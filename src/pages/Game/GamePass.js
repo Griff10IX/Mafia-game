@@ -385,6 +385,7 @@ export default function GamePass() {
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [user, setUser] = useState(null);
   const [selectedBandIndex, setSelectedBandIndex] = useState(null);
+  const [selectedMicroTier, setSelectedMicroTier] = useState(null);
 
   const fetchData = useCallback(async () => {
     try {
@@ -439,6 +440,17 @@ export default function GamePass() {
   }, [currentBandIndex, selectedBandIndex]);
 
   const selectedBand = selectedBandIndex != null ? BANDS[selectedBandIndex] : null;
+
+  useEffect(() => {
+    if (!selectedBand) return;
+    const suggested = microTierCurrent >= selectedBand.start && microTierCurrent <= selectedBand.end ? microTierCurrent : selectedBand.start;
+    if (selectedMicroTier == null || selectedMicroTier < selectedBand.start || selectedMicroTier > selectedBand.end) {
+      setSelectedMicroTier(suggested);
+    }
+  }, [selectedBand, microTierCurrent, selectedMicroTier]);
+
+  const selectedTierObj = selectedMicroTier ? getTierRewardObj(selectedMicroTier) : null;
+  const selectedNextTierObj = selectedMicroTier && selectedMicroTier < 100 ? getTierRewardObj(selectedMicroTier + 1) : null;
 
   const handlePurchase = async () => {
     if (!user) return;
@@ -725,6 +737,42 @@ export default function GamePass() {
                   Clicked band rewards preview (VIP shows all; Free unlocks only 1 item per completed tier).
                 </div>
 
+                {selectedTierObj && (
+                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-2">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
+                        Selected tier {selectedMicroTier}
+                      </div>
+                      <div className="text-[9px] text-zinc-500 font-heading">
+                        XP Needed: {selectedTierObj.thresholdRp.toLocaleString()} XP
+                      </div>
+                    </div>
+
+                    <TierRewards
+                      rewards={selectedTierObj.rewards}
+                      isFreeMembership={membershipType === 'Free'}
+                      isTierCompleted={microTierCurrent >= selectedMicroTier}
+                      microTier={selectedMicroTier}
+                    />
+
+                    {selectedNextTierObj && (
+                      <div className="pt-2 border-t border-zinc-800/60">
+                        <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">
+                          Next tier ({selectedMicroTier + 1})
+                        </div>
+                        <div className="mt-2">
+                          <TierRewards
+                            rewards={selectedNextTierObj.rewards}
+                            isFreeMembership={membershipType === 'Free'}
+                            isTierCompleted={false}
+                            microTier={selectedMicroTier + 1}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                   {Array.from({ length: selectedBand.end - selectedBand.start + 1 }, (_, i) => selectedBand.start + i).map((t) => {
                     const tierObj = getTierRewardObj(t);
@@ -734,12 +782,20 @@ export default function GamePass() {
                     return (
                       <div
                         key={t}
-                        className={`relative rounded-lg border p-2 ${
-                          isCurrent
-                            ? 'border-primary/60 bg-primary/5'
-                            : isMicroCompleted
-                              ? 'border-primary/20 bg-primary/10'
-                              : 'border-primary/10 bg-zinc-900/25'
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setSelectedMicroTier(t)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') setSelectedMicroTier(t);
+                        }}
+                        className={`relative rounded-lg border p-2 transition-transform duration-150 hover:scale-[1.02] ${
+                          selectedMicroTier === t
+                            ? 'border-primary/80 bg-primary/10'
+                            : isCurrent
+                              ? 'border-primary/60 bg-primary/5'
+                              : isMicroCompleted
+                                ? 'border-primary/20 bg-primary/10'
+                                : 'border-primary/10 bg-zinc-900/25'
                         }`}
                       >
                         <div className="flex items-baseline justify-between gap-2">
@@ -773,19 +829,7 @@ export default function GamePass() {
                   })}
                 </div>
 
-                {microTierCurrent < 100 && (
-                  <div className="pt-2 border-t border-zinc-800/60">
-                    <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Next tier ({microTierCurrent + 1})</div>
-                    <div className="mt-2">
-                      <TierRewards
-                        rewards={getTierRewardObj(microTierCurrent + 1).rewards}
-                        isFreeMembership={membershipType === 'Free'}
-                        isTierCompleted={false}
-                        microTier={microTierCurrent + 1}
-                      />
-                    </div>
-                  </div>
-                )}
+                {/* Next tier preview is shown in the Selected Tier panel above. */}
               </div>
             </div>
           )}

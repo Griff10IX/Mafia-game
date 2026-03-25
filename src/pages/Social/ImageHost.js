@@ -91,7 +91,12 @@ export default function ImageHost() {
       await load();
       await loadPublic();
     } catch (err) {
-      toast.error(err.response?.data?.detail ?? 'Upload failed');
+      // Bubble up backend validation/resize errors so we can debug quickly.
+      // eslint-disable-next-line no-console
+      console.error('Image upload failed', err);
+      const detail = err?.response?.data?.detail || err?.response?.data?.message || err?.message;
+      const status = err?.response?.status;
+      toast.error(detail ? `Upload failed${status ? ` (HTTP ${status})` : ''}: ${detail}` : `Upload failed${status ? ` (HTTP ${status})` : ''}`);
     } finally {
       setUploading(false);
     }
@@ -116,7 +121,11 @@ export default function ImageHost() {
       await load();
       await loadPublic();
     } catch (err) {
-      toast.error(err.response?.data?.detail ?? 'Import failed');
+      // eslint-disable-next-line no-console
+      console.error('Image import failed', err);
+      const detail = err?.response?.data?.detail || err?.response?.data?.message || err?.message;
+      const status = err?.response?.status;
+      toast.error(detail ? `Import failed${status ? ` (HTTP ${status})` : ''}: ${detail}` : `Import failed${status ? ` (HTTP ${status})` : ''}`);
     } finally {
       setImporting(false);
     }
@@ -213,7 +222,7 @@ export default function ImageHost() {
           <p className="text-[10px] font-heading font-bold uppercase tracking-wider text-amber-300">{activeTab === 'public' ? 'Public' : 'Private'} gallery rules</p>
           <p className="text-[10px] font-heading text-amber-100/90 mt-1">
             No NSFW, nudity, sexual content, gore, hate content, threats, doxxing, or illegal content.
-            Uploads are moderated. If caught posting prohibited content you can be banned.
+            Uploads are moderated. If caught posting prohibited content you will be banned.
           </p>
         </div>
 
