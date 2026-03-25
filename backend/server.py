@@ -934,6 +934,72 @@ async def get_current_user(
         except Exception:
             pass
     await apply_passive_health_regen(user_id, user)
+
+    # Free Game Pass auto-grant: unlock the 1 free reward item (cash) per completed micro tier.
+    # Only runs for effectively Free users:
+    #   - no VIP claim granted yet
+    #   - no unactivated but ready Game Pass token
+    try:
+        is_vip_claimed = user.get("rank_xp_pass_rewards_granted") is True
+        if not is_vip_claimed:
+            now = datetime.now(timezone.utc)
+            token_count = int(user.get("rank_xp_pass_tokens") or 0)
+
+            expires_dt = None
+            if token_count > 0:
+                expires_raw = user.get("rank_xp_pass_token_expires_at")
+                if expires_raw:
+                    try:
+                        expires_dt = datetime.fromisoformat(str(expires_raw).replace("Z", "+00:00"))
+                        if expires_dt.tzinfo is None:
+                            expires_dt = expires_dt.replace(tzinfo=timezone.utc)
+                    except Exception:
+                        expires_dt = None
+
+            token_ready = bool(token_count > 0 and expires_dt and expires_dt > now)
+
+            if not token_ready:
+                current_micro = micro_tier_from_rank_points(user.get("rank_points"))
+                if current_micro > 0:
+                    last_micro = int(user.get("rank_xp_pass_free_last_micro_tier_granted") or 0)
+                    if current_micro > last_micro:
+                        for t in range(last_micro + 1, current_micro + 1):
+                            cash_reward = int(rewards_for_micro_tier(t).get("money") or 0)
+                            res = await db.users.update_one(
+                                {
+                                    "id": user_id,
+                                    "$or": [
+                                        {"rank_xp_pass_free_last_micro_tier_granted": {"$lt": t}},
+                                        {"rank_xp_pass_free_last_micro_tier_granted": {"$exists": False}},
+                                    ],
+                                },
+                                {"$inc": {"money": cash_reward}, "$set": {"rank_xp_pass_free_last_micro_tier_granted": t}},
+                            )
+                            if res.modified_count <= 0:
+                                continue
+
+                            user["money"] = int(user.get("money") or 0) + cash_reward
+
+                            next_tier = t + 1 if t < MAX_MICRO_TIER else None
+                            next_summary = (
+                                f"Tier {next_tier} rewards: {format_rewards_summary(rewards_for_micro_tier(next_tier))}"
+                                if next_tier
+                                else "Max tier reached"
+                            )
+                            await send_notification(
+                                user_id,
+                                "Game Pass reward",
+                                f"You received ${cash_reward:,} cash. Next reward: {next_summary}.",
+                                "reward",
+                                category="system",
+                                reward_key="money",
+                                tier_micro=t,
+                                next_tier=next_tier,
+                            )
+    except Exception:
+        # Never block user requests due to reward automation.
+        pass
+
     return user
 
 
