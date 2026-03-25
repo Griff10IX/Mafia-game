@@ -504,27 +504,8 @@ def register(router):
             
             if login_is_locked:
                 # Pre-registration: account created but can't login yet
-                # Still send verification email if required
-                if require_verification:
-                    verification_token = str(uuid.uuid4())
-                    expires_at = datetime.now(timezone.utc) + timedelta(hours=24)
-                    await db.email_verifications.insert_one({
-                        "token": verification_token,
-                        "user_id": user_id,
-                        "email": user_doc["email"],
-                        "username": user_doc["username"],
-                        "created_at": datetime.now(timezone.utc).isoformat(),
-                        "expires_at": expires_at.isoformat(),
-                    })
-                    import threading
-                    from utils.email_sender import send_verification_email
-                    def _send_in_background():
-                        try:
-                            send_verification_email(user_doc["email"], user_doc["username"], verification_token)
-                        except Exception as e:
-                            logging.warning("Background verification email failed: %s", e)
-                    threading.Thread(target=_send_in_background, daemon=True).start()
-                
+                # Don't send verification emails while login is locked.
+                # Users can request a verification resend after launch.
                 return {
                     "token": None,
                     "user": None,
@@ -1089,10 +1070,39 @@ def register(router):
         user = await db.users.find_one({"id": record["user_id"]}, {"_id": 0})
         if not user:
             raise HTTPException(status_code=400, detail="User not found.")
+        user_response = {k: v for k, v in user.items() if k not in ("password_hash", "is_dead", "dead_at", "points_at_death", "retrieval_used")}
+
+        # If login is currently locked (pre-launch), do NOT issue a JWT/session on verification link click.
+        # This prevents "click-to-login" while the game is closed.
+        settings = await db.game_settings.find_one({"_id": "main"})
+        now = datetime.now(timezone.utc)
+        login_lock_until = settings.get("login_lock_until") if settings else None
+        login_lock_from = settings.get("login_lock_from") if settings else None
+        login_is_locked = False
+        if login_lock_until:
+            try:
+                lock_dt = datetime.fromisoformat(login_lock_until.replace("Z", "+00:00"))
+                started = True
+                if login_lock_from:
+                    from_dt = datetime.fromisoformat(login_lock_from.replace("Z", "+00:00"))
+                    started = now >= from_dt
+                login_is_locked = started and now < lock_dt
+            except (ValueError, TypeError):
+                pass
+
+        if login_is_locked:
+            return {
+                "token": None,
+                "user": user_response,
+                "reward_bullets": 2000,
+                "reward_respect_points": 500,
+                "detail": "Email verified. Login is not available until launch.",
+            }
+
         ip = _client_ip(request) or ""
         ua = (request.headers.get("User-Agent") or "").strip()
         device_type = _device_type_from_user_agent(ua) if ua else "Unknown"
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = now.isoformat()
         session_id = str(uuid.uuid4())
         session_entry = {
             "id": session_id,
@@ -1112,7 +1122,6 @@ def register(router):
             "session_id": session_id,
             "username": user.get("username") or "",
         })
-        user_response = {k: v for k, v in user.items() if k not in ("password_hash", "is_dead", "dead_at", "points_at_death", "retrieval_used")}
         return {
             "token": token,
             "user": user_response,
@@ -1123,6 +1132,25 @@ def register(router):
     @router.post("/auth/resend-verification")
     async def resend_verification(body: ResendVerificationBody):
         """Send a new verification email if the account exists and is not verified. Accepts email or username. 2min cooldown."""
+        # Don't send verification emails while login is locked (pre-launch).
+        settings = await db.game_settings.find_one({"_id": "main"})
+        now = datetime.now(timezone.utc)
+        login_lock_until = settings.get("login_lock_until") if settings else None
+        login_lock_from = settings.get("login_lock_from") if settings else None
+        login_is_locked = False
+        if login_lock_until:
+            try:
+                lock_dt = datetime.fromisoformat(login_lock_until.replace("Z", "+00:00"))
+                started = True
+                if login_lock_from:
+                    from_dt = datetime.fromisoformat(login_lock_from.replace("Z", "+00:00"))
+                    started = now >= from_dt
+                login_is_locked = started and now < lock_dt
+            except (ValueError, TypeError):
+                pass
+        if login_is_locked:
+            return {"message": "Verification emails are disabled until launch."}
+
         raw = (body.email or "").strip()
         if not raw:
             return {"message": "If an account exists with that email, a new verification link has been sent."}
