@@ -107,60 +107,202 @@ def _initial_base_amount_for_total(*, tiers: range, base_tier: int, target_total
 
 
 # Baselines:
-# With the band-fixed 1-2 bucket model:
-# - `money` only appears on micro tiers 1..10, so we normalize across 1..10.
-# - `points` only appears on micro tiers 31..40, so we normalize across 31..40.
-_money_active_tiers = range(1, 11)
-_points_active_tiers = range(31, 41)
-_auto_rank_2h_active_tiers = range(81, 101)
+# Deterministic weighted random bucket selection:
+# - Each micro tier selects 1 bucket 70% of the time, or 2 distinct buckets 30% of the time.
+# - Rewards are deterministically chosen so all users see the same preview.
+# - Then we normalize (linear scaling + ceil) so totals for the key targets land close to:
+#     cash ~50,000,000, points ~6,000, bullets ~250,000, random tokens ~250, auto-rank 2h tokens ~50.
 
-_money_base = _normalize_base_amount_to_total_for_tiers(
-    tiers=_money_active_tiers,
-    base_tier=_MONEY_BASE_TIER,
-    target_total=TARGET_CASH_TOTAL,
-    initial_base_amount=_initial_base_amount_for_total(
-        tiers=_money_active_tiers,
-        base_tier=_MONEY_BASE_TIER,
-        target_total=TARGET_CASH_TOTAL,
-    ),
-)
+TARGET_RANDOM_TOKENS_TOTAL = 250
 
-_points_base = _normalize_base_amount_to_total_for_tiers(
-    tiers=_points_active_tiers,
-    base_tier=_POINTS_BASE_TIER,
-    target_total=TARGET_POINTS_TOTAL,
-    initial_base_amount=_initial_base_amount_for_total(
-        tiers=_points_active_tiers,
-        base_tier=_POINTS_BASE_TIER,
-        target_total=TARGET_POINTS_TOTAL,
-    ),
-)
+# Token keys that represent the "random token pool" in this implementation.
+_RANDOM_TOKEN_KEYS = ["melt_tokens", "jailbust_tokens", "travel_tokens", "properties_tokens"]
 
-_auto_rank_2h_base_tier = 100
-_auto_rank_2h_base = _normalize_base_amount_to_total_for_tiers(
-    tiers=_auto_rank_2h_active_tiers,
-    base_tier=_auto_rank_2h_base_tier,
-    target_total=TARGET_AUTO_RANK_2H_TOTAL,
-    initial_base_amount=_initial_base_amount_for_total(
-        tiers=_auto_rank_2h_active_tiers,
-        base_tier=_auto_rank_2h_base_tier,
-        target_total=TARGET_AUTO_RANK_2H_TOTAL,
-    ),
-)
+# Deterministic seeds (string->int is stable across backend/frontend via fnv1a_32).
+_SEED_CATEGORY = "game_pass_micro_rewards:category:v2"
+_SEED_FREE = "game_pass_micro_rewards:free:v2"
 
-MICRO_TIER_REWARD_BASELINES = {
-    "money": {"baseTier": _MONEY_BASE_TIER, "baseAmount": _money_base},
-    "bullets": {"baseTier": 20, "baseAmount": 2_500},
-    "xp_crimes_tokens": {"baseTier": 40, "baseAmount": 2},
-    "xp_gta_tokens": {"baseTier": 40, "baseAmount": 2},
-    "points": {"baseTier": _POINTS_BASE_TIER, "baseAmount": _points_base},
-    "respect_points": {"baseTier": 60, "baseAmount": 50},
-    "melt_tokens": {"baseTier": 70, "baseAmount": 2},
-    "jailbust_tokens": {"baseTier": 80, "baseAmount": 2},
-    "travel_tokens": {"baseTier": 90, "baseAmount": 1},
-    "properties_tokens": {"baseTier": 100, "baseAmount": 1},
-    "auto_rank_2h_tokens": {"baseTier": _auto_rank_2h_base_tier, "baseAmount": _auto_rank_2h_base},
+TWO_BUCKET_CHANCE = 0.30
+
+# Category pool for selection (respect_points excluded; not part of the 1–2 reward bucket contract).
+_SELECTABLE_KEYS = [
+    "money",
+    "bullets",
+    "xp_crimes_tokens",
+    "xp_gta_tokens",
+    "points",
+    *_RANDOM_TOKEN_KEYS,
+    "auto_rank_2h_tokens",
+]
+
+# Weights are tuned so cash isn't overwhelming early, and variety appears inside the same 1-10 band.
+# Final totals for normalized keys are enforced by baseAmount normalization.
+_CATEGORY_WEIGHTS = {
+    "money": 60,
+    "bullets": 20,
+    "xp_crimes_tokens": 10,
+    "xp_gta_tokens": 10,
+    "points": 12,
+    "melt_tokens": 2,
+    "jailbust_tokens": 2,
+    "travel_tokens": 2,
+    "properties_tokens": 2,
+    "auto_rank_2h_tokens": 2,
 }
+
+_BASE_TIER_BY_KEY = {
+    "money": _MONEY_BASE_TIER,
+    "bullets": 20,
+    "xp_crimes_tokens": 40,
+    "xp_gta_tokens": 40,
+    "points": _POINTS_BASE_TIER,
+    "melt_tokens": 70,
+    "jailbust_tokens": 80,
+    "travel_tokens": 90,
+    "properties_tokens": 100,
+    "auto_rank_2h_tokens": 100,
+}
+
+# For keys not included in the target normalization, we keep a fixed baseAmount.
+_FIXED_BASE_AMOUNT_BY_KEY = {
+    "xp_crimes_tokens": 2,
+    "xp_gta_tokens": 2,
+}
+
+
+def _fnv1a_32(s: str) -> int:
+    """Stable 32-bit FNV-1a hash (matches the frontend implementation)."""
+    h = 0x811C9DC5
+    for ch in s:
+        h ^= ord(ch) & 0xFF
+        h = (h * 0x01000193) & 0xFFFFFFFF
+    return h
+
+
+def _mulberry32(seed: int):
+    """Deterministic PRNG float generator (matches frontend mulberry32)."""
+    a = seed & 0xFFFFFFFF
+
+    def _rand():
+        nonlocal a
+        a = (a + 0x6D2B79F5) & 0xFFFFFFFF
+        t = a
+        t = (t ^ (t >> 15)) * (t | 1)
+        t &= 0xFFFFFFFF
+        t ^= t + ((t ^ (t >> 7)) * (t | 61) & 0xFFFFFFFF)
+        t &= 0xFFFFFFFF
+        return t / 4294967296  # 0..1
+
+    return _rand
+
+
+def _weighted_pick(rng, keys, weights_by_key):
+    total = 0.0
+    for k in keys:
+        total += float(weights_by_key.get(k) or 0.0)
+    if total <= 0:
+        return None
+    u = rng() * total
+    acc = 0.0
+    for k in keys:
+        w = float(weights_by_key.get(k) or 0.0)
+        acc += w
+        if u < acc:
+            return k
+    return keys[-1] if keys else None
+
+
+def _distribute_total(total: int, keys: list[str]) -> dict[str, int]:
+    """Split `total` across keys as evenly as possible (stable order)."""
+    n = max(1, len(keys))
+    base = total // n
+    rem = total % n
+    out: dict[str, int] = {}
+    for i, k in enumerate(keys):
+        out[k] = base + (1 if i < rem else 0)
+    return out
+
+
+_target_random_by_key = _distribute_total(TARGET_RANDOM_TOKENS_TOTAL, _RANDOM_TOKEN_KEYS)
+_TARGET_TOTAL_BY_KEY = {
+    "money": TARGET_CASH_TOTAL,
+    "bullets": TARGET_BULLETS_TOTAL,
+    "points": TARGET_POINTS_TOTAL,
+    "auto_rank_2h_tokens": TARGET_AUTO_RANK_2H_TOTAL,
+    **_target_random_by_key,
+}
+
+
+_SELECTED_KEYS_BY_TIER: dict[int, list[str]] = {}
+_FREE_UNLOCKED_KEY_BY_TIER: dict[int, str | None] = {}
+
+_BASE_AMOUNT_BY_KEY: dict[str, float] = {}
+
+# Precompute deterministic selections + normalization baseAmount.
+_tiers_assigned_by_key: dict[str, list[int]] = {k: [] for k in _TARGET_TOTAL_BY_KEY.keys()}
+
+for t in range(1, MAX_MICRO_TIER + 1):
+    rng = _mulberry32(_fnv1a_32(f"{_SEED_CATEGORY}:{t}"))
+    want_two = rng() < TWO_BUCKET_CHANCE
+    remaining_keys = list(_SELECTABLE_KEYS)
+    chosen: list[str] = []
+
+    n_buckets = 2 if want_two else 1
+    for _ in range(n_buckets):
+        k = _weighted_pick(rng, remaining_keys, _CATEGORY_WEIGHTS)
+        if not k:
+            break
+        chosen.append(k)
+        remaining_keys = [x for x in remaining_keys if x != k]
+
+    # Ensure 1..2 distinct keys.
+    if not chosen:
+        chosen = ["money"]
+    chosen = chosen[:2]
+    _SELECTED_KEYS_BY_TIER[t] = chosen
+
+    free_rng = _mulberry32(_fnv1a_32(f"{_SEED_FREE}:{t}"))
+    free_key = chosen[int(math.floor(free_rng() * len(chosen)))] if chosen else None
+    _FREE_UNLOCKED_KEY_BY_TIER[t] = free_key
+
+    for k in _TARGET_TOTAL_BY_KEY.keys():
+        if k in chosen:
+            _tiers_assigned_by_key[k].append(t)
+
+
+for k, assigned_tiers in _tiers_assigned_by_key.items():
+    if not assigned_tiers:
+        # No tiers selected for this key; keep baseAmount minimal.
+        _BASE_AMOUNT_BY_KEY[k] = 1.0
+        continue
+    base_tier = _BASE_TIER_BY_KEY.get(k)
+    if base_tier is None:
+        _BASE_AMOUNT_BY_KEY[k] = 1.0
+        continue
+    initial_guess = _initial_base_amount_for_total(
+        tiers=range(min(assigned_tiers), max(assigned_tiers) + 1),
+        base_tier=base_tier,
+        target_total=_TARGET_TOTAL_BY_KEY[k],
+    )
+    # Normalize using the exact assigned tier list (not a range).
+    initial_guess = float(_TARGET_TOTAL_BY_KEY[k]) / sum((t / float(base_tier)) for t in assigned_tiers) if assigned_tiers else 1.0
+    _BASE_AMOUNT_BY_KEY[k] = _normalize_base_amount_to_total_for_tiers(
+        tiers=assigned_tiers,
+        base_tier=base_tier,
+        target_total=_TARGET_TOTAL_BY_KEY[k],
+        initial_base_amount=initial_guess,
+    )
+
+
+# Baselines used at runtime to compute reward amounts.
+MICRO_TIER_REWARD_BASELINES = {}
+for key in _SELECTABLE_KEYS:
+    base_tier = _BASE_TIER_BY_KEY[key]
+    if key in _FIXED_BASE_AMOUNT_BY_KEY:
+        base_amount = _FIXED_BASE_AMOUNT_BY_KEY[key]
+    else:
+        base_amount = _BASE_AMOUNT_BY_KEY.get(key, 1.0)
+    MICRO_TIER_REWARD_BASELINES[key] = {"baseTier": base_tier, "baseAmount": base_amount}
 
 
 def micro_tier_from_rank_points(rank_points: Optional[int | float]) -> int:
@@ -188,16 +330,9 @@ def rewards_for_micro_tier(micro_tier: int) -> Dict[str, int]:
     """
     Return the exact reward set for a given micro tier.
 
-    Band-fixed contract (for UI compression):
-    - 1..10: cash only
-    - 11..20: bullets only
-    - 21..30: Crimes + GTA XP tokens (compressed by frontend as one "Auto Rank Perks" line)
-    - 31..40: points only
-    - 41..50: respect only
-    - 51..60: Melt token only
-    - 61..70: Jailbust token only
-    - 71..80: Travel token only
-    - 81..100: Properties token only
+    Deterministic weighted contract:
+    - Each micro tier gets 1 or 2 distinct reward keys chosen deterministically.
+    - Amounts are derived from normalized baseAmount scalars so totals land close to targets.
     """
     try:
         t = int(micro_tier or 0)
@@ -208,40 +343,11 @@ def rewards_for_micro_tier(micro_tier: int) -> Dict[str, int]:
         return {}
 
     t = max(1, min(MAX_MICRO_TIER, t))
+    selected_keys = _SELECTED_KEYS_BY_TIER.get(t) or []
     out: Dict[str, int] = {}
-
-    def _set(key: str) -> None:
+    for key in selected_keys:
         cfg = MICRO_TIER_REWARD_BASELINES[key]
         out[key] = int(math.ceil(cfg["baseAmount"] * (t / cfg["baseTier"])))
-
-    if 1 <= t <= 10:
-        _set("money")
-        return out
-    if 11 <= t <= 20:
-        _set("bullets")
-        return out
-    if 21 <= t <= 30:
-        _set("xp_crimes_tokens")
-        _set("xp_gta_tokens")
-        return out
-    if 31 <= t <= 40:
-        _set("points")
-        return out
-    if 41 <= t <= 50:
-        _set("respect_points")
-        return out
-    if 51 <= t <= 60:
-        _set("melt_tokens")
-        return out
-    if 61 <= t <= 70:
-        _set("jailbust_tokens")
-        return out
-    if 71 <= t <= 80:
-        _set("travel_tokens")
-        return out
-
-    # 81..100
-    _set("auto_rank_2h_tokens")
     return out
 
 
@@ -254,13 +360,18 @@ def free_unlocked_key_for_micro_tier(micro_tier: int, rewards: Dict[str, int]) -
     """
     Deterministic free unlock key helper.
 
-    With band-fixed rewards, free unlock is simply the first non-zero key in `REWARD_KEY_ORDER`.
+    Free unlock chooses deterministically one of the keys selected for this micro tier.
     """
-    if not rewards:
+    try:
+        t = int(micro_tier or 0)
+    except Exception:
         return None
-    for k in REWARD_KEY_ORDER:
-        if int(rewards.get(k) or 0) > 0:
-            return k
+    chosen = _FREE_UNLOCKED_KEY_BY_TIER.get(t)
+    if not chosen:
+        return None
+    # Safety: only return keys that are present in the provided reward dict.
+    if int(rewards.get(chosen) or 0) > 0:
+        return chosen
     return None
 
 
