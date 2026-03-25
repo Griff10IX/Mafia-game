@@ -56,6 +56,7 @@ const RankingBadges = lazy(() => import("./pages/Game/RankingBadges"));
 const States = lazy(() => import("./pages/Game/States"));
 const Stats = lazy(() => import("./pages/Game/Stats"));
 const Store = lazy(() => import("./pages/Game/Store"));
+const GamePass = lazy(() => import("./pages/Game/GamePass"));
 const Travel = lazy(() => import("./pages/Game/Travel"));
 const UsersOnline = lazy(() => import("./pages/Game/UsersOnline"));
 
@@ -1106,6 +1107,18 @@ function App() {
               isAuthenticated ? (
                 <Layout>
                   <Store />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
+            path="/game-pass"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <GamePass />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />

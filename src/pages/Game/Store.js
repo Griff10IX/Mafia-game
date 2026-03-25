@@ -141,14 +141,6 @@ export default function Store() {
   const [pendingPoints, setPendingPoints] = useState(0);
   const [claimingPending, setClaimingPending] = useState(false);
 
-  const nowTs = Date.now();
-  const passTokensHeld = Number(user?.rank_xp_pass_tokens ?? 0);
-  const passBonusUntil = user?.rank_xp_pass_bonus_until ? new Date(user.rank_xp_pass_bonus_until) : null;
-  const passIsActive = !!(passBonusUntil && passBonusUntil.getTime() > nowTs);
-  const passExpiryUntil = user?.rank_xp_pass_token_expires_at ? new Date(user.rank_xp_pass_token_expires_at) : null;
-  const passIsUnactivatedValid = passTokensHeld > 0 && !!(passExpiryUntil && passExpiryUntil.getTime() > nowTs);
-  const passIsUnactivatedExpired = passTokensHeld > 0 && !!(passExpiryUntil && passExpiryUntil.getTime() <= nowTs);
-
   const handleClaimPendingPoints = async () => {
     setClaimingPending(true);
     try {
@@ -264,7 +256,7 @@ export default function Store() {
     setCheckingPayment(true);
     try {
       const res = await api.get(`/payments/status/${sessionId}`);
-      if (res.data.payment_status === 'paid') {
+          if (res.data.payment_status === 'paid') {
         if (res.data.manual_credit_pending || res.data.status === 'manual_credit_pending') {
           const eta = res.data.manual_credit_eta
             ? new Date(res.data.manual_credit_eta).toLocaleString('en-GB', {
@@ -283,7 +275,7 @@ export default function Store() {
           toast.success(`Payment received. ${res.data.points_added} points will be credited on ${releaseDate}.`);
         } else {
           const pts = Number(res.data.points_added || 0);
-          if (pts === 0) toast.success('Rank-XP Pass purchased — token delivered. Activate in Armoury.');
+          if (pts === 0) toast.success('Game Pass purchased — token delivered. Activate in My Inventory.');
           else toast.success(`${pts} points added.`);
         }
         refreshUser();
@@ -692,34 +684,19 @@ export default function Store() {
           <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
-              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] truncate">Rank-XP Pass (£4.99)</span>
+              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] truncate">Game Pass (£4.99)</span>
               <Package className="text-primary shrink-0" size={14} />
             </div>
             <div className="p-3 space-y-2">
               <p className="text-[10px] text-zinc-400 font-heading">
-                Purchase grants an unactivated pass token. Activate it in <span className="text-primary font-bold">My Inventory</span> to start 24h bonuses.
+                Manage your 24h bonus token on the dedicated page (purchase and status).
               </p>
-              {passIsUnactivatedValid && (
-                <p className="text-[10px] text-primary font-heading">
-                  Token ready. Expires {passExpiryUntil?.toLocaleDateString('en-GB')}.
-                </p>
-              )}
-              {passIsUnactivatedExpired && (
-                <p className="text-[10px] text-amber-400 font-heading">Previous token expired — you can buy again.</p>
-              )}
-              {passIsActive && !passIsUnactivatedValid && (
-                <p className="text-[10px] text-emerald-400 font-heading">
-                  24h bonus active until {passBonusUntil?.toLocaleString('en-GB')}.
-                </p>
-              )}
-              <button
-                type="button"
-                onClick={() => handlePurchase('rank_xp_pass_499')}
-                disabled={!user || loading || passIsUnactivatedValid}
-                className="w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
+              <Link
+                to="/game-pass"
+                className="w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation flex items-center justify-center gap-2"
               >
-                {loading ? '...' : passIsUnactivatedValid ? 'Token available (activate to extend)' : 'Buy for £4.99'}
-              </button>
+                Open Game Pass →
+              </Link>
             </div>
             <div className="store-art-line text-primary mx-3" />
           </div>

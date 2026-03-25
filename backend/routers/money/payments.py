@@ -108,9 +108,9 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
         )
         await send_notification(
             user_id,
-            "Rank-XP Pass",
+            "Game Pass",
             (
-                "Your Rank-XP Pass token is ready. "
+                "Your Game Pass token is ready. "
                 "Use it in the Armoury/My Inventory to start the 24-hour bonuses."
             ),
             "rank_xp_pass_token_entitled",
@@ -491,7 +491,7 @@ def register(router):
                 else:
                     raise HTTPException(
                         status_code=400,
-                        detail="You already have an unactivated Rank-XP Pass token. Activate it before buying again.",
+                        detail="You already have an unactivated Game Pass token. Activate it before buying again.",
                     )
         # success_url: frontend sends origin_url like http://localhost:3000/store
         origin = (request.origin_url or "").rstrip("/")
@@ -504,7 +504,7 @@ def register(router):
             stripe.api_key = api_key
             product_name = f"{points} points"
             if package_id == RANK_XP_PASS_PACKAGE_ID:
-                product_name = "Rank-XP Pass"
+                product_name = "Game Pass"
             session = stripe.checkout.Session.create(
                 payment_method_types=["card"],
                 line_items=[{

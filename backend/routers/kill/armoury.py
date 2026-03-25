@@ -1771,7 +1771,7 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
                     {"id": current_user["id"]},
                     {"$set": {count_field: 0}, "$unset": unset_map},
                 )
-            raise HTTPException(status_code=400, detail="Rank-XP pass token has expired. Buy a new pass.")
+            raise HTTPException(status_code=400, detail="Game Pass token has expired. Buy a new pass.")
 
     if req.use_all:
         n, new_until = _tokens_to_reach_stack_cap(current_user, req.token_type)
@@ -1806,7 +1806,7 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
             pass_rewards_inc = await _grant_rank_xp_pass_one_time_rewards(db, current_user["id"], tier_snapshot)
         return {
             "message": (
-                f"Rank-XP Pass activated. Effect active until {new_until_iso} (up to {max_stack_hours}h stack)."
+                f"Game Pass activated. Effect active until {new_until_iso} (up to {max_stack_hours}h stack)."
                 if req.token_type == "rank_xp_pass"
                 else f"Used {n} token(s). Effect active until {new_until_iso} (up to {max_stack_hours}h stack)."
             ),
@@ -1846,7 +1846,7 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
         pass_rewards_inc = await _grant_rank_xp_pass_one_time_rewards(db, current_user["id"], tier_snapshot)
     return {
         "message": (
-            f"Rank-XP Pass activated. Effect active until {new_until_iso} (up to {max_stack_hours}h stack)."
+            f"Game Pass activated. Effect active until {new_until_iso} (up to {max_stack_hours}h stack)."
             if req.token_type == "rank_xp_pass"
             else f"Token used. Effect active until {new_until_iso} (up to {max_stack_hours}h stack)."
         ),
