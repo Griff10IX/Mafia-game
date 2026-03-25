@@ -593,7 +593,8 @@ export function parseForumContent(content, options = {}) {
   const imgPlaceholders   = [];
   const ytubePlaceholders = [];
 
-  s = s.replace(/\[gif\](.*?)\[\/gif\]/gi, (_, url) => {
+  // Note: use [\s\S]*? so URLs can span newlines (JS `.` does not match `\n`).
+  s = s.replace(/\[gif\]([\s\S]*?)\[\/gif\]/gi, (_, url) => {
     const idx = gifPlaceholders.length;
     const safe = safeUrl(url.trim());
     gifPlaceholders.push(
@@ -604,7 +605,7 @@ export function parseForumContent(content, options = {}) {
     return `\u0001G${idx}\u0001`;
   });
 
-  s = s.replace(/\[img\](.*?)\[\/img\]/gi, (_, url) => {
+  s = s.replace(/\[img\]([\s\S]*?)\[\/img\]/gi, (_, url) => {
     const idx = imgPlaceholders.length;
     const safe = safeUrl(url.trim());
     // display:block + margin:auto → centres correctly inside [center] wrappers
