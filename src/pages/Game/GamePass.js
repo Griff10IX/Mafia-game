@@ -11,17 +11,17 @@ const GAME_PASS_PACKAGE_ID = 'rank_xp_pass_499';
 // We only display; activation/entitlement is still handled by the existing rank_xp_pass flow.
 const MAX_THRESHOLD_RP = 20_000;
 
+// 10+ tier UIs often include a "level 0" state in the header; this grid starts at the first real reward tier.
 const LEVELS = [
-  { levelNumber: 1, thresholdRp: 0, rewards: {} },
-  { levelNumber: 2, thresholdRp: 2000, rewards: { money: 25_000_000 } },
-  { levelNumber: 3, thresholdRp: 4000, rewards: { bullets: 2_500 } },
-  { levelNumber: 4, thresholdRp: 8000, rewards: { xp_crimes_tokens: 2, xp_gta_tokens: 2 } },
-  { levelNumber: 5, thresholdRp: 10_000, rewards: { points: 50 } },
-  { levelNumber: 6, thresholdRp: 12_000, rewards: { respect_points: 50 } },
-  { levelNumber: 7, thresholdRp: 14_000, rewards: { melt_tokens: 2 } },
-  { levelNumber: 8, thresholdRp: 16_000, rewards: { jailbust_tokens: 2 } },
-  { levelNumber: 9, thresholdRp: 18_000, rewards: { travel_tokens: 1 } },
-  { levelNumber: 10, thresholdRp: 20_000, rewards: { properties_tokens: 1 } },
+  { levelNumber: 1, thresholdRp: 2000, rewards: { money: 25_000_000 } },
+  { levelNumber: 2, thresholdRp: 4000, rewards: { bullets: 2_500 } },
+  { levelNumber: 3, thresholdRp: 8000, rewards: { xp_crimes_tokens: 2, xp_gta_tokens: 2 } },
+  { levelNumber: 4, thresholdRp: 10_000, rewards: { points: 50 } },
+  { levelNumber: 5, thresholdRp: 12_000, rewards: { respect_points: 50 } },
+  { levelNumber: 6, thresholdRp: 14_000, rewards: { melt_tokens: 2 } },
+  { levelNumber: 7, thresholdRp: 16_000, rewards: { jailbust_tokens: 2 } },
+  { levelNumber: 8, thresholdRp: 18_000, rewards: { travel_tokens: 1 } },
+  { levelNumber: 9, thresholdRp: 20_000, rewards: { properties_tokens: 1 } },
 ];
 
 const REWARD_DISPLAY_ORDER = [
@@ -57,18 +57,26 @@ function formatTierRewardItem(key, value) {
   return `${n.toLocaleString()}x ${tokenName}`;
 }
 
-function TierRewards({ rewards }) {
+function TierRewards({ rewards, isFreeMembership, isTierCompleted }) {
   const hasAny = !!rewards && Object.values(rewards).some((v) => Number(v || 0) > 0);
   if (!hasAny) return null;
+
+  const rewardKeysInOrder = REWARD_DISPLAY_ORDER.filter((k) => Number(rewards?.[k] ?? 0) > 0);
+  const freeUnlockedRewardKey = rewardKeysInOrder[0] || null;
+
   return (
     <div className="space-y-1">
       {REWARD_DISPLAY_ORDER.map((k) => {
         const v = rewards?.[k];
         const text = formatTierRewardItem(k, v);
         if (!text) return null;
+        const lockedForFree = isFreeMembership && (!isTierCompleted || k !== freeUnlockedRewardKey);
         return (
-          <div key={k} className="text-[9px] text-zinc-300 font-heading">
-            {text}
+          <div key={k} className={`text-[9px] font-heading ${lockedForFree ? 'text-zinc-600/90' : 'text-zinc-300'}`}>
+            <span>{text}</span>
+            {lockedForFree && (
+              <span className="ml-1 text-[9px] text-amber-300/70 uppercase">VIP</span>
+            )}
           </div>
         );
       })}
@@ -78,7 +86,6 @@ function TierRewards({ rewards }) {
 
 function getTierPrimaryLabel(tier) {
   const rewards = tier?.rewards || {};
-  if (tier?.levelNumber === 1) return '—';
   if (rewards.money) return `$${Number(rewards.money).toLocaleString()} cash`;
   if (rewards.bullets) return `${Number(rewards.bullets).toLocaleString()} Bullets`;
   if (rewards.xp_crimes_tokens || rewards.xp_gta_tokens) {
@@ -138,7 +145,7 @@ export default function GamePass() {
 
   const currentLevelNumber = LEVELS.reduce((acc, tier) => (
     previewRankPoints >= tier.thresholdRp ? tier.levelNumber : acc
-  ), 1);
+  ), 0);
 
   const seasonLevel = Math.min(
     100,
@@ -354,28 +361,40 @@ export default function GamePass() {
             <div className="p-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 {LEVELS.map((tier) => {
+                  const isTierCompleted = previewRankPoints >= tier.thresholdRp;
                   const isCurrent = tier.levelNumber === currentLevelNumber;
-                  const xpNeededDisplay = tier.thresholdRp === 0 ? 2000 : tier.thresholdRp;
+                  const isPreviousTierDone = isTierCompleted && !isCurrent;
+                  const isFreeMembership = membershipType === 'Free';
                   return (
                     <div
                       key={tier.levelNumber}
-                      className={`relative rounded-lg border overflow-hidden ${isCurrent ? 'border-primary/60 bg-primary/5' : 'border-primary/20 bg-zinc-900/30'}`}
+                      className={`relative rounded-lg border overflow-hidden ${
+                        isCurrent
+                          ? 'border-primary/60 bg-primary/5'
+                          : isPreviousTierDone
+                            ? 'border-primary/30 bg-primary/10'
+                            : 'border-primary/20 bg-zinc-900/30'
+                      }`}
                     >
                       <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
                       <div className="p-3 space-y-1">
                         <div className="flex items-baseline justify-between gap-2">
                           <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Level {tier.levelNumber}</div>
-                          {isCurrent && <div className="text-[9px] font-heading font-bold text-primary">Current</div>}
+                          {isCurrent ? (
+                            <div className="text-[9px] font-heading font-bold text-primary">Current</div>
+                          ) : isPreviousTierDone ? (
+                            <div className="text-[9px] font-heading font-bold text-primary">Done</div>
+                          ) : null}
                         </div>
                         <div className="text-[11px] font-heading font-bold text-foreground tabular-nums">
                           {getTierPrimaryLabel(tier)}
                         </div>
-                        <div className="text-[9px] text-zinc-500 font-heading">XP Needed: {xpNeededDisplay.toLocaleString()} XP</div>
-                        <div className="text-[9px] text-mutedForeground font-heading uppercase tracking-wider">VIP Only</div>
-                        <TierRewards rewards={tier.rewards} />
-                        {tier.levelNumber === 1 && (
-                          <div className="text-[9px] text-zinc-500 font-heading italic">No reward at this level</div>
-                        )}
+                        <div className="text-[9px] text-zinc-500 font-heading">XP Needed: {tier.thresholdRp.toLocaleString()} XP</div>
+                        <TierRewards
+                          rewards={tier.rewards}
+                          isFreeMembership={isFreeMembership}
+                          isTierCompleted={isTierCompleted}
+                        />
                       </div>
                     </div>
                   );

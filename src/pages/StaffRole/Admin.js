@@ -292,6 +292,7 @@ export default function Admin() {
     adminNewPassword: '',
     tokenType: 'xp_crimes',
     tokenAmount: 5,
+    gamePassTierSnapshot: '',
   });
 
   const [eventsEnabled, setEventsEnabled] = useState(true);
@@ -1628,6 +1629,22 @@ export default function Admin() {
   const handleAddTokens = async () => {
     try {
       const response = await api.post(`/admin/add-tokens?target_username=${formData.targetUsername}&token_type=${formData.tokenType}&amount=${formData.tokenAmount}`);
+      toast.success(response.data.message);
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  const handleGrantGamePass = async () => {
+    try {
+      const qs = new URLSearchParams({
+        target_username: formData.targetUsername,
+        force: 'true',
+      });
+      const snapRaw = String(formData.gamePassTierSnapshot ?? '').trim();
+      if (snapRaw) {
+        const snap = parseInt(snapRaw, 10);
+        if (Number.isFinite(snap) && snap > 0) qs.set('tier_snapshot', String(snap));
+      }
+      const response = await api.post(`/admin/grant-game-pass?${qs.toString()}`);
       toast.success(response.data.message);
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
   };
@@ -3972,6 +3989,22 @@ export default function Admin() {
               </Select>
               <Input type="number" min="1" value={formData.tokenAmount} onChange={(e) => setFormData((prev) => ({ ...prev, tokenAmount: parseInt(e.target.value) || 1 }))} className="w-20" />
               <BtnPrimary onClick={handleAddTokens}>Give</BtnPrimary>
+            </ActionRow>
+
+            <ActionRow
+              icon={Gift}
+              label="Grant Game Pass"
+              description="Grants an unactivated Game Pass token; user activates it in My Inventory."
+            >
+              <Input
+                type="number"
+                min="1"
+                value={String(formData.gamePassTierSnapshot ?? '')}
+                onChange={(e) => setFormData((prev) => ({ ...prev, gamePassTierSnapshot: e.target.value ? parseInt(e.target.value, 10) || '' : '' }))}
+                className="w-28"
+                placeholder="Tier snapshot (optional)"
+              />
+              <BtnPrimary onClick={handleGrantGamePass}>Add</BtnPrimary>
             </ActionRow>
 
             <ActionRow icon={Award} label="Founding Member" description="Grant or remove Founding Member badge">

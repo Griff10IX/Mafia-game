@@ -575,6 +575,82 @@ def register(router):
         token_label = token_type.replace("_", " ").title()
         return {"message": f"Added {amount} {token_label} token(s) to {target['username']}"}
 
+    @router.post("/admin/grant-game-pass")
+    async def admin_grant_game_pass(
+        target_username: str,
+        tier_snapshot: Optional[int] = None,
+        force: bool = True,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Admin tool: grant an *unactivated* Game Pass token (rank_xp_pass).
+        Activation still happens via Armoury/My Inventory, which will then grant one-time rewards.
+        """
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one(
+            {"username": username_pattern},
+            {"_id": 0, "id": 1, "username": 1, "rank_points": 1, "rank_xp_pass_tokens": 1, "rank_xp_pass_token_expires_at": 1, "rank_xp_pass_bonus_until": 1},
+        )
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        now = datetime.now(timezone.utc)
+
+        def _parse_utc(s: Optional[str]):
+            if not s:
+                return None
+            try:
+                dt = datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt
+            except Exception:
+                return None
+
+        def _add_months(dt: datetime, months: int) -> datetime:
+            import calendar
+
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+
+            y = dt.year + (dt.month - 1 + months) // 12
+            m = (dt.month - 1 + months) % 12 + 1
+            last_day = calendar.monthrange(y, m)[1]
+            d = min(dt.day, last_day)
+            return dt.replace(year=y, month=m, day=d)
+
+        expires_dt = _parse_utc(target.get("rank_xp_pass_token_expires_at"))
+        unactivated_not_expired = bool(target.get("rank_xp_pass_tokens") and expires_dt and expires_dt > now)
+
+        active_until = _parse_utc(target.get("rank_xp_pass_bonus_until"))
+        active_token_not_expired = bool(active_until and active_until > now)
+
+        if (active_token_not_expired or unactivated_not_expired) and not force:
+            raise HTTPException(status_code=400, detail="User already has a valid Game Pass token")
+
+        # If the caller doesn't provide a snapshot, use the user's current rank points.
+        snap = int(tier_snapshot) if tier_snapshot is not None else int(target.get("rank_points") or 0)
+        expires_at = _add_months(now, 1).isoformat()
+
+        await db.users.update_one(
+            {"id": target["id"]},
+            {
+                "$set": {
+                    "rank_xp_pass_tokens": 1,
+                    "rank_xp_pass_bonus_until": None,
+                    "rank_xp_pass_tier_snapshot": None,
+                    "rank_xp_pass_token_expires_at": expires_at,
+                    "rank_xp_pass_pending_tier_snapshot": snap,
+                    "rank_xp_pass_rewards_granted": False,
+                }
+            },
+        )
+
+        return {"message": f"Granted unactivated Game Pass to {target['username']}"}
+
     @router.post("/admin/add-car")
     async def admin_add_car(target_username: str, car_id: str, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
