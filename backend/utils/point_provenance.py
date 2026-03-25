@@ -208,7 +208,7 @@ async def mint_transfer_in_lots(
 
 async def chargeback_preview(db, payment_session_id: str) -> Dict:
     if not payment_session_id:
-        return {"requested": 0, "eligible_remaining": 0, "owners": []}
+        return {"requested": 0, "eligible_remaining": 0, "reclaimed": 0, "unrecoverable": 0, "owners": []}
     txn = await db.payment_transactions.find_one({"session_id": payment_session_id}, {"_id": 0, "points": 1})
     requested = int((txn or {}).get("points") or 0)
     pipeline = [
@@ -218,9 +218,25 @@ async def chargeback_preview(db, payment_session_id: str) -> Dict:
     ]
     owners = await db.point_lots.aggregate(pipeline).to_list(10000)
     total = sum(int(x.get("remaining") or 0) for x in owners)
+    clawback_events = await db.point_ledger_events.aggregate(
+        [
+            {
+                "$match": {
+                    "root_purchase_ref": payment_session_id,
+                    "event_type": "clawback",
+                    "points": {"$lt": 0},
+                }
+            },
+            {"$group": {"_id": None, "sum_abs": {"$sum": {"$abs": "$points"}}}},
+        ]
+    ).to_list(1)
+    reclaimed_total = int((clawback_events[0].get("sum_abs") if clawback_events else 0) or 0)
+    unrecoverable_total = max(0, requested - reclaimed_total)
     return {
         "requested": requested,
         "eligible_remaining": total,
+        "reclaimed": reclaimed_total,
+        "unrecoverable": unrecoverable_total,
         "owners": [{"user_id": x["_id"], "remaining": int(x.get("remaining") or 0)} for x in owners],
     }
 

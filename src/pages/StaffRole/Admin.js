@@ -55,6 +55,7 @@ const ADMIN_STYLES = `
 
 const ADMIN_CATEGORIES = [
   { id: 'admin-players', label: 'Player Management', icon: UserCog },
+  { id: 'admin-moderation', label: 'Moderation', icon: Lock },
   { id: 'admin-donations', label: 'Donations', icon: HandCoins },
   { id: 'admin-gameworld', label: 'Game World', icon: Zap },
   { id: 'admin-security', label: 'Security & Cloudflare', icon: Globe },
@@ -67,7 +68,7 @@ const ADMIN_CATEGORIES = [
   { id: 'admin-staff', label: 'Staff Management', icon: Shield },
   { id: 'admin-mod-tools', label: 'Mod Tools', icon: Palette },
 ];
-const MOD_ONLY_CATEGORY_IDS = ['admin-cheat', 'admin-logs', 'admin-staff', 'admin-mod-tools', 'admin-donations'];
+const MOD_ONLY_CATEGORY_IDS = ['admin-cheat', 'admin-logs', 'admin-staff', 'admin-mod-tools', 'admin-donations', 'admin-moderation'];
 
 // Searchable tools list - each item has: label (searchable), categoryId (scroll target), collapseKey (optional - to expand section)
 const SEARCHABLE_TOOLS = [
@@ -83,9 +84,9 @@ const SEARCHABLE_TOOLS = [
   { label: 'Add Bullets', categoryId: 'admin-players', collapseKey: 'bullets', keywords: ['bullets', 'ammo', 'add'] },
   { label: 'Give Car', categoryId: 'admin-players', collapseKey: 'cars', keywords: ['car', 'vehicle', 'give'] },
   { label: 'Ghost Mode', categoryId: 'admin-players', collapseKey: 'ghost', keywords: ['ghost', 'invisible', 'hide'] },
-  { label: 'Lock Account', categoryId: 'admin-players', collapseKey: 'lock', keywords: ['lock', 'ban', 'account'] },
-  { label: 'Kill Player', categoryId: 'admin-players', collapseKey: 'kill', keywords: ['kill', 'death', 'player'] },
-  { label: 'Revive Player', categoryId: 'admin-players', collapseKey: 'revive', keywords: ['revive', 'resurrect', 'alive'] },
+  { label: 'Lock Account', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['lock', 'ban', 'account'] },
+  { label: 'Kill Player', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['kill', 'death', 'player'] },
+  { label: 'Revive Player', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['revive', 'resurrect', 'alive'] },
   { label: 'User Details', categoryId: 'admin-players', collapseKey: 'userDetails', keywords: ['user', 'details', 'info', 'profile'] },
   { label: 'Gambling Log', categoryId: 'admin-players', collapseKey: 'gamblingLog', keywords: ['gambling', 'log', 'casino', 'bet'] },
   { label: 'Activity Log', categoryId: 'admin-players', collapseKey: 'activityLog', keywords: ['activity', 'log', 'history'] },
@@ -155,9 +156,9 @@ const SEARCHABLE_TOOLS = [
   { label: 'Mod Online Colour', categoryId: 'admin-mod-tools', collapseKey: 'modColour', keywords: ['mod', 'colour', 'color', 'online'] },
   { label: 'Admin Credentials', categoryId: 'admin-mod-tools', collapseKey: 'adminCreds', keywords: ['admin', 'credentials', 'email', 'password'] },
   { label: 'Dupe check', categoryId: 'admin-mod-tools', collapseKey: 'dupeCheckMod', keywords: ['dupe', 'duplicate', 'multi', 'account'] },
-  { label: 'Lock player', categoryId: 'admin-mod-tools', collapseKey: 'lockPlayerModTools', keywords: ['lock', 'player', 'investigation'] },
-  { label: 'Modkill', categoryId: 'admin-mod-tools', collapseKey: 'lockPlayerModTools', keywords: ['modkill', 'kill', 'player'] },
-  { label: 'Lock page', categoryId: 'admin-mod-tools', collapseKey: 'pageLocksMod', keywords: ['lock', 'page', 'maintenance'] },
+  { label: 'Lock player', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['lock', 'player', 'investigation'] },
+  { label: 'Modkill', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['modkill', 'kill', 'player'] },
+  { label: 'Lock page', categoryId: 'admin-moderation', collapseKey: 'moderationPageLocks', keywords: ['lock', 'page', 'maintenance'] },
 ];
 
 const SECTIONS_KEY = 'admin_sections_collapsed';
@@ -3932,6 +3933,9 @@ export default function Admin() {
                 )}
               </div>
             )}
+            <div className="pt-1 pl-6">
+              <div className="text-[9px] font-heading font-bold uppercase tracking-wider text-mutedForeground">Economy & rewards</div>
+            </div>
             <ActionRow icon={UserCog} label="Change Rank">
               {ranks.length > 0 ? (
                 <Select value={String(formData.newRank)} onChange={(e) => setFormData((prev) => ({ ...prev, newRank: parseInt(e.target.value) }))}>
@@ -3992,72 +3996,9 @@ export default function Admin() {
               <BtnPrimary onClick={handleAddLootPieces}>Give</BtnPrimary>
             </ActionRow>
 
-            <ActionRow icon={Lock} label="Lock Player (investigation)" description="User can only access /locked page and submit one comment until unlocked" color="text-red-400">
-              <BtnDanger onClick={handleLockPlayer}>Lock</BtnDanger>
-            </ActionRow>
-            <ActionRow icon={Lock} label="Unlock Account" description="Restore access after investigation">
-              <BtnPrimary onClick={() => handleUnlockAccount()}>Unlock</BtnPrimary>
-            </ActionRow>
-            <ActionRow icon={Lock} label="Test lock (60s)" description="Lock yourself for 60 seconds to test the locked page">
-              <button type="button" onClick={handleTestLockSelf} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-amber-500/20 border-amber-500/40 text-amber-400 hover:bg-amber-500/30">
-                Test lock
-              </button>
-            </ActionRow>
-            <ActionRow icon={Lock} label="Locked accounts" description="Users under investigation and their comment">
-              <button type="button" onClick={fetchLockedAccounts} disabled={lockedAccountsLoading} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-zinc-700/60 border-zinc-500/40 text-zinc-300 hover:bg-zinc-600 disabled:opacity-50">
-                {lockedAccountsLoading ? '...' : 'Refresh'}
-              </button>
-            </ActionRow>
-            {lockedAccounts.length > 0 && (
-              <div className="mt-1 pl-6 space-y-2 border-l-2 border-amber-500/30">
-                {lockedAccounts.map((u) => (
-                  <div key={u.username} className="text-[10px] font-heading rounded border border-zinc-600/50 bg-zinc-800/30 p-2">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <span className="font-bold text-amber-400">{u.username}</span>
-                      <button type="button" onClick={() => handleUnlockAccount(u.username)} className="px-1.5 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-emerald-500/40 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30">Unlock</button>
-                    </div>
-                    {u.account_locked_at && <div className="text-zinc-500 mt-0.5">Locked: {new Date(u.account_locked_at).toLocaleString()}</div>}
-                    {u.account_locked_comment ? <div className="mt-1 text-foreground whitespace-pre-wrap">{u.account_locked_comment}</div> : <div className="mt-1 text-zinc-500 italic">No comment yet.</div>}
-                    {u.account_locked_comment_at && <div className="text-zinc-500 text-[9px]">Submitted: {new Date(u.account_locked_comment_at).toLocaleString()}</div>}
-                    {u.account_locked_admin_message && (
-                      <div className="mt-2 pt-2 border-t border-zinc-600/50">
-                        <span className="text-primary font-bold">Staff message:</span>
-                        <div className="text-foreground whitespace-pre-wrap mt-0.5">{u.account_locked_admin_message}</div>
-                        {u.account_locked_admin_message_at && <div className="text-zinc-500 text-[9px]">{new Date(u.account_locked_admin_message_at).toLocaleString()}</div>}
-                      </div>
-                    )}
-                    {u.account_locked_user_reply && (
-                      <div className="mt-1">
-                        <span className="text-emerald-400 font-bold">Their reply:</span>
-                        <div className="text-foreground whitespace-pre-wrap mt-0.5">{u.account_locked_user_reply}</div>
-                        {u.account_locked_user_reply_at && <div className="text-zinc-500 text-[9px]">{new Date(u.account_locked_user_reply_at).toLocaleString()}</div>}
-                      </div>
-                    )}
-                    <div className="mt-2 pt-2 border-t border-zinc-600/50">
-                      <textarea
-                        value={lockedMessageByUser[u.username] ?? ''}
-                        onChange={(e) => setLockedMessageByUser((prev) => ({ ...prev, [u.username]: e.target.value }))}
-                        placeholder="Leave message for user (they can reply once)"
-                        rows={2}
-                        className="w-full px-2 py-1 rounded border border-zinc-600 bg-zinc-800/50 text-[10px] font-heading placeholder:text-zinc-500 focus:border-primary/50 focus:outline-none resize-y"
-                        maxLength={2000}
-                        disabled={sendingMessageTo === u.username}
-                      />
-                      <button type="button" onClick={() => handleSendLockedMessage(u.username)} disabled={sendingMessageTo === u.username || !(lockedMessageByUser[u.username] || '').trim()} className="mt-1 px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed">
-                        {sendingMessageTo === u.username ? 'Sending...' : 'Send message'}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <ActionRow icon={Skull} label="Kill Player (modkill)" description="Account is dead; cannot login until revived" color="text-red-400">
-              <BtnDanger onClick={handleKillPlayer}>Kill</BtnDanger>
-            </ActionRow>
-            <ActionRow icon={Zap} label="Revive Player" description="Restore a dead or modkilled account so they can log in again">
-              <BtnPrimary onClick={handleRevivePlayer}>Revive</BtnPrimary>
-            </ActionRow>
+            <div className="pt-1 pl-6">
+              <div className="text-[9px] font-heading font-bold uppercase tracking-wider text-mutedForeground">Account access</div>
+            </div>
             <ActionRow icon={Bot} label="Auto Rank" description="Give or remove auto rank for the target user">
               <button type="button" onClick={handleGiveAutoRank} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-emerald-500/20 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30">Give</button>
               <button type="button" onClick={handleRemoveAutoRank} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-zinc-700/60 border-zinc-500/40 text-zinc-300 hover:bg-zinc-600">Remove</button>
@@ -4127,6 +4068,186 @@ export default function Admin() {
       )}
           </>
           )}
+
+      {activeCategoryId === 'admin-moderation' && (isAdmin || isModerator) && (
+      <section id="admin-moderation" className="admin-category-nav space-y-4">
+        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
+          <Lock size={12} />
+          Moderation
+        </h2>
+
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Lock}
+            title="Player enforcement"
+            badge={lockedAccounts.length > 0 ? <span className="text-[10px] font-heading text-amber-400">{lockedAccounts.length} locked</span> : null}
+            isCollapsed={collapsed.moderationPlayer}
+            onToggle={() => toggleSection('moderationPlayer')}
+          />
+          {!collapsed.moderationPlayer && (
+            <div className="p-2 space-y-1">
+              <ActionRow icon={User} label="Target username" description="User to lock, unlock, modkill, or revive">
+                <input
+                  type="text"
+                  value={formData.targetUsername}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, targetUsername: e.target.value }))}
+                  placeholder="Username"
+                  className="flex-1 min-w-0 max-w-[220px] px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading"
+                />
+              </ActionRow>
+              <ActionRow icon={Lock} label="Lock player (investigation)" description="User can only access /locked page and submit one comment until unlocked" color="text-red-400">
+                <BtnDanger onClick={handleLockPlayer}>Lock</BtnDanger>
+              </ActionRow>
+              <ActionRow icon={Lock} label="Unlock account" description="Restore access after investigation">
+                <BtnPrimary onClick={() => handleUnlockAccount()}>Unlock</BtnPrimary>
+              </ActionRow>
+              <ActionRow icon={Skull} label="Modkill" description="Permanently kill the target account. They cannot log in until revived." color="text-red-400">
+                <BtnDanger onClick={handleKillPlayer}>Kill</BtnDanger>
+              </ActionRow>
+              <ActionRow icon={Zap} label="Revive" description="Restore a dead or modkilled account so they can log in again">
+                <BtnPrimary onClick={handleRevivePlayer}>Revive</BtnPrimary>
+              </ActionRow>
+              {isAdmin && (
+                <ActionRow icon={Lock} label="Test lock (60s)" description="Lock yourself for 60 seconds to test the locked page">
+                  <button type="button" onClick={handleTestLockSelf} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-amber-500/20 border-amber-500/40 text-amber-400 hover:bg-amber-500/30">
+                    Test lock
+                  </button>
+                </ActionRow>
+              )}
+              <ActionRow icon={Lock} label="Locked accounts" description="Users under investigation and their comment">
+                <button type="button" onClick={fetchLockedAccounts} disabled={lockedAccountsLoading} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-zinc-700/60 border-zinc-500/40 text-zinc-300 hover:bg-zinc-600 disabled:opacity-50">
+                  {lockedAccountsLoading ? '...' : 'Refresh'}
+                </button>
+              </ActionRow>
+              {lockedAccounts.length > 0 && (
+                <div className="mt-1 pl-6 space-y-2 border-l-2 border-amber-500/30">
+                  {lockedAccounts.map((u) => (
+                    <div key={u.username} className="text-[10px] font-heading rounded border border-zinc-600/50 bg-zinc-800/30 p-2">
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <span className="font-bold text-amber-400">{u.username}</span>
+                        <button type="button" onClick={() => handleUnlockAccount(u.username)} className="px-1.5 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-emerald-500/40 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30">Unlock</button>
+                      </div>
+                      {u.account_locked_at && <div className="text-zinc-500 mt-0.5">Locked: {new Date(u.account_locked_at).toLocaleString()}</div>}
+                      {u.account_locked_comment ? <div className="mt-1 text-foreground whitespace-pre-wrap">{u.account_locked_comment}</div> : <div className="mt-1 text-zinc-500 italic">No comment yet.</div>}
+                      {u.account_locked_comment_at && <div className="text-zinc-500 text-[9px]">Submitted: {new Date(u.account_locked_comment_at).toLocaleString()}</div>}
+                      {u.account_locked_admin_message && (
+                        <div className="mt-2 pt-2 border-t border-zinc-600/50">
+                          <span className="text-primary font-bold">Staff message:</span>
+                          <div className="text-foreground whitespace-pre-wrap mt-0.5">{u.account_locked_admin_message}</div>
+                          {u.account_locked_admin_message_at && <div className="text-zinc-500 text-[9px]">{new Date(u.account_locked_admin_message_at).toLocaleString()}</div>}
+                        </div>
+                      )}
+                      {u.account_locked_user_reply && (
+                        <div className="mt-1">
+                          <span className="text-emerald-400 font-bold">Their reply:</span>
+                          <div className="text-foreground whitespace-pre-wrap mt-0.5">{u.account_locked_user_reply}</div>
+                          {u.account_locked_user_reply_at && <div className="text-zinc-500 text-[9px]">{new Date(u.account_locked_user_reply_at).toLocaleString()}</div>}
+                        </div>
+                      )}
+                      <div className="mt-2 pt-2 border-t border-zinc-600/50">
+                        <textarea
+                          value={lockedMessageByUser[u.username] ?? ''}
+                          onChange={(e) => setLockedMessageByUser((prev) => ({ ...prev, [u.username]: e.target.value }))}
+                          placeholder="Leave message for user (they can reply once)"
+                          rows={2}
+                          className="w-full px-2 py-1 rounded border border-zinc-600 bg-zinc-800/50 text-[10px] font-heading placeholder:text-zinc-500 focus:border-primary/50 focus:outline-none resize-y"
+                          maxLength={2000}
+                          disabled={sendingMessageTo === u.username}
+                        />
+                        <button type="button" onClick={() => handleSendLockedMessage(u.username)} disabled={sendingMessageTo === u.username || !(lockedMessageByUser[u.username] || '').trim()} className="mt-1 px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed">
+                          {sendingMessageTo === u.username ? 'Sending...' : 'Send message'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Lock}
+            title="Page locks"
+            badge={Object.keys(pageLocks).length > 0 ? <span className="text-[10px] font-heading text-amber-400">{Object.keys(pageLocks).length} locked</span> : null}
+            isCollapsed={collapsed.moderationPageLocks}
+            onToggle={() => { toggleSection('moderationPageLocks'); if (collapsed.moderationPageLocks) fetchPageLocks(); }}
+          />
+          {!collapsed.moderationPageLocks && (
+            <div className="p-3 space-y-3">
+              <p className="text-[10px] text-mutedForeground">When a page is locked, users see &quot;Down for maintenance&quot; (or your message) and cannot access it. Admins can still access.</p>
+              <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2.5 space-y-2">
+                <p className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-wider">Lock buying points (Points tab only) until</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input type="datetime-local" value={pageLockUnlockAt} onChange={(e) => setPageLockUnlockAt(e.target.value)} className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs font-mono" />
+                  <BtnPrimary onClick={() => handlePageLockToggle('/store/points', true, pageLockUnlockAt ? `Points purchase closed until ${new Date(pageLockUnlockAt).toLocaleString()}` : 'Points purchase temporarily unavailable', pageLockUnlockAt ? new Date(pageLockUnlockAt).toISOString() : null)} disabled={pageLockSaving || !pageLockUnlockAt}>Lock until date</BtnPrimary>
+                  {pageLocks['/store/points'] && (
+                    <BtnSecondary onClick={() => handlePageLockToggle('/store/points', false)} disabled={pageLockSaving}>Unlock now</BtnSecondary>
+                  )}
+                </div>
+              </div>
+              <div className="space-y-2 max-h-64 overflow-y-auto">
+                {['/dashboard', '/game/users-online', '/bank', '/stock-market', '/stats', '/jail', '/organised-crime', '/crimes', '/gta', '/attack', '/hitlist', '/families', '/casino', '/store', '/store/points', '/forum', '/inbox', '/help-desk', '/profile'].map((path) => {
+                  const entry = pageLocks[path];
+                  const isLocked = !!entry;
+                  const msg = typeof entry === 'object' ? (entry?.message ?? '') : (entry || '');
+                  return (
+                    <div key={path} className="flex flex-wrap items-center gap-2 px-2 py-1.5 rounded bg-zinc-800/30 border border-transparent hover:border-primary/20">
+                      <span className="text-[11px] font-heading font-mono min-w-[120px]">{path}</span>
+                      {isLocked && <span className="text-[10px] text-mutedForeground truncate max-w-[180px]" title={msg}>{msg || 'Down for maintenance'}</span>}
+                      <div className="flex gap-1 ml-auto">
+                        {isLocked ? (
+                          <BtnSecondary onClick={() => handlePageLockToggle(path, false)} disabled={pageLockSaving}>Unlock</BtnSecondary>
+                        ) : (
+                          <BtnPrimary onClick={() => handlePageLockToggle(path, true, pageLockMessage)} disabled={pageLockSaving}>Lock</BtnPrimary>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="pt-2 border-t border-white/10">
+                <p className="text-[10px] font-heading font-bold text-primary mb-2">Custom path</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input type="text" value={pageLockPath} onChange={(e) => setPageLockPath(e.target.value)} placeholder="/any/path" className="w-40 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs font-mono" />
+                  <input type="text" value={pageLockMessage} onChange={(e) => setPageLockMessage(e.target.value)} placeholder="Down for maintenance" className="w-48 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs" />
+                  <BtnPrimary onClick={() => handlePageLockToggle((pageLockPath || '').trim() || '/', true, pageLockMessage)} disabled={pageLockSaving || !(pageLockPath || '').trim()}>Lock</BtnPrimary>
+                  <BtnSecondary onClick={() => handlePageLockToggle((pageLockPath || '').trim() || '/', false)} disabled={pageLockSaving || !(pageLockPath || '').trim()}>Unlock</BtnSecondary>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={AlertTriangle}
+            title="Related shortcuts"
+            isCollapsed={collapsed.moderationRelated}
+            onToggle={() => toggleSection('moderationRelated')}
+          />
+          {!collapsed.moderationRelated && (
+            <div className="p-3 space-y-2">
+              <p className="text-[10px] text-mutedForeground font-heading">Quick jump to adjacent moderation surfaces.</p>
+              <div className="flex flex-wrap gap-2">
+                <BtnSecondary onClick={() => { setActiveCategoryId('admin-cheat'); setCollapsed(prev => ({ ...prev, cheat: false })); if (typeof window !== 'undefined') window.location.hash = 'admin-cheat'; }}>
+                  Open Cheat Detection
+                </BtnSecondary>
+                {isAdmin && (
+                  <BtnSecondary onClick={() => { setActiveCategoryId('admin-security'); if (typeof window !== 'undefined') window.location.hash = 'admin-security'; }}>
+                    Open Security & Cloudflare
+                  </BtnSecondary>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+      )}
 
       {activeCategoryId === 'admin-donations' && isAdmin && (
       <section id="admin-donations" className="admin-category-nav space-y-4">
@@ -5546,98 +5667,6 @@ export default function Admin() {
             )}
           </div>
         )}
-        </div>
-
-
-        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <SectionHeader
-            icon={Lock}
-            title="Lock player (investigation)"
-            badge={lockedAccounts.length > 0 ? <span className="text-[10px] font-heading text-amber-400">{lockedAccounts.length} locked</span> : null}
-            isCollapsed={collapsed.lockPlayerMod}
-            onToggle={() => toggleSection('lockPlayerMod')}
-          />
-          {!collapsed.lockPlayerMod && (
-            <div className="p-2 space-y-1">
-              <ActionRow icon={User} label="Target username" description="User to lock or unlock">
-                <input
-                  type="text"
-                  value={formData.targetUsername}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, targetUsername: e.target.value }))}
-                  placeholder="Username"
-                  className="flex-1 min-w-0 max-w-[180px] px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading"
-                />
-              </ActionRow>
-              <ActionRow icon={Lock} label="Lock Player (investigation)" description="User can only access /locked page and submit one comment until unlocked" color="text-red-400">
-                <BtnDanger onClick={handleLockPlayer}>Lock</BtnDanger>
-              </ActionRow>
-              <ActionRow icon={Lock} label="Unlock Account" description="Restore access after investigation">
-                <BtnPrimary onClick={() => handleUnlockAccount()}>Unlock</BtnPrimary>
-              </ActionRow>
-              <ActionRow icon={Skull} label="Modkill" description="Permanently kill the target account. They become dead and cannot log in until revived. Use for rule breaks or at player request." color="text-red-400">
-                <BtnDanger onClick={handleKillPlayer}>Kill</BtnDanger>
-              </ActionRow>
-              <ActionRow icon={Zap} label="Revive" description="Restore a dead or modkilled account so they can log in again">
-                <BtnPrimary onClick={handleRevivePlayer}>Revive</BtnPrimary>
-              </ActionRow>
-              {isAdmin && (
-                <ActionRow icon={Lock} label="Test lock (60s)" description="Lock yourself for 60 seconds to test the locked page">
-                  <button type="button" onClick={handleTestLockSelf} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-amber-500/20 border-amber-500/40 text-amber-400 hover:bg-amber-500/30">
-                    Test lock
-                  </button>
-                </ActionRow>
-              )}
-              <ActionRow icon={Lock} label="Locked accounts" description="Users under investigation and their comment">
-                <button type="button" onClick={fetchLockedAccounts} disabled={lockedAccountsLoading} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-zinc-700/60 border-zinc-500/40 text-zinc-300 hover:bg-zinc-600 disabled:opacity-50">
-                  {lockedAccountsLoading ? '...' : 'Refresh'}
-                </button>
-              </ActionRow>
-              {lockedAccounts.length > 0 && (
-                <div className="mt-1 pl-6 space-y-2 border-l-2 border-amber-500/30">
-                  {lockedAccounts.map((u) => (
-                    <div key={u.username} className="text-[10px] font-heading rounded border border-zinc-600/50 bg-zinc-800/30 p-2">
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <span className="font-bold text-amber-400">{u.username}</span>
-                        <button type="button" onClick={() => handleUnlockAccount(u.username)} className="px-1.5 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-emerald-500/40 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30">Unlock</button>
-                      </div>
-                      {u.account_locked_at && <div className="text-zinc-500 mt-0.5">Locked: {new Date(u.account_locked_at).toLocaleString()}</div>}
-                      {u.account_locked_comment ? <div className="mt-1 text-foreground whitespace-pre-wrap">{u.account_locked_comment}</div> : <div className="mt-1 text-zinc-500 italic">No comment yet.</div>}
-                      {u.account_locked_comment_at && <div className="text-zinc-500 text-[9px]">Submitted: {new Date(u.account_locked_comment_at).toLocaleString()}</div>}
-                      {u.account_locked_admin_message && (
-                        <div className="mt-2 pt-2 border-t border-zinc-600/50">
-                          <span className="text-primary font-bold">Staff message:</span>
-                          <div className="text-foreground whitespace-pre-wrap mt-0.5">{u.account_locked_admin_message}</div>
-                          {u.account_locked_admin_message_at && <div className="text-zinc-500 text-[9px]">{new Date(u.account_locked_admin_message_at).toLocaleString()}</div>}
-                        </div>
-                      )}
-                      {u.account_locked_user_reply && (
-                        <div className="mt-1">
-                          <span className="text-emerald-400 font-bold">Their reply:</span>
-                          <div className="text-foreground whitespace-pre-wrap mt-0.5">{u.account_locked_user_reply}</div>
-                          {u.account_locked_user_reply_at && <div className="text-zinc-500 text-[9px]">{new Date(u.account_locked_user_reply_at).toLocaleString()}</div>}
-                        </div>
-                      )}
-                      <div className="mt-2 pt-2 border-t border-zinc-600/50">
-                        <textarea
-                          value={lockedMessageByUser[u.username] ?? ''}
-                          onChange={(e) => setLockedMessageByUser((prev) => ({ ...prev, [u.username]: e.target.value }))}
-                          placeholder="Leave message for user (they can reply once)"
-                          rows={2}
-                          className="w-full px-2 py-1 rounded border border-zinc-600 bg-zinc-800/50 text-[10px] font-heading placeholder:text-zinc-500 focus:border-primary/50 focus:outline-none resize-y"
-                          maxLength={2000}
-                          disabled={sendingMessageTo === u.username}
-                        />
-                        <button type="button" onClick={() => handleSendLockedMessage(u.username)} disabled={sendingMessageTo === u.username || !(lockedMessageByUser[u.username] || '').trim()} className="mt-1 px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed">
-                          {sendingMessageTo === u.username ? 'Sending...' : 'Send message'}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
 
@@ -8894,144 +8923,6 @@ export default function Admin() {
                   )}
                 </div>
               )}
-            </div>
-          )}
-        </div>
-
-        {/* Lock player (investigation) – Mod Tools */}
-        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <SectionHeader
-            icon={Lock}
-            title="Lock player (investigation)"
-            badge={lockedAccounts.length > 0 ? <span className="text-[10px] font-heading text-amber-400">{lockedAccounts.length} locked</span> : null}
-            isCollapsed={collapsed.lockPlayerModTools}
-            onToggle={() => toggleSection('lockPlayerModTools')}
-          />
-          {!collapsed.lockPlayerModTools && (
-            <div className="p-2 space-y-1">
-              <ActionRow icon={User} label="Target username" description="User to lock or unlock">
-                <input
-                  type="text"
-                  value={formData.targetUsername}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, targetUsername: e.target.value }))}
-                  placeholder="Username"
-                  className="flex-1 min-w-0 max-w-[180px] px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading"
-                />
-              </ActionRow>
-              <ActionRow icon={Lock} label="Lock Player (investigation)" description="User can only access /locked page and submit one comment until unlocked" color="text-red-400">
-                <BtnDanger onClick={handleLockPlayer}>Lock</BtnDanger>
-              </ActionRow>
-              <ActionRow icon={Lock} label="Unlock Account" description="Restore access after investigation">
-                <BtnPrimary onClick={() => handleUnlockAccount()}>Unlock</BtnPrimary>
-              </ActionRow>
-              <ActionRow icon={Skull} label="Modkill" description="Permanently kill the target account. They become dead and cannot log in until revived." color="text-red-400">
-                <BtnDanger onClick={handleKillPlayer}>Kill</BtnDanger>
-              </ActionRow>
-              <ActionRow icon={Zap} label="Revive" description="Restore a dead or modkilled account so they can log in again">
-                <BtnPrimary onClick={handleRevivePlayer}>Revive</BtnPrimary>
-              </ActionRow>
-              <ActionRow icon={Lock} label="Locked accounts" description="Users under investigation and their comment">
-                <button type="button" onClick={fetchLockedAccounts} disabled={lockedAccountsLoading} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-zinc-700/60 border-zinc-500/40 text-zinc-300 hover:bg-zinc-600 disabled:opacity-50">
-                  {lockedAccountsLoading ? '...' : 'Refresh'}
-                </button>
-              </ActionRow>
-              {lockedAccounts.length > 0 && (
-                <div className="mt-1 pl-6 space-y-2 border-l-2 border-amber-500/30">
-                  {lockedAccounts.map((u) => (
-                    <div key={u.username} className="text-[10px] font-heading rounded border border-zinc-600/50 bg-zinc-800/30 p-2">
-                      <div className="flex items-center justify-between gap-2 flex-wrap">
-                        <span className="font-bold text-amber-400">{u.username}</span>
-                        <button type="button" onClick={() => handleUnlockAccount(u.username)} className="px-1.5 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-emerald-500/40 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30">Unlock</button>
-                      </div>
-                      {u.account_locked_at && <div className="text-zinc-500 mt-0.5">Locked: {new Date(u.account_locked_at).toLocaleString()}</div>}
-                      {u.account_locked_comment ? <div className="mt-1 text-foreground whitespace-pre-wrap">{u.account_locked_comment}</div> : <div className="mt-1 text-zinc-500 italic">No comment yet.</div>}
-                      {u.account_locked_admin_message && (
-                        <div className="mt-2 pt-2 border-t border-zinc-600/50">
-                          <span className="text-primary font-bold">Staff message:</span>
-                          <div className="text-foreground whitespace-pre-wrap mt-0.5">{u.account_locked_admin_message}</div>
-                        </div>
-                      )}
-                      {u.account_locked_user_reply && (
-                        <div className="mt-1">
-                          <span className="text-emerald-400 font-bold">Their reply:</span>
-                          <div className="text-foreground whitespace-pre-wrap mt-0.5">{u.account_locked_user_reply}</div>
-                        </div>
-                      )}
-                      <div className="mt-2 pt-2 border-t border-zinc-600/50">
-                        <textarea
-                          value={lockedMessageByUser[u.username] ?? ''}
-                          onChange={(e) => setLockedMessageByUser((prev) => ({ ...prev, [u.username]: e.target.value }))}
-                          placeholder="Leave message for user (they can reply once)"
-                          rows={2}
-                          className="w-full px-2 py-1 rounded border border-zinc-600 bg-zinc-800/50 text-[10px] font-heading placeholder:text-zinc-500 focus:border-primary/50 focus:outline-none resize-y"
-                          maxLength={2000}
-                          disabled={sendingMessageTo === u.username}
-                        />
-                        <button type="button" onClick={() => handleSendLockedMessage(u.username)} disabled={sendingMessageTo === u.username || !(lockedMessageByUser[u.username] || '').trim()} className="mt-1 px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed">
-                          {sendingMessageTo === u.username ? 'Sending...' : 'Send message'}
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Lock page – Mod Tools */}
-        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <SectionHeader
-            icon={Lock}
-            title="Lock page"
-            badge={Object.keys(pageLocks).length > 0 ? <span className="text-[10px] font-heading text-amber-400">{Object.keys(pageLocks).length} locked</span> : null}
-            isCollapsed={collapsed.pageLocksMod}
-            onToggle={() => { toggleSection('pageLocksMod'); if (collapsed.pageLocksMod) fetchPageLocks(); }}
-          />
-          {!collapsed.pageLocksMod && (
-            <div className="p-3 space-y-3">
-              <p className="text-[10px] text-mutedForeground">When a page is locked, users see &quot;Down for maintenance&quot; (or your message) and cannot access it. Admins can still access.</p>
-              <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2.5 space-y-2">
-                <p className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-wider">Lock buying points (Points tab only) until</p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <input type="datetime-local" value={pageLockUnlockAt} onChange={(e) => setPageLockUnlockAt(e.target.value)} className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs font-mono" />
-                  <BtnPrimary onClick={() => handlePageLockToggle('/store/points', true, pageLockUnlockAt ? `Points purchase closed until ${new Date(pageLockUnlockAt).toLocaleString()}` : 'Points purchase temporarily unavailable', pageLockUnlockAt ? new Date(pageLockUnlockAt).toISOString() : null)} disabled={pageLockSaving || !pageLockUnlockAt}>Lock until date</BtnPrimary>
-                  {pageLocks['/store/points'] && (
-                    <BtnSecondary onClick={() => handlePageLockToggle('/store/points', false)} disabled={pageLockSaving}>Unlock now</BtnSecondary>
-                  )}
-                </div>
-              </div>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {['/dashboard', '/game/users-online', '/bank', '/stock-market', '/stats', '/jail', '/organised-crime', '/crimes', '/gta', '/attack', '/hitlist', '/families', '/casino', '/store', '/store/points', '/forum', '/inbox', '/help-desk', '/profile'].map((path) => {
-                  const entry = pageLocks[path];
-                  const isLocked = !!entry;
-                  const msg = typeof entry === 'object' ? (entry?.message ?? '') : (entry || '');
-                  return (
-                    <div key={path} className="flex flex-wrap items-center gap-2 px-2 py-1.5 rounded bg-zinc-800/30 border border-transparent hover:border-primary/20">
-                      <span className="text-[11px] font-heading font-mono min-w-[120px]">{path}</span>
-                      {isLocked && <span className="text-[10px] text-mutedForeground truncate max-w-[180px]" title={msg}>{msg || 'Down for maintenance'}</span>}
-                      <div className="flex gap-1 ml-auto">
-                        {isLocked ? (
-                          <BtnSecondary onClick={() => handlePageLockToggle(path, false)} disabled={pageLockSaving}>Unlock</BtnSecondary>
-                        ) : (
-                          <BtnPrimary onClick={() => handlePageLockToggle(path, true, pageLockMessage)} disabled={pageLockSaving}>Lock</BtnPrimary>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="pt-2 border-t border-white/10">
-                <p className="text-[10px] font-heading font-bold text-primary mb-2">Custom path</p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <input type="text" value={pageLockPath} onChange={(e) => setPageLockPath(e.target.value)} placeholder="/any/path" className="w-40 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs font-mono" />
-                  <input type="text" value={pageLockMessage} onChange={(e) => setPageLockMessage(e.target.value)} placeholder="Down for maintenance" className="w-48 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs" />
-                  <BtnPrimary onClick={() => handlePageLockToggle((pageLockPath || '').trim() || '/', true, pageLockMessage)} disabled={pageLockSaving || !(pageLockPath || '').trim()}>Lock</BtnPrimary>
-                  <BtnSecondary onClick={() => handlePageLockToggle((pageLockPath || '').trim() || '/', false)} disabled={pageLockSaving || !(pageLockPath || '').trim()}>Unlock</BtnSecondary>
-                </div>
-              </div>
             </div>
           )}
         </div>

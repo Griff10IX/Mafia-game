@@ -42,10 +42,11 @@ CF_ZONE_ID = os.environ.get("CF_ZONE_ID", "")
 CF_API_TOKEN = os.environ.get("CF_API_TOKEN", "")
 
 # Mod-visible admin categories: which Admin Tool categories moderators can see (configurable by admin)
-MOD_VISIBLE_CATEGORY_IDS_DEFAULT = ["admin-cheat", "admin-logs", "admin-staff", "admin-mod-tools"]
+MOD_VISIBLE_CATEGORY_IDS_DEFAULT = ["admin-cheat", "admin-logs", "admin-staff", "admin-mod-tools", "admin-moderation"]
 ADMIN_CATEGORY_IDS = {
-    "admin-players", "admin-gameworld", "admin-security", "admin-cheat", "admin-analytics",
-    "admin-logs", "admin-testing", "admin-quick", "admin-database", "admin-staff", "admin-mod-tools",
+    "admin-players", "admin-moderation", "admin-donations", "admin-gameworld", "admin-security",
+    "admin-cheat", "admin-analytics", "admin-logs", "admin-testing", "admin-quick",
+    "admin-database", "admin-staff", "admin-mod-tools",
 }
 
 
