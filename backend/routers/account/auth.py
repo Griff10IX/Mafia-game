@@ -242,6 +242,26 @@ def register(router):
             "manual_credit_eta": manual_credit_eta,
         }
 
+    @router.get("/auth/check-username")
+    async def check_username_availability(username: str):
+        """
+        Check whether a username is already taken (case-insensitive).
+
+        Username cannot be reused by anyone (alive or dead); dead accounts keep their username in the game.
+        """
+        raw = (username or "").strip()
+        if not raw:
+            raise HTTPException(status_code=400, detail="Username is required.")
+        username_pattern = re.compile("^" + re.escape(raw) + "$", re.IGNORECASE)
+        existing_username = await db.users.find_one(
+            {"username": username_pattern},
+            {"_id": 0, "id": 1, "is_dead": 1},
+        )
+        return {
+            "username": raw,
+            "is_taken": bool(existing_username),
+        }
+
     @router.post("/auth/register")
     async def register_user(user_data: UserRegister, request: Request):
         try:

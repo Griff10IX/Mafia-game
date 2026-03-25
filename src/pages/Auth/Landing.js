@@ -55,6 +55,11 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
   const [bannerMessage, setBannerMessage]           = useState('');
   const [referralCode, setReferralCode]             = useState('');
   const [preregisteredSuccess, setPreregisteredSuccess] = useState(null);
+  const [usernameCheck, setUsernameCheck] = useState({
+    status: 'idle', // 'idle' | 'checking' | 'ok' | 'error'
+    isTaken: null,
+    message: '',
+  });
 
   // Track unique login-page visits for admin stats (when viewing login/landing page at / or /login)
   useEffect(() => {
@@ -62,6 +67,46 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
       api.post('/auth/track-login-page-view').catch(() => {});
     }
   }, [location.pathname]);
+
+  // Username availability feedback (register tab only)
+  useEffect(() => {
+    if (isLogin) {
+      setUsernameCheck({ status: 'idle', isTaken: null, message: '' });
+      return;
+    }
+
+    const u = (formData.username || '').trim();
+    if (!u || u.length < 1) {
+      setUsernameCheck({ status: 'idle', isTaken: null, message: '' });
+      return;
+    }
+
+    let cancelled = false;
+    setUsernameCheck({ status: 'checking', isTaken: null, message: 'Checking username...' });
+
+    const t = setTimeout(() => {
+      api
+        .get('/auth/check-username', { params: { username: u } })
+        .then((r) => {
+          if (cancelled) return;
+          const isTaken = !!r.data?.is_taken;
+          setUsernameCheck({
+            status: 'ok',
+            isTaken,
+            message: isTaken ? 'Username is taken' : 'Username is available',
+          });
+        })
+        .catch(() => {
+          if (cancelled) return;
+          setUsernameCheck({ status: 'error', isTaken: null, message: 'Could not check username' });
+        });
+    }, 450);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [formData.username, isLogin]);
 
   // Fetch launch status on mount
   useEffect(() => {
@@ -697,6 +742,23 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
                     placeholder="Choose a username"
                     required
                   />
+                  {usernameCheck.status !== 'idle' && (
+                    <p
+                      className="mt-1 text-[9px] font-heading"
+                      style={{
+                        color:
+                          usernameCheck.status === 'checking'
+                            ? 'var(--noir-muted)'
+                            : usernameCheck.status === 'error'
+                              ? 'rgba(239,68,68,0.9)'
+                              : usernameCheck.isTaken
+                                ? 'rgba(239,68,68,0.95)'
+                                : 'rgba(34,197,94,0.95)',
+                      }}
+                    >
+                      {usernameCheck.message}
+                    </p>
+                  )}
                 </div>
               )}
 
