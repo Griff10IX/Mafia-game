@@ -906,6 +906,7 @@ export default function Store() {
                 <span>Status</span>
               </div>
               {paymentTransactions.slice(0, 15).map((t, i) => {
+                const ui = t.ui_status || '';
                 const statusClass =
                   t.payment_status === 'completed'
                     ? 'text-green-400'
@@ -913,9 +914,11 @@ export default function Store() {
                       ? 'text-amber-400'
                       : t.payment_status === 'manual_credit_pending'
                         ? 'text-sky-400'
-                        : t.ui_status === 'Not completed'
+                        : ui.includes('Unpaid')
                           ? 'text-zinc-500'
-                          : 'text-zinc-400';
+                          : ui.includes('Paid')
+                            ? 'text-emerald-400/90'
+                            : 'text-zinc-400';
                 const statusText =
                   t.ui_status
                     ? t.ui_status

@@ -228,7 +228,7 @@ async def _attach_pending_ui_labels(items: list, api_key: Optional[str]) -> None
     if not api_key:
         for t in items:
             if t.get("payment_status") == "pending":
-                t["ui_status"] = "Awaiting payment"
+                t["ui_status"] = "Could not verify payment"
         return
     for t in items:
         if t.get("payment_status") != "pending":
@@ -248,11 +248,95 @@ async def _attach_pending_ui_labels(items: list, api_key: Optional[str]) -> None
             t["ui_status"] = "Awaiting payment"
             continue
         if session.payment_status == "paid":
-            t["ui_status"] = "Processing"
+            t["ui_status"] = "Paid — awaiting credit"
         elif session.status == "open" and session.payment_status == "unpaid":
-            t["ui_status"] = "Not completed"
+            t["ui_status"] = "Unpaid (checkout not completed)"
         else:
             t["ui_status"] = "Awaiting payment"
+
+
+async def _enrich_admin_payment_log_rows(items: list, api_key: Optional[str]) -> None:
+    """Admin table: paid vs unpaid for DB `pending` rows, and whether manual Credit is safe."""
+    pending_rows = [t for t in items if t.get("payment_status") == "pending" and t.get("session_id")]
+
+    sessions_by_id = {}
+    if api_key and pending_rows:
+
+        async def _fetch_session(sid: str):
+            try:
+
+                def _retrieve():
+                    import stripe
+
+                    stripe.api_key = api_key
+                    return stripe.checkout.Session.retrieve(sid)
+
+                sess = await asyncio.to_thread(_retrieve)
+                return sid, sess
+            except Exception as e:
+                logger.warning("admin payment log: Stripe retrieve %s: %s", sid, e)
+                return sid, None
+
+        pairs = await asyncio.gather(*[_fetch_session(t["session_id"]) for t in pending_rows])
+        sessions_by_id = {sid: s for sid, s in pairs if sid}
+
+    for t in items:
+        ps = t.get("payment_status")
+        sid = t.get("session_id")
+
+        if ps == "completed":
+            t["status_display"] = "Credited"
+            t["allow_manual_credit"] = False
+            continue
+        if ps == "manual_credit_pending":
+            t["status_display"] = "Paid — manual credit pending"
+            t["allow_manual_credit"] = True
+            t["stripe_payment_status"] = "paid"
+            continue
+        if ps == "preorder_pending":
+            t["status_display"] = "Paid — pre-order pending"
+            t["allow_manual_credit"] = True
+            t["stripe_payment_status"] = "paid"
+            continue
+        if ps == "abandoned":
+            t["status_display"] = "Unpaid (abandoned checkout)"
+            t["allow_manual_credit"] = False
+            continue
+        if ps != "pending":
+            t["status_display"] = ps or "Unknown"
+            t["allow_manual_credit"] = False
+            continue
+
+        if not sid:
+            t["status_display"] = "Pending (no session id)"
+            t["allow_manual_credit"] = False
+            continue
+        if not api_key:
+            t["status_display"] = "Pending (cannot verify — no Stripe key)"
+            t["allow_manual_credit"] = False
+            continue
+
+        session = sessions_by_id.get(sid)
+        if session is None:
+            t["status_display"] = "Pending (could not load Stripe session)"
+            t["allow_manual_credit"] = False
+            continue
+
+        t["stripe_session_status"] = session.status
+        t["stripe_payment_status"] = session.payment_status
+
+        if session.payment_status == "paid":
+            t["status_display"] = "Paid — points not credited yet"
+            t["allow_manual_credit"] = True
+        elif session.status == "expired":
+            t["status_display"] = "Unpaid (checkout expired)"
+            t["allow_manual_credit"] = False
+        elif session.status == "open" and session.payment_status == "unpaid":
+            t["status_display"] = "Unpaid (checkout not completed)"
+            t["allow_manual_credit"] = False
+        else:
+            t["status_display"] = f"Unpaid (Stripe: {session.status} / {session.payment_status})"
+            t["allow_manual_credit"] = False
 
 
 def register(router):
@@ -751,6 +835,7 @@ def register(router):
         by_id = {u["id"]: u.get("username", "?") for u in users}
         for t in items:
             t["username"] = by_id.get(t.get("user_id"), "?")
+        await _enrich_admin_payment_log_rows(items, _get_stripe_key())
         return {"transactions": items}
 
     class ManualCreditRequest(BaseModel):
@@ -835,7 +920,34 @@ def register(router):
         Works for pending, preorder_pending, and manual_credit_pending."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin only")
-        
+
+        existing = await db.payment_transactions.find_one({"session_id": body.session_id}, {"_id": 0})
+        if not existing:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        ps_existing = existing.get("payment_status")
+        if ps_existing == "abandoned":
+            raise HTTPException(status_code=400, detail="This checkout was abandoned; cannot credit")
+        if ps_existing == "pending":
+            api_key_mc = _get_stripe_key()
+            if not api_key_mc:
+                raise HTTPException(status_code=503, detail="Stripe key not configured; cannot verify payment")
+            try:
+
+                def _retrieve_mc():
+                    import stripe
+
+                    stripe.api_key = api_key_mc
+                    return stripe.checkout.Session.retrieve(body.session_id)
+
+                stripe_sess = await asyncio.to_thread(_retrieve_mc)
+            except Exception as e:
+                raise HTTPException(status_code=400, detail=f"Could not verify Stripe session: {e}") from e
+            if stripe_sess.payment_status != "paid":
+                raise HTTPException(
+                    status_code=400,
+                    detail="Stripe reports this checkout was not paid; cannot credit points",
+                )
+
         now_iso = datetime.now(timezone.utc).isoformat()
         txn = await db.payment_transactions.find_one_and_update(
             {"session_id": body.session_id, "payment_status": {"$ne": "completed"}},

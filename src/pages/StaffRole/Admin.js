@@ -7880,7 +7880,7 @@ export default function Admin() {
           />
           {!collapsed.donationsLog && (
             <div className="p-3 space-y-3">
-              <p className="text-[10px] text-mutedForeground font-heading">Stripe point purchases. Click &quot;Credit&quot; to manually credit pending transactions. Use &quot;Check Stripe&quot; to verify and process a session directly from Stripe.</p>
+              <p className="text-[10px] text-mutedForeground font-heading">Stripe point purchases. Status shows whether Stripe reports paid or unpaid. &quot;Credit&quot; only appears when the payment succeeded in Stripe but points are not credited yet. Use &quot;Check &amp; Process&quot; for a session id if a row looks stuck.</p>
               <div className="flex flex-wrap gap-2 items-center">
                 <BtnPrimary onClick={handleFetchDonationsLog} disabled={donationsLogLoading}>
                   {donationsLogLoading ? 'Loading…' : 'Load payments log'}
@@ -7918,6 +7918,21 @@ export default function Admin() {
                       {donationsLogData.map((row, idx) => {
                         const added = row.preorder_points || row.points || 0;
                         const isPending = row.payment_status !== 'completed';
+                        const canCredit = row.allow_manual_credit === true
+                          || (row.allow_manual_credit === undefined && isPending && row.session_id && row.payment_status !== 'pending' && row.payment_status !== 'abandoned');
+                        const statusLabel = row.status_display || (
+                          row.payment_status === 'completed' ? 'Credited'
+                            : row.payment_status === 'preorder_pending' ? 'Pre-order'
+                              : row.payment_status === 'manual_credit_pending' ? 'Manual credit'
+                                : row.payment_status || 'Pending'
+                        );
+                        const statusClass = row.allow_manual_credit
+                          ? 'text-emerald-400'
+                          : (statusLabel || '').startsWith('Unpaid')
+                            ? 'text-red-400/90'
+                            : row.payment_status === 'completed'
+                              ? 'text-green-400'
+                              : 'text-amber-400';
                         return (
                           <tr key={row.session_id || idx} className="border-b border-zinc-700/30">
                             <td className="py-1 pr-1 text-mutedForeground" title={row.created_at}>{row.created_at ? new Date(row.created_at).toLocaleString() : '—'}</td>
@@ -7925,18 +7940,13 @@ export default function Admin() {
                             <td className="py-1 pr-1 capitalize">{row.package_id ?? '—'}</td>
                             <td className="py-1 pr-1 font-mono">{Number(added).toLocaleString()}</td>
                             <td className="py-1 pr-1">
-                              {row.payment_status === 'completed' ? (
-                                <span className="text-green-400">Completed</span>
-                              ) : row.payment_status === 'preorder_pending' ? (
-                                <span className="text-amber-400">Pre-order</span>
-                              ) : row.payment_status === 'manual_credit_pending' ? (
-                                <span className="text-sky-400">Manual credit</span>
-                              ) : (
-                                <span className="text-red-400">{row.payment_status || 'Pending'}</span>
-                              )}
+                              <span className={statusClass}>{statusLabel}</span>
+                              {row.stripe_payment_status && row.payment_status === 'pending' ? (
+                                <span className="block text-[8px] text-mutedForeground mt-0.5 font-mono" title="Stripe payment_status">Stripe: {row.stripe_payment_status}</span>
+                              ) : null}
                             </td>
                             <td className="py-1 pr-1">
-                              {isPending && row.session_id && (
+                              {canCredit && row.session_id ? (
                                 <button
                                   type="button"
                                   onClick={() => handleManualCreditTransaction(row.session_id)}
@@ -7945,8 +7955,9 @@ export default function Admin() {
                                 >
                                   {manualCreditLoading === row.session_id ? '...' : 'Credit'}
                                 </button>
+                              ) : (
+                                <span className="text-mutedForeground">—</span>
                               )}
-                              {!isPending && <span className="text-mutedForeground">—</span>}
                             </td>
                           </tr>
                         );
