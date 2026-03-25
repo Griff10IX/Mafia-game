@@ -220,8 +220,26 @@ export default function Store() {
   }, []);
 
   useEffect(() => {
+    const sp = new URLSearchParams(window.location.search);
+    const sessionId = sp.get('session_id');
+    const paymentCancel = sp.get('payment_cancel');
+    // Stripe cancel_url: user backed out — mark checkout abandoned (not paid)
+    if (paymentCancel === '1' && sessionId) {
+      (async () => {
+        try {
+          await api.post(`/payments/mark-checkout-cancelled/${encodeURIComponent(sessionId)}`);
+          toast.info('Checkout was not completed — no charge was made.');
+          await fetchPaymentTransactions();
+        } catch {
+          toast.error('Could not update checkout status');
+        }
+        const tab = sp.get('tab');
+        window.history.replaceState({}, '', tab ? `/store?tab=${encodeURIComponent(tab)}` : '/store');
+        fetchData();
+      })();
+      return;
+    }
     fetchData();
-    const sessionId = new URLSearchParams(window.location.search).get('session_id');
     if (sessionId) checkPaymentStatus(sessionId);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -261,8 +279,11 @@ export default function Store() {
         refreshUser();
         fetchData();
         fetchPaymentTransactions();
-      } else if (res.data.status === 'expired') {
+      } else if (res.data.status === 'expired' || res.data.payment_status === 'expired') {
         toast.error('Session expired.');
+      } else if (res.data.payment_status === 'unpaid') {
+        toast.info('No payment was completed.');
+        fetchPaymentTransactions();
       } else {
         setTimeout(() => checkPaymentStatus(sessionId, attempt + 1), 2000);
         return;
@@ -870,15 +891,19 @@ export default function Store() {
                       ? 'text-amber-400'
                       : t.payment_status === 'manual_credit_pending'
                         ? 'text-sky-400'
-                        : 'text-zinc-400';
+                        : t.ui_status === 'Not completed'
+                          ? 'text-zinc-500'
+                          : 'text-zinc-400';
                 const statusText =
-                  t.payment_status === 'completed'
-                    ? 'Credited'
-                    : t.payment_status === 'preorder_pending'
-                      ? 'Pre-order'
-                      : t.payment_status === 'manual_credit_pending'
-                        ? 'Manual credit'
-                        : t.payment_status || 'Pending';
+                  t.ui_status
+                    ? t.ui_status
+                    : t.payment_status === 'completed'
+                      ? 'Credited'
+                      : t.payment_status === 'preorder_pending'
+                        ? 'Pre-order'
+                        : t.payment_status === 'manual_credit_pending'
+                          ? 'Manual credit'
+                          : t.payment_status || 'Pending';
                 return (
                   <div key={t.session_id || i} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-2 py-1.5 text-[10px] font-heading border-b border-zinc-800/50 last:border-0">
                     <span className="text-mutedForeground truncate" title={t.created_at}>{t.created_at ? new Date(t.created_at).toLocaleString() : '—'}</span>

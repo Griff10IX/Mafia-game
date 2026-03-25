@@ -887,8 +887,13 @@ export default function Missions() {
         if (res.data.reward_cash_immediate > 0) parts.push(`+${fmt(res.data.reward_cash_immediate)} cash`);
         if (res.data.reward_respect > 0) parts.push(`+${res.data.reward_respect} respect`);
         if (res.data.reward_bullets > 0) parts.push(`+${res.data.reward_bullets} bullets`);
-        if (res.data.reward_car_id) parts.push('1 car');
-        if (res.data.reward_car_ids?.length) parts.push(`${res.data.reward_car_ids.length} cars`);
+        const carNames = Array.isArray(res.data.reward_car_names) ? res.data.reward_car_names.filter(Boolean) : [];
+        if (carNames.length === 1) parts.push(carNames[0]);
+        else if (carNames.length > 1) parts.push(carNames.join(', '));
+        else {
+          if (res.data.reward_car_id) parts.push('1 car');
+          if (res.data.reward_car_ids?.length) parts.push(`${res.data.reward_car_ids.length} cars`);
+        }
         if (res.data.reward_loot_box_pieces > 0) parts.push(`+${res.data.reward_loot_box_pieces} Loot Box Piece(s)`);
         if (res.data.unlocked_city) parts.push(`${res.data.unlocked_city} unlocked!`);
         toast.success(parts.join(' · ') || 'Mission complete');

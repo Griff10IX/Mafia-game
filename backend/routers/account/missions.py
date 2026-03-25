@@ -211,6 +211,13 @@ MISSION_CHARACTERS = []
 # HELPERS
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _car_display_name(car_id: str) -> str:
+    if not isinstance(car_id, str) or not car_id:
+        return car_id or ""
+    c = next((x for x in CARS if x.get("id") == car_id), None)
+    return (c.get("name") or car_id) if c else car_id
+
+
 def _user_unlocked_cities(user: dict) -> List[str]:
     """Single first mission: no city progression."""
     return ["Start"]
@@ -859,6 +866,14 @@ async def complete_mission(
             category="missions",
         )
 
+    granted_car_ids: List[str] = []
+    if reward_car_id:
+        granted_car_ids.append(reward_car_id)
+    for cid in reward_car_ids:
+        if isinstance(cid, str) and cid and cid not in granted_car_ids:
+            granted_car_ids.append(cid)
+    reward_car_names = [_car_display_name(cid) for cid in granted_car_ids]
+
     return {
         "completed": True,
         "mission_id": mission_id,
@@ -869,6 +884,7 @@ async def complete_mission(
         "reward_tribute": reward_tribute,
         "reward_car_id": reward_car_id,
         "reward_car_ids": reward_car_ids,
+        "reward_car_names": reward_car_names,
         "reward_booze": reward_booze if isinstance(reward_booze, dict) else None,
         "reward_bullets": reward_bullets,
         "reward_loot_box_pieces": reward_loot_box_pieces,

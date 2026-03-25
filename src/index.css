@@ -419,6 +419,20 @@ a.from-primary {
   padding-bottom: max(7rem, calc(7rem + env(safe-area-inset-bottom, 0px)));
 }
 
+/* iPhone notch / status bar: fixed top bar clears system UI (public/index.html uses viewport-fit=cover) */
+.safe-area-pt {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+.safe-area-pb {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Main scroll area sits below fixed top bar (h-12) plus same safe-area inset as the bar */
+.mt-main-below-topbar {
+  margin-top: calc(3rem + env(safe-area-inset-top, 0px));
+}
+
 /* Dice animations with 3D tumbling */
 @keyframes dice-roll {
   0% { 

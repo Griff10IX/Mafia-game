@@ -1,12 +1,13 @@
 """
-Update existing forum topic "FAQs" body from docs/FORUM_FAQ.md.
+Create or update forum topic "FAQs" from docs/FORUM_FAQ.md.
 Run from backend dir: python update_faq_topic.py
 Or from repo root: python backend/seeds/update_faq_topic.py
 
-Unlike seed_faq_topic.py, this overwrites content when the topic already exists.
+If the topic does not exist, inserts it (same shape as seed_faq_topic.py). Otherwise updates content + updated_at.
 """
 import os
 import sys
+import uuid
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -57,8 +58,28 @@ def main():
         {"$set": {"content": body, "updated_at": now}},
     )
     if result.matched_count == 0:
-        print(f"No topic titled '{FAQ_TITLE}' found. Run seed_faq_topic.py first to create it.")
-        sys.exit(1)
+        user = db.users.find_one({}, {"_id": 0, "id": 1, "username": 1})
+        author_id = user["id"] if user else "system"
+        author_username = user.get("username", "Game") if user else "Game"
+        topic_id = str(uuid.uuid4())
+        doc = {
+            "id": topic_id,
+            "title": FAQ_TITLE,
+            "content": body,
+            "category": "general",
+            "author_id": author_id,
+            "author_username": author_username,
+            "created_at": now,
+            "updated_at": now,
+            "views": 0,
+            "is_sticky": True,
+            "is_important": True,
+            "is_locked": False,
+        }
+        db.forum_topics.insert_one(doc)
+        loaded = FAQ_MD_PATH if FAQ_MD_PATH.exists() else FAQ_MD_PATH_LEGACY
+        print(f"Created '{FAQ_TITLE}' (was missing) from {loaded.relative_to(PROJECT_ROOT)} at {now}")
+        return
     if result.modified_count == 0:
         print(f"Topic '{FAQ_TITLE}' found but content unchanged (or same bytes).")
     else:

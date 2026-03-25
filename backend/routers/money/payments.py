@@ -4,6 +4,8 @@ import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 
+from typing import Optional
+
 from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel
 
@@ -182,6 +184,77 @@ async def _credit_preorder_points(db, txn: dict) -> bool:
     return True
 
 
+async def _mark_pending_expired_checkouts_abandoned(db, user_id: str, api_key: Optional[str]) -> None:
+    """Stripe sessions that expired (or completed without pay) → payment_status abandoned; hides misleading 'pending'."""
+    if not api_key:
+        return
+    pending = await db.payment_transactions.find(
+        {"user_id": user_id, "payment_status": "pending"}
+    ).to_list(50)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    for txn in pending:
+        sid = txn.get("session_id")
+        if not sid:
+            continue
+        try:
+            def _retrieve():
+                import stripe
+                stripe.api_key = api_key
+                return stripe.checkout.Session.retrieve(sid)
+
+            session = await asyncio.to_thread(_retrieve)
+        except Exception as e:
+            logger.warning("reconcile pending checkout: session %s: %s", sid, e)
+            continue
+        if session.payment_status == "paid":
+            continue
+        st = session.status
+        if st == "expired":
+            await db.payment_transactions.update_one(
+                {"session_id": sid, "payment_status": "pending"},
+                {"$set": {"payment_status": "abandoned", "abandoned_at": now_iso, "abandoned_reason": "stripe_session_expired"}},
+            )
+        elif st == "complete" and session.payment_status != "paid":
+            await db.payment_transactions.update_one(
+                {"session_id": sid, "payment_status": "pending"},
+                {"$set": {"payment_status": "abandoned", "abandoned_at": now_iso, "abandoned_reason": "stripe_complete_unpaid"}},
+            )
+
+
+async def _attach_pending_ui_labels(items: list, api_key: Optional[str]) -> None:
+    """Human-readable status for unpaid pending rows (Stripe checkout started but not charged)."""
+    if not items:
+        return
+    if not api_key:
+        for t in items:
+            if t.get("payment_status") == "pending":
+                t["ui_status"] = "Awaiting payment"
+        return
+    for t in items:
+        if t.get("payment_status") != "pending":
+            continue
+        sid = t.get("session_id")
+        if not sid:
+            t["ui_status"] = "Awaiting payment"
+            continue
+        try:
+            def _retrieve():
+                import stripe
+                stripe.api_key = api_key
+                return stripe.checkout.Session.retrieve(sid)
+
+            session = await asyncio.to_thread(_retrieve)
+        except Exception:
+            t["ui_status"] = "Awaiting payment"
+            continue
+        if session.payment_status == "paid":
+            t["ui_status"] = "Processing"
+        elif session.status == "open" and session.payment_status == "unpaid":
+            t["ui_status"] = "Not completed"
+        else:
+            t["ui_status"] = "Awaiting payment"
+
+
 def register(router):
     """Register payment routes. Dependencies from server to avoid circular imports."""
     import server as srv
@@ -227,7 +300,8 @@ def register(router):
         # success_url: frontend sends origin_url like http://localhost:3000/store
         origin = (request.origin_url or "").rstrip("/")
         success_url = f"{origin}?session_id={{CHECKOUT_SESSION_ID}}"
-        cancel_url = origin
+        # Return with session id so we can mark DB row abandoned when user backs out without paying
+        cancel_url = f"{origin}?tab=points&payment_cancel=1&session_id={{CHECKOUT_SESSION_ID}}"
 
         def _create():
             import stripe
@@ -273,6 +347,38 @@ def register(router):
         })
 
         return {"url": session.url}
+
+    @router.post("/payments/mark-checkout-cancelled/{session_id}")
+    async def mark_checkout_cancelled(session_id: str, current_user: dict = Depends(get_current_user)):
+        """User hit Stripe cancel/back to store; checkout was not paid — mark row abandoned so Payments table is accurate."""
+        txn = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
+        if not txn or txn.get("user_id") != current_user["id"]:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        if txn.get("payment_status") != "pending":
+            return {"ok": True}
+        api_key = _get_stripe_key()
+        if api_key:
+            try:
+                def _retrieve():
+                    import stripe
+                    stripe.api_key = api_key
+                    return stripe.checkout.Session.retrieve(session_id)
+
+                session = await asyncio.to_thread(_retrieve)
+                if session.payment_status == "paid":
+                    return {"ok": True, "paid": True}
+            except Exception as e:
+                logger.warning("mark_checkout_cancelled: Stripe %s: %s (still marking abandoned)", session_id, e)
+        now_iso = datetime.now(timezone.utc).isoformat()
+        await db.payment_transactions.update_one(
+            {"session_id": session_id, "payment_status": "pending"},
+            {"$set": {
+                "payment_status": "abandoned",
+                "abandoned_at": now_iso,
+                "abandoned_reason": "user_cancelled_checkout",
+            }},
+        )
+        return {"ok": True}
 
     @router.get("/payments/status/{session_id}")
     async def get_payment_status(session_id: str, current_user: dict = Depends(get_current_user)):
@@ -388,6 +494,9 @@ def register(router):
 
             if session.status == "expired":
                 return {"status": "expired", "payment_status": "expired"}
+            # Open checkout, no charge yet — stop client polling (was stuck retrying forever)
+            if session.status == "open" and getattr(session, "payment_status", None) == "unpaid":
+                return {"status": "checkout_open", "payment_status": "unpaid"}
 
         if not transaction:
             raise HTTPException(status_code=404, detail="Transaction not found")
@@ -447,19 +556,24 @@ def register(router):
         Filters out old 'pending' transactions (abandoned checkouts) older than 30 minutes."""
         now = datetime.now(timezone.utc)
         thirty_mins_ago = (now - timedelta(minutes=30)).isoformat()
-        
-        # Only show: completed, preorder_pending, manual_credit_pending, or recent pending (last 30 min)
+        api_key = _get_stripe_key()
+        await _mark_pending_expired_checkouts_abandoned(db, current_user["id"], api_key)
+
+        # Only show: completed, preorder_pending, manual_credit_pending, or recent pending (last 30 min).
+        # Excludes abandoned (cancelled / expired checkout without payment).
         cursor = db.payment_transactions.find(
             {
                 "user_id": current_user["id"],
+                "payment_status": {"$ne": "abandoned"},
                 "$or": [
                     {"payment_status": {"$in": ["completed", "preorder_pending", "manual_credit_pending"]}},
                     {"payment_status": "pending", "created_at": {"$gte": thirty_mins_ago}},
-                ]
+                ],
             },
             {"_id": 0, "session_id": 1, "package_id": 1, "points": 1, "payment_status": 1, "created_at": 1, "points_credited_at": 1},
         ).sort("created_at", -1).limit(50)
         items = await cursor.to_list(50)
+        await _attach_pending_ui_labels(items, api_key)
         return {"transactions": items}
 
     @router.get("/payments/pending-points")

@@ -727,8 +727,7 @@ JAIL_BLOCKED_EXACT = frozenset({
     "/api/gta/attempt",
     "/api/gta/recent-stolen",
     "/api/gta/stats",
-    "/api/store/buy-oc-timer",
-    "/api/store/buy-booze-capacity",
+
 })
 JAIL_BLOCKED_PREFIXES = (
     "/api/crimes/",
@@ -1973,6 +1972,12 @@ async def startup_db():
     from ensure_indexes import ensure_all_indexes
     await ensure_profile_indexes(db)
     await ensure_all_indexes(db)
+    try:
+        from utils.ensure_faq_topic import ensure_faq_forum_topic
+
+        await ensure_faq_forum_topic(db)
+    except Exception as e:
+        logging.exception("FAQ forum topic sync: %s", e)
     from routers.crime.jail import spawn_jail_npcs
     asyncio.create_task(spawn_jail_npcs())
     # Start security monitoring background task

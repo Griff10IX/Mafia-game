@@ -4,7 +4,10 @@ Use this when updating [FORUM_FAQ.md](FORUM_FAQ.md) so numbers stay aligned with
 
 **Route / feature coverage:** see [FORUM_FAQ_ROUTE_COVERAGE.md](FORUM_FAQ_ROUTE_COVERAGE.md) (major `App.js` routes vs FAQ sections).
 
-**Live forum topic:** `seed_faq_topic.py` only *creates* the "FAQs" topic if missing. To refresh an existing topic from disk, run `python backend/seeds/update_faq_topic.py` (from repo root: `python seeds/update_faq_topic.py` from `backend/`).
+**Live forum topic:** `seed_faq_topic.py` only *creates* the "FAQs" topic if missing. To refresh an existing topic from disk:
+
+- **Local (dev DB):** `python backend/seeds/update_faq_topic.py` from the repo root (needs `MONGO_URL` / `MONGO_DB` in `backend/.env`).
+- **Production (same flow as deploy):** double-click [`scripts/push-faq-topic.bat`](../scripts/push-faq-topic.bat) — SSHs to the server, syncs `origin/MAfiaGame2`, runs `update_faq_topic.py` against live Mongo (creates the `FAQs` topic if it was never seeded). Commit and **push** FAQ edits first. For “only run Python” without `git pull`, use `push-faq-topic.bat python`.
 
 | Topic | Source file / symbol |
 |--------|----------------------|
