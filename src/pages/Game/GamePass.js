@@ -21,20 +21,7 @@ const BANDS = Array.from({ length: 10 }, (_, i) => {
   return { start, end, index: i };
 });
 
-// Reward scaling baselines (confirmed):
-// Amount at micro tier T is: ceil(baseAmount * (T / baseTier)).
-const MICRO_TIER_REWARD_BASELINES = {
-  money: { baseTier: 10, baseAmount: 25_000_000 },
-  bullets: { baseTier: 20, baseAmount: 2_500 },
-  xp_crimes_tokens: { baseTier: 40, baseAmount: 2 },
-  xp_gta_tokens: { baseTier: 40, baseAmount: 2 },
-  points: { baseTier: 50, baseAmount: 50 },
-  respect_points: { baseTier: 60, baseAmount: 50 },
-  melt_tokens: { baseTier: 70, baseAmount: 2 },
-  jailbust_tokens: { baseTier: 80, baseAmount: 2 },
-  travel_tokens: { baseTier: 90, baseAmount: 1 },
-  properties_tokens: { baseTier: 100, baseAmount: 1 },
-};
+// (Legacy milestone-tier model removed in favor of the 1..100 micro-tier scaling model.)
 
 function microTierToThresholdRp(microTier) {
   const t = Number(microTier || 0);
@@ -45,12 +32,30 @@ function microTierToThresholdRp(microTier) {
 function getRewardsForMicroTier(microTier) {
   const t = Number(microTier || 0);
   if (!Number.isFinite(t) || t < 1) return {};
-  const tier = Math.min(MAX_MICRO_TIER, Math.max(1, Math.floor(t)));
+  // Linear scaling model:
+  // amount = ceil(baseAmount * (tier / baseTier))
+  // Must match backend `backend/utils/game_pass_micro_rewards.py`.
+  const tier = Math.max(1, Math.min(100, Math.floor(t)));
   const out = {};
-  for (const [k, cfg] of Object.entries(MICRO_TIER_REWARD_BASELINES)) {
+
+  const baselines = {
+    money: { baseTier: 10, baseAmount: 25_000_000 },
+    bullets: { baseTier: 20, baseAmount: 2_500 },
+    xp_crimes_tokens: { baseTier: 40, baseAmount: 2 },
+    xp_gta_tokens: { baseTier: 40, baseAmount: 2 },
+    points: { baseTier: 50, baseAmount: 50 },
+    respect_points: { baseTier: 60, baseAmount: 50 },
+    melt_tokens: { baseTier: 70, baseAmount: 2 },
+    jailbust_tokens: { baseTier: 80, baseAmount: 2 },
+    travel_tokens: { baseTier: 90, baseAmount: 1 },
+    properties_tokens: { baseTier: 100, baseAmount: 1 },
+  };
+
+  for (const [k, cfg] of Object.entries(baselines)) {
     const raw = cfg.baseAmount * (tier / cfg.baseTier);
     out[k] = Math.ceil(raw);
   }
+
   return out;
 }
 
@@ -101,8 +106,17 @@ function TierRewards({ rewards, isFreeMembership, isTierCompleted }) {
   return (
     <div className="space-y-1">
       {REWARD_DISPLAY_ORDER.map((k) => {
+        // UI compression: show Crimes+GTA token tiers as a single "Auto Rank Perks" line
+        // to avoid listing multiple lines for what the player experiences as one reward bucket.
+        if (k === 'xp_gta_tokens') return null;
         const v = rewards?.[k];
-        const text = formatTierRewardItem(k, v);
+        const text =
+          k === 'xp_crimes_tokens'
+            ? (() => {
+                const total = Number(rewards?.xp_crimes_tokens || 0) + Number(rewards?.xp_gta_tokens || 0);
+                return total > 0 ? `${total} Auto Rank Perks` : null;
+              })()
+            : formatTierRewardItem(k, v);
         if (!text) return null;
         const lockedForFree = isFreeMembership && (!isTierCompleted || k !== freeUnlockedRewardKey);
         return (
@@ -123,7 +137,7 @@ function getTierPrimaryLabel(tier) {
   if (rewards.money) return `$${Number(rewards.money).toLocaleString()} cash`;
   if (rewards.bullets) return `${Number(rewards.bullets).toLocaleString()} Bullets`;
   if (rewards.xp_crimes_tokens || rewards.xp_gta_tokens) {
-    const n = Number(rewards.xp_crimes_tokens || 0) || Number(rewards.xp_gta_tokens || 0) || 0;
+    const n = Number(rewards.xp_crimes_tokens || 0) + Number(rewards.xp_gta_tokens || 0);
     return `${n} Auto Rank Perks`;
   }
   if (rewards.points) return `${Number(rewards.points).toLocaleString()} Points`;
@@ -165,25 +179,30 @@ export default function GamePass() {
 
   const nowTs = Date.now();
   const passTokensHeld = Number(user?.rank_xp_pass_tokens ?? 0);
-  // When true, the Game Pass one-time rewards were already claimed at activation.
-  const passIsActive = user?.rank_xp_pass_rewards_granted === true;
+  const vipClaimed = user?.rank_xp_pass_rewards_granted === true;
   const passExpiryUntil = user?.rank_xp_pass_token_expires_at ? new Date(user.rank_xp_pass_token_expires_at) : null;
   const passIsUnactivatedValid = passTokensHeld > 0 && !!(passExpiryUntil && passExpiryUntil.getTime() > nowTs);
   const passIsUnactivatedExpired = passTokensHeld > 0 && !!(passExpiryUntil && passExpiryUntil.getTime() <= nowTs);
 
-  const previewRankPointsRaw = passIsActive
-    ? Number(user?.rank_xp_pass_tier_snapshot ?? 0) // rewards granted tier snapshot
+  const vipGrantingActive = vipClaimed && (!passExpiryUntil || passExpiryUntil.getTime() > nowTs);
+
+  const previewRankPointsRaw = vipGrantingActive
+    ? Number(user?.rank_points ?? 0) // when VIP is active, keep preview moving with live rank_points
     : passIsUnactivatedValid
       ? Number(user?.rank_xp_pass_pending_tier_snapshot ?? 0) // pending snapshot before activation
-      : Number(user?.rank_points ?? 0);
+      : vipClaimed
+        ? microTierToThresholdRp(Number(user?.rank_xp_pass_last_granted_micro_tier ?? 0))
+        : Number(user?.rank_points ?? 0);
   const previewRankPoints = Math.max(0, Math.floor(previewRankPointsRaw));
 
   const microTierCurrent = Math.min(MAX_MICRO_TIER, Math.max(0, Math.floor((previewRankPoints / MAX_THRESHOLD_RP) * 100)));
   const seasonLevel = microTierCurrent; // Progress bar: 0..100
   const currentBandIndex = microTierCurrent === 0 ? 0 : Math.min(9, Math.floor((microTierCurrent - 1) / 10));
 
-  const membershipType = passIsActive
-    ? 'VIP (Activated)'
+  const membershipType = vipClaimed
+    ? vipGrantingActive
+      ? 'VIP (Active)'
+      : 'VIP (Claimed)'
     : passIsUnactivatedValid
       ? 'VIP (Token Ready)'
       : 'Free';
@@ -303,10 +322,10 @@ export default function GamePass() {
                 <button
                   type="button"
                   onClick={handlePurchase}
-                  disabled={!user || loading || passIsUnactivatedValid || passIsActive}
+                  disabled={!user || loading || passIsUnactivatedValid || vipClaimed}
                   className="flex-1 w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
                 >
-                  {loading ? '...' : passIsActive ? 'VIP claimed' : passIsUnactivatedValid ? 'Token ready (activate to claim)' : 'Buy for £4.99'}
+                  {loading ? '...' : vipClaimed ? 'VIP claimed' : passIsUnactivatedValid ? 'Token ready (activate to claim)' : 'Buy for £4.99'}
                 </button>
                 <Link
                   to="/account/inventory"
@@ -317,7 +336,7 @@ export default function GamePass() {
                 </Link>
               </div>
 
-              {passIsActive && (
+              {vipClaimed && (
                 <p className="text-[10px] text-emerald-400 font-heading">Rewards claimed.</p>
               )}
 

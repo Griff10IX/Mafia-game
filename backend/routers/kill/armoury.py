@@ -89,44 +89,124 @@ TOKEN_CONFIG = {
     },
 }
 
-async def _grant_rank_xp_pass_one_time_rewards(db, user_id: str, tier_snapshot: int, free_cash_last_micro_tier_granted: int = 0) -> Optional[dict]:
-    """
-    Idempotent one-time rewards for Rank-XP Pass activation.
-    Rewards are granted for the exact micro tier derived from tier_snapshot (rank_points snapshot).
+async def _try_grant_rank_xp_pass_micro_tier(
+    db,
+    user_id: str,
+    micro_tier: int,
+    free_cash_last_micro_tier_granted: int = 0,
+) -> Optional[dict]:
+    """Attempt to grant one micro-tier reward set (atomic, cursor-based)."""
+    try:
+        t = int(micro_tier or 0)
+    except Exception:
+        return None
+    if t <= 0:
+        return None
 
-    If Free membership already granted cash for the same micro tier (tracked by free_cash_last_micro_tier_granted),
-    cash is not re-granted to prevent duplicates.
+    rewards = rewards_for_micro_tier(t)
 
-    Returns the applied $inc dict when rewards were granted, otherwise None.
+    # Free auto-grants cash-only for tiers <= its cursor, so suppress money here to prevent duplicates.
+    if int(free_cash_last_micro_tier_granted or 0) >= t:
+        rewards["money"] = 0
+
+    inc = {k: int(v) for k, v in rewards.items() if int(v or 0) > 0}
+    if not inc:
+        inc = {}
+
+    updated = await db.users.update_one(
+        {
+            "id": user_id,
+            "rank_xp_pass_rewards_granted": True,
+            "$or": [
+                {"rank_xp_pass_last_granted_micro_tier": {"$lt": t}},
+                {"rank_xp_pass_last_granted_micro_tier": {"$exists": False}},
+            ],
+        },
+        {
+            "$set": {"rank_xp_pass_last_granted_micro_tier": t},
+            **({"$inc": inc} if inc else {}),
+        },
+    )
+    if updated.modified_count == 0:
+        return None
+    return rewards
+
+
+async def _activate_rank_xp_pass_and_grant_cumulative_micro_tiers(
+    db,
+    user_id: str,
+    tier_snapshot: int,
+    free_cash_last_micro_tier_granted: int = 0,
+) -> bool:
     """
+    Activation grants rewards cumulatively for micro tiers 1..activation_micro.
+    Cursor `rank_xp_pass_last_granted_micro_tier` is updated per micro tier.
+    """
+    activation_micro = micro_tier_from_rank_points(tier_snapshot)
+
     # Flip rewards_granted atomically so concurrent activations don't double-grant.
     updated = await db.users.update_one(
         {"id": user_id, "rank_xp_pass_rewards_granted": {"$ne": True}},
         {
             "$set": {
                 "rank_xp_pass_rewards_granted": True,
-                # Make this activation the source of truth for the 24h multiplier window.
                 "rank_xp_pass_tier_snapshot": int(tier_snapshot or 0),
+                "rank_xp_pass_last_granted_micro_tier": 0,
             },
             "$unset": {"rank_xp_pass_pending_tier_snapshot": ""},
         },
     )
     if updated.modified_count == 0:
-        return None
+        return False
 
-    micro_tier = micro_tier_from_rank_points(tier_snapshot)
-    rewards = rewards_for_micro_tier(micro_tier)
+    next_rewards_cache = {}
+    for t in range(1, max(0, activation_micro) + 1):
+        applied = await _try_grant_rank_xp_pass_micro_tier(
+            db,
+            user_id=user_id,
+            micro_tier=t,
+            free_cash_last_micro_tier_granted=free_cash_last_micro_tier_granted,
+        )
+        if not applied:
+            continue
 
-    # Free auto-grants cash only.
-    if micro_tier > 0 and int(free_cash_last_micro_tier_granted or 0) >= micro_tier:
-        rewards["money"] = 0
+        # Build next-tier reward summary for inbox messages.
+        next_t = t + 1 if t < MAX_MICRO_TIER else None
+        if next_t is None:
+            next_summary = "Max tier reached"
+            next_rewards = {}
+        else:
+            next_rewards = next_rewards_cache.get(next_t)
+            if next_rewards is None:
+                next_rewards = rewards_for_micro_tier(next_t)
+                if int(free_cash_last_micro_tier_granted or 0) >= next_t:
+                    next_rewards["money"] = 0
+                next_rewards_cache[next_t] = next_rewards
+            next_summary = f"Tier {next_t} rewards: {format_rewards_summary(next_rewards)}"
 
-    inc = {k: int(v) for k, v in rewards.items() if int(v or 0) > 0}
-    if not inc:
-        return {}
+        for reward_key in REWARD_KEY_ORDER:
+            amount = int(applied.get(reward_key) or 0)
+            if amount <= 0:
+                continue
+            if reward_key == "money":
+                received_text = f"${amount:,} cash"
+            elif reward_key in ("bullets", "points", "respect_points"):
+                received_text = f"{amount:,} {REWARD_KEY_LABELS.get(reward_key, reward_key)}"
+            else:
+                received_text = f"{amount:,}x {REWARD_KEY_LABELS.get(reward_key, reward_key)}"
 
-    await db.users.update_one({"id": user_id}, {"$inc": inc})
-    return inc
+            await send_notification(
+                user_id,
+                "Game Pass reward",
+                f"You received {received_text}. Next reward: {next_summary}.",
+                "reward",
+                category="system",
+                reward_key=reward_key,
+                tier_micro=t,
+                next_tier=next_t,
+            )
+
+    return True
 
 # Shooting range: weapon mastery 0-100%; at 100% = up to MASTERY_MAX_BULLET_REDUCTION_PCT fewer bullets in attack.
 MASTERY_MAX_BULLET_REDUCTION_PCT = 10
@@ -1753,7 +1833,15 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
                 # Pending token can never be activated now, so it must not be considered “granted”.
                 await db.users.update_one(
                     {"id": current_user["id"]},
-                    {"$set": {count_field: 0, "rank_xp_pass_rewards_granted": False}, "$unset": unset_map},
+                    {
+                        "$set": {
+                            count_field: 0,
+                            "rank_xp_pass_rewards_granted": False,
+                            "rank_xp_pass_last_granted_micro_tier": 0,
+                            "rank_xp_pass_tier_snapshot": None,
+                        },
+                        "$unset": unset_map,
+                    },
                 )
             else:
                 await db.users.update_one(
@@ -1780,7 +1868,11 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
                     else {"$set": {until_field: new_until_iso}}
                 ),
                 # Activation consumes the token(s); token expiry only matters for unactivated tokens.
-                **({"$unset": {expiry_field: ""}} if expiry_field else {}),
+                **(
+                    {"$unset": {expiry_field: ""}}
+                    if expiry_field and req.token_type != "rank_xp_pass"
+                    else {}
+                ),
             },
         )
         if result.modified_count == 0:
@@ -1790,51 +1882,28 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
             **current_user,
             count_field: new_count,
             until_field: None if req.token_type == "rank_xp_pass" else new_until_iso,
-            **({"%s" % expiry_field: None} if expiry_field else {}),
+            **(
+                {"%s" % expiry_field: None}
+                if expiry_field and req.token_type != "rank_xp_pass"
+                else {}
+            ),
         })
 
-        pass_rewards_inc = None
+        pass_activated_now = False
         if req.token_type == "rank_xp_pass":
             tier_snapshot = current_user.get("rank_xp_pass_pending_tier_snapshot") or current_user.get("rank_xp_pass_tier_snapshot") or 0
             free_cash_last_micro = int(current_user.get("rank_xp_pass_free_last_micro_tier_granted") or 0)
-            pass_rewards_inc = await _grant_rank_xp_pass_one_time_rewards(db, current_user["id"], tier_snapshot, free_cash_last_micro_tier_granted=free_cash_last_micro)
-            if pass_rewards_inc:
-                micro_tier = micro_tier_from_rank_points(tier_snapshot)
-                next_tier = micro_tier + 1 if micro_tier < MAX_MICRO_TIER else None
-                next_rewards = rewards_for_micro_tier(next_tier) if next_tier else {}
-                if next_tier and free_cash_last_micro >= next_tier:
-                    next_rewards["money"] = 0
-
-                next_summary = (
-                    f"Tier {next_tier} rewards: {format_rewards_summary(next_rewards)}"
-                    if next_tier
-                    else "Max tier reached"
-                )
-
-                for reward_key in REWARD_KEY_ORDER:
-                    amount = pass_rewards_inc.get(reward_key) or 0
-                    if amount <= 0:
-                        continue
-                    if reward_key == "money":
-                        received_text = f"${amount:,} cash"
-                    elif reward_key in ("bullets", "points", "respect_points"):
-                        received_text = f"{amount:,} {REWARD_KEY_LABELS.get(reward_key, reward_key)}"
-                    else:
-                        received_text = f"{amount:,}x {REWARD_KEY_LABELS.get(reward_key, reward_key)}"
-
-                    await send_notification(
-                        current_user["id"],
-                        "Game Pass reward",
-                        f"You received {received_text}. Next reward: {next_summary}.",
-                        "reward",
-                        category="system",
-                        reward_key=reward_key,
-                        tier_micro=micro_tier,
-                        next_tier=next_tier,
-                    )
+            pass_activated_now = await _activate_rank_xp_pass_and_grant_cumulative_micro_tiers(
+                db,
+                current_user["id"],
+                tier_snapshot,
+                free_cash_last_micro_tier_granted=free_cash_last_micro,
+            )
         return {
             "message": (
                 "Game Pass activated. Rewards granted."
+                if pass_activated_now
+                else "Game Pass already claimed."
                 if req.token_type == "rank_xp_pass"
                 else f"Used {n} token(s). Effect active until {new_until_iso} (up to {max_stack_hours}h stack)."
             ),
@@ -1860,7 +1929,11 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
                 if req.token_type == "rank_xp_pass"
                 else {"$set": {until_field: new_until_iso}}
             ),
-            **({"$unset": {expiry_field: ""}} if expiry_field else {}),
+            **(
+                {"$unset": {expiry_field: ""}}
+                if expiry_field and req.token_type != "rank_xp_pass"
+                else {}
+            ),
         },
     )
     if result.modified_count == 0:
@@ -1869,56 +1942,28 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
         **current_user,
         count_field: count - 1,
         until_field: None if req.token_type == "rank_xp_pass" else new_until_iso,
-        **({"%s" % expiry_field: None} if expiry_field else {}),
+        **(
+            {"%s" % expiry_field: None}
+            if expiry_field and req.token_type != "rank_xp_pass"
+            else {}
+        ),
     })
 
-    pass_rewards_inc = None
+    pass_activated_now = False
     if req.token_type == "rank_xp_pass":
         tier_snapshot = current_user.get("rank_xp_pass_pending_tier_snapshot") or current_user.get("rank_xp_pass_tier_snapshot") or 0
         free_cash_last_micro = int(current_user.get("rank_xp_pass_free_last_micro_tier_granted") or 0)
-        pass_rewards_inc = await _grant_rank_xp_pass_one_time_rewards(
+        pass_activated_now = await _activate_rank_xp_pass_and_grant_cumulative_micro_tiers(
             db,
             current_user["id"],
             tier_snapshot,
             free_cash_last_micro_tier_granted=free_cash_last_micro,
         )
-        if pass_rewards_inc:
-            micro_tier = micro_tier_from_rank_points(tier_snapshot)
-            next_tier = micro_tier + 1 if micro_tier < MAX_MICRO_TIER else None
-            next_rewards = rewards_for_micro_tier(next_tier) if next_tier else {}
-            if next_tier and free_cash_last_micro >= next_tier:
-                next_rewards["money"] = 0
-
-            next_summary = (
-                f"Tier {next_tier} rewards: {format_rewards_summary(next_rewards)}"
-                if next_tier
-                else "Max tier reached"
-            )
-
-            for reward_key in REWARD_KEY_ORDER:
-                amount = pass_rewards_inc.get(reward_key) or 0
-                if amount <= 0:
-                    continue
-                if reward_key == "money":
-                    received_text = f"${amount:,} cash"
-                elif reward_key in ("bullets", "points", "respect_points"):
-                    received_text = f"{amount:,} {REWARD_KEY_LABELS.get(reward_key, reward_key)}"
-                else:
-                    received_text = f"{amount:,}x {REWARD_KEY_LABELS.get(reward_key, reward_key)}"
-
-                await send_notification(
-                    current_user["id"],
-                    "Game Pass reward",
-                    f"You received {received_text}. Next reward: {next_summary}.",
-                    "reward",
-                    category="system",
-                    reward_key=reward_key,
-                    tier_micro=micro_tier,
-                    next_tier=next_tier,
-                )
     return {
         "message": (
             "Game Pass activated. Rewards granted."
+            if pass_activated_now
+            else "Game Pass already claimed."
             if req.token_type == "rank_xp_pass"
             else f"Token used. Effect active until {new_until_iso} (up to {max_stack_hours}h stack)."
         ),

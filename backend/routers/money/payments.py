@@ -103,6 +103,7 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
                     # Store for the unactivated token; activation will copy into the active multiplier window.
                     "rank_xp_pass_pending_tier_snapshot": rank_points,
                     "rank_xp_pass_rewards_granted": False,
+                    "rank_xp_pass_last_granted_micro_tier": 0,
                 }
             },
         )

@@ -645,6 +645,7 @@ def register(router):
                     "rank_xp_pass_token_expires_at": expires_at,
                     "rank_xp_pass_pending_tier_snapshot": snap,
                     "rank_xp_pass_rewards_granted": False,
+                    "rank_xp_pass_last_granted_micro_tier": 0,
                 }
             },
         )

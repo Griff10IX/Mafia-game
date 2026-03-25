@@ -162,6 +162,7 @@ def register(router):
 
         # Preserve idempotency/reward-grant state for whichever token (pending) might be activated later.
         pass_updates["rank_xp_pass_rewards_granted"] = pass_rewards_granted
+        pass_updates["rank_xp_pass_last_granted_micro_tier"] = int(dead_user.get("rank_xp_pass_last_granted_micro_tier") or 0) if pass_rewards_granted else 0
 
         if pass_updates:
             await db.users.update_one({"id": current_user["id"]}, {"$set": pass_updates})
