@@ -19,9 +19,9 @@ const MAX_EDGE_OPTIONS = [
   { value: '1920', label: 'Max 1920px' },
 ];
 
-// Nginx (and/or upstream) upload limit in this project is typically 10MB.
-// We keep a small buffer to avoid hitting 413.
-const CLIENT_MAX_UPLOAD_BYTES = 9 * 1024 * 1024; // ~9MB
+// Upload-size limit in the hosting layer is usually ~10MB (or lower).
+// We use a conservative client target (multipart overhead + encoding can push us over).
+const CLIENT_MAX_UPLOAD_BYTES = 6.5 * 1024 * 1024; // ~6.5MB
 
 // Backend gallery resize max edge is 640px; we mirror it for safe uploads.
 const SERVER_MAX_EDGE = 640;
@@ -123,8 +123,8 @@ export default function ImageHost() {
         const baseScale = Math.min(1, SERVER_MAX_EDGE / Math.max(width, height));
 
         // Try a couple of downscale steps + JPEG quality reductions until it fits.
-        const qualitySteps = [0.85, 0.75, 0.65, 0.55, 0.45];
-        const scaleSteps = [1, 0.85];
+        const qualitySteps = [0.85, 0.75, 0.65, 0.55, 0.45, 0.35];
+        const scaleSteps = [1, 0.85, 0.7, 0.55];
 
         let finalBlob = null;
         try {
