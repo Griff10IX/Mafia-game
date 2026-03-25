@@ -277,8 +277,9 @@ export default function GamePass() {
                   <div className="text-[11px] font-heading font-bold text-primary">{membershipType}</div>
                 </div>
                 <div className="p-2 rounded bg-zinc-900/30 border border-primary/10">
-                  <div className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider">Level</div>
-                  <div className="text-[11px] font-heading font-bold text-primary">{seasonLevel}</div>
+                  <div className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider">VIP Tier</div>
+                  <div className="text-[11px] font-heading font-bold text-primary">{currentLevelNumber}</div>
+                  <div className="text-[9px] text-zinc-500 font-heading mt-0.5">Season {seasonLevel}/100</div>
                 </div>
                 <div className="p-2 rounded bg-zinc-900/30 border border-primary/10">
                   <div className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider">XP</div>
