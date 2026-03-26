@@ -61,9 +61,14 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
     message: '',
   });
 
-  // Track unique login-page visits for admin stats (when viewing login/landing page at / or /login)
+  // Track login/landing visits for admin stats.
   useEffect(() => {
-    if (location.pathname === '/login' || location.pathname === '/') {
+    if (
+      location.pathname === '/login'
+      || location.pathname === '/'
+      || location.pathname === '/register'
+      || location.pathname === '/preregister'
+    ) {
       api.post('/auth/track-login-page-view').catch(() => {});
     }
   }, [location.pathname]);

@@ -20,6 +20,11 @@ export default function PreRegister() {
   const [launchStatus, setLaunchStatus] = useState({ loginLocked: false, lockUntil: null, lockMessage: null });
   const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
+  // Track pre-launch/landing page views for admin analytics.
+  useEffect(() => {
+    api.post('/auth/track-login-page-view').catch(() => {});
+  }, []);
+
   useEffect(() => {
     // Get launch status from the same endpoint as Landing page
     api.get('/auth/launch-status')
