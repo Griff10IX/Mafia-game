@@ -845,7 +845,10 @@ def register(router):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         try:
-            n = await db.login_page_visits.count_documents({})
+            # Count distinct IPs explicitly so duplicates are never counted,
+            # even if legacy data or a bad import inserted duplicate rows.
+            ips = await db.login_page_visits.distinct("ip", {"ip": {"$exists": True, "$ne": ""}})
+            n = len(ips or [])
         except Exception:
             n = 0
         return {"unique_visitors": n}
