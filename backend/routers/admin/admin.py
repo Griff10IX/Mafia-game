@@ -841,17 +841,29 @@ def register(router):
 
     @router.get("/admin/stats/login-page-unique-visitors")
     async def admin_login_page_unique_visitors(current_user: dict = Depends(get_current_user)):
-        """Return count of unique visitors to the login page (by IP)."""
+        """Return login page visitor stats: unique IPs and total tracked views."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         try:
             # Count distinct IPs explicitly so duplicates are never counted,
             # even if legacy data or a bad import inserted duplicate rows.
             ips = await db.login_page_visits.distinct("ip", {"ip": {"$exists": True, "$ne": ""}})
-            n = len(ips or [])
+            unique_visitors = len(ips or [])
+            rows = await db.login_page_visits.find(
+                {},
+                {"_id": 0, "view_count": 1},
+            ).to_list(200000)
+            total_views = 0
+            for r in rows:
+                c = r.get("view_count")
+                try:
+                    total_views += int(c) if c is not None else 1
+                except Exception:
+                    total_views += 1
         except Exception:
-            n = 0
-        return {"unique_visitors": n}
+            unique_visitors = 0
+            total_views = 0
+        return {"unique_visitors": unique_visitors, "total_views": total_views}
 
     @router.get("/admin/security/flags")
     async def admin_security_flags(

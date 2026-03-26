@@ -462,6 +462,7 @@ export default function Admin() {
   const [economyAnalytics, setEconomyAnalytics] = useState(null);
   const [economyAnalyticsLoading, setEconomyAnalyticsLoading] = useState(false);
   const [loginPageVisitors, setLoginPageVisitors] = useState(null);
+  const [loginPageViews, setLoginPageViews] = useState(null);
   const [loginPageVisitorsLoading, setLoginPageVisitorsLoading] = useState(false);
   const [attackLogsUsername, setAttackLogsUsername] = useState('');
   const [attackLogsLimit, setAttackLogsLimit] = useState(200);
@@ -3203,6 +3204,7 @@ export default function Admin() {
     try {
       const res = await api.get('/admin/stats/login-page-unique-visitors');
       setLoginPageVisitors(res.data?.unique_visitors ?? null);
+      setLoginPageViews(res.data?.total_views ?? null);
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed to load login page visitors'); }
     finally { setLoginPageVisitorsLoading(false); }
   };
@@ -6875,9 +6877,16 @@ export default function Admin() {
           <div className="p-3 space-y-2">
             <BtnPrimary onClick={handleFetchLoginPageVisitors} disabled={loginPageVisitorsLoading}>{loginPageVisitorsLoading ? 'Loading…' : 'Refresh'}</BtnPrimary>
             {loginPageVisitors != null && (
-              <p className="text-[10px] font-heading text-mutedForeground">
-                Unique visitors to the login page (by IP): <span className="font-bold text-foreground">{loginPageVisitors.toLocaleString()}</span>
-              </p>
+              <div className="space-y-1">
+                <p className="text-[10px] font-heading text-mutedForeground">
+                  Unique visitors to the login page (by IP): <span className="font-bold text-foreground">{loginPageVisitors.toLocaleString()}</span>
+                </p>
+                {loginPageViews != null && (
+                  <p className="text-[10px] font-heading text-mutedForeground">
+                    Total tracked landing views: <span className="font-bold text-foreground">{loginPageViews.toLocaleString()}</span>
+                  </p>
+                )}
+              </div>
             )}
           </div>
         )}

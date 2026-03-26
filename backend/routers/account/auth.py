@@ -710,6 +710,7 @@ def register(router):
                 {
                     "$setOnInsert": {"first_seen": now},
                     "$set": {"last_seen": now},
+                    "$inc": {"view_count": 1},
                 },
                 upsert=True,
             )
