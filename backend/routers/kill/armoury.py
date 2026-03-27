@@ -74,7 +74,7 @@ TOKEN_TYPES = (
 TOKEN_CONFIG = {
     "xp_crimes":     {"count_field": "xp_crimes_tokens",     "until_field": "xp_crimes_until",     "max_stack_hours": 6},
     "xp_gta":        {"count_field": "xp_gta_tokens",        "until_field": "xp_gta_until",        "max_stack_hours": 6},
-    "auto_rank_2h":  {"count_field": "auto_rank_2h_tokens",  "until_field": "xp_crimes_until",     "duration_hours": 2, "max_stack_hours": 6},
+    "auto_rank_2h":  {"count_field": "auto_rank_2h_tokens",  "until_field": "auto_rank_trial_until", "duration_hours": 2, "max_stack_hours": 6},
     "melt":          {"count_field": "melt_tokens",          "until_field": "melt_until",          "max_stack_hours": 6},
     "oc_reduced":    {"count_field": "oc_reduced_tokens",    "until_field": "oc_reduced_until",    "max_stack_hours": 6},
     "booze":         {"count_field": "booze_tokens",         "until_field": "booze_until",         "max_stack_hours": 6},
@@ -1827,17 +1827,11 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
     if count < 1:
         raise HTTPException(status_code=400, detail="No tokens of this type available.")
 
-    # Special case: auto_rank_2h extends both crimes and GTA auto-rank durations.
+    # Special case: auto_rank_2h grants temporary Auto Rank access (stackable up to 6h).
     if req.token_type == "auto_rank_2h":
-        # Parse current expiry windows for both effects.
+        # Parse current temporary Auto Rank window.
         now = datetime.now(timezone.utc)
-        crimes_until_dt = _parse_until(current_user.get("xp_crimes_until"))
-        gta_until_dt = _parse_until(current_user.get("xp_gta_until"))
-        existing_until = None
-        if crimes_until_dt and gta_until_dt:
-            existing_until = max(crimes_until_dt, gta_until_dt)
-        else:
-            existing_until = crimes_until_dt or gta_until_dt
+        existing_until = _parse_until(current_user.get("auto_rank_trial_until"))
         if existing_until and existing_until <= now:
             existing_until = None
 
@@ -1867,11 +1861,19 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
                 )
 
             new_until_iso = sim_until.isoformat()
+            set_updates = {
+                "auto_rank_trial_until": new_until_iso,
+                "auto_rank_enabled": True,
+                "auto_rank_idle": False,
+            }
+            if not bool(current_user.get("auto_rank_purchased")):
+                set_updates["auto_rank_purchased"] = True
+                set_updates["auto_rank_trial"] = True
             result = await db.users.update_one(
                 {"id": current_user["id"], count_field: {"$gte": to_use}},
                 {
                     "$inc": {count_field: -to_use},
-                    "$set": {"xp_crimes_until": new_until_iso, "xp_gta_until": new_until_iso},
+                    "$set": set_updates,
                 },
             )
             if result.modified_count == 0:
@@ -1880,11 +1882,10 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
             tokens = _tokens_from_user({
                 **current_user,
                 count_field: count - to_use,
-                "xp_crimes_until": new_until_iso,
-                "xp_gta_until": new_until_iso,
+                "auto_rank_trial_until": new_until_iso,
             })
             return {
-                "message": f"Used {to_use} token(s). Auto-rank boost active until {new_until_iso} (up to {max_stack_hours}h stack).",
+                "message": f"Used {to_use} token(s). Auto Rank access active until {new_until_iso} (up to {max_stack_hours}h stack).",
                 "tokens": tokens,
             }
 
@@ -1895,12 +1896,20 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
         else:
             new_until = now + timedelta(hours=min(duration_hours, max_stack_hours))
         new_until_iso = new_until.isoformat()
+        set_updates = {
+            "auto_rank_trial_until": new_until_iso,
+            "auto_rank_enabled": True,
+            "auto_rank_idle": False,
+        }
+        if not bool(current_user.get("auto_rank_purchased")):
+            set_updates["auto_rank_purchased"] = True
+            set_updates["auto_rank_trial"] = True
 
         result = await db.users.update_one(
             {"id": current_user["id"], count_field: {"$gte": 1}},
             {
                 "$inc": {count_field: -1},
-                "$set": {"xp_crimes_until": new_until_iso, "xp_gta_until": new_until_iso},
+                "$set": set_updates,
             },
         )
         if result.modified_count == 0:
@@ -1909,11 +1918,10 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
         tokens = _tokens_from_user({
             **current_user,
             count_field: count - 1,
-            "xp_crimes_until": new_until_iso,
-            "xp_gta_until": new_until_iso,
+            "auto_rank_trial_until": new_until_iso,
         })
         return {
-            "message": f"Used 1 token. Auto-rank boost active until {new_until_iso} (2h).",
+            "message": f"Used 1 token. Auto Rank access active until {new_until_iso} (2h).",
             "tokens": tokens,
         }
 

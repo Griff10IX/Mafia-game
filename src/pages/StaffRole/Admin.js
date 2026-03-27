@@ -543,6 +543,7 @@ export default function Admin() {
   const [adminOnlineColor, setAdminOnlineColor] = useState('#a78bfa');
   const [modDefaultOnlineColor, setModDefaultOnlineColor] = useState('#1e3a5f');
   const [requireEmailVerification, setRequireEmailVerification] = useState(false);
+  const [blockProxyVpnLogin, setBlockProxyVpnLogin] = useState(true);
   const [landingBannerEnabled, setLandingBannerEnabled] = useState(false);
   const [landingBannerMessage, setLandingBannerMessage] = useState('');
   const [stockMarketMaxPoints, setStockMarketMaxPoints] = useState(3000);
@@ -862,6 +863,7 @@ export default function Admin() {
       const modHex = res.data?.mod_default_online_color || '#1e3a5f';
       setModDefaultOnlineColor(modHex.startsWith('#') ? modHex : '#' + modHex);
       setRequireEmailVerification(!!res.data?.require_email_verification);
+      setBlockProxyVpnLogin(res.data?.block_proxy_vpn_login !== false);
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
       setLandingBannerMessage(res.data?.landing_banner_message ?? '');
       setStockMarketMaxPoints(Math.max(1, parseInt(res.data?.stock_market_max_points, 10) || 3000));
@@ -887,6 +889,7 @@ export default function Admin() {
       setAdminOnlineColor('#a78bfa');
       setModDefaultOnlineColor('#1e3a5f');
       setRequireEmailVerification(false);
+      setBlockProxyVpnLogin(true);
       setLandingBannerMessage('');
       setStockMarketMaxPoints(3000);
       setLoginLockFrom('');
@@ -937,6 +940,7 @@ export default function Admin() {
         admin_online_color: adminOnlineColor,
         mod_default_online_color: modDefaultOnlineColor,
         require_email_verification: requireEmailVerification,
+        block_proxy_vpn_login: blockProxyVpnLogin,
         landing_banner_enabled: landingBannerEnabled,
         landing_banner_message: landingBannerMessage,
         stock_market_max_points: Math.max(1, parseInt(stockMarketMaxPoints, 10) || 3000),
@@ -944,6 +948,7 @@ export default function Admin() {
       setAdminOnlineColor(res.data?.admin_online_color || adminOnlineColor);
       setModDefaultOnlineColor(res.data?.mod_default_online_color || modDefaultOnlineColor);
       setRequireEmailVerification(!!res.data?.require_email_verification);
+      setBlockProxyVpnLogin(res.data?.block_proxy_vpn_login !== false);
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
       if (res.data?.landing_banner_message !== undefined) setLandingBannerMessage(res.data.landing_banner_message ?? '');
       setStockMarketMaxPoints(Math.max(1, res.data?.stock_market_max_points ?? 3000));
@@ -5372,6 +5377,17 @@ export default function Admin() {
                   className="rounded border-input"
                 />
                 <span>Require email verification for new signups</span>
+              </label>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-primary/10">
+              <label className="flex items-center gap-2 cursor-pointer text-sm font-heading">
+                <input
+                  type="checkbox"
+                  checked={blockProxyVpnLogin}
+                  onChange={(e) => setBlockProxyVpnLogin(e.target.checked)}
+                  className="rounded border-input"
+                />
+                <span>Block proxy/VPN on login and signup</span>
               </label>
             </div>
             <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-primary/10">

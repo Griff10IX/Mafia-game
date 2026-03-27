@@ -103,6 +103,7 @@ class AdminSettingsUpdate(BaseModel):
     admin_online_color: Optional[str] = None
     mod_default_online_color: Optional[str] = None  # default colour for Mod on Users Online (mods can override on profile)
     require_email_verification: Optional[bool] = None
+    block_proxy_vpn_login: Optional[bool] = None
     stock_market_max_points: Optional[int] = None
     landing_banner_enabled: Optional[bool] = None
     landing_banner_message: Optional[str] = None
@@ -2315,6 +2316,7 @@ def register(router):
         if preregister_landing_banner_enabled is None:
             preregister_landing_banner_enabled = True
         preregister_landing_banner_preview_open = bool(main_doc.get("preregister_landing_banner_preview_open")) if main_doc else False
+        block_proxy_vpn_login = True if not main_doc else bool(main_doc.get("block_proxy_vpn_login", True))
         preorder_points_release_date = main_doc.get("preorder_points_release_date") if main_doc else None
         store_points_auto_credit = main_doc.get("store_points_auto_credit") if main_doc else None
         if store_points_auto_credit is None:
@@ -2333,6 +2335,7 @@ def register(router):
             "admin_online_color": admin_online_color.strip(),
             "mod_default_online_color": mod_default_online_color.strip(),
             "require_email_verification": require_email_verification,
+            "block_proxy_vpn_login": block_proxy_vpn_login,
             "stock_market_max_points": stock_market_max_points,
             "landing_banner_enabled": landing_banner_enabled,
             "landing_banner_message": landing_banner_message,
@@ -2379,6 +2382,12 @@ def register(router):
             await db.game_settings.update_one(
                 {"key": "require_email_verification"},
                 {"$set": {"value": body.require_email_verification}},
+                upsert=True,
+            )
+        if body.block_proxy_vpn_login is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"block_proxy_vpn_login": bool(body.block_proxy_vpn_login)}},
                 upsert=True,
             )
         if body.stock_market_max_points is not None:
@@ -2500,6 +2509,7 @@ def register(router):
         if preregister_landing_banner_enabled is None:
             preregister_landing_banner_enabled = True
         preregister_landing_banner_preview_open = bool(main_doc.get("preregister_landing_banner_preview_open")) if main_doc else False
+        block_proxy_vpn_login = True if not main_doc else bool(main_doc.get("block_proxy_vpn_login", True))
         preorder_points_release_date = main_doc.get("preorder_points_release_date") if main_doc else None
         store_points_auto_credit = main_doc.get("store_points_auto_credit") if main_doc else None
         if store_points_auto_credit is None:
@@ -2512,6 +2522,7 @@ def register(router):
             "admin_online_color": admin_online_color,
             "mod_default_online_color": mod_default_online_color.strip() if isinstance(mod_default_online_color, str) else MOD_DEFAULT,
             "require_email_verification": require_email_verification,
+            "block_proxy_vpn_login": block_proxy_vpn_login,
             "stock_market_max_points": stock_market_max_points,
             "landing_banner_enabled": landing_banner_enabled,
             "landing_banner_message": landing_banner_message,

@@ -179,7 +179,7 @@ export default function MyInventory() {
   const tokenLabels = {
     xp_crimes: { name: 'Crimes XP', icon: Zap, desc: 'Double XP from crimes, 1h per token (stack up to 6h)' },
     xp_gta: { name: 'GTA XP', icon: Zap, desc: 'Double XP from GTA, 1h per token (stack up to 6h)' },
-    auto_rank_2h: { name: 'Auto Rank (2h)', icon: Zap, desc: 'Auto-rank boost for both Crimes+GTA, 2h per token (stack up to 6h)' },
+    auto_rank_2h: { name: 'Auto Rank (2h)', icon: Zap, desc: 'Temporary Auto Rank access, 2h per token (stack up to 6h)' },
     melt: { name: 'Melt', icon: Zap, desc: 'Reduced melt (bullets) cooldown, 1h per token (stack up to 6h)' },
     oc_reduced: { name: 'OC Reduced', icon: Zap, desc: 'Reduced OC cooldown, setup cost & higher payout, 1h per token (6h)' },
     booze: { name: 'Booze', icon: Zap, desc: 'Booze costs less to buy, 1h per token (6h)' },

@@ -273,7 +273,9 @@ def register(router):
                     detail="Disposable or temporary email addresses are not allowed.",
                 )
             client_ip = _client_ip(request)
-            if client_ip and await is_proxy_or_vpn(client_ip):
+            main_settings = await db.game_settings.find_one({"_id": "main"}, {"_id": 0, "block_proxy_vpn_login": 1})
+            block_proxy_vpn_login = bool(main_settings.get("block_proxy_vpn_login", True)) if main_settings else True
+            if block_proxy_vpn_login and client_ip and await is_proxy_or_vpn(client_ip):
                 await _notify_admins_vpn_blocked(
                     client_ip,
                     "Registration blocked",
@@ -776,9 +778,10 @@ def register(router):
                     pass
 
         ip = _client_ip(request)
+        block_proxy_vpn_login = bool(settings.get("block_proxy_vpn_login", True)) if settings else True
 
         # Block VPN/proxy on login (staff can bypass)
-        if not staff_route and ip and await is_proxy_or_vpn(ip):
+        if not staff_route and block_proxy_vpn_login and ip and await is_proxy_or_vpn(ip):
             await _notify_admins_vpn_blocked(
                 ip,
                 "Login blocked",
