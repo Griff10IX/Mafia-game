@@ -116,6 +116,17 @@ async def ensure_all_indexes(db):
         await db.mp_poker_games.create_index("mode")
         await db.mp_poker_games.create_index("created_at")
         await db.mp_poker_games.create_index("user_id")
+        await db.mp_8ball_games.create_index("id", unique=True)
+        await db.mp_8ball_games.create_index("status")
+        await db.mp_8ball_games.create_index("mode")
+        await db.mp_8ball_games.create_index("owner_user_id")
+        await db.mp_8ball_games.create_index("created_at")
+        await db.pool_profiles.create_index("user_id", unique=True)
+        await db.pool_profiles.create_index([("rating", -1), ("wins", -1)])
+        await db.user_pool_cues.create_index("id", unique=True)
+        await db.user_pool_cues.create_index([("user_id", 1), ("selected", 1)])
+        await db.user_pool_cues.create_index([("user_id", 1), ("cue_id", 1)], unique=True)
+        await db.pool_cue_upgrades.create_index([("user_id", 1), ("cue_instance_id", 1)], unique=True)
         await db.videopoker_games.create_index("user_id")
 
         # --- Organised crime ---

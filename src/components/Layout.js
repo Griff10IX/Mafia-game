@@ -63,6 +63,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
         { path: '/casino/mini-games/the-getaway', label: 'The Getaway' },
         { path: '/casino/mini-games/whack-a-copper', label: 'Whack-A-Copper' },
         { path: '/casino/mini-games/famiglia', label: 'Famiglia' },
+        { path: '/casino/mini-games/8-ball-pool', label: '8-Ball Pool' },
         { path: '/casino/mini-games/leaderboard', label: 'Leaderboard' },
       ],
     },
@@ -1092,6 +1093,7 @@ export default function Layout({ children }) {
             { to: '/casino/mini-games/the-getaway', label: 'The Getaway', testId: 'nav-the-getaway', Icon: Plane },
             { to: '/casino/mini-games/whack-a-copper', label: 'Whack-A-Copper', testId: 'nav-whack-a-copper', Icon: Zap },
             { to: '/casino/mini-games/famiglia', label: 'Famiglia', testId: 'nav-famiglia', Icon: Landmark },
+            { to: '/casino/mini-games/8-ball-pool', label: '8-Ball Pool', testId: 'nav-8-ball-pool', Icon: CircleDot },
             { to: '/casino/mini-games/leaderboard', label: 'Leaderboard', testId: 'nav-minigames-leaderboard', Icon: Trophy },
           ].map((item, idx) => {
             const IconComp = item.Icon;

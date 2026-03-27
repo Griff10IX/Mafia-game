@@ -28,6 +28,7 @@ const GAME_ICONS = {
   family_run: PersonStanding,
   whack_a_copper: Shield,
   mafia_rpg: Landmark,
+  pool_8ball: Trophy,
 };
 
 const GAME_LABELS = {
@@ -40,6 +41,7 @@ const GAME_LABELS = {
   family_run: 'Family Run',
   whack_a_copper: 'Whack-A-Copper',
   mafia_rpg: 'Famiglia',
+  pool_8ball: '8-Ball Pool',
 };
 
 function formatTimeUntil(isoDate) {

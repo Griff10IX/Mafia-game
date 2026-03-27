@@ -82,6 +82,7 @@ const TheGetaway = lazy(() => import("./pages/MiniGames/TheGetaway"));
 const FamilyRun = lazy(() => import("./pages/MiniGames/FamilyRun"));
 const WhackACopper = lazy(() => import("./pages/MiniGames/WhackACopper"));
 const Famiglia = lazy(() => import("./pages/MiniGames/Famiglia"));
+const EightBallPool = lazy(() => import("./pages/MiniGames/EightBallPool"));
 
 // Money pages
 const Bank = lazy(() => import("./pages/Money/Bank"));
@@ -1037,6 +1038,18 @@ function App() {
             }
           />
           <Route
+            path="/casino/mini-games/8-ball-pool"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <EightBallPool />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
             path="/casino/mini-games/leaderboard"
             element={
               isAuthenticated ? (
@@ -1099,6 +1112,7 @@ function App() {
           <Route path="/boxing" element={<Navigate to="/casino/mini-games/boxing" replace />} />
           <Route path="/boxing/arena/:matchId" element={<BoxingArenaRedirect />} />
           <Route path="/racing" element={<Navigate to="/casino/mini-games/racing" replace />} />
+          <Route path="/8-ball-pool" element={<Navigate to="/casino/mini-games/8-ball-pool" replace />} />
           <Route
             path="/game/leaderboard"
             element={
