@@ -398,12 +398,37 @@ def _remaining_group_balls(balls: List[dict], group: Optional[str]) -> int:
 
 
 def _ensure_game_turn(game: dict, uid: str):
+    if game.get("phase") != "playing":
+        raise HTTPException(status_code=400, detail="Balls are still resolving")
     players = list(game.get("players") or [])
     idx = int(game.get("current_turn_index") or 0)
     if idx < 0 or idx >= len(players):
         raise HTTPException(status_code=400, detail="Invalid turn state")
     if players[idx].get("user_id") != uid:
         raise HTTPException(status_code=400, detail="It is not your turn")
+
+
+def _maybe_finalize_resolving(game: dict) -> dict:
+    if game.get("status") != "in_progress":
+        return game
+    if game.get("phase") != "resolving":
+        return game
+    resolve_at = _parse_iso(game.get("resolve_at"))
+    if resolve_at and datetime.now(timezone.utc) < resolve_at:
+        return game
+    players = list(game.get("players") or [])
+    fallback_idx = int(game.get("current_turn_index") or 0)
+    next_idx = int(game.get("pending_turn_index") or fallback_idx)
+    if next_idx < 0 or next_idx >= len(players):
+        next_idx = fallback_idx
+    game["phase"] = "playing"
+    game["current_turn_index"] = next_idx
+    game["pending_turn_index"] = None
+    game["resolve_at"] = None
+    game["turn_started_at"] = _now_iso()
+    game["updated_at"] = _now_iso()
+    game.setdefault("table_state", {})["balls_settled"] = True
+    return game
 
 
 def _public_game(game: dict, viewer_uid: Optional[str] = None) -> dict:
@@ -600,6 +625,23 @@ def register(router):
         uid = current_user["id"]
         if not any(p.get("user_id") == uid for p in (game.get("players") or [])):
             raise HTTPException(status_code=403, detail="Not in this game")
+        game_before = dict(game)
+        game = _maybe_finalize_resolving(game)
+        if game != game_before:
+            await db.mp_8ball_games.update_one(
+                {"id": game_id},
+                {
+                    "$set": {
+                        "phase": game.get("phase"),
+                        "current_turn_index": game.get("current_turn_index"),
+                        "pending_turn_index": game.get("pending_turn_index"),
+                        "resolve_at": game.get("resolve_at"),
+                        "turn_started_at": game.get("turn_started_at"),
+                        "updated_at": game.get("updated_at"),
+                        "table_state": game.get("table_state"),
+                    }
+                },
+            )
         # Auto-timeout handling.
         if game.get("status") == "in_progress" and game.get("phase") == "playing":
             ts = _parse_iso(game.get("turn_started_at"))
@@ -733,8 +775,15 @@ def register(router):
             updates["result_reason"] = result_reason
             updates["completed_at"] = _now_iso()
         else:
-            updates["current_turn_index"] = idx if keep_turn else opp_idx
-            updates["turn_started_at"] = _now_iso()
+            next_turn_idx = idx if keep_turn else opp_idx
+            replay_duration_ms = int((shot_replay or {}).get("duration_ms") or 0)
+            # Keep authoritative lock until replay window completes.
+            hold_ms = max(450, replay_duration_ms + 120)
+            updates["phase"] = "resolving"
+            updates["pending_turn_index"] = next_turn_idx
+            updates["resolve_at"] = (datetime.now(timezone.utc) + timedelta(milliseconds=hold_ms)).isoformat()
+            updates["turn_started_at"] = game.get("turn_started_at") or _now_iso()
+            table_state["balls_settled"] = False
 
         await db.mp_8ball_games.update_one({"id": game_id}, {"$set": updates})
 
@@ -875,9 +924,26 @@ def register(router):
         )
         if not game:
             raise HTTPException(status_code=404, detail="No active AI game")
+        game_before = dict(game)
+        game = _maybe_finalize_resolving(game)
+        if game != game_before:
+            await db.mp_8ball_games.update_one(
+                {"id": game["id"]},
+                {
+                    "$set": {
+                        "phase": game.get("phase"),
+                        "current_turn_index": game.get("current_turn_index"),
+                        "pending_turn_index": game.get("pending_turn_index"),
+                        "resolve_at": game.get("resolve_at"),
+                        "turn_started_at": game.get("turn_started_at"),
+                        "updated_at": game.get("updated_at"),
+                        "table_state": game.get("table_state"),
+                    }
+                },
+            )
         idx = int(game.get("current_turn_index") or 0)
         players = list(game.get("players") or [])
-        if game.get("status") == "in_progress" and idx < len(players) and players[idx].get("user_id") == MP_8BALL_AI_ID:
+        if game.get("status") == "in_progress" and game.get("phase") == "playing" and idx < len(players) and players[idx].get("user_id") == MP_8BALL_AI_ID:
             ts = _parse_iso(game.get("turn_started_at"))
             if not ts or (datetime.now(timezone.utc) - ts).total_seconds() >= 1.1:
                 await _ai_take_turn(game)

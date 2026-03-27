@@ -306,6 +306,25 @@ export default function EightBallPool() {
   const previewSegmentBudget = 1 + previewTier;
   const previewDistance = 130 + (previewLevel * 9) + (Number(selectedCueUpgrade?.aim || 0) * 2.5);
   const currentSkin = TABLE_SKINS[tableSkin] || TABLE_SKINS.ice_blue;
+  const playerBallTrackers = useMemo(() => {
+    const ballsByNum = new Map((displayBalls || []).map((b) => [Number(b.number), b]));
+    return (activeGame?.players || []).map((p) => {
+      const group = p?.group;
+      const targets = group === 'solid'
+        ? [1, 2, 3, 4, 5, 6, 7]
+        : group === 'stripe'
+          ? [9, 10, 11, 12, 13, 14, 15]
+          : [];
+      const potted = targets.filter((n) => ballsByNum.get(n)?.pocketed).length;
+      return {
+        userId: p?.user_id,
+        group,
+        targets,
+        potted,
+        left: Math.max(0, targets.length - potted),
+      };
+    });
+  }, [activeGame?.players, displayBalls]);
   const aimPreview = useMemo(() => {
     const cue = displayBalls.find((b) => b.number === 0 && !b.pocketed);
     if (!cue || !canRenderCue) return { segments: [], ghost: null };
@@ -661,21 +680,29 @@ export default function EightBallPool() {
     }
 
     for (const [px, py] of pockets) {
-      const pocketGrad = ctx.createRadialGradient(px, py, 2, px, py, 20);
+      const pocketGrad = ctx.createRadialGradient(px, py, 2, px, py, 22);
       pocketGrad.addColorStop(0, currentSkin.pocket[0]);
       pocketGrad.addColorStop(1, currentSkin.pocket[1]);
       ctx.beginPath();
-      ctx.arc(px, py, 17, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(37,27,16,0.85)';
+      ctx.arc(px, py, 18.5, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(24,16,10,0.92)';
       ctx.fill();
+      const rimGrad = ctx.createLinearGradient(px - 18, py - 18, px + 18, py + 18);
+      rimGrad.addColorStop(0, 'rgba(241,211,139,0.34)');
+      rimGrad.addColorStop(1, 'rgba(111,78,38,0.34)');
       ctx.beginPath();
-      ctx.arc(px, py, 14, 0, Math.PI * 2);
+      ctx.arc(px, py, 17.2, 0, Math.PI * 2);
+      ctx.strokeStyle = rimGrad;
+      ctx.lineWidth = 2.2;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(px, py, 13.2, 0, Math.PI * 2);
       ctx.fillStyle = pocketGrad;
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(px, py, 14, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(255,214,140,0.24)';
-      ctx.lineWidth = 1.2;
+      ctx.arc(px, py, 12.8, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,214,140,0.16)';
+      ctx.lineWidth = 1;
       ctx.stroke();
     }
 
@@ -731,8 +758,10 @@ export default function EightBallPool() {
         ctx.beginPath();
         ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.clip();
+        ctx.fillStyle = '#f8fafc';
+        ctx.fillRect(x - r, y - r, r * 2, r * 2);
         ctx.fillStyle = color;
-        ctx.fillRect(x - r, y - r * 0.45, r * 2, r * 0.9);
+        ctx.fillRect(x - r, y - r * 0.4, r * 2, r * 0.8);
         ctx.restore();
       }
 
@@ -1160,20 +1189,40 @@ export default function EightBallPool() {
                     Turn: <span className="font-bold text-primary">{turnLabel(activeGame)}</span> · {activeGame.status}/{activeGame.phase} · Shots {activeGame.table_state?.shot_count || 0} · {(replayActive || !ballsSettled) ? 'ROLLING' : 'AIMING'}
                   </div>
                 </div>
-                <div className="mt-2 flex flex-wrap items-center gap-1">
-                  {Array.from({ length: 15 }, (_, i) => i + 1).map((n) => {
-                    const b = (displayBalls || []).find((x) => x.number === n);
-                    const pocketed = !!b?.pocketed;
-                    const color = BALL_COLOR_MAP[n] || '#cbd5e1';
+                <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
+                  {playerBallTrackers.map((t, idx) => {
+                    const player = (activeGame.players || [])[idx];
+                    const isTurn = Number(activeGame.current_turn_index || 0) === idx;
                     return (
-                      <span
-                        key={n}
-                        className={`w-4 h-4 rounded-full inline-flex items-center justify-center text-[8px] border ${pocketed ? 'opacity-25 border-zinc-700' : 'opacity-100 border-white/30'}`}
-                        style={{ backgroundColor: color, color: n === 8 ? '#fff' : '#111' }}
-                        title={`Ball ${n}${pocketed ? ' (pocketed)' : ''}`}
-                      >
-                        {n}
-                      </span>
+                      <div key={t.userId || idx} className={`rounded border px-2 py-1 ${isTurn ? 'border-primary/60 bg-primary/10' : 'border-zinc-700/50 bg-zinc-800/40'}`}>
+                        <div className="flex items-center justify-between text-[10px] font-heading">
+                          <span className="text-foreground">{player?.username || `Player ${idx + 1}`}</span>
+                          <span className="text-mutedForeground">{groupBadge(t.group)} · Potted {t.potted} · Left {t.left}</span>
+                        </div>
+                        <div className="mt-1 flex items-center gap-1 flex-wrap">
+                          {(t.targets.length ? t.targets : [1, 2, 3, 4, 5, 6, 7]).map((n) => {
+                            const b = (displayBalls || []).find((x) => Number(x.number) === n);
+                            const pocketed = !!b?.pocketed;
+                            const color = BALL_COLOR_MAP[n] || '#cbd5e1';
+                            const isStripe = n >= 9;
+                            return (
+                              <span
+                                key={`${idx}-${n}`}
+                                className={`w-4 h-4 rounded-full inline-flex items-center justify-center text-[8px] border ${pocketed ? 'opacity-20 border-zinc-700' : 'opacity-100 border-white/35'}`}
+                                style={{
+                                  background: isStripe
+                                    ? `linear-gradient(180deg, #f8fafc 0%, #f8fafc 30%, ${color} 30%, ${color} 70%, #f8fafc 70%, #f8fafc 100%)`
+                                    : color,
+                                  color: n === 8 ? '#fff' : '#111',
+                                }}
+                                title={`Ball ${n}${pocketed ? ' (pocketed)' : ''}`}
+                              >
+                                {n}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      </div>
                     );
                   })}
                 </div>
