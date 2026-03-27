@@ -9,6 +9,14 @@ const POOL_STYLES = `
   .pool-fade-in { animation: pool-fade-in 0.35s ease-out both; }
   @keyframes pool-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .pool-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.2; }
+  .pool-canvas-shell {
+    background: radial-gradient(circle at 50% 30%, rgba(255,255,255,0.06), transparent 55%), linear-gradient(180deg, #1f140b 0%, #120c07 100%);
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35), 0 10px 30px rgba(0,0,0,0.5);
+  }
+  .pool-canvas {
+    box-shadow: inset 0 0 28px rgba(0,0,0,0.5), 0 0 20px rgba(14,165,233,0.15);
+  }
 `;
 
 const TABLE_W = 2.2;
@@ -44,10 +52,67 @@ export default function EightBallPool() {
   const [myCues, setMyCues] = useState([]);
   const [cueUpgrades, setCueUpgrades] = useState([]);
   const [busy, setBusy] = useState(false);
+  const [displayBalls, setDisplayBalls] = useState([]);
+  const [isAiming, setIsAiming] = useState(false);
   const canvasRef = useRef(null);
+  const animFrameRef = useRef(null);
+  const animatingRef = useRef(false);
+  const lastTargetBallsRef = useRef([]);
 
   const activeGame = tab === 'ai' ? aiGame : pvpGame;
   const balls = activeGame?.table_state?.balls || [];
+  useEffect(() => {
+    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    return () => {
+      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    const target = (balls || []).map((b) => ({ ...b }));
+    if (!target.length) {
+      setDisplayBalls([]);
+      lastTargetBallsRef.current = [];
+      return;
+    }
+    if (!displayBalls.length || !lastTargetBallsRef.current.length || displayBalls.length !== target.length) {
+      setDisplayBalls(target);
+      lastTargetBallsRef.current = target;
+      return;
+    }
+    const fromById = new Map(displayBalls.map((b) => [b.id, b]));
+    const toById = new Map(target.map((b) => [b.id, b]));
+    const durationMs = 460;
+    const startAt = performance.now();
+    animatingRef.current = true;
+    if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+
+    const tick = (t) => {
+      const raw = Math.min(1, (t - startAt) / durationMs);
+      const eased = 1 - Math.pow(1 - raw, 3);
+      const next = target.map((tb) => {
+        const fb = fromById.get(tb.id);
+        if (!fb || tb.pocketed || fb.pocketed) return { ...tb };
+        return {
+          ...tb,
+          x: Number(fb.x || 0) + (Number(tb.x || 0) - Number(fb.x || 0)) * eased,
+          y: Number(fb.y || 0) + (Number(tb.y || 0) - Number(fb.y || 0)) * eased,
+        };
+      });
+      setDisplayBalls(next);
+      if (raw < 1) {
+        animFrameRef.current = requestAnimationFrame(tick);
+      } else {
+        animatingRef.current = false;
+        setDisplayBalls(target);
+        lastTargetBallsRef.current = target;
+      }
+    };
+
+    animFrameRef.current = requestAnimationFrame(tick);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [balls]);
+
 
   const selectedCue = useMemo(() => {
     const selectedId = profile?.selected_cue_id;
@@ -133,51 +198,187 @@ export default function EightBallPool() {
     const h = canvas.height;
     ctx.clearRect(0, 0, w, h);
 
-    // Table
-    ctx.fillStyle = '#0b4f2f';
+    // Felt with depth (Mini-clip inspired blue table look).
+    const felt = ctx.createRadialGradient(w * 0.5, h * 0.45, 20, w * 0.5, h * 0.5, w * 0.8);
+    felt.addColorStop(0, '#0ea5e9');
+    felt.addColorStop(0.45, '#0284c7');
+    felt.addColorStop(1, '#075985');
+    ctx.fillStyle = felt;
     ctx.fillRect(0, 0, w, h);
-    ctx.strokeStyle = '#6b4a2b';
-    ctx.lineWidth = 12;
+
+    // Subtle cloth noise lines.
+    ctx.save();
+    ctx.globalAlpha = 0.065;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1;
+    for (let yy = 0; yy < h; yy += 6) {
+      ctx.beginPath();
+      ctx.moveTo(0, yy);
+      ctx.lineTo(w, yy);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    // Cushion/rail and inner bevel.
+    ctx.strokeStyle = '#5b3a20';
+    ctx.lineWidth = 14;
     ctx.strokeRect(0, 0, w, h);
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(10, 10, w - 20, h - 20);
 
     // Pockets
     const pockets = [
       [0, 0], [w / 2, 0], [w, 0],
       [0, h], [w / 2, h], [w, h],
     ];
-    ctx.fillStyle = '#0d0d0d';
+    // Diamonds on rails.
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    const diamonds = [w * 0.25, w * 0.5, w * 0.75];
+    for (const dx of diamonds) {
+      ctx.fillRect(dx - 2, 4, 4, 8);
+      ctx.fillRect(dx - 2, h - 12, 4, 8);
+    }
+    const sideDiamonds = [h * 0.25, h * 0.5, h * 0.75];
+    for (const dy of sideDiamonds) {
+      ctx.fillRect(4, dy - 2, 8, 4);
+      ctx.fillRect(w - 12, dy - 2, 8, 4);
+    }
+
+    ctx.fillStyle = '#070707';
     for (const [px, py] of pockets) {
+      const pocketGrad = ctx.createRadialGradient(px, py, 2, px, py, 18);
+      pocketGrad.addColorStop(0, '#111827');
+      pocketGrad.addColorStop(1, '#000000');
       ctx.beginPath();
       ctx.arc(px, py, 14, 0, Math.PI * 2);
+      ctx.fillStyle = pocketGrad;
       ctx.fill();
     }
 
     // Balls
-    for (const b of balls) {
+    for (const b of displayBalls) {
       if (b.pocketed) continue;
       const x = (Number(b.x || 0) / TABLE_W) * w;
       const y = (Number(b.y || 0) / TABLE_H) * h;
       const r = Math.max(4, (BALL_R / TABLE_W) * w);
       let color = '#ffffff';
       if (b.number === 8) color = '#111111';
-      else if (b.kind === 'solid') color = '#f59e0b';
-      else if (b.kind === 'stripe') color = '#38bdf8';
+      else if (b.number === 1) color = '#f59e0b';
+      else if (b.number === 2) color = '#2563eb';
+      else if (b.number === 3) color = '#dc2626';
+      else if (b.number === 4) color = '#7c3aed';
+      else if (b.number === 5) color = '#ea580c';
+      else if (b.number === 6) color = '#16a34a';
+      else if (b.number === 7) color = '#a16207';
+      else if (b.number === 9) color = '#f59e0b';
+      else if (b.number === 10) color = '#2563eb';
+      else if (b.number === 11) color = '#dc2626';
+      else if (b.number === 12) color = '#7c3aed';
+      else if (b.number === 13) color = '#ea580c';
+      else if (b.number === 14) color = '#16a34a';
+      else if (b.number === 15) color = '#a16207';
       else if (b.number === 0) color = '#ffffff';
+
+      // Ball shadow.
+      ctx.beginPath();
+      ctx.arc(x + 1.5, y + 2.5, r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.fill();
+
+      // Base sphere.
+      const ballGrad = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.25, x, y, r * 1.05);
+      ballGrad.addColorStop(0, '#ffffff');
+      ballGrad.addColorStop(0.25, color);
+      ballGrad.addColorStop(1, b.number === 8 ? '#000000' : '#1f2937');
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
-      ctx.fillStyle = color;
+      ctx.fillStyle = ballGrad;
       ctx.fill();
-      ctx.strokeStyle = '#222';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      if (b.number !== 0) {
-        ctx.fillStyle = b.number === 8 ? '#fff' : '#111';
-        ctx.font = '10px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText(String(b.number), x, y + 3);
+
+      // Stripe layer.
+      if (b.kind === 'stripe') {
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.clip();
+        ctx.fillStyle = color;
+        ctx.fillRect(x - r, y - r * 0.4, r * 2, r * 0.8);
+        ctx.restore();
       }
+
+      // Number circle.
+      if (b.number !== 0) {
+        ctx.beginPath();
+        ctx.arc(x, y, r * 0.45, 0, Math.PI * 2);
+        ctx.fillStyle = '#f8fafc';
+        ctx.fill();
+        ctx.fillStyle = '#111';
+        ctx.font = `${Math.max(8, r * 0.8)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(String(b.number), x, y);
+      }
+      ctx.strokeStyle = 'rgba(17,24,39,0.85)';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+
+      // Specular highlight.
+      ctx.beginPath();
+      ctx.arc(x - r * 0.3, y - r * 0.35, r * 0.22, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.38)';
+      ctx.fill();
     }
-  }, [balls]);
+
+    // Aiming guide + cue stick.
+    const cue = displayBalls.find((b) => b.number === 0 && !b.pocketed);
+    if (cue) {
+      const cx = (Number(cue.x || 0) / TABLE_W) * w;
+      const cy = (Number(cue.y || 0) / TABLE_H) * h;
+      const a = (Number(angleDeg || 0) * Math.PI) / 180;
+      const aimLen = 58 + Number(power || 0) * 200;
+      const cueLen = 140;
+      const ox = Math.cos(a);
+      const oy = Math.sin(a);
+
+      // Predicted ghost marker.
+      const gx = cx + ox * Math.min(aimLen, 170);
+      const gy = cy + oy * Math.min(aimLen, 170);
+      ctx.beginPath();
+      ctx.arc(gx, gy, 5, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + ox * aimLen, cy + oy * aimLen);
+      const lineGrad = ctx.createLinearGradient(cx, cy, cx + ox * aimLen, cy + oy * aimLen);
+      lineGrad.addColorStop(0, 'rgba(255,255,255,0.75)');
+      lineGrad.addColorStop(1, isAiming ? 'rgba(250,204,21,0.9)' : 'rgba(255,255,255,0.08)');
+      ctx.strokeStyle = lineGrad;
+      ctx.lineWidth = isAiming ? 2.5 : 2;
+      ctx.setLineDash([6, 6]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      const cueGrad = ctx.createLinearGradient(
+        cx - ox * (cueLen * (0.45 + Number(power || 0) * 0.65)),
+        cy - oy * (cueLen * (0.45 + Number(power || 0) * 0.65)),
+        cx - ox * 18,
+        cy - oy * 18,
+      );
+      cueGrad.addColorStop(0, '#f5d0a9');
+      cueGrad.addColorStop(0.55, '#b08968');
+      cueGrad.addColorStop(1, '#5b3a20');
+      ctx.beginPath();
+      ctx.moveTo(cx - ox * (cueLen * (0.45 + Number(power || 0) * 0.65)), cy - oy * (cueLen * (0.45 + Number(power || 0) * 0.65)));
+      ctx.lineTo(cx - ox * 18, cy - oy * 18);
+      ctx.strokeStyle = cueGrad;
+      ctx.lineWidth = 6;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+    }
+  }, [displayBalls, angleDeg, power, isAiming]);
 
   const startAi = async () => {
     setBusy(true);
@@ -266,6 +467,7 @@ export default function EightBallPool() {
 
   const shoot = async () => {
     if (!activeGame) return;
+    if (busy) return;
     setBusy(true);
     try {
       const angle = (Number(angleDeg) * Math.PI) / 180;
@@ -282,6 +484,24 @@ export default function EightBallPool() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const updateAimFromPointer = (event) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const cue = displayBalls.find((b) => b.number === 0 && !b.pocketed);
+    if (!cue) return;
+    const rect = canvas.getBoundingClientRect();
+    const sx = ((event.clientX - rect.left) / rect.width) * canvas.width;
+    const sy = ((event.clientY - rect.top) / rect.height) * canvas.height;
+    const cx = (Number(cue.x || 0) / TABLE_W) * canvas.width;
+    const cy = (Number(cue.y || 0) / TABLE_H) * canvas.height;
+    const dx = sx - cx;
+    const dy = sy - cy;
+    const ang = Math.atan2(dy, dx);
+    const dist = Math.hypot(dx, dy);
+    setAngleDeg((ang * 180) / Math.PI);
+    setPower(Math.max(0.08, Math.min(1, dist / 260)));
   };
 
   const buyCue = async (cueId) => {
@@ -393,7 +613,29 @@ export default function EightBallPool() {
                   <div className="text-foreground font-bold">{activeGame.table_state?.shot_count || 0}</div>
                 </div>
               </div>
-              <canvas ref={canvasRef} width={900} height={450} className="w-full rounded border border-primary/20 bg-[#0b4f2f]" />
+              <div className="pool-canvas-shell rounded-xl p-2">
+                <canvas
+                  ref={canvasRef}
+                  width={900}
+                  height={450}
+                  className="pool-canvas w-full rounded-lg border border-cyan-400/25 bg-[#0b4f2f] touch-none"
+                  onPointerDown={(e) => {
+                    setIsAiming(true);
+                    updateAimFromPointer(e);
+                  }}
+                  onPointerMove={(e) => {
+                    if (!isAiming) return;
+                    updateAimFromPointer(e);
+                  }}
+                  onPointerUp={async (e) => {
+                    if (!isAiming) return;
+                    updateAimFromPointer(e);
+                    setIsAiming(false);
+                    await shoot();
+                  }}
+                  onPointerLeave={() => setIsAiming(false)}
+                />
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
                 {(activeGame.players || []).map((p) => (
                   <div key={p.user_id} className="p-2 rounded bg-zinc-800/40 border border-zinc-700/40">
