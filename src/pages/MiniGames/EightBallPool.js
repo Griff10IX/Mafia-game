@@ -15,12 +15,13 @@ const POOL_STYLES = `
   @keyframes pool-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .pool-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.2; }
   .pool-canvas-shell {
-    background: radial-gradient(circle at 50% 30%, rgba(255,255,255,0.06), transparent 55%), linear-gradient(180deg, #1f140b 0%, #120c07 100%);
-    border: 1px solid rgba(255,255,255,0.1);
-    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.55), 0 12px 36px rgba(0,0,0,0.62);
+    background: radial-gradient(ellipse 120% 80% at 50% 20%, rgba(56,189,248,0.14), transparent 50%),
+      linear-gradient(180deg, #2a1810 0%, #120a06 100%);
+    border: 1px solid rgba(255,255,255,0.12);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.5), 0 16px 40px rgba(0,0,0,0.65), 0 0 24px rgba(8,145,178,0.12);
   }
   .pool-canvas {
-    box-shadow: inset 0 0 38px rgba(0,0,0,0.62), 0 0 12px rgba(8,145,178,0.08);
+    box-shadow: inset 0 0 48px rgba(0,0,0,0.55), 0 0 16px rgba(34,211,238,0.1);
   }
   .pool-table-wrap {
     width: 100%;
@@ -52,13 +53,31 @@ const POOL_STYLES = `
 
 const TABLE_W = 2.2;
 const TABLE_H = 1.1;
+/** Must match `MP_8BALL_HEAD_STRING_X` / kitchen logic in backend mp_8ball.py */
+const TABLE_HEAD_STRING_X = TABLE_W * 0.25;
 const BALL_R = 0.028;
+/** Capture radius in table units — must match `MP_8BALL_POCKET_R` in backend/routers/casinos/mp_8ball.py */
+const POCKET_R_TABLE = 0.045;
 const AI_POOL_ID = 'ai_pool_bot';
 const POOL_SHOT_CLOCK_SEC = 60;
 const REPLAY_IDLE_POS_EPS = 0.00035;
 const REPLAY_IDLE_VEL_EPS = 0.006;
 const PREVIEW_TABLE_MARGIN = 14;
 const TABLE_SKINS = {
+  /** Mobile-pool reference: bright felt, dark blue cushions, mahogany rails, silver sights */
+  miniclip_blue: {
+    name: 'Arena Blue',
+    felt: ['#9ae8ff', '#4dc7fc', '#0ea5e9'],
+    feltEdge: '#0369a1',
+    cushion: ['#0c4a6e', '#075985', '#0a2540'],
+    rail: ['#5c3624', '#7c4a32', '#4a2c18'],
+    railHighlight: 'rgba(255,245,220,0.12)',
+    pocket: ['#020617', '#000000'],
+    pocketRim: 'rgba(30,58,138,0.45)',
+    accent: 'rgba(255,255,255,0.55)',
+    stud: '#d1dae6',
+    studStroke: 'rgba(0,0,0,0.35)',
+  },
   classic_green: {
     name: 'Classic Green',
     felt: ['#22c55e', '#16a34a', '#166534'],
@@ -166,9 +185,12 @@ export default function EightBallPool() {
   const [upgradeTotalCap, setUpgradeTotalCap] = useState(250);
   const [upgradeStatCap, setUpgradeStatCap] = useState(50);
   const [busy, setBusy] = useState(false);
+  const [cueBusy, setCueBusy] = useState(false);
+  const [pageTab, setPageTab] = useState('match');
+  const [breakPreview, setBreakPreview] = useState(null);
   const [displayBalls, setDisplayBalls] = useState([]);
   const [isAiming, setIsAiming] = useState(false);
-  const [tableSkin, setTableSkin] = useState('ice_blue');
+  const [tableSkin, setTableSkin] = useState('miniclip_blue');
   const [renderTick, setRenderTick] = useState(0);
   const [replayActive, setReplayActive] = useState(false);
   const [sfxEnabled, setSfxEnabled] = useState(true);
@@ -208,6 +230,22 @@ export default function EightBallPool() {
     && activeGame.phase === 'playing'
     && ballsSettled
     && isMyTurn;
+  const awaitingBreak = Boolean(
+    activeGame?.table_state?.awaiting_break_placement
+    && Number(activeGame?.table_state?.shot_count || 0) === 0,
+  );
+  const inBreakPlacement = awaitingBreak && isMyTurn;
+  const canAim = canRenderCue && !inBreakPlacement;
+
+  const ballsForRender = useMemo(() => {
+    if (breakPreview == null || !inBreakPlacement) return displayBalls;
+    return displayBalls.map((b) => (Number(b.number) === 0 ? { ...b, x: breakPreview.x, y: breakPreview.y } : b));
+  }, [displayBalls, breakPreview, inBreakPlacement]);
+
+  useEffect(() => {
+    if (!inBreakPlacement) setBreakPreview(null);
+  }, [inBreakPlacement]);
+
   useEffect(() => {
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     if (replayAnimRef.current) cancelAnimationFrame(replayAnimRef.current);
@@ -359,7 +397,7 @@ export default function EightBallPool() {
   const previewSegmentBudget = 1 + previewTier;
   const previewDistance = 130 + (previewLevel * 9) + (cueLevels.aim * 2.5);
   const objectRailSegmentCap = Math.min(12, 1 + previewTier * 2 + Math.floor(previewLevel / 7));
-  const currentSkin = TABLE_SKINS[tableSkin] || TABLE_SKINS.ice_blue;
+  const currentSkin = TABLE_SKINS[tableSkin] || TABLE_SKINS.miniclip_blue;
   const playerBallTrackers = useMemo(() => {
     const ballsByNum = new Map((displayBalls || []).map((b) => [Number(b.number), b]));
     return (activeGame?.players || []).map((p) => {
@@ -381,7 +419,7 @@ export default function EightBallPool() {
   }, [activeGame?.players, displayBalls]);
   const aimPreview = useMemo(() => {
     const cue = displayBalls.find((b) => b.number === 0 && !b.pocketed);
-    if (!cue || !canRenderCue) return { segments: [], ghost: null, objectLineWidth: 1.25 };
+    if (!cue || !canAim) return { segments: [], ghost: null, objectLineWidth: 1.25 };
     const w = 900;
     const h = 450;
     const cuePx = (Number(cue.x || 0) / TABLE_W) * w;
@@ -460,6 +498,23 @@ export default function EightBallPool() {
           oox = onx;
           ooy = ony;
         }
+        // Cue ball path after impact (elastic tangent, equal mass — like classic pool helpers).
+        const dot = (dx * odx) + (dy * ody);
+        let cdx = dx - dot * odx;
+        let cdy = dy - dot * ody;
+        const cm = Math.hypot(cdx, cdy);
+        if (cm > 0.08) {
+          cdx /= cm;
+          cdy /= cm;
+          const deflectLen = Math.min(155, Math.max(40, 62 + previewLevel * 6 + objectPathLength * 0.32));
+          segs.push({
+            x1: nx,
+            y1: ny,
+            x2: nx + cdx * deflectLen,
+            y2: ny + cdy * deflectLen,
+            kind: 'cue_deflect',
+          });
+        }
         break;
       }
       const r = reflectDirAtPoint(nx, ny, dx, dy, minX, maxX, minY, maxY);
@@ -469,13 +524,13 @@ export default function EightBallPool() {
       oy = ny;
     }
     return { segments: segs, ghost, objectLineWidth };
-  }, [displayBalls, angleDeg, power, canRenderCue, previewDistance, previewSegmentBudget, previewTier, previewLevel]);
+  }, [displayBalls, angleDeg, power, canAim, previewDistance, previewSegmentBudget, previewTier, previewLevel, objectRailSegmentCap]);
 
   useEffect(() => {
     const skinByCue = (selectedCue?.cue_id || '').toLowerCase();
     if (skinByCue.includes('legacy') || (profile?.rating || 0) >= 1200) setTableSkin('royal_teal_gold');
     else if (skinByCue.includes('street')) setTableSkin('classic_green');
-    else setTableSkin('ice_blue');
+    else setTableSkin('miniclip_blue');
   }, [selectedCue?.cue_id, profile?.rating]);
 
   const playShotReplay = useCallback((gameData, setGameState) => {
@@ -640,6 +695,44 @@ export default function EightBallPool() {
     }
   }, [playShotReplay, pvpGame?.id]);
 
+  const pointerToKitchen = useCallback((event) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    const sx = ((event.clientX - rect.left) / rect.width) * canvas.width;
+    const sy = ((event.clientY - rect.top) / rect.height) * canvas.height;
+    const tx = (sx / canvas.width) * TABLE_W;
+    const ty = (sy / canvas.height) * TABLE_H;
+    const minX = BALL_R;
+    const maxX = TABLE_HEAD_STRING_X - BALL_R * 2;
+    const minY = BALL_R;
+    const maxY = TABLE_H - BALL_R;
+    return {
+      x: Math.max(minX, Math.min(maxX, tx)),
+      y: Math.max(minY, Math.min(maxY, ty)),
+    };
+  }, []);
+
+  const placeBreakCue = useCallback(async (x, y) => {
+    if (!activeGame?.id) return;
+    setBusy(true);
+    try {
+      const payload = { x, y };
+      if (tab === 'ai') {
+        await api.post('/casino/mp-8ball/vs-ai/break-cue', payload);
+        await fetchAiGame();
+      } else {
+        await api.post(`/casino/mp-8ball/games/${encodeURIComponent(activeGame.id)}/break-cue`, payload);
+        await fetchPvpGame();
+      }
+      toast.success('Cue placed — shoot to break');
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || 'Placement failed');
+    } finally {
+      setBusy(false);
+    }
+  }, [activeGame?.id, tab, fetchAiGame, fetchPvpGame]);
+
   useEffect(() => {
     const run = async () => {
       setLoading(true);
@@ -674,50 +767,82 @@ export default function EightBallPool() {
     const h = canvas.height;
     ctx.clearRect(0, 0, w, h);
 
-    // Felt with depth (skin driven).
-    const felt = ctx.createRadialGradient(w * 0.5, h * 0.45, 20, w * 0.5, h * 0.5, w * 0.8);
-    felt.addColorStop(0, currentSkin.felt[0]);
-    felt.addColorStop(0.38, currentSkin.felt[1]);
-    felt.addColorStop(1, currentSkin.felt[2]);
-    ctx.fillStyle = felt;
+    const playL = PREVIEW_TABLE_MARGIN;
+    const playT = PREVIEW_TABLE_MARGIN;
+    const playR = w - PREVIEW_TABLE_MARGIN;
+    const playB = h - PREVIEW_TABLE_MARGIN;
+    const cushionClrs = currentSkin.cushion || [currentSkin.felt[2], currentSkin.felt[1], currentSkin.rail[0]];
+    const wood = ctx.createLinearGradient(0, 0, w, h);
+    wood.addColorStop(0, currentSkin.rail[0]);
+    wood.addColorStop(0.45, currentSkin.rail[1] || currentSkin.rail[0]);
+    wood.addColorStop(1, currentSkin.rail[2] || currentSkin.rail[1]);
+    ctx.fillStyle = wood;
     ctx.fillRect(0, 0, w, h);
+    if (currentSkin.railHighlight) {
+      ctx.strokeStyle = currentSkin.railHighlight;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(0.5, 0.5, w - 1, h - 1);
+    }
+
+    const cushGrad = ctx.createLinearGradient(0, playT, 0, playB);
+    cushGrad.addColorStop(0, cushionClrs[0]);
+    cushGrad.addColorStop(0.5, cushionClrs[1] || cushionClrs[0]);
+    cushGrad.addColorStop(1, cushionClrs[2] || cushionClrs[0]);
+    ctx.fillStyle = cushGrad;
+    ctx.fillRect(6, 6, w - 12, h - 12);
+
+    const felt = ctx.createRadialGradient(w * 0.5, h * 0.38, w * 0.06, w * 0.52, h * 0.5, w * 0.95);
+    felt.addColorStop(0, currentSkin.felt[0]);
+    felt.addColorStop(0.42, currentSkin.felt[1]);
+    felt.addColorStop(1, currentSkin.feltEdge || currentSkin.felt[2]);
+    ctx.fillStyle = felt;
+    ctx.fillRect(playL, playT, playR - playL, playB - playT);
     if (feltTextureRef.current) {
       const feltPattern = ctx.createPattern(feltTextureRef.current, 'repeat');
       if (feltPattern) {
-        ctx.globalAlpha = 0.08;
+        ctx.save();
+        ctx.beginPath();
+        ctx.rect(playL, playT, playR - playL, playB - playT);
+        ctx.clip();
+        ctx.globalAlpha = 0.07;
         ctx.fillStyle = feltPattern;
-        ctx.fillRect(0, 0, w, h);
-        ctx.globalAlpha = 1;
+        ctx.fillRect(playL, playT, playR - playL, playB - playT);
+        ctx.restore();
       }
     }
-
-    // Subtle cloth noise lines.
     ctx.save();
-    ctx.globalAlpha = 0.065;
+    ctx.globalAlpha = 0.04;
     ctx.strokeStyle = '#ffffff';
     ctx.lineWidth = 1;
-    for (let yy = 0; yy < h; yy += 6) {
+    for (let yy = playT; yy < playB; yy += 5) {
       ctx.beginPath();
-      ctx.moveTo(0, yy);
-      ctx.lineTo(w, yy);
+      ctx.moveTo(playL, yy);
+      ctx.lineTo(playR, yy);
       ctx.stroke();
     }
     ctx.restore();
 
-    // Cushion/rail and inner bevel.
-    const railGrad = ctx.createLinearGradient(0, 0, w, h);
-    railGrad.addColorStop(0, currentSkin.rail[0]);
-    railGrad.addColorStop(0.5, currentSkin.rail[1]);
-    railGrad.addColorStop(1, currentSkin.rail[2]);
-    ctx.strokeStyle = railGrad;
-    ctx.lineWidth = 18;
-    ctx.strokeRect(0, 0, w, h);
-    ctx.strokeStyle = 'rgba(10,10,10,0.6)';
+    const baulkX = playL + (playR - playL) * 0.22;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.22)';
+    ctx.lineWidth = 1.25;
+    ctx.setLineDash([4, 5]);
+    ctx.beginPath();
+    ctx.moveTo(baulkX, playT + 4);
+    ctx.lineTo(baulkX, playB - 4);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    ctx.strokeStyle = 'rgba(10,10,10,0.45)';
     ctx.lineWidth = 5;
-    ctx.strokeRect(3, 3, w - 6, h - 6);
+    ctx.strokeRect(playL + 2, playT + 2, playR - playL - 4, playB - playT - 4);
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(playL + 2, playT + 2, playR - playL - 4, playB - playT - 4);
     if (railTextureRef.current) {
       ctx.save();
-      ctx.globalAlpha = 0.34;
+      ctx.globalAlpha = 0.22;
       ctx.drawImage(railTextureRef.current, 0, 0, w, 18);
       ctx.drawImage(railTextureRef.current, 0, h - 18, w, 18);
       ctx.translate(0, h);
@@ -730,65 +855,98 @@ export default function EightBallPool() {
       ctx.restore();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
     }
-    ctx.strokeStyle = 'rgba(255,255,255,0.09)';
-    ctx.lineWidth = 2;
-    ctx.strokeRect(12, 12, w - 24, h - 24);
 
-    // Pockets
-    const cornerInset = 9;
-    const pockets = [
-      { x: cornerInset, y: cornerInset, r: 16.8 },
-      { x: w / 2, y: 0, r: 14.2 },
-      { x: w - cornerInset, y: cornerInset, r: 16.8 },
-      { x: cornerInset, y: h - cornerInset, r: 16.8 },
-      { x: w / 2, y: h, r: 14.2 },
-      { x: w - cornerInset, y: h - cornerInset, r: 16.8 },
+    const studFill = currentSkin.stud || currentSkin.accent;
+    const studStroke = currentSkin.studStroke || 'rgba(0,0,0,0.35)';
+    const studsX = [w * 0.25, w * 0.5, w * 0.75];
+    const studsY = [h * 0.25, h * 0.5, h * 0.75];
+    const drawStud = (sx, sy) => {
+      ctx.beginPath();
+      ctx.arc(sx, sy, 3.4, 0, Math.PI * 2);
+      ctx.fillStyle = studFill;
+      ctx.fill();
+      ctx.strokeStyle = studStroke;
+      ctx.lineWidth = 0.6;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(sx - 0.8, sy - 0.8, 1.1, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.38)';
+      ctx.fill();
+    };
+    for (const sx of studsX) {
+      drawStud(sx, 10);
+      drawStud(sx, h - 10);
+    }
+    for (const sy of studsY) {
+      drawStud(10, sy);
+      drawStud(w - 10, sy);
+    }
+
+    const pr = POCKET_R_TABLE * (w / TABLE_W);
+    const pocketCentersTable = [
+      [0, 0], [TABLE_W / 2, 0], [TABLE_W, 0],
+      [0, TABLE_H], [TABLE_W / 2, TABLE_H], [TABLE_W, TABLE_H],
     ];
-    // Diamonds on rails.
-    ctx.fillStyle = currentSkin.accent;
-    const diamonds = [w * 0.25, w * 0.5, w * 0.75];
-    for (const dx of diamonds) {
-      ctx.fillRect(dx - 2, 4, 4, 8);
-      ctx.fillRect(dx - 2, h - 12, 4, 8);
-    }
-    const sideDiamonds = [h * 0.25, h * 0.5, h * 0.75];
-    for (const dy of sideDiamonds) {
-      ctx.fillRect(4, dy - 2, 8, 4);
-      ctx.fillRect(w - 12, dy - 2, 8, 4);
-    }
+    const pockets = pocketCentersTable.map(([tx, ty]) => ({
+      x: (tx / TABLE_W) * w,
+      y: (ty / TABLE_H) * h,
+    }));
 
     for (const p of pockets) {
       const px = p.x;
       const py = p.y;
-      const pr = p.r;
-      const pocketGrad = ctx.createRadialGradient(px, py, 2, px, py, pr + 6);
+      const pocketGrad = ctx.createRadialGradient(px, py, 2, px, py, pr + 8);
       pocketGrad.addColorStop(0, currentSkin.pocket[0]);
-      pocketGrad.addColorStop(1, currentSkin.pocket[1]);
+      pocketGrad.addColorStop(0.55, currentSkin.pocket[1]);
+      pocketGrad.addColorStop(1, '#000000');
       ctx.beginPath();
       ctx.arc(px, py, pr + 2.2, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(24,16,10,0.92)';
+      ctx.fillStyle = 'rgba(8,8,12,0.96)';
       ctx.fill();
       const rimGrad = ctx.createLinearGradient(px - pr, py - pr, px + pr, py + pr);
-      rimGrad.addColorStop(0, 'rgba(241,211,139,0.34)');
-      rimGrad.addColorStop(1, 'rgba(111,78,38,0.34)');
+      const rimA = currentSkin.pocketRim || 'rgba(30,64,120,0.5)';
+      rimGrad.addColorStop(0, rimA);
+      rimGrad.addColorStop(1, 'rgba(0,0,0,0.35)');
       ctx.beginPath();
       ctx.arc(px, py, pr + 0.9, 0, Math.PI * 2);
       ctx.strokeStyle = rimGrad;
-      ctx.lineWidth = 2.2;
+      ctx.lineWidth = 2.4;
       ctx.stroke();
+      const innerHoleR = Math.max(pr * 0.45, pr - 3.5);
       ctx.beginPath();
-      ctx.arc(px, py, Math.max(9.8, pr - 3.2), 0, Math.PI * 2);
+      ctx.arc(px, py, innerHoleR, 0, Math.PI * 2);
       ctx.fillStyle = pocketGrad;
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(px, py, Math.max(9.4, pr - 3.6), 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(255,214,140,0.16)';
+      ctx.arc(px, py, Math.max(pr * 0.42, innerHoleR - 0.5), 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
       ctx.lineWidth = 1;
       ctx.stroke();
     }
 
+    const kb = activeGame?.table_state?.break_kitchen;
+    if (awaitingBreak) {
+      const minX = kb ? Number(kb.min_x) : BALL_R;
+      const maxX = kb ? Number(kb.max_x) : TABLE_HEAD_STRING_X - BALL_R * 2;
+      const minY = kb ? Number(kb.min_y) : BALL_R;
+      const maxY = kb ? Number(kb.max_y) : TABLE_H - BALL_R;
+      const x1 = (minX / TABLE_W) * w;
+      const x2 = (maxX / TABLE_W) * w;
+      const y1 = (minY / TABLE_H) * h;
+      const y2 = (maxY / TABLE_H) * h;
+      ctx.save();
+      ctx.fillStyle = 'rgba(251,191,36,0.07)';
+      ctx.fillRect(x1, y1, x2 - x1, y2 - y1);
+      ctx.strokeStyle = 'rgba(251,191,36,0.55)';
+      ctx.setLineDash([6, 5]);
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+
     // Balls
-    for (const b of displayBalls) {
+    for (const b of ballsForRender) {
       if (b.pocketed) continue;
       const x = (Number(b.x || 0) / TABLE_W) * w;
       const y = (Number(b.y || 0) / TABLE_H) * h;
@@ -816,11 +974,17 @@ export default function EightBallPool() {
         ctx.stroke();
       }
 
-      // Ball shadow.
+      // Ball shadow (soft drop — Miniclip-style lift).
+      ctx.save();
       ctx.beginPath();
-      ctx.arc(x + 1.5, y + 2.5, r, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(0,0,0,0.35)';
+      ctx.ellipse(x + r * 0.28, y + r * 0.55, r * 1.15, r * 0.55, 0, 0, Math.PI * 2);
+      const sh = ctx.createRadialGradient(x + r * 0.2, y + r * 0.5, r * 0.05, x + r * 0.35, y + r * 0.55, r * 1.15);
+      sh.addColorStop(0, 'rgba(0,0,0,0.42)');
+      sh.addColorStop(0.5, 'rgba(0,0,0,0.18)');
+      sh.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = sh;
       ctx.fill();
+      ctx.restore();
 
       // Base sphere.
       const ballGrad = ctx.createRadialGradient(x - r * 0.38, y - r * 0.42, r * 0.18, x, y, r * 1.08);
@@ -873,9 +1037,21 @@ export default function EightBallPool() {
       ctx.fill();
     }
 
+    const cuePlace = ballsForRender.find((b) => b.number === 0 && !b.pocketed);
+    if (cuePlace && inBreakPlacement && canRenderCue) {
+      const pcx = (Number(cuePlace.x || 0) / TABLE_W) * w;
+      const pcy = (Number(cuePlace.y || 0) / TABLE_H) * h;
+      const placeRingR = Math.max(10, (BALL_R / TABLE_W) * w * 1.7);
+      ctx.beginPath();
+      ctx.arc(pcx, pcy, placeRingR, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(251,191,36,0.92)';
+      ctx.lineWidth = 2.6;
+      ctx.stroke();
+    }
+
     // Aiming guide + cue stick.
-    const cue = displayBalls.find((b) => b.number === 0 && !b.pocketed);
-    if (cue && canRenderCue) {
+    const cue = ballsForRender.find((b) => b.number === 0 && !b.pocketed);
+    if (cue && canAim) {
       const cx = (Number(cue.x || 0) / TABLE_W) * w;
       const cy = (Number(cue.y || 0) / TABLE_H) * h;
       const cueVisualR = Math.max(10, (BALL_R / TABLE_W) * w * 1.7);
@@ -888,11 +1064,14 @@ export default function EightBallPool() {
       // Aim ring around cue ball.
       ctx.beginPath();
       ctx.arc(cx, cy, cueVisualR, 0, Math.PI * 2);
-      ctx.strokeStyle = isAiming ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.35)';
-      ctx.lineWidth = isAiming ? 2.5 : 1.4;
+      ctx.strokeStyle = isAiming ? 'rgba(34,197,94,0.95)' : 'rgba(255,255,255,0.4)';
+      ctx.lineWidth = isAiming ? 3 : 1.6;
+      ctx.shadowColor = isAiming ? 'rgba(34,197,94,0.55)' : 'transparent';
+      ctx.shadowBlur = isAiming ? 8 : 0;
       ctx.stroke();
+      ctx.shadowBlur = 0;
 
-      // Multi-segment preview upgrades: rails and contact-aware lines.
+      // Multi-segment preview: solid whites + object path + cue deflection (mobile-pool style).
       const segs = aimPreview?.segments || [];
       if (segs.length) {
         segs.forEach((seg, idx) => {
@@ -901,20 +1080,25 @@ export default function EightBallPool() {
           ctx.lineTo(seg.x2, seg.y2);
           const grad = ctx.createLinearGradient(seg.x1, seg.y1, seg.x2, seg.y2);
           if (seg.kind === 'object') {
-            grad.addColorStop(0, 'rgba(56,189,248,0.92)');
-            grad.addColorStop(1, 'rgba(56,189,248,0.12)');
-            ctx.setLineDash([3, 5]);
-            ctx.lineWidth = typeof seg.lineWidth === 'number' ? seg.lineWidth : (aimPreview?.objectLineWidth || 1.4);
+            grad.addColorStop(0, 'rgba(255,255,255,0.98)');
+            grad.addColorStop(1, 'rgba(255,255,255,0.35)');
+            ctx.setLineDash([]);
+            ctx.lineWidth = typeof seg.lineWidth === 'number' ? seg.lineWidth : (aimPreview?.objectLineWidth || 1.65);
+          } else if (seg.kind === 'cue_deflect') {
+            grad.addColorStop(0, 'rgba(255,255,255,0.92)');
+            grad.addColorStop(1, 'rgba(255,255,255,0.2)');
+            ctx.setLineDash([5, 4]);
+            ctx.lineWidth = 1.85;
           } else if (seg.kind === 'contact') {
-            grad.addColorStop(0, 'rgba(250,204,21,0.95)');
-            grad.addColorStop(1, 'rgba(250,204,21,0.25)');
-            ctx.setLineDash([5, 5]);
-            ctx.lineWidth = 2.1;
+            grad.addColorStop(0, 'rgba(255,255,255,1)');
+            grad.addColorStop(1, 'rgba(255,255,255,0.55)');
+            ctx.setLineDash([]);
+            ctx.lineWidth = 2.35;
           } else {
-            grad.addColorStop(0, idx === 0 ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.45)');
-            grad.addColorStop(1, isAiming ? 'rgba(250,204,21,0.65)' : 'rgba(255,255,255,0.14)');
-            ctx.setLineDash([6, 6]);
-            ctx.lineWidth = idx === 0 ? 2.4 : 1.6;
+            grad.addColorStop(0, idx === 0 ? 'rgba(255,255,255,1)' : 'rgba(255,255,255,0.55)');
+            grad.addColorStop(1, idx === 0 ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.2)');
+            ctx.setLineDash(idx === 0 ? [] : [5, 5]);
+            ctx.lineWidth = idx === 0 ? 2.75 : 1.55;
           }
           ctx.strokeStyle = grad;
           ctx.stroke();
@@ -938,13 +1122,19 @@ export default function EightBallPool() {
       }
       if (aimPreview?.ghost) {
         ctx.beginPath();
+        ctx.arc(aimPreview.ghost.x, aimPreview.ghost.y, 6.2, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+        ctx.beginPath();
         ctx.arc(aimPreview.ghost.x, aimPreview.ghost.y, 5.2, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255,255,255,0.32)';
+        ctx.fillStyle = 'rgba(255,255,255,0.22)';
         ctx.fill();
         ctx.beginPath();
-        ctx.arc(aimPreview.ghost.objectX, aimPreview.ghost.objectY, 4.6, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(56,189,248,0.24)';
-        ctx.fill();
+        ctx.arc(aimPreview.ghost.objectX, aimPreview.ghost.objectY, 4.8, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
       }
 
       const cueGrad = ctx.createLinearGradient(
@@ -953,9 +1143,11 @@ export default function EightBallPool() {
         cx - ox * 18,
         cy - oy * 18,
       );
-      cueGrad.addColorStop(0, '#f5d0a9');
-      cueGrad.addColorStop(0.55, '#b08968');
-      cueGrad.addColorStop(1, '#5b3a20');
+      cueGrad.addColorStop(0, '#fdf6e3');
+      cueGrad.addColorStop(0.25, '#e8c88a');
+      cueGrad.addColorStop(0.55, '#b8894a');
+      cueGrad.addColorStop(0.82, '#6b4425');
+      cueGrad.addColorStop(1, '#3d2314');
       if (cueTextureRef.current) {
         const cuePattern = ctx.createPattern(cueTextureRef.current, 'repeat');
         if (cuePattern) ctx.strokeStyle = cuePattern;
@@ -964,9 +1156,16 @@ export default function EightBallPool() {
       ctx.moveTo(cx - ox * (cueLen * (0.45 + Number(power || 0) * 0.65)), cy - oy * (cueLen * (0.45 + Number(power || 0) * 0.65)));
       ctx.lineTo(cx - ox * 18, cy - oy * 18);
       if (!cueTextureRef.current) ctx.strokeStyle = cueGrad;
-      ctx.lineWidth = 6;
+      ctx.lineWidth = 7;
       ctx.lineCap = 'round';
+      ctx.shadowColor = 'rgba(0,0,0,0.4)';
+      ctx.shadowBlur = 5;
+      ctx.shadowOffsetX = 1;
+      ctx.shadowOffsetY = 2;
       ctx.stroke();
+      ctx.shadowBlur = 0;
+      ctx.shadowOffsetX = 0;
+      ctx.shadowOffsetY = 0;
     }
     const now = Date.now();
     fxRef.current.pockets = fxRef.current.pockets.filter((f) => now - f.at < 450);
@@ -987,7 +1186,7 @@ export default function EightBallPool() {
       ctx.lineWidth = 2;
       ctx.stroke();
     }
-  }, [displayBalls, angleDeg, power, spinX, spinY, isAiming, currentSkin, renderTick, canRenderCue, aimPreview]);
+  }, [ballsForRender, angleDeg, power, spinX, spinY, isAiming, currentSkin, renderTick, canAim, canRenderCue, aimPreview, awaitingBreak, activeGame?.table_state?.break_kitchen, inBreakPlacement]);
 
   const startAi = async () => {
     setBusy(true);
@@ -995,6 +1194,7 @@ export default function EightBallPool() {
       const res = await api.post('/casino/mp-8ball/vs-ai/start');
       setAiGame(res.data || null);
       setTab('ai');
+      setPageTab('match');
       toast.success('AI match started');
     } catch (e) {
       toast.error(getApiErrorMessage(e) || 'Failed to start AI game');
@@ -1009,6 +1209,7 @@ export default function EightBallPool() {
       const res = await api.post('/casino/mp-8ball/games', { buy_in: Number(buyIn) || 0, rated: true, anonymous: false });
       setPvpGame(res.data || null);
       setTab('pvp');
+      setPageTab('match');
       await fetchPvpLobbies();
       toast.success('Lobby created');
     } catch (e) {
@@ -1023,6 +1224,7 @@ export default function EightBallPool() {
     try {
       const res = await api.post(`/casino/mp-8ball/games/${encodeURIComponent(gid)}/join`);
       setPvpGame(res.data || null);
+      setPageTab('match');
       toast.success('Joined lobby');
       await fetchPvpLobbies();
     } catch (e) {
@@ -1099,11 +1301,12 @@ export default function EightBallPool() {
   const shoot = async () => {
     if (!activeGame) return;
     if (busy) return;
-    if (!canRenderCue || !ballsSettled) return;
+    if (inBreakPlacement) return;
+    if (!canAim || !ballsSettled) return;
     setBusy(true);
     try {
       const angle = (Number(angleDeg) * Math.PI) / 180;
-      const cue = displayBalls.find((b) => b.number === 0 && !b.pocketed);
+      const cue = ballsForRender.find((b) => b.number === 0 && !b.pocketed);
       const canvas = canvasRef.current;
       if (cue && canvas) {
         const cx = (Number(cue.x || 0) / TABLE_W) * canvas.width;
@@ -1130,10 +1333,10 @@ export default function EightBallPool() {
 
   const updateAimFromPointer = (event) => {
     if (replayActiveRef.current) return;
-    if (!canRenderCue || !ballsSettled) return;
+    if (!canAim || !ballsSettled) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const cue = displayBalls.find((b) => b.number === 0 && !b.pocketed);
+    const cue = ballsForRender.find((b) => b.number === 0 && !b.pocketed);
     if (!cue) return;
     const rect = canvas.getBoundingClientRect();
     const sx = ((event.clientX - rect.left) / rect.width) * canvas.width;
@@ -1174,7 +1377,7 @@ export default function EightBallPool() {
   }, []);
 
   const buyCue = async (cueId) => {
-    setBusy(true);
+    setCueBusy(true);
     try {
       await api.post('/casino/mp-8ball/cues/buy', { cue_id: cueId });
       toast.success('Cue purchased');
@@ -1182,12 +1385,12 @@ export default function EightBallPool() {
     } catch (e) {
       toast.error(getApiErrorMessage(e) || 'Purchase failed');
     } finally {
-      setBusy(false);
+      setCueBusy(false);
     }
   };
 
   const selectCue = async (cueInstanceId) => {
-    setBusy(true);
+    setCueBusy(true);
     try {
       await api.post('/casino/mp-8ball/cues/select', { cue_instance_id: cueInstanceId });
       await fetchCues();
@@ -1195,13 +1398,13 @@ export default function EightBallPool() {
     } catch (e) {
       toast.error(getApiErrorMessage(e) || 'Select failed');
     } finally {
-      setBusy(false);
+      setCueBusy(false);
     }
   };
 
   const upgradeCue = async (stat) => {
     if (!selectedCue?.id) return;
-    setBusy(true);
+    setCueBusy(true);
     try {
       const res = await api.post('/casino/mp-8ball/cues/upgrade', { cue_instance_id: selectedCue.id, stat });
       await fetchCues();
@@ -1212,7 +1415,7 @@ export default function EightBallPool() {
     } catch (e) {
       toast.error(getApiErrorMessage(e) || 'Upgrade failed');
     } finally {
-      setBusy(false);
+      setCueBusy(false);
     }
   };
 
@@ -1235,6 +1438,13 @@ export default function EightBallPool() {
         <p className="text-[10px] text-mutedForeground font-heading italic">WPA-style rules: call your group after the break, no upgrade “luck” on fouls or turns. {POOL_SHOT_CLOCK_SEC}s shot clock; forfeit = DNF loss.</p>
       </header>
 
+      <div className="flex flex-wrap justify-center gap-2 pool-fade-in">
+        <button type="button" onClick={() => setPageTab('match')} className={`px-3 py-1.5 rounded text-[10px] font-heading uppercase border ${pageTab === 'match' ? 'bg-primary/20 border-primary/50 text-primary' : 'border-zinc-700 text-mutedForeground'}`}>Match</button>
+        <button type="button" onClick={() => setPageTab('garage')} className={`px-3 py-1.5 rounded text-[10px] font-heading uppercase border ${pageTab === 'garage' ? 'bg-primary/20 border-primary/50 text-primary' : 'border-zinc-700 text-mutedForeground'}`}>Cue garage</button>
+      </div>
+
+      {pageTab === 'match' && (
+      <>
       <div className={`${styles.panel} mobile-panel rounded-md border border-primary/20 overflow-hidden pool-fade-in`}>
         <div className="px-3 py-2 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
           <button type="button" onClick={() => setTab('ai')} className={`px-2 py-1 rounded text-[10px] font-heading uppercase border ${tab === 'ai' ? 'bg-primary/20 border-primary/50 text-primary' : 'border-zinc-700 text-mutedForeground'}`}><Bot size={12} className="inline mr-1" />AI</button>
@@ -1247,17 +1457,17 @@ export default function EightBallPool() {
         <div className="p-3 space-y-3">
           {tab === 'ai' ? (
             <div className="flex flex-wrap items-center gap-2">
-              <button type="button" onClick={startAi} disabled={busy} className="px-3 py-1.5 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading">{busy ? '...' : 'Start AI Match'}</button>
+              <button type="button" onClick={startAi} disabled={busy || cueBusy} className="px-3 py-1.5 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading">{busy ? '...' : 'Start AI Match'}</button>
               {aiGame?.id && <span className="text-[10px] text-mutedForeground font-mono">Session: {aiGame.id}</span>}
             </div>
           ) : (
             <div className="space-y-2">
               <div className="flex flex-wrap items-center gap-2">
                 <input type="number" min={0} value={buyIn} onChange={(e) => setBuyIn(Number(e.target.value || 0))} className="w-28 px-2 py-1 rounded border border-input bg-transparent text-xs" placeholder="Buy-in" />
-                <button type="button" onClick={createPvp} disabled={busy} className="px-3 py-1.5 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading">{busy ? '...' : 'Create Lobby'}</button>
-                {pvpGame?.id && <button type="button" onClick={leaveLobby} disabled={busy} className="px-3 py-1.5 rounded bg-red-500/20 border border-red-500/50 text-red-300 text-xs font-heading">Leave</button>}
-                {pvpGame?.id && <button type="button" onClick={readyLobby} disabled={busy} className="px-3 py-1.5 rounded bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 text-xs font-heading">Ready</button>}
-                {pvpGame?.id && <button type="button" onClick={startLobby} disabled={busy} className="px-3 py-1.5 rounded bg-amber-500/20 border border-amber-500/50 text-amber-300 text-xs font-heading">Start</button>}
+                <button type="button" onClick={createPvp} disabled={busy || cueBusy} className="px-3 py-1.5 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading">{busy ? '...' : 'Create Lobby'}</button>
+                {pvpGame?.id && <button type="button" onClick={leaveLobby} disabled={busy || cueBusy} className="px-3 py-1.5 rounded bg-red-500/20 border border-red-500/50 text-red-300 text-xs font-heading">Leave</button>}
+                {pvpGame?.id && <button type="button" onClick={readyLobby} disabled={busy || cueBusy} className="px-3 py-1.5 rounded bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 text-xs font-heading">Ready</button>}
+                {pvpGame?.id && <button type="button" onClick={startLobby} disabled={busy || cueBusy} className="px-3 py-1.5 rounded bg-amber-500/20 border border-amber-500/50 text-amber-300 text-xs font-heading">Start</button>}
               </div>
               <div className="space-y-1 max-h-32 overflow-y-auto">
                 {lobbies.length === 0 ? <p className="text-[10px] text-mutedForeground">No live lobbies.</p> : lobbies.map((g) => (
@@ -1265,7 +1475,7 @@ export default function EightBallPool() {
                     <span className="text-[10px] text-foreground font-mono">{g.id}</span>
                     <span className="text-[10px] text-mutedForeground">{(g.players || []).length}/2 players</span>
                     <span className="text-[10px] text-mutedForeground">Pot: ${(g.pot || 0).toLocaleString()}</span>
-                    <button type="button" onClick={() => joinLobby(g.id)} disabled={busy} className="ml-auto px-2 py-1 rounded border border-primary/40 text-primary text-[10px]">Join</button>
+                    <button type="button" onClick={() => joinLobby(g.id)} disabled={busy || cueBusy} className="ml-auto px-2 py-1 rounded border border-primary/40 text-primary text-[10px]">Join</button>
                   </div>
                 ))}
               </div>
@@ -1290,7 +1500,7 @@ export default function EightBallPool() {
                     {typeof activeGame.turn_seconds_left === 'number' && activeGame.phase === 'playing' && (
                       <span className="text-amber-300/90"> · {activeGame.turn_seconds_left}s</span>
                     )}
-                    {' · '}{activeGame.status}/{activeGame.phase} · Shots {activeGame.table_state?.shot_count || 0} · {(replayActive || !ballsSettled) ? 'ROLLING' : 'AIMING'}
+                    {' · '}{activeGame.status}/{activeGame.phase} · Shots {activeGame.table_state?.shot_count || 0} · {(replayActive || !ballsSettled) ? 'ROLLING' : inBreakPlacement ? 'PLACE CUE (KITCHEN)' : 'AIMING'}
                     {activeGame.status === 'completed' && activeGame.result_reason === 'dnf' && (
                       <span className="text-red-300/90"> · DNF</span>
                     )}
@@ -1346,28 +1556,48 @@ export default function EightBallPool() {
                   ref={canvasRef}
                   width={900}
                   height={450}
-                  className="pool-canvas w-full rounded-lg border border-cyan-400/25 bg-[#0b4f2f] touch-none"
+                  className="pool-canvas w-full rounded-lg border border-cyan-300/20 bg-[#0c1929] touch-none"
                   onPointerDown={(e) => {
-                    if (replayActive || !canRenderCue || !ballsSettled) return;
+                    if (replayActive || !ballsSettled) return;
                     if (mobileNeedsRotate) return;
+                    if (inBreakPlacement && canRenderCue) {
+                      e.preventDefault();
+                      const pos = pointerToKitchen(e);
+                      if (pos) setBreakPreview(pos);
+                      return;
+                    }
+                    if (!canAim) return;
                     setIsAiming(true);
                     updateAimFromPointer(e);
                   }}
                   onPointerMove={(e) => {
-                    if (replayActive || !canRenderCue || !ballsSettled) return;
+                    if (replayActive || !ballsSettled) return;
                     if (mobileNeedsRotate) return;
+                    if (inBreakPlacement && canRenderCue) {
+                      const pos = pointerToKitchen(e);
+                      if (pos) setBreakPreview(pos);
+                      return;
+                    }
+                    if (!canAim) return;
                     if (!isAiming) return;
                     updateAimFromPointer(e);
                   }}
                   onPointerUp={async (e) => {
-                    if (replayActive || !canRenderCue || !ballsSettled) return;
+                    if (replayActive || !ballsSettled) return;
                     if (mobileNeedsRotate) return;
+                    if (inBreakPlacement && canRenderCue) {
+                      const pos = pointerToKitchen(e);
+                      if (pos) await placeBreakCue(pos.x, pos.y);
+                      setBreakPreview(null);
+                      return;
+                    }
+                    if (!canAim) return;
                     if (!isAiming) return;
                     updateAimFromPointer(e);
                     setIsAiming(false);
                     await shoot();
                   }}
-                  onPointerLeave={() => setIsAiming(false)}
+                  onPointerLeave={() => { setIsAiming(false); }}
                 />
                 </div>
               </div>
@@ -1431,14 +1661,17 @@ export default function EightBallPool() {
                     </button>
                   </div>
                 </div>
-                <div className="flex items-end"><button type="button" onClick={shoot} disabled={busy || replayActive || mobileNeedsRotate || !canRenderCue || !ballsSettled} className="w-full px-3 py-2 rounded bg-primary/20 border border-primary/50 text-primary font-heading">{mobileNeedsRotate ? 'Rotate Phone' : (replayActive || !ballsSettled) ? 'Rolling...' : busy ? '...' : 'Shoot'}</button></div>
+                <div className="flex items-end"><button type="button" onClick={shoot} disabled={busy || replayActive || mobileNeedsRotate || !canAim || !ballsSettled} className="w-full px-3 py-2 rounded bg-primary/20 border border-primary/50 text-primary font-heading">{mobileNeedsRotate ? 'Rotate Phone' : (replayActive || !ballsSettled) ? 'Rolling...' : busy ? '...' : inBreakPlacement ? 'Place cue in kitchen' : 'Shoot'}</button></div>
               </div>
             </div>
           )}
         </div>
         <div className="pool-art-line text-primary mx-3" />
       </div>
+      </>
+      )}
 
+      {pageTab === 'garage' && (
       <div className={`${styles.panel} mobile-panel rounded-md border border-primary/20 overflow-hidden pool-fade-in`}>
         <div className="px-3 py-2 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
           <Zap size={13} className="text-primary" />
@@ -1483,7 +1716,7 @@ export default function EightBallPool() {
                   const canAfford = cash >= nextCost;
                   const statMaxed = lvl >= upgradeStatCap;
                   const totalMaxed = cueTotalLevel >= upgradeTotalCap;
-                  const disabled = busy || statMaxed || totalMaxed || !canAfford;
+                  const disabled = cueBusy || statMaxed || totalMaxed || !canAfford;
                   let btnLabel = `Upgrade · $${nextCost.toLocaleString()}`;
                   if (statMaxed) btnLabel = 'Stat maxed';
                   else if (totalMaxed) btnLabel = 'Total cap';
@@ -1525,7 +1758,11 @@ export default function EightBallPool() {
                       </div>
                       <button
                         type="button"
-                        onClick={() => upgradeCue(key)}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          upgradeCue(key);
+                        }}
                         disabled={disabled}
                         className={`w-full px-2 py-1.5 rounded-md text-[10px] font-heading uppercase tracking-wide border ${
                           disabled
@@ -1553,9 +1790,9 @@ export default function EightBallPool() {
                   <div className="text-mutedForeground">Price: {Number(c.price_points || 0).toLocaleString()} pts</div>
                   <div className="text-mutedForeground">Base stats: P {c.stats.power} · A {c.stats.aim} · S {c.stats.spin} · C {c.stats.control}</div>
                   {owned ? (
-                    <button type="button" onClick={() => selectCue(owned.id)} disabled={busy} className="px-2 py-1 rounded border border-emerald-500/50 text-emerald-300 text-[10px]">Select</button>
+                    <button type="button" onClick={() => selectCue(owned.id)} disabled={cueBusy} className="px-2 py-1 rounded border border-emerald-500/50 text-emerald-300 text-[10px]">Select</button>
                   ) : (
-                    <button type="button" onClick={() => buyCue(c.id)} disabled={busy} className="px-2 py-1 rounded border border-primary/50 text-primary text-[10px]">Buy</button>
+                    <button type="button" onClick={() => buyCue(c.id)} disabled={cueBusy} className="px-2 py-1 rounded border border-primary/50 text-primary text-[10px]">Buy</button>
                   )}
                 </div>
               );
@@ -1569,6 +1806,7 @@ export default function EightBallPool() {
           </div>
         </div>
       </div>
+      )}
     </div>
   );
 }

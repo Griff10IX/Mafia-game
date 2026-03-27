@@ -24,6 +24,10 @@ MP_8BALL_AI_ID = "ai_pool_bot"
 MP_8BALL_TABLE_W = 2.2
 MP_8BALL_TABLE_H = 1.1
 MP_8BALL_BALL_R = 0.028
+# Head string at W/4 from the breaking end (left); kitchen is behind it toward the head cushion.
+MP_8BALL_HEAD_STRING_X = MP_8BALL_TABLE_W * 0.25
+# Ball pockets when center is within this distance of pocket center (see `_pockets()`).
+# Keep in sync with `POCKET_R_TABLE` on the pool client (EightBallPool.js).
 MP_8BALL_POCKET_R = 0.045
 MP_8BALL_RESTITUTION = 0.985
 MP_8BALL_FRICTION = 0.994
@@ -35,6 +39,7 @@ MP_8BALL_SPIN_CARRY = 0.03
 MP_8BALL_SLEEP_EPS = 0.006
 MP_8BALL_POS_EPS = 1e-5
 MP_8BALL_MAX_SIM_STEPS = 1200
+MP_8BALL_COLLISION_PASSES = 4
 MP_8BALL_SPIN_SWERVE = 0.045
 MP_8BALL_SPIN_DECAY = 0.988
 MP_8BALL_RAIL_SPIN_THROW = 0.085
@@ -80,6 +85,11 @@ class CueUpgradeRequest(BaseModel):
     stat: str
 
 
+class PoolBreakCueRequest(BaseModel):
+    x: float
+    y: float
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
@@ -117,12 +127,35 @@ def _new_ball(ball_id: int, number: int, x: float, y: float) -> dict:
     }
 
 
+def _kitchen_break_bounds() -> Dict[str, float]:
+    """WPA-style kitchen: behind the head string toward the head cushion (left side here)."""
+    min_x = MP_8BALL_BALL_R
+    max_x = MP_8BALL_HEAD_STRING_X - MP_8BALL_BALL_R * 2.0
+    min_y = MP_8BALL_BALL_R
+    max_y = MP_8BALL_TABLE_H - MP_8BALL_BALL_R
+    return {"min_x": min_x, "max_x": max_x, "min_y": min_y, "max_y": max_y}
+
+
+def _clamp_kitchen_xy(x: float, y: float) -> Tuple[float, float]:
+    b = _kitchen_break_bounds()
+    return (
+        max(b["min_x"], min(b["max_x"], float(x))),
+        max(b["min_y"], min(b["max_y"], float(y))),
+    )
+
+
+def _default_break_cue_xy() -> Tuple[float, float]:
+    b = _kitchen_break_bounds()
+    return ((b["min_x"] + b["max_x"]) / 2.0, (b["min_y"] + b["max_y"]) / 2.0)
+
+
 def _initial_balls() -> List[dict]:
     balls: List[dict] = []
-    balls.append(_new_ball(0, 0, MP_8BALL_TABLE_W * 0.25, MP_8BALL_TABLE_H * 0.5))
+    bx, by = _default_break_cue_xy()
+    balls.append(_new_ball(0, 0, bx, by))
     rack_origin_x = MP_8BALL_TABLE_W * 0.73
     rack_origin_y = MP_8BALL_TABLE_H * 0.5
-    spacing = MP_8BALL_BALL_R * 2.08
+    spacing = MP_8BALL_BALL_R * 2.1
     nums = list(range(1, 16))
     _rng.shuffle(nums)
     # Keep 8 roughly center-ish in rack.
@@ -138,6 +171,19 @@ def _initial_balls() -> List[dict]:
             idx += 1
             ball_id += 1
     return balls
+
+
+def _new_table_state() -> dict:
+    return {
+        "table_w": MP_8BALL_TABLE_W,
+        "table_h": MP_8BALL_TABLE_H,
+        "balls": _initial_balls(),
+        "shot_count": 0,
+        "balls_settled": True,
+        "history": [],
+        "awaiting_break_placement": True,
+        "break_kitchen": _kitchen_break_bounds(),
+    }
 
 
 def _pockets() -> List[Tuple[float, float]]:
@@ -224,7 +270,7 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
                 cue_spin_y *= MP_8BALL_SPIN_DECAY
             b["x"] += b["vx"] * MP_8BALL_SIM_DT
             b["y"] += b["vy"] * MP_8BALL_SIM_DT
-            # Cushion bounce.
+            # Cushion bounce (axis-aligned rails; reflect normal velocity with restitution).
             if b["x"] <= MP_8BALL_BALL_R:
                 b["x"] = MP_8BALL_BALL_R
                 pre = abs(b["vx"])
@@ -286,6 +332,81 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
                         "strength": float(pre),
                     })
 
+        # Ball–ball: separate overlaps for all pairs (fixes rack penetration), then elastic
+        # impulse on pass 0 only (equal mass, 1D along contact normal). Friction runs after.
+        min_dist = MP_8BALL_BALL_R * 2.0
+        for collision_pass in range(MP_8BALL_COLLISION_PASSES):
+            active = _active_balls(out)
+            for i in range(len(active)):
+                for j in range(i + 1, len(active)):
+                    a = active[i]
+                    b = active[j]
+                    dx = b["x"] - a["x"]
+                    dy = b["y"] - a["y"]
+                    dist = math.hypot(dx, dy)
+                    if dist < 1e-12:
+                        nx, ny = 1.0, 0.0
+                    else:
+                        nx = dx / dist
+                        ny = dy / dist
+                    if dist < min_dist:
+                        overlap = (min_dist - dist) * 0.5
+                        a["x"] -= nx * overlap
+                        a["y"] -= ny * overlap
+                        b["x"] += nx * overlap
+                        b["y"] += ny * overlap
+                        dx = b["x"] - a["x"]
+                        dy = b["y"] - a["y"]
+                        dist = math.hypot(dx, dy)
+                        if dist > 1e-12:
+                            nx = dx / dist
+                            ny = dy / dist
+                    if collision_pass > 0:
+                        continue
+                    if dist > min_dist + 1e-7:
+                        continue
+                    a_imp = int(a.get("id") or 0) in impacted_ids
+                    b_imp = int(b.get("id") or 0) in impacted_ids
+                    rvx = b["vx"] - a["vx"]
+                    rvy = b["vy"] - a["vy"]
+                    vel_along_normal = rvx * nx + rvy * ny
+                    if vel_along_normal >= -1e-9:
+                        continue
+                    if not a_imp and not b_imp:
+                        continue
+                    impulse = -(1.0 + MP_8BALL_RESTITUTION) * vel_along_normal * 0.5
+                    ix = impulse * nx
+                    iy = impulse * ny
+                    a["vx"] -= ix
+                    a["vy"] -= iy
+                    b["vx"] += ix
+                    b["vy"] += iy
+                    impacted_ids.add(int(a.get("id") or 0))
+                    impacted_ids.add(int(b.get("id") or 0))
+                    strength = math.hypot(ix, iy)
+                    if a.get("number") == 0:
+                        a["vx"] += nx * MP_8BALL_SPIN_CARRY
+                        a["vy"] += ny * MP_8BALL_SPIN_CARRY
+                    if b.get("number") == 0:
+                        b["vx"] -= nx * MP_8BALL_SPIN_CARRY
+                        b["vy"] -= ny * MP_8BALL_SPIN_CARRY
+                    if strength > 0.02:
+                        band = "soft" if strength < 0.08 else "medium" if strength < 0.16 else "hard"
+                        replay_events.append(
+                            {
+                                "type": "collision",
+                                "t_ms": int((step + 1) * MP_8BALL_SIM_DT * 1000),
+                                "x": float((a["x"] + b["x"]) / 2.0),
+                                "y": float((a["y"] + b["y"]) / 2.0),
+                                "strength": float(strength),
+                                "band": band,
+                            }
+                        )
+                    if first_contact is None and (a.get("number") == 0 or b.get("number") == 0):
+                        other = b if a.get("number") == 0 else a
+                        first_contact = int(other.get("number") or 0)
+
+        for b in _active_balls(out):
             speed_now = math.hypot(b["vx"], b["vy"])
             drag = MP_8BALL_FRICTION - (0.0015 if speed_now < 0.18 else 0.0)
             b["vx"] *= max(0.975, drag)
@@ -297,68 +418,6 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
             if abs(b["vx"]) < MP_8BALL_POS_EPS and abs(b["vy"]) < MP_8BALL_POS_EPS:
                 b["vx"] = 0.0
                 b["vy"] = 0.0
-
-        # Ball collisions.
-        active = _active_balls(out)
-        for i in range(len(active)):
-            for j in range(i + 1, len(active)):
-                a = active[i]
-                b = active[j]
-                dx = b["x"] - a["x"]
-                dy = b["y"] - a["y"]
-                dist = math.hypot(dx, dy)
-                min_dist = MP_8BALL_BALL_R * 2.0
-                if dist <= 1e-8 or dist >= min_dist:
-                    continue
-                nx = dx / dist
-                ny = dy / dist
-                a_impacted = int(a.get("id") or 0) in impacted_ids
-                b_impacted = int(b.get("id") or 0) in impacted_ids
-                if not a_impacted and not b_impacted:
-                    # Prevent untouched balls from jittering due tiny rack overlaps.
-                    continue
-                overlap = (min_dist - dist) * 0.5
-                a["x"] -= nx * overlap
-                a["y"] -= ny * overlap
-                b["x"] += nx * overlap
-                b["y"] += ny * overlap
-
-                rvx = b["vx"] - a["vx"]
-                rvy = b["vy"] - a["vy"]
-                vel_along_normal = rvx * nx + rvy * ny
-                if vel_along_normal > 0:
-                    continue
-                impulse = -(1 + MP_8BALL_RESTITUTION) * vel_along_normal / 2.0
-                ix = impulse * nx
-                iy = impulse * ny
-                a["vx"] -= ix
-                a["vy"] -= iy
-                b["vx"] += ix
-                b["vy"] += iy
-                impacted_ids.add(int(a.get("id") or 0))
-                impacted_ids.add(int(b.get("id") or 0))
-                strength = math.hypot(ix, iy)
-                if a.get("number") == 0:
-                    a["vx"] += nx * MP_8BALL_SPIN_CARRY
-                    a["vy"] += ny * MP_8BALL_SPIN_CARRY
-                if b.get("number") == 0:
-                    b["vx"] -= nx * MP_8BALL_SPIN_CARRY
-                    b["vy"] -= ny * MP_8BALL_SPIN_CARRY
-                if strength > 0.02:
-                    band = "soft" if strength < 0.08 else "medium" if strength < 0.16 else "hard"
-                    replay_events.append(
-                        {
-                            "type": "collision",
-                            "t_ms": int((step + 1) * MP_8BALL_SIM_DT * 1000),
-                            "x": float((a["x"] + b["x"]) / 2.0),
-                            "y": float((a["y"] + b["y"]) / 2.0),
-                            "strength": float(strength),
-                            "band": band,
-                        }
-                    )
-                if first_contact is None and (a.get("number") == 0 or b.get("number") == 0):
-                    other = b if a.get("number") == 0 else a
-                    first_contact = int(other.get("number") or 0)
 
         # Pocket detection.
         for b in out:
@@ -445,13 +504,16 @@ def _ensure_game_turn(game: dict, uid: str):
     idx = int(game.get("current_turn_index") or 0)
     if idx < 0 or idx >= len(players):
         raise HTTPException(status_code=400, detail="Invalid turn state")
-    if players[idx].get("user_id") != uid:
+    if str(players[idx].get("user_id")) != str(uid):
         raise HTTPException(status_code=400, detail="It is not your turn")
 
 
 async def _maybe_apply_shot_clock_timeout(db, game_id: str, game: dict) -> dict:
     """If the active player exceeded MP_8BALL_TURN_SECONDS in phase playing, foul and pass turn."""
     if game.get("status") != "in_progress" or game.get("phase") != "playing":
+        return game
+    ts0 = game.get("table_state") or {}
+    if int(ts0.get("shot_count") or 0) == 0 and bool(ts0.get("awaiting_break_placement")):
         return game
     ts = _parse_iso(game.get("turn_started_at"))
     if not ts or (datetime.now(timezone.utc) - ts).total_seconds() <= MP_8BALL_TURN_SECONDS:
@@ -699,14 +761,7 @@ def register(router):
             "all_ready_at": None,
             "winner_user_id": None,
             "result_reason": None,
-            "table_state": {
-                "table_w": MP_8BALL_TABLE_W,
-                "table_h": MP_8BALL_TABLE_H,
-                "balls": _initial_balls(),
-                "shot_count": 0,
-                "balls_settled": True,
-                "history": [],
-            },
+            "table_state": _new_table_state(),
         }
         await db.mp_8ball_games.insert_one(game)
         return _public_game(game, uid)
@@ -835,6 +890,7 @@ def register(router):
                     "current_turn_index": breaker,
                     "turn_started_at": _now_iso(),
                     "updated_at": _now_iso(),
+                    "table_state.awaiting_break_placement": True,
                 }
             },
         )
@@ -868,6 +924,9 @@ def register(router):
             )
         # Auto-timeout handling.
         if game.get("status") == "in_progress" and game.get("phase") == "playing":
+            ts_tbl = game.get("table_state") or {}
+            if int(ts_tbl.get("shot_count") or 0) == 0 and bool(ts_tbl.get("awaiting_break_placement")):
+                return _public_game(game, uid)
             ts = _parse_iso(game.get("turn_started_at"))
             if ts and (datetime.now(timezone.utc) - ts).total_seconds() > MP_8BALL_TURN_SECONDS:
                 players = list(game.get("players") or [])
@@ -883,7 +942,7 @@ def register(router):
 
     @router.post("/casino/mp-8ball/games/{game_id}/shoot")
     async def pool_shoot(game_id: str, body: PoolShootRequest, current_user: dict = Depends(get_current_user_verified)):
-        uid = current_user["id"]
+        uid = str(current_user["id"])
         game = await db.mp_8ball_games.find_one({"id": game_id})
         if not game:
             raise HTTPException(status_code=404, detail="Game not found")
@@ -891,14 +950,16 @@ def register(router):
             raise HTTPException(status_code=400, detail="Game is not active")
         _ensure_game_turn(game, uid)
 
+        table_state = dict(game.get("table_state") or {})
+        if int(table_state.get("shot_count") or 0) == 0 and bool(table_state.get("awaiting_break_placement")):
+            raise HTTPException(status_code=400, detail="Place the cue ball in the kitchen before breaking")
+
         players = list(game.get("players") or [])
         idx = int(game.get("current_turn_index") or 0)
         shooter = players[idx]
         opp_idx = (idx + 1) % len(players)
         opponent = players[opp_idx]
         shooter_uid = str(shooter.get("user_id") or "")
-
-        table_state = dict(game.get("table_state") or {})
         balls = list(table_state.get("balls") or [])
         selected_cue = await db.user_pool_cues.find_one({"user_id": shooter_uid, "selected": True}, {"_id": 0, "id": 1})
         if not selected_cue:
@@ -1047,6 +1108,52 @@ def register(router):
         g = await db.mp_8ball_games.find_one({"id": game_id}, {"_id": 0})
         return _public_game(g, uid)
 
+    @router.post("/casino/mp-8ball/games/{game_id}/break-cue")
+    async def pool_place_break_cue(game_id: str, body: PoolBreakCueRequest, current_user: dict = Depends(get_current_user_verified)):
+        uid = str(current_user["id"])
+        game = await db.mp_8ball_games.find_one({"id": game_id})
+        if not game:
+            raise HTTPException(status_code=404, detail="Game not found")
+        if game.get("status") != "in_progress" or game.get("phase") != "playing":
+            raise HTTPException(status_code=400, detail="Game is not active")
+        _ensure_game_turn(game, uid)
+        ts = dict(game.get("table_state") or {})
+        if int(ts.get("shot_count") or 0) != 0:
+            raise HTTPException(status_code=400, detail="Break placement is only before the first shot")
+        if not bool(ts.get("awaiting_break_placement")):
+            raise HTTPException(status_code=400, detail="Cue ball is already placed for the break")
+        cx, cy = _clamp_kitchen_xy(body.x, body.y)
+        balls = list(ts.get("balls") or [])
+        placed = False
+        for b in balls:
+            if b.get("number") == 0:
+                b["x"] = cx
+                b["y"] = cy
+                placed = True
+                break
+        if not placed:
+            raise HTTPException(status_code=400, detail="Cue ball missing")
+        ts["balls"] = balls
+        ts["awaiting_break_placement"] = False
+        ts.setdefault("break_kitchen", _kitchen_break_bounds())
+        await db.mp_8ball_games.update_one(
+            {"id": game_id},
+            {"$set": {"table_state": ts, "updated_at": _now_iso()}},
+        )
+        g = await db.mp_8ball_games.find_one({"id": game_id}, {"_id": 0})
+        return _public_game(g, uid)
+
+    @router.post("/casino/mp-8ball/vs-ai/break-cue")
+    async def pool_ai_place_break_cue(body: PoolBreakCueRequest, current_user: dict = Depends(get_current_user_verified)):
+        uid = str(current_user["id"])
+        game = await db.mp_8ball_games.find_one(
+            {"mode": "vs_ai", "owner_user_id": uid, "status": "in_progress"},
+            sort=[("created_at", -1)],
+        )
+        if not game:
+            raise HTTPException(status_code=404, detail="No active AI game")
+        return await pool_place_break_cue(game["id"], body, current_user)
+
     @router.post("/casino/mp-8ball/games/{game_id}/timeout")
     async def pool_timeout(game_id: str, current_user: dict = Depends(get_current_user_verified)):
         uid = current_user["id"]
@@ -1116,7 +1223,7 @@ def register(router):
             "turn_started_at": _now_iso(),
             "winner_user_id": None,
             "result_reason": None,
-            "table_state": {"table_w": MP_8BALL_TABLE_W, "table_h": MP_8BALL_TABLE_H, "balls": _initial_balls(), "shot_count": 0, "balls_settled": True, "history": []},
+            "table_state": _new_table_state(),
         }
         await db.mp_8ball_games.insert_one(game)
         return _public_game(game, uid)
@@ -1127,7 +1234,19 @@ def register(router):
         shooter = players[idx]
         if shooter.get("user_id") != MP_8BALL_AI_ID:
             return
-        balls = list((game.get("table_state") or {}).get("balls") or [])
+        ts = dict(game.get("table_state") or {})
+        balls = list(ts.get("balls") or [])
+        if int(ts.get("shot_count") or 0) == 0 and bool(ts.get("awaiting_break_placement")):
+            kb = _kitchen_break_bounds()
+            px = _rng.uniform(kb["min_x"], kb["max_x"])
+            py = _rng.uniform(kb["min_y"], kb["max_y"])
+            for b in balls:
+                if b.get("number") == 0:
+                    b["x"], b["y"] = px, py
+                    break
+            ts["balls"] = balls
+            ts["awaiting_break_placement"] = False
+            game["table_state"] = ts
         cue = next((b for b in balls if b.get("number") == 0), None)
         targets = [b for b in balls if not b.get("pocketed") and b.get("number") not in (0, 8)]
         if not cue or not targets:
@@ -1252,7 +1371,7 @@ def register(router):
 
     @router.post("/casino/mp-8ball/cues/buy")
     async def pool_cues_buy(body: CueBuyRequest, current_user: dict = Depends(get_current_user_verified)):
-        uid = current_user["id"]
+        uid = str(current_user["id"])
         cue = next((c for c in _cue_catalog() if c["id"] == body.cue_id), None)
         if not cue:
             raise HTTPException(status_code=400, detail="Cue not found")
@@ -1292,7 +1411,7 @@ def register(router):
 
     @router.post("/casino/mp-8ball/cues/select")
     async def pool_cues_select(body: CueSelectRequest, current_user: dict = Depends(get_current_user_verified)):
-        uid = current_user["id"]
+        uid = str(current_user["id"])
         row = await db.user_pool_cues.find_one({"id": body.cue_instance_id, "user_id": uid}, {"_id": 0, "id": 1})
         if not row:
             raise HTTPException(status_code=404, detail="Cue not owned")
@@ -1302,7 +1421,7 @@ def register(router):
 
     @router.post("/casino/mp-8ball/cues/upgrade")
     async def pool_cues_upgrade(body: CueUpgradeRequest, current_user: dict = Depends(get_current_user_verified)):
-        uid = current_user["id"]
+        uid = str(current_user["id"])
         stat = (body.stat or "").strip().lower()
         if stat == "spin":
             stat = "curve"
