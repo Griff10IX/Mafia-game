@@ -20,6 +20,32 @@ const POOL_STYLES = `
   .pool-canvas {
     box-shadow: inset 0 0 28px rgba(0,0,0,0.5), 0 0 20px rgba(14,165,233,0.15);
   }
+  .pool-table-wrap {
+    width: 100%;
+    margin: 0 auto;
+    max-width: 860px;
+  }
+  @media (min-width: 1024px) {
+    .pool-table-wrap {
+      max-width: 820px;
+    }
+  }
+  @media (min-width: 1280px) {
+    .pool-table-wrap {
+      max-width: 760px;
+    }
+  }
+  .pool-rotate-notice {
+    display: none;
+  }
+  @media (max-width: 900px) and (orientation: portrait) {
+    .pool-rotate-notice {
+      display: flex;
+    }
+    .pool-hide-portrait {
+      display: none;
+    }
+  }
 `;
 
 const TABLE_W = 2.2;
@@ -89,6 +115,7 @@ export default function EightBallPool() {
   const [renderTick, setRenderTick] = useState(0);
   const [replayActive, setReplayActive] = useState(false);
   const [sfxEnabled, setSfxEnabled] = useState(true);
+  const [mobileNeedsRotate, setMobileNeedsRotate] = useState(false);
   const canvasRef = useRef(null);
   const animFrameRef = useRef(null);
   const replayAnimRef = useRef(null);
@@ -106,6 +133,7 @@ export default function EightBallPool() {
 
   const activeGame = tab === 'ai' ? aiGame : pvpGame;
   const balls = useMemo(() => activeGame?.table_state?.balls || [], [activeGame?.table_state?.balls]);
+  const canRenderCue = !!activeGame && !replayActive;
   useEffect(() => {
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     if (replayAnimRef.current) cancelAnimationFrame(replayAnimRef.current);
@@ -117,7 +145,19 @@ export default function EightBallPool() {
 
   useEffect(() => {
     replayActiveRef.current = replayActive;
+    if (replayActive) setIsAiming(false);
   }, [replayActive]);
+
+  useEffect(() => {
+    const checkRotate = () => {
+      const smallScreen = window.innerWidth <= 900;
+      const portrait = window.matchMedia('(orientation: portrait)').matches;
+      setMobileNeedsRotate(smallScreen && portrait);
+    };
+    checkRotate();
+    window.addEventListener('resize', checkRotate);
+    return () => window.removeEventListener('resize', checkRotate);
+  }, []);
 
   useEffect(() => {
     const loadImg = (src, targetRef) => {
@@ -244,6 +284,7 @@ export default function EightBallPool() {
     }
     replayLastShotRef.current = shotCount;
     setReplayActive(true);
+    setIsAiming(false);
     if (replayAnimRef.current) cancelAnimationFrame(replayAnimRef.current);
     const start = performance.now();
     const duration = Math.max(1, Number(replay?.duration_ms || 1));
@@ -571,7 +612,7 @@ export default function EightBallPool() {
 
     // Aiming guide + cue stick.
     const cue = displayBalls.find((b) => b.number === 0 && !b.pocketed);
-    if (cue) {
+    if (cue && canRenderCue) {
       const cx = (Number(cue.x || 0) / TABLE_W) * w;
       const cy = (Number(cue.y || 0) / TABLE_H) * h;
       const a = (Number(angleDeg || 0) * Math.PI) / 180;
@@ -657,7 +698,7 @@ export default function EightBallPool() {
       ctx.lineWidth = 2;
       ctx.stroke();
     }
-  }, [displayBalls, angleDeg, power, isAiming, currentSkin, renderTick]);
+  }, [displayBalls, angleDeg, power, isAiming, currentSkin, renderTick, canRenderCue]);
 
   const startAi = async () => {
     setBusy(true);
@@ -774,6 +815,7 @@ export default function EightBallPool() {
   };
 
   const updateAimFromPointer = (event) => {
+    if (replayActiveRef.current) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const cue = displayBalls.find((b) => b.number === 0 && !b.pocketed);
@@ -892,8 +934,8 @@ export default function EightBallPool() {
           )}
 
           {activeGame && (
-            <div className="space-y-2">
-              <div className="rounded-md border border-primary/20 bg-zinc-900/55 p-2">
+            <div className="space-y-2 xl:space-y-1.5">
+              <div className="rounded-md border border-primary/20 bg-zinc-900/55 p-2 xl:p-1.5">
                 <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-heading">
                   {(activeGame.players || []).map((p, idx) => {
                     const isTurn = Number(activeGame.current_turn_index || 0) === idx;
@@ -926,7 +968,14 @@ export default function EightBallPool() {
                   })}
                 </div>
               </div>
-              <div className="pool-canvas-shell rounded-xl p-2">
+              <div className="pool-rotate-notice rounded-xl border border-primary/25 bg-zinc-900/70 p-4 items-center justify-center text-center">
+                <div className="space-y-1">
+                  <div className="text-xs font-heading uppercase tracking-wide text-primary">Rotate device to play</div>
+                  <div className="text-[11px] text-mutedForeground">For Mini Clip-style aim and table visibility, switch to landscape mode.</div>
+                </div>
+              </div>
+              <div className="pool-table-wrap pool-hide-portrait">
+                <div className="pool-canvas-shell rounded-xl p-1.5 xl:p-1">
                 <canvas
                   ref={canvasRef}
                   width={900}
@@ -934,16 +983,19 @@ export default function EightBallPool() {
                   className="pool-canvas w-full rounded-lg border border-cyan-400/25 bg-[#0b4f2f] touch-none"
                   onPointerDown={(e) => {
                     if (replayActive) return;
+                    if (mobileNeedsRotate) return;
                     setIsAiming(true);
                     updateAimFromPointer(e);
                   }}
                   onPointerMove={(e) => {
                     if (replayActive) return;
+                    if (mobileNeedsRotate) return;
                     if (!isAiming) return;
                     updateAimFromPointer(e);
                   }}
                   onPointerUp={async (e) => {
                     if (replayActive) return;
+                    if (mobileNeedsRotate) return;
                     if (!isAiming) return;
                     updateAimFromPointer(e);
                     setIsAiming(false);
@@ -951,8 +1003,9 @@ export default function EightBallPool() {
                   }}
                   onPointerLeave={() => setIsAiming(false)}
                 />
+                </div>
               </div>
-              <div className="rounded-md border border-primary/20 bg-zinc-900/55 p-2 space-y-1">
+              <div className="rounded-md border border-primary/20 bg-zinc-900/55 p-2 xl:p-1.5 space-y-1">
                 <div className="flex items-center justify-between text-[10px] font-heading">
                   <span className="text-mutedForeground uppercase">Force</span>
                   <span className="text-primary font-bold">{(Number(power || 0) * 100).toFixed(1)}%</span>
@@ -986,7 +1039,7 @@ export default function EightBallPool() {
                 <label className="space-y-1"><span className="text-mutedForeground">Power (0-1)</span><input type="number" min={0} max={1} step={0.01} value={power} onChange={(e) => setPower(Number(e.target.value || 0))} className="w-full px-2 py-1 rounded border border-input bg-transparent" /></label>
                 <label className="space-y-1"><span className="text-mutedForeground">Spin X</span><input type="number" min={-1} max={1} step={0.05} value={spinX} onChange={(e) => setSpinX(Number(e.target.value || 0))} className="w-full px-2 py-1 rounded border border-input bg-transparent" /></label>
                 <label className="space-y-1"><span className="text-mutedForeground">Spin Y</span><input type="number" min={-1} max={1} step={0.05} value={spinY} onChange={(e) => setSpinY(Number(e.target.value || 0))} className="w-full px-2 py-1 rounded border border-input bg-transparent" /></label>
-                <div className="flex items-end"><button type="button" onClick={shoot} disabled={busy || replayActive} className="w-full px-3 py-2 rounded bg-primary/20 border border-primary/50 text-primary font-heading">{replayActive ? 'Rolling...' : busy ? '...' : 'Shoot'}</button></div>
+                <div className="flex items-end"><button type="button" onClick={shoot} disabled={busy || replayActive || mobileNeedsRotate} className="w-full px-3 py-2 rounded bg-primary/20 border border-primary/50 text-primary font-heading">{mobileNeedsRotate ? 'Rotate Phone' : replayActive ? 'Rolling...' : busy ? '...' : 'Shoot'}</button></div>
               </div>
             </div>
           )}
