@@ -15,24 +15,24 @@ const POOL_STYLES = `
   .pool-canvas-shell {
     background: radial-gradient(circle at 50% 30%, rgba(255,255,255,0.06), transparent 55%), linear-gradient(180deg, #1f140b 0%, #120c07 100%);
     border: 1px solid rgba(255,255,255,0.1);
-    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.35), 0 10px 30px rgba(0,0,0,0.5);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,0.55), 0 12px 36px rgba(0,0,0,0.62);
   }
   .pool-canvas {
-    box-shadow: inset 0 0 28px rgba(0,0,0,0.5), 0 0 20px rgba(14,165,233,0.15);
+    box-shadow: inset 0 0 38px rgba(0,0,0,0.62), 0 0 12px rgba(8,145,178,0.08);
   }
   .pool-table-wrap {
     width: 100%;
     margin: 0 auto;
-    max-width: 860px;
+    max-width: 760px;
   }
   @media (min-width: 1024px) {
     .pool-table-wrap {
-      max-width: 820px;
+      max-width: 700px;
     }
   }
   @media (min-width: 1280px) {
     .pool-table-wrap {
-      max-width: 760px;
+      max-width: 650px;
     }
   }
   .pool-rotate-notice {
@@ -51,6 +51,9 @@ const POOL_STYLES = `
 const TABLE_W = 2.2;
 const TABLE_H = 1.1;
 const BALL_R = 0.028;
+const AI_POOL_ID = 'ai_pool_bot';
+const REPLAY_IDLE_POS_EPS = 0.00035;
+const REPLAY_IDLE_VEL_EPS = 0.006;
 const TABLE_SKINS = {
   classic_green: {
     name: 'Classic Green',
@@ -133,7 +136,20 @@ export default function EightBallPool() {
 
   const activeGame = tab === 'ai' ? aiGame : pvpGame;
   const balls = useMemo(() => activeGame?.table_state?.balls || [], [activeGame?.table_state?.balls]);
-  const canRenderCue = !!activeGame && !replayActive;
+  const isMyTurn = useMemo(() => {
+    if (!activeGame) return false;
+    const players = activeGame.players || [];
+    const idx = Number(activeGame.current_turn_index || 0);
+    const current = players[idx];
+    if (!current) return false;
+    if (tab === 'ai') return current.user_id !== AI_POOL_ID;
+    return true;
+  }, [activeGame, tab]);
+  const canRenderCue = !!activeGame
+    && !replayActive
+    && activeGame.status === 'in_progress'
+    && activeGame.phase === 'playing'
+    && isMyTurn;
   useEffect(() => {
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     if (replayAnimRef.current) cancelAnimationFrame(replayAnimRef.current);
@@ -289,6 +305,10 @@ export default function EightBallPool() {
     const start = performance.now();
     const duration = Math.max(1, Number(replay?.duration_ms || 1));
     const events = Array.isArray(replay?.events) ? replay.events : [];
+    const firstImpactMs = events
+      .filter((ev) => ev?.type === 'collision' || ev?.type === 'rail' || ev?.type === 'pocket')
+      .reduce((min, ev) => Math.min(min, Number(ev?.t_ms || Number.MAX_SAFE_INTEGER)), Number.MAX_SAFE_INTEGER);
+    const hasImpactWindow = Number.isFinite(firstImpactMs) && firstImpactMs < Number.MAX_SAFE_INTEGER;
     let lastFrameIdx = -1;
 
     const pushFrameFx = (toIdx) => {
@@ -329,12 +349,34 @@ export default function EightBallPool() {
       const interpolated = current.map((b) => {
         const nb = byId.get(b.id);
         if (!nb || b.pocketed || nb.pocketed) return { ...b };
+        const bIsCue = Number(b?.number) === 0;
+        const beforeFirstImpact = hasImpactWindow && targetMs < firstImpactMs;
+        if (beforeFirstImpact && !bIsCue) {
+          return { ...b, vx: 0, vy: 0 };
+        }
+        const fromX = Number(b.x || 0);
+        const fromY = Number(b.y || 0);
+        const toX = Number(nb.x || 0);
+        const toY = Number(nb.y || 0);
+        const fromVx = Number(b.vx || 0);
+        const fromVy = Number(b.vy || 0);
+        const toVx = Number(nb.vx || 0);
+        const toVy = Number(nb.vy || 0);
+        const px = fromX + (toX - fromX) * alpha;
+        const py = fromY + (toY - fromY) * alpha;
+        const pvx = fromVx + (toVx - fromVx) * alpha;
+        const pvy = fromVy + (toVy - fromVy) * alpha;
+        const tinyPos = Math.abs(px - fromX) < REPLAY_IDLE_POS_EPS && Math.abs(py - fromY) < REPLAY_IDLE_POS_EPS;
+        const tinyVel = Math.abs(pvx) < REPLAY_IDLE_VEL_EPS && Math.abs(pvy) < REPLAY_IDLE_VEL_EPS;
+        if (tinyPos && tinyVel) {
+          return { ...b, vx: 0, vy: 0 };
+        }
         return {
           ...b,
-          x: Number(b.x || 0) + (Number(nb.x || 0) - Number(b.x || 0)) * alpha,
-          y: Number(b.y || 0) + (Number(nb.y || 0) - Number(b.y || 0)) * alpha,
-          vx: Number(b.vx || 0) + (Number(nb.vx || 0) - Number(b.vx || 0)) * alpha,
-          vy: Number(b.vy || 0) + (Number(nb.vy || 0) - Number(b.vy || 0)) * alpha,
+          x: px,
+          y: py,
+          vx: pvx,
+          vy: pvy,
         };
       });
       if (interpolated.length) setDisplayBalls(interpolated);
@@ -445,14 +487,14 @@ export default function EightBallPool() {
     // Felt with depth (skin driven).
     const felt = ctx.createRadialGradient(w * 0.5, h * 0.45, 20, w * 0.5, h * 0.5, w * 0.8);
     felt.addColorStop(0, currentSkin.felt[0]);
-    felt.addColorStop(0.45, currentSkin.felt[1]);
+    felt.addColorStop(0.38, currentSkin.felt[1]);
     felt.addColorStop(1, currentSkin.felt[2]);
     ctx.fillStyle = felt;
     ctx.fillRect(0, 0, w, h);
     if (feltTextureRef.current) {
       const feltPattern = ctx.createPattern(feltTextureRef.current, 'repeat');
       if (feltPattern) {
-        ctx.globalAlpha = 0.16;
+        ctx.globalAlpha = 0.08;
         ctx.fillStyle = feltPattern;
         ctx.fillRect(0, 0, w, h);
         ctx.globalAlpha = 1;
@@ -478,26 +520,29 @@ export default function EightBallPool() {
     railGrad.addColorStop(0.5, currentSkin.rail[1]);
     railGrad.addColorStop(1, currentSkin.rail[2]);
     ctx.strokeStyle = railGrad;
-    ctx.lineWidth = 14;
+    ctx.lineWidth = 18;
     ctx.strokeRect(0, 0, w, h);
+    ctx.strokeStyle = 'rgba(10,10,10,0.6)';
+    ctx.lineWidth = 5;
+    ctx.strokeRect(3, 3, w - 6, h - 6);
     if (railTextureRef.current) {
       ctx.save();
-      ctx.globalAlpha = 0.42;
-      ctx.drawImage(railTextureRef.current, 0, 0, w, 16);
-      ctx.drawImage(railTextureRef.current, 0, h - 16, w, 16);
+      ctx.globalAlpha = 0.34;
+      ctx.drawImage(railTextureRef.current, 0, 0, w, 18);
+      ctx.drawImage(railTextureRef.current, 0, h - 18, w, 18);
       ctx.translate(0, h);
       ctx.rotate(-Math.PI / 2);
-      ctx.drawImage(railTextureRef.current, 0, 0, h, 16);
+      ctx.drawImage(railTextureRef.current, 0, 0, h, 18);
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.translate(w, 0);
       ctx.rotate(Math.PI / 2);
-      ctx.drawImage(railTextureRef.current, 0, -16, h, 16);
+      ctx.drawImage(railTextureRef.current, 0, -18, h, 18);
       ctx.restore();
       ctx.setTransform(1, 0, 0, 1, 0, 0);
     }
-    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.09)';
     ctx.lineWidth = 2;
-    ctx.strokeRect(10, 10, w - 20, h - 20);
+    ctx.strokeRect(12, 12, w - 24, h - 24);
 
     // Pockets
     const pockets = [
@@ -517,15 +562,23 @@ export default function EightBallPool() {
       ctx.fillRect(w - 12, dy - 2, 8, 4);
     }
 
-    ctx.fillStyle = '#070707';
     for (const [px, py] of pockets) {
-      const pocketGrad = ctx.createRadialGradient(px, py, 2, px, py, 18);
+      const pocketGrad = ctx.createRadialGradient(px, py, 2, px, py, 20);
       pocketGrad.addColorStop(0, currentSkin.pocket[0]);
       pocketGrad.addColorStop(1, currentSkin.pocket[1]);
+      ctx.beginPath();
+      ctx.arc(px, py, 17, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(37,27,16,0.85)';
+      ctx.fill();
       ctx.beginPath();
       ctx.arc(px, py, 14, 0, Math.PI * 2);
       ctx.fillStyle = pocketGrad;
       ctx.fill();
+      ctx.beginPath();
+      ctx.arc(px, py, 14, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,214,140,0.24)';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
     }
 
     // Balls
@@ -543,11 +596,11 @@ export default function EightBallPool() {
       const vx = Number(b.vx || 0);
       const vy = Number(b.vy || 0);
       const speed = Math.hypot(vx, vy);
-      if (speed > 0.04) {
+      if (speed > 0.05) {
         const tx = x - (vx * 900 * 0.08);
         const ty = y - (vy * 900 * 0.08);
         const trail = ctx.createLinearGradient(x, y, tx, ty);
-        trail.addColorStop(0, 'rgba(255,255,255,0.22)');
+        trail.addColorStop(0, 'rgba(255,255,255,0.16)');
         trail.addColorStop(1, 'rgba(255,255,255,0.0)');
         ctx.beginPath();
         ctx.moveTo(x, y);
@@ -564,10 +617,11 @@ export default function EightBallPool() {
       ctx.fill();
 
       // Base sphere.
-      const ballGrad = ctx.createRadialGradient(x - r * 0.35, y - r * 0.4, r * 0.25, x, y, r * 1.05);
+      const ballGrad = ctx.createRadialGradient(x - r * 0.38, y - r * 0.42, r * 0.18, x, y, r * 1.08);
       ballGrad.addColorStop(0, '#ffffff');
-      ballGrad.addColorStop(0.25, color);
-      ballGrad.addColorStop(1, b.number === 8 ? '#000000' : '#1f2937');
+      ballGrad.addColorStop(0.2, b.number === 0 ? '#f8fafc' : color);
+      ballGrad.addColorStop(0.8, b.number === 8 ? '#050505' : color);
+      ballGrad.addColorStop(1, b.number === 8 ? '#000000' : '#111827');
       ctx.beginPath();
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fillStyle = ballGrad;
@@ -580,18 +634,18 @@ export default function EightBallPool() {
         ctx.arc(x, y, r, 0, Math.PI * 2);
         ctx.clip();
         ctx.fillStyle = color;
-        ctx.fillRect(x - r, y - r * 0.48, r * 2, r * 0.96);
+        ctx.fillRect(x - r, y - r * 0.45, r * 2, r * 0.9);
         ctx.restore();
       }
 
       // Number circle.
       if (b.number !== 0) {
         ctx.beginPath();
-        ctx.arc(x, y, r * 0.45, 0, Math.PI * 2);
+        ctx.arc(x, y, r * 0.43, 0, Math.PI * 2);
         ctx.fillStyle = '#f8fafc';
         ctx.fill();
-        ctx.fillStyle = '#111';
-        ctx.font = `${Math.max(8, r * 0.8)}px sans-serif`;
+        ctx.fillStyle = '#0f172a';
+        ctx.font = `700 ${Math.max(8, r * 0.78)}px sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(String(b.number), x, y);
@@ -601,9 +655,10 @@ export default function EightBallPool() {
       ctx.stroke();
 
       // Specular highlight.
-      const rollPhase = (renderTick * 0.08) + ((vx * 400) + (vy * 400));
-      const hx = x - r * 0.22 + (Math.cos(rollPhase) * r * 0.08);
-      const hy = y - r * 0.24 + (Math.sin(rollPhase) * r * 0.06);
+      const moving = speed > 0.01;
+      const rollPhase = moving ? (renderTick * 0.08) + ((vx * 400) + (vy * 400)) : 0;
+      const hx = x - r * 0.22 + (moving ? Math.cos(rollPhase) * r * 0.08 : 0);
+      const hy = y - r * 0.24 + (moving ? Math.sin(rollPhase) * r * 0.06 : 0);
       ctx.beginPath();
       ctx.arc(hx, hy, r * 0.22, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(255,255,255,0.38)';

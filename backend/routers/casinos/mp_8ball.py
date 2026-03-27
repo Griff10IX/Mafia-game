@@ -32,6 +32,8 @@ MP_8BALL_SIM_DT = 0.016
 MP_8BALL_REPLAY_SAMPLE_EVERY = 1
 MP_8BALL_MAX_REPLAY_FRAMES = 240
 MP_8BALL_SPIN_CARRY = 0.03
+MP_8BALL_SLEEP_EPS = 0.006
+MP_8BALL_POS_EPS = 1e-5
 
 
 class PoolCreateRequest(BaseModel):
@@ -181,6 +183,7 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
     speed = 2.2 * power
     cue["vx"] = math.cos(cue_angle) * speed + (spin_x * 0.05)
     cue["vy"] = math.sin(cue_angle) * speed + (spin_y * 0.05)
+    impacted_ids = {int(cue.get("id") or 0)}
     first_contact = None
     pocketed_numbers: List[int] = []
     replay_frames: List[dict] = [{"t_ms": 0, "balls": _replay_frame_balls(out)}]
@@ -249,9 +252,12 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
             drag = MP_8BALL_FRICTION - (0.0015 if speed_now < 0.18 else 0.0)
             b["vx"] *= max(0.975, drag)
             b["vy"] *= max(0.975, drag)
-            if abs(b["vx"]) < 1e-4:
+            if abs(b["vx"]) < MP_8BALL_SLEEP_EPS:
                 b["vx"] = 0.0
-            if abs(b["vy"]) < 1e-4:
+            if abs(b["vy"]) < MP_8BALL_SLEEP_EPS:
+                b["vy"] = 0.0
+            if abs(b["vx"]) < MP_8BALL_POS_EPS and abs(b["vy"]) < MP_8BALL_POS_EPS:
+                b["vx"] = 0.0
                 b["vy"] = 0.0
 
         # Ball collisions.
@@ -268,6 +274,11 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
                     continue
                 nx = dx / dist
                 ny = dy / dist
+                a_impacted = int(a.get("id") or 0) in impacted_ids
+                b_impacted = int(b.get("id") or 0) in impacted_ids
+                if not a_impacted and not b_impacted:
+                    # Prevent untouched balls from jittering due tiny rack overlaps.
+                    continue
                 overlap = (min_dist - dist) * 0.5
                 a["x"] -= nx * overlap
                 a["y"] -= ny * overlap
@@ -286,6 +297,8 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
                 a["vy"] -= iy
                 b["vx"] += ix
                 b["vy"] += iy
+                impacted_ids.add(int(a.get("id") or 0))
+                impacted_ids.add(int(b.get("id") or 0))
                 strength = math.hypot(ix, iy)
                 if a.get("number") == 0:
                     a["vx"] += nx * MP_8BALL_SPIN_CARRY
