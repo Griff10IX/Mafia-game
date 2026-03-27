@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="64" viewBox="0 0 512 64">
+  <defs>
+    <linearGradient id="railBase" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f7d16c"/>
+      <stop offset="0.5" stop-color="#915f24"/>
+      <stop offset="1" stop-color="#3b240f"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="64" fill="url(#railBase)"/>
+  <g fill="none" stroke="#20d4d3" stroke-width="2" opacity="0.8">
+    <path d="M0 32 C20 12, 44 12, 64 32 C84 52, 108 52, 128 32 C148 12, 172 12, 192 32 C212 52, 236 52, 256 32 C276 12, 300 12, 320 32 C340 52, 364 52, 384 32 C404 12, 428 12, 448 32 C468 52, 492 52, 512 32"/>
+  </g>
+  <g fill="none" stroke="#ffe8b0" stroke-width="1.5" opacity="0.85">
+    <path d="M0 20 H512"/>
+    <path d="M0 44 H512"/>
+  </g>
+</svg>

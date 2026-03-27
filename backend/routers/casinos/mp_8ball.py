@@ -25,12 +25,13 @@ MP_8BALL_TABLE_W = 2.2
 MP_8BALL_TABLE_H = 1.1
 MP_8BALL_BALL_R = 0.028
 MP_8BALL_POCKET_R = 0.045
-MP_8BALL_RESTITUTION = 0.96
-MP_8BALL_FRICTION = 0.991
-MP_8BALL_STOP_SPEED = 0.02
+MP_8BALL_RESTITUTION = 0.985
+MP_8BALL_FRICTION = 0.994
+MP_8BALL_STOP_SPEED = 0.012
 MP_8BALL_SIM_DT = 0.016
-MP_8BALL_REPLAY_SAMPLE_EVERY = 2
-MP_8BALL_MAX_REPLAY_FRAMES = 180
+MP_8BALL_REPLAY_SAMPLE_EVERY = 1
+MP_8BALL_MAX_REPLAY_FRAMES = 240
+MP_8BALL_SPIN_CARRY = 0.03
 
 
 class PoolCreateRequest(BaseModel):
@@ -169,6 +170,7 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
             "pocketed_numbers": [],
             "cue_pocketed": False,
             "shot_replay": {
+                "schema_version": 2,
                 "frame_dt_ms": int(MP_8BALL_SIM_DT * 1000 * MP_8BALL_REPLAY_SAMPLE_EVERY),
                 "duration_ms": 0,
                 "frames": [{"t_ms": 0, "balls": _replay_frame_balls(out)}],
@@ -192,19 +194,61 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
             # Cushion bounce.
             if b["x"] <= MP_8BALL_BALL_R:
                 b["x"] = MP_8BALL_BALL_R
+                pre = abs(b["vx"])
                 b["vx"] = abs(b["vx"]) * MP_8BALL_RESTITUTION
+                if pre > 0.15:
+                    replay_events.append({
+                        "type": "rail",
+                        "axis": "x",
+                        "t_ms": int((step + 1) * MP_8BALL_SIM_DT * 1000),
+                        "x": float(b["x"]),
+                        "y": float(b["y"]),
+                        "strength": float(pre),
+                    })
             elif b["x"] >= MP_8BALL_TABLE_W - MP_8BALL_BALL_R:
                 b["x"] = MP_8BALL_TABLE_W - MP_8BALL_BALL_R
+                pre = abs(b["vx"])
                 b["vx"] = -abs(b["vx"]) * MP_8BALL_RESTITUTION
+                if pre > 0.15:
+                    replay_events.append({
+                        "type": "rail",
+                        "axis": "x",
+                        "t_ms": int((step + 1) * MP_8BALL_SIM_DT * 1000),
+                        "x": float(b["x"]),
+                        "y": float(b["y"]),
+                        "strength": float(pre),
+                    })
             if b["y"] <= MP_8BALL_BALL_R:
                 b["y"] = MP_8BALL_BALL_R
+                pre = abs(b["vy"])
                 b["vy"] = abs(b["vy"]) * MP_8BALL_RESTITUTION
+                if pre > 0.15:
+                    replay_events.append({
+                        "type": "rail",
+                        "axis": "y",
+                        "t_ms": int((step + 1) * MP_8BALL_SIM_DT * 1000),
+                        "x": float(b["x"]),
+                        "y": float(b["y"]),
+                        "strength": float(pre),
+                    })
             elif b["y"] >= MP_8BALL_TABLE_H - MP_8BALL_BALL_R:
                 b["y"] = MP_8BALL_TABLE_H - MP_8BALL_BALL_R
+                pre = abs(b["vy"])
                 b["vy"] = -abs(b["vy"]) * MP_8BALL_RESTITUTION
+                if pre > 0.15:
+                    replay_events.append({
+                        "type": "rail",
+                        "axis": "y",
+                        "t_ms": int((step + 1) * MP_8BALL_SIM_DT * 1000),
+                        "x": float(b["x"]),
+                        "y": float(b["y"]),
+                        "strength": float(pre),
+                    })
 
-            b["vx"] *= MP_8BALL_FRICTION
-            b["vy"] *= MP_8BALL_FRICTION
+            speed_now = math.hypot(b["vx"], b["vy"])
+            drag = MP_8BALL_FRICTION - (0.0015 if speed_now < 0.18 else 0.0)
+            b["vx"] *= max(0.975, drag)
+            b["vy"] *= max(0.975, drag)
             if abs(b["vx"]) < 1e-4:
                 b["vx"] = 0.0
             if abs(b["vy"]) < 1e-4:
@@ -243,7 +287,14 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
                 b["vx"] += ix
                 b["vy"] += iy
                 strength = math.hypot(ix, iy)
+                if a.get("number") == 0:
+                    a["vx"] += nx * MP_8BALL_SPIN_CARRY
+                    a["vy"] += ny * MP_8BALL_SPIN_CARRY
+                if b.get("number") == 0:
+                    b["vx"] -= nx * MP_8BALL_SPIN_CARRY
+                    b["vy"] -= ny * MP_8BALL_SPIN_CARRY
                 if strength > 0.02:
+                    band = "soft" if strength < 0.08 else "medium" if strength < 0.16 else "hard"
                     replay_events.append(
                         {
                             "type": "collision",
@@ -251,6 +302,7 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
                             "x": float((a["x"] + b["x"]) / 2.0),
                             "y": float((a["y"] + b["y"]) / 2.0),
                             "strength": float(strength),
+                            "band": band,
                         }
                     )
                 if first_contact is None and (a.get("number") == 0 or b.get("number") == 0):
@@ -307,6 +359,7 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
         "pocketed_numbers": pocketed_numbers,
         "cue_pocketed": cue_pocketed,
         "shot_replay": {
+            "schema_version": 2,
             "frame_dt_ms": int(MP_8BALL_SIM_DT * 1000 * MP_8BALL_REPLAY_SAMPLE_EVERY),
             "duration_ms": int(replay_frames[-1].get("t_ms") or 0),
             "frames": replay_frames,
