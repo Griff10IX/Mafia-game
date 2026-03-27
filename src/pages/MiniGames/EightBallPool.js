@@ -127,6 +127,8 @@ export default function EightBallPool() {
   const [catalog, setCatalog] = useState([]);
   const [myCues, setMyCues] = useState([]);
   const [cueUpgrades, setCueUpgrades] = useState([]);
+  const [upgradeTotalCap, setUpgradeTotalCap] = useState(250);
+  const [upgradeStatCap, setUpgradeStatCap] = useState(50);
   const [busy, setBusy] = useState(false);
   const [displayBalls, setDisplayBalls] = useState([]);
   const [isAiming, setIsAiming] = useState(false);
@@ -301,10 +303,25 @@ export default function EightBallPool() {
     if (!selectedCue) return null;
     return cueUpgrades.find((u) => u.cue_instance_id === selectedCue.id) || null;
   }, [cueUpgrades, selectedCue]);
-  const previewLevel = Math.max(0, Number(selectedCueUpgrade?.preview || 0));
+  const cueLevels = useMemo(() => ({
+    power: Math.max(0, Number(selectedCueUpgrade?.power || 0)),
+    curve: Math.max(0, Number(selectedCueUpgrade?.curve || selectedCueUpgrade?.spin || 0)),
+    luck: Math.max(0, Number(selectedCueUpgrade?.luck || 0)),
+    aim: Math.max(0, Number(selectedCueUpgrade?.aim || 0)),
+    control: Math.max(0, Number(selectedCueUpgrade?.control || 0)),
+  }), [selectedCueUpgrade]);
+  const cueTotalLevel = useMemo(
+    () => Object.values(cueLevels).reduce((sum, n) => sum + Number(n || 0), 0),
+    [cueLevels],
+  );
+  const milestoneCount = useMemo(
+    () => Math.floor(cueTotalLevel / 25),
+    [cueTotalLevel],
+  );
+  const previewLevel = cueLevels.aim;
   const previewTier = Math.min(4, Math.floor(previewLevel / 5));
   const previewSegmentBudget = 1 + previewTier;
-  const previewDistance = 130 + (previewLevel * 9) + (Number(selectedCueUpgrade?.aim || 0) * 2.5);
+  const previewDistance = 130 + (previewLevel * 9) + (cueLevels.aim * 2.5);
   const currentSkin = TABLE_SKINS[tableSkin] || TABLE_SKINS.ice_blue;
   const playerBallTrackers = useMemo(() => {
     const ballsByNum = new Map((displayBalls || []).map((b) => [Number(b.number), b]));
@@ -522,6 +539,8 @@ export default function EightBallPool() {
     setCatalog(catalogRes.data?.catalog || []);
     setMyCues(myRes.data?.owned || []);
     setCueUpgrades(myRes.data?.upgrades || []);
+    setUpgradeTotalCap(Number(myRes.data?.upgrade_total_cap || 250));
+    setUpgradeStatCap(Number(myRes.data?.upgrade_stat_cap || 50));
     setProfile(profileRes.data || null);
   }, []);
 
@@ -662,9 +681,14 @@ export default function EightBallPool() {
     ctx.strokeRect(12, 12, w - 24, h - 24);
 
     // Pockets
+    const cornerInset = 9;
     const pockets = [
-      [0, 0], [w / 2, 0], [w, 0],
-      [0, h], [w / 2, h], [w, h],
+      { x: cornerInset, y: cornerInset, r: 16.8 },
+      { x: w / 2, y: 0, r: 14.2 },
+      { x: w - cornerInset, y: cornerInset, r: 16.8 },
+      { x: cornerInset, y: h - cornerInset, r: 16.8 },
+      { x: w / 2, y: h, r: 14.2 },
+      { x: w - cornerInset, y: h - cornerInset, r: 16.8 },
     ];
     // Diamonds on rails.
     ctx.fillStyle = currentSkin.accent;
@@ -679,28 +703,31 @@ export default function EightBallPool() {
       ctx.fillRect(w - 12, dy - 2, 8, 4);
     }
 
-    for (const [px, py] of pockets) {
-      const pocketGrad = ctx.createRadialGradient(px, py, 2, px, py, 22);
+    for (const p of pockets) {
+      const px = p.x;
+      const py = p.y;
+      const pr = p.r;
+      const pocketGrad = ctx.createRadialGradient(px, py, 2, px, py, pr + 6);
       pocketGrad.addColorStop(0, currentSkin.pocket[0]);
       pocketGrad.addColorStop(1, currentSkin.pocket[1]);
       ctx.beginPath();
-      ctx.arc(px, py, 18.5, 0, Math.PI * 2);
+      ctx.arc(px, py, pr + 2.2, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(24,16,10,0.92)';
       ctx.fill();
-      const rimGrad = ctx.createLinearGradient(px - 18, py - 18, px + 18, py + 18);
+      const rimGrad = ctx.createLinearGradient(px - pr, py - pr, px + pr, py + pr);
       rimGrad.addColorStop(0, 'rgba(241,211,139,0.34)');
       rimGrad.addColorStop(1, 'rgba(111,78,38,0.34)');
       ctx.beginPath();
-      ctx.arc(px, py, 17.2, 0, Math.PI * 2);
+      ctx.arc(px, py, pr + 0.9, 0, Math.PI * 2);
       ctx.strokeStyle = rimGrad;
       ctx.lineWidth = 2.2;
       ctx.stroke();
       ctx.beginPath();
-      ctx.arc(px, py, 13.2, 0, Math.PI * 2);
+      ctx.arc(px, py, Math.max(9.8, pr - 3.2), 0, Math.PI * 2);
       ctx.fillStyle = pocketGrad;
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(px, py, 12.8, 0, Math.PI * 2);
+      ctx.arc(px, py, Math.max(9.4, pr - 3.6), 0, Math.PI * 2);
       ctx.strokeStyle = 'rgba(255,214,140,0.16)';
       ctx.lineWidth = 1;
       ctx.stroke();
@@ -1116,7 +1143,7 @@ export default function EightBallPool() {
 
       <header className="pool-fade-in text-center">
         <h1 className="text-sm font-heading font-bold text-primary uppercase tracking-wider">8-Ball Pool</h1>
-        <p className="text-[10px] text-mutedForeground font-heading italic">Play against AI or live PvP. Upgrade cues for power, aim, spin, control and preview guidance.</p>
+        <p className="text-[10px] text-mutedForeground font-heading italic">Win matches for cash (AI pays more), then upgrade power, curve, luck, aim and control.</p>
       </header>
 
       <div className={`${styles.panel} mobile-panel rounded-md border border-primary/20 overflow-hidden pool-fade-in`}>
@@ -1325,10 +1352,11 @@ export default function EightBallPool() {
           {selectedCue && (
             <div className="text-[10px] font-heading p-2 rounded border border-primary/20 bg-zinc-900/40">
               <div className="text-foreground font-bold">Selected cue: {selectedCue.cue_id}</div>
-              <div className="text-mutedForeground">Power {selectedCueUpgrade?.power || 0} · Aim {selectedCueUpgrade?.aim || 0} · Spin {selectedCueUpgrade?.spin || 0} · Control {selectedCueUpgrade?.control || 0} · Preview {selectedCueUpgrade?.preview || 0}</div>
+              <div className="text-mutedForeground">Power {cueLevels.power} · Curve {cueLevels.curve} · Luck {cueLevels.luck} · Aim {cueLevels.aim} · Control {cueLevels.control}</div>
+              <div className="text-mutedForeground">Progress {cueTotalLevel}/{upgradeTotalCap} · Milestones {milestoneCount} · Per-stat cap {upgradeStatCap}</div>
               <div className="text-mutedForeground">Preview Tier {previewTier} · Segments {previewSegmentBudget} · Range {Math.round(previewDistance)}px</div>
               <div className="mt-2 flex flex-wrap gap-2">
-                {['power', 'aim', 'spin', 'control', 'preview'].map((stat) => (
+                {['power', 'curve', 'luck', 'aim', 'control'].map((stat) => (
                   <button key={stat} type="button" onClick={() => upgradeCue(stat)} disabled={busy} className="px-2 py-1 rounded border border-primary/40 text-primary text-[10px] uppercase">{stat} +1</button>
                 ))}
               </div>
@@ -1354,6 +1382,7 @@ export default function EightBallPool() {
           <div className="p-2 rounded border border-primary/20 bg-zinc-900/40 text-[10px] font-heading">
             <div className="flex items-center gap-2 text-foreground"><Trophy size={12} className="text-primary" /> Rating: <span className="font-bold text-primary">{profile?.rating ?? 1000}</span></div>
             <div className="text-mutedForeground">W {profile?.wins ?? 0} / L {profile?.losses ?? 0}</div>
+            <div className="text-mutedForeground">Cash: ${(profile?.money ?? 0).toLocaleString()}</div>
             <div className="mt-1"><Link to="/casino/mini-games/leaderboard" className="text-primary hover:underline">View mini-games leaderboard</Link></div>
           </div>
         </div>

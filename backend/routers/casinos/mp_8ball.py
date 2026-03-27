@@ -30,7 +30,7 @@ MP_8BALL_FRICTION = 0.994
 MP_8BALL_STOP_SPEED = 0.012
 MP_8BALL_SIM_DT = 0.016
 MP_8BALL_REPLAY_SAMPLE_EVERY = 1
-MP_8BALL_MAX_REPLAY_FRAMES = 240
+MP_8BALL_MAX_REPLAY_FRAMES = 1200
 MP_8BALL_SPIN_CARRY = 0.03
 MP_8BALL_SLEEP_EPS = 0.006
 MP_8BALL_POS_EPS = 1e-5
@@ -38,6 +38,11 @@ MP_8BALL_MAX_SIM_STEPS = 1200
 MP_8BALL_SPIN_SWERVE = 0.045
 MP_8BALL_SPIN_DECAY = 0.988
 MP_8BALL_RAIL_SPIN_THROW = 0.085
+MP_8BALL_AI_WIN_CASH = 1400
+MP_8BALL_PVP_WIN_CASH = 650
+MP_8BALL_UPGRADE_STATS = ("power", "curve", "luck", "aim", "control")
+MP_8BALL_UPGRADE_STAT_CAP = 50
+MP_8BALL_UPGRADE_TOTAL_CAP = 250
 
 
 class PoolCreateRequest(BaseModel):
@@ -492,6 +497,61 @@ def _cue_catalog() -> List[dict]:
     ]
 
 
+def _upgrade_defaults(uid: str, cue_instance_id: str) -> dict:
+    return {
+        "user_id": uid,
+        "cue_instance_id": cue_instance_id,
+        "power": 0,
+        "curve": 0,
+        "luck": 0,
+        "aim": 0,
+        "control": 0,
+        "spin": 0,   # legacy compatibility
+        "preview": 0,  # legacy compatibility
+    }
+
+
+def _normalize_upgrade_doc(row: Optional[dict], uid: str, cue_instance_id: str) -> dict:
+    out = _upgrade_defaults(uid, cue_instance_id)
+    src = row or {}
+    for k in ("power", "curve", "luck", "aim", "control", "spin", "preview"):
+        out[k] = max(0, int(src.get(k) or 0))
+    # Backfill curve from legacy spin if needed.
+    if out["curve"] <= 0 and out["spin"] > 0:
+        out["curve"] = out["spin"]
+    return out
+
+
+def _upgrade_total_level(upg: dict) -> int:
+    return int(sum(int(upg.get(k) or 0) for k in MP_8BALL_UPGRADE_STATS))
+
+
+def _upgrade_milestones(upg: dict) -> Dict[str, int]:
+    return {k: int(int(upg.get(k) or 0) // 10) for k in MP_8BALL_UPGRADE_STATS}
+
+
+def _upgrade_effects(upg: dict) -> dict:
+    lv_power = int(upg.get("power") or 0)
+    lv_curve = int(upg.get("curve") or 0)
+    lv_luck = int(upg.get("luck") or 0)
+    lv_aim = int(upg.get("aim") or 0)
+    lv_control = int(upg.get("control") or 0)
+    ms = _upgrade_milestones(upg)
+    return {
+        "power_mul": 1.0 + (lv_power * 0.006) + (ms["power"] * 0.01),
+        "curve_mul": 1.0 + (lv_curve * 0.007) + (ms["curve"] * 0.015),
+        "luck_chance": min(0.24, (lv_luck * 0.0035) + (ms["luck"] * 0.01)),
+        "aim_nudge": max(0.0, 0.05 - (lv_aim * 0.0008)),
+        "foul_relief_chance": min(0.2, (lv_control * 0.0028) + (ms["control"] * 0.008)),
+    }
+
+
+def _upgrade_cash_cost(stat_level: int, total_level: int) -> int:
+    base = 420 + (stat_level * 130)
+    progression_tax = (total_level // 5) * 30
+    return int(base + progression_tax)
+
+
 def register(router):
     @router.get("/casino/mp-8ball/games")
     async def pool_list_games(current_user: dict = Depends(get_current_user_verified)):
@@ -708,15 +768,31 @@ def register(router):
         shooter = players[idx]
         opp_idx = (idx + 1) % len(players)
         opponent = players[opp_idx]
+        shooter_uid = str(shooter.get("user_id") or "")
 
         table_state = dict(game.get("table_state") or {})
         balls = list(table_state.get("balls") or [])
+        selected_cue = await db.user_pool_cues.find_one({"user_id": shooter_uid, "selected": True}, {"_id": 0, "id": 1})
+        if not selected_cue:
+            selected_cue = await db.user_pool_cues.find_one({"user_id": shooter_uid}, {"_id": 0, "id": 1})
+        upg_row = None
+        if selected_cue and selected_cue.get("id"):
+            upg_row = await db.pool_cue_upgrades.find_one(
+                {"user_id": shooter_uid, "cue_instance_id": selected_cue.get("id")},
+                {"_id": 0},
+            )
+        shooter_upg = _normalize_upgrade_doc(upg_row, shooter_uid, str((selected_cue or {}).get("id") or ""))
+        effects = _upgrade_effects(shooter_upg)
+        input_angle = float(body.angle) + (_rng.uniform(-1, 1) * effects["aim_nudge"] * 0.5)
+        input_power = max(0.0, min(1.0, float(body.power) * effects["power_mul"]))
+        input_spin_x = float(body.spin_x or 0.0) * effects["curve_mul"]
+        input_spin_y = float(body.spin_y or 0.0) * effects["curve_mul"]
         sim = _simulate_shot(
             balls,
-            cue_angle=float(body.angle),
-            cue_power=float(body.power),
-            spin_x=float(body.spin_x or 0.0),
-            spin_y=float(body.spin_y or 0.0),
+            cue_angle=input_angle,
+            cue_power=input_power,
+            spin_x=input_spin_x,
+            spin_y=input_spin_y,
         )
         new_balls = sim["balls"]
         shot_replay = sim.get("shot_replay") or {}
@@ -758,6 +834,8 @@ def register(router):
                 foul = True
             if legal_target is None and first_contact == 8:
                 foul = True
+        if foul and _rng.random() < effects["foul_relief_chance"]:
+            foul = False
 
         winner_uid = None
         result_reason = None
@@ -779,6 +857,8 @@ def register(router):
                     keep_turn = len(stripes) > 0
                 else:
                     keep_turn = len(pocketed) > 0
+                if not keep_turn and _rng.random() < effects["luck_chance"] and len(pocketed) > 0:
+                    keep_turn = True
             else:
                 shooter["fouls"] = int(shooter.get("fouls") or 0) + 1
                 keep_turn = False
@@ -829,6 +909,8 @@ def register(router):
             pot = int(game.get("pot") or 0)
             if pot > 0:
                 await db.users.update_one({"id": winner_uid}, {"$inc": {"money": pot}})
+            win_cash = MP_8BALL_AI_WIN_CASH if str(game.get("mode")) == "vs_ai" else MP_8BALL_PVP_WIN_CASH
+            await db.users.update_one({"id": winner_uid}, {"$inc": {"money": int(win_cash)}})
             loser_uid = opponent.get("user_id") if winner_uid == uid else uid
             # Rank points and MMR.
             w_prof = await db.pool_profiles.find_one({"user_id": winner_uid}, {"_id": 0}) or {"user_id": winner_uid, "rating": 1000, "wins": 0, "losses": 0}
@@ -1004,6 +1086,7 @@ def register(router):
     async def pool_profile(current_user: dict = Depends(get_current_user_verified)):
         uid = current_user["id"]
         p = await db.pool_profiles.find_one({"user_id": uid}, {"_id": 0}) or {"user_id": uid, "rating": 1000, "wins": 0, "losses": 0}
+        user_row = await db.users.find_one({"id": uid}, {"_id": 0, "money": 1})
         selected_cue = await db.user_pool_cues.find_one({"user_id": uid, "selected": True}, {"_id": 0, "id": 1, "cue_id": 1})
         if not selected_cue:
             selected_cue = await db.user_pool_cues.find_one({"user_id": uid}, {"_id": 0, "id": 1, "cue_id": 1})
@@ -1011,6 +1094,7 @@ def register(router):
             "rating": int(p.get("rating") or 1000),
             "wins": int(p.get("wins") or 0),
             "losses": int(p.get("losses") or 0),
+            "money": int((user_row or {}).get("money") or 0),
             "selected_cue_id": (selected_cue or {}).get("id"),
             "selected_cue_type": (selected_cue or {}).get("cue_id"),
         }
@@ -1028,8 +1112,16 @@ def register(router):
     async def pool_cues_me(current_user: dict = Depends(get_current_user_verified)):
         uid = current_user["id"]
         owned = await db.user_pool_cues.find({"user_id": uid}, {"_id": 0}).sort("acquired_at", 1).to_list(100)
-        upgs = await db.pool_cue_upgrades.find({"user_id": uid}, {"_id": 0}).to_list(200)
-        return {"owned": owned, "upgrades": upgs}
+        rows = await db.pool_cue_upgrades.find({"user_id": uid}, {"_id": 0}).to_list(300)
+        row_by_cue = {str(r.get("cue_instance_id") or ""): r for r in rows}
+        upgs = []
+        for cue in owned:
+            cue_id = str(cue.get("id") or "")
+            norm = _normalize_upgrade_doc(row_by_cue.get(cue_id), uid, cue_id)
+            norm["total_level"] = _upgrade_total_level(norm)
+            norm["milestones"] = _upgrade_milestones(norm)
+            upgs.append(norm)
+        return {"owned": owned, "upgrades": upgs, "upgrade_total_cap": MP_8BALL_UPGRADE_TOTAL_CAP, "upgrade_stat_cap": MP_8BALL_UPGRADE_STAT_CAP}
 
     @router.post("/casino/mp-8ball/cues/buy")
     async def pool_cues_buy(body: CueBuyRequest, current_user: dict = Depends(get_current_user_verified)):
@@ -1053,7 +1145,20 @@ def register(router):
         )
         await db.pool_cue_upgrades.update_one(
             {"user_id": uid, "cue_instance_id": inst_id},
-            {"$setOnInsert": {"user_id": uid, "cue_instance_id": inst_id, "power": 0, "aim": 0, "spin": 0, "control": 0, "preview": 0, "created_at": _now_iso()}},
+            {
+                "$setOnInsert": {
+                    "user_id": uid,
+                    "cue_instance_id": inst_id,
+                    "power": 0,
+                    "curve": 0,
+                    "luck": 0,
+                    "aim": 0,
+                    "control": 0,
+                    "spin": 0,
+                    "preview": 0,
+                    "created_at": _now_iso(),
+                }
+            },
             upsert=True,
         )
         return {"message": "Cue purchased", "cue_instance_id": inst_id}
@@ -1072,31 +1177,42 @@ def register(router):
     async def pool_cues_upgrade(body: CueUpgradeRequest, current_user: dict = Depends(get_current_user_verified)):
         uid = current_user["id"]
         stat = (body.stat or "").strip().lower()
-        if stat not in ("power", "aim", "spin", "control", "preview"):
+        if stat == "spin":
+            stat = "curve"
+        if stat == "preview":
+            stat = "aim"
+        if stat not in MP_8BALL_UPGRADE_STATS:
             raise HTTPException(status_code=400, detail="Invalid stat")
         cue = await db.user_pool_cues.find_one({"id": body.cue_instance_id, "user_id": uid}, {"_id": 0, "id": 1})
         if not cue:
             raise HTTPException(status_code=404, detail="Cue not owned")
-        upg = await db.pool_cue_upgrades.find_one({"user_id": uid, "cue_instance_id": body.cue_instance_id}, {"_id": 0}) or {
-            "user_id": uid,
-            "cue_instance_id": body.cue_instance_id,
-            "power": 0,
-            "aim": 0,
-            "spin": 0,
-            "control": 0,
-            "preview": 0,
-        }
+        raw_upg = await db.pool_cue_upgrades.find_one({"user_id": uid, "cue_instance_id": body.cue_instance_id}, {"_id": 0})
+        upg = _normalize_upgrade_doc(raw_upg, uid, body.cue_instance_id)
         lvl = int(upg.get(stat) or 0)
-        if lvl >= 25:
+        total_level = _upgrade_total_level(upg)
+        if total_level >= MP_8BALL_UPGRADE_TOTAL_CAP:
+            raise HTTPException(status_code=400, detail="Total upgrade cap reached")
+        if lvl >= MP_8BALL_UPGRADE_STAT_CAP:
             raise HTTPException(status_code=400, detail="Stat is maxed")
-        cost = 250 + (lvl * 125)
-        user = await db.users.find_one({"id": uid}, {"_id": 0, "points": 1})
-        if not user or int(user.get("points") or 0) < cost:
-            raise HTTPException(status_code=400, detail="Not enough points")
-        await db.users.update_one({"id": uid, "points": {"$gte": cost}}, {"$inc": {"points": -cost}})
+        cost = _upgrade_cash_cost(lvl, total_level)
+        user = await db.users.find_one({"id": uid}, {"_id": 0, "money": 1})
+        if not user or int(user.get("money") or 0) < cost:
+            raise HTTPException(status_code=400, detail="Not enough cash")
+        await db.users.update_one({"id": uid, "money": {"$gte": cost}}, {"$inc": {"money": -cost}})
         await db.pool_cue_upgrades.update_one(
             {"user_id": uid, "cue_instance_id": body.cue_instance_id},
-            {"$inc": {stat: 1}, "$setOnInsert": {"created_at": _now_iso()}},
+            {"$inc": {stat: 1}, "$setOnInsert": {"created_at": _now_iso(), **_upgrade_defaults(uid, body.cue_instance_id)}},
             upsert=True,
         )
-        return {"message": f"{stat.title()} upgraded", "cost": cost}
+        new_row = await db.pool_cue_upgrades.find_one({"user_id": uid, "cue_instance_id": body.cue_instance_id}, {"_id": 0})
+        new_upg = _normalize_upgrade_doc(new_row, uid, body.cue_instance_id)
+        balance = await db.users.find_one({"id": uid}, {"_id": 0, "money": 1})
+        return {
+            "message": f"{stat.title()} upgraded",
+            "cost": cost,
+            "currency": "cash",
+            "money_balance": int((balance or {}).get("money") or 0),
+            "total_level": _upgrade_total_level(new_upg),
+            "milestones": _upgrade_milestones(new_upg),
+            "upgrades": new_upg,
+        }
