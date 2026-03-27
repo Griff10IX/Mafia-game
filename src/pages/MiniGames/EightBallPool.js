@@ -768,6 +768,7 @@ export default function EightBallPool() {
     if (cue && canRenderCue) {
       const cx = (Number(cue.x || 0) / TABLE_W) * w;
       const cy = (Number(cue.y || 0) / TABLE_H) * h;
+      const cueVisualR = Math.max(10, (BALL_R / TABLE_W) * w * 1.7);
       const a = (Number(angleDeg || 0) * Math.PI) / 180;
       const aimLen = 58 + Number(power || 0) * 200;
       const cueLen = 140;
@@ -776,9 +777,22 @@ export default function EightBallPool() {
 
       // Aim ring around cue ball.
       ctx.beginPath();
-      ctx.arc(cx, cy, Math.max(10, (BALL_R / TABLE_W) * w * 1.7), 0, Math.PI * 2);
+      ctx.arc(cx, cy, cueVisualR, 0, Math.PI * 2);
       ctx.strokeStyle = isAiming ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.35)';
       ctx.lineWidth = isAiming ? 2.5 : 1.4;
+      ctx.stroke();
+
+      // Spin marker: click inside cue ball to move this target.
+      const spinDotX = cx + (Number(spinX || 0) * cueVisualR * 0.68);
+      const spinDotY = cy - (Number(spinY || 0) * cueVisualR * 0.68);
+      ctx.beginPath();
+      ctx.arc(spinDotX, spinDotY, Math.max(3, cueVisualR * 0.17), 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(220,38,38,0.95)';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(spinDotX, spinDotY, Math.max(5, cueVisualR * 0.26), 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(220,38,38,0.95)';
+      ctx.lineWidth = 1.6;
       ctx.stroke();
 
       // Multi-segment preview upgrades: rails and contact-aware lines.
@@ -868,7 +882,7 @@ export default function EightBallPool() {
       ctx.lineWidth = 2;
       ctx.stroke();
     }
-  }, [displayBalls, angleDeg, power, isAiming, currentSkin, renderTick, canRenderCue, aimPreview]);
+  }, [displayBalls, angleDeg, power, spinX, spinY, isAiming, currentSkin, renderTick, canRenderCue, aimPreview]);
 
   const startAi = async () => {
     setBusy(true);
@@ -1008,6 +1022,30 @@ export default function EightBallPool() {
     const curvedPower = Math.pow(normalized, 1.22);
     setPower((prev) => prev + (curvedPower - prev) * 0.38);
   };
+
+  const updateSpinFromPointer = useCallback((event) => {
+    if (!canRenderCue || !ballsSettled) return false;
+    const canvas = canvasRef.current;
+    if (!canvas) return false;
+    const cue = displayBalls.find((b) => b.number === 0 && !b.pocketed);
+    if (!cue) return false;
+    const rect = canvas.getBoundingClientRect();
+    const sx = ((event.clientX - rect.left) / rect.width) * canvas.width;
+    const sy = ((event.clientY - rect.top) / rect.height) * canvas.height;
+    const cx = (Number(cue.x || 0) / TABLE_W) * canvas.width;
+    const cy = (Number(cue.y || 0) / TABLE_H) * canvas.height;
+    const visualRadius = Math.max(12, (BALL_R / TABLE_W) * canvas.width);
+    const dx = sx - cx;
+    const dy = sy - cy;
+    const dist = Math.hypot(dx, dy);
+    if (dist > visualRadius * 1.05) return false;
+    const clamped = Math.min(1, dist / visualRadius);
+    const nx = dist > 1e-6 ? (dx / dist) * clamped : 0;
+    const ny = dist > 1e-6 ? (dy / dist) * clamped : 0;
+    setSpinX(Number(nx.toFixed(3)));
+    setSpinY(Number((-ny).toFixed(3)));
+    return true;
+  }, [ballsSettled, canRenderCue, displayBalls]);
 
   const buyCue = async (cueId) => {
     setBusy(true);
@@ -1156,6 +1194,7 @@ export default function EightBallPool() {
                   onPointerDown={(e) => {
                     if (replayActive || !canRenderCue || !ballsSettled) return;
                     if (mobileNeedsRotate) return;
+                    if (updateSpinFromPointer(e)) return;
                     setIsAiming(true);
                     updateAimFromPointer(e);
                   }}
@@ -1209,8 +1248,17 @@ export default function EightBallPool() {
                 </label>
                 <label className="space-y-1"><span className="text-mutedForeground">Angle (deg)</span><input type="number" value={angleDeg} onChange={(e) => setAngleDeg(Number(e.target.value || 0))} className="w-full px-2 py-1 rounded border border-input bg-transparent" /></label>
                 <label className="space-y-1"><span className="text-mutedForeground">Power (0-1)</span><input type="number" min={0} max={1} step={0.01} value={power} onChange={(e) => setPower(Number(e.target.value || 0))} className="w-full px-2 py-1 rounded border border-input bg-transparent" /></label>
-                <label className="space-y-1"><span className="text-mutedForeground">Spin X</span><input type="number" min={-1} max={1} step={0.05} value={spinX} onChange={(e) => setSpinX(Number(e.target.value || 0))} className="w-full px-2 py-1 rounded border border-input bg-transparent" /></label>
-                <label className="space-y-1"><span className="text-mutedForeground">Spin Y</span><input type="number" min={-1} max={1} step={0.05} value={spinY} onChange={(e) => setSpinY(Number(e.target.value || 0))} className="w-full px-2 py-1 rounded border border-input bg-transparent" /></label>
+                <div className="space-y-1 col-span-2 md:col-span-2">
+                  <span className="text-mutedForeground">Spin (click cue ball to set)</span>
+                  <div className="flex items-center gap-2">
+                    <div className="px-2 py-1 rounded border border-input bg-transparent text-[10px] text-foreground min-w-[120px]">
+                      X {Number(spinX || 0).toFixed(2)} · Y {Number(spinY || 0).toFixed(2)}
+                    </div>
+                    <button type="button" onClick={() => { setSpinX(0); setSpinY(0); }} className="px-2 py-1 rounded border border-zinc-700 text-mutedForeground hover:text-foreground">
+                      Center
+                    </button>
+                  </div>
+                </div>
                 <div className="flex items-end"><button type="button" onClick={shoot} disabled={busy || replayActive || mobileNeedsRotate || !canRenderCue || !ballsSettled} className="w-full px-3 py-2 rounded bg-primary/20 border border-primary/50 text-primary font-heading">{mobileNeedsRotate ? 'Rotate Phone' : (replayActive || !ballsSettled) ? 'Rolling...' : busy ? '...' : 'Shoot'}</button></div>
               </div>
             </div>
