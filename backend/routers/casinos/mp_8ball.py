@@ -17,7 +17,7 @@ _rng = random.SystemRandom()
 
 MP_8BALL_MIN_PLAYERS = 2
 MP_8BALL_MAX_PLAYERS = 2
-MP_8BALL_TURN_SECONDS = 45
+MP_8BALL_TURN_SECONDS = 60
 MP_8BALL_START_COUNTDOWN = 3
 MP_8BALL_MAX_BUY_IN = 200_000_000
 MP_8BALL_AI_ID = "ai_pool_bot"
@@ -449,6 +449,26 @@ def _ensure_game_turn(game: dict, uid: str):
         raise HTTPException(status_code=400, detail="It is not your turn")
 
 
+async def _maybe_apply_shot_clock_timeout(db, game_id: str, game: dict) -> dict:
+    """If the active player exceeded MP_8BALL_TURN_SECONDS in phase playing, foul and pass turn."""
+    if game.get("status") != "in_progress" or game.get("phase") != "playing":
+        return game
+    ts = _parse_iso(game.get("turn_started_at"))
+    if not ts or (datetime.now(timezone.utc) - ts).total_seconds() <= MP_8BALL_TURN_SECONDS:
+        return game
+    players = list(game.get("players") or [])
+    idx = int(game.get("current_turn_index") or 0)
+    if idx < 0 or idx >= len(players):
+        return game
+    players[idx]["fouls"] = int(players[idx].get("fouls") or 0) + 1
+    nidx = (idx + 1) % len(players)
+    await db.mp_8ball_games.update_one(
+        {"id": game_id},
+        {"$set": {"players": players, "current_turn_index": nidx, "turn_started_at": _now_iso(), "updated_at": _now_iso()}},
+    )
+    return await db.mp_8ball_games.find_one({"id": game_id}, {"_id": 0}) or game
+
+
 def _maybe_finalize_resolving(game: dict) -> dict:
     if game.get("status") != "in_progress":
         return game
@@ -479,6 +499,16 @@ def _public_game(game: dict, viewer_uid: Optional[str] = None) -> dict:
         for i, p in enumerate(g.get("players") or []):
             if p.get("user_id") != viewer_uid:
                 p["username"] = f"Player {i + 1}"
+    g["turn_seconds_total"] = MP_8BALL_TURN_SECONDS
+    if g.get("status") == "in_progress" and g.get("phase") == "playing":
+        ts = _parse_iso(g.get("turn_started_at"))
+        if ts:
+            elapsed = (datetime.now(timezone.utc) - ts).total_seconds()
+            g["turn_seconds_left"] = max(0, int(MP_8BALL_TURN_SECONDS - elapsed))
+        else:
+            g["turn_seconds_left"] = MP_8BALL_TURN_SECONDS
+    else:
+        g["turn_seconds_left"] = None
     return g
 
 
@@ -486,6 +516,64 @@ def _elo_delta(my: int, opp: int, win: bool, k: int = 24) -> int:
     expected = 1.0 / (1.0 + 10 ** ((opp - my) / 400.0))
     score = 1.0 if win else 0.0
     return int(round(k * (score - expected)))
+
+
+async def _apply_pool_match_rewards(db, game: dict, winner_uid: str, loser_uid: str) -> None:
+    """Apply pot, win cash, ELO, and rank/minigame logging. AI id can be winner or loser."""
+    table_state = dict(game.get("table_state") or {})
+    pot = int(game.get("pot") or 0)
+    if pot > 0 and winner_uid and winner_uid != MP_8BALL_AI_ID:
+        await db.users.update_one({"id": winner_uid}, {"$inc": {"money": pot}})
+    mode = str(game.get("mode") or "")
+    win_cash = MP_8BALL_AI_WIN_CASH if mode == "vs_ai" else MP_8BALL_PVP_WIN_CASH
+    if winner_uid and winner_uid != MP_8BALL_AI_ID:
+        await db.users.update_one({"id": winner_uid}, {"$inc": {"money": int(win_cash)}})
+    w_human = bool(winner_uid and winner_uid != MP_8BALL_AI_ID)
+    l_human = bool(loser_uid and loser_uid != MP_8BALL_AI_ID)
+    if w_human and l_human:
+        w_prof = await db.pool_profiles.find_one({"user_id": winner_uid}, {"_id": 0}) or {"user_id": winner_uid, "rating": 1000, "wins": 0, "losses": 0}
+        l_prof = await db.pool_profiles.find_one({"user_id": loser_uid}, {"_id": 0}) or {"user_id": loser_uid, "rating": 1000, "wins": 0, "losses": 0}
+        w_delta = _elo_delta(int(w_prof.get("rating") or 1000), int(l_prof.get("rating") or 1000), True)
+        l_delta = _elo_delta(int(l_prof.get("rating") or 1000), int(w_prof.get("rating") or 1000), False)
+        await db.pool_profiles.update_one(
+            {"user_id": winner_uid},
+            {"$inc": {"wins": 1, "rating": w_delta}, "$setOnInsert": {"created_at": _now_iso()}},
+            upsert=True,
+        )
+        await db.pool_profiles.update_one(
+            {"user_id": loser_uid},
+            {"$inc": {"losses": 1, "rating": l_delta}, "$setOnInsert": {"created_at": _now_iso()}},
+            upsert=True,
+        )
+    elif w_human and not l_human:
+        w_prof = await db.pool_profiles.find_one({"user_id": winner_uid}, {"_id": 0}) or {"user_id": winner_uid, "rating": 1000, "wins": 0, "losses": 0}
+        w_delta = _elo_delta(int(w_prof.get("rating") or 1000), 1000, True)
+        await db.pool_profiles.update_one(
+            {"user_id": winner_uid},
+            {"$inc": {"wins": 1, "rating": w_delta}, "$setOnInsert": {"created_at": _now_iso()}},
+            upsert=True,
+        )
+    elif l_human and not w_human:
+        l_prof = await db.pool_profiles.find_one({"user_id": loser_uid}, {"_id": 0}) or {"user_id": loser_uid, "rating": 1000, "wins": 0, "losses": 0}
+        l_delta = _elo_delta(int(l_prof.get("rating") or 1000), 1000, False)
+        await db.pool_profiles.update_one(
+            {"user_id": loser_uid},
+            {"$inc": {"losses": 1, "rating": l_delta}, "$setOnInsert": {"created_at": _now_iso()}},
+            upsert=True,
+        )
+    if w_human:
+        winner_doc = await db.users.find_one({"id": winner_uid}, {"_id": 0, "rank_points": 1, "username": 1})
+        if winner_doc:
+            rp_gain = 60 if bool(game.get("rated", True)) else 25
+            await db.users.update_one({"id": winner_uid}, {"$inc": {"rank_points": rp_gain}})
+            await maybe_process_rank_up(
+                winner_uid,
+                int(winner_doc.get("rank_points") or 0),
+                rp_gain,
+                winner_doc.get("username") or "?",
+                1.0,
+            )
+            await log_minigame_play(winner_uid, winner_doc.get("username") or "?", "pool_8ball", int(table_state.get("shot_count") or 0))
 
 
 def _cue_catalog() -> List[dict]:
@@ -508,6 +596,20 @@ def _upgrade_defaults(uid: str, cue_instance_id: str) -> dict:
         "control": 0,
         "spin": 0,   # legacy compatibility
         "preview": 0,  # legacy compatibility
+    }
+
+
+def _pool_upgrade_set_on_insert() -> dict:
+    """MongoDB $setOnInsert only: must NOT repeat query filter fields (user_id, cue_instance_id)."""
+    return {
+        "power": 0,
+        "curve": 0,
+        "luck": 0,
+        "aim": 0,
+        "control": 0,
+        "spin": 0,
+        "preview": 0,
+        "created_at": _now_iso(),
     }
 
 
@@ -649,8 +751,34 @@ def register(router):
         game = await db.mp_8ball_games.find_one({"id": game_id})
         if not game:
             raise HTTPException(status_code=404, detail="Game not found")
+        if game.get("status") == "in_progress":
+            players = list(game.get("players") or [])
+            if not any(p.get("user_id") == uid for p in players):
+                raise HTTPException(status_code=403, detail="Not in this game")
+            winner_uid = next((p.get("user_id") for p in players if p.get("user_id") != uid), None)
+            if not winner_uid:
+                raise HTTPException(status_code=400, detail="Invalid game state")
+            loser_uid = uid
+            await db.mp_8ball_games.update_one(
+                {"id": game_id},
+                {
+                    "$set": {
+                        "status": "completed",
+                        "phase": "settled",
+                        "winner_user_id": winner_uid,
+                        "result_reason": "dnf",
+                        "completed_at": _now_iso(),
+                        "updated_at": _now_iso(),
+                    }
+                },
+            )
+            g_done = await db.mp_8ball_games.find_one({"id": game_id}, {"_id": 0})
+            await _apply_pool_match_rewards(db, g_done, winner_uid, loser_uid)
+            return _public_game(g_done, uid)
+        if game.get("status") == "completed":
+            return _public_game(game, uid)
         if game.get("status") != "waiting":
-            raise HTTPException(status_code=400, detail="Cannot leave after match start")
+            raise HTTPException(status_code=400, detail="Cannot leave this game")
         players = [p for p in (game.get("players") or []) if p.get("user_id") != uid]
         if len(players) == len(game.get("players") or []):
             return {"message": "Not in game"}
@@ -832,10 +960,15 @@ def register(router):
             first_kind = "solid" if 1 <= first_contact <= 7 else "stripe" if 9 <= first_contact <= 15 else "black" if first_contact == 8 else "cue"
             if legal_target and first_kind != legal_target:
                 foul = True
-            if legal_target is None and first_contact == 8:
-                foul = True
-        if foul and _rng.random() < effects["foul_relief_chance"]:
-            foul = False
+        # Open table: contacting the 8 first is legal; pocketing the 8 early is handled below.
+        if shooter_group in ("solid", "stripe"):
+            for n in pocketed:
+                if n == 8:
+                    continue
+                if 1 <= n <= 7 and shooter_group != "solid":
+                    foul = True
+                if 9 <= n <= 15 and shooter_group != "stripe":
+                    foul = True
 
         winner_uid = None
         result_reason = None
@@ -857,8 +990,6 @@ def register(router):
                     keep_turn = len(stripes) > 0
                 else:
                     keep_turn = len(pocketed) > 0
-                if not keep_turn and _rng.random() < effects["luck_chance"] and len(pocketed) > 0:
-                    keep_turn = True
             else:
                 shooter["fouls"] = int(shooter.get("fouls") or 0) + 1
                 keep_turn = False
@@ -906,39 +1037,12 @@ def register(router):
 
         # Settlement / progression.
         if winner_uid:
-            pot = int(game.get("pot") or 0)
-            if pot > 0:
-                await db.users.update_one({"id": winner_uid}, {"$inc": {"money": pot}})
-            win_cash = MP_8BALL_AI_WIN_CASH if str(game.get("mode")) == "vs_ai" else MP_8BALL_PVP_WIN_CASH
-            await db.users.update_one({"id": winner_uid}, {"$inc": {"money": int(win_cash)}})
             loser_uid = opponent.get("user_id") if winner_uid == uid else uid
-            # Rank points and MMR.
-            w_prof = await db.pool_profiles.find_one({"user_id": winner_uid}, {"_id": 0}) or {"user_id": winner_uid, "rating": 1000, "wins": 0, "losses": 0}
-            l_prof = await db.pool_profiles.find_one({"user_id": loser_uid}, {"_id": 0}) or {"user_id": loser_uid, "rating": 1000, "wins": 0, "losses": 0}
-            w_delta = _elo_delta(int(w_prof.get("rating") or 1000), int(l_prof.get("rating") or 1000), True)
-            l_delta = _elo_delta(int(l_prof.get("rating") or 1000), int(w_prof.get("rating") or 1000), False)
-            await db.pool_profiles.update_one(
-                {"user_id": winner_uid},
-                {"$inc": {"wins": 1, "rating": w_delta}, "$setOnInsert": {"created_at": _now_iso()}},
-                upsert=True,
-            )
-            await db.pool_profiles.update_one(
-                {"user_id": loser_uid},
-                {"$inc": {"losses": 1, "rating": l_delta}, "$setOnInsert": {"created_at": _now_iso()}},
-                upsert=True,
-            )
-            winner_doc = await db.users.find_one({"id": winner_uid}, {"_id": 0, "rank_points": 1, "username": 1})
-            if winner_doc:
-                rp_gain = 60 if bool(game.get("rated", True)) else 25
-                await db.users.update_one({"id": winner_uid}, {"$inc": {"rank_points": rp_gain}})
-                await maybe_process_rank_up(
-                    winner_uid,
-                    int(winner_doc.get("rank_points") or 0),
-                    rp_gain,
-                    winner_doc.get("username") or "?",
-                    1.0,
-                )
-                await log_minigame_play(winner_uid, winner_doc.get("username") or "?", "pool_8ball", int(table_state.get("shot_count") or 0))
+            g_done = dict(game)
+            g_done["table_state"] = table_state
+            g_done["status"] = "completed"
+            g_done["winner_user_id"] = winner_uid
+            await _apply_pool_match_rewards(db, g_done, winner_uid, loser_uid)
 
         g = await db.mp_8ball_games.find_one({"id": game_id}, {"_id": 0})
         return _public_game(g, uid)
@@ -963,11 +1067,33 @@ def register(router):
     @router.post("/casino/mp-8ball/vs-ai/start")
     async def pool_ai_start(current_user: dict = Depends(get_current_user_verified)):
         uid = current_user["id"]
-        # Close old active AI session.
-        await db.mp_8ball_games.update_many(
+        # Forfeit any in-progress AI match (DNF = loss) before starting a new session.
+        old_rows = await db.mp_8ball_games.find(
             {"mode": "vs_ai", "status": {"$in": ["waiting", "in_progress"]}, "owner_user_id": uid},
-            {"$set": {"status": "completed", "phase": "abandoned", "completed_at": _now_iso()}},
-        )
+            {"_id": 0},
+        ).to_list(50)
+        for og in old_rows:
+            oid = og.get("id")
+            if not oid:
+                continue
+            if og.get("status") == "in_progress":
+                await db.mp_8ball_games.update_one(
+                    {"id": oid},
+                    {
+                        "$set": {
+                            "status": "completed",
+                            "phase": "settled",
+                            "winner_user_id": MP_8BALL_AI_ID,
+                            "result_reason": "dnf",
+                            "completed_at": _now_iso(),
+                            "updated_at": _now_iso(),
+                        }
+                    },
+                )
+                g_done = await db.mp_8ball_games.find_one({"id": oid}, {"_id": 0})
+                await _apply_pool_match_rewards(db, g_done, MP_8BALL_AI_ID, uid)
+            else:
+                await db.mp_8ball_games.delete_one({"id": oid})
         gid = f"ai8_{uuid.uuid4().hex[:12]}"
         game = {
             "id": gid,
@@ -1060,6 +1186,7 @@ def register(router):
                     }
                 },
             )
+        game = await _maybe_apply_shot_clock_timeout(db, game["id"], game)
         idx = int(game.get("current_turn_index") or 0)
         players = list(game.get("players") or [])
         if game.get("status") == "in_progress" and game.get("phase") == "playing" and idx < len(players) and players[idx].get("user_id") == MP_8BALL_AI_ID:
@@ -1201,7 +1328,7 @@ def register(router):
         await db.users.update_one({"id": uid, "money": {"$gte": cost}}, {"$inc": {"money": -cost}})
         await db.pool_cue_upgrades.update_one(
             {"user_id": uid, "cue_instance_id": body.cue_instance_id},
-            {"$inc": {stat: 1}, "$setOnInsert": {"created_at": _now_iso(), **_upgrade_defaults(uid, body.cue_instance_id)}},
+            {"$inc": {stat: 1}, "$setOnInsert": _pool_upgrade_set_on_insert()},
             upsert=True,
         )
         new_row = await db.pool_cue_upgrades.find_one({"user_id": uid, "cue_instance_id": body.cue_instance_id}, {"_id": 0})

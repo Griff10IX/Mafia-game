@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bot, Users, Trophy, Target, Zap, RefreshCw, Volume2, VolumeX } from 'lucide-react';
+import {
+  Bot, Users, Trophy, Target, Zap, RefreshCw, Volume2, VolumeX, Sparkles, Crosshair, SlidersHorizontal, Gauge,
+} from 'lucide-react';
 import api, { getApiErrorMessage } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -52,6 +54,7 @@ const TABLE_W = 2.2;
 const TABLE_H = 1.1;
 const BALL_R = 0.028;
 const AI_POOL_ID = 'ai_pool_bot';
+const POOL_SHOT_CLOCK_SEC = 60;
 const REPLAY_IDLE_POS_EPS = 0.00035;
 const REPLAY_IDLE_VEL_EPS = 0.006;
 const PREVIEW_TABLE_MARGIN = 14;
@@ -97,6 +100,21 @@ function groupBadge(group) {
   return 'Unassigned';
 }
 
+/** Matches backend `_upgrade_cash_cost` in mp_8ball.py */
+function poolUpgradeCashCost(statLevel, totalLevel) {
+  const base = 420 + statLevel * 130;
+  const progressionTax = Math.floor(totalLevel / 5) * 30;
+  return Math.floor(base + progressionTax);
+}
+
+const POOL_GARAGE_STATS = [
+  { key: 'power', label: 'Power', hint: 'Shot strength multiplier', Icon: Zap, color: '#fb923c' },
+  { key: 'curve', label: 'Curve', hint: 'Spin & swerve on the cue ball', Icon: Gauge, color: '#c084fc' },
+  { key: 'luck', label: 'Luck', hint: 'Minor table roll variance (not fouls)', Icon: Sparkles, color: '#f472b6' },
+  { key: 'aim', label: 'Aim', hint: 'Longer aim preview & rail paths', Icon: Crosshair, color: '#22d3ee' },
+  { key: 'control', label: 'Control', hint: 'Cue stability & finesse', Icon: SlidersHorizontal, color: '#84cc16' },
+];
+
 function rayCircleHit(originX, originY, dirX, dirY, ballX, ballY, radius) {
   const dx = originX - ballX;
   const dy = originY - ballY;
@@ -110,6 +128,24 @@ function rayCircleHit(originX, originY, dirX, dirY, ballX, ballY, radius) {
   const candidates = [t1, t2].filter((t) => t > 1e-4);
   if (!candidates.length) return null;
   return Math.min(...candidates);
+}
+
+/** Distance along ray to inner table edge (canvas coords). */
+function rayToTableWall(ox, oy, dx, dy, minX, maxX, minY, maxY) {
+  let wallDist = Number.POSITIVE_INFINITY;
+  if (dx > 1e-8) wallDist = Math.min(wallDist, (maxX - ox) / dx);
+  if (dx < -1e-8) wallDist = Math.min(wallDist, (minX - ox) / dx);
+  if (dy > 1e-8) wallDist = Math.min(wallDist, (maxY - oy) / dy);
+  if (dy < -1e-8) wallDist = Math.min(wallDist, (minY - oy) / dy);
+  return wallDist;
+}
+
+function reflectDirAtPoint(nx, ny, dx, dy, minX, maxX, minY, maxY) {
+  let rdx = dx;
+  let rdy = dy;
+  if (Math.abs(nx - maxX) < 0.7 || Math.abs(nx - minX) < 0.7) rdx *= -1;
+  if (Math.abs(ny - maxY) < 0.7 || Math.abs(ny - minY) < 0.7) rdy *= -1;
+  return { rdx, rdy };
 }
 
 export default function EightBallPool() {
@@ -322,6 +358,7 @@ export default function EightBallPool() {
   const previewTier = Math.min(4, Math.floor(previewLevel / 5));
   const previewSegmentBudget = 1 + previewTier;
   const previewDistance = 130 + (previewLevel * 9) + (cueLevels.aim * 2.5);
+  const objectRailSegmentCap = Math.min(12, 1 + previewTier * 2 + Math.floor(previewLevel / 7));
   const currentSkin = TABLE_SKINS[tableSkin] || TABLE_SKINS.ice_blue;
   const playerBallTrackers = useMemo(() => {
     const ballsByNum = new Map((displayBalls || []).map((b) => [Number(b.number), b]));
@@ -344,7 +381,7 @@ export default function EightBallPool() {
   }, [activeGame?.players, displayBalls]);
   const aimPreview = useMemo(() => {
     const cue = displayBalls.find((b) => b.number === 0 && !b.pocketed);
-    if (!cue || !canRenderCue) return { segments: [], ghost: null };
+    if (!cue || !canRenderCue) return { segments: [], ghost: null, objectLineWidth: 1.25 };
     const w = 900;
     const h = 450;
     const cuePx = (Number(cue.x || 0) / TABLE_W) * w;
@@ -359,24 +396,26 @@ export default function EightBallPool() {
     let ghost = null;
     let contactDone = false;
     const ballPxR = Math.max(4, (BALL_R / TABLE_W) * w);
+    const hitRadius = ballPxR * 2.02;
     const minX = PREVIEW_TABLE_MARGIN;
     const maxX = w - PREVIEW_TABLE_MARGIN;
     const minY = PREVIEW_TABLE_MARGIN;
     const maxY = h - PREVIEW_TABLE_MARGIN;
+    // Object-ball path: more segments + longer line as aim upgrades increase (rails off cushions).
+    const objectSegmentBudget = objectRailSegmentCap;
+    const objectPathLength = 90 + (previewLevel * 14) + (previewTier * 48) + (Number(power || 0) * 95);
+    const objectLineWidth = 1.25 + (previewTier * 0.45) + Math.min(2.5, previewLevel * 0.04);
+
     for (let segmentIndex = 0; segmentIndex < previewSegmentBudget && remain > 1; segmentIndex += 1) {
-      let wallDist = Number.POSITIVE_INFINITY;
-      if (dx > 0) wallDist = Math.min(wallDist, (maxX - ox) / dx);
-      if (dx < 0) wallDist = Math.min(wallDist, (minX - ox) / dx);
-      if (dy > 0) wallDist = Math.min(wallDist, (maxY - oy) / dy);
-      if (dy < 0) wallDist = Math.min(wallDist, (minY - oy) / dy);
+      const wallDist = rayToTableWall(ox, oy, dx, dy, minX, maxX, minY, maxY);
       let hitBall = null;
       let ballDist = Number.POSITIVE_INFINITY;
-      if (!contactDone && previewTier >= 1) {
+      if (!contactDone) {
         for (const b of displayBalls) {
           if (b.pocketed || b.number === 0) continue;
           const bx = (Number(b.x || 0) / TABLE_W) * w;
           const by = (Number(b.y || 0) / TABLE_H) * h;
-          const t = rayCircleHit(ox, oy, dx, dy, bx, by, ballPxR * 2.02);
+          const t = rayCircleHit(ox, oy, dx, dy, bx, by, hitRadius);
           if (t !== null && t < ballDist) {
             ballDist = t;
             hitBall = { x: bx, y: by, number: Number(b.number || 0) };
@@ -392,30 +431,45 @@ export default function EightBallPool() {
       if (hitBall && ballDist <= wallDist) {
         contactDone = true;
         ghost = { x: nx, y: ny, objectX: hitBall.x, objectY: hitBall.y };
-        if (previewTier >= 2) {
-          const odxRaw = hitBall.x - nx;
-          const odyRaw = hitBall.y - ny;
-          const om = Math.hypot(odxRaw, odyRaw) || 1;
-          const odx = odxRaw / om;
-          const ody = odyRaw / om;
-          const objectLen = Math.min(110 + (previewTier * 35), remain + 40);
+        const odxRaw = hitBall.x - nx;
+        const odyRaw = hitBall.y - ny;
+        const om = Math.hypot(odxRaw, odyRaw) || 1;
+        let odx = odxRaw / om;
+        let ody = odyRaw / om;
+        let oox = hitBall.x;
+        let ooy = hitBall.y;
+        let oRemain = objectPathLength;
+        for (let oi = 0; oi < objectSegmentBudget && oRemain > 1; oi += 1) {
+          const oWall = rayToTableWall(oox, ooy, odx, ody, minX, maxX, minY, maxY);
+          const oTravel = Math.min(oRemain, oWall);
+          if (!Number.isFinite(oTravel) || oTravel <= 0) break;
+          const onx = oox + (odx * oTravel);
+          const ony = ooy + (ody * oTravel);
           segs.push({
-            x1: hitBall.x,
-            y1: hitBall.y,
-            x2: hitBall.x + (odx * objectLen),
-            y2: hitBall.y + (ody * objectLen),
+            x1: oox,
+            y1: ooy,
+            x2: onx,
+            y2: ony,
             kind: 'object',
+            lineWidth: objectLineWidth,
           });
+          oRemain -= oTravel;
+          const { rdx, rdy } = reflectDirAtPoint(onx, ony, odx, ody, minX, maxX, minY, maxY);
+          odx = rdx;
+          ody = rdy;
+          oox = onx;
+          ooy = ony;
         }
         break;
       }
-      if (Math.abs(nx - maxX) < 0.7 || Math.abs(nx - minX) < 0.7) dx *= -1;
-      if (Math.abs(ny - maxY) < 0.7 || Math.abs(ny - minY) < 0.7) dy *= -1;
+      const r = reflectDirAtPoint(nx, ny, dx, dy, minX, maxX, minY, maxY);
+      dx = r.rdx;
+      dy = r.rdy;
       ox = nx;
       oy = ny;
     }
-    return { segments: segs, ghost };
-  }, [displayBalls, angleDeg, power, canRenderCue, previewDistance, previewSegmentBudget, previewTier]);
+    return { segments: segs, ghost, objectLineWidth };
+  }, [displayBalls, angleDeg, power, canRenderCue, previewDistance, previewSegmentBudget, previewTier, previewLevel]);
 
   useEffect(() => {
     const skinByCue = (selectedCue?.cue_id || '').toLowerCase();
@@ -847,10 +901,10 @@ export default function EightBallPool() {
           ctx.lineTo(seg.x2, seg.y2);
           const grad = ctx.createLinearGradient(seg.x1, seg.y1, seg.x2, seg.y2);
           if (seg.kind === 'object') {
-            grad.addColorStop(0, 'rgba(56,189,248,0.8)');
-            grad.addColorStop(1, 'rgba(56,189,248,0.15)');
+            grad.addColorStop(0, 'rgba(56,189,248,0.92)');
+            grad.addColorStop(1, 'rgba(56,189,248,0.12)');
             ctx.setLineDash([3, 5]);
-            ctx.lineWidth = 1.4;
+            ctx.lineWidth = typeof seg.lineWidth === 'number' ? seg.lineWidth : (aimPreview?.objectLineWidth || 1.4);
           } else if (seg.kind === 'contact') {
             grad.addColorStop(0, 'rgba(250,204,21,0.95)');
             grad.addColorStop(1, 'rgba(250,204,21,0.25)');
@@ -867,6 +921,14 @@ export default function EightBallPool() {
           ctx.setLineDash([]);
         });
       } else {
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(cx + ox * Math.min(aimLen, 170), cy + oy * Math.min(aimLen, 170));
+        ctx.strokeStyle = isAiming ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.18)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([5, 6]);
+        ctx.stroke();
+        ctx.setLineDash([]);
         const gx = cx + ox * Math.min(aimLen, 170);
         const gy = cy + oy * Math.min(aimLen, 170);
         ctx.beginPath();
@@ -972,14 +1034,36 @@ export default function EightBallPool() {
 
   const leaveLobby = async () => {
     if (!pvpGame?.id) return;
+    const wasInProgress = pvpGame.status === 'in_progress';
+    if (wasInProgress) {
+      if (typeof window !== 'undefined' && !window.confirm('Forfeit this match? You lose (DNF) and your opponent wins.')) return;
+    }
     setBusy(true);
     try {
       await api.post(`/casino/mp-8ball/games/${encodeURIComponent(pvpGame.id)}/leave`);
       setPvpGame(null);
-      toast.success('Left lobby');
+      toast.success(wasInProgress ? 'You forfeited (DNF)' : 'Left lobby');
       await fetchPvpLobbies();
     } catch (e) {
       toast.error(getApiErrorMessage(e) || 'Failed to leave');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const leaveAiMatch = async () => {
+    if (!aiGame?.id) return;
+    const wasInProgress = aiGame.status === 'in_progress';
+    if (wasInProgress) {
+      if (typeof window !== 'undefined' && !window.confirm('Forfeit this match? You lose (DNF).')) return;
+    }
+    setBusy(true);
+    try {
+      await api.post(`/casino/mp-8ball/games/${encodeURIComponent(aiGame.id)}/leave`);
+      setAiGame(null);
+      toast.success(wasInProgress ? 'You forfeited (DNF)' : 'Left match');
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || 'Failed to leave match');
     } finally {
       setBusy(false);
     }
@@ -1035,6 +1119,8 @@ export default function EightBallPool() {
         const res = await api.post(`/casino/mp-8ball/games/${encodeURIComponent(activeGame.id)}/shoot`, payload);
         playShotReplay(res.data || null, setPvpGame);
       }
+      setSpinX(0);
+      setSpinY(0);
     } catch (e) {
       toast.error(getApiErrorMessage(e) || 'Shot failed');
     } finally {
@@ -1117,9 +1203,12 @@ export default function EightBallPool() {
     if (!selectedCue?.id) return;
     setBusy(true);
     try {
-      await api.post('/casino/mp-8ball/cues/upgrade', { cue_instance_id: selectedCue.id, stat });
+      const res = await api.post('/casino/mp-8ball/cues/upgrade', { cue_instance_id: selectedCue.id, stat });
       await fetchCues();
-      toast.success(`${stat} upgraded`);
+      const bal = res.data?.money_balance;
+      toast.success(
+        `${stat} +1${typeof bal === 'number' ? ` · Cash $${bal.toLocaleString()}` : ''}`,
+      );
     } catch (e) {
       toast.error(getApiErrorMessage(e) || 'Upgrade failed');
     } finally {
@@ -1143,7 +1232,7 @@ export default function EightBallPool() {
 
       <header className="pool-fade-in text-center">
         <h1 className="text-sm font-heading font-bold text-primary uppercase tracking-wider">8-Ball Pool</h1>
-        <p className="text-[10px] text-mutedForeground font-heading italic">Win matches for cash (AI pays more), then upgrade power, curve, luck, aim and control.</p>
+        <p className="text-[10px] text-mutedForeground font-heading italic">WPA-style rules: call your group after the break, no upgrade “luck” on fouls or turns. {POOL_SHOT_CLOCK_SEC}s shot clock; forfeit = DNF loss.</p>
       </header>
 
       <div className={`${styles.panel} mobile-panel rounded-md border border-primary/20 overflow-hidden pool-fade-in`}>
@@ -1197,7 +1286,14 @@ export default function EightBallPool() {
                     );
                   })}
                   <div className="px-2 py-1 rounded border border-zinc-700/60 bg-zinc-800/35 text-foreground">
-                    Turn: <span className="font-bold text-primary">{turnLabel(activeGame)}</span> · {activeGame.status}/{activeGame.phase} · Shots {activeGame.table_state?.shot_count || 0} · {(replayActive || !ballsSettled) ? 'ROLLING' : 'AIMING'}
+                    Turn: <span className="font-bold text-primary">{turnLabel(activeGame)}</span>
+                    {typeof activeGame.turn_seconds_left === 'number' && activeGame.phase === 'playing' && (
+                      <span className="text-amber-300/90"> · {activeGame.turn_seconds_left}s</span>
+                    )}
+                    {' · '}{activeGame.status}/{activeGame.phase} · Shots {activeGame.table_state?.shot_count || 0} · {(replayActive || !ballsSettled) ? 'ROLLING' : 'AIMING'}
+                    {activeGame.status === 'completed' && activeGame.result_reason === 'dnf' && (
+                      <span className="text-red-300/90"> · DNF</span>
+                    )}
                   </div>
                 </div>
                 <div className="mt-2 grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -1350,15 +1446,101 @@ export default function EightBallPool() {
         </div>
         <div className="p-3 space-y-3">
           {selectedCue && (
-            <div className="text-[10px] font-heading p-2 rounded border border-primary/20 bg-zinc-900/40">
-              <div className="text-foreground font-bold">Selected cue: {selectedCue.cue_id}</div>
-              <div className="text-mutedForeground">Power {cueLevels.power} · Curve {cueLevels.curve} · Luck {cueLevels.luck} · Aim {cueLevels.aim} · Control {cueLevels.control}</div>
-              <div className="text-mutedForeground">Progress {cueTotalLevel}/{upgradeTotalCap} · Milestones {milestoneCount} · Per-stat cap {upgradeStatCap}</div>
-              <div className="text-mutedForeground">Preview Tier {previewTier} · Segments {previewSegmentBudget} · Range {Math.round(previewDistance)}px</div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {['power', 'curve', 'luck', 'aim', 'control'].map((stat) => (
-                  <button key={stat} type="button" onClick={() => upgradeCue(stat)} disabled={busy} className="px-2 py-1 rounded border border-primary/40 text-primary text-[10px] uppercase">{stat} +1</button>
-                ))}
+            <div className="space-y-3">
+              <div className="text-[10px] font-heading p-3 rounded-lg border border-primary/25 bg-gradient-to-br from-zinc-900/85 to-zinc-950/95">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                  <div>
+                    <div className="text-[10px] text-primary font-bold uppercase tracking-wider">Active cue</div>
+                    <div className="text-foreground font-bold">{selectedCue.cue_id}</div>
+                  </div>
+                  <div className="text-right text-[10px] tabular-nums">
+                    <span className="text-mutedForeground">Cash </span>
+                    <span className="text-emerald-400 font-bold">${(profile?.money ?? 0).toLocaleString()}</span>
+                  </div>
+                </div>
+                <div className="flex justify-between text-[9px] text-mutedForeground mb-1">
+                  <span>Total upgrades</span>
+                  <span>{cueTotalLevel} / {upgradeTotalCap}</span>
+                </div>
+                <div className="h-2 rounded-full bg-zinc-800 overflow-hidden border border-zinc-700/40">
+                  <div
+                    className="h-full rounded-full transition-all duration-300"
+                    style={{
+                      width: `${Math.min(100, (cueTotalLevel / Math.max(1, upgradeTotalCap)) * 100)}%`,
+                      background: 'linear-gradient(90deg, rgba(8,145,178,0.95), rgba(34,211,238,0.75))',
+                    }}
+                  />
+                </div>
+                <div className="mt-2 text-[9px] text-mutedForeground">
+                  Milestones {milestoneCount} · per-stat cap {upgradeStatCap}
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+                {POOL_GARAGE_STATS.map(({ key, label, hint, Icon, color }) => {
+                  const lvl = Number(cueLevels[key] || 0);
+                  const nextCost = poolUpgradeCashCost(lvl, cueTotalLevel);
+                  const cash = Number(profile?.money ?? 0);
+                  const canAfford = cash >= nextCost;
+                  const statMaxed = lvl >= upgradeStatCap;
+                  const totalMaxed = cueTotalLevel >= upgradeTotalCap;
+                  const disabled = busy || statMaxed || totalMaxed || !canAfford;
+                  let btnLabel = `Upgrade · $${nextCost.toLocaleString()}`;
+                  if (statMaxed) btnLabel = 'Stat maxed';
+                  else if (totalMaxed) btnLabel = 'Total cap';
+                  else if (!canAfford) btnLabel = `Need $${nextCost.toLocaleString()}`;
+                  return (
+                    <div
+                      key={key}
+                      className="p-2.5 rounded-lg border border-zinc-700/55 bg-zinc-900/45 flex flex-col gap-1.5 hover:border-zinc-600/70 transition-colors"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-white/10"
+                            style={{ backgroundColor: `${color}22`, color }}
+                          >
+                            <Icon size={17} strokeWidth={2.1} />
+                          </span>
+                          <div className="min-w-0">
+                            <div className="text-[11px] font-heading font-bold text-foreground">{label}</div>
+                            <div className="text-[9px] text-mutedForeground leading-snug">{hint}</div>
+                          </div>
+                        </div>
+                        <span
+                          className="text-[10px] font-heading tabular-nums shrink-0"
+                          style={{ color: statMaxed ? 'rgb(161 161 170)' : color }}
+                        >
+                          {lvl}/{upgradeStatCap}
+                        </span>
+                      </div>
+                      <div className="h-1.5 rounded-full bg-zinc-800/90 overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{
+                            width: `${Math.min(100, (lvl / Math.max(1, upgradeStatCap)) * 100)}%`,
+                            backgroundColor: color,
+                            opacity: 0.88,
+                          }}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => upgradeCue(key)}
+                        disabled={disabled}
+                        className={`w-full px-2 py-1.5 rounded-md text-[10px] font-heading uppercase tracking-wide border ${
+                          disabled
+                            ? 'border-zinc-700/60 text-zinc-500 cursor-not-allowed bg-zinc-950/50'
+                            : 'border-primary/45 text-primary bg-primary/12 hover:bg-primary/18'
+                        }`}
+                      >
+                        {btnLabel}
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="text-[9px] text-mutedForeground font-heading px-0.5">
+                Aim preview: tier {previewTier} · cue {previewSegmentBudget} seg · object {objectRailSegmentCap} seg · range {Math.round(previewDistance)}px
               </div>
             </div>
           )}
