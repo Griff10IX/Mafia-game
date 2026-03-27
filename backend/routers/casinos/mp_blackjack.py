@@ -24,6 +24,38 @@ MP_BJ_MAX_BUY_IN = 1_000_000_000
 MP_BJ_MAX_EXTRA_PRIZE = 1_000_000_000
 
 
+def _mp_bj_user_id_match_values(uid) -> list:
+    if uid is None:
+        return []
+    out = [uid, str(uid)]
+    if isinstance(uid, str) and uid.isdigit():
+        try:
+            out.append(int(uid))
+        except ValueError:
+            pass
+    return list(dict.fromkeys(out))
+
+
+async def user_in_active_mp_blackjack_game(user_id) -> bool:
+    """True if user is seated in an open or in-progress multiplayer blackjack game."""
+    g = await active_mp_blackjack_game_doc(user_id)
+    return g is not None
+
+
+async def active_mp_blackjack_game_doc(user_id):
+    """Return the game doc (id only) if user is in an open/playing MP blackjack game, else None."""
+    vals = _mp_bj_user_id_match_values(user_id)
+    if not vals:
+        return None
+    return await db.mp_blackjack_games.find_one(
+        {
+            "status": {"$in": ["open", "playing"]},
+            "players": {"$elemMatch": {"user_id": {"$in": vals}}},
+        },
+        {"_id": 0, "id": 1},
+    )
+
+
 def _mp_bj_make_deck():
     return [{"suit": s, "value": v} for s in MP_BJ_SUITS for v in MP_BJ_VALUES]
 
@@ -471,6 +503,14 @@ def register(router):
         return await db.mp_blackjack_games.find_one({"id": game_id})
 
     # ── Routes ───────────────────────────────────────────────────────────────
+
+    @router.get("/casino/mp-blackjack/active-participation")
+    async def mp_bj_active_participation(current_user: dict = Depends(get_current_user_verified)):
+        """Whether the user is seated in an unfinished MP blackjack game (for travel UI)."""
+        game = await active_mp_blackjack_game_doc(current_user.get("id"))
+        if not game:
+            return {"in_game": False, "game_id": None}
+        return {"in_game": True, "game_id": game.get("id")}
 
     @router.get("/casino/mp-blackjack/games")
     async def mp_bj_list_games(current_user: dict = Depends(get_current_user_verified)):

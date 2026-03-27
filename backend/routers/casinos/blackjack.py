@@ -159,6 +159,23 @@ async def _blackjack_settle_and_save_history(user_id: str, username: str, city: 
     await log_gambling(user_id, username or "?", "blackjack", {"city": city, "bet": bet, "result": result, "payout": payout, "player_total": player_total, "dealer_total": dealer_total})
 
 
+async def user_has_blocking_singleplayer_blackjack(user_id) -> bool:
+    """True if the user has an unfinished (non-stale) single-player blackjack hand."""
+    if not user_id:
+        return False
+    candidates = [user_id, str(user_id)]
+    if isinstance(user_id, str) and user_id.isdigit():
+        try:
+            candidates.append(int(user_id))
+        except ValueError:
+            pass
+    uniq = list(dict.fromkeys(candidates))
+    game = await db.blackjack_games.find_one({"user_id": {"$in": uniq}})
+    if not game:
+        return False
+    return not _blackjack_game_is_stale(game)
+
+
 def _blackjack_game_is_stale(game: dict) -> bool:
     """True if game was created more than BLACKJACK_GAME_TIMEOUT_SECONDS ago."""
     created = game.get("created_at")

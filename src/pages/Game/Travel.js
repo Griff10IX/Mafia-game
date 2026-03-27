@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Plane, Car, Clock, MapPin, Zap, ShoppingCart, Bot } from 'lucide-react';
+import { Plane, Car, Clock, MapPin, Zap, ShoppingCart, Bot, Spade } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -349,21 +349,33 @@ export default function Travel() {
   const [selectedDest, setSelectedDest] = useState('');
   const [autoRankBoozeOn, setAutoRankBoozeOn] = useState(false);
   const [user, setUser] = useState(null);
+  /** Block travel while single-player or MP blackjack is unfinished */
+  const [bjTravelBlock, setBjTravelBlock] = useState(null);
 
   const fetchTravelInfo = useCallback(async () => {
     try {
-      const [infoRes, autoRankRes, userRes] = await Promise.all([
+      const [infoRes, autoRankRes, userRes, bjRes, mpBjRes] = await Promise.all([
         api.get('/travel/info'),
         api.get('/auto-rank/me').catch(() => ({ data: {} })),
         api.get('/auth/me').catch(() => ({ data: null })),
+        api.get('/casino/blackjack/current-game').catch(() => ({ data: {} })),
+        api.get('/casino/mp-blackjack/active-participation').catch(() => ({ data: { in_game: false } })),
       ]);
       setTravelInfo(infoRes.data);
       setAutoRankBoozeOn(!!(autoRankRes.data?.auto_rank_enabled && autoRankRes.data?.auto_rank_booze));
       if (userRes.data) setUser(userRes.data);
+      if (mpBjRes.data?.in_game && mpBjRes.data?.game_id) {
+        setBjTravelBlock({ kind: 'mp', gameId: String(mpBjRes.data.game_id) });
+      } else if (bjRes.data?.hasGame) {
+        setBjTravelBlock({ kind: 'single' });
+      } else {
+        setBjTravelBlock(null);
+      }
     } catch (error) {
       toast.error('Failed to load travel info');
       setTravelInfo(null);
       setAutoRankBoozeOn(false);
+      setBjTravelBlock(null);
     } finally {
       setLoading(false);
     }
@@ -441,6 +453,38 @@ export default function Travel() {
         <div className="p-4 text-center">
           <p className="text-sm text-mutedForeground font-heading">Unable to load travel info.</p>
           <button type="button" onClick={() => fetchTravelInfo()} className="mt-2 px-3 py-1.5 rounded bg-primary/20 text-primary font-heading text-xs uppercase">Retry</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (bjTravelBlock) {
+    const to =
+      bjTravelBlock.kind === 'mp'
+        ? `/casino/mp-blackjack/game/${encodeURIComponent(bjTravelBlock.gameId)}`
+        : '/casino/blackjack';
+    const label = bjTravelBlock.kind === 'mp' ? 'Multiplayer blackjack' : 'Blackjack';
+    return (
+      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="travel-page-blackjack-block">
+        <style>{TRAVEL_STYLES}</style>
+        <div className={`${styles.panel} rounded-md border border-amber-500/35 bg-amber-500/5 p-4 trv-fade-in mobile-panel`}>
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-lg bg-primary/15 border border-primary/25 shrink-0">
+              <Spade className="text-primary" size={22} />
+            </div>
+            <div className="min-w-0 space-y-2">
+              <h2 className="text-sm font-heading font-bold text-primary uppercase tracking-wide">Finish your blackjack game</h2>
+              <p className="text-[11px] text-mutedForeground font-heading leading-relaxed">
+                You have an unfinished {label} hand. Complete or leave the table before you can travel.
+              </p>
+              <Link
+                to={to}
+                className="inline-flex items-center justify-center px-3 py-2 rounded-md bg-primary/20 text-primary font-heading text-xs font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-colors"
+              >
+                Go to {label}
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
     );
