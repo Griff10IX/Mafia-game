@@ -194,9 +194,11 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
     pocketed_numbers: List[int] = []
     replay_frames: List[dict] = [{"t_ms": 0, "balls": _replay_frame_balls(out)}]
     replay_events: List[dict] = []
+    sim_elapsed_ms = 0
 
     settled = False
     for step in range(MP_8BALL_MAX_SIM_STEPS):
+        sim_elapsed_ms = int((step + 1) * MP_8BALL_SIM_DT * 1000)
         active = _active_balls(out)
         for b in active:
             # Apply cue-ball spin as gradual side-force (swerve) and top/back speed bias.
@@ -401,19 +403,24 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
 
     cue_after = next((b for b in out if b.get("number") == 0), None)
     cue_pocketed = bool(cue_after and cue_after.get("pocketed"))
-    final_t_ms = int(len(replay_frames) * MP_8BALL_SIM_DT * 1000 * MP_8BALL_REPLAY_SAMPLE_EVERY)
-    if not replay_frames or replay_frames[-1].get("balls") != _replay_frame_balls(out):
-        replay_frames.append({"t_ms": max(final_t_ms, 1), "balls": _replay_frame_balls(out)})
+    final_t_ms = max(int(sim_elapsed_ms), 1)
+    if (
+        not replay_frames
+        or int(replay_frames[-1].get("t_ms") or 0) < final_t_ms
+        or replay_frames[-1].get("balls") != _replay_frame_balls(out)
+    ):
+        replay_frames.append({"t_ms": final_t_ms, "balls": _replay_frame_balls(out)})
     return {
         "balls": out,
         "first_contact": first_contact,
         "pocketed_numbers": pocketed_numbers,
         "cue_pocketed": cue_pocketed,
         "balls_settled": True,
+        "sim_duration_ms": final_t_ms,
         "shot_replay": {
             "schema_version": 2,
             "frame_dt_ms": int(MP_8BALL_SIM_DT * 1000 * MP_8BALL_REPLAY_SAMPLE_EVERY),
-            "duration_ms": int(replay_frames[-1].get("t_ms") or 0),
+            "duration_ms": final_t_ms,
             "frames": replay_frames,
             "events": replay_events[-120:],
         },
@@ -806,8 +813,9 @@ def register(router):
         else:
             next_turn_idx = idx if keep_turn else opp_idx
             replay_duration_ms = int((shot_replay or {}).get("duration_ms") or 0)
+            sim_duration_ms = int(sim.get("sim_duration_ms") or replay_duration_ms)
             # Keep authoritative lock until replay window completes.
-            hold_ms = max(450, replay_duration_ms + 120)
+            hold_ms = max(450, max(replay_duration_ms, sim_duration_ms) + 120)
             updates["phase"] = "resolving"
             updates["pending_turn_index"] = next_turn_idx
             updates["resolve_at"] = (datetime.now(timezone.utc) + timedelta(milliseconds=hold_ms)).isoformat()
