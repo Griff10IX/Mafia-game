@@ -63,6 +63,41 @@ const POOL_SHOT_CLOCK_SEC = 60;
 const REPLAY_IDLE_POS_EPS = 0.00035;
 const REPLAY_IDLE_VEL_EPS = 0.006;
 const PREVIEW_TABLE_MARGIN = 14;
+/** Must match `<canvas width>` / `<canvas height>` on the pool table. */
+const POOL_CANVAS_W = 900;
+const POOL_CANVAS_H = 450;
+
+/** Map physics table coords to the inner felt rectangle (same basis as wall bounces in aim preview). */
+function tableToCanvasX(tx, canvasW = POOL_CANVAS_W) {
+  const m = PREVIEW_TABLE_MARGIN;
+  return m + (Number(tx) / TABLE_W) * (canvasW - 2 * m);
+}
+function tableToCanvasY(ty, canvasH = POOL_CANVAS_H) {
+  const m = PREVIEW_TABLE_MARGIN;
+  return m + (Number(ty) / TABLE_H) * (canvasH - 2 * m);
+}
+/** Pixel radii on the felt — TABLE_W / TABLE_H differ, so the ball is an ellipse in canvas space (matches physics circle in table space). */
+function ballRadiiPx(canvasW = POOL_CANVAS_W, canvasH = POOL_CANVAS_H) {
+  const m = PREVIEW_TABLE_MARGIN;
+  const fw = canvasW - 2 * m;
+  const fh = canvasH - 2 * m;
+  const rx = Math.max(4, (BALL_R / TABLE_W) * fw);
+  const ry = Math.max(4, (BALL_R / TABLE_H) * fh);
+  return { rx, ry };
+}
+function ballRadiusMax(canvasW = POOL_CANVAS_W, canvasH = POOL_CANVAS_H) {
+  const { rx, ry } = ballRadiiPx(canvasW, canvasH);
+  return Math.max(rx, ry);
+}
+function canvasToTableX(sx, canvasW = POOL_CANVAS_W) {
+  const m = PREVIEW_TABLE_MARGIN;
+  return ((Number(sx) - m) / (canvasW - 2 * m)) * TABLE_W;
+}
+function canvasToTableY(sy, canvasH = POOL_CANVAS_H) {
+  const m = PREVIEW_TABLE_MARGIN;
+  return ((Number(sy) - m) / (canvasH - 2 * m)) * TABLE_H;
+}
+
 const TABLE_SKINS = {
   /** Mobile-pool reference: bright felt, dark blue cushions, mahogany rails, silver sights */
   miniclip_blue: {
@@ -420,10 +455,10 @@ export default function EightBallPool() {
   const aimPreview = useMemo(() => {
     const cue = displayBalls.find((b) => b.number === 0 && !b.pocketed);
     if (!cue || !canAim) return { segments: [], ghost: null, objectLineWidth: 1.55 };
-    const w = 900;
-    const h = 450;
-    const cuePx = (Number(cue.x || 0) / TABLE_W) * w;
-    const cuePy = (Number(cue.y || 0) / TABLE_H) * h;
+    const w = POOL_CANVAS_W;
+    const h = POOL_CANVAS_H;
+    const cuePx = tableToCanvasX(cue.x, w);
+    const cuePy = tableToCanvasY(cue.y, h);
     const a = (Number(angleDeg || 0) * Math.PI) / 180;
     let dx = Math.cos(a);
     let dy = Math.sin(a);
@@ -433,7 +468,8 @@ export default function EightBallPool() {
     const segs = [];
     let ghost = null;
     let contactDone = false;
-    const ballPxR = Math.max(4, (BALL_R / TABLE_W) * w);
+    const { rx: brx, ry: bry } = ballRadiiPx(w, h);
+    const ballPxR = Math.max(brx, bry);
     const hitRadius = ballPxR * 2.02;
     const minX = PREVIEW_TABLE_MARGIN;
     const maxX = w - PREVIEW_TABLE_MARGIN;
@@ -451,8 +487,8 @@ export default function EightBallPool() {
       if (!contactDone) {
         for (const b of displayBalls) {
           if (b.pocketed || b.number === 0) continue;
-          const bx = (Number(b.x || 0) / TABLE_W) * w;
-          const by = (Number(b.y || 0) / TABLE_H) * h;
+          const bx = tableToCanvasX(b.x, w);
+          const by = tableToCanvasY(b.y, h);
           const t = rayCircleHit(ox, oy, dx, dy, bx, by, hitRadius);
           if (t !== null && t < ballDist) {
             ballDist = t;
@@ -561,8 +597,8 @@ export default function EightBallPool() {
         for (const ev of events) {
           if (Number(ev?.t_ms || 0) !== tMs) continue;
           if (ev?.type === 'collision') {
-            const cx = (Number(ev?.x || 0) / TABLE_W) * 900;
-            const cy = (Number(ev?.y || 0) / TABLE_H) * 450;
+            const cx = tableToCanvasX(ev?.x, POOL_CANVAS_W);
+            const cy = tableToCanvasY(ev?.y, POOL_CANVAS_H);
             fxRef.current.impacts.push({ x: cx, y: cy, at: Date.now() });
             playSfx('collision', Number(ev?.strength || 0.1));
           } else if (ev?.type === 'rail') {
@@ -701,17 +737,18 @@ export default function EightBallPool() {
     const rect = canvas.getBoundingClientRect();
     const sx = ((event.clientX - rect.left) / rect.width) * canvas.width;
     const sy = ((event.clientY - rect.top) / rect.height) * canvas.height;
-    const tx = (sx / canvas.width) * TABLE_W;
-    const ty = (sy / canvas.height) * TABLE_H;
-    const minX = BALL_R;
-    const maxX = TABLE_HEAD_STRING_X - BALL_R * 2;
-    const minY = BALL_R;
-    const maxY = TABLE_H - BALL_R;
+    const tx = canvasToTableX(sx, canvas.width);
+    const ty = canvasToTableY(sy, canvas.height);
+    const kb = activeGame?.table_state?.break_kitchen;
+    const minX = kb ? Number(kb.min_x) : BALL_R;
+    const maxX = kb ? Number(kb.max_x) : TABLE_HEAD_STRING_X - BALL_R * 2;
+    const minY = kb ? Number(kb.min_y) : BALL_R;
+    const maxY = kb ? Number(kb.max_y) : TABLE_H - BALL_R;
     return {
       x: Math.max(minX, Math.min(maxX, tx)),
       y: Math.max(minY, Math.min(maxY, ty)),
     };
-  }, []);
+  }, [activeGame?.table_state?.break_kitchen]);
 
   const placeBreakCue = useCallback(async (x, y) => {
     if (!activeGame?.id) return;
@@ -834,11 +871,8 @@ export default function EightBallPool() {
     ctx.setLineDash([]);
     ctx.restore();
 
-    ctx.strokeStyle = 'rgba(10,10,10,0.45)';
-    ctx.lineWidth = 5;
-    ctx.strokeRect(playL + 2, playT + 2, playR - playL - 4, playB - playT - 4);
-    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
-    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255,255,255,0.14)';
+    ctx.lineWidth = 1.25;
     ctx.strokeRect(playL + 2, playT + 2, playR - playL - 4, playB - playT - 4);
     if (railTextureRef.current) {
       ctx.save();
@@ -882,7 +916,13 @@ export default function EightBallPool() {
       drawStud(w - 10, sy);
     }
 
-    const pr = POCKET_R_TABLE * (w / TABLE_W);
+    const feltW = playR - playL;
+    const pr = POCKET_R_TABLE * (feltW / TABLE_W);
+    /** Base mouth — side pockets use rot=0 so the opening reads wide; corners rotate ~45° and looked too tight vs physics (same MP_8BALL_POCKET_R). */
+    const mouthRx = pr * 1.22;
+    const mouthRy = pr * 1.08;
+    const tcx = tableToCanvasX(TABLE_W * 0.5, w);
+    const tcy = tableToCanvasY(TABLE_H * 0.5, h);
     const pocketCentersTable = [
       [0, 0], [TABLE_W / 2, 0], [TABLE_W, 0],
       [0, TABLE_H], [TABLE_W / 2, TABLE_H], [TABLE_W, TABLE_H],
@@ -890,20 +930,20 @@ export default function EightBallPool() {
 
     for (let pi = 0; pi < pocketCentersTable.length; pi += 1) {
       const [tx, ty] = pocketCentersTable[pi];
-      const px = (tx / TABLE_W) * w;
-      const py = (ty / TABLE_H) * h;
-      // Center pockets on the top/bottom rails read smaller than corners when drawn as the same circle.
-      // Widen slightly along the rail (horizontal for these two) so they match corner pocket presence.
+      const px = tableToCanvasX(tx, w);
+      const py = tableToCanvasY(ty, h);
       const isMidShortRail = pi === 1 || pi === 4;
-      const rx = isMidShortRail ? pr * 1.28 : pr;
-      const ry = isMidShortRail ? pr * 1.1 : pr;
+      const rot = isMidShortRail ? 0 : Math.atan2(tcy - py, tcx - px);
+      const cornerMul = isMidShortRail ? 1 : 1.36;
+      const rx = mouthRx * cornerMul;
+      const ry = mouthRy * cornerMul;
       const rGrad = Math.max(rx, ry);
       const pocketGrad = ctx.createRadialGradient(px, py, 2, px, py, rGrad + 8);
       pocketGrad.addColorStop(0, currentSkin.pocket[0]);
       pocketGrad.addColorStop(0.55, currentSkin.pocket[1]);
       pocketGrad.addColorStop(1, '#000000');
       ctx.beginPath();
-      ctx.ellipse(px, py, rx + 2.2, ry + 2.2, 0, 0, Math.PI * 2);
+      ctx.ellipse(px, py, rx + 2.2, ry + 2.2, rot, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(8,8,12,0.96)';
       ctx.fill();
       const rimGrad = ctx.createLinearGradient(px - rx, py - ry, px + rx, py + ry);
@@ -911,19 +951,52 @@ export default function EightBallPool() {
       rimGrad.addColorStop(0, rimA);
       rimGrad.addColorStop(1, 'rgba(0,0,0,0.35)');
       ctx.beginPath();
-      ctx.ellipse(px, py, rx + 0.9, ry + 0.9, 0, 0, Math.PI * 2);
+      ctx.ellipse(px, py, rx + 0.9, ry + 0.9, rot, 0, Math.PI * 2);
       ctx.strokeStyle = rimGrad;
       ctx.lineWidth = 2.4;
       ctx.stroke();
-      const innerHoleRx = Math.max(rx * 0.45, rx - 3.5);
-      const innerHoleRy = Math.max(ry * 0.45, ry - 3.5);
+      const innerFrac = isMidShortRail ? 0.45 : 0.56;
+      const innerHoleRx = Math.max(rx * innerFrac, rx - 3.5);
+      const innerHoleRy = Math.max(ry * innerFrac, ry - 3.5);
       ctx.beginPath();
-      ctx.ellipse(px, py, innerHoleRx, innerHoleRy, 0, 0, Math.PI * 2);
+      ctx.ellipse(px, py, innerHoleRx, innerHoleRy, rot, 0, Math.PI * 2);
       ctx.fillStyle = pocketGrad;
       ctx.fill();
+      // Cushion throat (rubber ring into the pocket — reads as jaws before the drop).
+      const cushionOuter = 'rgba(28,72,48,0.95)';
+      const cushionInner = 'rgba(12,38,26,0.92)';
       ctx.beginPath();
-      ctx.ellipse(px, py, Math.max(rx * 0.42, innerHoleRx - 0.5), Math.max(ry * 0.42, innerHoleRy - 0.5), 0, 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+      ctx.ellipse(px, py, innerHoleRx + 1.4, innerHoleRy + 1.4, rot, 0, Math.PI * 2);
+      ctx.strokeStyle = cushionOuter;
+      ctx.lineWidth = 3.1;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.ellipse(px, py, innerHoleRx + 0.35, innerHoleRy + 0.35, rot, 0, Math.PI * 2);
+      ctx.strokeStyle = cushionInner;
+      ctx.lineWidth = 1.35;
+      ctx.stroke();
+      // Jaw highlights — toward table center (same basis for corners & middle).
+      const dcx = tcx - px;
+      const dcy = tcy - py;
+      const dlen = Math.hypot(dcx, dcy) || 1;
+      const ix = dcx / dlen;
+      const iy = dcy / dlen;
+      const perpX = -iy;
+      const perpY = ix;
+      const jm = Math.max(innerHoleRx, innerHoleRy) * 0.85;
+      ctx.beginPath();
+      ctx.arc(px + ix * jm * 0.62, py + iy * jm * 0.62, 2.4, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(190,228,200,0.26)';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(px + ix * jm * 0.48 + perpX * jm * 0.38, py + iy * jm * 0.48 + perpY * jm * 0.38, 1.7, 0, Math.PI * 2);
+      ctx.arc(px + ix * jm * 0.48 - perpX * jm * 0.38, py + iy * jm * 0.48 - perpY * jm * 0.38, 1.7, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(210,240,220,0.2)';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.ellipse(px, py, Math.max(rx * 0.42, innerHoleRx - 0.5), Math.max(ry * 0.42, innerHoleRy - 0.5), rot, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,255,255,0.12)';
       ctx.lineWidth = 1;
       ctx.stroke();
     }
@@ -934,10 +1007,10 @@ export default function EightBallPool() {
       const maxX = kb ? Number(kb.max_x) : TABLE_HEAD_STRING_X - BALL_R * 2;
       const minY = kb ? Number(kb.min_y) : BALL_R;
       const maxY = kb ? Number(kb.max_y) : TABLE_H - BALL_R;
-      const x1 = (minX / TABLE_W) * w;
-      const x2 = (maxX / TABLE_W) * w;
-      const y1 = (minY / TABLE_H) * h;
-      const y2 = (maxY / TABLE_H) * h;
+      const x1 = tableToCanvasX(minX, w);
+      const x2 = tableToCanvasX(maxX, w);
+      const y1 = tableToCanvasY(minY, h);
+      const y2 = tableToCanvasY(maxY, h);
       ctx.save();
       ctx.fillStyle = 'rgba(251,191,36,0.07)';
       ctx.fillRect(x1, y1, x2 - x1, y2 - y1);
@@ -952,12 +1025,18 @@ export default function EightBallPool() {
       ctx.restore();
     }
 
-    // Balls
+    // Balls — clip to felt so spheres never paint on cushions/rail art; radii use X/Y table scales.
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(playL, playT, playR - playL, playB - playT);
+    ctx.clip();
+
     for (const b of ballsForRender) {
       if (b.pocketed) continue;
-      const x = (Number(b.x || 0) / TABLE_W) * w;
-      const y = (Number(b.y || 0) / TABLE_H) * h;
-      const r = Math.max(4, (BALL_R / TABLE_W) * w);
+      const x = tableToCanvasX(b.x, w);
+      const y = tableToCanvasY(b.y, h);
+      const { rx, ry } = ballRadiiPx(w, h);
+      const rm = Math.max(rx, ry);
       let color = '#ffffff';
       if (b.number === 8) color = '#111111';
       else if (Object.prototype.hasOwnProperty.call(BALL_COLOR_MAP, b.number)) color = BALL_COLOR_MAP[b.number];
@@ -967,97 +1046,142 @@ export default function EightBallPool() {
       const vx = Number(b.vx || 0);
       const vy = Number(b.vy || 0);
       const speed = Math.hypot(vx, vy);
-      if (speed > 0.05) {
-        const tx = x - (vx * 900 * 0.08);
-        const ty = y - (vy * 900 * 0.08);
-        const tw = Math.max(1.6, r * 0.85);
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(tx, ty);
-        ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-        ctx.lineWidth = tw + 2.2;
-        ctx.stroke();
-        const trail = ctx.createLinearGradient(x, y, tx, ty);
-        trail.addColorStop(0, 'rgba(255,255,255,0.42)');
-        trail.addColorStop(0.55, 'rgba(255,255,255,0.12)');
-        trail.addColorStop(1, 'rgba(255,255,255,0)');
-        ctx.beginPath();
-        ctx.moveTo(x, y);
-        ctx.lineTo(tx, ty);
-        ctx.strokeStyle = trail;
-        ctx.lineWidth = tw;
-        ctx.stroke();
-      }
-
-      // Ball shadow (soft drop — Miniclip-style lift).
+      const travelDir = speed > 0.008 ? Math.atan2(vy, vx) : 0;
+      const rollSpin = renderTick * (0.052 + speed * 2.6) + (Number(b.number) || 0) * 0.29;
+      // Ground shadow — flat under the ball (reads as rolling on felt, not hovering).
       ctx.save();
-      ctx.beginPath();
-      ctx.ellipse(x + r * 0.28, y + r * 0.55, r * 1.15, r * 0.55, 0, 0, Math.PI * 2);
-      const sh = ctx.createRadialGradient(x + r * 0.2, y + r * 0.5, r * 0.05, x + r * 0.35, y + r * 0.55, r * 1.15);
-      sh.addColorStop(0, 'rgba(0,0,0,0.42)');
-      sh.addColorStop(0.5, 'rgba(0,0,0,0.18)');
-      sh.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = sh;
-      ctx.fill();
+      if (speed > 0.02) {
+        ctx.translate(x, y + ry * 0.34);
+        ctx.rotate(travelDir);
+        ctx.scale(1, 0.38 + Math.min(0.12, speed * 0.06));
+        const gsh = ctx.createRadialGradient(0, 0, 0, 0, 0, rm * 1.12);
+        gsh.addColorStop(0, 'rgba(0,0,0,0.5)');
+        gsh.addColorStop(0.55, 'rgba(0,0,0,0.2)');
+        gsh.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.beginPath();
+        ctx.ellipse(0, 0, rx * 1.08, ry * 0.52, 0, 0, Math.PI * 2);
+        ctx.fillStyle = gsh;
+        ctx.fill();
+      } else {
+        ctx.beginPath();
+        ctx.ellipse(x, y + ry * 0.34, rx * 1.02, ry * 0.36, 0, 0, Math.PI * 2);
+        const sh = ctx.createRadialGradient(x, y + ry * 0.28, rm * 0.02, x, y + ry * 0.34, rm * 1.15);
+        sh.addColorStop(0, 'rgba(0,0,0,0.44)');
+        sh.addColorStop(0.5, 'rgba(0,0,0,0.16)');
+        sh.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle = sh;
+        ctx.fill();
+      }
       ctx.restore();
 
       // Base sphere.
-      const ballGrad = ctx.createRadialGradient(x - r * 0.38, y - r * 0.42, r * 0.18, x, y, r * 1.08);
+      const ballGrad = ctx.createRadialGradient(x - rx * 0.38, y - ry * 0.42, rm * 0.18, x, y, rm * 1.08);
       ballGrad.addColorStop(0, '#ffffff');
       ballGrad.addColorStop(0.2, b.number === 0 ? '#f8fafc' : color);
       ballGrad.addColorStop(0.8, b.number === 8 ? '#050505' : color);
       ballGrad.addColorStop(1, b.number === 8 ? '#000000' : '#111827');
       ctx.beginPath();
-      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
       ctx.fillStyle = ballGrad;
       ctx.fill();
 
-      // Stripe layer.
+      // Cloth contact shading on lower hemisphere (ball sitting on table).
+      ctx.save();
+      ctx.beginPath();
+      ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
+      ctx.clip();
+      const contactShade = ctx.createLinearGradient(x, y - ry * 0.4, x, y + ry * 1.05);
+      contactShade.addColorStop(0, 'rgba(0,0,0,0)');
+      contactShade.addColorStop(0.72, 'rgba(0,0,0,0)');
+      contactShade.addColorStop(1, 'rgba(0,0,0,0.2)');
+      ctx.fillStyle = contactShade;
+      ctx.fillRect(x - rx, y - ry, rx * 2, ry * 2);
+      ctx.restore();
+
+      // Stripe layer — rotate with roll so the band visibly spins.
       if (b.kind === 'stripe') {
         ctx.save();
         ctx.beginPath();
-        ctx.arc(x, y, r, 0, Math.PI * 2);
+        ctx.ellipse(x, y, rx, ry, 0, 0, Math.PI * 2);
         ctx.clip();
+        const bandRot = speed > 0.008 ? rollSpin - travelDir : 0;
+        ctx.translate(x, y);
+        ctx.rotate(bandRot);
+        ctx.translate(-x, -y);
         ctx.fillStyle = '#f8fafc';
-        ctx.fillRect(x - r, y - r, r * 2, r * 2);
+        ctx.fillRect(x - rx, y - ry, rx * 2, ry * 2);
         ctx.fillStyle = color;
-        ctx.fillRect(x - r, y - r * 0.4, r * 2, r * 0.8);
+        ctx.fillRect(x - rx, y - ry * 0.4, rx * 2, ry * 0.8);
         ctx.restore();
       }
 
-      // Number circle.
+      // Number circle — spins with the ball (full band match on stripes, slightly softer on solids).
       if (b.number !== 0) {
+        ctx.save();
+        if (speed > 0.008) {
+          const numRot = b.kind === 'stripe' ? (rollSpin - travelDir) : (rollSpin - travelDir) * 0.62;
+          ctx.translate(x, y);
+          ctx.rotate(numRot);
+          ctx.translate(-x, -y);
+        }
         ctx.beginPath();
-        ctx.arc(x, y, r * 0.43, 0, Math.PI * 2);
+        ctx.ellipse(x, y, rx * 0.43, ry * 0.43, 0, 0, Math.PI * 2);
         ctx.fillStyle = '#f8fafc';
         ctx.fill();
         ctx.fillStyle = '#0f172a';
-        ctx.font = `700 ${Math.max(8, r * 0.78)}px sans-serif`;
+        ctx.font = `700 ${Math.max(8, rm * 0.78)}px sans-serif`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(String(b.number), x, y);
+        ctx.beginPath();
+        ctx.ellipse(x, y, rx * 0.43, ry * 0.43, 0, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(17,24,39,0.85)';
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+        ctx.restore();
       }
-      ctx.strokeStyle = 'rgba(17,24,39,0.85)';
-      ctx.lineWidth = 1.2;
-      ctx.stroke();
 
-      // Specular highlight.
+      // Specular: fixed when idle; orbits with speed so light rolls around the sphere.
       const moving = speed > 0.01;
-      const rollPhase = moving ? (renderTick * 0.08) + ((vx * 400) + (vy * 400)) : 0;
-      const hx = x - r * 0.22 + (moving ? Math.cos(rollPhase) * r * 0.08 : 0);
-      const hy = y - r * 0.24 + (moving ? Math.sin(rollPhase) * r * 0.06 : 0);
-      ctx.beginPath();
-      ctx.arc(hx, hy, r * 0.22, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(255,255,255,0.38)';
-      ctx.fill();
+      let hx;
+      let hy;
+      let hiR = rm * 0.2;
+      if (moving) {
+        const orbit = travelDir - Math.PI / 2 + rollSpin * 0.72;
+        hx = x + Math.cos(orbit) * rx * 0.34;
+        hy = y + Math.sin(orbit) * ry * 0.34;
+        hiR = rm * (0.17 + Math.min(0.06, speed * 0.04));
+        ctx.beginPath();
+        ctx.arc(hx, hy, hiR, 0, Math.PI * 2);
+        const gl = ctx.createRadialGradient(hx - hiR * 0.3, hy - hiR * 0.3, 0, hx, hy, hiR * 1.2);
+        gl.addColorStop(0, 'rgba(255,255,255,0.72)');
+        gl.addColorStop(0.55, 'rgba(255,255,255,0.22)');
+        gl.addColorStop(1, 'rgba(255,255,255,0)');
+        ctx.fillStyle = gl;
+        ctx.fill();
+        const orbit2 = orbit + Math.PI * 0.85;
+        const hx2 = x + Math.cos(orbit2) * rx * 0.26;
+        const hy2 = y + Math.sin(orbit2) * ry * 0.26;
+        ctx.beginPath();
+        ctx.arc(hx2, hy2, rm * 0.09, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.14)';
+        ctx.fill();
+      } else {
+        hx = x - rx * 0.22;
+        hy = y - ry * 0.24;
+        ctx.beginPath();
+        ctx.arc(hx, hy, rm * 0.22, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.38)';
+        ctx.fill();
+      }
     }
+    ctx.restore();
 
     const cuePlace = ballsForRender.find((b) => b.number === 0 && !b.pocketed);
     if (cuePlace && inBreakPlacement && canRenderCue) {
-      const pcx = (Number(cuePlace.x || 0) / TABLE_W) * w;
-      const pcy = (Number(cuePlace.y || 0) / TABLE_H) * h;
-      const placeRingR = Math.max(10, (BALL_R / TABLE_W) * w * 1.7);
+      const pcx = tableToCanvasX(cuePlace.x, w);
+      const pcy = tableToCanvasY(cuePlace.y, h);
+      const placeRingR = Math.max(10, ballRadiusMax(w, h) * 1.7);
       ctx.beginPath();
       ctx.arc(pcx, pcy, placeRingR, 0, Math.PI * 2);
       ctx.strokeStyle = 'rgba(251,191,36,0.92)';
@@ -1068,9 +1192,9 @@ export default function EightBallPool() {
     // Aiming guide + cue stick.
     const cue = ballsForRender.find((b) => b.number === 0 && !b.pocketed);
     if (cue && canAim) {
-      const cx = (Number(cue.x || 0) / TABLE_W) * w;
-      const cy = (Number(cue.y || 0) / TABLE_H) * h;
-      const cueVisualR = Math.max(10, (BALL_R / TABLE_W) * w * 1.7);
+      const cx = tableToCanvasX(cue.x, w);
+      const cy = tableToCanvasY(cue.y, h);
+      const cueVisualR = Math.max(10, ballRadiusMax(w, h) * 1.7);
       const a = (Number(angleDeg || 0) * Math.PI) / 180;
       const aimLen = 58 + Number(power || 0) * 200;
       const cueLen = 140;
@@ -1334,6 +1458,27 @@ export default function EightBallPool() {
     }
   };
 
+  const finishMatch = async () => {
+    if (!activeGame?.id || activeGame.status !== 'in_progress') return;
+    if (typeof window !== 'undefined' && !window.confirm('Finish match? This counts as a loss (DNF).')) return;
+    setBusy(true);
+    try {
+      await api.post(`/casino/mp-8ball/games/${encodeURIComponent(activeGame.id)}/leave`);
+      if (tab === 'ai') {
+        setAiGame(null);
+        await fetchAiGame();
+      } else {
+        setPvpGame(null);
+        await fetchPvpLobbies();
+      }
+      toast.success('Match ended — you forfeited (DNF)');
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || 'Could not finish match');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const readyLobby = async () => {
     if (!pvpGame?.id) return;
     setBusy(true);
@@ -1372,8 +1517,8 @@ export default function EightBallPool() {
       const cue = ballsForRender.find((b) => b.number === 0 && !b.pocketed);
       const canvas = canvasRef.current;
       if (cue && canvas) {
-        const cx = (Number(cue.x || 0) / TABLE_W) * canvas.width;
-        const cy = (Number(cue.y || 0) / TABLE_H) * canvas.height;
+        const cx = tableToCanvasX(cue.x, canvas.width);
+        const cy = tableToCanvasY(cue.y, canvas.height);
         fxRef.current.impacts.push({ x: cx, y: cy, at: Date.now() });
         playSfx('cue', Number(power || 0.6));
       }
@@ -1404,8 +1549,8 @@ export default function EightBallPool() {
     const rect = canvas.getBoundingClientRect();
     const sx = ((event.clientX - rect.left) / rect.width) * canvas.width;
     const sy = ((event.clientY - rect.top) / rect.height) * canvas.height;
-    const cx = (Number(cue.x || 0) / TABLE_W) * canvas.width;
-    const cy = (Number(cue.y || 0) / TABLE_H) * canvas.height;
+    const cx = tableToCanvasX(cue.x, canvas.width);
+    const cy = tableToCanvasY(cue.y, canvas.height);
     const dx = sx - cx;
     const dy = sy - cy;
     const ang = Math.atan2(dy, dx);
@@ -1558,14 +1703,27 @@ export default function EightBallPool() {
                       </div>
                     );
                   })}
-                  <div className="px-2 py-1 rounded border border-zinc-700/60 bg-zinc-800/35 text-foreground">
-                    Turn: <span className="font-bold text-primary">{turnLabel(activeGame)}</span>
-                    {typeof activeGame.turn_seconds_left === 'number' && activeGame.phase === 'playing' && (
-                      <span className="text-amber-300/90"> · {activeGame.turn_seconds_left}s</span>
-                    )}
-                    {' · '}{activeGame.status}/{activeGame.phase} · Shots {activeGame.table_state?.shot_count || 0} · {(replayActive || !ballsSettled) ? 'ROLLING' : inBreakPlacement ? 'PLACE CUE (KITCHEN)' : 'AIMING'}
-                    {activeGame.status === 'completed' && activeGame.result_reason === 'dnf' && (
-                      <span className="text-red-300/90"> · DNF</span>
+                  <div className="flex flex-wrap items-center gap-2 justify-between w-full min-w-[min(100%,220px)]">
+                    <div className="px-2 py-1 rounded border border-zinc-700/60 bg-zinc-800/35 text-foreground flex-1 min-w-0">
+                      Turn: <span className="font-bold text-primary">{turnLabel(activeGame)}</span>
+                      {typeof activeGame.turn_seconds_left === 'number' && activeGame.phase === 'playing' && (
+                        <span className="text-amber-300/90"> · {activeGame.turn_seconds_left}s</span>
+                      )}
+                      {' · '}{activeGame.status}/{activeGame.phase} · Shots {activeGame.table_state?.shot_count || 0} · {(replayActive || !ballsSettled) ? 'ROLLING' : inBreakPlacement ? 'PLACE CUE (KITCHEN)' : 'AIMING'}
+                      {activeGame.status === 'completed' && activeGame.result_reason === 'dnf' && (
+                        <span className="text-red-300/90"> · DNF</span>
+                      )}
+                    </div>
+                    {activeGame.status === 'in_progress' && (
+                      <button
+                        type="button"
+                        onClick={finishMatch}
+                        disabled={busy || cueBusy || replayActive}
+                        className="shrink-0 px-2.5 py-1 rounded border border-red-500/45 bg-red-500/15 text-red-200 text-[10px] font-heading uppercase tracking-wide hover:bg-red-500/25 disabled:opacity-40 disabled:cursor-not-allowed"
+                        title="Forfeit — counts as a loss (DNF)"
+                      >
+                        Finish match (lose)
+                      </button>
                     )}
                   </div>
                 </div>

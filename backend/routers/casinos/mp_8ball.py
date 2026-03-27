@@ -675,6 +675,13 @@ def _pool_upgrade_set_on_insert() -> dict:
     }
 
 
+def _pool_upgrade_set_on_insert_for_inc(stat: str) -> dict:
+    """Same as insert defaults but omit `stat` — MongoDB forbids $inc and $setOnInsert on the same path."""
+    d = _pool_upgrade_set_on_insert()
+    d.pop(stat, None)
+    return d
+
+
 def _normalize_upgrade_doc(row: Optional[dict], uid: str, cue_instance_id: str) -> dict:
     out = _upgrade_defaults(uid, cue_instance_id)
     src = row or {}
@@ -1447,7 +1454,7 @@ def register(router):
         await db.users.update_one({"id": uid, "money": {"$gte": cost}}, {"$inc": {"money": -cost}})
         await db.pool_cue_upgrades.update_one(
             {"user_id": uid, "cue_instance_id": body.cue_instance_id},
-            {"$inc": {stat: 1}, "$setOnInsert": _pool_upgrade_set_on_insert()},
+            {"$inc": {stat: 1}, "$setOnInsert": _pool_upgrade_set_on_insert_for_inc(stat)},
             upsert=True,
         )
         new_row = await db.pool_cue_upgrades.find_one({"user_id": uid, "cue_instance_id": body.cue_instance_id}, {"_id": 0})
