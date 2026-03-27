@@ -22,6 +22,34 @@ const POOL_STYLES = `
 const TABLE_W = 2.2;
 const TABLE_H = 1.1;
 const BALL_R = 0.028;
+const TABLE_SKINS = {
+  classic_green: {
+    name: 'Classic Green',
+    felt: ['#22c55e', '#16a34a', '#166534'],
+    rail: ['#8b5e34', '#5c3b1e', '#2f1d0f'],
+    pocket: ['#1f2937', '#000000'],
+    accent: 'rgba(255,255,255,0.4)',
+  },
+  ice_blue: {
+    name: 'Ice Blue',
+    felt: ['#67e8f9', '#0ea5e9', '#075985'],
+    rail: ['#9ca3af', '#4b5563', '#1f2937'],
+    pocket: ['#0f172a', '#000000'],
+    accent: 'rgba(255,255,255,0.5)',
+  },
+  royal_teal_gold: {
+    name: 'Royal Teal',
+    felt: ['#22d3ee', '#0891b2', '#155e75'],
+    rail: ['#f5d37a', '#9a6e2e', '#2f1d0f'],
+    pocket: ['#111827', '#000000'],
+    accent: 'rgba(250,204,21,0.6)',
+  },
+};
+const BALL_COLOR_MAP = {
+  1: '#f59e0b', 2: '#2563eb', 3: '#dc2626', 4: '#7c3aed', 5: '#ea580c', 6: '#16a34a', 7: '#a16207',
+  8: '#111111',
+  9: '#f59e0b', 10: '#2563eb', 11: '#dc2626', 12: '#7c3aed', 13: '#ea580c', 14: '#16a34a', 15: '#a16207',
+};
 
 function turnLabel(game) {
   const players = game?.players || [];
@@ -54,10 +82,14 @@ export default function EightBallPool() {
   const [busy, setBusy] = useState(false);
   const [displayBalls, setDisplayBalls] = useState([]);
   const [isAiming, setIsAiming] = useState(false);
+  const [tableSkin, setTableSkin] = useState('ice_blue');
+  const [renderTick, setRenderTick] = useState(0);
   const canvasRef = useRef(null);
   const animFrameRef = useRef(null);
   const animatingRef = useRef(false);
   const lastTargetBallsRef = useRef([]);
+  const pocketedSetRef = useRef(new Set());
+  const fxRef = useRef({ impacts: [], pockets: [] });
 
   const activeGame = tab === 'ai' ? aiGame : pvpGame;
   const balls = activeGame?.table_state?.balls || [];
@@ -82,7 +114,7 @@ export default function EightBallPool() {
     }
     const fromById = new Map(displayBalls.map((b) => [b.id, b]));
     const toById = new Map(target.map((b) => [b.id, b]));
-    const durationMs = 460;
+    const durationMs = 380;
     const startAt = performance.now();
     animatingRef.current = true;
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
@@ -113,6 +145,21 @@ export default function EightBallPool() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [balls]);
 
+  useEffect(() => {
+    const id = setInterval(() => setRenderTick((n) => (n + 1) % 100000), 33);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    const nowPocketed = new Set((balls || []).filter((b) => b.pocketed).map((b) => b.number));
+    for (const n of nowPocketed) {
+      if (!pocketedSetRef.current.has(n)) {
+        fxRef.current.pockets.push({ number: n, at: Date.now() });
+      }
+    }
+    pocketedSetRef.current = nowPocketed;
+  }, [balls]);
+
 
   const selectedCue = useMemo(() => {
     const selectedId = profile?.selected_cue_id;
@@ -123,6 +170,14 @@ export default function EightBallPool() {
     if (!selectedCue) return null;
     return cueUpgrades.find((u) => u.cue_instance_id === selectedCue.id) || null;
   }, [cueUpgrades, selectedCue]);
+  const currentSkin = TABLE_SKINS[tableSkin] || TABLE_SKINS.ice_blue;
+
+  useEffect(() => {
+    const skinByCue = (selectedCue?.cue_id || '').toLowerCase();
+    if (skinByCue.includes('legacy') || (profile?.rating || 0) >= 1200) setTableSkin('royal_teal_gold');
+    else if (skinByCue.includes('street')) setTableSkin('classic_green');
+    else setTableSkin('ice_blue');
+  }, [selectedCue?.cue_id, profile?.rating]);
 
   const fetchCues = useCallback(async () => {
     const [catalogRes, myRes, profileRes] = await Promise.all([
@@ -198,11 +253,11 @@ export default function EightBallPool() {
     const h = canvas.height;
     ctx.clearRect(0, 0, w, h);
 
-    // Felt with depth (Mini-clip inspired blue table look).
+    // Felt with depth (skin driven).
     const felt = ctx.createRadialGradient(w * 0.5, h * 0.45, 20, w * 0.5, h * 0.5, w * 0.8);
-    felt.addColorStop(0, '#0ea5e9');
-    felt.addColorStop(0.45, '#0284c7');
-    felt.addColorStop(1, '#075985');
+    felt.addColorStop(0, currentSkin.felt[0]);
+    felt.addColorStop(0.45, currentSkin.felt[1]);
+    felt.addColorStop(1, currentSkin.felt[2]);
     ctx.fillStyle = felt;
     ctx.fillRect(0, 0, w, h);
 
@@ -220,7 +275,11 @@ export default function EightBallPool() {
     ctx.restore();
 
     // Cushion/rail and inner bevel.
-    ctx.strokeStyle = '#5b3a20';
+    const railGrad = ctx.createLinearGradient(0, 0, w, h);
+    railGrad.addColorStop(0, currentSkin.rail[0]);
+    railGrad.addColorStop(0.5, currentSkin.rail[1]);
+    railGrad.addColorStop(1, currentSkin.rail[2]);
+    ctx.strokeStyle = railGrad;
     ctx.lineWidth = 14;
     ctx.strokeRect(0, 0, w, h);
     ctx.strokeStyle = 'rgba(255,255,255,0.12)';
@@ -233,7 +292,7 @@ export default function EightBallPool() {
       [0, h], [w / 2, h], [w, h],
     ];
     // Diamonds on rails.
-    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.fillStyle = currentSkin.accent;
     const diamonds = [w * 0.25, w * 0.5, w * 0.75];
     for (const dx of diamonds) {
       ctx.fillRect(dx - 2, 4, 4, 8);
@@ -248,8 +307,8 @@ export default function EightBallPool() {
     ctx.fillStyle = '#070707';
     for (const [px, py] of pockets) {
       const pocketGrad = ctx.createRadialGradient(px, py, 2, px, py, 18);
-      pocketGrad.addColorStop(0, '#111827');
-      pocketGrad.addColorStop(1, '#000000');
+      pocketGrad.addColorStop(0, currentSkin.pocket[0]);
+      pocketGrad.addColorStop(1, currentSkin.pocket[1]);
       ctx.beginPath();
       ctx.arc(px, py, 14, 0, Math.PI * 2);
       ctx.fillStyle = pocketGrad;
@@ -264,21 +323,26 @@ export default function EightBallPool() {
       const r = Math.max(4, (BALL_R / TABLE_W) * w);
       let color = '#ffffff';
       if (b.number === 8) color = '#111111';
-      else if (b.number === 1) color = '#f59e0b';
-      else if (b.number === 2) color = '#2563eb';
-      else if (b.number === 3) color = '#dc2626';
-      else if (b.number === 4) color = '#7c3aed';
-      else if (b.number === 5) color = '#ea580c';
-      else if (b.number === 6) color = '#16a34a';
-      else if (b.number === 7) color = '#a16207';
-      else if (b.number === 9) color = '#f59e0b';
-      else if (b.number === 10) color = '#2563eb';
-      else if (b.number === 11) color = '#dc2626';
-      else if (b.number === 12) color = '#7c3aed';
-      else if (b.number === 13) color = '#ea580c';
-      else if (b.number === 14) color = '#16a34a';
-      else if (b.number === 15) color = '#a16207';
+      else if (Object.prototype.hasOwnProperty.call(BALL_COLOR_MAP, b.number)) color = BALL_COLOR_MAP[b.number];
       else if (b.number === 0) color = '#ffffff';
+
+      // High-speed trail.
+      const vx = Number(b.vx || 0);
+      const vy = Number(b.vy || 0);
+      const speed = Math.hypot(vx, vy);
+      if (speed > 0.04) {
+        const tx = x - (vx * 900 * 0.08);
+        const ty = y - (vy * 900 * 0.08);
+        const trail = ctx.createLinearGradient(x, y, tx, ty);
+        trail.addColorStop(0, 'rgba(255,255,255,0.22)');
+        trail.addColorStop(1, 'rgba(255,255,255,0.0)');
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(tx, ty);
+        ctx.strokeStyle = trail;
+        ctx.lineWidth = Math.max(1, r * 0.7);
+        ctx.stroke();
+      }
 
       // Ball shadow.
       ctx.beginPath();
@@ -341,6 +405,13 @@ export default function EightBallPool() {
       const ox = Math.cos(a);
       const oy = Math.sin(a);
 
+      // Aim ring around cue ball.
+      ctx.beginPath();
+      ctx.arc(cx, cy, Math.max(10, (BALL_R / TABLE_W) * w * 1.7), 0, Math.PI * 2);
+      ctx.strokeStyle = isAiming ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.35)';
+      ctx.lineWidth = isAiming ? 2.5 : 1.4;
+      ctx.stroke();
+
       // Predicted ghost marker.
       const gx = cx + ox * Math.min(aimLen, 170);
       const gy = cy + oy * Math.min(aimLen, 170);
@@ -361,6 +432,16 @@ export default function EightBallPool() {
       ctx.stroke();
       ctx.setLineDash([]);
 
+      // Secondary faint trajectory extension.
+      ctx.beginPath();
+      ctx.moveTo(cx + ox * aimLen, cy + oy * aimLen);
+      ctx.lineTo(cx + ox * (aimLen + 120), cy + oy * (aimLen + 120));
+      ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([3, 7]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
       const cueGrad = ctx.createLinearGradient(
         cx - ox * (cueLen * (0.45 + Number(power || 0) * 0.65)),
         cy - oy * (cueLen * (0.45 + Number(power || 0) * 0.65)),
@@ -378,7 +459,26 @@ export default function EightBallPool() {
       ctx.lineCap = 'round';
       ctx.stroke();
     }
-  }, [displayBalls, angleDeg, power, isAiming]);
+    const now = Date.now();
+    fxRef.current.pockets = fxRef.current.pockets.filter((f) => now - f.at < 450);
+    for (const f of fxRef.current.pockets) {
+      const alpha = 1 - ((now - f.at) / 450);
+      const flash = ctx.createRadialGradient(w * 0.5, h * 0.5, 30, w * 0.5, h * 0.5, w * 0.55);
+      flash.addColorStop(0, `rgba(255,255,255,${0.12 * alpha})`);
+      flash.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = flash;
+      ctx.fillRect(0, 0, w, h);
+    }
+    fxRef.current.impacts = fxRef.current.impacts.filter((f) => now - f.at < 300);
+    for (const f of fxRef.current.impacts) {
+      const alpha = 1 - ((now - f.at) / 300);
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, 6 + (1 - alpha) * 18, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(255,255,255,${0.35 * alpha})`;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+  }, [displayBalls, angleDeg, power, isAiming, currentSkin, renderTick]);
 
   const startAi = async () => {
     setBusy(true);
@@ -471,6 +571,13 @@ export default function EightBallPool() {
     setBusy(true);
     try {
       const angle = (Number(angleDeg) * Math.PI) / 180;
+      const cue = displayBalls.find((b) => b.number === 0 && !b.pocketed);
+      const canvas = canvasRef.current;
+      if (cue && canvas) {
+        const cx = (Number(cue.x || 0) / TABLE_W) * canvas.width;
+        const cy = (Number(cue.y || 0) / TABLE_H) * canvas.height;
+        fxRef.current.impacts.push({ x: cx, y: cy, at: Date.now() });
+      }
       const payload = { angle, power: Number(power), spin_x: Number(spinX), spin_y: Number(spinY) };
       if (tab === 'ai') {
         const res = await api.post('/casino/mp-8ball/vs-ai/shoot', payload);
@@ -500,8 +607,10 @@ export default function EightBallPool() {
     const dy = sy - cy;
     const ang = Math.atan2(dy, dx);
     const dist = Math.hypot(dx, dy);
-    setAngleDeg((ang * 180) / Math.PI);
-    setPower(Math.max(0.08, Math.min(1, dist / 260)));
+    const targetDeg = (ang * 180) / Math.PI;
+    setAngleDeg((prev) => prev + (targetDeg - prev) * 0.38);
+    const targetPower = Math.max(0.08, Math.min(1, dist / 260));
+    setPower((prev) => prev + (targetPower - prev) * 0.42);
   };
 
   const buyCue = async (cueId) => {
@@ -599,18 +708,37 @@ export default function EightBallPool() {
 
           {activeGame && (
             <div className="space-y-2">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px] font-heading">
-                <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/40">
-                  <div className="text-mutedForeground">Turn</div>
-                  <div className="text-primary font-bold">{turnLabel(activeGame)}</div>
+              <div className="rounded-md border border-primary/20 bg-zinc-900/55 p-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-heading">
+                  {(activeGame.players || []).map((p, idx) => {
+                    const isTurn = Number(activeGame.current_turn_index || 0) === idx;
+                    return (
+                      <div key={p.user_id} className={`px-2 py-1 rounded border ${isTurn ? 'border-primary/70 bg-primary/15 text-primary' : 'border-zinc-700/60 bg-zinc-800/35 text-foreground'}`}>
+                        <span className="font-bold">{p.username}</span>
+                        <span className="ml-2 text-mutedForeground">({groupBadge(p.group)})</span>
+                      </div>
+                    );
+                  })}
+                  <div className="px-2 py-1 rounded border border-zinc-700/60 bg-zinc-800/35 text-foreground">
+                    Turn: <span className="font-bold text-primary">{turnLabel(activeGame)}</span> · {activeGame.status}/{activeGame.phase} · Shots {activeGame.table_state?.shot_count || 0}
+                  </div>
                 </div>
-                <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/40">
-                  <div className="text-mutedForeground">Status</div>
-                  <div className="text-foreground font-bold">{activeGame.status} / {activeGame.phase}</div>
-                </div>
-                <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/40">
-                  <div className="text-mutedForeground">Shot count</div>
-                  <div className="text-foreground font-bold">{activeGame.table_state?.shot_count || 0}</div>
+                <div className="mt-2 flex flex-wrap items-center gap-1">
+                  {Array.from({ length: 15 }, (_, i) => i + 1).map((n) => {
+                    const b = (displayBalls || []).find((x) => x.number === n);
+                    const pocketed = !!b?.pocketed;
+                    const color = BALL_COLOR_MAP[n] || '#cbd5e1';
+                    return (
+                      <span
+                        key={n}
+                        className={`w-4 h-4 rounded-full inline-flex items-center justify-center text-[8px] border ${pocketed ? 'opacity-25 border-zinc-700' : 'opacity-100 border-white/30'}`}
+                        style={{ backgroundColor: color, color: n === 8 ? '#fff' : '#111' }}
+                        title={`Ball ${n}${pocketed ? ' (pocketed)' : ''}`}
+                      >
+                        {n}
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
               <div className="pool-canvas-shell rounded-xl p-2">
@@ -636,6 +764,21 @@ export default function EightBallPool() {
                   onPointerLeave={() => setIsAiming(false)}
                 />
               </div>
+              <div className="rounded-md border border-primary/20 bg-zinc-900/55 p-2 space-y-1">
+                <div className="flex items-center justify-between text-[10px] font-heading">
+                  <span className="text-mutedForeground uppercase">Force</span>
+                  <span className="text-primary font-bold">{(Number(power || 0) * 100).toFixed(1)}%</span>
+                </div>
+                <div className="h-2 rounded bg-zinc-800/70 border border-zinc-700/50 overflow-hidden">
+                  <div
+                    className="h-full rounded"
+                    style={{
+                      width: `${Math.max(3, Math.min(100, Number(power || 0) * 100))}%`,
+                      background: `linear-gradient(90deg, ${currentSkin.felt[0]}, ${currentSkin.felt[1]}, ${currentSkin.rail[0]})`,
+                    }}
+                  />
+                </div>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px]">
                 {(activeGame.players || []).map((p) => (
                   <div key={p.user_id} className="p-2 rounded bg-zinc-800/40 border border-zinc-700/40">
@@ -645,7 +788,12 @@ export default function EightBallPool() {
                   </div>
                 ))}
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-[10px]">
+              <div className="grid grid-cols-2 md:grid-cols-6 gap-2 text-[10px]">
+                <label className="space-y-1"><span className="text-mutedForeground">Table skin</span>
+                  <select value={tableSkin} onChange={(e) => setTableSkin(e.target.value)} className="w-full px-2 py-1 rounded border border-input bg-transparent">
+                    {Object.keys(TABLE_SKINS).map((k) => <option key={k} value={k}>{TABLE_SKINS[k].name}</option>)}
+                  </select>
+                </label>
                 <label className="space-y-1"><span className="text-mutedForeground">Angle (deg)</span><input type="number" value={angleDeg} onChange={(e) => setAngleDeg(Number(e.target.value || 0))} className="w-full px-2 py-1 rounded border border-input bg-transparent" /></label>
                 <label className="space-y-1"><span className="text-mutedForeground">Power (0-1)</span><input type="number" min={0} max={1} step={0.01} value={power} onChange={(e) => setPower(Number(e.target.value || 0))} className="w-full px-2 py-1 rounded border border-input bg-transparent" /></label>
                 <label className="space-y-1"><span className="text-mutedForeground">Spin X</span><input type="number" min={-1} max={1} step={0.05} value={spinX} onChange={(e) => setSpinX(Number(e.target.value || 0))} className="w-full px-2 py-1 rounded border border-input bg-transparent" /></label>
