@@ -54,6 +54,7 @@ const BALL_R = 0.028;
 const AI_POOL_ID = 'ai_pool_bot';
 const REPLAY_IDLE_POS_EPS = 0.00035;
 const REPLAY_IDLE_VEL_EPS = 0.006;
+const PREVIEW_TABLE_MARGIN = 14;
 const TABLE_SKINS = {
   classic_green: {
     name: 'Classic Green',
@@ -96,6 +97,21 @@ function groupBadge(group) {
   return 'Unassigned';
 }
 
+function rayCircleHit(originX, originY, dirX, dirY, ballX, ballY, radius) {
+  const dx = originX - ballX;
+  const dy = originY - ballY;
+  const b = 2 * ((dirX * dx) + (dirY * dy));
+  const c = (dx * dx) + (dy * dy) - (radius * radius);
+  const disc = (b * b) - (4 * c);
+  if (disc < 0) return null;
+  const sd = Math.sqrt(disc);
+  const t1 = (-b - sd) / 2;
+  const t2 = (-b + sd) / 2;
+  const candidates = [t1, t2].filter((t) => t > 1e-4);
+  if (!candidates.length) return null;
+  return Math.min(...candidates);
+}
+
 export default function EightBallPool() {
   const [tab, setTab] = useState('ai'); // ai | pvp
   const [loading, setLoading] = useState(false);
@@ -136,19 +152,23 @@ export default function EightBallPool() {
 
   const activeGame = tab === 'ai' ? aiGame : pvpGame;
   const balls = useMemo(() => activeGame?.table_state?.balls || [], [activeGame?.table_state?.balls]);
+  const viewerUid = activeGame?.viewer_user_id || null;
+  const ballsSettled = Boolean(activeGame?.table_state?.balls_settled ?? true);
   const isMyTurn = useMemo(() => {
     if (!activeGame) return false;
     const players = activeGame.players || [];
     const idx = Number(activeGame.current_turn_index || 0);
     const current = players[idx];
     if (!current) return false;
+    if (viewerUid) return current.user_id === viewerUid;
     if (tab === 'ai') return current.user_id !== AI_POOL_ID;
-    return true;
-  }, [activeGame, tab]);
+    return false;
+  }, [activeGame, tab, viewerUid]);
   const canRenderCue = !!activeGame
     && !replayActive
     && activeGame.status === 'in_progress'
     && activeGame.phase === 'playing'
+    && ballsSettled
     && isMyTurn;
   useEffect(() => {
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
@@ -281,7 +301,85 @@ export default function EightBallPool() {
     if (!selectedCue) return null;
     return cueUpgrades.find((u) => u.cue_instance_id === selectedCue.id) || null;
   }, [cueUpgrades, selectedCue]);
+  const previewLevel = Math.max(0, Number(selectedCueUpgrade?.preview || 0));
+  const previewTier = Math.min(4, Math.floor(previewLevel / 5));
+  const previewSegmentBudget = 1 + previewTier;
+  const previewDistance = 130 + (previewLevel * 9) + (Number(selectedCueUpgrade?.aim || 0) * 2.5);
   const currentSkin = TABLE_SKINS[tableSkin] || TABLE_SKINS.ice_blue;
+  const aimPreview = useMemo(() => {
+    const cue = displayBalls.find((b) => b.number === 0 && !b.pocketed);
+    if (!cue || !canRenderCue) return { segments: [], ghost: null };
+    const w = 900;
+    const h = 450;
+    const cuePx = (Number(cue.x || 0) / TABLE_W) * w;
+    const cuePy = (Number(cue.y || 0) / TABLE_H) * h;
+    const a = (Number(angleDeg || 0) * Math.PI) / 180;
+    let dx = Math.cos(a);
+    let dy = Math.sin(a);
+    let ox = cuePx;
+    let oy = cuePy;
+    let remain = Math.max(40, previewDistance + (Number(power || 0) * 120));
+    const segs = [];
+    let ghost = null;
+    let contactDone = false;
+    const ballPxR = Math.max(4, (BALL_R / TABLE_W) * w);
+    const minX = PREVIEW_TABLE_MARGIN;
+    const maxX = w - PREVIEW_TABLE_MARGIN;
+    const minY = PREVIEW_TABLE_MARGIN;
+    const maxY = h - PREVIEW_TABLE_MARGIN;
+    for (let segmentIndex = 0; segmentIndex < previewSegmentBudget && remain > 1; segmentIndex += 1) {
+      let wallDist = Number.POSITIVE_INFINITY;
+      if (dx > 0) wallDist = Math.min(wallDist, (maxX - ox) / dx);
+      if (dx < 0) wallDist = Math.min(wallDist, (minX - ox) / dx);
+      if (dy > 0) wallDist = Math.min(wallDist, (maxY - oy) / dy);
+      if (dy < 0) wallDist = Math.min(wallDist, (minY - oy) / dy);
+      let hitBall = null;
+      let ballDist = Number.POSITIVE_INFINITY;
+      if (!contactDone && previewTier >= 1) {
+        for (const b of displayBalls) {
+          if (b.pocketed || b.number === 0) continue;
+          const bx = (Number(b.x || 0) / TABLE_W) * w;
+          const by = (Number(b.y || 0) / TABLE_H) * h;
+          const t = rayCircleHit(ox, oy, dx, dy, bx, by, ballPxR * 2.02);
+          if (t !== null && t < ballDist) {
+            ballDist = t;
+            hitBall = { x: bx, y: by, number: Number(b.number || 0) };
+          }
+        }
+      }
+      const travel = Math.min(remain, wallDist, ballDist);
+      if (!Number.isFinite(travel) || travel <= 0) break;
+      const nx = ox + (dx * travel);
+      const ny = oy + (dy * travel);
+      segs.push({ x1: ox, y1: oy, x2: nx, y2: ny, kind: hitBall && ballDist <= wallDist ? 'contact' : 'path' });
+      remain -= travel;
+      if (hitBall && ballDist <= wallDist) {
+        contactDone = true;
+        ghost = { x: nx, y: ny, objectX: hitBall.x, objectY: hitBall.y };
+        if (previewTier >= 2) {
+          const odxRaw = hitBall.x - nx;
+          const odyRaw = hitBall.y - ny;
+          const om = Math.hypot(odxRaw, odyRaw) || 1;
+          const odx = odxRaw / om;
+          const ody = odyRaw / om;
+          const objectLen = Math.min(110 + (previewTier * 35), remain + 40);
+          segs.push({
+            x1: hitBall.x,
+            y1: hitBall.y,
+            x2: hitBall.x + (odx * objectLen),
+            y2: hitBall.y + (ody * objectLen),
+            kind: 'object',
+          });
+        }
+        break;
+      }
+      if (Math.abs(nx - maxX) < 0.7 || Math.abs(nx - minX) < 0.7) dx *= -1;
+      if (Math.abs(ny - maxY) < 0.7 || Math.abs(ny - minY) < 0.7) dy *= -1;
+      ox = nx;
+      oy = ny;
+    }
+    return { segments: segs, ghost };
+  }, [displayBalls, angleDeg, power, canRenderCue, previewDistance, previewSegmentBudget, previewTier]);
 
   useEffect(() => {
     const skinByCue = (selectedCue?.cue_id || '').toLowerCase();
@@ -683,35 +781,52 @@ export default function EightBallPool() {
       ctx.lineWidth = isAiming ? 2.5 : 1.4;
       ctx.stroke();
 
-      // Predicted ghost marker.
-      const gx = cx + ox * Math.min(aimLen, 170);
-      const gy = cy + oy * Math.min(aimLen, 170);
-      ctx.beginPath();
-      ctx.arc(gx, gy, 5, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(255,255,255,0.25)';
-      ctx.fill();
-
-      ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.lineTo(cx + ox * aimLen, cy + oy * aimLen);
-      const lineGrad = ctx.createLinearGradient(cx, cy, cx + ox * aimLen, cy + oy * aimLen);
-      lineGrad.addColorStop(0, 'rgba(255,255,255,0.75)');
-      lineGrad.addColorStop(1, isAiming ? 'rgba(250,204,21,0.9)' : 'rgba(255,255,255,0.08)');
-      ctx.strokeStyle = lineGrad;
-      ctx.lineWidth = isAiming ? 2.5 : 2;
-      ctx.setLineDash([6, 6]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      // Secondary faint trajectory extension.
-      ctx.beginPath();
-      ctx.moveTo(cx + ox * aimLen, cy + oy * aimLen);
-      ctx.lineTo(cx + ox * (aimLen + 120), cy + oy * (aimLen + 120));
-      ctx.strokeStyle = 'rgba(255,255,255,0.18)';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([3, 7]);
-      ctx.stroke();
-      ctx.setLineDash([]);
+      // Multi-segment preview upgrades: rails and contact-aware lines.
+      const segs = aimPreview?.segments || [];
+      if (segs.length) {
+        segs.forEach((seg, idx) => {
+          ctx.beginPath();
+          ctx.moveTo(seg.x1, seg.y1);
+          ctx.lineTo(seg.x2, seg.y2);
+          const grad = ctx.createLinearGradient(seg.x1, seg.y1, seg.x2, seg.y2);
+          if (seg.kind === 'object') {
+            grad.addColorStop(0, 'rgba(56,189,248,0.8)');
+            grad.addColorStop(1, 'rgba(56,189,248,0.15)');
+            ctx.setLineDash([3, 5]);
+            ctx.lineWidth = 1.4;
+          } else if (seg.kind === 'contact') {
+            grad.addColorStop(0, 'rgba(250,204,21,0.95)');
+            grad.addColorStop(1, 'rgba(250,204,21,0.25)');
+            ctx.setLineDash([5, 5]);
+            ctx.lineWidth = 2.1;
+          } else {
+            grad.addColorStop(0, idx === 0 ? 'rgba(255,255,255,0.9)' : 'rgba(255,255,255,0.45)');
+            grad.addColorStop(1, isAiming ? 'rgba(250,204,21,0.65)' : 'rgba(255,255,255,0.14)');
+            ctx.setLineDash([6, 6]);
+            ctx.lineWidth = idx === 0 ? 2.4 : 1.6;
+          }
+          ctx.strokeStyle = grad;
+          ctx.stroke();
+          ctx.setLineDash([]);
+        });
+      } else {
+        const gx = cx + ox * Math.min(aimLen, 170);
+        const gy = cy + oy * Math.min(aimLen, 170);
+        ctx.beginPath();
+        ctx.arc(gx, gy, 5, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.25)';
+        ctx.fill();
+      }
+      if (aimPreview?.ghost) {
+        ctx.beginPath();
+        ctx.arc(aimPreview.ghost.x, aimPreview.ghost.y, 5.2, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(255,255,255,0.32)';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(aimPreview.ghost.objectX, aimPreview.ghost.objectY, 4.6, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(56,189,248,0.24)';
+        ctx.fill();
+      }
 
       const cueGrad = ctx.createLinearGradient(
         cx - ox * (cueLen * (0.45 + Number(power || 0) * 0.65)),
@@ -753,7 +868,7 @@ export default function EightBallPool() {
       ctx.lineWidth = 2;
       ctx.stroke();
     }
-  }, [displayBalls, angleDeg, power, isAiming, currentSkin, renderTick, canRenderCue]);
+  }, [displayBalls, angleDeg, power, isAiming, currentSkin, renderTick, canRenderCue, aimPreview]);
 
   const startAi = async () => {
     setBusy(true);
@@ -843,6 +958,7 @@ export default function EightBallPool() {
   const shoot = async () => {
     if (!activeGame) return;
     if (busy) return;
+    if (!canRenderCue || !ballsSettled) return;
     setBusy(true);
     try {
       const angle = (Number(angleDeg) * Math.PI) / 180;
@@ -871,6 +987,7 @@ export default function EightBallPool() {
 
   const updateAimFromPointer = (event) => {
     if (replayActiveRef.current) return;
+    if (!canRenderCue || !ballsSettled) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const cue = displayBalls.find((b) => b.number === 0 && !b.pocketed);
@@ -948,7 +1065,7 @@ export default function EightBallPool() {
 
       <header className="pool-fade-in text-center">
         <h1 className="text-sm font-heading font-bold text-primary uppercase tracking-wider">8-Ball Pool</h1>
-        <p className="text-[10px] text-mutedForeground font-heading italic">Play against AI or live PvP. Upgrade cues for power, aim, spin and control.</p>
+        <p className="text-[10px] text-mutedForeground font-heading italic">Play against AI or live PvP. Upgrade cues for power, aim, spin, control and preview guidance.</p>
       </header>
 
       <div className={`${styles.panel} mobile-panel rounded-md border border-primary/20 overflow-hidden pool-fade-in`}>
@@ -1002,7 +1119,7 @@ export default function EightBallPool() {
                     );
                   })}
                   <div className="px-2 py-1 rounded border border-zinc-700/60 bg-zinc-800/35 text-foreground">
-                    Turn: <span className="font-bold text-primary">{turnLabel(activeGame)}</span> · {activeGame.status}/{activeGame.phase} · Shots {activeGame.table_state?.shot_count || 0} · {replayActive ? 'ROLLING' : 'AIMING'}
+                    Turn: <span className="font-bold text-primary">{turnLabel(activeGame)}</span> · {activeGame.status}/{activeGame.phase} · Shots {activeGame.table_state?.shot_count || 0} · {(replayActive || !ballsSettled) ? 'ROLLING' : 'AIMING'}
                   </div>
                 </div>
                 <div className="mt-2 flex flex-wrap items-center gap-1">
@@ -1037,19 +1154,19 @@ export default function EightBallPool() {
                   height={450}
                   className="pool-canvas w-full rounded-lg border border-cyan-400/25 bg-[#0b4f2f] touch-none"
                   onPointerDown={(e) => {
-                    if (replayActive) return;
+                    if (replayActive || !canRenderCue || !ballsSettled) return;
                     if (mobileNeedsRotate) return;
                     setIsAiming(true);
                     updateAimFromPointer(e);
                   }}
                   onPointerMove={(e) => {
-                    if (replayActive) return;
+                    if (replayActive || !canRenderCue || !ballsSettled) return;
                     if (mobileNeedsRotate) return;
                     if (!isAiming) return;
                     updateAimFromPointer(e);
                   }}
                   onPointerUp={async (e) => {
-                    if (replayActive) return;
+                    if (replayActive || !canRenderCue || !ballsSettled) return;
                     if (mobileNeedsRotate) return;
                     if (!isAiming) return;
                     updateAimFromPointer(e);
@@ -1094,7 +1211,7 @@ export default function EightBallPool() {
                 <label className="space-y-1"><span className="text-mutedForeground">Power (0-1)</span><input type="number" min={0} max={1} step={0.01} value={power} onChange={(e) => setPower(Number(e.target.value || 0))} className="w-full px-2 py-1 rounded border border-input bg-transparent" /></label>
                 <label className="space-y-1"><span className="text-mutedForeground">Spin X</span><input type="number" min={-1} max={1} step={0.05} value={spinX} onChange={(e) => setSpinX(Number(e.target.value || 0))} className="w-full px-2 py-1 rounded border border-input bg-transparent" /></label>
                 <label className="space-y-1"><span className="text-mutedForeground">Spin Y</span><input type="number" min={-1} max={1} step={0.05} value={spinY} onChange={(e) => setSpinY(Number(e.target.value || 0))} className="w-full px-2 py-1 rounded border border-input bg-transparent" /></label>
-                <div className="flex items-end"><button type="button" onClick={shoot} disabled={busy || replayActive || mobileNeedsRotate} className="w-full px-3 py-2 rounded bg-primary/20 border border-primary/50 text-primary font-heading">{mobileNeedsRotate ? 'Rotate Phone' : replayActive ? 'Rolling...' : busy ? '...' : 'Shoot'}</button></div>
+                <div className="flex items-end"><button type="button" onClick={shoot} disabled={busy || replayActive || mobileNeedsRotate || !canRenderCue || !ballsSettled} className="w-full px-3 py-2 rounded bg-primary/20 border border-primary/50 text-primary font-heading">{mobileNeedsRotate ? 'Rotate Phone' : (replayActive || !ballsSettled) ? 'Rolling...' : busy ? '...' : 'Shoot'}</button></div>
               </div>
             </div>
           )}
@@ -1111,9 +1228,10 @@ export default function EightBallPool() {
           {selectedCue && (
             <div className="text-[10px] font-heading p-2 rounded border border-primary/20 bg-zinc-900/40">
               <div className="text-foreground font-bold">Selected cue: {selectedCue.cue_id}</div>
-              <div className="text-mutedForeground">Power {selectedCueUpgrade?.power || 0} · Aim {selectedCueUpgrade?.aim || 0} · Spin {selectedCueUpgrade?.spin || 0} · Control {selectedCueUpgrade?.control || 0}</div>
+              <div className="text-mutedForeground">Power {selectedCueUpgrade?.power || 0} · Aim {selectedCueUpgrade?.aim || 0} · Spin {selectedCueUpgrade?.spin || 0} · Control {selectedCueUpgrade?.control || 0} · Preview {selectedCueUpgrade?.preview || 0}</div>
+              <div className="text-mutedForeground">Preview Tier {previewTier} · Segments {previewSegmentBudget} · Range {Math.round(previewDistance)}px</div>
               <div className="mt-2 flex flex-wrap gap-2">
-                {['power', 'aim', 'spin', 'control'].map((stat) => (
+                {['power', 'aim', 'spin', 'control', 'preview'].map((stat) => (
                   <button key={stat} type="button" onClick={() => upgradeCue(stat)} disabled={busy} className="px-2 py-1 rounded border border-primary/40 text-primary text-[10px] uppercase">{stat} +1</button>
                 ))}
               </div>

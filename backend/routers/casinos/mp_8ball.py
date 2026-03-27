@@ -34,6 +34,7 @@ MP_8BALL_MAX_REPLAY_FRAMES = 240
 MP_8BALL_SPIN_CARRY = 0.03
 MP_8BALL_SLEEP_EPS = 0.006
 MP_8BALL_POS_EPS = 1e-5
+MP_8BALL_MAX_SIM_STEPS = 1200
 
 
 class PoolCreateRequest(BaseModel):
@@ -189,7 +190,8 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
     replay_frames: List[dict] = [{"t_ms": 0, "balls": _replay_frame_balls(out)}]
     replay_events: List[dict] = []
 
-    for step in range(320):
+    settled = False
+    for step in range(MP_8BALL_MAX_SIM_STEPS):
         active = _active_balls(out)
         for b in active:
             b["x"] += b["vx"] * MP_8BALL_SIM_DT
@@ -359,7 +361,14 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
                 moving = True
                 break
         if not moving:
+            settled = True
             break
+
+    # Strict settle gate: never hand off a turn with latent micro-velocity.
+    if not settled:
+        for b in _active_balls(out):
+            b["vx"] = 0.0
+            b["vy"] = 0.0
 
     cue_after = next((b for b in out if b.get("number") == 0), None)
     cue_pocketed = bool(cue_after and cue_after.get("pocketed"))
@@ -371,6 +380,7 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
         "first_contact": first_contact,
         "pocketed_numbers": pocketed_numbers,
         "cue_pocketed": cue_pocketed,
+        "balls_settled": True,
         "shot_replay": {
             "schema_version": 2,
             "frame_dt_ms": int(MP_8BALL_SIM_DT * 1000 * MP_8BALL_REPLAY_SAMPLE_EVERY),
@@ -398,6 +408,7 @@ def _ensure_game_turn(game: dict, uid: str):
 
 def _public_game(game: dict, viewer_uid: Optional[str] = None) -> dict:
     g = {k: v for k, v in game.items() if k != "_id"}
+    g["viewer_user_id"] = viewer_uid
     if g.get("anonymous"):
         for i, p in enumerate(g.get("players") or []):
             if p.get("user_id") != viewer_uid:
@@ -470,6 +481,7 @@ def register(router):
                 "table_h": MP_8BALL_TABLE_H,
                 "balls": _initial_balls(),
                 "shot_count": 0,
+                "balls_settled": True,
                 "history": [],
             },
         }
@@ -697,6 +709,7 @@ def register(router):
         table_state["shot_count"] = int(table_state.get("shot_count") or 0) + 1
         table_state["last_shot_replay"] = shot_replay
         table_state["last_shot_replay_shot_count"] = int(table_state.get("shot_count") or 0)
+        table_state["balls_settled"] = bool(sim.get("balls_settled", True))
         hist = list(table_state.get("history") or [])
         hist.append({
             "at": _now_iso(),
@@ -809,7 +822,7 @@ def register(router):
             "turn_started_at": _now_iso(),
             "winner_user_id": None,
             "result_reason": None,
-            "table_state": {"table_w": MP_8BALL_TABLE_W, "table_h": MP_8BALL_TABLE_H, "balls": _initial_balls(), "shot_count": 0, "history": []},
+            "table_state": {"table_w": MP_8BALL_TABLE_W, "table_h": MP_8BALL_TABLE_H, "balls": _initial_balls(), "shot_count": 0, "balls_settled": True, "history": []},
         }
         await db.mp_8ball_games.insert_one(game)
         return _public_game(game, uid)
@@ -844,6 +857,7 @@ def register(router):
         game["table_state"]["shot_count"] = int(game["table_state"].get("shot_count") or 0) + 1
         game["table_state"]["last_shot_replay"] = sim.get("shot_replay") or {}
         game["table_state"]["last_shot_replay_shot_count"] = int(game["table_state"].get("shot_count") or 0)
+        game["table_state"]["balls_settled"] = bool(sim.get("balls_settled", True))
         game["current_turn_index"] = 0
         game["turn_started_at"] = _now_iso()
         game["updated_at"] = _now_iso()
@@ -936,7 +950,7 @@ def register(router):
         )
         await db.pool_cue_upgrades.update_one(
             {"user_id": uid, "cue_instance_id": inst_id},
-            {"$setOnInsert": {"user_id": uid, "cue_instance_id": inst_id, "power": 0, "aim": 0, "spin": 0, "control": 0, "created_at": _now_iso()}},
+            {"$setOnInsert": {"user_id": uid, "cue_instance_id": inst_id, "power": 0, "aim": 0, "spin": 0, "control": 0, "preview": 0, "created_at": _now_iso()}},
             upsert=True,
         )
         return {"message": "Cue purchased", "cue_instance_id": inst_id}
@@ -955,7 +969,7 @@ def register(router):
     async def pool_cues_upgrade(body: CueUpgradeRequest, current_user: dict = Depends(get_current_user_verified)):
         uid = current_user["id"]
         stat = (body.stat or "").strip().lower()
-        if stat not in ("power", "aim", "spin", "control"):
+        if stat not in ("power", "aim", "spin", "control", "preview"):
             raise HTTPException(status_code=400, detail="Invalid stat")
         cue = await db.user_pool_cues.find_one({"id": body.cue_instance_id, "user_id": uid}, {"_id": 0, "id": 1})
         if not cue:
@@ -967,6 +981,7 @@ def register(router):
             "aim": 0,
             "spin": 0,
             "control": 0,
+            "preview": 0,
         }
         lvl = int(upg.get(stat) or 0)
         if lvl >= 25:
