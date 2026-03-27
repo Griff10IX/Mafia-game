@@ -8,6 +8,7 @@ import ForgotPassword from "./pages/Auth/ForgotPassword";
 import ResetPassword from "./pages/Auth/ResetPassword";
 import VerifyEmail from "./pages/Auth/VerifyEmail";
 import VerifyComplete from "./pages/Auth/VerifyComplete";
+import SpotifyCallback from "./pages/Auth/SpotifyCallback";
 import Layout from "./components/Layout";
 import ErrorBoundary from "./components/ErrorBoundary";
 import ServerUnavailableOverlay from "./components/ServerUnavailableOverlay";
@@ -267,6 +268,16 @@ function App() {
           <Route
             path="/verify-complete"
             element={<VerifyComplete />}
+          />
+          <Route
+            path="/spotify-callback"
+            element={
+              isAuthenticated ? (
+                <SpotifyCallback />
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
           />
           <Route
             path="/staff-entrance"

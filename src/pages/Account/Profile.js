@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import React from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
-import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, ChevronDown, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd, Radio, Award } from 'lucide-react';
+import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, ChevronDown, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd, Radio, Award, Music2, Play, Pause, SkipBack, SkipForward, ExternalLink } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
@@ -762,6 +762,48 @@ const YouTubeCard = ({ youtubeUrl, autoplay = true }) => {
   );
 };
 
+const SpotifyCard = ({ spotifyEmbedUrl, spotifyUrl }) => {
+  if (!spotifyEmbedUrl && !spotifyUrl) return null;
+  return (
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in mobile-panel`} style={{ animationDelay: '0.05s' }}>
+      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-center gap-1">
+        <Music2 size={12} className="md:w-3.5 md:h-3.5 text-primary" />
+        <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
+          Spotify
+        </h3>
+      </div>
+      <div className="p-2.5">
+        {spotifyEmbedUrl ? (
+          <iframe
+            title="Spotify embed"
+            src={spotifyEmbedUrl}
+            className="w-full h-[152px] rounded-md border-0"
+            allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+            loading="lazy"
+          />
+        ) : (
+          <p className="text-xs text-mutedForeground text-center">Spotify embed unavailable for this item.</p>
+        )}
+        {spotifyUrl ? (
+          <div className="mt-2 text-center">
+            <a
+              href={spotifyUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1 text-[10px] md:text-xs font-heading text-primary hover:underline"
+            >
+              Open on Spotify
+              <ExternalLink size={12} />
+            </a>
+          </div>
+        ) : null}
+      </div>
+      <div className="prof-art-line text-primary mx-3" />
+    </div>
+  );
+};
+
 const TopCarsCard = ({ topCars, showCars }) => {
   if (showCars === false || !topCars?.length) return null;
   return (
@@ -953,6 +995,14 @@ export default function Profile() {
   const [telegramChatId, setTelegramChatId] = useState('');
   const [telegramBotToken, setTelegramBotToken] = useState('');
   const [savingTelegram, setSavingTelegram] = useState(false);
+  const [spotifyUrlInput, setSpotifyUrlInput] = useState('');
+  const [spotifyStatus, setSpotifyStatus] = useState(null);
+  const [savingSpotifyEmbed, setSavingSpotifyEmbed] = useState(false);
+  const [spotifyBusy, setSpotifyBusy] = useState(false);
+  const [spotifySdkReady, setSpotifySdkReady] = useState(false);
+  const [spotifyDeviceId, setSpotifyDeviceId] = useState('');
+  const [spotifyPlayerState, setSpotifyPlayerState] = useState(null);
+  const [spotifyVolume, setSpotifyVolume] = useState(65);
   const [profileAutoplayVideo, setProfileAutoplayVideo] = useState(true);
   const [hideKillsOnProfile, setHideKillsOnProfile] = useState(false);
   const [hideJailbustsOnProfile, setHideJailbustsOnProfile] = useState(false);
@@ -971,6 +1021,7 @@ export default function Profile() {
   /** When true, we're viewing our own profile as a visitor would (no settings, no avatar edit, etc.). */
   const isPublicView = isMe && viewPublic;
   const [savingAvatar, setSavingAvatar] = useState(false);
+  const spotifyPlayerRef = React.useRef(null);
 
   const refetchMe = async () => {
     try {
@@ -1043,6 +1094,16 @@ export default function Profile() {
   }, []);
 
   useEffect(() => {
+    try {
+      const msg = window.sessionStorage.getItem('spotify_connect_message');
+      if (msg) {
+        toast.success(msg);
+        window.sessionStorage.removeItem('spotify_connect_message');
+      }
+    } catch (_) {}
+  }, []);
+
+  useEffect(() => {
     if (me?.mod_online_color != null && (me.mod_online_color || '').trim())
       setModOnlineColor((me.mod_online_color || '').trim());
     else if (me && !me.mod_online_color) setModOnlineColor('#1e3a5f');
@@ -1097,10 +1158,20 @@ export default function Profile() {
       setTelegramBotToken('');
     }
   };
+  const fetchSpotifyStatus = async () => {
+    try {
+      const res = await api.get('/profile/spotify/status');
+      setSpotifyStatus(res.data || null);
+      setSpotifyUrlInput(res.data?.spotify_url || '');
+    } catch (_) {
+      setSpotifyStatus(null);
+    }
+  };
   useEffect(() => {
     if (isMe && !viewPublic && profile) {
       fetchPrefs();
       fetchTelegram();
+      fetchSpotifyStatus();
       setProfileAutoplayVideo(me?.profile_autoplay_video !== false);
       setHideKillsOnProfile(profile?.hide_kills_on_profile === true);
       setHideJailbustsOnProfile(profile?.hide_jailbusts_on_profile === true);
@@ -1109,6 +1180,87 @@ export default function Profile() {
       }).catch(() => {});
     }
   }, [isMe, viewPublic, profile, profile?.hide_kills_on_profile, profile?.hide_jailbusts_on_profile, me?.profile_autoplay_video]);
+
+  useEffect(() => {
+    if (!isMe || viewPublic || !spotifyStatus?.spotify_connected || !spotifyStatus?.feature_enabled) {
+      if (spotifyPlayerRef.current) {
+        try { spotifyPlayerRef.current.disconnect(); } catch (_) {}
+      }
+      spotifyPlayerRef.current = null;
+      setSpotifySdkReady(false);
+      setSpotifyDeviceId('');
+      return;
+    }
+
+    let cancelled = false;
+    const initPlayer = async () => {
+      try {
+        const init = async () => {
+          if (cancelled || !window.Spotify) return;
+          const player = new window.Spotify.Player({
+            name: 'Mafia Wars Web Player',
+            getOAuthToken: async (cb) => {
+              try {
+                const tok = await api.get('/profile/spotify/sdk-token');
+                cb(tok.data?.access_token || '');
+              } catch (_) {
+                cb('');
+              }
+            },
+            volume: 0.65,
+          });
+          player.addListener('ready', ({ device_id }) => {
+            if (cancelled) return;
+            setSpotifyDeviceId(device_id || '');
+            setSpotifySdkReady(true);
+          });
+          player.addListener('not_ready', () => {
+            if (cancelled) return;
+            setSpotifySdkReady(false);
+          });
+          player.addListener('player_state_changed', (s) => {
+            if (cancelled) return;
+            setSpotifyPlayerState(s || null);
+          });
+          player.addListener('authentication_error', ({ message }) => {
+            if (cancelled) return;
+            toast.error(message || 'Spotify auth failed');
+          });
+          player.addListener('account_error', ({ message }) => {
+            if (cancelled) return;
+            toast.error(message || 'Spotify Premium is required for web playback');
+          });
+          await player.connect();
+          if (!cancelled) spotifyPlayerRef.current = player;
+        };
+
+        if (window.Spotify) {
+          await init();
+          return;
+        }
+        if (!document.getElementById('spotify-player-sdk')) {
+          const script = document.createElement('script');
+          script.id = 'spotify-player-sdk';
+          script.src = 'https://sdk.scdn.co/spotify-player.js';
+          script.async = true;
+          document.body.appendChild(script);
+        }
+        window.onSpotifyWebPlaybackSDKReady = () => {
+          init();
+        };
+      } catch (_) {}
+    };
+
+    initPlayer();
+
+    return () => {
+      cancelled = true;
+      if (spotifyPlayerRef.current) {
+        try { spotifyPlayerRef.current.disconnect(); } catch (_) {}
+        spotifyPlayerRef.current = null;
+      }
+    };
+  }, [isMe, viewPublic, spotifyStatus?.spotify_connected, spotifyStatus?.feature_enabled]);
 
   const updatePref = (key, value) => {
     const next = { ...prefs, [key]: value };
@@ -1133,6 +1285,76 @@ export default function Profile() {
       toast.error(e.response?.data?.detail || 'Failed to save Telegram settings');
     } finally {
       setSavingTelegram(false);
+    }
+  };
+
+  const saveSpotifyEmbed = async () => {
+    setSavingSpotifyEmbed(true);
+    try {
+      const res = await api.patch('/profile/spotify/embed', { spotify_url: spotifyUrlInput.trim() || null });
+      toast.success(res.data?.message || 'Spotify embed saved');
+      await fetchSpotifyStatus();
+      await refetchProfile();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to save Spotify embed');
+    } finally {
+      setSavingSpotifyEmbed(false);
+    }
+  };
+
+  const connectSpotify = async () => {
+    setSpotifyBusy(true);
+    try {
+      const res = await api.get('/profile/spotify/connect-url');
+      const url = res.data?.url;
+      if (!url) throw new Error('Missing Spotify connect URL');
+      window.location.href = url;
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not start Spotify connect');
+      setSpotifyBusy(false);
+    }
+  };
+
+  const disconnectSpotify = async () => {
+    setSpotifyBusy(true);
+    try {
+      const res = await api.post('/profile/spotify/disconnect');
+      toast.success(res.data?.message || 'Spotify disconnected');
+      await fetchSpotifyStatus();
+      setSpotifySdkReady(false);
+      setSpotifyDeviceId('');
+      setSpotifyPlayerState(null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to disconnect Spotify');
+    } finally {
+      setSpotifyBusy(false);
+    }
+  };
+
+  const transferSpotifyPlayback = async () => {
+    if (!spotifyDeviceId) {
+      toast.error('Web player not ready yet');
+      return;
+    }
+    setSpotifyBusy(true);
+    try {
+      await api.post('/profile/spotify/player/transfer', { device_id: spotifyDeviceId, play: false });
+      toast.success('Web player activated');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to activate web player');
+    } finally {
+      setSpotifyBusy(false);
+    }
+  };
+
+  const spotifyControl = async (action) => {
+    setSpotifyBusy(true);
+    try {
+      await action();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Spotify control failed');
+    } finally {
+      setSpotifyBusy(false);
     }
   };
 
@@ -1598,6 +1820,68 @@ export default function Profile() {
                   <button type="button" onClick={saveTelegram} disabled={savingTelegram} className="px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50">{savingTelegram ? 'Saving...' : 'Save'}</button>
                 </div>
                 <div>
+                  <h3 className="text-xs font-heading font-bold text-foreground uppercase tracking-wider mb-1">Spotify</h3>
+                  {!spotifyStatus?.feature_enabled ? (
+                    <p className="text-xs text-mutedForeground">Spotify is currently disabled.</p>
+                  ) : (
+                    <>
+                      <p className="text-xs text-mutedForeground mb-2">Paste a Spotify track/album/playlist/artist URL or URI for your profile embed.</p>
+                      <input
+                        type="text"
+                        placeholder="https://open.spotify.com/track/... or spotify:track:..."
+                        value={spotifyUrlInput}
+                        onChange={(e) => setSpotifyUrlInput(e.target.value)}
+                        className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 mb-2"
+                      />
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button type="button" onClick={saveSpotifyEmbed} disabled={savingSpotifyEmbed} className="px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50">{savingSpotifyEmbed ? 'Saving...' : 'Save embed'}</button>
+                        {!spotifyStatus?.spotify_connected ? (
+                          <button type="button" onClick={connectSpotify} disabled={spotifyBusy || !spotifyStatus?.oauth_configured} className="px-3 py-2 rounded-md bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 font-heading font-bold text-sm hover:bg-emerald-500/30 disabled:opacity-50">
+                            Connect Spotify
+                          </button>
+                        ) : (
+                          <button type="button" onClick={disconnectSpotify} disabled={spotifyBusy} className="px-3 py-2 rounded-md bg-red-500/20 border border-red-500/50 text-red-300 font-heading font-bold text-sm hover:bg-red-500/30 disabled:opacity-50">
+                            Disconnect
+                          </button>
+                        )}
+                      </div>
+                      {spotifyStatus?.spotify_connected && (
+                        <div className="mt-3 rounded-md border border-primary/20 bg-secondary/30 p-2.5 space-y-2">
+                          <p className="text-xs text-mutedForeground">
+                            Connected as <span className="text-foreground font-semibold">{spotifyStatus?.spotify_display_name || spotifyStatus?.spotify_user_id || 'Spotify user'}</span>.
+                          </p>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <button type="button" onClick={transferSpotifyPlayback} disabled={spotifyBusy || !spotifySdkReady || !spotifyDeviceId} className="px-2.5 py-1.5 rounded-md border border-primary/40 bg-primary/10 text-primary text-xs font-heading font-bold disabled:opacity-50">
+                              Activate web player
+                            </button>
+                            <button type="button" onClick={() => spotifyControl(() => api.post('/profile/spotify/player/previous'))} disabled={spotifyBusy} className="px-2 py-1.5 rounded-md border border-border text-foreground hover:bg-primary/10 disabled:opacity-50"><SkipBack size={14} /></button>
+                            <button type="button" onClick={() => spotifyControl(() => api.post('/profile/spotify/player/play', {}))} disabled={spotifyBusy} className="px-2 py-1.5 rounded-md border border-border text-foreground hover:bg-primary/10 disabled:opacity-50"><Play size={14} /></button>
+                            <button type="button" onClick={() => spotifyControl(() => api.post('/profile/spotify/player/pause'))} disabled={spotifyBusy} className="px-2 py-1.5 rounded-md border border-border text-foreground hover:bg-primary/10 disabled:opacity-50"><Pause size={14} /></button>
+                            <button type="button" onClick={() => spotifyControl(() => api.post('/profile/spotify/player/next'))} disabled={spotifyBusy} className="px-2 py-1.5 rounded-md border border-border text-foreground hover:bg-primary/10 disabled:opacity-50"><SkipForward size={14} /></button>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-mutedForeground">Volume</span>
+                            <input
+                              type="range"
+                              min={0}
+                              max={100}
+                              value={spotifyVolume}
+                              onChange={(e) => setSpotifyVolume(Number(e.target.value))}
+                              className="flex-1"
+                            />
+                            <button type="button" onClick={() => spotifyControl(() => api.patch('/profile/spotify/player/volume', { volume_percent: spotifyVolume }))} disabled={spotifyBusy} className="px-2 py-1 rounded-md border border-border text-[11px] text-foreground hover:bg-primary/10 disabled:opacity-50">Set</button>
+                          </div>
+                          {spotifyPlayerState?.track_window?.current_track?.name && (
+                            <p className="text-xs text-mutedForeground">
+                              Now playing: <span className="text-foreground font-semibold">{spotifyPlayerState.track_window.current_track.name}</span>
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+                <div>
                   <h3 className="text-xs font-heading font-bold text-foreground uppercase tracking-wider mb-1">Change password</h3>
                   <input type="password" placeholder="Current password" value={passwordForm.current} onChange={(e) => setPasswordForm((f) => ({ ...f, current: e.target.value }))} className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 mb-2" />
                   <input type="password" placeholder="New password (min 6 characters)" value={passwordForm.new} onChange={(e) => setPasswordForm((f) => ({ ...f, new: e.target.value }))} className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 mb-2" />
@@ -1727,6 +2011,10 @@ export default function Profile() {
                 </div>
               </div>
             )}
+            <SpotifyCard
+              spotifyEmbedUrl={profile.spotify_embed_url}
+              spotifyUrl={profile.spotify_url}
+            />
             <ProfileInfoCard 
               profile={profile} 
               isMe={isMe}

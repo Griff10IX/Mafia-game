@@ -1,8 +1,13 @@
 # Profile: user profile view, avatar, theme, change-password, telegram (for Auto Rank)
 import asyncio
+import base64
 import logging
+import os
+import re
+import secrets
 from datetime import datetime, timezone, timedelta
 from typing import Optional
+from urllib.parse import urlencode, urlparse
 
 _VALID_TOAST_POSITIONS = frozenset(
     ("top-left", "top-center", "top-right", "bottom-left", "bottom-center", "bottom-right", "custom")
@@ -12,9 +17,15 @@ _VALID_TOPBAR_STAT_IDS = frozenset(
 )
 _CHIP_SCALE_MIN, _CHIP_SCALE_MAX = 20, 100
 
+import httpx
 from fastapi import Body, Depends, HTTPException
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
+
+SPOTIFY_ALLOWED_TYPES = {"track", "album", "playlist", "artist", "episode", "show"}
+SPOTIFY_ID_RE = re.compile(r"^[A-Za-z0-9]{22}$")
+SPOTIFY_OAUTH_SCOPE = "streaming user-read-email user-read-private user-modify-playback-state user-read-playback-state user-read-currently-playing"
 
 
 async def ensure_profile_indexes(db):
@@ -68,6 +79,182 @@ def register(router):
     ChangePasswordRequest = srv.ChangePasswordRequest
     DashboardPreferencesRequest = srv.DashboardPreferencesRequest
     CARS = srv.CARS
+
+    class SpotifyEmbedUpdateBody(BaseModel):
+        spotify_url: Optional[str] = None
+
+    class SpotifyOAuthCallbackBody(BaseModel):
+        code: str
+        state: str
+
+    class SpotifyPlayBody(BaseModel):
+        uri: Optional[str] = None
+        device_id: Optional[str] = None
+        position_ms: Optional[int] = None
+
+    class SpotifyTransferBody(BaseModel):
+        device_id: str
+        play: Optional[bool] = True
+
+    class SpotifyVolumeBody(BaseModel):
+        volume_percent: int = Field(..., ge=0, le=100)
+
+    def _spotify_env():
+        return (
+            (os.environ.get("SPOTIFY_CLIENT_ID") or "").strip(),
+            (os.environ.get("SPOTIFY_CLIENT_SECRET") or "").strip(),
+            (os.environ.get("SPOTIFY_REDIRECT_URI") or "").strip(),
+        )
+
+    async def _spotify_feature_allowed(current_user: dict) -> bool:
+        if _is_admin(current_user):
+            return True
+        main_doc = await db.game_settings.find_one({"_id": "main"}, {"_id": 0, "spotify_feature_enabled": 1})
+        return bool(main_doc.get("spotify_feature_enabled", False)) if main_doc else False
+
+    def _spotify_normalize_url_or_uri(raw: str):
+        """
+        Normalize Spotify URL/URI into canonical forms.
+        Returns tuple: (uri, embed_url, public_url, content_type, spotify_id)
+        """
+        s = (raw or "").strip()
+        if not s:
+            raise HTTPException(status_code=400, detail="Spotify URL/URI is required.")
+
+        content_type = None
+        spotify_id = None
+
+        if s.lower().startswith("spotify:"):
+            parts = s.split(":")
+            if len(parts) == 3:
+                content_type = (parts[1] or "").strip().lower()
+                spotify_id = (parts[2] or "").strip()
+        else:
+            try:
+                parsed = urlparse(s)
+            except Exception:
+                parsed = None
+            if parsed and "spotify.com" in (parsed.netloc or "").lower():
+                segs = [seg for seg in (parsed.path or "").split("/") if seg]
+                if segs and segs[0].lower().startswith("intl-"):
+                    segs = segs[1:]
+                if len(segs) >= 2:
+                    content_type = (segs[0] or "").strip().lower()
+                    spotify_id = (segs[1] or "").strip()
+
+        if content_type not in SPOTIFY_ALLOWED_TYPES:
+            raise HTTPException(status_code=400, detail=f"Unsupported Spotify type. Allowed: {sorted(SPOTIFY_ALLOWED_TYPES)}")
+        if not spotify_id or not SPOTIFY_ID_RE.match(spotify_id):
+            raise HTTPException(status_code=400, detail="Invalid Spotify ID.")
+
+        uri = f"spotify:{content_type}:{spotify_id}"
+        public_url = f"https://open.spotify.com/{content_type}/{spotify_id}"
+        embed_url = f"https://open.spotify.com/embed/{content_type}/{spotify_id}"
+        return uri, embed_url, public_url, content_type, spotify_id
+
+    def _spotify_auth_header(client_id: str, client_secret: str) -> str:
+        raw = f"{client_id}:{client_secret}".encode("utf-8")
+        return "Basic " + base64.b64encode(raw).decode("ascii")
+
+    async def _spotify_exchange_code_for_tokens(code: str):
+        client_id, client_secret, redirect_uri = _spotify_env()
+        if not client_id or not client_secret or not redirect_uri:
+            raise HTTPException(status_code=503, detail="Spotify OAuth is not configured on the server.")
+        headers = {
+            "Authorization": _spotify_auth_header(client_id, client_secret),
+            "Content-Type": "application/x-www-form-urlencoded",
+        }
+        data = {
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": redirect_uri,
+        }
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.post("https://accounts.spotify.com/api/token", data=data, headers=headers)
+        if r.status_code >= 400:
+            detail = None
+            try:
+                detail = r.json()
+            except Exception:
+                detail = r.text
+            raise HTTPException(status_code=400, detail=f"Spotify token exchange failed: {detail}")
+        return r.json() if r.content else {}
+
+    async def _spotify_refresh_access_token(refresh_token: str):
+        client_id, client_secret, _redirect_uri = _spotify_env()
+        if not client_id or not client_secret:
+            raise HTTPException(status_code=503, detail="Spotify OAuth is not configured on the server.")
+        headers = {
+            "Authorization": _spotify_auth_header(client_id, client_secret),
+            "Content-Type": "application/x-www-form-urlencoded",
+        }
+        data = {
+            "grant_type": "refresh_token",
+            "refresh_token": refresh_token,
+        }
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.post("https://accounts.spotify.com/api/token", data=data, headers=headers)
+        if r.status_code >= 400:
+            detail = None
+            try:
+                detail = r.json()
+            except Exception:
+                detail = r.text
+            raise HTTPException(status_code=400, detail=f"Spotify token refresh failed: {detail}")
+        return r.json() if r.content else {}
+
+    async def _spotify_valid_access_token(user_id: str):
+        doc = await db.users.find_one(
+            {"id": user_id},
+            {
+                "_id": 0,
+                "spotify_connected": 1,
+                "spotify_access_token": 1,
+                "spotify_access_token_expires_at": 1,
+                "spotify_refresh_token": 1,
+            },
+        )
+        if not doc or not doc.get("spotify_connected"):
+            raise HTTPException(status_code=400, detail="Spotify is not connected.")
+
+        now = datetime.now(timezone.utc)
+        token = (doc.get("spotify_access_token") or "").strip()
+        exp_raw = doc.get("spotify_access_token_expires_at")
+        exp_dt = None
+        if exp_raw:
+            try:
+                exp_dt = datetime.fromisoformat(str(exp_raw).replace("Z", "+00:00"))
+                if exp_dt.tzinfo is None:
+                    exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+            except Exception:
+                exp_dt = None
+
+        if token and exp_dt and exp_dt > (now + timedelta(seconds=30)):
+            return token
+
+        refresh_token = (doc.get("spotify_refresh_token") or "").strip()
+        if not refresh_token:
+            raise HTTPException(status_code=400, detail="Spotify refresh token is missing. Please reconnect Spotify.")
+
+        refreshed = await _spotify_refresh_access_token(refresh_token)
+        new_access = (refreshed.get("access_token") or "").strip()
+        if not new_access:
+            raise HTTPException(status_code=400, detail="Failed to refresh Spotify access token. Please reconnect Spotify.")
+        expires_in = int(refreshed.get("expires_in") or 3600)
+        new_refresh = (refreshed.get("refresh_token") or "").strip() or refresh_token
+        new_exp = (now + timedelta(seconds=max(60, expires_in))).isoformat()
+        await db.users.update_one(
+            {"id": user_id},
+            {
+                "$set": {
+                    "spotify_access_token": new_access,
+                    "spotify_access_token_expires_at": new_exp,
+                    "spotify_refresh_token": new_refresh,
+                    "spotify_connected": True,
+                }
+            },
+        )
+        return new_access
 
     async def _top_cars_for_profile(user_id: str, limit: int = 5, show_cars: bool = False, profile_car_ids: Optional[list] = None):
         """Return only the explicitly chosen cars for the profile (up to 5). Preserves selection order."""
@@ -419,6 +606,8 @@ def register(router):
             "top_cars": top_cars or [],
             "show_cars_on_profile": user.get("profile_show_cars", False),
             "youtube_url": (user.get("profile_youtube_url") or "").strip() or None,
+            "spotify_url": (user.get("profile_spotify_url") or "").strip() or None,
+            "spotify_embed_url": (user.get("profile_spotify_embed_url") or "").strip() or None,
             "profile_banner_image_url": (user.get("profile_banner_image_url") or "").strip() or None,
             "profile_banner_text": (user.get("profile_banner_text") or "").strip() or None,
             "badges": user.get("badges") or [],
@@ -910,6 +1099,273 @@ def register(router):
         val = (youtube_url or "").strip() or None
         await db.users.update_one({"id": uid}, {"$set": {"profile_youtube_url": val}})
         return {"message": "YouTube URL updated", "youtube_url": val}
+
+    @router.get("/profile/spotify/status")
+    async def get_profile_spotify_status(current_user: dict = Depends(get_current_user)):
+        allowed = await _spotify_feature_allowed(current_user)
+        client_id, client_secret, redirect_uri = _spotify_env()
+        oauth_configured = bool(client_id and client_secret and redirect_uri)
+        return {
+            "feature_enabled": allowed,
+            "oauth_configured": oauth_configured,
+            "spotify_connected": bool(current_user.get("spotify_connected")),
+            "spotify_display_name": (current_user.get("spotify_display_name") or "").strip() or None,
+            "spotify_user_id": (current_user.get("spotify_user_id") or "").strip() or None,
+            "spotify_access_token_expires_at": current_user.get("spotify_access_token_expires_at"),
+            "spotify_url": (current_user.get("profile_spotify_url") or "").strip() or None,
+            "spotify_embed_url": (current_user.get("profile_spotify_embed_url") or "").strip() or None,
+        }
+
+    @router.patch("/profile/spotify/embed")
+    async def update_profile_spotify_embed(body: SpotifyEmbedUpdateBody, current_user: dict = Depends(get_current_user)):
+        if not await _spotify_feature_allowed(current_user):
+            raise HTTPException(status_code=403, detail="Spotify feature is currently disabled.")
+        uid = current_user["id"]
+        raw = (body.spotify_url or "").strip()
+        if not raw:
+            await db.users.update_one(
+                {"id": uid},
+                {"$set": {"profile_spotify_url": None, "profile_spotify_uri": None, "profile_spotify_embed_url": None}},
+            )
+            return {"message": "Spotify embed cleared", "spotify_url": None, "spotify_embed_url": None, "spotify_uri": None}
+
+        uri, embed_url, public_url, _typ, _sid = _spotify_normalize_url_or_uri(raw)
+        await db.users.update_one(
+            {"id": uid},
+            {"$set": {"profile_spotify_url": public_url, "profile_spotify_uri": uri, "profile_spotify_embed_url": embed_url}},
+        )
+        return {
+            "message": "Spotify embed updated",
+            "spotify_url": public_url,
+            "spotify_embed_url": embed_url,
+            "spotify_uri": uri,
+        }
+
+    @router.get("/profile/spotify/connect-url")
+    async def get_profile_spotify_connect_url(current_user: dict = Depends(get_current_user)):
+        if not await _spotify_feature_allowed(current_user):
+            raise HTTPException(status_code=403, detail="Spotify feature is currently disabled.")
+        client_id, client_secret, redirect_uri = _spotify_env()
+        if not client_id or not client_secret or not redirect_uri:
+            raise HTTPException(status_code=503, detail="Spotify OAuth is not configured on the server.")
+        state = secrets.token_urlsafe(24)
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": {"spotify_oauth_state": state, "spotify_oauth_state_created_at": datetime.now(timezone.utc).isoformat()}},
+        )
+        query = urlencode(
+            {
+                "response_type": "code",
+                "client_id": client_id,
+                "scope": SPOTIFY_OAUTH_SCOPE,
+                "redirect_uri": redirect_uri,
+                "state": state,
+            }
+        )
+        return {"url": f"https://accounts.spotify.com/authorize?{query}"}
+
+    @router.post("/profile/spotify/oauth-callback")
+    async def spotify_oauth_callback(body: SpotifyOAuthCallbackBody, current_user: dict = Depends(get_current_user)):
+        if not await _spotify_feature_allowed(current_user):
+            raise HTTPException(status_code=403, detail="Spotify feature is currently disabled.")
+        expected_state = (current_user.get("spotify_oauth_state") or "").strip()
+        if not expected_state or expected_state != (body.state or "").strip():
+            raise HTTPException(status_code=400, detail="Invalid Spotify OAuth state.")
+        issued_at = current_user.get("spotify_oauth_state_created_at")
+        if issued_at:
+            try:
+                issued_dt = datetime.fromisoformat(str(issued_at).replace("Z", "+00:00"))
+                if issued_dt.tzinfo is None:
+                    issued_dt = issued_dt.replace(tzinfo=timezone.utc)
+                if datetime.now(timezone.utc) - issued_dt > timedelta(minutes=15):
+                    raise HTTPException(status_code=400, detail="Spotify OAuth state expired. Please reconnect.")
+            except HTTPException:
+                raise
+            except Exception:
+                pass
+
+        tok = await _spotify_exchange_code_for_tokens(body.code)
+        access_token = (tok.get("access_token") or "").strip()
+        if not access_token:
+            raise HTTPException(status_code=400, detail="Spotify did not return an access token.")
+        refresh_token = (tok.get("refresh_token") or "").strip()
+        expires_in = int(tok.get("expires_in") or 3600)
+
+        profile_user_id = None
+        profile_display_name = None
+        try:
+            async with httpx.AsyncClient(timeout=12.0) as client:
+                me_res = await client.get(
+                    "https://api.spotify.com/v1/me",
+                    headers={"Authorization": f"Bearer {access_token}"},
+                )
+            if me_res.status_code < 400:
+                me_data = me_res.json() if me_res.content else {}
+                profile_user_id = (me_data.get("id") or "").strip() or None
+                profile_display_name = (me_data.get("display_name") or "").strip() or None
+        except Exception:
+            pass
+
+        updates = {
+            "spotify_connected": True,
+            "spotify_access_token": access_token,
+            "spotify_access_token_expires_at": (datetime.now(timezone.utc) + timedelta(seconds=max(60, expires_in))).isoformat(),
+            "spotify_oauth_state": None,
+            "spotify_oauth_state_created_at": None,
+        }
+        if refresh_token:
+            updates["spotify_refresh_token"] = refresh_token
+        if profile_user_id is not None:
+            updates["spotify_user_id"] = profile_user_id
+        if profile_display_name is not None:
+            updates["spotify_display_name"] = profile_display_name
+
+        await db.users.update_one({"id": current_user["id"]}, {"$set": updates})
+        return {
+            "message": "Spotify connected",
+            "spotify_connected": True,
+            "spotify_display_name": profile_display_name,
+            "spotify_user_id": profile_user_id,
+        }
+
+    @router.post("/profile/spotify/disconnect")
+    async def disconnect_spotify(current_user: dict = Depends(get_current_user)):
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {
+                "$set": {
+                    "spotify_connected": False,
+                    "spotify_oauth_state": None,
+                    "spotify_oauth_state_created_at": None,
+                },
+                "$unset": {
+                    "spotify_access_token": "",
+                    "spotify_refresh_token": "",
+                    "spotify_access_token_expires_at": "",
+                    "spotify_user_id": "",
+                    "spotify_display_name": "",
+                },
+            },
+        )
+        return {"message": "Spotify disconnected", "spotify_connected": False}
+
+    @router.get("/profile/spotify/sdk-token")
+    async def get_spotify_sdk_token(current_user: dict = Depends(get_current_user)):
+        if not await _spotify_feature_allowed(current_user):
+            raise HTTPException(status_code=403, detail="Spotify feature is currently disabled.")
+        token = await _spotify_valid_access_token(current_user["id"])
+        return {"access_token": token}
+
+    async def _spotify_player_request(current_user: dict, method: str, path: str, *, params=None, payload=None, allow_empty=True):
+        if not await _spotify_feature_allowed(current_user):
+            raise HTTPException(status_code=403, detail="Spotify feature is currently disabled.")
+        token = await _spotify_valid_access_token(current_user["id"])
+        headers = {"Authorization": f"Bearer {token}"}
+        if payload is not None:
+            headers["Content-Type"] = "application/json"
+        url = f"https://api.spotify.com/v1{path}"
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            r = await client.request(method.upper(), url, headers=headers, params=params, json=payload)
+        if r.status_code in (200, 201):
+            return r.json() if r.content else {}
+        if r.status_code in (202, 204):
+            return {}
+        detail = None
+        try:
+            detail = r.json()
+        except Exception:
+            detail = r.text
+        if r.status_code == 403:
+            raise HTTPException(
+                status_code=403,
+                detail="Spotify Premium is required for in-game playback controls.",
+            )
+        if r.status_code == 404:
+            raise HTTPException(
+                status_code=404,
+                detail="No active Spotify playback device found. Open Spotify or connect the web player first.",
+            )
+        if allow_empty and r.status_code == 400:
+            raise HTTPException(status_code=400, detail=f"Spotify rejected the request: {detail}")
+        raise HTTPException(status_code=400, detail=f"Spotify request failed: {detail}")
+
+    @router.get("/profile/spotify/player/state")
+    async def get_spotify_player_state(current_user: dict = Depends(get_current_user)):
+        player_state = await _spotify_player_request(current_user, "GET", "/me/player")
+        devices = await _spotify_player_request(current_user, "GET", "/me/player/devices")
+        return {"player": player_state or None, "devices": devices.get("devices") if isinstance(devices, dict) else []}
+
+    @router.post("/profile/spotify/player/transfer")
+    async def spotify_transfer_playback(body: SpotifyTransferBody, current_user: dict = Depends(get_current_user)):
+        device_id = (body.device_id or "").strip()
+        if not device_id:
+            raise HTTPException(status_code=400, detail="device_id is required.")
+        await _spotify_player_request(
+            current_user,
+            "PUT",
+            "/me/player",
+            payload={"device_ids": [device_id], "play": bool(body.play)},
+        )
+        return {"message": "Playback transferred"}
+
+    @router.post("/profile/spotify/player/play")
+    async def spotify_play(body: SpotifyPlayBody, current_user: dict = Depends(get_current_user)):
+        payload = {}
+        if body.uri:
+            raw_uri = (body.uri or "").strip()
+            if raw_uri.lower().startswith("spotify:"):
+                uri = raw_uri
+            else:
+                uri, _embed_url, _public_url, content_type, _sid = _spotify_normalize_url_or_uri(raw_uri)
+                if content_type == "track":
+                    payload["uris"] = [uri]
+                else:
+                    payload["context_uri"] = uri
+            if raw_uri.lower().startswith("spotify:"):
+                try:
+                    typ = raw_uri.split(":")[1].strip().lower()
+                except Exception:
+                    typ = ""
+                if typ == "track":
+                    payload["uris"] = [raw_uri]
+                else:
+                    payload["context_uri"] = raw_uri
+        if body.position_ms is not None:
+            payload["position_ms"] = max(0, int(body.position_ms))
+        params = {"device_id": body.device_id} if body.device_id else None
+        await _spotify_player_request(
+            current_user,
+            "PUT",
+            "/me/player/play",
+            params=params,
+            payload=payload or {},
+        )
+        return {"message": "Playback started"}
+
+    @router.post("/profile/spotify/player/pause")
+    async def spotify_pause(current_user: dict = Depends(get_current_user)):
+        await _spotify_player_request(current_user, "PUT", "/me/player/pause")
+        return {"message": "Playback paused"}
+
+    @router.post("/profile/spotify/player/next")
+    async def spotify_next(current_user: dict = Depends(get_current_user)):
+        await _spotify_player_request(current_user, "POST", "/me/player/next")
+        return {"message": "Skipped to next track"}
+
+    @router.post("/profile/spotify/player/previous")
+    async def spotify_previous(current_user: dict = Depends(get_current_user)):
+        await _spotify_player_request(current_user, "POST", "/me/player/previous")
+        return {"message": "Went to previous track"}
+
+    @router.patch("/profile/spotify/player/volume")
+    async def spotify_volume(body: SpotifyVolumeBody, current_user: dict = Depends(get_current_user)):
+        await _spotify_player_request(
+            current_user,
+            "PUT",
+            "/me/player/volume",
+            params={"volume_percent": int(body.volume_percent)},
+        )
+        return {"message": "Volume updated", "volume_percent": int(body.volume_percent)}
 
     @router.patch("/profile/banner")
     async def update_profile_banner(

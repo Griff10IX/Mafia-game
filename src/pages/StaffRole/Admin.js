@@ -24,16 +24,6 @@ const ADMIN_STYLES = `
       padding-left: 12px;
       padding-right: 12px;
     }
-    .admin-module {
-      background-color: var(--noir-surface, #282828);
-      border: 1px solid var(--noir-border-mid, rgba(var(--noir-primary-rgb), 0.22));
-      border-top-width: 1px;
-      box-shadow: var(--app-card-shadow, none);
-    }
-    .admin-focus-block {
-      border-top-width: 1px;
-      box-shadow: var(--app-card-shadow, none);
-    }
   }
   .admin-command-bar {
     border-bottom: 1px solid rgba(var(--noir-primary-rgb), 0.35);
@@ -544,6 +534,7 @@ export default function Admin() {
   const [modDefaultOnlineColor, setModDefaultOnlineColor] = useState('#1e3a5f');
   const [requireEmailVerification, setRequireEmailVerification] = useState(false);
   const [blockProxyVpnLogin, setBlockProxyVpnLogin] = useState(true);
+  const [spotifyFeatureEnabled, setSpotifyFeatureEnabled] = useState(false);
   const [landingBannerEnabled, setLandingBannerEnabled] = useState(false);
   const [landingBannerMessage, setLandingBannerMessage] = useState('');
   const [stockMarketMaxPoints, setStockMarketMaxPoints] = useState(3000);
@@ -864,6 +855,7 @@ export default function Admin() {
       setModDefaultOnlineColor(modHex.startsWith('#') ? modHex : '#' + modHex);
       setRequireEmailVerification(!!res.data?.require_email_verification);
       setBlockProxyVpnLogin(res.data?.block_proxy_vpn_login !== false);
+      setSpotifyFeatureEnabled(!!res.data?.spotify_feature_enabled);
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
       setLandingBannerMessage(res.data?.landing_banner_message ?? '');
       setStockMarketMaxPoints(Math.max(1, parseInt(res.data?.stock_market_max_points, 10) || 3000));
@@ -890,6 +882,7 @@ export default function Admin() {
       setModDefaultOnlineColor('#1e3a5f');
       setRequireEmailVerification(false);
       setBlockProxyVpnLogin(true);
+      setSpotifyFeatureEnabled(false);
       setLandingBannerMessage('');
       setStockMarketMaxPoints(3000);
       setLoginLockFrom('');
@@ -941,6 +934,7 @@ export default function Admin() {
         mod_default_online_color: modDefaultOnlineColor,
         require_email_verification: requireEmailVerification,
         block_proxy_vpn_login: blockProxyVpnLogin,
+        spotify_feature_enabled: spotifyFeatureEnabled,
         landing_banner_enabled: landingBannerEnabled,
         landing_banner_message: landingBannerMessage,
         stock_market_max_points: Math.max(1, parseInt(stockMarketMaxPoints, 10) || 3000),
@@ -949,6 +943,7 @@ export default function Admin() {
       setModDefaultOnlineColor(res.data?.mod_default_online_color || modDefaultOnlineColor);
       setRequireEmailVerification(!!res.data?.require_email_verification);
       setBlockProxyVpnLogin(res.data?.block_proxy_vpn_login !== false);
+      setSpotifyFeatureEnabled(!!res.data?.spotify_feature_enabled);
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
       if (res.data?.landing_banner_message !== undefined) setLandingBannerMessage(res.data.landing_banner_message ?? '');
       setStockMarketMaxPoints(Math.max(1, res.data?.stock_market_max_points ?? 3000));
@@ -5388,6 +5383,17 @@ export default function Admin() {
                   className="rounded border-input"
                 />
                 <span>Block proxy/VPN on login and signup</span>
+              </label>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-primary/10">
+              <label className="flex items-center gap-2 cursor-pointer text-sm font-heading">
+                <input
+                  type="checkbox"
+                  checked={spotifyFeatureEnabled}
+                  onChange={(e) => setSpotifyFeatureEnabled(e.target.checked)}
+                  className="rounded border-input"
+                />
+                <span>Enable Spotify feature for players (admins can always test)</span>
               </label>
             </div>
             <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-primary/10">
