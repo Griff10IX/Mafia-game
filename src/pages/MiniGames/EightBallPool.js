@@ -419,7 +419,7 @@ export default function EightBallPool() {
   }, [activeGame?.players, displayBalls]);
   const aimPreview = useMemo(() => {
     const cue = displayBalls.find((b) => b.number === 0 && !b.pocketed);
-    if (!cue || !canAim) return { segments: [], ghost: null, objectLineWidth: 1.25 };
+    if (!cue || !canAim) return { segments: [], ghost: null, objectLineWidth: 1.55 };
     const w = 900;
     const h = 450;
     const cuePx = (Number(cue.x || 0) / TABLE_W) * w;
@@ -442,7 +442,7 @@ export default function EightBallPool() {
     // Object-ball path: more segments + longer line as aim upgrades increase (rails off cushions).
     const objectSegmentBudget = objectRailSegmentCap;
     const objectPathLength = 90 + (previewLevel * 14) + (previewTier * 48) + (Number(power || 0) * 95);
-    const objectLineWidth = 1.25 + (previewTier * 0.45) + Math.min(2.5, previewLevel * 0.04);
+    const objectLineWidth = 1.55 + (previewTier * 0.52) + Math.min(2.85, previewLevel * 0.05);
 
     for (let segmentIndex = 0; segmentIndex < previewSegmentBudget && remain > 1; segmentIndex += 1) {
       const wallDist = rayToTableWall(ox, oy, dx, dy, minX, maxX, minY, maxY);
@@ -887,39 +887,43 @@ export default function EightBallPool() {
       [0, 0], [TABLE_W / 2, 0], [TABLE_W, 0],
       [0, TABLE_H], [TABLE_W / 2, TABLE_H], [TABLE_W, TABLE_H],
     ];
-    const pockets = pocketCentersTable.map(([tx, ty]) => ({
-      x: (tx / TABLE_W) * w,
-      y: (ty / TABLE_H) * h,
-    }));
 
-    for (const p of pockets) {
-      const px = p.x;
-      const py = p.y;
-      const pocketGrad = ctx.createRadialGradient(px, py, 2, px, py, pr + 8);
+    for (let pi = 0; pi < pocketCentersTable.length; pi += 1) {
+      const [tx, ty] = pocketCentersTable[pi];
+      const px = (tx / TABLE_W) * w;
+      const py = (ty / TABLE_H) * h;
+      // Center pockets on the top/bottom rails read smaller than corners when drawn as the same circle.
+      // Widen slightly along the rail (horizontal for these two) so they match corner pocket presence.
+      const isMidShortRail = pi === 1 || pi === 4;
+      const rx = isMidShortRail ? pr * 1.28 : pr;
+      const ry = isMidShortRail ? pr * 1.1 : pr;
+      const rGrad = Math.max(rx, ry);
+      const pocketGrad = ctx.createRadialGradient(px, py, 2, px, py, rGrad + 8);
       pocketGrad.addColorStop(0, currentSkin.pocket[0]);
       pocketGrad.addColorStop(0.55, currentSkin.pocket[1]);
       pocketGrad.addColorStop(1, '#000000');
       ctx.beginPath();
-      ctx.arc(px, py, pr + 2.2, 0, Math.PI * 2);
+      ctx.ellipse(px, py, rx + 2.2, ry + 2.2, 0, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(8,8,12,0.96)';
       ctx.fill();
-      const rimGrad = ctx.createLinearGradient(px - pr, py - pr, px + pr, py + pr);
+      const rimGrad = ctx.createLinearGradient(px - rx, py - ry, px + rx, py + ry);
       const rimA = currentSkin.pocketRim || 'rgba(30,64,120,0.5)';
       rimGrad.addColorStop(0, rimA);
       rimGrad.addColorStop(1, 'rgba(0,0,0,0.35)');
       ctx.beginPath();
-      ctx.arc(px, py, pr + 0.9, 0, Math.PI * 2);
+      ctx.ellipse(px, py, rx + 0.9, ry + 0.9, 0, 0, Math.PI * 2);
       ctx.strokeStyle = rimGrad;
       ctx.lineWidth = 2.4;
       ctx.stroke();
-      const innerHoleR = Math.max(pr * 0.45, pr - 3.5);
+      const innerHoleRx = Math.max(rx * 0.45, rx - 3.5);
+      const innerHoleRy = Math.max(ry * 0.45, ry - 3.5);
       ctx.beginPath();
-      ctx.arc(px, py, innerHoleR, 0, Math.PI * 2);
+      ctx.ellipse(px, py, innerHoleRx, innerHoleRy, 0, 0, Math.PI * 2);
       ctx.fillStyle = pocketGrad;
       ctx.fill();
       ctx.beginPath();
-      ctx.arc(px, py, Math.max(pr * 0.42, innerHoleR - 0.5), 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.ellipse(px, py, Math.max(rx * 0.42, innerHoleRx - 0.5), Math.max(ry * 0.42, innerHoleRy - 0.5), 0, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(255,255,255,0.1)';
       ctx.lineWidth = 1;
       ctx.stroke();
     }
@@ -937,9 +941,12 @@ export default function EightBallPool() {
       ctx.save();
       ctx.fillStyle = 'rgba(251,191,36,0.07)';
       ctx.fillRect(x1, y1, x2 - x1, y2 - y1);
-      ctx.strokeStyle = 'rgba(251,191,36,0.55)';
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)';
       ctx.setLineDash([6, 5]);
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 3.2;
+      ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+      ctx.strokeStyle = 'rgba(251,191,36,0.78)';
+      ctx.lineWidth = 1.65;
       ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
       ctx.setLineDash([]);
       ctx.restore();
@@ -963,14 +970,23 @@ export default function EightBallPool() {
       if (speed > 0.05) {
         const tx = x - (vx * 900 * 0.08);
         const ty = y - (vy * 900 * 0.08);
+        const tw = Math.max(1.6, r * 0.85);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(tx, ty);
+        ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+        ctx.lineWidth = tw + 2.2;
+        ctx.stroke();
         const trail = ctx.createLinearGradient(x, y, tx, ty);
-        trail.addColorStop(0, 'rgba(255,255,255,0.16)');
-        trail.addColorStop(1, 'rgba(255,255,255,0.0)');
+        trail.addColorStop(0, 'rgba(255,255,255,0.42)');
+        trail.addColorStop(0.55, 'rgba(255,255,255,0.12)');
+        trail.addColorStop(1, 'rgba(255,255,255,0)');
         ctx.beginPath();
         ctx.moveTo(x, y);
         ctx.lineTo(tx, ty);
         ctx.strokeStyle = trail;
-        ctx.lineWidth = Math.max(1, r * 0.7);
+        ctx.lineWidth = tw;
         ctx.stroke();
       }
 
@@ -1061,79 +1077,120 @@ export default function EightBallPool() {
       const ox = Math.cos(a);
       const oy = Math.sin(a);
 
-      // Aim ring around cue ball.
+      // Aim ring around cue ball (underlay + ring for contrast on felt).
+      const ringW = isAiming ? 3.2 : 1.85;
       ctx.beginPath();
       ctx.arc(cx, cy, cueVisualR, 0, Math.PI * 2);
-      ctx.strokeStyle = isAiming ? 'rgba(34,197,94,0.95)' : 'rgba(255,255,255,0.4)';
-      ctx.lineWidth = isAiming ? 3 : 1.6;
-      ctx.shadowColor = isAiming ? 'rgba(34,197,94,0.55)' : 'transparent';
-      ctx.shadowBlur = isAiming ? 8 : 0;
+      ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+      ctx.lineWidth = ringW + 2.4;
+      ctx.shadowBlur = 0;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(cx, cy, cueVisualR, 0, Math.PI * 2);
+      ctx.strokeStyle = isAiming ? 'rgba(34,197,94,0.96)' : 'rgba(255,255,255,0.55)';
+      ctx.lineWidth = ringW;
+      ctx.shadowColor = isAiming ? 'rgba(34,197,94,0.45)' : 'transparent';
+      ctx.shadowBlur = isAiming ? 7 : 0;
       ctx.stroke();
       ctx.shadowBlur = 0;
 
-      // Multi-segment preview: solid whites + object path + cue deflection (mobile-pool style).
+      // Multi-segment preview: dark underlay + bright stroke so paths read on busy felt.
       const segs = aimPreview?.segments || [];
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
       if (segs.length) {
         segs.forEach((seg, idx) => {
+          const grad = ctx.createLinearGradient(seg.x1, seg.y1, seg.x2, seg.y2);
+          let lw;
+          let dash;
+          if (seg.kind === 'object') {
+            grad.addColorStop(0, 'rgba(255,255,255,0.98)');
+            grad.addColorStop(1, 'rgba(226,232,240,0.55)');
+            dash = [];
+            lw = typeof seg.lineWidth === 'number' ? seg.lineWidth : (aimPreview?.objectLineWidth || 2.1);
+          } else if (seg.kind === 'cue_deflect') {
+            grad.addColorStop(0, 'rgba(253,224,71,0.95)');
+            grad.addColorStop(1, 'rgba(253,224,71,0.35)');
+            dash = [6, 5];
+            lw = 2.35;
+          } else if (seg.kind === 'contact') {
+            grad.addColorStop(0, 'rgba(255,255,255,1)');
+            grad.addColorStop(1, 'rgba(186,230,253,0.75)');
+            dash = [];
+            lw = 2.85;
+          } else {
+            grad.addColorStop(0, idx === 0 ? 'rgba(255,255,255,1)' : 'rgba(255,255,255,0.72)');
+            grad.addColorStop(1, idx === 0 ? 'rgba(224,242,254,0.55)' : 'rgba(255,255,255,0.28)');
+            dash = idx === 0 ? [] : [6, 5];
+            lw = idx === 0 ? 3.15 : 2.05;
+          }
+          ctx.setLineDash(dash);
           ctx.beginPath();
           ctx.moveTo(seg.x1, seg.y1);
           ctx.lineTo(seg.x2, seg.y2);
-          const grad = ctx.createLinearGradient(seg.x1, seg.y1, seg.x2, seg.y2);
-          if (seg.kind === 'object') {
-            grad.addColorStop(0, 'rgba(255,255,255,0.98)');
-            grad.addColorStop(1, 'rgba(255,255,255,0.35)');
-            ctx.setLineDash([]);
-            ctx.lineWidth = typeof seg.lineWidth === 'number' ? seg.lineWidth : (aimPreview?.objectLineWidth || 1.65);
-          } else if (seg.kind === 'cue_deflect') {
-            grad.addColorStop(0, 'rgba(255,255,255,0.92)');
-            grad.addColorStop(1, 'rgba(255,255,255,0.2)');
-            ctx.setLineDash([5, 4]);
-            ctx.lineWidth = 1.85;
-          } else if (seg.kind === 'contact') {
-            grad.addColorStop(0, 'rgba(255,255,255,1)');
-            grad.addColorStop(1, 'rgba(255,255,255,0.55)');
-            ctx.setLineDash([]);
-            ctx.lineWidth = 2.35;
-          } else {
-            grad.addColorStop(0, idx === 0 ? 'rgba(255,255,255,1)' : 'rgba(255,255,255,0.55)');
-            grad.addColorStop(1, idx === 0 ? 'rgba(255,255,255,0.75)' : 'rgba(255,255,255,0.2)');
-            ctx.setLineDash(idx === 0 ? [] : [5, 5]);
-            ctx.lineWidth = idx === 0 ? 2.75 : 1.55;
-          }
+          ctx.strokeStyle = 'rgba(0,0,0,0.42)';
+          ctx.lineWidth = lw + 2.8;
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(seg.x1, seg.y1);
+          ctx.lineTo(seg.x2, seg.y2);
           ctx.strokeStyle = grad;
+          ctx.lineWidth = lw;
           ctx.stroke();
           ctx.setLineDash([]);
         });
       } else {
-        ctx.beginPath();
-        ctx.moveTo(cx, cy);
-        ctx.lineTo(cx + ox * Math.min(aimLen, 170), cy + oy * Math.min(aimLen, 170));
-        ctx.strokeStyle = isAiming ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.18)';
-        ctx.lineWidth = 1.5;
-        ctx.setLineDash([5, 6]);
-        ctx.stroke();
-        ctx.setLineDash([]);
         const gx = cx + ox * Math.min(aimLen, 170);
         const gy = cy + oy * Math.min(aimLen, 170);
+        ctx.setLineDash([6, 7]);
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(gx, gy);
+        ctx.strokeStyle = 'rgba(0,0,0,0.38)';
+        ctx.lineWidth = 4.2;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.lineTo(gx, gy);
+        ctx.strokeStyle = isAiming ? 'rgba(255,255,255,0.72)' : 'rgba(255,255,255,0.45)';
+        ctx.lineWidth = 2.35;
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.arc(gx, gy, 5.5, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
         ctx.beginPath();
         ctx.arc(gx, gy, 5, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255,255,255,0.25)';
+        ctx.fillStyle = 'rgba(255,255,255,0.35)';
         ctx.fill();
       }
       if (aimPreview?.ghost) {
+        ctx.setLineDash([]);
+        ctx.beginPath();
+        ctx.arc(aimPreview.ghost.x, aimPreview.ghost.y, 6.5, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
         ctx.beginPath();
         ctx.arc(aimPreview.ghost.x, aimPreview.ghost.y, 6.2, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-        ctx.lineWidth = 1.4;
+        ctx.strokeStyle = 'rgba(255,255,255,0.95)';
+        ctx.lineWidth = 1.85;
         ctx.stroke();
         ctx.beginPath();
         ctx.arc(aimPreview.ghost.x, aimPreview.ghost.y, 5.2, 0, Math.PI * 2);
-        ctx.fillStyle = 'rgba(255,255,255,0.22)';
+        ctx.fillStyle = 'rgba(255,255,255,0.28)';
         ctx.fill();
         ctx.beginPath();
+        ctx.arc(aimPreview.ghost.objectX, aimPreview.ghost.objectY, 5.2, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(0,0,0,0.38)';
+        ctx.lineWidth = 2.2;
+        ctx.stroke();
+        ctx.beginPath();
         ctx.arc(aimPreview.ghost.objectX, aimPreview.ghost.objectY, 4.8, 0, Math.PI * 2);
-        ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(147,197,253,0.92)';
+        ctx.lineWidth = 1.45;
         ctx.stroke();
       }
 
@@ -1180,9 +1237,15 @@ export default function EightBallPool() {
     fxRef.current.impacts = fxRef.current.impacts.filter((f) => now - f.at < 300);
     for (const f of fxRef.current.impacts) {
       const alpha = 1 - ((now - f.at) / 300);
+      const rad = 6 + (1 - alpha) * 18;
       ctx.beginPath();
-      ctx.arc(f.x, f.y, 6 + (1 - alpha) * 18, 0, Math.PI * 2);
-      ctx.strokeStyle = `rgba(255,255,255,${0.35 * alpha})`;
+      ctx.arc(f.x, f.y, rad, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(0,0,0,${0.4 * alpha})`;
+      ctx.lineWidth = 3.5;
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, rad, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(255,255,255,${0.55 * alpha})`;
       ctx.lineWidth = 2;
       ctx.stroke();
     }
