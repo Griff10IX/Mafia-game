@@ -811,19 +811,6 @@ export default function EightBallPool() {
       ctx.lineWidth = isAiming ? 2.5 : 1.4;
       ctx.stroke();
 
-      // Spin marker: click inside cue ball to move this target.
-      const spinDotX = cx + (Number(spinX || 0) * cueVisualR * 0.68);
-      const spinDotY = cy - (Number(spinY || 0) * cueVisualR * 0.68);
-      ctx.beginPath();
-      ctx.arc(spinDotX, spinDotY, Math.max(3, cueVisualR * 0.17), 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(220,38,38,0.95)';
-      ctx.fill();
-      ctx.beginPath();
-      ctx.arc(spinDotX, spinDotY, Math.max(5, cueVisualR * 0.26), 0, Math.PI * 2);
-      ctx.strokeStyle = 'rgba(220,38,38,0.95)';
-      ctx.lineWidth = 1.6;
-      ctx.stroke();
-
       // Multi-segment preview upgrades: rails and contact-aware lines.
       const segs = aimPreview?.segments || [];
       if (segs.length) {
@@ -1052,29 +1039,26 @@ export default function EightBallPool() {
     setPower((prev) => prev + (curvedPower - prev) * 0.38);
   };
 
-  const updateSpinFromPointer = useCallback((event) => {
-    if (!canRenderCue || !ballsSettled) return false;
-    const canvas = canvasRef.current;
-    if (!canvas) return false;
-    const cue = displayBalls.find((b) => b.number === 0 && !b.pocketed);
-    if (!cue) return false;
-    const rect = canvas.getBoundingClientRect();
-    const sx = ((event.clientX - rect.left) / rect.width) * canvas.width;
-    const sy = ((event.clientY - rect.top) / rect.height) * canvas.height;
-    const cx = (Number(cue.x || 0) / TABLE_W) * canvas.width;
-    const cy = (Number(cue.y || 0) / TABLE_H) * canvas.height;
-    const visualRadius = Math.max(12, (BALL_R / TABLE_W) * canvas.width);
+  const updateSpinFromPad = useCallback((event) => {
+    const target = event.currentTarget;
+    if (!target) return;
+    const rect = target.getBoundingClientRect();
+    const sx = event.clientX - rect.left;
+    const sy = event.clientY - rect.top;
+    const size = Math.min(rect.width, rect.height);
+    const cx = size / 2;
+    const cy = size / 2;
+    const visualRadius = size * 0.36;
     const dx = sx - cx;
     const dy = sy - cy;
     const dist = Math.hypot(dx, dy);
-    if (dist > visualRadius * 1.05) return false;
+    if (dist > visualRadius * 1.1) return;
     const clamped = Math.min(1, dist / visualRadius);
     const nx = dist > 1e-6 ? (dx / dist) * clamped : 0;
     const ny = dist > 1e-6 ? (dy / dist) * clamped : 0;
     setSpinX(Number(nx.toFixed(3)));
     setSpinY(Number((-ny).toFixed(3)));
-    return true;
-  }, [ballsSettled, canRenderCue, displayBalls]);
+  }, []);
 
   const buyCue = async (cueId) => {
     setBusy(true);
@@ -1243,7 +1227,6 @@ export default function EightBallPool() {
                   onPointerDown={(e) => {
                     if (replayActive || !canRenderCue || !ballsSettled) return;
                     if (mobileNeedsRotate) return;
-                    if (updateSpinFromPointer(e)) return;
                     setIsAiming(true);
                     updateAimFromPointer(e);
                   }}
@@ -1298,8 +1281,25 @@ export default function EightBallPool() {
                 <label className="space-y-1"><span className="text-mutedForeground">Angle (deg)</span><input type="number" value={angleDeg} onChange={(e) => setAngleDeg(Number(e.target.value || 0))} className="w-full px-2 py-1 rounded border border-input bg-transparent" /></label>
                 <label className="space-y-1"><span className="text-mutedForeground">Power (0-1)</span><input type="number" min={0} max={1} step={0.01} value={power} onChange={(e) => setPower(Number(e.target.value || 0))} className="w-full px-2 py-1 rounded border border-input bg-transparent" /></label>
                 <div className="space-y-1 col-span-2 md:col-span-2">
-                  <span className="text-mutedForeground">Spin (click cue ball to set)</span>
-                  <div className="flex items-center gap-2">
+                  <span className="text-mutedForeground">Curve/Spin ball</span>
+                  <div className="flex items-center gap-3">
+                    <div
+                      className="relative w-16 h-16 rounded-full border border-zinc-500/70 bg-gradient-to-b from-zinc-100 to-zinc-300 shadow-inner cursor-pointer select-none"
+                      onPointerDown={(e) => updateSpinFromPad(e)}
+                      onPointerMove={(e) => { if ((e.buttons & 1) === 1) updateSpinFromPad(e); }}
+                      title="Drag red marker to set curve"
+                    >
+                      <div className="absolute inset-[10%] rounded-full border border-zinc-400/60" />
+                      <div
+                        className="absolute w-3.5 h-3.5 rounded-full border border-red-100"
+                        style={{
+                          left: `calc(50% + ${Number(spinX || 0) * 21}px - 7px)`,
+                          top: `calc(50% + ${-Number(spinY || 0) * 21}px - 7px)`,
+                          backgroundColor: '#dc2626',
+                          boxShadow: '0 0 0 2px rgba(220,38,38,0.35)',
+                        }}
+                      />
+                    </div>
                     <div className="px-2 py-1 rounded border border-input bg-transparent text-[10px] text-foreground min-w-[120px]">
                       X {Number(spinX || 0).toFixed(2)} · Y {Number(spinY || 0).toFixed(2)}
                     </div>

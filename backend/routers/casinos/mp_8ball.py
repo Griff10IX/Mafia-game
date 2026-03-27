@@ -35,6 +35,9 @@ MP_8BALL_SPIN_CARRY = 0.03
 MP_8BALL_SLEEP_EPS = 0.006
 MP_8BALL_POS_EPS = 1e-5
 MP_8BALL_MAX_SIM_STEPS = 1200
+MP_8BALL_SPIN_SWERVE = 0.045
+MP_8BALL_SPIN_DECAY = 0.988
+MP_8BALL_RAIL_SPIN_THROW = 0.085
 
 
 class PoolCreateRequest(BaseModel):
@@ -184,6 +187,8 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
     speed = 2.2 * power
     cue["vx"] = math.cos(cue_angle) * speed + (spin_x * 0.05)
     cue["vy"] = math.sin(cue_angle) * speed + (spin_y * 0.05)
+    cue_spin_x = max(-1.0, min(1.0, float(spin_x or 0.0)))
+    cue_spin_y = max(-1.0, min(1.0, float(spin_y or 0.0)))
     impacted_ids = {int(cue.get("id") or 0)}
     first_contact = None
     pocketed_numbers: List[int] = []
@@ -194,6 +199,22 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
     for step in range(MP_8BALL_MAX_SIM_STEPS):
         active = _active_balls(out)
         for b in active:
+            # Apply cue-ball spin as gradual side-force (swerve) and top/back speed bias.
+            if b.get("number") == 0:
+                speed_now = math.hypot(b["vx"], b["vy"])
+                if speed_now > MP_8BALL_STOP_SPEED:
+                    # Side spin curves path while ball is rolling.
+                    px = -b["vy"] / max(speed_now, 1e-6)
+                    py = b["vx"] / max(speed_now, 1e-6)
+                    swerve = cue_spin_x * MP_8BALL_SPIN_SWERVE * MP_8BALL_SIM_DT
+                    b["vx"] += px * swerve
+                    b["vy"] += py * swerve
+                    # Top/back spin nudges along velocity axis.
+                    speed_bias = cue_spin_y * 0.035 * MP_8BALL_SIM_DT
+                    b["vx"] += (b["vx"] / max(speed_now, 1e-6)) * speed_bias
+                    b["vy"] += (b["vy"] / max(speed_now, 1e-6)) * speed_bias
+                cue_spin_x *= MP_8BALL_SPIN_DECAY
+                cue_spin_y *= MP_8BALL_SPIN_DECAY
             b["x"] += b["vx"] * MP_8BALL_SIM_DT
             b["y"] += b["vy"] * MP_8BALL_SIM_DT
             # Cushion bounce.
@@ -201,6 +222,8 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
                 b["x"] = MP_8BALL_BALL_R
                 pre = abs(b["vx"])
                 b["vx"] = abs(b["vx"]) * MP_8BALL_RESTITUTION
+                if b.get("number") == 0:
+                    b["vy"] += cue_spin_x * MP_8BALL_RAIL_SPIN_THROW
                 if pre > 0.15:
                     replay_events.append({
                         "type": "rail",
@@ -214,6 +237,8 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
                 b["x"] = MP_8BALL_TABLE_W - MP_8BALL_BALL_R
                 pre = abs(b["vx"])
                 b["vx"] = -abs(b["vx"]) * MP_8BALL_RESTITUTION
+                if b.get("number") == 0:
+                    b["vy"] -= cue_spin_x * MP_8BALL_RAIL_SPIN_THROW
                 if pre > 0.15:
                     replay_events.append({
                         "type": "rail",
@@ -227,6 +252,8 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
                 b["y"] = MP_8BALL_BALL_R
                 pre = abs(b["vy"])
                 b["vy"] = abs(b["vy"]) * MP_8BALL_RESTITUTION
+                if b.get("number") == 0:
+                    b["vx"] -= cue_spin_x * MP_8BALL_RAIL_SPIN_THROW
                 if pre > 0.15:
                     replay_events.append({
                         "type": "rail",
@@ -240,6 +267,8 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
                 b["y"] = MP_8BALL_TABLE_H - MP_8BALL_BALL_R
                 pre = abs(b["vy"])
                 b["vy"] = -abs(b["vy"]) * MP_8BALL_RESTITUTION
+                if b.get("number") == 0:
+                    b["vx"] += cue_spin_x * MP_8BALL_RAIL_SPIN_THROW
                 if pre > 0.15:
                     replay_events.append({
                         "type": "rail",
