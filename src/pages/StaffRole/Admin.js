@@ -3981,6 +3981,7 @@ export default function Admin() {
               <Select value={formData.tokenType} onChange={(e) => setFormData((prev) => ({ ...prev, tokenType: e.target.value }))}>
                 <option value="xp_crimes">Crime XP</option>
                 <option value="xp_gta">GTA XP</option>
+                <option value="auto_rank_2h">Auto Rank (2h)</option>
                 <option value="melt">Melt Speed</option>
                 <option value="oc_reduced">OC Reduced</option>
                 <option value="booze">Booze</option>
