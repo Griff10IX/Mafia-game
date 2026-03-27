@@ -169,9 +169,9 @@ const TrialBanner = ({ trialUntil, dismissed, onDismiss }) => {
         <Clock size={14} className={`shrink-0 ${expired ? 'text-red-400' : 'text-cyan-400'}`} />
         <p className="flex-1 text-[10px] sm:text-xs font-heading text-zinc-300">
           {expired ? (
-            <>Founding Member trial has ended. <Link to="/game/store" className="text-primary underline font-bold">Purchase Auto Rank</Link> in the Store to keep it.</>
+            <>Auto Rank trial has ended. <Link to="/game/store" className="text-primary underline font-bold">Purchase Auto Rank</Link> in the Store to keep it.</>
           ) : (
-            <>Founding Member trial — <span className="font-bold text-cyan-400">{remaining}</span> remaining. <Link to="/game/store" className="text-primary underline font-bold">Purchase permanently</Link> in the Store.</>
+            <>Auto Rank trial — <span className="font-bold text-cyan-400">{remaining}</span> remaining. <Link to="/game/store" className="text-primary underline font-bold">Purchase permanently</Link> in the Store.</>
           )}
         </p>
         <button
