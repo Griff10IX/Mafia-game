@@ -28,6 +28,9 @@ MP_8BALL_POCKET_R = 0.045
 MP_8BALL_RESTITUTION = 0.96
 MP_8BALL_FRICTION = 0.991
 MP_8BALL_STOP_SPEED = 0.02
+MP_8BALL_SIM_DT = 0.016
+MP_8BALL_REPLAY_SAMPLE_EVERY = 2
+MP_8BALL_MAX_REPLAY_FRAMES = 180
 
 
 class PoolCreateRequest(BaseModel):
@@ -140,23 +143,52 @@ def _active_balls(balls: List[dict]) -> List[dict]:
     return [b for b in balls if not b.get("pocketed")]
 
 
+def _replay_frame_balls(balls: List[dict]) -> List[dict]:
+    return [
+        {
+            "id": int(b.get("id") or 0),
+            "number": int(b.get("number") or 0),
+            "kind": b.get("kind"),
+            "x": float(b.get("x") or 0.0),
+            "y": float(b.get("y") or 0.0),
+            "vx": float(b.get("vx") or 0.0),
+            "vy": float(b.get("vy") or 0.0),
+            "pocketed": bool(b.get("pocketed")),
+        }
+        for b in balls
+    ]
+
+
 def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x: float = 0.0, spin_y: float = 0.0) -> dict:
     out = [{**b} for b in balls]
     cue = next((b for b in out if b.get("number") == 0), None)
     if not cue or cue.get("pocketed"):
-        return {"balls": out, "first_contact": None, "pocketed_numbers": [], "cue_pocketed": False}
+        return {
+            "balls": out,
+            "first_contact": None,
+            "pocketed_numbers": [],
+            "cue_pocketed": False,
+            "shot_replay": {
+                "frame_dt_ms": int(MP_8BALL_SIM_DT * 1000 * MP_8BALL_REPLAY_SAMPLE_EVERY),
+                "duration_ms": 0,
+                "frames": [{"t_ms": 0, "balls": _replay_frame_balls(out)}],
+                "events": [],
+            },
+        }
     power = max(0.0, min(1.0, float(cue_power)))
     speed = 2.2 * power
     cue["vx"] = math.cos(cue_angle) * speed + (spin_x * 0.05)
     cue["vy"] = math.sin(cue_angle) * speed + (spin_y * 0.05)
     first_contact = None
     pocketed_numbers: List[int] = []
+    replay_frames: List[dict] = [{"t_ms": 0, "balls": _replay_frame_balls(out)}]
+    replay_events: List[dict] = []
 
-    for _ in range(320):
+    for step in range(320):
         active = _active_balls(out)
         for b in active:
-            b["x"] += b["vx"] * 0.016
-            b["y"] += b["vy"] * 0.016
+            b["x"] += b["vx"] * MP_8BALL_SIM_DT
+            b["y"] += b["vy"] * MP_8BALL_SIM_DT
             # Cushion bounce.
             if b["x"] <= MP_8BALL_BALL_R:
                 b["x"] = MP_8BALL_BALL_R
@@ -210,6 +242,17 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
                 a["vy"] -= iy
                 b["vx"] += ix
                 b["vy"] += iy
+                strength = math.hypot(ix, iy)
+                if strength > 0.02:
+                    replay_events.append(
+                        {
+                            "type": "collision",
+                            "t_ms": int((step + 1) * MP_8BALL_SIM_DT * 1000),
+                            "x": float((a["x"] + b["x"]) / 2.0),
+                            "y": float((a["y"] + b["y"]) / 2.0),
+                            "strength": float(strength),
+                        }
+                    )
                 if first_contact is None and (a.get("number") == 0 or b.get("number") == 0):
                     other = b if a.get("number") == 0 else a
                     first_contact = int(other.get("number") or 0)
@@ -225,7 +268,24 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
                     b["vy"] = 0.0
                     if b.get("number") is not None:
                         pocketed_numbers.append(int(b["number"]))
+                        replay_events.append(
+                            {
+                                "type": "pocket",
+                                "t_ms": int((step + 1) * MP_8BALL_SIM_DT * 1000),
+                                "number": int(b.get("number") or 0),
+                                "x": float(px),
+                                "y": float(py),
+                            }
+                        )
                     break
+
+        if ((step + 1) % MP_8BALL_REPLAY_SAMPLE_EVERY) == 0 and len(replay_frames) < MP_8BALL_MAX_REPLAY_FRAMES:
+            replay_frames.append(
+                {
+                    "t_ms": int((step + 1) * MP_8BALL_SIM_DT * 1000),
+                    "balls": _replay_frame_balls(out),
+                }
+            )
 
         # Stop condition.
         moving = False
@@ -238,11 +298,20 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
 
     cue_after = next((b for b in out if b.get("number") == 0), None)
     cue_pocketed = bool(cue_after and cue_after.get("pocketed"))
+    final_t_ms = int(len(replay_frames) * MP_8BALL_SIM_DT * 1000 * MP_8BALL_REPLAY_SAMPLE_EVERY)
+    if not replay_frames or replay_frames[-1].get("balls") != _replay_frame_balls(out):
+        replay_frames.append({"t_ms": max(final_t_ms, 1), "balls": _replay_frame_balls(out)})
     return {
         "balls": out,
         "first_contact": first_contact,
         "pocketed_numbers": pocketed_numbers,
         "cue_pocketed": cue_pocketed,
+        "shot_replay": {
+            "frame_dt_ms": int(MP_8BALL_SIM_DT * 1000 * MP_8BALL_REPLAY_SAMPLE_EVERY),
+            "duration_ms": int(replay_frames[-1].get("t_ms") or 0),
+            "frames": replay_frames,
+            "events": replay_events[-120:],
+        },
     }
 
 
@@ -494,6 +563,7 @@ def register(router):
             spin_y=float(body.spin_y or 0.0),
         )
         new_balls = sim["balls"]
+        shot_replay = sim.get("shot_replay") or {}
         pocketed = [n for n in sim["pocketed_numbers"] if n != 0]
         first_contact = sim["first_contact"]
         cue_pocketed = bool(sim["cue_pocketed"])
@@ -559,6 +629,8 @@ def register(router):
 
         table_state["balls"] = new_balls
         table_state["shot_count"] = int(table_state.get("shot_count") or 0) + 1
+        table_state["last_shot_replay"] = shot_replay
+        table_state["last_shot_replay_shot_count"] = int(table_state.get("shot_count") or 0)
         hist = list(table_state.get("history") or [])
         hist.append({
             "at": _now_iso(),
@@ -704,6 +776,8 @@ def register(router):
         )
         game["table_state"]["balls"] = sim["balls"]
         game["table_state"]["shot_count"] = int(game["table_state"].get("shot_count") or 0) + 1
+        game["table_state"]["last_shot_replay"] = sim.get("shot_replay") or {}
+        game["table_state"]["last_shot_replay_shot_count"] = int(game["table_state"].get("shot_count") or 0)
         game["current_turn_index"] = 0
         game["turn_started_at"] = _now_iso()
         game["updated_at"] = _now_iso()

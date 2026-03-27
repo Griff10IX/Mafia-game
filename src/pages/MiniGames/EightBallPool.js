@@ -84,23 +84,34 @@ export default function EightBallPool() {
   const [isAiming, setIsAiming] = useState(false);
   const [tableSkin, setTableSkin] = useState('ice_blue');
   const [renderTick, setRenderTick] = useState(0);
+  const [replayActive, setReplayActive] = useState(false);
   const canvasRef = useRef(null);
   const animFrameRef = useRef(null);
+  const replayAnimRef = useRef(null);
+  const replayActiveRef = useRef(false);
+  const replayLastShotRef = useRef(0);
   const animatingRef = useRef(false);
   const lastTargetBallsRef = useRef([]);
   const pocketedSetRef = useRef(new Set());
   const fxRef = useRef({ impacts: [], pockets: [] });
 
   const activeGame = tab === 'ai' ? aiGame : pvpGame;
-  const balls = activeGame?.table_state?.balls || [];
+  const balls = useMemo(() => activeGame?.table_state?.balls || [], [activeGame?.table_state?.balls]);
   useEffect(() => {
     if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+    if (replayAnimRef.current) cancelAnimationFrame(replayAnimRef.current);
     return () => {
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (replayAnimRef.current) cancelAnimationFrame(replayAnimRef.current);
     };
   }, []);
 
   useEffect(() => {
+    replayActiveRef.current = replayActive;
+  }, [replayActive]);
+
+  useEffect(() => {
+    if (replayActiveRef.current) return;
     const target = (balls || []).map((b) => ({ ...b }));
     if (!target.length) {
       setDisplayBalls([]);
@@ -179,6 +190,64 @@ export default function EightBallPool() {
     else setTableSkin('ice_blue');
   }, [selectedCue?.cue_id, profile?.rating]);
 
+  const playShotReplay = useCallback((gameData, setGameState) => {
+    const replay = gameData?.table_state?.last_shot_replay;
+    const shotCount = Number(gameData?.table_state?.last_shot_replay_shot_count || 0);
+    const frames = Array.isArray(replay?.frames) ? replay.frames : [];
+    if (!frames.length || replayLastShotRef.current === shotCount) {
+      setGameState(gameData || null);
+      return;
+    }
+    replayLastShotRef.current = shotCount;
+    setReplayActive(true);
+    if (replayAnimRef.current) cancelAnimationFrame(replayAnimRef.current);
+    const start = performance.now();
+    const duration = Math.max(1, Number(replay?.duration_ms || 1));
+    const events = Array.isArray(replay?.events) ? replay.events : [];
+    let lastFrameIdx = -1;
+
+    const pushFrameFx = (toIdx) => {
+      for (let i = lastFrameIdx + 1; i <= toIdx; i += 1) {
+        if (i < 0 || i >= frames.length) continue;
+        const tMs = Number(frames[i]?.t_ms || 0);
+        for (const ev of events) {
+          if (Number(ev?.t_ms || 0) !== tMs) continue;
+          if (ev?.type === 'collision') {
+            const cx = (Number(ev?.x || 0) / TABLE_W) * 900;
+            const cy = (Number(ev?.y || 0) / TABLE_H) * 450;
+            fxRef.current.impacts.push({ x: cx, y: cy, at: Date.now() });
+          } else if (ev?.type === 'pocket') {
+            fxRef.current.pockets.push({ number: Number(ev?.number || 0), at: Date.now() });
+          }
+        }
+      }
+      lastFrameIdx = toIdx;
+    };
+
+    const tick = (now) => {
+      const elapsed = now - start;
+      const targetMs = Math.min(duration, elapsed);
+      let idx = 0;
+      while (idx + 1 < frames.length && Number(frames[idx + 1]?.t_ms || 0) <= targetMs) idx += 1;
+      pushFrameFx(idx);
+      const frameBalls = Array.isArray(frames[idx]?.balls) ? frames[idx].balls.map((b) => ({ ...b })) : [];
+      if (frameBalls.length) setDisplayBalls(frameBalls);
+      if (elapsed < duration) {
+        replayAnimRef.current = requestAnimationFrame(tick);
+        return;
+      }
+      const finalBalls = Array.isArray(frames[frames.length - 1]?.balls) ? frames[frames.length - 1].balls.map((b) => ({ ...b })) : [];
+      if (finalBalls.length) {
+        setDisplayBalls(finalBalls);
+        lastTargetBallsRef.current = finalBalls;
+      }
+      setGameState(gameData || null);
+      setReplayActive(false);
+    };
+
+    replayAnimRef.current = requestAnimationFrame(tick);
+  }, []);
+
   const fetchCues = useCallback(async () => {
     const [catalogRes, myRes, profileRes] = await Promise.all([
       api.get('/casino/mp-8ball/cues/catalog'),
@@ -203,21 +272,35 @@ export default function EightBallPool() {
   const fetchAiGame = useCallback(async () => {
     try {
       const res = await api.get('/casino/mp-8ball/vs-ai/game');
-      setAiGame(res.data || null);
+      if (replayActiveRef.current) return;
+      const nextGame = res.data || null;
+      const replayShot = Number(nextGame?.table_state?.last_shot_replay_shot_count || 0);
+      if (replayShot && replayShot !== replayLastShotRef.current) {
+        playShotReplay(nextGame, setAiGame);
+      } else {
+        setAiGame(nextGame);
+      }
     } catch (_) {
-      setAiGame(null);
+      if (!replayActiveRef.current) setAiGame(null);
     }
-  }, []);
+  }, [playShotReplay]);
 
   const fetchPvpGame = useCallback(async () => {
     if (!pvpGame?.id) return;
     try {
       const res = await api.get(`/casino/mp-8ball/games/${encodeURIComponent(pvpGame.id)}`);
-      setPvpGame(res.data || null);
+      if (replayActiveRef.current) return;
+      const nextGame = res.data || null;
+      const replayShot = Number(nextGame?.table_state?.last_shot_replay_shot_count || 0);
+      if (replayShot && replayShot !== replayLastShotRef.current) {
+        playShotReplay(nextGame, setPvpGame);
+      } else {
+        setPvpGame(nextGame);
+      }
     } catch (e) {
-      if (e?.response?.status === 404) setPvpGame(null);
+      if (e?.response?.status === 404 && !replayActiveRef.current) setPvpGame(null);
     }
-  }, [pvpGame?.id]);
+  }, [playShotReplay, pvpGame?.id]);
 
   useEffect(() => {
     const run = async () => {
@@ -581,10 +664,10 @@ export default function EightBallPool() {
       const payload = { angle, power: Number(power), spin_x: Number(spinX), spin_y: Number(spinY) };
       if (tab === 'ai') {
         const res = await api.post('/casino/mp-8ball/vs-ai/shoot', payload);
-        setAiGame(res.data || null);
+        playShotReplay(res.data || null, setAiGame);
       } else {
         const res = await api.post(`/casino/mp-8ball/games/${encodeURIComponent(activeGame.id)}/shoot`, payload);
-        setPvpGame(res.data || null);
+        playShotReplay(res.data || null, setPvpGame);
       }
     } catch (e) {
       toast.error(getApiErrorMessage(e) || 'Shot failed');
@@ -748,14 +831,17 @@ export default function EightBallPool() {
                   height={450}
                   className="pool-canvas w-full rounded-lg border border-cyan-400/25 bg-[#0b4f2f] touch-none"
                   onPointerDown={(e) => {
+                    if (replayActive) return;
                     setIsAiming(true);
                     updateAimFromPointer(e);
                   }}
                   onPointerMove={(e) => {
+                    if (replayActive) return;
                     if (!isAiming) return;
                     updateAimFromPointer(e);
                   }}
                   onPointerUp={async (e) => {
+                    if (replayActive) return;
                     if (!isAiming) return;
                     updateAimFromPointer(e);
                     setIsAiming(false);
@@ -798,7 +884,7 @@ export default function EightBallPool() {
                 <label className="space-y-1"><span className="text-mutedForeground">Power (0-1)</span><input type="number" min={0} max={1} step={0.01} value={power} onChange={(e) => setPower(Number(e.target.value || 0))} className="w-full px-2 py-1 rounded border border-input bg-transparent" /></label>
                 <label className="space-y-1"><span className="text-mutedForeground">Spin X</span><input type="number" min={-1} max={1} step={0.05} value={spinX} onChange={(e) => setSpinX(Number(e.target.value || 0))} className="w-full px-2 py-1 rounded border border-input bg-transparent" /></label>
                 <label className="space-y-1"><span className="text-mutedForeground">Spin Y</span><input type="number" min={-1} max={1} step={0.05} value={spinY} onChange={(e) => setSpinY(Number(e.target.value || 0))} className="w-full px-2 py-1 rounded border border-input bg-transparent" /></label>
-                <div className="flex items-end"><button type="button" onClick={shoot} disabled={busy} className="w-full px-3 py-2 rounded bg-primary/20 border border-primary/50 text-primary font-heading">{busy ? '...' : 'Shoot'}</button></div>
+                <div className="flex items-end"><button type="button" onClick={shoot} disabled={busy || replayActive} className="w-full px-3 py-2 rounded bg-primary/20 border border-primary/50 text-primary font-heading">{replayActive ? 'Rolling...' : busy ? '...' : 'Shoot'}</button></div>
               </div>
             </div>
           )}
