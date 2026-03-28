@@ -504,6 +504,23 @@ def register(router):
                 return (None, None)
             return (fam.get("name"), fam.get("tag"))
 
+        async def _badge_stat_fields():
+            """Stats only — used for ranking badges on profile (same for self and visitors)."""
+            return await db.users.find_one(
+                {"id": user_id},
+                {
+                    "_id": 0,
+                    "total_crimes": 1,
+                    "total_gta": 1,
+                    "jail_busts": 1,
+                    "total_kills": 1,
+                    "total_oc_heists": 1,
+                    "bullets_melted": 1,
+                    "booze_runs_count": 1,
+                    "hitlist_npc_kills": 1,
+                },
+            )
+
         (
             family_name_tag,
             kills_rank,
@@ -522,6 +539,7 @@ def register(router):
             messages_received,
             messages_sent_count,
             top_cars,
+            badge_stat_fields,
         ) = await asyncio.gather(
             _family_name_and_tag(),
             _rank_for_field("total_kills", int(user.get("total_kills") or 0)),
@@ -552,6 +570,7 @@ def register(router):
                     [user.get("profile_featured_car_id")] if user.get("profile_featured_car_id") else []
                 ),
             ),
+            _badge_stat_fields(),
         )
 
         family_name, family_tag = family_name_tag or (None, None)
@@ -565,7 +584,7 @@ def register(router):
             {"rank": points_spent_rank, "label": "Most Points Spent"},
         ]
         from routers.game.achievements import compute_profile_badges
-        achievement_badges = compute_profile_badges(user)
+        achievement_badges = compute_profile_badges(badge_stat_fields or user)
         owned_casinos = dice_casinos + roulette_casinos + blackjack_casinos + horseracing_casinos + slots_casinos + videopoker_casinos
 
         if property_ and user_id != current_user.get("id") and property_.get("type") == "airport":
@@ -583,14 +602,13 @@ def register(router):
             and requested_username_norm == current_username_norm
         )
         is_admin = current_user.get("email") in ADMIN_EMAILS
-        # When viewing another player's profile, expose only minimal public info (no stats, wealth, honours, etc.)
+        # When viewing another player's profile, hide last_seen (privacy). Account created is public.
         # owned_casinos and property are always shown for the profile subject (public who owns what)
+        created_at = user.get("created_at")
         if not is_own_profile:
             last_seen = None
-            created_at = None
             is_bodyguard_visible = False
         else:
-            created_at = user.get("created_at")
             is_bodyguard_visible = bool(user.get("is_bodyguard"))
 
         out = {
@@ -635,7 +653,6 @@ def register(router):
         }
         if not is_own_profile:
             for key in (
-                "created_at",
                 "last_seen",
                 "top_cars",
                 "show_cars_on_profile",

@@ -1,4 +1,4 @@
-# Ranking Achievements / Badges - tiered milestones from early game to 5M+ crimes
+# Ranking Achievements / Badges - tiered milestones from early game to 15M+ crimes
 # Badge events are written to db.badge_events for flash news ticker
 
 from datetime import datetime, timezone
@@ -74,7 +74,11 @@ def compute_profile_badges(user: dict) -> list:
     """Return current (highest) badge per category for profile display (no DB call needed)."""
     result = []
     for cat in BADGE_CATEGORIES:
-        progress = int(user.get(cat["progress_key"]) or 0)
+        raw = user.get(cat["progress_key"])
+        try:
+            progress = int(raw) if raw is not None else 0
+        except (TypeError, ValueError):
+            progress = 0
         unlocked = [t for t in sorted(cat["targets"]) if progress >= t]
         if not unlocked:
             continue

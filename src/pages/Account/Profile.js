@@ -521,39 +521,45 @@ const ProfileInfoCard = ({
               </div>
             </div>
           </div>
-          {/* Achievement Badges under Honours */}
-          {achievementBadges?.length > 0 && (
-            <div className="border-t border-zinc-700/30 px-2.5 py-1.5 md:px-3 md:py-1.5">
-              <div className="flex items-center gap-0.5 mb-1">
-                <Award size={9} className="text-primary shrink-0" />
-                <span className="text-[8px] font-heading font-bold text-primary uppercase tracking-wider">Badges</span>
+          {/* Achievement Badges under Honours (always visible on profile — same for you and other players) */}
+          <div className="border-t border-zinc-700/30 px-2.5 py-1.5 md:px-3 md:py-1.5">
+            <div className="flex items-center gap-0.5 mb-1">
+              <Award size={9} className="text-primary shrink-0" />
+              <span className="text-[8px] font-heading font-bold text-primary uppercase tracking-wider">Badges</span>
+              {achievementBadges.length > 0 && (
                 <span className="text-[7px] text-mutedForeground font-heading ml-1">
                   {achievementBadges.reduce((s, c) => s + c.unlocked_count, 0)} unlocked
                 </span>
-              </div>
-              <style>{RANKING_BADGE_STYLES}</style>
-              <div className="flex flex-wrap gap-1.5 items-end">
-                {achievementBadges.map((cat) => {
-                  const t = cat.current_target;
-                  const lbl = t >= 1_000_000 ? `${Math.floor(t / 1_000_000)}M` : t >= 1000 ? `${Math.floor(t / 1000)}K` : String(t);
-                  return (
-                    <div key={cat.id} className="flex flex-col items-center gap-0.5">
-                      <BadgeShield
-                        label={lbl}
-                        unlocked={true}
-                        categoryId={cat.id}
-                        target={t}
-                        size={24}
-                      />
-                      <span className="text-[7px] text-mutedForeground font-heading uppercase tracking-wider whitespace-nowrap" title={cat.id}>
-                        {CATEGORY_LABELS[cat.id] || cat.id.replace(/_/g, ' ')}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+              )}
             </div>
-          )}
+            {achievementBadges.length > 0 ? (
+              <>
+                <style>{RANKING_BADGE_STYLES}</style>
+                <div className="flex flex-wrap gap-1.5 items-end">
+                  {achievementBadges.map((cat) => {
+                    const t = cat.current_target;
+                    const lbl = t >= 1_000_000 ? `${Math.floor(t / 1_000_000)}M` : t >= 1000 ? `${Math.floor(t / 1000)}K` : String(t);
+                    return (
+                      <div key={cat.id} className="flex flex-col items-center gap-0.5">
+                        <BadgeShield
+                          label={lbl}
+                          unlocked={true}
+                          categoryId={cat.id}
+                          target={t}
+                          size={24}
+                        />
+                        <span className="text-[7px] text-mutedForeground font-heading uppercase tracking-wider whitespace-nowrap" title={cat.id}>
+                          {CATEGORY_LABELS[cat.id] || cat.id.replace(/_/g, ' ')}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            ) : (
+              <p className="text-[8px] text-mutedForeground font-heading">No ranking badges unlocked yet</p>
+            )}
+          </div>
           {/* Compact Cars row under Honours/Properties (no label) */}
           {showCarsOnProfile !== false && topCars?.length > 0 && (
             <div className="border-t border-zinc-700/30 px-2 py-0.5 md:px-3">
@@ -635,8 +641,8 @@ const ProfileInfoCard = ({
         );
       })()}
 
-      {/* Account Created — inside same card, below notepad */}
-      {(isMe || profile.created_at) && (
+      {/* Account Created — inside same card, below notepad (API sends created_at for every profile) */}
+      {profile.created_at != null && (
         <div className="border-t border-zinc-700/30">
           <div className="px-3 py-2 md:px-4 bg-primary/8 border-b border-primary/20 text-center">
             <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
@@ -2046,7 +2052,7 @@ export default function Profile() {
               }}
               staffDetailsOpen={staffDetailsOpen}
               setStaffDetailsOpen={setStaffDetailsOpen}
-              achievementBadges={profile.achievement_badges || []}
+              achievementBadges={Array.isArray(profile.achievement_badges) ? profile.achievement_badges : []}
               censorProfanity={me?.censor_profanity}
             />
 
