@@ -16,7 +16,7 @@ from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, field_validator
 
 from utils.disposable_email import is_disposable_email
-from middleware.security import is_proxy_or_vpn
+from middleware.security import is_proxy_or_vpn, get_ip_info
 
 
 class UserRegister(BaseModel):
@@ -203,14 +203,32 @@ def register(router):
         return bool(doc.get("value"))
 
     async def _notify_admins_vpn_blocked(ip: str, context: str, details: str):
-        """Send inbox notification to all admins when VPN/proxy block occurs."""
+        """Send inbox notification to all admins when VPN/proxy block occurs, with provider info."""
         admin_emails = list(ADMIN_EMAILS or [])
         if not admin_emails:
             return
         try:
+            ip_info = await get_ip_info(ip)
+            provider_parts = []
+            if ip_info.get("isp"):
+                provider_parts.append(f"ISP: {ip_info['isp']}")
+            if ip_info.get("org") and ip_info.get("org") != ip_info.get("isp"):
+                provider_parts.append(f"Org: {ip_info['org']}")
+            if ip_info.get("as"):
+                provider_parts.append(f"AS: {ip_info['as']}")
+            location_parts = [p for p in [ip_info.get("city"), ip_info.get("country")] if p]
+            if location_parts:
+                provider_parts.append(f"Location: {', '.join(location_parts)}")
+            if ip_info.get("hosting"):
+                provider_parts.append("Type: Hosting/Datacenter")
+            elif ip_info.get("proxy"):
+                provider_parts.append("Type: Proxy")
+
             admins = await db.users.find({"email": {"$in": admin_emails}}, {"_id": 0, "id": 1}).to_list(100)
             title = "VPN/Proxy Blocked"
             msg = f"{context}: IP {ip}. {details}"
+            if provider_parts:
+                msg += "\n" + " | ".join(provider_parts)
             for a in admins:
                 if a.get("id"):
                     await send_notification(a["id"], title, msg, "system", category="admin")
@@ -304,7 +322,7 @@ def register(router):
                 await _notify_admins_vpn_blocked(
                     client_ip,
                     "Registration blocked",
-                    f"Attempted email: {email_clean[:3]}***, username: {user_data.username.strip()[:20]}",
+                    f"Attempted email: {email_clean}, username: {user_data.username.strip()}",
                 )
                 raise HTTPException(
                     status_code=400,

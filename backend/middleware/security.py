@@ -74,6 +74,31 @@ PROXY_CHECK_THRESHOLD = 0.99  # When not using flags=m; with flags=m we block on
 pending_alerts = []
 
 
+async def get_ip_info(ip: str) -> dict:
+    """Look up ISP / org / AS / country for an IP via ip-api.com (free, no key needed)."""
+    if not ip or not HTTPX_AVAILABLE:
+        return {}
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            r = await client.get(f"http://ip-api.com/json/{ip}?fields=status,isp,org,as,country,city,proxy,hosting")
+        if r.status_code != 200:
+            return {}
+        data = r.json()
+        if data.get("status") == "success":
+            return {
+                "isp": data.get("isp", ""),
+                "org": data.get("org", ""),
+                "as": data.get("as", ""),
+                "country": data.get("country", ""),
+                "city": data.get("city", ""),
+                "proxy": data.get("proxy", False),
+                "hosting": data.get("hosting", False),
+            }
+    except Exception:
+        pass
+    return {}
+
+
 async def is_proxy_or_vpn(ip: str) -> bool:
     """Return True if IP appears to be proxy/VPN (block registration). Requires GETIPINTEL_CONTACT_EMAIL in env.
     Uses flags=m so only IPs on known proxy/VPN ban lists are blocked; mobile/carrier IPs are allowed."""

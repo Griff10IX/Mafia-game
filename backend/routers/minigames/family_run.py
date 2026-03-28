@@ -6,7 +6,7 @@ from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 
-from server import db, get_current_user, log_activity, log_respect_earned, _get_staff_user_ids, _is_admin
+from server import db, get_current_user, log_activity, log_minigame_payout, log_respect_earned, _get_staff_user_ids, _is_admin
 from routers.minigames.minigame_leaderboard import log_minigame_play
 from utils.minigame_run_session import (
     as_utc_started,
@@ -176,8 +176,15 @@ def register(router):
         try:
             await log_activity(
                 current_user["id"],
-                f"Family Run score: {score}m",
+                current_user.get("username", "?"),
+                "minigame_family_run",
+                {"score": score, "coins": coins, **rewards_applied},
             )
+        except Exception:
+            pass
+
+        try:
+            await log_minigame_payout(current_user["id"], current_user.get("username", "?"), "family_run", score, rewards_applied)
         except Exception:
             pass
 

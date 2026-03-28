@@ -6,7 +6,7 @@ from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional
 
-from server import db, get_current_user, log_activity, log_respect_earned, _get_staff_user_ids, _is_admin
+from server import db, get_current_user, log_activity, log_minigame_payout, log_respect_earned, _get_staff_user_ids, _is_admin
 from routers.minigames.minigame_leaderboard import log_minigame_play
 from utils.minigame_run_session import (
     as_utc_started,
@@ -265,8 +265,13 @@ def register(router):
             {"$set": {"gauntlet_last_claim_at": now_iso, "gauntlet_last_score": score, "gauntlet_last_cash": cash, "gauntlet_last_respect": respect}},
             upsert=True,
         )
+        payout_rewards = {"money": cash, "respect_points": respect}
         try:
-            await log_activity(current_user["id"], f"Claimed ${cash:,} and {respect} respect from Flappy Gangster (score {score}).")
+            await log_activity(current_user["id"], current_user.get("username", "?"), "minigame_gauntlet", {"score": score, "cash": cash, "respect": respect})
+        except Exception:
+            pass
+        try:
+            await log_minigame_payout(current_user["id"], current_user.get("username", "?"), "gauntlet", score, payout_rewards)
         except Exception:
             pass
 

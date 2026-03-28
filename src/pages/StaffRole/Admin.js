@@ -136,6 +136,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'User Analytics', categoryId: 'admin-analytics', collapseKey: 'analytics', keywords: ['analytics', 'stats', 'users'] },
   // Logs
   { label: 'Live Activity Feed', categoryId: 'admin-logs', collapseKey: 'activityFeed', keywords: ['activity', 'feed', 'live', 'real-time', 'actions', 'gambling', 'bank', 'transfer'] },
+  { label: 'Minigame Payouts', categoryId: 'admin-logs', collapseKey: 'minigamePayouts', keywords: ['minigame', 'payout', 'reward', 'cash', 'mini', 'game'] },
   { label: 'Attack Logs', categoryId: 'admin-logs', collapseKey: 'attackLogs', keywords: ['attack', 'log', 'kill'] },
   { label: 'Mod Action Logs', categoryId: 'admin-logs', collapseKey: 'modLogs', keywords: ['mod', 'action', 'log'] },
   // Testing Tools
@@ -542,6 +543,10 @@ export default function Admin() {
   const [activityFeedUsername, setActivityFeedUsername] = useState('');
   const [activityFeedAutoRefresh, setActivityFeedAutoRefresh] = useState(false);
   const activityFeedIntervalRef = useRef(null);
+  const [minigamePayouts, setMinigamePayouts] = useState({ entries: [] });
+  const [minigamePayoutsLoading, setMinigamePayoutsLoading] = useState(false);
+  const [minigamePayoutsUsername, setMinigamePayoutsUsername] = useState('');
+  const [minigamePayoutsGame, setMinigamePayoutsGame] = useState('');
   const [gamblingLog, setGamblingLog] = useState({ entries: [] });
   const [gamblingLogLoading, setGamblingLogLoading] = useState(false);
   const [gamblingLogUsername, setGamblingLogUsername] = useState('');
@@ -3227,6 +3232,22 @@ export default function Admin() {
       setActivityLog({ entries: [] });
     } finally {
       setActivityLogLoading(false);
+    }
+  };
+
+  const fetchMinigamePayouts = async () => {
+    setMinigamePayoutsLoading(true);
+    try {
+      const params = { limit: 200 };
+      if (minigamePayoutsUsername.trim()) params.username = minigamePayoutsUsername.trim();
+      if (minigamePayoutsGame.trim()) params.game = minigamePayoutsGame.trim();
+      const res = await api.get('/admin/minigame-payouts', { params });
+      setMinigamePayouts(res.data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load minigame payouts');
+      setMinigamePayouts({ entries: [] });
+    } finally {
+      setMinigamePayoutsLoading(false);
     }
   };
 
@@ -8145,6 +8166,90 @@ export default function Admin() {
                     </table>
                   )}
                 </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Minigame Payouts */}
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Trophy}
+            title="Minigame Payouts"
+            badge={minigamePayouts.entries?.length ? <span className="text-[10px] font-heading text-primary">{minigamePayouts.count} entries</span> : null}
+            isCollapsed={collapsed.minigamePayouts}
+            onToggle={() => toggleSection('minigamePayouts')}
+          />
+          {!collapsed.minigamePayouts && (
+            <div className="p-3 space-y-2">
+              <p className="text-[10px] text-mutedForeground font-heading">Every individual minigame play and what rewards were paid out.</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={minigamePayoutsUsername}
+                  onChange={(e) => setMinigamePayoutsUsername(e.target.value)}
+                  placeholder="Filter by username"
+                  className="flex-1 min-w-[120px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                <select
+                  value={minigamePayoutsGame}
+                  onChange={(e) => setMinigamePayoutsGame(e.target.value)}
+                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                >
+                  <option value="">All Games</option>
+                  <option value="family_run">Family Run</option>
+                  <option value="snake">Package Run</option>
+                  <option value="gauntlet">Flappy Gangster</option>
+                  <option value="famiglia">Famiglia</option>
+                  <option value="battleships">Battleships</option>
+                  <option value="minesweeper">Minesweeper</option>
+                  <option value="whack_a_copper">Whack a Copper</option>
+                  <option value="the_getaway">The Getaway</option>
+                  <option value="shooting_range">Shooting Range</option>
+                </select>
+                <BtnPrimary onClick={fetchMinigamePayouts} disabled={minigamePayoutsLoading}>
+                  {minigamePayoutsLoading ? '...' : 'Load'}
+                </BtnPrimary>
+              </div>
+              {minigamePayouts.entries?.length > 0 && (
+                <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+                  <table className="w-full text-[10px] font-mono">
+                    <thead className="sticky top-0 bg-zinc-900/90">
+                      <tr className="text-left text-mutedForeground">
+                        <th className="p-2">Time</th>
+                        <th className="p-2">User</th>
+                        <th className="p-2">Game</th>
+                        <th className="p-2">Score</th>
+                        <th className="p-2">Cash</th>
+                        <th className="p-2">Respect</th>
+                        <th className="p-2">Other</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {minigamePayouts.entries.map((e) => {
+                        const r = e.rewards || {};
+                        const cash = r.money || 0;
+                        const respect = r.respect_points || 0;
+                        const other = Object.entries(r).filter(([k]) => k !== 'money' && k !== 'respect_points' && k !== 'missions').filter(([, v]) => v > 0).map(([k, v]) => `${k}: ${v}`).join(', ');
+                        return (
+                          <tr key={e.id} className="border-t border-zinc-700/30 hover:bg-zinc-800/30">
+                            <td className="p-2 text-mutedForeground whitespace-nowrap">{e.created_at ? new Date(e.created_at).toLocaleString() : '—'}</td>
+                            <td className="p-2 text-foreground">{e.username}</td>
+                            <td className="p-2 text-primary">{e.game}</td>
+                            <td className="p-2 text-foreground">{Number(e.score).toLocaleString()}</td>
+                            <td className="p-2 text-green-400">{cash > 0 ? `$${cash.toLocaleString()}` : '—'}</td>
+                            <td className="p-2 text-blue-400">{respect > 0 ? respect.toLocaleString() : '—'}</td>
+                            <td className="p-2 text-mutedForeground">{other || '—'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {minigamePayouts.entries?.length === 0 && !minigamePayoutsLoading && (
+                <p className="text-[10px] text-mutedForeground font-heading">No payout records found. Load data or adjust filters.</p>
               )}
             </div>
           )}

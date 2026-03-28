@@ -8,7 +8,7 @@ from typing import Optional
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
-from server import db, get_current_user, _get_staff_user_ids, _is_admin, log_activity
+from server import db, get_current_user, _get_staff_user_ids, _is_admin, log_activity, log_minigame_payout
 from utils.minigame_run_session import (
     as_utc_started,
     claim_minigame_run_session,
@@ -138,6 +138,7 @@ def register(router):
         await log_activity(uid, current_user.get("username", "?"), "minigame_getaway", {
             "distance": distance, "coins": coins_collected, "cash": cash, "respect": respect,
         })
+        await log_minigame_payout(uid, current_user.get("username", "?"), "the_getaway", distance + (coins_collected * 50), {"money": cash, "respect_points": respect})
 
         try:
             from routers.minigames.minigame_leaderboard import log_minigame_play

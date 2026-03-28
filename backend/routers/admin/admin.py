@@ -6618,6 +6618,29 @@ def register(router):
         return {"history": history}
 
     # ─────────────────────────────────────────────────────────────────────────────
+    # Minigame Play Payouts Log (Admin Only)
+    # ─────────────────────────────────────────────────────────────────────────────
+    @router.get("/admin/minigame-payouts")
+    async def get_minigame_play_payouts(
+        username: str = "",
+        game: str = "",
+        limit: int = 100,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Return recent minigame play payout records for admin auditing."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin only")
+        query = {}
+        if username.strip():
+            query["username"] = {"$regex": f"^{username.strip()}$", "$options": "i"}
+        if game.strip():
+            query["game"] = game.strip()
+        cap = min(max(1, limit), 500)
+        cursor = db.minigame_play_payouts.find(query, {"_id": 0}).sort("created_at", -1).limit(cap)
+        rows = await cursor.to_list(cap)
+        return {"entries": rows, "count": len(rows)}
+
+    # ─────────────────────────────────────────────────────────────────────────────
     # Lifetime Objectives Testing (Admin Only)
     # ─────────────────────────────────────────────────────────────────────────────
     from routers.account.objectives import OBJECTIVE_TYPES_LIFETIME

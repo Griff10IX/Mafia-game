@@ -8,7 +8,7 @@ from typing import Optional
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
-from server import db, get_current_user, log_activity, _get_staff_user_ids, _is_admin
+from server import db, get_current_user, log_activity, log_minigame_payout, _get_staff_user_ids, _is_admin
 from utils.minigame_run_session import (
     claim_minigame_run_session,
     enforce_numeric_score_for_claimed_session,
@@ -143,11 +143,13 @@ def register(router):
         except Exception:
             pass
 
+        payout_rewards = {"money": cash, "respect_points": respect, "missions": missions}
         try:
-            await log_activity(
-                uid,
-                f"Famiglia session — score {score} (missions {missions}, respect {respect})",
-            )
+            await log_activity(uid, current_user.get("username", "?"), "minigame_famiglia", {"score": score, "cash": cash, "respect": respect, "missions": missions})
+        except Exception:
+            pass
+        try:
+            await log_minigame_payout(uid, current_user.get("username", "?"), "famiglia", score, payout_rewards)
         except Exception:
             pass
 

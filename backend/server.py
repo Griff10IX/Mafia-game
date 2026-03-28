@@ -1704,6 +1704,22 @@ async def log_activity(user_id: str, username: str, action: str, details: dict):
         pass
 
 
+async def log_minigame_payout(user_id: str, username: str, game: str, score, rewards: dict):
+    """Log every individual minigame play payout for admin auditing."""
+    try:
+        await db.minigame_play_payouts.insert_one({
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "username": username,
+            "game": game,
+            "score": score,
+            "rewards": rewards,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception:
+        pass
+
+
 async def log_gambling(user_id: str, username: str, game_type: str, details: dict):
     """Append to gambling_log for admin anti-cheat monitoring. Used by all casinos: blackjack, slots, roulette, dice, videopoker, horseracing, sports_bet, mdg."""
     try:
