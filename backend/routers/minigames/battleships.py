@@ -7,8 +7,9 @@ from typing import Optional
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
-from server import db, get_current_user, _get_staff_user_ids, _is_admin
+from server import db, get_current_user, _get_staff_user_ids, _is_admin, log_activity
 from utils.minigame_run_session import (
+    as_utc_started,
     claim_minigame_run_session,
     enforce_client_duration_for_claimed_session,
     release_minigame_run,
@@ -24,6 +25,7 @@ BASE_RESPECT = 25
 BONUS_PER_SHIP_SAVED = 1_250
 BONUS_RESPECT_PER_SHIP = 5
 MAX_TIME_SECONDS = 1800
+MIN_PLAY_SECONDS = 30
 
 
 class BattleshipsWinRequest(BaseModel):
@@ -69,6 +71,20 @@ def register(router):
             sess = await claim_minigame_run_session(
                 db, user_id=uid, game=BATTLESHIPS_GAME, session_id=session_id, now_dt=now
             )
+
+            started_at = as_utc_started(sess.get("started_at"))
+            elapsed = max(0.0, (now - started_at).total_seconds())
+            if elapsed < MIN_PLAY_SECONDS:
+                await release_minigame_run(db, session_id)
+                raise HTTPException(status_code=400, detail="Game too short.")
+
+            sess_meta = sess.get("meta") or {}
+            sess_diff = sess_meta.get("difficulty", "normal")
+            sess_fleet = int(sess_meta.get("fleet_size") or 5)
+            if difficulty != sess_diff or fleet_size != sess_fleet:
+                await release_minigame_run(db, session_id)
+                raise HTTPException(status_code=400, detail="Difficulty/fleet mismatch with session.")
+
             await enforce_client_duration_for_claimed_session(
                 db,
                 session_id=session_id,
@@ -119,6 +135,11 @@ def register(router):
         }
         await db.battleships_wins.insert_one(win_doc)
 
+        await log_activity(uid, current_user.get("username", "?"), "minigame_battleships", {
+            "score": shots_fired, "difficulty": difficulty, "fleet_size": fleet_size,
+            "ships_lost": ships_lost, "cash": cash, "respect": respect,
+        })
+
         try:
             from routers.minigames.minigame_leaderboard import log_minigame_play
             total_enemy_cells = sum([5,4,4,3,3,3,2,2][:fleet_size])
@@ -129,8 +150,7 @@ def register(router):
             pass
 
         return {
-            "message": "Victory recorded!",
-            "reward": {"cash": cash, "respect": respect},
+            "ok": True,
             "shots_fired": shots_fired,
             "ships_lost": ships_lost,
         }

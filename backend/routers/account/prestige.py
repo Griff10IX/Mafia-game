@@ -132,6 +132,7 @@ def register(router):
             category="system",
         )
 
+        await srv.log_activity(current_user["id"], current_user.get("username", "?"), "account_prestige", {"new_level": new_level, "name": new_cfg["name"]})
         return {
             "message": f"Prestiged to level {new_level} — {new_cfg['name']}!",
             "prestige_level": new_level,

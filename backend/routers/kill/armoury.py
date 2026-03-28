@@ -13,7 +13,7 @@ from fastapi import Depends, HTTPException, Request, Body
 from pydantic import BaseModel
 from bson.objectid import ObjectId
 
-from server import db, get_current_user, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, _family_in_active_war, CARS, _get_staff_user_ids, send_notification
+from server import db, get_current_user, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, _family_in_active_war, CARS, _get_staff_user_ids, send_notification, log_activity
 from utils.game_pass_micro_rewards import (
     micro_tier_from_rank_points,
     rewards_for_micro_tier,
@@ -231,8 +231,8 @@ SHOOTING_RANGE_MAX_PLAYS_PER_HOUR = 10
 SHOOTING_RANGE_BONUS_STORE_MAX = 10
 SHOOTING_RANGE_SESSION_GAME = "shooting_range"
 SHOOTING_RANGE_ABS_SCORE_CAP = 99_999_999
-SHOOTING_RANGE_SCORE_RATE = 45_000.0
-SHOOTING_RANGE_SCORE_BUFFER = 12_000
+SHOOTING_RANGE_SCORE_RATE = 5_000.0
+SHOOTING_RANGE_SCORE_BUFFER = 2_000
 
 
 class StateOptionalRequest(BaseModel):
@@ -1000,6 +1000,7 @@ async def buy_bullets(
             {"state": state},
             {"$inc": {"owner_pending_profit": total_cost}},
         )
+    await log_activity(current_user["id"], current_user.get("username", "?"), "armoury_buy_bullets", {"amount": amount, "cost": total_cost, "state": state})
     return {
         "message": f"Bought {amount:,} bullets for ${total_cost:,}",
         "amount": amount,
@@ -1170,6 +1171,7 @@ async def buy_armour(request: ArmourBuyRequest, current_user: dict = Depends(get
                     {"id": current_user["id"]},
                     {"$set": {"armour_level": level, "armour_owned_level_max": max(owned_max, level)}},
                 )
+            await log_activity(current_user["id"], current_user.get("username", "?"), "armoury_buy_armour", {"item": armour["name"], "level": level, "cost": price, "source": "armoury"})
             return {"message": f"Purchased {armour['name']} (Armour Lv.{level}) from armoury", "new_level": level}
 
     updates = {"$set": {"armour_level": level, "armour_owned_level_max": max(owned_max, level)}}
@@ -1177,6 +1179,7 @@ async def buy_armour(request: ArmourBuyRequest, current_user: dict = Depends(get
     result = await db.users.update_one({"id": current_user["id"], currency_field: {"$gte": price}}, updates)
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail=insufficient_msg)
+    await log_activity(current_user["id"], current_user.get("username", "?"), "armoury_buy_armour", {"item": armour["name"], "level": level, "cost": price})
     return {"message": f"Purchased {armour['name']} (Armour Lv.{level})", "new_level": level}
 
 
@@ -1450,6 +1453,7 @@ async def buy_weapon(weapon_id: str, request: WeaponBuyRequest, current_user: di
                 {"$set": {"equipped_weapon_id": weapon_id}},
             )
             _invalidate_weapons_cache(current_user["id"])
+            await log_activity(current_user["id"], current_user.get("username", "?"), "armoury_buy_weapon", {"weapon": weapon["name"], "cost": price, "source": "armoury"})
             return {"message": f"Successfully purchased {weapon['name']} from armoury"}
 
     result = await db.users.update_one(
@@ -1468,6 +1472,7 @@ async def buy_weapon(weapon_id: str, request: WeaponBuyRequest, current_user: di
         {"$set": {"equipped_weapon_id": weapon_id}},
     )
     _invalidate_weapons_cache(current_user["id"])
+    await log_activity(current_user["id"], current_user.get("username", "?"), "armoury_buy_weapon", {"weapon": weapon["name"], "cost": price})
     return {"message": f"Successfully purchased {weapon['name']}"}
 
 

@@ -34,7 +34,7 @@ def _parse_iso_datetime(val):
 _backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _backend not in sys.path:
     sys.path.insert(0, _backend)
-from server import db, get_current_user, get_effective_event, maybe_process_rank_up, send_notification
+from server import db, get_current_user, get_effective_event, log_activity, maybe_process_rank_up, send_notification
 
 # Roles (team of 4)
 OC_ROLES = [
@@ -405,6 +405,7 @@ async def oc_invite_accept(invite_id: str, current_user: dict = Depends(get_curr
     if res.modified_count == 0:
         latest = await db.oc_invites.find_one({"id": invite_id}, {"_id": 0, "status": 1})
         raise HTTPException(status_code=400, detail=f"Invite already {(latest or {}).get('status', 'updated')}")
+    await log_activity(current_user["id"], current_user.get("username", "?"), "oc_invite_accept", {"invite_id": invite_id})
     return {"message": "You accepted the heist invite. The creator can run the heist when everyone has accepted."}
 
 
@@ -422,6 +423,7 @@ async def oc_invite_decline(invite_id: str, current_user: dict = Depends(get_cur
     if res.modified_count == 0:
         latest = await db.oc_invites.find_one({"id": invite_id}, {"_id": 0, "status": 1})
         raise HTTPException(status_code=400, detail=f"Invite already {(latest or {}).get('status', 'updated')}")
+    await log_activity(current_user["id"], current_user.get("username", "?"), "oc_invite_decline", {"invite_id": invite_id})
     return {"message": "You declined the heist invite."}
 
 
@@ -802,6 +804,10 @@ async def execute_oc(
     if result.get("success"):
         out["cash_earned"] = result.get("cash_earned", 0)
         out["rp_earned"] = result.get("rp_earned", 0)
+    await log_activity(uid, current_user.get("username", "?"), "oc_execute", {
+        "job": job_id, "success": result.get("success", False),
+        "cash": result.get("cash_earned", 0), "rp": result.get("rp_earned", 0),
+    })
     return out
 
 

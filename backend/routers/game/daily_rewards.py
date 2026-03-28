@@ -290,6 +290,7 @@ def register(router):
         })
 
         plays_left, next_play_at = await _get_play_window(uid)
+        await log_activity(uid, current_user.get("username", "?"), "daily_ttt_start", {"side": player_side})
         return {
             "board": board,
             "player_side": player_side,

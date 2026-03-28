@@ -42,6 +42,7 @@ from server import (
     get_current_user,
     get_current_user_verified,
     get_rank_info,
+    log_activity,
     log_respect_earned,
     maybe_process_rank_up,
     send_notification,
@@ -498,7 +499,10 @@ async def bust_out_of_jail(
         raise HTTPException(status_code=500, detail="Failed to process bust. Please try again.")
     if result.get("error"):
         raise HTTPException(status_code=result.get("error_code", 400), detail=result["error"])
-    # bust_events are recorded inside _attempt_bust_impl (so Auto Rank busts are counted too)
+    await log_activity(current_user["id"], current_user.get("username", "?"), "jail_bust", {
+        "target": request.target_username, "success": result.get("success", False),
+        "cash_reward": result.get("cash_reward", 0), "rp": result.get("rank_points_earned", 0),
+    })
     return result
 
 
@@ -621,6 +625,7 @@ async def leave_jail(current_user: dict = Depends(get_current_user_verified)):
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="You need at least 3 points to leave jail")
+    await log_activity(current_user["id"], current_user.get("username", "?"), "jail_leave", {"points_spent": 3})
     return {
         "success": True,
         "message": "You paid 3 points and left jail!",
@@ -767,6 +772,9 @@ async def snitch(
         "system",
         category="jail",
     )
+    await log_activity(current_user["id"], current_user.get("username", "?"), "jail_snitch", {
+        "target": target["username"], "jail_seconds": SNITCH_JAIL_SECONDS,
+    })
     return {
         "success": True,
         "message": f"You snitched on {target['username']}. You're free; they're serving {SNITCH_JAIL_SECONDS} seconds.",

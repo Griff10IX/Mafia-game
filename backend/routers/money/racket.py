@@ -6,7 +6,7 @@ from pydantic import BaseModel
 
 from fastapi import Depends, HTTPException
 
-from server import db, get_current_user, maybe_process_rank_up
+from server import db, get_current_user, log_activity, maybe_process_rank_up
 
 
 class ProtectionRacketRequest(BaseModel):
@@ -95,6 +95,9 @@ async def extort_property(request: ProtectionRacketRequest, current_user: dict =
             extortion_filter,
             {"$set": {"amount": extortion_amount}},
         )
+        await log_activity(current_user["id"], current_user.get("username", "?"), "racket_extort", {
+            "target": target["username"], "property": prop["name"], "amount": extortion_amount,
+        })
         return {
             "success": True,
             "message": f"Raid successful! You took ${extortion_amount:,} ({PROPERTY_ATTACK_REVENUE_PCT*100:.0f}% of revenue) from {target['username']}'s {prop['name']}.",

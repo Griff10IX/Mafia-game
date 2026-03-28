@@ -1472,9 +1472,14 @@ export default function Battleships() {
         difficulty:settings.difficulty,
         session_id:battleshipsSessionRef.current,
       });
-      if (res.data?.reward) {
-        setWinReward(res.data.reward);
-        toast.success(`Victory! +$${res.data.reward.cash.toLocaleString()} +${res.data.reward.respect} Respect`);
+      if (res.data?.ok) {
+        const shipsSaved=activeShips.length-sunkByAi.length;
+        const diffMult={easy:0.6,normal:1.0,hard:1.5}[settings.difficulty]||1;
+        const fleetMult=activeShips.length/5;
+        const estCash=Math.floor((6250+shipsSaved*1250)*diffMult*fleetMult);
+        const estResp=Math.floor((25+shipsSaved*5)*diffMult*fleetMult);
+        setWinReward({cash:estCash,respect:estResp});
+        toast.success(`Victory! +$${estCash.toLocaleString()} +${estResp} Respect`);
       }
       refreshPlays();
     } catch (err) {
@@ -1773,7 +1778,7 @@ export default function Battleships() {
             <button className="nb" disabled={placedShips.length<activeShips.length||!canPlay} onClick={async()=>{
               if(!canPlay){toast.error("Hourly play limit reached. Try again next hour.");return;}
               try{
-                const run=await startMinigameRun("battleships");
+                const run=await startMinigameRun("battleships",{difficulty:settings.difficulty,fleet_size:String(activeShips.length)});
                 battleshipsSessionRef.current=run.session_id;
                 updateFromStart(run);
                 setScreen("battle");

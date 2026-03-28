@@ -8,7 +8,7 @@ from typing import Optional
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
-from server import db, get_current_user, _get_staff_user_ids, _is_admin
+from server import db, get_current_user, _get_staff_user_ids, _is_admin, log_activity
 from utils.minigame_run_session import (
     as_utc_started,
     claim_minigame_run_session,
@@ -134,6 +134,10 @@ def register(router):
             "created_at": now_iso,
         }
         await db.the_getaway_runs.insert_one(run_doc)
+
+        await log_activity(uid, current_user.get("username", "?"), "minigame_getaway", {
+            "distance": distance, "coins": coins_collected, "cash": cash, "respect": respect,
+        })
 
         try:
             from routers.minigames.minigame_leaderboard import log_minigame_play

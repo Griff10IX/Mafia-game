@@ -540,6 +540,8 @@ export default function Admin() {
   const [activityFeedMinutes, setActivityFeedMinutes] = useState(60);
   const [activityFeedFilter, setActivityFeedFilter] = useState('');
   const [activityFeedUsername, setActivityFeedUsername] = useState('');
+  const [activityFeedAutoRefresh, setActivityFeedAutoRefresh] = useState(false);
+  const activityFeedIntervalRef = useRef(null);
   const [gamblingLog, setGamblingLog] = useState({ entries: [] });
   const [gamblingLogLoading, setGamblingLogLoading] = useState(false);
   const [gamblingLogUsername, setGamblingLogUsername] = useState('');
@@ -3179,21 +3181,39 @@ export default function Admin() {
     }
   };
 
-  const fetchActivityFeed = async () => {
-    setActivityFeedLoading(true);
+  const fetchActivityFeed = async (silent = false) => {
+    if (!silent) setActivityFeedLoading(true);
     try {
-      const params = { since_minutes: activityFeedMinutes, limit: 200 };
+      const mins = activityFeedAutoRefresh ? 15 : activityFeedMinutes;
+      const params = { since_minutes: mins, limit: 200 };
       if (activityFeedUsername.trim()) params.username = activityFeedUsername.trim();
       if (activityFeedFilter.trim()) params.action = activityFeedFilter.trim();
       const res = await api.get('/admin/activity-feed', { params });
       setActivityFeed(res.data);
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to load activity feed');
-      setActivityFeed(null);
+      if (!silent) toast.error(e.response?.data?.detail || 'Failed to load activity feed');
+      if (!silent) setActivityFeed(null);
     } finally {
-      setActivityFeedLoading(false);
+      if (!silent) setActivityFeedLoading(false);
     }
   };
+
+  useEffect(() => {
+    if (activityFeedAutoRefresh) {
+      fetchActivityFeed(true);
+      activityFeedIntervalRef.current = setInterval(() => fetchActivityFeed(true), 5000);
+    } else if (activityFeedIntervalRef.current) {
+      clearInterval(activityFeedIntervalRef.current);
+      activityFeedIntervalRef.current = null;
+    }
+    return () => {
+      if (activityFeedIntervalRef.current) {
+        clearInterval(activityFeedIntervalRef.current);
+        activityFeedIntervalRef.current = null;
+      }
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activityFeedAutoRefresh, activityFeedUsername, activityFeedFilter]);
 
   const fetchActivityLog = async () => {
     setActivityLogLoading(true);
@@ -8072,9 +8092,17 @@ export default function Admin() {
                     {m < 60 ? `${m}m` : `${m / 60}h`}
                   </button>
                 ))}
-                <BtnPrimary onClick={fetchActivityFeed} disabled={activityFeedLoading}>
+                <BtnPrimary onClick={() => fetchActivityFeed(false)} disabled={activityFeedLoading}>
                   {activityFeedLoading ? 'Loading…' : 'Load feed'}
                 </BtnPrimary>
+                <button
+                  type="button"
+                  onClick={() => setActivityFeedAutoRefresh(prev => !prev)}
+                  className={`px-2 py-1 rounded border text-[10px] font-heading flex items-center gap-1 ${activityFeedAutoRefresh ? 'bg-green-900/50 border-green-500/60 text-green-400' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'}`}
+                >
+                  {activityFeedAutoRefresh && <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />}
+                  {activityFeedAutoRefresh ? 'Live' : 'Auto-refresh'}
+                </button>
               </div>
               {activityFeed && (
                 <div className="overflow-x-auto max-h-[500px]">

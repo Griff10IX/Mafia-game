@@ -46,7 +46,7 @@ BOOZE_TYPES = [
 BOOZE_CAPACITY_BASE_RANK1 = 50
 BOOZE_CAPACITY_EXTRA_PER_RANK = 25
 BOOZE_CAPACITY_UPGRADE_COST = 100
-BOOZE_CAPACITY_UPGRADE_AMOUNT = 100
+BOOZE_CAPACITY_UPGRADE_AMOUNT = 25
 BOOZE_CAPACITY_BONUS_MAX = 1000
 BOOZE_RUN_HISTORY_MAX = 10
 BOOZE_RUN_JAIL_CHANCE_MIN = 0.02
@@ -518,6 +518,6 @@ def register(router):
     router.add_api_route("/booze-run/config", booze_run_config, methods=["GET"])
     router.add_api_route("/booze-run/buy", booze_run_buy, methods=["POST"])
     router.add_api_route("/booze-run/sell", booze_run_sell, methods=["POST"])
-    router.add_api_route("/store/buy-booze-capacity", buy_booze_capacity, methods=["POST"])
+    # buy-booze-capacity route is registered in store.py (uses respect-first logic)
     router.add_api_route("/admin/booze-rotation", admin_get_booze_rotation, methods=["GET"])
     router.add_api_route("/admin/booze-rotation", admin_set_booze_rotation, methods=["POST"])

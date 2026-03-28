@@ -779,6 +779,7 @@ async def travel_to_target(request: AttackIdRequest, current_user: dict = Depend
         {"id": current_user["id"]},
         {"$set": {"current_state": location_state}}
     )
+    await log_activity(current_user["id"], current_user.get("username", "?"), "attack_travel", {"target_city": location_state})
     return {"message": f"Traveled to {location_state}"}
 
 async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(get_current_user_verified)):
@@ -1720,6 +1721,10 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             )
         except Exception:
             pass
+        await log_activity(killer_id, current_user.get("username", "?"), "attack_kill", {
+            "victim": target_name, "cash_loot": cash_loot, "rp": rank_points,
+            "bullets_used": bullets_used, "cars_taken": victim_cars_count, "props_taken": victim_props_count,
+        })
         return AttackExecuteResponse(
             success=True,
             message=success_message,

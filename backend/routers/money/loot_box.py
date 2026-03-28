@@ -15,6 +15,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from server import (
     db,
     get_current_user,
+    log_activity,
     send_notification,
     _is_admin,
     CARS,
@@ -558,6 +559,10 @@ async def open_loot_box(
             "reward_types": [r.get("type") for r in rewards if r.get("type")],
         })
 
+        await log_activity(user_id, current_user.get("username", "?"), "loot_box_open", {
+            "quality": box_quality, "prizes": len(rewards),
+            "types": [r.get("type") for r in rewards if r.get("type")],
+        })
         return {
             "rewards": rewards,
             "box_quality": box_quality,
@@ -606,6 +611,7 @@ async def collect_speakeasy(current_user: dict = Depends(get_current_user)):
         {"id": user_id},
         {"$inc": {"money": SPEAKEASY_DAILY_CASH, "bullets": SPEAKEASY_DAILY_BULLETS}},
     )
+    await log_activity(user_id, current_user.get("username", "?"), "speakeasy_collect", {"cash": SPEAKEASY_DAILY_CASH, "bullets": SPEAKEASY_DAILY_BULLETS})
     return {
         "message": f"Collected ${SPEAKEASY_DAILY_CASH:,} and {SPEAKEASY_DAILY_BULLETS} bullets from your Speakeasy.",
         "cash": SPEAKEASY_DAILY_CASH,

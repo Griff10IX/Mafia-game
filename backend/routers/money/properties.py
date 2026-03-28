@@ -476,6 +476,7 @@ def register(router):
             {"user_id": current_user["id"], "property_id": property_id},
             {"$set": {"income_buff_until": buff_until.isoformat()}},
         )
+        await log_activity(current_user["id"], current_user.get("username", "?"), "property_reinvest", {"property": prop["name"], "cost_points": BUFF_COST_POINTS})
         return {
             "message": f"Reinvested {BUFF_COST_POINTS:,} points into {prop['name']} — income +10% for 24 hours.",
             "buff_until": buff_until.isoformat(),

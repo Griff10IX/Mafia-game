@@ -599,6 +599,10 @@ async def attempt_gta(
         "jail_seconds": jail_seconds,
     }
     await db.gta_events.insert_one(event_doc)
+    await log_activity(current_user.get("id", ""), current_user.get("username", "?"), "gta_attempt", {
+        "option": (option or {}).get("name", request.option_id), "success": success,
+        "car": car.get("name") if car else None, "jailed": jailed,
+    })
     return result
 
 
@@ -1295,6 +1299,7 @@ async def delist_car(
     else:
         q = {"user_id": current_user.get("id") or "", "id": user_car.get("id")}
     await db.user_cars.update_one(q, {"$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""}})
+    await log_activity(current_user.get("id", ""), current_user.get("username", "?"), "gta_delist", {"car_id": user_car.get("car_id")})
     return {"message": "Car delisted"}
 
 
@@ -1445,6 +1450,7 @@ async def repair_car(
     else:
         q = {"user_id": current_user.get("id") or "", "id": user_car.get("id")}
     await db.user_cars.update_one(q, {"$set": {"damage_percent": 0}})
+    await log_activity(current_user.get("id", ""), current_user.get("username", "?"), "gta_repair", {"car": car_info.get("name"), "cost": cost})
     return {
         "message": f"Repaired for ${cost:,}. Damage 0%.",
         "damage_percent": 0,

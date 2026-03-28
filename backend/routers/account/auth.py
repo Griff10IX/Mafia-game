@@ -558,9 +558,7 @@ def register(router):
                     pass
             
             if login_is_locked:
-                # Pre-registration: account created but can't login yet
-                # Don't send verification emails while login is locked.
-                # Users can request a verification resend after launch.
+                await srv.log_activity(user_id, user_doc["username"], "account_register", {"ip": _client_ip(request) or ""})
                 return {
                     "token": None,
                     "user": None,
@@ -608,6 +606,7 @@ def register(router):
                     "created_at": user_doc["created_at"],
                     "rules_accepted": bool(user_doc.get("rules_accepted", False)),
                 }
+                await srv.log_activity(user_id, user_doc["username"], "account_register", {"ip": ip})
                 return {"token": token, "user": user_response}
 
             # Email verification: create token and send link
@@ -1062,6 +1061,7 @@ def register(router):
         if founding_rewards_applied:
             user_safe["founding_rewards_just_applied"] = True
             user_safe["founding_rewards"] = PREREGISTER_REWARDS
+        await srv.log_activity(user_id, user.get("username", "?"), "account_login", {"ip": _client_ip(request) or ""})
         return {"token": token, "user": user_safe}
 
     @router.post("/auth/password-reset/request")

@@ -156,11 +156,13 @@ export default function FamilyRun() {
     try {
       const res = await api.post('/family-run/score', { score: Math.floor(score), coins, session_id: sid });
       if (runSessionIdRef.current === sid) runSessionIdRef.current = null;
-      if (res.data?.rewards_applied) {
-        const r = res.data.rewards_applied;
+      if (res.data?.ok) {
+        const sc = Math.floor(score);
+        const estCash = Math.min(10000, Math.floor(sc / 100) * 10) + Math.min(2000, Math.floor(coins / 10));
+        const estResp = Math.min(50, Math.floor(sc / 200));
         const parts = [];
-        if (r.money) parts.push(`$${r.money.toLocaleString()}`);
-        if (r.respect_points) parts.push(`${r.respect_points} Respect`);
+        if (estCash > 0) parts.push(`$${estCash.toLocaleString()}`);
+        if (estResp > 0) parts.push(`${estResp} Respect`);
         if (parts.length) toast.success(`Rewards: ${parts.join(', ')}`);
       }
       fetchLeaderboard();

@@ -29,6 +29,7 @@ from server import (
     db,
     get_current_user,
     get_effective_event,
+    log_activity,
     log_respect_earned,
     RANKS,
     send_notification,
@@ -1572,6 +1573,7 @@ async def families_deposit(request: FamilyDepositRequest, current_user: dict = D
         raise HTTPException(status_code=400, detail="Not enough cash or bullets")
     await db.families.update_one({"id": family_id}, {"$inc": {"treasury": amount, "treasury_bullets": bullets}})
     _invalidate_my_cache(current_user["id"])
+    await log_activity(current_user["id"], current_user.get("username", "?"), "family_deposit", {"cash": amount, "bullets": bullets})
     return {"message": "Deposited to treasury"}
 
 
@@ -1603,6 +1605,7 @@ async def families_withdraw(request: FamilyWithdrawRequest, current_user: dict =
         raise HTTPException(status_code=400, detail="Not enough treasury cash or bullets")
     await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": amount, "bullets": bullets}})
     _invalidate_my_cache(current_user["id"])
+    await log_activity(current_user["id"], current_user.get("username", "?"), "family_withdraw", {"cash": amount, "bullets": bullets})
     return {"message": "Withdrew from treasury"}
 
 

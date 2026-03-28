@@ -5,8 +5,10 @@ import api from './api';
  * @param {string} game - snake | family_run | the_getaway | minesweeper | battleships | whack_a_copper | mafia_rpg | shooting_range
  * @returns {{ session_id: string, plays_left?: number, max_plays?: number, resets_at?: string }}
  */
-export async function startMinigameRun(game) {
-  const r = await api.post('/minigames/run-session/start', { game });
+export async function startMinigameRun(game, meta) {
+  const body = { game };
+  if (meta && typeof meta === 'object') body.meta = meta;
+  const r = await api.post('/minigames/run-session/start', body);
   const sid = r.data?.session_id;
   if (!sid) throw new Error('No run session from server');
   return {

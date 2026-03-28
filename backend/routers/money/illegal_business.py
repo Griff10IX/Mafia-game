@@ -16,6 +16,7 @@ from server import (
     get_rank_info,
     get_effective_event,
     get_prestige_bonus,
+    log_activity,
     log_respect_earned,
     send_notification,
     STATES,
@@ -973,6 +974,9 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
     else:
         update_user["illegal_business_raids_today"] = raid_count_today + 1
     await db.users.update_one({"id": current_user["id"]}, {"$set": update_user})
+    await log_activity(current_user["id"], current_user.get("username", "?"), "illegal_biz_raid", {
+        "target": target_user.get("username"), "success": won, "cash": loot_cash_credited if won else 0,
+    })
     return {
         "success": won,
         "loot_cash": loot_cash_credited if won else loot_cash,

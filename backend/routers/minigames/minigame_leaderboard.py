@@ -4,7 +4,7 @@
 
 import logging
 from datetime import datetime, timezone, timedelta
-from typing import Optional, List
+from typing import Any, Dict, Optional, List
 
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
@@ -111,6 +111,7 @@ class LeaderboardResponse(BaseModel):
 
 class MinigameRunSessionStartRequest(BaseModel):
     game: str
+    meta: Optional[Dict[str, Any]] = None
 
 
 def register(router):
@@ -127,7 +128,8 @@ def register(router):
         if g == "shooting_range":
             bonus = int(current_user.get("shooting_range_bonus_plays") or 0)
             extra = max(0, min(bonus, 10))
-        return await start_minigame_run(db, user_id=current_user["id"], game=g, extra_max=extra)
+        raw_meta = body.meta if isinstance(body.meta, dict) else None
+        return await start_minigame_run(db, user_id=current_user["id"], game=g, extra_max=extra, meta=raw_meta)
 
     @router.get("/minigames/plays-left")
     async def minigame_plays_left(

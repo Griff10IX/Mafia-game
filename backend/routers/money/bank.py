@@ -212,6 +212,7 @@ async def bank_interest_claim(request: BankDepositClaimRequest, current_user: di
 
     await db.users.update_one({"id": uid}, {"$inc": {"money": total}})
     _invalidate_overview_cache(uid)
+    await log_activity(uid, current_user.get("username", "?"), "bank_interest_claim", {"principal": principal, "interest": interest, "total": total})
     return {"message": f"Claimed ${total:,} (${principal:,} + ${interest:,} interest)", "total": total}
 
 

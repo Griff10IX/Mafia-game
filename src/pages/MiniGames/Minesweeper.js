@@ -124,15 +124,18 @@ export default function Minesweeper() {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- run only when phase becomes "won"; submitWin uses current closure
   }, [phase]);
 
+  const DIFF_REWARDS = { snitch: { cash: 1250, respect: 5 }, capo: { cash: 3750, respect: 15 }, godfather: { cash: 12500, respect: 50 } };
   const submitWin = async () => {
     try {
       const res = await api.post("/minesweeper/win", {
         difficulty,
         time_seconds: elapsed,
+        session_id: runSessionRef.current,
       });
-      if (res.data?.reward) {
-        setReward(res.data.reward);
-        toast.success(`You won! +$${res.data.reward.cash?.toLocaleString() || 0} cash`);
+      if (res.data?.ok) {
+        const dr = DIFF_REWARDS[difficulty] || { cash: 0, respect: 0 };
+        setReward(dr);
+        toast.success(`You won! +$${dr.cash.toLocaleString()} cash`);
       }
       fetchLeaderboard();
       refreshPlays();
@@ -169,7 +172,7 @@ export default function Minesweeper() {
       if (firstRevealLockRef.current) return;
       firstRevealLockRef.current = true;
       try {
-        const run = await startMinigameRun("minesweeper");
+        const run = await startMinigameRun("minesweeper", { difficulty });
         runSessionRef.current = run.session_id;
         updateFromStart(run);
       } catch (e) {

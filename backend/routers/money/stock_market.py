@@ -10,7 +10,7 @@ import httpx
 from pydantic import BaseModel
 from fastapi import Depends, HTTPException
 
-from server import db, get_current_user, send_notification
+from server import db, get_current_user, send_notification, log_activity
 
 # CoinGecko API (free, no key). Cache to respect rate limits.
 COINGECKO_BASE = "https://api.coingecko.com/api/v3"
@@ -457,6 +457,7 @@ def register(router):
                 "profit_points": 0,
                 "created_at": now_iso,
             })
+            await log_activity(uid, current_user.get("username", "?"), "stock_buy", {"stock": stock.get("name"), "side": "short", "points": points})
             return {"message": f"Opened short {stock.get('name')} for {points} points notional", "position_id": position_id, "units": round(units, 6), "price": current_price, "side": "short"}
 
         result = await db.users.update_one(
@@ -489,6 +490,7 @@ def register(router):
             "profit_points": 0,
             "created_at": now_iso,
         })
+        await log_activity(uid, current_user.get("username", "?"), "stock_buy", {"stock": stock.get("name"), "side": "long", "points": points})
         return {"message": f"Bought {stock.get('name')} for {points} points", "position_id": position_id, "units": round(units, 6), "price": current_price, "side": "long"}
 
     @router.post("/stock-market/sell")
@@ -573,4 +575,5 @@ def register(router):
         })
         if profit_points > 0:
             await send_notification(uid, "📈 Stock sold", f"You sold {stock.get('name')} for a profit of {profit_points} points!", "reward")
+        await log_activity(uid, current_user.get("username", "?"), "stock_sell", {"stock": stock.get("name"), "side": side, "value": value_points, "profit": profit_points})
         return {"message": f"Sold {stock.get('name')} for {value_points} points", "value_points": value_points, "profit_points": profit_points}

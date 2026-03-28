@@ -33,6 +33,7 @@ from server import (
     db,
     get_current_user,
     get_effective_event,
+    log_activity,
     send_notification,
     get_rank_info,
     RANKS,
@@ -581,6 +582,9 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
         "bodyguard"
     ))
     _invalidate_bodyguards_cache(current_user["id"])
+    await log_activity(current_user["id"], current_user.get("username", "?"), "bodyguard_hire", {
+        "slot": slot, "is_robot": is_robot, "cost": total_cost, "name": robot_name,
+    })
     return {"message": f"{'Robot bodyguard ' + robot_name if is_robot else 'Human bodyguard slot'} hired for {total_cost} points", "bodyguard_name": robot_name}
 
 
@@ -1491,6 +1495,9 @@ async def drop_bodyguard(slot: int, current_user: dict = Depends(get_current_use
     if not is_robot:
         _invalidate_bodyguards_cache(guard_id)
     guard_type = "robot" if is_robot else "human"
+    await log_activity(current_user["id"], current_user.get("username", "?"), "bodyguard_drop", {
+        "slot": slot, "guard": guard_name, "type": guard_type,
+    })
     return {"message": f"Dropped {guard_name} ({guard_type}) from slot {slot}. You can drop again in {BODYGUARD_DROP_COOLDOWN_SECONDS} seconds."}
 
 

@@ -7,8 +7,9 @@ from typing import Optional
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
-from server import db, get_current_user, _get_staff_user_ids, _is_admin
+from server import db, get_current_user, _get_staff_user_ids, _is_admin, log_activity
 from utils.minigame_run_session import (
+    as_utc_started,
     claim_minigame_run_session,
     enforce_client_duration_for_claimed_session,
     release_minigame_run,
@@ -20,9 +21,9 @@ VALID_DIFFICULTIES = ["snitch", "capo", "godfather"]
 
 # 75% reduction for beta
 DIFFICULTY_CONFIG = {
-    "snitch": {"base_cash": 1_250, "base_respect": 5, "points": 15, "max_time": 600},
-    "capo": {"base_cash": 3_750, "base_respect": 15, "points": 30, "max_time": 1200},
-    "godfather": {"base_cash": 12_500, "base_respect": 50, "points": 60, "max_time": 1800},
+    "snitch": {"base_cash": 1_250, "base_respect": 5, "points": 15, "max_time": 600, "min_time": 5},
+    "capo": {"base_cash": 3_750, "base_respect": 15, "points": 30, "max_time": 1200, "min_time": 15},
+    "godfather": {"base_cash": 12_500, "base_respect": 50, "points": 60, "max_time": 1800, "min_time": 30},
 }
 
 MAX_WINS_PER_HOUR = 10
@@ -65,6 +66,20 @@ def register(router):
             sess = await claim_minigame_run_session(
                 db, user_id=uid, game=MINESWEEPER_GAME, session_id=session_id, now_dt=now
             )
+
+            sess_meta = sess.get("meta") or {}
+            sess_diff = sess_meta.get("difficulty", "")
+            if sess_diff and sess_diff != difficulty:
+                await release_minigame_run(db, session_id)
+                raise HTTPException(status_code=400, detail="Difficulty mismatch with session.")
+
+            started_at = as_utc_started(sess.get("started_at"))
+            elapsed = max(0.0, (now - started_at).total_seconds())
+            min_time = cfg.get("min_time", 5)
+            if elapsed < min_time:
+                await release_minigame_run(db, session_id)
+                raise HTTPException(status_code=400, detail="Game too short for this difficulty.")
+
             await enforce_client_duration_for_claimed_session(
                 db,
                 session_id=session_id,
@@ -109,6 +124,10 @@ def register(router):
         }
         await db.minesweeper_wins.insert_one(win_doc)
 
+        await log_activity(uid, current_user.get("username", "?"), "minigame_minesweeper", {
+            "difficulty": difficulty, "time_seconds": time_seconds, "cash": cash, "respect": respect,
+        })
+
         try:
             from routers.minigames.minigame_leaderboard import log_minigame_play
             score = max(1, cfg["max_time"] - time_seconds)
@@ -117,8 +136,7 @@ def register(router):
             pass
 
         return {
-            "message": "Win recorded!",
-            "reward": {"cash": cash, "respect": respect},
+            "ok": True,
             "time_seconds": time_seconds,
             "difficulty": difficulty,
         }

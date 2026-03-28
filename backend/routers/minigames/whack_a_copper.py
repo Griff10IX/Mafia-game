@@ -7,8 +7,9 @@ from typing import Optional
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
-from server import db, get_current_user, _get_staff_user_ids, _is_admin
+from server import db, get_current_user, _get_staff_user_ids, _is_admin, log_activity
 from utils.minigame_run_session import (
+    as_utc_started,
     claim_minigame_run_session,
     enforce_numeric_score_for_claimed_session,
     release_minigame_run,
@@ -16,8 +17,9 @@ from utils.minigame_run_session import (
 
 MAX_PLAYS_PER_HOUR = 10
 MAX_SCORE_ACCEPTED = 50_000
-WHACK_RATE = 100.0
-WHACK_BUFFER = 40
+WHACK_RATE = 20.0
+WHACK_BUFFER = 15
+MIN_PLAY_SECONDS = 3
 WHACK_GAME = "whack_a_copper"
 MIN_SCORE_FOR_REWARD = 100
 CASH_PER_10_POINTS = 1  # $1 per 10 score
@@ -58,6 +60,11 @@ def register(router):
             sess = await claim_minigame_run_session(
                 db, user_id=uid, game=WHACK_GAME, session_id=session_id, now_dt=now_dt
             )
+            started_at = as_utc_started(sess.get("started_at"))
+            elapsed = max(0.0, (now_dt - started_at).total_seconds())
+            if elapsed < MIN_PLAY_SECONDS:
+                await release_minigame_run(db, session_id)
+                raise HTTPException(status_code=400, detail="Game too short.")
             await enforce_numeric_score_for_claimed_session(
                 db,
                 session_id=session_id,
@@ -110,6 +117,10 @@ def register(router):
         except Exception:
             pass
 
+        await log_activity(uid, current_user.get("username", "?"), "minigame_whack", {
+            "score": score, "cash": cash,
+        })
+
         try:
             from routers.minigames.minigame_leaderboard import log_minigame_play
             await log_minigame_play(
@@ -122,9 +133,8 @@ def register(router):
             pass
 
         return {
-            "message": "Score submitted",
+            "ok": True,
             "score": score,
-            "cash": cash,
         }
 
     @router.get("/whack-a-copper/leaderboard")

@@ -240,10 +240,10 @@ export default function WhackACopper() {
         score: finalScore,
         session_id: whackSessionRef.current,
       });
-      if (res.data?.cash > 0) {
-        toast.success(`Score submitted! +$${res.data.cash.toLocaleString()} cash`);
-      } else if (finalScore >= 100) {
-        toast.success("Score submitted!");
+      if (res.data?.ok) {
+        const estCash = finalScore >= 100 ? Math.min(5000, Math.floor(finalScore / 10)) : 0;
+        if (estCash > 0) toast.success(`Score submitted! +$${estCash.toLocaleString()} cash`);
+        else toast.success("Score submitted!");
       }
       refreshPlays();
     } catch (e) {

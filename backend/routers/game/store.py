@@ -54,6 +54,7 @@ from server import (
     db,
     get_current_user,
     get_current_user_verified,
+    log_activity,
     send_notification,
     _username_pattern,
     _is_admin,
@@ -64,6 +65,7 @@ from server import (
 )
 from routers.money.booze_run import (
     _booze_user_capacity,
+    _invalidate_config_cache as _invalidate_booze_config_cache,
     BOOZE_CAPACITY_UPGRADE_COST,
     BOOZE_CAPACITY_UPGRADE_AMOUNT,
     BOOZE_CAPACITY_BONUS_MAX,
@@ -212,6 +214,7 @@ async def buy_premium_rank_bar(
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
     await _record_store_points_spend(current_user["id"], inc, "buy-rank-bar")
+    await log_activity(current_user["id"], current_user.get("username", "?"), "store_purchase", {"item": "premium_rank_bar", "cost": cost_used})
     return {"message": "Premium rank bar purchased!", "cost": cost_used}
 
 
@@ -331,6 +334,7 @@ async def buy_booze_capacity(
         raise HTTPException(status_code=400, detail="Insufficient points")
     await _record_store_points_spend(current_user["id"], inc, "buy-booze-capacity")
     new_capacity = _booze_user_capacity({**current_user, "booze_capacity_bonus": current_bonus + add_bonus})
+    _invalidate_booze_config_cache(current_user["id"])
     return {"message": f"+{add_bonus} booze capacity for {cost_used} points", "new_capacity": new_capacity, "capacity_bonus": current_bonus + add_bonus, "capacity_bonus_max": BOOZE_CAPACITY_BONUS_MAX}
 
 
@@ -608,6 +612,7 @@ async def buy_store_token(
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Purchase failed (balance or token cap). Try again.")
     await _record_store_points_spend(current_user["id"], inc, f"buy-token:{tt}")
+    await log_activity(current_user["id"], current_user.get("username", "?"), "store_purchase", {"item": f"token:{tt}", "amount": amt, "cost": cost_used})
     return {"message": f"+{amt} {tt.replace('_', ' ')} token(s) for {cost_used} points", "cost": cost_used, "token_type": tt, "amount": amt}
 
 

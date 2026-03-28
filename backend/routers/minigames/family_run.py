@@ -9,6 +9,7 @@ from typing import Optional, Dict, Any
 from server import db, get_current_user, log_activity, log_respect_earned, _get_staff_user_ids, _is_admin
 from routers.minigames.minigame_leaderboard import log_minigame_play
 from utils.minigame_run_session import (
+    as_utc_started,
     claim_minigame_run_session,
     enforce_numeric_score_for_claimed_session,
     release_minigame_run,
@@ -17,8 +18,11 @@ from utils.minigame_run_session import (
 
 MAX_SCORE_ACCEPTED = 100_000
 MAX_PLAYS_PER_HOUR = 10
-FAMILY_RUN_RATE = 400.0
-FAMILY_RUN_BUFFER = 60
+FAMILY_RUN_RATE = 50.0
+FAMILY_RUN_BUFFER = 20
+MIN_PLAY_SECONDS = 3
+MAX_COINS_PER_SECOND = 5.0
+COINS_SLACK = 10
 FAMILY_RUN_GAME = "family_run"
 
 REWARD_CAPS = {
@@ -110,6 +114,15 @@ def register(router):
             sess = await claim_minigame_run_session(
                 db, user_id=uid, game=FAMILY_RUN_GAME, session_id=session_id, now_dt=now_dt
             )
+            started_at = as_utc_started(sess.get("started_at"))
+            elapsed = max(0.0, (now_dt - started_at).total_seconds())
+            if elapsed < MIN_PLAY_SECONDS:
+                await release_minigame_run(db, session_id)
+                raise HTTPException(status_code=400, detail="Game too short.")
+            max_coins = int(elapsed * MAX_COINS_PER_SECOND) + COINS_SLACK
+            if coins > max_coins:
+                await release_minigame_run(db, session_id)
+                raise HTTPException(status_code=400, detail="Coins do not match session timing.")
             await enforce_numeric_score_for_claimed_session(
                 db,
                 session_id=session_id,
@@ -169,8 +182,7 @@ def register(router):
             pass
 
         return {
-            "message": "Score submitted",
+            "ok": True,
             "score": score,
             "coins": coins,
-            "rewards_applied": rewards_applied,
         }
