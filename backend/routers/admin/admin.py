@@ -3153,33 +3153,42 @@ def register(router):
         items = []
         grand_total_profit = 0
         grand_total_earnings = 0
+        errors = []
         for game_name, coll_name in collections.items():
-            coll = getattr(db, coll_name, None)
-            if not coll:
-                continue
-            docs = await coll.find({}, {"_id": 0}).to_list(200)
-            for doc in docs:
-                profit = int(doc.get("profit") or 0)
-                total_earnings = int(doc.get("total_earnings") or 0)
-                owner_id = doc.get("owner_id")
-                owner_username = doc.get("owner_username") or "—"
-                city = doc.get("city") or doc.get("state") or "—"
-                grand_total_profit += profit
-                grand_total_earnings += total_earnings
-                items.append({
-                    "game": game_name,
-                    "city": city,
-                    "owner_id": owner_id,
-                    "owner_username": owner_username,
-                    "profit": profit,
-                    "total_earnings": total_earnings,
-                })
+            try:
+                coll = db[coll_name]
+                docs = await coll.find({}, {"_id": 0, "profit": 1, "total_earnings": 1, "owner_id": 1, "owner_username": 1, "city": 1, "state": 1}).to_list(200)
+                for doc in docs:
+                    try:
+                        profit = int(float(doc.get("profit") or 0))
+                        total_earnings = int(float(doc.get("total_earnings") or 0))
+                    except (TypeError, ValueError):
+                        profit = 0
+                        total_earnings = 0
+                    owner_id = doc.get("owner_id")
+                    owner_username = str(doc.get("owner_username") or "—")
+                    city = str(doc.get("city") or doc.get("state") or "—")
+                    grand_total_profit += profit
+                    grand_total_earnings += total_earnings
+                    items.append({
+                        "game": game_name,
+                        "city": city,
+                        "owner_id": owner_id,
+                        "owner_username": owner_username,
+                        "profit": profit,
+                        "total_earnings": total_earnings,
+                    })
+            except Exception as exc:
+                errors.append(f"{game_name}: {exc}")
         items.sort(key=lambda x: -abs(x["profit"]))
-        return {
+        resp = {
             "items": items,
             "grand_total_profit": grand_total_profit,
             "grand_total_earnings": grand_total_earnings,
         }
+        if errors:
+            resp["errors"] = errors
+        return resp
 
     @router.get("/admin/casinos/gambling-anomalies")
     async def admin_gambling_anomalies(

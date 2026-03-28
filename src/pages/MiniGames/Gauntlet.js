@@ -943,9 +943,10 @@ export default function Gauntlet() {
         difficulty: difficultyId, character: characterId,
       });
       if (gauntletSessionIdRef.current === runSessionId) gauntletSessionIdRef.current = null;
-      const cash = Number(res.data?.cash_awarded || 0);
-      const respect = Number(res.data?.respect_awarded || 0);
-      if (res.data?.money != null) { setMoney(Number(res.data.money)); refreshUser(Number(res.data.money)); }
+      const r = getReward(Number(finalScore || 0));
+      const cash = r.cash;
+      const respect = r.respect;
+      void refreshUser();
       const playsMsg = res.data?.plays_left != null ? ` • Plays left: ${res.data.plays_left}` : "";
       const parts = [];
       if (cash > 0) parts.push(`$${cash.toLocaleString()}`);

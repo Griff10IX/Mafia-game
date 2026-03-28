@@ -18,11 +18,12 @@ from utils.minigame_run_session import (
 
 MAX_RUNS_PER_HOUR = 10
 GETAWAY_GAME = "the_getaway"
-# Server-side plausibility vs client-reported time (meters / sec, coins / sec).
-GETAWAY_MAX_M_PER_SEC = 140
-GETAWAY_MAX_COINS_PER_SEC = 40
-GETAWAY_DISTANCE_SLACK = 800
-GETAWAY_COINS_SLACK = 200
+# Server-side plausibility vs client-reported time.
+# Real max: ~43 dist/sec at max speed 18; ~2-3 coins/sec collecting perfectly.
+GETAWAY_MAX_M_PER_SEC = 55
+GETAWAY_MAX_COINS_PER_SEC = 5
+GETAWAY_DISTANCE_SLACK = 200
+GETAWAY_COINS_SLACK = 30
 
 # 75% reduction for beta
 BASE_CASH = 3_750
@@ -143,7 +144,7 @@ def register(router):
 
         return {
             "message": "Clean getaway!",
-            "reward": {"cash": cash, "respect": respect},
+            "ok": True,
             "distance": distance,
             "coins_collected": coins_collected,
         }

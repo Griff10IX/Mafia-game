@@ -179,8 +179,12 @@ export default function TheGetaway() {
         session_id: sid,
       });
       getawaySessionRef.current = null;
-      if (res.data?.reward) {
-        toast.success(`Clean getaway! +$${res.data.reward.cash.toLocaleString()} +${res.data.reward.respect} respect`);
+      if (res.data?.ok) {
+        const dist = Math.floor(stateRef.current?.score || 0);
+        const coins = stateRef.current?.coins || 0;
+        const estCash = 3750 + Math.floor(dist / 100) * 500 + coins * 25;
+        const estResp = 15 + Math.floor(dist / 100) * 2;
+        toast.success(`Clean getaway! +$${estCash.toLocaleString()} +${estResp} respect`);
       }
       refreshPlays();
     } catch (err) {

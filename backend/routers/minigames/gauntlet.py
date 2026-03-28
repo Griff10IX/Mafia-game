@@ -9,6 +9,7 @@ from typing import Optional
 from server import db, get_current_user, log_activity, log_respect_earned, _get_staff_user_ids, _is_admin
 from routers.minigames.minigame_leaderboard import log_minigame_play
 from utils.minigame_run_session import (
+    as_utc_started,
     claim_minigame_run_session,
     enforce_numeric_score_for_claimed_session,
     release_minigame_run,
@@ -35,14 +36,28 @@ MAX_RESPECT_PER_CLAIM = 1_000
 CASH_PER_GATE_AFTER_50 = 500  # 75% reduction
 RESPECT_PER_GATE_AFTER_50 = 2
 
-# Basic sanity limits (frontend is not trusted). Highest score-gated unlock in the client is 750 gates;
-# real runs can go higher, but values like 9999 are trivial API spoofing (old cap was 10_000).
-MAX_SCORE_ACCEPTED = 2_000
+MAX_SCORE_ACCEPTED = 750
 MAX_PLAYS_PER_HOUR = 10
 
-# Run sessions: claim must use session_id from POST /gauntlet/start (or /minigames/run-session/start).
-MAX_GATES_PER_SECOND = 10.0
-SCORE_TIME_BUFFER = 15
+# Pipe-rate caps per speed×difficulty combination (real gameplay caps ~0.5-0.88 gates/sec).
+# { speed_id: { difficulty_id: max_gates_per_second } }
+_SPEED_MULTS = {"slow": 0.7, "normal": 1.0, "fast": 1.4}
+_DIFF_SPEED_MULTS = {"easy": 0.85, "normal": 1.0, "hard": 1.25, "insane": 1.65}
+_BASE_SPAWN_TICKS = 95
+_TICK_MS = 1000 / 60
+
+def _max_rate_for_mode(speed: str, difficulty: str) -> float:
+    """Max plausible gates/sec for a given speed + difficulty, with 80% headroom."""
+    sm = _SPEED_MULTS.get(speed, 1.0)
+    spawn_ticks = max(40, round(_BASE_SPAWN_TICKS / sm))
+    spawn_sec = spawn_ticks * _TICK_MS / 1000.0
+    real_rate = 1.0 / spawn_sec
+    return real_rate * 1.8  # 80% buffer over theoretical max
+
+# Fallback if mode lookup fails
+MAX_GATES_PER_SECOND = 1.5
+SCORE_TIME_BUFFER = 5
+MIN_PLAY_SECONDS = 3
 
 GAUNTLET_GAME_SLUG = "gauntlet"
 
@@ -159,6 +174,24 @@ def register(router):
             sess = await claim_minigame_run_session(
                 db, user_id=uid, game=GAUNTLET_GAME_SLUG, session_id=session_id, now_dt=now_dt
             )
+
+            started_at = as_utc_started(sess.get("started_at"))
+            elapsed = max(0.0, (now_dt - started_at).total_seconds())
+            if elapsed < MIN_PLAY_SECONDS:
+                await release_minigame_run(db, session_id)
+                raise HTTPException(status_code=400, detail="Game too short.")
+
+            sess_meta = sess.get("meta") or {}
+            sess_speed = sess_meta.get("speed", "normal")
+            sess_diff = sess_meta.get("difficulty", "normal")
+            claim_speed = (payload.speed or "normal").strip()
+            claim_diff = (payload.difficulty or "normal").strip()
+            if claim_speed != sess_speed or claim_diff != sess_diff:
+                await release_minigame_run(db, session_id)
+                raise HTTPException(status_code=400, detail="Speed/difficulty mismatch with session.")
+
+            rate = _max_rate_for_mode(sess_speed, sess_diff)
+
             await enforce_numeric_score_for_claimed_session(
                 db,
                 session_id=session_id,
@@ -166,7 +199,7 @@ def register(router):
                 now_dt=now_dt,
                 score=score,
                 max_score_cap=MAX_SCORE_ACCEPTED,
-                rate_per_second=MAX_GATES_PER_SECOND,
+                rate_per_second=rate,
                 buffer=SCORE_TIME_BUFFER,
             )
 
@@ -206,7 +239,7 @@ def register(router):
                 await log_minigame_play(current_user["id"], current_user.get("username"), "gauntlet", score)
             except Exception:
                 pass
-            return {"cash_awarded": 0, "respect_awarded": 0, "label": reward["label"], "tier": reward["tier"], "plays_left": plays_left, "resets_at": reset_iso}
+            return {"ok": True, "score": score, "plays_left": plays_left, "resets_at": reset_iso}
 
         updates = {}
         if cash > 0:
@@ -237,14 +270,9 @@ def register(router):
         except Exception:
             pass
 
-        user_doc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1, "respect_points": 1})
         return {
-            "cash_awarded": cash,
-            "respect_awarded": respect,
-            "label": reward["label"],
-            "tier": reward["tier"],
+            "ok": True,
             "score": score,
-            "money": int((user_doc or {}).get("money") or 0),
             "plays_left": plays_left,
             "resets_at": reset_iso,
         }

@@ -2594,9 +2594,13 @@ export default function Admin() {
     setOwnershipProfitsLoading(true);
     try {
       const res = await api.get('/admin/casinos/ownership-profits');
-      setOwnershipProfits(res.data || null);
+      const data = res.data || {};
+      setOwnershipProfits(data);
+      if (data.errors?.length) toast.error(`Partial errors: ${data.errors.join(', ')}`);
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to load ownership profits');
+      const detail = e.response?.data?.detail || e.message || 'Failed to load ownership profits';
+      toast.error(detail);
+      setOwnershipProfits({ items: [], grand_total_profit: 0, grand_total_earnings: 0 });
     } finally {
       setOwnershipProfitsLoading(false);
     }
