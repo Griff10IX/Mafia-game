@@ -847,7 +847,13 @@ def _user_pool_cash(user_doc: Optional[dict]) -> int:
     return int((user_doc or {}).get("pool_cash") or 0)
 
 
-def _ai_select_target_ball(balls: List[dict], cue: dict, shooter: dict) -> Optional[dict]:
+def _ai_select_target_ball(
+    balls: List[dict],
+    cue: dict,
+    shooter: dict,
+    *,
+    is_break_shot: bool = False,
+) -> Optional[dict]:
     """Pick a legal object ball for the AI (group / 8-ball rules). Falls back to nearest ball."""
     if not cue:
         return None
@@ -857,6 +863,14 @@ def _ai_select_target_ball(balls: List[dict], cue: dict, shooter: dict) -> Optio
 
     def dist(b: dict) -> float:
         return math.hypot(float(b["x"]) - cx, float(b["y"]) - cy)
+
+    # Break: never use Euclidean-nearest — that can pick a side/back ball and aim almost
+    # straight up/down (tiny dx), so the cue rattles top/bottom rails without hitting the rack.
+    if is_break_shot:
+        front = [b for b in objs if int(b.get("number") or 0) != 8]
+        if not front:
+            return None
+        return min(front, key=lambda b: float(b["x"]))
 
     pool: List[dict] = []
     if shooter_group == "solid":
@@ -1320,8 +1334,9 @@ def register(router):
         balls = list(ts.get("balls") or [])
         if int(ts.get("shot_count") or 0) == 0 and bool(ts.get("awaiting_break_placement")):
             kb = _kitchen_break_bounds()
-            px = _rng.uniform(kb["min_x"], kb["max_x"])
-            py = _rng.uniform(kb["min_y"], kb["max_y"])
+            # Center the cue on the head string toward the rack (avoids vertical "nearest ball" breaks).
+            px = (kb["min_x"] + kb["max_x"]) / 2.0
+            py = MP_8BALL_TABLE_H * 0.5
             for b in balls:
                 if b.get("number") == 0:
                     b["x"], b["y"] = px, py
@@ -1330,11 +1345,23 @@ def register(router):
             ts["awaiting_break_placement"] = False
         balls = list(ts.get("balls") or [])
         cue = next((b for b in balls if b.get("number") == 0), None)
-        target = _ai_select_target_ball(balls, cue, shooter) if cue else None
+        awaiting_bp = bool(ts.get("awaiting_break_placement"))
+        shot_n = int(ts.get("shot_count") or 0)
+        is_break_shot = shot_n == 0 and not awaiting_bp
+        target = _ai_select_target_ball(balls, cue, shooter, is_break_shot=is_break_shot) if cue else None
         if not cue or not target:
             return
-        ang = math.atan2((target["y"] - cue["y"]), (target["x"] - cue["x"]))
-        req = PoolShootRequest(angle=ang, power=0.65 + _rng.random() * 0.25, spin_x=0.0, spin_y=0.0)
+        dx = float(target["x"]) - float(cue["x"])
+        dy = float(target["y"]) - float(cue["y"])
+        if abs(dx) < 1e-5:
+            ang = 0.0
+        else:
+            ang = math.atan2(dy, dx)
+        if is_break_shot:
+            pwr = 0.82 + _rng.random() * 0.16
+        else:
+            pwr = 0.65 + _rng.random() * 0.25
+        req = PoolShootRequest(angle=ang, power=pwr, spin_x=0.0, spin_y=0.0)
         sim = _simulate_shot(
             balls,
             cue_angle=float(req.angle),
