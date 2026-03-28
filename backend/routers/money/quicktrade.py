@@ -21,6 +21,12 @@ _properties_cache: Optional[tuple] = None
 _properties_ts: float = 0
 _LIST_TTL_SEC = 5
 
+# Founding Member random drops still write `founding_tokens.*` for analytics, but these types also flow from
+# Game Pass / store — they should remain listable on Quick Trade (referral + entertainer locks still apply).
+_FOUNDING_LOCK_EXEMPT_COUNT_FIELDS = frozenset(
+    {"melt_tokens", "travel_tokens", "properties_tokens", "jailbust_tokens"}
+)
+
 
 def _invalidate_trade_caches():
     global _sell_offers_cache, _sell_offers_ts, _buy_offers_cache, _buy_offers_ts, _token_offers_cache, _token_offers_ts, _properties_cache, _properties_ts
@@ -328,7 +334,7 @@ async def get_token_offers(current_user: dict = Depends(get_current_user)):
 
 
 async def get_my_token_balances(current_user: dict = Depends(get_current_user)):
-    """Return per-token-type balances: total, unsellable (referral + entertainer), and sellable for Quick Trade."""
+    """Return per-token-type balances: total, unsellable (referral + entertainer + founding lock), sellable."""
     user_id = current_user["id"]
     projection = {"_id": 0, "referral_tokens": 1, "entertainer_tokens": 1, "founding_tokens": 1}
     for cfg in TOKEN_CONFIG.values():
@@ -345,10 +351,19 @@ async def get_my_token_balances(current_user: dict = Depends(get_current_user)):
         total = int(user.get(field) or 0)
         referral = int(referral_tokens.get(field) or 0)
         entertainer = int(entertainer_tokens.get(field) or 0)
-        founding = int(founding_tokens.get(field) or 0)
-        unsellable = referral + entertainer + founding
+        founding_stored = int(founding_tokens.get(field) or 0)
+        founding_lock = 0 if field in _FOUNDING_LOCK_EXEMPT_COUNT_FIELDS else founding_stored
+        unsellable = referral + entertainer + founding_lock
         sellable = max(0, total - unsellable)
-        result[token_type] = {"total": total, "referral": referral, "entertainer": entertainer, "founding": founding, "unsellable": unsellable, "sellable": sellable}
+        result[token_type] = {
+            "total": total,
+            "referral": referral,
+            "entertainer": entertainer,
+            "founding": founding_stored,
+            "founding_locks_trade": founding_lock,
+            "unsellable": unsellable,
+            "sellable": sellable,
+        }
     return result
 
 
@@ -367,27 +382,29 @@ async def create_token_offer(offer: CreateTokenOffer, current_user: dict = Depen
     referral_key = f"referral_tokens.{field}"
     entertainer_key = f"entertainer_tokens.{field}"
     founding_key = f"founding_tokens.{field}"
+    locked_parts = [
+        {"$ifNull": ["$" + referral_key, 0]},
+        {"$ifNull": ["$" + entertainer_key, 0]},
+    ]
+    if field not in _FOUNDING_LOCK_EXEMPT_COUNT_FIELDS:
+        locked_parts.append({"$ifNull": ["$" + founding_key, 0]})
     result = await db.users.update_one(
         {
             "id": user_id,
             "$expr": {
                 "$gte": [
-                    {"$subtract": [
-                        {"$ifNull": ["$" + field, 0]},
-                        {"$add": [
-                            {"$ifNull": ["$" + referral_key, 0]},
-                            {"$ifNull": ["$" + entertainer_key, 0]},
-                            {"$ifNull": ["$" + founding_key, 0]},
-                        ]}
-                    ]},
-                    offer.quantity
+                    {"$subtract": [{"$ifNull": ["$" + field, 0]}, {"$add": locked_parts}]},
+                    offer.quantity,
                 ]
-            }
+            },
         },
-        {"$inc": {field: -offer.quantity}}
+        {"$inc": {field: -offer.quantity}},
     )
     if result.modified_count == 0:
-        raise HTTPException(status_code=400, detail="Insufficient sellable tokens (referral and entertainer tokens cannot be sold on Quick Trade)")
+        raise HTTPException(
+            status_code=400,
+            detail="Insufficient sellable tokens (referral, entertainer, and some founding bonus tokens cannot be sold on Quick Trade)",
+        )
     new_offer = {
         "user_id": user_id,
         "username": username,

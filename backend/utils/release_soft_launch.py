@@ -1,4 +1,9 @@
-"""Release soft-launch: optional PvP kill pause + Game Pass purchase window (game_settings key `release_soft_launch`)."""
+"""Release soft-launch: optional pre-unlock window (game_settings key `release_soft_launch`).
+
+Before `game_pass_unlock_at`: player vs player kills and Game Pass purchases are blocked; after that instant,
+both open automatically while `enabled` remains. Hitlist NPCs are unaffected. Staff disable `enabled` to drop
+the release banner/messaging when desired.
+"""
 from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
@@ -29,10 +34,14 @@ async def get_release_soft_launch_public(db) -> Dict[str, Any]:
     now = datetime.now(timezone.utc)
     unlock_dt = _parse_iso_utc(game_pass_unlock_at)
     unlock_ok = unlock_dt is not None and now >= unlock_dt
-    game_pass_purchase_locked = enabled and not unlock_ok
+    # Before unlock: Game Pass checkout + player-vs-player kills stay off; after unlock, both open
+    # automatically while `enabled` remains (banner/messaging can stay until staff disable the flag).
+    preunlock_active = enabled and not unlock_ok
+    game_pass_purchase_locked = preunlock_active
+    pvp_kills_disabled = preunlock_active
     return {
         "release_soft_launch_enabled": enabled,
-        "pvp_kills_disabled": enabled,
+        "pvp_kills_disabled": pvp_kills_disabled,
         "game_pass_purchase_locked": game_pass_purchase_locked,
         "game_pass_unlock_at": game_pass_unlock_at,
     }
@@ -47,7 +56,7 @@ def game_pass_purchase_locked_detail(state: Dict[str, Any]) -> str:
 
 
 PVP_KILLS_DISABLED_DETAIL = (
-    "Player vs player kills are temporarily disabled during release soft-launch. "
+    "Player vs player kills are paused until the release unlock time (same schedule as Game Pass and the points store). "
     "You can still search for and attack hitlist NPCs."
 )
 

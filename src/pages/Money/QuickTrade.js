@@ -200,7 +200,9 @@ export default function QuickTrade() {
     const sellable = tokenBalances[tokenType]?.sellable;
     if (sellable != null && qty > sellable) qty = Math.max(0, sellable);
     if (qty < 1) {
-      toast.error('No tokens available to sell (referral tokens cannot be sold on Quick Trade).');
+      toast.error(
+        'No tradable tokens to list. Referral, entertainer, and some Founding Member bonus tokens cannot be sold on Quick Trade.',
+      );
       return;
     }
     const price = Math.max(1, parseInt(String(tokenPrice).replace(/,/g, ''), 10) || 0);
@@ -294,6 +296,13 @@ export default function QuickTrade() {
   const buyFee = buyPoints ? calculateFee(buyPoints) : 0;
   const sellAfterFee = sellPoints ? parseFloat(sellPoints) - sellFee : 0;
   const buyAfterFee = buyPoints ? parseFloat(buyPoints) - buyFee : 0;
+
+  const sellTokBal = tokenBalances[tokenType];
+  const sellFoundingRaw = sellTokBal ? Number(sellTokBal.founding || 0) : 0;
+  const sellFoundingLock =
+    sellTokBal && sellTokBal.founding_locks_trade != null
+      ? Number(sellTokBal.founding_locks_trade)
+      : sellFoundingRaw;
 
   if (loading) {
     return (
@@ -486,18 +495,38 @@ export default function QuickTrade() {
                 onChange={(e) => setTokenType(e.target.value)}
                 className="w-full bg-zinc-900 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none cursor-pointer capitalize"
               >
-                {TOKEN_TYPES.map((t) => (
-                  <option key={t} value={t} className="bg-zinc-900 text-foreground py-2">
-                    {formatTokenName(t)}{tokenBalances?.[t]?.sellable != null ? ` (${tokenBalances[t].sellable})` : ''}
-                  </option>
-                ))}
+                {TOKEN_TYPES.map((t) => {
+                  const b = tokenBalances?.[t];
+                  const held = b?.total;
+                  const tradable = b?.sellable;
+                  const label =
+                    held != null && tradable != null
+                      ? `${formatTokenName(t)} (${held} held · ${tradable} tradable)`
+                      : formatTokenName(t);
+                  return (
+                    <option key={t} value={t} className="bg-zinc-900 text-foreground py-2">
+                      {label}
+                    </option>
+                  );
+                })}
               </select>
             </div>
-            {tokenBalances[tokenType] != null && (
+            {sellTokBal != null && (
               <div className="flex flex-col gap-1 rounded-md px-3 py-2 bg-zinc-800/40 border border-zinc-700/30 text-[10px] font-heading">
-                <span className="text-mutedForeground">Your balance: <span className="text-foreground font-bold">{tokenBalances[tokenType].total}</span> total</span>
-                <span className="text-mutedForeground">Referral tokens: <span className="text-foreground font-bold">{tokenBalances[tokenType].referral}</span> (cannot be sold)</span>
-                <span className="text-primary font-bold">Available to sell: {tokenBalances[tokenType].sellable}</span>
+                <span className="text-mutedForeground">Your balance: <span className="text-foreground font-bold">{sellTokBal.total}</span> total</span>
+                <span className="text-mutedForeground">Referral: <span className="text-foreground font-bold">{sellTokBal.referral}</span> (cannot be sold)</span>
+                {Number(sellTokBal.entertainer || 0) > 0 && (
+                  <span className="text-mutedForeground">Entertainer: <span className="text-foreground font-bold">{sellTokBal.entertainer}</span> (cannot be sold)</span>
+                )}
+                {sellFoundingRaw > 0 && (
+                  <span className="text-mutedForeground">
+                    Founding Member drops: <span className="text-foreground font-bold">{sellFoundingRaw}</span>
+                    {sellFoundingLock > 0
+                      ? ' (cannot be sold on Quick Trade)'
+                      : ' (this type can still be sold — same pool as Game Pass / store)'}
+                  </span>
+                )}
+                <span className="text-primary font-bold">Tradable on Quick Trade: {sellTokBal.sellable}</span>
               </div>
             )}
             <div>

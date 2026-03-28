@@ -5523,7 +5523,7 @@ export default function Admin() {
         {!collapsed.releaseSoftLaunch && (
           <div className="p-3 space-y-2">
             <p className="text-[10px] text-mutedForeground font-heading">
-              While enabled: kills on real players are blocked (hitlist NPCs and other NPC targets still work). Game Pass purchases are blocked until the unlock time below (default matches the 4 Apr points window). Turn this off when you are ready to open PvP again.
+              While enabled, before the unlock time: player vs player kills and Game Pass checkout are both off (same clock; hitlist NPCs still work). After that time they turn on automatically while this flag stays enabled — disable soft-launch when you want to clear the in-game release banner entirely.
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <BtnPrimary onClick={handleFetchReleaseSoftLaunch} disabled={releaseSoftLaunchLoading}>
@@ -5535,9 +5535,9 @@ export default function Admin() {
             </div>
             {releaseSoftLaunchAdmin && (
               <p className="text-[10px] text-mutedForeground font-heading">
-                Game Pass purchase lock:{' '}
+                Pre-unlock lock (Game Pass + PvP kills):{' '}
                 <span className={releaseSoftLaunchAdmin.game_pass_purchase_locked ? 'text-amber-400 font-bold' : 'text-emerald-400'}>
-                  {releaseSoftLaunchAdmin.game_pass_purchase_locked ? 'locked' : 'unlocked'}
+                  {releaseSoftLaunchAdmin.game_pass_purchase_locked ? 'active (before unlock time)' : 'off (unlock time passed)'}
                 </span>
                 {releaseSoftLaunchAdmin.game_pass_unlock_at && (
                   <>
@@ -5548,7 +5548,7 @@ export default function Admin() {
               </p>
             )}
             <div>
-              <label className="block text-[10px] font-heading uppercase tracking-wider text-mutedForeground mb-1">Game Pass unlock (ISO 8601, UTC)</label>
+              <label className="block text-[10px] font-heading uppercase tracking-wider text-mutedForeground mb-1">Unlock time — Game Pass + PvP kills (ISO 8601, UTC)</label>
               <input
                 type="text"
                 value={releaseSoftLaunchUnlockAt}

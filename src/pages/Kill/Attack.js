@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { Search, Plane, Car, Crosshair, Clock, MapPin, Skull, Calculator, Zap, FileText, Users, AlertTriangle } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
+import { formatReleaseUnlockLine } from '../../utils/releaseSoftLaunchDisplay';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
@@ -46,6 +47,17 @@ function formatCountdown(expiresAtIso) {
   if (h > 0) return `${h}h ${m}m ${s}s`;
   if (m > 0) return `${m}m ${s}s`;
   return `${s}s`;
+}
+
+/** Searching: time until target is found (`found_at`). Found: row expiry (`expires_at`). */
+function attackCountdownIso(a) {
+  if (!a) return null;
+  if (a.status === 'searching' && a.found_at) return a.found_at;
+  return a.expires_at || a.search_started;
+}
+
+function attackCountdownLabel(a) {
+  return a?.status === 'searching' ? 'Found in' : 'Expires';
 }
 
 // Shown in toast when caught during booze run (prohibition bust)
@@ -530,7 +542,7 @@ const SearchesCard = ({
                     <div className="col-span-4 text-right text-[9px] text-mutedForeground font-heading">
                       <span className="inline-flex items-center gap-1 justify-end">
                         <Clock size={12} />
-                        {formatCountdown(a.expires_at || a.search_started)}
+                        {formatCountdown(attackCountdownIso(a))}
                       </span>
                     </div>
                   </div>
@@ -608,7 +620,7 @@ const SearchesCard = ({
 
                   <div className="text-[9px] text-mutedForeground font-heading flex items-center gap-1">
                     <Clock size={10} />
-                    Expires: {formatCountdown(a.expires_at || a.search_started)}
+                    {attackCountdownLabel(a)}: {formatCountdown(attackCountdownIso(a))}
                   </div>
                 </div>
               ))}
@@ -618,7 +630,7 @@ const SearchesCard = ({
         
         {attacks.length > 0 && (
           <p className="text-[9px] text-mutedForeground font-heading italic pt-1">
-            💡 Searches complete automatically. Location revealed when target is found.
+            💡 While searching, the timer is time until the target is found (~2h 15m–2h 45m). After found, it shows how long the row stays valid.
           </p>
         )}
       </div>
@@ -1567,6 +1579,7 @@ export default function Attack() {
   const filteredIds = useMemo(() => filteredAttacks.map((a) => a.attack_id), [filteredAttacks]);
 
   const pvpKillsDisabled = !!releaseSoftLaunch?.pvp_kills_disabled;
+  const releaseUnlockKillDisplay = formatReleaseUnlockLine(releaseSoftLaunch?.game_pass_unlock_at);
 
   const killPvpBlocked = useMemo(() => {
     if (!pvpKillsDisabled) return false;
@@ -1595,9 +1608,23 @@ export default function Attack() {
       {pvpKillsDisabled && (
         <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-2 flex items-start gap-2">
           <AlertTriangle size={16} className="text-amber-400 shrink-0 mt-0.5" />
-          <p className="text-[10px] text-amber-100 font-heading leading-snug">
-            Release mode: attacks on other players are off. Hitlist NPCs and other NPC targets can still be searched and killed.
-          </p>
+          <div className="text-[10px] text-amber-100 font-heading leading-snug space-y-1.5 min-w-0">
+            <p>
+              Release mode: attacks on other players are off until the scheduled unlock (same time as{' '}
+              <Link to="/game-pass" className="text-primary font-bold underline-offset-2 hover:underline">
+                Game Pass
+              </Link>{' '}
+              and the points store).
+            </p>
+            {releaseUnlockKillDisplay && (
+              <p>
+                <span className="text-amber-200/90 uppercase tracking-wider font-bold">Opens / unlocks</span>
+                {': '}
+                <span className="text-foreground font-bold break-words">{releaseUnlockKillDisplay.line}</span>
+              </p>
+            )}
+            <p>Hitlist NPCs and other NPC targets can still be searched and killed.</p>
+          </div>
         </div>
       )}
 

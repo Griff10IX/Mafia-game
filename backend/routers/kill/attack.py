@@ -53,6 +53,7 @@ from server import (
     log_activity,
     founding_member_income_mult,
 )
+from utils.kill_search_duration import KILL_SEARCH_RANDOM_MAX_MINUTES, KILL_SEARCH_RANDOM_MIN_MINUTES
 from utils.release_soft_launch import PVP_KILLS_DISABLED_DETAIL, soft_launch_blocks_pvp_kill_on_target
 from routers.money.booze_run import BOOZE_TYPES
 from routers.account.objectives import update_objectives_progress
@@ -496,7 +497,11 @@ async def search_target(request: AttackSearchRequest, current_user: dict = Depen
     if existing:
         await db.attacks.delete_one({"attacker_id": current_user["id"], "id": existing.get("id")})
 
-    search_duration = int(override_minutes) if override_minutes and override_minutes > 0 else random.randint(120, 180)
+    search_duration = (
+        int(override_minutes)
+        if override_minutes and override_minutes > 0
+        else random.randint(KILL_SEARCH_RANDOM_MIN_MINUTES, KILL_SEARCH_RANDOM_MAX_MINUTES)
+    )
     found_at = now + timedelta(minutes=search_duration)
     expires_at = now + timedelta(hours=24)
     attack_id = str(uuid.uuid4())

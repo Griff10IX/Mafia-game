@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Package, ShoppingBag, Clock } from 'lucide-react';
+import { Package, ShoppingBag, Clock, AlertTriangle } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
+import { formatReleaseUnlockLine } from '../../utils/releaseSoftLaunchDisplay';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 
@@ -457,13 +458,9 @@ export default function GamePass() {
   const selectedTierObj = selectedMicroTier ? getTierRewardObj(selectedMicroTier) : null;
   const selectedNextTierObj = selectedMicroTier && selectedMicroTier < 100 ? getTierRewardObj(selectedMicroTier + 1) : null;
 
+  const releaseSoftLaunchOn = !!releaseSoftLaunch?.release_soft_launch_enabled;
   const gamePassPurchaseLocked = !!releaseSoftLaunch?.game_pass_purchase_locked;
-  const gamePassUnlockLabel = releaseSoftLaunch?.game_pass_unlock_at
-    ? (() => {
-        const d = new Date(releaseSoftLaunch.game_pass_unlock_at);
-        return Number.isNaN(d.getTime()) ? releaseSoftLaunch.game_pass_unlock_at : d.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
-      })()
-    : null;
+  const gamePassUnlockDisplay = formatReleaseUnlockLine(releaseSoftLaunch?.game_pass_unlock_at);
 
   const handlePurchase = async () => {
     if (!user) return;
@@ -559,6 +556,38 @@ export default function GamePass() {
         </div>
       ) : (
         <div className="max-w-5xl mx-auto space-y-4">
+          {releaseSoftLaunchOn && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-2 py-2 flex items-start gap-2">
+              <AlertTriangle size={16} className="text-amber-400 shrink-0 mt-0.5" />
+              <div className="text-[10px] text-amber-100 font-heading leading-snug space-y-1.5 min-w-0">
+                <p>Release mode is active.</p>
+                {gamePassUnlockDisplay && (
+                  <p>
+                    <span className="text-amber-200/90 uppercase tracking-wider font-bold">Opens / unlocks</span>
+                    {': '}
+                    <span className="text-foreground font-bold break-words">{gamePassUnlockDisplay.line}</span>
+                    <span className="text-amber-200/80"> — same schedule as the points store release.</span>
+                  </p>
+                )}
+                {gamePassPurchaseLocked ? (
+                  <p>
+                    Game Pass checkout and player vs player kills are <span className="text-foreground font-bold">off</span> until that time.
+                  </p>
+                ) : (
+                  <p>
+                    Game Pass checkout and player vs player kills are <span className="text-emerald-300 font-bold">on</span> (unlock time has passed; this banner stays until staff disable soft-launch).
+                  </p>
+                )}
+                <p>
+                  Hitlist NPCs and other NPC targets can always be hunted during this window — see{' '}
+                  <Link to="/attack" className="text-primary font-bold underline-offset-2 hover:underline">
+                    Kill
+                  </Link>
+                  .
+                </p>
+              </div>
+            </div>
+          )}
           {/* Membership header + purchase CTA */}
           <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />

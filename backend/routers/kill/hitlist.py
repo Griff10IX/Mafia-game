@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from fastapi import Depends, HTTPException
 
+from utils.kill_search_duration import KILL_SEARCH_RANDOM_MAX_MINUTES, KILL_SEARCH_RANDOM_MIN_MINUTES
 from server import (
     db,
     get_current_user,
@@ -344,7 +345,11 @@ async def hitlist_add_npc(current_user: dict = Depends(get_current_user)):
         config = await db.game_config.find_one({"id": "main"}, {"_id": 0, "default_search_minutes": 1})
         default_mins = (config or {}).get("default_search_minutes")
         override_minutes = int(default_mins) if default_mins is not None else None
-    search_duration = int(override_minutes) if override_minutes and override_minutes > 0 else random.randint(120, 180)
+    search_duration = (
+        int(override_minutes)
+        if override_minutes and override_minutes > 0
+        else random.randint(KILL_SEARCH_RANDOM_MIN_MINUTES, KILL_SEARCH_RANDOM_MAX_MINUTES)
+    )
     found_at = now + timedelta(minutes=search_duration)
     expires_at = now + timedelta(hours=24)
     await db.attacks.insert_one({
