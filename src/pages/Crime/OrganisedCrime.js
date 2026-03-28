@@ -195,6 +195,11 @@ const JobCard = ({ job, selected, onSelect }) => (
     <div className="flex items-center justify-between gap-1 text-[10px] font-heading">
       <span className="text-primary font-bold">${(job.cash || 0).toLocaleString()}</span>
     </div>
+    {job.total_cost != null && (
+      <div className="text-[9px] font-heading text-red-400/80 mt-0.5">
+        Cost: ${(job.total_cost).toLocaleString()}
+      </div>
+    )}
   </button>
 );
 
@@ -791,7 +796,7 @@ export default function OrganisedCrime() {
         </div>
         <div className="p-1.5">
           <p className="text-[9px] text-mutedForeground font-heading mb-0.5">
-            Cash shown is your reward if the heist succeeds. Success chance is 50; rest is fail or jail.
+            Reward shown in cyan, cost in red. Success chance is 50%; rest is fail or jail.
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-1">
             {(config.jobs || []).map((job) => (

@@ -44,8 +44,8 @@ OC_ROLES = [
     {"id": "hacker", "name": "Hacker"},
 ]
 
-# Setup cost paid by creator when running (so reward always exceeds cost even when split)
-OC_SETUP_COST = 1_000_000
+# Setup cost paid by creator when running (equipment is the only cost now)
+OC_SETUP_COST = 0
 
 # Organised crime: 50% success; rest is fail or jail.
 OC_SUCCESS_RATE = 0.50
@@ -156,7 +156,18 @@ class OCSendInvitesRequest(BaseModel):
 
 async def get_oc_config(current_user: dict = Depends(get_current_user)):
     """Return jobs and roles for Organised Crime."""
-    return {"jobs": OC_JOBS, "roles": OC_ROLES}
+    user_oc = await db.user_organised_crime.find_one({"user_id": current_user["id"]}, {"_id": 0, "selected_equipment": 1})
+    selected_id = (user_oc or {}).get("selected_equipment", "basic")
+    equip = OC_EQUIPMENT_BY_ID.get(selected_id, OC_EQUIPMENT_BY_ID["basic"])
+    equip_cost = equip["cost"]
+    oc_reduced = _oc_reduced_active(current_user)
+    jobs_out = []
+    for j in OC_JOBS:
+        total = OC_SETUP_COST + equip_cost
+        if oc_reduced:
+            total = int(total * 0.8)
+        jobs_out.append({**j, "setup_cost": OC_SETUP_COST, "total_cost": total})
+    return {"jobs": jobs_out, "roles": OC_ROLES, "setup_cost": OC_SETUP_COST, "equipment_cost": equip_cost}
 
 
 async def buy_oc_timer(current_user: dict = Depends(get_current_user)):

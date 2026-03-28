@@ -855,6 +855,9 @@ def register(router):
         email_clean = (user.get("email") or "").strip().lower()
         if not email_clean:
             raise HTTPException(status_code=401, detail="No account found with that email or username.")
+        user_id = str(user.get("id") or "").strip()
+        if not user_id:
+            raise HTTPException(status_code=500, detail="Account data is incomplete. Please contact support.")
 
         # Check lockout (by account email)
         lockout = await db.login_lockouts.find_one({"email": email_clean}, {"_id": 0, "locked_until": 1, "failed_count": 1})
@@ -912,7 +915,7 @@ def register(router):
                                 "at": now.isoformat(),
                                 "ip": ip,
                                 "login_input": login_input,
-                                "user_id": user["id"],
+                                "user_id": user_id,
                                 "username": user.get("username"),
                                 "email": email_clean,
                                 "reason": "wrong_password_same_ip_other_alive",
@@ -938,9 +941,9 @@ def register(router):
         device_type = _device_type_from_user_agent(request.headers.get("User-Agent") or "")
         set_fields = {}
         if ip and not isinstance(user.get("login_ips"), list):
-            await db.users.update_one({"id": user["id"]}, {"$set": {"login_ips": []}})
+            await db.users.update_one({"id": user_id}, {"$set": {"login_ips": []}})
         if not isinstance(user.get("sessions"), list):
-            await db.users.update_one({"id": user["id"]}, {"$set": {"sessions": []}})
+            await db.users.update_one({"id": user_id}, {"$set": {"sessions": []}})
         if ip:
             set_fields["last_login_ip"] = ip
         if ua:
@@ -951,12 +954,12 @@ def register(router):
             update_op = {"$set": set_fields}
             if ip:
                 update_op["$addToSet"] = {"login_ips": ip}
-            await db.users.update_one({"id": user["id"]}, update_op)
+            await db.users.update_one({"id": user_id}, update_op)
         if ip:
-            doc = await db.users.find_one({"id": user["id"]}, {"_id": 0, "login_ips": 1})
+            doc = await db.users.find_one({"id": user_id}, {"_id": 0, "login_ips": 1})
             ips = doc.get("login_ips") if isinstance((doc or {}).get("login_ips"), list) else []
             if len(ips) > 20:
-                await db.users.update_one({"id": user["id"]}, {"$set": {"login_ips": ips[-20:]}})
+                await db.users.update_one({"id": user_id}, {"$set": {"login_ips": ips[-20:]}})
         # Create session for this login (per-IP device/last-used and "log out other sessions")
         now_iso = datetime.now(timezone.utc).isoformat()
         session_id = str(uuid.uuid4())
@@ -969,22 +972,22 @@ def register(router):
         }
         try:
             await db.users.update_one(
-                {"id": user["id"]},
+                {"id": user_id},
                 {"$push": {"sessions": {"$each": [session_entry], "$position": 0, "$slice": 10}}},
             )
         except Exception:
             # Legacy/bad data safeguard: if sessions became non-array, reset and retry once.
-            await db.users.update_one({"id": user["id"]}, {"$set": {"sessions": []}})
+            await db.users.update_one({"id": user_id}, {"$set": {"sessions": []}})
             await db.users.update_one(
-                {"id": user["id"]},
+                {"id": user_id},
                 {"$push": {"sessions": {"$each": [session_entry], "$position": 0, "$slice": 10}}},
             )
         token = create_access_token({
-            "sub": user["id"],
+            "sub": user_id,
             "v": int(user.get("token_version") or 0),
-            "email": user.get("email") or "",
+            "email": str(user.get("email") or ""),
             "session_id": session_id,
-            "username": user.get("username") or "",
+            "username": str(user.get("username") or ""),
         })
         
         # Release any pending preorder points if release date has passed
@@ -996,7 +999,7 @@ def register(router):
                 if now >= preorder_release:
                     from routers.money.payments import _credit_preorder_points
                     pending_txns = await db.payment_transactions.find(
-                        {"user_id": user["id"], "payment_status": "preorder_pending"}
+                        {"user_id": user_id, "payment_status": "preorder_pending"}
                     ).to_list(100)
                     for txn in pending_txns:
                         await _credit_preorder_points(db, txn)
@@ -1047,11 +1050,11 @@ def register(router):
                             "badges": badge_name,
                         }
                     }
-                    await db.users.update_one({"id": user["id"]}, reward_update)
+                    await db.users.update_one({"id": user_id}, reward_update)
                     if respect_bonus > 0:
-                        await srv.log_respect_earned(user["id"], respect_bonus, "founding_member")
+                        await srv.log_respect_earned(user_id, respect_bonus, "founding_member")
                     founding_rewards_applied = True
-                    logging.info("Applied founding member rewards to user %s", user["id"])
+                    logging.info("Applied founding member rewards to user %s", user_id)
         except Exception as e:
             logging.warning("Failed to apply founding member rewards: %s", e)
         
