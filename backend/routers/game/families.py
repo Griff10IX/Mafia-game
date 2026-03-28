@@ -1722,14 +1722,14 @@ async def families_compound_deposit(request: CompoundDepositRequest, current_use
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient resources for deposit")
-    updates = {"$inc": {"compound_cash": cash, "compound_points": points, "compound_loot_pieces": loot_pieces}}
-    by_user = (await db.families.find_one({"id": family_id}, {"_id": 0, "compound_deposits_by_user": 1})) or {}
-    deposits = dict((by_user.get("compound_deposits_by_user") or {}).get(uid) or {})
-    deposits["cash"] = int(deposits.get("cash") or 0) + cash
-    deposits["points"] = int(deposits.get("points") or 0) + points
-    deposits["loot_pieces"] = int(deposits.get("loot_pieces") or 0) + loot_pieces
-    updates["$set"] = {f"compound_deposits_by_user.{uid}": deposits}
-    await db.families.update_one({"id": family_id}, updates)
+    inc_fields = {"compound_cash": cash, "compound_points": points, "compound_loot_pieces": loot_pieces}
+    if cash > 0:
+        inc_fields[f"compound_deposits_by_user.{uid}.cash"] = cash
+    if points > 0:
+        inc_fields[f"compound_deposits_by_user.{uid}.points"] = points
+    if loot_pieces > 0:
+        inc_fields[f"compound_deposits_by_user.{uid}.loot_pieces"] = loot_pieces
+    await db.families.update_one({"id": family_id}, {"$inc": inc_fields})
     _invalidate_my_cache(current_user["id"])
     return {"message": "Deposited to compound"}
 
@@ -2370,7 +2370,12 @@ async def families_racket_unlock(racket_id: str, current_user: dict = Depends(ge
     if treasury < RACKET_UNLOCK_COST:
         raise HTTPException(status_code=400, detail=f"Not enough treasury (need ${RACKET_UNLOCK_COST:,})")
     rackets[racket_id] = {"level": 1, "last_collected_at": None}
-    await db.families.update_one({"id": family_id}, {"$set": {"rackets": rackets}, "$inc": {"treasury": -RACKET_UNLOCK_COST}})
+    result = await db.families.update_one(
+        {"id": family_id, "treasury": {"$gte": RACKET_UNLOCK_COST}},
+        {"$set": {"rackets": rackets}, "$inc": {"treasury": -RACKET_UNLOCK_COST}},
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Not enough treasury (balance may have changed)")
     _invalidate_my_cache(current_user["id"])
     return {"message": "Racket unlocked"}
 
@@ -2399,7 +2404,12 @@ async def families_racket_upgrade(racket_id: str, current_user: dict = Depends(g
     if treasury < RACKET_UPGRADE_COST:
         raise HTTPException(status_code=400, detail="Not enough treasury")
     rackets[racket_id] = {**state, "level": level + 1, "last_collected_at": state.get("last_collected_at")}
-    await db.families.update_one({"id": family_id}, {"$set": {"rackets": rackets}, "$inc": {"treasury": -RACKET_UPGRADE_COST}})
+    result = await db.families.update_one(
+        {"id": family_id, "treasury": {"$gte": RACKET_UPGRADE_COST}},
+        {"$set": {"rackets": rackets}, "$inc": {"treasury": -RACKET_UPGRADE_COST}},
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Not enough treasury (balance may have changed)")
     _invalidate_my_cache(current_user["id"])
     return {"message": f"Upgraded to level {level + 1}"}
 

@@ -489,24 +489,14 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
              {"cooldown_until": None},
              {"cooldown_until": {"$lte": now.isoformat()}},
          ]},
-        {"$set": {"cooldown_until": cooldown_until}},
+        {"$set": {"cooldown_until": cooldown_until},
+         "$setOnInsert": {"attempts": 0, "successes": 0}},
         projection={"_id": 0},
+        upsert=True,
+        return_document=False,
     )
-    if user_crime is None:
-        existing = await db.user_crimes.find_one(
-            {"user_id": current_user["id"], "crime_id": crime_id},
-            {"_id": 1},
-        )
-        if existing:
-            raise HTTPException(
-                status_code=400,
-                detail="Crime on cooldown",
-            )
-        await db.user_crimes.update_one(
-            {"user_id": current_user["id"], "crime_id": crime_id},
-            {"$setOnInsert": {"cooldown_until": cooldown_until, "attempts": 0, "successes": 0}},
-            upsert=True,
-        )
+    if user_crime is not None and user_crime.get("cooldown_until") and user_crime["cooldown_until"] > now.isoformat():
+        raise HTTPException(status_code=400, detail="Crime on cooldown")
     
     # PROGRESS BAR: 10-92%. Success +6-8%. Fail -1-3%; once hit 92%, floor is 77%
     stored = (user_crime or {}).get("progress")

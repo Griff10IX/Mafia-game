@@ -270,16 +270,35 @@ async def hitlist_npc_status(current_user: dict = Depends(get_current_user)):
 async def hitlist_add_npc(current_user: dict = Depends(get_current_user)):
     """Add a random NPC to the hitlist. Max 3 per 3 hours per user. NPC is attackable from Attack page."""
     now = datetime.now(timezone.utc)
-    window_start = now - timedelta(hours=HITLIST_NPC_COOLDOWN_HOURS)
-    raw = list(current_user.get("hitlist_npc_add_timestamps") or [])
-    timestamps = []
-    for t in raw:
-        if not t:
-            continue
-        dt = _parse_iso_datetime(t) if isinstance(t, str) else (t if hasattr(t, "year") else None)
-        if dt and dt > window_start:
-            timestamps.append(t)
-    if len(timestamps) >= HITLIST_NPC_MAX_PER_WINDOW:
+    window_start_iso = (now - timedelta(hours=HITLIST_NPC_COOLDOWN_HOURS)).isoformat()
+    now_iso = now.isoformat()
+    claim = await db.users.find_one_and_update(
+        {"id": current_user["id"]},
+        [{"$set": {
+            "hitlist_npc_add_timestamps": {
+                "$concatArrays": [
+                    {"$filter": {
+                        "input": {"$ifNull": ["$hitlist_npc_add_timestamps", []]},
+                        "cond": {"$gt": ["$$this", window_start_iso]},
+                    }},
+                    {"$cond": {
+                        "if": {"$lt": [
+                            {"$size": {"$filter": {
+                                "input": {"$ifNull": ["$hitlist_npc_add_timestamps", []]},
+                                "cond": {"$gt": ["$$this", window_start_iso]},
+                            }}},
+                            HITLIST_NPC_MAX_PER_WINDOW,
+                        ]},
+                        "then": [now_iso],
+                        "else": [],
+                    }},
+                ],
+            },
+        }}],
+        return_document=False,
+    )
+    old_timestamps = [t for t in (claim.get("hitlist_npc_add_timestamps") or []) if t and t > window_start_iso] if claim else []
+    if len(old_timestamps) >= HITLIST_NPC_MAX_PER_WINDOW:
         raise HTTPException(
             status_code=400,
             detail=f"You can add at most {HITLIST_NPC_MAX_PER_WINDOW} NPCs per {HITLIST_NPC_COOLDOWN_HOURS} hours. Try again later."
@@ -287,7 +306,6 @@ async def hitlist_add_npc(current_user: dict = Depends(get_current_user)):
     template = random.choice(HITLIST_NPC_TEMPLATES)
     hitlist_id = str(uuid.uuid4())
     npc_user_id = str(uuid.uuid4())
-    now_iso = now.isoformat()
     rewards = template.get("rewards") or {}
     rank_id = max(1, min(template.get("rank", 1), len(RANKS)))
     rank_points = RANKS[rank_id - 1]["required_points"]
@@ -328,11 +346,6 @@ async def hitlist_add_npc(current_user: dict = Depends(get_current_user)):
         "npc_rewards": dict(rewards),
         "created_at": now_iso,
     })
-    timestamps.append(now_iso)
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$set": {"hitlist_npc_add_timestamps": timestamps[-10:]}}
-    )
 
     # Auto-add NPC to attacker's searches with note
     override_minutes = current_user.get("search_minutes_override")

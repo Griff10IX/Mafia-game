@@ -250,10 +250,6 @@ def register(router):
                 status_code=400,
                 detail=f"You need {REVIVE_COST:,} points to revive (you have {points_balance:,}).",
             )
-        revive_used_doc = await db.revive_used_by_email.find_one({"email": email}, {"_id": 0})
-        if revive_used_doc:
-            raise HTTPException(status_code=400, detail="This email has already used its one-time revive.")
-
         username_pattern = _username_pattern(request.dead_username)
         dead_user = await db.users.find_one({"username": username_pattern}, {"_id": 0})
         if not dead_user:
@@ -276,17 +272,29 @@ def register(router):
         reviver_points_after = points_balance - REVIVE_COST
         now_iso = datetime.now(timezone.utc).isoformat()
 
-        # 1) Deduct 50k points from current user (atomic)
+        # 1) Atomically claim the one-time revive slot for this email (insert-first gate)
+        from pymongo.errors import DuplicateKeyError
+        try:
+            await db.revive_used_by_email.insert_one({"email": email, "used_at": now_iso, "reviver_id": current_user["id"]})
+        except (DuplicateKeyError, Exception) as e:
+            if "duplicate" in str(e).lower() or "E11000" in str(e):
+                raise HTTPException(status_code=400, detail="This email has already used its one-time revive.")
+            existing = await db.revive_used_by_email.find_one({"email": email})
+            if existing:
+                raise HTTPException(status_code=400, detail="This email has already used its one-time revive.")
+
+        # 2) Deduct 50k points from current user (atomic)
         res = await db.users.find_one_and_update(
             {"id": current_user["id"], "points": {"$gte": REVIVE_COST}},
             {"$inc": {"points": -REVIVE_COST}},
             projection={"_id": 0, "id": 1},
         )
         if not res:
+            await db.revive_used_by_email.delete_one({"email": email, "reviver_id": current_user["id"]})
             raise HTTPException(status_code=400, detail="Not enough points (balance may have changed).")
 
         try:
-            # 2) Revive dead account: alive, receive reviver's money and points (after 50k deduction)
+            # 3) Revive dead account: alive, receive reviver's money and points (after 50k deduction)
             await db.users.update_one(
                 {"id": dead_user["id"]},
                 {
@@ -312,7 +320,7 @@ def register(router):
                     },
                 },
             )
-            # 3) Kill reviving account
+            # 4) Kill reviving account
             await db.users.update_one(
                 {"id": current_user["id"]},
                 {
@@ -327,8 +335,6 @@ def register(router):
                     },
                 },
             )
-            # 4) Record revive used for this email
-            await db.revive_used_by_email.insert_one({"email": email})
 
             # 5) Notify the revived user with before/after balances so they can verify the transfer
             notification_body = (
@@ -344,11 +350,11 @@ def register(router):
                 category="system",
             )
         except Exception as e:
-            # Refund points if we failed after deducting
             await db.users.update_one(
                 {"id": current_user["id"]},
                 {"$inc": {"points": REVIVE_COST}},
             )
+            await db.revive_used_by_email.delete_one({"email": email, "reviver_id": current_user["id"]})
             raise e
 
         revived_username = dead_user.get("username") or request.dead_username

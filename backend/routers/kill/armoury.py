@@ -947,19 +947,6 @@ async def buy_bullets(
             status_code=400,
             detail=f"You can only buy up to {BULLET_FACTORY_BUY_MAX_PER_PURCHASE:,} bullets at once from the factory",
         )
-    # 15-minute cooldown between purchases
-    user_doc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "last_bullet_factory_bought_at": 1})
-    last_bought = (user_doc or {}).get("last_bullet_factory_bought_at")
-    if last_bought:
-        last_dt = _parse_utc(last_bought)
-        if last_dt:
-            elapsed = (datetime.now(timezone.utc) - last_dt).total_seconds()
-            if elapsed < BULLET_FACTORY_BUY_COOLDOWN_MINUTES * 60:
-                wait_mins = max(0, int((BULLET_FACTORY_BUY_COOLDOWN_MINUTES * 60 - elapsed) / 60) + 1)
-                raise HTTPException(
-                    status_code=400,
-                    detail=f"You can only buy bullets from the factory once every {BULLET_FACTORY_BUY_COOLDOWN_MINUTES} minutes. Try again in {wait_mins} min.",
-                )
     accumulated = _accumulated_bullets(factory)
     if amount > accumulated:
         raise HTTPException(
@@ -975,7 +962,32 @@ async def buy_bullets(
     else:
         price = factory.get("unowned_price") or random.randint(BULLET_FACTORY_UNOWNED_PRICE_MIN, BULLET_FACTORY_UNOWNED_PRICE_MAX)
     total_cost = amount * price
-    # Advance last_collected_at so accumulated drops by amount
+    now_iso = datetime.now(timezone.utc).isoformat()
+    cooldown_threshold = (datetime.now(timezone.utc) - timedelta(minutes=BULLET_FACTORY_BUY_COOLDOWN_MINUTES)).isoformat()
+    result = await db.users.update_one(
+        {"id": current_user["id"], "money": {"$gte": total_cost},
+         "$or": [
+             {"last_bullet_factory_bought_at": {"$exists": False}},
+             {"last_bullet_factory_bought_at": None},
+             {"last_bullet_factory_bought_at": {"$lte": cooldown_threshold}},
+         ]},
+        {"$inc": {"money": -total_cost, "bullets": amount, "bullets_purchased_from_armoury": amount}, "$set": {"last_bullet_factory_bought_at": now_iso}},
+    )
+    if result.modified_count == 0:
+        user_doc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "last_bullet_factory_bought_at": 1, "money": 1})
+        last_bought = (user_doc or {}).get("last_bullet_factory_bought_at")
+        if last_bought and last_bought > cooldown_threshold:
+            last_dt = _parse_utc(last_bought)
+            elapsed = (datetime.now(timezone.utc) - last_dt).total_seconds() if last_dt else 0
+            wait_mins = max(1, int((BULLET_FACTORY_BUY_COOLDOWN_MINUTES * 60 - elapsed) / 60) + 1)
+            raise HTTPException(
+                status_code=400,
+                detail=f"You can only buy bullets from the factory once every {BULLET_FACTORY_BUY_COOLDOWN_MINUTES} minutes. Try again in {wait_mins} min.",
+            )
+        raise HTTPException(
+            status_code=400,
+            detail=f"You need ${total_cost:,} (${price:,} × {amount:,})",
+        )
     last = _parse_utc(factory.get("last_collected_at"))
     if last is None:
         last = datetime.now(timezone.utc)
@@ -985,16 +997,6 @@ async def buy_bullets(
         {"state": state},
         {"$set": {"last_collected_at": new_last.isoformat()}},
     )
-    now_iso = datetime.now(timezone.utc).isoformat()
-    result = await db.users.update_one(
-        {"id": current_user["id"], "money": {"$gte": total_cost}},
-        {"$inc": {"money": -total_cost, "bullets": amount, "bullets_purchased_from_armoury": amount}, "$set": {"last_bullet_factory_bought_at": now_iso}},
-    )
-    if result.modified_count == 0:
-        raise HTTPException(
-            status_code=400,
-            detail=f"You need ${total_cost:,} (${price:,} × {amount:,})",
-        )
     if owner_id:
         await db.bullet_factory.update_one(
             {"state": state},
@@ -1149,30 +1151,41 @@ async def buy_armour(request: ArmourBuyRequest, current_user: dict = Depends(get
     owner_id = factory.get("owner_id") if factory else None
     state_key = factory.get("state") or _normalize_state(state) if factory else None
     if factory and state_key:
-        # Atomic stock decrement to prevent overselling race condition
-        result = await db.bullet_factory.update_one(
-            {"state": state_key, f"armour_stock.{level}": {"$gt": 0}},
-            {"$inc": {f"armour_stock.{level}": -1}},
-        )
-        if result.modified_count == 1:
-            if owner_id and owner_id != current_user["id"]:
-                result = await db.users.update_one(
-                    {"id": current_user["id"], currency_field: {"$gte": price}},
-                    {"$inc": {currency_field: -price}, "$set": {"armour_level": level, "armour_owned_level_max": max(owned_max, level)}},
-                )
-                if result.modified_count == 0:
-                    raise HTTPException(status_code=400, detail=insufficient_msg)
+        if owner_id and owner_id != current_user["id"]:
+            pay_result = await db.users.update_one(
+                {"id": current_user["id"], currency_field: {"$gte": price}},
+                {"$inc": {currency_field: -price}, "$set": {"armour_level": level, "armour_owned_level_max": max(owned_max, level)}},
+            )
+            if pay_result.modified_count == 0:
+                raise HTTPException(status_code=400, detail=insufficient_msg)
+            stock_result = await db.bullet_factory.update_one(
+                {"state": state_key, f"armour_stock.{level}": {"$gt": 0}},
+                {"$inc": {f"armour_stock.{level}": -1}},
+            )
+            if stock_result.modified_count == 1:
                 if currency_field == "money":
                     await db.bullet_factory.update_one({"state": state_key}, {"$inc": {"owner_pending_profit": price}})
                 else:
                     await db.bullet_factory.update_one({"state": state_key}, {"$inc": {"owner_pending_profit_points": price}})
+                await log_activity(current_user["id"], current_user.get("username", "?"), "armoury_buy_armour", {"item": armour["name"], "level": level, "cost": price, "source": "armoury"})
+                return {"message": f"Purchased {armour['name']} (Armour Lv.{level}) from armoury", "new_level": level}
             else:
+                await db.users.update_one(
+                    {"id": current_user["id"]},
+                    {"$inc": {currency_field: price}},
+                )
+        else:
+            stock_result = await db.bullet_factory.update_one(
+                {"state": state_key, f"armour_stock.{level}": {"$gt": 0}},
+                {"$inc": {f"armour_stock.{level}": -1}},
+            )
+            if stock_result.modified_count == 1:
                 await db.users.update_one(
                     {"id": current_user["id"]},
                     {"$set": {"armour_level": level, "armour_owned_level_max": max(owned_max, level)}},
                 )
-            await log_activity(current_user["id"], current_user.get("username", "?"), "armoury_buy_armour", {"item": armour["name"], "level": level, "cost": price, "source": "armoury"})
-            return {"message": f"Purchased {armour['name']} (Armour Lv.{level}) from armoury", "new_level": level}
+                await log_activity(current_user["id"], current_user.get("username", "?"), "armoury_buy_armour", {"item": armour["name"], "level": level, "cost": price, "source": "armoury"})
+                return {"message": f"Purchased {armour['name']} (Armour Lv.{level}) from armoury", "new_level": level}
 
     updates = {"$set": {"armour_level": level, "armour_owned_level_max": max(owned_max, level)}}
     updates["$inc"] = {currency_field: -price}
@@ -1426,19 +1439,22 @@ async def buy_weapon(weapon_id: str, request: WeaponBuyRequest, current_user: di
     owner_id = factory.get("owner_id") if factory else None
     state_key = factory.get("state") or _normalize_state(state) if factory else None
     if factory and state_key:
-        # Atomic stock decrement to prevent overselling race condition
-        result = await db.bullet_factory.update_one(
+        needs_payment = owner_id and owner_id != current_user["id"]
+        paid = False
+        if needs_payment:
+            pay_result = await db.users.update_one(
+                {"id": current_user["id"], currency: {"$gte": price}},
+                {"$inc": {currency: -price}},
+            )
+            if pay_result.modified_count == 0:
+                raise HTTPException(status_code=400, detail=insufficient_msg)
+            paid = True
+        stock_result = await db.bullet_factory.update_one(
             {"state": state_key, f"weapon_stock.{weapon_id}": {"$gt": 0}},
             {"$inc": {f"weapon_stock.{weapon_id}": -1}},
         )
-        if result.modified_count == 1:
-            if owner_id and owner_id != current_user["id"]:
-                result = await db.users.update_one(
-                    {"id": current_user["id"], currency: {"$gte": price}},
-                    {"$inc": {currency: -price}},
-                )
-                if result.modified_count == 0:
-                    raise HTTPException(status_code=400, detail=insufficient_msg)
+        if stock_result.modified_count == 1:
+            if paid:
                 if currency == "money":
                     await db.bullet_factory.update_one({"state": state_key}, {"$inc": {"owner_pending_profit": price}})
                 else:
@@ -1455,6 +1471,8 @@ async def buy_weapon(weapon_id: str, request: WeaponBuyRequest, current_user: di
             _invalidate_weapons_cache(current_user["id"])
             await log_activity(current_user["id"], current_user.get("username", "?"), "armoury_buy_weapon", {"weapon": weapon["name"], "cost": price, "source": "armoury"})
             return {"message": f"Successfully purchased {weapon['name']} from armoury"}
+        elif paid:
+            await db.users.update_one({"id": current_user["id"]}, {"$inc": {currency: price}})
 
     result = await db.users.update_one(
         {"id": current_user["id"], currency: {"$gte": price}},

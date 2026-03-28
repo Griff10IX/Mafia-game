@@ -1731,13 +1731,16 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             rewards={"money": cash_loot, "rank_points": rank_points, "cars_taken": victim_cars_count, "properties_taken": victim_props_count, "exclusive_cars": exclusive_car_count}
         )
     else:
-        new_health = max(0.0, target_health - health_dealt_pct)
-        damage_done = float(max(0.0, target_health - new_health))
+        damage_done = float(health_dealt_pct)
         dmg_iso = datetime.now(timezone.utc).isoformat()
         await db.users.update_one(
             {"id": target["id"]},
-            {"$set": {"health": new_health, "health_regen_last_at": dmg_iso}},
+            [{"$set": {
+                "health": {"$max": [0.0, {"$subtract": [{"$ifNull": ["$health", 100.0]}, health_dealt_pct]}]},
+                "health_regen_last_at": dmg_iso,
+            }}],
         )
+        new_health = max(0.0, target_health - health_dealt_pct)
         await db.attacks.update_one(
             {"id": attack["id"]},
             {"$set": {"last_attack_result": "damaged", "last_attack_at": datetime.now(timezone.utc).isoformat()}}

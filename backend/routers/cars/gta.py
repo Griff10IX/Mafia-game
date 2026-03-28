@@ -777,36 +777,31 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
     for car_id in car_ids:
         if processed >= limit:
             break
-        user_car = await db.user_cars.find_one(
-            {"user_id": user["id"], "id": car_id}
-        )
-        if not user_car:
+        deleted_car = None
+        delete_filter = {"user_id": user["id"], "id": car_id, "listed_for_sale": {"$ne": True}}
+        deleted_car = await db.user_cars.find_one_and_delete(delete_filter)
+        if not deleted_car:
             try:
-                user_car = await db.user_cars.find_one(
-                    {"user_id": user["id"], "_id": ObjectId(car_id)}
-                )
+                delete_filter = {"user_id": user["id"], "_id": ObjectId(car_id), "listed_for_sale": {"$ne": True}}
+                deleted_car = await db.user_cars.find_one_and_delete(delete_filter)
             except Exception:
-                user_car = None
-        if not user_car:
-            user_car = await db.user_cars.find_one(
-                {"user_id": user["id"], "car_id": car_id}
-            )
-        if user_car:
-            if user_car.get("listed_for_sale"):
-                continue  # cannot melt/scrap a listed car; must delist first
-            model_id = user_car["car_id"]
+                pass
+        if not deleted_car:
+            delete_filter = {"user_id": user["id"], "car_id": car_id, "listed_for_sale": {"$ne": True}}
+            deleted_car = await db.user_cars.find_one_and_delete(delete_filter)
+        if deleted_car:
+            model_id = deleted_car["car_id"]
             car_info = next((c for c in CARS if c["id"] == model_id), None)
             if in_war and car_info and car_info.get("rarity") in ("exclusive", "loot_exclusive"):
-                continue  # cannot scrap exclusive cars during family war
+                await db.user_cars.insert_one(deleted_car)
+                continue
             if car_info:
                 if car_info.get("rarity") == "uncommon":
                     uncommon_count += 1
                 car_value = int(car_info.get("value", 0) or 0)
                 if action == "bullets":
-                    # Garage melt bullets only: +12% per car melt value.
                     melt_value = (car_value * 112) // 100
                     car_bullets = melt_value // MELT_VALUE_PER_BULLET
-                    # Common cars should still feel worthwhile to melt.
                     if car_info.get("rarity") == "common":
                         if car_bullets < 2:
                             car_bullets = 2
@@ -815,21 +810,10 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
                     total_bullets += car_bullets
                 else:
                     total_value += int(car_value * 0.5)
-                if user_car.get("_id") is not None:
-                    await db.user_cars.delete_one({"_id": user_car["_id"]})
-                elif user_car.get("id") is not None:
-                    await db.user_cars.delete_one(
-                        {"user_id": user["id"], "id": user_car["id"]}
-                    )
-                else:
-                    await db.user_cars.delete_one(
-                        {
-                            "user_id": user["id"],
-                            "car_id": model_id,
-                            "acquired_at": user_car.get("acquired_at"),
-                        }
-                    )
                 deleted_count += 1
+                processed += 1
+            else:
+                await db.user_cars.insert_one(deleted_car)
                 processed += 1
     if deleted_count > 0:
         if action == "bullets":

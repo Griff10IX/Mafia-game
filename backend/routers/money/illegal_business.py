@@ -913,27 +913,36 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
                 raise HTTPException(status_code=400, detail=f"Raid cooldown. Try again in {RAID_COOLDOWN_HOURS}h.")
         except Exception:
             pass
-    # Daily limit
     today_key = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    raid_count_today = int(current_user.get("illegal_business_raids_today") or 0)
-    raid_date = current_user.get("illegal_business_raids_date")
-    if raid_date != today_key:
-        raid_count_today = 0
-    if raid_count_today >= RAID_DAILY_LIMIT:
+    now = datetime.now(timezone.utc).isoformat()
+    cooldowns_new = dict(cooldowns)
+    cooldowns_new[target_id] = now
+    claim_result = await db.users.find_one_and_update(
+        {"id": current_user["id"],
+         "$or": [
+             {"illegal_business_raids_date": {"$ne": today_key}},
+             {"illegal_business_raids_today": {"$lt": RAID_DAILY_LIMIT}},
+         ]},
+        [{"$set": {
+            "illegal_business_raid_cooldowns": cooldowns_new,
+            "illegal_business_raids_date": today_key,
+            "illegal_business_raids_today": {
+                "$cond": {
+                    "if": {"$ne": ["$illegal_business_raids_date", today_key]},
+                    "then": 1,
+                    "else": {"$add": [{"$ifNull": ["$illegal_business_raids_today", 0]}, 1]},
+                }
+            },
+        }}],
+        return_document=False,
+    )
+    if not claim_result:
         raise HTTPException(status_code=400, detail=f"Daily raid limit ({RAID_DAILY_LIMIT}) reached.")
     guards = await db.illegal_business_guards.find({"business_id": business["id"]}, {"_id": 0}).to_list(2000)
     defender_str = _business_defender_strength(business, guards)
     attacker_str = _attacker_strength(current_user)
     win_prob = _raid_win_probability(attacker_str, defender_str)
     won = _rng.random() < win_prob
-    now = datetime.now(timezone.utc).isoformat()
-    cooldowns_new = dict(cooldowns)
-    cooldowns_new[target_id] = now
-    update_user = {
-        "illegal_business_raid_cooldowns": cooldowns_new,
-        "illegal_business_raids_date": today_key,
-        "illegal_business_raids_today": raid_count_today + 1,
-    }
     loot_cash = 0
     loot_points = 0
     loot_cash_credited = 0
@@ -969,11 +978,6 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
     else:
         await send_notification(current_user["id"], "Raid", "They were ready—you got nothing.", "attack", category="attacks")
         await send_notification(target_id, "Raid", "Someone tried to hit your joint. They were turned away.", "attack", category="attacks")
-    if raid_date != today_key:
-        update_user["illegal_business_raids_today"] = 1
-    else:
-        update_user["illegal_business_raids_today"] = raid_count_today + 1
-    await db.users.update_one({"id": current_user["id"]}, {"$set": update_user})
     await log_activity(current_user["id"], current_user.get("username", "?"), "illegal_biz_raid", {
         "target": target_user.get("username"), "success": won, "cash": loot_cash_credited if won else 0,
     })

@@ -292,7 +292,6 @@ def register(router):
         user_id = ticket.get("user_id")
         if not user_id:
             raise HTTPException(status_code=400, detail="Ticket has no user")
-        await db.users.update_one({"id": user_id}, {"$inc": {"money": body.amount}})
         now = datetime.now(timezone.utc).isoformat()
         reply = {
             "author_id": current_user["id"],
@@ -301,8 +300,8 @@ def register(router):
             "body": f"Admin rewarded ${body.amount:,} for this report.",
             "created_at": now,
         }
-        await db.help_desk_tickets.update_one(
-            {"id": ticket_id},
+        claim = await db.help_desk_tickets.update_one(
+            {"id": ticket_id, "rewarded": {"$ne": True}},
             {
                 "$push": {"replies": reply},
                 "$set": {
@@ -312,6 +311,9 @@ def register(router):
                 },
             },
         )
+        if claim.modified_count == 0:
+            raise HTTPException(status_code=400, detail="This report has already been rewarded")
+        await db.users.update_one({"id": user_id}, {"$inc": {"money": body.amount}})
         await srv.send_notification(
             user_id,
             "Bug Report Reward",

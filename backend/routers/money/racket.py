@@ -104,13 +104,9 @@ async def extort_property(request: ProtectionRacketRequest, current_user: dict =
             "amount": extortion_amount,
             "rank_points_earned": rank_points,
         }
-    await db.extortions.update_one(
-        extortion_filter,
-        {"$unset": {"timestamp": ""}},
-    )
     return {
         "success": False,
-        "message": f"Raid failed. {prop['name']} is well defended (level {defender_level}). Try again later.",
+        "message": f"Raid failed. {prop['name']} is well defended (level {defender_level}). Try again in 2 hours.",
         "amount": 0,
         "rank_points_earned": 0,
     }

@@ -12,6 +12,13 @@ from fastapi import Depends, HTTPException
 
 from server import db, get_current_user, send_notification, log_activity
 
+_stock_buy_locks: dict = {}
+
+def _get_stock_buy_lock(uid: str) -> asyncio.Lock:
+    if uid not in _stock_buy_locks:
+        _stock_buy_locks[uid] = asyncio.Lock()
+    return _stock_buy_locks[uid]
+
 # CoinGecko API (free, no key). Cache to respect rate limits.
 COINGECKO_BASE = "https://api.coingecko.com/api/v3"
 _LIVE_CACHE = {"data": None, "ts": 0}
@@ -432,66 +439,74 @@ def register(router):
         position_id = str(uuid.uuid4())
         now_iso = now.isoformat()
 
-        if side == "short":
-            await db.users.update_one({"id": uid}, {"$inc": {"points": points}})
+        async with _get_stock_buy_lock(uid):
+            points_in_market = await _user_points_in_market(uid)
+            if points_in_market + points > max_points:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Total points in market cannot exceed {max_points}. You have {points_in_market} in open positions; this trade would be {points_in_market + points}.",
+                )
+
+            if side == "short":
+                await db.users.update_one({"id": uid}, {"$inc": {"points": points}})
+                await db.stock_positions.insert_one({
+                    "id": position_id,
+                    "user_id": uid,
+                    "stock_id": request.stock_id,
+                    "side": "short",
+                    "units": units,
+                    "open_price": current_price,
+                    "bought_at": now_iso,
+                })
+                await db.stock_transactions.insert_one({
+                    "id": str(uuid.uuid4()),
+                    "user_id": uid,
+                    "stock_id": request.stock_id,
+                    "stock_name": stock.get("name"),
+                    "type": "short",
+                    "side": "short",
+                    "units": units,
+                    "price": current_price,
+                    "points_spent": 0,
+                    "points_received": points,
+                    "profit_points": 0,
+                    "created_at": now_iso,
+                })
+                await log_activity(uid, current_user.get("username", "?"), "stock_buy", {"stock": stock.get("name"), "side": "short", "points": points})
+                return {"message": f"Opened short {stock.get('name')} for {points} points notional", "position_id": position_id, "units": round(units, 6), "price": current_price, "side": "short"}
+
+            result = await db.users.update_one(
+                {"id": uid, "points": {"$gte": points}},
+                {"$inc": {"points": -points}},
+            )
+            if result.modified_count == 0:
+                raise HTTPException(status_code=400, detail="Insufficient points")
             await db.stock_positions.insert_one({
                 "id": position_id,
                 "user_id": uid,
                 "stock_id": request.stock_id,
-                "side": "short",
+                "side": "long",
                 "units": units,
-                "open_price": current_price,
+                "buy_price": current_price,
                 "bought_at": now_iso,
+                "stop_loss_pct": request.stop_loss_pct,
+                "take_profit_pct": request.take_profit_pct,
             })
             await db.stock_transactions.insert_one({
                 "id": str(uuid.uuid4()),
                 "user_id": uid,
                 "stock_id": request.stock_id,
                 "stock_name": stock.get("name"),
-                "type": "short",
-                "side": "short",
+                "type": "buy",
+                "side": "long",
                 "units": units,
                 "price": current_price,
-                "points_spent": 0,
-                "points_received": points,
+                "points_spent": points,
                 "profit_points": 0,
                 "created_at": now_iso,
             })
-            await log_activity(uid, current_user.get("username", "?"), "stock_buy", {"stock": stock.get("name"), "side": "short", "points": points})
-            return {"message": f"Opened short {stock.get('name')} for {points} points notional", "position_id": position_id, "units": round(units, 6), "price": current_price, "side": "short"}
-
-        result = await db.users.update_one(
-            {"id": uid, "points": {"$gte": points}},
-            {"$inc": {"points": -points}},
-        )
-        if result.modified_count == 0:
-            raise HTTPException(status_code=400, detail="Insufficient points")
-        await db.stock_positions.insert_one({
-            "id": position_id,
-            "user_id": uid,
-            "stock_id": request.stock_id,
-            "side": "long",
-            "units": units,
-            "buy_price": current_price,
-            "bought_at": now_iso,
-            "stop_loss_pct": request.stop_loss_pct,
-            "take_profit_pct": request.take_profit_pct,
-        })
-        await db.stock_transactions.insert_one({
-            "id": str(uuid.uuid4()),
-            "user_id": uid,
-            "stock_id": request.stock_id,
-            "stock_name": stock.get("name"),
-            "type": "buy",
-            "side": "long",
-            "units": units,
-            "price": current_price,
-            "points_spent": points,
-            "profit_points": 0,
-            "created_at": now_iso,
-        })
-        await log_activity(uid, current_user.get("username", "?"), "stock_buy", {"stock": stock.get("name"), "side": "long", "points": points})
-        return {"message": f"Bought {stock.get('name')} for {points} points", "position_id": position_id, "units": round(units, 6), "price": current_price, "side": "long"}
+            await log_activity(uid, current_user.get("username", "?"), "stock_buy", {"stock": stock.get("name"), "side": "long", "points": points})
+            return {"message": f"Bought {stock.get('name')} for {points} points", "position_id": position_id, "units": round(units, 6), "price": current_price, "side": "long"}
 
     @router.post("/stock-market/sell")
     async def stock_market_sell(request: StockSellRequest, current_user: dict = Depends(get_current_user)):

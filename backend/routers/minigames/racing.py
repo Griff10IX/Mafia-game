@@ -2690,39 +2690,7 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
             client_dnf_ids=body.dnf_ids,
             caller=current_user.get("id"))
 
-    client_order_valid = (
-        body.result_order
-        and set(body.result_order) == expected_ids
-        and len(body.result_order) == len(expected_ids)
-    )
-
     if is_interactive:
-        if not client_order_valid:
-            _rdebug(race_id, "COMPLETE_RACE_REJECTED", reason="invalid_client_order")
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid result_order for interactive race (must match entrant set exactly once)",
-            )
-        dnf_set = set(body.dnf_ids or [])
-        if not dnf_set <= expected_ids:
-            _rdebug(race_id, "COMPLETE_RACE_REJECTED", reason="invalid_dnf_set")
-            raise HTTPException(status_code=400, detail="dnf_ids must be a subset of race entrants")
-        for u in dnf_set:
-            if u not in body.result_order:
-                _rdebug(race_id, "COMPLETE_RACE_REJECTED", reason="dnf_missing_from_order")
-                raise HTTPException(status_code=400, detail="Every DNF entrant must appear in result_order")
-        seen_dnf_flag = False
-        for eid in body.result_order:
-            is_dnf_ent = eid in dnf_set
-            if seen_dnf_flag and not is_dnf_ent:
-                _rdebug(race_id, "COMPLETE_RACE_REJECTED", reason="dnf_order_sanity")
-                raise HTTPException(
-                    status_code=400,
-                    detail="result_order must list all classified finishers before DNFs",
-                )
-            if is_dnf_ent:
-                seen_dnf_flag = True
-        # Do not require server lap cursor to match: frontend owns simulation; guard impossible timing only.
         min_race_sec = max(15.0, float(total_laps) * 6.0)
         elapsed = _seconds_since_started_utc(race)
         if current_lap < total_laps:
@@ -2749,21 +2717,11 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
             _rdebug(race_id, "COMPLETE_RACE_INTERACTIVE_SERVER_AUTHORITY",
                     result_order=result_order, dnf_ids=dnf_ids)
         else:
-            result_order = list(body.result_order)
-            dnf_ids = [eid for eid in result_order if eid in dnf_set]
-            _rdebug(race_id, "COMPLETE_RACE_INTERACTIVE_CLIENT_FALLBACK",
-                    result_order=result_order, dnf_ids=dnf_ids)
+            _rdebug(race_id, "COMPLETE_RACE_INTERACTIVE_NO_SERVER_ORDER_RECOMPUTING")
+            result_order = None
     else:
-        can_use_client = client_order_valid and not result_order
-        _rdebug(race_id, "COMPLETE_RACE_CLIENT_ORDER_CHECK",
-                can_use_client=can_use_client,
-                is_interactive=False,
-                has_server_result=bool(result_order),
-                client_order_valid=client_order_valid)
-        if can_use_client:
-            result_order = list(body.result_order)
-            if body.dnf_ids is not None:
-                dnf_ids = [eid for eid in body.dnf_ids if eid in expected_ids]
+        _rdebug(race_id, "COMPLETE_RACE_NON_INTERACTIVE_ORDER_CHECK",
+                has_server_result=bool(result_order))
 
     profile_by_user: Dict[str, dict] = {}
 
