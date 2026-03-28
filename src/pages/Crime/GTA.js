@@ -127,34 +127,39 @@ const GTARow = ({ option, attemptingOptionId, onAttempt, event, eventsEnabled, m
     ? Math.min(100, Math.round(progress * (event.gta_success ?? 1)))
     : progress;
 
+  const rankLocked = !unlocked && option.min_rank_name;
   return (
     <div
-      className={`flex items-center justify-between gap-2 px-2 py-1 rounded-md transition-all gta-row ${
+      className={`flex justify-between gap-2 px-2 py-1 rounded-md transition-all gta-row min-w-0 ${
+        rankLocked ? 'items-start sm:items-center' : 'items-center'
+      } ${
         unlocked && !onCooldown
           ? 'bg-zinc-800/30 border border-transparent hover:border-primary/20' 
           : 'bg-zinc-800/20 border border-transparent opacity-60'
       }`}
       data-testid={`gta-option-${option.id}`}
     >
-      {/* Car info */}
-      <div className="flex items-center gap-1 min-w-0 flex-1">
+      {/* Car info — rank unlock on its own row on mobile so timers don’t overlap "Underboss" */}
+      <div className="flex items-start gap-1 min-w-0 flex-1">
         {unlocked ? (
-          <Car className="text-primary/50 w-3.5 h-3.5 shrink-0" />
+          <Car className={`text-primary/50 w-3.5 h-3.5 shrink-0 ${rankLocked ? 'mt-0.5 sm:mt-0' : ''}`} />
         ) : (
-          <Lock className="text-mutedForeground/50 w-3.5 h-3.5 shrink-0" />
+          <Lock className={`text-mutedForeground/50 w-3.5 h-3.5 shrink-0 ${rankLocked ? 'mt-0.5 sm:mt-0' : ''}`} />
         )}
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1 flex-wrap gap-y-0.5">
-            <span className="text-[11px] font-heading font-bold text-foreground truncate">
+          <div className="flex flex-col gap-1 min-w-0 sm:flex-row sm:items-center sm:flex-wrap sm:gap-x-1 sm:gap-y-0.5">
+            <span className="text-[11px] font-heading font-bold text-foreground truncate min-w-0">
               {option.name}
             </span>
             {!unlocked && option.min_rank_name && (
               <span
-                className="shrink-0 inline-flex items-center gap-0.5 bg-zinc-800/50 text-mutedForeground rounded px-1 py-0.5 text-[9px] font-bold uppercase border border-zinc-700/50"
+                className="inline-flex items-start gap-0.5 bg-zinc-800/50 text-mutedForeground rounded px-1 py-0.5 text-[9px] font-bold uppercase border border-zinc-700/50 w-full min-w-0 sm:w-auto sm:max-w-full leading-snug"
                 title={`Unlocked at rank ${option.min_rank_name}`}
               >
-                <Lock size={8} />
-                Unlocked at rank {option.min_rank_name}
+                <Lock size={8} className="shrink-0 mt-px" />
+                <span className="min-w-0 break-words">
+                  Unlocked at rank {option.min_rank_name}
+                </span>
               </span>
             )}
           </div>
