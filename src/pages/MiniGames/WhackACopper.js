@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
 import api from "../../utils/api";
+import { startMinigameRun } from "../../utils/minigameRunSession";
 import { toast } from "sonner";
 import styles from "./WhackACopper.module.css";
 
@@ -176,6 +177,7 @@ export default function WhackACopper() {
   const [shaking, setShaking] = useState(false);
   const [bestScore, setBestScore] = useState(0);
   const submittedRef = useRef(false);
+  const whackSessionRef = useRef(null);
 
   const [holeStates, setHoleStates] = useState(() =>
     Array.from({ length: 9 }, () => ({ up: false, bonked: false, flash: null, escaped: false }))
@@ -232,7 +234,10 @@ export default function WhackACopper() {
     if (submittedRef.current) return;
     submittedRef.current = true;
     try {
-      const res = await api.post("/whack-a-copper/score", { score: finalScore });
+      const res = await api.post("/whack-a-copper/score", {
+        score: finalScore,
+        session_id: whackSessionRef.current,
+      });
       if (res.data?.cash > 0) {
         toast.success(`Score submitted! +$${res.data.cash.toLocaleString()} cash`);
       } else if (finalScore >= 100) {
@@ -318,7 +323,7 @@ export default function WhackACopper() {
     waveRef.current = setTimeout(scheduleWave, delay);
   }, [diff, popUp]);
 
-  const startGame = useCallback(() => {
+  const startGame = useCallback(async () => {
     holeTimers.current.forEach(clearTimeout);
     holeTimers.current = [];
     (holeEscapeTimerIds.current || []).forEach((tid) => { if (tid != null) clearTimeout(tid); });
@@ -327,6 +332,13 @@ export default function WhackACopper() {
     clearTimeout(waveRef.current);
     holeUpRef.current = Array(gridSize).fill(false);
     submittedRef.current = false;
+
+    try {
+      whackSessionRef.current = await startMinigameRun("whack_a_copper");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || e.message || "Could not start run");
+      return;
+    }
 
     setScore(0);
     setCombo(1);
@@ -555,7 +567,7 @@ export default function WhackACopper() {
                 Send &apos;em back underground before<br />
                 they blow the whole operation.
               </div>
-              <button className={styles.ovBtn} onClick={startGame}>
+              <button className={styles.ovBtn} onClick={() => void startGame()}>
                 TAKE THE JOB
               </button>
               <Link to="/casino/mini-games/leaderboard" className={styles.ovBtnSecondary}>
@@ -591,7 +603,7 @@ export default function WhackACopper() {
                   <div className={styles.ovStatVal}>x{maxCombo}</div>
                 </div>
               </div>
-              <button className={styles.ovBtn} onClick={startGame}>
+              <button className={styles.ovBtn} onClick={() => void startGame()}>
                 RUN IT AGAIN
               </button>
               <button className={styles.ovBtnSecondary} onClick={() => { setSettingsOpen(true); setPhase("idle"); }}>

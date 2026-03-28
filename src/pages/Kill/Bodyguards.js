@@ -112,19 +112,27 @@ export default function Bodyguards() {
         api.get('/bodyguards'),
         api.get('/auth/me'),
         api.get('/events/active').catch((e) => {
-          console.warn('[Bodyguards] events/active failed', e?.response?.status, e?.response?.data);
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('[Bodyguards] events/active failed', e?.response?.status, e?.response?.data);
+          }
           return { data: { event: null, events_enabled: false } };
         }),
         api.get('/bodyguards/inflation').catch((e) => {
-          console.warn('[Bodyguards] inflation failed', e?.response?.status, e?.response?.data);
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('[Bodyguards] inflation failed', e?.response?.status, e?.response?.data);
+          }
           return { data: { next_hire_inflation_pct: 0 } };
         }),
         api.get('/bodyguards/stats').catch((e) => {
-          console.warn('[Bodyguards] stats failed', e?.response?.status, e?.response?.data);
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('[Bodyguards] stats failed', e?.response?.status, e?.response?.data);
+          }
           return { data: null };
         }),
         api.get('/bodyguards/invites').catch((e) => {
-          console.warn('[Bodyguards] invites failed', e?.response?.status, e?.response?.data);
+          if (process.env.NODE_ENV === 'development') {
+            console.warn('[Bodyguards] invites failed', e?.response?.status, e?.response?.data);
+          }
           return { data: { sent: [], received: [] } };
         })
       ]);
@@ -137,7 +145,11 @@ export default function Bodyguards() {
       }
       if (userRes.status >= 400) {
         const msg = userRes.data?.detail ?? userRes.statusText ?? 'Auth failed';
-        console.error('[Bodyguards] /auth/me bad status', userRes.status, userRes.data);
+        if (process.env.NODE_ENV === 'development') {
+          console.error('[Bodyguards] /auth/me bad status', userRes.status, userRes.data);
+        } else {
+          console.error('[Bodyguards] /auth/me bad status', userRes.status);
+        }
         toast.error(`Auth: ${msg}`, { duration: 12000 });
         setLoading(false);
         return;
@@ -158,7 +170,11 @@ export default function Bodyguards() {
       const status = error.response?.status;
       const detail = error.response?.data?.detail ?? error.response?.data?.message ?? error.message;
       const which = error.config?.url?.includes('bodyguards') ? 'bodyguards' : error.config?.url?.includes('auth') ? 'auth' : 'request';
-      console.error('[Bodyguards] fetchData failed', { which, status, detail, url: error.config?.url, data: error.response?.data });
+      if (process.env.NODE_ENV === 'development') {
+        console.error('[Bodyguards] fetchData failed', { which, status, detail, url: error.config?.url, data: error.response?.data });
+      } else {
+        console.error('[Bodyguards] fetchData failed', { which, status, detail, url: error.config?.url });
+      }
       const msg = typeof detail === 'string' ? detail : JSON.stringify(detail);
       toast.error(`Failed to load ${which}: ${msg || status || 'Network error'}`, { duration: 12000 });
       setBodyguards([]);

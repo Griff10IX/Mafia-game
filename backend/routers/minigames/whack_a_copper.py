@@ -2,20 +2,30 @@
 # Integrated with mini games weekly leaderboard
 
 from datetime import datetime, timezone, timedelta
+from typing import Optional
 
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
-from server import db, get_current_user, _get_staff_user_ids
+from server import db, get_current_user, _get_staff_user_ids, _is_admin
+from utils.minigame_run_session import (
+    claim_minigame_run_session,
+    enforce_numeric_score_for_claimed_session,
+    release_minigame_run,
+)
 
 MAX_PLAYS_PER_HOUR = 10
 MAX_SCORE_ACCEPTED = 50_000
+WHACK_RATE = 100.0
+WHACK_BUFFER = 40
+WHACK_GAME = "whack_a_copper"
 MIN_SCORE_FOR_REWARD = 100
 CASH_PER_10_POINTS = 1  # $1 per 10 score
 
 
 class WhackACopperScoreRequest(BaseModel):
     score: int
+    session_id: Optional[str] = None
 
 
 def register(router):
@@ -40,6 +50,25 @@ def register(router):
 
         uid = current_user["id"]
 
+        skip_session = _is_admin(current_user)
+        session_id = (payload.session_id or "").strip()
+        if not skip_session:
+            if not session_id:
+                raise HTTPException(status_code=400, detail="Start a run before submitting (missing session).")
+            sess = await claim_minigame_run_session(
+                db, user_id=uid, game=WHACK_GAME, session_id=session_id, now_dt=now_dt
+            )
+            await enforce_numeric_score_for_claimed_session(
+                db,
+                session_id=session_id,
+                sess=sess,
+                now_dt=now_dt,
+                score=score,
+                max_score_cap=MAX_SCORE_ACCEPTED,
+                rate_per_second=WHACK_RATE,
+                buffer=WHACK_BUFFER,
+            )
+
         result = await db.user_meta.update_one(
             {"user_id": uid, "whack_a_copper_hour_start": hour_start_iso, "whack_a_copper_hour_count": {"$lt": MAX_PLAYS_PER_HOUR}},
             {"$inc": {"whack_a_copper_hour_count": 1}},
@@ -52,6 +81,8 @@ def register(router):
             )
             if result.modified_count == 0 and result.upserted_id is None:
                 remaining = max(0, int((reset_dt - now_dt).total_seconds()))
+                if not skip_session and session_id:
+                    await release_minigame_run(db, session_id)
                 raise HTTPException(
                     status_code=429,
                     detail=f"Hourly limit reached ({MAX_PLAYS_PER_HOUR} plays). Try again in {remaining}s.",

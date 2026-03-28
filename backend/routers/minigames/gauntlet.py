@@ -6,10 +6,14 @@ from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional
 
-from pymongo import ReturnDocument
-
 from server import db, get_current_user, log_activity, log_respect_earned, _get_staff_user_ids, _is_admin
 from routers.minigames.minigame_leaderboard import log_minigame_play
+from utils.minigame_run_session import (
+    claim_minigame_run_session,
+    enforce_numeric_score_for_claimed_session,
+    release_minigame_run,
+    start_minigame_run,
+)
 
 
 # Base tiers (score threshold -> cash, respect for that tier only; cumulative applied in _get_reward)
@@ -36,28 +40,11 @@ RESPECT_PER_GATE_AFTER_50 = 2
 MAX_SCORE_ACCEPTED = 2_000
 MAX_PLAYS_PER_HOUR = 10
 
-# Run sessions: claim must use session_id from POST /gauntlet/start; score capped by elapsed server time.
-RUN_SESSION_MAX_MINUTES = 45
-# Well above typical client pacing (~0.5–2 gates/s); blocks instant fake scores, not long legit runs.
+# Run sessions: claim must use session_id from POST /gauntlet/start (or /minigames/run-session/start).
 MAX_GATES_PER_SECOND = 10.0
 SCORE_TIME_BUFFER = 15
 
-
-def _started_at_utc(started) -> datetime:
-    if started is None:
-        return datetime.now(timezone.utc)
-    if isinstance(started, datetime):
-        if started.tzinfo is None:
-            return started.replace(tzinfo=timezone.utc)
-        return started.astimezone(timezone.utc)
-    return datetime.now(timezone.utc)
-
-
-async def _release_gauntlet_session(session_id: str) -> None:
-    await db.gauntlet_run_sessions.update_one(
-        {"id": session_id},
-        {"$set": {"claimed": False}, "$unset": {"claimed_at": ""}},
-    )
+GAUNTLET_GAME_SLUG = "gauntlet"
 
 
 def _get_reward(score: int) -> dict:
@@ -133,23 +120,19 @@ def register(router):
     @router.post("/gauntlet/start")
     async def gauntlet_start(body: GauntletStartRequest, current_user: dict = Depends(get_current_user)):
         """Open a server-timed run; claims must reference the returned session_id."""
-        now_dt = datetime.now(timezone.utc)
-        sid = str(uuid.uuid4())
-        expires = now_dt + timedelta(minutes=RUN_SESSION_MAX_MINUTES)
-        await db.gauntlet_run_sessions.insert_one({
-            "id": sid,
-            "user_id": current_user["id"],
-            "started_at": now_dt,
-            "expires_at": expires,
-            "claimed": False,
-            "theme": (body.theme or "")[:64] or None,
-            "speed": (body.speed or "")[:32] or None,
-            "difficulty": (body.difficulty or "")[:32] or None,
-        })
-        return {
-            "session_id": sid,
-            "expires_at": expires.isoformat().replace("+00:00", "Z"),
-        }
+        meta = {}
+        if body.theme:
+            meta["theme"] = (body.theme or "")[:64]
+        if body.speed:
+            meta["speed"] = (body.speed or "")[:32]
+        if body.difficulty:
+            meta["difficulty"] = (body.difficulty or "")[:32]
+        return await start_minigame_run(
+            db,
+            user_id=current_user["id"],
+            game=GAUNTLET_GAME_SLUG,
+            meta=meta or None,
+        )
 
     @router.post("/gauntlet/claim")
     async def gauntlet_claim(payload: GauntletClaimRequest, current_user: dict = Depends(get_current_user)):
@@ -169,36 +152,24 @@ def register(router):
 
         skip_session = _is_admin(current_user)
         session_id = (payload.session_id or "").strip()
+        sess = None
         if not skip_session:
             if not session_id:
                 raise HTTPException(status_code=400, detail="Start a run before claiming (missing session).")
-            sess = await db.gauntlet_run_sessions.find_one_and_update(
-                {
-                    "id": session_id,
-                    "user_id": uid,
-                    "claimed": False,
-                    "expires_at": {"$gte": now_dt},
-                },
-                {"$set": {"claimed": True, "claimed_at": now_iso}},
-                return_document=ReturnDocument.BEFORE,
+            sess = await claim_minigame_run_session(
+                db, user_id=uid, game=GAUNTLET_GAME_SLUG, session_id=session_id, now_dt=now_dt
             )
-            if not sess:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Invalid, expired, or already used run session. Start a new game.",
-                )
-            started = _started_at_utc(sess.get("started_at"))
-            elapsed = max(0.0, (now_dt - started).total_seconds())
-            max_for_time = int(elapsed * MAX_GATES_PER_SECOND) + SCORE_TIME_BUFFER
-            max_allowed = min(MAX_SCORE_ACCEPTED, max_for_time)
-            if score > max_allowed:
-                await _release_gauntlet_session(session_id)
-                raise HTTPException(
-                    status_code=400,
-                    detail="Score is not consistent with this run. Play normally or start a new game.",
-                )
+            await enforce_numeric_score_for_claimed_session(
+                db,
+                session_id=session_id,
+                sess=sess,
+                now_dt=now_dt,
+                score=score,
+                max_score_cap=MAX_SCORE_ACCEPTED,
+                rate_per_second=MAX_GATES_PER_SECOND,
+                buffer=SCORE_TIME_BUFFER,
+            )
 
-        # Limit: N plays per hour (UTC) — atomic to prevent concurrent bypass
         result = await db.user_meta.update_one(
             {"user_id": uid, "gauntlet_hour_start": hour_start_iso, "gauntlet_hour_count": {"$lt": MAX_PLAYS_PER_HOUR}},
             {"$inc": {"gauntlet_hour_count": 1}},
@@ -212,7 +183,7 @@ def register(router):
             if result.modified_count == 0 and result.upserted_id is None:
                 remaining = max(0, int((reset_dt - now_dt).total_seconds()))
                 if not skip_session and session_id:
-                    await _release_gauntlet_session(session_id)
+                    await release_minigame_run(db, session_id)
                 raise HTTPException(
                     status_code=429,
                     detail=f"Hourly limit reached ({MAX_PLAYS_PER_HOUR} plays). Try again in {remaining}s.",
@@ -277,4 +248,3 @@ def register(router):
             "plays_left": plays_left,
             "resets_at": reset_iso,
         }
-

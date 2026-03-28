@@ -6,12 +6,20 @@ from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 
-from server import db, get_current_user, log_activity, log_respect_earned, _get_staff_user_ids
+from server import db, get_current_user, log_activity, log_respect_earned, _get_staff_user_ids, _is_admin
 from routers.minigames.minigame_leaderboard import log_minigame_play
+from utils.minigame_run_session import (
+    claim_minigame_run_session,
+    enforce_numeric_score_for_claimed_session,
+    release_minigame_run,
+)
 
 
 MAX_SCORE_ACCEPTED = 100_000
 MAX_PLAYS_PER_HOUR = 10
+FAMILY_RUN_RATE = 400.0
+FAMILY_RUN_BUFFER = 60
+FAMILY_RUN_GAME = "family_run"
 
 REWARD_CAPS = {
     "cash": 10_000,
@@ -22,6 +30,7 @@ REWARD_CAPS = {
 class FamilyRunScoreRequest(BaseModel):
     score: int
     coins: Optional[int] = 0
+    session_id: Optional[str] = None
 
 
 async def _apply_rewards(user_id: str, score: int, coins: int) -> Dict[str, Any]:
@@ -106,6 +115,8 @@ def register(router):
             )
             if result.modified_count == 0 and result.upserted_id is None:
                 remaining = max(0, int((reset_dt - now_dt).total_seconds()))
+                if not skip_session and session_id:
+                    await release_minigame_run(db, session_id)
                 raise HTTPException(
                     status_code=429,
                     detail=f"Hourly limit reached ({MAX_PLAYS_PER_HOUR} plays). Try again in {remaining}s.",

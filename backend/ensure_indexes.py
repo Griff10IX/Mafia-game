@@ -222,8 +222,9 @@ async def ensure_all_indexes(db):
         await db.sports_betting_templates.create_index([("category", 1), ("saved_at", -1)])
 
         # --- Flappy Gangster (Gauntlet) ---
-        await db.gauntlet_run_sessions.create_index("id", unique=True)
-        await db.gauntlet_run_sessions.create_index([("expires_at", 1)], expireAfterSeconds=0)
+        await db.minigame_run_sessions.create_index("id", unique=True)
+        await db.minigame_run_sessions.create_index([("game", 1), ("user_id", 1)])
+        await db.minigame_run_sessions.create_index([("expires_at", 1)], expireAfterSeconds=0)
         await db.gauntlet_scores.create_index("id", unique=True)
         await db.gauntlet_scores.create_index([("score", -1), ("at", 1)])
         await db.gauntlet_scores.create_index([("user_id", 1), ("at", -1)])

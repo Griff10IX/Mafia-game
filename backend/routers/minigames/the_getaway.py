@@ -3,13 +3,26 @@
 # Integrated with mini games weekly leaderboard
 
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
-from server import db, get_current_user, _get_staff_user_ids
+from server import db, get_current_user, _get_staff_user_ids, _is_admin
+from utils.minigame_run_session import (
+    as_utc_started,
+    claim_minigame_run_session,
+    enforce_client_duration_for_claimed_session,
+    release_minigame_run,
+)
 
 MAX_RUNS_PER_HOUR = 10
+GETAWAY_GAME = "the_getaway"
+# Server-side plausibility vs client-reported time (meters / sec, coins / sec).
+GETAWAY_MAX_M_PER_SEC = 140
+GETAWAY_MAX_COINS_PER_SEC = 40
+GETAWAY_DISTANCE_SLACK = 800
+GETAWAY_COINS_SLACK = 200
 
 # 75% reduction for beta
 BASE_CASH = 3_750
@@ -25,6 +38,7 @@ class GetawayRunRequest(BaseModel):
     distance: int
     coins_collected: int
     time_seconds: int
+    session_id: Optional[str] = None
 
 
 def register(router):
@@ -46,12 +60,40 @@ def register(router):
         if time_seconds > 3600:
             raise HTTPException(status_code=400, detail="Game exceeded time limit.")
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc).replace(microsecond=0)
         now_iso = now.isoformat().replace("+00:00", "Z")
         hour_start = now.replace(minute=0, second=0, microsecond=0)
         hour_start_iso = hour_start.isoformat().replace("+00:00", "Z")
 
         uid = current_user["id"]
+
+        skip_session = _is_admin(current_user)
+        session_id = (body.session_id or "").strip()
+        if not skip_session:
+            if not session_id:
+                raise HTTPException(status_code=400, detail="Start a run before submitting (missing session).")
+            sess = await claim_minigame_run_session(
+                db, user_id=uid, game=GETAWAY_GAME, session_id=session_id, now_dt=now
+            )
+            await enforce_client_duration_for_claimed_session(
+                db,
+                session_id=session_id,
+                sess=sess,
+                now_dt=now,
+                client_duration_seconds=time_seconds,
+                max_duration_cap=3600,
+                slack_seconds=45,
+            )
+            started_at = as_utc_started(sess.get("started_at"))
+            elapsed = max(0.0, (now - started_at).total_seconds())
+            max_dist = int(elapsed * GETAWAY_MAX_M_PER_SEC) + GETAWAY_DISTANCE_SLACK
+            max_coins = int(elapsed * GETAWAY_MAX_COINS_PER_SEC) + GETAWAY_COINS_SLACK
+            if distance > max_dist or coins_collected > max_coins:
+                await release_minigame_run(db, session_id)
+                raise HTTPException(
+                    status_code=400,
+                    detail="Run stats do not match server session timing.",
+                )
 
         result = await db.user_meta.update_one(
             {"user_id": uid, "getaway_hour_start": hour_start_iso, "getaway_hour_count": {"$lt": MAX_RUNS_PER_HOUR}},
@@ -64,6 +106,8 @@ def register(router):
                 upsert=True,
             )
             if result.modified_count == 0 and result.upserted_id is None:
+                if not skip_session and session_id:
+                    await release_minigame_run(db, session_id)
                 raise HTTPException(status_code=429, detail=f"Hourly run limit reached ({MAX_RUNS_PER_HOUR}). Try again later.")
 
         distance_bonus = (distance // 100) * BONUS_PER_100M

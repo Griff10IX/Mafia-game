@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Trophy, RefreshCw } from "lucide-react";
 import api from "../../utils/api";
+import { startMinigameRun } from "../../utils/minigameRunSession";
 import { toast } from "sonner";
 import styles from "../../styles/noir.module.css";
 
@@ -55,6 +56,7 @@ export default function FamilyRun() {
   const raf       = useRef(null);
   const touch     = useRef({ x:0, y:0, t:0 });
   const scoreSubmittedRef = useRef(false);
+  const runSessionIdRef = useRef(null);
 
   const [leaderboard, setLeaderboard] = useState([]);
   const [loadingLb, setLoadingLb] = useState(false);
@@ -144,8 +146,14 @@ export default function FamilyRun() {
   const submitScore = useCallback(async (score, coins) => {
     if (scoreSubmittedRef.current) return;
     scoreSubmittedRef.current = true;
+    const sid = runSessionIdRef.current;
+    if (!sid) {
+      toast.error('Missing run session. Refresh and try again.');
+      return;
+    }
     try {
-      const res = await api.post('/family-run/score', { score: Math.floor(score), coins });
+      const res = await api.post('/family-run/score', { score: Math.floor(score), coins, session_id: sid });
+      if (runSessionIdRef.current === sid) runSessionIdRef.current = null;
       if (res.data?.rewards_applied) {
         const r = res.data.rewards_applied;
         const parts = [];
@@ -175,10 +183,16 @@ export default function FamilyRun() {
     if (!p.jumping) { p.sliding=true; p.slideTimer=22; }
   },[]);
 
-  const startGame = useCallback(() => {
+  const startGame = useCallback(async () => {
     scoreSubmittedRef.current = false;
-    G.current=makeState();
-    G.current.phase='playing';
+    try {
+      const sid = await startMinigameRun('family_run');
+      runSessionIdRef.current = sid;
+      G.current = makeState();
+      G.current.phase = 'playing';
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || e?.message || 'Could not start run');
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- makeState is stable (uses G.current)
   }, []);
 

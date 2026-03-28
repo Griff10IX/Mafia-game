@@ -7,7 +7,14 @@ from typing import Optional
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
-from server import db, get_current_user, _get_staff_user_ids
+from server import db, get_current_user, _get_staff_user_ids, _is_admin
+from utils.minigame_run_session import (
+    claim_minigame_run_session,
+    enforce_client_duration_for_claimed_session,
+    release_minigame_run,
+)
+
+MINESWEEPER_GAME = "minesweeper"
 
 VALID_DIFFICULTIES = ["snitch", "capo", "godfather"]
 
@@ -24,6 +31,7 @@ MAX_WINS_PER_HOUR = 10
 class MinesweeperWinRequest(BaseModel):
     difficulty: str
     time_seconds: int
+    session_id: Optional[str] = None
 
 
 def register(router):
@@ -42,12 +50,30 @@ def register(router):
         if time_seconds > cfg["max_time"]:
             raise HTTPException(status_code=400, detail="Time exceeds maximum for this difficulty.")
 
-        now = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc).replace(microsecond=0)
         now_iso = now.isoformat().replace("+00:00", "Z")
         hour_start = now.replace(minute=0, second=0, microsecond=0)
         hour_start_iso = hour_start.isoformat().replace("+00:00", "Z")
 
         uid = current_user["id"]
+
+        skip_session = _is_admin(current_user)
+        session_id = (body.session_id or "").strip()
+        if not skip_session:
+            if not session_id:
+                raise HTTPException(status_code=400, detail="Start a game before submitting (missing session).")
+            sess = await claim_minigame_run_session(
+                db, user_id=uid, game=MINESWEEPER_GAME, session_id=session_id, now_dt=now
+            )
+            await enforce_client_duration_for_claimed_session(
+                db,
+                session_id=session_id,
+                sess=sess,
+                now_dt=now,
+                client_duration_seconds=time_seconds,
+                max_duration_cap=int(cfg["max_time"]),
+                slack_seconds=45,
+            )
 
         result = await db.user_meta.update_one(
             {"user_id": uid, "minesweeper_hour_start": hour_start_iso, "minesweeper_hour_count": {"$lt": MAX_WINS_PER_HOUR}},
@@ -60,6 +86,8 @@ def register(router):
                 upsert=True,
             )
             if result.modified_count == 0 and result.upserted_id is None:
+                if not skip_session and session_id:
+                    await release_minigame_run(db, session_id)
                 raise HTTPException(status_code=429, detail=f"Hourly win limit reached ({MAX_WINS_PER_HOUR}). Try again later.")
 
         cash = cfg["base_cash"]

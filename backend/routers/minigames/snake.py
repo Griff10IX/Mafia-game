@@ -6,12 +6,20 @@ from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional, Dict, Any
 
-from server import db, get_current_user, log_activity, log_respect_earned, _get_staff_user_ids
+from server import db, get_current_user, log_activity, log_respect_earned, _get_staff_user_ids, _is_admin
 from routers.minigames.minigame_leaderboard import log_minigame_play
+from utils.minigame_run_session import (
+    claim_minigame_run_session,
+    enforce_numeric_score_for_claimed_session,
+    release_minigame_run,
+)
 
 
 MAX_SCORE_ACCEPTED = 50_000
 MAX_PLAYS_PER_HOUR = 10
+SNAKE_SCORE_RATE_PER_SEC = 120.0
+SNAKE_SCORE_BUFFER = 60
+SNAKE_GAME = "snake"
 
 # Per-submit caps for each reward type (prevent economy overflow)
 # 75% reduction for beta
@@ -30,6 +38,7 @@ SNAKE_JAIL_SECONDS = 30
 
 class SnakeScoreRequest(BaseModel):
     score: int
+    session_id: Optional[str] = None
     rewards: Optional[Dict[str, int]] = None
 
 
@@ -173,6 +182,8 @@ def register(router):
             )
             if result.modified_count == 0 and result.upserted_id is None:
                 remaining = max(0, int((reset_dt - now_dt).total_seconds()))
+                if not skip_session and session_id:
+                    await release_minigame_run(db, session_id)
                 raise HTTPException(
                     status_code=429,
                     detail=f"Hourly limit reached ({MAX_PLAYS_PER_HOUR} plays). Try again in {remaining}s.",

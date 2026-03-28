@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { toast } from "sonner";
 import api from "../../utils/api";
+import { startMinigameRun } from "../../utils/minigameRunSession";
 import styles from "../../styles/noir.module.css";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -245,6 +246,7 @@ export default function Snake() {
   const lastTickRef = useRef(0);
   const tRef = useRef(0);
   const dirQueueRef = useRef([]); // up to 2 pending directions for smoother WASD
+  const snakeSessionRef = useRef(null);
 
   const [phase, setPhase] = useState("menu");
   const [score, setScore] = useState(0);
@@ -420,29 +422,43 @@ export default function Snake() {
     drawGame(ctx, s, C, t);
   }, [tick]);
 
-  const startGame = useCallback(() => {
-    const s = initState(levelId, difficultyId);
-    stateRef.current = s;
-    dirQueueRef.current = [];
-    setScore(0);
-    setPhase("playing");
-    setLastPkg(null);
-    setPkgFade(0);
-    lastTickRef.current = performance.now();
-    tRef.current = 0;
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    rafRef.current = requestAnimationFrame(renderLoop);
+  const startGame = useCallback(async () => {
+    try {
+      const sid = await startMinigameRun("snake");
+      snakeSessionRef.current = sid;
+      const s = initState(levelId, difficultyId);
+      stateRef.current = s;
+      dirQueueRef.current = [];
+      setScore(0);
+      setPhase("playing");
+      setLastPkg(null);
+      setPkgFade(0);
+      lastTickRef.current = performance.now();
+      tRef.current = 0;
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      rafRef.current = requestAnimationFrame(renderLoop);
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || e?.message || "Could not start run");
+    }
   }, [initState, renderLoop, levelId, difficultyId]);
 
   const submitScore = useCallback(async (finalScore) => {
     if (finalScore <= 0) return;
+    const runSessionId = snakeSessionRef.current;
+    if (!runSessionId) {
+      toast.error("Missing run session. Refresh and try again.");
+      setPhase("dead");
+      return;
+    }
     setPhase("submitting");
     try {
       const rewards = stateRef.current?.rewards || {};
-      await api.post("/snake/score", { score: finalScore, rewards });
+      await api.post("/snake/score", { score: finalScore, rewards, session_id: runSessionId });
+      if (snakeSessionRef.current === runSessionId) snakeSessionRef.current = null;
       toast.success(`Score submitted: ${finalScore} pts`);
       await fetchLB();
     } catch (e) {
+      if (snakeSessionRef.current === runSessionId) snakeSessionRef.current = null;
       toast.error(e?.response?.data?.detail || "Failed to submit score");
     } finally {
       setPhase("dead");

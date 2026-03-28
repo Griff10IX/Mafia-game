@@ -25,6 +25,11 @@ from utils.game_pass_micro_rewards import (
 )
 from routers.game.store import _store_cost_inc
 from routers.minigames.minigame_leaderboard import log_minigame_play
+from utils.minigame_run_session import (
+    claim_minigame_run_session,
+    enforce_numeric_score_for_claimed_session,
+    release_minigame_run,
+)
 import middleware.security as _security_mod
 
 # 5k bullets per 24h, effectively delivered every 20 mins (72 ticks per day)
@@ -224,6 +229,10 @@ MASTERY_LIVE_HITS_MAX_PER_REQUEST = 30
 SHOOTING_RANGE_MAX_PLAYS_PER_HOUR = 10
 # Store upgrade: extra plays/hour capped (see store.buy_shooting_range_bonus)
 SHOOTING_RANGE_BONUS_STORE_MAX = 10
+SHOOTING_RANGE_SESSION_GAME = "shooting_range"
+SHOOTING_RANGE_ABS_SCORE_CAP = 99_999_999
+SHOOTING_RANGE_SCORE_RATE = 45_000.0
+SHOOTING_RANGE_SCORE_BUFFER = 12_000
 
 
 class StateOptionalRequest(BaseModel):
@@ -272,6 +281,7 @@ class ShootingRangeTrainRequest(BaseModel):
 
 class ShootingRangeScoreRequest(BaseModel):
     score: int
+    session_id: Optional[str] = None
 
 
 def _normalize_state(state: str) -> str:
@@ -1643,6 +1653,8 @@ async def submit_shooting_range_score(request: ShootingRangeScoreRequest, curren
     score = int(request.score) if request.score is not None else 0
     if score < 0:
         raise HTTPException(status_code=400, detail="score must be >= 0.")
+    if score > SHOOTING_RANGE_ABS_SCORE_CAP:
+        raise HTTPException(status_code=400, detail="score too high.")
 
     now_dt = datetime.now(timezone.utc).replace(microsecond=0)
     now_iso = now_dt.isoformat().replace("+00:00", "Z")
@@ -1650,6 +1662,26 @@ async def submit_shooting_range_score(request: ShootingRangeScoreRequest, curren
     hour_start_iso = hour_start.isoformat().replace("+00:00", "Z")
     reset_dt = hour_start + timedelta(hours=1)
     reset_iso = reset_dt.isoformat().replace("+00:00", "Z")
+
+    uid = current_user["id"]
+    skip_session = _is_admin(current_user)
+    session_id = (request.session_id or "").strip()
+    if not skip_session:
+        if not session_id:
+            raise HTTPException(status_code=400, detail="Start a run before submitting (missing session).")
+        sess = await claim_minigame_run_session(
+            db, user_id=uid, game=SHOOTING_RANGE_SESSION_GAME, session_id=session_id, now_dt=now_dt
+        )
+        await enforce_numeric_score_for_claimed_session(
+            db,
+            session_id=session_id,
+            sess=sess,
+            now_dt=now_dt,
+            score=score,
+            max_score_cap=SHOOTING_RANGE_ABS_SCORE_CAP,
+            rate_per_second=SHOOTING_RANGE_SCORE_RATE,
+            buffer=SHOOTING_RANGE_SCORE_BUFFER,
+        )
 
     meta = await db.user_meta.find_one(
         {"user_id": current_user["id"]},
@@ -1662,6 +1694,8 @@ async def submit_shooting_range_score(request: ShootingRangeScoreRequest, curren
     if meta_start == hour_start_iso:
         if meta_count >= hourly_limit:
             remaining = max(0, int((reset_dt - now_dt).total_seconds()))
+            if not skip_session and session_id:
+                await release_minigame_run(db, session_id)
             raise HTTPException(
                 status_code=400,
                 detail=f"Hourly limit reached ({hourly_limit} plays). Try again in {remaining}s.",

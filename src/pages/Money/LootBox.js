@@ -489,12 +489,16 @@ export default function LootBox() {
     } catch (e) {
       setPhase('idle');
       const detail = e.response?.data?.detail ?? e.message ?? 'Failed to open loot box';
-      console.error('[Loot box open failed]', {
-        detail,
-        status: e.response?.status,
-        data: e.response?.data,
-        error: e,
-      });
+      if (process.env.NODE_ENV === 'development') {
+        console.error('[Loot box open failed]', {
+          detail,
+          status: e.response?.status,
+          data: e.response?.data,
+          error: e,
+        });
+      } else {
+        console.error('[Loot box open failed]', detail, e.response?.status);
+      }
       toast.error(detail);
     }
   };

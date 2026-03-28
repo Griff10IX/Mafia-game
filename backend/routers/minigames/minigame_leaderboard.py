@@ -10,9 +10,23 @@ from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
 from server import db, get_current_user, ADMIN_EMAILS, _get_staff_user_ids
+from utils.minigame_run_session import start_minigame_run
 
 MINIGAME_LB_CONFIG_ID = "minigame_weekly_leaderboard"
 VALID_GAMES = ["snake", "gauntlet", "shooting_range", "minesweeper", "battleships", "the_getaway", "family_run", "whack_a_copper", "mafia_rpg", "pool_8ball"]
+RUN_SESSION_GAMES = frozenset(
+    [
+        "snake",
+        "gauntlet",
+        "shooting_range",
+        "minesweeper",
+        "battleships",
+        "the_getaway",
+        "family_run",
+        "whack_a_copper",
+        "mafia_rpg",
+    ]
+)
 PARTICIPATION_POINTS = 10
 SCORE_BONUS_DIVISOR = 100
 SCORE_BONUS_CAP = 50
@@ -94,7 +108,22 @@ class LeaderboardResponse(BaseModel):
     rewards: dict
 
 
+class MinigameRunSessionStartRequest(BaseModel):
+    game: str
+
+
 def register(router):
+    @router.post("/minigames/run-session/start")
+    async def minigame_run_session_start(
+        body: MinigameRunSessionStartRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Begin a server-timed run; submit endpoints require the returned session_id."""
+        g = (body.game or "").strip()
+        if g not in RUN_SESSION_GAMES:
+            raise HTTPException(status_code=400, detail="Unknown or unsupported game for run session.")
+        return await start_minigame_run(db, user_id=current_user["id"], game=g)
+
     @router.get("/minigames/leaderboard")
     async def get_minigame_leaderboard(current_user: dict = Depends(get_current_user)):
         """Get the top 5 mini games leaderboard for the current week plus user's stats."""

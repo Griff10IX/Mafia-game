@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import api from '../../utils/api';
+import { startMinigameRun } from '../../utils/minigameRunSession';
 import { toast } from 'sonner';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1418,6 +1419,7 @@ export default function Battleships() {
   const [myStats,setMyStats]=useState(null);
   const [showStats,setShowStats]=useState(false);
   const aiTimerRef=useRef(null);
+  const battleshipsSessionRef=useRef(null);
   const playerFxRef=useRef({add:()=>{}});
   const aiFxRef=useRef({add:()=>{}});
 
@@ -1466,6 +1468,7 @@ export default function Battleships() {
         time_seconds:timeSeconds,
         fleet_size:activeShips.length,
         difficulty:settings.difficulty,
+        session_id:battleshipsSessionRef.current,
       });
       if (res.data?.reward) {
         setWinReward(res.data.reward);
@@ -1489,6 +1492,7 @@ export default function Battleships() {
     setAiState({mode:"hunt",targets:[],hits:[],firstHit:null}); setPlayerTurn(true);
     setSunkByPlayer([]); setSunkByAi([]); setEvents([]); setCutscene(null);
     setShotsFired(0); setGameStartTime(null); setWinSubmitted(false);
+    battleshipsSessionRef.current=null;
     setBattleTab("enemy"); setConsecutiveHits(0); setBonusShotActive(false);
     setElapsedTime(0); setWinReward(null);
     setAbilities({airRecon:false,sonarPing:false,salvo:false});
@@ -1761,7 +1765,17 @@ export default function Battleships() {
           <div style={{display:"flex",gap:6,flexWrap:"wrap",justifyContent:"center",width:"100%",maxWidth:GRID*CELL+20}}>
             <button className="nb" onClick={()=>setHoriz(h=>!h)} disabled={placingIdx>=activeShips.length}>↺ {horiz?"Horiz":"Vert"}</button>
             <button className="nb" onClick={handleAutoPlace}>⚡ Auto</button>
-            <button className="nb" disabled={placedShips.length<activeShips.length} onClick={()=>{setScreen("battle");setGameStartTime(Date.now());setShotsFired(0);setWinSubmitted(false);}}>⚔ Go to War</button>
+            <button className="nb" disabled={placedShips.length<activeShips.length} onClick={async()=>{
+              try{
+                battleshipsSessionRef.current=await startMinigameRun("battleships");
+                setScreen("battle");
+                setGameStartTime(Date.now());
+                setShotsFired(0);
+                setWinSubmitted(false);
+              }catch(e){
+                toast.error(e.response?.data?.detail||e.message||"Could not start battle");
+              }
+            }}>⚔ Go to War</button>
             <button className="nb" onClick={resetToSettings} style={{borderColor:"rgba(212,175,55,0.18)",color:"rgba(212,175,55,0.45)"}}>⚙</button>
           </div>
           {/* Fleet list — horizontal scrolling on mobile */}

@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import * as THREE from "three";
 import { Crosshair } from "lucide-react";
 import api from "../../utils/api";
+import { startMinigameRun } from "../../utils/minigameRunSession";
 import { toast } from "sonner";
 import styles from "../../styles/noir.module.css";
 
@@ -251,6 +252,7 @@ function buildScene(scene, mobile, woodTex, brickTex, cobbleTex) {
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ShootingRange3D() {
   const canvasRef = useRef(null);
+  const shootingRunSessionRef = useRef(null);
 
   // Three.js refs — never trigger re-renders
   const r = useRef({
@@ -557,8 +559,14 @@ export default function ShootingRange3D() {
   }, [shoot]);
 
   // ── START ROUND ──────────────────────────────────────────────────────────────
-  const startRound = useCallback(() => {
+  const startRound = useCallback(async () => {
     if (cooldownSecondsLeft > 0) return;
+    try {
+      shootingRunSessionRef.current = await startMinigameRun("shooting_range");
+    } catch (e) {
+      toast.error(e.response?.data?.detail || e.message || "Could not start run");
+      return;
+    }
     const state = r.current;
     state.phase = "playing";
     state.score = 0;
@@ -848,9 +856,12 @@ export default function ShootingRange3D() {
                 .catch(e => toast.error(e.response?.data?.detail || "Submit failed."));
             }
             if (finalScore >= 0) {
-              api.post("/shooting-range/score", { score: finalScore })
-                .then(() => fetchLeaderboard())
-                .catch(() => {});
+              const sid = shootingRunSessionRef.current;
+              if (sid) {
+                api.post("/shooting-range/score", { score: finalScore, session_id: sid })
+                  .then(() => fetchLeaderboard())
+                  .catch(() => {});
+              }
             }
             fetchMastery();
           }
@@ -1206,7 +1217,7 @@ export default function ShootingRange3D() {
                   {(gamePhase === "idle" || gamePhase === "done") && (
                     <button
                       type="button"
-                      onClick={() => { setRoundStats(null); startRound(); }}
+                      onClick={() => { setRoundStats(null); void startRound(); }}
                       disabled={cooldownSecondsLeft > 0}
                       className={`${styles.btnGoldDarkText} font-heading text-[10px] sm:text-[11px] font-bold uppercase tracking-wider px-4 py-2 cursor-pointer`}
                       style={{
@@ -1280,7 +1291,7 @@ export default function ShootingRange3D() {
                     )}
                     <button
                       type="button"
-                      onClick={() => { setRoundStats(null); startRound(); }}
+                      onClick={() => { setRoundStats(null); void startRound(); }}
                       disabled={cooldownSecondsLeft > 0}
                       className={`${styles.btnGoldDarkText} font-heading text-[10px] sm:text-[11px] font-bold uppercase tracking-wider px-5 py-2 cursor-pointer mt-2`}
                       style={{

@@ -2,6 +2,7 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowLeft, Trophy, RefreshCw } from "lucide-react";
 import api from "../../utils/api";
+import { startMinigameRun } from "../../utils/minigameRunSession";
 import { toast } from "sonner";
 import styles from "../../styles/noir.module.css";
 
@@ -869,9 +870,12 @@ function FamigliaGameInner(){
   const toggleRadioRef=useRef(null);
   const joyRef=useRef({id:null,origin:null,vec:{x:0,y:0},base:null});
   const uiRef=useRef({showShop:false,showMissions:false,activeMission:null,missionProgress:{}});
+  const famigliaRunSessionRef=useRef(null);
   const lastFamigliaSubmitRef=useRef(0);
   const submitFamigliaSession=useCallback(async()=>{
     const gs=gsRef.current;if(!gs?.player)return;
+    const sid=famigliaRunSessionRef.current;
+    if(!sid)return;
     const now=Date.now();
     if(now-lastFamigliaSubmitRef.current<45_000)return;
     lastFamigliaSubmitRef.current=now;
@@ -880,13 +884,20 @@ function FamigliaGameInner(){
         respect:gs.player.respect||0,
         missions_complete:gs.player.missionsComplete||0,
         total_earned:gs.player.totalEarned||0,
+        session_id:sid,
       });
     }catch(_e){}
   },[]);
 
 
-  const initGame=useCallback(()=>{
+  const initGame=useCallback(async ()=>{
     const canvas=canvasRef.current;if(!canvas)return;
+    try{
+      famigliaRunSessionRef.current=await startMinigameRun("mafia_rpg");
+    }catch(e){
+      toast.error(e?.response?.data?.detail||e?.message||"Could not start game session");
+      return;
+    }
     canvas.width=NW;canvas.height=NH;
     const{map,variant,blockTypes}=buildMap();
     const bakedTiles=bakeTileLayer(map,variant,blockTypes);

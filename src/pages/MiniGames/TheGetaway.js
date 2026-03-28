@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { toast } from "sonner";
 import api from "../../utils/api";
+import { startMinigameRun } from "../../utils/minigameRunSession";
 import styles from "../../styles/noir.module.css";
 
 const W = 480, H = 640;
@@ -59,6 +60,7 @@ export default function TheGetaway() {
   const [submitted, setSubmitted] = useState(false);
   const [showRules, setShowRules] = useState(false);
   const touchStartRef = useRef({ x: 0, y: 0 });
+  const getawaySessionRef = useRef(null);
 
   const laneX = useCallback((l) => W / 2 + LANES[l], []);
 
@@ -158,20 +160,28 @@ export default function TheGetaway() {
   const submitRun = useCallback(async () => {
     const s = stateRef.current;
     if (submitted || s.score < 50) return;
+    const sid = getawaySessionRef.current;
+    if (!sid) {
+      toast.error("No active run. Start again from the title screen.");
+      return;
+    }
     setSubmitted(true);
-    
+
     const timeSeconds = Math.floor((Date.now() - (s.gameStartTime || Date.now())) / 1000);
-    
+
     try {
       const res = await api.post('/the-getaway/run', {
         distance: Math.floor(s.score),
         coins_collected: s.coins,
         time_seconds: timeSeconds,
+        session_id: sid,
       });
+      getawaySessionRef.current = null;
       if (res.data?.reward) {
         toast.success(`Clean getaway! +$${res.data.reward.cash.toLocaleString()} +${res.data.reward.respect} respect`);
       }
     } catch (err) {
+      setSubmitted(false);
       const msg = err?.response?.data?.detail || 'Failed to submit run';
       toast.error(msg);
     }
@@ -203,11 +213,17 @@ export default function TheGetaway() {
     if (p.targetLane < 2) p.targetLane++;
   }, []);
 
-  const handleStart = useCallback(() => {
+  const handleStart = useCallback(async () => {
     const s = stateRef.current;
     if (s.state === 'title' || s.state === 'gameover') {
       if (s.state === 'gameover') {
-        submitRun();
+        await submitRun();
+      }
+      try {
+        getawaySessionRef.current = await startMinigameRun('the_getaway');
+      } catch (err) {
+        toast.error(err?.response?.data?.detail || err?.message || 'Could not start run');
+        return;
       }
       resetGame();
       s.state = 'playing';
@@ -805,7 +821,7 @@ export default function TheGetaway() {
     const handleKeyDown = (e) => {
       const s = stateRef.current;
       if (s.state !== 'playing') {
-        handleStart();
+        void handleStart();
         return;
       }
       if (e.key === 'ArrowLeft' || e.key === 'a') { e.preventDefault(); moveLeft(); }
@@ -828,7 +844,7 @@ export default function TheGetaway() {
   const handleTouchEnd = useCallback((e) => {
     const s = stateRef.current;
     if (s.state !== 'playing') {
-      handleStart();
+      void handleStart();
       return;
     }
     const dx = e.changedTouches[0].clientX - touchStartRef.current.x;
@@ -883,7 +899,7 @@ export default function TheGetaway() {
       <div className="flex justify-center">
         <canvas
           ref={canvasRef}
-          onClick={handleStart}
+          onClick={() => void handleStart()}
           onTouchStart={handleTouchStart}
           onTouchEnd={handleTouchEnd}
           className="rounded-lg cursor-pointer touch-none select-none"
@@ -893,25 +909,25 @@ export default function TheGetaway() {
 
       <div className="flex justify-center gap-2 flex-wrap">
         <button
-          onClick={() => { if (gameState === 'playing') moveLeft(); else handleStart(); }}
+          onClick={() => { if (gameState === 'playing') moveLeft(); else void handleStart(); }}
           className={`px-4 py-2 rounded border border-primary/30 text-primary text-sm font-heading hover:bg-primary/10 touch-manipulation min-w-[60px]`}
         >
           ← Left
         </button>
         <button
-          onClick={() => { if (gameState === 'playing') jump(); else handleStart(); }}
+          onClick={() => { if (gameState === 'playing') jump(); else void handleStart(); }}
           className={`px-4 py-2 rounded border border-primary/30 text-primary text-sm font-heading hover:bg-primary/10 touch-manipulation min-w-[60px]`}
         >
           ↑ Jump
         </button>
         <button
-          onClick={() => { if (gameState === 'playing') slide(); else handleStart(); }}
+          onClick={() => { if (gameState === 'playing') slide(); else void handleStart(); }}
           className={`px-4 py-2 rounded border border-primary/30 text-primary text-sm font-heading hover:bg-primary/10 touch-manipulation min-w-[60px]`}
         >
           ↓ Slide
         </button>
         <button
-          onClick={() => { if (gameState === 'playing') moveRight(); else handleStart(); }}
+          onClick={() => { if (gameState === 'playing') moveRight(); else void handleStart(); }}
           className={`px-4 py-2 rounded border border-primary/30 text-primary text-sm font-heading hover:bg-primary/10 touch-manipulation min-w-[60px]`}
         >
           Right →

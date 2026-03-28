@@ -3,13 +3,21 @@
 
 from datetime import datetime, timezone, timedelta
 import uuid
+from typing import Optional
 
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
-from server import db, get_current_user, log_activity, _get_staff_user_ids
+from server import db, get_current_user, log_activity, _get_staff_user_ids, _is_admin
+from utils.minigame_run_session import (
+    assert_active_minigame_run_session,
+    enforce_numeric_score_for_claimed_session,
+)
 
 MAX_PLAYS_PER_HOUR = 8
+MAFIA_RPG_GAME = "mafia_rpg"
+MAFIA_COMPOSITE_RATE = 40_000.0
+MAFIA_COMPOSITE_BUFFER = 100_000
 MAX_RESPECT = 100
 MAX_MISSIONS = 100
 MAX_TOTAL_EARNED = 50_000_000
@@ -20,6 +28,7 @@ class MafiaRpgSessionRequest(BaseModel):
     respect: int = 0
     missions_complete: int = 0
     total_earned: int = 0
+    session_id: Optional[str] = None
 
 
 def _composite_score(respect: int, missions: int, earned: int) -> int:
@@ -53,6 +62,25 @@ def register(router):
         reset_dt = hour_start + timedelta(hours=1)
 
         uid = current_user["id"]
+
+        skip_session = _is_admin(current_user)
+        session_id = (payload.session_id or "").strip()
+        if not skip_session:
+            if not session_id:
+                raise HTTPException(status_code=400, detail="Start a session before submitting (missing session).")
+            sess = await assert_active_minigame_run_session(
+                db, user_id=uid, game=MAFIA_RPG_GAME, session_id=session_id, now_dt=now_dt
+            )
+            await enforce_numeric_score_for_claimed_session(
+                db,
+                session_id=session_id,
+                sess=sess,
+                now_dt=now_dt,
+                score=score,
+                max_score_cap=MAX_COMPOSITE,
+                rate_per_second=MAFIA_COMPOSITE_RATE,
+                buffer=MAFIA_COMPOSITE_BUFFER,
+            )
 
         result = await db.user_meta.update_one(
             {

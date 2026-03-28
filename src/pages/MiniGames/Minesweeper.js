@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Trophy, Clock, Target, ArrowLeft } from "lucide-react";
 import api from "../../utils/api";
 import { toast } from "sonner";
+import { startMinigameRun } from "../../utils/minigameRunSession";
 import styles from "../../styles/noir.module.css";
 
 const DIFFICULTIES = {
@@ -86,6 +87,8 @@ export default function Minesweeper() {
   const [reward, setReward] = useState(null);
   const timerRef = useRef(null);
   const submittedRef = useRef(false);
+  const runSessionRef = useRef(null);
+  const firstRevealLockRef = useRef(false);
 
   const cfg = DIFFICULTIES[difficulty];
 
@@ -145,6 +148,8 @@ export default function Minesweeper() {
     setDeathCell(null);
     setReward(null);
     submittedRef.current = false;
+    runSessionRef.current = null;
+    firstRevealLockRef.current = false;
   }, [difficulty]);
 
   const handleDifficulty = (d) => {
@@ -152,10 +157,19 @@ export default function Minesweeper() {
     resetGame(d);
   };
 
-  const handleReveal = (r, c) => {
+  const handleReveal = async (r, c) => {
     if (phase === "won" || phase === "dead") return;
     let b = board;
     if (!minesReady) {
+      if (firstRevealLockRef.current) return;
+      firstRevealLockRef.current = true;
+      try {
+        runSessionRef.current = await startMinigameRun("minesweeper");
+      } catch (e) {
+        firstRevealLockRef.current = false;
+        toast.error(e.response?.data?.detail || e.message || "Could not start game");
+        return;
+      }
       b = placeMines(board, cfg.rows, cfg.cols, cfg.mines, r, c);
       setMinesReady(true);
       setPhase("playing");
@@ -336,7 +350,7 @@ export default function Minesweeper() {
                   key={`${cell.r}-${cell.c}`}
                   className={cls}
                   style={{ width: cellSize, height: cellSize, fontSize: cellSize * 0.42 }}
-                  onClick={() => handleReveal(cell.r, cell.c)}
+                  onClick={() => void handleReveal(cell.r, cell.c)}
                   onContextMenu={(e) => handleFlag(e, cell.r, cell.c)}
                 >
                   {cell.flagged && !cell.revealed && (

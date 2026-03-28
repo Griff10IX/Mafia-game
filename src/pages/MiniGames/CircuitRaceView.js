@@ -1224,6 +1224,7 @@ export default function CircuitRaceView({
   const raceDbgSeqRef = useRef(0);
   const debugRace = useCallback((event, payload = {}) => {
     if (mode !== "interactive-live") return;
+    if (process.env.NODE_ENV !== "development") return;
     try {
       const entry = {
         seq: ++raceDbgSeqRef.current,

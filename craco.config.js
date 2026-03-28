@@ -76,6 +76,34 @@ const webpackConfig = {
       if (config.enableHealthCheck && healthPluginInstance) {
         webpackConfig.plugins.push(healthPluginInstance);
       }
+
+      // Production: drop console.log / info / debug calls so DevTools cannot surface API payloads from stray logging.
+      if (process.env.NODE_ENV === "production") {
+        const minimizers = webpackConfig.optimization?.minimizer || [];
+        for (const plugin of minimizers) {
+          if (plugin?.constructor?.name !== "TerserPlugin") continue;
+          const opts = plugin.options || {};
+          const terserOptions = opts.terserOptions || {};
+          const compress = terserOptions.compress || {};
+          const prev = Array.isArray(compress.pure_funcs) ? compress.pure_funcs : [];
+          plugin.options = {
+            ...opts,
+            terserOptions: {
+              ...terserOptions,
+              compress: {
+                ...compress,
+                pure_funcs: [
+                  ...prev,
+                  "console.log",
+                  "console.info",
+                  "console.debug",
+                ],
+              },
+            },
+          };
+        }
+      }
+
       return webpackConfig;
     },
   },
