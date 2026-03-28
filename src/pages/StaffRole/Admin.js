@@ -111,6 +111,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Pre-Registered Accounts', categoryId: 'admin-gameworld', collapseKey: 'preregisterAccounts', keywords: ['pre-register', 'preregister', 'emails', 'launch list'] },
   { label: 'Booze Run Rotation', categoryId: 'admin-gameworld', collapseKey: 'boozeRun', keywords: ['booze', 'run', 'rotation', 'prices'] },
   { label: 'Slots Draw', categoryId: 'admin-gameworld', collapseKey: 'slotsDraw', keywords: ['slots', 'draw', 'lottery'] },
+  { label: 'Crack the Safe jackpot', categoryId: 'admin-gameworld', collapseKey: 'crackSafeJackpot', keywords: ['crack', 'safe', 'jackpot', 'pot', 'lower'] },
   { label: 'State Heads', categoryId: 'admin-gameworld', collapseKey: 'stateHeads', keywords: ['state', 'heads', 'family', 'territory'] },
   { label: 'Release soft-launch', categoryId: 'admin-gameworld', collapseKey: 'releaseSoftLaunch', keywords: ['release', 'soft', 'launch', 'pvp', 'kill', 'game pass'] },
   { label: 'Reset Racket Cooldown', categoryId: 'admin-gameworld', collapseKey: 'racketReset', keywords: ['racket', 'cooldown', 'reset', 'family'] },
@@ -285,6 +286,10 @@ export default function Admin() {
   const [npcCount, setNpcCount] = useState(10);
   const [forceOnlineInfo, setForceOnlineInfo] = useState(null);
   const [boozeRotationSeconds, setBoozeRotationSeconds] = useState(null);
+  const [crackSafeInfo, setCrackSafeInfo] = useState(null);
+  const [crackSafeJackpotInput, setCrackSafeJackpotInput] = useState('');
+  const [crackSafeJackpotLoading, setCrackSafeJackpotLoading] = useState(false);
+  const [crackSafeJackpotSaving, setCrackSafeJackpotSaving] = useState(false);
   const [ranks, setRanks] = useState([]);
   const [cars, setCars] = useState([]);
   const [bgTestCount, setBgTestCount] = useState(2);
@@ -1187,6 +1192,39 @@ export default function Admin() {
       toast.success(res.data?.message || 'Slots cooldowns cleared');
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to clear cooldowns');
+    }
+  };
+
+  const fetchCrackSafeJackpot = async () => {
+    setCrackSafeJackpotLoading(true);
+    try {
+      const res = await api.get('/admin/crack-safe/jackpot');
+      setCrackSafeInfo(res.data);
+      if (res.data?.jackpot != null) {
+        setCrackSafeJackpotInput(String(res.data.jackpot));
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load Crack the Safe jackpot');
+    } finally {
+      setCrackSafeJackpotLoading(false);
+    }
+  };
+
+  const handleSetCrackSafeJackpot = async () => {
+    const n = parseInt(String(crackSafeJackpotInput).replace(/\D/g, ''), 10);
+    if (Number.isNaN(n) || n < 0) {
+      toast.error('Enter a valid amount (0 or more)');
+      return;
+    }
+    setCrackSafeJackpotSaving(true);
+    try {
+      const res = await api.post('/admin/crack-safe/set-jackpot', { jackpot: n });
+      toast.success(res.data?.message || 'Jackpot updated');
+      await fetchCrackSafeJackpot();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to set jackpot');
+    } finally {
+      setCrackSafeJackpotSaving(false);
     }
   };
 
@@ -5069,6 +5107,73 @@ export default function Admin() {
               <BtnSecondary onClick={handleSlotsDrawReset}>Reset to default (3h)</BtnSecondary>
               <BtnSecondary onClick={handleSlotsClearCooldowns}>Clear slots cooldowns</BtnSecondary>
             </div>
+          </div>
+        )}
+        </div>
+
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Lock}
+          title="Crack the Safe jackpot"
+          badge={
+            crackSafeInfo != null ? (
+              <span className="text-[10px] font-heading text-yellow-400">${Number(crackSafeInfo.jackpot).toLocaleString()}</span>
+            ) : (
+              <span className="text-[10px] text-mutedForeground font-heading">Global pot</span>
+            )
+          }
+          isCollapsed={collapsed.crackSafeJackpot}
+          onToggle={() => {
+            toggleSection('crackSafeJackpot');
+            if (collapsed.crackSafeJackpot) fetchCrackSafeJackpot();
+          }}
+        />
+        {!collapsed.crackSafeJackpot && (
+          <div className="p-3 space-y-2">
+            <p className="text-[10px] text-mutedForeground">
+              Set the global jackpot shown on Crack the Safe (lowers or raises the pot without a win). Code default seed is shown for reference.
+            </p>
+            {crackSafeJackpotLoading ? (
+              <p className="text-xs text-mutedForeground">Loading...</p>
+            ) : crackSafeInfo ? (
+              <div className="space-y-2">
+                <p className="text-[10px] text-mutedForeground">
+                  Total attempts (all-time): <span className="text-foreground font-heading">{Number(crackSafeInfo.total_attempts || 0).toLocaleString()}</span>
+                  {' · '}
+                  Code seed default:{' '}
+                  <span className="text-foreground font-heading">${Number(crackSafeInfo.seed_default || 0).toLocaleString()}</span>
+                </p>
+                <div className="flex flex-wrap items-end gap-2">
+                  <div>
+                    <label className="text-[9px] text-mutedForeground uppercase font-heading block mb-1">New jackpot ($)</label>
+                    <FormattedNumberInput
+                      value={crackSafeJackpotInput}
+                      onChange={(v) => setCrackSafeJackpotInput(v)}
+                      className="w-44 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none tabular-nums"
+                    />
+                  </div>
+                  <BtnPrimary onClick={handleSetCrackSafeJackpot} disabled={crackSafeJackpotSaving}>
+                    {crackSafeJackpotSaving ? '...' : 'Apply'}
+                  </BtnPrimary>
+                  <BtnSecondary
+                    type="button"
+                    onClick={() => {
+                      if (crackSafeInfo?.seed_default != null) {
+                        setCrackSafeJackpotInput(String(crackSafeInfo.seed_default));
+                      }
+                    }}
+                  >
+                    Use seed default
+                  </BtnSecondary>
+                  <BtnSecondary type="button" onClick={fetchCrackSafeJackpot}>
+                    Refresh
+                  </BtnSecondary>
+                </div>
+              </div>
+            ) : (
+              <BtnPrimary onClick={fetchCrackSafeJackpot}>Load jackpot</BtnPrimary>
+            )}
           </div>
         )}
         </div>

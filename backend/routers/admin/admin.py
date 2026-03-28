@@ -189,6 +189,10 @@ class AdminSetCasinoMaxBetRequest(BaseModel):
     max_bet: int
 
 
+class CrackSafeJackpotSetRequest(BaseModel):
+    jackpot: int = Field(ge=0, description="New Crack the Safe jackpot in dollars")
+
+
 class ForumMuteRequest(BaseModel):
     target_username: str
     duration_hours: Optional[int] = None  # set one of duration_hours, duration_days, or permanent
@@ -281,6 +285,9 @@ def register(router):
     get_active_game_event_async = srv.get_active_game_event_async
     get_override_event_id = srv.get_override_event_id
     GAME_EVENTS = srv.GAME_EVENTS
+
+    from routers.money import crack_safe as _crack_safe_mod
+    from routers.money.crack_safe import SAFE_JACKPOT_SEED as _CRACK_SAFE_JACKPOT_SEED
 
     @router.post("/admin/ghost-mode")
     async def admin_toggle_ghost_mode(current_user: dict = Depends(get_current_user)):
@@ -862,6 +869,55 @@ def register(router):
             {"$unset": {"slots_cooldown_until": ""}},
         )
         return {"message": f"Slots cooldown cleared for {result.modified_count} user(s). They are eligible for the next draw."}
+
+    @router.get("/admin/crack-safe/jackpot")
+    async def admin_crack_safe_jackpot_get(current_user: dict = Depends(get_current_user)):
+        """Current Crack the Safe global jackpot (safe_game document)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        safe = await _crack_safe_mod._get_or_create_safe()
+        return {
+            "jackpot": int(safe.get("jackpot") or 0),
+            "seed_default": _CRACK_SAFE_JACKPOT_SEED,
+            "total_attempts": int(safe.get("total_attempts") or 0),
+        }
+
+    @router.post("/admin/crack-safe/set-jackpot")
+    async def admin_crack_safe_jackpot_set(
+        body: CrackSafeJackpotSetRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Set the global Crack the Safe jackpot (e.g. lower the pot without a win)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        await _crack_safe_mod._get_or_create_safe()
+        new_j = int(body.jackpot)
+        await db.safe_game.update_one({}, {"$set": {"jackpot": new_j}})
+        return {
+            "message": f"Crack the Safe jackpot set to ${new_j:,}.",
+            "jackpot": new_j,
+        }
+
+    @router.post("/admin/gauntlet/wipe-user-scores")
+    async def admin_gauntlet_wipe_user_scores(
+        target_username: str,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Delete Flappy Gangster (gauntlet) leaderboard rows and gauntlet minigame_plays for a user."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        username_pattern = _username_pattern((target_username or "").strip())
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = target["id"]
+        ga = await db.gauntlet_scores.delete_many({"user_id": uid})
+        mgp = await db.minigame_plays.delete_many({"user_id": uid, "game": "gauntlet"})
+        return {
+            "message": f"Wiped Flappy Gangster data for {target.get('username')}",
+            "gauntlet_scores_deleted": ga.deleted_count,
+            "minigame_plays_gauntlet_deleted": mgp.deleted_count,
+        }
 
     @router.post("/admin/cars/delete-all")
     async def admin_delete_all_cars(current_user: dict = Depends(get_current_user)):

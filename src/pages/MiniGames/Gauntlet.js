@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { toast } from "sonner";
 import api, { getApiErrorMessage, refreshUser } from "../../utils/api";
 import styles from "../../styles/noir.module.css";
 
@@ -877,6 +878,7 @@ export default function Gauntlet() {
   const lastTimeRef = useRef(null);
   const accumRef = useRef(0);
   const animTickRef = useRef(null);
+  const gauntletSessionIdRef = useRef(null);
 
   stateRef.current = gameState;
   birdYRef.current = birdY;
@@ -922,12 +924,23 @@ export default function Gauntlet() {
 
   const claimReward = useCallback(async (finalScore) => {
     if (claimStatus.state === "claiming" || claimStatus.state === "claimed") return;
+    const runSessionId = gauntletSessionIdRef.current;
+    if (!runSessionId) {
+      setClaimStatus({
+        state: "error", cash: 0, respect: 0,
+        message: "Run session missing. Refresh the page and try again.",
+      });
+      return;
+    }
     setClaimStatus({ state: "claiming", cash: 0, respect: 0, message: "" });
     try {
       const res = await api.post("/gauntlet/claim", {
-        score: Number(finalScore || 0), theme: themeId, speed: speedId,
+        score: Number(finalScore || 0),
+        session_id: runSessionId,
+        theme: themeId, speed: speedId,
         difficulty: difficultyId, character: characterId,
       });
+      if (gauntletSessionIdRef.current === runSessionId) gauntletSessionIdRef.current = null;
       const cash = Number(res.data?.cash_awarded || 0);
       const respect = Number(res.data?.respect_awarded || 0);
       if (res.data?.money != null) { setMoney(Number(res.data.money)); refreshUser(Number(res.data.money)); }
@@ -938,6 +951,7 @@ export default function Gauntlet() {
       setClaimStatus({ state: "claimed", cash, respect, message: (parts.length ? `Claimed ${parts.join(" & ")}` : "No reward") + playsMsg });
       loadLeaderboard(lbPeriod);
     } catch (e) {
+      if (gauntletSessionIdRef.current === runSessionId) gauntletSessionIdRef.current = null;
       setClaimStatus({ state: "error", cash: 0, respect: 0, message: getApiErrorMessage(e) });
     }
   }, [claimStatus.state, lbPeriod, loadLeaderboard, themeId, speedId, difficultyId, characterId]);
@@ -959,14 +973,29 @@ export default function Gauntlet() {
 
   const jump = useCallback(() => {
     if (stateRef.current === "idle") {
-      setClaimStatus({ state: "idle", cash: 0, message: "" });
-      setGameState("playing");
-      setGameFrame(prev => ({
-        ...prev, birdVel: JUMP_FORCE,
-        pipes: [{ x: VIEW_W + 80, topHeight: 100 + Math.random() * 200, scored: false }],
-        score: 0, bgOffset: 0,
-      }));
-      tickRef.current = 0;
+      void (async () => {
+        try {
+          const r = await api.post("/gauntlet/start", {
+            theme: themeId, speed: speedId, difficulty: difficultyId,
+          });
+          const sid = r.data?.session_id;
+          if (!sid) {
+            toast.error("Could not start run. Try again.");
+            return;
+          }
+          gauntletSessionIdRef.current = sid;
+          setClaimStatus({ state: "idle", cash: 0, message: "" });
+          setGameState("playing");
+          setGameFrame(prev => ({
+            ...prev, birdVel: JUMP_FORCE,
+            pipes: [{ x: VIEW_W + 80, topHeight: 100 + Math.random() * 200, scored: false }],
+            score: 0, bgOffset: 0,
+          }));
+          tickRef.current = 0;
+        } catch (e) {
+          toast.error(getApiErrorMessage(e));
+        }
+      })();
       return;
     }
     if (stateRef.current === "playing") {
@@ -977,7 +1006,7 @@ export default function Gauntlet() {
       setGameFrame(initialGameFrame());
       setClaimStatus({ state: "idle", cash: 0, respect: 0, message: "" });
     }
-  }, []);
+  }, [themeId, speedId, difficultyId]);
 
   const theme = THEMES.find(t => t.id === themeId) || THEMES[0];
   const speedOpt = SPEED_OPTIONS.find(s => s.id === speedId) || SPEED_OPTIONS[1];
