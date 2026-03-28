@@ -754,13 +754,15 @@ def register(router):
         except HTTPException:
             raise
         except Exception as e:
+            err_ref = f"L-{uuid.uuid4().hex[:8]}"
             logging.exception(
-                "Login 500 for login=%s exception=%s: %s",
+                "Login 500 ref=%s login=%s exception=%s: %s",
+                err_ref,
                 login_input or "(empty)",
                 type(e).__name__,
                 e,
             )
-            raise HTTPException(status_code=500, detail="Login failed. Please try again or contact support.")
+            raise HTTPException(status_code=500, detail=f"Login failed. Please try again or contact support. Ref: {err_ref}")
 
     @router.post("/auth/login-staff")
     async def login_staff(user_data: UserLogin, request: Request):
@@ -772,8 +774,9 @@ def register(router):
         except HTTPException:
             raise
         except Exception as e:
-            logging.exception("Login-staff 500 for login=%s: %s", login_input or "(empty)", e)
-            raise HTTPException(status_code=500, detail="Login failed. Please try again.")
+            err_ref = f"S-{uuid.uuid4().hex[:8]}"
+            logging.exception("Login-staff 500 ref=%s login=%s: %s", err_ref, login_input or "(empty)", e)
+            raise HTTPException(status_code=500, detail=f"Login failed. Please try again. Ref: {err_ref}")
 
     async def _do_login(user_data: UserLogin, request: Request, login_input: str, now: datetime, staff_route: bool = False):
         # Require non-empty email/username and password
@@ -856,9 +859,17 @@ def register(router):
         # Check lockout (by account email)
         lockout = await db.login_lockouts.find_one({"email": email_clean}, {"_id": 0, "locked_until": 1, "failed_count": 1})
         if lockout:
-            locked_until = lockout.get("locked_until")
-            if isinstance(locked_until, str):
-                locked_until = datetime.fromisoformat(locked_until.replace("Z", "+00:00"))
+            locked_until_raw = lockout.get("locked_until")
+            locked_until = None
+            if isinstance(locked_until_raw, datetime):
+                locked_until = locked_until_raw if locked_until_raw.tzinfo else locked_until_raw.replace(tzinfo=timezone.utc)
+            elif isinstance(locked_until_raw, str):
+                try:
+                    locked_until = datetime.fromisoformat(locked_until_raw.replace("Z", "+00:00"))
+                    if locked_until.tzinfo is None:
+                        locked_until = locked_until.replace(tzinfo=timezone.utc)
+                except Exception:
+                    locked_until = None
             if locked_until and locked_until > now:
                 wait_sec = int((locked_until - now).total_seconds())
                 wait_min = (wait_sec + 59) // 60
@@ -970,7 +981,7 @@ def register(router):
             )
         token = create_access_token({
             "sub": user["id"],
-            "v": user.get("token_version", 0),
+            "v": int(user.get("token_version") or 0),
             "email": user.get("email") or "",
             "session_id": session_id,
             "username": user.get("username") or "",
