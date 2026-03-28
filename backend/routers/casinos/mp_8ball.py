@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone, timedelta
-from typing import Optional, List, Dict, Tuple
+from typing import Optional, List, Dict, Tuple, Any
 import math
 import random
 import uuid
@@ -554,6 +554,123 @@ def _maybe_finalize_resolving(game: dict) -> dict:
     return game
 
 
+def _apply_pool_shot_outcome(
+    players: List[dict],
+    idx: int,
+    shooter_uid: str,
+    sim: dict,
+    table_state: dict,
+) -> Dict[str, Any]:
+    """
+    Apply WPA-style rules after a simulated shot. Mutates `players` and `table_state` in place.
+    Returns keys: winner_uid, result_reason, next_turn_idx (None if game ended), foul, keep_turn,
+    shot_replay, replay_duration_ms, sim_duration_ms.
+    """
+    if len(players) < 2:
+        raise ValueError("Need 2 players")
+    opp_idx = (idx + 1) % len(players)
+    shooter = players[idx]
+    opponent = players[opp_idx]
+    new_balls = sim["balls"]
+    shot_replay = sim.get("shot_replay") or {}
+    pocketed = [n for n in sim["pocketed_numbers"] if n != 0]
+    first_contact = sim["first_contact"]
+    cue_pocketed = bool(sim["cue_pocketed"])
+
+    shooter_group = shooter.get("group")
+    opponent_group = opponent.get("group")
+    solids = [n for n in pocketed if 1 <= n <= 7]
+    stripes = [n for n in pocketed if 9 <= n <= 15]
+    black_pocketed = 8 in pocketed
+
+    if shooter_group is None and opponent_group is None:
+        if solids and not stripes:
+            shooter_group, opponent_group = "solid", "stripe"
+        elif stripes and not solids:
+            shooter_group, opponent_group = "stripe", "solid"
+        shooter["group"] = shooter_group
+        opponent["group"] = opponent_group
+
+    legal_target = None
+    if shooter_group in ("solid", "stripe"):
+        if _remaining_group_balls(new_balls, shooter_group) > 0:
+            legal_target = shooter_group
+        else:
+            legal_target = "black"
+
+    foul = False
+    if cue_pocketed:
+        foul = True
+    if first_contact is None:
+        foul = True
+    else:
+        first_kind = "solid" if 1 <= first_contact <= 7 else "stripe" if 9 <= first_contact <= 15 else "black" if first_contact == 8 else "cue"
+        if legal_target and first_kind != legal_target:
+            foul = True
+    if shooter_group in ("solid", "stripe"):
+        for n in pocketed:
+            if n == 8:
+                continue
+            if 1 <= n <= 7 and shooter_group != "solid":
+                foul = True
+            if 9 <= n <= 15 and shooter_group != "stripe":
+                foul = True
+
+    winner_uid = None
+    result_reason = None
+    keep_turn = False
+
+    if black_pocketed:
+        can_pot_black = (legal_target == "black")
+        if can_pot_black and not foul:
+            winner_uid = shooter_uid
+            result_reason = "8-ball legally potted"
+        else:
+            winner_uid = opponent.get("user_id")
+            result_reason = "8-ball foul"
+    else:
+        if not foul:
+            if shooter_group == "solid":
+                keep_turn = len(solids) > 0
+            elif shooter_group == "stripe":
+                keep_turn = len(stripes) > 0
+            else:
+                keep_turn = len(pocketed) > 0
+        else:
+            shooter["fouls"] = int(shooter.get("fouls") or 0) + 1
+            keep_turn = False
+
+    table_state["balls"] = new_balls
+    table_state["shot_count"] = int(table_state.get("shot_count") or 0) + 1
+    table_state["last_shot_replay"] = shot_replay
+    table_state["last_shot_replay_shot_count"] = int(table_state.get("shot_count") or 0)
+    table_state["balls_settled"] = bool(sim.get("balls_settled", True))
+    hist = list(table_state.get("history") or [])
+    hist.append({
+        "at": _now_iso(),
+        "shooter_id": shooter_uid,
+        "first_contact": first_contact,
+        "pocketed": pocketed,
+        "foul": foul,
+        "cue_pocketed": cue_pocketed,
+    })
+    table_state["history"] = hist[-40:]
+
+    replay_duration_ms = int((shot_replay or {}).get("duration_ms") or 0)
+    sim_duration_ms = int(sim.get("sim_duration_ms") or replay_duration_ms)
+    next_turn_idx = None if winner_uid else (idx if keep_turn else opp_idx)
+    return {
+        "winner_uid": winner_uid,
+        "result_reason": result_reason,
+        "next_turn_idx": next_turn_idx,
+        "foul": foul,
+        "keep_turn": keep_turn,
+        "shot_replay": shot_replay,
+        "replay_duration_ms": replay_duration_ms,
+        "sim_duration_ms": sim_duration_ms,
+    }
+
+
 def _public_game(game: dict, viewer_uid: Optional[str] = None) -> dict:
     g = {k: v for k, v in game.items() if k != "_id"}
     g["viewer_user_id"] = viewer_uid
@@ -990,93 +1107,12 @@ def register(router):
             spin_x=input_spin_x,
             spin_y=input_spin_y,
         )
-        new_balls = sim["balls"]
-        shot_replay = sim.get("shot_replay") or {}
-        pocketed = [n for n in sim["pocketed_numbers"] if n != 0]
-        first_contact = sim["first_contact"]
-        cue_pocketed = bool(sim["cue_pocketed"])
-
-        shooter_group = shooter.get("group")
-        opponent_group = opponent.get("group")
-        solids = [n for n in pocketed if 1 <= n <= 7]
-        stripes = [n for n in pocketed if 9 <= n <= 15]
-        black_pocketed = 8 in pocketed
-
-        # Assign groups if still open and only one category was pocketed.
-        if shooter_group is None and opponent_group is None:
-            if solids and not stripes:
-                shooter_group, opponent_group = "solid", "stripe"
-            elif stripes and not solids:
-                shooter_group, opponent_group = "stripe", "solid"
-            shooter["group"] = shooter_group
-            opponent["group"] = opponent_group
-
-        # Determine legal target.
-        legal_target = None
-        if shooter_group in ("solid", "stripe"):
-            if _remaining_group_balls(new_balls, shooter_group) > 0:
-                legal_target = shooter_group
-            else:
-                legal_target = "black"
-
-        foul = False
-        if cue_pocketed:
-            foul = True
-        if first_contact is None:
-            foul = True
-        else:
-            first_kind = "solid" if 1 <= first_contact <= 7 else "stripe" if 9 <= first_contact <= 15 else "black" if first_contact == 8 else "cue"
-            if legal_target and first_kind != legal_target:
-                foul = True
-        # Open table: contacting the 8 first is legal; pocketing the 8 early is handled below.
-        if shooter_group in ("solid", "stripe"):
-            for n in pocketed:
-                if n == 8:
-                    continue
-                if 1 <= n <= 7 and shooter_group != "solid":
-                    foul = True
-                if 9 <= n <= 15 and shooter_group != "stripe":
-                    foul = True
-
-        winner_uid = None
-        result_reason = None
-        keep_turn = False
-
-        if black_pocketed:
-            can_pot_black = (legal_target == "black")
-            if can_pot_black and not foul:
-                winner_uid = uid
-                result_reason = "8-ball legally potted"
-            else:
-                winner_uid = opponent.get("user_id")
-                result_reason = "8-ball foul"
-        else:
-            if not foul:
-                if shooter_group == "solid":
-                    keep_turn = len(solids) > 0
-                elif shooter_group == "stripe":
-                    keep_turn = len(stripes) > 0
-                else:
-                    keep_turn = len(pocketed) > 0
-            else:
-                shooter["fouls"] = int(shooter.get("fouls") or 0) + 1
-                keep_turn = False
-
-        table_state["balls"] = new_balls
-        table_state["shot_count"] = int(table_state.get("shot_count") or 0) + 1
-        table_state["last_shot_replay"] = shot_replay
-        table_state["last_shot_replay_shot_count"] = int(table_state.get("shot_count") or 0)
-        table_state["balls_settled"] = bool(sim.get("balls_settled", True))
-        hist = list(table_state.get("history") or [])
-        hist.append({
-            "at": _now_iso(),
-            "shooter_id": uid,
-            "first_contact": first_contact,
-            "pocketed": pocketed,
-            "foul": foul,
-            "cue_pocketed": cue_pocketed,
-        })
-        table_state["history"] = hist[-40:]
+        out = _apply_pool_shot_outcome(players, idx, shooter_uid, sim, table_state)
+        winner_uid = out["winner_uid"]
+        result_reason = out["result_reason"]
+        next_turn_idx = out["next_turn_idx"]
+        replay_duration_ms = out["replay_duration_ms"]
+        sim_duration_ms = out["sim_duration_ms"]
 
         updates = {
             "players": players,
@@ -1090,9 +1126,6 @@ def register(router):
             updates["result_reason"] = result_reason
             updates["completed_at"] = _now_iso()
         else:
-            next_turn_idx = idx if keep_turn else opp_idx
-            replay_duration_ms = int((shot_replay or {}).get("duration_ms") or 0)
-            sim_duration_ms = int(sim.get("sim_duration_ms") or replay_duration_ms)
             # Keep authoritative lock until replay window completes.
             hold_ms = max(450, max(replay_duration_ms, sim_duration_ms) + 120)
             updates["phase"] = "resolving"
@@ -1105,7 +1138,7 @@ def register(router):
 
         # Settlement / progression.
         if winner_uid:
-            loser_uid = opponent.get("user_id") if winner_uid == uid else uid
+            loser_uid = opponent.get("user_id") if winner_uid == shooter_uid else shooter_uid
             g_done = dict(game)
             g_done["table_state"] = table_state
             g_done["status"] = "completed"
@@ -1241,6 +1274,8 @@ def register(router):
         shooter = players[idx]
         if shooter.get("user_id") != MP_8BALL_AI_ID:
             return
+        opp_idx = (idx + 1) % len(players)
+        opponent = players[opp_idx]
         ts = dict(game.get("table_state") or {})
         balls = list(ts.get("balls") or [])
         if int(ts.get("shot_count") or 0) == 0 and bool(ts.get("awaiting_break_placement")):
@@ -1253,7 +1288,7 @@ def register(router):
                     break
             ts["balls"] = balls
             ts["awaiting_break_placement"] = False
-            game["table_state"] = ts
+        balls = list(ts.get("balls") or [])
         cue = next((b for b in balls if b.get("number") == 0), None)
         targets = [b for b in balls if not b.get("pocketed") and b.get("number") not in (0, 8)]
         if not cue or not targets:
@@ -1264,8 +1299,6 @@ def register(router):
             target = min(targets, key=lambda b: math.hypot((b["x"] - cue["x"]), (b["y"] - cue["y"])))
         ang = math.atan2((target["y"] - cue["y"]), (target["x"] - cue["x"]))
         req = PoolShootRequest(angle=ang, power=0.65 + _rng.random() * 0.25, spin_x=0.0, spin_y=0.0)
-        fake_user = {"id": MP_8BALL_AI_ID}
-        # Reuse core shot logic by directly applying here.
         sim = _simulate_shot(
             balls,
             cue_angle=float(req.angle),
@@ -1273,18 +1306,42 @@ def register(router):
             spin_x=float(req.spin_x),
             spin_y=float(req.spin_y),
         )
-        game["table_state"]["balls"] = sim["balls"]
-        game["table_state"]["shot_count"] = int(game["table_state"].get("shot_count") or 0) + 1
-        game["table_state"]["last_shot_replay"] = sim.get("shot_replay") or {}
-        game["table_state"]["last_shot_replay_shot_count"] = int(game["table_state"].get("shot_count") or 0)
-        game["table_state"]["balls_settled"] = bool(sim.get("balls_settled", True))
-        game["current_turn_index"] = 0
-        game["turn_started_at"] = _now_iso()
-        game["updated_at"] = _now_iso()
-        await db.mp_8ball_games.update_one(
-            {"id": game["id"], "status": "in_progress"},
-            {"$set": {"table_state": game["table_state"], "current_turn_index": game["current_turn_index"], "turn_started_at": game["turn_started_at"], "updated_at": game["updated_at"]}},
-        )
+        out = _apply_pool_shot_outcome(players, idx, MP_8BALL_AI_ID, sim, ts)
+        winner_uid = out["winner_uid"]
+        result_reason = out["result_reason"]
+        next_turn_idx = out["next_turn_idx"]
+        replay_duration_ms = out["replay_duration_ms"]
+        sim_duration_ms = out["sim_duration_ms"]
+        game_id = game["id"]
+
+        updates: Dict[str, Any] = {
+            "players": players,
+            "table_state": ts,
+            "updated_at": _now_iso(),
+        }
+        if winner_uid:
+            updates["status"] = "completed"
+            updates["phase"] = "settled"
+            updates["winner_user_id"] = winner_uid
+            updates["result_reason"] = result_reason
+            updates["completed_at"] = _now_iso()
+        else:
+            hold_ms = max(450, max(replay_duration_ms, sim_duration_ms) + 120)
+            updates["phase"] = "resolving"
+            updates["pending_turn_index"] = next_turn_idx
+            updates["resolve_at"] = (datetime.now(timezone.utc) + timedelta(milliseconds=hold_ms)).isoformat()
+            updates["turn_started_at"] = game.get("turn_started_at") or _now_iso()
+            ts["balls_settled"] = False
+
+        await db.mp_8ball_games.update_one({"id": game_id, "status": "in_progress"}, {"$set": updates})
+
+        if winner_uid:
+            loser_uid = opponent.get("user_id") if winner_uid == MP_8BALL_AI_ID else MP_8BALL_AI_ID
+            g_done = dict(game)
+            g_done["table_state"] = ts
+            g_done["status"] = "completed"
+            g_done["winner_user_id"] = winner_uid
+            await _apply_pool_match_rewards(db, g_done, winner_uid, loser_uid)
 
     @router.get("/casino/mp-8ball/vs-ai/game")
     async def pool_ai_get_game(current_user: dict = Depends(get_current_user_verified)):
