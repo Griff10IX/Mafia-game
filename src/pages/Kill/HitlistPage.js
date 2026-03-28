@@ -491,11 +491,12 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                     <tr key={item.id ?? `hitlist-${index}`} className="hover:bg-zinc-800/30 transition-colors">
                       <td className="py-2 px-3">
                         <div className="flex items-center gap-1.5">
-                          {item.target_type === 'npc' ? (
-                            <span className="text-foreground font-bold text-xs">{item.target_username ?? ''}</span>
-                          ) : (
-                            <Link to={`/profile/${encodeURIComponent(item.target_username ?? '')}`} className="text-primary hover:underline font-bold text-xs">{item.target_username ?? ''}</Link>
-                          )}
+                          <Link
+                            to={`/profile/${encodeURIComponent(item.target_username ?? '')}`}
+                            className={`font-bold text-xs ${item.target_type === 'npc' ? 'text-foreground hover:text-primary' : 'text-primary hover:underline'}`}
+                          >
+                            {item.target_username ?? ''}
+                          </Link>
                           <Link
                             to={`/kill/attack?target=${encodeURIComponent(item.target_username ?? '')}${item.target_type === 'npc' ? '&hitlist_npc=1' : ''}`}
                             className="shrink-0 p-1 rounded hover:bg-primary/20 text-primary transition-colors"
@@ -576,11 +577,12 @@ const ActiveBountiesCard = ({ list, user, onBuyOffUser, buyingOffTarget }) => {
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 mb-1">
-                        {item.target_type === 'npc' ? (
-                          <span className="text-foreground font-heading font-bold text-xs">{item.target_username ?? ''}</span>
-                        ) : (
-                          <Link to={`/profile/${encodeURIComponent(item.target_username ?? '')}`} className="text-primary hover:underline font-heading font-bold text-xs">{item.target_username ?? ''}</Link>
-                        )}
+                        <Link
+                          to={`/profile/${encodeURIComponent(item.target_username ?? '')}`}
+                          className={`font-heading font-bold text-xs ${item.target_type === 'npc' ? 'text-foreground hover:text-primary' : 'text-primary hover:underline'}`}
+                        >
+                          {item.target_username ?? ''}
+                        </Link>
                         <Link
                           to={`/kill/attack?target=${encodeURIComponent(item.target_username ?? '')}${item.target_type === 'npc' ? '&hitlist_npc=1' : ''}`}
                           className="shrink-0 p-1 rounded hover:bg-primary/20 text-primary transition-colors"

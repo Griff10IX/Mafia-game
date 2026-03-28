@@ -335,77 +335,103 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
 
         # Ball–ball: separate overlaps for all pairs (fixes rack penetration), then elastic
         # impulse on pass 0 only (equal mass, 1D along contact normal). Friction runs after.
+        # On pass 0, process (cue, other) pairs in ascending center distance so first_contact matches
+        # the ball the cue hits first when multiple overlaps occur in one step (reduces false fouls).
         min_dist = MP_8BALL_BALL_R * 2.0
         for collision_pass in range(MP_8BALL_COLLISION_PASSES):
             active = _active_balls(out)
-            for i in range(len(active)):
-                for j in range(i + 1, len(active)):
-                    a = active[i]
-                    b = active[j]
+            if collision_pass == 0:
+                cue_idx = next((i for i, b in enumerate(active) if b.get("number") == 0), None)
+                pair_iter: List[Tuple[int, int]]
+                if cue_idx is not None:
+                    cue_b = active[cue_idx]
+                    cue_pairs: List[Tuple[float, int, int]] = []
+                    for j in range(len(active)):
+                        if j == cue_idx:
+                            continue
+                        ob = active[j]
+                        d = math.hypot(ob["x"] - cue_b["x"], ob["y"] - cue_b["y"])
+                        i0, j0 = (cue_idx, j) if cue_idx < j else (j, cue_idx)
+                        cue_pairs.append((d, i0, j0))
+                    cue_pairs.sort(key=lambda t: t[0])
+                    ordered: List[Tuple[int, int]] = [(t[1], t[2]) for t in cue_pairs]
+                    seen = set(ordered)
+                    for i in range(len(active)):
+                        for j in range(i + 1, len(active)):
+                            if (i, j) not in seen:
+                                ordered.append((i, j))
+                    pair_iter = ordered
+                else:
+                    pair_iter = [(i, j) for i in range(len(active)) for j in range(i + 1, len(active))]
+            else:
+                pair_iter = [(i, j) for i in range(len(active)) for j in range(i + 1, len(active))]
+            for i, j in pair_iter:
+                a = active[i]
+                b = active[j]
+                dx = b["x"] - a["x"]
+                dy = b["y"] - a["y"]
+                dist = math.hypot(dx, dy)
+                if dist < 1e-12:
+                    nx, ny = 1.0, 0.0
+                else:
+                    nx = dx / dist
+                    ny = dy / dist
+                if dist < min_dist:
+                    overlap = (min_dist - dist) * 0.5
+                    a["x"] -= nx * overlap
+                    a["y"] -= ny * overlap
+                    b["x"] += nx * overlap
+                    b["y"] += ny * overlap
                     dx = b["x"] - a["x"]
                     dy = b["y"] - a["y"]
                     dist = math.hypot(dx, dy)
-                    if dist < 1e-12:
-                        nx, ny = 1.0, 0.0
-                    else:
+                    if dist > 1e-12:
                         nx = dx / dist
                         ny = dy / dist
-                    if dist < min_dist:
-                        overlap = (min_dist - dist) * 0.5
-                        a["x"] -= nx * overlap
-                        a["y"] -= ny * overlap
-                        b["x"] += nx * overlap
-                        b["y"] += ny * overlap
-                        dx = b["x"] - a["x"]
-                        dy = b["y"] - a["y"]
-                        dist = math.hypot(dx, dy)
-                        if dist > 1e-12:
-                            nx = dx / dist
-                            ny = dy / dist
-                    if collision_pass > 0:
-                        continue
-                    if dist > min_dist + 1e-7:
-                        continue
-                    a_imp = int(a.get("id") or 0) in impacted_ids
-                    b_imp = int(b.get("id") or 0) in impacted_ids
-                    rvx = b["vx"] - a["vx"]
-                    rvy = b["vy"] - a["vy"]
-                    vel_along_normal = rvx * nx + rvy * ny
-                    if vel_along_normal >= -1e-9:
-                        continue
-                    if not a_imp and not b_imp:
-                        continue
-                    impulse = -(1.0 + MP_8BALL_RESTITUTION) * vel_along_normal * 0.5
-                    ix = impulse * nx
-                    iy = impulse * ny
-                    a["vx"] -= ix
-                    a["vy"] -= iy
-                    b["vx"] += ix
-                    b["vy"] += iy
-                    impacted_ids.add(int(a.get("id") or 0))
-                    impacted_ids.add(int(b.get("id") or 0))
-                    strength = math.hypot(ix, iy)
-                    if a.get("number") == 0:
-                        a["vx"] += nx * MP_8BALL_SPIN_CARRY
-                        a["vy"] += ny * MP_8BALL_SPIN_CARRY
-                    if b.get("number") == 0:
-                        b["vx"] -= nx * MP_8BALL_SPIN_CARRY
-                        b["vy"] -= ny * MP_8BALL_SPIN_CARRY
-                    if strength > 0.02:
-                        band = "soft" if strength < 0.08 else "medium" if strength < 0.16 else "hard"
-                        replay_events.append(
-                            {
-                                "type": "collision",
-                                "t_ms": int((step + 1) * MP_8BALL_SIM_DT * 1000),
-                                "x": float((a["x"] + b["x"]) / 2.0),
-                                "y": float((a["y"] + b["y"]) / 2.0),
-                                "strength": float(strength),
-                                "band": band,
-                            }
-                        )
-                    if first_contact is None and (a.get("number") == 0 or b.get("number") == 0):
-                        other = b if a.get("number") == 0 else a
-                        first_contact = int(other.get("number") or 0)
+                if collision_pass > 0:
+                    continue
+                if dist > min_dist + 1e-7:
+                    continue
+                a_imp = int(a.get("id") or 0) in impacted_ids
+                b_imp = int(b.get("id") or 0) in impacted_ids
+                rvx = b["vx"] - a["vx"]
+                rvy = b["vy"] - a["vy"]
+                vel_along_normal = rvx * nx + rvy * ny
+                if vel_along_normal >= -1e-9:
+                    continue
+                if not a_imp and not b_imp:
+                    continue
+                impulse = -(1.0 + MP_8BALL_RESTITUTION) * vel_along_normal * 0.5
+                ix = impulse * nx
+                iy = impulse * ny
+                a["vx"] -= ix
+                a["vy"] -= iy
+                b["vx"] += ix
+                b["vy"] += iy
+                impacted_ids.add(int(a.get("id") or 0))
+                impacted_ids.add(int(b.get("id") or 0))
+                strength = math.hypot(ix, iy)
+                if a.get("number") == 0:
+                    a["vx"] += nx * MP_8BALL_SPIN_CARRY
+                    a["vy"] += ny * MP_8BALL_SPIN_CARRY
+                if b.get("number") == 0:
+                    b["vx"] -= nx * MP_8BALL_SPIN_CARRY
+                    b["vy"] -= ny * MP_8BALL_SPIN_CARRY
+                if strength > 0.02:
+                    band = "soft" if strength < 0.08 else "medium" if strength < 0.16 else "hard"
+                    replay_events.append(
+                        {
+                            "type": "collision",
+                            "t_ms": int((step + 1) * MP_8BALL_SIM_DT * 1000),
+                            "x": float((a["x"] + b["x"]) / 2.0),
+                            "y": float((a["y"] + b["y"]) / 2.0),
+                            "strength": float(strength),
+                            "band": band,
+                        }
+                    )
+                if first_contact is None and (a.get("number") == 0 or b.get("number") == 0):
+                    other = b if a.get("number") == 0 else a
+                    first_contact = int(other.get("number") or 0)
 
         for b in _active_balls(out):
             speed_now = math.hypot(b["vx"], b["vy"])
@@ -1289,33 +1315,14 @@ def register(router):
     @router.post("/casino/mp-8ball/vs-ai/start")
     async def pool_ai_start(current_user: dict = Depends(get_current_user_verified)):
         uid = current_user["id"]
-        # Forfeit any in-progress AI match (DNF = loss) before starting a new session.
-        old_rows = await db.mp_8ball_games.find(
-            {"mode": "vs_ai", "status": {"$in": ["waiting", "in_progress"]}, "owner_user_id": uid},
-            {"_id": 0},
-        ).to_list(50)
-        for og in old_rows:
-            oid = og.get("id")
-            if not oid:
-                continue
-            if og.get("status") == "in_progress":
-                await db.mp_8ball_games.update_one(
-                    {"id": oid},
-                    {
-                        "$set": {
-                            "status": "completed",
-                            "phase": "settled",
-                            "winner_user_id": MP_8BALL_AI_ID,
-                            "result_reason": "dnf",
-                            "completed_at": _now_iso(),
-                            "updated_at": _now_iso(),
-                        }
-                    },
-                )
-                g_done = await db.mp_8ball_games.find_one({"id": oid}, {"_id": 0})
-                await _apply_pool_match_rewards(db, g_done, MP_8BALL_AI_ID, uid)
-            else:
-                await db.mp_8ball_games.delete_one({"id": oid})
+        existing = await db.mp_8ball_games.find_one(
+            {"mode": "vs_ai", "owner_user_id": uid, "status": {"$in": ["waiting", "in_progress"]}},
+        )
+        if existing:
+            raise HTTPException(
+                status_code=409,
+                detail="You already have an AI match. Finish it or forfeit (Leave / Finish match) before starting a new one.",
+            )
         gid = f"ai8_{uuid.uuid4().hex[:12]}"
         game = {
             "id": gid,

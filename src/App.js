@@ -132,7 +132,9 @@ function ProfileRedirect() {
   const { username } = useParams();
   const location = useLocation();
   const search = location.search || '';
-  return <Navigate to={username ? `/account/profile/${username}${search}` : `/account/profile${search}`} replace />;
+  // Must encode: hitlist NPC usernames contain `#id` — raw `#` would start a URL fragment and drop the suffix.
+  const seg = username != null && username !== '' ? encodeURIComponent(username) : '';
+  return <Navigate to={seg ? `/account/profile/${seg}${search}` : `/account/profile${search}`} replace />;
 }
 function FamilyRedirect() {
   const { familyId } = useParams();

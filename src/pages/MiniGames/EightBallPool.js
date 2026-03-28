@@ -258,6 +258,74 @@ function rayToPocketCaptureFirst(ox, oy, dx, dy, w, h, pocketR) {
   return best;
 }
 
+/** Table-space unit direction (cos/sin of shot) — matches mp_8ball _simulate_shot. */
+function rayToInnerRectTableUnits(oxT, oyT, udx, udy) {
+  const minx = BALL_R;
+  const maxx = TABLE_W - BALL_R;
+  const miny = BALL_R;
+  const maxy = TABLE_H - BALL_R;
+  let wallDist = Infinity;
+  if (udx > 1e-12) wallDist = Math.min(wallDist, (maxx - oxT) / udx);
+  if (udx < -1e-12) wallDist = Math.min(wallDist, (minx - oxT) / udx);
+  if (udy > 1e-12) wallDist = Math.min(wallDist, (maxy - oyT) / udy);
+  if (udy < -1e-12) wallDist = Math.min(wallDist, (miny - oyT) / udy);
+  return wallDist;
+}
+
+function rayToPocketCaptureTableUnits(oxT, oyT, udx, udy, pocketR) {
+  let best = Infinity;
+  for (const [px, py] of POCKET_CENTERS_TABLE) {
+    const A = udx * udx + udy * udy;
+    if (A < 1e-20) continue;
+    const dx0 = oxT - px;
+    const dy0 = oyT - py;
+    const B = 2 * (dx0 * udx + dy0 * udy);
+    const C = dx0 * dx0 + dy0 * dy0 - pocketR * pocketR;
+    const disc = B * B - 4 * A * C;
+    if (disc < 0) continue;
+    const sd = Math.sqrt(disc);
+    const t1 = (-B - sd) / (2 * A);
+    const t2 = (-B + sd) / (2 * A);
+    for (const t of [t1, t2]) {
+      if (t <= 1e-8) continue;
+      const xt = oxT + t * udx;
+      const yt = oyT + t * udy;
+      if (Math.hypot(xt - px, yt - py) <= pocketR + 1e-5) best = Math.min(best, t);
+    }
+  }
+  return best;
+}
+
+/** Ray–circle in table space (same geometry as server ball–ball contact). */
+function rayCircleHitTable(oxT, oyT, udx, udy, bxT, byT, radius) {
+  const dx = oxT - bxT;
+  const dy = oyT - byT;
+  const b = 2 * ((udx * dx) + (udy * dy));
+  const c = (dx * dx) + (dy * dy) - (radius * radius);
+  const A = udx * udx + udy * udy;
+  const disc = (b * b) - (4 * A * c);
+  if (disc < 0) return null;
+  const sd = Math.sqrt(disc);
+  const t1 = (-b - sd) / (2 * A);
+  const t2 = (-b + sd) / (2 * A);
+  const candidates = [t1, t2].filter((t) => t > 1e-6);
+  if (!candidates.length) return null;
+  return Math.min(...candidates);
+}
+
+function reflectDirTableUnitWall(xT, yT, udx, udy) {
+  const eps = 1.2e-4;
+  const minx = BALL_R;
+  const maxx = TABLE_W - BALL_R;
+  const miny = BALL_R;
+  const maxy = TABLE_H - BALL_R;
+  let rdx = udx;
+  let rdy = udy;
+  if (Math.abs(xT - minx) < eps || Math.abs(xT - maxx) < eps) rdx = -rdx;
+  if (Math.abs(yT - miny) < eps || Math.abs(yT - maxy) < eps) rdy = -rdy;
+  return { rdx, rdy };
+}
+
 function reflectDirAtPoint(nx, ny, dx, dy, minX, maxX, minY, maxY) {
   let rdx = dx;
   let rdy = dy;
@@ -526,116 +594,113 @@ export default function EightBallPool() {
     if (!cue || !canAim) return { segments: [], ghost: null, objectLineWidth: 1.55 };
     const w = POOL_CANVAS_W;
     const h = POOL_CANVAS_H;
-    const cuePx = tableToCanvasX(cue.x, w);
-    const cuePy = tableToCanvasY(cue.y, h);
+    const m = PREVIEW_TABLE_MARGIN;
+    const fw = w - 2 * m;
+    const fh = h - 2 * m;
+    const pxPerMeter = (fw / TABLE_W + fh / TABLE_H) / 2;
     const a = (Number(angleDeg || 0) * Math.PI) / 180;
-    let dx = Math.cos(a);
-    let dy = Math.sin(a);
-    let ox = cuePx;
-    let oy = cuePy;
-    let remain = Math.max(40, previewDistance + (Number(power || 0) * 120));
+    let udx = Math.cos(a);
+    let udy = Math.sin(a);
+    let oxT = Number(cue.x);
+    let oyT = Number(cue.y);
+    let remain = Math.max(0.04, (previewDistance + (Number(power || 0) * 120)) / pxPerMeter);
     const segs = [];
     let ghost = null;
     let contactDone = false;
-    const { rx: brx, ry: bry } = ballRadiiPx(w, h);
-    const ballPxR = Math.max(brx, bry);
-    const hitRadius = ballPxR * 2.02;
-    /** Ball centers bounce at x∈[BALL_R,W-BALL_R], y∈[BALL_R,H-BALL_R] — not the felt edge (matches server). */
-    const minX = tableToCanvasX(BALL_R, w);
-    const maxX = tableToCanvasX(TABLE_W - BALL_R, w);
-    const minY = tableToCanvasY(BALL_R, h);
-    const maxY = tableToCanvasY(TABLE_H - BALL_R, h);
-    // Object-ball path: more segments + longer line as aim upgrades increase (rails off cushions).
+    const hitR = BALL_R * 2;
     const objectSegmentBudget = objectRailSegmentCap;
     const objectPathLength = 90 + (previewLevel * 14) + (previewTier * 48) + (Number(effPower || 0) * 95);
     const objectLineWidth = 1.55 + (previewTier * 0.52) + Math.min(2.85, previewLevel * 0.05);
+    const objectPathTable = objectPathLength / pxPerMeter;
+    const deflectTable = Math.min(4.2, Math.max(0.55, (62 + previewLevel * 6 + objectPathLength * 0.32) / pxPerMeter));
 
-    for (let segmentIndex = 0; segmentIndex < previewSegmentBudget && remain > 1; segmentIndex += 1) {
-      const wallDist = rayToTableWall(ox, oy, dx, dy, minX, maxX, minY, maxY);
-      const pocketDist = rayToPocketCaptureFirst(ox, oy, dx, dy, w, h, POCKET_R_TABLE);
+    const toSeg = (x1t, y1t, x2t, y2t, kind, lw) => {
+      const o = {
+        x1: tableToCanvasX(x1t, w),
+        y1: tableToCanvasY(y1t, h),
+        x2: tableToCanvasX(x2t, w),
+        y2: tableToCanvasY(y2t, h),
+        kind,
+      };
+      if (typeof lw === 'number') o.lineWidth = lw;
+      return o;
+    };
+
+    for (let segmentIndex = 0; segmentIndex < previewSegmentBudget && remain > 1e-5; segmentIndex += 1) {
+      const wallDist = rayToInnerRectTableUnits(oxT, oyT, udx, udy);
+      const pocketDist = rayToPocketCaptureTableUnits(oxT, oyT, udx, udy, POCKET_R_TABLE);
       let hitBall = null;
       let ballDist = Number.POSITIVE_INFINITY;
       if (!contactDone) {
         for (const b of displayBalls) {
           if (b.pocketed || b.number === 0) continue;
-          const bx = tableToCanvasX(b.x, w);
-          const by = tableToCanvasY(b.y, h);
-          const t = rayCircleHit(ox, oy, dx, dy, bx, by, hitRadius);
+          const bxT = Number(b.x);
+          const byT = Number(b.y);
+          const t = rayCircleHitTable(oxT, oyT, udx, udy, bxT, byT, hitR);
           if (t !== null && t < ballDist) {
             ballDist = t;
-            hitBall = { x: bx, y: by, number: Number(b.number || 0) };
+            hitBall = { bxT, byT, number: Number(b.number || 0) };
           }
         }
       }
       const travel = Math.min(remain, wallDist, ballDist, pocketDist);
       if (!Number.isFinite(travel) || travel <= 0) break;
-      const nx = ox + (dx * travel);
-      const ny = oy + (dy * travel);
+      const nxT = oxT + udx * travel;
+      const nyT = oyT + udy * travel;
       const atBall = Boolean(
         hitBall && ballDist <= wallDist && ballDist <= pocketDist && Math.abs(ballDist - travel) < 1e-5,
       );
       const atPocket = !atBall && Math.abs(pocketDist - travel) < 1e-5;
-      segs.push({ x1: ox, y1: oy, x2: nx, y2: ny, kind: atBall ? 'contact' : 'path' });
+      segs.push(toSeg(oxT, oyT, nxT, nyT, atBall ? 'contact' : 'path'));
       remain -= travel;
       if (atPocket) break;
       if (atBall) {
         contactDone = true;
-        ghost = { x: nx, y: ny, objectX: hitBall.x, objectY: hitBall.y };
-        const odxRaw = hitBall.x - nx;
-        const odyRaw = hitBall.y - ny;
-        const om = Math.hypot(odxRaw, odyRaw) || 1;
-        let odx = odxRaw / om;
-        let ody = odyRaw / om;
-        let oox = hitBall.x;
-        let ooy = hitBall.y;
-        let oRemain = objectPathLength;
-        for (let oi = 0; oi < objectSegmentBudget && oRemain > 1; oi += 1) {
-          const oWall = rayToTableWall(oox, ooy, odx, ody, minX, maxX, minY, maxY);
-          const oPocket = rayToPocketCaptureFirst(oox, ooy, odx, ody, w, h, POCKET_R_TABLE);
+        const gcx = tableToCanvasX(nxT, w);
+        const gcy = tableToCanvasY(nyT, h);
+        ghost = { x: gcx, y: gcy, objectX: tableToCanvasX(hitBall.bxT, w), objectY: tableToCanvasY(hitBall.byT, h) };
+        let odx = hitBall.bxT - nxT;
+        let ody = hitBall.byT - nyT;
+        const om = Math.hypot(odx, ody) || 1;
+        odx /= om;
+        ody /= om;
+        let ooxT = hitBall.bxT;
+        let ooyT = hitBall.byT;
+        let oRemain = objectPathTable;
+        let uodx = odx;
+        let uody = ody;
+        for (let oi = 0; oi < objectSegmentBudget && oRemain > 1e-5; oi += 1) {
+          const oWall = rayToInnerRectTableUnits(ooxT, ooyT, uodx, uody);
+          const oPocket = rayToPocketCaptureTableUnits(ooxT, ooyT, uodx, uody, POCKET_R_TABLE);
           const oTravel = Math.min(oRemain, oWall, oPocket);
           if (!Number.isFinite(oTravel) || oTravel <= 0) break;
-          const onx = oox + (odx * oTravel);
-          const ony = ooy + (ody * oTravel);
-          segs.push({
-            x1: oox,
-            y1: ooy,
-            x2: onx,
-            y2: ony,
-            kind: 'object',
-            lineWidth: objectLineWidth,
-          });
+          const onxT = ooxT + uodx * oTravel;
+          const onyT = ooyT + uody * oTravel;
+          segs.push(toSeg(ooxT, ooyT, onxT, onyT, 'object', objectLineWidth));
           oRemain -= oTravel;
           if (Math.abs(oPocket - oTravel) < 1e-5) break;
-          const { rdx, rdy } = reflectDirAtPoint(onx, ony, odx, ody, minX, maxX, minY, maxY);
-          odx = rdx;
-          ody = rdy;
-          oox = onx;
-          ooy = ony;
+          const { rdx, rdy } = reflectDirTableUnitWall(onxT, onyT, uodx, uody);
+          uodx = rdx;
+          uody = rdy;
+          ooxT = onxT;
+          ooyT = onyT;
         }
-        // Cue ball path after impact (elastic tangent, equal mass — like classic pool helpers).
-        const dot = (dx * odx) + (dy * ody);
-        let cdx = dx - dot * odx;
-        let cdy = dy - dot * ody;
+        const dot = (udx * odx) + (udy * ody);
+        let cdx = udx - dot * odx;
+        let cdy = udy - dot * ody;
         const cm = Math.hypot(cdx, cdy);
-        if (cm > 0.08) {
+        if (cm > 0.02) {
           cdx /= cm;
           cdy /= cm;
-          const deflectLen = Math.min(155, Math.max(40, 62 + previewLevel * 6 + objectPathLength * 0.32));
-          segs.push({
-            x1: nx,
-            y1: ny,
-            x2: nx + cdx * deflectLen,
-            y2: ny + cdy * deflectLen,
-            kind: 'cue_deflect',
-          });
+          segs.push(toSeg(nxT, nyT, nxT + cdx * deflectTable, nyT + cdy * deflectTable, 'cue_deflect'));
         }
         break;
       }
-      const r = reflectDirAtPoint(nx, ny, dx, dy, minX, maxX, minY, maxY);
-      dx = r.rdx;
-      dy = r.rdy;
-      ox = nx;
-      oy = ny;
+      const { rdx, rdy } = reflectDirTableUnitWall(nxT, nyT, udx, udy);
+      udx = rdx;
+      udy = rdy;
+      oxT = nxT;
+      oyT = nyT;
     }
     return { segments: segs, ghost, objectLineWidth };
   }, [displayBalls, angleDeg, power, effPower, canAim, previewDistance, previewSegmentBudget, previewTier, previewLevel, objectRailSegmentCap]);
@@ -1453,7 +1518,15 @@ export default function EightBallPool() {
     }
   }, [ballsForRender, angleDeg, power, effPower, spinX, spinY, isAiming, currentSkin, renderTick, canAim, canRenderCue, aimPreview, awaitingBreak, activeGame?.table_state?.break_kitchen, inBreakPlacement]);
 
+  const hasActiveAiSession = Boolean(
+    aiGame?.id && (aiGame.status === 'in_progress' || aiGame.status === 'waiting'),
+  );
+
   const startAi = async () => {
+    if (hasActiveAiSession) {
+      toast.error('Finish or forfeit your current AI match first (Finish match / Leave).');
+      return;
+    }
     setBusy(true);
     try {
       const res = await api.post('/casino/mp-8ball/vs-ai/start');
@@ -1462,7 +1535,13 @@ export default function EightBallPool() {
       setPageTab('match');
       toast.success('AI match started');
     } catch (e) {
-      toast.error(getApiErrorMessage(e) || 'Failed to start AI game');
+      const code = e?.response?.status;
+      if (code === 409) {
+        toast.error(getApiErrorMessage(e) || 'You already have an AI match. Finish or forfeit it first.');
+        await fetchAiGame();
+      } else {
+        toast.error(getApiErrorMessage(e) || 'Failed to start AI game');
+      }
     } finally {
       setBusy(false);
     }
@@ -1751,8 +1830,21 @@ export default function EightBallPool() {
         <div className="p-3 space-y-3">
           {tab === 'ai' ? (
             <div className="flex flex-wrap items-center gap-2">
-              <button type="button" onClick={startAi} disabled={busy || cueBusy} className="px-3 py-1.5 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading">{busy ? '...' : 'Start AI Match'}</button>
+              <button
+                type="button"
+                onClick={startAi}
+                disabled={busy || cueBusy || hasActiveAiSession}
+                title={hasActiveAiSession ? 'Finish or forfeit your current AI match first' : undefined}
+                className="px-3 py-1.5 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {busy ? '...' : 'Start AI Match'}
+              </button>
               {aiGame?.id && <span className="text-[10px] text-mutedForeground font-mono">Session: {aiGame.id}</span>}
+              {hasActiveAiSession && (
+                <span className="text-[10px] text-amber-400/90 max-w-[min(100%,220px)]">
+                  Active match — use &quot;Finish match (lose)&quot; or leave to start another.
+                </span>
+              )}
             </div>
           ) : (
             <div className="space-y-2">

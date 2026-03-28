@@ -284,12 +284,32 @@ def register(router):
             })
         return result
 
+    async def _find_user_by_profile_username(username: str, projection: dict):
+        """Resolve user by username; supports hitlist NPC names with `#` in them.
+
+        If the URL was broken at `#` (browser fragment), the path may be only `Name (NPC)` while
+        the DB username is `Name (NPC) #af473e1c`. When exactly one NPC matches that prefix+suffix, use it.
+        """
+        username_pattern = _username_pattern(username)
+        user = await db.users.find_one({"username": username_pattern}, projection)
+        if user:
+            return user
+        raw = (username or "").strip()
+        if "(NPC)" in raw and "#" not in raw:
+            try:
+                rx = re.compile("^" + re.escape(raw) + r" #[0-9a-f]{8}$", re.IGNORECASE)
+            except re.error:
+                return None
+            cand = await db.users.find({"is_npc": True, "username": rx}, projection).to_list(12)
+            if len(cand) == 1:
+                return cand[0]
+        return None
+
     @router.get("/users/{username}/profile-preview")
     async def get_user_profile_preview(username: str, current_user: dict = Depends(get_current_user)):
         """Minimal profile data for hover previews (e.g. Users Online). Only returns public-safe fields."""
-        username_pattern = _username_pattern(username)
-        user = await db.users.find_one(
-            {"username": username_pattern},
+        user = await _find_user_by_profile_username(
+            username,
             {"_id": 0, "id": 1, "username": 1, "avatar_url": 1, "total_kills": 1, "jail_busts": 1, "family_id": 1},
         )
         if not user:
@@ -368,8 +388,7 @@ def register(router):
     @router.get("/users/{username}/profile")
     async def get_user_profile(username: str, current_user: dict = Depends(get_current_user)):
         """View a user's profile (requires auth)."""
-        username_pattern = _username_pattern(username)
-        user = await db.users.find_one({"username": username_pattern}, {"_id": 0, "password_hash": 0})
+        user = await _find_user_by_profile_username(username, {"_id": 0, "password_hash": 0})
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
 
