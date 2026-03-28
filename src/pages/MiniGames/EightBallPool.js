@@ -98,6 +98,26 @@ function canvasToTableY(sy, canvasH = POOL_CANVAS_H) {
   return ((Number(sy) - m) / (canvasH - 2 * m)) * TABLE_H;
 }
 
+/** Mirror backend mp_8ball._upgrade_milestones / _upgrade_effects for aim preview parity */
+function poolUpgradeMilestones(upg) {
+  const keys = ['power', 'curve', 'luck', 'aim', 'control'];
+  const o = {};
+  for (const k of keys) {
+    o[k] = Math.floor(Math.max(0, Number(upg?.[k] || 0)) / 10);
+  }
+  return o;
+}
+function poolUpgradeEffects(upg) {
+  if (!upg) return { power_mul: 1, curve_mul: 1 };
+  const ms = poolUpgradeMilestones(upg);
+  const lvPower = Math.max(0, Number(upg.power || 0));
+  const lvCurve = Math.max(0, Number(upg.curve || upg.spin || 0));
+  return {
+    power_mul: 1.0 + (lvPower * 0.006) + (ms.power * 0.01),
+    curve_mul: 1.0 + (lvCurve * 0.007) + (ms.curve * 0.015),
+  };
+}
+
 const TABLE_SKINS = {
   /** Mobile-pool reference: bright felt, dark blue cushions, mahogany rails, silver sights */
   miniclip_blue: {
@@ -419,6 +439,11 @@ export default function EightBallPool() {
     aim: Math.max(0, Number(selectedCueUpgrade?.aim || 0)),
     control: Math.max(0, Number(selectedCueUpgrade?.control || 0)),
   }), [selectedCueUpgrade]);
+  const previewFx = useMemo(() => poolUpgradeEffects(selectedCueUpgrade || {}), [selectedCueUpgrade]);
+  const effPower = useMemo(
+    () => Math.min(1, Math.max(0, Number(power || 0) * previewFx.power_mul)),
+    [power, previewFx.power_mul],
+  );
   const cueTotalLevel = useMemo(
     () => Object.values(cueLevels).reduce((sum, n) => sum + Number(n || 0), 0),
     [cueLevels],
@@ -477,7 +502,7 @@ export default function EightBallPool() {
     const maxY = h - PREVIEW_TABLE_MARGIN;
     // Object-ball path: more segments + longer line as aim upgrades increase (rails off cushions).
     const objectSegmentBudget = objectRailSegmentCap;
-    const objectPathLength = 90 + (previewLevel * 14) + (previewTier * 48) + (Number(power || 0) * 95);
+    const objectPathLength = 90 + (previewLevel * 14) + (previewTier * 48) + (Number(effPower || 0) * 95);
     const objectLineWidth = 1.55 + (previewTier * 0.52) + Math.min(2.85, previewLevel * 0.05);
 
     for (let segmentIndex = 0; segmentIndex < previewSegmentBudget && remain > 1; segmentIndex += 1) {
@@ -560,7 +585,7 @@ export default function EightBallPool() {
       oy = ny;
     }
     return { segments: segs, ghost, objectLineWidth };
-  }, [displayBalls, angleDeg, power, canAim, previewDistance, previewSegmentBudget, previewTier, previewLevel, objectRailSegmentCap]);
+  }, [displayBalls, angleDeg, power, effPower, canAim, previewDistance, previewSegmentBudget, previewTier, previewLevel, objectRailSegmentCap]);
 
   useEffect(() => {
     const skinByCue = (selectedCue?.cue_id || '').toLowerCase();
@@ -1196,7 +1221,7 @@ export default function EightBallPool() {
       const cy = tableToCanvasY(cue.y, h);
       const cueVisualR = Math.max(10, ballRadiusMax(w, h) * 1.7);
       const a = (Number(angleDeg || 0) * Math.PI) / 180;
-      const aimLen = 58 + Number(power || 0) * 200;
+      const aimLen = 58 + Number(effPower || 0) * 200;
       const cueLen = 140;
       const ox = Math.cos(a);
       const oy = Math.sin(a);
@@ -1373,7 +1398,7 @@ export default function EightBallPool() {
       ctx.lineWidth = 2;
       ctx.stroke();
     }
-  }, [ballsForRender, angleDeg, power, spinX, spinY, isAiming, currentSkin, renderTick, canAim, canRenderCue, aimPreview, awaitingBreak, activeGame?.table_state?.break_kitchen, inBreakPlacement]);
+  }, [ballsForRender, angleDeg, power, effPower, spinX, spinY, isAiming, currentSkin, renderTick, canAim, canRenderCue, aimPreview, awaitingBreak, activeGame?.table_state?.break_kitchen, inBreakPlacement]);
 
   const startAi = async () => {
     setBusy(true);
@@ -1616,9 +1641,9 @@ export default function EightBallPool() {
     try {
       const res = await api.post('/casino/mp-8ball/cues/upgrade', { cue_instance_id: selectedCue.id, stat });
       await fetchCues();
-      const bal = res.data?.money_balance;
+      const bal = res.data?.pool_cash_balance;
       toast.success(
-        `${stat} +1${typeof bal === 'number' ? ` · Cash $${bal.toLocaleString()}` : ''}`,
+        `${stat} +1${typeof bal === 'number' ? ` · Pool cash $${bal.toLocaleString()}` : ''}`,
       );
     } catch (e) {
       toast.error(getApiErrorMessage(e) || 'Upgrade failed');
@@ -1908,8 +1933,8 @@ export default function EightBallPool() {
                     <div className="text-foreground font-bold">{selectedCue.cue_id}</div>
                   </div>
                   <div className="text-right text-[10px] tabular-nums">
-                    <span className="text-mutedForeground">Cash </span>
-                    <span className="text-emerald-400 font-bold">${(profile?.money ?? 0).toLocaleString()}</span>
+                    <span className="text-mutedForeground">Pool cash </span>
+                    <span className="text-emerald-400 font-bold">${(profile?.pool_cash ?? 0).toLocaleString()}</span>
                   </div>
                 </div>
                 <div className="flex justify-between text-[9px] text-mutedForeground mb-1">
@@ -1933,7 +1958,7 @@ export default function EightBallPool() {
                 {POOL_GARAGE_STATS.map(({ key, label, hint, Icon, color }) => {
                   const lvl = Number(cueLevels[key] || 0);
                   const nextCost = poolUpgradeCashCost(lvl, cueTotalLevel);
-                  const cash = Number(profile?.money ?? 0);
+                  const cash = Number(profile?.pool_cash ?? 0);
                   const canAfford = cash >= nextCost;
                   const statMaxed = lvl >= upgradeStatCap;
                   const totalMaxed = cueTotalLevel >= upgradeTotalCap;
@@ -2022,7 +2047,7 @@ export default function EightBallPool() {
           <div className="p-2 rounded border border-primary/20 bg-zinc-900/40 text-[10px] font-heading">
             <div className="flex items-center gap-2 text-foreground"><Trophy size={12} className="text-primary" /> Rating: <span className="font-bold text-primary">{profile?.rating ?? 1000}</span></div>
             <div className="text-mutedForeground">W {profile?.wins ?? 0} / L {profile?.losses ?? 0}</div>
-            <div className="text-mutedForeground">Cash: ${(profile?.money ?? 0).toLocaleString()}</div>
+            <div className="text-mutedForeground">Pool cash: ${(profile?.pool_cash ?? 0).toLocaleString()}</div>
             <div className="mt-1"><Link to="/casino/mini-games/leaderboard" className="text-primary hover:underline">View mini-games leaderboard</Link></div>
           </div>
         </div>

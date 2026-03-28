@@ -43,8 +43,9 @@ MP_8BALL_COLLISION_PASSES = 4
 MP_8BALL_SPIN_SWERVE = 0.045
 MP_8BALL_SPIN_DECAY = 0.988
 MP_8BALL_RAIL_SPIN_THROW = 0.085
-MP_8BALL_AI_WIN_CASH = 1400
-MP_8BALL_PVP_WIN_CASH = 650
+# Winnings credited to `users.pool_cash` (pool-only wallet; separate from main `money`).
+MP_8BALL_VS_AI_WIN_POOL_CASH = 10_000
+MP_8BALL_PVP_WIN_POOL_CASH = 10_000
 MP_8BALL_UPGRADE_STATS = ("power", "curve", "luck", "aim", "control")
 MP_8BALL_UPGRADE_STAT_CAP = 50
 MP_8BALL_UPGRADE_TOTAL_CAP = 250
@@ -698,15 +699,17 @@ def _elo_delta(my: int, opp: int, win: bool, k: int = 24) -> int:
 
 
 async def _apply_pool_match_rewards(db, game: dict, winner_uid: str, loser_uid: str) -> None:
-    """Apply pot, win cash, ELO, and rank/minigame logging. AI id can be winner or loser."""
+    """Apply pot + win to pool_cash, ELO, and rank/minigame logging. AI id can be winner or loser."""
     table_state = dict(game.get("table_state") or {})
     pot = int(game.get("pot") or 0)
-    if pot > 0 and winner_uid and winner_uid != MP_8BALL_AI_ID:
-        await db.users.update_one({"id": winner_uid}, {"$inc": {"money": pot}})
     mode = str(game.get("mode") or "")
-    win_cash = MP_8BALL_AI_WIN_CASH if mode == "vs_ai" else MP_8BALL_PVP_WIN_CASH
+    win_bonus = MP_8BALL_VS_AI_WIN_POOL_CASH if mode == "vs_ai" else MP_8BALL_PVP_WIN_POOL_CASH
     if winner_uid and winner_uid != MP_8BALL_AI_ID:
-        await db.users.update_one({"id": winner_uid}, {"$inc": {"money": int(win_cash)}})
+        inc = int(win_bonus)
+        if pot > 0:
+            inc += int(pot)
+        if inc > 0:
+            await db.users.update_one({"id": winner_uid}, {"$inc": {"pool_cash": inc}})
     w_human = bool(winner_uid and winner_uid != MP_8BALL_AI_ID)
     l_human = bool(loser_uid and loser_uid != MP_8BALL_AI_ID)
     if w_human and l_human:
@@ -822,14 +825,14 @@ def _upgrade_effects(upg: dict) -> dict:
     lv_power = int(upg.get("power") or 0)
     lv_curve = int(upg.get("curve") or 0)
     lv_luck = int(upg.get("luck") or 0)
-    lv_aim = int(upg.get("aim") or 0)
     lv_control = int(upg.get("control") or 0)
     ms = _upgrade_milestones(upg)
     return {
         "power_mul": 1.0 + (lv_power * 0.006) + (ms["power"] * 0.01),
         "curve_mul": 1.0 + (lv_curve * 0.007) + (ms["curve"] * 0.015),
         "luck_chance": min(0.24, (lv_luck * 0.0035) + (ms["luck"] * 0.01)),
-        "aim_nudge": max(0.0, 0.05 - (lv_aim * 0.0008)),
+        # No hidden aim deviation — preview must match server trajectory (power/curve still apply).
+        "aim_nudge": 0.0,
         "foul_relief_chance": min(0.2, (lv_control * 0.0028) + (ms["control"] * 0.008)),
     }
 
@@ -838,6 +841,43 @@ def _upgrade_cash_cost(stat_level: int, total_level: int) -> int:
     base = 420 + (stat_level * 130)
     progression_tax = (total_level // 5) * 30
     return int(base + progression_tax)
+
+
+def _user_pool_cash(user_doc: Optional[dict]) -> int:
+    return int((user_doc or {}).get("pool_cash") or 0)
+
+
+def _ai_select_target_ball(balls: List[dict], cue: dict, shooter: dict) -> Optional[dict]:
+    """Pick a legal object ball for the AI (group / 8-ball rules). Falls back to nearest ball."""
+    if not cue:
+        return None
+    cx, cy = float(cue["x"]), float(cue["y"])
+    shooter_group = shooter.get("group")
+    objs = [b for b in balls if not b.get("pocketed") and int(b.get("number") or -1) != 0]
+
+    def dist(b: dict) -> float:
+        return math.hypot(float(b["x"]) - cx, float(b["y"]) - cy)
+
+    pool: List[dict] = []
+    if shooter_group == "solid":
+        if _remaining_group_balls(balls, "solid") > 0:
+            pool = [b for b in objs if 1 <= int(b.get("number") or 0) <= 7]
+        else:
+            pool = [b for b in objs if int(b.get("number") or 0) == 8]
+    elif shooter_group == "stripe":
+        if _remaining_group_balls(balls, "stripe") > 0:
+            pool = [b for b in objs if 9 <= int(b.get("number") or 0) <= 15]
+        else:
+            pool = [b for b in objs if int(b.get("number") or 0) == 8]
+    else:
+        # Open table: any ball except 8 until groups are assigned.
+        pool = [b for b in objs if int(b.get("number") or 0) != 8]
+
+    if not pool:
+        pool = list(objs)
+    if not pool:
+        return None
+    return min(pool, key=dist)
 
 
 def register(router):
@@ -854,10 +894,10 @@ def register(router):
         uid = current_user["id"]
         buy_in = max(0, min(MP_8BALL_MAX_BUY_IN, int(body.buy_in or 0)))
         if buy_in > 0:
-            user = await db.users.find_one({"id": uid}, {"_id": 0, "money": 1})
-            if not user or int(user.get("money") or 0) < buy_in:
-                raise HTTPException(status_code=400, detail="Not enough cash for buy-in")
-            await db.users.update_one({"id": uid, "money": {"$gte": buy_in}}, {"$inc": {"money": -buy_in}})
+            user = await db.users.find_one({"id": uid}, {"_id": 0, "pool_cash": 1})
+            if not user or _user_pool_cash(user) < buy_in:
+                raise HTTPException(status_code=400, detail="Not enough pool cash for buy-in")
+            await db.users.update_one({"id": uid, "pool_cash": {"$gte": buy_in}}, {"$inc": {"pool_cash": -buy_in}})
         gid = f"mp8_{uuid.uuid4().hex[:12]}"
         player = {
             "user_id": uid,
@@ -905,10 +945,10 @@ def register(router):
             raise HTTPException(status_code=400, detail="Game is full")
         buy_in = int(game.get("buy_in") or 0)
         if buy_in > 0:
-            user = await db.users.find_one({"id": uid}, {"_id": 0, "money": 1})
-            if not user or int(user.get("money") or 0) < buy_in:
-                raise HTTPException(status_code=400, detail="Not enough cash for buy-in")
-            await db.users.update_one({"id": uid, "money": {"$gte": buy_in}}, {"$inc": {"money": -buy_in}})
+            user = await db.users.find_one({"id": uid}, {"_id": 0, "pool_cash": 1})
+            if not user or _user_pool_cash(user) < buy_in:
+                raise HTTPException(status_code=400, detail="Not enough pool cash for buy-in")
+            await db.users.update_one({"id": uid, "pool_cash": {"$gte": buy_in}}, {"$inc": {"pool_cash": -buy_in}})
         players.append({
             "user_id": uid,
             "username": current_user.get("username") or "?",
@@ -963,7 +1003,7 @@ def register(router):
             return {"message": "Not in game"}
         buy_in = int(game.get("buy_in") or 0)
         if buy_in > 0:
-            await db.users.update_one({"id": uid}, {"$inc": {"money": buy_in}})
+            await db.users.update_one({"id": uid}, {"$inc": {"pool_cash": buy_in}})
         if not players:
             await db.mp_8ball_games.delete_one({"id": game_id})
             return {"message": "Game closed"}
@@ -1096,7 +1136,7 @@ def register(router):
             )
         shooter_upg = _normalize_upgrade_doc(upg_row, shooter_uid, str((selected_cue or {}).get("id") or ""))
         effects = _upgrade_effects(shooter_upg)
-        input_angle = float(body.angle) + (_rng.uniform(-1, 1) * effects["aim_nudge"] * 0.5)
+        input_angle = float(body.angle)
         input_power = max(0.0, min(1.0, float(body.power) * effects["power_mul"]))
         input_spin_x = float(body.spin_x or 0.0) * effects["curve_mul"]
         input_spin_y = float(body.spin_y or 0.0) * effects["curve_mul"]
@@ -1290,13 +1330,9 @@ def register(router):
             ts["awaiting_break_placement"] = False
         balls = list(ts.get("balls") or [])
         cue = next((b for b in balls if b.get("number") == 0), None)
-        targets = [b for b in balls if not b.get("pocketed") and b.get("number") not in (0, 8)]
-        if not cue or not targets:
-            target = next((b for b in balls if not b.get("pocketed") and b.get("number") == 8), None)
-            if not cue or not target:
-                return
-        else:
-            target = min(targets, key=lambda b: math.hypot((b["x"] - cue["x"]), (b["y"] - cue["y"])))
+        target = _ai_select_target_ball(balls, cue, shooter) if cue else None
+        if not cue or not target:
+            return
         ang = math.atan2((target["y"] - cue["y"]), (target["x"] - cue["x"]))
         req = PoolShootRequest(angle=ang, power=0.65 + _rng.random() * 0.25, spin_x=0.0, spin_y=0.0)
         sim = _simulate_shot(
@@ -1396,7 +1432,7 @@ def register(router):
     async def pool_profile(current_user: dict = Depends(get_current_user_verified)):
         uid = current_user["id"]
         p = await db.pool_profiles.find_one({"user_id": uid}, {"_id": 0}) or {"user_id": uid, "rating": 1000, "wins": 0, "losses": 0}
-        user_row = await db.users.find_one({"id": uid}, {"_id": 0, "money": 1})
+        user_row = await db.users.find_one({"id": uid}, {"_id": 0, "pool_cash": 1})
         selected_cue = await db.user_pool_cues.find_one({"user_id": uid, "selected": True}, {"_id": 0, "id": 1, "cue_id": 1})
         if not selected_cue:
             selected_cue = await db.user_pool_cues.find_one({"user_id": uid}, {"_id": 0, "id": 1, "cue_id": 1})
@@ -1404,7 +1440,7 @@ def register(router):
             "rating": int(p.get("rating") or 1000),
             "wins": int(p.get("wins") or 0),
             "losses": int(p.get("losses") or 0),
-            "money": int((user_row or {}).get("money") or 0),
+            "pool_cash": _user_pool_cash(user_row),
             "selected_cue_id": (selected_cue or {}).get("id"),
             "selected_cue_type": (selected_cue or {}).get("cue_id"),
         }
@@ -1505,10 +1541,10 @@ def register(router):
         if lvl >= MP_8BALL_UPGRADE_STAT_CAP:
             raise HTTPException(status_code=400, detail="Stat is maxed")
         cost = _upgrade_cash_cost(lvl, total_level)
-        user = await db.users.find_one({"id": uid}, {"_id": 0, "money": 1})
-        if not user or int(user.get("money") or 0) < cost:
-            raise HTTPException(status_code=400, detail="Not enough cash")
-        await db.users.update_one({"id": uid, "money": {"$gte": cost}}, {"$inc": {"money": -cost}})
+        user = await db.users.find_one({"id": uid}, {"_id": 0, "pool_cash": 1})
+        if not user or _user_pool_cash(user) < cost:
+            raise HTTPException(status_code=400, detail="Not enough pool cash")
+        await db.users.update_one({"id": uid, "pool_cash": {"$gte": cost}}, {"$inc": {"pool_cash": -cost}})
         await db.pool_cue_upgrades.update_one(
             {"user_id": uid, "cue_instance_id": body.cue_instance_id},
             {"$inc": {stat: 1}, "$setOnInsert": _pool_upgrade_set_on_insert_for_inc(stat)},
@@ -1516,12 +1552,12 @@ def register(router):
         )
         new_row = await db.pool_cue_upgrades.find_one({"user_id": uid, "cue_instance_id": body.cue_instance_id}, {"_id": 0})
         new_upg = _normalize_upgrade_doc(new_row, uid, body.cue_instance_id)
-        balance = await db.users.find_one({"id": uid}, {"_id": 0, "money": 1})
+        balance = await db.users.find_one({"id": uid}, {"_id": 0, "pool_cash": 1})
         return {
             "message": f"{stat.title()} upgraded",
             "cost": cost,
-            "currency": "cash",
-            "money_balance": int((balance or {}).get("money") or 0),
+            "currency": "pool_cash",
+            "pool_cash_balance": _user_pool_cash(balance),
             "total_level": _upgrade_total_level(new_upg),
             "milestones": _upgrade_milestones(new_upg),
             "upgrades": new_upg,
