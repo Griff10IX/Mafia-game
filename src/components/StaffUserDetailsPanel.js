@@ -111,6 +111,7 @@ export default function StaffUserDetailsPanel({
   const [sessions, setSessions] = useState(null);
   const [sessionsLoading, setSessionsLoading] = useState(false);
 
+  const [dossierMoneyAmount, setDossierMoneyAmount] = useState(0);
   const [dossierPoints, setDossierPoints] = useState(100);
   const [dossierBullets, setDossierBullets] = useState(5000);
   const [dossierLootPieces, setDossierLootPieces] = useState(100);
@@ -641,6 +642,37 @@ export default function StaffUserDetailsPanel({
 
                       <Section title="Rewards & items">
                         <div className="col-span-2 space-y-1">
+                          <ToolRow label="Adjust money">
+                            <input
+                              type="number"
+                              value={dossierMoneyAmount}
+                              onChange={(e) =>
+                                setDossierMoneyAmount(parseInt(e.target.value, 10) || 0)
+                              }
+                              className={`${inputClass} w-24`}
+                              placeholder="e.g. -50000"
+                            />
+                            <button
+                              type="button"
+                              className={dossierMoneyAmount < 0 ? btnDangerClass : btnClass}
+                              disabled={actionLoading.adjustMoney || dossierMoneyAmount === 0}
+                              onClick={() =>
+                                runAction('adjustMoney', async () => {
+                                  const label = dossierMoneyAmount < 0
+                                    ? `Remove $${Math.abs(dossierMoneyAmount).toLocaleString()} from ${username}?`
+                                    : `Add $${dossierMoneyAmount.toLocaleString()} to ${username}?`;
+                                  if (!window.confirm(label)) return;
+                                  const res = await api.post(
+                                    `/admin/adjust-money?target_username=${encodeURIComponent(username)}&amount=${dossierMoneyAmount}`
+                                  );
+                                  toast.success(res.data?.message);
+                                  refetch();
+                                })
+                              }
+                            >
+                              {actionLoading.adjustMoney ? '…' : dossierMoneyAmount < 0 ? 'Remove' : 'Add'}
+                            </button>
+                          </ToolRow>
                           <ToolRow label="Add points">
                             <input
                               type="number"

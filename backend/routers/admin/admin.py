@@ -527,6 +527,39 @@ def register(router):
         )
         return {"message": f"Gave ${amount:,} to {result.modified_count} accounts", "updated": result.modified_count}
 
+    @router.post("/admin/adjust-money")
+    async def admin_adjust_money(target_username: str, amount: int, current_user: dict = Depends(get_current_user)):
+        """Add or remove money from a user. Positive = add, negative = remove. Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        if amount == 0:
+            raise HTTPException(status_code=400, detail="Amount cannot be zero")
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1, "money": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        current_money = int(target.get("money") or 0)
+        if amount < 0 and current_money + amount < 0:
+            raise HTTPException(status_code=400, detail=f"Cannot remove more than the user has (${current_money:,}).")
+        await db.users.update_one(
+            {"id": target["id"]},
+            {"$inc": {"money": amount}},
+        )
+        verb = "Added" if amount > 0 else "Removed"
+        display = abs(amount)
+        new_balance = current_money + amount
+        try:
+            await log_activity(
+                db, target["id"], target.get("username") or "?",
+                f"Admin {verb.lower()} ${display:,} (by {current_user.get('username', '?')}). New balance: ${new_balance:,}",
+            )
+        except Exception:
+            pass
+        return {
+            "message": f"{verb} ${display:,} {'to' if amount > 0 else 'from'} {target['username']}. New balance: ${new_balance:,}",
+            "new_balance": new_balance,
+        }
+
     @router.post("/admin/add-loot-pieces")
     async def admin_add_loot_pieces(target_username: str, pieces: int, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):

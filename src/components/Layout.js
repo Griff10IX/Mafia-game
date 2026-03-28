@@ -691,8 +691,9 @@ export default function Layout({ children }) {
     try {
       const userRes = await api.get('/auth/me');
       if (userRes.data?.account_locked) {
-        setUser((prev) => ({ ...userRes.data, ...prev }));
-        navigate('/locked', { replace: true });
+        if (window.location.pathname !== '/locked') {
+          window.location.replace('/locked');
+        }
         return;
       }
       if (!userRes.data?.rules_accepted && location.pathname !== '/account/rules-acceptance') {

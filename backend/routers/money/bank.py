@@ -8,8 +8,6 @@ import os
 import sys
 from typing import Optional
 from pydantic import BaseModel
-from pymongo import UpdateOne
-
 from fastapi import Depends, HTTPException, Request
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -294,6 +292,24 @@ async def bank_transfer(request: MoneyTransferRequest, req: Request, current_use
     if recent_dup:
         raise HTTPException(status_code=400, detail="Duplicate transfer detected. Please wait a few seconds before sending again.")
 
+    # Atomically debit sender first — if they don't have enough, nothing happens.
+    debit_result = await db.users.update_one(
+        {"id": sender_id, "money": {"$gte": amount}},
+        {"$inc": {"money": -amount}},
+    )
+    if debit_result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient cash on hand")
+
+    # Sender was debited. Now credit recipient.
+    credit_result = await db.users.update_one(
+        {"id": recipient_id},
+        {"$inc": {"money": amount}},
+    )
+    if credit_result.modified_count == 0:
+        # Recipient vanished — rollback sender debit
+        await db.users.update_one({"id": sender_id}, {"$inc": {"money": amount}})
+        raise HTTPException(status_code=400, detail="Transfer failed — recipient account unavailable.")
+
     transfer_doc = {
         "id": transfer_id,
         "from_user_id": sender_id,
@@ -304,16 +320,6 @@ async def bank_transfer(request: MoneyTransferRequest, req: Request, current_use
         "created_at": now_iso,
     }
     await db.money_transfers.insert_one(transfer_doc)
-
-    result = await db.users.bulk_write([
-        UpdateOne({"id": sender_id, "money": {"$gte": amount}}, {"$inc": {"money": -amount}}),
-        UpdateOne({"id": recipient_id}, {"$inc": {"money": amount}}),
-    ], ordered=True)
-    if result.modified_count < 2:
-        if result.modified_count == 1:
-            await db.users.update_one({"id": sender_id}, {"$inc": {"money": amount}})
-        await db.money_transfers.delete_one({"id": transfer_id})
-        raise HTTPException(status_code=400, detail="Insufficient cash on hand")
     if security_module and getattr(security_module, "check_negative_balance", None):
         try:
             await security_module.check_negative_balance(db, sender_id, current_user.get("username", ""))

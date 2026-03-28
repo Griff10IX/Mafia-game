@@ -108,14 +108,15 @@ api.interceptors.response.use(
     }
 
     // ── 403 Account under investigation → redirect to lock page immediately (no delay until next /auth/me) ──
-    if (error.response?.status === 403 && !hasRedirectedOnAuthFailure && !isPublicPath() && typeof window !== 'undefined') {
+    if (error.response?.status === 403 && !isPublicPath() && typeof window !== 'undefined') {
       const detail = error.response?.data?.detail;
       const isAccountLocked = typeof detail === 'string' && (
         detail.toLowerCase().includes('under investigation') || detail.toLowerCase().includes('account status page')
       );
       if (isAccountLocked) {
-        hasRedirectedOnAuthFailure = true;
-        window.location.replace('/locked');
+        if (window.location.pathname !== '/locked') {
+          window.location.replace('/locked');
+        }
         return Promise.reject(error);
       }
     }
