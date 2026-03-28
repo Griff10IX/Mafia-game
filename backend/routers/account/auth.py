@@ -926,6 +926,10 @@ def register(router):
         ua = (request.headers.get("User-Agent") or "").strip()[:500]
         device_type = _device_type_from_user_agent(request.headers.get("User-Agent") or "")
         set_fields = {}
+        if ip and not isinstance(user.get("login_ips"), list):
+            await db.users.update_one({"id": user["id"]}, {"$set": {"login_ips": []}})
+        if not isinstance(user.get("sessions"), list):
+            await db.users.update_one({"id": user["id"]}, {"$set": {"sessions": []}})
         if ip:
             set_fields["last_login_ip"] = ip
         if ua:
@@ -939,7 +943,7 @@ def register(router):
             await db.users.update_one({"id": user["id"]}, update_op)
         if ip:
             doc = await db.users.find_one({"id": user["id"]}, {"_id": 0, "login_ips": 1})
-            ips = doc.get("login_ips") or []
+            ips = doc.get("login_ips") if isinstance((doc or {}).get("login_ips"), list) else []
             if len(ips) > 20:
                 await db.users.update_one({"id": user["id"]}, {"$set": {"login_ips": ips[-20:]}})
         # Create session for this login (per-IP device/last-used and "log out other sessions")
@@ -952,10 +956,18 @@ def register(router):
             "created_at": now_iso,
             "last_used_at": now_iso,
         }
-        await db.users.update_one(
-            {"id": user["id"]},
-            {"$push": {"sessions": {"$each": [session_entry], "$position": 0, "$slice": 10}}},
-        )
+        try:
+            await db.users.update_one(
+                {"id": user["id"]},
+                {"$push": {"sessions": {"$each": [session_entry], "$position": 0, "$slice": 10}}},
+            )
+        except Exception:
+            # Legacy/bad data safeguard: if sessions became non-array, reset and retry once.
+            await db.users.update_one({"id": user["id"]}, {"$set": {"sessions": []}})
+            await db.users.update_one(
+                {"id": user["id"]},
+                {"$push": {"sessions": {"$each": [session_entry], "$position": 0, "$slice": 10}}},
+            )
         token = create_access_token({
             "sub": user["id"],
             "v": user.get("token_version", 0),
