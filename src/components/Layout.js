@@ -199,7 +199,7 @@ function loadBottomNavShowDividers() {
 }
 function loadMobileStatsDisplay() {
   try { const v = localStorage.getItem(MOBILE_STATS_DISPLAY_KEY); if (v === 'top_bar' || v === 'touch_ball' || v === 'right_sidebar') return v; } catch (_) {}
-  return 'top_bar';
+  return 'touch_ball';
 }
 function loadNotificationBallPosition() {
   try {
@@ -387,6 +387,10 @@ export default function Layout({ children }) {
     if (p.toastTextColourId !== undefined) setToastTextColour(p.toastTextColourId ?? null);
     if (p.mobileNavStyle != null) setMobileNavStyle(p.mobileNavStyle);
     if (p.themeVariant != null) setThemeVariant(p.themeVariant);
+    try {
+      localStorage.setItem(MOBILE_STATS_DISPLAY_KEY, p.mobileStatsDisplay ?? 'touch_ball');
+      window.dispatchEvent(new Event('mobile-stats-display-changed'));
+    } catch (_) {}
     try {
       localStorage.setItem('app_initial_theme_chosen', '1');
     } catch (_) {}

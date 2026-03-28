@@ -396,7 +396,7 @@ def register(router):
                 "theme_preferences": {
                     "sidebarLayout": "categorized_classic",
                     "mobileNavStyle": "bottom",
-                    "mobileStatsDisplay": "top_bar",
+                    "mobileStatsDisplay": "touch_ball",
                     "fontId": "clean",
                 },
                 "founding_member": False,

@@ -249,7 +249,7 @@ export default function ThemePicker({ open, onClose }) {
 
   const topBarGap = ls(KEYS.gap, 'normal');
   const topBarSize = ls(KEYS.size, 'medium');
-  const mobileStatsDisplay = ls(KEYS.statsDisplay, 'top_bar');
+  const mobileStatsDisplay = ls(KEYS.statsDisplay, 'touch_ball');
   const sidebarShowDividers = ls(KEYS.sidebarDividers) === 'true';
   const bottomNavShowDividers = ls(KEYS.bottomDividers) === 'true';
   const sidebarDividerStyle = ls(KEYS.dividerStyle, 'solid');
@@ -358,6 +358,7 @@ export default function ThemePicker({ open, onClose }) {
     (p.textStyleId == null || textStyleId === p.textStyleId) &&
     (p.toastTextColourId === undefined || (p.toastTextColourId == null ? toastTextColourId == null : toastTextColourId === p.toastTextColourId)) &&
     (p.mobileNavStyle == null || mobileNavStyle === p.mobileNavStyle) &&
+    (p.mobileStatsDisplay == null || mobileStatsDisplay === p.mobileStatsDisplay) &&
     (p.themeVariant == null || themeVariant === p.themeVariant);
 
   const applyPreset = (p) => {
@@ -371,6 +372,10 @@ export default function ThemePicker({ open, onClose }) {
     if (p.toastTextColourId !== undefined) setToastTextColour(p.toastTextColourId ?? null);
     if (p.mobileNavStyle != null) setMobileNavStyle(p.mobileNavStyle);
     if (p.themeVariant != null) setThemeVariant(p.themeVariant);
+    if (p.mobileStatsDisplay != null) {
+      lsSet(KEYS.statsDisplay, p.mobileStatsDisplay, 'mobile-stats-display-changed');
+      api.patch('/profile/theme', { mobile_stats_display: p.mobileStatsDisplay }).catch(() => {});
+    }
   };
 
   const handleSaveCustom = () => {
