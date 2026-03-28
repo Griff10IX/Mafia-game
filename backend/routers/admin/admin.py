@@ -1451,6 +1451,84 @@ def register(router):
         )
         return {"message": f"Reset OC timers for all users ({result.modified_count} accounts)", "modified_count": result.modified_count}
 
+    @router.post("/admin/oc/clear-user-invites")
+    async def admin_oc_clear_user_invites(
+        target_username: str,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Clear one user's OC invite footprint: outgoing/incoming invites + their pending heist."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        username_pattern = _username_pattern((target_username or "").strip())
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = target["id"]
+
+        invite_filter = {"$or": [{"creator_id": uid}, {"target_id": uid}]}
+        invite_docs = await db.oc_invites.find(invite_filter, {"_id": 0, "pending_heist_id": 1, "role": 1}).to_list(1000)
+
+        # Remove this user's own pending heists first.
+        pending_deleted = await db.oc_pending_heists.delete_many({"creator_id": uid})
+        invites_deleted = await db.oc_invites.delete_many(invite_filter)
+
+        # Clear now-dangling role assignments on other creators' pending heists.
+        slot_clears = 0
+        for inv in invite_docs:
+            pending_id = inv.get("pending_heist_id")
+            role = inv.get("role")
+            if pending_id and role:
+                res = await db.oc_pending_heists.update_one({"id": pending_id}, {"$set": {role: None}})
+                slot_clears += int(res.modified_count or 0)
+
+        return {
+            "message": f"Cleared OC invites for {target.get('username')}",
+            "invites_deleted": invites_deleted.deleted_count,
+            "pending_heists_deleted": pending_deleted.deleted_count,
+            "pending_slots_cleared": slot_clears,
+        }
+
+    @router.post("/admin/minigames/clear-user-records")
+    async def admin_minigames_clear_user_records(
+        target_username: str,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Delete one user's minigame records/history rows across minigame collections."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        username_pattern = _username_pattern((target_username or "").strip())
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = target["id"]
+
+        collections = {
+            "snake_scores": db.snake_scores,
+            "family_run_scores": db.family_run_scores,
+            "whack_a_copper_scores": db.whack_a_copper_scores,
+            "gauntlet_scores": db.gauntlet_scores,
+            "mafia_rpg_scores": db.mafia_rpg_scores,
+            "minesweeper_wins": db.minesweeper_wins,
+            "battleships_wins": db.battleships_wins,
+            "the_getaway_runs": db.the_getaway_runs,
+            "minigame_plays": db.minigame_plays,
+            "minigame_run_sessions": db.minigame_run_sessions,
+        }
+
+        deleted_by_collection: Dict[str, int] = {}
+        total_deleted = 0
+        for key, coll in collections.items():
+            res = await coll.delete_many({"user_id": uid})
+            count = int(res.deleted_count or 0)
+            deleted_by_collection[key] = count
+            total_deleted += count
+
+        return {
+            "message": f"Cleared minigame records for {target.get('username')}",
+            "total_deleted": total_deleted,
+            "deleted_by_collection": deleted_by_collection,
+        }
+
     @router.post("/admin/daily-rewards/reset-timer")
     async def admin_daily_rewards_reset_timer(
         target_username: Optional[str] = Query(None, description="Reset this user only; omit to reset all users"),

@@ -142,6 +142,8 @@ const SEARCHABLE_TOOLS = [
   { label: 'Search & Attack Tools', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['search', 'attack', 'time'] },
   { label: 'Set Search Time', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['search', 'time', 'minutes'] },
   { label: 'Clear All Searches', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['clear', 'searches', 'delete'] },
+  { label: 'Clear OC invites (user)', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['oc', 'organised', 'crime', 'invite', 'clear', 'user'] },
+  { label: 'Clear minigame records (user)', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['minigame', 'records', 'clear', 'user', 'scores'] },
   { label: 'Reset Hitlist NPC Timers', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['hitlist', 'npc', 'timer', 'reset'] },
   { label: 'Reset OC Timers', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['oc', 'organised', 'crime', 'timer'] },
   { label: 'Reset Daily Rewards Timer', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['daily', 'rewards', 'timer', 'rps'] },
@@ -395,6 +397,8 @@ export default function Admin() {
     if (typeof window !== 'undefined') window.location.hash = tool.categoryId;
   };
   const [resetOcTimersLoading, setResetOcTimersLoading] = useState(false);
+  const [clearOcInvitesLoading, setClearOcInvitesLoading] = useState(false);
+  const [clearMinigameRecordsLoading, setClearMinigameRecordsLoading] = useState(false);
   const [resetDailyRewardsLoading, setResetDailyRewardsLoading] = useState(false);
   const [pointsProvSessionId, setPointsProvSessionId] = useState('');
   const [pointsProvUserId, setPointsProvUserId] = useState('');
@@ -2202,6 +2206,30 @@ export default function Admin() {
       toast.success(res.data?.message || 'Reset');
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
     finally { setResetOcTimersLoading(false); }
+  };
+
+  const handleClearUserOcInvites = async () => {
+    const username = (formData.targetUsername || '').trim();
+    if (!username) { toast.error('Enter a username'); return; }
+    if (!window.confirm(`Clear all OC invites for ${username}?`)) return;
+    setClearOcInvitesLoading(true);
+    try {
+      const res = await api.post(`/admin/oc/clear-user-invites?target_username=${encodeURIComponent(username)}`);
+      toast.success(res.data?.message || 'OC invites cleared');
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+    finally { setClearOcInvitesLoading(false); }
+  };
+
+  const handleClearUserMinigameRecords = async () => {
+    const username = (formData.targetUsername || '').trim();
+    if (!username) { toast.error('Enter a username'); return; }
+    if (!window.confirm(`Clear all minigame records for ${username}?`)) return;
+    setClearMinigameRecordsLoading(true);
+    try {
+      const res = await api.post(`/admin/minigames/clear-user-records?target_username=${encodeURIComponent(username)}`);
+      toast.success(res.data?.message || 'Minigame records cleared');
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+    finally { setClearMinigameRecordsLoading(false); }
   };
 
   const handleResetDailyRewardsTimerAll = async () => {
@@ -8734,6 +8762,18 @@ export default function Admin() {
               <BtnPrimary onClick={handleResetAllOcTimers} disabled={resetOcTimersLoading}>
                 {resetOcTimersLoading ? '...' : 'Reset'}
               </BtnPrimary>
+            </ActionRow>
+
+            <ActionRow icon={Users} label="Clear OC invites (user)" description="Target Username: remove incoming/outgoing OC invites and pending heist links">
+              <BtnDanger onClick={handleClearUserOcInvites} disabled={clearOcInvitesLoading || !(formData.targetUsername || '').trim()}>
+                {clearOcInvitesLoading ? '...' : 'Clear'}
+              </BtnDanger>
+            </ActionRow>
+
+            <ActionRow icon={Trash2} label="Clear minigame records (user)" description="Target Username: delete minigame scores/history rows across all minigame collections" color="text-red-400">
+              <BtnDanger onClick={handleClearUserMinigameRecords} disabled={clearMinigameRecordsLoading || !(formData.targetUsername || '').trim()}>
+                {clearMinigameRecordsLoading ? '...' : 'Clear'}
+              </BtnDanger>
             </ActionRow>
 
             <ActionRow icon={Clock} label="Reset Daily Rewards Timer" description="Clear 6h play window: all users get 3 plays again (RPS / Noughts & Crosses)">
