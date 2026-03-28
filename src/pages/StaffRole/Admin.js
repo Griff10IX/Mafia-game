@@ -60,6 +60,25 @@ const ADMIN_CATEGORIES = [
 ];
 const MOD_ONLY_CATEGORY_IDS = ['admin-cheat', 'admin-logs', 'admin-staff', 'admin-mod-tools', 'admin-donations', 'admin-moderation'];
 
+function summarizeRedeemRewardsForAdmin(rewards) {
+  if (!rewards || typeof rewards !== 'object') return '—';
+  const parts = [];
+  if (rewards.money) parts.push(`$${Number(rewards.money).toLocaleString()} cash`);
+  if (rewards.points) parts.push(`${Number(rewards.points).toLocaleString()} pts`);
+  if (rewards.respect_points) parts.push(`${Number(rewards.respect_points).toLocaleString()} respect`);
+  if (rewards.loot_box_pieces) parts.push(`${Number(rewards.loot_box_pieces)} loot`);
+  const carN = Array.isArray(rewards.cars) ? rewards.cars.length : 0;
+  if (carN) parts.push(`${carN} car${carN === 1 ? '' : 's'}`);
+  const tok = rewards.tokens;
+  if (tok && typeof tok === 'object' && !Array.isArray(tok)) {
+    Object.entries(tok).forEach(([k, v]) => {
+      const n = Number(v);
+      if (n > 0) parts.push(`${n}× ${String(k).replace(/_/g, ' ')}`);
+    });
+  }
+  return parts.length ? parts.join(' · ') : '—';
+}
+
 // Searchable tools list - each item has: label (searchable), categoryId (scroll target), collapseKey (optional - to expand section)
 const SEARCHABLE_TOOLS = [
   // Player Management
@@ -1423,16 +1442,24 @@ export default function Admin() {
   const fetchRedeemCodes = useCallback(async () => {
     setRedeemCodesLoading(true);
     try {
-      const [codesRes, typesRes] = await Promise.all([
+      const [codesOut, typesOut] = await Promise.allSettled([
         api.get('/admin/redeem-codes'),
-        api.get('/admin/token-types').catch(() => ({ data: { token_types: [] } })),
+        api.get('/admin/token-types'),
       ]);
-      setRedeemCodesList(codesRes.data?.codes ?? []);
-      if (Array.isArray(typesRes.data?.token_types)) setTokenTypes(typesRes.data.token_types);
-    } catch (e) {
-      const d = e.response?.data?.detail;
-      toast.error(typeof d === 'string' ? d : Array.isArray(d) ? d.map((x) => x?.msg || String(x)).join('; ') : 'Failed to load redeem codes');
-      setRedeemCodesList([]);
+      if (codesOut.status === 'fulfilled') {
+        setRedeemCodesList(codesOut.value.data?.codes ?? []);
+      } else {
+        const e = codesOut.reason;
+        const d = e?.response?.data?.detail;
+        toast.error(typeof d === 'string' ? d : Array.isArray(d) ? d.map((x) => x?.msg || String(x)).join('; ') : 'Failed to load redeem codes');
+        setRedeemCodesList([]);
+      }
+      if (typesOut.status === 'fulfilled' && Array.isArray(typesOut.value.data?.token_types)) {
+        setTokenTypes(typesOut.value.data.token_types);
+      } else {
+        if (typesOut.status === 'rejected') toast.error('Could not load token types for redeem codes');
+        setTokenTypes([]);
+      }
     } finally {
       setRedeemCodesLoading(false);
     }
@@ -1460,7 +1487,7 @@ export default function Admin() {
     if (rsp > 0) rewards.respect_points = rsp;
     if (loot > 0) rewards.loot_box_pieces = loot;
     if (redeemForm.cars && redeemForm.cars.length > 0) rewards.cars = redeemForm.cars;
-    const tokenEntries = redeemForm.tokenEntries.filter((e) => e.type && e.amount > 0);
+    const tokenEntries = redeemForm.tokenEntries.filter((e) => e.type && Number(e.amount) > 0);
     if (tokenEntries.length > 0) {
       rewards.tokens = {};
       tokenEntries.forEach((e) => { rewards.tokens[e.type] = (rewards.tokens[e.type] || 0) + parseInt(e.amount, 10); });
@@ -8463,81 +8490,132 @@ export default function Admin() {
           onToggle={() => { toggleSection('redeemCodes'); if (collapsed.redeemCodes) fetchRedeemCodes(); }}
         />
         {!collapsed.redeemCodes && (
-          <div className="p-3 space-y-3">
-            <p className="text-[10px] text-mutedForeground">Create a code that players can redeem once per user on the Referral % Redeem page. Set total redeem limit (optional).</p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div>
-                <label className="text-[10px] text-mutedForeground font-heading uppercase block mb-0.5">Code</label>
-                <input type="text" value={redeemForm.code} onChange={(e) => setRedeemForm((p) => ({ ...p, code: e.target.value }))} placeholder="e.g. WELCOME2025" className="w-full px-2 py-1 rounded border border-input bg-transparent text-xs font-heading" />
-              </div>
-              <div>
-                <label className="text-[10px] text-mutedForeground font-heading uppercase block mb-0.5">Max uses (blank = unlimited)</label>
-                <input type="number" min="1" value={redeemForm.max_uses} onChange={(e) => setRedeemForm((p) => ({ ...p, max_uses: e.target.value }))} placeholder="Unlimited" className="w-full px-2 py-1 rounded border border-input bg-transparent text-xs font-heading" />
-              </div>
-            </div>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <div>
-                <label className="text-[10px] text-mutedForeground font-heading uppercase block mb-0.5">Cash</label>
-                <FormattedNumberInput value={redeemForm.money} onChange={(v) => setRedeemForm((p) => ({ ...p, money: v }))} className="w-full px-2 py-1 rounded border border-input bg-transparent text-xs" />
-              </div>
-              <div>
-                <label className="text-[10px] text-mutedForeground font-heading uppercase block mb-0.5">Points</label>
-                <FormattedNumberInput value={redeemForm.points} onChange={(v) => setRedeemForm((p) => ({ ...p, points: v }))} className="w-full px-2 py-1 rounded border border-input bg-transparent text-xs" />
-              </div>
-              <div>
-                <label className="text-[10px] text-mutedForeground font-heading uppercase block mb-0.5">Respect</label>
-                <FormattedNumberInput value={redeemForm.respect_points} onChange={(v) => setRedeemForm((p) => ({ ...p, respect_points: v }))} className="w-full px-2 py-1 rounded border border-input bg-transparent text-xs" />
-              </div>
-              <div>
-                <label className="text-[10px] text-mutedForeground font-heading uppercase block mb-0.5">Loot pieces</label>
-                <input type="number" min="0" value={redeemForm.loot_box_pieces} onChange={(e) => setRedeemForm((p) => ({ ...p, loot_box_pieces: e.target.value }))} className="w-full px-2 py-1 rounded border border-input bg-transparent text-xs font-heading" />
+          <div className="p-3 space-y-4">
+            <p className="text-[10px] text-mutedForeground leading-relaxed">Players redeem once per account on the Referral / Redeem page. Leave max uses empty for unlimited total redemptions.</p>
+
+            <div className="rounded-md border border-primary/15 bg-black/25 p-3 space-y-3">
+              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Code &amp; limit</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] text-mutedForeground font-heading uppercase block mb-1">Code</label>
+                  <input type="text" value={redeemForm.code} onChange={(e) => setRedeemForm((p) => ({ ...p, code: e.target.value }))} placeholder="e.g. WELCOME2025" className="w-full px-2.5 py-1.5 rounded-md border border-input bg-transparent text-xs font-heading" />
+                </div>
+                <div>
+                  <label className="text-[10px] text-mutedForeground font-heading uppercase block mb-1">Max uses <span className="normal-case text-mutedForeground/80">(optional)</span></label>
+                  <input type="number" min="1" value={redeemForm.max_uses} onChange={(e) => setRedeemForm((p) => ({ ...p, max_uses: e.target.value }))} placeholder="Unlimited" className="w-full px-2.5 py-1.5 rounded-md border border-input bg-transparent text-xs font-heading" />
+                </div>
               </div>
             </div>
-            <div>
-              <label className="text-[10px] text-mutedForeground font-heading uppercase block mb-0.5">Cars</label>
-              <select multiple value={redeemForm.cars} onChange={(e) => setRedeemForm((p) => ({ ...p, cars: Array.from(e.target.selectedOptions, (o) => o.value) }))} className="w-full px-2 py-1 rounded border border-input bg-transparent text-xs font-heading min-h-[80px]">
-                {cars.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-[10px] text-mutedForeground font-heading uppercase block mb-0.5">Tokens (type + amount)</label>
-              <div className="flex flex-wrap gap-2 items-center">
-                {redeemForm.tokenEntries.map((entry, i) => (
-                  <div key={i} className="flex gap-1 items-center">
-                    <select value={entry.type} onChange={(e) => setRedeemForm((p) => ({ ...p, tokenEntries: p.tokenEntries.map((t, j) => j === i ? { ...t, type: e.target.value } : t) }))} className="px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading">
-                      {tokenTypes.map((tt) => <option key={tt} value={tt}>{tt.replace(/_/g, ' ')}</option>)}
-                    </select>
-                    <FormattedNumberInput value={String(entry.amount || '')} onChange={(v) => setRedeemForm((p) => ({ ...p, tokenEntries: p.tokenEntries.map((t, j) => j === i ? { ...t, amount: parseInt(v, 10) || 0 } : t) }))} className="w-16 px-2 py-1 rounded border border-input bg-transparent text-xs" />
-                    <button type="button" onClick={() => setRedeemForm((p) => ({ ...p, tokenEntries: p.tokenEntries.filter((_, j) => j !== i) }))} className="text-red-400 text-xs px-1">×</button>
+
+            <div className="rounded-md border border-primary/15 bg-black/25 p-3 space-y-4">
+              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Rewards</p>
+              <div>
+                <p className="text-[10px] text-mutedForeground mb-2">Currency (leave blank for none)</p>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div>
+                    <label className="text-[10px] text-mutedForeground font-heading uppercase block mb-1">Cash</label>
+                    <FormattedNumberInput value={redeemForm.money} onChange={(v) => setRedeemForm((p) => ({ ...p, money: v }))} className="w-full px-2.5 py-1.5 rounded-md border border-input bg-transparent text-xs" />
                   </div>
-                ))}
-                <button type="button" onClick={() => setRedeemForm((p) => ({ ...p, tokenEntries: [...p.tokenEntries, { type: tokenTypes[0] || 'xp_crimes', amount: 1 }] }))} className="text-primary text-[10px] font-heading uppercase">+ Add token</button>
+                  <div>
+                    <label className="text-[10px] text-mutedForeground font-heading uppercase block mb-1">Points</label>
+                    <FormattedNumberInput value={redeemForm.points} onChange={(v) => setRedeemForm((p) => ({ ...p, points: v }))} className="w-full px-2.5 py-1.5 rounded-md border border-input bg-transparent text-xs" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-mutedForeground font-heading uppercase block mb-1">Respect</label>
+                    <FormattedNumberInput value={redeemForm.respect_points} onChange={(v) => setRedeemForm((p) => ({ ...p, respect_points: v }))} className="w-full px-2.5 py-1.5 rounded-md border border-input bg-transparent text-xs" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-mutedForeground font-heading uppercase block mb-1">Loot pieces</label>
+                    <input type="number" min="0" value={redeemForm.loot_box_pieces} onChange={(e) => setRedeemForm((p) => ({ ...p, loot_box_pieces: e.target.value }))} className="w-full px-2.5 py-1.5 rounded-md border border-input bg-transparent text-xs font-heading" />
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] text-mutedForeground font-heading uppercase block mb-1">Cars</label>
+                <p className="text-[9px] text-mutedForeground/90 mb-1.5">Hold Ctrl (Windows) or Cmd (Mac) to select multiple.</p>
+                <select multiple value={redeemForm.cars} onChange={(e) => setRedeemForm((p) => ({ ...p, cars: Array.from(e.target.selectedOptions, (o) => o.value) }))} className="w-full px-2 py-1.5 rounded-md border border-input bg-transparent text-xs font-heading max-h-32 overflow-y-auto">
+                  {cars.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <div className="flex flex-wrap items-end justify-between gap-2 mb-2">
+                  <div>
+                    <label className="text-[10px] text-mutedForeground font-heading uppercase block">Armoury tokens</label>
+                    <p className="text-[9px] text-mutedForeground/90 mt-0.5">Each row is one token type and how many to grant.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setRedeemForm((p) => {
+                      const opts = tokenTypes.length ? tokenTypes : ['xp_crimes'];
+                      return { ...p, tokenEntries: [...p.tokenEntries, { type: opts[0] || 'xp_crimes', amount: 1 }] };
+                    })}
+                    className="shrink-0 text-primary text-[10px] font-heading uppercase hover:underline"
+                  >
+                    + Add token
+                  </button>
+                </div>
+                {!redeemCodesLoading && tokenTypes.length === 0 && (
+                  <p className="text-[9px] text-amber-400/90 mb-2">Token list failed to load; refresh the list or reopen this section. You can still add rows (defaults to crime XP token).</p>
+                )}
+                <div className="space-y-2">
+                  {redeemForm.tokenEntries.length === 0 ? (
+                    <p className="text-[10px] text-mutedForeground italic py-1">No tokens on this code. Use &quot;Add token&quot; to include armoury tokens.</p>
+                  ) : redeemForm.tokenEntries.map((entry, i) => {
+                    const opts = tokenTypes.length ? tokenTypes : ['xp_crimes'];
+                    return (
+                      <div key={`redeem-token-${i}`} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_7rem_auto] gap-2 items-center rounded-md border border-input/60 bg-black/30 px-2 py-2">
+                        <div>
+                          <span className="text-[9px] text-mutedForeground uppercase font-heading block mb-0.5 sm:hidden">Type</span>
+                          <select value={entry.type} onChange={(e) => setRedeemForm((p) => ({ ...p, tokenEntries: p.tokenEntries.map((t, j) => (j === i ? { ...t, type: e.target.value } : t)) }))} className="w-full px-2 py-1.5 rounded-md border border-input bg-transparent text-[11px] font-heading">
+                            {opts.map((tt) => <option key={tt} value={tt}>{tt.replace(/_/g, ' ')}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <span className="text-[9px] text-mutedForeground uppercase font-heading block mb-0.5 sm:hidden">Amount</span>
+                          <FormattedNumberInput value={String(entry.amount !== undefined && entry.amount !== null && entry.amount !== '' ? entry.amount : '')} onChange={(v) => setRedeemForm((p) => ({ ...p, tokenEntries: p.tokenEntries.map((t, j) => (j === i ? { ...t, amount: v === '' ? 0 : (parseInt(v, 10) || 0) } : t)) }))} className="w-full min-w-0 px-2 py-1.5 rounded-md border border-input bg-transparent text-xs tabular-nums" />
+                        </div>
+                        <div className="flex sm:justify-end">
+                          <button type="button" onClick={() => setRedeemForm((p) => ({ ...p, tokenEntries: p.tokenEntries.filter((_, j) => j !== i) }))} className="inline-flex items-center gap-1 text-red-400 hover:text-red-300 text-[10px] font-heading uppercase px-2 py-1 rounded-md hover:bg-red-500/10" title="Remove row">
+                            <Trash2 size={12} className="shrink-0" />
+                            <span className="sm:hidden">Remove</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             </div>
+
             <BtnPrimary onClick={handleCreateRedeemCode} disabled={redeemCodeCreateLoading}>{redeemCodeCreateLoading ? '...' : 'Create code'}</BtnPrimary>
 
-            <div className="pt-2 border-t border-primary/20">
-              <div className="flex items-center justify-between gap-2 mb-1">
+            <div className="rounded-md border border-primary/15 bg-black/25 p-3 space-y-2">
+              <div className="flex items-center justify-between gap-2">
                 <p className="text-xs font-medium text-foreground">Existing codes</p>
                 <button type="button" onClick={() => fetchRedeemCodes()} disabled={redeemCodesLoading} className="text-[10px] font-heading uppercase text-primary hover:underline disabled:opacity-50">Refresh list</button>
               </div>
               {redeemCodesLoading ? <p className="text-[10px] text-mutedForeground">Loading…</p> : (
-                <div className="space-y-1 max-h-64 overflow-y-auto">
-                  {redeemCodesList.length === 0 ? <p className="text-[10px] text-mutedForeground">No redeem codes yet. (List loads when this section is open under Quick &amp; Bulk.)</p> : redeemCodesList.map((rc, i) => {
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-0.5">
+                  {redeemCodesList.length === 0 ? <p className="text-[10px] text-mutedForeground">No redeem codes yet.</p> : redeemCodesList.map((rc, i) => {
                     const used = Number(rc.used_count) || 0;
                     const cap = rc.max_uses != null ? Number(rc.max_uses) : null;
                     const usesLabel = cap != null ? `${used} / ${cap} uses` : `${used} use${used === 1 ? '' : 's'} (no limit)`;
                     const exhausted = cap != null && used >= cap;
+                    const rewardLine = summarizeRedeemRewardsForAdmin(rc.rewards);
                     return (
-                      <div key={`${rc.code}-${i}`} className="flex flex-wrap items-center gap-2 py-1.5 px-2 rounded bg-black/20 text-[10px]">
-                        <span className="font-mono font-medium text-foreground">{rc.code}</span>
-                        {rc.active ? <span className="text-emerald-400 font-heading uppercase">Active</span> : <span className="text-red-400 font-heading uppercase">Inactive</span>}
-                        <span className={`tabular-nums ${exhausted ? 'text-amber-400' : 'text-mutedForeground'}`}>{usesLabel}{exhausted && rc.active ? ' · exhausted' : ''}</span>
-                        <span className="text-mutedForeground truncate max-w-[200px]" title={JSON.stringify(rc.rewards || {})}>{Object.keys(rc.rewards || {}).join(', ') || '—'}</span>
-                        {rc.active && (
-                          <button type="button" onClick={() => handleDeactivateRedeemCode(rc.code)} className="text-amber-400 hover:underline text-[10px] font-heading uppercase">Deactivate</button>
-                        )}
-                        <button type="button" onClick={() => handleDeleteRedeemCode(rc.code)} className="text-red-400 hover:underline text-[10px] font-heading uppercase">Delete</button>
+                      <div key={`${rc.code}-${i}`} className="rounded-md border border-input/50 bg-black/30 p-2.5 text-[10px] space-y-1.5">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                          <span className="font-mono font-medium text-foreground">{rc.code}</span>
+                          {rc.active ? <span className="text-emerald-400 font-heading uppercase">Active</span> : <span className="text-red-400 font-heading uppercase">Inactive</span>}
+                          <span className={`tabular-nums ${exhausted ? 'text-amber-400' : 'text-mutedForeground'}`}>{usesLabel}{exhausted && rc.active ? ' · exhausted' : ''}</span>
+                          <span className="flex flex-wrap gap-x-2 gap-y-0.5 sm:ml-auto">
+                            {rc.active && (
+                              <button type="button" onClick={() => handleDeactivateRedeemCode(rc.code)} className="text-amber-400 hover:underline text-[10px] font-heading uppercase">Deactivate</button>
+                            )}
+                            <button type="button" onClick={() => handleDeleteRedeemCode(rc.code)} className="text-red-400 hover:underline text-[10px] font-heading uppercase">Delete</button>
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-mutedForeground leading-snug break-words" title={JSON.stringify(rc.rewards || {})}>{rewardLine}</p>
                       </div>
                     );
                   })}

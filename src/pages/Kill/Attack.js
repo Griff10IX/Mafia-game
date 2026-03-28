@@ -49,17 +49,6 @@ function formatCountdown(expiresAtIso) {
   return `${s}s`;
 }
 
-/** Searching: time until target is found (`found_at`). Found: row expiry (`expires_at`). */
-function attackCountdownIso(a) {
-  if (!a) return null;
-  if (a.status === 'searching' && a.found_at) return a.found_at;
-  return a.expires_at || a.search_started;
-}
-
-function attackCountdownLabel(a) {
-  return a?.status === 'searching' ? 'Found in' : 'Expires';
-}
-
 // Shown in toast when caught during booze run (prohibition bust)
 const BOOZE_CAUGHT_IMAGE = 'https://historicipswich.net/wp-content/uploads/2021/12/0a79f-boston-rum-prohibition1.jpg';
 const MOLOTOV_BULLET_EQUIV = 5000;
@@ -542,7 +531,7 @@ const SearchesCard = ({
                     <div className="col-span-4 text-right text-[9px] text-mutedForeground font-heading">
                       <span className="inline-flex items-center gap-1 justify-end">
                         <Clock size={12} />
-                        {formatCountdown(attackCountdownIso(a))}
+                        {formatCountdown(a.expires_at || a.search_started)}
                       </span>
                     </div>
                   </div>
@@ -620,7 +609,7 @@ const SearchesCard = ({
 
                   <div className="text-[9px] text-mutedForeground font-heading flex items-center gap-1">
                     <Clock size={10} />
-                    {attackCountdownLabel(a)}: {formatCountdown(attackCountdownIso(a))}
+                    Expires: {formatCountdown(a.expires_at || a.search_started)}
                   </div>
                 </div>
               ))}
@@ -630,7 +619,7 @@ const SearchesCard = ({
         
         {attacks.length > 0 && (
           <p className="text-[9px] text-mutedForeground font-heading italic pt-1">
-            💡 While searching, the timer is time until the target is found (~2h 15m–2h 45m). After found, it shows how long the row stays valid.
+            💡 Searches complete automatically. Typical find time ~2h 15m–2h 45m; the timer above is the 24h row expiry from search start.
           </p>
         )}
       </div>

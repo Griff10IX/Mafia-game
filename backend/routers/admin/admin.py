@@ -548,6 +548,7 @@ def register(router):
         "travel": "travel_tokens",
         "properties": "properties_tokens",
         "jailbust_bonus": "jailbust_tokens",
+        "rank_xp_pass": "rank_xp_pass_tokens",
     }
 
     @router.get("/admin/token-types")
@@ -564,7 +565,7 @@ def register(router):
         amount: int,
         current_user: dict = Depends(get_current_user)
     ):
-        """Add tokens to a user. token_type: xp_crimes, xp_gta, auto_rank_2h, melt, oc_reduced, booze, racket, travel, properties, jailbust_bonus"""
+        """Add tokens to a user. token_type: xp_crimes, xp_gta, auto_rank_2h, melt, oc_reduced, booze, racket, travel, properties, jailbust_bonus, rank_xp_pass"""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         if token_type not in ADMIN_TOKEN_TYPES:
