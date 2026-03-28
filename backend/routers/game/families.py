@@ -42,6 +42,7 @@ from server import (
     _family_war_start,
     _record_war_stats_bodyguard_kill,  # kept for potential direct use
     founding_member_income_mult,
+    _is_admin,
 )
 
 # ============ Constants ============
@@ -1163,19 +1164,20 @@ async def families_lookup(tag: Optional[str] = None, id: Optional[str] = None, c
 async def families_create(request: FamilyCreateRequest, current_user: dict = Depends(get_current_user)):
     if current_user.get("family_id"):
         raise HTTPException(status_code=400, detail="Already in a family")
+    is_admin = _is_admin(current_user)
     name = (request.name or "").strip()[:30]
     tag = (request.tag or "").strip().upper().replace(" ", "")[:4]
     if len(name) < 2 or len(tag) < 2:
         raise HTTPException(status_code=400, detail="Name and tag must be at least 2 characters")
     await cleanup_dead_families()
-    if await count_families_toward_player_cap() >= MAX_FAMILIES:
+    if not is_admin and await count_families_toward_player_cap() >= MAX_FAMILIES:
         raise HTTPException(status_code=400, detail="Maximum number of families reached")
     if await db.families.find_one({"wiped": {"$ne": True}, "$or": [{"name": name}, {"tag": tag}]}):
         raise HTTPException(status_code=400, detail="Name or tag already taken")
     family_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     first_racket_id = FAMILY_RACKETS[0]["id"]
-    await db.families.insert_one({
+    fam_doc = {
         "id": family_id, "name": name, "tag": tag, "boss_id": current_user["id"],
         "treasury": 0, "treasury_bullets": 0, "treasury_points": 0, "treasury_loot_pieces": 0, "created_at": now,
         "rackets": {first_racket_id: {"level": 1, "last_collected_at": None}},
@@ -1186,21 +1188,34 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
         "join_auto_accept_rank_min": None,
         "melt_treasury_pct": 0,
         "melt_reward_tiers": [],
-    })
+    }
+    if is_admin:
+        fam_doc["player_cap_exempt"] = True
+    await db.families.insert_one(fam_doc)
     await db.family_members.insert_one({
         "id": str(uuid.uuid4()), "family_id": family_id, "user_id": current_user["id"],
         "role": "boss", "joined_at": now,
     })
-    result = await db.users.update_one(
-        {"id": current_user["id"], "money": {"$gte": FAMILY_CREATE_COST}},
-        {"$set": {"family_id": family_id, "family_role": "boss"}, "$inc": {"money": -FAMILY_CREATE_COST}},
-    )
+    if is_admin:
+        result = await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": {"family_id": family_id, "family_role": "boss"}},
+        )
+    else:
+        result = await db.users.update_one(
+            {"id": current_user["id"], "money": {"$gte": FAMILY_CREATE_COST}},
+            {"$set": {"family_id": family_id, "family_role": "boss"}, "$inc": {"money": -FAMILY_CREATE_COST}},
+        )
     if result.modified_count == 0:
         await db.families.delete_one({"id": family_id})
         await db.family_members.delete_one({"family_id": family_id, "user_id": current_user["id"]})
         raise HTTPException(
             status_code=400,
-            detail=f"You need ${FAMILY_CREATE_COST:,} to create a family.",
+            detail=(
+                "Could not assign family to your account."
+                if is_admin
+                else f"You need ${FAMILY_CREATE_COST:,} to create a family."
+            ),
         )
     _invalidate_list_cache()
     _invalidate_my_cache(current_user["id"])
