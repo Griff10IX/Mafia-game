@@ -4830,6 +4830,101 @@ def register(router):
             "value_types": value_types,
         }
 
+    @router.post("/admin/auth/fix-login-fields")
+    async def admin_fix_login_fields(
+        target_username: str,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Repair malformed login-related fields for one user and clear lockout."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        username_pattern = _username_pattern((target_username or "").strip())
+        user = await db.users.find_one(
+            {"username": username_pattern},
+            {"_id": 0, "id": 1, "username": 1, "email": 1, "login_ips": 1, "sessions": 1, "last_login_ip": 1, "last_request_ip": 1},
+        )
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        def _to_clean_str(v) -> Optional[str]:
+            if v is None:
+                return None
+            s = str(v).strip()
+            return s[:200] if s else None
+
+        # login_ips must be a short list of strings
+        login_ips_raw = user.get("login_ips")
+        login_ips_before_type = type(login_ips_raw).__name__
+        login_ips_clean: List[str] = []
+        if isinstance(login_ips_raw, list):
+            seen = set()
+            for item in login_ips_raw:
+                s = _to_clean_str(item)
+                if not s or s in seen:
+                    continue
+                seen.add(s)
+                login_ips_clean.append(s)
+            login_ips_clean = login_ips_clean[-20:]
+
+        # sessions must be a list of small dicts
+        sessions_raw = user.get("sessions")
+        sessions_before_type = type(sessions_raw).__name__
+        sessions_clean: List[dict] = []
+        if isinstance(sessions_raw, list):
+            for ent in sessions_raw:
+                if not isinstance(ent, dict):
+                    continue
+                sid = _to_clean_str(ent.get("id")) or str(uuid.uuid4())
+                ip = _to_clean_str(ent.get("ip")) or ""
+                device_type = _to_clean_str(ent.get("device_type")) or "Unknown"
+                created_at = _to_clean_str(ent.get("created_at")) or datetime.now(timezone.utc).isoformat()
+                last_used_at = _to_clean_str(ent.get("last_used_at")) or created_at
+                sessions_clean.append({
+                    "id": sid,
+                    "ip": ip,
+                    "device_type": device_type,
+                    "created_at": created_at,
+                    "last_used_at": last_used_at,
+                })
+            sessions_clean = sessions_clean[:10]
+
+        set_updates: Dict[str, object] = {
+            "login_ips": login_ips_clean,
+            "sessions": sessions_clean,
+        }
+        unset_updates: Dict[str, str] = {}
+        for ip_key in ("last_login_ip", "last_request_ip"):
+            val = user.get(ip_key)
+            if val is None:
+                continue
+            if isinstance(val, str):
+                set_updates[ip_key] = val.strip()[:200]
+            else:
+                unset_updates[ip_key] = ""
+
+        update_doc: Dict[str, object] = {"$set": set_updates}
+        if unset_updates:
+            update_doc["$unset"] = unset_updates
+        await db.users.update_one({"id": user["id"]}, update_doc)
+
+        # Clear failed-attempt lockout for this account so they can retry immediately.
+        lockout_deleted = 0
+        email_clean = (user.get("email") or "").strip().lower()
+        if email_clean:
+            lockout_res = await db.login_lockouts.delete_many({"email": email_clean})
+            lockout_deleted = int(lockout_res.deleted_count or 0)
+
+        return {
+            "message": f"Repaired login fields for {user.get('username')}",
+            "username": user.get("username"),
+            "user_id": user.get("id"),
+            "login_ips_before_type": login_ips_before_type,
+            "sessions_before_type": sessions_before_type,
+            "login_ips_after_count": len(login_ips_clean),
+            "sessions_after_count": len(sessions_clean),
+            "lockouts_cleared": lockout_deleted,
+        }
+
     @router.get("/admin/user-details/{user_id}")
     async def admin_user_details(user_id: str, current_user: dict = Depends(get_current_user)):
         """View user document and all casino ownerships. Admin or moderator."""

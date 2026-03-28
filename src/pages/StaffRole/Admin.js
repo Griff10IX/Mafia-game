@@ -142,6 +142,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Search & Attack Tools', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['search', 'attack', 'time'] },
   { label: 'Set Search Time', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['search', 'time', 'minutes'] },
   { label: 'Clear All Searches', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['clear', 'searches', 'delete'] },
+  { label: 'Fix login fields (user)', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['login', 'fix', 'repair', 'sessions', 'ip', 'lockout'] },
   { label: 'Clear OC invites (user)', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['oc', 'organised', 'crime', 'invite', 'clear', 'user'] },
   { label: 'Clear minigame records (user)', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['minigame', 'records', 'clear', 'user', 'scores'] },
   { label: 'Reset Hitlist NPC Timers', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['hitlist', 'npc', 'timer', 'reset'] },
@@ -397,6 +398,7 @@ export default function Admin() {
     if (typeof window !== 'undefined') window.location.hash = tool.categoryId;
   };
   const [resetOcTimersLoading, setResetOcTimersLoading] = useState(false);
+  const [fixLoginFieldsLoading, setFixLoginFieldsLoading] = useState(false);
   const [clearOcInvitesLoading, setClearOcInvitesLoading] = useState(false);
   const [clearMinigameRecordsLoading, setClearMinigameRecordsLoading] = useState(false);
   const [resetDailyRewardsLoading, setResetDailyRewardsLoading] = useState(false);
@@ -2206,6 +2208,18 @@ export default function Admin() {
       toast.success(res.data?.message || 'Reset');
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
     finally { setResetOcTimersLoading(false); }
+  };
+
+  const handleFixLoginFields = async () => {
+    const username = (formData.targetUsername || '').trim();
+    if (!username) { toast.error('Enter a username'); return; }
+    if (!window.confirm(`Repair login fields and clear lockout for ${username}?`)) return;
+    setFixLoginFieldsLoading(true);
+    try {
+      const res = await api.post(`/admin/auth/fix-login-fields?target_username=${encodeURIComponent(username)}`);
+      toast.success(res.data?.message || 'Login fields repaired');
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+    finally { setFixLoginFieldsLoading(false); }
   };
 
   const handleClearUserOcInvites = async () => {
@@ -8761,6 +8775,12 @@ export default function Admin() {
             <ActionRow icon={Clock} label="Reset All OC Timers" description="Clear OC cooldown for everyone; all can run Organised Crime immediately">
               <BtnPrimary onClick={handleResetAllOcTimers} disabled={resetOcTimersLoading}>
                 {resetOcTimersLoading ? '...' : 'Reset'}
+              </BtnPrimary>
+            </ActionRow>
+
+            <ActionRow icon={Wrench} label="Fix login fields (user)" description="Target Username: repair malformed sessions/login IP fields and clear login lockout">
+              <BtnPrimary onClick={handleFixLoginFields} disabled={fixLoginFieldsLoading || !(formData.targetUsername || '').trim()}>
+                {fixLoginFieldsLoading ? '...' : 'Fix'}
               </BtnPrimary>
             </ActionRow>
 
