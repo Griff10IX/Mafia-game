@@ -88,6 +88,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Add Points', categoryId: 'admin-players', collapseKey: 'points', keywords: ['points', 'add', 'give'] },
   { label: 'Points Provenance', categoryId: 'admin-donations', collapseKey: 'donationsProvenance', keywords: ['chargeback', 'provenance', 'payment session', 'points tree'] },
   { label: 'Add Tokens', categoryId: 'admin-players', collapseKey: 'tokens', keywords: ['tokens', 'crime', 'gta', 'melt', 'booze', 'travel', 'oc', 'racket', 'jailbust'] },
+  { label: 'Clear pool cue upgrades', categoryId: 'admin-players', keywords: ['pool', '8-ball', '8 ball', 'cue', 'upgrades', 'reset', 'minigame'] },
   { label: 'Founding Member', categoryId: 'admin-players', collapseKey: 'founding', keywords: ['founding', 'member', 'badge', 'founder'] },
   { label: 'Add Money', categoryId: 'admin-players', collapseKey: 'money', keywords: ['money', 'cash', 'add', 'give'] },
   { label: 'Add Bullets', categoryId: 'admin-players', collapseKey: 'bullets', keywords: ['bullets', 'ammo', 'add'] },
@@ -1663,6 +1664,20 @@ export default function Admin() {
       const response = await api.post(`/admin/add-tokens?target_username=${formData.targetUsername}&token_type=${formData.tokenType}&amount=${formData.tokenAmount}`);
       toast.success(response.data.message);
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  const handlePoolClearCueUpgrades = async () => {
+    if (!(formData.targetUsername || '').trim()) {
+      toast.error('Enter target username');
+      return;
+    }
+    if (!window.confirm(`Reset ALL 8-ball pool cue upgrades for ${formData.targetUsername}? Every owned cue goes to 0/250.`)) return;
+    try {
+      const response = await api.post(`/admin/pool-clear-cue-upgrades?target_username=${encodeURIComponent(formData.targetUsername)}`);
+      toast.success(response.data?.message || 'Done');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    }
   };
 
   const handleGrantGamePass = async () => {
@@ -4047,6 +4062,10 @@ export default function Admin() {
               </Select>
               <Input type="number" min="1" value={formData.tokenAmount} onChange={(e) => setFormData((prev) => ({ ...prev, tokenAmount: parseInt(e.target.value) || 1 }))} className="w-20" />
               <BtnPrimary onClick={handleAddTokens}>Give</BtnPrimary>
+            </ActionRow>
+
+            <ActionRow icon={Layers} label="Clear pool cue upgrades" description="8-ball minigame: reset power/curve/luck/aim/control on every owned cue (target username above)">
+              <BtnDanger onClick={handlePoolClearCueUpgrades}>Clear all</BtnDanger>
             </ActionRow>
 
             <ActionRow

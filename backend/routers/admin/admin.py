@@ -584,6 +584,36 @@ def register(router):
         token_label = token_type.replace("_", " ").title()
         return {"message": f"Added {amount} {token_label} token(s) to {target['username']}"}
 
+    @router.post("/admin/pool-clear-cue-upgrades")
+    async def admin_pool_clear_cue_upgrades(
+        target_username: str,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Reset all 8-ball pool cue upgrade levels for every cue instance (power, curve, luck, aim, control, spin, preview)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = target["id"]
+        zero = {
+            "power": 0,
+            "curve": 0,
+            "luck": 0,
+            "aim": 0,
+            "control": 0,
+            "spin": 0,
+            "preview": 0,
+        }
+        result = await db.pool_cue_upgrades.update_many({"user_id": uid}, {"$set": zero})
+        un = target.get("username") or target_username
+        return {
+            "message": f"Reset 8-ball pool cue upgrades for {un} ({result.matched_count} cue(s); {result.modified_count} document(s) updated).",
+            "matched_count": result.matched_count,
+            "modified_count": result.modified_count,
+        }
+
     @router.post("/admin/grant-game-pass")
     async def admin_grant_game_pass(
         target_username: str,

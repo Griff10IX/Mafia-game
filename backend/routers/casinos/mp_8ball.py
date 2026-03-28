@@ -542,7 +542,12 @@ def _maybe_finalize_resolving(game: dict) -> dict:
         return game
     players = list(game.get("players") or [])
     fallback_idx = int(game.get("current_turn_index") or 0)
-    next_idx = int(game.get("pending_turn_index") or fallback_idx)
+    # pending_turn_index may be 0 (first player); must not use `or` — 0 is falsy in Python.
+    pending_raw = game.get("pending_turn_index")
+    if pending_raw is None:
+        next_idx = fallback_idx
+    else:
+        next_idx = int(pending_raw)
     if next_idx < 0 or next_idx >= len(players):
         next_idx = fallback_idx
     game["phase"] = "playing"
