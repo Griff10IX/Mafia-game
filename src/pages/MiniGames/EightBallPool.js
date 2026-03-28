@@ -58,6 +58,15 @@ const TABLE_HEAD_STRING_X = TABLE_W * 0.25;
 const BALL_R = 0.028;
 /** Capture radius in table units — must match `MP_8BALL_POCKET_R` in backend/routers/casinos/mp_8ball.py */
 const POCKET_R_TABLE = 0.045;
+/** Same centers as backend `_pockets()` — used so aim preview stops at pocket capture, not pocket art. */
+const POCKET_CENTERS_TABLE = [
+  [0, 0],
+  [TABLE_W / 2, 0],
+  [TABLE_W, 0],
+  [0, TABLE_H],
+  [TABLE_W / 2, TABLE_H],
+  [TABLE_W, TABLE_H],
+];
 const AI_POOL_ID = 'ai_pool_bot';
 const POOL_SHOT_CLOCK_SEC = 60;
 const REPLAY_IDLE_POS_EPS = 0.00035;
@@ -212,6 +221,41 @@ function rayToTableWall(ox, oy, dx, dy, minX, maxX, minY, maxY) {
   if (dy > 1e-8) wallDist = Math.min(wallDist, (maxY - oy) / dy);
   if (dy < -1e-8) wallDist = Math.min(wallDist, (minY - oy) / dy);
   return wallDist;
+}
+
+/**
+ * First distance t (same units as canvas ray param) where ball center enters pocket capture.
+ * Must use table-space line (same linear map as canvas→table); matches server pocket test.
+ */
+function rayToPocketCaptureFirst(ox, oy, dx, dy, w, h, pocketR) {
+  const m = PREVIEW_TABLE_MARGIN;
+  const fw = w - 2 * m;
+  const fh = h - 2 * m;
+  const oxT = ((ox - m) / fw) * TABLE_W;
+  const oyT = ((oy - m) / fh) * TABLE_H;
+  const vx = dx * (TABLE_W / fw);
+  const vy = dy * (TABLE_H / fh);
+  let best = Infinity;
+  for (const [px, py] of POCKET_CENTERS_TABLE) {
+    const A = vx * vx + vy * vy;
+    if (A < 1e-20) continue;
+    const dx0 = oxT - px;
+    const dy0 = oyT - py;
+    const B = 2 * (dx0 * vx + dy0 * vy);
+    const C = dx0 * dx0 + dy0 * dy0 - pocketR * pocketR;
+    const disc = B * B - 4 * A * C;
+    if (disc < 0) continue;
+    const sd = Math.sqrt(disc);
+    const t1 = (-B - sd) / (2 * A);
+    const t2 = (-B + sd) / (2 * A);
+    for (const t of [t1, t2]) {
+      if (t <= 1e-8) continue;
+      const xt = oxT + t * vx;
+      const yt = oyT + t * vy;
+      if (Math.hypot(xt - px, yt - py) <= pocketR + 1e-5) best = Math.min(best, t);
+    }
+  }
+  return best;
 }
 
 function reflectDirAtPoint(nx, ny, dx, dy, minX, maxX, minY, maxY) {
@@ -496,10 +540,11 @@ export default function EightBallPool() {
     const { rx: brx, ry: bry } = ballRadiiPx(w, h);
     const ballPxR = Math.max(brx, bry);
     const hitRadius = ballPxR * 2.02;
-    const minX = PREVIEW_TABLE_MARGIN;
-    const maxX = w - PREVIEW_TABLE_MARGIN;
-    const minY = PREVIEW_TABLE_MARGIN;
-    const maxY = h - PREVIEW_TABLE_MARGIN;
+    /** Ball centers bounce at x∈[BALL_R,W-BALL_R], y∈[BALL_R,H-BALL_R] — not the felt edge (matches server). */
+    const minX = tableToCanvasX(BALL_R, w);
+    const maxX = tableToCanvasX(TABLE_W - BALL_R, w);
+    const minY = tableToCanvasY(BALL_R, h);
+    const maxY = tableToCanvasY(TABLE_H - BALL_R, h);
     // Object-ball path: more segments + longer line as aim upgrades increase (rails off cushions).
     const objectSegmentBudget = objectRailSegmentCap;
     const objectPathLength = 90 + (previewLevel * 14) + (previewTier * 48) + (Number(effPower || 0) * 95);
@@ -507,6 +552,7 @@ export default function EightBallPool() {
 
     for (let segmentIndex = 0; segmentIndex < previewSegmentBudget && remain > 1; segmentIndex += 1) {
       const wallDist = rayToTableWall(ox, oy, dx, dy, minX, maxX, minY, maxY);
+      const pocketDist = rayToPocketCaptureFirst(ox, oy, dx, dy, w, h, POCKET_R_TABLE);
       let hitBall = null;
       let ballDist = Number.POSITIVE_INFINITY;
       if (!contactDone) {
@@ -521,13 +567,18 @@ export default function EightBallPool() {
           }
         }
       }
-      const travel = Math.min(remain, wallDist, ballDist);
+      const travel = Math.min(remain, wallDist, ballDist, pocketDist);
       if (!Number.isFinite(travel) || travel <= 0) break;
       const nx = ox + (dx * travel);
       const ny = oy + (dy * travel);
-      segs.push({ x1: ox, y1: oy, x2: nx, y2: ny, kind: hitBall && ballDist <= wallDist ? 'contact' : 'path' });
+      const atBall = Boolean(
+        hitBall && ballDist <= wallDist && ballDist <= pocketDist && Math.abs(ballDist - travel) < 1e-5,
+      );
+      const atPocket = !atBall && Math.abs(pocketDist - travel) < 1e-5;
+      segs.push({ x1: ox, y1: oy, x2: nx, y2: ny, kind: atBall ? 'contact' : 'path' });
       remain -= travel;
-      if (hitBall && ballDist <= wallDist) {
+      if (atPocket) break;
+      if (atBall) {
         contactDone = true;
         ghost = { x: nx, y: ny, objectX: hitBall.x, objectY: hitBall.y };
         const odxRaw = hitBall.x - nx;
@@ -540,7 +591,8 @@ export default function EightBallPool() {
         let oRemain = objectPathLength;
         for (let oi = 0; oi < objectSegmentBudget && oRemain > 1; oi += 1) {
           const oWall = rayToTableWall(oox, ooy, odx, ody, minX, maxX, minY, maxY);
-          const oTravel = Math.min(oRemain, oWall);
+          const oPocket = rayToPocketCaptureFirst(oox, ooy, odx, ody, w, h, POCKET_R_TABLE);
+          const oTravel = Math.min(oRemain, oWall, oPocket);
           if (!Number.isFinite(oTravel) || oTravel <= 0) break;
           const onx = oox + (odx * oTravel);
           const ony = ooy + (ody * oTravel);
@@ -553,6 +605,7 @@ export default function EightBallPool() {
             lineWidth: objectLineWidth,
           });
           oRemain -= oTravel;
+          if (Math.abs(oPocket - oTravel) < 1e-5) break;
           const { rdx, rdy } = reflectDirAtPoint(onx, ony, odx, ody, minX, maxX, minY, maxY);
           odx = rdx;
           ody = rdy;
@@ -1449,14 +1502,22 @@ export default function EightBallPool() {
   const leaveLobby = async () => {
     if (!pvpGame?.id) return;
     const wasInProgress = pvpGame.status === 'in_progress';
+    const waitingWithOpponent = pvpGame.status === 'waiting' && (pvpGame.players || []).length >= 2;
+    const waitingSolo = pvpGame.status === 'waiting' && (pvpGame.players || []).length < 2;
     if (wasInProgress) {
       if (typeof window !== 'undefined' && !window.confirm('Forfeit this match? You lose (DNF) and your opponent wins.')) return;
+    } else if (waitingWithOpponent) {
+      if (typeof window !== 'undefined' && !window.confirm('Leave lobby? You forfeit — your opponent wins the pot. No buy-in refund.')) return;
+    } else if (waitingSolo) {
+      if (typeof window !== 'undefined' && !window.confirm('Leave lobby? Your buy-in is not refunded.')) return;
     }
     setBusy(true);
     try {
       await api.post(`/casino/mp-8ball/games/${encodeURIComponent(pvpGame.id)}/leave`);
       setPvpGame(null);
-      toast.success(wasInProgress ? 'You forfeited (DNF)' : 'Left lobby');
+      if (wasInProgress) toast.success('You forfeited (DNF)');
+      else if (waitingWithOpponent) toast.success('You forfeited — opponent wins the pot');
+      else toast.success('Left lobby');
       await fetchPvpLobbies();
     } catch (e) {
       toast.error(getApiErrorMessage(e) || 'Failed to leave');

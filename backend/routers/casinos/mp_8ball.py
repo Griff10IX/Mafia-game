@@ -1020,14 +1020,30 @@ def register(router):
         players = [p for p in (game.get("players") or []) if p.get("user_id") != uid]
         if len(players) == len(game.get("players") or []):
             return {"message": "Not in game"}
-        buy_in = int(game.get("buy_in") or 0)
-        if buy_in > 0:
-            await db.users.update_one({"id": uid}, {"$inc": {"pool_cash": buy_in}})
         if not players:
             await db.mp_8ball_games.delete_one({"id": game_id})
             return {"message": "Game closed"}
-        await db.mp_8ball_games.update_one({"id": game_id}, {"$set": {"players": players, "pot": max(0, int(game.get("pot") or 0) - buy_in)}})
-        return {"message": "Left game"}
+        winner_uid = players[0].get("user_id")
+        if not winner_uid:
+            await db.mp_8ball_games.delete_one({"id": game_id})
+            return {"message": "Game closed"}
+        loser_uid = uid
+        await db.mp_8ball_games.update_one(
+            {"id": game_id},
+            {
+                "$set": {
+                    "status": "completed",
+                    "phase": "settled",
+                    "winner_user_id": winner_uid,
+                    "result_reason": "dnf",
+                    "completed_at": _now_iso(),
+                    "updated_at": _now_iso(),
+                }
+            },
+        )
+        g_done = await db.mp_8ball_games.find_one({"id": game_id}, {"_id": 0})
+        await _apply_pool_match_rewards(db, g_done, winner_uid, loser_uid)
+        return _public_game(g_done, uid)
 
     @router.post("/casino/mp-8ball/games/{game_id}/ready")
     async def pool_ready_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
