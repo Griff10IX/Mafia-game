@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { toast } from "sonner";
 import api from "../../utils/api";
 import { startMinigameRun } from "../../utils/minigameRunSession";
+import useMinigamePlaysLeft from "../../hooks/useMinigamePlaysLeft";
 import styles from "../../styles/noir.module.css";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -240,6 +241,7 @@ function lerp(a, b, t) { return a + (b - a) * Math.min(1, Math.max(0, t)); }
 // COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Snake() {
+  const { playsLeft, maxPlays, canPlay, updateFromStart, refresh: refreshPlays } = useMinigamePlaysLeft("snake");
   const canvasRef = useRef(null);
   const stateRef = useRef(null);
   const rafRef = useRef(null);
@@ -423,9 +425,11 @@ export default function Snake() {
   }, [tick]);
 
   const startGame = useCallback(async () => {
+    if (!canPlay) { toast.error("Hourly play limit reached. Try again next hour."); return; }
     try {
-      const sid = await startMinigameRun("snake");
-      snakeSessionRef.current = sid;
+      const run = await startMinigameRun("snake");
+      snakeSessionRef.current = run.session_id;
+      updateFromStart(run);
       const s = initState(levelId, difficultyId);
       stateRef.current = s;
       dirQueueRef.current = [];
@@ -440,7 +444,7 @@ export default function Snake() {
     } catch (e) {
       toast.error(e?.response?.data?.detail || e?.message || "Could not start run");
     }
-  }, [initState, renderLoop, levelId, difficultyId]);
+  }, [initState, renderLoop, levelId, difficultyId, canPlay, updateFromStart]);
 
   const submitScore = useCallback(async (finalScore) => {
     if (finalScore <= 0) return;
@@ -457,13 +461,15 @@ export default function Snake() {
       if (snakeSessionRef.current === runSessionId) snakeSessionRef.current = null;
       toast.success(`Score submitted: ${finalScore} pts`);
       await fetchLB();
+      refreshPlays();
     } catch (e) {
       if (snakeSessionRef.current === runSessionId) snakeSessionRef.current = null;
       toast.error(e?.response?.data?.detail || "Failed to submit score");
+      refreshPlays();
     } finally {
       setPhase("dead");
     }
-  }, [fetchLB]);
+  }, [fetchLB, refreshPlays]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -593,6 +599,11 @@ export default function Snake() {
           <div style={{ fontFamily: "'Cinzel',serif", fontSize: 9, letterSpacing: ".15em", color: "var(--noir-muted)" }}>
             BEST <span style={{ color: "var(--noir-primary)" }}>{hiScore}</span>
           </div>
+          {playsLeft != null && (
+            <div style={{ fontFamily: "'Cinzel',serif", fontSize: 9, letterSpacing: ".15em", color: canPlay ? "var(--noir-muted)" : "#dc2626" }}>
+              PLAYS {playsLeft}/{maxPlays}
+            </div>
+          )}
         </div>
       </div>
 
@@ -754,19 +765,27 @@ export default function Snake() {
               </div>
               <button
                 onClick={startGame}
+                disabled={!canPlay}
                 style={{
                   fontFamily: "'Cinzel',serif", fontSize: "clamp(11px,2.8vw,13px)", fontWeight: 700, letterSpacing: ".2em",
                   textTransform: "uppercase", padding: "clamp(12px,3vw,14px) clamp(20px,5vw,28px)", minHeight: 48,
-                  background: "linear-gradient(135deg,#6a4010,#c9a460)",
-                  border: "none", color: "#0a0c06", cursor: "pointer",
-                  boxShadow: "0 0 20px rgba(201,164,96,0.3)",
+                  background: canPlay ? "linear-gradient(135deg,#6a4010,#c9a460)" : "#444",
+                  border: "none", color: canPlay ? "#0a0c06" : "#888", cursor: canPlay ? "pointer" : "not-allowed",
+                  boxShadow: canPlay ? "0 0 20px rgba(201,164,96,0.3)" : "none",
+                  opacity: canPlay ? 1 : 0.6,
                 }}
               >
-                Start Run
+                {canPlay ? "Start Run" : `Limit reached (${maxPlays}/${maxPlays})`}
               </button>
-              <div style={{ fontSize: "clamp(9px,2.2vw,11px)", color: "var(--noir-muted)", letterSpacing: ".1em" }}>
-                WASD / Arrows — or tap to start
-              </div>
+              {canPlay ? (
+                <div style={{ fontSize: "clamp(9px,2.2vw,11px)", color: "var(--noir-muted)", letterSpacing: ".1em" }}>
+                  WASD / Arrows — or tap to start
+                </div>
+              ) : (
+                <div style={{ fontSize: "clamp(9px,2.2vw,11px)", color: "#dc2626", letterSpacing: ".1em" }}>
+                  Hourly limit reached — resets next hour
+                </div>
+              )}
             </div>
           )}
 
@@ -805,13 +824,16 @@ export default function Snake() {
               )}
               <button
                 onClick={startGame}
+                disabled={!canPlay}
                 style={{
                   fontFamily: "'Cinzel',serif", fontSize: "clamp(10px,2.5vw,11px)", letterSpacing: ".15em",
                   padding: "clamp(10px,2.5vw,12px) 18px", minHeight: 44, border: "1px solid var(--noir-border)",
-                  background: "rgba(201,164,96,0.07)", color: "var(--noir-primary)", cursor: "pointer",
+                  background: canPlay ? "rgba(201,164,96,0.07)" : "rgba(100,100,100,0.15)",
+                  color: canPlay ? "var(--noir-primary)" : "#888", cursor: canPlay ? "pointer" : "not-allowed",
+                  opacity: canPlay ? 1 : 0.6,
                 }}
               >
-                Run Again
+                {canPlay ? "Run Again" : "Limit reached"}
               </button>
               <button
                 type="button"

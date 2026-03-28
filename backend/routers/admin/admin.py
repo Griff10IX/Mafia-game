@@ -3,6 +3,7 @@
 # force-online, lock/kill player, search time, clear searches, check, activity/gambling log,
 # find-duplicates, cheat-detection, user-details, wipe, delete-user, events, seed-families, create-test-users.
 import asyncio
+import ipaddress
 import logging
 import os
 import random
@@ -257,6 +258,7 @@ def register(router):
     _is_moderator = srv._is_moderator
     _is_hdo = srv._is_hdo
     ADMIN_EMAILS = srv.ADMIN_EMAILS
+    _staff_exclude_user_filter = srv._staff_exclude_user_filter
 
     def _admin_or_mod(user: dict) -> bool:
         """True if user is admin or moderator (mods have limited tools: logs, account info, lock user; no wealth/rank)."""
@@ -288,6 +290,26 @@ def register(router):
 
     from routers.money import crack_safe as _crack_safe_mod
     from routers.money.crack_safe import SAFE_JACKPOT_SEED as _CRACK_SAFE_JACKPOT_SEED
+
+    def _normalize_ip(raw: str) -> Optional[str]:
+        s = (raw or "").strip().strip('"').strip("'")
+        if not s:
+            return None
+        if "," in s:
+            s = s.split(",", 1)[0].strip()
+        if s.startswith("[") and "]" in s:
+            s = s[1:s.find("]")]
+        if s.count(":") == 1 and "." in s:
+            host, port = s.rsplit(":", 1)
+            if port.isdigit():
+                s = host
+        if "%" in s:
+            s = s.split("%", 1)[0]
+        try:
+            ipaddress.ip_address(s)
+            return s
+        except Exception:
+            return None
 
     @router.post("/admin/ghost-mode")
     async def admin_toggle_ghost_mode(current_user: dict = Depends(get_current_user)):
@@ -559,6 +581,47 @@ def register(router):
             "message": f"{verb} ${display:,} {'to' if amount > 0 else 'from'} {target['username']}. New balance: ${new_balance:,}",
             "new_balance": new_balance,
         }
+
+    @router.get("/admin/swiss-bank/list")
+    async def admin_swiss_bank_list(
+        min_balance: int = Query(1, ge=0),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """List all users with swiss_balance >= min_balance, sorted by balance descending."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        cursor = db.users.find(
+            {"swiss_balance": {"$gte": min_balance}},
+            {"_id": 0, "id": 1, "username": 1, "swiss_balance": 1, "swiss_limit": 1},
+        ).sort("swiss_balance", -1).limit(500)
+        rows = await cursor.to_list(500)
+        total = sum(int(r.get("swiss_balance") or 0) for r in rows)
+        return {"users": rows, "count": len(rows), "total_swiss": total}
+
+    @router.post("/admin/swiss-bank/wipe")
+    async def admin_swiss_bank_wipe(
+        target_username: str,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Set a user's swiss_balance to 0. Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1, "swiss_balance": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        old_balance = int(target.get("swiss_balance") or 0)
+        if old_balance == 0:
+            return {"message": f"{target['username']} already has $0 in Swiss Bank."}
+        await db.users.update_one({"id": target["id"]}, {"$set": {"swiss_balance": 0}})
+        try:
+            await log_activity(
+                db, target["id"], target.get("username") or "?",
+                f"Admin wiped Swiss Bank ${old_balance:,} (by {current_user.get('username', '?')})",
+            )
+        except Exception:
+            pass
+        return {"message": f"Wiped ${old_balance:,} from {target['username']}'s Swiss Bank.", "old_balance": old_balance}
 
     @router.post("/admin/add-loot-pieces")
     async def admin_add_loot_pieces(target_username: str, pieces: int, current_user: dict = Depends(get_current_user)):
@@ -1552,7 +1615,7 @@ def register(router):
         for u in raw:
             if (u.get("email") in ADMIN_EMAILS or u.get("is_moderator")) and u.get("admin_ghost_mode"):
                 continue
-            ip = (u.get("last_request_ip") or u.get("last_login_ip") or "").strip() or None
+            ip = _normalize_ip(u.get("last_request_ip") or u.get("last_login_ip") or "")
             users.append({
                 "id": u.get("id"),
                 "username": u.get("username"),
@@ -5951,12 +6014,14 @@ def register(router):
         """Economy snapshot: total money, points, average wealth, top 5 richest."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
+        base_match = {"is_dead": {"$ne": True}, **_staff_exclude_user_filter()}
         pipeline = [
-            {"$match": {"is_dead": {"$ne": True}}},
+            {"$match": base_match},
             {"$group": {
                 "_id": None,
                 "total_money": {"$sum": {"$ifNull": ["$money", 0]}},
                 "total_bank": {"$sum": {"$ifNull": ["$bank_balance", 0]}},
+                "total_swiss": {"$sum": {"$ifNull": ["$swiss_balance", 0]}},
                 "total_points": {"$sum": {"$ifNull": ["$points", 0]}},
                 "avg_money": {"$avg": {"$ifNull": ["$money", 0]}},
                 "player_count": {"$sum": 1},
@@ -5965,23 +6030,34 @@ def register(router):
         agg = await db.users.aggregate(pipeline).to_list(1)
         stats = agg[0] if agg else {}
         top5 = await db.users.find(
-            {"is_dead": {"$ne": True}},
-            {"_id": 0, "username": 1, "money": 1, "bank_balance": 1, "points": 1},
+            base_match,
+            {"_id": 0, "username": 1, "money": 1, "bank_balance": 1, "swiss_balance": 1, "points": 1},
         ).sort("money", -1).limit(5).to_list(5)
         top5_points = await db.users.find(
-            {"is_dead": {"$ne": True}},
+            base_match,
             {"_id": 0, "username": 1, "points": 1},
         ).sort("points", -1).limit(5).to_list(5)
         player_count = stats.get("player_count", 1) or 1
+        total_bank = int(stats.get("total_bank", 0) or 0)
+        total_swiss = int(stats.get("total_swiss", 0) or 0)
         return {
             "total_money": stats.get("total_money", 0),
-            "total_bank": stats.get("total_bank", 0),
+            "total_bank": total_bank,
+            "total_swiss": total_swiss,
+            "total_banked": total_bank + total_swiss,
             "total_points": stats.get("total_points", 0),
             "avg_money": round(stats.get("avg_money", 0)),
             "avg_points": round(stats.get("total_points", 0) / player_count),
             "player_count": stats.get("player_count", 0),
             "top5_richest": [
-                {"username": u.get("username", "?"), "money": u.get("money", 0), "bank": u.get("bank_balance", 0), "points": u.get("points", 0)}
+                {
+                    "username": u.get("username", "?"),
+                    "money": u.get("money", 0),
+                    "bank": u.get("bank_balance", 0),
+                    "swiss": u.get("swiss_balance", 0),
+                    "banked_total": int(u.get("bank_balance", 0) or 0) + int(u.get("swiss_balance", 0) or 0),
+                    "points": u.get("points", 0),
+                }
                 for u in (top5 or [])
             ],
             "top5_points": [

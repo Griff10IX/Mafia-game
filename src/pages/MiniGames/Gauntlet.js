@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import api, { getApiErrorMessage, refreshUser } from "../../utils/api";
+import useMinigamePlaysLeft from "../../hooks/useMinigamePlaysLeft";
 import styles from "../../styles/noir.module.css";
 
 const GRAVITY = 0.25;
@@ -848,6 +849,7 @@ function ThemeSelect({ themes, selected, onSelect, money, bestScore, onClose }) 
 const initialGameFrame = () => ({ birdY: VIEW_H / 2, birdVel: 0, birdRot: 0, pipes: [], score: 0, bgOffset: 0 });
 
 export default function Gauntlet() {
+  const { playsLeft, maxPlays, canPlay, refresh: refreshPlays } = useMinigamePlaysLeft("gauntlet");
   const [gameState, setGameState] = useState("idle");
   const [gameFrame, setGameFrame] = useState(initialGameFrame);
   const { birdY, birdVel, birdRot, pipes, score, bgOffset } = gameFrame;
@@ -950,11 +952,13 @@ export default function Gauntlet() {
       if (respect > 0) parts.push(`${respect} respect`);
       setClaimStatus({ state: "claimed", cash, respect, message: (parts.length ? `Claimed ${parts.join(" & ")}` : "No reward") + playsMsg });
       loadLeaderboard(lbPeriod);
+      refreshPlays();
     } catch (e) {
       if (gauntletSessionIdRef.current === runSessionId) gauntletSessionIdRef.current = null;
       setClaimStatus({ state: "error", cash: 0, respect: 0, message: getApiErrorMessage(e) });
+      refreshPlays();
     }
-  }, [claimStatus.state, lbPeriod, loadLeaderboard, themeId, speedId, difficultyId, characterId]);
+  }, [claimStatus.state, lbPeriod, loadLeaderboard, themeId, speedId, difficultyId, characterId, refreshPlays]);
 
   const handleBuyCharacter = useCallback(async (char) => {
     if (money < char.price) return;
@@ -973,6 +977,7 @@ export default function Gauntlet() {
 
   const jump = useCallback(() => {
     if (stateRef.current === "idle") {
+      if (!canPlay) { toast.error("Hourly play limit reached. Try again next hour."); return; }
       void (async () => {
         try {
           const r = await api.post("/gauntlet/start", {
@@ -1156,6 +1161,11 @@ export default function Gauntlet() {
           <p style={{ color: "var(--noir-muted)", fontSize: "11px", letterSpacing: "0.1em", margin: "2px 0 0" }}>
             FLY THE CORRIDOR — EARN YOUR KEEP
           </p>
+          {playsLeft != null && (
+            <p style={{ fontSize: 10, letterSpacing: "0.12em", marginTop: 3, color: canPlay ? "var(--noir-muted)" : "#dc2626", fontWeight: canPlay ? 400 : 700 }}>
+              {playsLeft}/{maxPlays} plays left
+            </p>
+          )}
         </div>
 
         {/* Stats bar */}
@@ -1315,8 +1325,8 @@ export default function Gauntlet() {
                       <text x={VIEW_W / 2 + 70} y={VIEW_H / 2 + 20 + i * 22} textAnchor="middle" fill={theme.accent} fontSize="11" fontFamily="Cinzel, serif">+${t.cash.toLocaleString()} / +{t.respect}r</text>
                     </g>
                   ))}
-                  <text x={VIEW_W / 2} y={VIEW_H / 2 + 115} textAnchor="middle" fill={theme.accent} fontSize="13" fontFamily="Cinzel, serif" letterSpacing="3" opacity={0.85}>
-                    {isTouch ? "TAP TO BEGIN" : "TAP / SPACE TO BEGIN"}
+                  <text x={VIEW_W / 2} y={VIEW_H / 2 + 115} textAnchor="middle" fill={canPlay ? theme.accent : "#dc2626"} fontSize="13" fontFamily="Cinzel, serif" letterSpacing="3" opacity={0.85}>
+                    {!canPlay ? "HOURLY LIMIT REACHED" : isTouch ? "TAP TO BEGIN" : "TAP / SPACE TO BEGIN"}
                   </text>
                 </g>
               )}
@@ -1364,8 +1374,8 @@ export default function Gauntlet() {
                       )}
                     </div>
                   </foreignObject>
-                  <text x={VIEW_W / 2} y={VIEW_H / 2 + 136} textAnchor="middle" fill="var(--noir-primary)" fontSize="12" fontFamily="Cinzel, serif" letterSpacing="3" opacity="0.85">
-                    TAP TO TRY AGAIN
+                  <text x={VIEW_W / 2} y={VIEW_H / 2 + 136} textAnchor="middle" fill={canPlay ? "var(--noir-primary)" : "#dc2626"} fontSize="12" fontFamily="Cinzel, serif" letterSpacing="3" opacity="0.85">
+                    {canPlay ? "TAP TO TRY AGAIN" : "HOURLY LIMIT REACHED"}
                   </text>
                 </g>
               )}

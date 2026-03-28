@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import api from '../../utils/api';
 import { startMinigameRun } from '../../utils/minigameRunSession';
+import useMinigamePlaysLeft from '../../hooks/useMinigamePlaysLeft';
 import { toast } from 'sonner';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1381,6 +1382,7 @@ function FleetRoster({ships, sunkList, label, accent}) {
 // MAIN
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Battleships() {
+  const { playsLeft, maxPlays, canPlay, updateFromStart, refresh: refreshPlays } = useMinigamePlaysLeft("battleships");
   const CELL = useCellSize();
   const isMobile = CELL < 38;
 
@@ -1474,11 +1476,13 @@ export default function Battleships() {
         setWinReward(res.data.reward);
         toast.success(`Victory! +$${res.data.reward.cash.toLocaleString()} +${res.data.reward.respect} Respect`);
       }
+      refreshPlays();
     } catch (err) {
       const msg=err?.response?.data?.detail||'Failed to record win';
       if (!msg.includes('limit')) toast.error(msg);
+      refreshPlays();
     }
-  },[winSubmitted,gameStartTime,shotsFired,sunkByAi.length,activeShips.length,settings.difficulty]);
+  },[winSubmitted,gameStartTime,shotsFired,sunkByAi.length,activeShips.length,settings.difficulty,refreshPlays]);
 
   useEffect(()=>{
     if (screen==="won"&&!winSubmitted) submitWin();
@@ -1740,6 +1744,7 @@ export default function Battleships() {
         <div style={{fontSize:9,letterSpacing:"0.35em",color:"rgba(212,175,55,0.38)",marginBottom:3,textTransform:"uppercase"}}>The Family's Navy</div>
         <h1 style={{fontSize:isMobile?22:28,fontWeight:900,color:"var(--noir-primary)",margin:0,letterSpacing:"0.1em",textTransform:"uppercase",animation:"tglow 4s ease-in-out infinite"}}>Rum Runner</h1>
         <div style={{fontSize:10,color:"rgba(212,175,55,0.28)",letterSpacing:"0.12em",marginTop:3,fontFamily:"'Crimson Text',serif",fontStyle:"italic"}}>Sink the Feds before they sink you</div>
+        {playsLeft!=null&&(<div style={{fontSize:10,letterSpacing:"0.15em",marginTop:4,color:canPlay?"rgba(212,175,55,0.45)":"#dc2626",fontWeight:canPlay?400:700}}>{playsLeft}/{maxPlays} PLAYS LEFT</div>)}
       </div>
 
       {/* SETTINGS */}
@@ -1765,9 +1770,12 @@ export default function Battleships() {
           <div style={{display:"flex",gap:6,flexWrap:"wrap",justifyContent:"center",width:"100%",maxWidth:GRID*CELL+20}}>
             <button className="nb" onClick={()=>setHoriz(h=>!h)} disabled={placingIdx>=activeShips.length}>↺ {horiz?"Horiz":"Vert"}</button>
             <button className="nb" onClick={handleAutoPlace}>⚡ Auto</button>
-            <button className="nb" disabled={placedShips.length<activeShips.length} onClick={async()=>{
+            <button className="nb" disabled={placedShips.length<activeShips.length||!canPlay} onClick={async()=>{
+              if(!canPlay){toast.error("Hourly play limit reached. Try again next hour.");return;}
               try{
-                battleshipsSessionRef.current=await startMinigameRun("battleships");
+                const run=await startMinigameRun("battleships");
+                battleshipsSessionRef.current=run.session_id;
+                updateFromStart(run);
                 setScreen("battle");
                 setGameStartTime(Date.now());
                 setShotsFired(0);
@@ -1775,7 +1783,7 @@ export default function Battleships() {
               }catch(e){
                 toast.error(e.response?.data?.detail||e.message||"Could not start battle");
               }
-            }}>⚔ Go to War</button>
+            }}>{canPlay?"⚔ Go to War":"Limit Reached"}</button>
             <button className="nb" onClick={resetToSettings} style={{borderColor:"rgba(212,175,55,0.18)",color:"rgba(212,175,55,0.45)"}}>⚙</button>
           </div>
           {/* Fleet list — horizontal scrolling on mobile */}

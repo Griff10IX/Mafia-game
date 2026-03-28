@@ -4,6 +4,7 @@ import { Trophy, Clock, Target, ArrowLeft } from "lucide-react";
 import api from "../../utils/api";
 import { toast } from "sonner";
 import { startMinigameRun } from "../../utils/minigameRunSession";
+import useMinigamePlaysLeft from "../../hooks/useMinigamePlaysLeft";
 import styles from "../../styles/noir.module.css";
 
 const DIFFICULTIES = {
@@ -76,6 +77,7 @@ function checkWin(board) {
 }
 
 export default function Minesweeper() {
+  const { playsLeft, maxPlays, canPlay, updateFromStart, refresh: refreshPlays } = useMinigamePlaysLeft("minesweeper");
   const [difficulty, setDifficulty] = useState("snitch");
   const [board, setBoard] = useState(() => createBoard(9, 9));
   const [phase, setPhase] = useState("idle");
@@ -133,8 +135,10 @@ export default function Minesweeper() {
         toast.success(`You won! +$${res.data.reward.cash?.toLocaleString() || 0} cash`);
       }
       fetchLeaderboard();
+      refreshPlays();
     } catch (e) {
       console.error("Failed to submit win", e);
+      refreshPlays();
     }
   };
 
@@ -161,10 +165,13 @@ export default function Minesweeper() {
     if (phase === "won" || phase === "dead") return;
     let b = board;
     if (!minesReady) {
+      if (!canPlay) { toast.error("Hourly play limit reached. Try again next hour."); return; }
       if (firstRevealLockRef.current) return;
       firstRevealLockRef.current = true;
       try {
-        runSessionRef.current = await startMinigameRun("minesweeper");
+        const run = await startMinigameRun("minesweeper");
+        runSessionRef.current = run.session_id;
+        updateFromStart(run);
       } catch (e) {
         firstRevealLockRef.current = false;
         toast.error(e.response?.data?.detail || e.message || "Could not start game");
@@ -298,6 +305,11 @@ export default function Minesweeper() {
         <div style={{ fontSize: 11, color: "rgba(212,175,55,0.35)", letterSpacing: "0.2em", marginTop: 4, fontFamily: "'Crimson Text', serif", fontStyle: "italic" }}>
           One wrong move &amp; you're sleeping with the fishes
         </div>
+        {playsLeft != null && (
+          <div style={{ fontSize: 10, letterSpacing: '0.15em', marginTop: 6, color: canPlay ? 'rgba(212,175,55,0.5)' : '#dc2626', fontWeight: canPlay ? 400 : 700 }}>
+            {playsLeft}/{maxPlays} PLAYS LEFT
+          </div>
+        )}
       </div>
 
       {/* Difficulty */}

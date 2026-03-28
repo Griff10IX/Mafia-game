@@ -91,6 +91,16 @@ function getTimeAgo(dateString) {
   return `${Math.floor(seconds / 86400)}d ago`;
 }
 
+function ocInviteActionError(detail, action) {
+  const msg = String(detail || "").toLowerCase();
+  if (msg.includes("expired")) return "This OC invite expired.";
+  if (msg.includes("already accepted")) return "This OC invite was already accepted.";
+  if (msg.includes("already cancelled")) return "This OC invite was cancelled by the creator.";
+  if (msg.includes("already declined")) return "This OC invite was already declined.";
+  if (msg.includes("already")) return "This OC invite was already updated.";
+  return action === "accept" ? "Failed to accept invite" : "Failed to decline invite";
+}
+
 // Render notification message; if actor_username is set, make it a profile link
 function NotificationMessage({ message, actorUsername, className }) {
   if (!message || typeof message !== 'string') return null;
@@ -643,7 +653,7 @@ export default function Inbox() {
       toast.success(res.data?.message || 'Accepted');
       fetchNotifications();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to accept');
+      toast.error(ocInviteActionError(error.response?.data?.detail, "accept"));
     }
   };
 
@@ -653,7 +663,7 @@ export default function Inbox() {
       toast.success(res.data?.message || 'Declined');
       fetchNotifications();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to decline');
+      toast.error(ocInviteActionError(error.response?.data?.detail, "decline"));
     }
   };
 

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowLeft, Trophy, RefreshCw } from "lucide-react";
 import api from "../../utils/api";
 import { startMinigameRun } from "../../utils/minigameRunSession";
+import useMinigamePlaysLeft from "../../hooks/useMinigamePlaysLeft";
 import { toast } from "sonner";
 import styles from "../../styles/noir.module.css";
 
@@ -51,6 +52,7 @@ const C = {
 };
 
 export default function FamilyRun() {
+  const { playsLeft, maxPlays, canPlay, updateFromStart, refresh: refreshPlays } = useMinigamePlaysLeft("family_run");
   const canvasRef = useRef(null);
   const G         = useRef(null);
   const raf       = useRef(null);
@@ -162,10 +164,12 @@ export default function FamilyRun() {
         if (parts.length) toast.success(`Rewards: ${parts.join(', ')}`);
       }
       fetchLeaderboard();
+      refreshPlays();
     } catch (err) {
       toast.error(err?.response?.data?.detail || 'Failed to submit score');
+      refreshPlays();
     }
-  }, [fetchLeaderboard]);
+  }, [fetchLeaderboard, refreshPlays]);
 
   const goLeft  = useCallback(() => { const g=G.current; if(!g||g.phase!=='playing')return; if(g.player.lane>0)g.player.lane--; },[]);
   const goRight = useCallback(() => { const g=G.current; if(!g||g.phase!=='playing')return; if(g.player.lane<2)g.player.lane++; },[]);
@@ -184,17 +188,19 @@ export default function FamilyRun() {
   },[]);
 
   const startGame = useCallback(async () => {
+    if (!canPlay) { toast.error("Hourly play limit reached. Try again next hour."); return; }
     scoreSubmittedRef.current = false;
     try {
-      const sid = await startMinigameRun('family_run');
-      runSessionIdRef.current = sid;
+      const run = await startMinigameRun('family_run');
+      runSessionIdRef.current = run.session_id;
+      updateFromStart(run);
       G.current = makeState();
       G.current.phase = 'playing';
     } catch (e) {
       toast.error(e?.response?.data?.detail || e?.message || 'Could not start run');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- makeState is stable (uses G.current)
-  }, []);
+  }, [canPlay, updateFromStart]);
 
   useEffect(() => {
     const kd = e => {
@@ -705,6 +711,11 @@ export default function FamilyRun() {
           <ArrowLeft size={16} className="text-primary" />
         </Link>
         <h1 className="text-sm font-heading font-bold text-primary uppercase tracking-wider">Family Run</h1>
+        {playsLeft != null && (
+          <span className={`ml-auto text-[10px] font-heading ${canPlay ? 'text-mutedForeground' : 'text-red-500 font-bold'}`}>
+            {playsLeft}/{maxPlays} plays
+          </span>
+        )}
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">

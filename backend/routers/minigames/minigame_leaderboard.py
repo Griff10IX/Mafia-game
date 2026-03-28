@@ -9,8 +9,9 @@ from typing import Optional, List
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
+from fastapi import Query
 from server import db, get_current_user, ADMIN_EMAILS, _get_staff_user_ids
-from utils.minigame_run_session import start_minigame_run
+from utils.minigame_run_session import start_minigame_run, get_plays_left, GAME_HOURLY_LIMITS
 
 MINIGAME_LB_CONFIG_ID = "minigame_weekly_leaderboard"
 VALID_GAMES = ["snake", "gauntlet", "shooting_range", "minesweeper", "battleships", "the_getaway", "family_run", "whack_a_copper", "mafia_rpg", "pool_8ball"]
@@ -122,7 +123,26 @@ def register(router):
         g = (body.game or "").strip()
         if g not in RUN_SESSION_GAMES:
             raise HTTPException(status_code=400, detail="Unknown or unsupported game for run session.")
-        return await start_minigame_run(db, user_id=current_user["id"], game=g)
+        extra = 0
+        if g == "shooting_range":
+            bonus = int(current_user.get("shooting_range_bonus_plays") or 0)
+            extra = max(0, min(bonus, 10))
+        return await start_minigame_run(db, user_id=current_user["id"], game=g, extra_max=extra)
+
+    @router.get("/minigames/plays-left")
+    async def minigame_plays_left(
+        game: str = Query(...),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Check remaining hourly plays for a minigame."""
+        g = (game or "").strip()
+        if g not in GAME_HOURLY_LIMITS:
+            raise HTTPException(status_code=400, detail="Unknown game.")
+        extra = 0
+        if g == "shooting_range":
+            bonus = int(current_user.get("shooting_range_bonus_plays") or 0)
+            extra = max(0, min(bonus, 10))
+        return await get_plays_left(db, user_id=current_user["id"], game=g, extra_max=extra)
 
     @router.get("/minigames/leaderboard")
     async def get_minigame_leaderboard(current_user: dict = Depends(get_current_user)):

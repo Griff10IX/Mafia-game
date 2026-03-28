@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowLeft, Trophy, RefreshCw } from "lucide-react";
 import api from "../../utils/api";
 import { startMinigameRun } from "../../utils/minigameRunSession";
+import useMinigamePlaysLeft from "../../hooks/useMinigamePlaysLeft";
 import { toast } from "sonner";
 import styles from "../../styles/noir.module.css";
 
@@ -893,7 +894,8 @@ function FamigliaGameInner(){
   const initGame=useCallback(async ()=>{
     const canvas=canvasRef.current;if(!canvas)return;
     try{
-      famigliaRunSessionRef.current=await startMinigameRun("mafia_rpg");
+      const run=await startMinigameRun("mafia_rpg");
+      famigliaRunSessionRef.current=run.session_id;
     }catch(e){
       toast.error(e?.response?.data?.detail||e?.message||"Could not start game session");
       return;

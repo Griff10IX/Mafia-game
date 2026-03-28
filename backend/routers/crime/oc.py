@@ -382,14 +382,18 @@ async def oc_invite_accept(invite_id: str, current_user: dict = Depends(get_curr
         raise HTTPException(status_code=404, detail="Invite not found")
     if inv.get("target_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="Not your invite")
-    if inv.get("status") != "pending":
-        raise HTTPException(status_code=400, detail=f"Invite already {inv.get('status')}")
     now = datetime.now(timezone.utc)
     exp = _parse_iso_datetime(inv.get("expires_at"))
     if exp and exp <= now:
         await db.oc_invites.update_one({"id": invite_id}, {"$set": {"status": "expired"}})
         raise HTTPException(status_code=400, detail="Invite expired")
-    await db.oc_invites.update_one({"id": invite_id}, {"$set": {"status": "accepted"}})
+    res = await db.oc_invites.update_one(
+        {"id": invite_id, "target_id": current_user["id"], "status": "pending"},
+        {"$set": {"status": "accepted"}},
+    )
+    if res.modified_count == 0:
+        latest = await db.oc_invites.find_one({"id": invite_id}, {"_id": 0, "status": 1})
+        raise HTTPException(status_code=400, detail=f"Invite already {(latest or {}).get('status', 'updated')}")
     return {"message": "You accepted the heist invite. The creator can run the heist when everyone has accepted."}
 
 
@@ -400,9 +404,13 @@ async def oc_invite_decline(invite_id: str, current_user: dict = Depends(get_cur
         raise HTTPException(status_code=404, detail="Invite not found")
     if inv.get("target_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="Not your invite")
-    if inv.get("status") != "pending":
-        raise HTTPException(status_code=400, detail=f"Invite already {inv.get('status')}")
-    await db.oc_invites.update_one({"id": invite_id}, {"$set": {"status": "declined"}})
+    res = await db.oc_invites.update_one(
+        {"id": invite_id, "target_id": current_user["id"], "status": "pending"},
+        {"$set": {"status": "declined"}},
+    )
+    if res.modified_count == 0:
+        latest = await db.oc_invites.find_one({"id": invite_id}, {"_id": 0, "status": 1})
+        raise HTTPException(status_code=400, detail=f"Invite already {(latest or {}).get('status', 'updated')}")
     return {"message": "You declined the heist invite."}
 
 
@@ -413,11 +421,15 @@ async def oc_invite_cancel(invite_id: str, current_user: dict = Depends(get_curr
         raise HTTPException(status_code=404, detail="Invite not found")
     if inv.get("creator_id") != current_user["id"]:
         raise HTTPException(status_code=403, detail="Not your invite")
-    if inv.get("status") not in ("pending", "expired"):
-        raise HTTPException(status_code=400, detail="Can only cancel pending or expired invites")
     role = inv.get("role")
     pending_id = inv.get("pending_heist_id")
-    await db.oc_invites.update_one({"id": invite_id}, {"$set": {"status": "cancelled"}})
+    res = await db.oc_invites.update_one(
+        {"id": invite_id, "creator_id": current_user["id"], "status": {"$in": ["pending", "expired"]}},
+        {"$set": {"status": "cancelled"}},
+    )
+    if res.modified_count == 0:
+        latest = await db.oc_invites.find_one({"id": invite_id}, {"_id": 0, "status": 1})
+        raise HTTPException(status_code=400, detail=f"Can only cancel pending/expired invites (current: {(latest or {}).get('status', 'unknown')})")
     if pending_id and role:
         await db.oc_pending_heists.update_one(
             {"id": pending_id},

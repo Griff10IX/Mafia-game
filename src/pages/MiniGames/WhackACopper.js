@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
 import api from "../../utils/api";
 import { startMinigameRun } from "../../utils/minigameRunSession";
+import useMinigamePlaysLeft from "../../hooks/useMinigamePlaysLeft";
 import { toast } from "sonner";
 import styles from "./WhackACopper.module.css";
 
@@ -156,6 +157,7 @@ const Toggle = ({ checked, onChange }) => (
 );
 
 export default function WhackACopper() {
+  const { playsLeft, maxPlays, canPlay, updateFromStart, refresh: refreshPlays } = useMinigamePlaysLeft("whack_a_copper");
   const [diff, setDiff] = useState("medium");
   const [duration, setDuration] = useState(30);
   const [gridSize, setGridSize] = useState(9);
@@ -243,12 +245,14 @@ export default function WhackACopper() {
       } else if (finalScore >= 100) {
         toast.success("Score submitted!");
       }
+      refreshPlays();
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed to submit score");
+      refreshPlays();
     } finally {
       submittedRef.current = false;
     }
-  }, []);
+  }, [refreshPlays]);
 
   const endGame = useCallback(() => {
     refs.current.running = false;
@@ -324,6 +328,7 @@ export default function WhackACopper() {
   }, [diff, popUp]);
 
   const startGame = useCallback(async () => {
+    if (!canPlay) { toast.error("Hourly play limit reached. Try again next hour."); return; }
     holeTimers.current.forEach(clearTimeout);
     holeTimers.current = [];
     (holeEscapeTimerIds.current || []).forEach((tid) => { if (tid != null) clearTimeout(tid); });
@@ -334,7 +339,9 @@ export default function WhackACopper() {
     submittedRef.current = false;
 
     try {
-      whackSessionRef.current = await startMinigameRun("whack_a_copper");
+      const run = await startMinigameRun("whack_a_copper");
+      whackSessionRef.current = run.session_id;
+      updateFromStart(run);
     } catch (e) {
       toast.error(e.response?.data?.detail || e.message || "Could not start run");
       return;
@@ -431,6 +438,11 @@ export default function WhackACopper() {
         <div className={styles.wantedStamp}>WANTED</div>
         <h1 className={styles.title}>WHACK-A-COPPER</h1>
         <p className={styles.subtitle}>Silence the fuzz before they blow the whistle</p>
+        {playsLeft != null && (
+          <p style={{ fontSize: 10, letterSpacing: '.12em', marginTop: 2, color: canPlay ? '#b8960c' : '#dc2626', fontWeight: canPlay ? 400 : 700 }}>
+            {playsLeft}/{maxPlays} plays left
+          </p>
+        )}
       </div>
 
       <div className={styles.hud}>
@@ -567,8 +579,8 @@ export default function WhackACopper() {
                 Send &apos;em back underground before<br />
                 they blow the whole operation.
               </div>
-              <button className={styles.ovBtn} onClick={() => void startGame()}>
-                TAKE THE JOB
+              <button className={styles.ovBtn} onClick={() => void startGame()} disabled={!canPlay} style={!canPlay ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
+                {canPlay ? "TAKE THE JOB" : "LIMIT REACHED"}
               </button>
               <Link to="/casino/mini-games/leaderboard" className={styles.ovBtnSecondary}>
                 BACK TO MINI GAMES
@@ -603,8 +615,8 @@ export default function WhackACopper() {
                   <div className={styles.ovStatVal}>x{maxCombo}</div>
                 </div>
               </div>
-              <button className={styles.ovBtn} onClick={() => void startGame()}>
-                RUN IT AGAIN
+              <button className={styles.ovBtn} onClick={() => void startGame()} disabled={!canPlay} style={!canPlay ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
+                {canPlay ? "RUN IT AGAIN" : "LIMIT REACHED"}
               </button>
               <button className={styles.ovBtnSecondary} onClick={() => { setSettingsOpen(true); setPhase("idle"); }}>
                 SETTINGS

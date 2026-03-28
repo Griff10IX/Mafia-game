@@ -1,5 +1,6 @@
 # Auth: register, login, password reset, /auth/me
 import asyncio
+import ipaddress
 import logging
 import random
 import re
@@ -145,17 +146,41 @@ def register(router):
     PRESTIGE_CONFIGS = getattr(srv, "PRESTIGE_CONFIGS", {})
     CARS = getattr(srv, "CARS", [])
 
+    def _normalize_ip(raw: str) -> str:
+        s = (raw or "").strip().strip('"').strip("'")
+        if not s:
+            return ""
+        if "," in s:
+            s = s.split(",")[0].strip()
+        if s.startswith("[") and "]" in s:
+            s = s[1:s.find("]")]
+        if s.count(":") == 1 and "." in s:
+            host, port = s.rsplit(":", 1)
+            if port.isdigit():
+                s = host
+        if "%" in s:
+            s = s.split("%", 1)[0]
+        try:
+            ipaddress.ip_address(s)
+            return s
+        except Exception:
+            return ""
+
     def _client_ip(request: Request):
         # Cloudflare provides real IP in CF-Connecting-IP
         cf_ip = request.headers.get("cf-connecting-ip")
         if cf_ip:
-            return cf_ip.strip()
+            ip = _normalize_ip(cf_ip)
+            if ip:
+                return ip
         # Fallback to X-Forwarded-For (nginx or other proxies)
         forwarded = request.headers.get("x-forwarded-for")
         if forwarded:
-            return forwarded.split(",")[0].strip()
+            ip = _normalize_ip(forwarded)
+            if ip:
+                return ip
         if request.client:
-            return request.client.host or ""
+            return _normalize_ip(request.client.host or "")
         return ""
 
     def _device_type_from_user_agent(ua: str) -> str:

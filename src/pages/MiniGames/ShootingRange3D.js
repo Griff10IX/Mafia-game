@@ -4,6 +4,7 @@ import * as THREE from "three";
 import { Crosshair } from "lucide-react";
 import api from "../../utils/api";
 import { startMinigameRun } from "../../utils/minigameRunSession";
+import useMinigamePlaysLeft from "../../hooks/useMinigamePlaysLeft";
 import { toast } from "sonner";
 import styles from "../../styles/noir.module.css";
 
@@ -251,6 +252,7 @@ function buildScene(scene, mobile, woodTex, brickTex, cobbleTex) {
 // COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ShootingRange3D() {
+  const { playsLeft, maxPlays, canPlay: hasPlaysLeft, updateFromStart, refresh: refreshPlays } = useMinigamePlaysLeft("shooting_range");
   const canvasRef = useRef(null);
   const shootingRunSessionRef = useRef(null);
 
@@ -561,8 +563,11 @@ export default function ShootingRange3D() {
   // ── START ROUND ──────────────────────────────────────────────────────────────
   const startRound = useCallback(async () => {
     if (cooldownSecondsLeft > 0) return;
+    if (!hasPlaysLeft) { toast.error("Hourly play limit reached. Try again next hour."); return; }
     try {
-      shootingRunSessionRef.current = await startMinigameRun("shooting_range");
+      const run = await startMinigameRun("shooting_range");
+      shootingRunSessionRef.current = run.session_id;
+      updateFromStart(run);
     } catch (e) {
       toast.error(e.response?.data?.detail || e.message || "Could not start run");
       return;
@@ -859,8 +864,8 @@ export default function ShootingRange3D() {
               const sid = shootingRunSessionRef.current;
               if (sid) {
                 api.post("/shooting-range/score", { score: finalScore, session_id: sid })
-                  .then(() => fetchLeaderboard())
-                  .catch(() => {});
+                  .then(() => { fetchLeaderboard(); refreshPlays(); })
+                  .catch(() => { refreshPlays(); });
               }
             }
             fetchMastery();
@@ -998,6 +1003,11 @@ export default function ShootingRange3D() {
           {isTouchDevice && " Extra time & bigger hit area on touch."}
           Max <strong className="text-primary">+{MAX_HITS_FOR_MASTERY}%</strong> mastery per round.
         </p>
+        {playsLeft != null && (
+          <p className={`text-[10px] font-heading mt-1 ${hasPlaysLeft ? 'text-mutedForeground' : 'text-red-500 font-bold'}`}>
+            {playsLeft}/{maxPlays} plays left this hour
+          </p>
+        )}
       </div>
 
       {/* Weapon select — panel like Casino */}

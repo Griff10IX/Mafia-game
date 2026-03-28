@@ -132,6 +132,7 @@ const SEARCHABLE_TOOLS = [
   // Analytics
   { label: 'Login page unique visitors', categoryId: 'admin-analytics', collapseKey: 'loginPageVisitors', keywords: ['login', 'visitors', 'unique', 'page', 'stats'] },
   { label: 'Casino Ownership Profits', categoryId: 'admin-analytics', collapseKey: 'ownershipProfits', keywords: ['casino', 'ownership', 'profit', 'owner', 'earnings'] },
+  { label: 'Swiss Bank Overview', categoryId: 'admin-analytics', collapseKey: 'swissBank', keywords: ['swiss', 'bank', 'balance', 'hidden', 'money', 'wipe'] },
   { label: 'User Analytics', categoryId: 'admin-analytics', collapseKey: 'analytics', keywords: ['analytics', 'stats', 'users'] },
   // Logs
   { label: 'Live Activity Feed', categoryId: 'admin-logs', collapseKey: 'activityFeed', keywords: ['activity', 'feed', 'live', 'real-time', 'actions', 'gambling', 'bank', 'transfer'] },
@@ -472,6 +473,9 @@ export default function Admin() {
   const [casinoAnalyticsLoading, setCasinoAnalyticsLoading] = useState(false);
   const [ownershipProfits, setOwnershipProfits] = useState(null);
   const [ownershipProfitsLoading, setOwnershipProfitsLoading] = useState(false);
+  const [swissBankList, setSwissBankList] = useState(null);
+  const [swissBankLoading, setSwissBankLoading] = useState(false);
+  const [swissBankWiping, setSwissBankWiping] = useState('');
   const [tradesAnalyticsDays, setTradesAnalyticsDays] = useState(7);
   const [tradesAnalytics, setTradesAnalytics] = useState(null);
   const [tradesAnalyticsLoading, setTradesAnalyticsLoading] = useState(false);
@@ -2553,6 +2557,32 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed to load ownership profits');
     } finally {
       setOwnershipProfitsLoading(false);
+    }
+  };
+
+  const handleFetchSwissBank = async () => {
+    setSwissBankLoading(true);
+    try {
+      const res = await api.get('/admin/swiss-bank/list', { params: { min_balance: 1 } });
+      setSwissBankList(res.data || null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load Swiss Bank data');
+    } finally {
+      setSwissBankLoading(false);
+    }
+  };
+
+  const handleWipeSwissBank = async (username) => {
+    if (!window.confirm(`Wipe ALL Swiss Bank funds from ${username}?`)) return;
+    setSwissBankWiping(username);
+    try {
+      const res = await api.post('/admin/swiss-bank/wipe', null, { params: { target_username: username } });
+      toast.success(res.data?.message || 'Wiped');
+      handleFetchSwissBank();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to wipe');
+    } finally {
+      setSwissBankWiping('');
     }
   };
 
@@ -7204,8 +7234,8 @@ export default function Admin() {
                     <div className="font-bold text-foreground">${(economyOverview.total_money ?? 0).toLocaleString()}</div>
                   </div>
                   <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
-                    <div className="text-mutedForeground uppercase">Banked</div>
-                    <div className="font-bold text-foreground">${(economyOverview.total_bank ?? 0).toLocaleString()}</div>
+                    <div className="text-mutedForeground uppercase">Banked + Swiss</div>
+                    <div className="font-bold text-foreground">${(economyOverview.total_banked ?? ((economyOverview.total_bank ?? 0) + (economyOverview.total_swiss ?? 0))).toLocaleString()}</div>
                   </div>
                   <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
                     <div className="text-mutedForeground uppercase">Total Points</div>
@@ -7231,7 +7261,7 @@ export default function Admin() {
                       {economyOverview.top5_richest.map((u, i) => (
                         <div key={u.username || i} className="flex justify-between px-1">
                           <span className="font-bold text-foreground">{i + 1}. {u.username}</span>
-                          <span className="text-mutedForeground">${(u.money ?? 0).toLocaleString()} cash · ${(u.bank ?? 0).toLocaleString()} banked · {(u.points ?? 0).toLocaleString()} pts</span>
+                          <span className="text-mutedForeground">${(u.money ?? 0).toLocaleString()} cash · ${((u.banked_total ?? ((u.bank ?? 0) + (u.swiss ?? 0))) || 0).toLocaleString()} banked · ${(u.swiss ?? 0).toLocaleString()} swiss · {(u.points ?? 0).toLocaleString()} pts</span>
                         </div>
                       ))}
                     </div>
@@ -7883,7 +7913,73 @@ export default function Admin() {
           )}
         </div>
 
-        {/* Bank Logs (Post Data) */}
+        {/* Swiss Bank Overview */}
+
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={BarChart3}
+            title="Swiss Bank Overview"
+            badge={swissBankList?.users ? <span className="text-[10px] font-heading text-mutedForeground">{swissBankList.count} users — ${swissBankList.total_swiss?.toLocaleString()}</span> : null}
+            isCollapsed={collapsed.swissBank}
+            onToggle={() => toggleSection('swissBank')}
+          />
+          {!collapsed.swissBank && (
+            <div className="p-3 space-y-2">
+              <BtnPrimary onClick={handleFetchSwissBank} disabled={swissBankLoading}>
+                {swissBankLoading ? 'Loading…' : 'Load Swiss Bank balances'}
+              </BtnPrimary>
+              {swissBankList && (
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase">Users with Swiss Funds</div>
+                      <div className="text-sm font-heading font-bold">{swissBankList.count}</div>
+                    </div>
+                    <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase">Total Swiss Money</div>
+                      <div className="text-sm font-heading font-bold text-amber-400">${swissBankList.total_swiss?.toLocaleString() || 0}</div>
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto max-h-[400px]">
+                    {(!swissBankList.users || swissBankList.users.length === 0) ? (
+                      <p className="text-[10px] text-mutedForeground font-heading">No users with Swiss Bank funds.</p>
+                    ) : (
+                      <table className="w-full text-[10px] font-heading">
+                        <thead><tr>
+                          <th className="text-left p-1.5 text-mutedForeground sticky top-0 bg-zinc-900">Username</th>
+                          <th className="text-right p-1.5 text-mutedForeground sticky top-0 bg-zinc-900">Balance</th>
+                          <th className="text-right p-1.5 text-mutedForeground sticky top-0 bg-zinc-900">Limit</th>
+                          <th className="text-right p-1.5 text-mutedForeground sticky top-0 bg-zinc-900">Action</th>
+                        </tr></thead>
+                        <tbody>
+                          {swissBankList.users.map((u) => (
+                            <tr key={u.id} className="border-b border-zinc-700/30 hover:bg-zinc-800/30">
+                              <td className="p-1.5 font-medium">{u.username || '—'}</td>
+                              <td className="p-1.5 text-right text-amber-400 font-bold">${Number(u.swiss_balance || 0).toLocaleString()}</td>
+                              <td className="p-1.5 text-right text-mutedForeground">${Number(u.swiss_limit || 0).toLocaleString()}</td>
+                              <td className="p-1.5 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => handleWipeSwissBank(u.username)}
+                                  disabled={swissBankWiping === u.username}
+                                  className="px-2 py-0.5 rounded border border-red-600/40 bg-red-900/20 text-red-400 text-[9px] font-heading hover:bg-red-900/40 disabled:opacity-50"
+                                >
+                                  {swissBankWiping === u.username ? '...' : 'Wipe'}
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
       </section>
       )}
 

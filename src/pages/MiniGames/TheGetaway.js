@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { toast } from "sonner";
 import api from "../../utils/api";
 import { startMinigameRun } from "../../utils/minigameRunSession";
+import useMinigamePlaysLeft from "../../hooks/useMinigamePlaysLeft";
 import styles from "../../styles/noir.module.css";
 
 const W = 480, H = 640;
@@ -20,6 +21,7 @@ const RULES = [
 ];
 
 export default function TheGetaway() {
+  const { playsLeft, maxPlays, canPlay, updateFromStart, refresh: refreshPlays } = useMinigamePlaysLeft("the_getaway");
   const canvasRef = useRef(null);
   const stateRef = useRef({
     state: 'title',
@@ -180,12 +182,14 @@ export default function TheGetaway() {
       if (res.data?.reward) {
         toast.success(`Clean getaway! +$${res.data.reward.cash.toLocaleString()} +${res.data.reward.respect} respect`);
       }
+      refreshPlays();
     } catch (err) {
       setSubmitted(false);
       const msg = err?.response?.data?.detail || 'Failed to submit run';
       toast.error(msg);
+      refreshPlays();
     }
-  }, [submitted]);
+  }, [submitted, refreshPlays]);
 
   const jump = useCallback(() => {
     const p = stateRef.current.player;
@@ -214,13 +218,16 @@ export default function TheGetaway() {
   }, []);
 
   const handleStart = useCallback(async () => {
+    if (!canPlay) { toast.error("Hourly play limit reached. Try again next hour."); return; }
     const s = stateRef.current;
     if (s.state === 'title' || s.state === 'gameover') {
       if (s.state === 'gameover') {
         await submitRun();
       }
       try {
-        getawaySessionRef.current = await startMinigameRun('the_getaway');
+        const run = await startMinigameRun('the_getaway');
+        getawaySessionRef.current = run.session_id;
+        updateFromStart(run);
       } catch (err) {
         toast.error(err?.response?.data?.detail || err?.message || 'Could not start run');
         return;
@@ -229,7 +236,7 @@ export default function TheGetaway() {
       s.state = 'playing';
       setGameState('playing');
     }
-  }, [resetGame, submitRun]);
+  }, [resetGame, submitRun, canPlay, updateFromStart]);
 
   const drawSky = useCallback((ctx) => {
     const grad = ctx.createLinearGradient(0, 0, 0, H * 0.65);
@@ -866,12 +873,19 @@ export default function TheGetaway() {
           <h1 className="text-lg font-heading font-bold text-primary uppercase tracking-wider">The Getaway</h1>
           <p className="text-[10px] text-mutedForeground">Escape through the city streets</p>
         </div>
-        <button
-          onClick={() => setShowRules(!showRules)}
-          className="px-3 py-1 rounded border border-primary/30 text-primary text-xs font-heading hover:bg-primary/10"
-        >
-          {showRules ? 'Hide Rules' : 'Show Rules'}
-        </button>
+        <div className="flex items-center gap-2">
+          {playsLeft != null && (
+            <span className={`text-[10px] font-heading ${canPlay ? 'text-mutedForeground' : 'text-red-500 font-bold'}`}>
+              {playsLeft}/{maxPlays} plays
+            </span>
+          )}
+          <button
+            onClick={() => setShowRules(!showRules)}
+            className="px-3 py-1 rounded border border-primary/30 text-primary text-xs font-heading hover:bg-primary/10"
+          >
+            {showRules ? 'Hide Rules' : 'Show Rules'}
+          </button>
+        </div>
       </div>
 
       {showRules && (

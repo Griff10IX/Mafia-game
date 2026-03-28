@@ -53,6 +53,15 @@ function formatCooldown(isoUntil) {
   return s ? `${m}m ${s}s` : `${m}m`;
 }
 
+function ocInviteCancelError(detail) {
+  const msg = String(detail || "").toLowerCase();
+  if (msg.includes("already accepted")) return "Can't clear this slot - that invite was already accepted.";
+  if (msg.includes("already declined")) return "Can't clear this slot - that invite was already declined.";
+  if (msg.includes("expired")) return "Invite expired. You can clear and set a new slot.";
+  if (msg.includes("already cancelled")) return "That invite was already cancelled.";
+  return "Failed to clear invite slot.";
+}
+
 // Custom hook for cooldown ticker
 const useCooldownTicker = (cooldownUntil, onCooldownExpired) => {
   const [tick, setTick] = useState(0);
@@ -693,7 +702,8 @@ export default function OrganisedCrime() {
       toast.success('Slot cleared.');
       fetchData();
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to clear');
+      toast.error(ocInviteCancelError(e.response?.data?.detail));
+      fetchData();
     }
   };
 
