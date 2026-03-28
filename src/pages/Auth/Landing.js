@@ -12,6 +12,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
   const location = useLocation();
   const [isLogin, setIsLogin] = useState(defaultTab !== 'register');
   const [verifySentForEmail, setVerifySentForEmail] = useState(null);
+  const [authInlineError, setAuthInlineError] = useState(null);
 
   // Launch lock state
   const [launchStatus, setLaunchStatus] = useState({
@@ -31,6 +32,11 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
     if (msg) {
       sessionStorage.removeItem(AUTH_ERROR_KEY);
       toast.error(msg);
+      setAuthInlineError({
+        message: String(msg),
+        status: null,
+        supportCode: `AUTH-${Date.now().toString().slice(-6)}`,
+      });
     }
     // Optional override: open Register tab when coming from DeathScreen "New Life"
     try {
@@ -232,6 +238,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
     e.preventDefault();
     setLoading(true);
     setVerifySentForEmail(null);
+    setAuthInlineError(null);
 
     if (!isLogin && formData.password !== formData.confirmPassword) {
       toast.error('Passwords do not match.');
@@ -324,6 +331,11 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
         setVerifySentForEmail(formData.email);
       }
       toast.error(msg);
+      setAuthInlineError({
+        message: String(msg || 'Unknown login error'),
+        status: error.response?.status || null,
+        supportCode: `AUTH-${(error.response?.status || 'X')}-${Date.now().toString().slice(-6)}`,
+      });
     } finally {
       setLoading(false);
     }
@@ -701,6 +713,43 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
               </div>
             ) : (
             <form onSubmit={handleSubmit} className="p-6 space-y-4" autoComplete="on">
+              {authInlineError && (
+                <div
+                  className="rounded border px-3 py-2 space-y-1"
+                  style={{
+                    borderColor: 'rgba(239,68,68,0.55)',
+                    background: 'rgba(239,68,68,0.08)',
+                  }}
+                >
+                  <p className="text-[11px] font-heading font-bold" style={{ color: 'rgba(248,113,113,1)' }}>
+                    Login issue
+                  </p>
+                  <p className="text-[10px] font-heading" style={{ color: 'var(--noir-foreground)' }}>
+                    {authInlineError.message}
+                  </p>
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-[9px] font-heading" style={{ color: 'var(--noir-muted)' }}>
+                      {authInlineError.status ? `HTTP ${authInlineError.status} - ` : ''}Support code: {authInlineError.supportCode}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const report = `Login error report | code=${authInlineError.supportCode} | status=${authInlineError.status || 'n/a'} | message=${authInlineError.message}`;
+                        if (navigator.clipboard?.writeText) {
+                          navigator.clipboard.writeText(report).then(() => toast.success('Error details copied')).catch(() => toast.error('Copy failed'));
+                        } else {
+                          toast.error('Copy not supported');
+                        }
+                      }}
+                      className="inline-flex items-center gap-1 text-[9px] font-heading uppercase tracking-wider hover:opacity-100 opacity-80"
+                      style={{ color: 'var(--noir-primary)' }}
+                    >
+                      <Copy size={11} />
+                      Copy
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Email / username */}
               <div>
