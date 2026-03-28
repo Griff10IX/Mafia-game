@@ -198,6 +198,36 @@ def _pockets() -> List[Tuple[float, float]]:
     ]
 
 
+def _try_pocket_balls(
+    out: List[dict],
+    pocketed_numbers: List[int],
+    replay_events: List[dict],
+    t_ms: int,
+) -> None:
+    """Mark balls whose center is inside a pocket capture radius. Must run before rail bounce so corner/side
+    pockets are not treated as cushion hits first (which would reflect the ball away from the hole)."""
+    for b in out:
+        if b.get("pocketed"):
+            continue
+        for px, py in _pockets():
+            if math.hypot(b["x"] - px, b["y"] - py) <= MP_8BALL_POCKET_R:
+                b["pocketed"] = True
+                b["vx"] = 0.0
+                b["vy"] = 0.0
+                if b.get("number") is not None:
+                    pocketed_numbers.append(int(b["number"]))
+                    replay_events.append(
+                        {
+                            "type": "pocket",
+                            "t_ms": int(t_ms),
+                            "number": int(b.get("number") or 0),
+                            "x": float(px),
+                            "y": float(py),
+                        }
+                    )
+                break
+
+
 def _active_balls(balls: List[dict]) -> List[dict]:
     return [b for b in balls if not b.get("pocketed")]
 
@@ -271,6 +301,12 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
                 cue_spin_y *= MP_8BALL_SPIN_DECAY
             b["x"] += b["vx"] * MP_8BALL_SIM_DT
             b["y"] += b["vy"] * MP_8BALL_SIM_DT
+
+        # Pocket before rails: otherwise cushion logic at x/y clamps reflects balls away from corner/side pockets.
+        _try_pocket_balls(out, pocketed_numbers, replay_events, sim_elapsed_ms)
+
+        active = _active_balls(out)
+        for b in active:
             # Cushion bounce (axis-aligned rails; reflect normal velocity with restitution).
             if b["x"] <= MP_8BALL_BALL_R:
                 b["x"] = MP_8BALL_BALL_R
@@ -446,27 +482,8 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
                 b["vx"] = 0.0
                 b["vy"] = 0.0
 
-        # Pocket detection.
-        for b in out:
-            if b.get("pocketed"):
-                continue
-            for px, py in _pockets():
-                if math.hypot(b["x"] - px, b["y"] - py) <= MP_8BALL_POCKET_R:
-                    b["pocketed"] = True
-                    b["vx"] = 0.0
-                    b["vy"] = 0.0
-                    if b.get("number") is not None:
-                        pocketed_numbers.append(int(b["number"]))
-                        replay_events.append(
-                            {
-                                "type": "pocket",
-                                "t_ms": int((step + 1) * MP_8BALL_SIM_DT * 1000),
-                                "number": int(b.get("number") or 0),
-                                "x": float(px),
-                                "y": float(py),
-                            }
-                        )
-                    break
+        # Pocket again after collisions / friction (e.g. ball rolled into hole from a hit).
+        _try_pocket_balls(out, pocketed_numbers, replay_events, sim_elapsed_ms)
 
         if ((step + 1) % MP_8BALL_REPLAY_SAMPLE_EVERY) == 0 and len(replay_frames) < MP_8BALL_MAX_REPLAY_FRAMES:
             replay_frames.append(

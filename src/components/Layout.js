@@ -323,6 +323,8 @@ export default function Layout({ children }) {
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [findUserQuery, setFindUserQuery] = useState('');
   const [isMobileViewport, setIsMobileViewport] = useState(false);
+  /** Width ≥ md but short landscape (typical phone sideways) — keep drawer nav, no persistent sidebar. */
+  const [isLandscapeCompactLayout, setIsLandscapeCompactLayout] = useState(false);
   const [userSearchQuery, setUserSearchQuery] = useState('');
   const [userSearchResults, setUserSearchResults] = useState([]);
   const [userSearchOpen, setUserSearchOpen] = useState(false);
@@ -469,6 +471,14 @@ export default function Layout({ children }) {
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px)');
     const fn = () => setIsMobileViewport(mq.matches);
+    fn();
+    mq.addEventListener('change', fn);
+    return () => mq.removeEventListener('change', fn);
+  }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 1024px) and (orientation: landscape) and (max-height: 520px)');
+    const fn = () => setIsLandscapeCompactLayout(mq.matches);
     fn();
     mq.addEventListener('change', fn);
     return () => mq.removeEventListener('change', fn);
@@ -1429,15 +1439,15 @@ export default function Layout({ children }) {
 
       {/* Mobile overlay */}
       {sidebarOpen && mobileNavStyle !== 'bottom' && (
-        <div className="fixed inset-0 bg-black/50 z-40 md:hidden" onClick={() => setSidebarOpen(false)} />
+        <div className={`fixed inset-0 bg-black/50 z-40 ${!isLandscapeCompactLayout ? 'md:hidden' : ''}`} onClick={() => setSidebarOpen(false)} />
       )}
 
       {/* ── TOP BAR ─────────────────────────────────────────────────────────── */}
-      <div data-layout="topbar" className={`fixed top-0 right-0 left-0 safe-area-pt ${themeVariant === 'modern' ? 'md:left-40' : 'md:left-48'} min-h-[36px] md:min-h-0 md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-2 py-1 md:px-3 md:py-0 gap-1 md:gap-2 ${mobileStatsDisplay === 'right_sidebar' ? 'md:right-52' : ''}`}>
+      <div data-layout="topbar" className={`fixed top-0 right-0 left-0 safe-area-pt ${!isLandscapeCompactLayout ? (themeVariant === 'modern' ? 'md:left-40' : 'md:left-48') : ''} min-h-[36px] md:min-h-0 md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-2 py-1 md:px-3 md:py-0 gap-1 md:gap-2 ${mobileStatsDisplay === 'right_sidebar' && !isLandscapeCompactLayout ? 'md:right-52' : ''}`}>
         <div className="flex items-center gap-1 md:gap-2 flex-1 min-w-0 overflow-hidden md:justify-end">
           {mobileNavStyle !== 'bottom' && (
             <button onClick={() => setSidebarOpen(!sidebarOpen)} data-testid="mobile-menu-toggle"
-              className="md:hidden shrink-0 min-h-[34px] min-w-[34px] flex items-center justify-center -m-1 rounded-lg hover:bg-white/[0.06] active:bg-white/[0.1] transition-colors order-last"
+              className={`${!isLandscapeCompactLayout ? 'md:hidden' : ''} shrink-0 min-h-[34px] min-w-[34px] flex items-center justify-center -m-1 rounded-lg hover:bg-white/[0.06] active:bg-white/[0.1] transition-colors order-last`}
               style={{ color: 'var(--noir-primary)' }} aria-label={sidebarOpen ? 'Close menu' : 'Open menu'}>
               {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
@@ -1710,7 +1720,7 @@ export default function Layout({ children }) {
       </div>
 
       {/* ── MAIN CONTENT ─────────────────────────────────────────────────────── */}
-      <main data-layout="main" className={`${themeVariant === 'modern' ? 'md:ml-40' : 'md:ml-48'} mt-main-below-topbar min-h-screen p-4 md:p-6 overflow-x-hidden ${mobileNavStyle === 'bottom' ? 'pb-safe-bottom-nav md:pb-6' : ''} ${isMobileViewport && mobileStatsDisplay === 'top_bar' && (flashNews.length > 0 || (user && hasCasinoOrProperty)) && mobileNavStyle !== 'bottom' ? 'pb-16 md:pb-6' : ''} ${mobileStatsDisplay === 'right_sidebar' ? (themeVariant === 'modern' ? 'md:mr-60' : 'md:mr-52') : ''}`}>
+      <main data-layout="main" className={`${!isLandscapeCompactLayout ? (themeVariant === 'modern' ? 'md:ml-40' : 'md:ml-48') : ''} mt-main-below-topbar min-h-screen p-4 md:p-6 overflow-x-hidden ${mobileNavStyle === 'bottom' ? 'pb-safe-bottom-nav md:pb-6' : ''} ${(isMobileViewport || isLandscapeCompactLayout) && mobileStatsDisplay === 'top_bar' && (flashNews.length > 0 || (user && hasCasinoOrProperty)) && mobileNavStyle !== 'bottom' ? 'pb-16 md:pb-6' : ''} ${mobileStatsDisplay === 'right_sidebar' && !isLandscapeCompactLayout ? (themeVariant === 'modern' ? 'md:mr-60' : 'md:mr-52') : ''}`}>
         {needsEmailVerification && (
           <div className="mb-3 px-3 py-2 rounded-sm flex items-center gap-2 flex-wrap" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.15)', border: '1px solid rgba(var(--noir-primary-rgb), 0.4)' }}>
             <Mail size={16} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
