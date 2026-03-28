@@ -384,13 +384,18 @@ export default function GamePass() {
   const [loading, setLoading] = useState(false);
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [user, setUser] = useState(null);
+  const [releaseSoftLaunch, setReleaseSoftLaunch] = useState(null);
   const [selectedBandIndex, setSelectedBandIndex] = useState(null);
   const [selectedMicroTier, setSelectedMicroTier] = useState(null);
 
   const fetchData = useCallback(async () => {
     try {
-      const userRes = await api.get('/auth/me');
+      const [userRes, rlRes] = await Promise.all([
+        api.get('/auth/me'),
+        api.get('/payments/release-soft-launch').catch(() => ({ data: null })),
+      ]);
       setUser(userRes.data);
+      setReleaseSoftLaunch(rlRes?.data && typeof rlRes.data === 'object' ? rlRes.data : null);
     } catch {
       toast.error('Failed to load data');
     }
@@ -451,6 +456,14 @@ export default function GamePass() {
 
   const selectedTierObj = selectedMicroTier ? getTierRewardObj(selectedMicroTier) : null;
   const selectedNextTierObj = selectedMicroTier && selectedMicroTier < 100 ? getTierRewardObj(selectedMicroTier + 1) : null;
+
+  const gamePassPurchaseLocked = !!releaseSoftLaunch?.game_pass_purchase_locked;
+  const gamePassUnlockLabel = releaseSoftLaunch?.game_pass_unlock_at
+    ? (() => {
+        const d = new Date(releaseSoftLaunch.game_pass_unlock_at);
+        return Number.isNaN(d.getTime()) ? releaseSoftLaunch.game_pass_unlock_at : d.toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+      })()
+    : null;
 
   const handlePurchase = async () => {
     if (!user) return;
@@ -575,10 +588,10 @@ export default function GamePass() {
                 <button
                   type="button"
                   onClick={handlePurchase}
-                  disabled={!user || loading || vipClaimed || passIsUnactivatedValid || passIsUnactivatedUnknownExpiry}
+                  disabled={!user || loading || gamePassPurchaseLocked || vipClaimed || passIsUnactivatedValid || passIsUnactivatedUnknownExpiry}
                   className="flex-1 w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
                 >
-                  {loading ? '...' : vipClaimed ? 'VIP claimed' : passIsUnactivatedValid ? 'Token ready (activate to claim)' : 'Buy for £4.99'}
+                  {loading ? '...' : gamePassPurchaseLocked ? 'Unavailable until unlock' : vipClaimed ? 'VIP claimed' : passIsUnactivatedValid ? 'Token ready (activate to claim)' : 'Buy for £4.99'}
                 </button>
                 <Link
                   to="/account/inventory"
@@ -593,10 +606,10 @@ export default function GamePass() {
                 <button
                   type="button"
                   onClick={handlePurchaseWithPoints}
-                  disabled={!user || loading || vipClaimed || passIsUnactivatedValid || passIsUnactivatedUnknownExpiry || pointsBalance < GAME_PASS_POINTS_PRICE}
+                  disabled={!user || loading || gamePassPurchaseLocked || vipClaimed || passIsUnactivatedValid || passIsUnactivatedUnknownExpiry || pointsBalance < GAME_PASS_POINTS_PRICE}
                   className="flex-1 w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 disabled:opacity-50 touch-manipulation"
                 >
-                  {loading ? '...' : pointsBalance < GAME_PASS_POINTS_PRICE ? `Need ${GAME_PASS_POINTS_PRICE.toLocaleString()} points` : 'Buy for 8,000 points'}
+                  {loading ? '...' : gamePassPurchaseLocked ? 'Unavailable until unlock' : pointsBalance < GAME_PASS_POINTS_PRICE ? `Need ${GAME_PASS_POINTS_PRICE.toLocaleString()} points` : 'Buy for 8,000 points'}
                 </button>
                 <div className="text-[9px] text-zinc-400 font-heading italic sm:text-right sm:flex-1">
                   Deducts points to grant an unactivated Game Pass token.

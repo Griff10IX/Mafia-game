@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from server import send_notification
 from utils.point_provenance import mint_purchase_lot_if_missing
+from utils.release_soft_launch import game_pass_purchase_locked_detail, get_release_soft_launch_public
 
 logger = logging.getLogger(__name__)
 
@@ -442,6 +443,11 @@ def register(router):
     _is_admin = srv._is_admin
     POINT_PACKAGES = srv.POINT_PACKAGES
 
+    @router.get("/payments/release-soft-launch")
+    async def get_release_soft_launch_status():
+        """Public flags for UI: PvP kill pause and Game Pass purchase lock during release soft-launch."""
+        return await get_release_soft_launch_public(db)
+
     @router.post("/payments/buy-game-pass-with-points")
     async def buy_game_pass_with_points(request: BuyGamePassWithPointsRequest, current_user: dict = Depends(get_current_user)):
         """Buy a Game Pass token using in-game points (no Stripe). Grants an unactivated `rank_xp_pass` token."""
@@ -477,6 +483,10 @@ def register(router):
                     "$unset": {"rank_xp_pass_token_expires_at": "", "rank_xp_pass_pending_tier_snapshot": ""},
                 },
             )
+
+        rl = await get_release_soft_launch_public(db)
+        if rl.get("game_pass_purchase_locked"):
+            raise HTTPException(status_code=403, detail=game_pass_purchase_locked_detail(rl))
 
         points = int(current_user.get("points") or 0)
         if points < GAME_PASS_POINTS_PRICE:
@@ -556,6 +566,9 @@ def register(router):
 
         # Pre-check: disallow buying again while the user already has an unactivated pass token.
         if package_id == RANK_XP_PASS_PACKAGE_ID:
+            rl = await get_release_soft_launch_public(db)
+            if rl.get("game_pass_purchase_locked"):
+                raise HTTPException(status_code=403, detail=game_pass_purchase_locked_detail(rl))
             existing_tokens = int(current_user.get("rank_xp_pass_tokens") or 0)
             if existing_tokens > 0:
                 expires_dt = _parse_utc(current_user.get("rank_xp_pass_token_expires_at"))

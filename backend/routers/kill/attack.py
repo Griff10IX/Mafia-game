@@ -53,6 +53,7 @@ from server import (
     log_activity,
     founding_member_income_mult,
 )
+from utils.release_soft_launch import PVP_KILLS_DISABLED_DETAIL, soft_launch_blocks_pvp_kill_on_target
 from routers.money.booze_run import BOOZE_TYPES
 from routers.account.objectives import update_objectives_progress
 from routers.kill.armoury import _best_weapon_for_user, _get_weapon_mastery_pct, MASTERY_MAX_BULLET_REDUCTION_PCT
@@ -463,6 +464,8 @@ async def search_target(request: AttackSearchRequest, current_user: dict = Depen
         raise HTTPException(status_code=400, detail="That account is dead and cannot be attacked")
     if target["id"] == current_user["id"]:
         raise HTTPException(status_code=400, detail="Cannot attack yourself")
+    if await soft_launch_blocks_pvp_kill_on_target(db, target):
+        raise HTTPException(status_code=403, detail=PVP_KILLS_DISABLED_DETAIL)
     if target.get("is_npc") and not target.get("is_bodyguard"):
         hitlist_npc = await db.hitlist.find_one(
             {"target_id": target["id"], "target_type": "npc", "placer_id": current_user["id"]},
@@ -723,7 +726,8 @@ async def list_attacks(current_user: dict = Depends(get_current_user)):
             "expires_at": attack.get("expires_at"),
             "can_travel": can_travel,
             "can_attack": can_attack,
-            "message": msg
+            "message": msg,
+            "target_is_npc": bool((users_map.get(tid or "") or {}).get("is_npc")) if tid else False,
         }
         if attack["status"] == "found" and tid:
             target_bgs = bgs_by_owner.get(tid) or []
@@ -779,6 +783,8 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
     target = await db.users.find_one(user_filter, {"_id": 0})
     if not target:
         raise HTTPException(status_code=404, detail="Target user not found")
+    if await soft_launch_blocks_pvp_kill_on_target(db, target):
+        raise HTTPException(status_code=403, detail=PVP_KILLS_DISABLED_DETAIL)
     if not target.get("is_npc"):
         await apply_passive_health_regen(target["id"], target)
     if target.get("is_dead"):
@@ -867,6 +873,9 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     if not target:
         await _log_attack_error(current_user["id"], current_user.get("username"), "Target not found", req)
         raise HTTPException(status_code=404, detail="Target not found")
+    if await soft_launch_blocks_pvp_kill_on_target(db, target):
+        await _log_attack_error(current_user["id"], current_user.get("username"), "Release soft-launch PvP block", req)
+        raise HTTPException(status_code=403, detail=PVP_KILLS_DISABLED_DETAIL)
     if target.get("is_dead"):
         await db.attacks.delete_one({"id": request.attack_id, "attacker_id": current_user["id"]})
         await _log_attack_error(current_user["id"], current_user.get("username"), "Target is already dead", req)

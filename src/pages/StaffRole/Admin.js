@@ -92,6 +92,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Booze Run Rotation', categoryId: 'admin-gameworld', collapseKey: 'boozeRun', keywords: ['booze', 'run', 'rotation', 'prices'] },
   { label: 'Slots Draw', categoryId: 'admin-gameworld', collapseKey: 'slotsDraw', keywords: ['slots', 'draw', 'lottery'] },
   { label: 'State Heads', categoryId: 'admin-gameworld', collapseKey: 'stateHeads', keywords: ['state', 'heads', 'family', 'territory'] },
+  { label: 'Release soft-launch', categoryId: 'admin-gameworld', collapseKey: 'releaseSoftLaunch', keywords: ['release', 'soft', 'launch', 'pvp', 'kill', 'game pass'] },
   { label: 'Reset Racket Cooldown', categoryId: 'admin-gameworld', collapseKey: 'racketReset', keywords: ['racket', 'cooldown', 'reset', 'family'] },
   { label: 'Hitlist NPCs', categoryId: 'admin-gameworld', collapseKey: 'hitlistNpcs', keywords: ['hitlist', 'npc', 'bounty'] },
   { label: 'Jail NPCs', categoryId: 'admin-gameworld', collapseKey: 'jailNpcs', keywords: ['jail', 'npc', 'prisoner'] },
@@ -587,6 +588,9 @@ export default function Admin() {
   const [systemHealthLoading, setSystemHealthLoading] = useState(false);
   const [maintenanceBanner, setMaintenanceBanner] = useState(null);
   const [maintenanceBannerLoading, setMaintenanceBannerLoading] = useState(false);
+  const [releaseSoftLaunchAdmin, setReleaseSoftLaunchAdmin] = useState(null);
+  const [releaseSoftLaunchLoading, setReleaseSoftLaunchLoading] = useState(false);
+  const [releaseSoftLaunchUnlockAt, setReleaseSoftLaunchUnlockAt] = useState('2026-04-04T17:00:00+00:00');
   const [maintenanceMsg, setMaintenanceMsg] = useState('');
   const [maintenanceDuration, setMaintenanceDuration] = useState(60);
   const [bulkUsernames, setBulkUsernames] = useState('');
@@ -3262,6 +3266,30 @@ export default function Admin() {
     finally { setMaintenanceBannerLoading(false); }
   };
 
+  const handleFetchReleaseSoftLaunch = async () => {
+    setReleaseSoftLaunchLoading(true);
+    try {
+      const res = await api.get('/admin/release-soft-launch');
+      setReleaseSoftLaunchAdmin(res.data ?? null);
+      const u = res.data?.game_pass_unlock_at || res.data?.stored?.game_pass_unlock_at;
+      if (u) setReleaseSoftLaunchUnlockAt(String(u));
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed to load release soft-launch'); }
+    finally { setReleaseSoftLaunchLoading(false); }
+  };
+
+  const handleSetReleaseSoftLaunch = async (enabled) => {
+    setReleaseSoftLaunchLoading(true);
+    try {
+      const res = await api.post('/admin/release-soft-launch', {
+        enabled,
+        game_pass_unlock_at: releaseSoftLaunchUnlockAt.trim() || undefined,
+      });
+      setReleaseSoftLaunchAdmin(res.data ?? null);
+      toast.success(res.data?.message || 'Updated release soft-launch');
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed to update release soft-launch'); }
+    finally { setReleaseSoftLaunchLoading(false); }
+  };
+
   const handleBulkAction = async () => {
     const names = bulkUsernames.split(/[,\n]+/).map(s => s.trim()).filter(Boolean);
     if (!names.length) { toast.error('Enter at least one username'); return; }
@@ -5478,6 +5506,60 @@ export default function Admin() {
                 <BtnPrimary onClick={() => handleSetMaintenanceBanner(true)} disabled={maintenanceBannerLoading}>Enable banner</BtnPrimary>
                 <BtnDanger onClick={() => handleSetMaintenanceBanner(false)} disabled={maintenanceBannerLoading}>Disable</BtnDanger>
               </div>
+            </div>
+          </div>
+        )}
+        </div>
+
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={AlertTriangle}
+          title="Release soft-launch"
+          badge={releaseSoftLaunchAdmin?.release_soft_launch_enabled ? <span className="text-[10px] font-heading text-amber-400">Active</span> : null}
+          isCollapsed={collapsed.releaseSoftLaunch}
+          onToggle={() => { toggleSection('releaseSoftLaunch'); if (collapsed.releaseSoftLaunch && !releaseSoftLaunchAdmin) handleFetchReleaseSoftLaunch(); }}
+        />
+        {!collapsed.releaseSoftLaunch && (
+          <div className="p-3 space-y-2">
+            <p className="text-[10px] text-mutedForeground font-heading">
+              While enabled: kills on real players are blocked (hitlist NPCs and other NPC targets still work). Game Pass purchases are blocked until the unlock time below (default matches the 4 Apr points window). Turn this off when you are ready to open PvP again.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <BtnPrimary onClick={handleFetchReleaseSoftLaunch} disabled={releaseSoftLaunchLoading}>
+                {releaseSoftLaunchLoading ? '…' : 'Refresh status'}
+              </BtnPrimary>
+              <span className="text-[10px] font-heading text-mutedForeground">
+                {releaseSoftLaunchAdmin?.pvp_kills_disabled ? <span className="text-amber-400 font-bold">Player PvP kills paused</span> : <span>Player PvP kills allowed</span>}
+              </span>
+            </div>
+            {releaseSoftLaunchAdmin && (
+              <p className="text-[10px] text-mutedForeground font-heading">
+                Game Pass purchase lock:{' '}
+                <span className={releaseSoftLaunchAdmin.game_pass_purchase_locked ? 'text-amber-400 font-bold' : 'text-emerald-400'}>
+                  {releaseSoftLaunchAdmin.game_pass_purchase_locked ? 'locked' : 'unlocked'}
+                </span>
+                {releaseSoftLaunchAdmin.game_pass_unlock_at && (
+                  <>
+                    {' · '}
+                    Unlock: <span className="text-foreground font-mono text-[9px]">{releaseSoftLaunchAdmin.game_pass_unlock_at}</span>
+                  </>
+                )}
+              </p>
+            )}
+            <div>
+              <label className="block text-[10px] font-heading uppercase tracking-wider text-mutedForeground mb-1">Game Pass unlock (ISO 8601, UTC)</label>
+              <input
+                type="text"
+                value={releaseSoftLaunchUnlockAt}
+                onChange={(e) => setReleaseSoftLaunchUnlockAt(e.target.value)}
+                className="w-full px-2 py-1.5 rounded border border-input bg-transparent text-[11px] font-mono text-foreground"
+                placeholder="2026-04-04T17:00:00+00:00"
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <BtnPrimary onClick={() => handleSetReleaseSoftLaunch(true)} disabled={releaseSoftLaunchLoading}>Enable soft-launch</BtnPrimary>
+              <BtnDanger onClick={() => handleSetReleaseSoftLaunch(false)} disabled={releaseSoftLaunchLoading}>Disable soft-launch</BtnDanger>
             </div>
           </div>
         )}

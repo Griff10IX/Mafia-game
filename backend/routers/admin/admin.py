@@ -31,6 +31,11 @@ from utils.cheat_detection_utils import (
     compute_dupe_risk_score,
 )
 from routers.kill.armoury import TOKEN_CONFIG
+from utils.release_soft_launch import (
+    DEFAULT_GAME_PASS_UNLOCK_AT,
+    RELEASE_SOFT_LAUNCH_KEY,
+    get_release_soft_launch_public,
+)
 from utils.point_provenance import (
     chargeback_preview,
     execute_chargeback_best_effort,
@@ -5861,6 +5866,46 @@ def register(router):
             upsert=True,
         )
         return {"message": f"Maintenance banner {'enabled' if req.enabled else 'disabled'}", **value}
+
+    class ReleaseSoftLaunchRequest(BaseModel):
+        enabled: bool
+        game_pass_unlock_at: Optional[str] = None
+
+    @router.get("/admin/release-soft-launch")
+    async def admin_get_release_soft_launch(current_user: dict = Depends(get_current_user)):
+        """Release soft-launch: block PvP kills on real players; optional Game Pass lock until unlock time."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        doc = await db.game_settings.find_one({"key": RELEASE_SOFT_LAUNCH_KEY}, {"_id": 0, "value": 1})
+        stored = (doc or {}).get("value") if doc else None
+        if not isinstance(stored, dict):
+            stored = {}
+        pub = await get_release_soft_launch_public(db)
+        return {**pub, "stored": stored}
+
+    @router.post("/admin/release-soft-launch")
+    async def admin_set_release_soft_launch(req: ReleaseSoftLaunchRequest, current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        unlock_raw = (req.game_pass_unlock_at or "").strip() if req.game_pass_unlock_at else ""
+        game_pass_unlock_at = unlock_raw or DEFAULT_GAME_PASS_UNLOCK_AT
+        value = {
+            "enabled": req.enabled,
+            "game_pass_unlock_at": game_pass_unlock_at,
+            "set_by": current_user.get("username", "?"),
+            "set_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.game_settings.update_one(
+            {"key": RELEASE_SOFT_LAUNCH_KEY},
+            {"$set": {"key": RELEASE_SOFT_LAUNCH_KEY, "value": value}},
+            upsert=True,
+        )
+        pub = await get_release_soft_launch_public(db)
+        return {
+            "message": f"Release soft-launch {'enabled' if req.enabled else 'disabled'}",
+            **pub,
+            "stored": value,
+        }
 
     class BulkUserActionRequest(BaseModel):
         usernames: list
