@@ -823,18 +823,21 @@ async def _deduct_crew_bank(user_id: str, cost: int, allow_debt: bool = False) -
     """
     if cost <= 0:
         return
-    prof = await db.racing_profiles.find_one({"user_id": user_id}, {"_id": 0, "crew_bank": 1})
-    bank = int((prof or {}).get("crew_bank") or 0)
-    new_balance = bank - cost
-
     if allow_debt:
-        if new_balance < CREW_BANK_DEBT_LIMIT:
+        min_balance = CREW_BANK_DEBT_LIMIT + cost
+        result = await db.racing_profiles.update_one(
+            {"user_id": user_id, "crew_bank": {"$gte": min_balance}},
+            {"$inc": {"crew_bank": -cost}},
+        )
+        if result.modified_count == 0:
             raise HTTPException(status_code=400, detail=f"Debt limit reached (${CREW_BANK_DEBT_LIMIT:,}). Win races to pay off debt.")
     else:
-        if bank < cost:
+        result = await db.racing_profiles.update_one(
+            {"user_id": user_id, "crew_bank": {"$gte": cost}},
+            {"$inc": {"crew_bank": -cost}},
+        )
+        if result.modified_count == 0:
             raise HTTPException(status_code=400, detail="Insufficient crew bank (race to earn more)")
-
-    await db.racing_profiles.update_one({"user_id": user_id}, {"$inc": {"crew_bank": -cost}})
 
 
 async def _pay_driver_salary_from_user_then_crew(user_id: str, salary: int) -> int:
@@ -2739,10 +2742,17 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
                 current_lap=current_lap,
                 elapsed=elapsed,
             )
-        result_order = list(body.result_order)
-        dnf_ids = [eid for eid in result_order if eid in dnf_set]
-        _rdebug(race_id, "COMPLETE_RACE_INTERACTIVE_CLIENT_AUTHORITY",
-                result_order=result_order, dnf_ids=dnf_ids)
+        server_order = race.get("result_order")
+        if server_order and len(server_order) == len(expected_ids) and set(server_order) == expected_ids:
+            result_order = list(server_order)
+            dnf_ids = list(race.get("dnf_ids") or [])
+            _rdebug(race_id, "COMPLETE_RACE_INTERACTIVE_SERVER_AUTHORITY",
+                    result_order=result_order, dnf_ids=dnf_ids)
+        else:
+            result_order = list(body.result_order)
+            dnf_ids = [eid for eid in result_order if eid in dnf_set]
+            _rdebug(race_id, "COMPLETE_RACE_INTERACTIVE_CLIENT_FALLBACK",
+                    result_order=result_order, dnf_ids=dnf_ids)
     else:
         can_use_client = client_order_valid and not result_order
         _rdebug(race_id, "COMPLETE_RACE_CLIENT_ORDER_CHECK",
@@ -2817,6 +2827,13 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
             result_order=result_order,
             dnf_ids=dnf_ids,
             source="interactive_client" if is_interactive else "non_interactive")
+
+    claim = await db.racing_races.update_one(
+        {"id": race_id, "state": "running"},
+        {"$set": {"state": "completing"}},
+    )
+    if claim.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Race already completed or claimed by another request")
 
     pot = entry_fee * len(participants) * REWARD_POOL_PCT
     if pot < RACING_BASE_CASH_POOL:
@@ -2904,7 +2921,7 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
         })
     now = _now_iso()
     await db.racing_races.update_one(
-        {"id": race_id},
+        {"id": race_id, "state": "completing"},
         {"$set": {
             "state": "completed",
             "participants": participants,
@@ -3090,9 +3107,6 @@ async def enter_racing_comp(comp_id: str, body: JoinRaceRequest, current_user: d
         raise HTTPException(status_code=400, detail="Competition has not started")
     if end_at and now > end_at:
         raise HTTPException(status_code=400, detail="Competition has ended")
-    existing = await db.racing_comp_entries.find_one({"comp_id": comp_id, "user_id": current_user["id"]})
-    if existing:
-        raise HTTPException(status_code=400, detail="Already entered")
     instance_id = (body.racing_car_instance_id or "").strip()
     car_doc = await _get_user_racing_car(current_user["id"], instance_id)
     if not car_doc:
@@ -3102,15 +3116,21 @@ async def enter_racing_comp(comp_id: str, body: JoinRaceRequest, current_user: d
         user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
         if int(user.get("money") or 0) < entry_fee:
             raise HTTPException(status_code=400, detail="Insufficient cash")
-    await db.racing_comp_entries.insert_one({
-        "id": str(uuid.uuid4()),
-        "comp_id": comp_id,
-        "user_id": current_user["id"],
-        "username": current_user.get("username") or "?",
-        "racing_car_instance_id": instance_id,
-        "racing_car_id": car_doc.get("racing_car_id"),
-        "entered_at": _now_iso(),
-    })
+    entry_result = await db.racing_comp_entries.update_one(
+        {"comp_id": comp_id, "user_id": current_user["id"]},
+        {"$setOnInsert": {
+            "id": str(uuid.uuid4()),
+            "comp_id": comp_id,
+            "user_id": current_user["id"],
+            "username": current_user.get("username") or "?",
+            "racing_car_instance_id": instance_id,
+            "racing_car_id": car_doc.get("racing_car_id"),
+            "entered_at": _now_iso(),
+        }},
+        upsert=True,
+    )
+    if not entry_result.upserted_id:
+        raise HTTPException(status_code=400, detail="Already entered")
     if entry_fee > 0:
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -entry_fee}})
     return {"message": "Entered competition"}
@@ -3420,11 +3440,16 @@ async def decline_race_challenge(challenge_id: str, current_user: dict = Depends
     if ch["target_id"] != current_user["id"]:
         raise HTTPException(status_code=403, detail="Not your challenge")
 
+    claim = await db.racing_challenges.update_one(
+        {"id": challenge_id, "state": "pending"},
+        {"$set": {"state": "declined", "declined_at": _now_iso()}},
+    )
+    if claim.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Challenge already processed")
+
     stake = int(ch.get("stake") or 0)
     if stake > 0:
         await db.users.update_one({"id": ch["challenger_id"]}, {"$inc": {"money": stake}})
-
-    await db.racing_challenges.update_one({"id": challenge_id}, {"$set": {"state": "declined", "declined_at": _now_iso()}})
     await send_notification(ch["challenger_id"], f"{current_user.get('username','?')} declined your race challenge.", "racing_challenge_declined")
     return {"message": "Challenge declined"}
 

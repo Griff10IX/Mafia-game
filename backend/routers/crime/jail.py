@@ -321,6 +321,13 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
                 pass
         bust_reward_cash = _safe_int(npc.get("bust_reward_cash"), 0)
         if success:
+            npc_username = npc.get("username")
+            claimed_npc = None
+            if npc_username is not None:
+                claimed_npc = await db.jail_npcs.find_one_and_delete({"username": npc_username})
+            if not claimed_npc:
+                return {"success": False, "message": "That inmate was already busted out.", "jail_time": 0}
+            _invalidate_jail_npcs_cache()
             new_consec = _safe_int(current_user.get("current_consecutive_busts"), 0) + 1
             record = max(_safe_int(current_user.get("consecutive_busts_record"), 0), new_consec)
             rp_before = _safe_int(current_user.get("rank_points"), 0)
@@ -332,10 +339,6 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
                 await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""))
             except Exception as e:
                 logger.exception("Rank-up notification (jail NPC bust): %s", e)
-            npc_username = npc.get("username")
-            if npc_username is not None:
-                await db.jail_npcs.delete_one({"username": npc_username})
-            _invalidate_jail_npcs_cache()
             try:
                 await update_objectives_progress(current_user["id"], "busts", 1)
             except Exception:
@@ -682,7 +685,19 @@ async def snitch(
     """When in jail: snitch on a user (by username) or pick random online. On success you're released and they serve time. They get a notification that they were snitched on (not by whom). One attempt per jail term."""
     if not current_user.get("in_jail"):
         raise HTTPException(status_code=400, detail="You are not in jail")
-    if current_user.get("snitch_attempted_this_term"):
+
+    claimed = await db.users.find_one_and_update(
+        {
+            "id": current_user["id"],
+            "in_jail": True,
+            "$or": [
+                {"snitch_attempted_this_term": {"$ne": True}},
+                {"snitch_attempted_this_term": {"$exists": False}},
+            ],
+        },
+        {"$set": {"snitch_attempted_this_term": True}},
+    )
+    if not claimed:
         raise HTTPException(status_code=400, detail="You can only attempt to snitch once per jail term.")
 
     target_username = (request.target_username or "").strip()
@@ -726,12 +741,6 @@ async def snitch(
                     )
             except (ValueError, TypeError):
                 pass
-
-    # Mark attempt as used (one per jail term) before the roll
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$set": {"snitch_attempted_this_term": True}},
-    )
 
     if not _snitch_success_roll():
         return {

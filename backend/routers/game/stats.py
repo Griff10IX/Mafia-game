@@ -56,6 +56,15 @@ def _gambling_profit_from_details(game_type: str, details: dict) -> int:
             winnings = int(details.get("winnings") or 0)
             return winnings
         return 0
+
+    # 8-Ball Pool: win gets pot + bonus, loss gets -stake (pot they put in)
+    if game_type == "mp_8ball":
+        action = details.get("action")
+        if action == "win":
+            return int(details.get("payout") or 0)
+        elif action == "loss":
+            return -int(details.get("stake") or 0)
+        return 0
     
     return payout - stake
 

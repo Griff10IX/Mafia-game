@@ -480,13 +480,26 @@ def register(router):
             buy_back_offer = None
             if won:
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
-                owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1, "username": 1})
-                owner_money = int(((owner or {}).get("money") or 0) or 0)
-                owner_username = (owner or {}).get("username")
-                actual_payout = min(payout, owner_money)
-                shortfall = payout - actual_payout
+                owner_after_bet = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1, "username": 1})
+                owner_username = (owner_after_bet or {}).get("username")
+                debit_ok = await db.users.update_one(
+                    {"id": owner_id, "money": {"$gte": payout}},
+                    {"$inc": {"money": -payout, "total_casino_payouts": payout}},
+                )
+                if debit_ok.modified_count > 0:
+                    actual_payout = payout
+                    shortfall = 0
+                else:
+                    owner_now = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1})
+                    available = max(0, int((owner_now or {}).get("money", 0)))
+                    actual_payout = available
+                    shortfall = payout - actual_payout
+                    if actual_payout > 0:
+                        await db.users.update_one(
+                            {"id": owner_id, "money": {"$gte": actual_payout}},
+                            {"$inc": {"money": -actual_payout, "total_casino_payouts": actual_payout}},
+                        )
                 await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": actual_payout}})
-                await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_payout, "total_casino_payouts": actual_payout}})
                 # Track biggest payout for owner
                 await bump_user_biggest_casino_payout(owner_id, actual_payout)
                 edge = int(bet * (1 + horse["odds"]) * HORSERACING_HOUSE_EDGE) if head_family_id else 0

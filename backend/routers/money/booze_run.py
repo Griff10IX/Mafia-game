@@ -14,6 +14,7 @@ from server import (
     get_rank_info,
     STATES,
     _is_admin,
+    log_activity,
 )
 
 
@@ -374,6 +375,7 @@ async def _booze_sell_impl(user: dict, booze_id: str, amount: int) -> dict:
                     {"$inc": {"money": referral_cash, "referral_earnings_booze": referral_cash}},
                 )
     _invalidate_config_cache(user["id"])
+    await log_activity(user.get("id", ""), user.get("username", ""), "booze_sell", {"booze": booze_name, "amount": amount, "revenue": revenue, "profit": profit})
     return {"message": f"Sold {amount} {booze_name}", "revenue": revenue, "profit": profit, "new_carrying": new_val, "is_run": is_run}
 
 

@@ -2780,6 +2780,61 @@ def register(router):
         entries = await cursor.to_list(limit)
         return {"entries": entries, "count": len(entries)}
 
+    @router.get("/admin/activity-feed")
+    async def admin_activity_feed(
+        limit: int = Query(200, ge=1, le=500),
+        action: Optional[str] = None,
+        username: Optional[str] = None,
+        since_minutes: int = Query(60, ge=1, le=1440),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Combined activity + gambling feed for recent player actions. Supports filtering by action type and username."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        now = datetime.now(timezone.utc)
+        since_iso = (now - timedelta(minutes=int(since_minutes))).isoformat()
+        limit = min(max(1, limit), 500)
+
+        activity_query: dict = {"created_at": {"$gte": since_iso}}
+        gambling_query: dict = {"created_at": {"$gte": since_iso}}
+        if username and username.strip():
+            pat = re.compile("^" + re.escape(username.strip()) + "$", re.IGNORECASE)
+            activity_query["username"] = pat
+            gambling_query["username"] = pat
+        if action and action.strip():
+            a = action.strip().lower()
+            activity_query["action"] = re.compile(re.escape(a), re.IGNORECASE)
+            gambling_query["game_type"] = re.compile(re.escape(a), re.IGNORECASE)
+
+        activity_rows = await db.activity_log.find(activity_query, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+        gambling_rows = await db.gambling_log.find(gambling_query, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+
+        merged = []
+        for row in activity_rows:
+            merged.append({
+                "source": "activity",
+                "user_id": row.get("user_id"),
+                "username": row.get("username"),
+                "action": row.get("action"),
+                "details": row.get("details"),
+                "created_at": row.get("created_at"),
+            })
+        for row in gambling_rows:
+            details = row.get("details") or {}
+            stake = int(details.get("stake") or details.get("bet") or 0)
+            payout = int(details.get("payout") or 0)
+            merged.append({
+                "source": "gambling",
+                "user_id": row.get("user_id"),
+                "username": row.get("username"),
+                "action": row.get("game_type"),
+                "details": {"stake": stake, "payout": payout, "win": details.get("win"), **{k: v for k, v in details.items() if k not in ("stake", "bet", "payout", "win")}},
+                "created_at": row.get("created_at"),
+            })
+        merged.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+        merged = merged[:limit]
+        return {"entries": merged, "count": len(merged), "since_minutes": since_minutes}
+
     @router.get("/admin/gambling-log")
     async def admin_gambling_log(
         limit: int = 100,
@@ -2912,6 +2967,7 @@ def register(router):
             avg_profit = total_profit / attempts if attempts > 0 else 0.0
             win_rate = wins / attempts if attempts > 0 else 0.0
             usage_share = attempts / total_attempts if total_attempts > 0 else 0.0
+            house_profit = s["total_stake"] - s["total_payout"]
             items.append(
                 {
                     "game_type": gt,
@@ -2921,11 +2977,68 @@ def register(router):
                     "total_stake": s["total_stake"],
                     "total_payout": s["total_payout"],
                     "total_profit": total_profit,
+                    "house_profit": house_profit,
                     "avg_profit": avg_profit,
                     "usage_share": usage_share,
                 }
             )
-        return {"generated_at": now.isoformat(), "days": days, "items": items}
+        totals = {
+            "total_attempts": sum(v["attempts"] for v in stats.values()),
+            "total_wins": sum(v["wins"] for v in stats.values()),
+            "total_stake": sum(v["total_stake"] for v in stats.values()),
+            "total_payout": sum(v["total_payout"] for v in stats.values()),
+            "total_profit": sum(v["total_profit"] for v in stats.values()),
+            "total_house_profit": sum(v["total_stake"] for v in stats.values()) - sum(v["total_payout"] for v in stats.values()),
+            "unique_games": len(stats),
+        }
+        return {"generated_at": now.isoformat(), "days": days, "items": items, "totals": totals}
+
+    @router.get("/admin/casinos/ownership-profits")
+    async def admin_casinos_ownership_profits(
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Aggregate profit/earnings from all casino ownership collections."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        collections = {
+            "Dice": "dice_ownership",
+            "Roulette": "roulette_ownership",
+            "Blackjack": "blackjack_ownership",
+            "Slots": "slots_ownership",
+            "Video Poker": "videopoker_ownership",
+            "Horse Racing": "horseracing_ownership",
+        }
+        items = []
+        grand_total_profit = 0
+        grand_total_earnings = 0
+        for game_name, coll_name in collections.items():
+            coll = getattr(db, coll_name, None)
+            if not coll:
+                continue
+            docs = await coll.find({}, {"_id": 0}).to_list(200)
+            for doc in docs:
+                profit = int(doc.get("profit") or 0)
+                total_earnings = int(doc.get("total_earnings") or 0)
+                owner_id = doc.get("owner_id")
+                owner_username = doc.get("owner_username") or "—"
+                city = doc.get("city") or doc.get("state") or "—"
+                grand_total_profit += profit
+                grand_total_earnings += total_earnings
+                items.append({
+                    "game": game_name,
+                    "city": city,
+                    "owner_id": owner_id,
+                    "owner_username": owner_username,
+                    "profit": profit,
+                    "total_earnings": total_earnings,
+                })
+        items.sort(key=lambda x: -abs(x["profit"]))
+        return {
+            "items": items,
+            "grand_total_profit": grand_total_profit,
+            "grand_total_earnings": grand_total_earnings,
+        }
 
     @router.get("/admin/casinos/gambling-anomalies")
     async def admin_gambling_anomalies(

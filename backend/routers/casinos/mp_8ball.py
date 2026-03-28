@@ -10,7 +10,7 @@ import uuid
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel, field_validator
 
-from server import db, get_current_user, get_current_user_verified, maybe_process_rank_up
+from server import db, get_current_user, get_current_user_verified, maybe_process_rank_up, log_gambling
 from routers.minigames.minigame_leaderboard import log_minigame_play
 
 _rng = random.SystemRandom()
@@ -805,6 +805,19 @@ async def _apply_pool_match_rewards(db, game: dict, winner_uid: str, loser_uid: 
             )
             await log_minigame_play(winner_uid, winner_doc.get("username") or "?", "pool_8ball", int(table_state.get("shot_count") or 0))
 
+    if w_human:
+        w_doc = await db.users.find_one({"id": winner_uid}, {"_id": 0, "username": 1})
+        await log_gambling(winner_uid, (w_doc or {}).get("username", "?"), "mp_8ball", {
+            "action": "win", "game_id": game.get("id"), "mode": mode,
+            "pot": pot, "win_bonus": int(win_bonus), "payout": pot + int(win_bonus),
+        })
+    if l_human:
+        l_doc = await db.users.find_one({"id": loser_uid}, {"_id": 0, "username": 1})
+        await log_gambling(loser_uid, (l_doc or {}).get("username", "?"), "mp_8ball", {
+            "action": "loss", "game_id": game.get("id"), "mode": mode,
+            "pot": pot, "stake": pot, "payout": 0,
+        })
+
 
 def _cue_catalog() -> List[dict]:
     return [
@@ -1040,8 +1053,8 @@ def register(router):
             if not winner_uid:
                 raise HTTPException(status_code=400, detail="Invalid game state")
             loser_uid = uid
-            await db.mp_8ball_games.update_one(
-                {"id": game_id},
+            claim = await db.mp_8ball_games.update_one(
+                {"id": game_id, "status": "in_progress"},
                 {
                     "$set": {
                         "status": "completed",
@@ -1054,7 +1067,8 @@ def register(router):
                 },
             )
             g_done = await db.mp_8ball_games.find_one({"id": game_id}, {"_id": 0})
-            await _apply_pool_match_rewards(db, g_done, winner_uid, loser_uid)
+            if claim.modified_count > 0:
+                await _apply_pool_match_rewards(db, g_done, winner_uid, loser_uid)
             return _public_game(g_done, uid)
         if game.get("status") == "completed":
             return _public_game(game, uid)
@@ -1071,8 +1085,8 @@ def register(router):
             await db.mp_8ball_games.delete_one({"id": game_id})
             return {"message": "Game closed"}
         loser_uid = uid
-        await db.mp_8ball_games.update_one(
-            {"id": game_id},
+        claim = await db.mp_8ball_games.update_one(
+            {"id": game_id, "status": "waiting"},
             {
                 "$set": {
                     "status": "completed",
@@ -1085,7 +1099,8 @@ def register(router):
             },
         )
         g_done = await db.mp_8ball_games.find_one({"id": game_id}, {"_id": 0})
-        await _apply_pool_match_rewards(db, g_done, winner_uid, loser_uid)
+        if claim.modified_count > 0:
+            await _apply_pool_match_rewards(db, g_done, winner_uid, loser_uid)
         return _public_game(g_done, uid)
 
     @router.post("/casino/mp-8ball/games/{game_id}/ready")
@@ -1252,9 +1267,12 @@ def register(router):
             updates["turn_started_at"] = game.get("turn_started_at") or _now_iso()
             table_state["balls_settled"] = False
 
-        await db.mp_8ball_games.update_one({"id": game_id}, {"$set": updates})
+        result = await db.mp_8ball_games.update_one(
+            {"id": game_id, "status": "in_progress"}, {"$set": updates}
+        )
+        if result.modified_count == 0:
+            raise HTTPException(status_code=400, detail="Game is not active")
 
-        # Settlement / progression.
         if winner_uid:
             loser_uid = opponent.get("user_id") if winner_uid == shooter_uid else shooter_uid
             g_done = dict(game)

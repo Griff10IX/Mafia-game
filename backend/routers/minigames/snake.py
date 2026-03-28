@@ -1,4 +1,4 @@
-# The Package Run (Snake) — leaderboard and score submit with in-game rewards
+# The Package Run (Snake) — leaderboard and score submit with server-calculated rewards
 from datetime import datetime, timezone, timedelta
 import uuid
 
@@ -21,19 +21,7 @@ SNAKE_SCORE_RATE_PER_SEC = 120.0
 SNAKE_SCORE_BUFFER = 60
 SNAKE_GAME = "snake"
 
-# Per-submit caps for each reward type (prevent economy overflow)
-# 75% reduction for beta
-REWARD_CAPS = {
-    "cash": 25_000,
-    "respect": 500,
-    "rank_points": 200,
-    "bullets": 50,
-    "booze": 50,
-}
-# Default booze type for Package Run (Booze Run uses booze_carrying.{booze_id})
 SNAKE_BOOZE_ID = "speakeasy_whiskey"
-# Jail penalty: seconds in jail when user collected jail token(s)
-SNAKE_JAIL_SECONDS = 30
 
 
 class SnakeScoreRequest(BaseModel):
@@ -42,65 +30,28 @@ class SnakeScoreRequest(BaseModel):
     rewards: Optional[Dict[str, int]] = None
 
 
-async def _apply_rewards(user_id: str, rewards: Dict[str, Any]) -> Dict[str, Any]:
-    """Apply reward dict to user. Returns what was applied (for response). Clamps to REWARD_CAPS."""
-    if not rewards or not isinstance(rewards, dict):
-        return {}
+def _rewards_from_score(score: int) -> Dict[str, int]:
+    """Server-authoritative reward calculation based on score. Client rewards dict is ignored."""
+    s = max(0, score)
+    return {
+        "money": min(25_000, s * 5),
+        "respect_points": min(500, s // 20),
+        "rank_points": min(200, s // 50),
+        "bullets": min(50, s // 100),
+    }
 
-    inc = {}
-    jail_seconds = 0
 
-    # cash -> money
-    if "cash" in rewards:
-        v = max(0, min(REWARD_CAPS["cash"], int(rewards.get("cash") or 0)))
-        if v:
-            inc["money"] = v
-
-    # respect -> respect_points
-    if "respect" in rewards:
-        v = max(0, min(REWARD_CAPS["respect"], int(rewards.get("respect") or 0)))
-        if v:
-            inc["respect_points"] = v
-
-    # rank_points
-    if "rank_points" in rewards:
-        v = max(0, min(REWARD_CAPS["rank_points"], int(rewards.get("rank_points") or 0)))
-        if v:
-            inc["rank_points"] = v
-
-    # bullets
-    if "bullets" in rewards:
-        v = max(0, min(REWARD_CAPS["bullets"], int(rewards.get("bullets") or 0)))
-        if v:
-            inc["bullets"] = v
-
-    # booze -> booze_carrying.speakeasy_whiskey
-    if "booze" in rewards:
-        v = max(0, min(REWARD_CAPS["booze"], int(rewards.get("booze") or 0)))
-        if v:
-            inc[f"booze_carrying.{SNAKE_BOOZE_ID}"] = v
-
-    # jail: negative — add jail time (each token = 30s)
-    if "jail" in rewards:
-        n = max(0, int(rewards.get("jail") or 0))
-        if n:
-            jail_seconds = n * SNAKE_JAIL_SECONDS
+async def _apply_rewards(user_id: str, score: int) -> Dict[str, Any]:
+    """Calculate and apply rewards from score. Returns what was applied."""
+    inc = _rewards_from_score(score)
+    inc = {k: v for k, v in inc.items() if v > 0}
 
     applied = dict(inc)
-    if jail_seconds:
-        applied["jail_seconds"] = jail_seconds
 
     if inc:
         await db.users.update_one({"id": user_id}, {"$inc": inc})
         if inc.get("respect_points"):
             await log_respect_earned(user_id, inc["respect_points"], "snake")
-
-    if jail_seconds:
-        jail_until = datetime.now(timezone.utc) + timedelta(seconds=jail_seconds)
-        await db.users.update_one(
-            {"id": user_id},
-            {"$set": {"in_jail": True, "jail_until": jail_until.isoformat().replace("+00:00", "Z")}},
-        )
 
     return applied
 
@@ -161,7 +112,6 @@ def register(router):
         if score > MAX_SCORE_ACCEPTED:
             raise HTTPException(status_code=400, detail="Score too high.")
 
-        # Rate limit: N plays per hour (UTC) — atomic to prevent concurrent bypass
         now_dt = datetime.now(timezone.utc).replace(microsecond=0)
         now_iso = now_dt.isoformat().replace("+00:00", "Z")
         hour_start = now_dt.replace(minute=0, second=0)
@@ -169,6 +119,25 @@ def register(router):
         reset_dt = hour_start + timedelta(hours=1)
         reset_iso = reset_dt.isoformat().replace("+00:00", "Z")
         uid = current_user["id"]
+
+        skip_session = _is_admin(current_user)
+        session_id = (payload.session_id or "").strip()
+        if not skip_session:
+            if not session_id:
+                raise HTTPException(status_code=400, detail="Start a game before submitting (missing session).")
+            sess = await claim_minigame_run_session(
+                db, user_id=uid, game=SNAKE_GAME, session_id=session_id, now_dt=now_dt
+            )
+            await enforce_numeric_score_for_claimed_session(
+                db,
+                session_id=session_id,
+                sess=sess,
+                now_dt=now_dt,
+                score=score,
+                max_score_cap=MAX_SCORE_ACCEPTED,
+                rate_per_second=SNAKE_SCORE_RATE_PER_SEC,
+                buffer=SNAKE_SCORE_BUFFER,
+            )
 
         result = await db.user_meta.update_one(
             {"user_id": uid, "snake_hour_start": hour_start_iso, "snake_hour_count": {"$lt": MAX_PLAYS_PER_HOUR}},
@@ -189,15 +158,13 @@ def register(router):
                     detail=f"Hourly limit reached ({MAX_PLAYS_PER_HOUR} plays). Try again in {remaining}s.",
                 )
 
-        rewards = payload.rewards or {}
-        rewards_applied = await _apply_rewards(current_user["id"], rewards)
+        rewards_applied = await _apply_rewards(current_user["id"], score)
 
         doc = {
             "id": str(uuid.uuid4()),
             "user_id": current_user["id"],
             "username": current_user.get("username") or "?",
             "score": score,
-            "rewards": rewards,
             "at": now_iso,
         }
         try:

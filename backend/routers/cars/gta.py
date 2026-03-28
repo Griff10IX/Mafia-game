@@ -295,17 +295,31 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
     if not option:
         raise ValueError(f"Invalid GTA option: {option_id}")
     now = datetime.now(timezone.utc)
-    cooldown_doc = await db.gta_cooldowns.find_one(
-        {"user_id": current_user.get("id") or ""},
-        {"_id": 0, "cooldown_until": 1},
+    uid = current_user.get("id") or ""
+    now_iso = now.isoformat()
+    cooldown_until = now + timedelta(seconds=option["cooldown"])
+    cooldown_iso = cooldown_until.isoformat()
+
+    claimed = await db.gta_cooldowns.update_one(
+        {"user_id": uid, "cooldown_until": {"$lte": now_iso}},
+        {"$set": {"cooldown_until": cooldown_iso}},
     )
-    if cooldown_doc:
-        until = _parse_iso_datetime(cooldown_doc.get("cooldown_until"))
-        if until and until > now:
-            secs = int((until - now).total_seconds())
-            raise HTTPException(
-                status_code=400, detail=f"GTA cooldown: try again in {secs}s"
+    if claimed.modified_count == 0:
+        first = await db.gta_cooldowns.update_one(
+            {"user_id": uid},
+            {"$setOnInsert": {"cooldown_until": cooldown_iso}},
+            upsert=True,
+        )
+        if first.upserted_id is None and first.modified_count == 0:
+            existing = await db.gta_cooldowns.find_one(
+                {"user_id": uid}, {"_id": 0, "cooldown_until": 1}
             )
+            cd_until = _parse_iso_datetime((existing or {}).get("cooldown_until"))
+            if cd_until and cd_until > now:
+                secs = int((cd_until - now).total_seconds())
+                raise HTTPException(
+                    status_code=400, detail=f"GTA cooldown: try again in {secs}s"
+                )
     
     # PROGRESS BAR: 10-92%. Success +3-5%. Fail -1-3%; once hit 92%, floor 77%
     user_gta = await db.user_gta.find_one(
@@ -345,12 +359,6 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
             else GTA_PROGRESS_MIN
         )
         progress_after = max(floor, progress - drop)
-    
-    cooldown_until = now + timedelta(seconds=option["cooldown"])
-    await db.gta_cooldowns.delete_many({"user_id": current_user.get("id") or ""})
-    await db.gta_cooldowns.insert_one(
-        {"user_id": current_user.get("id") or "", "cooldown_until": cooldown_until.isoformat()}
-    )
     
     set_fields = {
         "last_attempted": now.isoformat(),

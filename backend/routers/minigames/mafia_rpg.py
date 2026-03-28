@@ -14,7 +14,7 @@ from utils.minigame_run_session import (
     enforce_numeric_score_for_claimed_session,
 )
 
-MAX_PLAYS_PER_HOUR = 8
+MAX_PLAYS_PER_HOUR = 10
 MAFIA_RPG_GAME = "mafia_rpg"
 MAFIA_COMPOSITE_RATE = 40_000.0
 MAFIA_COMPOSITE_BUFFER = 100_000

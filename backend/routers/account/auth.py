@@ -1575,6 +1575,22 @@ def register(router):
         used_count = int(doc.get("used_count", 0))
         if max_uses is not None and used_count >= max_uses:
             raise HTTPException(status_code=400, detail="This code has reached its redemption limit.")
+
+        claim_filter = {
+            "code": code_normalized,
+            "active": True,
+            "used_by": {"$nin": [user_id]},
+        }
+        if max_uses is not None:
+            claim_filter["used_count"] = {"$lt": int(max_uses)}
+        claimed = await db.redeem_codes.find_one_and_update(
+            claim_filter,
+            {"$inc": {"used_count": 1}, "$push": {"used_by": user_id}},
+        )
+        if not claimed:
+            raise HTTPException(status_code=400, detail="Code already used or limit reached.")
+        new_used = int(claimed.get("used_count", 0)) + 1
+
         rewards = doc.get("rewards") or {}
         inc = {}
         if rewards.get("money"):
@@ -1589,7 +1605,6 @@ def register(router):
             cfg = TOKEN_CONFIG.get(token_type)
             if cfg and amount:
                 inc[cfg["count_field"]] = int(amount)
-        # Lifetime stats for "amount received from redeems"
         inc["redeem_stats_total_money"] = int(rewards.get("money") or 0)
         inc["redeem_stats_total_points"] = int(rewards.get("points") or 0)
         inc["redeem_stats_total_respect_points"] = int(rewards.get("respect_points") or 0)
@@ -1608,11 +1623,6 @@ def register(router):
                     "car_name": car_info.get("name", car_id),
                     "acquired_at": datetime.now(timezone.utc).isoformat(),
                 })
-        await db.redeem_codes.update_one(
-            {"code": code_normalized},
-            {"$inc": {"used_count": 1}, "$push": {"used_by": user_id}},
-        )
-        new_used = used_count + 1
         max_uses_val = doc.get("max_uses")
         topic_id = doc.get("forum_topic_id")
         if topic_id and max_uses_val is not None and new_used >= int(max_uses_val):

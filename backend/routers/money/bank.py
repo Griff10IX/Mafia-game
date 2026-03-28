@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from fastapi import Depends, HTTPException, Request
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from server import db, get_current_user, get_current_user_verified
+from server import db, get_current_user, get_current_user_verified, log_activity
 
 # Set from server in register() (server keeps constants for UserProfile / new-user / auth/me)
 SWISS_BANK_LIMIT_START = None
@@ -177,6 +177,7 @@ async def bank_interest_deposit(request: BankInterestDepositRequest, current_use
     except Exception:
         pass
     _invalidate_overview_cache(current_user.get("id") or "")
+    await log_activity(current_user.get("id", ""), current_user.get("username", ""), "bank_deposit", {"amount": amount, "hours": hours, "interest": interest})
     return {"message": f"Deposited ${amount:,} for {hours}h", "deposit_id": deposit_id, "interest": interest, "matures_at": matures.isoformat()}
 
 
@@ -235,6 +236,7 @@ async def bank_swiss_deposit(request: BankSwissMoveRequest, current_user: dict =
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient cash on hand")
     _invalidate_overview_cache(current_user.get("id") or "")
+    await log_activity(current_user.get("id", ""), current_user.get("username", ""), "swiss_deposit", {"amount": amount})
     return {"message": f"Deposited ${amount:,} into Swiss Bank"}
 
 
@@ -249,6 +251,7 @@ async def bank_swiss_withdraw(request: BankSwissMoveRequest, current_user: dict 
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient Swiss balance")
     _invalidate_overview_cache(current_user.get("id") or "")
+    await log_activity(current_user.get("id", ""), current_user.get("username", ""), "swiss_withdraw", {"amount": amount})
     return {"message": f"Withdrew ${amount:,} from Swiss Bank"}
 
 
@@ -328,6 +331,7 @@ async def bank_transfer(request: MoneyTransferRequest, req: Request, current_use
             pass
     _invalidate_overview_cache(sender_id)
     _invalidate_overview_cache(recipient_id)
+    await log_activity(sender_id, current_user.get("username", ""), "bank_transfer", {"amount": amount, "recipient_id": recipient_id, "recipient": recipient.get("username", "")})
     return {"message": f"Sent ${amount:,} to {recipient.get('username', '')}"}
 
 

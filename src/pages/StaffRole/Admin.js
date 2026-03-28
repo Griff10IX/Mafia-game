@@ -131,8 +131,10 @@ const SEARCHABLE_TOOLS = [
   { label: 'Find Duplicates', categoryId: 'admin-cheat', collapseKey: 'duplicates', keywords: ['duplicate', 'multi', 'account'] },
   // Analytics
   { label: 'Login page unique visitors', categoryId: 'admin-analytics', collapseKey: 'loginPageVisitors', keywords: ['login', 'visitors', 'unique', 'page', 'stats'] },
+  { label: 'Casino Ownership Profits', categoryId: 'admin-analytics', collapseKey: 'ownershipProfits', keywords: ['casino', 'ownership', 'profit', 'owner', 'earnings'] },
   { label: 'User Analytics', categoryId: 'admin-analytics', collapseKey: 'analytics', keywords: ['analytics', 'stats', 'users'] },
   // Logs
+  { label: 'Live Activity Feed', categoryId: 'admin-logs', collapseKey: 'activityFeed', keywords: ['activity', 'feed', 'live', 'real-time', 'actions', 'gambling', 'bank', 'transfer'] },
   { label: 'Attack Logs', categoryId: 'admin-logs', collapseKey: 'attackLogs', keywords: ['attack', 'log', 'kill'] },
   { label: 'Mod Action Logs', categoryId: 'admin-logs', collapseKey: 'modLogs', keywords: ['mod', 'action', 'log'] },
   // Testing Tools
@@ -468,6 +470,8 @@ export default function Admin() {
   const [casinoAnalyticsDays, setCasinoAnalyticsDays] = useState(7);
   const [casinoAnalytics, setCasinoAnalytics] = useState(null);
   const [casinoAnalyticsLoading, setCasinoAnalyticsLoading] = useState(false);
+  const [ownershipProfits, setOwnershipProfits] = useState(null);
+  const [ownershipProfitsLoading, setOwnershipProfitsLoading] = useState(false);
   const [tradesAnalyticsDays, setTradesAnalyticsDays] = useState(7);
   const [tradesAnalytics, setTradesAnalytics] = useState(null);
   const [tradesAnalyticsLoading, setTradesAnalyticsLoading] = useState(false);
@@ -521,6 +525,11 @@ export default function Admin() {
   const [activityLog, setActivityLog] = useState({ entries: [] });
   const [activityLogLoading, setActivityLogLoading] = useState(false);
   const [activityLogUsername, setActivityLogUsername] = useState('');
+  const [activityFeed, setActivityFeed] = useState(null);
+  const [activityFeedLoading, setActivityFeedLoading] = useState(false);
+  const [activityFeedMinutes, setActivityFeedMinutes] = useState(60);
+  const [activityFeedFilter, setActivityFeedFilter] = useState('');
+  const [activityFeedUsername, setActivityFeedUsername] = useState('');
   const [gamblingLog, setGamblingLog] = useState({ entries: [] });
   const [gamblingLogLoading, setGamblingLogLoading] = useState(false);
   const [gamblingLogUsername, setGamblingLogUsername] = useState('');
@@ -2535,6 +2544,18 @@ export default function Admin() {
     }
   };
 
+  const handleFetchOwnershipProfits = async () => {
+    setOwnershipProfitsLoading(true);
+    try {
+      const res = await api.get('/admin/casinos/ownership-profits');
+      setOwnershipProfits(res.data || null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load ownership profits');
+    } finally {
+      setOwnershipProfitsLoading(false);
+    }
+  };
+
   const handleFetchTradesAnalytics = async () => {
     setTradesAnalyticsLoading(true);
     try {
@@ -3079,6 +3100,22 @@ export default function Admin() {
       setProfileLoadErrors([]);
     } finally {
       setProfileLoadErrorsLoading(false);
+    }
+  };
+
+  const fetchActivityFeed = async () => {
+    setActivityFeedLoading(true);
+    try {
+      const params = { since_minutes: activityFeedMinutes, limit: 200 };
+      if (activityFeedUsername.trim()) params.username = activityFeedUsername.trim();
+      if (activityFeedFilter.trim()) params.action = activityFeedFilter.trim();
+      const res = await api.get('/admin/activity-feed', { params });
+      setActivityFeed(res.data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load activity feed');
+      setActivityFeed(null);
+    } finally {
+      setActivityFeedLoading(false);
     }
   };
 
@@ -7567,9 +7604,9 @@ export default function Admin() {
             onToggle={() => toggleSection('casinoAnalytics')}
           />
           {!collapsed.casinoAnalytics && (
-            <div className="p-3 space-y-2">
+            <div className="p-3 space-y-3">
               <div className="flex flex-wrap items-center gap-2">
-                {[1, 7, 30].map((d) => (
+                {[1, 7, 30, 90].map((d) => (
                   <button
                     key={d}
                     type="button"
@@ -7586,20 +7623,112 @@ export default function Admin() {
               {casinoAnalytics && (
                 <>
                   <p className="text-[10px] text-mutedForeground font-heading">Generated at {casinoAnalytics.generated_at ? new Date(casinoAnalytics.generated_at).toLocaleString() : '—'} for last {casinoAnalytics.days} day(s).</p>
-                  <div className="overflow-x-auto max-h-72">
+                  {casinoAnalytics.totals && (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
+                        <div className="text-[9px] text-mutedForeground font-heading uppercase">Total Bets</div>
+                        <div className="text-sm font-heading font-bold">{casinoAnalytics.totals.total_attempts?.toLocaleString() || 0}</div>
+                      </div>
+                      <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
+                        <div className="text-[9px] text-mutedForeground font-heading uppercase">Total Staked</div>
+                        <div className="text-sm font-heading font-bold">${casinoAnalytics.totals.total_stake?.toLocaleString() || 0}</div>
+                      </div>
+                      <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
+                        <div className="text-[9px] text-mutedForeground font-heading uppercase">Total Paid Out</div>
+                        <div className="text-sm font-heading font-bold">${casinoAnalytics.totals.total_payout?.toLocaleString() || 0}</div>
+                      </div>
+                      <div className={`rounded p-2 border ${(casinoAnalytics.totals.total_house_profit || 0) >= 0 ? 'bg-green-900/30 border-green-700/40' : 'bg-red-900/30 border-red-700/40'}`}>
+                        <div className="text-[9px] text-mutedForeground font-heading uppercase">House Profit</div>
+                        <div className={`text-sm font-heading font-bold ${(casinoAnalytics.totals.total_house_profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>${casinoAnalytics.totals.total_house_profit?.toLocaleString() || 0}</div>
+                      </div>
+                    </div>
+                  )}
+                  <div className="overflow-x-auto max-h-80">
                     {(!casinoAnalytics.items || casinoAnalytics.items.length === 0) ? (
                       <p className="text-[10px] text-mutedForeground font-heading">No casino activity in this window.</p>
                     ) : (
                       <table className="w-full text-[10px] font-heading">
-                        <thead><tr><th className="text-left p-1.5 text-mutedForeground">Game</th><th className="text-right p-1.5 text-mutedForeground">Attempts</th><th className="text-right p-1.5 text-mutedForeground">Wins</th><th className="text-right p-1.5 text-mutedForeground">Profit</th><th className="text-right p-1.5 text-mutedForeground">Share</th></tr></thead>
+                        <thead><tr>
+                          <th className="text-left p-1.5 text-mutedForeground">Game</th>
+                          <th className="text-right p-1.5 text-mutedForeground">Bets</th>
+                          <th className="text-right p-1.5 text-mutedForeground">Wins</th>
+                          <th className="text-right p-1.5 text-mutedForeground">Win %</th>
+                          <th className="text-right p-1.5 text-mutedForeground">Staked</th>
+                          <th className="text-right p-1.5 text-mutedForeground">Paid Out</th>
+                          <th className="text-right p-1.5 text-mutedForeground">House Profit</th>
+                          <th className="text-right p-1.5 text-mutedForeground">Share</th>
+                        </tr></thead>
                         <tbody>
                           {casinoAnalytics.items.map((item, idx) => (
                             <tr key={idx} className="border-b border-zinc-700/30">
                               <td className="py-1.5 pr-2 font-medium">{item.game_type || '—'}</td>
                               <td className="py-1.5 text-right">{item.attempts != null ? item.attempts.toLocaleString() : '—'}</td>
                               <td className="py-1.5 text-right">{item.wins != null ? item.wins.toLocaleString() : '—'}</td>
-                              <td className="py-1.5 text-right">{item.total_profit != null ? `$${Number(item.total_profit).toLocaleString()}` : '—'}</td>
+                              <td className="py-1.5 text-right">{item.win_rate != null ? `${(item.win_rate * 100).toFixed(1)}%` : '—'}</td>
+                              <td className="py-1.5 text-right">{item.total_stake != null ? `$${Number(item.total_stake).toLocaleString()}` : '—'}</td>
+                              <td className="py-1.5 text-right">{item.total_payout != null ? `$${Number(item.total_payout).toLocaleString()}` : '—'}</td>
+                              <td className={`py-1.5 text-right ${(item.house_profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>{item.house_profit != null ? `$${Number(item.house_profit).toLocaleString()}` : '—'}</td>
                               <td className="py-1.5 text-right">{item.usage_share != null ? `${(item.usage_share * 100).toFixed(1)}%` : '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Casino Ownership Profits */}
+
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={BarChart3}
+            title="Casino Ownership Profits"
+            badge={ownershipProfits?.items ? <span className="text-[10px] font-heading text-mutedForeground">{ownershipProfits.items.length} casinos</span> : null}
+            isCollapsed={collapsed.ownershipProfits}
+            onToggle={() => toggleSection('ownershipProfits')}
+          />
+          {!collapsed.ownershipProfits && (
+            <div className="p-3 space-y-2">
+              <BtnPrimary onClick={handleFetchOwnershipProfits} disabled={ownershipProfitsLoading}>
+                {ownershipProfitsLoading ? 'Loading…' : 'Load ownership profits'}
+              </BtnPrimary>
+              {ownershipProfits && (
+                <>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className={`rounded p-2 border ${(ownershipProfits.grand_total_profit || 0) >= 0 ? 'bg-green-900/30 border-green-700/40' : 'bg-red-900/30 border-red-700/40'}`}>
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase">Total Owner Profit</div>
+                      <div className={`text-sm font-heading font-bold ${(ownershipProfits.grand_total_profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>${ownershipProfits.grand_total_profit?.toLocaleString() || 0}</div>
+                    </div>
+                    <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase">Total Earnings</div>
+                      <div className="text-sm font-heading font-bold">${ownershipProfits.grand_total_earnings?.toLocaleString() || 0}</div>
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto max-h-80">
+                    {(!ownershipProfits.items || ownershipProfits.items.length === 0) ? (
+                      <p className="text-[10px] text-mutedForeground font-heading">No casino ownerships found.</p>
+                    ) : (
+                      <table className="w-full text-[10px] font-heading">
+                        <thead><tr>
+                          <th className="text-left p-1.5 text-mutedForeground">Game</th>
+                          <th className="text-left p-1.5 text-mutedForeground">City</th>
+                          <th className="text-left p-1.5 text-mutedForeground">Owner</th>
+                          <th className="text-right p-1.5 text-mutedForeground">Profit</th>
+                          <th className="text-right p-1.5 text-mutedForeground">Total Earnings</th>
+                        </tr></thead>
+                        <tbody>
+                          {ownershipProfits.items.map((item, idx) => (
+                            <tr key={idx} className="border-b border-zinc-700/30">
+                              <td className="py-1.5 pr-2 font-medium">{item.game || '—'}</td>
+                              <td className="py-1.5 pr-2">{item.city || '—'}</td>
+                              <td className="py-1.5 pr-2">{item.owner_username || '—'}</td>
+                              <td className={`py-1.5 text-right ${(item.profit || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>${Number(item.profit || 0).toLocaleString()}</td>
+                              <td className="py-1.5 text-right">${Number(item.total_earnings || 0).toLocaleString()}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -7764,6 +7893,93 @@ export default function Admin() {
           <ScrollText size={12} />
           Logs
         </h2>
+        {/* Live Activity Feed */}
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={ScrollText}
+            title="Live Activity Feed"
+            badge={activityFeed?.entries ? <span className="text-[10px] font-heading text-primary">{activityFeed.count} events</span> : null}
+            isCollapsed={collapsed.activityFeed}
+            onToggle={() => toggleSection('activityFeed')}
+          />
+          {!collapsed.activityFeed && (
+            <div className="p-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={activityFeedUsername}
+                  onChange={(e) => setActivityFeedUsername(e.target.value)}
+                  placeholder="Username filter"
+                  className="flex-1 min-w-[100px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                <input
+                  type="text"
+                  value={activityFeedFilter}
+                  onChange={(e) => setActivityFeedFilter(e.target.value)}
+                  placeholder="Action filter (e.g. bank, dice)"
+                  className="flex-1 min-w-[120px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                {[15, 60, 360, 1440].map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setActivityFeedMinutes(m)}
+                    className={`px-2 py-1 rounded border text-[10px] font-heading ${activityFeedMinutes === m ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'}`}
+                  >
+                    {m < 60 ? `${m}m` : `${m / 60}h`}
+                  </button>
+                ))}
+                <BtnPrimary onClick={fetchActivityFeed} disabled={activityFeedLoading}>
+                  {activityFeedLoading ? 'Loading…' : 'Load feed'}
+                </BtnPrimary>
+              </div>
+              {activityFeed && (
+                <div className="overflow-x-auto max-h-[500px]">
+                  {(!activityFeed.entries || activityFeed.entries.length === 0) ? (
+                    <p className="text-[10px] text-mutedForeground font-heading">No activity in the last {activityFeedMinutes < 60 ? `${activityFeedMinutes} minutes` : `${activityFeedMinutes / 60} hours`}.</p>
+                  ) : (
+                    <table className="w-full text-[10px] font-heading">
+                      <thead><tr>
+                        <th className="text-left p-1.5 text-mutedForeground sticky top-0 bg-zinc-900">Time</th>
+                        <th className="text-left p-1.5 text-mutedForeground sticky top-0 bg-zinc-900">Source</th>
+                        <th className="text-left p-1.5 text-mutedForeground sticky top-0 bg-zinc-900">User</th>
+                        <th className="text-left p-1.5 text-mutedForeground sticky top-0 bg-zinc-900">Action</th>
+                        <th className="text-left p-1.5 text-mutedForeground sticky top-0 bg-zinc-900">Details</th>
+                      </tr></thead>
+                      <tbody>
+                        {activityFeed.entries.map((e, idx) => (
+                          <tr key={idx} className="border-b border-zinc-700/30 hover:bg-zinc-800/30">
+                            <td className="p-1.5 text-mutedForeground whitespace-nowrap">{e.created_at ? new Date(e.created_at).toLocaleTimeString() : '—'}</td>
+                            <td className="p-1.5">
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${e.source === 'gambling' ? 'bg-amber-900/40 text-amber-400' : 'bg-blue-900/40 text-blue-400'}`}>
+                                {e.source === 'gambling' ? 'CASINO' : 'ACTION'}
+                              </span>
+                            </td>
+                            <td className="p-1.5 font-medium">{e.username || '—'}</td>
+                            <td className="p-1.5">{e.action || '—'}</td>
+                            <td className="p-1.5 text-mutedForeground max-w-xs truncate">
+                              {e.details ? (() => {
+                                const d = e.details;
+                                if (d.stake != null && d.payout != null) return `Stake: $${Number(d.stake).toLocaleString()} → Payout: $${Number(d.payout).toLocaleString()}`;
+                                if (d.amount != null && d.recipient) return `$${Number(d.amount).toLocaleString()} → ${d.recipient}`;
+                                if (d.amount != null) return `$${Number(d.amount).toLocaleString()}`;
+                                if (d.profit != null) return `Profit: $${Number(d.profit).toLocaleString()}`;
+                                if (d.income != null) return `Income: $${Number(d.income).toLocaleString()}`;
+                                return JSON.stringify(d).slice(0, 120);
+                              })() : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Attack logs (post data) — admin and mod */}
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />

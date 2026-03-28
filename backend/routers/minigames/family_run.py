@@ -93,7 +93,6 @@ def register(router):
         if score > MAX_SCORE_ACCEPTED:
             raise HTTPException(status_code=400, detail="Score too high.")
 
-        # Rate limit: N plays per hour
         now_dt = datetime.now(timezone.utc).replace(microsecond=0)
         now_iso = now_dt.isoformat().replace("+00:00", "Z")
         hour_start = now_dt.replace(minute=0, second=0)
@@ -102,6 +101,25 @@ def register(router):
         reset_iso = reset_dt.isoformat().replace("+00:00", "Z")
 
         uid = current_user["id"]
+
+        skip_session = _is_admin(current_user)
+        session_id = (payload.session_id or "").strip()
+        if not skip_session:
+            if not session_id:
+                raise HTTPException(status_code=400, detail="Start a game before submitting (missing session).")
+            sess = await claim_minigame_run_session(
+                db, user_id=uid, game=FAMILY_RUN_GAME, session_id=session_id, now_dt=now_dt
+            )
+            await enforce_numeric_score_for_claimed_session(
+                db,
+                session_id=session_id,
+                sess=sess,
+                now_dt=now_dt,
+                score=score,
+                max_score_cap=MAX_SCORE_ACCEPTED,
+                rate_per_second=FAMILY_RUN_RATE,
+                buffer=FAMILY_RUN_BUFFER,
+            )
 
         result = await db.user_meta.update_one(
             {"user_id": uid, "family_run_hour_start": hour_start_iso, "family_run_hour_count": {"$lt": MAX_PLAYS_PER_HOUR}},

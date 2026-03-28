@@ -76,6 +76,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
         { path: '/crime/crimes', label: 'Crimes' },
         { path: '/crime/gta', label: 'GTA' },
         { path: '/crime/jail', label: 'Jailbust' },
+        { path: '/organised-crime', label: 'Organised Crime' },
         { path: '/game/ranking/badges', label: 'Badges' },
         { path: '/account/prestige', label: 'Prestige' },
       ],
@@ -409,7 +410,11 @@ export default function Layout({ children }) {
     }
     return items.map((i) => {
       if (i.type === 'group' && i.id === 'misc') {
-        return { ...i, items: i.items.map((sub) => (sub.path === '/help-desk' ? { ...sub, badge: helpDeskOpenCount } : sub)) };
+        return { ...i, items: i.items.map((sub) => {
+          if (sub.path === '/game/help-desk') return { ...sub, badge: helpDeskOpenCount };
+          if (sub.path === '/social/inbox') return { ...sub, badge: unreadCount };
+          return sub;
+        }) };
       }
       if (i.type === 'group' && i.id === 'rank') {
         return {
@@ -424,7 +429,7 @@ export default function Layout({ children }) {
       }
       return i;
     });
-  }, [isAdmin, isModerator, hasAdminEmail, hasCasinoOrProperty, helpDeskOpenCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail]);
+  }, [isAdmin, isModerator, hasAdminEmail, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail]);
 
   useEffect(() => onCooldownChange(setCooldownSeconds), []);
 

@@ -8,7 +8,7 @@ _rng = secrets.SystemRandom()
 
 from fastapi import Depends, HTTPException
 
-from server import db, get_current_user, founding_member_income_mult
+from server import db, get_current_user, founding_member_income_mult, log_activity
 
 
 def _parse_iso_datetime(s):
@@ -287,6 +287,7 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
         "cost": cost,
         "level": 1 if not user_prop else (user_prop.get("level") or 0) + 1,
     })
+    await log_activity(current_user.get("id", ""), current_user.get("username", ""), "property_buy", {"property": prop.get("name", property_id), "cost": cost})
     return {"message": f"Successfully purchased/upgraded {prop['name']}"}
 
 
@@ -346,6 +347,26 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
         )
     if total_income < 1:
         raise HTTPException(status_code=400, detail="No income to collect yet")
+
+    cooldown_threshold_dt = now_utc - timedelta(minutes=COLLECT_COOLDOWN_MINUTES)
+    cooldown_threshold_iso = cooldown_threshold_dt.isoformat()
+    claim_result = await db.user_properties.update_many(
+        {
+            "user_id": current_user["id"],
+            "property_id": property_id,
+            "$or": [
+                {"last_collected": {"$lte": cooldown_threshold_iso}},
+                {"last_collected": {"$exists": False}},
+            ],
+        },
+        {"$set": {"last_collected": now_iso}},
+    )
+    if claim_result.modified_count == 0:
+        raise HTTPException(
+            status_code=400,
+            detail=f"You can collect every {COLLECT_COOLDOWN_MINUTES} minutes. Try again shortly.",
+        )
+
     # Apply stack bonus
     income = total_income * stack_mult
     perk_until = _parse_iso_datetime(current_user.get("property_income_perk_until"))
@@ -357,14 +378,9 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
     # Streak bonus: +1% income per consecutive day (up to MAX_STREAK_DAYS) - use first property's streak
     streak_days = int(first_user_prop.get("collection_streak_days") or 0)
     hours_passed = max_hours_passed  # Use max hours for streak calculation
-    # First ever collection: start streak at 1
     if streak_days <= 0:
         streak_days = 1
     else:
-        # Use hours to avoid abusing tiny frequent collects:
-        # - If between 24–48h since last collect: streak can increase
-        # - If >48h: streak resets to 1
-        # - If <24h: streak is maintained but does not increase
         if hours_passed >= 24.0 and hours_passed <= 48.0:
             streak_days = min(MAX_STREAK_DAYS, streak_days + 1)
         elif hours_passed > 48.0:
@@ -396,10 +412,6 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
     )
     await db.user_properties.update_many(
         {"user_id": current_user["id"], "property_id": property_id},
-        {"$set": {"last_collected": now_iso}}
-    )
-    await db.user_properties.update_many(
-        {"user_id": current_user["id"], "property_id": property_id},
         {"$set": {"collection_streak_days": streak_days}}
     )
     message = f"Collected ${income:,.2f}"
@@ -411,6 +423,7 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
         message += " with reinvest bonus."
     if risk_event and risk_event.get("message"):
         message += f" {risk_event['message']}"
+    await log_activity(current_user.get("id", ""), current_user.get("username", ""), "property_collect", {"property": prop.get("name", property_id), "income": round(income, 2), "owned_count": owned_count})
     return {
         "message": message,
         "streak_days": streak_days,
