@@ -1,5 +1,6 @@
 # Security Admin endpoints: view logs, ban/unban users, security stats
 from datetime import datetime, timezone, timedelta
+import re
 import uuid
 from pydantic import BaseModel
 from typing import Optional
@@ -29,7 +30,9 @@ class BanIPRequest(BaseModel):
 
 
 class UnbanIPRequest(BaseModel):
-    ip: str
+    """Unban by canonical IP string, or by username (clears all active IP bans tied to that account ban)."""
+    ip: Optional[str] = None
+    username: Optional[str] = None
 
 
 class TestTelegramRequest(BaseModel):
@@ -216,15 +219,59 @@ def register(router):
     async def unban_ip_admin(request: UnbanIPRequest, current_user: dict = Depends(get_current_user)):
         if current_user.get("email") not in ADMIN_EMAILS:
             raise HTTPException(status_code=403, detail="Admin access required")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        set_ban = {"$set": {"active": False, "unbanned_at": now_iso}}
+
+        uname = (request.username or "").strip()
+        if uname:
+            pat = srv._username_pattern(uname)
+            if not pat:
+                raise HTTPException(status_code=400, detail="Username is required")
+            user = await db.users.find_one(
+                {"username": pat},
+                {"_id": 0, "id": 1, "username": 1},
+            )
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            uid = user["id"]
+            display = (user.get("username") or "").strip() or uname
+            or_filters = [{"source_user_id": uid}]
+            if display:
+                esc = re.escape(display)
+                or_filters.append({"source_username": {"$regex": f"^{esc}$", "$options": "i"}})
+            result = await db.ip_bans.update_many(
+                {"active": True, "$or": or_filters},
+                set_ban,
+            )
+            if result.modified_count > 0:
+                return {
+                    "message": f"Unbanned {result.modified_count} IP ban(s) linked to {display}",
+                    "unbanned": result.modified_count,
+                }
+            raise HTTPException(
+                status_code=404,
+                detail="No active IP bans found for this user (only bans created via 'ban user IPs' are linked by username).",
+            )
+
         ip = normalize_ip_string(request.ip or "")
         if not ip:
-            raise HTTPException(status_code=400, detail="IP is required")
-        result = await db.ip_bans.update_many(
-            {"ip": ip, "active": True},
-            {"$set": {"active": False, "unbanned_at": datetime.now(timezone.utc).isoformat()}}
-        )
-        if result.modified_count > 0:
-            return {"message": f"IP {ip} unbanned (removed {result.modified_count} ban(s))"}
+            raise HTTPException(status_code=400, detail="IP is required (or provide username to unban all IPs from a user ban)")
+
+        result = await db.ip_bans.update_many({"ip": ip, "active": True}, set_ban)
+        total = int(result.modified_count or 0)
+
+        if total == 0:
+            # Legacy rows may store a non-canonical string that still maps to the same address.
+            ids = []
+            async for doc in db.ip_bans.find({"active": True}, {"_id": 1, "ip": 1}):
+                if normalize_ip_string(doc.get("ip")) == ip:
+                    ids.append(doc["_id"])
+            if ids:
+                r2 = await db.ip_bans.update_many({"_id": {"$in": ids}}, set_ban)
+                total = int(r2.modified_count or 0)
+
+        if total > 0:
+            return {"message": f"IP {ip} unbanned (removed {total} ban(s))", "unbanned": total}
         raise HTTPException(status_code=404, detail="No active ban found for this IP")
 
     def _client_ip(req: Request) -> str:
