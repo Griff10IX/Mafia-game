@@ -178,21 +178,28 @@ async def flush_telegram_alerts():
     use_markdown = all(use_md_flags)
     try:
         async with httpx.AsyncClient(timeout=10.0) as client:
+            url = "https://api.telegram.org/bot{}/sendMessage".format(TELEGRAM_BOT_TOKEN)
             payload = {"chat_id": TELEGRAM_CHAT_ID, "text": combined_message[:4000]}
             if use_markdown:
                 payload["parse_mode"] = "Markdown"
-            r = await client.post(
-                f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
-                json=payload,
-            )
+            r = await client.post(url, json=payload)
+            err_body = r.text or ""
+            err_l = err_body.lower()
+            if r.status_code == 400 and ("chat not found" in err_l or "chat_id is empty" in err_l):
+                logger.warning(
+                    "Telegram security alerts: TELEGRAM_CHAT_ID is wrong or the bot cannot reach that chat. "
+                    "For DMs send /start to the bot; for groups add the bot and use the group id from @RawDataBot. API: %s",
+                    err_body[:200],
+                )
+                return
             if r.status_code == 400:
                 payload.pop("parse_mode", None)
-                await client.post(
-                    f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage",
-                    json=payload,
-                )
+                r = await client.post(url, json=payload)
+                err_body = r.text or ""
+            if r.status_code != 200:
+                logger.warning("Telegram alert send failed: %s %s", r.status_code, err_body[:200])
     except Exception as e:
-        logger.exception(f"Failed to send Telegram alert: {e}")
+        logger.exception("Failed to send Telegram alert: %s", e)
 
 
 async def send_telegram_to_chat(chat_id: str, message: str, bot_token: Optional[str] = None, username: Optional[str] = None) -> bool:

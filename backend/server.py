@@ -2200,6 +2200,9 @@ logging.basicConfig(
         )
     ]
 )
+# httpx/httpcore log every request URL at INFO — Telegram URLs embed the bot token
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
