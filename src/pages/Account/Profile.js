@@ -1706,6 +1706,22 @@ export default function Profile() {
                   <li>5% of their garage scrap (cash) profit</li>
                   <li>2% of their booze profit (cash)</li>
                 </ul>
+                <p className="text-[10px] text-mutedForeground font-heading mb-1.5">
+                  Referrals must verify email before their play counts toward your earnings.
+                </p>
+                <div className="rounded border border-border/60 bg-secondary/30 px-2 py-2 mb-2 space-y-1.5">
+                  <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Your earnings so far</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-2 gap-y-1 text-[10px] font-heading text-mutedForeground">
+                    <span>Crime: <span className="text-emerald-400 tabular-nums">${Number(me?.referral_earnings_crime || 0).toLocaleString()}</span></span>
+                    <span>OC: <span className="text-emerald-400 tabular-nums">${Number(me?.referral_earnings_oc || 0).toLocaleString()}</span></span>
+                    <span>Booze: <span className="text-emerald-400 tabular-nums">${Number(me?.referral_earnings_booze || 0).toLocaleString()}</span></span>
+                    <span>Scrap: <span className="text-emerald-400 tabular-nums">${Number(me?.referral_earnings_garage_scrap || 0).toLocaleString()}</span></span>
+                    <span className="sm:col-span-2">Melt bullets: <span className="text-amber-400 tabular-nums">{Number(me?.referral_earnings_melt_bullets || 0).toLocaleString()}</span></span>
+                  </div>
+                  <Link to="/account/referral" className="inline-block text-[10px] text-primary font-heading underline hover:no-underline">
+                    Full referral &amp; redeem page
+                  </Link>
+                </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <input
                     type="text"

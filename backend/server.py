@@ -626,6 +626,12 @@ class UserResponse(BaseModel):
     referred_by: Optional[str] = None  # first referrer id (legacy); see referred_by_ids for full list
     referred_by_username: Optional[str] = None  # comma-separated referrer usernames for display
     referred_by_ids: List[str] = Field(default_factory=list)  # all referrer user ids
+    # Lifetime totals you earned as a referrer (same fields as GET /account/referral earnings)
+    referral_earnings_crime: int = 0
+    referral_earnings_oc: int = 0
+    referral_earnings_booze: int = 0
+    referral_earnings_garage_scrap: int = 0
+    referral_earnings_melt_bullets: int = 0
     rules_accepted: bool = False
     rules_accepted_at: Optional[str] = None
 

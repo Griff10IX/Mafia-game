@@ -1753,6 +1753,11 @@ def register(router):
                 referred_by=referred_by_legacy,
                 referred_by_username=referred_by_username,
                 referred_by_ids=list(ref_ids),
+                referral_earnings_crime=_safe_int(u.get("referral_earnings_crime"), 0),
+                referral_earnings_oc=_safe_int(u.get("referral_earnings_oc"), 0),
+                referral_earnings_booze=_safe_int(u.get("referral_earnings_booze"), 0),
+                referral_earnings_garage_scrap=_safe_int(u.get("referral_earnings_garage_scrap"), 0),
+                referral_earnings_melt_bullets=_safe_int(u.get("referral_earnings_melt_bullets"), 0),
                 rules_accepted=bool(u.get("rules_accepted", False)),
                 rules_accepted_at=u.get("rules_accepted_at"),
             )

@@ -120,12 +120,6 @@ export default function Referral() {
   }
 
   const earnings = data?.earnings || {};
-  const hasAnyEarnings =
-    (earnings.melt_bullets || 0) > 0 ||
-    (earnings.crime_profit || 0) > 0 ||
-    (earnings.oc_profit || 0) > 0 ||
-    (earnings.garage_scrap || 0) > 0 ||
-    (earnings.booze_profit || 0) > 0;
 
   const cardClass = `relative ${styles.panel} rounded-lg overflow-hidden ref-fade-in mobile-panel`;
   const cardHeaderClass = `${styles.panelHeader} px-2.5 sm:px-3 py-2`;
@@ -255,6 +249,9 @@ export default function Referral() {
               <li>5% of their garage scrap profit (cash)</li>
               <li>2% of their booze profit (cash)</li>
             </ul>
+            <p className={`text-[9px] sm:text-[10px] ${styles.gmMuted} font-heading mt-2`}>
+              Referrals must verify their email before crimes, OC, GTA, and booze runs count toward your totals.
+            </p>
           </div>
         </div>
 
@@ -282,24 +279,25 @@ export default function Referral() {
             </h2>
           </div>
           <div className="p-2.5 sm:p-3 space-y-3">
-            {!hasAnyEarnings ? (
-              <p className={`text-[9px] sm:text-[10px] ${styles.gmMuted} font-heading`}>No referral earnings yet. Share your link to start earning.</p>
-            ) : (
-              <>
-                <p className={`text-[9px] sm:text-[10px] ${styles.gmMuted} font-heading`}>Lifetime totals from referred users</p>
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
-                  <StatCard
-                    label="Melt bullets"
-                    value={Number(earnings.melt_bullets || 0).toLocaleString()}
-                    valueColor="text-amber-400"
-                    icon={Crosshair}
-                  />
-                  <StatCard label="Crime profit" value={formatMoney(earnings.crime_profit || 0)} valueColor="text-emerald-400" icon={DollarSign} />
-                  <StatCard label="OC profit" value={formatMoney(earnings.oc_profit || 0)} valueColor="text-emerald-400" icon={Building2} />
-                  <StatCard label="Garage scrap" value={formatMoney(earnings.garage_scrap || 0)} valueColor="text-emerald-400" icon={Car} />
-                  <StatCard label="Booze profit" value={formatMoney(earnings.booze_profit || 0)} valueColor="text-emerald-400" icon={Wine} />
-                </div>
-              </>
+            <p className={`text-[9px] sm:text-[10px] ${styles.gmMuted} font-heading`}>
+              Lifetime totals from referred users (cash and bullets are added to your account when they play).
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              <StatCard
+                label="Melt bullets"
+                value={Number(earnings.melt_bullets || 0).toLocaleString()}
+                valueColor="text-amber-400"
+                icon={Crosshair}
+              />
+              <StatCard label="Crime profit" value={formatMoney(earnings.crime_profit || 0)} valueColor="text-emerald-400" icon={DollarSign} />
+              <StatCard label="OC profit" value={formatMoney(earnings.oc_profit || 0)} valueColor="text-emerald-400" icon={Building2} />
+              <StatCard label="Garage scrap" value={formatMoney(earnings.garage_scrap || 0)} valueColor="text-emerald-400" icon={Car} />
+              <StatCard label="Booze profit" value={formatMoney(earnings.booze_profit || 0)} valueColor="text-emerald-400" icon={Wine} />
+            </div>
+            {(Number(earnings.melt_bullets || 0) + Number(earnings.crime_profit || 0) + Number(earnings.oc_profit || 0) + Number(earnings.garage_scrap || 0) + Number(earnings.booze_profit || 0)) === 0 && (
+              <p className={`text-[9px] sm:text-[10px] ${styles.gmMuted} font-heading`}>
+                All zero so far — earnings appear here once referrals verify email and earn from the activities above.
+              </p>
             )}
           </div>
         </div>
