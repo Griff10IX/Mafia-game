@@ -1382,7 +1382,7 @@ function FleetRoster({ships, sunkList, label, accent}) {
 // MAIN
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Battleships() {
-  const { playsLeft, maxPlays, canPlay, updateFromStart, refresh: refreshPlays } = useMinigamePlaysLeft("battleships");
+  const { playsLeft, maxPlays, canPlay, updateFromStart, refresh: refreshPlays, applyPlaysLeftPayload } = useMinigamePlaysLeft("battleships");
   const CELL = useCellSize();
   const isMobile = CELL < 38;
 
@@ -1422,6 +1422,7 @@ export default function Battleships() {
   const [showStats,setShowStats]=useState(false);
   const aiTimerRef=useRef(null);
   const battleshipsSessionRef=useRef(null);
+  const bsLostSyncRef=useRef(false);
   const playerFxRef=useRef({add:()=>{}});
   const aiFxRef=useRef({add:()=>{}});
 
@@ -1481,17 +1482,30 @@ export default function Battleships() {
         setWinReward({cash:estCash,respect:estResp});
         toast.success(`Victory! +$${estCash.toLocaleString()} +${estResp} Respect`);
       }
-      refreshPlays();
+      if (res.data?.plays_left != null) applyPlaysLeftPayload(res.data);
+      else refreshPlays();
     } catch (err) {
       const msg=err?.response?.data?.detail||'Failed to record win';
       if (!msg.includes('limit')) toast.error(msg);
       refreshPlays();
     }
-  },[winSubmitted,gameStartTime,shotsFired,sunkByAi.length,activeShips.length,settings.difficulty,refreshPlays]);
+  },[winSubmitted,gameStartTime,shotsFired,sunkByAi.length,activeShips.length,settings.difficulty,refreshPlays,applyPlaysLeftPayload]);
 
   useEffect(()=>{
     if (screen==="won"&&!winSubmitted) submitWin();
   },[screen,winSubmitted,submitWin]);
+
+  useEffect(()=>{
+    if (screen!=="lost"){
+      bsLostSyncRef.current=false;
+      return;
+    }
+    if (bsLostSyncRef.current) return;
+    if (battleshipsSessionRef.current){
+      bsLostSyncRef.current=true;
+      refreshPlays();
+    }
+  },[screen,refreshPlays]);
 
   const handleSaveSettings=(s)=>{
     const ships=SHIP_CATALOGUE.filter(sh=>s.ships.includes(sh.id));
@@ -1776,7 +1790,7 @@ export default function Battleships() {
             <button className="nb" onClick={()=>setHoriz(h=>!h)} disabled={placingIdx>=activeShips.length}>↺ {horiz?"Horiz":"Vert"}</button>
             <button className="nb" onClick={handleAutoPlace}>⚡ Auto</button>
             <button className="nb" disabled={placedShips.length<activeShips.length||!canPlay} onClick={async()=>{
-              if(!canPlay){toast.error("Hourly play limit reached. Try again next hour.");return;}
+              if(!canPlay){toast.error("Play limit reached for this 2-hour window.");return;}
               try{
                 const run=await startMinigameRun("battleships",{difficulty:settings.difficulty,fleet_size:String(activeShips.length)});
                 battleshipsSessionRef.current=run.session_id;

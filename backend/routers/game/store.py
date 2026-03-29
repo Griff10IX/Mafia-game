@@ -655,10 +655,10 @@ async def buy_store_token_bundle(
 async def buy_shooting_range_bonus(
     current_user: dict = Depends(get_current_user),
 ):
-    """+2 max shooting range plays per hour (stacking), up to +10 from store (20/hour total with base 10)."""
+    """+2 max shooting range plays per 2h window (stacking), up to +10 from store (20 per 2h total with base 10)."""
     cur = int(current_user.get("shooting_range_bonus_plays") or 0)
     if cur >= SHOOTING_RANGE_BONUS_CAP:
-        raise HTTPException(status_code=400, detail="Shooting range hourly bonus is already maxed")
+        raise HTTPException(status_code=400, detail="Shooting range bonus plays are already maxed")
     add = min(SHOOTING_RANGE_BONUS_STEP, SHOOTING_RANGE_BONUS_CAP - cur)
     cost_used, inc, gte_filter = _store_cost_inc(current_user, SHOOTING_RANGE_BONUS_COST_POINTS)
     if not cost_used:
@@ -674,7 +674,7 @@ async def buy_shooting_range_bonus(
     new_bonus = cur + add
     base = 10  # SHOOTING_RANGE_MAX_PLAYS_PER_HOUR in armoury
     return {
-        "message": f"+{add} hourly plays for shooting range ({base + new_bonus}/hour cap). Cost {cost_used} points.",
+        "message": f"+{add} plays for shooting range ({base + new_bonus} per 2h cap). Cost {cost_used} points.",
         "cost": cost_used,
         "shooting_range_bonus_plays": new_bonus,
         "shooting_range_hourly_limit": base + new_bonus,

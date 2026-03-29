@@ -2,11 +2,10 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { getMinigamePlaysLeft } from "../utils/minigameRunSession";
 
 /**
- * Hook to track remaining hourly plays for a minigame.
- * Fetches on mount, and exposes `refresh` + `updateFromStart` to keep in sync.
- *
- * @param {string} game - Game identifier (e.g. "snake", "gauntlet")
- * @returns {{ playsLeft: number|null, maxPlays: number|null, resetsAt: string|null, loading: boolean, canPlay: boolean, refresh: () => void, updateFromStart: (data: object) => void }}
+ * Track remaining plays for a minigame (server rate-limit window, typically 10 per 2h UTC).
+ * Fetches on mount; use `refresh` for GET /minigames/plays-left, `updateFromStart` after
+ * POST .../run-session/start (or equivalent) to reserve one play in the UI, and
+ * `applyPlaysLeftPayload` after submit/claim responses that include plays_left.
  */
 export default function useMinigamePlaysLeft(game) {
   const [playsLeft, setPlaysLeft] = useState(null);
@@ -15,7 +14,8 @@ export default function useMinigamePlaysLeft(game) {
   const [loading, setLoading] = useState(true);
   const timerRef = useRef(null);
 
-  const apply = useCallback((data) => {
+  const applyPlaysLeftPayload = useCallback((data) => {
+    if (!data || typeof data !== "object") return;
     if (data.plays_left != null) setPlaysLeft(data.plays_left);
     if (data.max_plays != null) setMaxPlays(data.max_plays);
     if (data.resets_at != null) setResetsAt(data.resets_at);
@@ -25,13 +25,13 @@ export default function useMinigamePlaysLeft(game) {
     if (!game) return;
     try {
       const data = await getMinigamePlaysLeft(game);
-      apply(data);
+      applyPlaysLeftPayload(data);
     } catch {
       /* silent */
     } finally {
       setLoading(false);
     }
-  }, [game, apply]);
+  }, [game, applyPlaysLeftPayload]);
 
   useEffect(() => {
     refresh();
@@ -57,5 +57,5 @@ export default function useMinigamePlaysLeft(game) {
 
   const canPlay = playsLeft === null ? true : playsLeft > 0;
 
-  return { playsLeft, maxPlays, resetsAt, loading, canPlay, refresh, updateFromStart };
+  return { playsLeft, maxPlays, resetsAt, loading, canPlay, refresh, updateFromStart, applyPlaysLeftPayload };
 }

@@ -77,7 +77,7 @@ function checkWin(board) {
 }
 
 export default function Minesweeper() {
-  const { playsLeft, maxPlays, canPlay, updateFromStart, refresh: refreshPlays } = useMinigamePlaysLeft("minesweeper");
+  const { playsLeft, maxPlays, canPlay, updateFromStart, refresh: refreshPlays, applyPlaysLeftPayload } = useMinigamePlaysLeft("minesweeper");
   const [difficulty, setDifficulty] = useState("snitch");
   const [board, setBoard] = useState(() => createBoard(9, 9));
   const [phase, setPhase] = useState("idle");
@@ -91,6 +91,7 @@ export default function Minesweeper() {
   const submittedRef = useRef(false);
   const runSessionRef = useRef(null);
   const firstRevealLockRef = useRef(false);
+  const msDeadSyncRef = useRef(false);
 
   const cfg = DIFFICULTIES[difficulty];
 
@@ -124,6 +125,18 @@ export default function Minesweeper() {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- run only when phase becomes "won"; submitWin uses current closure
   }, [phase]);
 
+  useEffect(() => {
+    if (phase !== "dead") {
+      msDeadSyncRef.current = false;
+      return;
+    }
+    if (msDeadSyncRef.current) return;
+    if (runSessionRef.current) {
+      msDeadSyncRef.current = true;
+      refreshPlays();
+    }
+  }, [phase, refreshPlays]);
+
   const DIFF_REWARDS = { snitch: { cash: 1250, respect: 5 }, capo: { cash: 3750, respect: 15 }, godfather: { cash: 12500, respect: 50 } };
   const submitWin = async () => {
     try {
@@ -138,7 +151,8 @@ export default function Minesweeper() {
         toast.success(`You won! +$${dr.cash.toLocaleString()} cash`);
       }
       fetchLeaderboard();
-      refreshPlays();
+      if (res.data?.plays_left != null) applyPlaysLeftPayload(res.data);
+      else refreshPlays();
     } catch (e) {
       console.error("Failed to submit win", e);
       refreshPlays();
@@ -168,7 +182,7 @@ export default function Minesweeper() {
     if (phase === "won" || phase === "dead") return;
     let b = board;
     if (!minesReady) {
-      if (!canPlay) { toast.error("Hourly play limit reached. Try again next hour."); return; }
+      if (!canPlay) { toast.error("Play limit reached for this 2-hour window."); return; }
       if (firstRevealLockRef.current) return;
       firstRevealLockRef.current = true;
       try {

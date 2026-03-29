@@ -136,7 +136,7 @@ def register(router):
         game: str = Query(...),
         current_user: dict = Depends(get_current_user),
     ):
-        """Check remaining hourly plays for a minigame."""
+        """Check remaining plays for a minigame in the current UTC rate-limit window (same as run-session start / score submit)."""
         g = (game or "").strip()
         if g not in GAME_HOURLY_LIMITS:
             raise HTTPException(status_code=400, detail="Unknown game.")

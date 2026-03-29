@@ -49,8 +49,8 @@ BOOZE_CAPACITY_UPGRADE_COST = 100
 BOOZE_CAPACITY_UPGRADE_AMOUNT = 25
 BOOZE_CAPACITY_BONUS_MAX = 1000
 BOOZE_RUN_HISTORY_MAX = 10
-BOOZE_RUN_JAIL_CHANCE_MIN = 0.025
-BOOZE_RUN_JAIL_CHANCE_MAX = 0.065
+BOOZE_RUN_JAIL_CHANCE_MIN = 0.05
+BOOZE_RUN_JAIL_CHANCE_MAX = 0.15
 BOOZE_RUN_JAIL_SECONDS = 20
 
 # Per-user cache for GET /booze-run/config
@@ -177,6 +177,31 @@ def _booze_user_in_jail(user: dict) -> bool:
     return jail_until > datetime.now(timezone.utc)
 
 
+def _booze_confiscation_profit_updates(user: dict) -> tuple[dict, dict, int]:
+    """When inventory is seized (jail), subtract carrying cost basis from profit stats (same fields as successful runs)."""
+    carrying_cost = dict(user.get("booze_carrying_cost") or {})
+    total = sum(int(v) for v in carrying_cost.values())
+    if total <= 0:
+        return {}, {}, 0
+    today_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    profit_today = int(user.get("booze_profit_today") or 0)
+    if user.get("booze_profit_today_date") != today_utc:
+        profit_today = 0
+    inc: dict = {
+        "booze_profit_total": -total,
+        "booze_run_profit_total": -total,
+    }
+    for bid, c in carrying_cost.items():
+        c = int(c)
+        if c:
+            inc[f"booze_profit_by_type.{bid}"] = -c
+    set_doc = {
+        "booze_profit_today": profit_today - total,
+        "booze_profit_today_date": today_utc,
+    }
+    return inc, set_doc, total
+
+
 # ----- Models -----
 class BoozeBuyRequest(BaseModel):
     booze_id: str
@@ -219,17 +244,36 @@ async def _booze_buy_impl(user: dict, booze_id: str, amount: int) -> dict:
     jail_chance = _rng.uniform(BOOZE_RUN_JAIL_CHANCE_MIN, BOOZE_RUN_JAIL_CHANCE_MAX)
     if _rng.random() < jail_chance:
         jail_until = datetime.now(timezone.utc) + timedelta(seconds=BOOZE_RUN_JAIL_SECONDS)
+        inc_loss, set_loss, loss_basis = _booze_confiscation_profit_updates(user)
         await db.users.update_one(
             {"id": user["id"]},
-            {"$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "snitch_attempted_this_term": False}, "$inc": {"booze_jail_count": 1}, "$unset": {"booze_carrying": "", "booze_carrying_cost": ""}},
+            {
+                "$set": {
+                    "in_jail": True,
+                    "jail_until": jail_until.isoformat(),
+                    "snitch_attempted_this_term": False,
+                    **set_loss,
+                },
+                "$inc": {"booze_jail_count": 1, **inc_loss},
+                "$unset": {"booze_carrying": "", "booze_carrying_cost": ""},
+            },
         )
         _invalidate_config_cache(user["id"])
-        return {
+        await log_activity(
+            user.get("id", ""),
+            user.get("username", ""),
+            "booze_jail",
+            {"phase": "buy", "inventory_loss_basis": loss_basis},
+        )
+        out = {
             "message": "Busted! Prohibition agents got you. You're going to jail.",
             "caught": True,
             "jail_until": jail_until.isoformat(),
             "jail_seconds": BOOZE_RUN_JAIL_SECONDS,
         }
+        if loss_basis > 0:
+            out["inventory_loss_basis"] = loss_basis
+        return out
     booze_name = BOOZE_TYPES[booze_index]["name"]
     history_entry = {
         "at": datetime.now(timezone.utc).isoformat(),
@@ -277,17 +321,36 @@ async def _booze_sell_impl(user: dict, booze_id: str, amount: int) -> dict:
     jail_chance = _rng.uniform(BOOZE_RUN_JAIL_CHANCE_MIN, BOOZE_RUN_JAIL_CHANCE_MAX)
     if _rng.random() < jail_chance:
         jail_until = datetime.now(timezone.utc) + timedelta(seconds=BOOZE_RUN_JAIL_SECONDS)
+        inc_loss, set_loss, loss_basis = _booze_confiscation_profit_updates(user)
         await db.users.update_one(
             {"id": user["id"]},
-            {"$set": {"in_jail": True, "jail_until": jail_until.isoformat(), "snitch_attempted_this_term": False}, "$inc": {"booze_jail_count": 1}, "$unset": {"booze_carrying": "", "booze_carrying_cost": ""}},
+            {
+                "$set": {
+                    "in_jail": True,
+                    "jail_until": jail_until.isoformat(),
+                    "snitch_attempted_this_term": False,
+                    **set_loss,
+                },
+                "$inc": {"booze_jail_count": 1, **inc_loss},
+                "$unset": {"booze_carrying": "", "booze_carrying_cost": ""},
+            },
         )
         _invalidate_config_cache(user["id"])
-        return {
+        await log_activity(
+            user.get("id", ""),
+            user.get("username", ""),
+            "booze_jail",
+            {"phase": "sell", "inventory_loss_basis": loss_basis},
+        )
+        out = {
             "message": "Busted! Prohibition agents got you. You're going to jail.",
             "caught": True,
             "jail_until": jail_until.isoformat(),
             "jail_seconds": BOOZE_RUN_JAIL_SECONDS,
         }
+        if loss_basis > 0:
+            out["inventory_loss_basis"] = loss_basis
+        return out
     revenue = price * amount
     total_cost_stored = int(carrying_cost.get(booze_id, 0))
     cost_of_sold = (total_cost_stored * amount // have) if have else 0

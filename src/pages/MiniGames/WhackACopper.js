@@ -157,7 +157,7 @@ const Toggle = ({ checked, onChange }) => (
 );
 
 export default function WhackACopper() {
-  const { playsLeft, maxPlays, canPlay, updateFromStart, refresh: refreshPlays } = useMinigamePlaysLeft("whack_a_copper");
+  const { playsLeft, maxPlays, canPlay, updateFromStart, refresh: refreshPlays, applyPlaysLeftPayload } = useMinigamePlaysLeft("whack_a_copper");
   const [diff, setDiff] = useState("medium");
   const [duration, setDuration] = useState(30);
   const [gridSize, setGridSize] = useState(9);
@@ -245,14 +245,15 @@ export default function WhackACopper() {
         if (estCash > 0) toast.success(`Score submitted! +$${estCash.toLocaleString()} cash`);
         else toast.success("Score submitted!");
       }
-      refreshPlays();
+      if (res.data?.plays_left != null) applyPlaysLeftPayload(res.data);
+      else refreshPlays();
     } catch (e) {
       toast.error(e.response?.data?.detail || "Failed to submit score");
       refreshPlays();
     } finally {
       submittedRef.current = false;
     }
-  }, [refreshPlays]);
+  }, [refreshPlays, applyPlaysLeftPayload]);
 
   const endGame = useCallback(() => {
     refs.current.running = false;
@@ -328,7 +329,7 @@ export default function WhackACopper() {
   }, [diff, popUp]);
 
   const startGame = useCallback(async () => {
-    if (!canPlay) { toast.error("Hourly play limit reached. Try again next hour."); return; }
+    if (!canPlay) { toast.error("Play limit reached for this 2-hour window."); return; }
     holeTimers.current.forEach(clearTimeout);
     holeTimers.current = [];
     (holeEscapeTimerIds.current || []).forEach((tid) => { if (tid != null) clearTimeout(tid); });

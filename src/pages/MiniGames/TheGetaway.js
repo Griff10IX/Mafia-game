@@ -17,11 +17,11 @@ const RULES = [
   "Collect cash bundles for bonus money",
   "Avoid cops and FBI agents",
   "Distance + coins = your final score",
-  "Max 10 runs per hour",
+  "Max 10 runs per 2 hours",
 ];
 
 export default function TheGetaway() {
-  const { playsLeft, maxPlays, canPlay, updateFromStart, refresh: refreshPlays } = useMinigamePlaysLeft("the_getaway");
+  const { playsLeft, maxPlays, canPlay, updateFromStart, refresh: refreshPlays, applyPlaysLeftPayload } = useMinigamePlaysLeft("the_getaway");
   const canvasRef = useRef(null);
   const stateRef = useRef({
     state: 'title',
@@ -186,14 +186,15 @@ export default function TheGetaway() {
         const estResp = 15 + Math.floor(dist / 100) * 2;
         toast.success(`Clean getaway! +$${estCash.toLocaleString()} +${estResp} respect`);
       }
-      refreshPlays();
+      if (res.data?.plays_left != null) applyPlaysLeftPayload(res.data);
+      else refreshPlays();
     } catch (err) {
       setSubmitted(false);
       const msg = err?.response?.data?.detail || 'Failed to submit run';
       toast.error(msg);
       refreshPlays();
     }
-  }, [submitted, refreshPlays]);
+  }, [submitted, refreshPlays, applyPlaysLeftPayload]);
 
   const jump = useCallback(() => {
     const p = stateRef.current.player;
@@ -222,7 +223,7 @@ export default function TheGetaway() {
   }, []);
 
   const handleStart = useCallback(async () => {
-    if (!canPlay) { toast.error("Hourly play limit reached. Try again next hour."); return; }
+    if (!canPlay) { toast.error("Play limit reached for this 2-hour window."); return; }
     const s = stateRef.current;
     if (s.state === 'title' || s.state === 'gameover') {
       if (s.state === 'gameover') {

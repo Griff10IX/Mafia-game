@@ -3,7 +3,6 @@ import { Link } from "react-router-dom";
 import { ArrowLeft, Trophy, RefreshCw } from "lucide-react";
 import api from "../../utils/api";
 import { startMinigameRun } from "../../utils/minigameRunSession";
-import useMinigamePlaysLeft from "../../hooks/useMinigamePlaysLeft";
 import { toast } from "sonner";
 import styles from "../../styles/noir.module.css";
 

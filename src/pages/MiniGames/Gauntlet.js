@@ -849,7 +849,7 @@ function ThemeSelect({ themes, selected, onSelect, money, bestScore, onClose }) 
 const initialGameFrame = () => ({ birdY: VIEW_H / 2, birdVel: 0, birdRot: 0, pipes: [], score: 0, bgOffset: 0 });
 
 export default function Gauntlet() {
-  const { playsLeft, maxPlays, canPlay, refresh: refreshPlays } = useMinigamePlaysLeft("gauntlet");
+  const { playsLeft, maxPlays, canPlay, refresh: refreshPlays, updateFromStart, applyPlaysLeftPayload } = useMinigamePlaysLeft("gauntlet");
   const [gameState, setGameState] = useState("idle");
   const [gameFrame, setGameFrame] = useState(initialGameFrame);
   const { birdY, birdVel, birdRot, pipes, score, bgOffset } = gameFrame;
@@ -947,19 +947,20 @@ export default function Gauntlet() {
       const cash = r.cash;
       const respect = r.respect;
       void refreshUser();
+      if (res.data?.plays_left != null) applyPlaysLeftPayload(res.data);
+      else refreshPlays();
       const playsMsg = res.data?.plays_left != null ? ` • Plays left: ${res.data.plays_left}` : "";
       const parts = [];
       if (cash > 0) parts.push(`$${cash.toLocaleString()}`);
       if (respect > 0) parts.push(`${respect} respect`);
       setClaimStatus({ state: "claimed", cash, respect, message: (parts.length ? `Claimed ${parts.join(" & ")}` : "No reward") + playsMsg });
       loadLeaderboard(lbPeriod);
-      refreshPlays();
     } catch (e) {
       if (gauntletSessionIdRef.current === runSessionId) gauntletSessionIdRef.current = null;
       setClaimStatus({ state: "error", cash: 0, respect: 0, message: getApiErrorMessage(e) });
       refreshPlays();
     }
-  }, [claimStatus.state, lbPeriod, loadLeaderboard, themeId, speedId, difficultyId, characterId, refreshPlays]);
+  }, [claimStatus.state, lbPeriod, loadLeaderboard, themeId, speedId, difficultyId, characterId, refreshPlays, applyPlaysLeftPayload]);
 
   const handleBuyCharacter = useCallback(async (char) => {
     if (money < char.price) return;
@@ -978,7 +979,7 @@ export default function Gauntlet() {
 
   const jump = useCallback(() => {
     if (stateRef.current === "idle") {
-      if (!canPlay) { toast.error("Hourly play limit reached. Try again next hour."); return; }
+      if (!canPlay) { toast.error("Play limit reached for this 2-hour window."); return; }
       void (async () => {
         try {
           const r = await api.post("/gauntlet/start", {
@@ -989,6 +990,7 @@ export default function Gauntlet() {
             toast.error("Could not start run. Try again.");
             return;
           }
+          updateFromStart(r.data);
           gauntletSessionIdRef.current = sid;
           setClaimStatus({ state: "idle", cash: 0, message: "" });
           setGameState("playing");
@@ -1012,7 +1014,7 @@ export default function Gauntlet() {
       setGameFrame(initialGameFrame());
       setClaimStatus({ state: "idle", cash: 0, respect: 0, message: "" });
     }
-  }, [themeId, speedId, difficultyId]);
+  }, [themeId, speedId, difficultyId, canPlay, updateFromStart]);
 
   const theme = THEMES.find(t => t.id === themeId) || THEMES[0];
   const speedOpt = SPEED_OPTIONS.find(s => s.id === speedId) || SPEED_OPTIONS[1];

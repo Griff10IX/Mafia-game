@@ -62,7 +62,7 @@ const SNAKE_REWARDS_AND_RULES = {
     "Submit your score when you die to credit rewards (cash, respect, rank points, bullets, booze) to your account.",
     "Avoid the jail token (🔒) — it reduces your score and adds jail time.",
     "Cops (🚔) appear after 100 points. Don't hit them or you're pinched.",
-    "Speed increases as you collect. Max 10 runs per hour.",
+    "Speed increases as you collect. Max 10 runs per 2 hours.",
   ],
 };
 
@@ -241,7 +241,7 @@ function lerp(a, b, t) { return a + (b - a) * Math.min(1, Math.max(0, t)); }
 // COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Snake() {
-  const { playsLeft, maxPlays, canPlay, updateFromStart, refresh: refreshPlays } = useMinigamePlaysLeft("snake");
+  const { playsLeft, maxPlays, canPlay, updateFromStart, refresh: refreshPlays, applyPlaysLeftPayload } = useMinigamePlaysLeft("snake");
   const canvasRef = useRef(null);
   const stateRef = useRef(null);
   const rafRef = useRef(null);
@@ -249,6 +249,7 @@ export default function Snake() {
   const tRef = useRef(0);
   const dirQueueRef = useRef([]); // up to 2 pending directions for smoother WASD
   const snakeSessionRef = useRef(null);
+  const snakeDeadSyncRef = useRef(false);
 
   const [phase, setPhase] = useState("menu");
   const [score, setScore] = useState(0);
@@ -425,7 +426,7 @@ export default function Snake() {
   }, [tick]);
 
   const startGame = useCallback(async () => {
-    if (!canPlay) { toast.error("Hourly play limit reached. Try again next hour."); return; }
+    if (!canPlay) { toast.error("Play limit reached for this 2-hour window."); return; }
     try {
       const run = await startMinigameRun("snake");
       snakeSessionRef.current = run.session_id;
@@ -457,11 +458,12 @@ export default function Snake() {
     setPhase("submitting");
     try {
       const rewards = stateRef.current?.rewards || {};
-      await api.post("/snake/score", { score: finalScore, rewards, session_id: runSessionId });
+      const res = await api.post("/snake/score", { score: finalScore, rewards, session_id: runSessionId });
       if (snakeSessionRef.current === runSessionId) snakeSessionRef.current = null;
       toast.success(`Score submitted: ${finalScore} pts`);
       await fetchLB();
-      refreshPlays();
+      if (res.data?.plays_left != null) applyPlaysLeftPayload(res.data);
+      else refreshPlays();
     } catch (e) {
       if (snakeSessionRef.current === runSessionId) snakeSessionRef.current = null;
       toast.error(e?.response?.data?.detail || "Failed to submit score");
@@ -469,7 +471,19 @@ export default function Snake() {
     } finally {
       setPhase("dead");
     }
-  }, [fetchLB, refreshPlays]);
+  }, [fetchLB, refreshPlays, applyPlaysLeftPayload]);
+
+  useEffect(() => {
+    if (phase !== "dead") {
+      snakeDeadSyncRef.current = false;
+      return;
+    }
+    if (snakeDeadSyncRef.current) return;
+    if (snakeSessionRef.current) {
+      snakeDeadSyncRef.current = true;
+      refreshPlays();
+    }
+  }, [phase, refreshPlays]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -783,7 +797,7 @@ export default function Snake() {
                 </div>
               ) : (
                 <div style={{ fontSize: "clamp(9px,2.2vw,11px)", color: "#dc2626", letterSpacing: ".1em" }}>
-                  Hourly limit reached — resets next hour
+                  Play limit reached — resets next window
                 </div>
               )}
             </div>

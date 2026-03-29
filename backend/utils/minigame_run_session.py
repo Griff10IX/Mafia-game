@@ -8,6 +8,21 @@ from pymongo import ReturnDocument
 
 SESSION_MAX_MINUTES = 45
 
+# All entries below: max plays per UTC-aligned window (not per calendar hour).
+RATE_LIMIT_PERIOD_HOURS = 2
+DEFAULT_PLAYS_PER_WINDOW = 10
+
+
+def utc_rate_limit_window(now_dt: datetime, *, period_hours: int = RATE_LIMIT_PERIOD_HOURS) -> tuple[datetime, datetime]:
+    """Return (window_start, reset_at) in UTC. Window starts on even hour boundaries (0,2,4,...) when period_hours=2."""
+    now_floor = now_dt.astimezone(timezone.utc).replace(minute=0, second=0, microsecond=0)
+    h = now_floor.hour
+    block_h = (h // period_hours) * period_hours
+    window_start = now_floor.replace(hour=block_h)
+    reset_dt = window_start + timedelta(hours=period_hours)
+    return window_start, reset_dt
+
+
 GAME_HOURLY_LIMITS: Dict[str, Dict[str, Any]] = {
     "snake":          {"start_field": "snake_hour_start",          "count_field": "snake_hour_count",          "base_max": 10},
     "gauntlet":       {"start_field": "gauntlet_hour_start",       "count_field": "gauntlet_hour_count",       "base_max": 10},
@@ -22,15 +37,14 @@ GAME_HOURLY_LIMITS: Dict[str, Dict[str, Any]] = {
 
 
 async def get_plays_left(db, *, user_id: str, game: str, extra_max: int = 0) -> dict:
-    """Return plays_left, max_plays, resets_at for a game's hourly window."""
+    """Return plays_left, max_plays, resets_at for the game's rate-limit window (see RATE_LIMIT_PERIOD_HOURS)."""
     cfg = GAME_HOURLY_LIMITS.get(game)
     if not cfg:
         return {"plays_left": -1, "max_plays": -1, "resets_at": None}
 
     now_dt = datetime.now(timezone.utc).replace(microsecond=0)
-    hour_start = now_dt.replace(minute=0, second=0)
+    hour_start, reset_dt = utc_rate_limit_window(now_dt)
     hour_start_iso = hour_start.isoformat().replace("+00:00", "Z")
-    reset_dt = hour_start + timedelta(hours=1)
     reset_iso = reset_dt.isoformat().replace("+00:00", "Z")
 
     max_plays = cfg["base_max"] + max(0, extra_max)
@@ -68,10 +82,10 @@ async def start_minigame_run(
         if info["plays_left"] == 0:
             raise HTTPException(
                 status_code=429,
-                detail=f"Hourly limit reached ({info['max_plays']} plays). Resets at {info['resets_at']}.",
+                detail=f"Play limit reached ({info['max_plays']} per {RATE_LIMIT_PERIOD_HOURS}h). Resets at {info['resets_at']}.",
             )
 
-    now_dt = datetime.now(timezone.utc)
+    now_dt = datetime.now(timezone.utc).replace(microsecond=0)
     sid = str(uuid.uuid4())
     expires = now_dt + timedelta(minutes=SESSION_MAX_MINUTES)
     doc: Dict[str, Any] = {

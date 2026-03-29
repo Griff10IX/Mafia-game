@@ -1,7 +1,7 @@
 # Famiglia / Mafia RPG — canvas minigame session submit + leaderboard
 # Weekly points via minigame_plays; all-time top scores in mafia_rpg_scores
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 import uuid
 from typing import Optional
 
@@ -13,6 +13,8 @@ from utils.minigame_run_session import (
     claim_minigame_run_session,
     enforce_numeric_score_for_claimed_session,
     release_minigame_run,
+    utc_rate_limit_window,
+    RATE_LIMIT_PERIOD_HOURS,
 )
 
 MAX_PLAYS_PER_HOUR = 10
@@ -58,9 +60,8 @@ def register(router):
 
         now_dt = datetime.now(timezone.utc).replace(microsecond=0)
         now_iso = now_dt.isoformat().replace("+00:00", "Z")
-        hour_start = now_dt.replace(minute=0, second=0)
+        hour_start, reset_dt = utc_rate_limit_window(now_dt)
         hour_start_iso = hour_start.isoformat().replace("+00:00", "Z")
-        reset_dt = hour_start + timedelta(hours=1)
 
         uid = current_user["id"]
 
@@ -108,7 +109,7 @@ def register(router):
                     await release_minigame_run(db, session_id)
                 raise HTTPException(
                     status_code=429,
-                    detail=f"Hourly limit reached ({MAX_PLAYS_PER_HOUR} submits). Try again in {remaining}s.",
+                    detail=f"Submit limit reached ({MAX_PLAYS_PER_HOUR} per {RATE_LIMIT_PERIOD_HOURS}h). Try again in {remaining}s.",
                 )
 
         cash = min(8_000, max(0, score // 2_000))

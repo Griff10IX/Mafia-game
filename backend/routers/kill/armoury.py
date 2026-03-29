@@ -28,7 +28,10 @@ from routers.minigames.minigame_leaderboard import log_minigame_play
 from utils.minigame_run_session import (
     claim_minigame_run_session,
     enforce_numeric_score_for_claimed_session,
+    get_plays_left,
     release_minigame_run,
+    utc_rate_limit_window,
+    RATE_LIMIT_PERIOD_HOURS,
 )
 import middleware.security as _security_mod
 
@@ -1688,9 +1691,8 @@ async def submit_shooting_range_score(request: ShootingRangeScoreRequest, curren
 
     now_dt = datetime.now(timezone.utc).replace(microsecond=0)
     now_iso = now_dt.isoformat().replace("+00:00", "Z")
-    hour_start = now_dt.replace(minute=0, second=0)
+    hour_start, reset_dt = utc_rate_limit_window(now_dt)
     hour_start_iso = hour_start.isoformat().replace("+00:00", "Z")
-    reset_dt = hour_start + timedelta(hours=1)
     reset_iso = reset_dt.isoformat().replace("+00:00", "Z")
 
     uid = current_user["id"]
@@ -1713,42 +1715,26 @@ async def submit_shooting_range_score(request: ShootingRangeScoreRequest, curren
             buffer=SHOOTING_RANGE_SCORE_BUFFER,
         )
 
-    meta = await db.user_meta.find_one(
-        {"user_id": current_user["id"]},
-        {"_id": 0, "shooting_range_hour_start": 1, "shooting_range_hour_count": 1},
-    )
-    meta_start = (meta or {}).get("shooting_range_hour_start")
-    meta_count = int((meta or {}).get("shooting_range_hour_count") or 0)
     bonus_plays = int(current_user.get("shooting_range_bonus_plays") or 0)
     hourly_limit = SHOOTING_RANGE_MAX_PLAYS_PER_HOUR + max(0, min(bonus_plays, SHOOTING_RANGE_BONUS_STORE_MAX))
-    if meta_start == hour_start_iso:
-        if meta_count >= hourly_limit:
-            remaining = max(0, int((reset_dt - now_dt).total_seconds()))
-            if not skip_session and session_id:
-                await release_minigame_run(db, session_id)
-            raise HTTPException(
-                status_code=400,
-                detail=f"Hourly limit reached ({hourly_limit} plays). Try again in {remaining}s.",
-            )
-        new_count = meta_count + 1
-        await db.user_meta.update_one(
-            {"user_id": current_user["id"]},
+    extra_plays = max(0, min(bonus_plays, SHOOTING_RANGE_BONUS_STORE_MAX))
+
+    result = await db.user_meta.update_one(
+        {
+            "user_id": uid,
+            "shooting_range_hour_start": hour_start_iso,
+            "shooting_range_hour_count": {"$lt": hourly_limit},
+        },
+        {
+            "$inc": {"shooting_range_hour_count": 1},
+            "$set": {"shooting_range_hour_reset_at": reset_iso},
+        },
+    )
+    if result.modified_count == 0:
+        result = await db.user_meta.update_one(
+            {"user_id": uid, "shooting_range_hour_start": {"$ne": hour_start_iso}},
             {
-                "$setOnInsert": {"user_id": current_user["id"]},
-                "$set": {
-                    "shooting_range_hour_start": hour_start_iso,
-                    "shooting_range_hour_reset_at": reset_iso,
-                    "shooting_range_hour_count": new_count,
-                },
-            },
-            upsert=True,
-        )
-    else:
-        new_count = 1
-        await db.user_meta.update_one(
-            {"user_id": current_user["id"]},
-            {
-                "$setOnInsert": {"user_id": current_user["id"]},
+                "$setOnInsert": {"user_id": uid},
                 "$set": {
                     "shooting_range_hour_start": hour_start_iso,
                     "shooting_range_hour_reset_at": reset_iso,
@@ -1757,6 +1743,14 @@ async def submit_shooting_range_score(request: ShootingRangeScoreRequest, curren
             },
             upsert=True,
         )
+        if result.modified_count == 0 and result.upserted_id is None:
+            remaining = max(0, int((reset_dt - now_dt).total_seconds()))
+            if not skip_session and session_id:
+                await release_minigame_run(db, session_id)
+            raise HTTPException(
+                status_code=400,
+                detail=f"Play limit reached ({hourly_limit} per {RATE_LIMIT_PERIOD_HOURS}h). Try again in {remaining}s.",
+            )
 
     doc = {
         "user_id": current_user["id"],
@@ -1770,7 +1764,14 @@ async def submit_shooting_range_score(request: ShootingRangeScoreRequest, curren
     except Exception:
         pass
     await log_minigame_payout(current_user["id"], current_user.get("username", "?"), "shooting_range", score, {})
-    return {"message": "Score recorded.", "score": score}
+    plays_info = await get_plays_left(db, user_id=uid, game="shooting_range", extra_max=extra_plays)
+    return {
+        "message": "Score recorded.",
+        "score": score,
+        "plays_left": plays_info["plays_left"],
+        "max_plays": plays_info["max_plays"],
+        "resets_at": plays_info["resets_at"],
+    }
 
 
 async def get_shooting_range_leaderboard(period: str = "all", current_user: dict = Depends(get_current_user)):

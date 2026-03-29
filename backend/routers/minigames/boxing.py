@@ -8,6 +8,7 @@ from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
 from server import db, get_current_user_verified, get_current_user, log_gambling, _get_staff_user_ids
+from utils.minigame_run_session import utc_rate_limit_window, RATE_LIMIT_PERIOD_HOURS
 
 
 def _now_iso() -> str:
@@ -422,9 +423,8 @@ async def _claim_hourly_fight_slot(
     max_fights: int,
     now_dt: datetime,
 ) -> tuple[bool, int, str]:
-    hour_start = now_dt.replace(minute=0, second=0, microsecond=0)
+    hour_start, reset_dt = utc_rate_limit_window(now_dt.replace(microsecond=0))
     hour_start_iso = hour_start.isoformat().replace("+00:00", "Z")
-    reset_dt = hour_start + timedelta(hours=1)
     claimed = await db.boxing_profiles.update_one(
         { "user_id": user_id, start_field: hour_start_iso, count_field: {"$lt": max_fights} },
         {"$inc": {count_field: 1}},
@@ -460,31 +460,20 @@ async def boxing_fight_npc(payload: FightNpcRequest, current_user: dict = Depend
 
     await _ensure_profile(current_user["id"])
     now = datetime.now(timezone.utc)
-    hour_start = now.replace(minute=0, second=0, microsecond=0)
-    hour_start_iso = hour_start.isoformat().replace("+00:00", "Z")
-    reset_dt = hour_start + timedelta(hours=1)
-
-    # Reserve an hourly fight slot first; if cooldown claim fails below, we roll this back.
-    hour_claim = await db.boxing_profiles.update_one(
-        {
-            "user_id": current_user["id"],
-            "npc_fight_hour_start": hour_start_iso,
-            "npc_fight_hour_count": {"$lt": NPC_MAX_FIGHTS_PER_HOUR},
-        },
-        {"$inc": {"npc_fight_hour_count": 1}},
+    npc_ok, npc_remaining, hour_start_iso = await _claim_hourly_fight_slot(
+        user_id=current_user["id"],
+        start_field="npc_fight_hour_start",
+        count_field="npc_fight_hour_count",
+        max_fights=NPC_MAX_FIGHTS_PER_HOUR,
+        now_dt=now,
     )
-    if hour_claim.modified_count == 0:
-        hour_claim = await db.boxing_profiles.update_one(
-            {"user_id": current_user["id"], "npc_fight_hour_start": {"$ne": hour_start_iso}},
-            {"$set": {"npc_fight_hour_start": hour_start_iso, "npc_fight_hour_count": 1}},
+    if not npc_ok:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Fight limit reached ({NPC_MAX_FIGHTS_PER_HOUR} per {RATE_LIMIT_PERIOD_HOURS}h). Try again in {npc_remaining}s.",
         )
-        if hour_claim.modified_count == 0:
-            remaining = max(0, int((reset_dt - now).total_seconds()))
-            raise HTTPException(
-                status_code=429,
-                detail=f"Hourly limit reached ({NPC_MAX_FIGHTS_PER_HOUR} fights). Try again in {remaining}s.",
-            )
 
+    # Fight slot reserved; if cooldown claim fails below, we roll this back.
     cooldown_until = now + timedelta(seconds=NPC_FIGHT_COOLDOWN_SECONDS)
     cooldown_iso = cooldown_until.isoformat().replace("+00:00", "Z")
     now_iso_cd = now.isoformat().replace("+00:00", "Z")
@@ -702,7 +691,7 @@ async def boxing_challenge_accept(payload: AcceptChallengeRequest, current_user:
         await db.boxing_challenges.update_one({"id": cid, "state": "in_progress"}, {"$set": {"state": "pending"}})
         raise HTTPException(
             status_code=429,
-            detail=f"{ch.get('challenger_username') or 'Challenger'} reached hourly limit ({PVP_MAX_FIGHTS_PER_HOUR} fights). Try again in {a_remaining}s.",
+            detail=f"{ch.get('challenger_username') or 'Challenger'} reached fight limit ({PVP_MAX_FIGHTS_PER_HOUR} per {RATE_LIMIT_PERIOD_HOURS}h). Try again in {a_remaining}s.",
         )
 
     b_ok, b_remaining, b_hour_start_iso = await _claim_hourly_fight_slot(
@@ -722,7 +711,7 @@ async def boxing_challenge_accept(payload: AcceptChallengeRequest, current_user:
         await db.boxing_challenges.update_one({"id": cid, "state": "in_progress"}, {"$set": {"state": "pending"}})
         raise HTTPException(
             status_code=429,
-            detail=f"Hourly limit reached ({PVP_MAX_FIGHTS_PER_HOUR} fights). Try again in {b_remaining}s.",
+            detail=f"Fight limit reached ({PVP_MAX_FIGHTS_PER_HOUR} per {RATE_LIMIT_PERIOD_HOURS}h). Try again in {b_remaining}s.",
         )
 
     a_prof = await _ensure_profile(a_id)

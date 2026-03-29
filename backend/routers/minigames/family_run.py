@@ -1,5 +1,5 @@
 # Family Run — endless runner minigame
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 import uuid
 
 from fastapi import Depends, HTTPException
@@ -12,7 +12,10 @@ from utils.minigame_run_session import (
     as_utc_started,
     claim_minigame_run_session,
     enforce_numeric_score_for_claimed_session,
+    get_plays_left,
     release_minigame_run,
+    utc_rate_limit_window,
+    RATE_LIMIT_PERIOD_HOURS,
 )
 
 
@@ -99,9 +102,8 @@ def register(router):
 
         now_dt = datetime.now(timezone.utc).replace(microsecond=0)
         now_iso = now_dt.isoformat().replace("+00:00", "Z")
-        hour_start = now_dt.replace(minute=0, second=0)
+        hour_start, reset_dt = utc_rate_limit_window(now_dt)
         hour_start_iso = hour_start.isoformat().replace("+00:00", "Z")
-        reset_dt = hour_start + timedelta(hours=1)
         reset_iso = reset_dt.isoformat().replace("+00:00", "Z")
 
         uid = current_user["id"]
@@ -150,7 +152,7 @@ def register(router):
                     await release_minigame_run(db, session_id)
                 raise HTTPException(
                     status_code=429,
-                    detail=f"Hourly limit reached ({MAX_PLAYS_PER_HOUR} plays). Try again in {remaining}s.",
+                    detail=f"Play limit reached ({MAX_PLAYS_PER_HOUR} per {RATE_LIMIT_PERIOD_HOURS}h). Try again in {remaining}s.",
                 )
 
         rewards_applied = await _apply_rewards(current_user["id"], score, coins)
@@ -188,8 +190,12 @@ def register(router):
         except Exception:
             pass
 
+        plays_info = await get_plays_left(db, user_id=current_user["id"], game=FAMILY_RUN_GAME)
         return {
             "ok": True,
             "score": score,
             "coins": coins,
+            "plays_left": plays_info["plays_left"],
+            "max_plays": plays_info["max_plays"],
+            "resets_at": plays_info["resets_at"],
         }

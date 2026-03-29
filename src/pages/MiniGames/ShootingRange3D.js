@@ -252,7 +252,7 @@ function buildScene(scene, mobile, woodTex, brickTex, cobbleTex) {
 // COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ShootingRange3D() {
-  const { playsLeft, maxPlays, canPlay: hasPlaysLeft, updateFromStart, refresh: refreshPlays } = useMinigamePlaysLeft("shooting_range");
+  const { playsLeft, maxPlays, canPlay: hasPlaysLeft, updateFromStart, refresh: refreshPlays, applyPlaysLeftPayload } = useMinigamePlaysLeft("shooting_range");
   const canvasRef = useRef(null);
   const shootingRunSessionRef = useRef(null);
 
@@ -563,7 +563,7 @@ export default function ShootingRange3D() {
   // ── START ROUND ──────────────────────────────────────────────────────────────
   const startRound = useCallback(async () => {
     if (cooldownSecondsLeft > 0) return;
-    if (!hasPlaysLeft) { toast.error("Hourly play limit reached. Try again next hour."); return; }
+    if (!hasPlaysLeft) { toast.error("Play limit reached for this 2-hour window."); return; }
     try {
       const run = await startMinigameRun("shooting_range");
       shootingRunSessionRef.current = run.session_id;
@@ -591,7 +591,7 @@ export default function ShootingRange3D() {
     setScore(0); setTimeLeft(ROUND_DURATION_SEC); setAmmoState(MAX_AMMO); setClipsRemainingState(CLIPS_TOTAL);
     setIsReloading(false); setReloadAnim(false); setTargetUrgent(false);
     spawnTarget();
-  }, [spawnTarget, cooldownSecondsLeft]);
+  }, [spawnTarget, cooldownSecondsLeft, hasPlaysLeft, updateFromStart]);
 
   // ── THREE.JS SCENE SETUP ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -864,7 +864,11 @@ export default function ShootingRange3D() {
               const sid = shootingRunSessionRef.current;
               if (sid) {
                 api.post("/shooting-range/score", { score: finalScore, session_id: sid })
-                  .then(() => { fetchLeaderboard(); refreshPlays(); })
+                  .then((res) => {
+                    fetchLeaderboard();
+                    if (res.data?.plays_left != null) applyPlaysLeftPayload(res.data);
+                    else refreshPlays();
+                  })
                   .catch(() => { refreshPlays(); });
               }
             }
@@ -1005,7 +1009,7 @@ export default function ShootingRange3D() {
         </p>
         {playsLeft != null && (
           <p className={`text-[10px] font-heading mt-1 ${hasPlaysLeft ? 'text-mutedForeground' : 'text-red-500 font-bold'}`}>
-            {playsLeft}/{maxPlays} plays left this hour
+            {playsLeft}/{maxPlays} plays left this window
           </p>
         )}
       </div>

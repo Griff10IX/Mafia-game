@@ -12,7 +12,10 @@ from utils.minigame_run_session import (
     as_utc_started,
     claim_minigame_run_session,
     enforce_client_duration_for_claimed_session,
+    get_plays_left,
     release_minigame_run,
+    utc_rate_limit_window,
+    RATE_LIMIT_PERIOD_HOURS,
 )
 
 BATTLESHIPS_GAME = "battleships"
@@ -58,7 +61,7 @@ def register(router):
 
         now = datetime.now(timezone.utc).replace(microsecond=0)
         now_iso = now.isoformat().replace("+00:00", "Z")
-        hour_start = now.replace(minute=0, second=0, microsecond=0)
+        hour_start, _ = utc_rate_limit_window(now)
         hour_start_iso = hour_start.isoformat().replace("+00:00", "Z")
 
         uid = current_user["id"]
@@ -108,7 +111,10 @@ def register(router):
             if result.modified_count == 0 and result.upserted_id is None:
                 if not skip_session and session_id:
                     await release_minigame_run(db, session_id)
-                raise HTTPException(status_code=429, detail=f"Hourly win limit reached ({MAX_WINS_PER_HOUR}). Try again later.")
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Win limit reached ({MAX_WINS_PER_HOUR} per {RATE_LIMIT_PERIOD_HOURS}h). Try again later.",
+                )
 
         ships_saved = fleet_size - ships_lost
         diff_mult = {"easy": 0.6, "normal": 1.0, "hard": 1.5}.get(difficulty, 1.0)
@@ -150,10 +156,14 @@ def register(router):
         except Exception:
             pass
 
+        plays_info = await get_plays_left(db, user_id=uid, game=BATTLESHIPS_GAME)
         return {
             "ok": True,
             "shots_fired": shots_fired,
             "ships_lost": ships_lost,
+            "plays_left": plays_info["plays_left"],
+            "max_plays": plays_info["max_plays"],
+            "resets_at": plays_info["resets_at"],
         }
 
     @router.get("/battleships/leaderboard")

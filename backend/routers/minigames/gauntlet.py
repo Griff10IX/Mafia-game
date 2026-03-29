@@ -14,6 +14,8 @@ from utils.minigame_run_session import (
     enforce_numeric_score_for_claimed_session,
     release_minigame_run,
     start_minigame_run,
+    utc_rate_limit_window,
+    RATE_LIMIT_PERIOD_HOURS,
 )
 
 
@@ -159,9 +161,8 @@ def register(router):
 
         now_dt = datetime.now(timezone.utc).replace(microsecond=0)
         now_iso = now_dt.isoformat().replace("+00:00", "Z")
-        hour_start = now_dt.replace(minute=0, second=0)
+        hour_start, reset_dt = utc_rate_limit_window(now_dt)
         hour_start_iso = hour_start.isoformat().replace("+00:00", "Z")
-        reset_dt = hour_start + timedelta(hours=1)
         reset_iso = reset_dt.isoformat().replace("+00:00", "Z")
         uid = current_user["id"]
 
@@ -219,7 +220,7 @@ def register(router):
                     await release_minigame_run(db, session_id)
                 raise HTTPException(
                     status_code=429,
-                    detail=f"Hourly limit reached ({MAX_PLAYS_PER_HOUR} plays). Try again in {remaining}s.",
+                    detail=f"Play limit reached ({MAX_PLAYS_PER_HOUR} per {RATE_LIMIT_PERIOD_HOURS}h). Try again in {remaining}s.",
                 )
 
         meta_after = await db.user_meta.find_one({"user_id": uid}, {"_id": 0, "gauntlet_hour_count": 1})

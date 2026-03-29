@@ -52,7 +52,7 @@ const C = {
 };
 
 export default function FamilyRun() {
-  const { playsLeft, maxPlays, canPlay, updateFromStart, refresh: refreshPlays } = useMinigamePlaysLeft("family_run");
+  const { playsLeft, maxPlays, canPlay, updateFromStart, refresh: refreshPlays, applyPlaysLeftPayload } = useMinigamePlaysLeft("family_run");
   const canvasRef = useRef(null);
   const G         = useRef(null);
   const raf       = useRef(null);
@@ -166,12 +166,13 @@ export default function FamilyRun() {
         if (parts.length) toast.success(`Rewards: ${parts.join(', ')}`);
       }
       fetchLeaderboard();
-      refreshPlays();
+      if (res.data?.plays_left != null) applyPlaysLeftPayload(res.data);
+      else refreshPlays();
     } catch (err) {
       toast.error(err?.response?.data?.detail || 'Failed to submit score');
       refreshPlays();
     }
-  }, [fetchLeaderboard, refreshPlays]);
+  }, [fetchLeaderboard, refreshPlays, applyPlaysLeftPayload]);
 
   const goLeft  = useCallback(() => { const g=G.current; if(!g||g.phase!=='playing')return; if(g.player.lane>0)g.player.lane--; },[]);
   const goRight = useCallback(() => { const g=G.current; if(!g||g.phase!=='playing')return; if(g.player.lane<2)g.player.lane++; },[]);
@@ -190,7 +191,7 @@ export default function FamilyRun() {
   },[]);
 
   const startGame = useCallback(async () => {
-    if (!canPlay) { toast.error("Hourly play limit reached. Try again next hour."); return; }
+    if (!canPlay) { toast.error("Play limit reached for this 2-hour window."); return; }
     scoreSubmittedRef.current = false;
     try {
       const run = await startMinigameRun('family_run');

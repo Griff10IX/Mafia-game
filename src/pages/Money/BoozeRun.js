@@ -688,6 +688,9 @@ export default function BoozeRun() {
                 <div className="absolute inset-0 bg-black/40 pointer-events-auto" aria-hidden />
               </div>
               {response.data.jail_seconds && <p className="text-xs text-mutedForeground mt-1">{response.data.jail_seconds}s in jail</p>}
+              {Number(response.data.inventory_loss_basis) > 0 && (
+                <p className="text-xs text-mutedForeground mt-1">Run profit adjusted by −{formatMoney(response.data.inventory_loss_basis)} (stock seized)</p>
+              )}
             </div>
           ),
         });
@@ -721,6 +724,9 @@ export default function BoozeRun() {
                 <div className="absolute inset-0 bg-black/40 pointer-events-auto" aria-hidden />
               </div>
               {response.data.jail_seconds && <p className="text-xs text-mutedForeground mt-1">{response.data.jail_seconds}s in jail</p>}
+              {Number(response.data.inventory_loss_basis) > 0 && (
+                <p className="text-xs text-mutedForeground mt-1">Run profit adjusted by −{formatMoney(response.data.inventory_loss_basis)} (stock seized)</p>
+              )}
             </div>
           ),
         });
