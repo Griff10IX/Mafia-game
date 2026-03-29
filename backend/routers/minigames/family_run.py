@@ -3,10 +3,11 @@ from datetime import datetime, timezone
 import uuid
 
 from fastapi import Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional, Dict, Any
 
 from server import db, get_current_user, log_activity, log_minigame_payout, log_respect_earned, _get_staff_user_ids, _is_admin
+from utils.minigame_security import skip_minigame_session
 from routers.minigames.minigame_leaderboard import log_minigame_play
 from utils.minigame_run_session import (
     as_utc_started,
@@ -35,6 +36,8 @@ REWARD_CAPS = {
 
 
 class FamilyRunScoreRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     score: int
     coins: Optional[int] = 0
     session_id: Optional[str] = None
@@ -108,7 +111,7 @@ def register(router):
 
         uid = current_user["id"]
 
-        skip_session = _is_admin(current_user)
+        skip_session = skip_minigame_session(_is_admin(current_user))
         session_id = (payload.session_id or "").strip()
         if not skip_session:
             if not session_id:

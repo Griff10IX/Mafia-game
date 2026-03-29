@@ -3,10 +3,11 @@ from datetime import datetime, timezone
 import uuid
 
 from fastapi import Depends, HTTPException
-from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from pydantic import BaseModel, ConfigDict
+from typing import Optional
 
 from server import db, get_current_user, log_activity, log_minigame_payout, log_respect_earned, _get_staff_user_ids, _is_admin
+from utils.minigame_security import skip_minigame_session
 from routers.minigames.minigame_leaderboard import log_minigame_play
 from utils.minigame_run_session import (
     as_utc_started,
@@ -30,9 +31,10 @@ SNAKE_BOOZE_ID = "speakeasy_whiskey"
 
 
 class SnakeScoreRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     score: int
     session_id: Optional[str] = None
-    rewards: Optional[Dict[str, int]] = None
 
 
 def _rewards_from_score(score: int) -> Dict[str, int]:
@@ -125,7 +127,7 @@ def register(router):
         reset_iso = reset_dt.isoformat().replace("+00:00", "Z")
         uid = current_user["id"]
 
-        skip_session = _is_admin(current_user)
+        skip_session = skip_minigame_session(_is_admin(current_user))
         session_id = (payload.session_id or "").strip()
         if not skip_session:
             if not session_id:

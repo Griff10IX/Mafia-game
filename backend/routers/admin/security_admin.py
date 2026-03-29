@@ -21,8 +21,10 @@ class UnbanUserRequest(BaseModel):
 
 
 class BanIPRequest(BaseModel):
-    ip: str
-    reason: str
+    """Ban by username (all known IPs for that account) or by a single IP. Prefer `username` when set."""
+    ip: Optional[str] = None
+    username: Optional[str] = None
+    reason: str = ""
     duration_hours: Optional[int] = None  # None = permanent
 
 
@@ -104,27 +106,99 @@ def register(router):
     async def ban_ip_admin(request: BanIPRequest, current_user: dict = Depends(get_current_user)):
         if current_user.get("email") not in ADMIN_EMAILS:
             raise HTTPException(status_code=403, detail="Admin access required")
-        ip = normalize_ip_string(request.ip or "")
-        if not ip:
-            raise HTTPException(status_code=400, detail="IP is required")
+        from utils.cheat_detection_utils import user_ip_union
+
+        uname = (request.username or "").strip()
+        raw_ip = (request.ip or "").strip()
         now = datetime.now(timezone.utc)
-        doc = {
-            "ip": ip,
-            "reason": request.reason or "Banned by admin",
-            "banned_by": current_user.get("username", "Admin"),
-            "created_at": now.isoformat(),
-            "active": True,
-        }
+        reason = (request.reason or "").strip() or "Banned by admin"
+        expires_at = None
         if request.duration_hours is not None:
-            doc["expires_at"] = (now + timedelta(hours=request.duration_hours)).isoformat()
-        await db.ip_bans.insert_one(doc)
+            expires_at = (now + timedelta(hours=request.duration_hours)).isoformat()
         duration_str = f"{request.duration_hours}h" if request.duration_hours else "permanent"
-        return {"message": f"IP {ip} banned ({duration_str})"}
+        banned_by = current_user.get("username", "Admin")
+
+        def _ban_doc(ip_val: str, extra: Optional[dict] = None) -> dict:
+            doc = {
+                "ip": ip_val,
+                "reason": reason,
+                "banned_by": banned_by,
+                "created_at": now.isoformat(),
+                "active": True,
+            }
+            if expires_at:
+                doc["expires_at"] = expires_at
+            if extra:
+                doc.update(extra)
+            return doc
+
+        if uname:
+            pat = srv._username_pattern(uname)
+            if not pat:
+                raise HTTPException(status_code=400, detail="Username is required")
+            user = await db.users.find_one(
+                {"username": pat},
+                {
+                    "_id": 0,
+                    "id": 1,
+                    "username": 1,
+                    "registration_ip": 1,
+                    "last_login_ip": 1,
+                    "last_request_ip": 1,
+                    "login_ips": 1,
+                    "sessions": 1,
+                },
+            )
+            if not user:
+                raise HTTPException(status_code=404, detail="User not found")
+            ips_raw, _ = user_ip_union(user, include_session_ips=True)
+            ips_norm: list[str] = []
+            seen: set[str] = set()
+            for raw in ips_raw:
+                n = normalize_ip_string(raw)
+                if n and n not in seen:
+                    seen.add(n)
+                    ips_norm.append(n)
+            if not ips_norm:
+                raise HTTPException(
+                    status_code=400,
+                    detail="No IP addresses on record for this account (registration, login, sessions).",
+                )
+            inserted = 0
+            skipped = 0
+            display_name = user.get("username") or uname
+            src: dict = {"source_username": display_name}
+            if user.get("id"):
+                src["source_user_id"] = user["id"]
+            for ip_val in ips_norm:
+                existing = await db.ip_bans.find_one({"ip": ip_val, "active": True}, {"_id": 1})
+                if existing:
+                    skipped += 1
+                    continue
+                await db.ip_bans.insert_one(_ban_doc(ip_val, src))
+                inserted += 1
+            msg = (
+                f"Banned {inserted} IP(s) for {display_name} ({duration_str})"
+                + (f"; {skipped} already banned" if skipped else "")
+            )
+            return {
+                "message": msg,
+                "banned_ips": ips_norm,
+                "inserted": inserted,
+                "skipped_already_banned": skipped,
+                "username": display_name,
+            }
+
+        ip = normalize_ip_string(raw_ip)
+        if not ip:
+            raise HTTPException(status_code=400, detail="Enter a username or a valid IP address")
+        await db.ip_bans.insert_one(_ban_doc(ip))
+        return {"message": f"IP {ip} banned ({duration_str})", "banned_ips": [ip], "inserted": 1}
 
     async def unban_ip_admin(request: UnbanIPRequest, current_user: dict = Depends(get_current_user)):
         if current_user.get("email") not in ADMIN_EMAILS:
             raise HTTPException(status_code=403, detail="Admin access required")
-        ip = (request.ip or "").strip()
+        ip = normalize_ip_string(request.ip or "")
         if not ip:
             raise HTTPException(status_code=400, detail="IP is required")
         result = await db.ip_bans.update_many(

@@ -500,7 +500,7 @@ export default function Admin() {
   const [rateLimitLogUsername, setRateLimitLogUsername] = useState('');
   const [ipBans, setIpBans] = useState([]);
   const [ipBansLoading, setIpBansLoading] = useState(false);
-  const [ipBanIp, setIpBanIp] = useState('');
+  const [ipBanUsername, setIpBanUsername] = useState('');
   const [ipBanReason, setIpBanReason] = useState('');
   const [ipBanHours, setIpBanHours] = useState('');
   const [cheatDetectionConfig, setCheatDetectionConfig] = useState(null);
@@ -7609,14 +7609,14 @@ export default function Admin() {
             {/* IP Bans */}
             <div className="mt-3 pt-3 border-t border-zinc-700/50">
               <div className="text-[10px] font-heading text-primary uppercase tracking-wider mb-2">IP Bans</div>
-              <p className="text-[10px] text-mutedForeground mb-2">Banned IPs cannot access the server (login, API, etc.).</p>
+              <p className="text-[10px] text-mutedForeground mb-2">Banned IPs cannot access the server (login, API, etc.). Enter a username to ban every IP on record for that account (registration, login history, last request, active sessions). Use cheat detection &quot;Ban IP&quot; to block a single address.</p>
               <div className="flex flex-wrap items-center gap-2 mb-2">
                 <input
                   type="text"
-                  value={ipBanIp}
-                  onChange={(e) => setIpBanIp(e.target.value)}
-                  placeholder="IP address"
-                  className="w-32 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                  value={ipBanUsername}
+                  onChange={(e) => setIpBanUsername(e.target.value)}
+                  placeholder="Username"
+                  className="w-36 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none"
                 />
                 <input
                   type="text"
@@ -7633,7 +7633,7 @@ export default function Admin() {
                   min="1"
                   className="w-24 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none"
                 />
-                <BtnPrimary onClick={handleBanIp} disabled={ipBansLoading}>Ban IP</BtnPrimary>
+                <BtnPrimary onClick={handleBanIp} disabled={ipBansLoading}>Ban user IPs</BtnPrimary>
                 <BtnSecondary onClick={fetchIpBans} disabled={ipBansLoading}>{ipBansLoading ? '...' : 'Load list'}</BtnSecondary>
               </div>
               {ipBans.length > 0 && (
@@ -7642,6 +7642,7 @@ export default function Admin() {
                     <div key={i} className="flex items-center justify-between gap-2 text-[10px] py-1.5 px-2 rounded bg-zinc-800/50 border border-zinc-700/30">
                       <div className="min-w-0">
                         <span className="font-mono font-bold text-foreground">{b.ip}</span>
+                        {b.source_username && <span className="ml-2 text-[9px] text-amber-400/90 font-heading">via {b.source_username}</span>}
                         {b.reason && <span className="ml-2 text-mutedForeground truncate">{b.reason}</span>}
                         {b.expires_at && <span className="ml-2 text-amber-400/80">expires {b.expires_at.slice(0, 10)}</span>}
                       </div>

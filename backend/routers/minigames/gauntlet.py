@@ -3,7 +3,7 @@ from datetime import datetime, timezone, timedelta
 import uuid
 
 from fastapi import Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from typing import Optional
 
 from server import db, get_current_user, log_activity, log_minigame_payout, log_respect_earned, _get_staff_user_ids
@@ -94,12 +94,16 @@ def _get_reward(score: int) -> dict:
 
 
 class GauntletStartRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     theme: Optional[str] = None
     speed: Optional[str] = None
     difficulty: Optional[str] = None
 
 
 class GauntletClaimRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     score: int
     session_id: Optional[str] = None
     theme: Optional[str] = None

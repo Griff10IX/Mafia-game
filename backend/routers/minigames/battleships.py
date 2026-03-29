@@ -5,9 +5,10 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from server import db, get_current_user, _get_staff_user_ids, _is_admin, log_activity, log_minigame_payout
+from utils.minigame_security import skip_minigame_session
 from utils.minigame_run_session import (
     as_utc_started,
     claim_minigame_run_session,
@@ -32,6 +33,8 @@ MIN_PLAY_SECONDS = 30
 
 
 class BattleshipsWinRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     shots_fired: int
     ships_lost: int
     time_seconds: int
@@ -66,7 +69,7 @@ def register(router):
 
         uid = current_user["id"]
 
-        skip_session = _is_admin(current_user)
+        skip_session = skip_minigame_session(_is_admin(current_user))
         session_id = (body.session_id or "").strip()
         if not skip_session:
             if not session_id:

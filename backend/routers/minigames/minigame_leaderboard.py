@@ -7,7 +7,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, Optional, List
 
 from fastapi import Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 from fastapi import Query
 from server import db, get_current_user, ADMIN_EMAILS, _get_staff_user_ids
@@ -110,6 +110,8 @@ class LeaderboardResponse(BaseModel):
 
 
 class MinigameRunSessionStartRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     game: str
     meta: Optional[Dict[str, Any]] = None
 

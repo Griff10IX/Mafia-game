@@ -10,7 +10,7 @@ from typing import Optional, List, Tuple
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import Depends, HTTPException, Request, Body
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 from bson.objectid import ObjectId
 
 from server import db, get_current_user, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, _family_in_active_war, CARS, _get_staff_user_ids, send_notification, log_activity, log_minigame_payout
@@ -33,6 +33,7 @@ from utils.minigame_run_session import (
     utc_rate_limit_window,
     RATE_LIMIT_PERIOD_HOURS,
 )
+from utils.minigame_security import skip_minigame_session
 import middleware.security as _security_mod
 
 # 5k bullets per 24h, effectively delivered every 20 mins (72 ticks per day)
@@ -1712,7 +1713,7 @@ async def submit_shooting_range_score(request: ShootingRangeScoreRequest, curren
     reset_iso = reset_dt.isoformat().replace("+00:00", "Z")
 
     uid = current_user["id"]
-    skip_session = _is_admin(current_user)
+    skip_session = skip_minigame_session(_is_admin(current_user))
     session_id = (request.session_id or "").strip()
     if not skip_session:
         if not session_id:

@@ -6,6 +6,8 @@ from typing import Any, Dict, Optional
 from fastapi import HTTPException
 from pymongo import ReturnDocument
 
+from utils.minigame_security import validate_minigame_session_id
+
 SESSION_MAX_MINUTES = 45
 
 # All entries below: max plays per UTC-aligned window (not per calendar hour).
@@ -166,14 +168,9 @@ async def claim_minigame_run_session(
     session_id: str,
     now_dt: Optional[datetime] = None,
 ) -> dict:
-    if not (session_id or "").strip():
-        raise HTTPException(
-            status_code=400,
-            detail="Missing run session. Start the game from the game screen first.",
-        )
     now_dt = now_dt or datetime.now(timezone.utc).replace(microsecond=0)
     now_iso = now_dt.isoformat().replace("+00:00", "Z")
-    sid = session_id.strip()
+    sid = validate_minigame_session_id(session_id)
     sess = await db.minigame_run_sessions.find_one_and_update(
         {
             "id": sid,

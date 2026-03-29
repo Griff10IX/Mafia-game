@@ -457,8 +457,7 @@ export default function Snake() {
     }
     setPhase("submitting");
     try {
-      const rewards = stateRef.current?.rewards || {};
-      const res = await api.post("/snake/score", { score: finalScore, rewards, session_id: runSessionId });
+      const res = await api.post("/snake/score", { score: finalScore, session_id: runSessionId });
       if (snakeSessionRef.current === runSessionId) snakeSessionRef.current = null;
       toast.success(`Score submitted: ${finalScore} pts`);
       await fetchLB();
