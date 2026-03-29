@@ -236,7 +236,9 @@ export default function Properties() {
                 {property.owned && (
                   <>
                     <span className="text-mutedForeground uppercase tracking-wider">Level</span>
-                    <span className="text-foreground text-right">{(property.level ?? 0)}/{(property.max_level ?? 0)}</span>
+                    <span className="text-foreground text-right" title={property.owned_count > 1 ? 'Total levels across all copies of this business' : ''}>
+                      {(property.level ?? 0)}/{(property.max_total_level ?? property.max_level ?? 0)}
+                    </span>
                     <span className="text-mutedForeground uppercase tracking-wider">Available</span>
                     <span className="text-primary font-bold text-right">${Math.floor(property.available_income ?? 0).toLocaleString()}</span>
                   </>
@@ -272,13 +274,13 @@ export default function Properties() {
                     >
                       <DollarSign size={12} /> Collect
                     </button>
-                    {property.level < property.max_level && (
+                    {property.can_upgrade && (
                       <button
                         onClick={() => buyProperty(property.id)}
                         data-testid={`upgrade-property-${property.id}`}
                         className={`w-full ${styles.surface} border border-primary/30 text-primary rounded font-heading font-bold uppercase tracking-wider py-1.5 text-[10px] hover:bg-primary/10 transition-all flex items-center justify-center gap-1.5`}
                       >
-                        <TrendingUp size={11} /> Upgrade ${((property.price ?? 0) * ((property.level ?? 0) + 1)).toLocaleString()}
+                        <TrendingUp size={11} /> Upgrade ${(property.next_upgrade_cost ?? (property.price ?? 0) * ((property.level ?? 0) + 1)).toLocaleString()}
                       </button>
                     )}
                     {property.owned && (

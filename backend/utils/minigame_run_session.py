@@ -119,6 +119,15 @@ async def start_minigame_run(
 
 
 async def release_minigame_run(db, session_id: str) -> None:
+    """Reset a session's claimed flag so the same session_id can be claimed again.
+
+    Do **not** call this after `claim_minigame_run_session` has succeeded and validation
+    fails (too short, score mismatch, rate limit, etc.). Doing so lets bots retry the same
+    `session_id` until wall-clock checks pass. Failed post-claim validation must leave the
+    session consumed (claimed=True).
+
+    Legitimate uses are rare (e.g. legacy tooling); prefer leaving sessions single-use.
+    """
     if not session_id:
         return
     await db.minigame_run_sessions.update_one(
@@ -197,9 +206,17 @@ def max_numeric_score_for_session(
     max_score_cap: int,
     rate_per_second: float,
     buffer: int,
+    max_elapsed_seconds: Optional[float] = None,
 ) -> int:
+    """Upper bound on plausible score from server session start → claim time.
+
+    max_elapsed_seconds: if set, caps wall-clock elapsed so AFK waits cannot inflate
+    the allowed score (anti-exploit). Per-game constants should reflect realistic max run length.
+    """
     started = as_utc_started(sess.get("started_at"))
     elapsed = max(0.0, (now_dt - started).total_seconds())
+    if max_elapsed_seconds is not None:
+        elapsed = min(elapsed, float(max_elapsed_seconds))
     max_for_time = int(elapsed * rate_per_second) + buffer
     return min(max_score_cap, max_for_time)
 
@@ -214,16 +231,18 @@ async def enforce_numeric_score_for_claimed_session(
     max_score_cap: int,
     rate_per_second: float,
     buffer: int,
+    max_elapsed_seconds: Optional[float] = None,
 ) -> None:
+    """Reject if client score exceeds physics bound; session stays consumed (no release)."""
     max_allowed = max_numeric_score_for_session(
         sess,
         now_dt=now_dt,
         max_score_cap=max_score_cap,
         rate_per_second=rate_per_second,
         buffer=buffer,
+        max_elapsed_seconds=max_elapsed_seconds,
     )
     if score > max_allowed:
-        await release_minigame_run(db, session_id)
         raise HTTPException(status_code=400, detail="Score does not match server run timing.")
 
 
@@ -237,16 +256,14 @@ async def enforce_client_duration_for_claimed_session(
     max_duration_cap: int,
     slack_seconds: int = 45,
 ) -> None:
+    """Validate client-reported duration vs server session; session stays consumed on failure."""
     if client_duration_seconds < 1:
-        await release_minigame_run(db, session_id)
         raise HTTPException(status_code=400, detail="Invalid play duration.")
     if client_duration_seconds > max_duration_cap:
-        await release_minigame_run(db, session_id)
         raise HTTPException(status_code=400, detail="Play duration too long.")
     started = as_utc_started(sess.get("started_at"))
     elapsed = max(0.0, (now_dt - started).total_seconds())
     if client_duration_seconds > elapsed + slack_seconds:
-        await release_minigame_run(db, session_id)
         raise HTTPException(
             status_code=400,
             detail="Reported play time does not match server session.",

@@ -14,7 +14,6 @@ from utils.minigame_run_session import (
     claim_minigame_run_session,
     enforce_numeric_score_for_claimed_session,
     get_plays_left,
-    release_minigame_run,
     utc_rate_limit_window,
     RATE_LIMIT_PERIOD_HOURS,
 )
@@ -25,6 +24,7 @@ MAX_PLAYS_PER_HOUR = 10
 SNAKE_SCORE_RATE_PER_SEC = 15.0
 SNAKE_SCORE_BUFFER = 20
 MIN_PLAY_SECONDS = 3
+SNAKE_MAX_SCORING_SECONDS = 120.0
 SNAKE_GAME = "snake"
 
 SNAKE_BOOZE_ID = "speakeasy_whiskey"
@@ -132,13 +132,18 @@ def register(router):
         if not skip_session:
             if not session_id:
                 raise HTTPException(status_code=400, detail="Start a game before submitting (missing session).")
+            pl = await get_plays_left(db, user_id=uid, game=SNAKE_GAME)
+            if pl["plays_left"] == 0:
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Play limit reached ({pl['max_plays']} per {RATE_LIMIT_PERIOD_HOURS}h). Resets at {pl['resets_at']}.",
+                )
             sess = await claim_minigame_run_session(
                 db, user_id=uid, game=SNAKE_GAME, session_id=session_id, now_dt=now_dt
             )
             started_at = as_utc_started(sess.get("started_at"))
             elapsed = max(0.0, (now_dt - started_at).total_seconds())
             if elapsed < MIN_PLAY_SECONDS:
-                await release_minigame_run(db, session_id)
                 raise HTTPException(status_code=400, detail="Game too short.")
             await enforce_numeric_score_for_claimed_session(
                 db,
@@ -149,6 +154,7 @@ def register(router):
                 max_score_cap=MAX_SCORE_ACCEPTED,
                 rate_per_second=SNAKE_SCORE_RATE_PER_SEC,
                 buffer=SNAKE_SCORE_BUFFER,
+                max_elapsed_seconds=SNAKE_MAX_SCORING_SECONDS,
             )
 
         result = await db.user_meta.update_one(
@@ -163,8 +169,6 @@ def register(router):
             )
             if result.modified_count == 0 and result.upserted_id is None:
                 remaining = max(0, int((reset_dt - now_dt).total_seconds()))
-                if not skip_session and session_id:
-                    await release_minigame_run(db, session_id)
                 raise HTTPException(
                     status_code=429,
                     detail=f"Play limit reached ({MAX_PLAYS_PER_HOUR} per {RATE_LIMIT_PERIOD_HOURS}h). Try again in {remaining}s.",

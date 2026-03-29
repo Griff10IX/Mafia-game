@@ -13,7 +13,6 @@ from utils.minigame_run_session import (
     claim_minigame_run_session,
     get_plays_left,
     max_numeric_score_for_session,
-    release_minigame_run,
     start_minigame_run,
     utc_rate_limit_window,
     RATE_LIMIT_PERIOD_HOURS,
@@ -63,6 +62,8 @@ def _max_rate_for_mode(speed: str, difficulty: str) -> float:
 MAX_GATES_PER_SECOND = 1.5
 SCORE_TIME_BUFFER = 4
 MIN_PLAY_SECONDS = 3
+# Cap wall-clock contribution to score bound (anti-AFK); ~2 min of flappy-scale play
+GAUNTLET_MAX_SCORING_SECONDS = 120.0
 
 GAUNTLET_GAME_SLUG = "gauntlet"
 
@@ -176,6 +177,14 @@ def register(router):
         session_id = (payload.session_id or "").strip()
         if not session_id:
             raise HTTPException(status_code=400, detail="Start a run before claiming (missing session).")
+
+        plays_gate = await get_plays_left(db, user_id=uid, game=GAUNTLET_GAME_SLUG)
+        if plays_gate["plays_left"] == 0:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Play limit reached ({plays_gate['max_plays']} per {RATE_LIMIT_PERIOD_HOURS}h). Resets at {plays_gate['resets_at']}.",
+            )
+
         sess = await claim_minigame_run_session(
             db, user_id=uid, game=GAUNTLET_GAME_SLUG, session_id=session_id, now_dt=now_dt
         )
@@ -183,7 +192,6 @@ def register(router):
         started_at = as_utc_started(sess.get("started_at"))
         elapsed = max(0.0, (now_dt - started_at).total_seconds())
         if elapsed < MIN_PLAY_SECONDS:
-            await release_minigame_run(db, session_id)
             raise HTTPException(status_code=400, detail="Game too short.")
 
         sess_meta = sess.get("meta") or {}
@@ -194,7 +202,6 @@ def register(router):
         claim_speed = (payload.speed or "normal").strip()
         claim_diff = (payload.difficulty or "normal").strip()
         if claim_theme != sess_theme or claim_speed != sess_speed or claim_diff != sess_diff:
-            await release_minigame_run(db, session_id)
             raise HTTPException(status_code=400, detail="Theme/speed/difficulty mismatch with session.")
 
         rate = _max_rate_for_mode(sess_speed, sess_diff)
@@ -204,9 +211,11 @@ def register(router):
             max_score_cap=MAX_SCORE_SANITY,
             rate_per_second=rate,
             buffer=SCORE_TIME_BUFFER,
+            max_elapsed_seconds=GAUNTLET_MAX_SCORING_SECONDS,
         )
-        # Authoritative score: client-reported value cannot exceed physics bound for this session duration.
-        score = min(raw_score, max_allowed)
+        if raw_score > max_allowed:
+            raise HTTPException(status_code=400, detail="Score does not match server run timing.")
+        score = raw_score
 
         result = await db.user_meta.update_one(
             {"user_id": uid, "gauntlet_hour_start": hour_start_iso, "gauntlet_hour_count": {"$lt": MAX_PLAYS_PER_HOUR}},
@@ -220,8 +229,6 @@ def register(router):
             )
             if result.modified_count == 0 and result.upserted_id is None:
                 remaining = max(0, int((reset_dt - now_dt).total_seconds()))
-                if session_id:
-                    await release_minigame_run(db, session_id)
                 raise HTTPException(
                     status_code=429,
                     detail=f"Play limit reached ({MAX_PLAYS_PER_HOUR} per {RATE_LIMIT_PERIOD_HOURS}h). Try again in {remaining}s.",

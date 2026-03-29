@@ -14,7 +14,6 @@ from utils.minigame_run_session import (
     claim_minigame_run_session,
     enforce_client_duration_for_claimed_session,
     get_plays_left,
-    release_minigame_run,
     utc_rate_limit_window,
     RATE_LIMIT_PERIOD_HOURS,
 )
@@ -74,6 +73,12 @@ def register(router):
         if not skip_session:
             if not session_id:
                 raise HTTPException(status_code=400, detail="Start a game before submitting (missing session).")
+            pl = await get_plays_left(db, user_id=uid, game=BATTLESHIPS_GAME)
+            if pl["plays_left"] == 0:
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Win limit reached ({pl['max_plays']} per {RATE_LIMIT_PERIOD_HOURS}h). Resets at {pl['resets_at']}.",
+                )
             sess = await claim_minigame_run_session(
                 db, user_id=uid, game=BATTLESHIPS_GAME, session_id=session_id, now_dt=now
             )
@@ -81,14 +86,12 @@ def register(router):
             started_at = as_utc_started(sess.get("started_at"))
             elapsed = max(0.0, (now - started_at).total_seconds())
             if elapsed < MIN_PLAY_SECONDS:
-                await release_minigame_run(db, session_id)
                 raise HTTPException(status_code=400, detail="Game too short.")
 
             sess_meta = sess.get("meta") or {}
             sess_diff = sess_meta.get("difficulty", "normal")
             sess_fleet = int(sess_meta.get("fleet_size") or 5)
             if difficulty != sess_diff or fleet_size != sess_fleet:
-                await release_minigame_run(db, session_id)
                 raise HTTPException(status_code=400, detail="Difficulty/fleet mismatch with session.")
 
             await enforce_client_duration_for_claimed_session(
@@ -112,8 +115,6 @@ def register(router):
                 upsert=True,
             )
             if result.modified_count == 0 and result.upserted_id is None:
-                if not skip_session and session_id:
-                    await release_minigame_run(db, session_id)
                 raise HTTPException(
                     status_code=429,
                     detail=f"Win limit reached ({MAX_WINS_PER_HOUR} per {RATE_LIMIT_PERIOD_HOURS}h). Try again later.",

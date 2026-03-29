@@ -29,7 +29,6 @@ from utils.minigame_run_session import (
     claim_minigame_run_session,
     enforce_numeric_score_for_claimed_session,
     get_plays_left,
-    release_minigame_run,
     utc_rate_limit_window,
     RATE_LIMIT_PERIOD_HOURS,
 )
@@ -237,6 +236,7 @@ SHOOTING_RANGE_SESSION_GAME = "shooting_range"
 SHOOTING_RANGE_ABS_SCORE_CAP = 99_999_999
 SHOOTING_RANGE_SCORE_RATE = 5_000.0
 SHOOTING_RANGE_SCORE_BUFFER = 2_000
+SHOOTING_RANGE_MAX_SCORING_SECONDS = 300.0
 
 
 class StateOptionalRequest(BaseModel):
@@ -1713,11 +1713,21 @@ async def submit_shooting_range_score(request: ShootingRangeScoreRequest, curren
     reset_iso = reset_dt.isoformat().replace("+00:00", "Z")
 
     uid = current_user["id"]
+    bonus_plays = int(current_user.get("shooting_range_bonus_plays") or 0)
+    hourly_limit = SHOOTING_RANGE_MAX_PLAYS_PER_HOUR + max(0, min(bonus_plays, SHOOTING_RANGE_BONUS_STORE_MAX))
+    extra_plays = max(0, min(bonus_plays, SHOOTING_RANGE_BONUS_STORE_MAX))
+
     skip_session = skip_minigame_session(_is_admin(current_user))
     session_id = (request.session_id or "").strip()
     if not skip_session:
         if not session_id:
             raise HTTPException(status_code=400, detail="Start a run before submitting (missing session).")
+        pl_gate = await get_plays_left(db, user_id=uid, game="shooting_range", extra_max=extra_plays)
+        if pl_gate["plays_left"] == 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Play limit reached ({pl_gate['max_plays']} per {RATE_LIMIT_PERIOD_HOURS}h). Resets at {pl_gate['resets_at']}.",
+            )
         sess = await claim_minigame_run_session(
             db, user_id=uid, game=SHOOTING_RANGE_SESSION_GAME, session_id=session_id, now_dt=now_dt
         )
@@ -1730,11 +1740,8 @@ async def submit_shooting_range_score(request: ShootingRangeScoreRequest, curren
             max_score_cap=SHOOTING_RANGE_ABS_SCORE_CAP,
             rate_per_second=SHOOTING_RANGE_SCORE_RATE,
             buffer=SHOOTING_RANGE_SCORE_BUFFER,
+            max_elapsed_seconds=SHOOTING_RANGE_MAX_SCORING_SECONDS,
         )
-
-    bonus_plays = int(current_user.get("shooting_range_bonus_plays") or 0)
-    hourly_limit = SHOOTING_RANGE_MAX_PLAYS_PER_HOUR + max(0, min(bonus_plays, SHOOTING_RANGE_BONUS_STORE_MAX))
-    extra_plays = max(0, min(bonus_plays, SHOOTING_RANGE_BONUS_STORE_MAX))
 
     result = await db.user_meta.update_one(
         {
@@ -1762,8 +1769,6 @@ async def submit_shooting_range_score(request: ShootingRangeScoreRequest, curren
         )
         if result.modified_count == 0 and result.upserted_id is None:
             remaining = max(0, int((reset_dt - now_dt).total_seconds()))
-            if not skip_session and session_id:
-                await release_minigame_run(db, session_id)
             raise HTTPException(
                 status_code=400,
                 detail=f"Play limit reached ({hourly_limit} per {RATE_LIMIT_PERIOD_HOURS}h). Try again in {remaining}s.",

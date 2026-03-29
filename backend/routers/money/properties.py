@@ -50,6 +50,10 @@ class PropertyResponse(BaseModel):
     # Stacking: how many of this property type user owns
     owned_count: int = 1
     stack_bonus_pct: int = 0  # e.g., 50 = +50% bonus from stacking
+    # level = sum of levels across copies; max_total_level = per-copy cap * copy count
+    max_total_level: int = 10
+    can_upgrade: bool = False
+    next_upgrade_cost: Optional[int] = None
 
 
 # Upgrade cost to go from level L→L+1 is price * (L+1) (first buy = price). Each level adds +income_per_hour.
@@ -200,6 +204,17 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
         # Effective income/hr = base * total_level * stack_mult (so stacking shows increased rate)
         effective_income_per_hour = int(prop["income_per_hour"] * total_level * stack_mult) if owned and total_level >= 1 else prop["income_per_hour"]
         streak_bonus_mult = 1.0 + min(MAX_STREAK_DAYS, max(0, streak_days)) * STREAK_BONUS_PER_DAY if owned else 1.0
+        cap_single = int(prop["max_level"])
+        max_total_level = cap_single * max(1, owned_count)
+        can_upgrade = False
+        next_cost: Optional[int] = None
+        if owned and user_props_list:
+            upgradable = [up for up in user_props_list if max(0, int(up.get("level") or 0)) < cap_single]
+            can_upgrade = len(upgradable) > 0
+            if can_upgrade:
+                lowest = min(upgradable, key=lambda u: max(0, int(u.get("level") or 0)))
+                lv = max(0, int(lowest.get("level") or 0))
+                next_cost = int(prop["price"]) * (lv + 1)
         result.append(PropertyResponse(
             id=prop["id"],
             name=prop["name"],
@@ -208,7 +223,7 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
             income_per_hour=effective_income_per_hour,
             max_level=prop["max_level"],
             owned=owned,
-            level=total_level,  # Show total level across all copies
+            level=total_level,  # Sum of levels across copies (stacking)
             available_income=available_income,
             locked=locked,
             required_property_name=required_property_name,
@@ -218,6 +233,9 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
             buff_label=buff_label,
             owned_count=owned_count,
             stack_bonus_pct=stack_bonus_pct,
+            max_total_level=max_total_level,
+            can_upgrade=can_upgrade,
+            next_upgrade_cost=next_cost,
         ))
     return PropertiesListResponse(
         properties=result,
@@ -239,14 +257,22 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
     )
     if not prop:
         raise HTTPException(status_code=404, detail="Property not found")
-    user_prop = await db.user_properties.find_one(
+    cap = int(prop["max_level"])
+    owned_rows = await db.user_properties.find(
         {"user_id": current_user["id"], "property_id": property_id},
-        {"_id": 0}
-    )
-    if user_prop:
-        if user_prop["level"] >= prop["max_level"]:
-            raise HTTPException(status_code=400, detail="Property already at max level")
-        cost = prop["price"] * (user_prop["level"] + 1)
+        {"_id": 1, "level": 1},
+    ).sort("level", 1).to_list(100)
+    user_prop = None  # target row for upgrade (lowest level below cap)
+    if owned_rows:
+        for row in owned_rows:
+            if max(0, int(row.get("level") or 0)) < cap:
+                user_prop = row
+                break
+    if user_prop is not None:
+        lvl = max(0, int(user_prop.get("level") or 0))
+        cost = prop["price"] * (lvl + 1)
+    elif owned_rows:
+        raise HTTPException(status_code=400, detail="Property already at max level")
     else:
         # First-time buy: must have previous property at max level
         required_property_id = prop.get("required_property_id")
@@ -269,10 +295,10 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient money")
-    if user_prop:
+    if user_prop is not None:
         await db.user_properties.update_one(
-            {"user_id": current_user["id"], "property_id": property_id},
-            {"$inc": {"level": 1}}
+            {"_id": user_prop["_id"]},
+            {"$inc": {"level": 1}},
         )
     else:
         await db.user_properties.insert_one({
@@ -290,7 +316,7 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
         "property_id": property_id,
         "property_name": (prop or {}).get("name") or property_id,
         "cost": cost,
-        "level": 1 if not user_prop else (user_prop.get("level") or 0) + 1,
+        "level": 1 if not owned_rows else (user_prop.get("level") or 0) + 1,
     })
     await log_activity(current_user.get("id", ""), current_user.get("username", ""), "property_buy", {"property": prop.get("name", property_id), "cost": cost})
     return {"message": f"Successfully purchased/upgraded {prop['name']}"}

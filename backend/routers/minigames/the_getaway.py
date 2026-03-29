@@ -15,7 +15,6 @@ from utils.minigame_run_session import (
     claim_minigame_run_session,
     enforce_client_duration_for_claimed_session,
     get_plays_left,
-    release_minigame_run,
     utc_rate_limit_window,
     RATE_LIMIT_PERIOD_HOURS,
 )
@@ -28,6 +27,8 @@ GETAWAY_MAX_M_PER_SEC = 55
 GETAWAY_MAX_COINS_PER_SEC = 5
 GETAWAY_DISTANCE_SLACK = 200
 GETAWAY_COINS_SLACK = 30
+# Cap server elapsed used for distance/coin bounds (anti-AFK)
+GETAWAY_MAX_SCORING_SECONDS = 600.0
 
 # 75% reduction for beta
 BASE_CASH = 3_750
@@ -79,6 +80,12 @@ def register(router):
         if not skip_session:
             if not session_id:
                 raise HTTPException(status_code=400, detail="Start a run before submitting (missing session).")
+            pl = await get_plays_left(db, user_id=uid, game=GETAWAY_GAME)
+            if pl["plays_left"] == 0:
+                raise HTTPException(
+                    status_code=429,
+                    detail=f"Run limit reached ({pl['max_plays']} per {RATE_LIMIT_PERIOD_HOURS}h). Resets at {pl['resets_at']}.",
+                )
             sess = await claim_minigame_run_session(
                 db, user_id=uid, game=GETAWAY_GAME, session_id=session_id, now_dt=now
             )
@@ -93,10 +100,10 @@ def register(router):
             )
             started_at = as_utc_started(sess.get("started_at"))
             elapsed = max(0.0, (now - started_at).total_seconds())
-            max_dist = int(elapsed * GETAWAY_MAX_M_PER_SEC) + GETAWAY_DISTANCE_SLACK
-            max_coins = int(elapsed * GETAWAY_MAX_COINS_PER_SEC) + GETAWAY_COINS_SLACK
+            eff_elapsed = min(elapsed, GETAWAY_MAX_SCORING_SECONDS)
+            max_dist = int(eff_elapsed * GETAWAY_MAX_M_PER_SEC) + GETAWAY_DISTANCE_SLACK
+            max_coins = int(eff_elapsed * GETAWAY_MAX_COINS_PER_SEC) + GETAWAY_COINS_SLACK
             if distance > max_dist or coins_collected > max_coins:
-                await release_minigame_run(db, session_id)
                 raise HTTPException(
                     status_code=400,
                     detail="Run stats do not match server session timing.",
@@ -113,8 +120,6 @@ def register(router):
                 upsert=True,
             )
             if result.modified_count == 0 and result.upserted_id is None:
-                if not skip_session and session_id:
-                    await release_minigame_run(db, session_id)
                 raise HTTPException(
                     status_code=429,
                     detail=f"Run limit reached ({MAX_RUNS_PER_HOUR} per {RATE_LIMIT_PERIOD_HOURS}h). Try again later.",
