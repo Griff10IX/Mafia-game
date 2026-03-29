@@ -6,6 +6,20 @@ import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 
 const formatMoney = (n) => `$${Number(n ?? 0).toLocaleString()}`;
+
+/** Worst → best for combat (same as bullets-to-kill tier): non-loot by damage, loot-exclusive last. */
+function sortWeaponsByPower(list) {
+  if (!Array.isArray(list)) return [];
+  return [...list].sort((a, b) => {
+    const la = a.loot_exclusive ? 1 : 0;
+    const lb = b.loot_exclusive ? 1 : 0;
+    if (la !== lb) return la - lb;
+    const da = Number(a.damage) || 0;
+    const db = Number(b.damage) || 0;
+    if (da !== db) return da - db;
+    return String(a.id || '').localeCompare(String(b.id || ''));
+  });
+}
 const QUICK_BUYS = [100, 500, 1000, 2000, 3000];
 const ITEM_WIDTH = 32;
 
@@ -278,7 +292,7 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
           api.get('/weapons', { params: effectiveState ? { state: effectiveState } : {} }),
         ]);
         if (!cancelled && armourRes.data?.options) setArmourOptions(armourRes.data.options);
-        if (!cancelled && Array.isArray(weaponsRes.data)) setWeaponsList(weaponsRes.data);
+        if (!cancelled && Array.isArray(weaponsRes.data)) setWeaponsList(sortWeaponsByPower(weaponsRes.data));
       } catch {
         if (!cancelled) setArmourOptions([]);
         if (!cancelled) setWeaponsList([]);
@@ -356,7 +370,7 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
       refreshUser();
       fetchData();
       const weaponsRes = await api.get('/weapons', { params: effectiveState ? { state: effectiveState } : {} });
-      if (Array.isArray(weaponsRes.data)) setWeaponsList(weaponsRes.data);
+      if (Array.isArray(weaponsRes.data)) setWeaponsList(sortWeaponsByPower(weaponsRes.data));
     } catch (e) {
       const detail = e.response?.data?.detail;
       toast.error(Array.isArray(detail) ? detail[0]?.msg || 'Failed to buy weapon' : detail || 'Failed to buy weapon');
@@ -372,7 +386,7 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
       toast.success('Weapon equipped');
       refreshUser();
       const weaponsRes = await api.get('/weapons', { params: effectiveState ? { state: effectiveState } : {} });
-      if (Array.isArray(weaponsRes.data)) setWeaponsList(weaponsRes.data);
+      if (Array.isArray(weaponsRes.data)) setWeaponsList(sortWeaponsByPower(weaponsRes.data));
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to equip weapon');
     } finally {
@@ -387,7 +401,7 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
       toast.success('Weapon unequipped');
       refreshUser();
       const weaponsRes = await api.get('/weapons', { params: effectiveState ? { state: effectiveState } : {} });
-      if (Array.isArray(weaponsRes.data)) setWeaponsList(weaponsRes.data);
+      if (Array.isArray(weaponsRes.data)) setWeaponsList(sortWeaponsByPower(weaponsRes.data));
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to unequip weapon');
     } finally {

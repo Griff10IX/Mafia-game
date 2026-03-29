@@ -1302,7 +1302,7 @@ async def get_weapons(request: Request, current_user: dict = Depends(get_current
         payload, expires = _get_weapons_cache[uid]
         if now <= expires:
             return payload
-    weapons = await db.weapons.find({}, {"_id": 0}).to_list(100)
+    weapons = await db.weapons.find({}, {"_id": 0}).sort([("damage", 1), ("id", 1)]).to_list(100)
     weapons.sort(
         key=lambda w: (
             1 if w.get("loot_exclusive") else 0,
