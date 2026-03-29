@@ -1017,7 +1017,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             "crew_oc_cooldown_until": fam.get("crew_oc_cooldown_until"),
             "crew_oc_join_fee": int(fam.get("crew_oc_join_fee") or 0),
             "crew_oc_auto_accept": bool(fam.get("crew_oc_auto_accept")),
-            "crew_oc_forum_topic_id": fam.get("crew_oc_forum_topic_id"),
+            "crew_oc_forum_topic_id": fam.get("crew_oc_forum_topic_id") if fam.get("crew_oc_forum_topic_id") and await db.forum_topics.find_one({"id": fam["crew_oc_forum_topic_id"]}, {"_id": 1}) else None,
             "profile_text": (fam.get("profile_text") or "").strip() or None,
             "racket_income_bonus_percent": float((fam.get("racket_income_bonus_percent") or 0) or 0),
             "head_of_state": head_of_state,
@@ -1125,6 +1125,11 @@ async def families_lookup(tag: Optional[str] = None, id: Optional[str] = None, c
     crew_oc_join_fee = int(fam.get("crew_oc_join_fee") or 0)
     crew_oc_cooldown_until = fam.get("crew_oc_cooldown_until")
     crew_oc_forum_topic_id = fam.get("crew_oc_forum_topic_id")
+    if crew_oc_forum_topic_id:
+        topic_exists = await db.forum_topics.find_one({"id": crew_oc_forum_topic_id}, {"_id": 1})
+        if not topic_exists:
+            crew_oc_forum_topic_id = None
+            await db.families.update_one({"id": fam["id"]}, {"$unset": {"crew_oc_forum_topic_id": ""}})
     crew_oc_application = None
     app = await db.family_crew_oc_applications.find_one(
         {"family_id": fam["id"], "user_id": current_user["id"]},

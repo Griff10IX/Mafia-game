@@ -931,6 +931,10 @@ export default function Forum() {
   const [rollingId, setRollingId] = useState(null);
   const [configSaving, setConfigSaving] = useState(false);
   const [creatingGames, setCreatingGames] = useState(false);
+  const [rewardsConfig, setRewardsConfig] = useState(null);
+  const [rewardsConfigLoading, setRewardsConfigLoading] = useState(false);
+  const [rewardsConfigSaving, setRewardsConfigSaving] = useState(false);
+  const [rewardsEditing, setRewardsEditing] = useState(false);
   const [, setTick] = useState(0);
   const [activeDesignerComp, setActiveDesignerComp] = useState(null);
   const [myVoteEntryId, setMyVoteEntryId] = useState(null);
@@ -1176,6 +1180,29 @@ export default function Forum() {
     } finally {
       setCreatingGames(false);
     }
+  };
+
+  const fetchRewardsConfig = async () => {
+    setRewardsConfigLoading(true);
+    try {
+      const res = await api.get('/forum/entertainer/admin/rewards');
+      setRewardsConfig(res.data);
+    } catch { setRewardsConfig(null); }
+    finally { setRewardsConfigLoading(false); }
+  };
+
+  const handleSaveRewardsConfig = async () => {
+    if (!rewardsConfig) return;
+    setRewardsConfigSaving(true);
+    try {
+      const res = await api.patch('/forum/entertainer/admin/rewards', rewardsConfig);
+      setRewardsConfig(res.data);
+      toast.success(res.data?.message || 'Rewards config saved');
+      setRewardsEditing(false);
+      fetchEntertainerPrizes();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to save');
+    } finally { setRewardsConfigSaving(false); }
   };
 
   const handleRollGame = async (gameId) => {
@@ -1708,6 +1735,66 @@ export default function Forum() {
                   <span className="text-[10px] text-mutedForeground">
                     Next games due in: {formatTimeUntil(getSecondsUntilNextBatch(entertainerConfig.next_auto_create_at))}
                   </span>
+                )}
+              </div>
+              {/* Reward config editor */}
+              <div className="px-3 pb-3 border-t border-amber-500/20">
+                <div className="flex items-center gap-2 pt-2">
+                  <span className="text-[10px] font-heading text-amber-400 uppercase tracking-wider">Reward Config</span>
+                  {!rewardsEditing ? (
+                    <button type="button" onClick={() => { fetchRewardsConfig(); setRewardsEditing(true); }}
+                      disabled={rewardsConfigLoading}
+                      className="px-2 py-0.5 bg-amber-500/20 border border-amber-500/50 text-amber-400 text-[9px] font-heading font-bold uppercase rounded hover:bg-amber-500/30 disabled:opacity-50">
+                      {rewardsConfigLoading ? '...' : 'Edit Rewards'}
+                    </button>
+                  ) : (
+                    <button type="button" onClick={() => setRewardsEditing(false)}
+                      className="px-2 py-0.5 bg-zinc-700/50 border border-zinc-600/50 text-mutedForeground text-[9px] font-heading font-bold uppercase rounded hover:bg-zinc-700">
+                      Cancel
+                    </button>
+                  )}
+                </div>
+                {rewardsEditing && rewardsConfig && (
+                  <div className="mt-2 space-y-3">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div>
+                        <label className="text-[9px] text-mutedForeground font-heading block mb-0.5">Cash Min</label>
+                        <input type="number" min="0" value={rewardsConfig.cash_min ?? ''} onChange={(e) => setRewardsConfig(c => ({...c, cash_min: parseInt(e.target.value,10)||0}))}
+                          className="w-full px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono" />
+                      </div>
+                      <div>
+                        <label className="text-[9px] text-mutedForeground font-heading block mb-0.5">Cash Max</label>
+                        <input type="number" min="0" value={rewardsConfig.cash_max ?? ''} onChange={(e) => setRewardsConfig(c => ({...c, cash_max: parseInt(e.target.value,10)||0}))}
+                          className="w-full px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono" />
+                      </div>
+                      <div>
+                        <label className="text-[9px] text-mutedForeground font-heading block mb-0.5">Bullets Min</label>
+                        <input type="number" min="0" value={rewardsConfig.bullets_min ?? ''} onChange={(e) => setRewardsConfig(c => ({...c, bullets_min: parseInt(e.target.value,10)||0}))}
+                          className="w-full px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono" />
+                      </div>
+                      <div>
+                        <label className="text-[9px] text-mutedForeground font-heading block mb-0.5">Bullets Max</label>
+                        <input type="number" min="0" value={rewardsConfig.bullets_max ?? ''} onChange={(e) => setRewardsConfig(c => ({...c, bullets_max: parseInt(e.target.value,10)||0}))}
+                          className="w-full px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono" />
+                      </div>
+                    </div>
+                    <div>
+                      <label className="text-[9px] text-mutedForeground font-heading block mb-1">Reward Type Weights (higher = more likely)</label>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
+                        {rewardsConfig.reward_type_weights && Object.entries(rewardsConfig.reward_type_weights).map(([key, val]) => (
+                          <div key={key} className="flex items-center gap-1.5">
+                            <span className="text-[9px] text-mutedForeground font-mono min-w-[100px]">{key}</span>
+                            <input type="number" min="0" value={val} onChange={(e) => setRewardsConfig(c => ({...c, reward_type_weights: {...c.reward_type_weights, [key]: parseInt(e.target.value,10)||0}}))}
+                              className="w-16 px-1.5 py-0.5 rounded border border-input bg-transparent text-[10px] font-mono" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <button type="button" onClick={handleSaveRewardsConfig} disabled={rewardsConfigSaving}
+                      className="px-3 py-1 bg-amber-500/20 border border-amber-500/50 text-amber-400 text-[10px] font-heading font-bold uppercase rounded hover:bg-amber-500/30 disabled:opacity-50">
+                      {rewardsConfigSaving ? 'Saving...' : 'Save Rewards Config'}
+                    </button>
+                  </div>
                 )}
               </div>
             </div>

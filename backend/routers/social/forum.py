@@ -99,7 +99,13 @@ class TopicUpdate(BaseModel):
 
 
 async def _delete_topic_fully(topic_id: str) -> None:
-    """Delete a topic and all its comments and comment likes/dislikes."""
+    """Delete a topic and all its comments and comment likes/dislikes. Clears crew OC link if applicable."""
+    topic = await db.forum_topics.find_one({"id": topic_id}, {"_id": 0, "crew_oc_family_id": 1})
+    if topic and topic.get("crew_oc_family_id"):
+        await db.families.update_one(
+            {"id": topic["crew_oc_family_id"]},
+            {"$unset": {"crew_oc_forum_topic_id": ""}},
+        )
     comments = await db.forum_comments.find({"topic_id": topic_id}, {"_id": 0, "id": 1}).to_list(500)
     comment_ids = [c["id"] for c in comments]
     if comment_ids:

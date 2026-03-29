@@ -216,14 +216,13 @@ for _e in HANGMAN_WORD_DATA:
     _seen[_e["word"]] = _e
 HANGMAN_WORD_DATA = list(_seen.values())
 
-REWARD_TYPE_WEIGHTS = {
+DEFAULT_REWARD_TYPE_WEIGHTS = {
     "cash": 36,
     "bullets": 30,
     "cash_bullets": 17,
     "car_cash": 7,
     "car": 5,
     "two_cars": 2,
-    # Keep token rewards much rarer than core rewards
     "token": 1,
     "cash_token": 1,
     "bullets_token": 1,
@@ -231,11 +230,49 @@ REWARD_TYPE_WEIGHTS = {
     "all_tokens": 1,
 }
 
-def _random_cash():
-    return _rng.randint(100, 2000)
+ENTERTAINER_REWARDS_CONFIG_KEY = "entertainer_rewards_config"
 
-def _random_bullets():
-    return _rng.randint(1, 25)
+_cached_rewards_config = None
+_cached_rewards_config_at = 0
+
+async def _get_rewards_config() -> dict:
+    """Load rewards config from DB (cached 60s). Falls back to hardcoded defaults."""
+    import time
+    global _cached_rewards_config, _cached_rewards_config_at
+    now = time.monotonic()
+    if _cached_rewards_config and (now - _cached_rewards_config_at) < 60:
+        return _cached_rewards_config
+    doc = await db.game_config.find_one({"key": ENTERTAINER_REWARDS_CONFIG_KEY}, {"_id": 0})
+    if doc:
+        cfg = {
+            "cash_min": int(doc.get("cash_min") or 100),
+            "cash_max": int(doc.get("cash_max") or 2000),
+            "bullets_min": int(doc.get("bullets_min") or 1),
+            "bullets_max": int(doc.get("bullets_max") or 25),
+            "reward_type_weights": doc.get("reward_type_weights") or dict(DEFAULT_REWARD_TYPE_WEIGHTS),
+        }
+    else:
+        cfg = {
+            "cash_min": 100,
+            "cash_max": 2000,
+            "bullets_min": 1,
+            "bullets_max": 25,
+            "reward_type_weights": dict(DEFAULT_REWARD_TYPE_WEIGHTS),
+        }
+    _cached_rewards_config = cfg
+    _cached_rewards_config_at = now
+    return cfg
+
+def _invalidate_rewards_config_cache():
+    global _cached_rewards_config, _cached_rewards_config_at
+    _cached_rewards_config = None
+    _cached_rewards_config_at = 0
+
+def _random_cash_range(cfg: dict):
+    return _rng.randint(cfg["cash_min"], max(cfg["cash_min"], cfg["cash_max"]))
+
+def _random_bullets_range(cfg: dict):
+    return _rng.randint(cfg["bullets_min"], max(cfg["bullets_min"], cfg["bullets_max"]))
 
 
 def _token_label(token_type: str) -> str:
@@ -255,9 +292,11 @@ def _token_label(token_type: str) -> str:
 
 async def _give_random_reward(user_id: str) -> dict:
     """Apply a random reward to user. Returns description for result."""
+    rcfg = await _get_rewards_config()
+    weights = rcfg["reward_type_weights"]
     reward_type = _rng.choices(
-        population=list(REWARD_TYPE_WEIGHTS.keys()),
-        weights=list(REWARD_TYPE_WEIGHTS.values()),
+        population=list(weights.keys()),
+        weights=list(weights.values()),
         k=1,
     )[0]
     desc = {"reward_type": reward_type, "money": 0, "bullets": 0, "cars": [], "tokens": {}}
@@ -278,15 +317,15 @@ async def _give_random_reward(user_id: str) -> dict:
         desc["tokens"][token_type] = int(desc["tokens"].get(token_type, 0)) + int(amount)
 
     if reward_type == "cash":
-        amt = _random_cash()
+        amt = _random_cash_range(rcfg)
         updates["money"] = amt
         desc["money"] = amt
     elif reward_type == "bullets":
-        amt = _random_bullets()
+        amt = _random_bullets_range(rcfg)
         updates["bullets"] = amt
         desc["bullets"] = amt
     elif reward_type == "cash_bullets":
-        c, b = _random_cash(), _random_bullets()
+        c, b = _random_cash_range(rcfg), _random_bullets_range(rcfg)
         updates["money"], updates["bullets"] = c, b
         desc["money"], desc["bullets"] = c, b
     elif reward_type == "token":
@@ -295,17 +334,17 @@ async def _give_random_reward(user_id: str) -> dict:
         for token_type in TOKEN_TYPES:
             _add_token(token_type, 1)
     elif reward_type == "cash_token":
-        c = _random_cash()
+        c = _random_cash_range(rcfg)
         updates["money"] = c
         desc["money"] = c
         _add_token(_rng.choice(list(TOKEN_TYPES)), 1)
     elif reward_type == "bullets_token":
-        b = _random_bullets()
+        b = _random_bullets_range(rcfg)
         updates["bullets"] = b
         desc["bullets"] = b
         _add_token(_rng.choice(list(TOKEN_TYPES)), 1)
     elif reward_type == "cash_bullets_token":
-        c, b = _random_cash(), _random_bullets()
+        c, b = _random_cash_range(rcfg), _random_bullets_range(rcfg)
         updates["money"], updates["bullets"] = c, b
         desc["money"], desc["bullets"] = c, b
         _add_token(_rng.choice(list(TOKEN_TYPES)), 1)
@@ -337,7 +376,7 @@ async def _give_random_reward(user_id: str) -> dict:
                     })
                     desc["cars"].append(car.get("name", car_id))
     elif reward_type == "car_cash":
-        c = _random_cash()
+        c = _random_cash_range(rcfg)
         updates["money"] = c
         desc["money"] = c
         if E_GAME_CAR_IDS:
@@ -672,6 +711,7 @@ async def settle_open_games_now():
 
 async def get_prizes(current_user: dict = Depends(get_current_user)):
     """Return possible prizes for E-Games (cash/bullets/tokens ranges and cars)."""
+    rcfg = await _get_rewards_config()
     prize_cars = [
         {"name": c.get("name", c["id"]), "rarity": c.get("rarity", "common")}
         for c in CARS
@@ -679,8 +719,8 @@ async def get_prizes(current_user: dict = Depends(get_current_user)):
     ]
     token_labels = [{"token_type": t, "label": _token_label(t)} for t in TOKEN_TYPES]
     return {
-        "cash": {"min": 100, "max": 2000},
-        "bullets": {"min": 1, "max": 25},
+        "cash": {"min": rcfg["cash_min"], "max": rcfg["cash_max"]},
+        "bullets": {"min": rcfg["bullets_min"], "max": rcfg["bullets_max"]},
         "tokens": {"min": 1, "max": len(TOKEN_TYPES), "types": token_labels},
         "cars": prize_cars,
     }
@@ -943,6 +983,68 @@ async def admin_roll_game(game_id: str, current_user: dict = Depends(get_current
     return {"message": "Game rolled", "game": updated}
 
 
+# ---------- Admin: entertainer reward config ----------
+async def get_rewards_config_admin(current_user: dict = Depends(get_current_user)):
+    """Admin only: get current E-Game reward configuration."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    rcfg = await _get_rewards_config()
+    return rcfg
+
+
+class EntertainerRewardsConfigUpdate(BaseModel):
+    cash_min: Optional[int] = None
+    cash_max: Optional[int] = None
+    bullets_min: Optional[int] = None
+    bullets_max: Optional[int] = None
+    reward_type_weights: Optional[dict] = None
+
+
+async def update_rewards_config_admin(
+    body: EntertainerRewardsConfigUpdate,
+    current_user: dict = Depends(get_current_user),
+):
+    """Admin only: update E-Game reward ranges and/or type weights."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    current = await _get_rewards_config()
+    update = {}
+    if body.cash_min is not None:
+        if body.cash_min < 0:
+            raise HTTPException(status_code=400, detail="cash_min must be >= 0")
+        update["cash_min"] = body.cash_min
+    if body.cash_max is not None:
+        if body.cash_max < (body.cash_min if body.cash_min is not None else current["cash_min"]):
+            raise HTTPException(status_code=400, detail="cash_max must be >= cash_min")
+        update["cash_max"] = body.cash_max
+    if body.bullets_min is not None:
+        if body.bullets_min < 0:
+            raise HTTPException(status_code=400, detail="bullets_min must be >= 0")
+        update["bullets_min"] = body.bullets_min
+    if body.bullets_max is not None:
+        if body.bullets_max < (body.bullets_min if body.bullets_min is not None else current["bullets_min"]):
+            raise HTTPException(status_code=400, detail="bullets_max must be >= bullets_min")
+        update["bullets_max"] = body.bullets_max
+    if body.reward_type_weights is not None:
+        valid_keys = set(DEFAULT_REWARD_TYPE_WEIGHTS.keys())
+        for k, v in body.reward_type_weights.items():
+            if k not in valid_keys:
+                raise HTTPException(status_code=400, detail=f"Unknown reward type: {k}")
+            if not isinstance(v, (int, float)) or v < 0:
+                raise HTTPException(status_code=400, detail=f"Weight for '{k}' must be >= 0")
+        update["reward_type_weights"] = {k: int(v) for k, v in body.reward_type_weights.items()}
+    if not update:
+        raise HTTPException(status_code=400, detail="No changes provided")
+    await db.game_config.update_one(
+        {"key": ENTERTAINER_REWARDS_CONFIG_KEY},
+        {"$set": {**update, "key": ENTERTAINER_REWARDS_CONFIG_KEY}},
+        upsert=True,
+    )
+    _invalidate_rewards_config_cache()
+    new_cfg = await _get_rewards_config()
+    return {"message": "Rewards config updated", **new_cfg}
+
+
 # ---------- Admin: entertainer config (auto-create on/off) ----------
 async def get_entertainer_config(current_user: dict = Depends(get_current_user)):
     """Get entertainer config (auto_create_enabled, last/next run). Anyone can read."""
@@ -1097,3 +1199,5 @@ def register(router):
     router.add_api_route("/forum/entertainer/admin/config", get_entertainer_config, methods=["GET"])
     router.add_api_route("/forum/entertainer/admin/config", update_entertainer_config, methods=["PATCH"])
     router.add_api_route("/forum/entertainer/admin/auto-create", admin_auto_create_now, methods=["POST"])
+    router.add_api_route("/forum/entertainer/admin/rewards", get_rewards_config_admin, methods=["GET"])
+    router.add_api_route("/forum/entertainer/admin/rewards", update_rewards_config_admin, methods=["PATCH"])
