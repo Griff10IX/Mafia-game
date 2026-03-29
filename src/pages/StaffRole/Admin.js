@@ -555,7 +555,7 @@ export default function Admin() {
   const [manualReferrer, setManualReferrer] = useState('');
   const [manualForce, setManualForce] = useState(false);
   const [manualGrantReferee, setManualGrantReferee] = useState(true);
-  const [manualReferrerRespect, setManualReferrerRespect] = useState('250');
+  const [manualReferrerRespect, setManualReferrerRespect] = useState('500');
   const [manualLoading, setManualLoading] = useState(false);
   const [manualResult, setManualResult] = useState(null);
   const [loginPageVisitors, setLoginPageVisitors] = useState(null);
@@ -3112,7 +3112,7 @@ export default function Admin() {
     setManualReferrer('');
     setManualForce(false);
     setManualGrantReferee(true);
-    setManualReferrerRespect('250');
+    setManualReferrerRespect('500');
     setManualResult(null);
   };
 
@@ -4945,7 +4945,7 @@ export default function Admin() {
             </div>
             <div className="border-t border-primary/20 pt-3 space-y-2">
               <p className="text-[10px] text-mutedForeground font-heading">
-                <span className="text-foreground font-bold">Manual link:</span> set who was referred by whom. Referee gets signup perks if they never received <span className="font-mono text-foreground">referral_tokens</span>. Referrer gets a one-time respect bonus only when the referee previously had no referrer (not on force-replace).
+                <span className="text-foreground font-bold">Manual link:</span> set who was referred by whom. With bonuses on, the referee is topped up to the normal referred package (respect + each token type + premium bar; <span className="font-mono text-foreground">referral_tokens</span> synced). Referrer gets a one-time welcome respect (default 500, same as referee referral respect) only when the referee previously had no referrer (not on force-replace).
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <input
@@ -4970,7 +4970,7 @@ export default function Admin() {
                   onChange={(e) => setManualGrantReferee(e.target.checked)}
                   className="rounded border border-input"
                 />
-                Grant referee signup bonuses (respect + tokens) if missing
+                Grant referee signup bonuses (top-up to full referred package)
               </label>
               <label className="flex items-center gap-2 text-[10px] font-heading text-mutedForeground cursor-pointer">
                 <input
@@ -4982,7 +4982,7 @@ export default function Admin() {
                 Force replace existing referrer
               </label>
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-[10px] text-mutedForeground font-heading">Referrer welcome respect (0–5000, 0 = off):</span>
+                <span className="text-[10px] text-mutedForeground font-heading">Referrer welcome respect (default 500; 0–5000, 0 = off):</span>
                 <input
                   type="number"
                   min={0}

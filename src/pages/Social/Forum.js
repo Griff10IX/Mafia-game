@@ -1222,9 +1222,16 @@ export default function Forum() {
           : Array.isArray(det)
             ? det.map((e) => e?.msg || e?.message || JSON.stringify(e)).join('; ')
             : det && typeof det === 'object'
-              ? det.msg || det.message || 'Failed to save'
+              ? det.msg || det.message || JSON.stringify(det)
               : null;
-      toast.error(msg || 'Failed to save');
+      const status = err.response?.status;
+      const fallback =
+        status === 403
+          ? 'Admin only — sign in with an admin account'
+          : status === 401
+            ? 'Session expired — sign in again'
+            : err.message || 'Failed to save';
+      toast.error(msg || fallback);
     } finally { setRewardsConfigSaving(false); }
   };
 
@@ -1729,6 +1736,10 @@ export default function Forum() {
               <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
               <div className="px-3 py-2.5 bg-amber-500/10 border-b border-amber-500/20">
                 <span className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-[0.15em]">🛠️ E-Games Admin</span>
+                <p className="text-[9px] text-mutedForeground mt-1.5 font-heading leading-snug">
+                  Referral report / prereg heal / manual links:{' '}
+                  <Link to="/staffrole/admin#admin-players" className="text-primary hover:underline">Admin Tools → Player Management → Referrals & prereg heal</Link>
+                </p>
               </div>
               <div className="p-3 flex flex-wrap items-center gap-3">
                 <label className="flex items-center gap-2 cursor-pointer">

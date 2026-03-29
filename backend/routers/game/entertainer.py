@@ -1029,20 +1029,30 @@ async def update_rewards_config_admin(
             raise HTTPException(status_code=400, detail="cash_min must be >= 0")
         update["cash_min"] = body.cash_min
     if body.cash_max is not None:
-        if body.cash_max < (body.cash_min if body.cash_min is not None else current["cash_min"]):
-            raise HTTPException(status_code=400, detail="cash_max must be >= cash_min")
+        if body.cash_max < 0:
+            raise HTTPException(status_code=400, detail="cash_max must be >= 0")
         update["cash_max"] = body.cash_max
     if body.bullets_min is not None:
         if body.bullets_min < 0:
             raise HTTPException(status_code=400, detail="bullets_min must be >= 0")
         update["bullets_min"] = body.bullets_min
     if body.bullets_max is not None:
-        if body.bullets_max < (body.bullets_min if body.bullets_min is not None else current["bullets_min"]):
-            raise HTTPException(status_code=400, detail="bullets_max must be >= bullets_min")
+        if body.bullets_max < 0:
+            raise HTTPException(status_code=400, detail="bullets_max must be >= 0")
         update["bullets_max"] = body.bullets_max
+
+    cm = update.get("cash_min", current["cash_min"])
+    cx = update.get("cash_max", current["cash_max"])
+    if cx < cm:
+        raise HTTPException(status_code=400, detail="cash_max must be >= cash_min")
+    bm = update.get("bullets_min", current["bullets_min"])
+    bx = update.get("bullets_max", current["bullets_max"])
+    if bx < bm:
+        raise HTTPException(status_code=400, detail="bullets_max must be >= bullets_min")
+
     if body.reward_type_weights is not None:
         valid_keys = set(DEFAULT_REWARD_TYPE_WEIGHTS.keys())
-        normalized_weights = {}
+        merged_weights = dict(current["reward_type_weights"])
         for k, v in body.reward_type_weights.items():
             if k not in valid_keys:
                 raise HTTPException(status_code=400, detail=f"Unknown reward type: {k}")
@@ -1054,8 +1064,11 @@ async def update_rewards_config_admin(
                 raise HTTPException(status_code=400, detail=f"Weight for '{k}' must be a non-negative number")
             if w < 0:
                 raise HTTPException(status_code=400, detail=f"Weight for '{k}' must be >= 0")
-            normalized_weights[k] = w
-        update["reward_type_weights"] = normalized_weights
+            merged_weights[k] = w
+        total_w = sum(int(x) for x in merged_weights.values())
+        if total_w <= 0:
+            raise HTTPException(status_code=400, detail="Sum of reward type weights must be greater than 0")
+        update["reward_type_weights"] = merged_weights
     if not update:
         raise HTTPException(status_code=400, detail="No changes provided")
     await db.game_config.update_one(

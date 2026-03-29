@@ -95,7 +95,7 @@ class ManualReferralAssignRequest(BaseModel):
     referrer_username: str
     force: bool = False
     grant_referee_signup_bonuses: bool = True
-    grant_referrer_welcome_respect: int = Field(250, ge=0, le=5000)
+    grant_referrer_welcome_respect: int = Field(500, ge=0, le=5000)
 
 
 class RedeemCodeRewards(BaseModel):
@@ -2017,7 +2017,7 @@ def register(router):
         body: ManualReferralAssignRequest,
         current_user: dict = Depends(get_current_user),
     ):
-        """Link a referee account to a referrer (referred_by). Referee signup perks if they never got referral_tokens; referrer welcome respect when first link only."""
+        """Link a referee account to a referrer (referred_by). Referee gets token/respect top-up to match normal referral; referrer welcome respect (default 500) when first link only."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         try:

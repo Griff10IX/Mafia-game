@@ -122,21 +122,23 @@ REFERRED_USER_TOKEN_COUNT_FIELDS = [
 ]
 
 
-def _referral_signup_bonus_update(now_iso: str, *, prereg_heal: bool = True) -> Tuple[dict, dict]:
-    """($set fields excluding referred_by, $inc) for referred-user signup perks."""
-    referral_tokens = {f: REFERRED_USER_TOKENS_PER_TYPE for f in REFERRED_USER_TOKEN_COUNT_FIELDS}
-    inc: dict = {"respect_points": REFERRED_USER_RESPECT}
+def _referral_referee_topup_increment(referee: dict) -> Tuple[Dict[str, int], Dict[str, int]]:
+    """Top-up referee to match normal referred signup: each token type + referral_tokens record, + respect if no prior referral grant recorded.
+    Returns ($inc dict for user fields, full referral_tokens dict for $set)."""
+    rt = referee.get("referral_tokens")
+    rt = dict(rt) if isinstance(rt, dict) else {}
+    inc: Dict[str, int] = {}
+    new_rt: Dict[str, int] = {}
     for f in REFERRED_USER_TOKEN_COUNT_FIELDS:
-        inc[f] = REFERRED_USER_TOKENS_PER_TYPE
-    set_fields: Dict[str, Any] = {
-        "premium_rank_bar": True,
-        "referral_tokens": referral_tokens,
-    }
-    if prereg_heal:
-        set_fields["referral_prereg_heal_at"] = now_iso
-    else:
-        set_fields["referral_manual_bonus_at"] = now_iso
-    return set_fields, inc
+        need = REFERRED_USER_TOKENS_PER_TYPE
+        got = int(rt[f]) if f in rt and rt[f] is not None else 0
+        if got < need:
+            inc[f] = inc.get(f, 0) + (need - got)
+        new_rt[f] = max(got, need)
+    had_any_referral_grant = any(int(rt.get(x, 0) or 0) > 0 for x in REFERRED_USER_TOKEN_COUNT_FIELDS)
+    if not had_any_referral_grant:
+        inc["respect_points"] = inc.get("respect_points", 0) + REFERRED_USER_RESPECT
+    return inc, new_rt
 
 
 async def try_heal_referral_from_prereg(db, user: dict, *, dry_run: bool = False) -> Optional[Dict[str, Any]]:
@@ -172,7 +174,6 @@ async def try_heal_referral_from_prereg(db, user: dict, *, dry_run: bool = False
         return None
 
     now_iso = datetime.now(timezone.utc).isoformat()
-    set_bonus, inc_bonus = _referral_signup_bonus_update(now_iso)
 
     filt = {
         "id": user_id,
@@ -196,11 +197,19 @@ async def try_heal_referral_from_prereg(db, user: dict, *, dry_run: bool = False
             return None
         return detail
 
+    u_rt = await db.users.find_one({"id": user_id}, {"_id": 0, "referral_tokens": 1})
+    merge_user = {**user, **(u_rt or {})}
+    inc_bonus, new_rt = _referral_referee_topup_increment(merge_user)
+    set_bonus = {
+        "premium_rank_bar": True,
+        "referral_tokens": new_rt,
+        "referral_prereg_heal_at": now_iso,
+    }
     set_fields = {"referred_by": referrer["id"], **set_bonus}
-    res = await db.users.update_one(
-        filt,
-        {"$set": set_fields, "$inc": inc_bonus},
-    )
+    update_op: Dict[str, Any] = {"$set": set_fields}
+    if inc_bonus:
+        update_op["$inc"] = inc_bonus
+    res = await db.users.update_one(filt, update_op)
     if res.modified_count:
         logger.info(
             "referral prereg heal: user_id=%s referrer_id=%s email=%s",
@@ -259,7 +268,6 @@ async def apply_manual_referral_link(
         raise ValueError("Referee already has a referrer; pass force=true to replace")
 
     now_iso = datetime.now(timezone.utc).isoformat()
-    has_tokens = bool(referee.get("referral_tokens"))
 
     set_doc: Dict[str, Any] = {
         "referred_by": zid,
@@ -268,15 +276,18 @@ async def apply_manual_referral_link(
     inc_doc: Dict[str, Any] = {}
     referee_bonuses_applied = False
 
-    if grant_referee_signup_bonuses and not has_tokens:
-        sb, ib = _referral_signup_bonus_update(now_iso, prereg_heal=False)
-        set_doc.update(sb)
-        inc_doc.update(ib)
-        referee_bonuses_applied = True
-    elif grant_referee_signup_bonuses and has_tokens:
+    if grant_referee_signup_bonuses:
+        inc_top, new_rt = _referral_referee_topup_increment(referee)
         set_doc["premium_rank_bar"] = True
+        set_doc["referral_tokens"] = new_rt
+        set_doc["referral_manual_bonus_at"] = now_iso
+        inc_doc.update(inc_top)
+        referee_bonuses_applied = grant_referee_signup_bonuses
 
-    await db.users.update_one({"id": rid}, {"$set": set_doc, "$inc": inc_doc} if inc_doc else {"$set": set_doc})
+    update_referee: Dict[str, Any] = {"$set": set_doc}
+    if inc_doc:
+        update_referee["$inc"] = inc_doc
+    await db.users.update_one({"id": rid}, update_referee)
 
     referrer_bonus_applied = False
     if (
