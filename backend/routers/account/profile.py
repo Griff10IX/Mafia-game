@@ -394,12 +394,13 @@ def register(router):
 
         _prestige_mult = float(user.get("prestige_rank_multiplier") or 1.0)
         rank_id, rank_name = get_rank_info(user.get("rank_points", 0), _prestige_mult)
+        _game_rank_name = rank_name
         if user.get("email") in ADMIN_EMAILS:
             rank_name = "Admin"
         elif _is_moderator(user):
             rank_name = "Moderator"
         elif user.get("is_help_desk_operator"):
-            rank_name = "Help Desk Operator"
+            rank_name = f"(HDO) {_game_rank_name}"
         _prestige_level = int(user.get("prestige_level") or 0)
         _prestige_name = PRESTIGE_CONFIGS.get(_prestige_level, {}).get("name", "") if _prestige_level > 0 else ""
         wealth_id, wealth_name = get_wealth_rank(user.get("money", 0))
@@ -616,6 +617,7 @@ def register(router):
             "username": user["username"],
             "rank": rank_id,
             "rank_name": rank_name,
+            "is_help_desk_operator": bool(user.get("is_help_desk_operator")),
             "prestige_level": _prestige_level,
             "prestige_name": _prestige_name,
             "wealth_rank": wealth_id,
@@ -780,7 +782,7 @@ def register(router):
         elif user.get("is_moderator"):
             rank_name = "Moderator"
         elif user.get("is_help_desk_operator"):
-            rank_name = "Help Desk Operator"
+            rank_name = f"(HDO) {rank_name}"
         family_name = None
         if user.get("family_id"):
             try:

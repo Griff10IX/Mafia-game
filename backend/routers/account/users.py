@@ -65,7 +65,7 @@ def register(router):
             elif is_mod:
                 rank_name = "Moderator"
             elif is_hdo:
-                rank_name = "Help Desk Operator"
+                rank_name = f"(HDO) {rank_name}"
             _prestige_level = int(user.get("prestige_level") or 0)
             online_color = None
             if is_admin:

@@ -230,7 +230,9 @@ const ProfileInfoCard = ({
 }) => {
   const isAdminProfile = profile.rank_name === 'Admin';
   const isModeratorProfile = profile.rank_name === 'Moderator';
-  const isHdoProfile = profile.rank_name === 'Help Desk Operator';
+  const isHdoProfile = Boolean(profile.is_help_desk_operator)
+    || (typeof profile.rank_name === 'string' && profile.rank_name.startsWith('(HDO)'))
+    || profile.rank_name === 'Help Desk Operator';
   const isStaffProfile = isAdminProfile || isModeratorProfile || isHdoProfile;
   const adminColor = profile.admin_online_color ?? adminOnlineColor ?? '#a78bfa';
   const modColor = profile.mod_online_color ?? '#1e3a5f';

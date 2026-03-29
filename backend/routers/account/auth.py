@@ -1656,11 +1656,15 @@ def register(router):
                 from routers.account.auto_rank import wake_auto_rank_if_idle
                 await wake_auto_rank_if_idle(db, current_user["id"])
 
-            rank_id, rank_name = get_rank_info(_safe_int(current_user.get("rank_points"), 0))
+            _rp = _safe_int(current_user.get("rank_points"), 0)
+            _prestige_m = float(current_user.get("prestige_rank_multiplier") or 1.0)
+            rank_id, rank_name = get_rank_info(_rp, _prestige_m)
             if current_user.get("email") in ADMIN_EMAILS:
                 rank_name = "Admin"
             elif _is_moderator(current_user):
                 rank_name = "Moderator"
+            elif current_user.get("is_help_desk_operator"):
+                rank_name = f"(HDO) {rank_name}"
             money_val = _safe_float(current_user.get("money"), 0.0)
             wealth_id, wealth_name = get_wealth_rank(money_val)
             wealth_range = get_wealth_rank_range(money_val)
