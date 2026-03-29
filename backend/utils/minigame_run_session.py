@@ -233,17 +233,13 @@ async def enforce_numeric_score_for_claimed_session(
     buffer: int,
     max_elapsed_seconds: Optional[float] = None,
 ) -> None:
-    """Reject if client score exceeds physics bound; session stays consumed (no release)."""
-    max_allowed = max_numeric_score_for_session(
-        sess,
-        now_dt=now_dt,
-        max_score_cap=max_score_cap,
-        rate_per_second=rate_per_second,
-        buffer=buffer,
-        max_elapsed_seconds=max_elapsed_seconds,
-    )
-    if score > max_allowed:
-        raise HTTPException(status_code=400, detail="Score does not match server run timing.")
+    """Reject only absurd scores vs per-game cap. Session stays consumed on failure (no release).
+
+    Elapsed-time / rate-based bounds are not applied (Turnstile + run session cover bot abuse).
+    rate_per_second, buffer, max_elapsed_seconds are kept for call-site compatibility.
+    """
+    if score > max_score_cap:
+        raise HTTPException(status_code=400, detail="Score outside allowed range.")
 
 
 async def enforce_client_duration_for_claimed_session(
@@ -257,25 +253,12 @@ async def enforce_client_duration_for_claimed_session(
     slack_seconds: int = 45,
     symmetric: bool = False,
 ) -> None:
-    """Validate client-reported duration vs server session; session stays consumed on failure.
+    """Basic duration sanity only; session stays consumed on failure.
 
-    If symmetric is True, require |client_duration - wall_elapsed| <= slack (stops claiming a
-    30s run after 120s of real time). If False, only upper-bound checks (legacy behaviour).
+    Wall-clock comparison vs server session is not applied (Turnstile + run session).
+    slack_seconds / symmetric are kept for call-site compatibility.
     """
     if client_duration_seconds < 1:
         raise HTTPException(status_code=400, detail="Invalid play duration.")
     if client_duration_seconds > max_duration_cap:
         raise HTTPException(status_code=400, detail="Play duration too long.")
-    started = as_utc_started(sess.get("started_at"))
-    elapsed = max(0.0, (now_dt - started).total_seconds())
-    if symmetric:
-        if abs(float(client_duration_seconds) - elapsed) > float(slack_seconds):
-            raise HTTPException(
-                status_code=400,
-                detail="Reported play time does not match server session.",
-            )
-    elif client_duration_seconds > elapsed + slack_seconds:
-        raise HTTPException(
-            status_code=400,
-            detail="Reported play time does not match server session.",
-        )

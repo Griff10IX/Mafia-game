@@ -13,7 +13,6 @@ from utils.minigame_run_session import (
     as_utc_started,
     claim_minigame_run_session,
     get_plays_left,
-    max_numeric_score_for_session,
     start_minigame_run,
     utc_rate_limit_window,
     RATE_LIMIT_PERIOD_HOURS,
@@ -40,31 +39,10 @@ CASH_PER_GATE_AFTER_50 = 500  # 75% reduction
 RESPECT_PER_GATE_AFTER_50 = 2
 
 # Reject only absurd client-reported scores. Per-run cash/respect are still capped by _get_reward.
-# Anti-cheat is enforce_numeric_score_for_claimed_session (elapsed × max gates/sec + buffer).
 MAX_SCORE_SANITY = 100_000
 MAX_PLAYS_PER_HOUR = 10
 
-# Pipe-rate caps per speed×difficulty combination (real gameplay caps ~0.5-0.88 gates/sec).
-# { speed_id: { difficulty_id: max_gates_per_second } }
-_SPEED_MULTS = {"slow": 0.7, "normal": 1.0, "fast": 1.4}
-_DIFF_SPEED_MULTS = {"easy": 0.85, "normal": 1.0, "hard": 1.25, "insane": 1.65}
-_BASE_SPAWN_TICKS = 95
-_TICK_MS = 1000 / 60
-
-def _max_rate_for_mode(speed: str, difficulty: str) -> float:
-    """Max plausible gates/sec for a given speed + difficulty, with 80% headroom."""
-    sm = _SPEED_MULTS.get(speed, 1.0)
-    spawn_ticks = max(40, round(_BASE_SPAWN_TICKS / sm))
-    spawn_sec = spawn_ticks * _TICK_MS / 1000.0
-    real_rate = 1.0 / spawn_sec
-    return real_rate * 1.35  # modest buffer; score is still capped by session timing
-
-# Fallback if mode lookup fails
-MAX_GATES_PER_SECOND = 1.5
-SCORE_TIME_BUFFER = 4
 MIN_PLAY_SECONDS = 3
-# Cap wall-clock contribution to score bound (anti-AFK); ~2 min of flappy-scale play
-GAUNTLET_MAX_SCORING_SECONDS = 120.0
 
 GAUNTLET_GAME_SLUG = "gauntlet"
 
@@ -217,17 +195,6 @@ def register(router):
         if claim_theme != sess_theme or claim_speed != sess_speed or claim_diff != sess_diff:
             raise HTTPException(status_code=400, detail="Theme/speed/difficulty mismatch with session.")
 
-        rate = _max_rate_for_mode(sess_speed, sess_diff)
-        max_allowed = max_numeric_score_for_session(
-            sess,
-            now_dt=now_dt,
-            max_score_cap=MAX_SCORE_SANITY,
-            rate_per_second=rate,
-            buffer=SCORE_TIME_BUFFER,
-            max_elapsed_seconds=GAUNTLET_MAX_SCORING_SECONDS,
-        )
-        if raw_score > max_allowed:
-            raise HTTPException(status_code=400, detail="Score does not match server run timing.")
         score = raw_score
 
         result = await db.user_meta.update_one(
