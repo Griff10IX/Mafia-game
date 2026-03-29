@@ -97,13 +97,38 @@ api.interceptors.response.use(
       return Promise.reject(error);
     }
 
-    // ── 429 Rate Limit → cooldown (NEVER log out) ──
+    // ── 429 Rate Limit → global cooldown overlay (NEVER log out) ──
+    // Some endpoints (e.g. boxing fight throttle) return 429 with suppress_global_cooldown so the game rule still applies but we don't show the app-wide "clicking too fast" modal.
     if (error.response?.status === 429) {
       const data = error.response.data || {};
-      const seconds = data.cooldown_seconds || 15;
-      _startCooldown(seconds);
-      const detail = typeof data.detail === 'string' ? data.detail : `Rate limited. Please wait ${seconds} seconds.`;
-      error.response.data = { ...data, detail, is_cooldown: true, cooldown_seconds: seconds };
+      const rawDetail = data.detail;
+      let suppressOverlay = false;
+      let detailStr;
+      let seconds = data.cooldown_seconds != null ? Number(data.cooldown_seconds) : 15;
+      if (seconds < 1 || Number.isNaN(seconds)) seconds = 15;
+      if (rawDetail && typeof rawDetail === 'object' && !Array.isArray(rawDetail)) {
+        suppressOverlay = Boolean(rawDetail.suppress_global_cooldown);
+        detailStr = typeof rawDetail.message === 'string'
+          ? rawDetail.message
+          : `Rate limited. Please wait ${seconds} seconds.`;
+        if (rawDetail.cooldown_seconds != null) {
+          const s = Number(rawDetail.cooldown_seconds);
+          if (s >= 1 && !Number.isNaN(s)) seconds = s;
+        }
+      } else if (typeof rawDetail === 'string') {
+        detailStr = rawDetail;
+      } else {
+        detailStr = `Rate limited. Please wait ${seconds} seconds.`;
+      }
+      if (!suppressOverlay) {
+        _startCooldown(seconds);
+      }
+      error.response.data = {
+        ...data,
+        detail: detailStr,
+        is_cooldown: !suppressOverlay,
+        cooldown_seconds: seconds,
+      };
       return Promise.reject(error);
     }
 

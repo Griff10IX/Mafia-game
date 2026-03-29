@@ -9,12 +9,14 @@ from pydantic import BaseModel
 
 from server import db, get_current_user_verified, get_current_user, log_gambling, _get_staff_user_ids
 from utils.minigame_run_session import utc_rate_limit_window, RATE_LIMIT_PERIOD_HOURS
-import middleware.security as _security_mod
 
 
-def _boxing_enforce_fight_throttles() -> bool:
-    """Hourly caps + per-fight cooldown only when global click rate limits are on (admin toggle)."""
-    return bool(getattr(_security_mod, "GLOBAL_RATE_LIMITS_ENABLED", False))
+def _boxing_fight_throttle_429(message: str, *, cooldown_seconds: Optional[int] = None) -> HTTPException:
+    """429 with flag so the client skips the global 'clicking too fast' overlay (game cooldown only)."""
+    body: Dict[str, Any] = {"message": message, "suppress_global_cooldown": True}
+    if cooldown_seconds is not None:
+        body["cooldown_seconds"] = int(cooldown_seconds)
+    return HTTPException(status_code=429, detail=body)
 
 
 def _now_iso() -> str:
@@ -466,58 +468,58 @@ async def boxing_fight_npc(payload: FightNpcRequest, current_user: dict = Depend
 
     await _ensure_profile(current_user["id"])
     now = datetime.now(timezone.utc)
-    enforce_throttles = _boxing_enforce_fight_throttles()
-    hour_start_iso = ""
-    if enforce_throttles:
-        npc_ok, npc_remaining, hour_start_iso = await _claim_hourly_fight_slot(
-            user_id=current_user["id"],
-            start_field="npc_fight_hour_start",
-            count_field="npc_fight_hour_count",
-            max_fights=NPC_MAX_FIGHTS_PER_HOUR,
-            now_dt=now,
+    npc_ok, npc_remaining, hour_start_iso = await _claim_hourly_fight_slot(
+        user_id=current_user["id"],
+        start_field="npc_fight_hour_start",
+        count_field="npc_fight_hour_count",
+        max_fights=NPC_MAX_FIGHTS_PER_HOUR,
+        now_dt=now,
+    )
+    if not npc_ok:
+        raise _boxing_fight_throttle_429(
+            f"Fight limit reached ({NPC_MAX_FIGHTS_PER_HOUR} per {RATE_LIMIT_PERIOD_HOURS}h). Try again in {npc_remaining}s.",
+            cooldown_seconds=max(1, npc_remaining),
         )
-        if not npc_ok:
-            raise HTTPException(
-                status_code=429,
-                detail=f"Fight limit reached ({NPC_MAX_FIGHTS_PER_HOUR} per {RATE_LIMIT_PERIOD_HOURS}h). Try again in {npc_remaining}s.",
-            )
 
-        # Fight slot reserved; if cooldown claim fails below, we roll this back.
-        cooldown_until = now + timedelta(seconds=NPC_FIGHT_COOLDOWN_SECONDS)
-        cooldown_iso = cooldown_until.isoformat().replace("+00:00", "Z")
-        now_iso_cd = now.isoformat().replace("+00:00", "Z")
+    # Fight slot reserved; if cooldown claim fails below, we roll this back.
+    cooldown_until = now + timedelta(seconds=NPC_FIGHT_COOLDOWN_SECONDS)
+    cooldown_iso = cooldown_until.isoformat().replace("+00:00", "Z")
+    now_iso_cd = now.isoformat().replace("+00:00", "Z")
 
-        claimed = await db.boxing_profiles.find_one_and_update(
+    claimed = await db.boxing_profiles.find_one_and_update(
+        {
+            "user_id": current_user["id"],
+            "$or": [
+                {"npc_fight_cooldown_until": {"$lte": now_iso_cd}},
+                {"npc_fight_cooldown_until": {"$exists": False}},
+            ],
+        },
+        {"$set": {"npc_fight_cooldown_until": cooldown_iso}},
+    )
+    if claimed is None:
+        await db.boxing_profiles.update_one(
             {
                 "user_id": current_user["id"],
-                "$or": [
-                    {"npc_fight_cooldown_until": {"$lte": now_iso_cd}},
-                    {"npc_fight_cooldown_until": {"$exists": False}},
-                ],
+                "npc_fight_hour_start": hour_start_iso,
+                "npc_fight_hour_count": {"$gt": 0},
             },
-            {"$set": {"npc_fight_cooldown_until": cooldown_iso}},
+            {"$inc": {"npc_fight_hour_count": -1}},
         )
-        if claimed is None:
-            await db.boxing_profiles.update_one(
-                {
-                    "user_id": current_user["id"],
-                    "npc_fight_hour_start": hour_start_iso,
-                    "npc_fight_hour_count": {"$gt": 0},
-                },
-                {"$inc": {"npc_fight_hour_count": -1}},
-            )
-            existing = await db.boxing_profiles.find_one(
-                {"user_id": current_user["id"]}, {"_id": 0, "npc_fight_cooldown_until": 1}
-            )
-            cd_raw = (existing or {}).get("npc_fight_cooldown_until")
-            if cd_raw:
-                cd_dt = datetime.fromisoformat(str(cd_raw).replace("Z", "+00:00"))
-                if cd_dt.tzinfo is None:
-                    cd_dt = cd_dt.replace(tzinfo=timezone.utc)
-                if cd_dt > now:
-                    secs = int((cd_dt - now).total_seconds())
-                    raise HTTPException(status_code=429, detail=f"Fight cooldown: wait {secs}s")
-            raise HTTPException(status_code=429, detail=f"Fight cooldown: wait {NPC_FIGHT_COOLDOWN_SECONDS}s")
+        existing = await db.boxing_profiles.find_one(
+            {"user_id": current_user["id"]}, {"_id": 0, "npc_fight_cooldown_until": 1}
+        )
+        cd_raw = (existing or {}).get("npc_fight_cooldown_until")
+        if cd_raw:
+            cd_dt = datetime.fromisoformat(str(cd_raw).replace("Z", "+00:00"))
+            if cd_dt.tzinfo is None:
+                cd_dt = cd_dt.replace(tzinfo=timezone.utc)
+            if cd_dt > now:
+                secs = int((cd_dt - now).total_seconds())
+                raise _boxing_fight_throttle_429(f"Fight cooldown: wait {secs}s", cooldown_seconds=max(1, secs))
+        raise _boxing_fight_throttle_429(
+            f"Fight cooldown: wait {NPC_FIGHT_COOLDOWN_SECONDS}s",
+            cooldown_seconds=NPC_FIGHT_COOLDOWN_SECONDS,
+        )
 
     prof = await _ensure_profile(current_user["id"])
     a_stats = {k: int(prof.get(k) or 10) for k in STAT_KEYS}
@@ -689,41 +691,39 @@ async def boxing_challenge_accept(payload: AcceptChallengeRequest, current_user:
     a_id, b_id = ch["challenger_id"], ch["target_id"]
     now_dt = datetime.now(timezone.utc)
 
-    enforce_throttles = _boxing_enforce_fight_throttles()
-    if enforce_throttles:
-        a_ok, a_remaining, a_hour_start_iso = await _claim_hourly_fight_slot(
+    a_ok, a_remaining, a_hour_start_iso = await _claim_hourly_fight_slot(
+        user_id=a_id,
+        start_field="pvp_fight_hour_start",
+        count_field="pvp_fight_hour_count",
+        max_fights=PVP_MAX_FIGHTS_PER_HOUR,
+        now_dt=now_dt,
+    )
+    if not a_ok:
+        await db.boxing_challenges.update_one({"id": cid, "state": "in_progress"}, {"$set": {"state": "pending"}})
+        raise _boxing_fight_throttle_429(
+            f"{ch.get('challenger_username') or 'Challenger'} reached fight limit ({PVP_MAX_FIGHTS_PER_HOUR} per {RATE_LIMIT_PERIOD_HOURS}h). Try again in {a_remaining}s.",
+            cooldown_seconds=max(1, a_remaining),
+        )
+
+    b_ok, b_remaining, b_hour_start_iso = await _claim_hourly_fight_slot(
+        user_id=b_id,
+        start_field="pvp_fight_hour_start",
+        count_field="pvp_fight_hour_count",
+        max_fights=PVP_MAX_FIGHTS_PER_HOUR,
+        now_dt=now_dt,
+    )
+    if not b_ok:
+        await _release_hourly_fight_slot(
             user_id=a_id,
             start_field="pvp_fight_hour_start",
             count_field="pvp_fight_hour_count",
-            max_fights=PVP_MAX_FIGHTS_PER_HOUR,
-            now_dt=now_dt,
+            hour_start_iso=a_hour_start_iso,
         )
-        if not a_ok:
-            await db.boxing_challenges.update_one({"id": cid, "state": "in_progress"}, {"$set": {"state": "pending"}})
-            raise HTTPException(
-                status_code=429,
-                detail=f"{ch.get('challenger_username') or 'Challenger'} reached fight limit ({PVP_MAX_FIGHTS_PER_HOUR} per {RATE_LIMIT_PERIOD_HOURS}h). Try again in {a_remaining}s.",
-            )
-
-        b_ok, b_remaining, b_hour_start_iso = await _claim_hourly_fight_slot(
-            user_id=b_id,
-            start_field="pvp_fight_hour_start",
-            count_field="pvp_fight_hour_count",
-            max_fights=PVP_MAX_FIGHTS_PER_HOUR,
-            now_dt=now_dt,
+        await db.boxing_challenges.update_one({"id": cid, "state": "in_progress"}, {"$set": {"state": "pending"}})
+        raise _boxing_fight_throttle_429(
+            f"Fight limit reached ({PVP_MAX_FIGHTS_PER_HOUR} per {RATE_LIMIT_PERIOD_HOURS}h). Try again in {b_remaining}s.",
+            cooldown_seconds=max(1, b_remaining),
         )
-        if not b_ok:
-            await _release_hourly_fight_slot(
-                user_id=a_id,
-                start_field="pvp_fight_hour_start",
-                count_field="pvp_fight_hour_count",
-                hour_start_iso=a_hour_start_iso,
-            )
-            await db.boxing_challenges.update_one({"id": cid, "state": "in_progress"}, {"$set": {"state": "pending"}})
-            raise HTTPException(
-                status_code=429,
-                detail=f"Fight limit reached ({PVP_MAX_FIGHTS_PER_HOUR} per {RATE_LIMIT_PERIOD_HOURS}h). Try again in {b_remaining}s.",
-            )
 
     a_prof = await _ensure_profile(a_id)
     b_prof = await _ensure_profile(b_id)
