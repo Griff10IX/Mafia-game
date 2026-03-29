@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import api from "../../utils/api";
 import { startMinigameRun } from "../../utils/minigameRunSession";
 import useMinigamePlaysLeft from "../../hooks/useMinigamePlaysLeft";
+import { useMinigameCaptcha } from "../../hooks/useMinigameCaptcha";
 import styles from "../../styles/noir.module.css";
 
 const W = 480, H = 640;
@@ -229,8 +230,15 @@ export default function TheGetaway() {
       if (s.state === 'gameover') {
         await submitRun();
       }
+      let captchaToken = null;
       try {
-        const run = await startMinigameRun('the_getaway');
+        captchaToken = await getCaptchaToken();
+      } catch (c) {
+        if (c?.message === 'captcha_cancelled') return;
+        throw c;
+      }
+      try {
+        const run = await startMinigameRun('the_getaway', undefined, captchaToken);
         getawaySessionRef.current = run.session_id;
         updateFromStart(run);
       } catch (err) {
@@ -241,7 +249,7 @@ export default function TheGetaway() {
       s.state = 'playing';
       setGameState('playing');
     }
-  }, [resetGame, submitRun, canPlay, updateFromStart]);
+  }, [resetGame, submitRun, canPlay, updateFromStart, getCaptchaToken]);
 
   const drawSky = useCallback((ctx) => {
     const grad = ctx.createLinearGradient(0, 0, 0, H * 0.65);
@@ -873,6 +881,7 @@ export default function TheGetaway() {
 
   return (
     <div className={`${styles.pageContent} mobile-page-root space-y-4`}>
+      {captchaModal}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
           <h1 className="text-lg font-heading font-bold text-primary uppercase tracking-wider">The Getaway</h1>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Mail, MailOpen, Bell, Trophy, Shield, Skull, Gift, Trash2, MessageCircle, Send, X, ChevronRight } from 'lucide-react';
+import { Mail, MailOpen, Bell, Trophy, Shield, Skull, Gift, Trash2, MessageCircle, Send, X, ChevronRight, Bot } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import GifPicker from '../../components/GifPicker';
@@ -21,10 +21,11 @@ const NOTIFICATION_ICONS = {
   bodyguard: Shield,
   attack: Skull,
   system: Bell,
-  user_message: MessageCircle
+  user_message: MessageCircle,
+  staff_bot_client: Bot,
 };
 
-const VALID_FILTERS = ['all', 'unread', 'sent', 'rank_up', 'reward', 'bodyguard', 'attack', 'system', 'user_message'];
+const VALID_FILTERS = ['all', 'unread', 'sent', 'rank_up', 'reward', 'bodyguard', 'attack', 'system', 'user_message', 'staff_bot_client'];
 
 // Classic forum smileys (text codes that render as images)
 const CLASSIC_SMILEYS = [
@@ -738,6 +739,7 @@ export default function Inbox() {
     { value: 'rank_up', label: 'Rank', icon: Trophy },
     { value: 'attack', label: 'Attack', icon: Skull },
     { value: 'system', label: 'System', icon: Bell },
+    { value: 'staff_bot_client', label: 'Bot alerts', icon: Bot },
   ];
 
   return (

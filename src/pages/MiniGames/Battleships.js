@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import api from '../../utils/api';
 import { startMinigameRun } from '../../utils/minigameRunSession';
 import useMinigamePlaysLeft from '../../hooks/useMinigamePlaysLeft';
+import { useMinigameCaptcha } from '../../hooks/useMinigameCaptcha';
 import { toast } from 'sonner';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1382,6 +1383,7 @@ function FleetRoster({ships, sunkList, label, accent}) {
 // MAIN
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Battleships() {
+  const { getCaptchaToken, captchaModal } = useMinigameCaptcha();
   const { playsLeft, maxPlays, canPlay, updateFromStart, refresh: refreshPlays, applyPlaysLeftPayload } = useMinigamePlaysLeft("battleships");
   const CELL = useCellSize();
   const isMobile = CELL < 38;
@@ -1791,8 +1793,10 @@ export default function Battleships() {
             <button className="nb" onClick={handleAutoPlace}>⚡ Auto</button>
             <button className="nb" disabled={placedShips.length<activeShips.length||!canPlay} onClick={async()=>{
               if(!canPlay){toast.error("Play limit reached for this 2-hour window.");return;}
+              let captchaToken=null;
+              try{captchaToken=await getCaptchaToken();}catch(c){if(c?.message==="captcha_cancelled")return;throw c;}
               try{
-                const run=await startMinigameRun("battleships",{difficulty:settings.difficulty,fleet_size:String(activeShips.length)});
+                const run=await startMinigameRun("battleships",{difficulty:settings.difficulty,fleet_size:String(activeShips.length)},captchaToken);
                 battleshipsSessionRef.current=run.session_id;
                 updateFromStart(run);
                 setScreen("battle");

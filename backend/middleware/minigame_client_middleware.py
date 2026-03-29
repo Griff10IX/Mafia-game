@@ -6,6 +6,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from utils.login_user_agent import auth_client_headers_blocked
+from utils.staff_bot_client_alert import maybe_notify_staff_bot_client_blocked
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +75,15 @@ class MinigameClientGuardMiddleware(BaseHTTPMiddleware):
                 path,
                 request.method,
             )
+            try:
+                await maybe_notify_staff_bot_client_blocked(
+                    db=self.db,
+                    request=request,
+                    internal_reason=reason,
+                    source="minigames",
+                )
+            except Exception:
+                logger.exception("Minigame client guard: staff inbox notify failed")
             return JSONResponse(
                 status_code=403,
                 content={"detail": "This action must use the official game app or a normal web browser."},

@@ -3,14 +3,15 @@
 # Top 5 rewarded every Monday midnight UTC
 
 import logging
+import os
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, Optional, List
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict
 
-from fastapi import Query
-from server import db, get_current_user, ADMIN_EMAILS, _get_staff_user_ids
+from server import db, get_current_user, ADMIN_EMAILS, _get_staff_user_ids, _is_admin
+from utils.minigame_captcha_gate import require_turnstile_for_minigame_start
 from utils.minigame_run_session import start_minigame_run, get_plays_left, GAME_HOURLY_LIMITS
 
 MINIGAME_LB_CONFIG_ID = "minigame_weekly_leaderboard"
@@ -114,15 +115,37 @@ class MinigameRunSessionStartRequest(BaseModel):
 
     game: str
     meta: Optional[Dict[str, Any]] = None
+    captcha_token: Optional[str] = None
 
 
 def register(router):
+    @router.get("/minigames/captcha-config")
+    async def minigame_captcha_config(current_user: dict = Depends(get_current_user)):
+        """Site key for Turnstile when captcha is required before starting a minigame run."""
+        main = await db.game_settings.find_one(
+            {"_id": "main"},
+            {"_id": 0, "minigame_turnstile_enabled": 1, "minigame_turnstile_site_key": 1},
+        )
+        enabled = bool(main.get("minigame_turnstile_enabled")) if main else False
+        site_key = (main.get("minigame_turnstile_site_key") or os.environ.get("TURNSTILE_SITE_KEY") or "").strip()
+        secret_ok = bool((os.environ.get("TURNSTILE_SECRET_KEY") or "").strip())
+        effective = enabled and bool(site_key) and secret_ok
+        return {"enabled": effective, "site_key": site_key if effective else None}
+
     @router.post("/minigames/run-session/start")
     async def minigame_run_session_start(
         body: MinigameRunSessionStartRequest,
+        request: Request,
         current_user: dict = Depends(get_current_user),
     ):
         """Begin a server-timed run; submit endpoints require the returned session_id."""
+        await require_turnstile_for_minigame_start(
+            db,
+            request=request,
+            current_user=current_user,
+            captcha_token=body.captcha_token,
+            is_admin=_is_admin(current_user),
+        )
         g = (body.game or "").strip()
         if g not in RUN_SESSION_GAMES:
             raise HTTPException(status_code=400, detail="Unknown or unsupported game for run session.")

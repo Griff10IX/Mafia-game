@@ -5,6 +5,7 @@ import api from "../../utils/api";
 import { toast } from "sonner";
 import { startMinigameRun } from "../../utils/minigameRunSession";
 import useMinigamePlaysLeft from "../../hooks/useMinigamePlaysLeft";
+import { useMinigameCaptcha } from "../../hooks/useMinigameCaptcha";
 import styles from "../../styles/noir.module.css";
 
 const DIFFICULTIES = {
@@ -77,6 +78,7 @@ function checkWin(board) {
 }
 
 export default function Minesweeper() {
+  const { getCaptchaToken, captchaModal } = useMinigameCaptcha();
   const { playsLeft, maxPlays, canPlay, updateFromStart, refresh: refreshPlays, applyPlaysLeftPayload } = useMinigamePlaysLeft("minesweeper");
   const [difficulty, setDifficulty] = useState("snitch");
   const [board, setBoard] = useState(() => createBoard(9, 9));
@@ -184,9 +186,16 @@ export default function Minesweeper() {
     if (!minesReady) {
       if (!canPlay) { toast.error("Play limit reached for this 2-hour window."); return; }
       if (firstRevealLockRef.current) return;
+      let captchaToken = null;
+      try {
+        captchaToken = await getCaptchaToken();
+      } catch (c) {
+        if (c?.message === "captcha_cancelled") return;
+        throw c;
+      }
       firstRevealLockRef.current = true;
       try {
-        const run = await startMinigameRun("minesweeper", { difficulty });
+        const run = await startMinigameRun("minesweeper", { difficulty }, captchaToken);
         runSessionRef.current = run.session_id;
         updateFromStart(run);
       } catch (e) {
@@ -228,6 +237,7 @@ export default function Minesweeper() {
 
   return (
     <div className={`${styles.pageContent} mobile-page-root`}>
+      {captchaModal}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
         .ms-cell {

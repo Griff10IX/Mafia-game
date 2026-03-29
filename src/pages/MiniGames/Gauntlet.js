@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { toast } from "sonner";
 import api, { getApiErrorMessage, refreshUser } from "../../utils/api";
 import useMinigamePlaysLeft from "../../hooks/useMinigamePlaysLeft";
+import { useMinigameCaptcha } from "../../hooks/useMinigameCaptcha";
 import styles from "../../styles/noir.module.css";
 
 const GRAVITY = 0.25;
@@ -849,6 +850,7 @@ function ThemeSelect({ themes, selected, onSelect, money, bestScore, onClose }) 
 const initialGameFrame = () => ({ birdY: VIEW_H / 2, birdVel: 0, birdRot: 0, pipes: [], score: 0, bgOffset: 0 });
 
 export default function Gauntlet() {
+  const { getCaptchaToken, captchaModal } = useMinigameCaptcha();
   const { playsLeft, maxPlays, canPlay, refresh: refreshPlays, updateFromStart, applyPlaysLeftPayload } = useMinigamePlaysLeft("gauntlet");
   const [gameState, setGameState] = useState("idle");
   const [gameFrame, setGameFrame] = useState(initialGameFrame);
@@ -996,8 +998,16 @@ export default function Gauntlet() {
       if (!canPlay) { toast.error("Play limit reached for this 2-hour window."); return; }
       void (async () => {
         try {
+          let captchaToken = null;
+          try {
+            captchaToken = await getCaptchaToken();
+          } catch (c) {
+            if (c?.message === "captcha_cancelled") return;
+            throw c;
+          }
           const r = await api.post("/gauntlet/start", {
             theme: themeId, speed: speedId, difficulty: difficultyId,
+            ...(captchaToken ? { captcha_token: captchaToken } : {}),
           });
           const sid = r.data?.session_id;
           if (!sid) {
@@ -1028,7 +1038,7 @@ export default function Gauntlet() {
       setGameFrame(initialGameFrame());
       setClaimStatus({ state: "idle", cash: 0, respect: 0, message: "" });
     }
-  }, [themeId, speedId, difficultyId, canPlay, updateFromStart]);
+  }, [themeId, speedId, difficultyId, canPlay, updateFromStart, getCaptchaToken]);
 
   const theme = THEMES.find(t => t.id === themeId) || THEMES[0];
   const speedOpt = SPEED_OPTIONS.find(s => s.id === speedId) || SPEED_OPTIONS[1];
@@ -1146,6 +1156,7 @@ export default function Gauntlet() {
 
   return (
     <div className="mobile-page-root w-full max-w-[min(1240px,calc(100vw-1rem))] mx-auto px-1 sm:px-2">
+      {captchaModal}
       {showCharSelect && (
         <CharacterSelect
           characters={CHARACTERS} selected={characterId} money={money} bestScore={bestScore} ownedChars={ownedChars}

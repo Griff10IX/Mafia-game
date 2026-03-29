@@ -4,6 +4,7 @@ import { ArrowLeft, Trophy, RefreshCw } from "lucide-react";
 import api from "../../utils/api";
 import { startMinigameRun } from "../../utils/minigameRunSession";
 import useMinigamePlaysLeft from "../../hooks/useMinigamePlaysLeft";
+import { useMinigameCaptcha } from "../../hooks/useMinigameCaptcha";
 import { toast } from "sonner";
 import styles from "../../styles/noir.module.css";
 
@@ -194,7 +195,14 @@ export default function FamilyRun() {
     if (!canPlay) { toast.error("Play limit reached for this 2-hour window."); return; }
     scoreSubmittedRef.current = false;
     try {
-      const run = await startMinigameRun('family_run');
+      let captchaToken = null;
+      try {
+        captchaToken = await getCaptchaToken();
+      } catch (c) {
+        if (c?.message === 'captcha_cancelled') return;
+        throw c;
+      }
+      const run = await startMinigameRun('family_run', undefined, captchaToken);
       runSessionIdRef.current = run.session_id;
       updateFromStart(run);
       G.current = makeState();
@@ -203,7 +211,7 @@ export default function FamilyRun() {
       toast.error(e?.response?.data?.detail || e?.message || 'Could not start run');
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- makeState is stable (uses G.current)
-  }, [canPlay, updateFromStart]);
+  }, [canPlay, updateFromStart, getCaptchaToken]);
 
   useEffect(() => {
     const kd = e => {
@@ -709,6 +717,7 @@ export default function FamilyRun() {
 
   return (
     <div className={`${styles.pageContent} mobile-page-root space-y-3`}>
+      {captchaModal}
       <header className="flex items-center gap-2 mb-2">
         <Link to="/casino/mini-games/leaderboard" className="p-1 rounded hover:bg-primary/10 transition-colors">
           <ArrowLeft size={16} className="text-primary" />

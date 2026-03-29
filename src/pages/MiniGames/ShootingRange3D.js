@@ -5,6 +5,7 @@ import { Crosshair } from "lucide-react";
 import api from "../../utils/api";
 import { startMinigameRun } from "../../utils/minigameRunSession";
 import useMinigamePlaysLeft from "../../hooks/useMinigamePlaysLeft";
+import { useMinigameCaptcha } from "../../hooks/useMinigameCaptcha";
 import { toast } from "sonner";
 import styles from "../../styles/noir.module.css";
 
@@ -252,6 +253,7 @@ function buildScene(scene, mobile, woodTex, brickTex, cobbleTex) {
 // COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
 export default function ShootingRange3D() {
+  const { getCaptchaToken, captchaModal } = useMinigameCaptcha();
   const { playsLeft, maxPlays, canPlay: hasPlaysLeft, updateFromStart, refresh: refreshPlays, applyPlaysLeftPayload } = useMinigamePlaysLeft("shooting_range");
   const canvasRef = useRef(null);
   const shootingRunSessionRef = useRef(null);
@@ -564,8 +566,15 @@ export default function ShootingRange3D() {
   const startRound = useCallback(async () => {
     if (cooldownSecondsLeft > 0) return;
     if (!hasPlaysLeft) { toast.error("Play limit reached for this 2-hour window."); return; }
+    let captchaToken = null;
     try {
-      const run = await startMinigameRun("shooting_range");
+      captchaToken = await getCaptchaToken();
+    } catch (c) {
+      if (c?.message === "captcha_cancelled") return;
+      throw c;
+    }
+    try {
+      const run = await startMinigameRun("shooting_range", undefined, captchaToken);
       shootingRunSessionRef.current = run.session_id;
       updateFromStart(run);
     } catch (e) {
@@ -591,7 +600,7 @@ export default function ShootingRange3D() {
     setScore(0); setTimeLeft(ROUND_DURATION_SEC); setAmmoState(MAX_AMMO); setClipsRemainingState(CLIPS_TOTAL);
     setIsReloading(false); setReloadAnim(false); setTargetUrgent(false);
     spawnTarget();
-  }, [spawnTarget, cooldownSecondsLeft, hasPlaysLeft, updateFromStart]);
+  }, [spawnTarget, cooldownSecondsLeft, hasPlaysLeft, updateFromStart, getCaptchaToken]);
 
   // ── THREE.JS SCENE SETUP ─────────────────────────────────────────────────────
   useEffect(() => {
@@ -982,6 +991,7 @@ export default function ShootingRange3D() {
 
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root mx-auto`} style={{ maxWidth: 900 }}>
+      {captchaModal}
       <style>{`
         .sr-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
       `}</style>

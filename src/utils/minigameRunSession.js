@@ -3,11 +3,14 @@ import api from './api';
 /**
  * Start a server-timed minigame run. Submit endpoints require session_id from the response.
  * @param {string} game - snake | family_run | the_getaway | minesweeper | battleships | whack_a_copper | mafia_rpg | shooting_range
+ * @param {object} [meta]
+ * @param {string|null} [captchaToken] - from useMinigameCaptcha().getCaptchaToken() when captcha is enabled
  * @returns {{ session_id: string, plays_left?: number, max_plays?: number, resets_at?: string }}
  */
-export async function startMinigameRun(game, meta) {
+export async function startMinigameRun(game, meta, captchaToken) {
   const body = { game };
   if (meta && typeof meta === 'object') body.meta = meta;
+  if (captchaToken) body.captcha_token = captchaToken;
   const r = await api.post('/minigames/run-session/start', body);
   const sid = r.data?.session_id;
   if (!sid) throw new Error('No run session from server');

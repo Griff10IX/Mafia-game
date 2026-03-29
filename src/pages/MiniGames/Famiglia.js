@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ArrowLeft, Trophy, RefreshCw } from "lucide-react";
 import api from "../../utils/api";
 import { startMinigameRun } from "../../utils/minigameRunSession";
+import { useMinigameCaptcha } from "../../hooks/useMinigameCaptcha";
 import { toast } from "sonner";
 import styles from "../../styles/noir.module.css";
 
@@ -871,6 +872,7 @@ function FamigliaGameInner(){
   const joyRef=useRef({id:null,origin:null,vec:{x:0,y:0},base:null});
   const uiRef=useRef({showShop:false,showMissions:false,activeMission:null,missionProgress:{}});
   const famigliaRunSessionRef=useRef(null);
+  const { getCaptchaToken, captchaModal } = useMinigameCaptcha();
   const lastFamigliaSubmitRef=useRef(0);
   const submitFamigliaSession=useCallback(async()=>{
     const gs=gsRef.current;if(!gs?.player)return;
@@ -890,10 +892,10 @@ function FamigliaGameInner(){
   },[]);
 
 
-  const initGame=useCallback(async ()=>{
+  const initGame=useCallback(async (captchaToken)=>{
     const canvas=canvasRef.current;if(!canvas)return;
     try{
-      const run=await startMinigameRun("mafia_rpg");
+      const run=await startMinigameRun("mafia_rpg", undefined, captchaToken);
       famigliaRunSessionRef.current=run.session_id;
     }catch(e){
       toast.error(e?.response?.data?.detail||e?.message||"Could not start game session");
@@ -2419,17 +2421,18 @@ function FamigliaGameInner(){
     return()=>{window.removeEventListener("keydown",kd);window.removeEventListener("keyup",ku);};
   },[doShoot,doInteract]);
 
-  useEffect(()=>{initGame();return()=>cancelAnimationFrame(rafRef.current);},[initGame]);
+  useEffect(()=>()=>cancelAnimationFrame(rafRef.current),[]);
 
-  const startGame=()=>{
+  const startGame=async()=>{
+    let tok=null;
+    try{tok=await getCaptchaToken();}catch(c){if(c?.message==="captcha_cancelled")return;throw c;}
+    await initGame(tok);
     const gs=gsRef.current;if(!gs)return;gs.started=true;
-    document.getElementById("rpg-splash").style.display="none";
+    const splash=document.getElementById("rpg-splash");if(splash)splash.style.display="none";
     rafRef.current=requestAnimationFrame(loop);
     setTimeout(()=>showMsg("Welcome to New Corleone — find Don Benedetto or Big Eddie for missions"),600);
     refreshHUD(gs);refreshObjective(gs);
   };
-
-  const gs=gsRef.current;
 
   return(
     <div
@@ -2441,6 +2444,7 @@ function FamigliaGameInner(){
       "
       style={{ touchAction: "none", userSelect: "none" }}
     >
+      {captchaModal}
       <canvas
         ref={canvasRef}
         className="block w-full max-xl:absolute max-xl:inset-0 max-xl:h-full xl:h-auto"

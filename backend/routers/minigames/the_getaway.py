@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict
 
 from server import db, get_current_user, _get_staff_user_ids, _is_admin, log_activity, log_minigame_payout
 from utils.minigame_security import skip_minigame_session
+from utils.minigame_repeat_guard import check_identical_payload_spam
 from utils.minigame_run_session import (
     as_utc_started,
     claim_minigame_run_session,
@@ -96,7 +97,8 @@ def register(router):
                 now_dt=now,
                 client_duration_seconds=time_seconds,
                 max_duration_cap=3600,
-                slack_seconds=45,
+                slack_seconds=90,
+                symmetric=True,
             )
             started_at = as_utc_started(sess.get("started_at"))
             elapsed = max(0.0, (now - started_at).total_seconds())
@@ -108,6 +110,13 @@ def register(router):
                     status_code=400,
                     detail="Run stats do not match server session timing.",
                 )
+            await check_identical_payload_spam(
+                db,
+                user_id=uid,
+                game=GETAWAY_GAME,
+                parts=(distance, coins_collected, time_seconds),
+                now=now,
+            )
 
         result = await db.user_meta.update_one(
             {"user_id": uid, "getaway_hour_start": hour_start_iso, "getaway_hour_count": {"$lt": MAX_RUNS_PER_HOUR}},

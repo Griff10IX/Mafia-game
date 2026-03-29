@@ -59,6 +59,7 @@ from routers.money.booze_run import BOOZE_TYPES
 from routers.account.objectives import update_objectives_progress
 from routers.kill.armoury import _best_weapon_for_user, _get_weapon_mastery_pct, MASTERY_MAX_BULLET_REDUCTION_PCT
 from routers.game.families import resolve_family_id
+from utils.staff_bot_client_alert import maybe_notify_staff_bot_attack_from_ua
 
 
 def _parse_iso_datetime(val):
@@ -199,22 +200,25 @@ async def _notify_target_if_bot_attack(
     location_state: Optional[str],
     player_message: str,
     attacker_is_bot: bool,
+    *,
+    attacker_id: str,
+    target_username: str,
+    meta: dict,
 ):
-    """If the attacker was detected as a bot, send an inbox notification to admins only."""
+    """If the attacker was detected as a bot UA, notify all staff inboxes (throttled per attacker)."""
     if not attacker_is_bot:
         return
-    admin_emails = list(ADMIN_EMAILS or [])
-    if not admin_emails:
-        return
     try:
-        admins = await db.users.find({"email": {"$in": admin_emails}}, {"_id": 0, "id": 1}).to_list(100)
-        loc = f" in {location_state}" if location_state else ""
-        target_info = f" (target: {target_id})" if target_id else ""
-        title = "Bot attack"
-        msg = f"{attacker_username} (bot){target_info}{loc}. {player_message[:200]}"
-        for a in admins:
-            if a.get("id"):
-                await send_notification(a["id"], title, msg, "attack", category="attacks")
+        await maybe_notify_staff_bot_attack_from_ua(
+            attacker_id=attacker_id,
+            attacker_username=attacker_username,
+            target_id=target_id,
+            target_username=target_username,
+            outcome=outcome,
+            location_state=location_state,
+            player_message=player_message,
+            meta=meta,
+        )
     except Exception:
         pass
 
@@ -1000,6 +1004,9 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 await _notify_target_if_bot_attack(
                     target["id"], current_user.get("username") or "?", "bodyguard",
                     attack.get("location_state"), msg, meta.get("attacker_is_bot", False),
+                    attacker_id=str(current_user.get("id") or ""),
+                    target_username=target_name,
+                    meta=meta,
                 )
             except Exception:
                 pass
@@ -1030,6 +1037,9 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             await _notify_target_if_bot_attack(
                 target["id"], current_user.get("username") or "?", "bodyguard",
                 attack.get("location_state"), msg, meta.get("attacker_is_bot", False),
+                attacker_id=str(current_user.get("id") or ""),
+                target_username=target_name,
+                meta=meta,
             )
         except Exception:
             pass
@@ -1728,6 +1738,9 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             await _notify_target_if_bot_attack(
                 attempt_base["target_id"], current_user.get("username") or "?", "killed",
                 attempt_base.get("location_state"), success_message, meta.get("attacker_is_bot", False),
+                attacker_id=str(current_user.get("id") or ""),
+                target_username=target_name,
+                meta=meta,
             )
         except Exception:
             pass

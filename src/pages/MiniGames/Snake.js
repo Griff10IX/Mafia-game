@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import api from "../../utils/api";
 import { startMinigameRun } from "../../utils/minigameRunSession";
 import useMinigamePlaysLeft from "../../hooks/useMinigamePlaysLeft";
+import { useMinigameCaptcha } from "../../hooks/useMinigameCaptcha";
 import styles from "../../styles/noir.module.css";
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -241,6 +242,7 @@ function lerp(a, b, t) { return a + (b - a) * Math.min(1, Math.max(0, t)); }
 // COMPONENT
 // ─────────────────────────────────────────────────────────────────────────────
 export default function Snake() {
+  const { getCaptchaToken, captchaModal } = useMinigameCaptcha();
   const { playsLeft, maxPlays, canPlay, updateFromStart, refresh: refreshPlays, applyPlaysLeftPayload } = useMinigamePlaysLeft("snake");
   const canvasRef = useRef(null);
   const stateRef = useRef(null);
@@ -428,7 +430,14 @@ export default function Snake() {
   const startGame = useCallback(async () => {
     if (!canPlay) { toast.error("Play limit reached for this 2-hour window."); return; }
     try {
-      const run = await startMinigameRun("snake");
+      let captchaToken = null;
+      try {
+        captchaToken = await getCaptchaToken();
+      } catch (c) {
+        if (c?.message === "captcha_cancelled") return;
+        throw c;
+      }
+      const run = await startMinigameRun("snake", undefined, captchaToken);
       snakeSessionRef.current = run.session_id;
       updateFromStart(run);
       const s = initState(levelId, difficultyId);
@@ -445,7 +454,7 @@ export default function Snake() {
     } catch (e) {
       toast.error(e?.response?.data?.detail || e?.message || "Could not start run");
     }
-  }, [initState, renderLoop, levelId, difficultyId, canPlay, updateFromStart]);
+  }, [initState, renderLoop, levelId, difficultyId, canPlay, updateFromStart, getCaptchaToken]);
 
   const submitScore = useCallback(async (finalScore) => {
     if (finalScore <= 0) return;
@@ -595,7 +604,7 @@ export default function Snake() {
 
   return (
     <div className={`${styles.page} mobile-page-root`} style={{ fontFamily: "'Cinzel', serif", maxWidth: 480, margin: "0 auto", minHeight: "100vh", paddingBottom: 24 }}>
-
+      {captchaModal}
       <div className={`${styles.panelHeader} mobile-panel`} style={{ padding: "clamp(8px,3vw,12px) clamp(12px,4vw,16px)", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
         <div>
           <h1 className="font-heading" style={{ color: "var(--noir-primary)", fontSize: "clamp(14px,4vw,22px)", letterSpacing: "0.12em", textTransform: "uppercase", lineHeight: 1.2 }}>

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import api from "../../utils/api";
 import { startMinigameRun } from "../../utils/minigameRunSession";
 import useMinigamePlaysLeft from "../../hooks/useMinigamePlaysLeft";
+import { useMinigameCaptcha } from "../../hooks/useMinigameCaptcha";
 import { toast } from "sonner";
 import styles from "./WhackACopper.module.css";
 
@@ -157,6 +158,7 @@ const Toggle = ({ checked, onChange }) => (
 );
 
 export default function WhackACopper() {
+  const { getCaptchaToken, captchaModal } = useMinigameCaptcha();
   const { playsLeft, maxPlays, canPlay, updateFromStart, refresh: refreshPlays, applyPlaysLeftPayload } = useMinigamePlaysLeft("whack_a_copper");
   const [diff, setDiff] = useState("medium");
   const [duration, setDuration] = useState(30);
@@ -339,8 +341,15 @@ export default function WhackACopper() {
     holeUpRef.current = Array(gridSize).fill(false);
     submittedRef.current = false;
 
+    let captchaToken = null;
     try {
-      const run = await startMinigameRun("whack_a_copper");
+      captchaToken = await getCaptchaToken();
+    } catch (c) {
+      if (c?.message === "captcha_cancelled") return;
+      throw c;
+    }
+    try {
+      const run = await startMinigameRun("whack_a_copper", undefined, captchaToken);
       whackSessionRef.current = run.session_id;
       updateFromStart(run);
     } catch (e) {
@@ -366,7 +375,7 @@ export default function WhackACopper() {
     refs.current.score = 0;
     refs.current.combo = 1;
     refs.current.lives = livesMode || 999;
-  }, [gridSize, duration, livesMode]);
+  }, [gridSize, duration, livesMode, canPlay, updateFromStart, getCaptchaToken]);
 
   useEffect(() => {
     if (phase !== "playing") return;
@@ -432,6 +441,7 @@ export default function WhackACopper() {
 
   return (
     <div data-game="whack-a-copper" className={`${styles.root} mobile-page-root ${panic ? styles.rootPanic : ""} ${shaking ? styles.rootShake : ""}`}>
+      {captchaModal}
       <div className={styles.header}>
         <Link to="/casino/mini-games/leaderboard" className="text-primary text-[9px] font-heading uppercase tracking-wider hover:underline block mb-1">
           ← Mini Games Leaderboard

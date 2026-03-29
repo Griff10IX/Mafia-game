@@ -17,6 +17,7 @@ from pydantic import BaseModel, EmailStr, field_validator
 from utils.ban_user_wipe import user_has_active_account_ban
 from utils.disposable_email import is_disposable_email
 from utils.login_user_agent import auth_client_headers_blocked
+from utils.staff_bot_client_alert import maybe_notify_staff_bot_client_blocked
 from utils.referral_ids import normalize_referred_by_ids, user_has_referrers
 from middleware.security import is_proxy_or_vpn, get_ip_info
 
@@ -503,6 +504,16 @@ def register(router):
                     cli_reason,
                     client_ip,
                     (email_clean or "")[:48],
+                )
+                await maybe_notify_staff_bot_client_blocked(
+                    db=db,
+                    request=request,
+                    internal_reason=cli_reason,
+                    source="auth_register",
+                    context_note=(
+                        f"Registration attempt — email: {(email_clean or '')[:96]}\n"
+                        f"Username: {(user_data.username or '').strip()[:40]}"
+                    ),
                 )
                 raise HTTPException(
                     status_code=403,
@@ -1038,6 +1049,13 @@ def register(router):
                     cli_reason,
                     ip,
                     (login_input or "")[:40],
+                )
+                await maybe_notify_staff_bot_client_blocked(
+                    db=db,
+                    request=request,
+                    internal_reason=cli_reason,
+                    source="auth_login",
+                    context_note=f"Login attempt (identifier): {(login_input or '')[:80]}",
                 )
                 raise HTTPException(
                     status_code=403,
@@ -2045,6 +2063,13 @@ def register(router):
                 cli_reason,
                 _client_ip(request),
                 (email_clean or "")[:48],
+            )
+            await maybe_notify_staff_bot_client_blocked(
+                db=db,
+                request=request,
+                internal_reason=cli_reason,
+                source="auth_preregister",
+                context_note=f"Pre-register attempt — email: {(email_clean or '')[:96]}",
             )
             raise HTTPException(
                 status_code=403,

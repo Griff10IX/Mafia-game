@@ -255,15 +255,26 @@ async def enforce_client_duration_for_claimed_session(
     client_duration_seconds: int,
     max_duration_cap: int,
     slack_seconds: int = 45,
+    symmetric: bool = False,
 ) -> None:
-    """Validate client-reported duration vs server session; session stays consumed on failure."""
+    """Validate client-reported duration vs server session; session stays consumed on failure.
+
+    If symmetric is True, require |client_duration - wall_elapsed| <= slack (stops claiming a
+    30s run after 120s of real time). If False, only upper-bound checks (legacy behaviour).
+    """
     if client_duration_seconds < 1:
         raise HTTPException(status_code=400, detail="Invalid play duration.")
     if client_duration_seconds > max_duration_cap:
         raise HTTPException(status_code=400, detail="Play duration too long.")
     started = as_utc_started(sess.get("started_at"))
     elapsed = max(0.0, (now_dt - started).total_seconds())
-    if client_duration_seconds > elapsed + slack_seconds:
+    if symmetric:
+        if abs(float(client_duration_seconds) - elapsed) > float(slack_seconds):
+            raise HTTPException(
+                status_code=400,
+                detail="Reported play time does not match server session.",
+            )
+    elif client_duration_seconds > elapsed + slack_seconds:
         raise HTTPException(
             status_code=400,
             detail="Reported play time does not match server session.",

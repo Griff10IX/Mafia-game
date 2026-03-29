@@ -666,6 +666,8 @@ export default function Admin() {
   const [blockProxyVpnLogin, setBlockProxyVpnLogin] = useState(true);
   const [blockScriptUserAgentLogin, setBlockScriptUserAgentLogin] = useState(true);
   const [blockScriptUaSaving, setBlockScriptUaSaving] = useState(false);
+  const [minigameTurnstileEnabled, setMinigameTurnstileEnabled] = useState(false);
+  const [minigameTurnstileSiteKey, setMinigameTurnstileSiteKey] = useState('');
   const [spotifyFeatureEnabled, setSpotifyFeatureEnabled] = useState(false);
   const [landingBannerEnabled, setLandingBannerEnabled] = useState(false);
   const [landingBannerMessage, setLandingBannerMessage] = useState('');
@@ -1145,6 +1147,8 @@ export default function Admin() {
       setRequireEmailVerification(!!res.data?.require_email_verification);
       setBlockProxyVpnLogin(res.data?.block_proxy_vpn_login !== false);
       setBlockScriptUserAgentLogin(res.data?.block_script_user_agent_login !== false);
+      setMinigameTurnstileEnabled(!!res.data?.minigame_turnstile_enabled);
+      setMinigameTurnstileSiteKey((res.data?.minigame_turnstile_site_key ?? '').trim());
       setSpotifyFeatureEnabled(!!res.data?.spotify_feature_enabled);
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
       setLandingBannerMessage(res.data?.landing_banner_message ?? '');
@@ -1173,6 +1177,8 @@ export default function Admin() {
       setRequireEmailVerification(false);
       setBlockProxyVpnLogin(true);
       setBlockScriptUserAgentLogin(true);
+      setMinigameTurnstileEnabled(false);
+      setMinigameTurnstileSiteKey('');
       setSpotifyFeatureEnabled(false);
       setLandingBannerMessage('');
       setStockMarketMaxPoints(3000);
@@ -1226,6 +1232,8 @@ export default function Admin() {
         require_email_verification: requireEmailVerification,
         block_proxy_vpn_login: blockProxyVpnLogin,
         block_script_user_agent_login: blockScriptUserAgentLogin,
+        minigame_turnstile_enabled: minigameTurnstileEnabled,
+        minigame_turnstile_site_key: minigameTurnstileSiteKey.trim(),
         spotify_feature_enabled: spotifyFeatureEnabled,
         landing_banner_enabled: landingBannerEnabled,
         landing_banner_message: landingBannerMessage,
@@ -1236,6 +1244,10 @@ export default function Admin() {
       setRequireEmailVerification(!!res.data?.require_email_verification);
       setBlockProxyVpnLogin(res.data?.block_proxy_vpn_login !== false);
       setBlockScriptUserAgentLogin(res.data?.block_script_user_agent_login !== false);
+      setMinigameTurnstileEnabled(!!res.data?.minigame_turnstile_enabled);
+      if (res.data?.minigame_turnstile_site_key !== undefined) {
+        setMinigameTurnstileSiteKey((res.data.minigame_turnstile_site_key ?? '').trim());
+      }
       setSpotifyFeatureEnabled(!!res.data?.spotify_feature_enabled);
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
       if (res.data?.landing_banner_message !== undefined) setLandingBannerMessage(res.data.landing_banner_message ?? '');
@@ -7010,6 +7022,32 @@ export default function Admin() {
                   {blockScriptUaSaving ? '…' : 'Disable blocking'}
                 </button>
                 <span className="text-[10px] text-mutedForeground font-heading">Applies immediately. Also saved with &quot;Save settings&quot; below.</span>
+              </div>
+            </div>
+            <div className="space-y-2 pt-2 border-t border-primary/10">
+              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Minigames — Cloudflare Turnstile</p>
+              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+                Require a captcha before each minigame run (and gauntlet). Set <code className="text-[9px] bg-muted px-1 rounded">TURNSTILE_SECRET_KEY</code> in the server environment; optionally override the public site key here or via <code className="text-[9px] bg-muted px-1 rounded">TURNSTILE_SITE_KEY</code>.
+              </p>
+              <label className="flex items-center gap-2 cursor-pointer text-sm font-heading">
+                <input
+                  type="checkbox"
+                  checked={minigameTurnstileEnabled}
+                  onChange={(e) => setMinigameTurnstileEnabled(e.target.checked)}
+                  className="rounded border-input"
+                />
+                <span>Enable Turnstile before minigame / gauntlet runs</span>
+              </label>
+              <div className="flex flex-col gap-1 max-w-md">
+                <label className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Site key (public)</label>
+                <input
+                  type="text"
+                  value={minigameTurnstileSiteKey}
+                  onChange={(e) => setMinigameTurnstileSiteKey(e.target.value)}
+                  placeholder="0x4AAAA…"
+                  className="w-full px-2 py-1.5 rounded border border-input bg-transparent text-[11px] font-mono font-heading"
+                  autoComplete="off"
+                />
               </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-primary/10">

@@ -2,11 +2,12 @@
 from datetime import datetime, timezone, timedelta
 import uuid
 
-from fastapi import Depends, HTTPException, Query
+from fastapi import Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict
 from typing import Optional
 
-from server import db, get_current_user, log_activity, log_minigame_payout, log_respect_earned, _get_staff_user_ids
+from server import db, get_current_user, log_activity, log_minigame_payout, log_respect_earned, _get_staff_user_ids, _is_admin
+from utils.minigame_captcha_gate import require_turnstile_for_minigame_start
 from routers.minigames.minigame_leaderboard import log_minigame_play
 from utils.minigame_run_session import (
     as_utc_started,
@@ -100,6 +101,7 @@ class GauntletStartRequest(BaseModel):
     theme: Optional[str] = None
     speed: Optional[str] = None
     difficulty: Optional[str] = None
+    captcha_token: Optional[str] = None
 
 
 class GauntletClaimRequest(BaseModel):
@@ -143,8 +145,19 @@ def register(router):
         return {"period": p, "top10": out}
 
     @router.post("/gauntlet/start")
-    async def gauntlet_start(body: GauntletStartRequest, current_user: dict = Depends(get_current_user)):
+    async def gauntlet_start(
+        body: GauntletStartRequest,
+        request: Request,
+        current_user: dict = Depends(get_current_user),
+    ):
         """Open a server-timed run; claims must reference the returned session_id."""
+        await require_turnstile_for_minigame_start(
+            db,
+            request=request,
+            current_user=current_user,
+            captcha_token=body.captcha_token,
+            is_admin=_is_admin(current_user),
+        )
         meta = {}
         if body.theme:
             meta["theme"] = (body.theme or "")[:64]
