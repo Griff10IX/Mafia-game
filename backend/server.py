@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field, ConfigDict, EmailStr, field_validator
 from typing import List, Optional, Dict, Union
 import uuid
 from datetime import datetime, timezone, timedelta
+from utils.ban_user_wipe import user_has_active_account_ban
 from utils.game_pass_micro_rewards import (
     micro_tier_from_rank_points,
     rewards_for_micro_tier,
@@ -843,6 +844,9 @@ async def get_current_user(
     if user is None:
         _log_auth_failure(user_id, 401, "User not found")
         raise HTTPException(status_code=401, detail="User not found")
+    if await user_has_active_account_ban(db, user_id):
+        _log_auth_failure(user_id, 403, "Account banned")
+        raise HTTPException(status_code=403, detail="This account has been banned from the game.")
     # Safety: money must never go negative - correct if it did (bug/race)
     if (user.get("money") or 0) < 0:
         await db.users.update_one({"id": user_id}, {"$set": {"money": 0}})

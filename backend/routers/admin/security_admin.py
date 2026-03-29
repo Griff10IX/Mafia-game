@@ -53,6 +53,14 @@ async def _ban_user_impl(db, user_id: str, username: str, reason: str, duration_
     await db.bans.insert_one(doc)
 
 
+async def _deactivate_prior_bans(db, user_id: str) -> None:
+    """Close older active ban rows so a new ban can be inserted without duplicate actives."""
+    await db.bans.update_many(
+        {"user_id": user_id, "active": True},
+        {"$set": {"active": False, "superseded_at": datetime.now(timezone.utc).isoformat()}},
+    )
+
+
 def register(router):
     """Register security admin routes. Dependencies injected here to avoid circular imports."""
     import server as srv
@@ -177,9 +185,17 @@ def register(router):
                     continue
                 await db.ip_bans.insert_one(_ban_doc(ip_val, src))
                 inserted += 1
+            from utils.ban_user_wipe import apply_ban_and_invalidate_sessions, wipe_user_for_account_ban
+
+            uid = user["id"]
+            await _deactivate_prior_bans(db, uid)
+            await _ban_user_impl(db, uid, display_name, reason, request.duration_hours, banned_by)
+            wipe_summary = await wipe_user_for_account_ban(db, uid)
+            await apply_ban_and_invalidate_sessions(db, uid)
             msg = (
-                f"Banned {inserted} IP(s) for {display_name} ({duration_str})"
-                + (f"; {skipped} already banned" if skipped else "")
+                f"Banned {inserted} new IP ban(s) for {display_name} ({duration_str})"
+                + (f"; {skipped} IP(s) already banned" if skipped else "")
+                + ". Account banned, stats/leaderboards cleared, sessions ended (IP ban records unchanged)."
             )
             return {
                 "message": msg,
@@ -187,6 +203,8 @@ def register(router):
                 "inserted": inserted,
                 "skipped_already_banned": skipped,
                 "username": display_name,
+                "account_ban": True,
+                "wipe": wipe_summary,
             }
 
         ip = normalize_ip_string(raw_ip)

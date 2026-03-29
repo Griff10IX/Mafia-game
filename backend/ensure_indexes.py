@@ -303,6 +303,7 @@ async def ensure_all_indexes(db):
 
         # --- Security / admin ---
         await db.bans.create_index([("active", 1), ("created_at", -1)])
+        await db.bans.create_index([("user_id", 1), ("active", 1)])
         await db.ip_bans.create_index([("ip", 1), ("active", 1)])
         await db.ip_bans.create_index([("active", 1), ("created_at", -1)])
         # One-time normalize: IPv6 has many equivalent strings; lookups use canonical form

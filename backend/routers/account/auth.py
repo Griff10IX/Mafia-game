@@ -14,6 +14,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, field_validator
 
+from utils.ban_user_wipe import user_has_active_account_ban
 from utils.disposable_email import is_disposable_email
 from utils.referral_ids import normalize_referred_by_ids, user_has_referrers
 from middleware.security import is_proxy_or_vpn, get_ip_info
@@ -1123,6 +1124,8 @@ def register(router):
                 status_code=401,
                 detail="Wrong password. Use Forgot password to reset it. After 3 failed attempts this account is locked for 5 minutes.",
             )
+        if await user_has_active_account_ban(db, user_id):
+            raise HTTPException(status_code=403, detail="This account has been banned from the game.")
         # On normal login, block admin/mod — they must use the secret staff login page
         if not staff_route and ((user.get("email") or "") in (ADMIN_EMAILS or set()) or bool(user.get("is_moderator"))):
             raise HTTPException(
