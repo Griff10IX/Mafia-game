@@ -187,13 +187,15 @@ def register(router):
             raise HTTPException(status_code=400, detail="Game too short.")
 
         sess_meta = sess.get("meta") or {}
+        sess_theme = (sess_meta.get("theme") or "classic").strip()
         sess_speed = sess_meta.get("speed", "normal")
         sess_diff = sess_meta.get("difficulty", "normal")
+        claim_theme = (payload.theme or "classic").strip()
         claim_speed = (payload.speed or "normal").strip()
         claim_diff = (payload.difficulty or "normal").strip()
-        if claim_speed != sess_speed or claim_diff != sess_diff:
+        if claim_theme != sess_theme or claim_speed != sess_speed or claim_diff != sess_diff:
             await release_minigame_run(db, session_id)
-            raise HTTPException(status_code=400, detail="Speed/difficulty mismatch with session.")
+            raise HTTPException(status_code=400, detail="Theme/speed/difficulty mismatch with session.")
 
         rate = _max_rate_for_mode(sess_speed, sess_diff)
         max_allowed = max_numeric_score_for_session(

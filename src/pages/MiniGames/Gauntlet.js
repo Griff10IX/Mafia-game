@@ -949,8 +949,9 @@ export default function Gauntlet() {
       const res = await api.post("/gauntlet/claim", {
         score: Number(finalScore || 0),
         session_id: runSessionId,
-        theme: themeId, speed: speedId,
-        difficulty: difficultyId, character: characterId,
+        theme: themeId,
+        speed: speedId,
+        difficulty: difficultyId,
       });
       if (gauntletSessionIdRef.current === runSessionId) gauntletSessionIdRef.current = null;
       const authScore = Number(res.data?.score ?? finalScore ?? 0);
@@ -973,7 +974,7 @@ export default function Gauntlet() {
       setClaimStatus({ state: "error", cash: 0, respect: 0, message: getApiErrorMessage(e) });
       refreshPlays();
     }
-  }, [claimStatus.state, lbPeriod, loadLeaderboard, themeId, speedId, difficultyId, characterId, refreshPlays, applyPlaysLeftPayload]);
+  }, [claimStatus.state, lbPeriod, loadLeaderboard, themeId, speedId, difficultyId, refreshPlays, applyPlaysLeftPayload]);
 
   const handleBuyCharacter = useCallback(async (char) => {
     if (money < char.price) return;

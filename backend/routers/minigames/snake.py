@@ -37,7 +37,7 @@ class SnakeScoreRequest(BaseModel):
     session_id: Optional[str] = None
 
 
-def _rewards_from_score(score: int) -> Dict[str, int]:
+def _rewards_from_score(score: int) -> dict[str, int]:
     """Server-authoritative reward calculation based on score. Client rewards dict is ignored."""
     s = max(0, score)
     return {
@@ -48,7 +48,7 @@ def _rewards_from_score(score: int) -> Dict[str, int]:
     }
 
 
-async def _apply_rewards(user_id: str, score: int) -> Dict[str, Any]:
+async def _apply_rewards(user_id: str, score: int) -> dict[str, int]:
     """Calculate and apply rewards from score. Returns what was applied."""
     inc = _rewards_from_score(score)
     inc = {k: v for k, v in inc.items() if v > 0}
