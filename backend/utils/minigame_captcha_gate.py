@@ -7,6 +7,7 @@ from typing import Optional
 
 from fastapi import HTTPException, Request
 
+from utils.captcha_failure_log import log_captcha_turnstile_failure
 from utils.captcha_turnstile import turnstile_secret, verify_turnstile_token
 from utils.ip_normalize import normalize_ip_string
 
@@ -56,6 +57,13 @@ async def require_turnstile_for_minigame_start(
     secret = turnstile_secret()
     if not site_key or not secret:
         logger.warning("minigame_turnstile enabled but site key or TURNSTILE_SECRET_KEY missing")
+        await log_captcha_turnstile_failure(
+            db,
+            request=request,
+            current_user=current_user,
+            reason="misconfigured",
+            detail="minigame_turnstile enabled but site key or TURNSTILE_SECRET_KEY missing",
+        )
         raise HTTPException(
             status_code=503,
             detail="Captcha is enabled but the server is not fully configured (TURNSTILE_SECRET_KEY and site key).",
@@ -63,12 +71,26 @@ async def require_turnstile_for_minigame_start(
 
     raw = (captcha_token or "").strip()
     if not raw:
+        await log_captcha_turnstile_failure(
+            db,
+            request=request,
+            current_user=current_user,
+            reason="missing_token",
+        )
         raise HTTPException(
             status_code=400,
             detail="Complete the captcha before starting a minigame.",
         )
 
     ip = _client_ip(request)
-    ok = await verify_turnstile_token(secret=secret, response=raw, remote_ip=ip or None)
-    if not ok:
+    vr = await verify_turnstile_token(secret=secret, response=raw, remote_ip=ip or None)
+    if not vr.success:
+        await log_captcha_turnstile_failure(
+            db,
+            request=request,
+            current_user=current_user,
+            reason="verify_failed",
+            turnstile_error_codes=vr.error_codes,
+            detail=vr.http_error,
+        )
         raise HTTPException(status_code=400, detail="Captcha verification failed. Try again.")

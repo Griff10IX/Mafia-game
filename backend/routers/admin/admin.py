@@ -690,6 +690,27 @@ def register(router):
         total = sum(int(r.get("swiss_balance") or 0) for r in rows)
         return {"users": rows, "count": len(rows), "total_swiss": total}
 
+    @router.get("/admin/captcha-turnstile-failures")
+    async def admin_captcha_turnstile_failures(
+        limit: int = Query(100, ge=1, le=500),
+        skip: int = Query(0, ge=0, le=10_000),
+        user_id: Optional[str] = Query(None, description="Filter by user id (exact)"),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Recent minigame Turnstile failures (missing token, verify failed, misconfigured hits). Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from utils.captcha_failure_log import CAPTCHA_TURNSTILE_FAILURES_COLLECTION
+
+        coll = db[CAPTCHA_TURNSTILE_FAILURES_COLLECTION]
+        q: Dict = {}
+        if user_id and str(user_id).strip():
+            q = {"user_id": str(user_id).strip()}
+        total = await coll.count_documents(q)
+        cursor = coll.find(q, {"_id": 0}).sort("at", -1).skip(skip).limit(limit)
+        items = await cursor.to_list(limit)
+        return {"total": total, "items": items, "limit": limit, "skip": skip}
+
     @router.post("/admin/swiss-bank/wipe")
     async def admin_swiss_bank_wipe(
         target_username: str,

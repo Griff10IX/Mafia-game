@@ -28,6 +28,8 @@ async def ensure_all_indexes(db):
             pass
         await db.game_config.create_index([("key", 1)], unique=True, sparse=True)
         await db.game_settings.create_index("key", unique=True)
+        await db.captcha_turnstile_failures.create_index([("at", -1)])
+        await db.captcha_turnstile_failures.create_index([("user_id", 1), ("at", -1)])
 
         # --- Families ---
         await db.family_members.create_index("family_id")
