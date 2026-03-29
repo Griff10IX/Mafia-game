@@ -254,12 +254,14 @@ SEED_TEST_PASSWORD = "test1234"
 def register(router):
     """Register admin routes. Dependencies from server to avoid circular imports."""
     import server as srv
+    from routers.game import leaderboard as leaderboard_module
     import middleware.security as security_module
     from routers.game.families import FAMILY_RACKETS
     from routers.kill.bodyguards import _create_robot_bodyguard_user
     from routers.social.forum import create_redeem_code_forum_topic, remove_redeem_code_forum_topic
 
     db = srv.db
+    log_respect_delta = srv.log_respect_delta
     get_current_user = srv.get_current_user
     send_notification = srv.send_notification
     send_notification_to_all = srv.send_notification_to_all
@@ -423,6 +425,8 @@ def register(router):
                 "new_respect_points": 0,
             }
         await db.users.update_one({"id": target["id"]}, {"$inc": {"respect_points": -remove}})
+        await log_respect_delta(target["id"], -remove, "admin_remove")
+        leaderboard_module.invalidate_leaderboard_cache()
         new_bal = current_rp - remove
         return {
             "message": f"Removed {remove:,} respect from {target.get('username') or target_username} (balance now {new_bal:,}).",
@@ -1747,7 +1751,7 @@ def register(router):
         await save_presence_config(db, cur)
         cur = await load_presence_config(db)
         if body.run_now and cur.get("enabled"):
-            await presence_simulator_tick(db, list(ADMIN_EMAILS or []))
+            await presence_simulator_tick(db, list(ADMIN_EMAILS or []), force=True)
             cur = await load_presence_config(db)
         return cur
 
@@ -3159,7 +3163,7 @@ def register(router):
 
         def _amt(d: dict) -> int:
             try:
-                return max(0, int(d.get("amount") or 0))
+                return int(d.get("amount") or 0)
             except (TypeError, ValueError):
                 return 0
 

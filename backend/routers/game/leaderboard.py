@@ -12,6 +12,11 @@ from server import ADMIN_EMAILS, db, get_current_user, _staff_exclude_user_filte
 
 _lb_cache: dict = {}
 _LB_CACHE_TTL = 30
+
+
+def invalidate_leaderboard_cache():
+    """Clear in-memory /leaderboards/top cache (e.g. after admin respect correction)."""
+    _lb_cache.clear()
 _last_reward_winners_cache: dict = {}
 _LAST_WINNERS_CACHE_TTL = 300
 

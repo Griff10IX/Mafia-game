@@ -5828,8 +5828,9 @@ export default function Admin() {
         {!collapsed.presenceSimulator && (
           <div className="p-3 space-y-2">
             <p className="text-[10px] text-mutedForeground font-heading">
-              Every few minutes, picks real players (not NPCs, not staff, not locked accounts) who look offline and updates their{' '}
-              <code className="text-[9px] bg-zinc-800/80 px-1 rounded">last_seen</code> so they show on Users Online. Rotates the pool: some names drop off each tick, 1–3 new ones may join. Auto-rank accounts (non-idle) are skipped — they already look online.
+              On each tick, removes up to “max remove” sim users from the pool (they then drift off Users Online as{' '}
+              <code className="text-[9px] bg-zinc-800/80 px-1 rounded">last_seen</code> ages) and adds up to “max add” new offline players.{' '}
+              <code className="text-[9px] bg-zinc-800/80 px-1 rounded">last_seen</code> is staggered per user so counts don’t jump in one instant; use an interval under ~5 minutes so pool members stay inside the online window. Overlapping ticks (loop + Run tick now) are deduped unless you use Run tick now (that always runs). Auto-rank (non-idle) accounts are skipped.
             </p>
             {presenceSimLoading && !presenceSim ? (
               <p className="text-[10px] text-mutedForeground font-heading">Loading…</p>
