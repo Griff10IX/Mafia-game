@@ -388,16 +388,16 @@ const THEMES = [
 ];
 
 const REWARD_TIERS = [
-  { score: 1, cash: 250, respect: 5, label: "Street Punk" },
-  { score: 5, cash: 1000, respect: 5, label: "Corner Boy" },
-  { score: 10, cash: 2500, respect: 10, label: "Made Man" },
-  { score: 20, cash: 6000, respect: 20, label: "Underboss" },
-  { score: 35, cash: 12500, respect: 20, label: "Capo" },
-  { score: 50, cash: 25000, respect: 40, label: "Don" },
+  { score: 1, cash: 63, respect: 5, label: "Street Punk" },
+  { score: 5, cash: 250, respect: 5, label: "Corner Boy" },
+  { score: 10, cash: 625, respect: 10, label: "Made Man" },
+  { score: 20, cash: 1500, respect: 20, label: "Underboss" },
+  { score: 35, cash: 3125, respect: 20, label: "Capo" },
+  { score: 50, cash: 6250, respect: 40, label: "Don" },
 ];
-const MAX_CASH_CAP = 1_000_000;
+const MAX_CASH_CAP = 250_000;
 const MAX_RESPECT_CAP = 1_000;
-const CASH_PER_GATE_AFTER_50 = 2_000;
+const CASH_PER_GATE_AFTER_50 = 500;
 const RESPECT_PER_GATE_AFTER_50 = 2;
 
 function getReward(score) {
@@ -1229,7 +1229,7 @@ export default function Gauntlet() {
               })}
             </div>
           </div>
-          <p style={{ color: "var(--noir-muted)", fontSize: "9px", marginTop: "6px", marginBottom: 0, textAlign: "center" }}>Caps: $1M cash · 1,000 respect per run</p>
+          <p style={{ color: "var(--noir-muted)", fontSize: "9px", marginTop: "6px", marginBottom: 0, textAlign: "center" }}>Caps: $250K cash · 1,000 respect per run</p>
         </div>
 
         {/* Game viewport */}

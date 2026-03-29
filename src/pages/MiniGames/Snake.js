@@ -62,7 +62,7 @@ const SNAKE_REWARDS_AND_RULES = {
     "Submit your score when you die to credit rewards (cash, respect, rank points, bullets, booze) to your account.",
     "Avoid the jail token (🔒) — it reduces your score and adds jail time.",
     "Cops (🚔) appear after 100 points. Don't hit them or you're pinched.",
-    "Speed increases as you collect. Max 15 runs per hour.",
+    "Speed increases as you collect. Max 10 runs per hour.",
   ],
 };
 

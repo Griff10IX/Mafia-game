@@ -17,7 +17,7 @@ const RULES = [
   "Collect cash bundles for bonus money",
   "Avoid cops and FBI agents",
   "Distance + coins = your final score",
-  "Max 15 runs per hour",
+  "Max 10 runs per hour",
 ];
 
 export default function TheGetaway() {
@@ -664,7 +664,7 @@ export default function TheGetaway() {
 
     ctx.fillStyle = '#fff';
     ctx.font = '14px sans-serif';
-    ctx.fillText('Cash collected: $' + (s.coins * 100).toLocaleString(), W / 2, H / 2 + 38);
+    ctx.fillText('Cash collected: $' + (s.coins * 25).toLocaleString(), W / 2, H / 2 + 38);
 
     ctx.fillStyle = '#4afa4a';
     ctx.font = 'bold 17px sans-serif';
@@ -909,7 +909,7 @@ export default function TheGetaway() {
       <div className={`${styles.panel} mobile-panel rounded-lg p-2`}>
         <div className="flex justify-between items-center px-2 py-1 text-xs font-heading text-foreground">
           <span>Score: <span className="text-primary">{displayScore}</span></span>
-          <span>Cash: <span className="text-emerald-400">${(displayCoins * 100).toLocaleString()}</span></span>
+          <span>Cash: <span className="text-emerald-400">${(displayCoins * 25).toLocaleString()}</span></span>
           <span>Lives: {'❤️'.repeat(displayLives)}{'🖤'.repeat(3 - displayLives)}</span>
         </div>
       </div>
