@@ -455,6 +455,16 @@ const ProfileInfoCard = ({
                   >
                     {row.value}
                   </Link>
+                ) : row.label === 'Rank'
+                  && isHdoProfile
+                  && typeof profile.rank_name === 'string'
+                  && profile.rank_name.startsWith('(HDO)') ? (
+                  <span className={`${row.valueClass ?? ''} inline-flex flex-wrap items-baseline justify-end gap-x-1`}>
+                    <span style={{ color: hdoColor }} className="shrink-0">(HDO)</span>
+                    <span className="text-primary">
+                      {(profile.rank_name.slice(5).trim() || profile.rank_name)}
+                    </span>
+                  </span>
                 ) : (
                   <span
                     className={row.valueClass}

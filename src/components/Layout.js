@@ -1833,7 +1833,7 @@ export default function Layout({ children }) {
                   { label: 'Weapon', value: user.gun_name || 'None', isLink: true, to: '/kill/armour-weapons' },
                   { label: 'Armour', value: user.armour_name || 'None', isLink: true, to: '/kill/armour-weapons' },
                   { label: 'Location', value: user.current_state || user.location || '—', truncate: true, isLink: true, to: '/travel' },
-                  { label: 'Family', value: user.gang_name || 'None', truncate: true, isLink: true, to: '/game/family/list' },
+                  { label: 'Family', value: user.gang_name || 'None', wrapValue: true, isLink: true, to: '/game/family/list' },
                   { label: 'Guards', value: typeof user.bodyguard_count === 'number' ? `${user.bodyguard_count}/${user.bodyguard_slots ?? 1}` : '—', isLink: true, to: '/kill/bodyguards' },
                   ...(hasCasinoOrProperty ? [
                     { label: 'Casino', value: formatMoney(user.casino_profit ?? 0), className: (user.casino_profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400', isLink: true, to: '/my-properties' },
@@ -1843,12 +1843,22 @@ export default function Layout({ children }) {
                   if (row.isLink) {
                     return (
                       <Link key={i} to={row.to} onClick={() => isMobileViewport && setRightSidebarOpen(false)}
-                        className="flex justify-between items-center gap-1 text-[9px] font-heading px-1 py-1 rounded-sm transition-colors min-w-0"
+                        className={`flex justify-between gap-1 text-[9px] font-heading px-1 py-1 rounded-sm transition-colors min-w-0 ${row.wrapValue ? 'items-start' : 'items-center'}`}
                         style={{ color: 'var(--noir-foreground)' }}
                         onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(var(--noir-primary-rgb), 0.05)'; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}>
-                        <span className="shrink-0" style={{ color: 'var(--noir-muted)' }}>{row.label}</span>
-                        <span className={`shrink min-w-0 text-right ${row.truncate ? 'truncate max-w-[72px]' : 'truncate'} ${row.className || ''}`} style={row.className ? undefined : { color: 'var(--noir-primary)' }} title={row.value}>{row.value}</span>
+                        <span className="shrink-0 pt-px" style={{ color: 'var(--noir-muted)' }}>{row.label}</span>
+                        <span
+                          className={
+                            row.wrapValue
+                              ? `flex-1 min-w-0 text-right break-words leading-snug ${row.className || ''}`
+                              : `shrink min-w-0 text-right ${row.truncate ? 'truncate max-w-[72px]' : 'truncate'} ${row.className || ''}`
+                          }
+                          style={row.className ? undefined : { color: 'var(--noir-primary)' }}
+                          title={row.wrapValue ? undefined : row.value}
+                        >
+                          {row.value}
+                        </span>
                       </Link>
                     );
                   }

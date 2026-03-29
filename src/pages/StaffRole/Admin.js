@@ -4792,129 +4792,6 @@ export default function Admin() {
       </div>
       )}
 
-      {captchaFailModalOpen && (
-        <div
-          className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4 bg-black/75"
-          onClick={() => setCaptchaFailModalOpen(false)}
-          role="presentation"
-        >
-          <div
-            className="bg-zinc-900 border border-primary/30 rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col"
-            onClick={(e) => e.stopPropagation()}
-            role="dialog"
-            aria-labelledby="captcha-fail-title"
-          >
-            <div className="px-3 py-2.5 border-b border-zinc-700/50 flex flex-wrap items-center justify-between gap-2 shrink-0">
-              <h3 id="captcha-fail-title" className="text-sm font-heading font-bold text-primary">
-                Turnstile / minigame captcha failures
-              </h3>
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  type="text"
-                  value={captchaFailUserDraft}
-                  onChange={(e) => setCaptchaFailUserDraft(e.target.value)}
-                  placeholder="Filter by user id"
-                  className="w-40 sm:w-52 px-2 py-1 rounded border border-input bg-transparent text-[10px] font-mono"
-                  autoComplete="off"
-                />
-                <button
-                  type="button"
-                  onClick={() => {
-                    const u = captchaFailUserDraft.trim();
-                    setCaptchaFailUserQuery(u);
-                    loadCaptchaTurnstileFailures(u);
-                  }}
-                  className="px-2 py-1 rounded border border-zinc-600 text-[10px] font-heading text-zinc-200 hover:bg-zinc-800"
-                >
-                  Apply
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCaptchaFailUserDraft('');
-                    setCaptchaFailUserQuery('');
-                    loadCaptchaTurnstileFailures('');
-                  }}
-                  className="px-2 py-1 rounded border border-zinc-600 text-[10px] font-heading text-zinc-200 hover:bg-zinc-800"
-                >
-                  Clear
-                </button>
-                <button
-                  type="button"
-                  disabled={captchaFailLoading}
-                  onClick={() => loadCaptchaTurnstileFailures()}
-                  className="px-2 py-1 rounded border border-primary/40 bg-primary/15 text-[10px] font-heading text-primary hover:bg-primary/25 disabled:opacity-40"
-                >
-                  {captchaFailLoading ? '…' : 'Refresh'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCaptchaFailModalOpen(false)}
-                  className="p-1 rounded border border-zinc-600 text-zinc-400 hover:bg-zinc-800 hover:text-foreground"
-                  aria-label="Close"
-                >
-                  <X size={16} />
-                </button>
-              </div>
-            </div>
-            <div className="px-3 py-2 text-[10px] text-mutedForeground font-heading border-b border-zinc-800/80 shrink-0">
-              Total matching: <span className="text-foreground tabular-nums">{captchaFailTotal}</span>
-              {' · '}
-              <span className="text-zinc-500">missing_token</span> = no token sent;{' '}
-              <span className="text-zinc-500">verify_failed</span> = Cloudflare rejected;{' '}
-              <span className="text-zinc-500">misconfigured</span> = keys missing while toggle on.
-            </div>
-            <div className="flex-1 overflow-auto min-h-0">
-              {captchaFailLoading && captchaFailRows.length === 0 ? (
-                <div className="p-8 text-center text-mutedForeground text-xs font-heading">Loading…</div>
-              ) : captchaFailRows.length === 0 ? (
-                <div className="p-8 text-center text-mutedForeground text-xs font-heading">No rows yet.</div>
-              ) : (
-                <table className="w-full text-left text-[9px] sm:text-[10px] font-heading border-collapse">
-                  <thead className="sticky top-0 bg-zinc-900/95 border-b border-zinc-700 z-10">
-                    <tr className="text-mutedForeground uppercase tracking-wider">
-                      <th className="py-2 px-2 font-semibold">When (UTC)</th>
-                      <th className="py-2 px-2 font-semibold">User</th>
-                      <th className="py-2 px-2 font-semibold">Reason</th>
-                      <th className="py-2 px-2 font-semibold">Path</th>
-                      <th className="py-2 px-2 font-semibold">IP</th>
-                      <th className="py-2 px-2 font-semibold">Turnstile codes</th>
-                      <th className="py-2 px-2 font-semibold">Detail / UA</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {captchaFailRows.map((row) => (
-                      <tr key={row.id} className="border-b border-zinc-800/80 hover:bg-zinc-800/40 align-top">
-                        <td className="py-1.5 px-2 text-zinc-300 whitespace-nowrap">{row.at || '—'}</td>
-                        <td className="py-1.5 px-2">
-                          <div className="text-foreground">{row.username || '—'}</div>
-                          <div className="font-mono text-[9px] text-zinc-500 break-all">{row.user_id || '—'}</div>
-                        </td>
-                        <td className="py-1.5 px-2 text-amber-200/90">{row.reason || '—'}</td>
-                        <td className="py-1.5 px-2 font-mono text-zinc-400 break-all max-w-[140px] sm:max-w-[200px]">
-                          {row.method ? `${row.method} ` : ''}
-                          {row.path || '—'}
-                        </td>
-                        <td className="py-1.5 px-2 font-mono text-zinc-400 whitespace-nowrap">{row.ip || '—'}</td>
-                        <td className="py-1.5 px-2 font-mono text-zinc-400 break-all max-w-[120px]">
-                          {Array.isArray(row.turnstile_error_codes) && row.turnstile_error_codes.length
-                            ? row.turnstile_error_codes.join(', ')
-                            : '—'}
-                        </td>
-                        <td className="py-1.5 px-2 text-zinc-500 break-all max-w-[200px] sm:max-w-[280px]">
-                          {row.detail ? <div className="text-rose-300/90 mb-1">{row.detail}</div> : null}
-                          <div className="opacity-80">{row.user_agent || '—'}</div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* User detail modal */}
       {userDetailData && (() => {
         const u = userDetailData.user || {};
@@ -12014,6 +11891,131 @@ export default function Admin() {
         </div>
       </section>
       )}
+
+      {/* Captcha failures: outside category sections so "View captcha failures" works from Security & Cloudflare */}
+      {captchaFailModalOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/75"
+          onClick={() => setCaptchaFailModalOpen(false)}
+          role="presentation"
+        >
+          <div
+            className="bg-zinc-900 border border-primary/30 rounded-lg shadow-xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-labelledby="captcha-fail-title"
+          >
+            <div className="px-3 py-2.5 border-b border-zinc-700/50 flex flex-wrap items-center justify-between gap-2 shrink-0">
+              <h3 id="captcha-fail-title" className="text-sm font-heading font-bold text-primary">
+                Turnstile / minigame captcha failures
+              </h3>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={captchaFailUserDraft}
+                  onChange={(e) => setCaptchaFailUserDraft(e.target.value)}
+                  placeholder="Filter by user id"
+                  className="w-40 sm:w-52 px-2 py-1 rounded border border-input bg-transparent text-[10px] font-mono"
+                  autoComplete="off"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    const u = captchaFailUserDraft.trim();
+                    setCaptchaFailUserQuery(u);
+                    loadCaptchaTurnstileFailures(u);
+                  }}
+                  className="px-2 py-1 rounded border border-zinc-600 text-[10px] font-heading text-zinc-200 hover:bg-zinc-800"
+                >
+                  Apply
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCaptchaFailUserDraft('');
+                    setCaptchaFailUserQuery('');
+                    loadCaptchaTurnstileFailures('');
+                  }}
+                  className="px-2 py-1 rounded border border-zinc-600 text-[10px] font-heading text-zinc-200 hover:bg-zinc-800"
+                >
+                  Clear
+                </button>
+                <button
+                  type="button"
+                  disabled={captchaFailLoading}
+                  onClick={() => loadCaptchaTurnstileFailures()}
+                  className="px-2 py-1 rounded border border-primary/40 bg-primary/15 text-[10px] font-heading text-primary hover:bg-primary/25 disabled:opacity-40"
+                >
+                  {captchaFailLoading ? '…' : 'Refresh'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCaptchaFailModalOpen(false)}
+                  className="p-1 rounded border border-zinc-600 text-zinc-400 hover:bg-zinc-800 hover:text-foreground"
+                  aria-label="Close"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+            <div className="px-3 py-2 text-[10px] text-mutedForeground font-heading border-b border-zinc-800/80 shrink-0">
+              Total matching: <span className="text-foreground tabular-nums">{captchaFailTotal}</span>
+              {' · '}
+              <span className="text-zinc-500">missing_token</span> = no token sent;{' '}
+              <span className="text-zinc-500">verify_failed</span> = Cloudflare rejected;{' '}
+              <span className="text-zinc-500">misconfigured</span> = keys missing while toggle on.
+            </div>
+            <div className="flex-1 overflow-auto min-h-0">
+              {captchaFailLoading && captchaFailRows.length === 0 ? (
+                <div className="p-8 text-center text-mutedForeground text-xs font-heading">Loading…</div>
+              ) : captchaFailRows.length === 0 ? (
+                <div className="p-8 text-center text-mutedForeground text-xs font-heading">No rows yet.</div>
+              ) : (
+                <table className="w-full text-left text-[9px] sm:text-[10px] font-heading border-collapse">
+                  <thead className="sticky top-0 bg-zinc-900/95 border-b border-zinc-700 z-10">
+                    <tr className="text-mutedForeground uppercase tracking-wider">
+                      <th className="py-2 px-2 font-semibold">When (UTC)</th>
+                      <th className="py-2 px-2 font-semibold">User</th>
+                      <th className="py-2 px-2 font-semibold">Reason</th>
+                      <th className="py-2 px-2 font-semibold">Path</th>
+                      <th className="py-2 px-2 font-semibold">IP</th>
+                      <th className="py-2 px-2 font-semibold">Turnstile codes</th>
+                      <th className="py-2 px-2 font-semibold">Detail / UA</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {captchaFailRows.map((row) => (
+                      <tr key={row.id} className="border-b border-zinc-800/80 hover:bg-zinc-800/40 align-top">
+                        <td className="py-1.5 px-2 text-zinc-300 whitespace-nowrap">{row.at || '—'}</td>
+                        <td className="py-1.5 px-2">
+                          <div className="text-foreground">{row.username || '—'}</div>
+                          <div className="font-mono text-[9px] text-zinc-500 break-all">{row.user_id || '—'}</div>
+                        </td>
+                        <td className="py-1.5 px-2 text-amber-200/90">{row.reason || '—'}</td>
+                        <td className="py-1.5 px-2 font-mono text-zinc-400 break-all max-w-[140px] sm:max-w-[200px]">
+                          {row.method ? `${row.method} ` : ''}
+                          {row.path || '—'}
+                        </td>
+                        <td className="py-1.5 px-2 font-mono text-zinc-400 whitespace-nowrap">{row.ip || '—'}</td>
+                        <td className="py-1.5 px-2 font-mono text-zinc-400 break-all max-w-[120px]">
+                          {Array.isArray(row.turnstile_error_codes) && row.turnstile_error_codes.length
+                            ? row.turnstile_error_codes.join(', ')
+                            : '—'}
+                        </td>
+                        <td className="py-1.5 px-2 text-zinc-500 break-all max-w-[200px] sm:max-w-[280px]">
+                          {row.detail ? <div className="text-rose-300/90 mb-1">{row.detail}</div> : null}
+                          <div className="opacity-80">{row.user_agent || '—'}</div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
         </main>
       </div>
     </div>
