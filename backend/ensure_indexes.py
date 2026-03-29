@@ -167,6 +167,7 @@ async def ensure_all_indexes(db):
         # --- Economy events (car/property/loot/booze analytics) ---
         await db.economy_events.create_index([("at", -1)])
         await db.economy_events.create_index([("type", 1), ("at", -1)])
+        await db.economy_events.create_index([("user_id", 1), ("at", -1)])
 
         # --- Crimes ---
         await db.crimes.create_index("id", unique=True)

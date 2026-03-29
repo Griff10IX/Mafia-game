@@ -52,6 +52,8 @@ BOOZE_RUN_HISTORY_MAX = 10
 BOOZE_RUN_JAIL_CHANCE_MIN = 0.05
 BOOZE_RUN_JAIL_CHANCE_MAX = 0.15
 BOOZE_RUN_JAIL_SECONDS = 20
+# Multiplier on net profit for a completed run (buy city ≠ sell city); stats, cash, referrals, economy_events.
+BOOZE_RUN_PROFIT_MULT = 0.75
 
 # Per-user cache for GET /booze-run/config
 _config_cache: dict = {}
@@ -150,7 +152,7 @@ def _booze_daily_estimate_rough(capacity: int, prices_map: dict, secs_per_leg: i
     runs_per_24h = 86400 / expected_secs_per_run
     successful_run_rate = (1 - jail_per_action) ** 2
     profitable_runs = runs_per_24h * successful_run_rate
-    return int(profitable_runs * capacity * profit_per_unit)
+    return int(profitable_runs * capacity * profit_per_unit * BOOZE_RUN_PROFIT_MULT)
 
 
 def _booze_user_capacity(current_user: dict) -> int:
@@ -265,6 +267,20 @@ async def _booze_buy_impl(user: dict, booze_id: str, amount: int) -> dict:
             "booze_jail",
             {"phase": "buy", "inventory_loss_basis": loss_basis},
         )
+        jail_at = datetime.now(timezone.utc).isoformat()
+        try:
+            await db.economy_events.insert_one(
+                {
+                    "at": jail_at,
+                    "type": "booze_run_jail",
+                    "user_id": user["id"],
+                    "username": user.get("username") or "",
+                    "phase": "buy",
+                    "inventory_loss_basis": int(loss_basis or 0),
+                }
+            )
+        except Exception:
+            pass
         out = {
             "message": "Busted! Prohibition agents got you. You're going to jail.",
             "caught": True,
@@ -342,6 +358,20 @@ async def _booze_sell_impl(user: dict, booze_id: str, amount: int) -> dict:
             "booze_jail",
             {"phase": "sell", "inventory_loss_basis": loss_basis},
         )
+        jail_at = datetime.now(timezone.utc).isoformat()
+        try:
+            await db.economy_events.insert_one(
+                {
+                    "at": jail_at,
+                    "type": "booze_run_jail",
+                    "user_id": user["id"],
+                    "username": user.get("username") or "",
+                    "phase": "sell",
+                    "inventory_loss_basis": int(loss_basis or 0),
+                }
+            )
+        except Exception:
+            pass
         out = {
             "message": "Busted! Prohibition agents got you. You're going to jail.",
             "caught": True,
@@ -363,9 +393,10 @@ async def _booze_sell_impl(user: dict, booze_id: str, amount: int) -> dict:
             from routers.game.achievements import get_badge_bonuses
             bb = await get_badge_bonuses(user.get("id") or "")
             profit = int(profit * (1 + bb.get("booze_runs", 0) * 0.001) * bb.get("prestige_badge_mult", 1))
-            revenue = cost_of_sold + profit
         except Exception:
             pass
+        profit = max(0, int(profit * BOOZE_RUN_PROFIT_MULT))
+        revenue = cost_of_sold + profit
     new_val = have - amount
     booze_name = BOOZE_TYPES[booze_index]["name"]
     today_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d")

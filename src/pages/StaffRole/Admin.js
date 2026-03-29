@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useLocation, Navigate } from 'react-router-dom';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine } from 'lucide-react';
 import api, { imageHostPublicUrl } from '../../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
@@ -492,6 +492,17 @@ export default function Admin() {
   const [economyAnalyticsDays, setEconomyAnalyticsDays] = useState(7);
   const [economyAnalytics, setEconomyAnalytics] = useState(null);
   const [economyAnalyticsLoading, setEconomyAnalyticsLoading] = useState(false);
+  const [boozeRunAnalyticsDays, setBoozeRunAnalyticsDays] = useState(30);
+  const [boozeRunUserDays, setBoozeRunUserDays] = useState(90);
+  const [boozeRunOverview, setBoozeRunOverview] = useState(null);
+  const [boozeRunOverviewLoading, setBoozeRunOverviewLoading] = useState(false);
+  const [boozeRunLeaders, setBoozeRunLeaders] = useState(null);
+  const [boozeRunLeadersLoading, setBoozeRunLeadersLoading] = useState(false);
+  const [boozeRunLeadersSort, setBoozeRunLeadersSort] = useState('profit');
+  const [boozeRunLeadersLimit, setBoozeRunLeadersLimit] = useState(50);
+  const [boozeRunUserQuery, setBoozeRunUserQuery] = useState('');
+  const [boozeRunUserProfile, setBoozeRunUserProfile] = useState(null);
+  const [boozeRunUserLoading, setBoozeRunUserLoading] = useState(false);
   const [loginPageVisitors, setLoginPageVisitors] = useState(null);
   const [loginPageViews, setLoginPageViews] = useState(null);
   const [loginPageVisitorsLoading, setLoginPageVisitorsLoading] = useState(false);
@@ -2678,6 +2689,52 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed to load economy analytics');
     } finally {
       setEconomyAnalyticsLoading(false);
+    }
+  };
+
+  const handleFetchBoozeRunOverview = async () => {
+    setBoozeRunOverviewLoading(true);
+    try {
+      const res = await api.get('/admin/booze-run/analytics/overview', { params: { days: boozeRunAnalyticsDays } });
+      setBoozeRunOverview(res.data || null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load booze-run overview');
+    } finally {
+      setBoozeRunOverviewLoading(false);
+    }
+  };
+
+  const handleFetchBoozeRunLeaders = async () => {
+    setBoozeRunLeadersLoading(true);
+    try {
+      const res = await api.get('/admin/booze-run/analytics/leaders', {
+        params: { limit: boozeRunLeadersLimit, sort: boozeRunLeadersSort },
+      });
+      setBoozeRunLeaders(res.data || null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load booze-run leaders');
+    } finally {
+      setBoozeRunLeadersLoading(false);
+    }
+  };
+
+  const handleFetchBoozeRunUser = async () => {
+    const q = (boozeRunUserQuery || '').trim();
+    if (!q) {
+      toast.error('Enter a username or user ID');
+      return;
+    }
+    setBoozeRunUserLoading(true);
+    setBoozeRunUserProfile(null);
+    try {
+      const res = await api.get(`/admin/booze-run/analytics/user/${encodeURIComponent(q)}`, {
+        params: { days: boozeRunUserDays },
+      });
+      setBoozeRunUserProfile(res.data || null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load booze-run user');
+    } finally {
+      setBoozeRunUserLoading(false);
     }
   };
 
@@ -8077,6 +8134,251 @@ export default function Admin() {
                   </div>
                 </>
               )}
+            </div>
+          )}
+        </div>
+
+        {/* Booze-run analytics (economy_events + user counters) */}
+
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Wine}
+            title="Booze-run analytics"
+            badge={boozeRunOverview?.booze_run_sell ? <span className="text-[10px] font-heading text-mutedForeground">{boozeRunOverview.days}d window</span> : null}
+            isCollapsed={collapsed.boozeRunAnalytics}
+            onToggle={() => toggleSection('boozeRunAnalytics')}
+          />
+          {!collapsed.boozeRunAnalytics && (
+            <div className="p-3 space-y-3">
+              <p className="text-[10px] text-mutedForeground font-heading">
+                Completed runs and jails from <code className="text-[9px] bg-zinc-800/80 px-1 rounded">economy_events</code>; lifetime totals from <code className="text-[9px] bg-zinc-800/80 px-1 rounded">users</code> (net of confiscation).
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[9px] text-mutedForeground font-heading uppercase">Overview / leaders</span>
+                {[7, 30, 90].map((d) => (
+                  <button
+                    key={d}
+                    type="button"
+                    onClick={() => setBoozeRunAnalyticsDays(d)}
+                    className={`px-2 py-1 rounded border text-[10px] font-heading ${boozeRunAnalyticsDays === d ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'}`}
+                  >
+                    {d}d
+                  </button>
+                ))}
+                <BtnPrimary onClick={handleFetchBoozeRunOverview} disabled={boozeRunOverviewLoading}>
+                  {boozeRunOverviewLoading ? 'Loading…' : 'Load overview'}
+                </BtnPrimary>
+                <AdminSelect
+                  value={String(boozeRunLeadersLimit)}
+                  onChange={(e) => setBoozeRunLeadersLimit(Number(e.target.value) || 50)}
+                  className="w-20"
+                >
+                  <option value="25">Top 25</option>
+                  <option value="50">Top 50</option>
+                  <option value="100">Top 100</option>
+                  <option value="200">Top 200</option>
+                </AdminSelect>
+                <AdminSelect
+                  value={boozeRunLeadersSort}
+                  onChange={(e) => setBoozeRunLeadersSort(e.target.value)}
+                  className="w-36"
+                >
+                  <option value="profit">Sort: profit</option>
+                  <option value="runs">Sort: runs</option>
+                  <option value="jails">Sort: jails</option>
+                </AdminSelect>
+                <BtnPrimary onClick={handleFetchBoozeRunLeaders} disabled={boozeRunLeadersLoading}>
+                  {boozeRunLeadersLoading ? 'Loading…' : 'Load leaders'}
+                </BtnPrimary>
+              </div>
+              {boozeRunOverview && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
+                    <div className="text-[9px] text-mutedForeground font-heading uppercase">Sells (runs)</div>
+                    <div className="text-sm font-heading font-bold">{boozeRunOverview.booze_run_sell?.count?.toLocaleString?.() ?? '—'}</div>
+                  </div>
+                  <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
+                    <div className="text-[9px] text-mutedForeground font-heading uppercase">Sell profit</div>
+                    <div className="text-sm font-heading font-bold text-green-400">${(boozeRunOverview.booze_run_sell?.total_profit ?? 0).toLocaleString()}</div>
+                  </div>
+                  <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
+                    <div className="text-[9px] text-mutedForeground font-heading uppercase">Sell revenue</div>
+                    <div className="text-sm font-heading font-bold">${(boozeRunOverview.booze_run_sell?.total_revenue ?? 0).toLocaleString()}</div>
+                  </div>
+                  <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
+                    <div className="text-[9px] text-mutedForeground font-heading uppercase">Unique sellers</div>
+                    <div className="text-sm font-heading font-bold">{boozeRunOverview.booze_run_sell?.unique_users?.toLocaleString?.() ?? '—'}</div>
+                  </div>
+                  <div className="bg-zinc-800/60 rounded p-2 border border-amber-700/30">
+                    <div className="text-[9px] text-mutedForeground font-heading uppercase">Jails</div>
+                    <div className="text-sm font-heading font-bold text-amber-400">{boozeRunOverview.booze_run_jail?.count?.toLocaleString?.() ?? '—'}</div>
+                  </div>
+                  <div className="bg-zinc-800/60 rounded p-2 border border-amber-700/30">
+                    <div className="text-[9px] text-mutedForeground font-heading uppercase">Confiscation basis</div>
+                    <div className="text-sm font-heading font-bold text-amber-400">${(boozeRunOverview.booze_run_jail?.total_inventory_loss_basis ?? 0).toLocaleString()}</div>
+                  </div>
+                  <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
+                    <div className="text-[9px] text-mutedForeground font-heading uppercase">Jail buy / sell</div>
+                    <div className="text-sm font-heading font-bold">
+                      {(boozeRunOverview.booze_run_jail?.buy_phase_count ?? 0).toLocaleString()} / {(boozeRunOverview.booze_run_jail?.sell_phase_count ?? 0).toLocaleString()}
+                    </div>
+                  </div>
+                  <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
+                    <div className="text-[9px] text-mutedForeground font-heading uppercase">Users (any)</div>
+                    <div className="text-sm font-heading font-bold">{boozeRunOverview.unique_users_any?.toLocaleString?.() ?? '—'}</div>
+                  </div>
+                </div>
+              )}
+              {boozeRunLeaders?.leaders && (
+                <div className="overflow-x-auto max-h-64">
+                  <p className="text-[10px] text-mutedForeground font-heading mb-1">Leaders — sort: {boozeRunLeaders.sort}; lifetime stats on users.</p>
+                  {boozeRunLeaders.leaders.length === 0 ? (
+                    <p className="text-[10px] text-mutedForeground font-heading">No users with booze runs or jails.</p>
+                  ) : (
+                    <table className="w-full text-[10px] font-heading">
+                      <thead>
+                        <tr>
+                          <th className="text-left p-1.5 text-mutedForeground">User</th>
+                          <th className="text-right p-1.5 text-mutedForeground">Runs</th>
+                          <th className="text-right p-1.5 text-mutedForeground">Jails</th>
+                          <th className="text-right p-1.5 text-mutedForeground">Run profit</th>
+                          <th className="text-right p-1.5 text-mutedForeground">Avg/run</th>
+                          <th className="text-right p-1.5 text-mutedForeground">Auto runs</th>
+                          <th className="text-right p-1.5 text-mutedForeground">Auto profit</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {boozeRunLeaders.leaders.map((row) => (
+                          <tr key={row.id || row.username} className="border-b border-zinc-700/30">
+                            <td className="py-1.5 pr-2 font-medium">{row.username || '—'}</td>
+                            <td className="py-1.5 text-right">{row.booze_runs_count != null ? row.booze_runs_count.toLocaleString() : '—'}</td>
+                            <td className="py-1.5 text-right">{row.booze_jail_count != null ? row.booze_jail_count.toLocaleString() : '—'}</td>
+                            <td className="py-1.5 text-right">${(row.booze_run_profit_total ?? 0).toLocaleString()}</td>
+                            <td className="py-1.5 text-right">${(row.avg_profit_per_run_lifetime ?? 0).toLocaleString()}</td>
+                            <td className="py-1.5 text-right">{(row.auto_rank_total_booze_runs ?? 0).toLocaleString()}</td>
+                            <td className="py-1.5 text-right">${(row.auto_rank_total_booze_profit ?? 0).toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+              <div className="border-t border-zinc-700/40 pt-2 space-y-2">
+                <div className="text-[9px] text-mutedForeground font-heading uppercase">Per-user report</div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <input
+                    type="text"
+                    value={boozeRunUserQuery}
+                    onChange={(e) => setBoozeRunUserQuery(e.target.value)}
+                    placeholder="Username or user ID"
+                    className="min-w-[12rem] flex-1 max-w-md bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                  />
+                  {[30, 90, 365].map((d) => (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setBoozeRunUserDays(d)}
+                      className={`px-2 py-1 rounded border text-[10px] font-heading ${boozeRunUserDays === d ? 'bg-primary/40 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'}`}
+                    >
+                      {d}d
+                    </button>
+                  ))}
+                  <BtnPrimary onClick={handleFetchBoozeRunUser} disabled={boozeRunUserLoading}>
+                    {boozeRunUserLoading ? 'Loading…' : 'Load user'}
+                  </BtnPrimary>
+                </div>
+                {boozeRunUserProfile && (
+                  <div className="space-y-2">
+                    <p className="text-[10px] font-heading font-bold text-primary">
+                      {boozeRunUserProfile.username} <span className="text-mutedForeground font-normal">({boozeRunUserProfile.user_id})</span>
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div className="bg-zinc-800/50 rounded p-2 border border-zinc-700/30">
+                        <div className="text-[9px] text-mutedForeground uppercase">Lifetime runs</div>
+                        <div className="text-sm font-bold">{boozeRunUserProfile.lifetime?.booze_runs_count?.toLocaleString?.() ?? 0}</div>
+                      </div>
+                      <div className="bg-zinc-800/50 rounded p-2 border border-zinc-700/30">
+                        <div className="text-[9px] text-mutedForeground uppercase">Lifetime jails</div>
+                        <div className="text-sm font-bold text-amber-400">{boozeRunUserProfile.lifetime?.booze_jail_count?.toLocaleString?.() ?? 0}</div>
+                      </div>
+                      <div className="bg-zinc-800/50 rounded p-2 border border-zinc-700/30">
+                        <div className="text-[9px] text-mutedForeground uppercase">Lifetime run profit</div>
+                        <div className="text-sm font-bold text-green-400">${(boozeRunUserProfile.lifetime?.booze_run_profit_total ?? 0).toLocaleString()}</div>
+                      </div>
+                      <div className="bg-zinc-800/50 rounded p-2 border border-zinc-700/30">
+                        <div className="text-[9px] text-mutedForeground uppercase">Avg / completed run</div>
+                        <div className="text-sm font-bold">${(boozeRunUserProfile.lifetime?.avg_profit_per_completed_run ?? 0).toLocaleString()}</div>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-mutedForeground font-heading">
+                      Window last {boozeRunUserProfile.window_days}d: {boozeRunUserProfile.window?.completed_runs ?? 0} runs, ${(boozeRunUserProfile.window?.total_profit ?? 0).toLocaleString()} profit, avg ${(boozeRunUserProfile.window?.avg_profit_per_run ?? 0).toLocaleString()}; jails {boozeRunUserProfile.window?.jail_events ?? 0}, confiscation basis ${(boozeRunUserProfile.window?.total_confiscation_basis ?? 0).toLocaleString()}.
+                    </p>
+                    <div className="overflow-x-auto max-h-40">
+                      <div className="text-[9px] text-mutedForeground font-heading mb-1">Recent booze history (last 10)</div>
+                      {(!boozeRunUserProfile.booze_run_history || boozeRunUserProfile.booze_run_history.length === 0) ? (
+                        <p className="text-[10px] text-mutedForeground font-heading">No history rows.</p>
+                      ) : (
+                        <table className="w-full text-[10px] font-heading">
+                          <thead>
+                            <tr>
+                              <th className="text-left p-1 text-mutedForeground">When</th>
+                              <th className="text-left p-1 text-mutedForeground">Action</th>
+                              <th className="text-left p-1 text-mutedForeground">Booze</th>
+                              <th className="text-right p-1 text-mutedForeground">Amt</th>
+                              <th className="text-right p-1 text-mutedForeground">Profit</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {boozeRunUserProfile.booze_run_history.map((h, i) => (
+                              <tr key={i} className="border-b border-zinc-700/20">
+                                <td className="py-1 pr-1 whitespace-nowrap">{h.at ? new Date(h.at).toLocaleString() : '—'}</td>
+                                <td className="py-1 pr-1">{h.action || '—'}{h.is_run ? ' (run)' : ''}</td>
+                                <td className="py-1 pr-1">{h.booze_name || '—'}</td>
+                                <td className="py-1 text-right">{h.amount != null ? h.amount.toLocaleString() : '—'}</td>
+                                <td className="py-1 text-right">{h.profit != null ? `$${Number(h.profit).toLocaleString()}` : '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                    <div className="overflow-x-auto max-h-48">
+                      <div className="text-[9px] text-mutedForeground font-heading mb-1">Economy events in window (up to 100)</div>
+                      {(!boozeRunUserProfile.recent_events || boozeRunUserProfile.recent_events.length === 0) ? (
+                        <p className="text-[10px] text-mutedForeground font-heading">No sell/jail events in window.</p>
+                      ) : (
+                        <table className="w-full text-[9px] font-heading">
+                          <thead>
+                            <tr>
+                              <th className="text-left p-1 text-mutedForeground">When</th>
+                              <th className="text-left p-1 text-mutedForeground">Type</th>
+                              <th className="text-right p-1 text-mutedForeground">Profit</th>
+                              <th className="text-right p-1 text-mutedForeground">Rev</th>
+                              <th className="text-left p-1 text-mutedForeground">Phase / loss</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {boozeRunUserProfile.recent_events.map((ev, i) => (
+                              <tr key={i} className="border-b border-zinc-700/20">
+                                <td className="py-1 pr-1 whitespace-nowrap">{ev.at ? new Date(ev.at).toLocaleString() : '—'}</td>
+                                <td className="py-1 pr-1">{ev.type || '—'}</td>
+                                <td className="py-1 text-right">{ev.profit != null ? ev.profit.toLocaleString() : '—'}</td>
+                                <td className="py-1 text-right">{ev.revenue != null ? ev.revenue.toLocaleString() : '—'}</td>
+                                <td className="py-1 pr-1">
+                                  {ev.phase ? ev.phase : '—'}
+                                  {ev.inventory_loss_basis != null ? ` · basis ${ev.inventory_loss_basis.toLocaleString()}` : ''}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

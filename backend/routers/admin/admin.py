@@ -3473,6 +3473,266 @@ def register(router):
             )
         return {"generated_at": now.isoformat(), "days": days, "items": items}
 
+    @router.get("/admin/booze-run/analytics/overview")
+    async def admin_booze_run_analytics_overview(
+        days: int = Query(30, ge=1, le=365),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Booze-run economy overview for the last N days (economy_events: booze_run_sell, booze_run_jail).
+        Admin or moderator only.
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        now = datetime.now(timezone.utc)
+        since_iso = (now - timedelta(days=int(days))).isoformat()
+        sell_count = 0
+        sell_profit = 0
+        sell_revenue = 0
+        sell_users: Set[str] = set()
+        jail_count = 0
+        jail_loss = 0
+        jail_buy = 0
+        jail_sell = 0
+        jail_users: Set[str] = set()
+        cursor = db.economy_events.find(
+            {
+                "at": {"$gte": since_iso},
+                "type": {"$in": ["booze_run_sell", "booze_run_jail"]},
+            },
+            {
+                "_id": 0,
+                "type": 1,
+                "user_id": 1,
+                "profit": 1,
+                "revenue": 1,
+                "phase": 1,
+                "inventory_loss_basis": 1,
+            },
+        )
+        async for e in cursor:
+            t = (e.get("type") or "").strip()
+            uid = (e.get("user_id") or "").strip()
+            if t == "booze_run_sell":
+                sell_count += 1
+                sell_profit += int(e.get("profit") or 0)
+                sell_revenue += int(e.get("revenue") or 0)
+                if uid:
+                    sell_users.add(uid)
+            elif t == "booze_run_jail":
+                jail_count += 1
+                jail_loss += int(e.get("inventory_loss_basis") or 0)
+                ph = (e.get("phase") or "").strip()
+                if ph == "buy":
+                    jail_buy += 1
+                elif ph == "sell":
+                    jail_sell += 1
+                if uid:
+                    jail_users.add(uid)
+        return {
+            "generated_at": now.isoformat(),
+            "days": days,
+            "booze_run_sell": {
+                "count": sell_count,
+                "total_profit": sell_profit,
+                "total_revenue": sell_revenue,
+                "unique_users": len(sell_users),
+            },
+            "booze_run_jail": {
+                "count": jail_count,
+                "total_inventory_loss_basis": jail_loss,
+                "buy_phase_count": jail_buy,
+                "sell_phase_count": jail_sell,
+                "unique_users": len(jail_users),
+            },
+            "unique_users_any": len(sell_users | jail_users),
+        }
+
+    @router.get("/admin/booze-run/analytics/leaders")
+    async def admin_booze_run_analytics_leaders(
+        limit: int = Query(50, ge=1, le=200),
+        sort: str = Query("profit"),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Top users by lifetime booze stats (users collection). sort=profit|runs|jails.
+        avg_profit_per_run_lifetime = booze_run_profit_total / max(booze_runs_count,1) (net of confiscation).
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        s = (sort or "profit").strip().lower()
+        if s not in ("profit", "runs", "jails"):
+            raise HTTPException(status_code=400, detail="sort must be profit, runs, or jails")
+        sort_field = {"profit": "booze_run_profit_total", "runs": "booze_runs_count", "jails": "booze_jail_count"}[s]
+        cursor = (
+            db.users.find(
+                {
+                    "$or": [
+                        {"booze_runs_count": {"$gt": 0}},
+                        {"booze_jail_count": {"$gt": 0}},
+                    ]
+                },
+                {
+                    "_id": 0,
+                    "id": 1,
+                    "username": 1,
+                    "booze_runs_count": 1,
+                    "booze_jail_count": 1,
+                    "booze_run_profit_total": 1,
+                    "booze_profit_total": 1,
+                    "auto_rank_total_booze_runs": 1,
+                    "auto_rank_total_booze_profit": 1,
+                },
+            )
+            .sort(sort_field, -1)
+            .limit(limit)
+        )
+        rows = await cursor.to_list(limit)
+        leaders = []
+        for r in rows:
+            rc = int(r.get("booze_runs_count") or 0)
+            pt = int(r.get("booze_run_profit_total") or 0)
+            avg = (pt / rc) if rc > 0 else 0.0
+            leaders.append(
+                {
+                    "id": r.get("id"),
+                    "username": r.get("username") or "?",
+                    "booze_runs_count": rc,
+                    "booze_jail_count": int(r.get("booze_jail_count") or 0),
+                    "booze_run_profit_total": pt,
+                    "booze_profit_total": int(r.get("booze_profit_total") or 0),
+                    "avg_profit_per_run_lifetime": round(avg, 2),
+                    "auto_rank_total_booze_runs": int(r.get("auto_rank_total_booze_runs") or 0),
+                    "auto_rank_total_booze_profit": int(r.get("auto_rank_total_booze_profit") or 0),
+                }
+            )
+        return {
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "sort": s,
+            "limit": limit,
+            "leaders": leaders,
+        }
+
+    @router.get("/admin/booze-run/analytics/user/{user_id_or_username}")
+    async def admin_booze_run_analytics_user(
+        user_id_or_username: str,
+        days: int = Query(90, ge=1, le=365),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Per-user booze snapshot: lifetime counters, last-N-days from economy_events, recent history.
+        Lookup by user id or username (case-insensitive).
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        key = (user_id_or_username or "").strip()
+        if not key:
+            raise HTTPException(status_code=400, detail="Missing user")
+        proj = {
+            "_id": 0,
+            "id": 1,
+            "username": 1,
+            "booze_runs_count": 1,
+            "booze_jail_count": 1,
+            "booze_run_profit_total": 1,
+            "booze_profit_total": 1,
+            "booze_profit_today": 1,
+            "booze_profit_today_date": 1,
+            "booze_profit_by_type": 1,
+            "booze_run_history": 1,
+            "auto_rank_total_booze_runs": 1,
+            "auto_rank_total_booze_profit": 1,
+        }
+        user = await db.users.find_one({"id": key}, proj)
+        if not user:
+            pattern = re.compile("^" + re.escape(key) + "$", re.IGNORECASE)
+            user = await db.users.find_one({"username": pattern}, proj)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = user["id"]
+        now = datetime.now(timezone.utc)
+        since_iso = (now - timedelta(days=int(days))).isoformat()
+        match = {
+            "user_id": uid,
+            "type": {"$in": ["booze_run_sell", "booze_run_jail"]},
+            "at": {"$gte": since_iso},
+        }
+        agg_rows = await db.economy_events.aggregate(
+            [
+                {"$match": match},
+                {
+                    "$group": {
+                        "_id": None,
+                        "win_sells": {"$sum": {"$cond": [{"$eq": ["$type", "booze_run_sell"]}, 1, 0]}},
+                        "win_profit": {
+                            "$sum": {"$cond": [{"$eq": ["$type", "booze_run_sell"]}, {"$ifNull": ["$profit", 0]}, 0]}
+                        },
+                        "win_jails": {"$sum": {"$cond": [{"$eq": ["$type", "booze_run_jail"]}, 1, 0]}},
+                        "win_loss_basis": {
+                            "$sum": {
+                                "$cond": [
+                                    {"$eq": ["$type", "booze_run_jail"]},
+                                    {"$ifNull": ["$inventory_loss_basis", 0]},
+                                    0,
+                                ]
+                            }
+                        },
+                    }
+                },
+            ]
+        ).to_list(1)
+        g = agg_rows[0] if agg_rows else {}
+        win_sells = int(g.get("win_sells") or 0)
+        win_profit = int(g.get("win_profit") or 0)
+        win_jails = int(g.get("win_jails") or 0)
+        win_loss_basis = int(g.get("win_loss_basis") or 0)
+        recent_events: List[dict] = []
+        ev_cursor = db.economy_events.find(match, {"_id": 0}).sort("at", -1).limit(100)
+        async for e in ev_cursor:
+            slim = {
+                "at": e.get("at"),
+                "type": e.get("type"),
+                "profit": e.get("profit"),
+                "revenue": e.get("revenue"),
+                "amount": e.get("amount"),
+                "booze_id": e.get("booze_id"),
+                "booze_name": e.get("booze_name"),
+                "phase": e.get("phase"),
+                "inventory_loss_basis": e.get("inventory_loss_basis"),
+            }
+            recent_events.append({k: v for k, v in slim.items() if v is not None})
+        rc = int(user.get("booze_runs_count") or 0)
+        pt = int(user.get("booze_run_profit_total") or 0)
+        lifetime_avg = round((pt / rc) if rc > 0 else 0.0, 2)
+        win_avg = round((win_profit / win_sells) if win_sells > 0 else 0.0, 2)
+        return {
+            "generated_at": now.isoformat(),
+            "user_id": uid,
+            "username": user.get("username") or "?",
+            "lifetime": {
+                "booze_runs_count": rc,
+                "booze_jail_count": int(user.get("booze_jail_count") or 0),
+                "booze_run_profit_total": pt,
+                "booze_profit_total": int(user.get("booze_profit_total") or 0),
+                "booze_profit_today": int(user.get("booze_profit_today") or 0),
+                "booze_profit_today_date": user.get("booze_profit_today_date"),
+                "booze_profit_by_type": user.get("booze_profit_by_type") or {},
+                "avg_profit_per_completed_run": lifetime_avg,
+                "auto_rank_total_booze_runs": int(user.get("auto_rank_total_booze_runs") or 0),
+                "auto_rank_total_booze_profit": int(user.get("auto_rank_total_booze_profit") or 0),
+            },
+            "window_days": days,
+            "window": {
+                "completed_runs": win_sells,
+                "total_profit": win_profit,
+                "avg_profit_per_run": win_avg,
+                "jail_events": win_jails,
+                "total_confiscation_basis": win_loss_basis,
+            },
+            "booze_run_history": user.get("booze_run_history") or [],
+            "recent_events": recent_events,
+        }
+
     @router.get("/admin/attacks/analytics/summary")
     async def admin_attacks_analytics_summary(
         days: int = Query(7, ge=1, le=90),
