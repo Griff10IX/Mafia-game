@@ -2066,8 +2066,13 @@ async def families_crew_oc_advertise(current_user: dict = Depends(get_current_us
     )
     if not fam:
         raise HTTPException(status_code=404, detail="Family not found")
-    if fam.get("crew_oc_forum_topic_id"):
-        raise HTTPException(status_code=400, detail="Family already has a Crew OC topic. Go to Forum → Crew OC to find it.")
+    existing_topic_id = (fam.get("crew_oc_forum_topic_id") or "").strip()
+    if existing_topic_id:
+        topic_exists = await db.forum_topics.find_one({"id": existing_topic_id}, {"_id": 1})
+        if topic_exists:
+            raise HTTPException(status_code=400, detail="Family already has a Crew OC topic. Go to Forum → Crew OC to find it.")
+        # Stale link from a deleted topic; clear it so a new ad can be posted.
+        await db.families.update_one({"id": family_id}, {"$unset": {"crew_oc_forum_topic_id": ""}})
     # Only allow when Crew OC is available or within CREW_OC_TOPIC_WINDOW_MINUTES before it becomes available
     cooldown_until = fam.get("crew_oc_cooldown_until")
     if cooldown_until:

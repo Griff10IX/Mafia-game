@@ -375,9 +375,20 @@ async def create_topic(
         role = (current_user.get("family_role") or "").strip().lower()
         if role not in ("boss", "underboss", "capo"):
             raise HTTPException(status_code=403, detail="Only Boss, Underboss, or Capo can create Crew OC ads")
-        existing = await db.families.find_one({"id": crew_oc_family_id, "crew_oc_forum_topic_id": {"$exists": True, "$ne": None}}, {"_id": 0, "crew_oc_forum_topic_id": 1})
-        if existing and existing.get("crew_oc_forum_topic_id"):
-            raise HTTPException(status_code=400, detail="Family already has a Crew OC topic. Use that topic or remove the link from family first.")
+        existing = await db.families.find_one(
+            {"id": crew_oc_family_id, "crew_oc_forum_topic_id": {"$exists": True, "$ne": None}},
+            {"_id": 0, "crew_oc_forum_topic_id": 1},
+        )
+        existing_topic_id = ((existing or {}).get("crew_oc_forum_topic_id") or "").strip()
+        if existing_topic_id:
+            topic_exists = await db.forum_topics.find_one({"id": existing_topic_id}, {"_id": 1})
+            if topic_exists:
+                raise HTTPException(status_code=400, detail="Family already has a Crew OC topic. Use that topic or remove the link from family first.")
+            # Topic was deleted but family still references it; clear stale link.
+            await db.families.update_one(
+                {"id": crew_oc_family_id},
+                {"$unset": {"crew_oc_forum_topic_id": ""}},
+            )
         # Crew OC topic only when OC is available or within CREW_OC_TOPIC_WINDOW_MINUTES before it becomes available
         cooldown_until = _parse_iso_datetime(fam.get("crew_oc_cooldown_until"))
         if cooldown_until:
