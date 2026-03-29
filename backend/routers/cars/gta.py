@@ -10,7 +10,13 @@ from fastapi import Depends, HTTPException, Query
 from bson.objectid import ObjectId
 from pydantic import BaseModel
 
-from utils.referral_ids import normalize_referred_by_ids, split_referral_pool, user_has_referrers
+from utils.referral_ids import (
+    apply_referrer_referral_increment,
+    normalize_referred_by_ids,
+    referral_pool_int,
+    split_referral_pool,
+    user_has_referrers,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -959,14 +965,14 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
                 },
             )
             # Referral: referrers split 10% of player-earned bullets (post family cut).
-            ref_ids = normalize_referred_by_ids(user.get("referred_by"))
+            _rb = await db.users.find_one({"id": user["id"]}, {"_id": 0, "referred_by": 1})
+            ref_ids = normalize_referred_by_ids((_rb or user).get("referred_by"))
             if ref_ids and player_bullets > 0:
-                pool = max(0, int(player_bullets * 0.10))
+                pool = referral_pool_int(player_bullets, 0.10)
                 for rid, amt in split_referral_pool(pool, ref_ids, self_id=user["id"]):
                     if amt > 0:
-                        await db.users.update_one(
-                            {"id": rid},
-                            {"$inc": {"bullets": amt, "referral_earnings_melt_bullets": amt}},
+                        await apply_referrer_referral_increment(
+                            db, rid, {"bullets": amt, "referral_earnings_melt_bullets": amt}, context="gta_melt"
                         )
             msg = (
                 f"Melted {deleted_count} car(s): {base_total_bullets} total bullets "
@@ -1003,14 +1009,14 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
             {"action": "cash", "scrapped_count": deleted_count, "total_value": total_value, "car_ids": car_ids[:limit]},
         )
         # Referral: referrers split 5% of garage scrap profit (game-paid)
-        ref_ids = normalize_referred_by_ids(user.get("referred_by"))
+        _rb = await db.users.find_one({"id": user["id"]}, {"_id": 0, "referred_by": 1})
+        ref_ids = normalize_referred_by_ids((_rb or user).get("referred_by"))
         if ref_ids and total_value > 0:
-            pool = max(0, int(total_value * 0.05))
+            pool = referral_pool_int(total_value, 0.05)
             for rid, amt in split_referral_pool(pool, ref_ids, self_id=user["id"]):
                 if amt > 0:
-                    await db.users.update_one(
-                        {"id": rid},
-                        {"$inc": {"money": amt, "referral_earnings_garage_scrap": amt}},
+                    await apply_referrer_referral_increment(
+                        db, rid, {"money": amt, "referral_earnings_garage_scrap": amt}, context="gta_scrap"
                     )
         return {
             "success": True,

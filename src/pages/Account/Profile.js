@@ -1718,9 +1718,17 @@ export default function Profile() {
                     <span>Scrap: <span className="text-emerald-400 tabular-nums">${Number(me?.referral_earnings_garage_scrap || 0).toLocaleString()}</span></span>
                     <span className="sm:col-span-2">Melt bullets: <span className="text-amber-400 tabular-nums">{Number(me?.referral_earnings_melt_bullets || 0).toLocaleString()}</span></span>
                   </div>
-                  <Link to="/account/referral" className="inline-block text-[10px] text-primary font-heading underline hover:no-underline">
-                    Full referral &amp; redeem page
-                  </Link>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Link
+                      to="/account/referral"
+                      className="inline-flex items-center px-3 py-1.5 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-xs hover:bg-primary/30"
+                    >
+                      Referral &amp; redeem
+                    </Link>
+                    <Link to="/account/referral" className="text-[10px] text-mutedForeground font-heading underline hover:text-primary hover:no-underline">
+                      Open codes &amp; details
+                    </Link>
+                  </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <input

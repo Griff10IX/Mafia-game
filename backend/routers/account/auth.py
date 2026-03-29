@@ -318,6 +318,70 @@ async def apply_manual_referral_link(
     }
 
 
+async def apply_manual_referral_remove(
+    db,
+    *,
+    referee_username: str,
+    referrer_username: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Admin: remove referrer(s) from a referee's referred_by list.
+    If referrer_username is omitted or blank, clear the entire list.
+    Does not remove tokens, respect, or lifetime referral_earnings on the referrer."""
+    ref_u = (referee_username or "").strip()
+    if not ref_u:
+        raise ValueError("referee_username is required")
+    referee = await db.users.find_one(
+        {"username": {"$regex": "^" + re.escape(ref_u) + "$", "$options": "i"}},
+        {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "referred_by": 1},
+    )
+    if not referee:
+        raise ValueError("Referee not found")
+    if referee.get("is_dead"):
+        raise ValueError("Cannot modify referral link on a dead account")
+    rid = str(referee.get("id") or "").strip()
+    if not rid:
+        raise ValueError("Invalid referee record")
+
+    existing_ids = normalize_referred_by_ids(referee.get("referred_by"))
+    if not existing_ids:
+        raise ValueError("This referee has no referral links to remove")
+
+    rer_u = (referrer_username or "").strip()
+    if not rer_u:
+        new_list: List[str] = []
+        removed_ids = list(existing_ids)
+    else:
+        referrer = await db.users.find_one(
+            {"username": {"$regex": "^" + re.escape(rer_u) + "$", "$options": "i"}},
+            {"_id": 0, "id": 1, "username": 1, "is_dead": 1},
+        )
+        if not referrer:
+            raise ValueError("Referrer username not found")
+        if referrer.get("is_dead"):
+            raise ValueError("Cannot reference a dead account as referrer")
+        zid = str(referrer.get("id") or "").strip()
+        if not zid:
+            raise ValueError("Invalid referrer record")
+        if zid not in existing_ids:
+            raise ValueError("That referrer is not on this referee's list")
+        new_list = [x for x in existing_ids if x != zid]
+        removed_ids = [zid]
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.users.update_one(
+        {"id": rid},
+        {"$set": {"referred_by": new_list, "referral_manual_remove_at": now_iso}},
+    )
+
+    return {
+        "referee_id": rid,
+        "referee_username": referee.get("username"),
+        "cleared_all": not rer_u,
+        "removed_referrer_ids": removed_ids,
+        "referred_by_remaining": new_list,
+    }
+
+
 def register(router):
     """Register auth routes. Dependencies from server to avoid circular imports."""
     import server as srv

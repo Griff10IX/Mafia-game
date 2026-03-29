@@ -11,7 +11,12 @@ import uuid
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
-from utils.referral_ids import normalize_referred_by_ids, split_referral_pool
+from utils.referral_ids import (
+    apply_referrer_referral_increment,
+    normalize_referred_by_ids,
+    referral_pool_int,
+    split_referral_pool,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -663,12 +668,11 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
         uid_doc = await db.users.find_one({"id": uid}, {"_id": 0, "referred_by": 1})
         ref_ids = normalize_referred_by_ids((uid_doc or {}).get("referred_by"))
         if ref_ids:
-            pool = max(0, int(cash_each * 0.05))
+            pool = referral_pool_int(cash_each, 0.05)
             for rid, amt in split_referral_pool(pool, ref_ids, self_id=uid):
                 if amt > 0:
-                    await db.users.update_one(
-                        {"id": rid},
-                        {"$inc": {"money": amt, "referral_earnings_oc": amt}},
+                    await apply_referrer_referral_increment(
+                        db, rid, {"money": amt, "referral_earnings_oc": amt}, context="oc"
                     )
     msg = _rng.choice(OC_TEAM_HEIST_SUCCESS_MESSAGES).format(job_name=job["name"])
     return {

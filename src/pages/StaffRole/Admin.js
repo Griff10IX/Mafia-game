@@ -100,7 +100,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Kill Player', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['kill', 'death', 'player'] },
   { label: 'Revive Player', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['revive', 'resurrect', 'alive'] },
   { label: 'User Details', categoryId: 'admin-players', collapseKey: 'userDetails', keywords: ['user', 'details', 'info', 'profile', 'jail', 'bust', 'reward'] },
-  { label: 'Referrals & prereg heal', categoryId: 'admin-players', collapseKey: 'referralsReport', keywords: ['referral', 'referrer', 'referee', 'invite', 'earnings', 'ref', 'heal', 'prereg', 'backfill', 'manual', 'assign', 'link'] },
+  { label: 'Referrals & prereg heal', categoryId: 'admin-players', collapseKey: 'referralsReport', keywords: ['referral', 'referrer', 'referee', 'invite', 'earnings', 'ref', 'heal', 'prereg', 'backfill', 'manual', 'assign', 'link', 'remove', 'unlink', 'clear'] },
   { label: 'Respect points log', categoryId: 'admin-players', collapseKey: 'respectPointsLog', keywords: ['respect', 'points', 'log', 'earned', 'audit', 'player'] },
   { label: 'Gambling Log', categoryId: 'admin-logs', collapseKey: 'gamblingLog', keywords: ['gambling', 'log', 'casino', 'bet'] },
   { label: 'Activity Log', categoryId: 'admin-logs', collapseKey: 'activityLog', keywords: ['activity', 'log', 'history'] },
@@ -560,6 +560,11 @@ export default function Admin() {
   const [manualReferrerRespect, setManualReferrerRespect] = useState('500');
   const [manualLoading, setManualLoading] = useState(false);
   const [manualResult, setManualResult] = useState(null);
+  const [removeRefereeUsername, setRemoveRefereeUsername] = useState('');
+  const [removeReferrerUsername, setRemoveReferrerUsername] = useState('');
+  const [removeReferralLoading, setRemoveReferralLoading] = useState(false);
+  const [removeReferralResult, setRemoveReferralResult] = useState(null);
+  const [removeReferralRowLoading, setRemoveReferralRowLoading] = useState(null);
   const [loginPageVisitors, setLoginPageVisitors] = useState(null);
   const [loginPageViews, setLoginPageViews] = useState(null);
   const [loginPageVisitorsLoading, setLoginPageVisitorsLoading] = useState(false);
@@ -3372,6 +3377,57 @@ export default function Admin() {
     }
   };
 
+  const clearRemoveReferralForm = () => {
+    setRemoveRefereeUsername('');
+    setRemoveReferrerUsername('');
+    setRemoveReferralResult(null);
+  };
+
+  const handleManualReferralRemove = async () => {
+    const refU = (removeRefereeUsername || '').trim();
+    if (!refU) {
+      toast.error('Enter referee username (account to unlink)');
+      return;
+    }
+    setRemoveReferralLoading(true);
+    try {
+      const rerU = (removeReferrerUsername || '').trim();
+      const res = await api.post('/admin/referrals/remove', {
+        referee_username: refU,
+        referrer_username: rerU || null,
+      });
+      setRemoveReferralResult(res.data || null);
+      toast.success(res.data?.cleared_all ? 'All referral links removed' : 'Referral link removed');
+      await handleFetchReferralsReport();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Remove referral failed');
+      setRemoveReferralResult(null);
+    } finally {
+      setRemoveReferralLoading(false);
+    }
+  };
+
+  const scrollToReferralRemove = () => {
+    document.getElementById('admin-referral-remove')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  const handleUnlinkRefereeFromReportRow = async (refereeUsername, referrerUsername, refereeUserId) => {
+    if (!window.confirm(`Unlink referee "${refereeUsername}" from referrer "${referrerUsername}"?`)) return;
+    setRemoveReferralRowLoading(refereeUserId || refereeUsername);
+    try {
+      await api.post('/admin/referrals/remove', {
+        referee_username: refereeUsername,
+        referrer_username: referrerUsername,
+      });
+      toast.success('Referral unlinked');
+      await handleFetchReferralsReport();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Unlink failed');
+    } finally {
+      setRemoveReferralRowLoading(null);
+    }
+  };
+
   const handleFetchAttackAnalytics = async () => {
     setAttackAnalyticsLoading(true);
     try {
@@ -5180,9 +5236,12 @@ export default function Admin() {
               <BtnPrimary onClick={() => runPreregHeal(false)} disabled={referralsHealLoading}>
                 {referralsHealLoading ? '…' : 'Prereg apply heal'}
               </BtnPrimary>
+              <BtnSecondary type="button" onClick={scrollToReferralRemove}>
+                Remove referral (form)
+              </BtnSecondary>
             </div>
             <p className="text-[10px] text-mutedForeground font-heading">
-              <span className="text-foreground font-bold">Report:</span> who referred whom (referees can have multiple referrers; payouts split the % across them). Pooled earnings per referrer. Optional filter by referrer username.
+              <span className="text-foreground font-bold">Report:</span> who referred whom (referees can have multiple referrers; payouts split the % across them). Pooled earnings per referrer. Optional filter by referrer username. Use <span className="text-foreground">Unlink</span> on a row to remove that link, or <span className="text-foreground">Remove referral (form)</span> below for bulk / clear-all.
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <input
@@ -5231,10 +5290,19 @@ export default function Admin() {
                       )}
                       <div className="pl-2 border-l border-primary/25 space-y-0.5 max-h-32 overflow-y-auto">
                         {(g.referees || []).map((r) => (
-                          <div key={r.user_id} className="flex flex-wrap gap-x-2 gap-y-0">
+                          <div key={r.user_id} className="flex flex-wrap items-center gap-x-2 gap-y-0">
                             <Link to={`/profile/${encodeURIComponent(r.username)}`} className="text-primary hover:underline">{r.username}</Link>
                             <span className="text-mutedForeground">{r.email || '—'}</span>
                             <span className="text-zinc-500">{r.created_at ? new Date(r.created_at).toLocaleString() : '—'}</span>
+                            <button
+                              type="button"
+                              className="text-[9px] font-heading uppercase tracking-wide px-1.5 py-0.5 rounded border border-destructive/40 text-destructive/90 hover:bg-destructive/10 disabled:opacity-40"
+                              disabled={removeReferralRowLoading != null || removeReferralLoading}
+                              title="Remove this referee–referrer link only"
+                              onClick={() => handleUnlinkRefereeFromReportRow(r.username, g.referrer_username, r.user_id)}
+                            >
+                              {removeReferralRowLoading === (r.user_id || r.username) ? '…' : 'Unlink'}
+                            </button>
                           </div>
                         ))}
                       </div>
@@ -5356,6 +5424,43 @@ export default function Admin() {
                   <div><span className="text-mutedForeground">Referee signup bonuses:</span> {manualResult.referee_signup_bonuses_applied ? 'Yes' : 'No'}</div>
                   <div><span className="text-mutedForeground">Referrer welcome respect:</span> {manualResult.referrer_welcome_respect_applied ? `${manualResult.referrer_welcome_respect_amount ?? 0} applied` : 'Not applied (already linked / duplicate, or set to 0)'}</div>
                   {manualResult.replaced_existing_referrer && <div className="text-amber-400 text-[9px]">Replaced entire referrer list with this single link.</div>}
+                </div>
+              )}
+            </div>
+            <div id="admin-referral-remove" className="border-t border-primary/20 pt-3 space-y-2 scroll-mt-24">
+              <p className="text-[10px] text-mutedForeground font-heading">
+                <span className="text-foreground font-bold">Remove link:</span> clears <span className="text-foreground">referred_by</span> on the referee. Leave referrer blank to remove <span className="text-foreground">all</span> referrers; or enter a referrer username to remove only that one (keeps others). Does not claw back cash, bullets, tokens, or referrer lifetime <span className="text-foreground">referral_earnings_*</span>.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={removeRefereeUsername}
+                  onChange={(e) => setRemoveRefereeUsername(e.target.value)}
+                  placeholder="Referee username (unlink this account)"
+                  className="flex-1 min-w-[140px] max-w-xs px-2 py-1 rounded border border-input bg-transparent text-[11px]"
+                />
+                <input
+                  type="text"
+                  value={removeReferrerUsername}
+                  onChange={(e) => setRemoveReferrerUsername(e.target.value)}
+                  placeholder="Referrer to remove (optional)"
+                  className="flex-1 min-w-[140px] max-w-xs px-2 py-1 rounded border border-input bg-transparent text-[11px]"
+                />
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <BtnDanger onClick={handleManualReferralRemove} disabled={removeReferralLoading}>
+                  {removeReferralLoading ? '…' : 'Remove referral link(s)'}
+                </BtnDanger>
+                <BtnSecondary type="button" onClick={clearRemoveReferralForm} disabled={removeReferralLoading}>
+                  Clear remove form
+                </BtnSecondary>
+              </div>
+              {removeReferralResult && (
+                <div className="rounded border border-destructive/30 bg-destructive/5 p-2 text-[10px] font-heading space-y-1">
+                  <div><span className="text-mutedForeground">Referee:</span> <span className="text-foreground">{removeReferralResult.referee_username}</span></div>
+                  <div><span className="text-mutedForeground">Cleared all:</span> {removeReferralResult.cleared_all ? 'Yes' : 'No'}</div>
+                  <div><span className="text-mutedForeground">Removed referrer id(s):</span> <span className="font-mono text-zinc-400">{(removeReferralResult.removed_referrer_ids || []).join(', ') || '—'}</span></div>
+                  <div><span className="text-mutedForeground">Remaining links:</span> <span className="font-mono text-zinc-400">{(removeReferralResult.referred_by_remaining || []).length ? (removeReferralResult.referred_by_remaining || []).join(', ') : 'none'}</span></div>
                 </div>
               )}
             </div>

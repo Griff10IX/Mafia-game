@@ -99,6 +99,12 @@ class ManualReferralAssignRequest(BaseModel):
     grant_referrer_welcome_respect: int = Field(500, ge=0, le=5000)
 
 
+class ManualReferralRemoveRequest(BaseModel):
+    """Admin: remove referral link(s) from a referee. Omit referrer_username to clear all referrers."""
+    referee_username: str
+    referrer_username: Optional[str] = None  # if set, remove only this referrer from the list
+
+
 class RedeemCodeRewards(BaseModel):
     money: Optional[int] = None
     points: Optional[int] = None
@@ -274,7 +280,11 @@ SEED_TEST_PASSWORD = "test1234"
 def register(router):
     """Register admin routes. Dependencies from server to avoid circular imports."""
     import server as srv
-    from routers.account.auth import apply_manual_referral_link, try_heal_referral_from_prereg
+    from routers.account.auth import (
+        apply_manual_referral_link,
+        apply_manual_referral_remove,
+        try_heal_referral_from_prereg,
+    )
     from routers.game import leaderboard as leaderboard_module
     import middleware.security as security_module
     from routers.game.families import FAMILY_RACKETS
@@ -2065,6 +2075,24 @@ def register(router):
                 force=body.force,
                 grant_referee_signup_bonuses=body.grant_referee_signup_bonuses,
                 grant_referrer_welcome_respect=int(body.grant_referrer_welcome_respect),
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return out
+
+    @router.post("/admin/referrals/remove")
+    async def admin_referrals_remove(
+        body: ManualReferralRemoveRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Remove one referrer from a referee's referred_by list, or clear the whole list if referrer_username is omitted."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        try:
+            out = await apply_manual_referral_remove(
+                db,
+                referee_username=body.referee_username.strip(),
+                referrer_username=(body.referrer_username or "").strip() or None,
             )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))

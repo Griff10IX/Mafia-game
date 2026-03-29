@@ -1,7 +1,11 @@
 # Normalize referred_by (legacy string or list) and split referral cuts across referrers.
 from __future__ import annotations
 
-from typing import Any, List, Sequence, Tuple
+import logging
+import math
+from typing import Any, Dict, List, Sequence, Tuple
+
+logger = logging.getLogger(__name__)
 
 
 def normalize_referred_by_ids(raw: Any) -> List[str]:
@@ -38,3 +42,23 @@ def split_referral_pool(pool: int, referrer_ids: Sequence[str], *, self_id: str)
     base = pool // n
     rem = pool % n
     return [(ids[i], base + (1 if i < rem else 0)) for i in range(n)]
+
+
+def referral_pool_int(base: int, fraction: float) -> int:
+    """Integer cut of base * fraction using ceil (not trunc). Avoids int() rounding small payouts to zero."""
+    b = int(base)
+    if b <= 0 or fraction <= 0:
+        return 0
+    return max(0, int(math.ceil(b * fraction - 1e-12)))
+
+
+async def apply_referrer_referral_increment(db, referrer_id: str, inc: Dict[str, int], *, context: str = "") -> bool:
+    """$inc on referrer by user id; logs if no document matched (mis-linked referred_by)."""
+    rid = str(referrer_id or "").strip()
+    if not rid or not inc:
+        return False
+    res = await db.users.update_one({"id": rid}, {"$inc": inc})
+    if res.matched_count:
+        return True
+    logger.warning("referral payout: no user matched id=%s context=%s inc=%s", rid, context or "?", inc)
+    return False
