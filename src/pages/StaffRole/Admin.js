@@ -2857,6 +2857,7 @@ export default function Admin() {
     const inCategory = activeCategoryId === 'admin-gameworld' || activeCategoryId === 'admin-logs';
     if (!isAdmin || !inCategory || !showingPanel) return;
     fetchGtaExclusivePool();
+    if (!collapsed.gtaPool) fetchExclusiveCarValues();
   }, [isAdmin, activeCategoryId, collapsed.gtaPool, collapsed.gtaLogs]);
 
   const handleGiveEveryoneExclusiveCars = async (lootExclusive, alCapone) => {
@@ -2892,14 +2893,15 @@ export default function Admin() {
     }
   };
 
-  const handleEditCarValue = async () => {
-    if (!editCarId) return;
-    const val = parseInt(editCarValue, 10);
+  const handleEditCarValue = async (carId, value, travel) => {
+    if (!carId) return;
+    const val = parseInt(value, 10);
     if (isNaN(val) || val < 0) { toast.error('Enter a valid value'); return; }
+    setEditCarId(carId);
     setEditCarSaving(true);
     try {
-      const payload = { car_id: editCarId, value: val };
-      if (editCarTravel.trim() !== '') payload.travel_bonus = parseInt(editCarTravel, 10) || 0;
+      const payload = { car_id: carId, value: val };
+      if (travel != null && String(travel).trim() !== '') payload.travel_bonus = parseInt(travel, 10) || 0;
       const res = await api.post('/admin/cars/edit-value', payload);
       toast.success(res.data?.message || 'Updated');
       await fetchExclusiveCarValues();
@@ -5980,56 +5982,40 @@ export default function Admin() {
               </div>
               <p className="text-[10px] text-mutedForeground font-heading">When released, the Al Capone exclusive can drop from GTA (very rare). Only one in game at a time. GTA logs are in the &quot;GTA logs (post data)&quot; section further down.</p>
 
-              {/* Edit exclusive car values */}
+              {/* Edit exclusive car values — inline */}
               <div className="pt-3 border-t border-zinc-700/50 space-y-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] font-heading text-mutedForeground">Edit exclusive car values:</span>
-                  <BtnPrimary onClick={fetchExclusiveCarValues} disabled={exclusiveCarValuesLoading}>
-                    {exclusiveCarValuesLoading ? '...' : 'Load'}
-                  </BtnPrimary>
-                </div>
-                {exclusiveCarValues.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-[10px] font-mono">
-                        <thead>
-                          <tr className="text-left text-mutedForeground">
-                            <th className="p-1.5">Car</th>
-                            <th className="p-1.5">Rarity</th>
-                            <th className="p-1.5">Value</th>
-                            <th className="p-1.5">Travel Bonus</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {exclusiveCarValues.map((c) => (
-                            <tr key={c.id} className={`border-t border-zinc-700/30 ${editCarId === c.id ? 'bg-primary/10' : 'hover:bg-zinc-800/30'} cursor-pointer`} onClick={() => { setEditCarId(c.id); setEditCarValue(String(c.value)); setEditCarTravel(String(c.travel_bonus)); }}>
-                              <td className="p-1.5 text-foreground">{c.name} <span className="text-mutedForeground">({c.id})</span></td>
-                              <td className="p-1.5 text-primary">{c.rarity}</td>
-                              <td className="p-1.5 text-green-400">${Number(c.value).toLocaleString()}</td>
-                              <td className="p-1.5 text-blue-400">{c.travel_bonus}%</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                    {editCarId && (
-                      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-zinc-700/30">
-                        <span className="text-[10px] font-heading text-mutedForeground">{exclusiveCarValues.find(c => c.id === editCarId)?.name || editCarId}:</span>
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px] text-mutedForeground">Value $</span>
-                          <input type="number" min="0" value={editCarValue} onChange={(e) => setEditCarValue(e.target.value)} className="w-32 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono" />
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px] text-mutedForeground">Travel</span>
-                          <input type="number" min="0" max="100" value={editCarTravel} onChange={(e) => setEditCarTravel(e.target.value)} className="w-16 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono" />
-                        </div>
-                        <BtnPrimary onClick={handleEditCarValue} disabled={editCarSaving}>
-                          {editCarSaving ? '...' : 'Save'}
-                        </BtnPrimary>
+                <span className="text-[10px] font-heading text-mutedForeground block">Edit exclusive car values:</span>
+                {exclusiveCarValuesLoading && <span className="text-[10px] text-mutedForeground">Loading...</span>}
+                {exclusiveCarValues.map((c) => {
+                  const valId = `car-val-${c.id}`;
+                  const travId = `car-trav-${c.id}`;
+                  return (
+                    <div key={c.id} className="flex flex-wrap items-center gap-2 p-2 rounded border border-zinc-700/30 bg-zinc-900/30">
+                      <span className="text-[10px] font-heading text-foreground min-w-[140px]">{c.name}</span>
+                      <span className="text-[9px] text-primary font-heading">{c.rarity}</span>
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] text-mutedForeground">Value $</span>
+                        <input id={valId} type="number" min="0" key={`v-${c.id}-${c.value}`} defaultValue={c.value} className="w-36 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono" />
                       </div>
-                    )}
-                  </div>
-                )}
+                      <div className="flex items-center gap-1">
+                        <span className="text-[10px] text-mutedForeground">Travel</span>
+                        <input id={travId} type="number" min="0" max="100" key={`t-${c.id}-${c.travel_bonus}`} defaultValue={c.travel_bonus} className="w-16 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono" />
+                      </div>
+                      <button
+                        type="button"
+                        disabled={editCarSaving && editCarId === c.id}
+                        onClick={() => {
+                          const v = document.getElementById(valId)?.value;
+                          const t = document.getElementById(travId)?.value;
+                          handleEditCarValue(c.id, v, t);
+                        }}
+                        className="px-2 py-1 rounded border border-primary/40 bg-primary/10 text-[10px] font-heading font-bold text-primary hover:bg-primary/20 disabled:opacity-50"
+                      >
+                        {editCarSaving && editCarId === c.id ? '...' : 'Save'}
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="pt-3 border-t border-zinc-700/50 space-y-2">
