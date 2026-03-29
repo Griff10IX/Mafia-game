@@ -664,6 +664,8 @@ export default function Admin() {
   const [modDefaultOnlineColor, setModDefaultOnlineColor] = useState('#1e3a5f');
   const [requireEmailVerification, setRequireEmailVerification] = useState(false);
   const [blockProxyVpnLogin, setBlockProxyVpnLogin] = useState(true);
+  const [blockScriptUserAgentLogin, setBlockScriptUserAgentLogin] = useState(true);
+  const [blockScriptUaSaving, setBlockScriptUaSaving] = useState(false);
   const [spotifyFeatureEnabled, setSpotifyFeatureEnabled] = useState(false);
   const [landingBannerEnabled, setLandingBannerEnabled] = useState(false);
   const [landingBannerMessage, setLandingBannerMessage] = useState('');
@@ -1142,6 +1144,7 @@ export default function Admin() {
       setModDefaultOnlineColor(modHex.startsWith('#') ? modHex : '#' + modHex);
       setRequireEmailVerification(!!res.data?.require_email_verification);
       setBlockProxyVpnLogin(res.data?.block_proxy_vpn_login !== false);
+      setBlockScriptUserAgentLogin(res.data?.block_script_user_agent_login !== false);
       setSpotifyFeatureEnabled(!!res.data?.spotify_feature_enabled);
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
       setLandingBannerMessage(res.data?.landing_banner_message ?? '');
@@ -1169,6 +1172,7 @@ export default function Admin() {
       setModDefaultOnlineColor('#1e3a5f');
       setRequireEmailVerification(false);
       setBlockProxyVpnLogin(true);
+      setBlockScriptUserAgentLogin(true);
       setSpotifyFeatureEnabled(false);
       setLandingBannerMessage('');
       setStockMarketMaxPoints(3000);
@@ -1221,6 +1225,7 @@ export default function Admin() {
         mod_default_online_color: modDefaultOnlineColor,
         require_email_verification: requireEmailVerification,
         block_proxy_vpn_login: blockProxyVpnLogin,
+        block_script_user_agent_login: blockScriptUserAgentLogin,
         spotify_feature_enabled: spotifyFeatureEnabled,
         landing_banner_enabled: landingBannerEnabled,
         landing_banner_message: landingBannerMessage,
@@ -1230,6 +1235,7 @@ export default function Admin() {
       setModDefaultOnlineColor(res.data?.mod_default_online_color || modDefaultOnlineColor);
       setRequireEmailVerification(!!res.data?.require_email_verification);
       setBlockProxyVpnLogin(res.data?.block_proxy_vpn_login !== false);
+      setBlockScriptUserAgentLogin(res.data?.block_script_user_agent_login !== false);
       setSpotifyFeatureEnabled(!!res.data?.spotify_feature_enabled);
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
       if (res.data?.landing_banner_message !== undefined) setLandingBannerMessage(res.data.landing_banner_message ?? '');
@@ -1239,6 +1245,19 @@ export default function Admin() {
       toast.error(e.response?.data?.detail ?? 'Failed to save');
     } finally {
       setAdminSettingsSaving(false);
+    }
+  };
+
+  const applyBlockScriptUserAgentLogin = async (enabled) => {
+    setBlockScriptUaSaving(true);
+    try {
+      const res = await api.patch('/admin/settings', { block_script_user_agent_login: !!enabled });
+      setBlockScriptUserAgentLogin(res.data?.block_script_user_agent_login !== false);
+      toast.success(enabled ? 'Bot/script blocking enabled' : 'Bot/script blocking disabled');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to update');
+    } finally {
+      setBlockScriptUaSaving(false);
     }
   };
 
@@ -6957,6 +6976,41 @@ export default function Admin() {
                 />
                 <span>Block proxy/VPN on login and signup</span>
               </label>
+            </div>
+            <div className="space-y-2 pt-2 border-t border-primary/10">
+              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Anti-bot / script clients</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="flex items-center gap-2 cursor-pointer text-sm font-heading">
+                  <input
+                    type="checkbox"
+                    checked={blockScriptUserAgentLogin}
+                    onChange={(e) => setBlockScriptUserAgentLogin(e.target.checked)}
+                    className="rounded border-input"
+                  />
+                  <span>
+                    Block script-like clients on login, register, preregister, and minigames (User-Agent markers, browser-shaped UA, Sec-Fetch headers)
+                  </span>
+                </label>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 pl-0 sm:pl-6">
+                <button
+                  type="button"
+                  disabled={blockScriptUaSaving || blockScriptUserAgentLogin}
+                  onClick={() => applyBlockScriptUserAgentLogin(true)}
+                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {blockScriptUaSaving ? '…' : 'Enable blocking'}
+                </button>
+                <button
+                  type="button"
+                  disabled={blockScriptUaSaving || !blockScriptUserAgentLogin}
+                  onClick={() => applyBlockScriptUserAgentLogin(false)}
+                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {blockScriptUaSaving ? '…' : 'Disable blocking'}
+                </button>
+                <span className="text-[10px] text-mutedForeground font-heading">Applies immediately. Also saved with &quot;Save settings&quot; below.</span>
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-primary/10">
               <label className="flex items-center gap-2 cursor-pointer text-sm font-heading">

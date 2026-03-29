@@ -16,6 +16,7 @@ from pydantic import BaseModel, EmailStr, field_validator
 
 from utils.ban_user_wipe import user_has_active_account_ban
 from utils.disposable_email import is_disposable_email
+from utils.login_user_agent import auth_client_headers_blocked
 from utils.referral_ids import normalize_referred_by_ids, user_has_referrers
 from middleware.security import is_proxy_or_vpn, get_ip_info
 
@@ -493,8 +494,20 @@ def register(router):
                     detail="Disposable or temporary email addresses are not allowed.",
                 )
             client_ip = _client_ip(request)
-            main_settings = await db.game_settings.find_one({"_id": "main"}, {"_id": 0, "block_proxy_vpn_login": 1})
+            main_settings = await db.game_settings.find_one({"_id": "main"}, {"_id": 0})
             block_proxy_vpn_login = bool(main_settings.get("block_proxy_vpn_login", True)) if main_settings else True
+            blocked_cli, cli_reason = auth_client_headers_blocked(request.headers, main_settings)
+            if blocked_cli:
+                logging.warning(
+                    "Registration blocked: client probe reason=%s ip=%s email=%s",
+                    cli_reason,
+                    client_ip,
+                    (email_clean or "")[:48],
+                )
+                raise HTTPException(
+                    status_code=403,
+                    detail="Registration must use the official game app or a normal web browser.",
+                )
             if block_proxy_vpn_login and client_ip and await is_proxy_or_vpn(client_ip):
                 await _notify_admins_vpn_blocked(
                     client_ip,
@@ -625,7 +638,7 @@ def register(router):
             }
 
             # Check if registering during pre-launch (founding member)
-            settings = await db.game_settings.find_one({"_id": "main"})
+            settings = main_settings
             lock_until = settings.get("login_lock_until") if settings else None
             lock_from = settings.get("login_lock_from") if settings else None
             is_founding = False
@@ -1015,6 +1028,21 @@ def register(router):
                 status_code=403,
                 detail="Login from proxy or VPN is not allowed. Please disconnect your VPN to use the game.",
             )
+
+        # UA + Sec-Fetch heuristics (staff may use curl; toggle via main.block_script_user_agent_login)
+        if not staff_route:
+            blocked_cli, cli_reason = auth_client_headers_blocked(request.headers, settings)
+            if blocked_cli:
+                logging.warning(
+                    "Login blocked: client probe reason=%s ip=%s login=%s",
+                    cli_reason,
+                    ip,
+                    (login_input or "")[:40],
+                )
+                raise HTTPException(
+                    status_code=403,
+                    detail="Login must use the official game app or a normal web browser.",
+                )
 
         # Find user by email or username (case-insensitive)
         pattern = re.compile("^" + re.escape(login_input) + "$", re.IGNORECASE)
@@ -2008,7 +2036,21 @@ def register(router):
         email_clean = (body.email or "").strip().lower()
         if is_disposable_email(email_clean):
             raise HTTPException(status_code=400, detail="Disposable email addresses are not allowed.")
-        
+
+        main_settings = await db.game_settings.find_one({"_id": "main"}, {"_id": 0})
+        blocked_cli, cli_reason = auth_client_headers_blocked(request.headers, main_settings)
+        if blocked_cli:
+            logging.warning(
+                "Preregister blocked: client probe reason=%s ip=%s email=%s",
+                cli_reason,
+                _client_ip(request),
+                (email_clean or "")[:48],
+            )
+            raise HTTPException(
+                status_code=403,
+                detail="This action must be done from the official game site in a normal web browser.",
+            )
+
         # Check if already pre-registered or has an account
         existing_prereg = await db.preregistrations.find_one({"email": email_clean})
         if existing_prereg:

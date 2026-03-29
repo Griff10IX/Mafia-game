@@ -349,9 +349,13 @@ const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref }) => {
       <ToggleRow
         icon={Wine}
         label="Run booze running"
-        description="Buy, travel, sell on round-trip route"
-        checked={p.auto_rank_enabled ? p.auto_rank_booze : false}
-        disabled={savingPrefs || !p.auto_rank_enabled}
+        description={
+          !p.auto_rank_enabled && p.auto_rank_booze
+            ? 'Still on in your account — turn off to allow manual travel (Auto Rank is off)'
+            : 'Buy, travel, sell on round-trip route'
+        }
+        checked={!!p.auto_rank_booze}
+        disabled={savingPrefs || (!p.auto_rank_enabled && !p.auto_rank_booze)}
         onToggle={() => onUpdatePref('auto_rank_booze', !p.auto_rank_booze)}
       />
     </div>

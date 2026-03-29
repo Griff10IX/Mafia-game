@@ -2160,6 +2160,14 @@ class OPTIONSResponder(BaseHTTPMiddleware):
             return Response(status_code=200, headers=headers)
         return await call_next(request)
 
+# Minigame routes: same browser-like UA / Sec-Fetch checks as auth (register before SecurityMiddleware so IP/spam runs outer)
+try:
+    from middleware.minigame_client_middleware import MinigameClientGuardMiddleware
+
+    app.add_middleware(MinigameClientGuardMiddleware, db=db)
+except ImportError:
+    print("Warning: minigame_client_middleware.py not found - minigame client guard disabled")
+
 # Import security middleware
 try:
     from middleware.security_middleware import SecurityMiddleware

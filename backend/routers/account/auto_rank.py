@@ -108,9 +108,22 @@ def _parse_iso(s):
 async def _expire_auto_rank_trials(db):
     """Disable auto rank for users whose founding-member trial has expired."""
     now_iso = datetime.now(timezone.utc).isoformat()
+    _trial_off = {
+        "auto_rank_purchased": False,
+        "auto_rank_enabled": False,
+        "auto_rank_trial": False,
+        # Clear activity flags so booze/GTA/etc. cannot stay "on" in DB and block manual travel after trial ends
+        "auto_rank_crimes": False,
+        "auto_rank_gta": False,
+        "auto_rank_bust_every_5_sec": False,
+        "auto_rank_oc": False,
+        "auto_rank_booze": False,
+        "auto_rank_melt": False,
+        "auto_rank_scrap": False,
+    }
     result = await db.users.update_many(
         {"auto_rank_trial": True, "auto_rank_trial_until": {"$lte": now_iso}},
-        {"$set": {"auto_rank_purchased": False, "auto_rank_enabled": False, "auto_rank_trial": False}},
+        {"$set": _trial_off},
     )
     if result.modified_count:
         logger.info("Auto rank: expired %d trial(s)", result.modified_count)
