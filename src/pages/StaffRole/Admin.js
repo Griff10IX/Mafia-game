@@ -100,7 +100,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Kill Player', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['kill', 'death', 'player'] },
   { label: 'Revive Player', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['revive', 'resurrect', 'alive'] },
   { label: 'User Details', categoryId: 'admin-players', collapseKey: 'userDetails', keywords: ['user', 'details', 'info', 'profile', 'jail', 'bust', 'reward'] },
-  { label: 'Referrals report', categoryId: 'admin-players', collapseKey: 'referralsReport', keywords: ['referral', 'referrer', 'referee', 'invite', 'earnings', 'ref'] },
+  { label: 'Referrals & prereg heal', categoryId: 'admin-players', collapseKey: 'referralsReport', keywords: ['referral', 'referrer', 'referee', 'invite', 'earnings', 'ref', 'heal', 'prereg', 'backfill', 'manual', 'assign', 'link'] },
   { label: 'Respect points log', categoryId: 'admin-players', collapseKey: 'respectPointsLog', keywords: ['respect', 'points', 'log', 'earned', 'audit', 'player'] },
   { label: 'Gambling Log', categoryId: 'admin-logs', collapseKey: 'gamblingLog', keywords: ['gambling', 'log', 'casino', 'bet'] },
   { label: 'Activity Log', categoryId: 'admin-logs', collapseKey: 'activityLog', keywords: ['activity', 'log', 'history'] },
@@ -192,8 +192,9 @@ const SECTIONS_KEY = 'admin_sections_collapsed';
 function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
-    return raw ? JSON.parse(raw) : {};
-  } catch { return {}; }
+    const parsed = raw ? JSON.parse(raw) : {};
+    return { referralsReport: false, ...parsed };
+  } catch { return { referralsReport: false }; }
 }
 
 function saveCollapsed(state) {
@@ -548,6 +549,15 @@ export default function Admin() {
   const [referralsReport, setReferralsReport] = useState(null);
   const [referralsReportLoading, setReferralsReportLoading] = useState(false);
   const [referralsFilterUsername, setReferralsFilterUsername] = useState('');
+  const [referralsHealLoading, setReferralsHealLoading] = useState(false);
+  const [referralsHealResult, setReferralsHealResult] = useState(null);
+  const [manualReferee, setManualReferee] = useState('');
+  const [manualReferrer, setManualReferrer] = useState('');
+  const [manualForce, setManualForce] = useState(false);
+  const [manualGrantReferee, setManualGrantReferee] = useState(true);
+  const [manualReferrerRespect, setManualReferrerRespect] = useState('250');
+  const [manualLoading, setManualLoading] = useState(false);
+  const [manualResult, setManualResult] = useState(null);
   const [loginPageVisitors, setLoginPageVisitors] = useState(null);
   const [loginPageViews, setLoginPageViews] = useState(null);
   const [loginPageVisitorsLoading, setLoginPageVisitorsLoading] = useState(false);
@@ -3079,6 +3089,60 @@ export default function Admin() {
     }
   };
 
+  const runPreregHeal = async (dryRun) => {
+    setReferralsHealLoading(true);
+    try {
+      const res = await api.post('/admin/referrals/heal-prereg', {
+        dry_run: dryRun,
+        max_scan: 5000,
+        max_detail_rows: 500,
+      });
+      setReferralsHealResult(res.data || null);
+      toast.success(res.data?.message || (dryRun ? 'Dry run complete' : 'Heal complete'));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Heal failed');
+      setReferralsHealResult(null);
+    } finally {
+      setReferralsHealLoading(false);
+    }
+  };
+
+  const clearManualReferralForm = () => {
+    setManualReferee('');
+    setManualReferrer('');
+    setManualForce(false);
+    setManualGrantReferee(true);
+    setManualReferrerRespect('250');
+    setManualResult(null);
+  };
+
+  const handleManualReferralAssign = async () => {
+    const refU = (manualReferee || '').trim();
+    const rerU = (manualReferrer || '').trim();
+    if (!refU || !rerU) {
+      toast.error('Enter both referee username (new player) and referrer username');
+      return;
+    }
+    setManualLoading(true);
+    try {
+      const n = Math.min(5000, Math.max(0, parseInt(String(manualReferrerRespect).replace(/\D/g, ''), 10) || 0));
+      const res = await api.post('/admin/referrals/manual-assign', {
+        referee_username: refU,
+        referrer_username: rerU,
+        force: manualForce,
+        grant_referee_signup_bonuses: manualGrantReferee,
+        grant_referrer_welcome_respect: n,
+      });
+      setManualResult(res.data || null);
+      toast.success('Referral link saved');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Manual assign failed');
+      setManualResult(null);
+    } finally {
+      setManualLoading(false);
+    }
+  };
+
   const handleFetchAttackAnalytics = async () => {
     setAttackAnalyticsLoading(true);
     try {
@@ -4743,76 +4807,44 @@ export default function Admin() {
           Player Management
         </h2>
 
-        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
-        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <SectionHeader
-          icon={Activity}
-          title="System Health"
-          badge={systemHealth ? <span className={`text-[10px] font-heading ${systemHealth.status === 'healthy' ? 'text-emerald-400' : 'text-amber-400'}`}>{systemHealth.status}</span> : null}
-          isCollapsed={collapsed.systemHealth}
-          onToggle={() => { toggleSection('systemHealth'); if (collapsed.systemHealth && !systemHealth) handleFetchSystemHealth(); }}
-        />
-        {!collapsed.systemHealth && (
-          <div className="p-3 space-y-2">
-            <div className="flex items-center gap-2">
-              <BtnPrimary onClick={handleFetchSystemHealth} disabled={systemHealthLoading}>{systemHealthLoading ? 'Loading...' : 'Refresh'}</BtnPrimary>
-            </div>
-            {systemHealth && (
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px] font-heading">
-                <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
-                  <div className="text-mutedForeground uppercase">Status</div>
-                  <div className={`font-bold ${systemHealth.status === 'healthy' ? 'text-emerald-400' : 'text-amber-400'}`}>{systemHealth.status}</div>
-                </div>
-                <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
-                  <div className="text-mutedForeground uppercase">Users (alive)</div>
-                  <div className="font-bold text-foreground">{(systemHealth.users_alive ?? 0).toLocaleString()} / {(systemHealth.users_total ?? 0).toLocaleString()}</div>
-                </div>
-                <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
-                  <div className="text-mutedForeground uppercase">Online (5m)</div>
-                  <div className="font-bold text-primary">{(systemHealth.users_online ?? 0).toLocaleString()}</div>
-                </div>
-                <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
-                  <div className="text-mutedForeground uppercase">Cars</div>
-                  <div className="font-bold text-foreground">{(systemHealth.cars ?? 0).toLocaleString()}</div>
-                </div>
-                <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
-                  <div className="text-mutedForeground uppercase">Families</div>
-                  <div className="font-bold text-foreground">{(systemHealth.families ?? 0).toLocaleString()}</div>
-                </div>
-                <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
-                  <div className="text-mutedForeground uppercase">Unresolved Flags</div>
-                  <div className={`font-bold ${(systemHealth.unresolved_flags ?? 0) > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>{systemHealth.unresolved_flags ?? 0}</div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-        </div>
-
-        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+        <div id="admin-referrals" className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel scroll-mt-24`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Users}
-          title="Referrals report"
+          title="Referrals & prereg heal"
           isCollapsed={collapsed.referralsReport}
           onToggle={() => { toggleSection('referralsReport'); if (collapsed.referralsReport && !referralsReport) handleFetchReferralsReport(); }}
         />
         {!collapsed.referralsReport && (
-          <div className="p-3 space-y-2">
+          <div className="p-3 space-y-3">
+            <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-primary/15">
+              <span className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider w-full sm:w-auto">Quick actions</span>
+              <BtnPrimary onClick={handleFetchReferralsReport} disabled={referralsReportLoading}>
+                {referralsReportLoading ? '…' : 'Load referral report'}
+              </BtnPrimary>
+              <BtnSecondary onClick={() => runPreregHeal(true)} disabled={referralsHealLoading}>
+                {referralsHealLoading ? '…' : 'Prereg dry run'}
+              </BtnSecondary>
+              <BtnPrimary onClick={() => runPreregHeal(false)} disabled={referralsHealLoading}>
+                {referralsHealLoading ? '…' : 'Prereg apply heal'}
+              </BtnPrimary>
+            </div>
             <p className="text-[10px] text-mutedForeground font-heading">
-              Linked accounts (<span className="text-foreground">referred_by</span>) and lifetime referral earnings on each referrer (pooled). Optional filter by referrer username.
+              <span className="text-foreground font-bold">Report:</span> who referred whom (<span className="text-foreground">referred_by</span>) and pooled referral earnings per referrer. Optional filter by referrer username.
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <input
                 type="text"
                 value={referralsFilterUsername}
                 onChange={(e) => setReferralsFilterUsername(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleFetchReferralsReport(); }}
                 placeholder="Referrer username (optional)"
                 className="flex-1 min-w-[160px] max-w-xs px-2 py-1 rounded border border-input bg-transparent text-[11px]"
               />
               <BtnPrimary onClick={handleFetchReferralsReport} disabled={referralsReportLoading}>
                 {referralsReportLoading ? 'Loading…' : 'Load report'}
               </BtnPrimary>
+              <BtnSecondary type="button" onClick={() => setReferralsFilterUsername('')}>Clear filter</BtnSecondary>
             </div>
             {referralsReport && (
               <div className="space-y-2 text-[10px] font-heading">
@@ -4860,6 +4892,165 @@ export default function Admin() {
                 {(referralsReport.groups || []).length === 0 && (
                   <p className="text-mutedForeground">No referral links found{referralsFilterUsername.trim() ? ' for this referrer' : ''}.</p>
                 )}
+              </div>
+            )}
+            <div className="border-t border-primary/20 pt-3 space-y-2">
+              <p className="text-[10px] text-mutedForeground font-heading">
+                <span className="text-foreground font-bold">Prereg heal:</span> backfill <span className="text-foreground">referred_by</span> for accounts where prereg stored a referral code but signup missed it. Use <span className="text-foreground">Prereg dry run</span> first, then <span className="text-foreground">Prereg apply heal</span> (same buttons in the bar above).
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <BtnSecondary onClick={() => runPreregHeal(true)} disabled={referralsHealLoading}>
+                  {referralsHealLoading ? '…' : 'Dry run (preview only)'}
+                </BtnSecondary>
+                <BtnPrimary onClick={() => runPreregHeal(false)} disabled={referralsHealLoading}>
+                  {referralsHealLoading ? '…' : 'Apply heal (write DB)'}
+                </BtnPrimary>
+              </div>
+              {referralsHealResult && (
+                <div className="rounded border border-primary/25 bg-primary/5 p-2 text-[10px] font-heading space-y-2">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-x-2 gap-y-1">
+                    <div><span className="text-mutedForeground">Users matched:</span> {referralsHealResult.users_matched ?? '—'}</div>
+                    <div><span className="text-mutedForeground">Eligible:</span> {referralsHealResult.eligible_for_heal ?? '—'}</div>
+                    <div><span className="text-mutedForeground">Healed:</span> {referralsHealResult.healed ?? 0}</div>
+                    <div><span className="text-mutedForeground">Rows in list:</span> {(referralsHealResult.dry_run ? (referralsHealResult.would_heal?.length ?? 0) : (referralsHealResult.healed_rows?.length ?? 0))}</div>
+                  </div>
+                  {(referralsHealResult.detail_truncated ?? 0) > 0 && (
+                    <p className="text-[9px] text-amber-400/90">… and {referralsHealResult.detail_truncated} more not listed (raise max_detail_rows on API if needed)</p>
+                  )}
+                  <div className="text-[9px] text-zinc-500">{referralsHealResult.message}</div>
+                  {(referralsHealResult.would_heal?.length > 0 || referralsHealResult.healed_rows?.length > 0) && (
+                    <div className="max-h-56 overflow-auto rounded border border-zinc-700/40">
+                      <table className="w-full text-left text-[9px] border-collapse">
+                        <thead>
+                          <tr className="border-b border-zinc-700/50 text-mutedForeground uppercase">
+                            <th className="py-1 px-2">Referee</th>
+                            <th className="py-1 px-2">Referrer</th>
+                            <th className="py-1 px-2">Referrer ID</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(referralsHealResult.dry_run ? referralsHealResult.would_heal : referralsHealResult.healed_rows)?.map((row, i) => (
+                            <tr key={`${row.referee_id}-${i}`} className="border-b border-zinc-800/50">
+                              <td className="py-1 px-2 text-foreground">{row.referee_username ?? row.referee_id}</td>
+                              <td className="py-1 px-2 text-primary">{row.referrer_username ?? '—'}</td>
+                              <td className="py-1 px-2 font-mono text-zinc-500">{row.referrer_id ?? '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="border-t border-primary/20 pt-3 space-y-2">
+              <p className="text-[10px] text-mutedForeground font-heading">
+                <span className="text-foreground font-bold">Manual link:</span> set who was referred by whom. Referee gets signup perks if they never received <span className="font-mono text-foreground">referral_tokens</span>. Referrer gets a one-time respect bonus only when the referee previously had no referrer (not on force-replace).
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={manualReferee}
+                  onChange={(e) => setManualReferee(e.target.value)}
+                  placeholder="Referee username (new player)"
+                  className="flex-1 min-w-[140px] max-w-xs px-2 py-1 rounded border border-input bg-transparent text-[11px]"
+                />
+                <input
+                  type="text"
+                  value={manualReferrer}
+                  onChange={(e) => setManualReferrer(e.target.value)}
+                  placeholder="Referrer username"
+                  className="flex-1 min-w-[140px] max-w-xs px-2 py-1 rounded border border-input bg-transparent text-[11px]"
+                />
+              </div>
+              <label className="flex items-center gap-2 text-[10px] font-heading text-mutedForeground cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={manualGrantReferee}
+                  onChange={(e) => setManualGrantReferee(e.target.checked)}
+                  className="rounded border border-input"
+                />
+                Grant referee signup bonuses (respect + tokens) if missing
+              </label>
+              <label className="flex items-center gap-2 text-[10px] font-heading text-mutedForeground cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={manualForce}
+                  onChange={(e) => setManualForce(e.target.checked)}
+                  className="rounded border border-input"
+                />
+                Force replace existing referrer
+              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[10px] text-mutedForeground font-heading">Referrer welcome respect (0–5000, 0 = off):</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={5000}
+                  value={manualReferrerRespect}
+                  onChange={(e) => setManualReferrerRespect(e.target.value)}
+                  className="w-24 px-2 py-1 rounded border border-input bg-transparent text-[11px]"
+                />
+                <BtnPrimary onClick={handleManualReferralAssign} disabled={manualLoading}>
+                  {manualLoading ? '…' : 'Apply manual link'}
+                </BtnPrimary>
+                <BtnSecondary type="button" onClick={clearManualReferralForm} disabled={manualLoading}>
+                  Clear manual form
+                </BtnSecondary>
+              </div>
+              {manualResult && (
+                <div className="rounded border border-primary/25 bg-primary/5 p-2 text-[10px] font-heading space-y-1">
+                  <div><span className="text-mutedForeground">Referee:</span> <span className="text-foreground">{manualResult.referee_username}</span> → <span className="text-primary">{manualResult.referrer_username}</span></div>
+                  <div><span className="text-mutedForeground">Referee signup bonuses:</span> {manualResult.referee_signup_bonuses_applied ? 'Yes' : 'No'}</div>
+                  <div><span className="text-mutedForeground">Referrer welcome respect:</span> {manualResult.referrer_welcome_respect_applied ? `${manualResult.referrer_welcome_respect_amount ?? 0} applied` : 'Not applied (already had referrer or set to 0)'}</div>
+                  {manualResult.replaced_existing_referrer && <div className="text-amber-400 text-[9px]">Replaced existing referred_by link.</div>}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        </div>
+
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Activity}
+          title="System Health"
+          badge={systemHealth ? <span className={`text-[10px] font-heading ${systemHealth.status === 'healthy' ? 'text-emerald-400' : 'text-amber-400'}`}>{systemHealth.status}</span> : null}
+          isCollapsed={collapsed.systemHealth}
+          onToggle={() => { toggleSection('systemHealth'); if (collapsed.systemHealth && !systemHealth) handleFetchSystemHealth(); }}
+        />
+        {!collapsed.systemHealth && (
+          <div className="p-3 space-y-2">
+            <div className="flex items-center gap-2">
+              <BtnPrimary onClick={handleFetchSystemHealth} disabled={systemHealthLoading}>{systemHealthLoading ? 'Loading...' : 'Refresh'}</BtnPrimary>
+            </div>
+            {systemHealth && (
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px] font-heading">
+                <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                  <div className="text-mutedForeground uppercase">Status</div>
+                  <div className={`font-bold ${systemHealth.status === 'healthy' ? 'text-emerald-400' : 'text-amber-400'}`}>{systemHealth.status}</div>
+                </div>
+                <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                  <div className="text-mutedForeground uppercase">Users (alive)</div>
+                  <div className="font-bold text-foreground">{(systemHealth.users_alive ?? 0).toLocaleString()} / {(systemHealth.users_total ?? 0).toLocaleString()}</div>
+                </div>
+                <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                  <div className="text-mutedForeground uppercase">Online (5m)</div>
+                  <div className="font-bold text-primary">{(systemHealth.users_online ?? 0).toLocaleString()}</div>
+                </div>
+                <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                  <div className="text-mutedForeground uppercase">Cars</div>
+                  <div className="font-bold text-foreground">{(systemHealth.cars ?? 0).toLocaleString()}</div>
+                </div>
+                <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                  <div className="text-mutedForeground uppercase">Families</div>
+                  <div className="font-bold text-foreground">{(systemHealth.families ?? 0).toLocaleString()}</div>
+                </div>
+                <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                  <div className="text-mutedForeground uppercase">Unresolved Flags</div>
+                  <div className={`font-bold ${(systemHealth.unresolved_flags ?? 0) > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>{systemHealth.unresolved_flags ?? 0}</div>
+                </div>
               </div>
             )}
           </div>

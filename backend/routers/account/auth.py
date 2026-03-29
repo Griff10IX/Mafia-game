@@ -10,7 +10,7 @@ import uuid
 logger = logging.getLogger(__name__)
 from datetime import datetime, timezone, timedelta
 
-from typing import Optional
+from typing import Any, Dict, Optional, Tuple
 
 from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, field_validator
@@ -120,6 +120,185 @@ REFERRED_USER_TOKEN_COUNT_FIELDS = [
     "xp_crimes_tokens", "xp_gta_tokens", "melt_tokens", "oc_reduced_tokens",
     "booze_tokens", "racket_tokens", "travel_tokens", "properties_tokens", "jailbust_tokens",
 ]
+
+
+def _referral_signup_bonus_update(now_iso: str, *, prereg_heal: bool = True) -> Tuple[dict, dict]:
+    """($set fields excluding referred_by, $inc) for referred-user signup perks."""
+    referral_tokens = {f: REFERRED_USER_TOKENS_PER_TYPE for f in REFERRED_USER_TOKEN_COUNT_FIELDS}
+    inc: dict = {"respect_points": REFERRED_USER_RESPECT}
+    for f in REFERRED_USER_TOKEN_COUNT_FIELDS:
+        inc[f] = REFERRED_USER_TOKENS_PER_TYPE
+    set_fields: Dict[str, Any] = {
+        "premium_rank_bar": True,
+        "referral_tokens": referral_tokens,
+    }
+    if prereg_heal:
+        set_fields["referral_prereg_heal_at"] = now_iso
+    else:
+        set_fields["referral_manual_bonus_at"] = now_iso
+    return set_fields, inc
+
+
+async def try_heal_referral_from_prereg(db, user: dict, *, dry_run: bool = False) -> Optional[Dict[str, Any]]:
+    """If user has no referred_by but preregistrations has referral_code for this email, set referred_by and
+    the same signup perks as a normal referred registration. Returns a detail dict on success/would-heal, else None."""
+    user_id = str(user.get("id") or "").strip()
+    if not user_id or user.get("is_dead"):
+        return None
+    if user.get("referred_by"):
+        return None
+    email_clean = (user.get("email") or "").strip().lower()
+    if not email_clean:
+        return None
+    prereg = await db.preregistrations.find_one({"email": email_clean})
+    if not prereg:
+        return None
+    referral_code = (prereg.get("referral_code") or "").strip()
+    if not referral_code:
+        return None
+    referrer = await db.users.find_one(
+        {
+            "username": {"$regex": "^" + re.escape(referral_code) + "$", "$options": "i"},
+            "is_dead": {"$ne": True},
+        },
+        {"_id": 0, "id": 1, "username": 1, "email": 1},
+    )
+    if not referrer:
+        return None
+    new_username_lower = (user.get("username") or "").strip().lower()
+    ref_username_lower = (referrer.get("username") or "").strip().lower()
+    ref_email_lower = (referrer.get("email") or "").strip().lower()
+    if ref_username_lower == new_username_lower or ref_email_lower == email_clean:
+        return None
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    set_bonus, inc_bonus = _referral_signup_bonus_update(now_iso)
+
+    filt = {
+        "id": user_id,
+        "$or": [
+            {"referred_by": {"$exists": False}},
+            {"referred_by": None},
+            {"referred_by": ""},
+        ],
+    }
+    detail = {
+        "referee_id": user_id,
+        "referee_username": user.get("username"),
+        "referee_email": email_clean,
+        "referrer_id": referrer["id"],
+        "referrer_username": referrer.get("username"),
+        "dry_run": dry_run,
+    }
+    if dry_run:
+        doc = await db.users.find_one(filt, {"_id": 0, "id": 1})
+        if not doc:
+            return None
+        return detail
+
+    set_fields = {"referred_by": referrer["id"], **set_bonus}
+    res = await db.users.update_one(
+        filt,
+        {"$set": set_fields, "$inc": inc_bonus},
+    )
+    if res.modified_count:
+        logger.info(
+            "referral prereg heal: user_id=%s referrer_id=%s email=%s",
+            user_id,
+            referrer["id"],
+            email_clean,
+        )
+        return {**detail, "dry_run": False}
+    return None
+
+
+async def apply_manual_referral_link(
+    db,
+    *,
+    referee_username: str,
+    referrer_username: str,
+    force: bool = False,
+    grant_referee_signup_bonuses: bool = True,
+    grant_referrer_welcome_respect: int = 250,
+) -> Dict[str, Any]:
+    """Admin: link referee → referrer (referred_by). Referee gets signup perks if missing referral_tokens.
+    Referrer gets one-time welcome respect only when referee previously had no referrer (not on force-replace)."""
+    ref_u = (referee_username or "").strip()
+    rer_u = (referrer_username or "").strip()
+    if not ref_u or not rer_u:
+        raise ValueError("referee_username and referrer_username are required")
+    referee = await db.users.find_one(
+        {"username": {"$regex": "^" + re.escape(ref_u) + "$", "$options": "i"}},
+        {"_id": 0, "id": 1, "username": 1, "email": 1, "is_dead": 1, "referred_by": 1, "referral_tokens": 1},
+    )
+    referrer = await db.users.find_one(
+        {"username": {"$regex": "^" + re.escape(rer_u) + "$", "$options": "i"}},
+        {"_id": 0, "id": 1, "username": 1, "email": 1, "is_dead": 1},
+    )
+    if not referee:
+        raise ValueError("Referee (new player) not found")
+    if not referrer:
+        raise ValueError("Referrer not found")
+    if referee.get("is_dead") or referrer.get("is_dead"):
+        raise ValueError("Cannot link dead accounts")
+    rid = str(referee.get("id") or "").strip()
+    zid = str(referrer.get("id") or "").strip()
+    if not rid or not zid or rid == zid:
+        raise ValueError("Invalid users or cannot refer yourself")
+    em_r = (referee.get("email") or "").strip().lower()
+    em_z = (referrer.get("email") or "").strip().lower()
+    if em_r and em_z and em_r == em_z:
+        raise ValueError("Referee and referrer cannot share the same email")
+    un_r = (referee.get("username") or "").strip().lower()
+    un_z = (referrer.get("username") or "").strip().lower()
+    if un_r == un_z:
+        raise ValueError("Cannot refer yourself")
+
+    had_referrer = bool((referee.get("referred_by") or "").strip())
+    if had_referrer and not force:
+        raise ValueError("Referee already has a referrer; pass force=true to replace")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    has_tokens = bool(referee.get("referral_tokens"))
+
+    set_doc: Dict[str, Any] = {
+        "referred_by": zid,
+        "referral_manual_assign_at": now_iso,
+    }
+    inc_doc: Dict[str, Any] = {}
+    referee_bonuses_applied = False
+
+    if grant_referee_signup_bonuses and not has_tokens:
+        sb, ib = _referral_signup_bonus_update(now_iso, prereg_heal=False)
+        set_doc.update(sb)
+        inc_doc.update(ib)
+        referee_bonuses_applied = True
+    elif grant_referee_signup_bonuses and has_tokens:
+        set_doc["premium_rank_bar"] = True
+
+    await db.users.update_one({"id": rid}, {"$set": set_doc, "$inc": inc_doc} if inc_doc else {"$set": set_doc})
+
+    referrer_bonus_applied = False
+    if (
+        grant_referrer_welcome_respect > 0
+        and not had_referrer
+    ):
+        r2 = await db.users.update_one(
+            {"id": zid},
+            {"$inc": {"respect_points": int(grant_referrer_welcome_respect)}},
+        )
+        referrer_bonus_applied = r2.modified_count > 0
+
+    return {
+        "referee_id": rid,
+        "referee_username": referee.get("username"),
+        "referrer_id": zid,
+        "referrer_username": referrer.get("username"),
+        "replaced_existing_referrer": had_referrer and force,
+        "referee_signup_bonuses_applied": referee_bonuses_applied,
+        "referrer_welcome_respect_applied": referrer_bonus_applied,
+        "referrer_welcome_respect_amount": grant_referrer_welcome_respect if referrer_bonus_applied else 0,
+    }
 
 
 def register(router):
@@ -955,6 +1134,17 @@ def register(router):
                 detail="Wrong password. Use Forgot password to reset it. After 3 failed attempts this account is locked for 5 minutes.",
             )
         await db.login_lockouts.delete_one({"email": email_clean})
+        # One-time backfill: referred_by from preregistrations.referral_code if signup missed ?ref=
+        if not staff_route:
+            try:
+                if await try_heal_referral_from_prereg(db, user):
+                    user = await db.users.find_one({"id": user_id}, {"_id": 0})
+                    if not user:
+                        raise HTTPException(status_code=500, detail="Account data is incomplete after referral heal. Please contact support.")
+            except HTTPException:
+                raise
+            except Exception as e:
+                logging.warning("referral prereg heal on login failed: %s", e)
         # Allow login even when dead so the frontend can render the death screen.
         # Gameplay endpoints remain blocked by get_current_user for dead accounts.
         ua = (request.headers.get("User-Agent") or "").strip()[:500]
@@ -1814,13 +2004,18 @@ def register(router):
         if existing_user:
             return {"message": "You already have an account! You'll receive founding member rewards.", "already_registered": True}
         
-        # Store pre-registration
+        # Store pre-registration (optional referral_code for full signup merge when client omits ?ref=)
+        ref_raw = (body.referral_code or "").strip()
+        if len(ref_raw) > 80:
+            ref_raw = ref_raw[:80]
         doc = {
             "email": email_clean,
             "created_at": datetime.now(timezone.utc).isoformat(),
             "ip": _client_ip(request),
             "converted": False,
         }
+        if ref_raw:
+            doc["referral_code"] = ref_raw
         await db.preregistrations.insert_one(doc)
         
         return {

@@ -82,6 +82,22 @@ class RandomEventRequest(BaseModel):
     event_ids: Optional[List[str]] = None
 
 
+class HealPreregReferralsRequest(BaseModel):
+    """Backfill referred_by from preregistrations.referral_code for accounts that missed it at signup."""
+    dry_run: bool = True
+    max_scan: int = Field(2000, ge=1, le=10000)
+    max_detail_rows: int = Field(500, ge=0, le=2000)
+
+
+class ManualReferralAssignRequest(BaseModel):
+    """Admin: set referee account as referred by referrer (same perks as signup where applicable)."""
+    referee_username: str
+    referrer_username: str
+    force: bool = False
+    grant_referee_signup_bonuses: bool = True
+    grant_referrer_welcome_respect: int = Field(250, ge=0, le=5000)
+
+
 class RedeemCodeRewards(BaseModel):
     money: Optional[int] = None
     points: Optional[int] = None
@@ -254,6 +270,7 @@ SEED_TEST_PASSWORD = "test1234"
 def register(router):
     """Register admin routes. Dependencies from server to avoid circular imports."""
     import server as srv
+    from routers.account.auth import apply_manual_referral_link, try_heal_referral_from_prereg
     from routers.game import leaderboard as leaderboard_module
     import middleware.security as security_module
     from routers.game.families import FAMILY_RACKETS
@@ -1925,6 +1942,96 @@ def register(router):
             "total_referee_links": len(rows),
             "groups": groups,
         }
+
+    @router.post("/admin/referrals/heal-prereg")
+    async def admin_heal_prereg_referrals(
+        body: HealPreregReferralsRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Backfill referred_by + signup bonuses for users whose prereg row has referral_code but account was created without referred_by.
+        Run with dry_run=true first. Users also heal automatically on next login."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        preregs = (
+            await db.preregistrations.find(
+                {"referral_code": {"$exists": True, "$nin": [None, ""]}},
+                {"_id": 0, "email": 1},
+            )
+            .limit(body.max_scan)
+            .to_list(body.max_scan + 1)
+        )
+        seen: Set[str] = set()
+        scanned = 0
+        eligible = 0
+        healed = 0
+        cap = int(body.max_detail_rows)
+        would_heal_rows: List[dict] = []
+        healed_rows: List[dict] = []
+
+        def _trim(d: dict) -> dict:
+            return {k: v for k, v in d.items() if k != "dry_run"}
+
+        for p in preregs:
+            em = (p.get("email") or "").strip().lower()
+            if not em or em in seen:
+                continue
+            seen.add(em)
+            pat = re.compile("^" + re.escape(em) + "$", re.IGNORECASE)
+            u = await db.users.find_one({"email": pat}, {"_id": 0})
+            if not u:
+                continue
+            scanned += 1
+            would = await try_heal_referral_from_prereg(db, u, dry_run=True)
+            if not would:
+                continue
+            eligible += 1
+            if body.dry_run:
+                if cap <= 0 or len(would_heal_rows) < cap:
+                    would_heal_rows.append(_trim(would))
+            else:
+                h = await try_heal_referral_from_prereg(db, u, dry_run=False)
+                if h:
+                    healed += 1
+                    if cap <= 0 or len(healed_rows) < cap:
+                        healed_rows.append(_trim(h))
+        shown = len(would_heal_rows) if body.dry_run else len(healed_rows)
+        detail_truncated = max(0, eligible - shown) if cap > 0 else 0
+        return {
+            "dry_run": body.dry_run,
+            "prereg_rows_considered": len(preregs),
+            "unique_emails_tried": len(seen),
+            "users_matched": scanned,
+            "eligible_for_heal": eligible,
+            "healed": healed if not body.dry_run else 0,
+            "would_heal": would_heal_rows if body.dry_run else [],
+            "healed_rows": healed_rows if not body.dry_run else [],
+            "detail_truncated": detail_truncated,
+            "message": (
+                "Dry run: no rows updated." if body.dry_run else f"Updated {healed} user account(s)."
+            ),
+        }
+
+    @router.post("/admin/referrals/manual-assign")
+    async def admin_referrals_manual_assign(
+        body: ManualReferralAssignRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Link a referee account to a referrer (referred_by). Referee signup perks if they never got referral_tokens; referrer welcome respect when first link only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        try:
+            out = await apply_manual_referral_link(
+                db,
+                referee_username=body.referee_username.strip(),
+                referrer_username=body.referrer_username.strip(),
+                force=body.force,
+                grant_referee_signup_bonuses=body.grant_referee_signup_bonuses,
+                grant_referrer_welcome_respect=int(body.grant_referrer_welcome_respect),
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return out
 
     @router.post("/admin/daily-rewards/reset-timer")
     async def admin_daily_rewards_reset_timer(
