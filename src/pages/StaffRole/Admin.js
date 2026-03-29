@@ -517,6 +517,12 @@ export default function Admin() {
   const [gtaExclusiveApproxOneIn, setGtaExclusiveApproxOneIn] = useState(166667);
   const [gtaExclusiveDropWeightInput, setGtaExclusiveDropWeightInput] = useState('0.000006');
   const [giveEveryoneExclusiveLoading, setGiveEveryoneExclusiveLoading] = useState(false);
+  const [exclusiveCarValues, setExclusiveCarValues] = useState([]);
+  const [exclusiveCarValuesLoading, setExclusiveCarValuesLoading] = useState(false);
+  const [editCarId, setEditCarId] = useState('');
+  const [editCarValue, setEditCarValue] = useState('');
+  const [editCarTravel, setEditCarTravel] = useState('');
+  const [editCarSaving, setEditCarSaving] = useState(false);
   const [jailLogsUsername, setJailLogsUsername] = useState('');
   const [jailLogsLimit, setJailLogsLimit] = useState(500);
   const [jailLogsData, setJailLogsData] = useState(null);
@@ -2865,6 +2871,42 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed');
     } finally {
       setGiveEveryoneExclusiveLoading(false);
+    }
+  };
+
+  const fetchExclusiveCarValues = async () => {
+    setExclusiveCarValuesLoading(true);
+    try {
+      const res = await api.get('/admin/cars/values');
+      setExclusiveCarValues(res.data?.cars || []);
+      if (res.data?.cars?.length && !editCarId) {
+        const first = res.data.cars[0];
+        setEditCarId(first.id);
+        setEditCarValue(String(first.value));
+        setEditCarTravel(String(first.travel_bonus));
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load car values');
+    } finally {
+      setExclusiveCarValuesLoading(false);
+    }
+  };
+
+  const handleEditCarValue = async () => {
+    if (!editCarId) return;
+    const val = parseInt(editCarValue, 10);
+    if (isNaN(val) || val < 0) { toast.error('Enter a valid value'); return; }
+    setEditCarSaving(true);
+    try {
+      const payload = { car_id: editCarId, value: val };
+      if (editCarTravel.trim() !== '') payload.travel_bonus = parseInt(editCarTravel, 10) || 0;
+      const res = await api.post('/admin/cars/edit-value', payload);
+      toast.success(res.data?.message || 'Updated');
+      await fetchExclusiveCarValues();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to update');
+    } finally {
+      setEditCarSaving(false);
     }
   };
 
@@ -5937,6 +5979,59 @@ export default function Admin() {
                 <span className="text-[10px] text-mutedForeground">Range: 0.0000001 to 0.05</span>
               </div>
               <p className="text-[10px] text-mutedForeground font-heading">When released, the Al Capone exclusive can drop from GTA (very rare). Only one in game at a time. GTA logs are in the &quot;GTA logs (post data)&quot; section further down.</p>
+
+              {/* Edit exclusive car values */}
+              <div className="pt-3 border-t border-zinc-700/50 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-heading text-mutedForeground">Edit exclusive car values:</span>
+                  <BtnPrimary onClick={fetchExclusiveCarValues} disabled={exclusiveCarValuesLoading}>
+                    {exclusiveCarValuesLoading ? '...' : 'Load'}
+                  </BtnPrimary>
+                </div>
+                {exclusiveCarValues.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-[10px] font-mono">
+                        <thead>
+                          <tr className="text-left text-mutedForeground">
+                            <th className="p-1.5">Car</th>
+                            <th className="p-1.5">Rarity</th>
+                            <th className="p-1.5">Value</th>
+                            <th className="p-1.5">Travel Bonus</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {exclusiveCarValues.map((c) => (
+                            <tr key={c.id} className={`border-t border-zinc-700/30 ${editCarId === c.id ? 'bg-primary/10' : 'hover:bg-zinc-800/30'} cursor-pointer`} onClick={() => { setEditCarId(c.id); setEditCarValue(String(c.value)); setEditCarTravel(String(c.travel_bonus)); }}>
+                              <td className="p-1.5 text-foreground">{c.name} <span className="text-mutedForeground">({c.id})</span></td>
+                              <td className="p-1.5 text-primary">{c.rarity}</td>
+                              <td className="p-1.5 text-green-400">${Number(c.value).toLocaleString()}</td>
+                              <td className="p-1.5 text-blue-400">{c.travel_bonus}%</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {editCarId && (
+                      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-zinc-700/30">
+                        <span className="text-[10px] font-heading text-mutedForeground">{exclusiveCarValues.find(c => c.id === editCarId)?.name || editCarId}:</span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-mutedForeground">Value $</span>
+                          <input type="number" min="0" value={editCarValue} onChange={(e) => setEditCarValue(e.target.value)} className="w-32 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono" />
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] text-mutedForeground">Travel</span>
+                          <input type="number" min="0" max="100" value={editCarTravel} onChange={(e) => setEditCarTravel(e.target.value)} className="w-16 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono" />
+                        </div>
+                        <BtnPrimary onClick={handleEditCarValue} disabled={editCarSaving}>
+                          {editCarSaving ? '...' : 'Save'}
+                        </BtnPrimary>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
               <div className="pt-3 border-t border-zinc-700/50 space-y-2">
                 <span className="text-[10px] font-heading text-mutedForeground block">Give every user an exclusive car (if they don&apos;t already have it):</span>
                 <div className="flex flex-wrap gap-2">

@@ -2196,6 +2196,21 @@ logger = logging.getLogger(__name__)
 @app.on_event("startup")
 async def startup_db():
     await init_game_data()
+    # Load persisted car value overrides (exclusive cars edited via admin)
+    try:
+        overrides = await db.game_config.find({"id": {"$regex": "^car_override_"}}).to_list(50)
+        for ov in overrides:
+            car_id = ov.get("car_id")
+            vals = ov.get("overrides") or {}
+            car = next((c for c in CARS if c["id"] == car_id), None)
+            if car and vals:
+                if "value" in vals:
+                    car["value"] = int(vals["value"])
+                if "travel_bonus" in vals:
+                    car["travel_bonus"] = int(vals["travel_bonus"])
+                logging.info("Loaded car override for %s: value=%s travel=%s", car_id, car.get("value"), car.get("travel_bonus"))
+    except Exception as e:
+        logging.warning("Failed to load car overrides: %s", e)
     from routers.account.profile import ensure_profile_indexes
     from ensure_indexes import ensure_all_indexes
     await ensure_profile_indexes(db)

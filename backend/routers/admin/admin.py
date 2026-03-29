@@ -138,6 +138,11 @@ class GTAExclusivePoolRequest(BaseModel):
     drop_weight: Optional[float] = None
 
 
+class EditCarValueRequest(BaseModel):
+    car_id: str
+    value: int
+    travel_bonus: Optional[int] = None
+
 class GiveEveryoneExclusiveCarsRequest(BaseModel):
     """Give every user a car they don't already have. loot_exclusive = car21, al_capone = car20."""
     loot_exclusive: bool = False
@@ -922,6 +927,57 @@ def register(router):
             "given": given,
             "skipped": skipped,
             "total_users": len(users),
+        }
+
+    @router.get("/admin/cars/values")
+    async def admin_get_car_values(current_user: dict = Depends(get_current_user)):
+        """Get all exclusive/loot_exclusive cars with their current values. Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        result = []
+        for c in CARS:
+            if c.get("rarity") in ("exclusive", "loot_exclusive"):
+                result.append({
+                    "id": c["id"],
+                    "name": c["name"],
+                    "rarity": c["rarity"],
+                    "value": c.get("value", 0),
+                    "travel_bonus": c.get("travel_bonus", 0),
+                })
+        return {"cars": result}
+
+    @router.post("/admin/cars/edit-value")
+    async def admin_edit_car_value(body: EditCarValueRequest, current_user: dict = Depends(get_current_user)):
+        """Edit the value and/or travel bonus of an exclusive car. Persists across restarts."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        car = next((c for c in CARS if c["id"] == body.car_id), None)
+        if not car:
+            raise HTTPException(status_code=404, detail=f"Car '{body.car_id}' not found")
+        if car.get("rarity") not in ("exclusive", "loot_exclusive"):
+            raise HTTPException(status_code=400, detail="Only exclusive and loot-exclusive cars can be edited")
+        if body.value < 0:
+            raise HTTPException(status_code=400, detail="Value must be >= 0")
+
+        old_value = car.get("value", 0)
+        old_travel = car.get("travel_bonus", 0)
+        car["value"] = body.value
+        if body.travel_bonus is not None:
+            car["travel_bonus"] = max(0, body.travel_bonus)
+
+        override = {"value": car["value"], "travel_bonus": car["travel_bonus"]}
+        await db.game_config.update_one(
+            {"id": f"car_override_{body.car_id}"},
+            {"$set": {"car_id": body.car_id, "overrides": override}},
+            upsert=True,
+        )
+
+        return {
+            "message": f"Updated {car['name']}: value ${old_value:,} -> ${car['value']:,}" + (f", travel {old_travel} -> {car['travel_bonus']}" if body.travel_bonus is not None else ""),
+            "car_id": body.car_id,
+            "name": car["name"],
+            "value": car["value"],
+            "travel_bonus": car["travel_bonus"],
         }
 
     @router.post("/admin/slots/set-draw-in-minutes")
