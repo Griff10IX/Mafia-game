@@ -7,10 +7,11 @@ import math
 import random
 import uuid
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, field_validator
 
-from server import db, get_current_user, get_current_user_verified, maybe_process_rank_up, log_gambling
+from server import db, get_current_user, get_current_user_verified, maybe_process_rank_up, log_gambling, _is_admin
+from utils.minigame_captcha_gate import require_turnstile_for_minigame_start
 from routers.minigames.minigame_leaderboard import log_minigame_play
 
 _rng = random.SystemRandom()
@@ -55,6 +56,7 @@ class PoolCreateRequest(BaseModel):
     buy_in: int = 0
     rated: bool = True
     anonymous: bool = False
+    captcha_token: Optional[str] = None
 
     @field_validator("buy_in", mode="before")
     @classmethod
@@ -965,7 +967,18 @@ def register(router):
         return {"games": [_public_game(r, current_user.get("id")) for r in rows]}
 
     @router.post("/casino/mp-8ball/games")
-    async def pool_create_game(body: PoolCreateRequest, current_user: dict = Depends(get_current_user_verified)):
+    async def pool_create_game(
+        body: PoolCreateRequest,
+        request: Request,
+        current_user: dict = Depends(get_current_user_verified),
+    ):
+        await require_turnstile_for_minigame_start(
+            db,
+            request=request,
+            current_user=current_user,
+            captcha_token=body.captcha_token,
+            is_admin=_is_admin(current_user),
+        )
         uid = current_user["id"]
         buy_in = max(0, min(MP_8BALL_MAX_BUY_IN, int(body.buy_in or 0)))
         if buy_in > 0:
@@ -1006,7 +1019,23 @@ def register(router):
         return _public_game(game, uid)
 
     @router.post("/casino/mp-8ball/games/{game_id}/join")
-    async def pool_join_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
+    async def pool_join_game(game_id: str, request: Request, current_user: dict = Depends(get_current_user_verified)):
+        captcha_token: Optional[str] = None
+        try:
+            raw = await request.json()
+            if isinstance(raw, dict):
+                t = raw.get("captcha_token")
+                if t is not None and str(t).strip():
+                    captcha_token = str(t).strip()
+        except Exception:
+            pass
+        await require_turnstile_for_minigame_start(
+            db,
+            request=request,
+            current_user=current_user,
+            captcha_token=captcha_token,
+            is_admin=_is_admin(current_user),
+        )
         uid = current_user["id"]
         game = await db.mp_8ball_games.find_one({"id": game_id})
         if not game:
@@ -1348,7 +1377,23 @@ def register(router):
         return {"message": "Turn timed out"}
 
     @router.post("/casino/mp-8ball/vs-ai/start")
-    async def pool_ai_start(current_user: dict = Depends(get_current_user_verified)):
+    async def pool_ai_start(request: Request, current_user: dict = Depends(get_current_user_verified)):
+        captcha_token: Optional[str] = None
+        try:
+            raw = await request.json()
+            if isinstance(raw, dict):
+                t = raw.get("captcha_token")
+                if t is not None and str(t).strip():
+                    captcha_token = str(t).strip()
+        except Exception:
+            pass
+        await require_turnstile_for_minigame_start(
+            db,
+            request=request,
+            current_user=current_user,
+            captcha_token=captcha_token,
+            is_admin=_is_admin(current_user),
+        )
         uid = current_user["id"]
         existing = await db.mp_8ball_games.find_one(
             {"mode": "vs_ai", "owner_user_id": uid, "status": {"$in": ["waiting", "in_progress"]}},

@@ -1,13 +1,15 @@
 import secrets
 _rng = secrets.SystemRandom()
+import re
 import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from server import db, get_current_user_verified, get_current_user, log_gambling, _get_staff_user_ids
+from server import db, get_current_user_verified, get_current_user, log_gambling, _get_staff_user_ids, _is_admin, send_notification
+from utils.minigame_captcha_gate import require_turnstile_for_minigame_start
 from utils.minigame_run_session import utc_rate_limit_window, RATE_LIMIT_PERIOD_HOURS
 
 
@@ -21,6 +23,50 @@ def _boxing_fight_throttle_429(message: str, *, cooldown_seconds: Optional[int] 
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _user_id_match(a: Any, b: Any) -> bool:
+    """JWT `sub` and Mongo `users.id` may differ by type (str vs int); normalize for comparisons."""
+    if a is None or b is None:
+        return False
+    return str(a) == str(b)
+
+
+def _user_id_query_values(uid: Any) -> List[Any]:
+    """Values to use in $in queries so challenges match regardless of id storage type."""
+    if uid is None:
+        return []
+    s = str(uid)
+    out: List[Any] = []
+    if uid not in out:
+        out.append(uid)
+    if s not in out:
+        out.append(s)
+    return out
+
+
+async def _find_user_by_username_for_challenge(raw_name: str) -> Optional[dict]:
+    """
+    Case-insensitive exact username match (same idea as bank transfers).
+    If more than one user matches, require a unique handle — avoids wrong opponent on case-only duplicates.
+    """
+    name = (raw_name or "").strip()
+    if not name:
+        return None
+    pattern = re.compile("^" + re.escape(name) + "$", re.IGNORECASE)
+    cur = db.users.find(
+        {"username": pattern, "is_dead": {"$ne": True}, "is_npc": {"$ne": True}},
+        {"_id": 0, "id": 1, "username": 1},
+    )
+    matches = await cur.to_list(3)
+    if not matches:
+        return None
+    if len(matches) > 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Multiple accounts match that name; type the username exactly as shown on their profile.",
+        )
+    return matches[0]
 
 
 def _week_start(dt: datetime) -> datetime:
@@ -331,12 +377,15 @@ class AllocateRequest(BaseModel):
 
 class FightNpcRequest(BaseModel):
     npc_id: str
+    captcha_token: Optional[str] = None
 
 class ChallengeRequest(BaseModel):
     opponent_username: str
+    captcha_token: Optional[str] = None
 
 class AcceptChallengeRequest(BaseModel):
     challenge_id: str
+    captcha_token: Optional[str] = None
 
 class CancelChallengeRequest(BaseModel):
     challenge_id: str
@@ -461,10 +510,22 @@ async def _release_hourly_fight_slot(
     )
 
 
-async def boxing_fight_npc(payload: FightNpcRequest, current_user: dict = Depends(get_current_user_verified)):
+async def boxing_fight_npc(
+    payload: FightNpcRequest,
+    request: Request,
+    current_user: dict = Depends(get_current_user_verified),
+):
     npc = _get_npc(payload.npc_id)
     if not npc:
         raise HTTPException(status_code=400, detail="Invalid opponent")
+
+    await require_turnstile_for_minigame_start(
+        db,
+        request=request,
+        current_user=current_user,
+        captcha_token=payload.captcha_token,
+        is_admin=_is_admin(current_user),
+    )
 
     await _ensure_profile(current_user["id"])
     now = datetime.now(timezone.utc)
@@ -625,30 +686,45 @@ async def boxing_fight_get(fight_id: str, current_user: dict = Depends(get_curre
     return {"fight": fight}
 
 
-async def boxing_challenge_create(payload: ChallengeRequest, current_user: dict = Depends(get_current_user_verified)):
+async def boxing_challenge_create(
+    payload: ChallengeRequest,
+    request: Request,
+    current_user: dict = Depends(get_current_user_verified),
+):
     opp_name = (payload.opponent_username or "").strip()
     if not opp_name:
         raise HTTPException(status_code=400, detail="Opponent username required")
-    opp = await db.users.find_one(
-        {"username": opp_name, "is_dead": {"$ne": True}, "is_npc": {"$ne": True}},
-        {"_id": 0, "id": 1, "username": 1},
+
+    await require_turnstile_for_minigame_start(
+        db,
+        request=request,
+        current_user=current_user,
+        captcha_token=payload.captcha_token,
+        is_admin=_is_admin(current_user),
     )
+    opp = await _find_user_by_username_for_challenge(opp_name)
     if not opp:
         raise HTTPException(status_code=404, detail="Player not found")
-    if opp["id"] == current_user["id"]:
+    if _user_id_match(opp["id"], current_user["id"]):
         raise HTTPException(status_code=400, detail="Cannot challenge yourself")
 
+    my_ids = _user_id_query_values(current_user["id"])
+    opp_ids = _user_id_query_values(opp["id"])
     existing = await db.boxing_challenges.find_one({
-        "challenger_id": current_user["id"], "target_id": opp["id"], "state": "pending",
+        "challenger_id": {"$in": my_ids},
+        "target_id": {"$in": opp_ids},
+        "state": "pending",
     })
     if existing:
         raise HTTPException(status_code=400, detail="You already have a pending challenge against this player")
 
-    await _ensure_profile(current_user["id"])
-    await _ensure_profile(opp["id"])
+    cid_self = str(current_user["id"])
+    cid_opp = str(opp["id"])
+    await _ensure_profile(cid_self)
+    await _ensure_profile(cid_opp)
 
-    a_prof = await db.boxing_profiles.find_one({"user_id": current_user["id"]}, {"_id": 0, "rating": 1})
-    b_prof = await db.boxing_profiles.find_one({"user_id": opp["id"]}, {"_id": 0, "rating": 1})
+    a_prof = await db.boxing_profiles.find_one({"user_id": cid_self}, {"_id": 0, "rating": 1})
+    b_prof = await db.boxing_profiles.find_one({"user_id": cid_opp}, {"_id": 0, "rating": 1})
     ra = int((a_prof or {}).get("rating") or 1000)
     rb = int((b_prof or {}).get("rating") or 1000)
     odds = _match_odds(ra, rb)
@@ -657,9 +733,9 @@ async def boxing_challenge_create(payload: ChallengeRequest, current_user: dict 
     now = _now_iso()
     doc = {
         "id": challenge_id,
-        "challenger_id": current_user["id"],
+        "challenger_id": cid_self,
         "challenger_username": current_user.get("username") or "?",
-        "target_id": opp["id"],
+        "target_id": cid_opp,
         "target_username": opp.get("username") or "?",
         "state": "pending",
         "odds": odds,
@@ -667,13 +743,32 @@ async def boxing_challenge_create(payload: ChallengeRequest, current_user: dict 
     }
     await db.boxing_challenges.insert_one(doc)
     doc.pop("_id", None)
+    ch_name = current_user.get("username") or "A player"
+    await send_notification(
+        cid_opp,
+        "Boxing challenge",
+        f"{ch_name} challenged you to a fight. Open Casino → Mini Games → Boxing, then the Fight tab, to accept.",
+        "boxing_challenge",
+    )
     return {"message": f"Challenge sent to {opp['username']}", "challenge_id": challenge_id, "challenge": doc}
 
 
-async def boxing_challenge_accept(payload: AcceptChallengeRequest, current_user: dict = Depends(get_current_user_verified)):
+async def boxing_challenge_accept(
+    payload: AcceptChallengeRequest,
+    request: Request,
+    current_user: dict = Depends(get_current_user_verified),
+):
     cid = (payload.challenge_id or "").strip()
     if not cid:
         raise HTTPException(status_code=400, detail="challenge_id required")
+
+    await require_turnstile_for_minigame_start(
+        db,
+        request=request,
+        current_user=current_user,
+        captcha_token=payload.captcha_token,
+        is_admin=_is_admin(current_user),
+    )
 
     # Atomic state transition to prevent two concurrent accepts from both running the fight
     ch = await db.boxing_challenges.find_one_and_update(
@@ -684,7 +779,7 @@ async def boxing_challenge_accept(payload: AcceptChallengeRequest, current_user:
     )
     if not ch:
         raise HTTPException(status_code=404, detail="Challenge not found or already accepted")
-    if ch["target_id"] != current_user["id"]:
+    if not _user_id_match(ch.get("target_id"), current_user["id"]):
         await db.boxing_challenges.update_one({"id": cid, "state": "in_progress"}, {"$set": {"state": "pending"}})
         raise HTTPException(status_code=403, detail="This challenge is not for you")
 
@@ -825,7 +920,7 @@ async def boxing_challenge_cancel(payload: CancelChallengeRequest, current_user:
     ch = await db.boxing_challenges.find_one({"id": cid, "state": "pending"}, {"_id": 0})
     if not ch:
         raise HTTPException(status_code=404, detail="Challenge not found or already resolved")
-    if ch["challenger_id"] != current_user["id"]:
+    if not _user_id_match(ch.get("challenger_id"), current_user["id"]):
         raise HTTPException(status_code=403, detail="Not your challenge to cancel")
 
     await db.boxing_challenges.update_one({"id": cid}, {"$set": {"state": "cancelled"}})
@@ -834,11 +929,14 @@ async def boxing_challenge_cancel(payload: CancelChallengeRequest, current_user:
 
 
 async def boxing_challenges_list(current_user: dict = Depends(get_current_user_verified)):
+    uid_opts = _user_id_query_values(current_user["id"])
+    if not uid_opts:
+        return {"incoming": [], "outgoing": []}
     incoming = await db.boxing_challenges.find(
-        {"target_id": current_user["id"], "state": "pending"}, {"_id": 0}
+        {"target_id": {"$in": uid_opts}, "state": "pending"}, {"_id": 0}
     ).sort("created_at", -1).to_list(20)
     outgoing = await db.boxing_challenges.find(
-        {"challenger_id": current_user["id"], "state": "pending"}, {"_id": 0}
+        {"challenger_id": {"$in": uid_opts}, "state": "pending"}, {"_id": 0}
     ).sort("created_at", -1).to_list(20)
     return {"incoming": incoming, "outgoing": outgoing}
 
@@ -896,9 +994,9 @@ async def boxing_bets_list(current_user: dict = Depends(get_current_user_verifie
 
 async def _settle_challenge_bets(challenge_id: str, winner_id: Optional[str], is_draw: bool, challenge: dict):
     win_side = None
-    if winner_id == challenge.get("challenger_id"):
+    if _user_id_match(winner_id, challenge.get("challenger_id")):
         win_side = "a"
-    elif winner_id == challenge.get("target_id"):
+    elif _user_id_match(winner_id, challenge.get("target_id")):
         win_side = "b"
     now = _now_iso()
     bets = await db.boxing_bets.find({"challenge_id": challenge_id, "status": "open"}, {"_id": 0}).to_list(2000)

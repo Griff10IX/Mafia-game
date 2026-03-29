@@ -53,6 +53,7 @@ const C = {
 };
 
 export default function FamilyRun() {
+  const { getCaptchaToken, captchaModal } = useMinigameCaptcha();
   const { playsLeft, maxPlays, canPlay, updateFromStart, refresh: refreshPlays, applyPlaysLeftPayload } = useMinigamePlaysLeft("family_run");
   const canvasRef = useRef(null);
   const G         = useRef(null);

@@ -22,6 +22,7 @@ const RULES = [
 ];
 
 export default function TheGetaway() {
+  const { getCaptchaToken, captchaModal } = useMinigameCaptcha();
   const { playsLeft, maxPlays, canPlay, updateFromStart, refresh: refreshPlays, applyPlaysLeftPayload } = useMinigamePlaysLeft("the_getaway");
   const canvasRef = useRef(null);
   const stateRef = useRef({

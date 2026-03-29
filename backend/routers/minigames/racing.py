@@ -14,7 +14,7 @@ import re
 import uuid
 import hashlib
 from typing import Optional, List, Dict, Any
-from fastapi import Depends, HTTPException, Header
+from fastapi import Depends, HTTPException, Header, Request
 
 from .racing_lap_engine import (
     LapEngineConfig,
@@ -26,6 +26,7 @@ from pydantic import BaseModel
 from pymongo import UpdateOne
 
 from server import db, get_current_user_verified, get_current_user, maybe_process_rank_up, send_notification, log_gambling, _is_admin, _get_staff_user_ids
+from utils.minigame_captcha_gate import require_turnstile_for_minigame_start
 import pathlib as _pathlib
 
 _RACE_DEBUG_LOG = str(_pathlib.Path(__file__).resolve().parent.parent.parent / "race_debug.log")
@@ -523,11 +524,13 @@ class CreateRaceRequest(BaseModel):
     tyre_compound: str = "medium"  # soft, medium, hard
     weather_id: Optional[str] = None  # clear, rain, snow, very_hot; if omitted, random at create
     interactive: bool = True
+    captcha_token: Optional[str] = None
 
 
 class JoinRaceRequest(BaseModel):
     racing_car_instance_id: str
     tyre_compound: str = "medium"  # soft, medium, hard
+    captcha_token: Optional[str] = None
 
 
 class RaceDecisionRequest(BaseModel):
@@ -2055,7 +2058,18 @@ async def create_racing_team(body: CreateRacingTeamRequest, current_user: dict =
     return {"message": "Racing team created", "team_name": name, "team_color": color, "crew_bank": CREW_BANK_START}
 
 
-async def create_race(body: CreateRaceRequest, current_user: dict = Depends(get_current_user_verified)):
+async def create_race(
+    body: CreateRaceRequest,
+    request: Request,
+    current_user: dict = Depends(get_current_user_verified),
+):
+    await require_turnstile_for_minigame_start(
+        db,
+        request=request,
+        current_user=current_user,
+        captcha_token=body.captcha_token,
+        is_admin=_is_admin(current_user),
+    )
     track_id = (body.track_id or "").strip()
     track = _get_track(track_id)
     if not track:
@@ -2146,7 +2160,19 @@ async def get_race(race_id: str, current_user: dict = Depends(get_current_user_v
     return {"race": race}
 
 
-async def join_race(race_id: str, body: JoinRaceRequest, current_user: dict = Depends(get_current_user_verified)):
+async def join_race(
+    race_id: str,
+    body: JoinRaceRequest,
+    request: Request,
+    current_user: dict = Depends(get_current_user_verified),
+):
+    await require_turnstile_for_minigame_start(
+        db,
+        request=request,
+        current_user=current_user,
+        captcha_token=body.captcha_token,
+        is_admin=_is_admin(current_user),
+    )
     race = await db.racing_races.find_one({"id": race_id}, {"_id": 0})
     if not race:
         raise HTTPException(status_code=404, detail="Race not found")

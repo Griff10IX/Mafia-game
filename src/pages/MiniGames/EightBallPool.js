@@ -4,6 +4,7 @@ import {
   Bot, Users, Trophy, Target, Zap, RefreshCw, Volume2, VolumeX, Sparkles, Crosshair, SlidersHorizontal, Gauge,
 } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../utils/api';
+import { useMinigameCaptcha } from '../../hooks/useMinigameCaptcha';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import railOrnateAsset from '../../lib/pool_assets/rail-ornate.svg';
@@ -335,6 +336,7 @@ function reflectDirAtPoint(nx, ny, dx, dy, minX, maxX, minY, maxY) {
 }
 
 export default function EightBallPool() {
+  const { getCaptchaToken, captchaModal } = useMinigameCaptcha();
   const [tab, setTab] = useState('ai'); // ai | pvp
   const [loading, setLoading] = useState(false);
   const [aiGame, setAiGame] = useState(null);
@@ -1528,8 +1530,16 @@ export default function EightBallPool() {
       return;
     }
     setBusy(true);
+    const payload = {};
     try {
-      const res = await api.post('/casino/mp-8ball/vs-ai/start');
+      const token = await getCaptchaToken();
+      if (token) payload.captcha_token = token;
+    } catch {
+      setBusy(false);
+      return;
+    }
+    try {
+      const res = await api.post('/casino/mp-8ball/vs-ai/start', payload);
       setAiGame(res.data || null);
       setTab('ai');
       setPageTab('match');
@@ -1549,8 +1559,16 @@ export default function EightBallPool() {
 
   const createPvp = async () => {
     setBusy(true);
+    const body = { buy_in: Number(buyIn) || 0, rated: true, anonymous: false };
     try {
-      const res = await api.post('/casino/mp-8ball/games', { buy_in: Number(buyIn) || 0, rated: true, anonymous: false });
+      const token = await getCaptchaToken();
+      if (token) body.captcha_token = token;
+    } catch {
+      setBusy(false);
+      return;
+    }
+    try {
+      const res = await api.post('/casino/mp-8ball/games', body);
       setPvpGame(res.data || null);
       setTab('pvp');
       setPageTab('match');
@@ -1565,8 +1583,16 @@ export default function EightBallPool() {
 
   const joinLobby = async (gid) => {
     setBusy(true);
+    const body = {};
     try {
-      const res = await api.post(`/casino/mp-8ball/games/${encodeURIComponent(gid)}/join`);
+      const token = await getCaptchaToken();
+      if (token) body.captcha_token = token;
+    } catch {
+      setBusy(false);
+      return;
+    }
+    try {
+      const res = await api.post(`/casino/mp-8ball/games/${encodeURIComponent(gid)}/join`, body);
       setPvpGame(res.data || null);
       setPageTab('match');
       toast.success('Joined lobby');
@@ -1794,16 +1820,20 @@ export default function EightBallPool() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
-        <Target size={22} className="text-primary/40 animate-pulse" />
-        <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-        <span className="text-primary text-[10px] font-heading uppercase tracking-[0.2em]">Loading pool room...</span>
-      </div>
+      <>
+        {captchaModal}
+        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
+          <Target size={22} className="text-primary/40 animate-pulse" />
+          <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span className="text-primary text-[10px] font-heading uppercase tracking-[0.2em]">Loading pool room...</span>
+        </div>
+      </>
     );
   }
 
   return (
     <div className={`space-y-3 ${styles.pageContent} mobile-page-root`} data-testid="eight-ball-pool-page">
+      {captchaModal}
       <style>{POOL_STYLES}</style>
 
       <header className="pool-fade-in text-center">

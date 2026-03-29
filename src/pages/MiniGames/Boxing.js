@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api, { getApiErrorMessage } from "../../utils/api";
+import { useMinigameCaptcha } from "../../hooks/useMinigameCaptcha";
 import styles from "../../styles/noir.module.css";
 
 const STAT_KEYS = ["power", "speed", "defense", "stamina"];
@@ -418,6 +419,7 @@ function FightReplay({ fight, onClose }) {
 export default function Boxing() {
   const { matchId: fightIdParam } = useParams();
   const navigate = useNavigate();
+  const { getCaptchaToken, captchaModal } = useMinigameCaptcha();
 
   const [tab, setTab] = useState(0);
   const [profile, setProfile] = useState(null);
@@ -515,6 +517,25 @@ export default function Boxing() {
     }).catch(() => {});
   }, [fightIdParam]);
 
+  useEffect(() => {
+    const t = setInterval(() => {
+      loadChallenges();
+    }, 25000);
+    return () => clearInterval(t);
+  }, [loadChallenges]);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === "visible") loadChallenges();
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, [loadChallenges]);
+
+  useEffect(() => {
+    if (tab === 1) loadChallenges();
+  }, [tab, loadChallenges]);
+
   const handleTrain = async (stat) => {
     setBusy(`train:${stat}`);
     setError("");
@@ -546,8 +567,16 @@ export default function Boxing() {
   const handleFightNpc = async (npcId) => {
     setBusy(`npc:${npcId}`);
     setError("");
+    let body = { npc_id: npcId };
     try {
-      const res = await api.post("/boxing/fight/npc", { npc_id: npcId });
+      const token = await getCaptchaToken();
+      if (token) body = { ...body, captcha_token: token };
+    } catch {
+      setBusy("");
+      return;
+    }
+    try {
+      const res = await api.post("/boxing/fight/npc", body);
       setProfile(res.data?.profile || null);
       if (res.data?.fight) setReplayFight(res.data.fight);
       loadHistory();
@@ -563,8 +592,16 @@ export default function Boxing() {
     if (!name) return;
     setBusy("challenge");
     setError("");
+    let body = { opponent_username: name };
     try {
-      await api.post("/boxing/fight/challenge", { opponent_username: name });
+      const token = await getCaptchaToken();
+      if (token) body = { ...body, captcha_token: token };
+    } catch {
+      setBusy("");
+      return;
+    }
+    try {
+      await api.post("/boxing/fight/challenge", body);
       setChallengeTarget("");
       loadChallenges();
     } catch (e) {
@@ -577,8 +614,16 @@ export default function Boxing() {
   const handleAccept = async (cid) => {
     setBusy(`accept:${cid}`);
     setError("");
+    let body = { challenge_id: cid };
     try {
-      const res = await api.post("/boxing/fight/accept", { challenge_id: cid });
+      const token = await getCaptchaToken();
+      if (token) body = { ...body, captcha_token: token };
+    } catch {
+      setBusy("");
+      return;
+    }
+    try {
+      const res = await api.post("/boxing/fight/accept", body);
       setProfile(res.data?.profile || null);
       if (res.data?.fight) setReplayFight(res.data.fight);
       loadChallenges();
@@ -637,6 +682,7 @@ export default function Boxing() {
 
   return (
     <div className={styles.page} style={{ minHeight: "100vh", fontFamily: "'Cinzel', serif" }}>
+      {captchaModal}
       <div className={`${styles.pageContent} mobile-page-root`} style={{ padding: "14px 16px", borderBottom: "1px solid var(--noir-border-light)" }}>
         <div className="text-sm sm:text-base" style={{ letterSpacing: "0.2em", color: gold }}>THE UNDERGROUND RING</div>
         <div style={{ fontSize: 10, color: "var(--noir-muted)", letterSpacing: "0.12em", marginTop: 2 }}>TRAIN &bull; FIGHT &bull; BET &bull; DOMINATE</div>
@@ -651,7 +697,18 @@ export default function Boxing() {
             color: tab === i ? "#f0e0b0" : "var(--noir-muted)",
             border: "none", borderBottom: tab === i ? "2px solid #c9a84c" : "2px solid transparent",
             cursor: "pointer", fontFamily: "inherit", minHeight: 44,
-          }}>{t}</button>
+            position: "relative",
+          }}>
+            <span style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6 }}>
+              {t}
+              {i === 1 && challenges.incoming.length > 0 ? (
+                <span style={{
+                  minWidth: 18, height: 18, padding: "0 5px", borderRadius: 9, fontSize: 10, fontWeight: 700,
+                  background: "rgba(201,168,76,0.35)", color: "#1a1510", lineHeight: "18px", textAlign: "center",
+                }} title="Incoming PvP challenges">{challenges.incoming.length > 9 ? "9+" : challenges.incoming.length}</span>
+              ) : null}
+            </span>
+          </button>
         ))}
       </div>
 
@@ -659,6 +716,26 @@ export default function Boxing() {
         {error && <div style={{ fontSize: 11, color: "#ff6666", marginBottom: 10, padding: "8px 12px", background: "rgba(255,60,60,0.08)", borderRadius: 4 }}>{error}</div>}
 
         {loading && !profile && <div style={{ textAlign: "center", padding: 30, color: "var(--noir-muted)", fontSize: 12 }}>Loading fighter profile...</div>}
+
+        {!loading && profile && challenges.incoming.length > 0 && tab !== 1 && (
+          <button
+            type="button"
+            onClick={() => setTab(1)}
+            className="touch-manipulation active:scale-[0.99] transition-transform w-full text-left"
+            style={{
+              marginBottom: 12, padding: "10px 12px", borderRadius: 4, border: "1px solid rgba(201,168,76,0.45)",
+              background: "rgba(201,168,76,0.12)", color: "#f0e0b0", fontSize: 11, letterSpacing: "0.06em", cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            <strong style={{ color: gold }}>Boxing challenge waiting</strong>
+            <span style={{ display: "block", marginTop: 4, color: "var(--noir-muted)", fontSize: 10 }}>
+              {challenges.incoming.length === 1
+                ? `${challenges.incoming[0].challenger_username} challenged you — open the Fight tab to accept.`
+                : `You have ${challenges.incoming.length} pending challenges — open the Fight tab.`}
+            </span>
+          </button>
+        )}
 
         {/* ── TAB 0: FIGHTER ── */}
         {tab === 0 && profile && (
@@ -827,7 +904,7 @@ export default function Boxing() {
                 <div className="p-3 sm:p-4">
                   <div className="flex gap-2 mb-3">
                     <input value={challengeTarget} onChange={e => setChallengeTarget(e.target.value)}
-                      placeholder="Username" className={styles.input}
+                      placeholder="Their profile username" className={styles.input}
                       style={{ flex: 1, minHeight: 44, padding: "10px 12px", fontSize: 11 }}
                       onKeyDown={e => e.key === "Enter" && handleChallenge()} />
                     <button onClick={handleChallenge} disabled={busy === "challenge" || !challengeTarget.trim()}

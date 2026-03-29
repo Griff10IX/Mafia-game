@@ -40,9 +40,10 @@ import certifi
 import middleware.security as security_module
 
 ROOT_DIR = Path(__file__).parent
-load_dotenv(ROOT_DIR / '.env')
-# Also load project root .env if present (e.g. when running from root)
-load_dotenv(ROOT_DIR.parent / '.env')
+# override=True: values in backend/.env win over empty or stale vars from systemd/docker (common Turnstile/JWT issue)
+load_dotenv(ROOT_DIR / '.env', override=True)
+# Also load project root .env if present (e.g. when running from root); do not override keys already set from backend/.env
+load_dotenv(ROOT_DIR.parent / '.env', override=False)
 
 # MongoDB connection (certifi CA bundle only needed for Atlas/DO SSL, skip for localhost)
 mongo_url = os.environ['MONGO_URL']

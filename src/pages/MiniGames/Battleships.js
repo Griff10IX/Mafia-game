@@ -1737,6 +1737,7 @@ export default function Battleships() {
       display:"flex",flexDirection:"column",alignItems:"center",
       paddingTop:"1rem",paddingBottom:"2.5rem",fontFamily:"'Cinzel',serif",
       WebkitTextSizeAdjust:"100%",overflowX:"hidden"}}>
+      {captchaModal}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700;900&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap');
         @keyframes ev-in{0%{opacity:0;transform:translateY(-10px)}12%{opacity:1;transform:none}80%{opacity:1}100%{opacity:0}}

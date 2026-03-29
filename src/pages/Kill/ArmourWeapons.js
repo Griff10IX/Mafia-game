@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Factory, Package, User, ShoppingCart, Flame, Gauge, Shield, Crosshair, Swords, DollarSign } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
+import { useMinigameCaptcha } from '../../hooks/useMinigameCaptcha';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 
@@ -231,6 +232,7 @@ const StatCard = ({ icon: Icon, label, value, highlight, pulseActive }) => (
    Main BulletFactory Component
    ═══════════════════════════════════════════════════════ */
 export default function BulletFactory({ me: meProp, ownedArmouryState }) {
+  const { getCaptchaToken, captchaModal } = useMinigameCaptcha();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [me, setMe] = useState(meProp ?? null);
@@ -315,9 +317,16 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
   }, [activeTab, fetchMastery]);
 
   const trainWeapon = async (weaponId) => {
+    let body = { weapon_id: weaponId, mode: 'auto_sim' };
+    try {
+      const token = await getCaptchaToken();
+      if (token) body = { ...body, captcha_token: token };
+    } catch {
+      return;
+    }
     setTrainingWeaponId(weaponId);
     try {
-      const res = await api.post('/shooting-range/train', { weapon_id: weaponId, mode: 'auto_sim' });
+      const res = await api.post('/shooting-range/train', body);
       toast.success(res.data?.message || 'Trained');
       fetchMastery();
     } catch (e) {
@@ -559,6 +568,7 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
 
   return (
     <div className={`space-y-3 sm:space-y-4 relative ${styles.pageContent} mobile-page-root`} data-page="armoury">
+      {captchaModal}
       <style>{`
         @keyframes belt-bullets {
           0% { transform: translateX(0); }

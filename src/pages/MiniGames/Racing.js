@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import api, { refreshUser } from "../../utils/api";
 import { getApiErrorMessage } from "../../utils/api";
+import { useMinigameCaptcha } from "../../hooks/useMinigameCaptcha";
 import styles from "../../styles/noir.module.css";
 import CircuitRaceView, { TRACKS as CIRCUIT_TRACKS, TrackThumb } from "./CircuitRaceView";
 
@@ -154,6 +155,7 @@ export default function Racing() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const raceIdParam = searchParams.get("race");
+  const { getCaptchaToken, captchaModal } = useMinigameCaptcha();
 
   const [profile, setProfile] = useState(_cached?.profile ?? null);
   const [cars, setCars] = useState(_cached?.cars ?? []);
@@ -663,8 +665,16 @@ export default function Racing() {
   const handleCreateRace = async () => {
     if (!createForm.track_id) { toast.error("Select a track"); return; }
     setCreating(true);
+    const payload = createRacePayload();
     try {
-      const r = await api.post("/racing/races", createRacePayload());
+      const token = await getCaptchaToken();
+      if (token) payload.captcha_token = token;
+    } catch {
+      setCreating(false);
+      return;
+    }
+    try {
+      const r = await api.post("/racing/races", payload);
       const race = r.data?.race;
       if (race) {
         setActiveRace(race);
@@ -682,8 +692,16 @@ export default function Racing() {
   const handleCreateAndRaceVsNpcs = async () => {
     if (!createForm.track_id) { toast.error("Select a track"); return; }
     setCreating(true);
+    const payload = createRacePayload();
     try {
-      const r = await api.post("/racing/races", createRacePayload());
+      const token = await getCaptchaToken();
+      if (token) payload.captcha_token = token;
+    } catch {
+      setCreating(false);
+      return;
+    }
+    try {
+      const r = await api.post("/racing/races", payload);
       const race = r.data?.race;
       if (race) {
         await api.post(`/racing/races/${race.id}/start`);
@@ -709,8 +727,16 @@ export default function Racing() {
   const handleJoinRace = async (race, carInstanceId, tyreCompound = "medium") => {
     if (!carInstanceId) { toast.error("Select a racing car first"); return; }
     setJoiningId(race.id);
+    const joinBody = { racing_car_instance_id: carInstanceId, tyre_compound: tyreCompound };
     try {
-      await api.post(`/racing/races/${race.id}/join`, { racing_car_instance_id: carInstanceId, tyre_compound: tyreCompound });
+      const token = await getCaptchaToken();
+      if (token) joinBody.captcha_token = token;
+    } catch {
+      setJoiningId(null);
+      return;
+    }
+    try {
+      await api.post(`/racing/races/${race.id}/join`, joinBody);
       const r = await api.get(`/racing/races/${race.id}`);
       setActiveRace(r.data?.race);
       await fetchOpenRaces();
@@ -882,9 +908,12 @@ export default function Racing() {
 
   if (loading) {
     return (
-      <div className={`${styles.pageContent} mobile-page-root`}>
-        <div className="p-4 text-center text-[var(--noir-muted)]">Loading racing...</div>
-      </div>
+      <>
+        {captchaModal}
+        <div className={`${styles.pageContent} mobile-page-root`}>
+          <div className="p-4 text-center text-[var(--noir-muted)]">Loading racing...</div>
+        </div>
+      </>
     );
   }
 
@@ -894,6 +923,7 @@ export default function Racing() {
   if (!hasTeam) {
     return (
       <div className={`${styles.pageContent} mobile-page-root overflow-x-hidden space-y-4`} style={{ minHeight: "100%", WebkitOverflowScrolling: "touch" }}>
+        {captchaModal}
         <div className="px-4 md:px-4 py-3 border-b border-[var(--noir-border)]" style={{ background: "rgba(201,164,96,.03)" }}>
           <h1 className="text-lg font-heading" style={{ color: "var(--noir-primary)" }}>Bootleg Runs</h1>
           <p className="text-xs text-[var(--noir-muted)] mt-0.5">Create a racing team to enter races.</p>
@@ -955,6 +985,7 @@ export default function Racing() {
 
   return (
     <div className={`${styles.pageContent} mobile-page-root overflow-x-hidden space-y-0`} style={{ minHeight: "100%", WebkitOverflowScrolling: "touch" }}>
+      {captchaModal}
       {/* ─── COMPACT HEADER ─── */}
       <div className="px-4 md:px-4 py-2.5 border-b border-[var(--noir-border)]" style={{ background: "rgba(201,164,96,.03)" }}>
         <div className="flex items-center justify-between gap-3">

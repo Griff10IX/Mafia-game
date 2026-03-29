@@ -33,6 +33,7 @@ from utils.minigame_run_session import (
     RATE_LIMIT_PERIOD_HOURS,
 )
 from utils.minigame_security import skip_minigame_session
+from utils.minigame_captcha_gate import require_turnstile_for_minigame_start
 import middleware.security as _security_mod
 
 # 5k bullets per 24h, effectively delivered every 20 mins (72 ticks per day)
@@ -281,6 +282,7 @@ class ShootingRangeTrainRequest(BaseModel):
     weapon_id: str
     mode: str = "auto_sim"  # "auto_sim" | "live" (3D game)
     hits: Optional[int] = None  # for mode=live: number of hits in session (1..MASTERY_LIVE_HITS_MAX_PER_REQUEST)
+    captcha_token: Optional[str] = None
 
 
 class ShootingRangeScoreRequest(BaseModel):
@@ -1612,9 +1614,13 @@ async def get_shooting_range_mastery(current_user: dict = Depends(get_current_us
     return {"mastery": result, "weapons": [{"id": w["id"], "name": w.get("name", w["id"])} for w in gun_weapons]}
 
 
-async def train_shooting_range(request: ShootingRangeTrainRequest, current_user: dict = Depends(get_current_user)):
+async def train_shooting_range(
+    payload: ShootingRangeTrainRequest,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+):
     """Train one weapon (auto_sim chunk). User must own the weapon. Gun only (exclude Brass Knuckles). Earlier *owned* guns in damage order must be at 100% first (unowned guns do not block)."""
-    weapon_id = (request.weapon_id or "").strip()
+    weapon_id = (payload.weapon_id or "").strip()
     if not weapon_id:
         raise HTTPException(status_code=400, detail="weapon_id required")
     if weapon_id == BRASS_KNUCKLES_WEAPON_ID:
@@ -1650,8 +1656,17 @@ async def train_shooting_range(request: ShootingRangeTrainRequest, current_user:
                     status_code=400,
                     detail=f"Master {prev_name} first (100%) before training this weapon.",
                 )
-    if request.mode not in ("auto_sim", "live"):
+    if payload.mode not in ("auto_sim", "live"):
         raise HTTPException(status_code=400, detail="Use mode 'auto_sim' or 'live'.")
+    # One-click auto train is bot-abusable; live mastery follows 3D play (run session already captcha-gated at start).
+    if payload.mode == "auto_sim":
+        await require_turnstile_for_minigame_start(
+            db,
+            request=request,
+            current_user=current_user,
+            captcha_token=payload.captcha_token,
+            is_admin=_is_admin(current_user),
+        )
     now = datetime.now(timezone.utc)
     doc = await db.user_weapon_mastery.find_one({"user_id": current_user["id"], "weapon_id": weapon_id}, {"_id": 0, "mastery_pct": 1, "last_trained_at": 1})
     current_pct = min(100, max(0, int(doc.get("mastery_pct", 0) or 0))) if doc else 0
@@ -1659,8 +1674,8 @@ async def train_shooting_range(request: ShootingRangeTrainRequest, current_user:
     # When global rate limits are off (dev / admin toggle), skip mastery 5-min cooldown too — same 429 was showing as "clicking too fast"
     enforce_mastery_cooldown = bool(getattr(_security_mod, "GLOBAL_RATE_LIMITS_ENABLED", False))
 
-    if request.mode == "live":
-        hits = request.hits if request.hits is not None else 0
+    if payload.mode == "live":
+        hits = payload.hits if payload.hits is not None else 0
         if not (1 <= hits <= MASTERY_LIVE_HITS_MAX_PER_REQUEST):
             raise HTTPException(status_code=400, detail=f"hits must be 1–{MASTERY_LIVE_HITS_MAX_PER_REQUEST} for live mode.")
         if enforce_mastery_cooldown:
@@ -1691,10 +1706,10 @@ async def train_shooting_range(request: ShootingRangeTrainRequest, current_user:
     )
     next_train_at = (
         (now + timedelta(minutes=MASTERY_COOLDOWN_MINUTES)).isoformat()
-        if enforce_mastery_cooldown and request.mode in ("auto_sim", "live")
+        if enforce_mastery_cooldown and payload.mode in ("auto_sim", "live")
         else None
     )
-    msg = f"+{add_pct}% mastery ({weapon.get('name', weapon_id)})." if request.mode == "auto_sim" else f"+{add_pct}% mastery from {request.hits} hits ({weapon.get('name', weapon_id)})."
+    msg = f"+{add_pct}% mastery ({weapon.get('name', weapon_id)})." if payload.mode == "auto_sim" else f"+{add_pct}% mastery from {payload.hits} hits ({weapon.get('name', weapon_id)})."
     return {"message": msg, "mastery_pct": current_pct + add_pct, "next_train_at": next_train_at}
 
 
