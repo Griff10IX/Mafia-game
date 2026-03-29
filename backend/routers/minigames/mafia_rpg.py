@@ -29,6 +29,8 @@ MAX_COMPOSITE = 2_000_000
 
 
 class MafiaRpgSessionRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     respect: int = 0
     missions_complete: int = 0
     total_earned: int = 0

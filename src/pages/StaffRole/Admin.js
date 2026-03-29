@@ -2360,20 +2360,29 @@ export default function Admin() {
   };
 
   const handleBanIp = async () => {
-    const ip = (ipBanIp || '').trim();
+    const raw = (ipBanUsername || '').trim();
     const reason = (ipBanReason || '').trim() || 'Banned by admin';
-    if (!ip) {
-      toast.error('Enter an IP address');
+    if (!raw) {
+      toast.error('Enter a username (ban all known IPs) or a single IP address');
       return;
     }
+    const hoursRaw = (ipBanHours || '').trim();
+    const hoursParsed = hoursRaw ? parseInt(hoursRaw.replace(/[^\d]/g, ''), 10) : null;
+    const durationHours = hoursRaw && !Number.isNaN(hoursParsed) && hoursParsed > 0 ? hoursParsed : null;
+
+    const looksLikeIp =
+      /^(?:\d{1,3}\.){3}\d{1,3}$/.test(raw) || (raw.includes(':') && raw.length >= 3);
+
     setIpBansLoading(true);
     try {
-      const body = { ip, reason };
-      const hours = ipBanHours.trim() ? parseInt(ipBanHours, 10) : null;
-      if (hours != null && !isNaN(hours) && hours > 0) body.duration_hours = hours;
-      await api.post('/admin/security/ban-ip', body);
-      toast.success(`IP ${ip} banned`);
-      setIpBanIp('');
+      const body = { reason };
+      if (durationHours != null) body.duration_hours = durationHours;
+      if (looksLikeIp) body.ip = raw;
+      else body.username = raw;
+
+      const res = await api.post('/admin/security/ban-ip', body);
+      toast.success(res.data?.message || (looksLikeIp ? `IP ${raw} banned` : 'Ban applied'));
+      setIpBanUsername('');
       setIpBanReason('');
       setIpBanHours('');
       fetchIpBans();

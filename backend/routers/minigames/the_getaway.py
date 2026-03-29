@@ -40,6 +40,8 @@ MAX_DISTANCE = 50000
 
 
 class GetawayRunRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     distance: int
     coins_collected: int
     time_seconds: int
