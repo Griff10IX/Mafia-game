@@ -448,6 +448,7 @@ Or check the DigitalOcean dashboard.
 3. ✅ Run `check-database-status.py` to investigate the attack
 4. ✅ Set up SSL if you have a domain (optional but recommended)
 5. ✅ Enable DigitalOcean monitoring (free, in dashboard)
+6. ✅ If the domain uses **Cloudflare** (orange cloud), follow **[docs/CLOUDFLARE.md](./CLOUDFLARE.md)** so SPA routes and `/api` are not wrongly cached and Rocket Loader stays off
 
 ---
 

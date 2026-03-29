@@ -23,6 +23,14 @@ server {
     root /opt/mafia-app/build;
     index index.html;
 
+    # SPA shell only: avoid caching index.html at browser/CDN so a transient 503 or bad deploy
+    # is less likely to stick (Chrome may show "503 from prefetch cache" on deep links like
+    # /account/dashboard if a speculative prefetch got an error). Static JS/CSS under /static/
+    # keep long cache from create-react-app filenames.
+    location = /index.html {
+        add_header Cache-Control "no-store, no-cache, must-revalidate" always;
+    }
+
     location /api {
         proxy_pass http://127.0.0.1:8000;
         proxy_http_version 1.1;
@@ -32,9 +40,10 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # Required for SPA: /travel/, /store/, /profile/xyz, etc. must serve index.html
-    # so the React app can load and handle the route. Without this, direct URLs
-    # or refresh on e.g. https://mafiawars.co.uk/travel/ return 403 Forbidden.
+    # Required for SPA: /travel/, /account/dashboard, etc. must serve index.html so React Router
+    # can run. Without try_files, deep links often 404/403. If you still see 503, the origin was
+    # down, nginx misconfigured, or Cloudflare could not reach origin (orange-cloud proxy still
+    # uses Cloudflare IPs like 2606:4700:*). Purge CF cache; avoid "Cache Everything" for HTML.
     location / {
         try_files $uri $uri/ /index.html;
     }

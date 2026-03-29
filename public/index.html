@@ -51,6 +51,9 @@
       To create a production bundle, use `npm run build` or `yarn build`.
     -->
         <!-- watermark removed -->
+        <!-- PostHog loads array.js from CDN; feature_collector.js + WASM live there. A wasm-bindgen
+             "pass a single object" console warning is fixed in newer posthog-js builds—use defaults
+             below and keep the snippet updated, or set disable_session_recording: true to avoid some extensions. -->
         <script>
             !(function (t, e) {
                 var o, n, p, r;
@@ -115,7 +118,8 @@
             })(document, window.posthog || []);
             posthog.init("phc_xAvL2Iq4tFmANRE7kzbKwaSqp1HJjN7x48s3vr0CMjs", {
                 api_host: "https://us.i.posthog.com",
-                person_profiles: "identified_only", // or 'always' to create profiles for anonymous users as well,
+                defaults: "2026-01-30",
+                person_profiles: "identified_only",
                 session_recording: {
                     recordCrossOriginIframes: true,
                     capturePerformance: false,

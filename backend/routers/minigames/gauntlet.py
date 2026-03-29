@@ -38,7 +38,9 @@ MAX_RESPECT_PER_CLAIM = 1_000
 CASH_PER_GATE_AFTER_50 = 500  # 75% reduction
 RESPECT_PER_GATE_AFTER_50 = 2
 
-MAX_SCORE_ACCEPTED = 750
+# Reject only absurd client-reported scores. Per-run cash/respect are still capped by _get_reward.
+# Anti-cheat is enforce_numeric_score_for_claimed_session (elapsed × max gates/sec + buffer).
+MAX_SCORE_SANITY = 100_000
 MAX_PLAYS_PER_HOUR = 10
 
 # Pipe-rate caps per speed×difficulty combination (real gameplay caps ~0.5-0.88 gates/sec).
@@ -156,8 +158,8 @@ def register(router):
         score = int(payload.score or 0)
         if score < 0:
             raise HTTPException(status_code=400, detail="Invalid score.")
-        if score > MAX_SCORE_ACCEPTED:
-            raise HTTPException(status_code=400, detail="Score too high to claim.")
+        if score > MAX_SCORE_SANITY:
+            raise HTTPException(status_code=400, detail="Score outside allowed range.")
 
         now_dt = datetime.now(timezone.utc).replace(microsecond=0)
         now_iso = now_dt.isoformat().replace("+00:00", "Z")
@@ -199,7 +201,7 @@ def register(router):
                 sess=sess,
                 now_dt=now_dt,
                 score=score,
-                max_score_cap=MAX_SCORE_ACCEPTED,
+                max_score_cap=MAX_SCORE_SANITY,
                 rate_per_second=rate,
                 buffer=SCORE_TIME_BUFFER,
             )
