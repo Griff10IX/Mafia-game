@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useSearchParams, useNavigate, Link } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Mail, MailOpen, Bell, Trophy, Shield, Skull, Gift, Trash2, MessageCircle, Send, X, ChevronRight } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import GifPicker from '../../components/GifPicker';
 import { parseForumContent } from '../../utils/forumContent';
 import styles from '../../styles/noir.module.css';
+import { NotificationMessage } from '../../components/NotificationMessage';
 
 const INBOX_STYLES = `
   @keyframes ib-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -99,88 +100,6 @@ function ocInviteActionError(detail, action) {
   if (msg.includes("already declined")) return "This OC invite was already declined.";
   if (msg.includes("already")) return "This OC invite was already updated.";
   return action === "accept" ? "Failed to accept invite" : "Failed to decline invite";
-}
-
-// Render notification message: optional profile link for actor_username; optional forum link for quoted topic when topic_id is set
-function NotificationMessage({ message, actorUsername, topicId, topicTitle, commentId, className }) {
-  if (!message || typeof message !== 'string') return null;
-
-  const linkCls = 'text-primary hover:underline font-heading';
-
-  const forumTopicTo = () => {
-    if (!topicId) return null;
-    const q = commentId ? `?comment=${encodeURIComponent(commentId)}` : '';
-    return `/social/forum/${encodeURIComponent(topicId)}${q}`;
-  };
-
-  const tryQuotedTopicLink = (text) => {
-    const to = forumTopicTo();
-    if (!to) return null;
-    if (topicTitle) {
-      const ttrunc = String(topicTitle).slice(0, 80);
-      const exactQuoted = `"${ttrunc}"`;
-      const qidx = text.indexOf(exactQuoted);
-      if (qidx !== -1) {
-        const beforeQ = text.slice(0, qidx);
-        const afterQ = text.slice(qidx + exactQuoted.length);
-        return (
-          <>
-            {beforeQ}
-            <Link to={to} className={`${linkCls} ${className || ''}`}>
-              {exactQuoted}
-            </Link>
-            {afterQ}
-          </>
-        );
-      }
-    }
-    const m = text.match(/"([^"]+)"\s*$/);
-    if (!m || m.index === undefined) return null;
-    const beforeQ = text.slice(0, m.index);
-    const quotedSlice = text.slice(m.index, m.index + m[0].length).replace(/\s+$/, '');
-    const afterQ = text.slice(m.index + m[0].length);
-    return (
-      <>
-        {beforeQ}
-        <Link to={to} className={`${linkCls} ${className || ''}`}>
-          {quotedSlice}
-        </Link>
-        {afterQ}
-      </>
-    );
-  };
-
-  let rest = message;
-  const parts = [];
-
-  if (actorUsername && typeof actorUsername === 'string') {
-    const idx = rest.indexOf(actorUsername);
-    if (idx !== -1) {
-      if (idx > 0) parts.push(<span key="pre-actor">{rest.slice(0, idx)}</span>);
-      parts.push(
-        <Link key="actor" to={`/profile/${encodeURIComponent(actorUsername)}`} className={`${linkCls} ${className || ''}`}>
-          {actorUsername}
-        </Link>
-      );
-      rest = rest.slice(idx + actorUsername.length);
-    }
-  }
-
-  const topicLink = tryQuotedTopicLink(rest);
-  if (topicLink) {
-    return <span className={className}>{parts}{topicLink}</span>;
-  }
-
-  if (parts.length) {
-    return (
-      <span className={className}>
-        {parts}
-        {rest}
-      </span>
-    );
-  }
-
-  return <span className={className}>{message}</span>;
 }
 
 // Subcomponents
@@ -398,6 +317,8 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, o
             topicId={notification.topic_id}
             topicTitle={notification.topic_title}
             commentId={notification.comment_id}
+            messageLinkTo={notification.message_link_to}
+            messageLinkLabel={notification.message_link_label}
             className="text-inherit"
           />
         </p>
@@ -458,6 +379,8 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, o
                 topicId={notification.topic_id}
                 topicTitle={notification.topic_title}
                 commentId={notification.comment_id}
+                messageLinkTo={notification.message_link_to}
+                messageLinkLabel={notification.message_link_label}
                 className="text-inherit"
               />
             </p>
@@ -579,6 +502,8 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
                 topicId={notification.topic_id}
                 topicTitle={notification.topic_title}
                 commentId={notification.comment_id}
+                messageLinkTo={notification.message_link_to}
+                messageLinkLabel={notification.message_link_label}
                 className="text-inherit"
               />
             </p>

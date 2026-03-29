@@ -1176,11 +1176,11 @@ async def send_notification_to_family(family_id: str, title: str, message: str, 
         await send_notification(m["user_id"], title, message, notification_type, category=category, **extra)
 
 
-async def send_notification_to_all(title: str, message: str, notification_type: str = "system", category: Optional[str] = None):
+async def send_notification_to_all(title: str, message: str, notification_type: str = "system", category: Optional[str] = None, **extra):
     """Notify all users (e.g. new E-Games available). Respects each user's notification_preferences when category is set."""
     user_ids = await db.users.distinct("id")
     for uid in user_ids:
-        await send_notification(uid, title, message, notification_type, category=category)
+        await send_notification(uid, title, message, notification_type, category=category, **extra)
 
 
 async def _family_war_start(family_a_id: str, family_b_id: str):

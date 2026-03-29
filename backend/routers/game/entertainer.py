@@ -1,4 +1,4 @@
-# Entertainer Forum: free entry, random prizes (cash/bullets/tokens/cars). Dice/Hangman = one winner; Gbox = everyone gets a random reward.
+# Entertainer Forum: free entry, random prizes (cash/bullets/tokens/cars). Dice/Hangman = one winner; Gbox = one cash pot split randomly + per-player non-cash rewards.
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 import uuid
@@ -43,6 +43,36 @@ def _house_bonus_pot_if_zero_stored_pot(game: dict) -> tuple[int, int]:
         hi = lo
     bonus = _rng.randint(lo, hi)
     return bonus, bonus
+
+
+def _random_partition(total: int, n: int) -> list[int]:
+    """Split `total` into n nonnegative integers that sum to `total` (uniform random cut points)."""
+    if n <= 0:
+        return []
+    if total <= 0:
+        return [0] * n
+    if n == 1:
+        return [total]
+    cuts = sorted(_rng.randrange(0, total + 1) for _ in range(n - 1))
+    points = [0] + cuts + [total]
+    return [points[i + 1] - points[i] for i in range(n)]
+
+
+async def _gbox_total_cash_pot(game: dict) -> tuple[int, int]:
+    """Total cash to split among all Gbox participants. Uses stored pot (join fees / funded) or one roll between admin cash_min..cash_max."""
+    base = int(game.get("pot") or 0)
+    participants = game.get("participants") or []
+    n = len(participants)
+    if n == 0:
+        return 0, 0
+    if base > 0:
+        return base, 0
+    rcfg = await _get_rewards_config()
+    lo, hi = int(rcfg["cash_min"]), int(rcfg["cash_max"])
+    if hi < lo:
+        hi = lo
+    pot = _rng.randint(lo, hi)
+    return pot, pot
 
 
 # Cars that can be won (common/uncommon/rare; exclude custom and exclusive)
@@ -230,6 +260,16 @@ DEFAULT_REWARD_TYPE_WEIGHTS = {
     "all_tokens": 1,
 }
 
+# Gbox secondary rolls (no cash — cash comes from one shared pot split in _run_gbox_payout)
+GBOX_SECONDARY_WEIGHTS = {
+    "bullets": 35,
+    "token": 12,
+    "all_tokens": 2,
+    "car": 8,
+    "two_cars": 3,
+    "bullets_token": 20,
+}
+
 ENTERTAINER_REWARDS_CONFIG_KEY = "entertainer_rewards_config"
 
 
@@ -309,10 +349,14 @@ def _token_label(token_type: str) -> str:
     return custom.get(token_type, token_type.replace("_", " ").title())
 
 
-async def _give_random_reward(user_id: str) -> dict:
-    """Apply a random reward to user. Returns description for result."""
+async def _give_random_reward(user_id: str, *, exclude_cash: bool = False) -> dict:
+    """Apply a random reward to user. Returns description for result.
+    If exclude_cash=True (Gbox secondary), only bullets/tokens/cars — no independent cash roll."""
     rcfg = await _get_rewards_config()
-    weights = rcfg["reward_type_weights"]
+    if exclude_cash:
+        weights = GBOX_SECONDARY_WEIGHTS
+    else:
+        weights = rcfg["reward_type_weights"]
     reward_type = _rng.choices(
         population=list(weights.keys()),
         weights=list(weights.values()),
@@ -458,6 +502,10 @@ async def _settle_game(game: dict):
         return
     participants = game.get("participants") or []
     now = datetime.now(timezone.utc).isoformat()
+    if game.get("game_type") == "gbox":
+        cash_pot, house_bonus = await _gbox_total_cash_pot(game)
+    else:
+        cash_pot, house_bonus = _house_bonus_pot_if_zero_stored_pot(game)
     result = None
     if participants:
         if game.get("game_type") == "dice":
@@ -465,21 +513,11 @@ async def _settle_game(game: dict):
         elif game.get("game_type") == "hangman":
             result = await _run_hangman_payout(game)
         else:
-            result = await _run_gbox_payout(game)
-    cash_pot, house_bonus = _house_bonus_pot_if_zero_stored_pot(game)
+            result = await _run_gbox_payout(game, cash_pot)
     if cash_pot > 0 and participants:
         if game.get("game_type") in ("dice", "hangman") and result and result.get("winner_id"):
             await db.users.update_one({"id": result["winner_id"]}, {"$inc": {"money": cash_pot}})
-        elif game.get("game_type") == "gbox":
-            n = len(participants)
-            each = cash_pot // n
-            remainder = cash_pot - (each * n)
-            for i, p in enumerate(participants):
-                uid = p.get("user_id")
-                if uid:
-                    amt = each + (remainder if i == 0 else 0)
-                    if amt > 0:
-                        await db.users.update_one({"id": uid}, {"$inc": {"money": amt}})
+        # gbox: cash already applied inside _run_gbox_payout
     set_doc = {"status": "completed", "completed_at": now, "result": result, "pot": cash_pot}
     if house_bonus > 0:
         set_doc["house_bonus_pot"] = house_bonus
@@ -677,17 +715,27 @@ async def _run_hangman_payout(game: dict):
     }
 
 
-async def _run_gbox_payout(game: dict):
-    """Each participant gets a random reward (cash/bullets/tokens/cars)."""
+async def _run_gbox_payout(game: dict, cash_pot: int):
+    """One cash pot split randomly among all participants; each also gets a non-cash secondary reward."""
     participants = game.get("participants") or []
     if not participants:
         return None
+    rows = [(p.get("user_id"), p) for p in participants if p.get("user_id")]
+    if not rows:
+        return None
+    uids = [r[0] for r in rows]
+    n = len(uids)
+    shares = _random_partition(int(cash_pot or 0), n)
+    _rng.shuffle(shares)
     rewards_by_user = {}
-    for p in participants:
-        uid = p.get("user_id")
-        if uid:
-            rewards_by_user[uid] = await _give_random_reward(uid)
-    return {"rewards_by_user": rewards_by_user}
+    for i, uid in enumerate(uids):
+        share = shares[i] if i < len(shares) else 0
+        if share:
+            await db.users.update_one({"id": uid}, {"$inc": {"money": share}})
+        reward_desc = await _give_random_reward(uid, exclude_cash=True)
+        reward_desc["money"] = int(share)
+        rewards_by_user[uid] = reward_desc
+    return {"rewards_by_user": rewards_by_user, "total_cash_pot": int(cash_pot or 0)}
 
 
 def _parse_iso(iso_str):
@@ -1193,6 +1241,8 @@ async def admin_auto_create_now(current_user: dict = Depends(get_current_user)):
             f"{len(created)} new dice, gbox & hangman games are open in the Entertainer Forum! Join now.",
             "system",
             category="ent_games",
+            message_link_to="/social/forum?tab=entertainer",
+            message_link_label="Entertainer Forum",
         )
     except Exception:
         pass  # Don't fail the request if notification fails; games were already created
@@ -1244,6 +1294,8 @@ async def run_auto_create_if_enabled():
         f"{n} new dice, gbox & hangman games are open in the Entertainer Forum! Join now.",
         "system",
         category="ent_games",
+        message_link_to="/social/forum?tab=entertainer",
+        message_link_label="Entertainer Forum",
     )
 
 

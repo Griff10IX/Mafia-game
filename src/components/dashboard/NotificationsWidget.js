@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Mail, ChevronRight, Bell, Trophy, Shield, Skull, Gift, MessageCircle } from 'lucide-react';
 import api from '../../utils/api';
+import { NotificationMessage } from '../NotificationMessage';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 
@@ -136,7 +137,18 @@ export default function NotificationsWidget({ onRefresh }) {
                   <p className={`text-[10px] font-heading truncate ${n.read ? 'text-mutedForeground' : 'text-foreground font-medium'}`}>
                     {n.title}
                   </p>
-                  <p className="text-[9px] text-mutedForeground line-clamp-2">{n.message}</p>
+                  <div className="text-[9px] text-mutedForeground line-clamp-2">
+                    <NotificationMessage
+                      message={n.message}
+                      actorUsername={n.actor_username}
+                      topicId={n.topic_id}
+                      topicTitle={n.topic_title}
+                      commentId={n.comment_id}
+                      messageLinkTo={n.message_link_to}
+                      messageLinkLabel={n.message_link_label}
+                      className="text-inherit"
+                    />
+                  </div>
                   <span className="text-[8px] text-mutedForeground">{getTimeAgo(n.created_at)}</span>
                 </div>
               </div>

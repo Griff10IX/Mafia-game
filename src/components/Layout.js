@@ -10,6 +10,7 @@ import ThemePicker from './ThemePicker';
 import FirstTimeThemeModal from './FirstTimeThemeModal';
 import { getThemePreset } from '../constants/themes';
 import ErrorBoundary from './ErrorBoundary';
+import { NotificationMessage } from './NotificationMessage';
 import GameChat from './GameChat';
 import DeathScreen from './DeathScreen';
 import styles from '../styles/noir.module.css';
@@ -2255,12 +2256,35 @@ export default function Layout({ children }) {
                   ) : (
                     <div className="space-y-0 rounded-lg overflow-hidden border" style={{ borderColor: 'var(--noir-border)' }}>
                       {notificationList.slice(0, 8).map((n) => (
-                        <button key={n.id} type="button" onClick={() => { setNotificationPanelOpen(false); navigate('/social/inbox'); }}
-                          className="w-full text-left px-3 py-2 border-b font-heading text-xs last:border-b-0"
+                        <div
+                          key={n.id}
+                          role="button"
+                          tabIndex={0}
+                          onClick={() => { setNotificationPanelOpen(false); navigate('/social/inbox'); }}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              setNotificationPanelOpen(false);
+                              navigate('/social/inbox');
+                            }
+                          }}
+                          className="w-full text-left px-3 py-2 border-b font-heading text-xs last:border-b-0 cursor-pointer"
                           style={{ borderColor: 'var(--noir-border)', color: n.read ? 'var(--noir-muted)' : 'var(--noir-foreground)', backgroundColor: n.read ? 'transparent' : 'rgba(var(--noir-primary-rgb), 0.08)' }}>
                           <span className="font-semibold block truncate">{n.title}</span>
-                          <span className="block truncate mt-0.5 opacity-90">{n.message}</span>
-                        </button>
+                          <span className="block truncate mt-0.5 opacity-90">
+                            <NotificationMessage
+                              message={n.message}
+                              actorUsername={n.actor_username}
+                              topicId={n.topic_id}
+                              topicTitle={n.topic_title}
+                              commentId={n.comment_id}
+                              messageLinkTo={n.message_link_to}
+                              messageLinkLabel={n.message_link_label}
+                              className="text-inherit"
+                              onLinkNavigate={() => setNotificationPanelOpen(false)}
+                            />
+                          </span>
+                        </div>
                       ))}
                     </div>
                   )}
