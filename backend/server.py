@@ -2225,6 +2225,8 @@ async def startup_db():
     asyncio.create_task(spawn_jail_npcs())
     # Start security monitoring background task
     asyncio.create_task(security_module.security_monitor_task(db))
+    from utils.presence_simulator import run_presence_simulator_loop
+    asyncio.create_task(run_presence_simulator_loop())
 
     async def entertainer_auto_create_cycle():
         # Run once shortly after startup so "Last run" isn't stuck on a pre-restart value

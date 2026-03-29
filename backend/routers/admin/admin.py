@@ -1667,6 +1667,55 @@ def register(router):
         )
         return {"message": f"Forced {target['username']} online until {until_iso}", "until": until_iso, "username": target["username"]}
 
+    class PresenceSimulatorBody(BaseModel):
+        enabled: Optional[bool] = None
+        interval_minutes: Optional[float] = None
+        min_add_per_tick: Optional[int] = None
+        max_add_per_tick: Optional[int] = None
+        max_remove_per_tick: Optional[int] = None
+        max_pool: Optional[int] = None
+        run_now: bool = False
+
+    @router.get("/admin/presence-simulator")
+    async def admin_presence_simulator_get(current_user: dict = Depends(get_current_user)):
+        """Read presence simulator config (rotating last_seen bumps for real players). Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from utils.presence_simulator import load_presence_config
+
+        return await load_presence_config(db)
+
+    @router.post("/admin/presence-simulator")
+    async def admin_presence_simulator_set(
+        body: PresenceSimulatorBody,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Enable/disable or tune the presence simulator; optional run_now runs one tick immediately."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from utils.presence_simulator import load_presence_config, save_presence_config, presence_simulator_tick
+
+        cur = await load_presence_config(db)
+        if body.enabled is not None:
+            cur["enabled"] = bool(body.enabled)
+        if body.interval_minutes is not None:
+            m = float(body.interval_minutes)
+            cur["interval_seconds"] = int(max(2.0, min(60.0, m)) * 60)
+        if body.min_add_per_tick is not None:
+            cur["min_add_per_tick"] = body.min_add_per_tick
+        if body.max_add_per_tick is not None:
+            cur["max_add_per_tick"] = body.max_add_per_tick
+        if body.max_remove_per_tick is not None:
+            cur["max_remove_per_tick"] = body.max_remove_per_tick
+        if body.max_pool is not None:
+            cur["max_pool"] = body.max_pool
+        await save_presence_config(db, cur)
+        cur = await load_presence_config(db)
+        if body.run_now and cur.get("enabled"):
+            await presence_simulator_tick(db, list(ADMIN_EMAILS or []))
+            cur = await load_presence_config(db)
+        return cur
+
     @router.post("/admin/lock-player")
     async def admin_lock_player(target_username: str, lock_minutes: int = 0, current_user: dict = Depends(get_current_user)):
         """Lock account for investigation: user can only access /locked page and submit one comment until unlocked. lock_minutes ignored (kept for API compat). Admin or moderator."""

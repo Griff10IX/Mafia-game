@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useLocation, Navigate } from 'react-router-dom';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle } from 'lucide-react';
 import api, { imageHostPublicUrl } from '../../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
@@ -110,6 +110,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Beta Round Signup', categoryId: 'admin-gameworld', collapseKey: 'betaSignup', keywords: ['beta', 'signup', 'round', 'points', 'cash', 'testing'] },
   { label: 'Pre-Registered Accounts', categoryId: 'admin-gameworld', collapseKey: 'preregisterAccounts', keywords: ['pre-register', 'preregister', 'emails', 'launch list'] },
   { label: 'Booze Run Rotation', categoryId: 'admin-gameworld', collapseKey: 'boozeRun', keywords: ['booze', 'run', 'rotation', 'prices', 'jail', 'bust'] },
+  { label: 'Presence simulator', categoryId: 'admin-gameworld', collapseKey: 'presenceSimulator', keywords: ['presence', 'simulator', 'online', 'active', 'fake', 'last_seen'] },
   { label: 'Slots Draw', categoryId: 'admin-gameworld', collapseKey: 'slotsDraw', keywords: ['slots', 'draw', 'lottery'] },
   { label: 'Crack the Safe jackpot', categoryId: 'admin-gameworld', collapseKey: 'crackSafeJackpot', keywords: ['crack', 'safe', 'jackpot', 'pot', 'lower'] },
   { label: 'State Heads', categoryId: 'admin-gameworld', collapseKey: 'stateHeads', keywords: ['state', 'heads', 'family', 'territory'] },
@@ -297,6 +298,15 @@ export default function Admin() {
   const [boozeJailMinPct, setBoozeJailMinPct] = useState('');
   const [boozeJailMaxPct, setBoozeJailMaxPct] = useState('');
   const [boozeJailSaving, setBoozeJailSaving] = useState(false);
+  const [presenceSim, setPresenceSim] = useState(null);
+  const [presenceSimLoading, setPresenceSimLoading] = useState(false);
+  const [psForm, setPsForm] = useState({
+    intervalMin: '5',
+    minAdd: '1',
+    maxAdd: '3',
+    maxRemove: '2',
+    maxPool: '25',
+  });
   const [crackSafeInfo, setCrackSafeInfo] = useState(null);
   const [crackSafeJackpotInput, setCrackSafeJackpotInput] = useState('');
   const [crackSafeJackpotLoading, setCrackSafeJackpotLoading] = useState(false);
@@ -973,6 +983,83 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed to reset');
     } finally {
       setBoozeJailSaving(false);
+    }
+  };
+
+  const fetchPresenceSim = async () => {
+    setPresenceSimLoading(true);
+    try {
+      const res = await api.get('/admin/presence-simulator');
+      const d = res.data;
+      setPresenceSim(d);
+      if (d) {
+        setPsForm({
+          intervalMin: String(Math.round(((Number(d.interval_seconds) || 300) / 60) * 100) / 100),
+          minAdd: String(d.min_add_per_tick ?? 1),
+          maxAdd: String(d.max_add_per_tick ?? 3),
+          maxRemove: String(d.max_remove_per_tick ?? 2),
+          maxPool: String(d.max_pool ?? 25),
+        });
+      }
+    } catch {
+      setPresenceSim(null);
+    } finally {
+      setPresenceSimLoading(false);
+    }
+  };
+
+  const handlePresenceSimToggle = async () => {
+    if (!presenceSim) return;
+    setPresenceSimLoading(true);
+    try {
+      const res = await api.post('/admin/presence-simulator', { enabled: !presenceSim.enabled });
+      setPresenceSim(res.data);
+      toast.success(res.data?.enabled ? 'Presence simulator on' : 'Presence simulator off');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setPresenceSimLoading(false);
+    }
+  };
+
+  const handlePresenceSimSave = async () => {
+    const intervalMin = parseFloat(String(psForm.intervalMin).replace(',', '.'));
+    const minAdd = parseInt(psForm.minAdd, 10);
+    const maxAdd = parseInt(psForm.maxAdd, 10);
+    const maxRemove = parseInt(psForm.maxRemove, 10);
+    const maxPool = parseInt(psForm.maxPool, 10);
+    if (Number.isNaN(intervalMin) || Number.isNaN(minAdd) || Number.isNaN(maxAdd) || Number.isNaN(maxRemove) || Number.isNaN(maxPool)) {
+      toast.error('Enter valid numbers');
+      return;
+    }
+    setPresenceSimLoading(true);
+    try {
+      const res = await api.post('/admin/presence-simulator', {
+        interval_minutes: intervalMin,
+        min_add_per_tick: minAdd,
+        max_add_per_tick: maxAdd,
+        max_remove_per_tick: maxRemove,
+        max_pool: maxPool,
+      });
+      setPresenceSim(res.data);
+      toast.success('Presence simulator settings saved');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to save');
+    } finally {
+      setPresenceSimLoading(false);
+    }
+  };
+
+  const handlePresenceSimRunNow = async () => {
+    setPresenceSimLoading(true);
+    try {
+      const res = await api.post('/admin/presence-simulator', { run_now: true });
+      setPresenceSim(res.data);
+      toast.success('Ran one tick');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setPresenceSimLoading(false);
     }
   };
 
@@ -5450,6 +5537,96 @@ export default function Admin() {
                 <BtnSecondary type="button" onClick={fetchBoozeJailChances} disabled={boozeJailSaving}>Refresh</BtnSecondary>
               </div>
             </div>
+          </div>
+        )}
+        </div>
+
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={UserCircle}
+          title="Presence simulator"
+          badge={
+            presenceSim?.enabled ? (
+              <span className="text-[10px] font-heading text-green-400">on · pool {presenceSim.active_user_ids?.length ?? 0}</span>
+            ) : (
+              <span className="text-[10px] text-mutedForeground font-heading">off</span>
+            )
+          }
+          isCollapsed={collapsed.presenceSimulator}
+          onToggle={() => {
+            toggleSection('presenceSimulator');
+            if (collapsed.presenceSimulator) fetchPresenceSim();
+          }}
+        />
+        {!collapsed.presenceSimulator && (
+          <div className="p-3 space-y-2">
+            <p className="text-[10px] text-mutedForeground font-heading">
+              Every few minutes, picks real players (not NPCs, not staff, not locked accounts) who look offline and updates their{' '}
+              <code className="text-[9px] bg-zinc-800/80 px-1 rounded">last_seen</code> so they show on Users Online. Rotates the pool: some names drop off each tick, 1–3 new ones may join. Auto-rank accounts (non-idle) are skipped — they already look online.
+            </p>
+            {presenceSimLoading && !presenceSim ? (
+              <p className="text-[10px] text-mutedForeground font-heading">Loading…</p>
+            ) : presenceSim ? (
+              <>
+                <div className="flex flex-wrap items-center gap-2 text-[10px] font-heading">
+                  <BtnPrimary type="button" onClick={handlePresenceSimToggle} disabled={presenceSimLoading}>
+                    {presenceSim.enabled ? 'Turn off' : 'Turn on'}
+                  </BtnPrimary>
+                  <BtnSecondary type="button" onClick={fetchPresenceSim} disabled={presenceSimLoading}>Refresh</BtnSecondary>
+                  <BtnSecondary type="button" onClick={handlePresenceSimRunNow} disabled={presenceSimLoading || !presenceSim.enabled}>Run tick now</BtnSecondary>
+                </div>
+                <p className="text-[9px] text-mutedForeground">
+                  Ticks: {presenceSim.ticks_total ?? 0}
+                  {presenceSim.last_tick_at ? ` · last ${new Date(presenceSim.last_tick_at).toLocaleString()}` : ''}
+                </p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px] font-heading">
+                  <label className="flex flex-col gap-0.5">
+                    <span className="text-mutedForeground">Interval (minutes)</span>
+                    <input
+                      value={psForm.intervalMin}
+                      onChange={(e) => setPsForm((f) => ({ ...f, intervalMin: e.target.value }))}
+                      className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-0.5">
+                    <span className="text-mutedForeground">Min add / tick</span>
+                    <input
+                      value={psForm.minAdd}
+                      onChange={(e) => setPsForm((f) => ({ ...f, minAdd: e.target.value }))}
+                      className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-0.5">
+                    <span className="text-mutedForeground">Max add / tick</span>
+                    <input
+                      value={psForm.maxAdd}
+                      onChange={(e) => setPsForm((f) => ({ ...f, maxAdd: e.target.value }))}
+                      className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-0.5">
+                    <span className="text-mutedForeground">Max remove / tick</span>
+                    <input
+                      value={psForm.maxRemove}
+                      onChange={(e) => setPsForm((f) => ({ ...f, maxRemove: e.target.value }))}
+                      className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-0.5">
+                    <span className="text-mutedForeground">Max pool size</span>
+                    <input
+                      value={psForm.maxPool}
+                      onChange={(e) => setPsForm((f) => ({ ...f, maxPool: e.target.value }))}
+                      className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground"
+                    />
+                  </label>
+                </div>
+                <BtnPrimary type="button" onClick={handlePresenceSimSave} disabled={presenceSimLoading}>Save settings</BtnPrimary>
+              </>
+            ) : (
+              <p className="text-[10px] text-red-400 font-heading">Could not load (admin only).</p>
+            )}
           </div>
         )}
         </div>
