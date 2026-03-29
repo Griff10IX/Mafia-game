@@ -173,7 +173,7 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
     real_players_raw = await db.users.find(
         {"in_jail": True},
-        {"_id": 0, "username": 1, "id": 1, "rank_points": 1, "jail_until": 1, "bust_reward_cash": 1},
+        {"_id": 0, "username": 1, "id": 1, "rank_points": 1, "jail_until": 1, "bust_reward_cash": 1, "money": 1},
     ).to_list(50)
     real_players = []
     for p in real_players_raw:
@@ -201,7 +201,10 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
     players_data = []
     for player in real_players:
         rank_id, rank_name = get_rank_info(player.get("rank_points", 0))
-        reward_cash = int((player.get("bust_reward_cash") or 0) or 0)
+        stored = _safe_int(player.get("bust_reward_cash"), 0)
+        on_hand = _safe_int(player.get("money"), 0)
+        # Cannot pay more than cash on hand at bust time; list should not advertise impossible rewards
+        reward_cash = min(stored, on_hand) if stored > 0 else 0
         username = (player.get("username") or "").strip() or "?"
         players_data.append(
             {
@@ -557,7 +560,9 @@ async def get_jail_stats(current_user: dict = Depends(get_current_user)):
 
 async def get_jail_status(current_user: dict = Depends(get_current_user)):
     jail_busts = int((current_user.get("jail_busts") or 0) or 0)
-    bust_reward_cash = int((current_user.get("bust_reward_cash") or 0) or 0)
+    stored_reward = _safe_int(current_user.get("bust_reward_cash"), 0)
+    on_hand = _safe_int(current_user.get("money"), 0)
+    bust_reward_cash = min(stored_reward, on_hand) if stored_reward > 0 else 0
     current_consecutive_busts = int((current_user.get("current_consecutive_busts") or 0) or 0)
     consecutive_busts_record = int((current_user.get("consecutive_busts_record") or 0) or 0)
     base = {
@@ -602,8 +607,15 @@ async def get_jail_status(current_user: dict = Depends(get_current_user)):
 
 
 async def set_bust_reward(request: JailSetBustRewardRequest, current_user: dict = Depends(get_current_user_verified)):
-    """Set the $ reward offered to whoever busts you out. 0 to clear."""
+    """Set the $ reward offered to whoever busts you out. 0 to clear. Cannot exceed cash on hand (same pool debited on bust)."""
     amount = max(0, int(request.amount))
+    fresh = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
+    balance = _safe_int((fresh or {}).get("money"), 0)
+    if amount > balance:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Bust reward cannot exceed your cash on hand (${balance:,}). You offered ${amount:,}.",
+        )
     await db.users.update_one(
         {"id": current_user["id"]},
         {"$set": {"bust_reward_cash": amount}},
