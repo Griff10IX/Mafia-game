@@ -399,6 +399,37 @@ def register(router):
         )
         return {"message": f"Added {points} points to {target_username}"}
 
+    @router.post("/admin/remove-respect-points")
+    async def admin_remove_respect_points(
+        target_username: str,
+        amount: int,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Remove up to `amount` respect points (clamped to current balance). Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="amount must be a positive number")
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1, "respect_points": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        current_rp = max(0, int(target.get("respect_points") or 0))
+        remove = min(int(amount), current_rp)
+        if remove <= 0:
+            return {
+                "message": f"{target.get('username') or target_username} has 0 respect points; nothing removed.",
+                "removed": 0,
+                "new_respect_points": 0,
+            }
+        await db.users.update_one({"id": target["id"]}, {"$inc": {"respect_points": -remove}})
+        new_bal = current_rp - remove
+        return {
+            "message": f"Removed {remove:,} respect from {target.get('username') or target_username} (balance now {new_bal:,}).",
+            "removed": remove,
+            "new_respect_points": new_bal,
+        }
+
     @router.get("/admin/points/provenance/user/{user_id_or_username}")
     async def admin_points_provenance_user(user_id_or_username: str, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):

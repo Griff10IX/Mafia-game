@@ -44,6 +44,14 @@ const GAME_LABELS = {
   pool_8ball: '8-Ball Pool',
 };
 
+function formatRewardCash(cash) {
+  const n = Number(cash);
+  if (!n || n <= 0) return null;
+  if (n >= 1_000_000) return `$${parseFloat((n / 1_000_000).toFixed(2))}M`;
+  if (n >= 1000) return `$${Math.round(n / 1000)}K`;
+  return `$${n}`;
+}
+
 function formatTimeUntil(isoDate) {
   if (!isoDate) return '—';
   const now = new Date();
@@ -65,7 +73,7 @@ function RewardBadge({ reward, rank }) {
     <div className="flex flex-wrap gap-1 mt-1">
       {reward.cash > 0 && (
         <span className="inline-flex items-center gap-0.5 px-1 py-0.5 rounded-sm bg-green-900/30 text-green-400 text-[8px] font-heading">
-          <DollarSign size={8} />${(reward.cash / 1000000).toFixed(1)}M
+          <DollarSign size={8} />{formatRewardCash(reward.cash)}
         </span>
       )}
       {reward.respect > 0 && (

@@ -86,6 +86,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Search Users', categoryId: 'admin-players', collapseKey: 'searchUsers', keywords: ['search', 'users', 'email', 'find'] },
   { label: 'Change Rank', categoryId: 'admin-players', collapseKey: 'rank', keywords: ['rank', 'change', 'prestige', 'level'] },
   { label: 'Add Points', categoryId: 'admin-players', collapseKey: 'points', keywords: ['points', 'add', 'give'] },
+  { label: 'Remove respect points', categoryId: 'admin-players', collapseKey: 'player', keywords: ['respect', 'remove', 'deduct', 'take'] },
   { label: 'Points Provenance', categoryId: 'admin-donations', collapseKey: 'donationsProvenance', keywords: ['chargeback', 'provenance', 'payment session', 'points tree'] },
   { label: 'Add Tokens', categoryId: 'admin-players', collapseKey: 'tokens', keywords: ['tokens', 'crime', 'gta', 'melt', 'booze', 'travel', 'oc', 'racket', 'jailbust'] },
   { label: 'Clear pool cue upgrades', categoryId: 'admin-players', keywords: ['pool', '8-ball', '8 ball', 'cue', 'upgrades', 'reset', 'minigame'] },
@@ -331,6 +332,7 @@ export default function Admin() {
     tokenType: 'xp_crimes',
     tokenAmount: 5,
     gamePassTierSnapshot: '',
+    respectRemove: 100,
   });
 
   const [eventsEnabled, setEventsEnabled] = useState(true);
@@ -4730,6 +4732,11 @@ export default function Admin() {
             <ActionRow icon={Coins} label="Add Points">
               <FormattedNumberInput value={formData.points != null ? String(formData.points) : ''} onChange={(raw) => setFormData((prev) => ({ ...prev, points: raw === '' ? 0 : parseInt(raw, 10) }))} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" />
               <BtnPrimary onClick={handleAddPoints}>Add</BtnPrimary>
+            </ActionRow>
+
+            <ActionRow icon={Award} label="Remove respect points" description="Deducts up to this amount (clamped to current balance). Uses target username above.">
+              <FormattedNumberInput value={formData.respectRemove != null ? String(formData.respectRemove) : ''} onChange={(raw) => setFormData((prev) => ({ ...prev, respectRemove: raw === '' ? 0 : parseInt(raw, 10) }))} className="flex h-9 w-24 min-w-[5rem] rounded-md border border-input bg-transparent px-3 py-1 text-sm" />
+              <BtnDanger onClick={handleRemoveRespectPoints}>Remove</BtnDanger>
             </ActionRow>
 
             <ActionRow icon={Zap} label="Add Tokens" description="Give consumable tokens (crime XP, GTA XP, melt, etc.)">
