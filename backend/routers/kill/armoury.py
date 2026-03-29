@@ -39,7 +39,7 @@ BULLET_FACTORY_PRODUCTION_PER_HOUR = BULLET_FACTORY_TOTAL_PER_24H / 24  # ~208.3
 BULLET_FACTORY_MAX_HOURS_CAP = 24  # cap accumulated at 24h of production (5000 total)
 BULLET_FACTORY_BUY_MAX_PER_PURCHASE = 5000  # max bullets per single purchase
 BULLET_FACTORY_BUY_COOLDOWN_MINUTES = 15  # must wait this long between purchases
-BULLET_FACTORY_CLAIM_COST = 75_000_000  # $75M to claim
+BULLET_FACTORY_CLAIM_COST = 200_000_000  # $200M to claim
 BULLET_FACTORY_PRICE_MIN = 1
 BULLET_FACTORY_PRICE_MAX = 100_000  # max $ per bullet (when owned)
 # 75% reduction for beta

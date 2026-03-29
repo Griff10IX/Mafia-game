@@ -2371,7 +2371,7 @@ def _load_seed_json(filename: str) -> list:
         logging.warning("Seed file not found: %s (game data will not be seeded from file)", path)
         return []
     try:
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, "r", encoding="utf-8-sig") as f:
             data = json.load(f)
         return data if isinstance(data, list) else []
     except Exception as e:

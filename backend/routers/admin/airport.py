@@ -24,7 +24,7 @@ AIRPORT_COST = 10
 AIRPORT_PRICE_MIN = 10
 AIRPORT_PRICE_MAX = 30
 AIRPORT_SLOTS_PER_STATE = 1
-AIRPORT_CLAIM_COST = 100_000_000  # $100M to claim
+AIRPORT_CLAIM_COST = 175_000_000  # $175M to claim
 MAX_TRAVELS_PER_HOUR = 15
 EXTRA_AIRMILES_COST = 25
 MAX_EXTRA_AIRMILES = 50
@@ -470,7 +470,7 @@ async def list_airports(current_user: dict = Depends(get_current_user)):
                 doc = await db.airport_ownership.find_one({"state": state, "slot": slot}, {"_id": 0})
             price = max(AIRPORT_PRICE_MIN, min(doc.get("price_per_travel") or AIRPORT_COST, AIRPORT_PRICE_MAX))
             result.append({"state": state, "slot": slot, "owner_username": doc.get("owner_username") or "Unclaimed", "price_per_travel": price})
-    payload = {"airports": result}
+    payload = {"airports": result, "claim_cost": AIRPORT_CLAIM_COST}
     _airports_list_cache = payload
     _airports_list_cache_ts = now
     return payload

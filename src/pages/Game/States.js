@@ -85,6 +85,7 @@ const CityCard = ({
   familyQualifiesForStateHead,
   onClaimState,
   claimingState,
+  airportClaimCost,
 }) => {
   const bf = bulletFactory;
   const ap = airportSlot1;
@@ -247,7 +248,7 @@ const CityCard = ({
                     disabled={claimingCity === city}
                     className="px-1.5 py-0.5 rounded bg-primary/20 border border-primary/50 text-primary text-[9px] font-heading font-bold uppercase hover:bg-primary/30 disabled:opacity-50 transition-colors"
                   >
-                    {claimingCity === city ? '...' : 'Take over ($100M)'}
+                    {claimingCity === city ? '...' : `Take over (${formatMaxBet(airportClaimCost)})`}
                   </button>
                 ) : (
                   <span className="text-[9px]">
@@ -310,6 +311,7 @@ export default function States() {
   const [loading, setLoading] = useState(true);
   const [bulletFactories, setBulletFactories] = useState([]);
   const [airports, setAirports] = useState([]);
+  const [airportClaimCost, setAirportClaimCost] = useState(175_000_000);
   const [expandedCities, setExpandedCities] = useState({});
   const [claimingCity, setClaimingCity] = useState(null);
   const [claimingState, setClaimingState] = useState(null);
@@ -365,7 +367,10 @@ export default function States() {
 
   useEffect(() => {
     api.get('/bullet-factory/list').then((r) => setBulletFactories(r.data?.factories ?? [])).catch(() => setBulletFactories([]));
-    api.get('/airports').then((r) => setAirports(r.data?.airports ?? [])).catch(() => setAirports([]));
+    api.get('/airports').then((r) => {
+      setAirports(r.data?.airports ?? []);
+      if (r.data?.claim_cost != null) setAirportClaimCost(Number(r.data.claim_cost));
+    }).catch(() => setAirports([]));
   }, []);
 
   const cities = useMemo(() => (Array.isArray(data.cities) ? data.cities : []), [data.cities]);
@@ -447,6 +452,7 @@ export default function States() {
       toast.success('You now own this airport. Set price in Travel or States.');
       const r = await api.get('/airports');
       setAirports(r.data?.airports ?? []);
+      if (r.data?.claim_cost != null) setAirportClaimCost(Number(r.data.claim_cost));
       fetchUserCity();
       window.dispatchEvent(new CustomEvent('app:refresh-user'));
     } catch (e) {
@@ -558,6 +564,7 @@ export default function States() {
             familyQualifiesForStateHead={familyQualifiesForStateHead}
             onClaimState={handleClaimState}
             claimingState={claimingState}
+            airportClaimCost={airportClaimCost}
           />
         ))}
       </div>

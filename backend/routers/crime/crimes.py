@@ -280,7 +280,7 @@ def _load_crimes_seed():
     path = os.path.join(_backend, "data", "crimes.json")
     if os.path.isfile(path):
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, "r", encoding="utf-8-sig") as f:
                 data = json.load(f)
             return data if isinstance(data, list) else CRIMES_SEED_FALLBACK
         except Exception as e:

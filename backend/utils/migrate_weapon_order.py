@@ -39,7 +39,8 @@ def _load_standard_weapons_from_json():
     if not _WEAPONS_JSON.is_file():
         logger.warning("migrate_weapon_order: missing %s", _WEAPONS_JSON)
         return []
-    with open(_WEAPONS_JSON, "r", encoding="utf-8") as f:
+    # utf-8-sig: tolerate UTF-8 BOM (e.g. PowerShell Set-Content -Encoding utf8 on Windows)
+    with open(_WEAPONS_JSON, "r", encoding="utf-8-sig") as f:
         data = json.load(f)
     if not isinstance(data, list):
         return []
