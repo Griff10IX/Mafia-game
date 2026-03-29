@@ -47,6 +47,13 @@ MAX_SAME_ACTION_PER_SECOND = 3  # Same endpoint hit 3+ times in 1 second = bot
 BURST_WINDOW_SECONDS = 0.5  # Time window for burst detection
 BURST_MAX_REQUESTS = 10  # Max requests allowed in burst window (10 clicks in 0.5s = 20 clicks/sec)
 
+# Cap per-user request/burst log length (must exceed thresholds above; avoids unbounded memory)
+_SPAM_LOG_MAX = 50
+
+# Throttle repeated Telegram alerts for the same user (spam burst/request flags)
+_SPAM_TELEGRAM_COOLDOWN_SEC = 300
+_last_spam_telegram_at: Dict[str, float] = {}
+
 # Exploit detection (off by default - enable in admin panel or here when ready for production)
 DETECT_NEGATIVE_BALANCE = False
 DETECT_IMPOSSIBLE_GAIN = 50_000_000  # $50M+ gain in single action = exploit (configurable via admin)
