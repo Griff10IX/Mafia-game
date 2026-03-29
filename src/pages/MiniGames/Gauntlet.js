@@ -396,7 +396,7 @@ const REWARD_TIERS = [
   { score: 50, cash: 6250, respect: 40, label: "Don" },
 ];
 const MAX_CASH_CAP = 250_000;
-const MAX_RESPECT_CAP = 1_000;
+const MAX_RESPECT_CAP = 300;
 const CASH_PER_GATE_AFTER_50 = 500;
 const RESPECT_PER_GATE_AFTER_50 = 2;
 
@@ -1231,7 +1231,7 @@ export default function Gauntlet() {
               })}
             </div>
           </div>
-          <p style={{ color: "var(--noir-muted)", fontSize: "9px", marginTop: "6px", marginBottom: 0, textAlign: "center" }}>Caps: $250K cash · 1,000 respect per run</p>
+          <p style={{ color: "var(--noir-muted)", fontSize: "9px", marginTop: "6px", marginBottom: 0, textAlign: "center" }}>Caps: $250K cash · 300 respect per run</p>
         </div>
 
         {/* Game viewport */}

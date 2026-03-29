@@ -434,6 +434,33 @@ def register(router):
             "new_respect_points": new_bal,
         }
 
+    @router.post("/admin/add-respect-points")
+    async def admin_add_respect_points(
+        target_username: str,
+        amount: int,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Grant respect points to a user. Logged as admin_add; does not pay cash. Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="amount must be a positive number")
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1, "respect_points": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        add = int(amount)
+        current_rp = max(0, int(target.get("respect_points") or 0))
+        await db.users.update_one({"id": target["id"]}, {"$inc": {"respect_points": add}})
+        await log_respect_delta(target["id"], add, "admin_add")
+        leaderboard_module.invalidate_leaderboard_cache()
+        new_bal = current_rp + add
+        return {
+            "message": f"Added {add:,} respect to {target.get('username') or target_username} (balance now {new_bal:,}).",
+            "added": add,
+            "new_respect_points": new_bal,
+        }
+
     @router.get("/admin/points/provenance/user/{user_id_or_username}")
     async def admin_points_provenance_user(user_id_or_username: str, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
@@ -1602,6 +1629,7 @@ def register(router):
             "family_run_scores": db.family_run_scores,
             "whack_a_copper_scores": db.whack_a_copper_scores,
             "gauntlet_scores": db.gauntlet_scores,
+            "shooting_range_scores": db.shooting_range_scores,
             "mafia_rpg_scores": db.mafia_rpg_scores,
             "minesweeper_wins": db.minesweeper_wins,
             "battleships_wins": db.battleships_wins,
@@ -1623,6 +1651,102 @@ def register(router):
             "total_deleted": total_deleted,
             "deleted_by_collection": deleted_by_collection,
         }
+
+    class AdminMinigameLbStripBody(BaseModel):
+        target_username: str = Field(..., min_length=1)
+        remove_weekly_plays: bool = True
+        weekly_scope: str = Field("current", description="'current' = this Mon UTC week only; 'all' = every minigame_plays row")
+        remove_per_game_scores: bool = True
+        games: Optional[List[str]] = Field(
+            None,
+            description="Optional list of game slugs (e.g. gauntlet, snake). If set, only those per-game collections are cleared.",
+        )
+
+    class AdminMinigameLbAddPlayBody(BaseModel):
+        target_username: str = Field(..., min_length=1)
+        game: str = Field(..., min_length=1)
+        score: int = Field(..., ge=0, le=50_000_000)
+        record_weekly_play: bool = Field(True, description="Append to minigame_plays for combined weekly leaderboard points")
+        record_per_game_score: bool = Field(
+            False,
+            description="Insert one high-score row for games that support it (snake, gauntlet, shooting_range, mafia_rpg, family_run, whack_a_copper). No cash/respect.",
+        )
+
+    @router.post("/admin/minigames/leaderboard/strip-user")
+    async def admin_minigame_leaderboard_strip_user(
+        body: AdminMinigameLbStripBody,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Remove a user from the combined mini games weekly leaderboard rows and/or per-game score tables."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from utils.minigame_admin_leaderboard import (
+            current_week_start_iso,
+            delete_minigame_weekly_plays_for_user,
+            delete_per_game_score_rows_for_user,
+        )
+
+        username_pattern = _username_pattern((body.target_username or "").strip())
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = target["id"]
+        ws = (body.weekly_scope or "current").strip().lower()
+        if ws not in ("current", "all"):
+            raise HTTPException(status_code=400, detail="weekly_scope must be 'current' or 'all'")
+
+        weekly_deleted = 0
+        if body.remove_weekly_plays:
+            weekly_deleted = await delete_minigame_weekly_plays_for_user(db, user_id=uid, scope=ws)
+
+        per_game_deleted: Dict[str, int] = {}
+        if body.remove_per_game_scores:
+            games_filter = [g.strip().lower() for g in (body.games or []) if (g or "").strip()]
+            per_game_deleted = await delete_per_game_score_rows_for_user(
+                db, user_id=uid, games=games_filter if games_filter else None
+            )
+
+        return {
+            "message": f"Leaderboard data stripped for {target.get('username')}",
+            "user_id": uid,
+            "week_start_iso": current_week_start_iso() if ws == "current" else None,
+            "weekly_plays_deleted": weekly_deleted,
+            "per_game_deleted_by_slug": per_game_deleted,
+        }
+
+    @router.post("/admin/minigames/leaderboard/add-play")
+    async def admin_minigame_leaderboard_add_play(
+        body: AdminMinigameLbAddPlayBody,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Add a synthetic weekly play and/or per-game score row (no in-game cash/respect payout)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from utils.minigame_admin_leaderboard import add_minigame_leaderboard_play_for_user
+
+        username_pattern = _username_pattern((body.target_username or "").strip())
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = target["id"]
+        uname = target.get("username") or "?"
+        if not body.record_weekly_play and not body.record_per_game_score:
+            raise HTTPException(status_code=400, detail="Enable at least one of record_weekly_play or record_per_game_score")
+
+        try:
+            detail = await add_minigame_leaderboard_play_for_user(
+                db,
+                user_id=uid,
+                username=uname,
+                game=body.game.strip().lower(),
+                score=body.score,
+                record_weekly=body.record_weekly_play,
+                record_per_game=body.record_per_game_score,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        return {"message": f"Recorded minigame leaderboard data for {uname}", **detail}
 
     @router.post("/admin/daily-rewards/reset-timer")
     async def admin_daily_rewards_reset_timer(

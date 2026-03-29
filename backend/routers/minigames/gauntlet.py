@@ -32,7 +32,7 @@ REWARD_TIERS = [
 
 # Caps per single run (infinite levels, but one claim cannot exceed these)
 MAX_CASH_PER_CLAIM = 250_000  # 75% reduction
-MAX_RESPECT_PER_CLAIM = 1_000
+MAX_RESPECT_PER_CLAIM = 300
 
 # Beyond tier 50: every gate adds this cash (until cap) and 2 respect (until cap)
 CASH_PER_GATE_AFTER_50 = 500  # 75% reduction

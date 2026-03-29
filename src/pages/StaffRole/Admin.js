@@ -86,6 +86,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Search Users', categoryId: 'admin-players', collapseKey: 'searchUsers', keywords: ['search', 'users', 'email', 'find'] },
   { label: 'Change Rank', categoryId: 'admin-players', collapseKey: 'rank', keywords: ['rank', 'change', 'prestige', 'level'] },
   { label: 'Add Points', categoryId: 'admin-players', collapseKey: 'points', keywords: ['points', 'add', 'give'] },
+  { label: 'Add respect points', categoryId: 'admin-players', collapseKey: 'player', keywords: ['respect', 'add', 'grant', 'give', 'points'] },
   { label: 'Remove respect points', categoryId: 'admin-players', collapseKey: 'player', keywords: ['respect', 'remove', 'deduct', 'take'] },
   { label: 'Points Provenance', categoryId: 'admin-donations', collapseKey: 'donationsProvenance', keywords: ['chargeback', 'provenance', 'payment session', 'points tree'] },
   { label: 'Add Tokens', categoryId: 'admin-players', collapseKey: 'tokens', keywords: ['tokens', 'crime', 'gta', 'melt', 'booze', 'travel', 'oc', 'racket', 'jailbust'] },
@@ -148,7 +149,8 @@ const SEARCHABLE_TOOLS = [
   { label: 'Clear All Searches', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['clear', 'searches', 'delete'] },
   { label: 'Fix login fields (user)', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['login', 'fix', 'repair', 'sessions', 'ip', 'lockout'] },
   { label: 'Clear OC invites (user)', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['oc', 'organised', 'crime', 'invite', 'clear', 'user'] },
-  { label: 'Clear minigame records (user)', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['minigame', 'records', 'clear', 'user', 'scores'] },
+  { label: 'Clear minigame records (user)', categoryId: 'admin-testing', collapseKey: 'minigameLbAdmin', keywords: ['minigame', 'records', 'clear', 'user', 'scores'] },
+  { label: 'Minigame weekly leaderboard strip/add', categoryId: 'admin-testing', collapseKey: 'minigameLbAdmin', keywords: ['minigame', 'leaderboard', 'weekly', 'strip', 'add', 'score', 'flappy', 'gauntlet'] },
   { label: 'Reset Hitlist NPC Timers', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['hitlist', 'npc', 'timer', 'reset'] },
   { label: 'Reset OC Timers', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['oc', 'organised', 'crime', 'timer'] },
   { label: 'Reset Daily Rewards Timer', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['daily', 'rewards', 'timer', 'rps'] },
@@ -332,6 +334,7 @@ export default function Admin() {
     tokenType: 'xp_crimes',
     tokenAmount: 5,
     gamePassTierSnapshot: '',
+    respectAdd: 100,
     respectRemove: 100,
   });
 
@@ -419,6 +422,16 @@ export default function Admin() {
   const [fixLoginFieldsLoading, setFixLoginFieldsLoading] = useState(false);
   const [clearOcInvitesLoading, setClearOcInvitesLoading] = useState(false);
   const [clearMinigameRecordsLoading, setClearMinigameRecordsLoading] = useState(false);
+  const [minigameLbStripLoading, setMinigameLbStripLoading] = useState(false);
+  const [minigameLbAddLoading, setMinigameLbAddLoading] = useState(false);
+  const [minigameLbWeekScope, setMinigameLbWeekScope] = useState('current');
+  const [minigameLbStripWeekly, setMinigameLbStripWeekly] = useState(true);
+  const [minigameLbStripPerGame, setMinigameLbStripPerGame] = useState(true);
+  const [minigameLbStripGames, setMinigameLbStripGames] = useState('');
+  const [minigameLbAddGame, setMinigameLbAddGame] = useState('gauntlet');
+  const [minigameLbAddScore, setMinigameLbAddScore] = useState('100');
+  const [minigameLbAddWeekly, setMinigameLbAddWeekly] = useState(true);
+  const [minigameLbAddPerGame, setMinigameLbAddPerGame] = useState(false);
   const [resetDailyRewardsLoading, setResetDailyRewardsLoading] = useState(false);
   const [pointsProvSessionId, setPointsProvSessionId] = useState('');
   const [pointsProvUserId, setPointsProvUserId] = useState('');
@@ -1847,6 +1860,27 @@ export default function Admin() {
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
   };
 
+  const handleAddRespectPoints = async () => {
+    const username = (formData.targetUsername || '').trim();
+    if (!username) {
+      toast.error('Enter target username above');
+      return;
+    }
+    const amt = Math.max(0, parseInt(String(formData.respectAdd), 10) || 0);
+    if (amt <= 0) {
+      toast.error('Enter a positive amount to add');
+      return;
+    }
+    if (!window.confirm(`Add ${amt.toLocaleString()} respect to ${username}?`)) return;
+    try {
+      const params = new URLSearchParams({ target_username: username, amount: String(amt) });
+      const response = await api.post(`/admin/add-respect-points?${params.toString()}`);
+      toast.success(response.data?.message || 'Done');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    }
+  };
+
   const handleRemoveRespectPoints = async () => {
     const username = (formData.targetUsername || '').trim();
     if (!username) {
@@ -2464,6 +2498,54 @@ export default function Admin() {
       toast.success(res.data?.message || 'Minigame records cleared');
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
     finally { setClearMinigameRecordsLoading(false); }
+  };
+
+  const handleMinigameLbStrip = async () => {
+    const username = (formData.targetUsername || '').trim();
+    if (!username) { toast.error('Enter target username'); return; }
+    if (!minigameLbStripWeekly && !minigameLbStripPerGame) { toast.error('Select at least one: weekly plays or per-game scores'); return; }
+    if (!window.confirm(`Strip minigame leaderboard data for ${username}?`)) return;
+    setMinigameLbStripLoading(true);
+    try {
+      const games = (minigameLbStripGames || '').trim()
+        ? minigameLbStripGames.split(/[\s,]+/).map((g) => g.trim().toLowerCase()).filter(Boolean)
+        : null;
+      const res = await api.post('/admin/minigames/leaderboard/strip-user', {
+        target_username: username,
+        remove_weekly_plays: minigameLbStripWeekly,
+        weekly_scope: minigameLbWeekScope,
+        remove_per_game_scores: minigameLbStripPerGame,
+        games,
+      });
+      toast.success(res.data?.message || 'Stripped');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    } finally {
+      setMinigameLbStripLoading(false);
+    }
+  };
+
+  const handleMinigameLbAddPlay = async () => {
+    const username = (formData.targetUsername || '').trim();
+    if (!username) { toast.error('Enter target username'); return; }
+    const score = parseInt(String(minigameLbAddScore), 10);
+    if (Number.isNaN(score) || score < 0) { toast.error('Invalid score'); return; }
+    if (!minigameLbAddWeekly && !minigameLbAddPerGame) { toast.error('Select weekly play and/or per-game row'); return; }
+    setMinigameLbAddLoading(true);
+    try {
+      const res = await api.post('/admin/minigames/leaderboard/add-play', {
+        target_username: username,
+        game: minigameLbAddGame,
+        score,
+        record_weekly_play: minigameLbAddWeekly,
+        record_per_game_score: minigameLbAddPerGame,
+      });
+      toast.success(res.data?.message || 'Recorded');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    } finally {
+      setMinigameLbAddLoading(false);
+    }
   };
 
   const handleResetDailyRewardsTimerAll = async () => {
@@ -4753,6 +4835,11 @@ export default function Admin() {
             <ActionRow icon={Coins} label="Add Points">
               <FormattedNumberInput value={formData.points != null ? String(formData.points) : ''} onChange={(raw) => setFormData((prev) => ({ ...prev, points: raw === '' ? 0 : parseInt(raw, 10) }))} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" />
               <BtnPrimary onClick={handleAddPoints}>Add</BtnPrimary>
+            </ActionRow>
+
+            <ActionRow icon={Award} label="Add respect points" description="Grants respect to the target user. Logged as admin_add. Uses target username above.">
+              <FormattedNumberInput value={formData.respectAdd != null ? String(formData.respectAdd) : ''} onChange={(raw) => setFormData((prev) => ({ ...prev, respectAdd: raw === '' ? 0 : parseInt(raw, 10) }))} className="flex h-9 w-24 min-w-[5rem] rounded-md border border-input bg-transparent px-3 py-1 text-sm" />
+              <BtnPrimary onClick={handleAddRespectPoints}>Add</BtnPrimary>
             </ActionRow>
 
             <ActionRow icon={Award} label="Remove respect points" description="Deducts up to this amount (clamped to current balance). Uses target username above.">
@@ -9970,12 +10057,6 @@ export default function Admin() {
               </BtnDanger>
             </ActionRow>
 
-            <ActionRow icon={Trash2} label="Clear minigame records (user)" description="Target Username: delete minigame scores/history rows across all minigame collections" color="text-red-400">
-              <BtnDanger onClick={handleClearUserMinigameRecords} disabled={clearMinigameRecordsLoading || !(formData.targetUsername || '').trim()}>
-                {clearMinigameRecordsLoading ? '...' : 'Clear'}
-              </BtnDanger>
-            </ActionRow>
-
             <ActionRow icon={Clock} label="Reset Daily Rewards Timer" description="Clear 6h play window: all users get 3 plays again (RPS / Noughts & Crosses)">
               <BtnPrimary onClick={handleResetDailyRewardsTimerAll} disabled={resetDailyRewardsLoading}>
                 {resetDailyRewardsLoading ? '...' : 'Reset all'}
@@ -9990,6 +10071,103 @@ export default function Admin() {
         )}
         </div>
 
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-amber-500/25 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
+          <SectionHeader
+            icon={BarChart3}
+            title="Minigame leaderboards & records"
+            isCollapsed={collapsed.minigameLbAdmin}
+            onToggle={() => toggleSection('minigameLbAdmin')}
+          />
+          {!collapsed.minigameLbAdmin && (
+            <div className="p-2 space-y-1">
+              <ActionRow icon={Trash2} label="Clear minigame records (user)" description="Target Username: delete minigame scores/history rows across all minigame collections" color="text-red-400">
+                <BtnDanger onClick={handleClearUserMinigameRecords} disabled={clearMinigameRecordsLoading || !(formData.targetUsername || '').trim()}>
+                  {clearMinigameRecordsLoading ? '...' : 'Clear'}
+                </BtnDanger>
+              </ActionRow>
+
+              <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 space-y-2 ml-0 sm:ml-0">
+                <div className="text-[10px] font-heading text-amber-200/90 uppercase tracking-wider">Weekly board + per-game tables</div>
+                <p className="text-[9px] text-mutedForeground font-heading">
+                  Strip: remove <code className="text-[8px] bg-zinc-800/80 px-1 rounded">minigame_plays</code> (combined weekly points) and/or per-game score collections. Does not delete{' '}
+                  <code className="text-[8px] bg-zinc-800/80 px-1 rounded">minigame_run_sessions</code> — use &quot;Clear minigame records&quot; for a full wipe.
+                </p>
+                <div className="flex flex-wrap items-center gap-2 text-[10px] font-heading">
+                  <label className="flex items-center gap-1 cursor-pointer">
+                    <input type="checkbox" checked={minigameLbStripWeekly} onChange={(e) => setMinigameLbStripWeekly(e.target.checked)} />
+                    Weekly plays
+                  </label>
+                  <select
+                    value={minigameLbWeekScope}
+                    onChange={(e) => setMinigameLbWeekScope(e.target.value)}
+                    disabled={!minigameLbStripWeekly}
+                    className="bg-zinc-900/80 border border-zinc-600 rounded px-2 py-1 text-xs"
+                  >
+                    <option value="current">This week (Mon UTC)</option>
+                    <option value="all">All weeks</option>
+                  </select>
+                  <label className="flex items-center gap-1 cursor-pointer">
+                    <input type="checkbox" checked={minigameLbStripPerGame} onChange={(e) => setMinigameLbStripPerGame(e.target.checked)} />
+                    Per-game scores
+                  </label>
+                </div>
+                <input
+                  type="text"
+                  placeholder="Optional: gauntlet, snake (comma-separated slugs; empty = all)"
+                  value={minigameLbStripGames}
+                  onChange={(e) => setMinigameLbStripGames(e.target.value)}
+                  className="w-full max-w-md bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs"
+                />
+                <div>
+                  <BtnDanger type="button" onClick={handleMinigameLbStrip} disabled={minigameLbStripLoading || !(formData.targetUsername || '').trim()}>
+                    {minigameLbStripLoading ? '…' : 'Strip leaderboard rows'}
+                  </BtnDanger>
+                </div>
+                <hr className="border-zinc-700/50 my-2" />
+                <p className="text-[9px] text-mutedForeground font-heading">
+                  Add: append one synthetic play for combined weekly points and/or one high-score row. No cash/respect payout. Per-game row supported for snake, gauntlet, shooting_range, mafia_rpg, family_run, whack_a_copper only.
+                </p>
+                <div className="flex flex-wrap items-center gap-2 text-[10px] font-heading">
+                  <select
+                    value={minigameLbAddGame}
+                    onChange={(e) => setMinigameLbAddGame(e.target.value)}
+                    className="bg-zinc-900/80 border border-zinc-600 rounded px-2 py-1 text-xs"
+                  >
+                    <option value="gauntlet">gauntlet (Flappy)</option>
+                    <option value="snake">snake</option>
+                    <option value="shooting_range">shooting_range</option>
+                    <option value="mafia_rpg">mafia_rpg</option>
+                    <option value="family_run">family_run</option>
+                    <option value="whack_a_copper">whack_a_copper</option>
+                    <option value="minesweeper">minesweeper (weekly only)</option>
+                    <option value="battleships">battleships (weekly only)</option>
+                    <option value="the_getaway">the_getaway (weekly only)</option>
+                    <option value="pool_8ball">pool_8ball (weekly only)</option>
+                  </select>
+                  <input
+                    type="number"
+                    min={0}
+                    value={minigameLbAddScore}
+                    onChange={(e) => setMinigameLbAddScore(e.target.value)}
+                    className="w-24 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs"
+                  />
+                  <label className="flex items-center gap-1 cursor-pointer">
+                    <input type="checkbox" checked={minigameLbAddWeekly} onChange={(e) => setMinigameLbAddWeekly(e.target.checked)} />
+                    Weekly points
+                  </label>
+                  <label className="flex items-center gap-1 cursor-pointer">
+                    <input type="checkbox" checked={minigameLbAddPerGame} onChange={(e) => setMinigameLbAddPerGame(e.target.checked)} />
+                    Per-game row
+                  </label>
+                  <BtnPrimary type="button" onClick={handleMinigameLbAddPlay} disabled={minigameLbAddLoading || !(formData.targetUsername || '').trim()}>
+                    {minigameLbAddLoading ? '…' : 'Add play / score'}
+                  </BtnPrimary>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
 
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
