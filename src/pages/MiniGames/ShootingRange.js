@@ -59,7 +59,7 @@ export default function ShootingRange() {
         </h1>
       </div>
       <p className="text-[11px] text-zinc-400 font-heading mb-4">
-        Master a weapon here to reduce bullets needed when attacking with it (up to 10% at full mastery). Train guns you own. Master one weapon (100%) before you can train the next.
+        Master a weapon here to reduce bullets needed when attacking with it (up to 10% at full mastery). Guns are ordered weakest → strongest. Train guns you own; each must reach 100% before the next stronger gun you own. Weapons you don&apos;t own never block progress.
       </p>
       <div className="flex gap-2 mb-4">
         <Link
@@ -102,7 +102,7 @@ export default function ShootingRange() {
                       <button
                         type="button"
                         disabled={disabled}
-                        title={!canTrain ? 'Master the previous weapon first (100%)' : undefined}
+                        title={!canTrain ? 'Master weaker owned guns to 100% first (in list order)' : undefined}
                         onClick={() => trainWeapon(w.id)}
                         className="px-2 py-1 rounded text-[9px] sm:text-[10px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                       >

@@ -1195,13 +1195,36 @@ export default function Forum() {
     if (!rewardsConfig) return;
     setRewardsConfigSaving(true);
     try {
-      const res = await api.patch('/forum/entertainer/admin/rewards', rewardsConfig);
-      setRewardsConfig(res.data);
-      toast.success(res.data?.message || 'Rewards config saved');
+      const { cash_min, cash_max, bullets_min, bullets_max, reward_type_weights } = rewardsConfig;
+      const res = await api.patch('/forum/entertainer/admin/rewards', {
+        cash_min,
+        cash_max,
+        bullets_min,
+        bullets_max,
+        reward_type_weights,
+      });
+      const d = res.data || {};
+      setRewardsConfig({
+        cash_min: d.cash_min,
+        cash_max: d.cash_max,
+        bullets_min: d.bullets_min,
+        bullets_max: d.bullets_max,
+        reward_type_weights: d.reward_type_weights,
+      });
+      toast.success(d.message || 'Rewards config saved');
       setRewardsEditing(false);
       fetchEntertainerPrizes();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to save');
+      const det = err.response?.data?.detail;
+      const msg =
+        typeof det === 'string'
+          ? det
+          : Array.isArray(det)
+            ? det.map((e) => e?.msg || e?.message || JSON.stringify(e)).join('; ')
+            : det && typeof det === 'object'
+              ? det.msg || det.message || 'Failed to save'
+              : null;
+      toast.error(msg || 'Failed to save');
     } finally { setRewardsConfigSaving(false); }
   };
 

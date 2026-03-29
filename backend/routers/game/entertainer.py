@@ -5,7 +5,7 @@ import uuid
 import secrets
 _rng = secrets.SystemRandom()
 from fastapi import Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict
 
 import os
 import sys
@@ -244,12 +244,25 @@ async def _get_rewards_config() -> dict:
         return _cached_rewards_config
     doc = await db.game_config.find_one({"key": ENTERTAINER_REWARDS_CONFIG_KEY}, {"_id": 0})
     if doc:
+        merged_w = dict(DEFAULT_REWARD_TYPE_WEIGHTS)
+        raw_w = doc.get("reward_type_weights")
+        if isinstance(raw_w, dict):
+            for k in merged_w:
+                if k not in raw_w:
+                    continue
+                v = raw_w[k]
+                if isinstance(v, bool):
+                    continue
+                try:
+                    merged_w[k] = max(0, int(float(v)))
+                except (TypeError, ValueError):
+                    pass
         cfg = {
             "cash_min": int(doc.get("cash_min") or 100),
             "cash_max": int(doc.get("cash_max") or 2000),
             "bullets_min": int(doc.get("bullets_min") or 1),
             "bullets_max": int(doc.get("bullets_max") or 25),
-            "reward_type_weights": doc.get("reward_type_weights") or dict(DEFAULT_REWARD_TYPE_WEIGHTS),
+            "reward_type_weights": merged_w,
         }
     else:
         cfg = {
@@ -993,6 +1006,8 @@ async def get_rewards_config_admin(current_user: dict = Depends(get_current_user
 
 
 class EntertainerRewardsConfigUpdate(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
     cash_min: Optional[int] = None
     cash_max: Optional[int] = None
     bullets_min: Optional[int] = None
@@ -1027,12 +1042,20 @@ async def update_rewards_config_admin(
         update["bullets_max"] = body.bullets_max
     if body.reward_type_weights is not None:
         valid_keys = set(DEFAULT_REWARD_TYPE_WEIGHTS.keys())
+        normalized_weights = {}
         for k, v in body.reward_type_weights.items():
             if k not in valid_keys:
                 raise HTTPException(status_code=400, detail=f"Unknown reward type: {k}")
-            if not isinstance(v, (int, float)) or v < 0:
+            if isinstance(v, bool):
+                raise HTTPException(status_code=400, detail=f"Weight for '{k}' must be a non-negative number")
+            try:
+                w = int(float(v))
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail=f"Weight for '{k}' must be a non-negative number")
+            if w < 0:
                 raise HTTPException(status_code=400, detail=f"Weight for '{k}' must be >= 0")
-        update["reward_type_weights"] = {k: int(v) for k, v in body.reward_type_weights.items()}
+            normalized_weights[k] = w
+        update["reward_type_weights"] = normalized_weights
     if not update:
         raise HTTPException(status_code=400, detail="No changes provided")
     await db.game_config.update_one(

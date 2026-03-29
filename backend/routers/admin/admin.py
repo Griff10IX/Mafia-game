@@ -177,6 +177,10 @@ class DropUserCasinosPropertiesRequest(BaseModel):
     user_id: str
 
 
+class ClearUserJailBustRewardRequest(BaseModel):
+    user_id: str
+
+
 class DropAllCasinosPropertiesConfirmation(BaseModel):
     confirmation_text: str  # "DROP ALL CASINOS PROPERTIES"
 
@@ -5330,6 +5334,39 @@ def register(router):
         for d in slots_owned:
             casinos_owned.append({"game_type": "slots", "location": d.get("state") or "?"})
         return {"user": user, "dice_owned": dice_owned, "casinos_owned": casinos_owned}
+
+    @router.post("/admin/clear-user-jail-bust-reward")
+    async def admin_clear_user_jail_bust_reward(
+        body: ClearUserJailBustRewardRequest, current_user: dict = Depends(get_current_user)
+    ):
+        """Set user's jail bust reward (bust_reward_cash) to 0. Admin or moderator."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        user_id = (body.user_id or "").strip()
+        if not user_id:
+            raise HTTPException(status_code=400, detail="user_id is required")
+        user = await db.users.find_one({"id": user_id}, {"_id": 0, "username": 1, "bust_reward_cash": 1})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        try:
+            prev = int(user.get("bust_reward_cash") or 0)
+        except (TypeError, ValueError):
+            prev = 0
+        await db.users.update_one({"id": user_id}, {"$set": {"bust_reward_cash": 0}})
+        logging.info(
+            "Admin clear jail bust reward: user_id=%s username=%s previous=%s by %s",
+            user_id,
+            user.get("username"),
+            prev,
+            current_user.get("email"),
+        )
+        return {
+            "message": f"Cleared jail bust reward for {user.get('username')}",
+            "username": user.get("username"),
+            "user_id": user_id,
+            "previous_bust_reward_cash": prev,
+            "bust_reward_cash": 0,
+        }
 
     @router.post("/admin/drop-user-casino")
     async def admin_drop_user_casino(body: DropUserCasinoRequest, current_user: dict = Depends(get_current_user)):

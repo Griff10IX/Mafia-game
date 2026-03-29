@@ -63,31 +63,15 @@ const JailStatusCard = ({
             {secondsRemaining ?? 0}s
           </div>
           
-          {/* Bust reward input */}
-          <div className="mb-1.5 w-full max-w-[200px]">
-            <label className="block text-[9px] font-heading text-zinc-300 mb-0.5">
-              💰 Reward for busting you out
-            </label>
-            <div className="flex gap-1">
-              <div className="relative flex-1">
-                <span className="absolute left-2 top-1/2 -translate-y-1/2 text-white/60 text-[10px]">$</span>
-                <FormattedNumberInput
-                  value={bustRewardInput}
-                  onChange={onBustRewardChange}
-                  placeholder="0"
-                  className="w-full h-6 pl-5 pr-1.5 rounded border border-primary/30 bg-black/40 text-white text-[10px] font-heading focus:border-primary/50 focus:outline-none"
-                />
-              </div>
-              <button
-                type="button"
-                onClick={onSetReward}
-                disabled={setRewardLoading}
-                className="h-6 px-2 rounded bg-primary/20 text-primary font-heading text-[9px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 transition-all"
-              >
-                {setRewardLoading ? '...' : 'Set'}
-              </button>
-            </div>
-          </div>
+          <p className="text-[9px] text-zinc-300 font-heading mb-1.5 max-w-[220px] leading-snug">
+            💰 Bust reward:{' '}
+            {currentReward > 0 ? (
+              <span className="text-amber-200/90">${Number(currentReward).toLocaleString()}</span>
+            ) : (
+              <span className="text-zinc-500">none</span>
+            )}
+            <span className="block text-zinc-500 mt-0.5">You can&apos;t change this while in jail.</span>
+          </p>
           
           <div className="flex flex-wrap items-center justify-center gap-1.5">
             <button
@@ -421,6 +405,10 @@ export default function Jail() {
   };
 
   const setBustReward = async () => {
+    if (jailStatus.in_jail) {
+      toast.error("You can't change your bust reward while in jail.");
+      return;
+    }
     const amount = Math.max(0, parseInt(String(bustRewardInput).replace(/\D/g, ''), 10) || 0);
     setSetRewardLoading(true);
     try {

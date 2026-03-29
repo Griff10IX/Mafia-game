@@ -607,7 +607,9 @@ async def get_jail_status(current_user: dict = Depends(get_current_user)):
 
 
 async def set_bust_reward(request: JailSetBustRewardRequest, current_user: dict = Depends(get_current_user_verified)):
-    """Set the $ reward offered to whoever busts you out. 0 to clear. Cannot exceed cash on hand (same pool debited on bust)."""
+    """Set the $ reward offered to whoever busts you out. 0 to clear. Cannot exceed cash on hand (same pool debited on bust). Not while in jail."""
+    if current_user.get("in_jail"):
+        raise HTTPException(status_code=400, detail="You cannot change your bust reward while in jail.")
     amount = max(0, int(request.amount))
     fresh = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
     balance = _safe_int((fresh or {}).get("money"), 0)

@@ -97,7 +97,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Lock Account', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['lock', 'ban', 'account'] },
   { label: 'Kill Player', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['kill', 'death', 'player'] },
   { label: 'Revive Player', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['revive', 'resurrect', 'alive'] },
-  { label: 'User Details', categoryId: 'admin-players', collapseKey: 'userDetails', keywords: ['user', 'details', 'info', 'profile'] },
+  { label: 'User Details', categoryId: 'admin-players', collapseKey: 'userDetails', keywords: ['user', 'details', 'info', 'profile', 'jail', 'bust', 'reward'] },
   { label: 'Gambling Log', categoryId: 'admin-players', collapseKey: 'gamblingLog', keywords: ['gambling', 'log', 'casino', 'bet'] },
   { label: 'Activity Log', categoryId: 'admin-players', collapseKey: 'activityLog', keywords: ['activity', 'log', 'history'] },
   // Donations
@@ -4168,6 +4168,34 @@ export default function Admin() {
                     <Row label="Current state (city)" value={u.current_state} />
                     <Row label="In jail" value={u.in_jail ? 'Yes' : 'No'} />
                     <Row label="Jail until" value={fmtDate(u.jail_until)} />
+                    <Row
+                      label="Jail bust reward (stored)"
+                      value={
+                        <span className="inline-flex items-center gap-2 flex-wrap">
+                          ${fmtNum(u.bust_reward_cash ?? 0)}
+                          {Number(u.bust_reward_cash ?? 0) > 0 && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const amt = Number(u.bust_reward_cash ?? 0);
+                                if (!window.confirm(`Clear jail bust reward ($${amt.toLocaleString()}) to $0 for ${u.username}?`)) return;
+                                try {
+                                  await api.post('/admin/clear-user-jail-bust-reward', { user_id: u.id });
+                                  toast.success('Jail bust reward cleared');
+                                  if (userDetailData?.user?.id) openUserDetail({ id: userDetailData.user.id });
+                                } catch (e) {
+                                  toast.error(e.response?.data?.detail || 'Failed to clear jail bust reward');
+                                }
+                              }}
+                              className="px-2 py-0.5 text-[10px] font-heading uppercase border border-amber-500/50 text-amber-400 hover:bg-amber-500/10 rounded"
+                            >
+                              Clear to $0
+                            </button>
+                          )}
+                        </span>
+                      }
+                      fullWidth
+                    />
                     <Row label="Last seen" value={fmtDate(u.last_seen)} />
                     <Row label="Forced online until" value={fmtDate(u.forced_online_until)} />
                     <Row label="Travels this hour" value={fmtNum(u.travels_this_hour)} />

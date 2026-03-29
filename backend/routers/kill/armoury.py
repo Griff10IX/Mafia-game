@@ -1578,10 +1578,15 @@ async def _get_weapon_mastery_pct(user_id: str, weapon_id: str | None) -> int:
 
 
 async def get_shooting_range_mastery(current_user: dict = Depends(get_current_user)):
-    """Return mastery for all gun weapons (exclude Brass Knuckles) for current user. Order is stable; can_train is True only if all previous weapons are mastered."""
-    weapons_list = await db.weapons.find({}, {"_id": 0, "id": 1, "name": 1, "bullets_needed": 1}).to_list(200)
+    """Return mastery for all gun weapons (exclude Brass Knuckles). Sorted by damage (low→high). can_train if every *earlier* weapon the user *owns* is at 100% (unowned guns never block)."""
+    weapons_list = await db.weapons.find({}, {"_id": 0, "id": 1, "name": 1, "bullets_needed": 1, "damage": 1}).to_list(200)
     gun_weapons = [w for w in weapons_list if w.get("id") != BRASS_KNUCKLES_WEAPON_ID]
     gun_weapons.sort(key=lambda w: (int(w.get("damage") or 0), str(w.get("id") or "")))
+    owned_rows = await db.user_weapons.find(
+        {"user_id": current_user["id"], "quantity": {"$gt": 0}},
+        {"_id": 0, "weapon_id": 1},
+    ).to_list(200)
+    owned_ids = {r["weapon_id"] for r in owned_rows if r.get("weapon_id")}
     mastery_docs = await db.user_weapon_mastery.find(
         {"user_id": current_user["id"], "weapon_id": {"$in": [w["id"] for w in gun_weapons]}},
         {"_id": 0, "weapon_id": 1, "mastery_pct": 1, "last_trained_at": 1},
@@ -1594,16 +1599,20 @@ async def get_shooting_range_mastery(current_user: dict = Depends(get_current_us
             continue
         info = by_weapon.get(wid, {"mastery_pct": 0, "last_trained_at": None})
         pct = info.get("mastery_pct") or 0
-        can_train = all(
-            (by_weapon.get(gun_weapons[j]["id"]) or {}).get("mastery_pct", 0) >= 100
-            for j in range(i)
-        )
+        can_train = True
+        for j in range(i):
+            prev_id = gun_weapons[j]["id"]
+            if prev_id not in owned_ids:
+                continue
+            if ((by_weapon.get(prev_id) or {}).get("mastery_pct") or 0) < 100:
+                can_train = False
+                break
         result[wid] = {**info, "can_train": can_train}
     return {"mastery": result, "weapons": [{"id": w["id"], "name": w.get("name", w["id"])} for w in gun_weapons]}
 
 
 async def train_shooting_range(request: ShootingRangeTrainRequest, current_user: dict = Depends(get_current_user)):
-    """Train one weapon (auto_sim chunk). User must own the weapon. Gun only (exclude Brass Knuckles). Must have mastered all previous weapons (in list order) before training the next."""
+    """Train one weapon (auto_sim chunk). User must own the weapon. Gun only (exclude Brass Knuckles). Earlier *owned* guns in damage order must be at 100% first (unowned guns do not block)."""
     weapon_id = (request.weapon_id or "").strip()
     if not weapon_id:
         raise HTTPException(status_code=400, detail="weapon_id required")
@@ -1615,10 +1624,15 @@ async def train_shooting_range(request: ShootingRangeTrainRequest, current_user:
     owned = await db.user_weapons.find_one({"user_id": current_user["id"], "weapon_id": weapon_id, "quantity": {"$gt": 0}}, {"_id": 1})
     if not owned:
         raise HTTPException(status_code=400, detail="You must own this weapon to train it.")
-    weapons_list = await db.weapons.find({}, {"_id": 0, "id": 1, "name": 1, "bullets_needed": 1}).to_list(200)
+    weapons_list = await db.weapons.find({}, {"_id": 0, "id": 1, "name": 1, "bullets_needed": 1, "damage": 1}).to_list(200)
     gun_weapons = [w for w in weapons_list if w.get("id") != BRASS_KNUCKLES_WEAPON_ID]
     gun_weapons.sort(key=lambda w: (int(w.get("damage") or 0), str(w.get("id") or "")))
     weapon_index = next((i for i, w in enumerate(gun_weapons) if w.get("id") == weapon_id), None)
+    owned_rows = await db.user_weapons.find(
+        {"user_id": current_user["id"], "quantity": {"$gt": 0}},
+        {"_id": 0, "weapon_id": 1},
+    ).to_list(200)
+    owned_ids = {r["weapon_id"] for r in owned_rows if r.get("weapon_id")}
     if weapon_index is not None and weapon_index > 0:
         mastery_docs = await db.user_weapon_mastery.find(
             {"user_id": current_user["id"], "weapon_id": {"$in": [gun_weapons[j]["id"] for j in range(weapon_index)]}},
@@ -1627,6 +1641,8 @@ async def train_shooting_range(request: ShootingRangeTrainRequest, current_user:
         by_prev = {d["weapon_id"]: min(100, max(0, int(d.get("mastery_pct", 0) or 0))) for d in mastery_docs}
         for j in range(weapon_index):
             wid = gun_weapons[j]["id"]
+            if wid not in owned_ids:
+                continue
             if (by_prev.get(wid) or 0) < 100:
                 prev_name = gun_weapons[j].get("name") or wid
                 raise HTTPException(
