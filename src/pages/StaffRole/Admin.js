@@ -1847,6 +1847,27 @@ export default function Admin() {
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
   };
 
+  const handleRemoveRespectPoints = async () => {
+    const username = (formData.targetUsername || '').trim();
+    if (!username) {
+      toast.error('Enter target username above');
+      return;
+    }
+    const amt = Math.max(0, parseInt(String(formData.respectRemove), 10) || 0);
+    if (amt <= 0) {
+      toast.error('Enter a positive amount to remove');
+      return;
+    }
+    if (!window.confirm(`Remove up to ${amt.toLocaleString()} respect from ${username}? (Cannot remove more than they have.)`)) return;
+    try {
+      const params = new URLSearchParams({ target_username: username, amount: String(amt) });
+      const response = await api.post(`/admin/remove-respect-points?${params.toString()}`);
+      toast.success(response.data?.message || 'Done');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    }
+  };
+
   const handlePointsPreview = async () => {
     const sid = (pointsProvSessionId || '').trim();
     if (!sid) { toast.error('Enter payment session id'); return; }
