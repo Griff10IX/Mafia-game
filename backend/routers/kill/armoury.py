@@ -1303,6 +1303,13 @@ async def get_weapons(request: Request, current_user: dict = Depends(get_current
         if now <= expires:
             return payload
     weapons = await db.weapons.find({}, {"_id": 0}).to_list(100)
+    weapons.sort(
+        key=lambda w: (
+            1 if w.get("loot_exclusive") else 0,
+            int(w.get("damage") or 0),
+            str(w.get("id") or ""),
+        )
+    )
     user_weapons = await db.user_weapons.find({"user_id": uid}, {"_id": 0}).to_list(100)
     weapons_map = {uw["weapon_id"]: uw["quantity"] for uw in user_weapons}
     equipped_weapon_id = current_user.get("equipped_weapon_id")
@@ -1571,7 +1578,7 @@ async def get_shooting_range_mastery(current_user: dict = Depends(get_current_us
     """Return mastery for all gun weapons (exclude Brass Knuckles) for current user. Order is stable; can_train is True only if all previous weapons are mastered."""
     weapons_list = await db.weapons.find({}, {"_id": 0, "id": 1, "name": 1, "bullets_needed": 1}).to_list(200)
     gun_weapons = [w for w in weapons_list if w.get("id") != BRASS_KNUCKLES_WEAPON_ID]
-    gun_weapons.sort(key=lambda w: (w.get("name") or w.get("id") or "").lower())
+    gun_weapons.sort(key=lambda w: (int(w.get("damage") or 0), str(w.get("id") or "")))
     mastery_docs = await db.user_weapon_mastery.find(
         {"user_id": current_user["id"], "weapon_id": {"$in": [w["id"] for w in gun_weapons]}},
         {"_id": 0, "weapon_id": 1, "mastery_pct": 1, "last_trained_at": 1},
@@ -1607,7 +1614,7 @@ async def train_shooting_range(request: ShootingRangeTrainRequest, current_user:
         raise HTTPException(status_code=400, detail="You must own this weapon to train it.")
     weapons_list = await db.weapons.find({}, {"_id": 0, "id": 1, "name": 1, "bullets_needed": 1}).to_list(200)
     gun_weapons = [w for w in weapons_list if w.get("id") != BRASS_KNUCKLES_WEAPON_ID]
-    gun_weapons.sort(key=lambda w: (w.get("name") or w.get("id") or "").lower())
+    gun_weapons.sort(key=lambda w: (int(w.get("damage") or 0), str(w.get("id") or "")))
     weapon_index = next((i for i, w in enumerate(gun_weapons) if w.get("id") == weapon_id), None)
     if weapon_index is not None and weapon_index > 0:
         mastery_docs = await db.user_weapon_mastery.find(

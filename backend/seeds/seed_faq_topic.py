@@ -40,7 +40,7 @@ FALLBACK_FAQ_CONTENT = """[b]NOTE:[/b] This text is only used if [i]FORUM_FAQ.md
 • Interest bank %: see [b]BANK_INTEREST_OPTIONS[/b] in [b]server.py[/b].
 • Personal OC cooldown: 6h → 4h after one-time store purchase ([b]oc.py[/b] / store).
 • GTA locations & cooldowns: [b]backend/routers/cars/gta.py[/b] → [b]GTA_OPTIONS[/b].
-• Booze: [b]booze_run.py[/b] → [b]BOOZE_TYPES[/b], jail chance 2–6% per buy/sell, 20s jail.
+• Booze: [b]booze_run.py[/b] → [b]BOOZE_TYPES[/b], jail chance 2.5–6.5% per buy/sell, 20s jail.
 • Bodyguards: up to 4 slots; robot hire; slot purchases [b]75/150/300/450[/b] pts — [b]bodyguards.py[/b].
 • Dead > Alive: ~99.95% of dead account cash/points at death to a new account (password); tokens partial restore — [b]dead_alive.py[/b].
 • Mini-game weekly LB: Monday UTC week start, top 5 rewards — [b]minigame_leaderboard.py[/b].

@@ -70,7 +70,7 @@ export default function Ranking() {
             </div>
             <div>
               <h3 className="text-xl font-heading font-bold text-foreground">Organised Crime</h3>
-              <p className="text-sm text-mutedForeground">Team heists: Driver, Weapons, Explosives, Hacker — high RP & cash</p>
+              <p className="text-sm text-mutedForeground">Team heists: Driver, Weapons, Explosives, Inside Man — high RP & cash</p>
             </div>
           </div>
         </Link>

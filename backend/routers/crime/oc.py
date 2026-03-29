@@ -1,4 +1,4 @@
-# Organised Crime: team heists (Driver, Weapons, Explosives, Hacker), 4 job types, 6h/4h cooldown
+# Organised Crime: team heists (Driver, Weapons, Explosives, Inside Man), 4 job types, 6h/4h cooldown
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict
 import secrets
@@ -41,7 +41,7 @@ OC_ROLES = [
     {"id": "driver", "name": "Driver"},
     {"id": "weapons", "name": "Weapons"},
     {"id": "explosives", "name": "Explosives"},
-    {"id": "hacker", "name": "Hacker"},
+    {"id": "hacker", "name": "Inside Man"},
 ]
 
 # Setup cost paid by creator when running (equipment is the only cost now)
@@ -75,6 +75,16 @@ OC_COOLDOWN_HOURS_REDUCED = 4
 NPC_PAYOUT_MULTIPLIER = 0.35  # Each NPC gets 35% of a full share for total pool
 OC_INVITE_EXPIRY_MINUTES = 5
 ROLE_KEYS = ["driver", "weapons", "explosives", "hacker"]
+
+
+def _oc_role_display_name(role_id: str) -> str:
+    """Human-readable role label for notifications (e.g. hacker → Inside Man)."""
+    rid = (role_id or "").strip()
+    for r in OC_ROLES:
+        if r.get("id") == rid:
+            return str(r.get("name") or rid)
+    return rid.replace("_", " ").title() if rid else ""
+
 
 # Store: one-time purchase to reduce heist cooldown from 6h to 4h
 OC_TIMER_COST_POINTS = 300
@@ -365,7 +375,7 @@ async def send_invites_oc(
             "created_at": now.isoformat(),
             "expires_at": expires_at,
         })
-        role_name = role.replace("_", " ").capitalize()
+        role_name = _oc_role_display_name(role)
         msg = f"{creator_username} invited you to an Organised Crime heist as {role_name} ({job_name}). Accept or decline in your inbox. Expires in {OC_INVITE_EXPIRY_MINUTES} min."
         await send_notification(
             target_id,
@@ -452,7 +462,7 @@ async def oc_invite_cancel(invite_id: str, current_user: dict = Depends(get_curr
 
 
 class OCPendingSlotRequest(BaseModel):
-    role: str  # driver, weapons, explosives, hacker
+    role: str  # driver, weapons, explosives, hacker (display: Inside Man)
     value: str  # "npc" or username to invite
 
 
@@ -474,7 +484,7 @@ async def oc_pending_set_slot(
             {"id": pending["id"]},
             {"$set": {request.role: "npc"}},
         )
-        return {"message": f"{request.role} set to NPC."}
+        return {"message": f"{_oc_role_display_name(request.role)} set to NPC."}
     # New invite
     target = await db.users.find_one(
         {"$or": [{"username": val}, {"id": val}]},
@@ -508,7 +518,7 @@ async def oc_pending_set_slot(
     await send_notification(
         target["id"],
         "OC Heist invite",
-        f"{current_user.get('username') or 'Someone'} invited you to an Organised Crime heist as {request.role.replace('_', ' ').capitalize()} ({job_name}). Accept or decline in your inbox. Expires in {OC_INVITE_EXPIRY_MINUTES} min.",
+        f"{current_user.get('username') or 'Someone'} invited you to an Organised Crime heist as {_oc_role_display_name(request.role)} ({job_name}). Accept or decline in your inbox. Expires in {OC_INVITE_EXPIRY_MINUTES} min.",
         "system",
         category="oc_invites",
         oc_invite_id=invite_id,

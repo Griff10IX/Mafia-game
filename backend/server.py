@@ -2386,9 +2386,12 @@ async def init_game_data():
     NOTE: No user data is modified; only game config collections are seeded when empty.
     """
     from routers.crime import crimes as crimes_router
+    from utils.migrate_weapon_order import migrate_weapon_tier_order_if_needed
+
     await crimes_router.init_crimes_data(db)
 
     logging.info("🔄 Initializing game data (weapons, properties...)...")
+    await migrate_weapon_tier_order_if_needed(db)
     weapons_count = await db.weapons.count_documents({})
     if weapons_count == 0:
         weapons = _load_seed_json("weapons.json")

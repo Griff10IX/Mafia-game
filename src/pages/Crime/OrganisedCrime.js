@@ -15,7 +15,8 @@ const OC_STYLES = `
 const formatMoney = (n) => `$${Number(n ?? 0).toLocaleString()}`;
 
 const ROLE_IDS = ['driver', 'weapons', 'explosives', 'hacker'];
-const ROLE_ICONS = { driver: '🚗', weapons: '🔫', explosives: '💣', hacker: '💻' };
+const ROLE_ICONS = { driver: '🚗', weapons: '🔫', explosives: '💣', hacker: '🗝️' };
+const ROLE_LABELS = { driver: 'Driver', weapons: 'Weapons', explosives: 'Explosives', hacker: 'Inside Man' };
 const TICK_INTERVAL = 1000;
 const COLLAPSED_KEY = 'oc_sections_collapsed';
 
@@ -241,7 +242,7 @@ const RoleSlotRow = ({ roleId, value, onValueChange, inviteInput, onInviteChange
     {/* Role name */}
     <div className="w-20 flex items-center gap-1">
       <span className="text-[11px]">{ROLE_ICONS[roleId]}</span>
-      <span className="text-[10px] font-heading font-bold text-primary capitalize">{roleId}</span>
+      <span className="text-[10px] font-heading font-bold text-primary">{ROLE_LABELS[roleId] || roleId}</span>
     </div>
 
     {/* Toggle buttons */}
@@ -302,8 +303,8 @@ const PendingHeistSection = ({ status, executing, onCooldown, onRun, onCancel, p
           
           return (
             <div key={roleId} className="flex items-center gap-1 px-2 py-1 rounded bg-zinc-800/30 text-[10px]">
-              <span className="w-16 font-heading font-bold text-primary capitalize flex items-center gap-0.5">
-                <span>{ROLE_ICONS[roleId]}</span> {roleId}
+              <span className="w-16 font-heading font-bold text-primary flex items-center gap-0.5">
+                <span>{ROLE_ICONS[roleId]}</span> {ROLE_LABELS[roleId] || roleId}
               </span>
               <span className="font-heading text-foreground">{displayVal}</span>
               {inv && (
@@ -403,7 +404,7 @@ const InfoSection = ({ cooldownHours, isCollapsed, onToggle }) => (
           <ul className="grid grid-cols-1 md:grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] text-mutedForeground font-heading">
             <li className="flex items-start gap-1">
               <span className="text-primary shrink-0">•</span>
-              <span>Team of 4: Driver, Weapons, Explosives, Hacker</span>
+              <span>Team of 4: Driver, Weapons, Explosives, Inside Man</span>
             </li>
             <li className="flex items-start gap-1">
               <span className="text-primary shrink-0">•</span>

@@ -311,7 +311,7 @@ async def run_heist(
     if not all(role in request.team for role in TEAM_ROLES):
         raise HTTPException(
             status_code=400,
-            detail="Team must have all roles: driver, weapons, explosives, hacker"
+            detail="Team must have all roles: driver, weapons, explosives, inside man"
         )
     
     result = await db.users.update_one(
