@@ -263,6 +263,7 @@ def register(router):
         pot = int(g.get("pot") or 0)
         uid = g.get("user_id")
         active = [p for p in players if p.get("status") not in ("folded",)]
+        human_player = next((p for p in players if p.get("user_id") == uid), None)
         if len(active) == 1:
             winner = active[0]
             best = None
@@ -280,9 +281,30 @@ def register(router):
         hand_name = None
         if winner and len(active) > 1 and best:
             hand_name = _hand_description(best[0], best[1])
+
+        # Vs dealer is a single-hand cash game: refund remaining human stack, then add pot if human won.
+        # Without this, players lose all unbet chips at hand end.
+        human_stack_refund = int((human_player or {}).get("stack") or 0)
+        human_pot_win = pot if winner and winner.get("user_id") == uid else 0
+        human_cashout = max(0, human_stack_refund + human_pot_win)
+
+        if human_cashout > 0:
+            await db.users.update_one({"id": uid}, {"$inc": {"money": human_cashout}})
+            await log_gambling(
+                uid,
+                g.get("username") or "?",
+                "mp_poker",
+                {
+                    "action": "payout",
+                    "game_id": game_id,
+                    "winnings": human_cashout,
+                    "stack_refund": human_stack_refund,
+                    "pot_win": human_pot_win,
+                    "mode": "vs_dealer",
+                },
+            )
+
         if winner and winner.get("user_id") == uid and pot > 0:
-            await db.users.update_one({"id": uid}, {"$inc": {"money": pot}})
-            await log_gambling(uid, g.get("username") or "?", "mp_poker", {"action": "payout", "game_id": game_id, "winnings": pot})
             results.append({"user_id": uid, "result": "win", "payout": pot, "hand": hand_name})
             results.append({"user_id": "dealer", "result": "lose", "payout": 0})
         elif winner and winner.get("user_id") == "dealer":
@@ -471,7 +493,7 @@ def register(router):
             {"$inc": {"money": -human_stack}},
         )
         if deduct_result.modified_count == 0:
-            raise HTTPException(status_code=400, detail="Need at least 4x blind to play")
+            raise HTTPException(status_code=400, detail="Need at least 20x blind to play")
         await log_gambling(uid, (current_user.get("username") or "?"), "mp_poker", {"action": "create", "game_id": game_id, "buy_in": human_stack, "mode": "vs_dealer"})
         now_iso = datetime.now(timezone.utc).isoformat()
         doc = {
@@ -908,12 +930,12 @@ def register(router):
         pot = int(g.get("pot") or 0)
         active = [p for p in players if p.get("status") not in ("folded",)]
         results = []
+        winner_payouts = {}
         if len(active) == 1:
             winner = active[0]
             uid = winner.get("user_id")
             if uid and uid != "dealer":
-                await db.users.update_one({"id": uid}, {"$inc": {"money": pot}})
-                await log_gambling(uid, winner.get("username") or "?", "mp_poker", {"action": "payout", "game_id": game_id, "winnings": pot})
+                winner_payouts[uid] = pot
             for p in players:
                 results.append({
                     "user_id": p.get("user_id"),
@@ -936,13 +958,9 @@ def register(router):
                     winners.append(p)
             split = pot // len(winners)
             remainder = pot - split * len(winners)
-            winner_payouts = {}
             for i, w in enumerate(winners):
                 uid = w.get("user_id")
                 winner_payouts[uid] = split + (remainder if i == 0 else 0)
-                if uid and uid != "dealer" and winner_payouts[uid] > 0:
-                    await db.users.update_one({"id": uid}, {"$inc": {"money": winner_payouts[uid]}})
-                    await log_gambling(uid, w.get("username") or "?", "mp_poker", {"action": "payout", "game_id": game_id, "winnings": winner_payouts[uid]})
             for p in players:
                 uid = p.get("user_id")
                 results.append({
@@ -951,6 +969,31 @@ def register(router):
                     "payout": winner_payouts.get(uid, 0),
                     "hand": winner_hand_name if uid in winner_payouts else None,
                 })
+        # Single-hand table cashout: return remaining stack + any pot share to each player.
+        # Without this, unbet chips disappear when the table settles.
+        for p in players:
+            uid = (p.get("user_id") or "").strip()
+            if not uid or uid == "dealer":
+                continue
+            stack_refund = max(0, int(p.get("stack") or 0))
+            pot_win = max(0, int(winner_payouts.get(uid) or 0))
+            cashout = stack_refund + pot_win
+            if cashout <= 0:
+                continue
+            await db.users.update_one({"id": uid}, {"$inc": {"money": cashout}})
+            await log_gambling(
+                uid,
+                p.get("username") or "?",
+                "mp_poker",
+                {
+                    "action": "payout",
+                    "game_id": game_id,
+                    "winnings": cashout,
+                    "stack_refund": stack_refund,
+                    "pot_win": pot_win,
+                    "mode": "vs_players",
+                },
+            )
         now_iso = datetime.now(timezone.utc).isoformat()
         await db.mp_poker_games.update_one(
             {"id": game_id},

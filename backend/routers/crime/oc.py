@@ -801,6 +801,9 @@ async def execute_oc(
     if not result.get("success") and result.get("cooldown_until") and "cooldown" in (result.get("message") or ""):
         raise HTTPException(status_code=400, detail=result.get("message", "OC cooldown"))
     out = {"success": result.get("success", False), "message": result.get("message", ""), "cooldown_until": result.get("cooldown_until")}
+    if result.get("jailed"):
+        out["jailed"] = True
+        out["jail_until"] = result.get("jail_until")
     if result.get("success"):
         out["cash_earned"] = result.get("cash_earned", 0)
         out["rp_earned"] = result.get("rp_earned", 0)

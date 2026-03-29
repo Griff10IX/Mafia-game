@@ -711,18 +711,34 @@ def register(router):
             raise HTTPException(status_code=400, detail="Game cannot be cancelled at this stage")
         players = list(game.get("players") or [])
         pot = int(game.get("pot") or 0)
-        num_players = len(players)
-        if num_players == 0:
-            refund_each = 0
-            remainder = 0
-        else:
-            refund_each = pot // num_players
-            remainder = pot - refund_each * num_players
-        for i, p in enumerate(players):
-            uid_p = p.get("user_id")
-            add = refund_each + (remainder if i == 0 else 0)
+        buy_in = int(game.get("buy_in") or 0)
+        extra_prize = int(game.get("extra_prize") or 0)
+        creator_id = (game.get("creator_id") or "").strip()
+
+        # Refund contributors, not equal shares:
+        # - each seated player gets their buy-in back
+        # - creator gets extra prize back (even if excluded from seating)
+        refund_map = {}
+        for p in players:
+            uid_p = (p.get("user_id") or "").strip()
+            if not uid_p:
+                continue
+            contributed_buy_in = int(p.get("bet") or buy_in or 0)
+            if contributed_buy_in > 0:
+                refund_map[uid_p] = int(refund_map.get(uid_p, 0)) + contributed_buy_in
+        if creator_id and extra_prize > 0:
+            refund_map[creator_id] = int(refund_map.get(creator_id, 0)) + extra_prize
+
+        planned_total = sum(int(v or 0) for v in refund_map.values())
+        if planned_total != pot:
+            # Keep economy balanced if legacy data is inconsistent.
+            adjust_uid = creator_id if creator_id else (players[0].get("user_id") if players else "")
+            if adjust_uid:
+                refund_map[adjust_uid] = int(refund_map.get(adjust_uid, 0)) + (pot - planned_total)
+
+        for uid_p, add in refund_map.items():
             if add > 0:
-                await db.users.update_one({"id": uid_p}, {"$inc": {"money": add}})
+                await db.users.update_one({"id": uid_p}, {"$inc": {"money": int(add)}})
         return {"message": "Game cancelled; all players refunded", "game_id": game_id}
 
     @router.post("/casino/mp-blackjack/games/{game_id}/leave")

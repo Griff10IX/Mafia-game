@@ -642,6 +642,10 @@ export default function OrganisedCrime() {
         toast.error(res.data.message || 'Heist failed');
       }
       refreshUser();
+      if (res.data.jailed) {
+        window.location.replace('/crime/jail');
+        return;
+      }
       fetchData();
     } catch (err) {
       const msg = err.response?.data?.detail || err.message;
@@ -690,6 +694,10 @@ export default function OrganisedCrime() {
         toast.error(res.data.message || 'Heist failed');
       }
       refreshUser();
+      if (res.data.jailed) {
+        window.location.replace('/crime/jail');
+        return;
+      }
       fetchData();
     } catch (err) {
       const msg = err.response?.data?.detail || err.message;

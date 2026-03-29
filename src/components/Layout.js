@@ -715,11 +715,16 @@ export default function Layout({ children }) {
       }));
       setRankProgress(progressRes.data);
     } catch (error) {
-      const msg = getApiErrorMessage(error);
-      toast.error(msg || 'Failed to load profile. Please log in again.');
-      console.error('Failed to fetch user:', error);
-      localStorage.removeItem('token');
-      navigate('/');
+      const status = error.response?.status;
+      if (status === 401 || (status === 403 && error.config?.url?.includes('/auth/me'))) {
+        const msg = getApiErrorMessage(error);
+        toast.error(msg || 'Session expired. Please log in again.');
+        console.error('Auth failure, logging out:', error);
+        localStorage.removeItem('token');
+        navigate('/');
+      } else {
+        console.error('Failed to fetch user (non-auth):', error);
+      }
     }
   };
 
