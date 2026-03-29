@@ -3105,6 +3105,72 @@ def register(router):
         entries = await cursor.to_list(limit)
         return {"entries": entries, "count": len(entries)}
 
+    @router.get("/admin/respect-points-log")
+    async def admin_respect_points_log(
+        user_id: str = Query(..., min_length=1),
+        limit: int = Query(200, ge=1, le=1000),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Earned-respect audit from respect_events (log_respect_earned). Admin or moderator."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        uid = user_id.strip()
+        user = await db.users.find_one({"id": uid}, {"_id": 0, "username": 1, "respect_points": 1})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        cap = min(int(limit), 1000)
+        raw = await db.respect_events.find({"user_id": uid}, {"_id": 0}).to_list(8000)
+
+        def _ts(d: dict) -> str:
+            v = d.get("at") or d.get("created_at")
+            return str(v) if v else ""
+
+        def _amt(d: dict) -> int:
+            try:
+                return max(0, int(d.get("amount") or 0))
+            except (TypeError, ValueError):
+                return 0
+
+        def _src(d: dict) -> str:
+            s = d.get("source")
+            if s is not None and str(s).strip():
+                return str(s).strip()[:120]
+            r = d.get("reason")
+            if r is not None and str(r).strip():
+                return str(r).strip()[:120]
+            return "unknown"
+
+        raw.sort(key=_ts, reverse=True)
+        events_slice = raw[:cap]
+        total_amount = sum(_amt(e) for e in events_slice)
+        by_map: Dict[str, Dict[str, int]] = defaultdict(lambda: {"events": 0, "total_amount": 0})
+        for e in events_slice:
+            src = _src(e)
+            by_map[src]["events"] += 1
+            by_map[src]["total_amount"] += _amt(e)
+        by_source = sorted(
+            ({"source": k, **v} for k, v in by_map.items()),
+            key=lambda x: (-x["total_amount"], -x["events"], x["source"]),
+        )
+        recent = [
+            {"at": _ts(e), "amount": _amt(e), "source": _src(e)}
+            for e in events_slice
+        ]
+        return {
+            "user_id": uid,
+            "username": user.get("username"),
+            "current_respect_balance": int(user.get("respect_points") or 0),
+            "summary": {
+                "events_in_view": len(events_slice),
+                "total_amount_in_view": total_amount,
+                "unique_sources": len(by_map),
+                "total_events_in_db": len(raw),
+            },
+            "by_source": by_source,
+            "events": recent,
+        }
+
     @router.get("/admin/crimes/analytics/summary")
     async def admin_crimes_analytics_summary(
         days: int = Query(7, ge=1, le=90),

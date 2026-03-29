@@ -52,6 +52,11 @@ class PropertyResponse(BaseModel):
     stack_bonus_pct: int = 0  # e.g., 50 = +50% bonus from stacking
 
 
+# Upgrade cost to go from level L→L+1 is price * (L+1) (first buy = price). Each level adds +income_per_hour.
+# Seed data should set income_per_hour >= ceil(price * max_level / PROPERTY_TARGET_ROI_HOURS) so the most
+# expensive upgrade (L=max-1→max, cost price*max_level) pays back within this many hours at the margin.
+PROPERTY_TARGET_ROI_HOURS = 24
+
 # Stacking bonus: +25% per additional property of same type (after first)
 STACK_BONUS_PER_EXTRA = 0.25
 # Max properties of same type that can stack (extras are auto-sold)

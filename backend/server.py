@@ -2408,11 +2408,40 @@ async def init_game_data():
             await db.weapons.insert_one(loot_weapon)
             logging.info("Inserted loot-exclusive weapon (weapon_loot) into existing weapons collection")
     properties_count = await db.properties.count_documents({})
+    seed_properties = _load_seed_json("properties.json")
     if properties_count == 0:
-        properties = _load_seed_json("properties.json")
-        if properties:
-            await db.properties.insert_many(properties)
-            logging.info("Seeded %d properties from data/properties.json", len(properties))
+        if seed_properties:
+            await db.properties.insert_many(seed_properties)
+            logging.info("Seeded %d properties from data/properties.json", len(seed_properties))
         else:
             logging.warning("Properties collection is empty and no seed file; add data/properties.json or insert via DB.")
+    elif seed_properties:
+        # Keep progression property economy in sync with data/properties.json (price, income, levels).
+        # Skips trade listings (for_sale) and any doc missing canonical fields.
+        synced = 0
+        for p in seed_properties:
+            pid = p.get("id")
+            if not pid or not isinstance(p, dict):
+                continue
+            fields = {
+                k: p[k]
+                for k in ("name", "property_type", "price", "income_per_hour", "max_level", "required_property_id")
+                if k in p
+            }
+            if len(fields) < 5:
+                continue
+            res = await db.properties.update_one(
+                {
+                    "id": pid,
+                    "for_sale": {"$ne": True},
+                    "price": {"$exists": True},
+                    "income_per_hour": {"$exists": True},
+                    "max_level": {"$exists": True},
+                },
+                {"$set": fields},
+            )
+            if res.modified_count:
+                synced += 1
+        if synced:
+            logging.info("Synced %d progression properties from data/properties.json", synced)
     logging.info("✅ Game data initialization complete (NO user data was modified)")

@@ -251,6 +251,10 @@ async def ensure_all_indexes(db):
         await db.boxing_events.create_index([("user_id", 1), ("at", -1)])
         await db.boxing_events.create_index([("at", -1)])
 
+        # --- Respect earned (weekly leaderboard / objectives; documents use at or created_at) ---
+        await db.respect_events.create_index([("user_id", 1), ("at", -1)])
+        await db.respect_events.create_index([("user_id", 1), ("created_at", -1)])
+
         # --- Racing (road races / championship; shares user_racing_cars with garage car instances) ---
         await db.racing_races.create_index("id", unique=True)
         await db.racing_races.create_index([("state", 1), ("created_at", -1)])

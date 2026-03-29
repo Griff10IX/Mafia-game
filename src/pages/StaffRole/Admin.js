@@ -98,8 +98,9 @@ const SEARCHABLE_TOOLS = [
   { label: 'Kill Player', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['kill', 'death', 'player'] },
   { label: 'Revive Player', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['revive', 'resurrect', 'alive'] },
   { label: 'User Details', categoryId: 'admin-players', collapseKey: 'userDetails', keywords: ['user', 'details', 'info', 'profile', 'jail', 'bust', 'reward'] },
-  { label: 'Gambling Log', categoryId: 'admin-players', collapseKey: 'gamblingLog', keywords: ['gambling', 'log', 'casino', 'bet'] },
-  { label: 'Activity Log', categoryId: 'admin-players', collapseKey: 'activityLog', keywords: ['activity', 'log', 'history'] },
+  { label: 'Respect points log', categoryId: 'admin-players', collapseKey: 'respectPointsLog', keywords: ['respect', 'points', 'log', 'earned', 'audit', 'player'] },
+  { label: 'Gambling Log', categoryId: 'admin-logs', collapseKey: 'gamblingLog', keywords: ['gambling', 'log', 'casino', 'bet'] },
+  { label: 'Activity Log', categoryId: 'admin-logs', collapseKey: 'activityLog', keywords: ['activity', 'log', 'history'] },
   // Donations
   { label: 'Donations Payments Log', categoryId: 'admin-donations', collapseKey: 'donationsPayments', keywords: ['donations', 'payments', 'stripe', 'credit'] },
   { label: 'Store Point Crediting', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['store', 'crediting', 'manual', 'eta', 'payments'] },
@@ -582,6 +583,10 @@ export default function Admin() {
   const [gamblingLogLoading, setGamblingLogLoading] = useState(false);
   const [gamblingLogUsername, setGamblingLogUsername] = useState('');
   const [gamblingLogGameType, setGamblingLogGameType] = useState('');
+  const [respectLogUserId, setRespectLogUserId] = useState('');
+  const [respectLogLimit, setRespectLogLimit] = useState(200);
+  const [respectLogData, setRespectLogData] = useState(null);
+  const [respectLogLoading, setRespectLogLoading] = useState(false);
   const [clearGamblingDays, setClearGamblingDays] = useState(30);
   const [clearGamblingLoading, setClearGamblingLoading] = useState(false);
 
@@ -892,11 +897,34 @@ export default function Admin() {
     }
     if (s.activityLogUsername != null && s.activityLogUsername !== '') {
       setActivityLogUsername(String(s.activityLogUsername));
+      setActiveCategoryId('admin-logs');
       setCollapsed((prev) => ({ ...prev, activityLog: false }));
+      if (typeof window !== 'undefined') window.location.hash = 'admin-logs';
     }
     if (s.gamblingLogUsername != null && s.gamblingLogUsername !== '') {
       setGamblingLogUsername(String(s.gamblingLogUsername));
+      setActiveCategoryId('admin-logs');
       setCollapsed((prev) => ({ ...prev, gamblingLog: false }));
+      if (typeof window !== 'undefined') window.location.hash = 'admin-logs';
+    }
+    if (s.respectLogUserId != null && String(s.respectLogUserId).trim()) {
+      const rid = String(s.respectLogUserId).trim();
+      setRespectLogUserId(rid);
+      setActiveCategoryId('admin-players');
+      setCollapsed((prev) => ({ ...prev, respectPointsLog: false }));
+      if (typeof window !== 'undefined') window.location.hash = 'admin-players';
+      const lim = Math.max(1, Math.min(1000, parseInt(String(respectLogLimit), 10) || 200));
+      setRespectLogLoading(true);
+      setRespectLogData(null);
+      api.get('/admin/respect-points-log', { params: { user_id: rid, limit: lim } })
+        .then((res) => {
+          setRespectLogData(res.data);
+          toast.success('Respect log loaded');
+        })
+        .catch((e) => {
+          toast.error(e.response?.data?.detail || 'Failed to load respect log');
+        })
+        .finally(() => setRespectLogLoading(false));
     }
   }, [location.state]);
 
@@ -3513,6 +3541,52 @@ export default function Admin() {
     }
   };
 
+  const fetchRespectPointsLog = async () => {
+    const uid = respectLogUserId.trim();
+    if (!uid) {
+      toast.error('Enter user ID');
+      return;
+    }
+    const lim = Math.max(1, Math.min(1000, parseInt(String(respectLogLimit), 10) || 200));
+    setRespectLogLoading(true);
+    setRespectLogData(null);
+    try {
+      const res = await api.get('/admin/respect-points-log', { params: { user_id: uid, limit: lim } });
+      setRespectLogData(res.data);
+      toast.success('Respect log loaded');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load respect log');
+      setRespectLogData(null);
+    } finally {
+      setRespectLogLoading(false);
+    }
+  };
+
+  const jumpToRespectPointsLog = (userId) => {
+    const id = String(userId || '').trim();
+    if (!id) return;
+    setUserDetailData(null);
+    setRespectLogUserId(id);
+    setActiveCategoryId('admin-players');
+    setCollapsed((prev) => ({ ...prev, respectPointsLog: false }));
+    if (typeof window !== 'undefined') {
+      window.location.hash = 'admin-players';
+      setTimeout(() => document.getElementById('admin-respect-points-log')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+    }
+    const lim = Math.max(1, Math.min(1000, parseInt(String(respectLogLimit), 10) || 200));
+    setRespectLogLoading(true);
+    setRespectLogData(null);
+    api.get('/admin/respect-points-log', { params: { user_id: id, limit: lim } })
+      .then((res) => {
+        setRespectLogData(res.data);
+        toast.success('Respect log loaded');
+      })
+      .catch((e) => {
+        toast.error(e.response?.data?.detail || 'Failed to load respect log');
+      })
+      .finally(() => setRespectLogLoading(false));
+  };
+
   const handleClearGamblingLog = async () => {
     if (!window.confirm(`Delete gambling log entries older than ${clearGamblingDays} days?`)) return;
     setClearGamblingLoading(true);
@@ -3994,6 +4068,126 @@ export default function Admin() {
         <div className="admin-art-line text-primary mx-3" />
       </div>
 
+      {(isAdmin || isModerator) && (
+      <div id="admin-respect-points-log" className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel scroll-mt-24`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Award}
+          title="Respect points log"
+          badge={
+            respectLogData?.summary ? (
+              <span className="text-[10px] font-heading text-mutedForeground">
+                {respectLogData.summary.events_in_view} events · {Number(respectLogData.summary.total_amount_in_view || 0).toLocaleString()} pts (view)
+              </span>
+            ) : null
+          }
+          isCollapsed={collapsed.respectPointsLog}
+          onToggle={() => toggleSection('respectPointsLog')}
+        />
+        {!collapsed.respectPointsLog && (
+          <div className="p-3 space-y-3">
+            <p className="text-[10px] text-mutedForeground font-heading">
+              Earned respect from <span className="text-foreground">respect_events</span> (sources such as rank_up, crimes, minigames). Enter the user&apos;s ID from User details or search.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                value={respectLogUserId}
+                onChange={(e) => setRespectLogUserId(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && fetchRespectPointsLog()}
+                placeholder="User ID"
+                className="flex-1 min-w-[160px] bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-xs font-mono text-foreground focus:border-primary/50 focus:outline-none"
+              />
+              <span className="text-[10px] text-mutedForeground font-heading shrink-0">Limit</span>
+              <input
+                type="number"
+                min={1}
+                max={1000}
+                value={respectLogLimit}
+                onChange={(e) => setRespectLogLimit(Math.max(1, Math.min(1000, parseInt(e.target.value, 10) || 200)))}
+                className="w-20 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-2 text-xs font-mono text-foreground focus:border-primary/50 focus:outline-none"
+              />
+              <BtnPrimary onClick={fetchRespectPointsLog} disabled={respectLogLoading}>
+                {respectLogLoading ? '...' : 'Load'}
+              </BtnPrimary>
+            </div>
+            {respectLogData && (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {[
+                    ['Username', respectLogData.username ?? '—'],
+                    ['Current balance', Number(respectLogData.current_respect_balance ?? 0).toLocaleString()],
+                    ['Events (this load)', String(respectLogData.summary?.events_in_view ?? 0)],
+                    ['Respect sum (this load)', Number(respectLogData.summary?.total_amount_in_view ?? 0).toLocaleString()],
+                    ['Unique sources', String(respectLogData.summary?.unique_sources ?? 0)],
+                    ['Total rows in DB', String(respectLogData.summary?.total_events_in_db ?? 0)],
+                  ].map(([k, v]) => (
+                    <div key={k} className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                      <div className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider">{k}</div>
+                      <div className="text-[11px] font-heading font-bold text-primary truncate" title={v}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+                <div>
+                  <div className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider mb-1">By source</div>
+                  <div className="max-h-48 overflow-y-auto rounded border border-zinc-700/50">
+                    <table className="w-full text-[10px] font-heading">
+                      <thead className="bg-zinc-800/50 sticky top-0">
+                        <tr>
+                          <th className="text-left p-2 text-mutedForeground uppercase">Source</th>
+                          <th className="text-right p-2 text-mutedForeground uppercase">Events</th>
+                          <th className="text-right p-2 text-mutedForeground uppercase">Respect</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(respectLogData.by_source || []).map((row) => (
+                          <tr key={row.source} className="border-t border-zinc-700/30">
+                            <td className="p-2 text-foreground font-mono text-[9px] break-all">{row.source}</td>
+                            <td className="p-2 text-right">{Number(row.events || 0).toLocaleString()}</td>
+                            <td className="p-2 text-right text-primary font-bold">{Number(row.total_amount || 0).toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {(respectLogData.by_source || []).length === 0 && (
+                    <p className="text-[10px] text-mutedForeground font-heading py-2">No events in this window.</p>
+                  )}
+                </div>
+                <div>
+                  <div className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider mb-1">Recent events</div>
+                  <div className="max-h-64 overflow-y-auto rounded border border-zinc-700/50">
+                    <table className="w-full text-[10px] font-heading">
+                      <thead className="bg-zinc-800/50 sticky top-0">
+                        <tr>
+                          <th className="text-left p-2 text-mutedForeground uppercase">Time</th>
+                          <th className="text-left p-2 text-mutedForeground uppercase">Source</th>
+                          <th className="text-right p-2 text-mutedForeground uppercase">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(respectLogData.events || []).map((ev, idx) => (
+                          <tr key={`${ev.at}-${idx}`} className="border-t border-zinc-700/30">
+                            <td className="p-2 text-mutedForeground whitespace-nowrap">{ev.at ? new Date(ev.at).toLocaleString() : '—'}</td>
+                            <td className="p-2 text-foreground font-mono text-[9px] break-all">{ev.source ?? '—'}</td>
+                            <td className="p-2 text-right text-primary font-bold">{Number(ev.amount ?? 0).toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </>
+            )}
+            {!respectLogData && !respectLogLoading && (
+              <p className="text-[10px] text-mutedForeground font-heading">Load to see earned-respect entries for that user.</p>
+            )}
+          </div>
+        )}
+        <div className="admin-art-line text-primary mx-3" />
+      </div>
+      )}
+
       {/* All registered users (admin only) */}
       {isAdmin && (
       <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
@@ -4146,7 +4340,23 @@ export default function Admin() {
                     <Row label="Bullets" value={fmtNum(u.bullets)} />
                     <Row label="Health" value={fmtNum(u.health)} />
                     <Row label="Armour level" value={fmtNum(u.armour_level)} />
-                    <Row label="Respect points" value={fmtNum(u.respect_points)} />
+                    <Row
+                      label="Respect points"
+                      value={
+                        <span className="inline-flex items-center gap-2 flex-wrap">
+                          {fmtNum(u.respect_points)}
+                          {u.id ? (
+                            <button
+                              type="button"
+                              onClick={() => jumpToRespectPointsLog(u.id)}
+                              className="px-2 py-0.5 text-[10px] font-heading uppercase border border-primary/40 bg-primary/15 text-primary hover:bg-primary/25 rounded"
+                            >
+                              Respect log
+                            </button>
+                          ) : null}
+                        </span>
+                      }
+                    />
                     <Row label="Loot box pieces" value={fmtNum(u.loot_box_pieces)} />
                     <Row label="Swiss balance" value={fmtNum(u.swiss_balance)} />
                     <Row label="Swiss limit" value={fmtNum(u.swiss_limit)} />
