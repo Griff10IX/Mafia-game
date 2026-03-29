@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useLocation, Navigate } from 'react-router-dom';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark } from 'lucide-react';
 import api, { imageHostPublicUrl } from '../../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
@@ -109,7 +109,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Events Toggle', categoryId: 'admin-gameworld', collapseKey: 'events', keywords: ['events', 'toggle', 'enable', 'disable'] },
   { label: 'Beta Round Signup', categoryId: 'admin-gameworld', collapseKey: 'betaSignup', keywords: ['beta', 'signup', 'round', 'points', 'cash', 'testing'] },
   { label: 'Pre-Registered Accounts', categoryId: 'admin-gameworld', collapseKey: 'preregisterAccounts', keywords: ['pre-register', 'preregister', 'emails', 'launch list'] },
-  { label: 'Booze Run Rotation', categoryId: 'admin-gameworld', collapseKey: 'boozeRun', keywords: ['booze', 'run', 'rotation', 'prices'] },
+  { label: 'Booze Run Rotation', categoryId: 'admin-gameworld', collapseKey: 'boozeRun', keywords: ['booze', 'run', 'rotation', 'prices', 'jail', 'bust'] },
   { label: 'Slots Draw', categoryId: 'admin-gameworld', collapseKey: 'slotsDraw', keywords: ['slots', 'draw', 'lottery'] },
   { label: 'Crack the Safe jackpot', categoryId: 'admin-gameworld', collapseKey: 'crackSafeJackpot', keywords: ['crack', 'safe', 'jackpot', 'pot', 'lower'] },
   { label: 'State Heads', categoryId: 'admin-gameworld', collapseKey: 'stateHeads', keywords: ['state', 'heads', 'family', 'territory'] },
@@ -293,6 +293,10 @@ export default function Admin() {
   const [npcCount, setNpcCount] = useState(10);
   const [forceOnlineInfo, setForceOnlineInfo] = useState(null);
   const [boozeRotationSeconds, setBoozeRotationSeconds] = useState(null);
+  const [boozeJailChances, setBoozeJailChances] = useState(null);
+  const [boozeJailMinPct, setBoozeJailMinPct] = useState('');
+  const [boozeJailMaxPct, setBoozeJailMaxPct] = useState('');
+  const [boozeJailSaving, setBoozeJailSaving] = useState(false);
   const [crackSafeInfo, setCrackSafeInfo] = useState(null);
   const [crackSafeJackpotInput, setCrackSafeJackpotInput] = useState('');
   const [crackSafeJackpotLoading, setCrackSafeJackpotLoading] = useState(false);
@@ -646,6 +650,8 @@ export default function Admin() {
 
   const [economyOverview, setEconomyOverview] = useState(null);
   const [economyOverviewLoading, setEconomyOverviewLoading] = useState(false);
+  const [capitalBreakdown, setCapitalBreakdown] = useState(null);
+  const [capitalBreakdownLoading, setCapitalBreakdownLoading] = useState(false);
   const [playerActivity, setPlayerActivity] = useState(null);
   const [playerActivityLoading, setPlayerActivityLoading] = useState(false);
   const [compareUser1, setCompareUser1] = useState('');
@@ -703,6 +709,7 @@ export default function Admin() {
         fetchEventsStatus();
         fetchBetaSignupStatus();
         fetchBoozeRotation();
+        fetchBoozeJailChances();
         fetchAdminSettings();
         fetchModerators();
         fetchCfBotBlockStatus();
@@ -915,6 +922,57 @@ export default function Admin() {
       setBoozeRotationSeconds(res.data?.rotation_seconds ?? null);
     } catch {
       setBoozeRotationSeconds(null);
+    }
+  };
+
+  const fetchBoozeJailChances = async () => {
+    try {
+      const res = await api.get('/admin/booze-jail-chances');
+      const d = res.data;
+      setBoozeJailChances(d ?? null);
+      if (d) {
+        const fmt = (x) => (x != null ? (Number(x) * 100).toFixed(2).replace(/\.?0+$/, '') : '');
+        setBoozeJailMinPct(fmt(d.effective_jail_chance_min));
+        setBoozeJailMaxPct(fmt(d.effective_jail_chance_max));
+      }
+    } catch {
+      setBoozeJailChances(null);
+    }
+  };
+
+  const handleBoozeJailSave = async () => {
+    const min = parseFloat(String(boozeJailMinPct).replace(',', '.'));
+    const max = parseFloat(String(boozeJailMaxPct).replace(',', '.'));
+    if (Number.isNaN(min) || Number.isNaN(max)) {
+      toast.error('Enter min and max as percentages (e.g. 5 and 15)');
+      return;
+    }
+    if (min < 0 || max > 100 || min > max) {
+      toast.error('Percentages must be 0–100 and min ≤ max');
+      return;
+    }
+    setBoozeJailSaving(true);
+    try {
+      await api.post('/admin/booze-jail-chances', { jail_chance_min: min / 100, jail_chance_max: max / 100 });
+      toast.success('Booze jail chances updated');
+      await fetchBoozeJailChances();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to update jail chances');
+    } finally {
+      setBoozeJailSaving(false);
+    }
+  };
+
+  const handleBoozeJailReset = async () => {
+    setBoozeJailSaving(true);
+    try {
+      await api.post('/admin/booze-jail-chances', { reset: true });
+      toast.success('Booze jail chances reset to code defaults');
+      await fetchBoozeJailChances();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to reset');
+    } finally {
+      setBoozeJailSaving(false);
     }
   };
 
@@ -3538,6 +3596,15 @@ export default function Admin() {
     finally { setEconomyOverviewLoading(false); }
   };
 
+  const handleFetchCapitalBreakdown = async () => {
+    setCapitalBreakdownLoading(true);
+    try {
+      const res = await api.get('/admin/economy/capital-breakdown');
+      setCapitalBreakdown(res.data ?? null);
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed to load capital breakdown'); }
+    finally { setCapitalBreakdownLoading(false); }
+  };
+
   const handleFetchLoginPageVisitors = async () => {
     setLoginPageVisitorsLoading(true);
     try {
@@ -5332,7 +5399,13 @@ export default function Admin() {
             </span>
           }
           isCollapsed={collapsed.boozeRun}
-          onToggle={() => toggleSection('boozeRun')}
+          onToggle={() => {
+            toggleSection('boozeRun');
+            if (collapsed.boozeRun) {
+              fetchBoozeRotation();
+              fetchBoozeJailChances();
+            }
+          }}
         />
         {!collapsed.boozeRun && (
           <div className="p-3 space-y-2">
@@ -5340,6 +5413,42 @@ export default function Admin() {
             <div className="flex flex-wrap gap-2">
               <BtnPrimary onClick={handleBoozeRotation15s}>Set rotation to 15s</BtnPrimary>
               <BtnSecondary onClick={handleBoozeRotationReset}>Reset to 3h</BtnSecondary>
+            </div>
+            <div className="border-t border-zinc-700/40 pt-3 mt-3 space-y-2">
+              <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wide">Jail bust chance (buy &amp; sell)</div>
+              <p className="text-[10px] text-mutedForeground">
+                Each leg rolls a uniform probability between min and max. Defaults in code: {(boozeJailChances?.default_jail_chance_min != null ? (Number(boozeJailChances.default_jail_chance_min) * 100).toFixed(1) : '5')}%–{(boozeJailChances?.default_jail_chance_max != null ? (Number(boozeJailChances.default_jail_chance_max) * 100).toFixed(1) : '15')}%. Overrides are in-memory (like rotation); restart server clears them.
+              </p>
+              {boozeJailChances && (
+                <p className="text-[9px] text-mutedForeground font-heading">
+                  Effective now: {(Number(boozeJailChances.effective_jail_chance_min) * 100).toFixed(2)}% – {(Number(boozeJailChances.effective_jail_chance_max) * 100).toFixed(2)}% · Jail duration {boozeJailChances.jail_seconds}s · Top-3 profit leaders +{(Number(boozeJailChances.top_leader_extra_probability) * 100).toFixed(1)}% (cap {(Number(boozeJailChances.top_leader_probability_cap_after_extra) * 100).toFixed(0)}% after bonus)
+                </p>
+              )}
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="flex flex-col gap-0.5 text-[10px] font-heading">
+                  <span className="text-mutedForeground">Min %</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={boozeJailMinPct}
+                    onChange={(e) => setBoozeJailMinPct(e.target.value)}
+                    className="w-20 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                  />
+                </label>
+                <label className="flex flex-col gap-0.5 text-[10px] font-heading">
+                  <span className="text-mutedForeground">Max %</span>
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={boozeJailMaxPct}
+                    onChange={(e) => setBoozeJailMaxPct(e.target.value)}
+                    className="w-20 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                  />
+                </label>
+                <BtnPrimary onClick={handleBoozeJailSave} disabled={boozeJailSaving}>{boozeJailSaving ? 'Saving…' : 'Apply jail %'}</BtnPrimary>
+                <BtnSecondary onClick={handleBoozeJailReset} disabled={boozeJailSaving}>Reset to defaults</BtnSecondary>
+                <BtnSecondary type="button" onClick={fetchBoozeJailChances} disabled={boozeJailSaving}>Refresh</BtnSecondary>
+              </div>
             </div>
           </div>
         )}
@@ -7501,6 +7610,113 @@ export default function Admin() {
                           <span className="font-bold text-foreground">{i + 1}. {u.username}</span>
                           <span className="text-primary">{(u.points ?? 0).toLocaleString()} pts</span>
                         </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+        </div>
+
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Landmark}
+          title="Capital breakdown"
+          badge={capitalBreakdown?.totals ? <span className="text-[10px] font-heading text-mutedForeground">where cash sits</span> : null}
+          isCollapsed={collapsed.capitalBreakdown}
+          onToggle={() => { toggleSection('capitalBreakdown'); if (collapsed.capitalBreakdown && !capitalBreakdown) handleFetchCapitalBreakdown(); }}
+        />
+        {!collapsed.capitalBreakdown && (
+          <div className="p-3 space-y-2">
+            <p className="text-[10px] text-mutedForeground font-heading">
+              Same rules as public <strong className="text-foreground">Stats → Game capital</strong> for the three headline numbers; extra rows show bank balances, dead/NPC/staff wallets, families, and trade escrow.
+            </p>
+            <BtnPrimary onClick={handleFetchCapitalBreakdown} disabled={capitalBreakdownLoading}>{capitalBreakdownLoading ? 'Loading...' : 'Load breakdown'}</BtnPrimary>
+            {capitalBreakdown && (
+              <div className="space-y-3 text-[10px] font-heading">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                    <div className="text-mutedForeground uppercase">Stats total cash</div>
+                    <div className="font-bold text-foreground">${(capitalBreakdown.public_stats_alignment?.total_cash ?? 0).toLocaleString()}</div>
+                  </div>
+                  <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                    <div className="text-mutedForeground uppercase">Stats Swiss total</div>
+                    <div className="font-bold text-foreground">${(capitalBreakdown.public_stats_alignment?.swiss_total ?? 0).toLocaleString()}</div>
+                  </div>
+                  <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                    <div className="text-mutedForeground uppercase">Stats interest bank</div>
+                    <div className="font-bold text-foreground">${(capitalBreakdown.public_stats_alignment?.interest_bank_total ?? 0).toLocaleString()}</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="p-2 rounded bg-primary/10 border border-primary/25">
+                    <div className="text-mutedForeground uppercase">Alive players (cash+bank+Swiss)</div>
+                    <div className="font-bold text-primary">${(capitalBreakdown.totals?.alive_players_liquid_cash_bank_swiss ?? 0).toLocaleString()}</div>
+                  </div>
+                  <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                    <div className="text-mutedForeground uppercase">Rough sum (all buckets below)</div>
+                    <div className="font-bold text-foreground">${(capitalBreakdown.totals?.approximate_all_locations_summed ?? 0).toLocaleString()}</div>
+                    <div className="text-[9px] text-mutedForeground mt-0.5">Includes NPC/staff/dead/escrow; use rows to see double-counting vs wallets.</div>
+                  </div>
+                </div>
+                <div className="overflow-x-auto max-h-80">
+                  <table className="w-full text-[10px] font-heading">
+                    <thead>
+                      <tr>
+                        <th className="text-left p-1.5 text-mutedForeground">Location</th>
+                        <th className="text-right p-1.5 text-mutedForeground">Amount</th>
+                        <th className="text-left p-1.5 text-mutedForeground">Note</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(capitalBreakdown.buckets || []).map((b) => (
+                        <tr key={b.id} className="border-b border-zinc-700/30">
+                          <td className="py-1.5 pr-2 font-medium text-foreground">{b.label}</td>
+                          <td className="py-1.5 text-right whitespace-nowrap">${(b.amount ?? 0).toLocaleString()}</td>
+                          <td className="py-1.5 text-mutedForeground text-[9px]">{b.note || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {capitalBreakdown.top_combined_liquid?.length > 0 && (
+                  <div>
+                    <div className="text-[10px] font-heading text-mutedForeground uppercase mb-1">Top 15 by cash + bank + Swiss (alive, excl. staff)</div>
+                    <div className="overflow-x-auto max-h-48">
+                      <table className="w-full text-[9px] font-heading">
+                        <thead>
+                          <tr>
+                            <th className="text-left p-1 text-mutedForeground">User</th>
+                            <th className="text-right p-1 text-mutedForeground">Cash</th>
+                            <th className="text-right p-1 text-mutedForeground">Bank</th>
+                            <th className="text-right p-1 text-mutedForeground">Swiss</th>
+                            <th className="text-right p-1 text-mutedForeground">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {capitalBreakdown.top_combined_liquid.map((u, i) => (
+                            <tr key={u.username || i} className="border-b border-zinc-700/20">
+                              <td className="py-1 pr-1 font-medium">{u.username}</td>
+                              <td className="py-1 text-right">${(u.money ?? 0).toLocaleString()}</td>
+                              <td className="py-1 text-right">${(u.bank_balance ?? 0).toLocaleString()}</td>
+                              <td className="py-1 text-right">${(u.swiss_balance ?? 0).toLocaleString()}</td>
+                              <td className="py-1 text-right font-bold text-primary">${(u.liquid ?? 0).toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+                {capitalBreakdown.top_cash_on_hand?.length > 0 && (
+                  <div>
+                    <div className="text-[10px] font-heading text-mutedForeground uppercase mb-1">Top 20 cash on hand only</div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[9px]">
+                      {capitalBreakdown.top_cash_on_hand.map((u, i) => (
+                        <span key={u.username || i} className="text-foreground"><span className="font-bold">{u.username}</span> ${(u.money ?? 0).toLocaleString()}</span>
                       ))}
                     </div>
                   </div>

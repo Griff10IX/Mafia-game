@@ -6564,6 +6564,261 @@ def register(router):
             ],
         }
 
+    @router.get("/admin/economy/capital-breakdown")
+    async def admin_economy_capital_breakdown(current_user: dict = Depends(get_current_user)):
+        """
+        Where dollars sit: player wallets (by segment), bank balances, Swiss, interest-bank deposits,
+        family treasuries, trade escrow. Aligns with /stats/overview game_capital where noted. Admin only.
+        """
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        now = datetime.now(timezone.utc)
+        staff_filter = _staff_exclude_user_filter()
+        staff_ids = await srv._get_staff_user_ids()
+        real_user_match = {"is_npc": {"$ne": True}, **staff_filter}
+        alive_real_match = {"is_npc": {"$ne": True}, "is_dead": {"$ne": True}, **staff_filter}
+        dead_real_match = {"is_npc": {"$ne": True}, "is_dead": True, **staff_filter}
+        npc_match = {"is_npc": True}
+        staff_match = {"id": {"$in": staff_ids}} if staff_ids else {"id": "__no_staff__"}
+
+        async def _user_cash_sums(match: dict) -> dict:
+            rows = await db.users.aggregate(
+                [
+                    {"$match": match},
+                    {
+                        "$group": {
+                            "_id": None,
+                            "money": {"$sum": {"$ifNull": ["$money", 0]}},
+                            "bank_balance": {"$sum": {"$ifNull": ["$bank_balance", 0]}},
+                            "swiss_balance": {"$sum": {"$ifNull": ["$swiss_balance", 0]}},
+                            "users": {"$sum": 1},
+                        }
+                    },
+                ]
+            ).to_list(1)
+            r = rows[0] if rows else {}
+            return {
+                "money": int(r.get("money") or 0),
+                "bank_balance": int(r.get("bank_balance") or 0),
+                "swiss_balance": int(r.get("swiss_balance") or 0),
+                "user_count": int(r.get("users") or 0),
+            }
+
+        bank_dep_match = {"claimed_at": None}
+        if staff_ids:
+            bank_dep_match["user_id"] = {"$nin": staff_ids}
+        qt_match = {"status": "active"}
+        if staff_ids:
+            qt_match["user_id"] = {"$nin": staff_ids}
+
+        (
+            alive_sums,
+            dead_sums,
+            npc_sums,
+            staff_sums,
+            interest_rows,
+            family_rows,
+            qt_rows,
+            top_wallets,
+            top_liquid,
+        ) = await asyncio.gather(
+            _user_cash_sums(alive_real_match),
+            _user_cash_sums(dead_real_match),
+            _user_cash_sums(npc_match),
+            _user_cash_sums(staff_match),
+            db.bank_deposits.aggregate(
+                [
+                    {"$match": bank_dep_match},
+                    {
+                        "$group": {
+                            "_id": None,
+                            "principal": {"$sum": {"$ifNull": ["$principal", 0]}},
+                            "interest": {"$sum": {"$ifNull": ["$interest_amount", 0]}},
+                            "deposits": {"$sum": 1},
+                        }
+                    },
+                ]
+            ).to_list(1),
+            db.families.aggregate([{"$group": {"_id": None, "treasury": {"$sum": {"$ifNull": ["$treasury", 0]}}}}]).to_list(1),
+            db.trade_buy_offers.aggregate(
+                [{"$match": qt_match}, {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$offer", 0]}}, "offers": {"$sum": 1}}}]
+            ).to_list(1),
+            db.users.find(alive_real_match, {"_id": 0, "username": 1, "money": 1, "bank_balance": 1, "swiss_balance": 1})
+            .sort("money", -1)
+            .limit(20)
+            .to_list(20),
+            db.users.aggregate(
+                [
+                    {"$match": alive_real_match},
+                    {
+                        "$addFields": {
+                            "liquid": {
+                                "$add": [
+                                    {"$ifNull": ["$money", 0]},
+                                    {"$ifNull": ["$bank_balance", 0]},
+                                    {"$ifNull": ["$swiss_balance", 0]},
+                                ]
+                            }
+                        }
+                    },
+                    {"$sort": {"liquid": -1}},
+                    {"$limit": 15},
+                    {
+                        "$project": {
+                            "_id": 0,
+                            "username": 1,
+                            "money": 1,
+                            "bank_balance": 1,
+                            "swiss_balance": 1,
+                            "liquid": 1,
+                        }
+                    },
+                ]
+            ).to_list(15),
+        )
+
+        int_doc = interest_rows[0] if interest_rows else {}
+        interest_principal = int(int_doc.get("principal") or 0)
+        interest_accrued = int(int_doc.get("interest") or 0)
+        interest_total = interest_principal + interest_accrued
+        interest_deposit_count = int(int_doc.get("deposits") or 0)
+
+        fam_doc = family_rows[0] if family_rows else {}
+        family_treasury = int(fam_doc.get("treasury") or 0)
+
+        qt_doc = qt_rows[0] if qt_rows else {}
+        quicktrade_escrow = int(qt_doc.get("total") or 0)
+        quicktrade_offers = int(qt_doc.get("offers") or 0)
+
+        # Same definitions as GET /stats/overview game_capital
+        public_total_cash = alive_sums["money"]
+        swiss_rows = await db.users.aggregate(
+            [
+                {"$match": real_user_match},
+                {"$group": {"_id": None, "t": {"$sum": {"$ifNull": ["$swiss_balance", 0]}}}},
+            ]
+        ).to_list(1)
+        public_swiss_total = int((swiss_rows[0].get("t", 0) if swiss_rows else 0) or 0)
+
+        real_alive_bank = alive_sums["bank_balance"]
+        npc_total = npc_sums["money"] + npc_sums["bank_balance"] + npc_sums["swiss_balance"]
+        staff_total = staff_sums["money"] + staff_sums["bank_balance"] + staff_sums["swiss_balance"]
+
+        alive_liquid_player = alive_sums["money"] + alive_sums["bank_balance"] + alive_sums["swiss_balance"]
+        approximate_all_in_system = (
+            alive_liquid_player
+            + dead_sums["money"]
+            + dead_sums["bank_balance"]
+            + dead_sums["swiss_balance"]
+            + npc_total
+            + staff_total
+            + interest_total
+            + family_treasury
+            + quicktrade_escrow
+        )
+
+        buckets = [
+            {
+                "id": "wallet_alive_players",
+                "label": "Cash on hand (alive players, excl. staff/NPC)",
+                "amount": alive_sums["money"],
+                "note": "Matches public Stats → Game capital → Total cash.",
+            },
+            {
+                "id": "bank_alive_players",
+                "label": "Classic bank balance (same players)",
+                "amount": real_alive_bank,
+                "note": "users.bank_balance; not included in public Total cash line.",
+            },
+            {
+                "id": "swiss_all_real_players",
+                "label": "Swiss bank (all real players, excl. staff)",
+                "amount": public_swiss_total,
+                "note": "Matches public Stats → Swiss bank cash (includes dead players’ Swiss).",
+            },
+            {
+                "id": "wallet_dead_players",
+                "label": "Cash on hand (dead players, excl. staff)",
+                "amount": dead_sums["money"],
+                "note": "Stranded wallets.",
+            },
+            {
+                "id": "bank_dead_players",
+                "label": "Bank + Swiss (dead players)",
+                "amount": dead_sums["bank_balance"] + dead_sums["swiss_balance"],
+                "note": "",
+            },
+            {
+                "id": "npc_all",
+                "label": "NPC accounts (cash + bank + Swiss)",
+                "amount": npc_total,
+                "note": f"{npc_sums['user_count']} NPC rows.",
+            },
+            {
+                "id": "staff_all",
+                "label": "Staff accounts (admins/mods, cash + bank + Swiss)",
+                "amount": staff_total,
+                "note": f"{staff_sums['user_count']} staff users (excluded from public stats).",
+            },
+            {
+                "id": "interest_bank_unclaimed",
+                "label": "Interest bank (unclaimed deposits)",
+                "amount": interest_total,
+                "note": f"Principal ${interest_principal:,} + accrued ${interest_accrued:,} · {interest_deposit_count} deposits. Matches public Stats line.",
+            },
+            {
+                "id": "family_treasury",
+                "label": "Family treasuries",
+                "amount": family_treasury,
+                "note": "families.treasury sum.",
+            },
+            {
+                "id": "trade_buy_escrow",
+                "label": "Quick trade — active buy offers (escrow)",
+                "amount": quicktrade_escrow,
+                "note": f"{quicktrade_offers} offers. Cash locked out of wallets while active.",
+            },
+        ]
+
+        return {
+            "generated_at": now.isoformat(),
+            "public_stats_alignment": {
+                "total_cash": public_total_cash,
+                "swiss_total": public_swiss_total,
+                "interest_bank_total": interest_total,
+            },
+            "segments": {
+                "alive_players_ex_staff": alive_sums,
+                "dead_players_ex_staff": dead_sums,
+                "npc": npc_sums,
+                "staff": staff_sums,
+            },
+            "buckets": buckets,
+            "totals": {
+                "alive_players_liquid_cash_bank_swiss": alive_liquid_player,
+                "approximate_all_locations_summed": approximate_all_in_system,
+            },
+            "top_cash_on_hand": [
+                {
+                    "username": u.get("username") or "?",
+                    "money": int(u.get("money") or 0),
+                    "bank_balance": int(u.get("bank_balance") or 0),
+                    "swiss_balance": int(u.get("swiss_balance") or 0),
+                }
+                for u in (top_wallets or [])
+            ],
+            "top_combined_liquid": [
+                {
+                    "username": u.get("username") or "?",
+                    "money": int(u.get("money") or 0),
+                    "bank_balance": int(u.get("bank_balance") or 0),
+                    "swiss_balance": int(u.get("swiss_balance") or 0),
+                    "liquid": int(u.get("liquid") or 0),
+                }
+                for u in (top_liquid or [])
+            ],
+        }
+
     @router.get("/admin/players/activity-summary")
     async def admin_players_activity_summary(current_user: dict = Depends(get_current_user)):
         """What online players are doing: count per feature area (last 5 min)."""

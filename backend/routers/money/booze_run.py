@@ -15,6 +15,7 @@ from server import (
     STATES,
     _is_admin,
     log_activity,
+    _staff_exclude_user_filter,
 )
 
 
@@ -52,6 +53,12 @@ BOOZE_RUN_HISTORY_MAX = 10
 BOOZE_RUN_JAIL_CHANCE_MIN = 0.05
 BOOZE_RUN_JAIL_CHANCE_MAX = 0.15
 BOOZE_RUN_JAIL_SECONDS = 20
+# Top 3 non-staff users by lifetime booze_run_profit_total (same ordering as admin leaders): small extra bust chance.
+# Not exposed to clients; cached briefly to limit DB reads.
+BOOZE_TOP_PROFIT_LEADER_COUNT = 3
+BOOZE_TOP_PROFIT_LEADER_CACHE_SEC = 90.0
+BOOZE_TOP_LEADER_JAIL_BONUS = 0.035  # added to the rolled probability for that action (e.g. 10% -> 13.5%)
+BOOZE_TOP_LEADER_JAIL_CHANCE_CAP = 0.22  # ceiling after bonus
 # Multiplier on net profit for a completed run (buy city ≠ sell city); stats, cash, referrals, economy_events.
 BOOZE_RUN_PROFIT_MULT = 0.75
 
@@ -59,6 +66,13 @@ BOOZE_RUN_PROFIT_MULT = 0.75
 _config_cache: dict = {}
 _CONFIG_TTL_SEC = 10
 _CONFIG_MAX_ENTRIES = 5000
+
+_booze_top_profit_leader_cache_until: float = 0.0
+_booze_top_profit_leader_cache_ids: frozenset[str] = frozenset()
+
+# Admin overrides (None = use BOOZE_RUN_JAIL_CHANCE_MIN / MAX). In-memory like rotation override.
+_booze_jail_min_override: Optional[float] = None
+_booze_jail_max_override: Optional[float] = None
 
 
 def _invalidate_config_cache(user_id: str):
@@ -127,6 +141,17 @@ def _booze_prices_for_rotation():
     return out
 
 
+def _effective_jail_chance_bounds() -> tuple[float, float]:
+    """Current buy/sell bust probability range (uniform roll per leg)."""
+    lo = BOOZE_RUN_JAIL_CHANCE_MIN if _booze_jail_min_override is None else float(_booze_jail_min_override)
+    hi = BOOZE_RUN_JAIL_CHANCE_MAX if _booze_jail_max_override is None else float(_booze_jail_max_override)
+    lo = max(0.0, min(1.0, lo))
+    hi = max(0.0, min(1.0, hi))
+    if lo > hi:
+        lo, hi = hi, lo
+    return lo, hi
+
+
 def _booze_daily_estimate_rough(capacity: int, prices_map: dict, secs_per_leg: int) -> int:
     if capacity <= 0:
         return 0
@@ -145,7 +170,8 @@ def _booze_daily_estimate_rough(capacity: int, prices_map: dict, secs_per_leg: i
     profit_per_unit = max(best_ab, best_ba, 1)
     leg = max(1, int(secs_per_leg))
     secs_per_run = 2 * leg
-    jail_per_action = (BOOZE_RUN_JAIL_CHANCE_MIN + BOOZE_RUN_JAIL_CHANCE_MAX) / 2
+    j_lo, j_hi = _effective_jail_chance_bounds()
+    jail_per_action = (j_lo + j_hi) / 2
     jail_per_run = 1 - (1 - jail_per_action) ** 2
     jail_seconds = BOOZE_RUN_JAIL_SECONDS
     expected_secs_per_run = secs_per_run + jail_per_run * jail_seconds
@@ -168,6 +194,43 @@ def _booze_user_capacity(current_user: dict) -> int:
 
 def _booze_user_carrying_total(carrying: dict) -> int:
     return sum(int(v) for v in (carrying or {}).values())
+
+
+async def _booze_top_profit_leader_ids_cached() -> frozenset[str]:
+    """User ids ranked #1–#3 by booze_run_profit_total among real runners (excl. staff), for server-side tuning only."""
+    global _booze_top_profit_leader_cache_until, _booze_top_profit_leader_cache_ids
+    now = time.monotonic()
+    if now < _booze_top_profit_leader_cache_until and _booze_top_profit_leader_cache_ids:
+        return _booze_top_profit_leader_cache_ids
+    match = {
+        "is_npc": {"$ne": True},
+        "$or": [{"booze_runs_count": {"$gt": 0}}, {"booze_jail_count": {"$gt": 0}}],
+        **_staff_exclude_user_filter(),
+    }
+    cursor = (
+        db.users.find(match, {"_id": 0, "id": 1})
+        .sort("booze_run_profit_total", -1)
+        .limit(BOOZE_TOP_PROFIT_LEADER_COUNT)
+    )
+    rows = await cursor.to_list(BOOZE_TOP_PROFIT_LEADER_COUNT)
+    ids = frozenset((r.get("id") or "").strip() for r in rows if (r.get("id") or "").strip())
+    _booze_top_profit_leader_cache_ids = ids
+    _booze_top_profit_leader_cache_until = now + BOOZE_TOP_PROFIT_LEADER_CACHE_SEC
+    return ids
+
+
+async def _booze_roll_jail(user_id: str) -> bool:
+    """Single buy or sell leg: True = caught (jail)."""
+    lo, hi = _effective_jail_chance_bounds()
+    jail_chance = _rng.uniform(lo, hi)
+    uid = (user_id or "").strip()
+    if uid:
+        try:
+            if uid in await _booze_top_profit_leader_ids_cached():
+                jail_chance = min(BOOZE_TOP_LEADER_JAIL_CHANCE_CAP, jail_chance + BOOZE_TOP_LEADER_JAIL_BONUS)
+        except Exception:
+            pass
+    return _rng.random() < jail_chance
 
 
 def _booze_user_in_jail(user: dict) -> bool:
@@ -217,6 +280,14 @@ class BoozeSellRequest(BaseModel):
 
 class AdminBoozeRotationRequest(BaseModel):
     seconds: Optional[int] = None
+
+
+class AdminBoozeJailChanceRequest(BaseModel):
+    """Set overrides; omit a field to leave it unchanged. Use reset=true to clear both overrides."""
+
+    reset: bool = False
+    jail_chance_min: Optional[float] = None
+    jail_chance_max: Optional[float] = None
 
 
 # ----- Internal impls (for auto-rank) -----
@@ -334,8 +405,7 @@ async def _booze_sell_impl(user: dict, booze_id: str, amount: int) -> dict:
     have = int(carrying.get(booze_id, 0))
     if have < amount:
         raise HTTPException(status_code=400, detail=f"Only carrying {have} units")
-    jail_chance = _rng.uniform(BOOZE_RUN_JAIL_CHANCE_MIN, BOOZE_RUN_JAIL_CHANCE_MAX)
-    if _rng.random() < jail_chance:
+    if await _booze_roll_jail(user.get("id", "")):
         jail_until = datetime.now(timezone.utc) + timedelta(seconds=BOOZE_RUN_JAIL_SECONDS)
         inc_loss, set_loss, loss_basis = _booze_confiscation_profit_updates(user)
         await db.users.update_one(
@@ -608,6 +678,60 @@ async def admin_set_booze_rotation(request: AdminBoozeRotationRequest, current_u
     return {"message": f"Booze rotation set to {sec} seconds", "rotation_seconds": sec}
 
 
+async def admin_get_booze_jail_chances(current_user: dict = Depends(get_current_user)):
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    lo, hi = _effective_jail_chance_bounds()
+    return {
+        "default_jail_chance_min": BOOZE_RUN_JAIL_CHANCE_MIN,
+        "default_jail_chance_max": BOOZE_RUN_JAIL_CHANCE_MAX,
+        "effective_jail_chance_min": lo,
+        "effective_jail_chance_max": hi,
+        "override_jail_chance_min": _booze_jail_min_override,
+        "override_jail_chance_max": _booze_jail_max_override,
+        "jail_seconds": BOOZE_RUN_JAIL_SECONDS,
+        "top_leader_extra_probability": BOOZE_TOP_LEADER_JAIL_BONUS,
+        "top_leader_probability_cap_after_extra": BOOZE_TOP_LEADER_JAIL_CHANCE_CAP,
+    }
+
+
+async def admin_set_booze_jail_chances(request: AdminBoozeJailChanceRequest, current_user: dict = Depends(get_current_user)):
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    global _booze_jail_min_override, _booze_jail_max_override
+    if request.reset:
+        _booze_jail_min_override = None
+        _booze_jail_max_override = None
+        lo, hi = _effective_jail_chance_bounds()
+        return {
+            "message": "Booze jail chance overrides cleared (using code defaults).",
+            "effective_jail_chance_min": lo,
+            "effective_jail_chance_max": hi,
+            "override_jail_chance_min": None,
+            "override_jail_chance_max": None,
+        }
+    if request.jail_chance_min is not None:
+        v = float(request.jail_chance_min)
+        if v < 0 or v > 1:
+            raise HTTPException(status_code=400, detail="jail_chance_min must be between 0 and 1")
+        _booze_jail_min_override = v
+    if request.jail_chance_max is not None:
+        v = float(request.jail_chance_max)
+        if v < 0 or v > 1:
+            raise HTTPException(status_code=400, detail="jail_chance_max must be between 0 and 1")
+        _booze_jail_max_override = v
+    lo, hi = _effective_jail_chance_bounds()
+    if lo > hi:
+        raise HTTPException(status_code=400, detail="jail_chance_min must be <= jail_chance_max")
+    return {
+        "message": "Booze jail chances updated.",
+        "effective_jail_chance_min": lo,
+        "effective_jail_chance_max": hi,
+        "override_jail_chance_min": _booze_jail_min_override,
+        "override_jail_chance_max": _booze_jail_max_override,
+    }
+
+
 def register(router):
     router.add_api_route("/booze-run/config", booze_run_config, methods=["GET"])
     router.add_api_route("/booze-run/buy", booze_run_buy, methods=["POST"])
@@ -615,3 +739,5 @@ def register(router):
     # buy-booze-capacity route is registered in store.py (uses respect-first logic)
     router.add_api_route("/admin/booze-rotation", admin_get_booze_rotation, methods=["GET"])
     router.add_api_route("/admin/booze-rotation", admin_set_booze_rotation, methods=["POST"])
+    router.add_api_route("/admin/booze-jail-chances", admin_get_booze_jail_chances, methods=["GET"])
+    router.add_api_route("/admin/booze-jail-chances", admin_set_booze_jail_chances, methods=["POST"])
