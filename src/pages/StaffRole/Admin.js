@@ -503,6 +503,8 @@ export default function Admin() {
   const [ipBanUsername, setIpBanUsername] = useState('');
   const [ipBanReason, setIpBanReason] = useState('');
   const [ipBanHours, setIpBanHours] = useState('');
+  const [ipUnbanUsername, setIpUnbanUsername] = useState('');
+  const [accountBans, setAccountBans] = useState([]);
   const [cheatDetectionConfig, setCheatDetectionConfig] = useState(null);
   const [cheatDetectionConfigLoading, setCheatDetectionConfigLoading] = useState(false);
 
@@ -2359,6 +2361,144 @@ export default function Admin() {
     }
   };
 
+  const fetchAccountBans = async () => {
+    setIpBansLoading(true);
+    try {
+      const res = await api.get('/admin/security/bans');
+      setAccountBans(res.data?.bans || []);
+      toast.success('Account bans loaded');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load account bans');
+      setAccountBans([]);
+    } finally {
+      setIpBansLoading(false);
+    }
+  };
+
+  const fetchAllBansLists = async () => {
+    setIpBansLoading(true);
+    try {
+      const [ipRes, accRes] = await Promise.all([
+        api.get('/admin/security/ip-bans'),
+        api.get('/admin/security/bans'),
+      ]);
+      setIpBans(ipRes.data?.ip_bans || []);
+      setAccountBans(accRes.data?.bans || []);
+      toast.success('IP and account bans loaded');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load bans');
+    } finally {
+      setIpBansLoading(false);
+    }
+  };
+
+  const resolveUsernameForBanActions = async (raw) => {
+    const q = (raw || '').trim();
+    if (!q) return { error: 'Enter a username' };
+    try {
+      const res = await api.get('/admin/users/search', { params: { q, limit: 40 } });
+      const users = res.data?.users || [];
+      const lower = q.toLowerCase();
+      const exact = users.find((u) => (u.username || '').toLowerCase() === lower);
+      if (exact) return { user: exact };
+      if (users.length === 1) return { user: users[0] };
+      if (users.length === 0) return { error: 'No user found for that search' };
+      return { error: 'Several users match — type the exact username' };
+    } catch (e) {
+      return { error: e.response?.data?.detail || 'User lookup failed' };
+    }
+  };
+
+  const handleUnbanAccountByUsername = async () => {
+    const resolved = await resolveUsernameForBanActions(ipUnbanUsername);
+    if (resolved.error) {
+      toast.error(resolved.error);
+      return;
+    }
+    const { id: userId, username: un } = resolved.user;
+    setIpBansLoading(true);
+    try {
+      const res = await api.post('/admin/security/unban', { user_id: userId });
+      toast.success(res.data?.message || `Account unbanned: ${un}`);
+      fetchAccountBans();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to unban account');
+    } finally {
+      setIpBansLoading(false);
+    }
+  };
+
+  const handleUnbanAccountFromList = async (userId, usernameLabel) => {
+    setIpBansLoading(true);
+    try {
+      const res = await api.post('/admin/security/unban', { user_id: userId });
+      toast.success(res.data?.message || `Unbanned ${usernameLabel || userId}`);
+      fetchAccountBans();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to unban account');
+    } finally {
+      setIpBansLoading(false);
+    }
+  };
+
+  const handleRestoreLoginFull = async () => {
+    const resolved = await resolveUsernameForBanActions(ipUnbanUsername);
+    if (resolved.error) {
+      toast.error(resolved.error);
+      return;
+    }
+    const { id: userId, username: un } = resolved.user;
+    const enc = encodeURIComponent(un);
+    if (!window.confirm(`Restore login for ${un}? This will unban the account, clear linked IP bans, and clear login lockout for this username.`)) return;
+    setIpBansLoading(true);
+    try {
+      const skip404 = (e, fragment) => {
+        const d = String(e.response?.data?.detail || '');
+        return e.response?.status === 404 && d.includes(fragment);
+      };
+      try {
+        await api.post('/admin/security/unban', { user_id: userId });
+      } catch (e) {
+        if (!skip404(e, 'No active ban')) throw e;
+      }
+      try {
+        await api.post('/admin/security/unban-ip', { username: un });
+      } catch (e) {
+        if (!skip404(e, 'No active IP ban')) throw e;
+      }
+      try {
+        await api.post(`/admin/clear-login-lockout?target_username=${enc}`);
+      } catch (e) {
+        /* lockout may already be clear */
+      }
+      toast.success(`Login restored for ${un} (account, IP bans, lockout)`);
+      setIpUnbanUsername('');
+      await fetchAllBansLists();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Restore login failed');
+    } finally {
+      setIpBansLoading(false);
+    }
+  };
+
+  const handleClearLoginLockoutOnly = async () => {
+    const resolved = await resolveUsernameForBanActions(ipUnbanUsername);
+    if (resolved.error) {
+      toast.error(resolved.error);
+      return;
+    }
+    const { username: un } = resolved.user;
+    setIpBansLoading(true);
+    try {
+      const res = await api.post(`/admin/clear-login-lockout?target_username=${encodeURIComponent(un)}`);
+      toast.success(res.data?.message || `Login lockout cleared for ${un}`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to clear lockout');
+    } finally {
+      setIpBansLoading(false);
+    }
+  };
+
   const handleBanIp = async () => {
     const raw = (ipBanUsername || '').trim();
     const reason = (ipBanReason || '').trim() || 'Banned by admin';
@@ -2400,6 +2540,25 @@ export default function Admin() {
       fetchIpBans();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to unban IP');
+    }
+  };
+
+  const handleUnbanAllIpsForUser = async () => {
+    const u = (ipUnbanUsername || '').trim();
+    if (!u) {
+      toast.error('Enter a username');
+      return;
+    }
+    setIpBansLoading(true);
+    try {
+      const res = await api.post('/admin/security/unban-ip', { username: u });
+      toast.success(res.data?.message || `IP bans cleared for ${u}`);
+      setIpUnbanUsername('');
+      fetchIpBans();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to unban IPs for user');
+    } finally {
+      setIpBansLoading(false);
     }
   };
 
@@ -7615,10 +7774,46 @@ export default function Admin() {
               )}
             </div>
 
-            {/* IP Bans */}
+            {/* Account & IP bans */}
             <div className="mt-3 pt-3 border-t border-zinc-700/50">
-              <div className="text-[10px] font-heading text-primary uppercase tracking-wider mb-2">IP Bans</div>
-              <p className="text-[10px] text-mutedForeground mb-2">Banned IPs cannot access the server (login, API, etc.). Enter a username to ban every IP on record for that account (registration, login history, last request, active sessions). Use cheat detection &quot;Ban IP&quot; to block a single address.</p>
+              <div className="text-[10px] font-heading text-primary uppercase tracking-wider mb-2">Bans &amp; login restore</div>
+              <p className="text-[10px] text-mutedForeground mb-2">
+                Account bans block login after password succeeds. IP bans block the whole API for that address. Use <span className="text-foreground font-heading">Restore login (full)</span> to clear account ban, linked IP bans, and login lockout in one step.
+              </p>
+
+              <div className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1">Load lists</div>
+              <div className="flex flex-wrap items-center gap-2 mb-3">
+                <BtnSecondary onClick={fetchAccountBans} disabled={ipBansLoading}>{ipBansLoading ? '...' : 'Load account bans'}</BtnSecondary>
+                <BtnSecondary onClick={fetchIpBans} disabled={ipBansLoading}>{ipBansLoading ? '...' : 'Load IP bans'}</BtnSecondary>
+                <BtnSecondary onClick={fetchAllBansLists} disabled={ipBansLoading}>{ipBansLoading ? '...' : 'Load both'}</BtnSecondary>
+                <BtnSecondary onClick={handleTestIpBan} disabled={ipBansLoading} title="Bans your IP for 30s to test middleware">Test IP ban (30s)</BtnSecondary>
+              </div>
+
+              {accountBans.length > 0 && (
+                <div className="mb-3">
+                  <div className="text-[9px] font-heading text-amber-400/90 uppercase tracking-wider mb-1">Active account bans</div>
+                  <div className="max-h-32 overflow-y-auto space-y-1 rounded bg-zinc-900/50 border border-zinc-700/50 p-2">
+                    {accountBans.map((b, i) => (
+                      <div key={b.id || `${b.user_id}-${i}`} className="flex items-center justify-between gap-2 text-[10px] py-1.5 px-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                        <div className="min-w-0">
+                          <span className="font-heading font-bold text-foreground">{b.username || '?'}</span>
+                          <span className="ml-2 text-mutedForeground truncate">{b.reason || '—'}</span>
+                          {b.expires_at && <span className="ml-2 text-amber-400/80">expires {String(b.expires_at).slice(0, 10)}</span>}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleUnbanAccountFromList(b.user_id, b.username)}
+                          className="shrink-0 bg-zinc-700/50 hover:bg-zinc-600/50 text-foreground rounded px-2 py-1 text-[9px] font-bold border border-zinc-600/50"
+                        >
+                          Unban account
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1">Ban by username / IP</div>
               <div className="flex flex-wrap items-center gap-2 mb-2">
                 <input
                   type="text"
@@ -7643,21 +7838,39 @@ export default function Admin() {
                   className="w-24 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none"
                 />
                 <BtnPrimary onClick={handleBanIp} disabled={ipBansLoading}>Ban user IPs</BtnPrimary>
-                <BtnSecondary onClick={fetchIpBans} disabled={ipBansLoading}>{ipBansLoading ? '...' : 'Load list'}</BtnSecondary>
               </div>
+
+              <div className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1">Actions by username</div>
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <input
+                  type="text"
+                  value={ipUnbanUsername}
+                  onChange={(e) => setIpUnbanUsername(e.target.value)}
+                  placeholder="Target username"
+                  className="w-44 min-w-[10rem] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                <BtnSecondary onClick={handleUnbanAllIpsForUser} disabled={ipBansLoading}>Clear IP bans</BtnSecondary>
+                <BtnSecondary onClick={handleUnbanAccountByUsername} disabled={ipBansLoading}>Unban account</BtnSecondary>
+                <BtnPrimary onClick={handleRestoreLoginFull} disabled={ipBansLoading}>Restore login (full)</BtnPrimary>
+                <BtnSecondary onClick={handleClearLoginLockoutOnly} disabled={ipBansLoading}>Clear login lockout</BtnSecondary>
+              </div>
+
               {ipBans.length > 0 && (
-                <div className="max-h-40 overflow-y-auto space-y-1 rounded bg-zinc-900/50 border border-zinc-700/50 p-2">
-                  {ipBans.map((b, i) => (
-                    <div key={i} className="flex items-center justify-between gap-2 text-[10px] py-1.5 px-2 rounded bg-zinc-800/50 border border-zinc-700/30">
-                      <div className="min-w-0">
-                        <span className="font-mono font-bold text-foreground">{b.ip}</span>
-                        {b.source_username && <span className="ml-2 text-[9px] text-amber-400/90 font-heading">via {b.source_username}</span>}
-                        {b.reason && <span className="ml-2 text-mutedForeground truncate">{b.reason}</span>}
-                        {b.expires_at && <span className="ml-2 text-amber-400/80">expires {b.expires_at.slice(0, 10)}</span>}
+                <div>
+                  <div className="text-[9px] font-heading text-red-400/90 uppercase tracking-wider mb-1">Active IP bans</div>
+                  <div className="max-h-40 overflow-y-auto space-y-1 rounded bg-zinc-900/50 border border-zinc-700/50 p-2">
+                    {ipBans.map((b, i) => (
+                      <div key={i} className="flex items-center justify-between gap-2 text-[10px] py-1.5 px-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                        <div className="min-w-0">
+                          <span className="font-mono font-bold text-foreground">{b.ip}</span>
+                          {b.source_username && <span className="ml-2 text-[9px] text-amber-400/90 font-heading">via {b.source_username}</span>}
+                          {b.reason && <span className="ml-2 text-mutedForeground truncate">{b.reason}</span>}
+                          {b.expires_at && <span className="ml-2 text-amber-400/80">expires {b.expires_at.slice(0, 10)}</span>}
+                        </div>
+                        <button type="button" onClick={() => handleUnbanIp(b.ip)} className="shrink-0 bg-zinc-700/50 hover:bg-zinc-600/50 text-foreground rounded px-2 py-1 text-[9px] font-bold border border-zinc-600/50">Unban IP</button>
                       </div>
-                      <button type="button" onClick={() => handleUnbanIp(b.ip)} className="shrink-0 bg-zinc-700/50 hover:bg-zinc-600/50 text-foreground rounded px-2 py-1 text-[9px] font-bold border border-zinc-600/50">Unban</button>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
