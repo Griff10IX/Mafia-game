@@ -1514,7 +1514,11 @@ export default function Attack() {
     setKillBulletsLoading(true);
     const timer = setTimeout(async () => {
       try {
-        const res = await api.post('/attack/bullets/calc', { target_username: trimmed });
+        const res = await api.post('/attack/bullets/calc', { target_username: trimmed, soft_fail: true });
+        if (res.data?.calc_ok === false) {
+          setKillBulletsResult(null);
+          return;
+        }
         const result = {
           username: res.data.target_username ?? trimmed,
           bullets: res.data.bullets_required ?? 0,

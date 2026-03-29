@@ -381,6 +381,8 @@ class AttackExecuteResponse(BaseModel):
 
 class BulletCalcRequest(BaseModel):
     target_username: str
+    # When true (live preview while typing), return 200 + calc_ok:false instead of 4xx so DevTools stays clean.
+    soft_fail: bool = False
 
 # ---------------------------------------------------------------------------
 # Pure helpers (no db)
@@ -783,18 +785,25 @@ async def travel_to_target(request: AttackIdRequest, current_user: dict = Depend
     return {"message": f"Traveled to {location_state}"}
 
 async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(get_current_user_verified)):
+    soft = bool(request.soft_fail)
+
+    def _soft_err(detail: str, http_status: int):
+        if soft:
+            return {"calc_ok": False, "detail": detail}
+        raise HTTPException(status_code=http_status, detail=detail)
+
     user_filter = _find_user_by_username_case_insensitive(request.target_username)
     if not user_filter:
-        raise HTTPException(status_code=400, detail="Target username required")
+        return _soft_err("Target username required", 400)
     target = await db.users.find_one(user_filter, {"_id": 0})
     if not target:
-        raise HTTPException(status_code=404, detail="Target user not found")
+        return _soft_err("Target user not found", 404)
     if await soft_launch_blocks_pvp_kill_on_target(db, target):
-        raise HTTPException(status_code=403, detail=PVP_KILLS_DISABLED_DETAIL)
+        return _soft_err(PVP_KILLS_DISABLED_DETAIL, 403)
     if not target.get("is_npc"):
         await apply_passive_health_regen(target["id"], target)
     if target.get("is_dead"):
-        raise HTTPException(status_code=400, detail="Target is dead")
+        return _soft_err("Target is dead", 400)
     attacker_rank_id, attacker_rank_name = get_rank_info(current_user.get("rank_points", 0))
     target_rank_id, target_rank_name = get_rank_info(target.get("rank_points", 0))
     target_armour = int(target.get("armour_level", 0) or 0)
@@ -832,6 +841,7 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
     if completed_it_discount:
         bullets_required = max(1, int(bullets_required * 0.35))
     return {
+        "calc_ok": True,
         "target_username": target["username"],
         "target_is_npc": bool(target.get("is_npc")),
         "target_rank": target_rank_id,
