@@ -6,12 +6,13 @@ from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel
 from typing import Optional
 
-from server import db, get_current_user, log_activity, log_minigame_payout, log_respect_earned, _get_staff_user_ids, _is_admin
+from server import db, get_current_user, log_activity, log_minigame_payout, log_respect_earned, _get_staff_user_ids
 from routers.minigames.minigame_leaderboard import log_minigame_play
 from utils.minigame_run_session import (
     as_utc_started,
     claim_minigame_run_session,
-    enforce_numeric_score_for_claimed_session,
+    get_plays_left,
+    max_numeric_score_for_session,
     release_minigame_run,
     start_minigame_run,
     utc_rate_limit_window,
@@ -56,11 +57,11 @@ def _max_rate_for_mode(speed: str, difficulty: str) -> float:
     spawn_ticks = max(40, round(_BASE_SPAWN_TICKS / sm))
     spawn_sec = spawn_ticks * _TICK_MS / 1000.0
     real_rate = 1.0 / spawn_sec
-    return real_rate * 1.8  # 80% buffer over theoretical max
+    return real_rate * 1.35  # modest buffer; score is still capped by session timing
 
 # Fallback if mode lookup fails
 MAX_GATES_PER_SECOND = 1.5
-SCORE_TIME_BUFFER = 5
+SCORE_TIME_BUFFER = 4
 MIN_PLAY_SECONDS = 3
 
 GAUNTLET_GAME_SLUG = "gauntlet"
@@ -155,10 +156,10 @@ def register(router):
 
     @router.post("/gauntlet/claim")
     async def gauntlet_claim(payload: GauntletClaimRequest, current_user: dict = Depends(get_current_user)):
-        score = int(payload.score or 0)
-        if score < 0:
+        raw_score = int(payload.score or 0)
+        if raw_score < 0:
             raise HTTPException(status_code=400, detail="Invalid score.")
-        if score > MAX_SCORE_SANITY:
+        if raw_score > MAX_SCORE_SANITY:
             raise HTTPException(status_code=400, detail="Score outside allowed range.")
 
         now_dt = datetime.now(timezone.utc).replace(microsecond=0)
@@ -168,43 +169,38 @@ def register(router):
         reset_iso = reset_dt.isoformat().replace("+00:00", "Z")
         uid = current_user["id"]
 
-        skip_session = _is_admin(current_user)
         session_id = (payload.session_id or "").strip()
-        sess = None
-        if not skip_session:
-            if not session_id:
-                raise HTTPException(status_code=400, detail="Start a run before claiming (missing session).")
-            sess = await claim_minigame_run_session(
-                db, user_id=uid, game=GAUNTLET_GAME_SLUG, session_id=session_id, now_dt=now_dt
-            )
+        if not session_id:
+            raise HTTPException(status_code=400, detail="Start a run before claiming (missing session).")
+        sess = await claim_minigame_run_session(
+            db, user_id=uid, game=GAUNTLET_GAME_SLUG, session_id=session_id, now_dt=now_dt
+        )
 
-            started_at = as_utc_started(sess.get("started_at"))
-            elapsed = max(0.0, (now_dt - started_at).total_seconds())
-            if elapsed < MIN_PLAY_SECONDS:
-                await release_minigame_run(db, session_id)
-                raise HTTPException(status_code=400, detail="Game too short.")
+        started_at = as_utc_started(sess.get("started_at"))
+        elapsed = max(0.0, (now_dt - started_at).total_seconds())
+        if elapsed < MIN_PLAY_SECONDS:
+            await release_minigame_run(db, session_id)
+            raise HTTPException(status_code=400, detail="Game too short.")
 
-            sess_meta = sess.get("meta") or {}
-            sess_speed = sess_meta.get("speed", "normal")
-            sess_diff = sess_meta.get("difficulty", "normal")
-            claim_speed = (payload.speed or "normal").strip()
-            claim_diff = (payload.difficulty or "normal").strip()
-            if claim_speed != sess_speed or claim_diff != sess_diff:
-                await release_minigame_run(db, session_id)
-                raise HTTPException(status_code=400, detail="Speed/difficulty mismatch with session.")
+        sess_meta = sess.get("meta") or {}
+        sess_speed = sess_meta.get("speed", "normal")
+        sess_diff = sess_meta.get("difficulty", "normal")
+        claim_speed = (payload.speed or "normal").strip()
+        claim_diff = (payload.difficulty or "normal").strip()
+        if claim_speed != sess_speed or claim_diff != sess_diff:
+            await release_minigame_run(db, session_id)
+            raise HTTPException(status_code=400, detail="Speed/difficulty mismatch with session.")
 
-            rate = _max_rate_for_mode(sess_speed, sess_diff)
-
-            await enforce_numeric_score_for_claimed_session(
-                db,
-                session_id=session_id,
-                sess=sess,
-                now_dt=now_dt,
-                score=score,
-                max_score_cap=MAX_SCORE_SANITY,
-                rate_per_second=rate,
-                buffer=SCORE_TIME_BUFFER,
-            )
+        rate = _max_rate_for_mode(sess_speed, sess_diff)
+        max_allowed = max_numeric_score_for_session(
+            sess,
+            now_dt=now_dt,
+            max_score_cap=MAX_SCORE_SANITY,
+            rate_per_second=rate,
+            buffer=SCORE_TIME_BUFFER,
+        )
+        # Authoritative score: client-reported value cannot exceed physics bound for this session duration.
+        score = min(raw_score, max_allowed)
 
         result = await db.user_meta.update_one(
             {"user_id": uid, "gauntlet_hour_start": hour_start_iso, "gauntlet_hour_count": {"$lt": MAX_PLAYS_PER_HOUR}},
@@ -218,7 +214,7 @@ def register(router):
             )
             if result.modified_count == 0 and result.upserted_id is None:
                 remaining = max(0, int((reset_dt - now_dt).total_seconds()))
-                if not skip_session and session_id:
+                if session_id:
                     await release_minigame_run(db, session_id)
                 raise HTTPException(
                     status_code=429,
@@ -231,6 +227,16 @@ def register(router):
         reward = _get_reward(score)
         cash = int(reward["cash"] or 0)
         respect = int(reward["respect"] or 0)
+
+        async def _bump_best() -> int:
+            await db.user_meta.update_one(
+                {"user_id": uid},
+                {"$max": {"gauntlet_best_score": score}, "$setOnInsert": {"user_id": uid}},
+                upsert=True,
+            )
+            doc = await db.user_meta.find_one({"user_id": uid}, {"_id": 0, "gauntlet_best_score": 1})
+            return int((doc or {}).get("gauntlet_best_score") or 0)
+
         if cash <= 0 and respect <= 0:
             try:
                 await db.gauntlet_scores.insert_one(
@@ -242,7 +248,16 @@ def register(router):
                 await log_minigame_play(current_user["id"], current_user.get("username"), "gauntlet", score)
             except Exception:
                 pass
-            return {"ok": True, "score": score, "plays_left": plays_left, "resets_at": reset_iso}
+            best_out = await _bump_best()
+            return {
+                "ok": True,
+                "score": score,
+                "cash": 0,
+                "respect": 0,
+                "best_score": best_out,
+                "plays_left": plays_left,
+                "resets_at": reset_iso,
+            }
 
         updates = {}
         if cash > 0:
@@ -268,6 +283,7 @@ def register(router):
             {"$set": {"gauntlet_last_claim_at": now_iso, "gauntlet_last_score": score, "gauntlet_last_cash": cash, "gauntlet_last_respect": respect}},
             upsert=True,
         )
+        best_out = await _bump_best()
         payout_rewards = {"money": cash, "respect_points": respect}
         try:
             await log_activity(current_user["id"], current_user.get("username", "?"), "minigame_gauntlet", {"score": score, "cash": cash, "respect": respect})
@@ -281,6 +297,9 @@ def register(router):
         return {
             "ok": True,
             "score": score,
+            "cash": cash,
+            "respect": respect,
+            "best_score": best_out,
             "plays_left": plays_left,
             "resets_at": reset_iso,
         }

@@ -907,6 +907,16 @@ export default function Gauntlet() {
     return () => { mounted = false; };
   }, []);
 
+  useEffect(() => {
+    let mounted = true;
+    api.get("/gauntlet/me").then(r => {
+      if (!mounted) return;
+      const b = Number(r.data?.best_score ?? 0);
+      if (Number.isFinite(b) && b >= 0) setBestScore(b);
+    }).catch(() => {});
+    return () => { mounted = false; };
+  }, []);
+
   const loadLeaderboard = useCallback(async (period) => {
     try {
       const r = await api.get("/gauntlet/leaderboard", { params: { period: period || lbPeriod || "weekly" } });
@@ -943,9 +953,12 @@ export default function Gauntlet() {
         difficulty: difficultyId, character: characterId,
       });
       if (gauntletSessionIdRef.current === runSessionId) gauntletSessionIdRef.current = null;
-      const r = getReward(Number(finalScore || 0));
-      const cash = r.cash;
-      const respect = r.respect;
+      const authScore = Number(res.data?.score ?? finalScore ?? 0);
+      const cash = res.data?.cash != null ? Number(res.data.cash) : getReward(authScore).cash;
+      const respect = res.data?.respect != null ? Number(res.data.respect) : getReward(authScore).respect;
+      if (res.data?.best_score != null && Number.isFinite(Number(res.data.best_score))) {
+        setBestScore(Math.max(0, Math.floor(Number(res.data.best_score))));
+      }
       void refreshUser();
       if (res.data?.plays_left != null) applyPlaysLeftPayload(res.data);
       else refreshPlays();
@@ -1091,7 +1104,6 @@ export default function Gauntlet() {
           if (hitDeath) {
             dead = true;
             spawnParticles(birdX, birdYRef.current, "#ff4444");
-            setBestScore(b => Math.max(b, newScore));
             setGameFrame(prev => ({ ...prev, score: newScore }));
             setGameState("dead");
             claimReward(newScore);

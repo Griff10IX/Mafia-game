@@ -335,6 +335,7 @@ _SPAM_ACTIVITY_RULES_RAW: List[Tuple[str, Optional[str], str]] = [
     ("/api/bank/overview", "GET", "Bank overview"),
     ("/api/bank/meta", "GET", "Bank meta"),
     ("/api/gauntlet/leaderboard", "GET", "Flappy Gangster leaderboard"),
+    ("/api/gauntlet/me", "GET", "Flappy Gangster profile"),
     ("/api/gauntlet/start", "POST", "Flappy Gangster start run"),
     ("/api/gauntlet/claim", "POST", "Flappy Gangster claim"),
     ("/api/minigames/run-session/start", "POST", "Mini game run session start"),
