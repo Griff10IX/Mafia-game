@@ -552,6 +552,7 @@ async def add_comment(
             category="forum_topic_reply",
             topic_id=topic_id,
             topic_title=topic.get("title"),
+            actor_username=author_username,
         )
         notified_ids.add(topic_author_id)
     if reply_to_author_id and reply_to_author_id != current_user["id"] and reply_to_author_id not in notified_ids:
@@ -564,6 +565,7 @@ async def add_comment(
             topic_id=topic_id,
             topic_title=topic.get("title"),
             comment_id=comment_id,
+            actor_username=author_username,
         )
         notified_ids.add(reply_to_author_id)
     mention_names = list(dict.fromkeys(_extract_mention_usernames(content)))
@@ -587,6 +589,7 @@ async def add_comment(
                             topic_id=topic_id,
                             topic_title=topic.get("title"),
                             comment_id=comment_id,
+                            actor_username=author_username,
                         )
                         notified_ids.add(uid)
 

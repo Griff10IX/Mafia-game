@@ -100,6 +100,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Kill Player', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['kill', 'death', 'player'] },
   { label: 'Revive Player', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['revive', 'resurrect', 'alive'] },
   { label: 'User Details', categoryId: 'admin-players', collapseKey: 'userDetails', keywords: ['user', 'details', 'info', 'profile', 'jail', 'bust', 'reward'] },
+  { label: 'Referrals report', categoryId: 'admin-players', collapseKey: 'referralsReport', keywords: ['referral', 'referrer', 'referee', 'invite', 'earnings', 'ref'] },
   { label: 'Respect points log', categoryId: 'admin-players', collapseKey: 'respectPointsLog', keywords: ['respect', 'points', 'log', 'earned', 'audit', 'player'] },
   { label: 'Gambling Log', categoryId: 'admin-logs', collapseKey: 'gamblingLog', keywords: ['gambling', 'log', 'casino', 'bet'] },
   { label: 'Activity Log', categoryId: 'admin-logs', collapseKey: 'activityLog', keywords: ['activity', 'log', 'history'] },
@@ -151,6 +152,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Clear OC invites (user)', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['oc', 'organised', 'crime', 'invite', 'clear', 'user'] },
   { label: 'Clear minigame records (user)', categoryId: 'admin-testing', collapseKey: 'minigameLbAdmin', keywords: ['minigame', 'records', 'clear', 'user', 'scores'] },
   { label: 'Minigame weekly leaderboard strip/add', categoryId: 'admin-testing', collapseKey: 'minigameLbAdmin', keywords: ['minigame', 'leaderboard', 'weekly', 'strip', 'add', 'score', 'flappy', 'gauntlet'] },
+  { label: 'Main leaderboards strip (respect melt stock booze)', categoryId: 'admin-testing', collapseKey: 'mainLbStrip', keywords: ['leaderboard', 'weekly', 'respect', 'melt', 'stock', 'booze', 'strip', 'top 10'] },
   { label: 'Reset Hitlist NPC Timers', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['hitlist', 'npc', 'timer', 'reset'] },
   { label: 'Reset OC Timers', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['oc', 'organised', 'crime', 'timer'] },
   { label: 'Reset Daily Rewards Timer', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['daily', 'rewards', 'timer', 'rps'] },
@@ -432,6 +434,16 @@ export default function Admin() {
   const [minigameLbAddScore, setMinigameLbAddScore] = useState('100');
   const [minigameLbAddWeekly, setMinigameLbAddWeekly] = useState(true);
   const [minigameLbAddPerGame, setMinigameLbAddPerGame] = useState(false);
+  const [mainLbStripLoading, setMainLbStripLoading] = useState(false);
+  const [mainLbScope, setMainLbScope] = useState('current');
+  const [mainLbRespect, setMainLbRespect] = useState(true);
+  const [mainLbMelt, setMainLbMelt] = useState(true);
+  const [mainLbStock, setMainLbStock] = useState(true);
+  const [mainLbBooze, setMainLbBooze] = useState(true);
+  const [mainLbKills, setMainLbKills] = useState(false);
+  const [mainLbCrimes, setMainLbCrimes] = useState(false);
+  const [mainLbGta, setMainLbGta] = useState(false);
+  const [mainLbJail, setMainLbJail] = useState(false);
   const [resetDailyRewardsLoading, setResetDailyRewardsLoading] = useState(false);
   const [pointsProvSessionId, setPointsProvSessionId] = useState('');
   const [pointsProvUserId, setPointsProvUserId] = useState('');
@@ -533,6 +545,9 @@ export default function Admin() {
   const [boozeRunUserQuery, setBoozeRunUserQuery] = useState('');
   const [boozeRunUserProfile, setBoozeRunUserProfile] = useState(null);
   const [boozeRunUserLoading, setBoozeRunUserLoading] = useState(false);
+  const [referralsReport, setReferralsReport] = useState(null);
+  const [referralsReportLoading, setReferralsReportLoading] = useState(false);
+  const [referralsFilterUsername, setReferralsFilterUsername] = useState('');
   const [loginPageVisitors, setLoginPageVisitors] = useState(null);
   const [loginPageViews, setLoginPageViews] = useState(null);
   const [loginPageVisitorsLoading, setLoginPageVisitorsLoading] = useState(false);
@@ -2548,6 +2563,39 @@ export default function Admin() {
     }
   };
 
+  const handleMainLeaderboardStrip = async () => {
+    const username = (formData.targetUsername || '').trim();
+    if (!username) { toast.error('Enter target username'); return; }
+    if (!mainLbRespect && !mainLbMelt && !mainLbStock && !mainLbBooze && !mainLbKills && !mainLbCrimes && !mainLbGta && !mainLbJail) {
+      toast.error('Select at least one category');
+      return;
+    }
+    const scopeLabel = mainLbScope === 'all' ? 'ALL HISTORY' : 'this week (Mon UTC) only';
+    if (!window.confirm(`Strip main /leaderboards/top inputs for ${username}? Scope: ${scopeLabel}. This cannot be undone.`)) return;
+    setMainLbStripLoading(true);
+    try {
+      const res = await api.post('/admin/leaderboards/strip-user-inputs', {
+        target_username: username,
+        scope: mainLbScope,
+        respect_events: mainLbRespect,
+        melt_events: mainLbMelt,
+        stock_profit_rows: mainLbStock,
+        booze_run_events: mainLbBooze,
+        kills: mainLbKills,
+        crimes: mainLbCrimes,
+        gta: mainLbGta,
+        jail_busts: mainLbJail,
+      });
+      const extra = res.data?.deleted_counts || res.data?.adjusted;
+      toast.success(res.data?.message || 'Stripped');
+      if (extra && typeof window !== 'undefined' && window.console) console.log('strip-user-inputs', extra);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    } finally {
+      setMainLbStripLoading(false);
+    }
+  };
+
   const handleResetDailyRewardsTimerAll = async () => {
     if (!window.confirm('Reset Daily Rewards timer for everyone? All users will get 3 plays again (6h window).')) return;
     setResetDailyRewardsLoading(true);
@@ -3013,6 +3061,21 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed to load booze-run user');
     } finally {
       setBoozeRunUserLoading(false);
+    }
+  };
+
+  const handleFetchReferralsReport = async () => {
+    setReferralsReportLoading(true);
+    try {
+      const u = (referralsFilterUsername || '').trim();
+      const params = u ? { referrer_username: u } : {};
+      const res = await api.get('/admin/referrals/report', { params });
+      setReferralsReport(res.data || null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load referrals report');
+      setReferralsReport(null);
+    } finally {
+      setReferralsReportLoading(false);
     }
   };
 
@@ -4720,6 +4783,83 @@ export default function Admin() {
                   <div className="text-mutedForeground uppercase">Unresolved Flags</div>
                   <div className={`font-bold ${(systemHealth.unresolved_flags ?? 0) > 0 ? 'text-amber-400' : 'text-emerald-400'}`}>{systemHealth.unresolved_flags ?? 0}</div>
                 </div>
+              </div>
+            )}
+          </div>
+        )}
+        </div>
+
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Users}
+          title="Referrals report"
+          isCollapsed={collapsed.referralsReport}
+          onToggle={() => { toggleSection('referralsReport'); if (collapsed.referralsReport && !referralsReport) handleFetchReferralsReport(); }}
+        />
+        {!collapsed.referralsReport && (
+          <div className="p-3 space-y-2">
+            <p className="text-[10px] text-mutedForeground font-heading">
+              Linked accounts (<span className="text-foreground">referred_by</span>) and lifetime referral earnings on each referrer (pooled). Optional filter by referrer username.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                value={referralsFilterUsername}
+                onChange={(e) => setReferralsFilterUsername(e.target.value)}
+                placeholder="Referrer username (optional)"
+                className="flex-1 min-w-[160px] max-w-xs px-2 py-1 rounded border border-input bg-transparent text-[11px]"
+              />
+              <BtnPrimary onClick={handleFetchReferralsReport} disabled={referralsReportLoading}>
+                {referralsReportLoading ? 'Loading…' : 'Load report'}
+              </BtnPrimary>
+            </div>
+            {referralsReport && (
+              <div className="space-y-2 text-[10px] font-heading">
+                <div className="text-mutedForeground">
+                  Prereg docs with stored ref code: <span className="text-foreground">{referralsReport.preregistrations_with_referral_code_stored ?? 0}</span>
+                  {' · '}
+                  Total referee links: <span className="text-foreground">{referralsReport.total_referee_links ?? 0}</span>
+                </div>
+                {referralsReport.note && (
+                  <p className="text-[9px] text-zinc-500 italic">{referralsReport.note}</p>
+                )}
+                <div className="max-h-[480px] overflow-y-auto rounded border border-primary/20 bg-zinc-900/40 divide-y divide-primary/10">
+                  {(referralsReport.groups || []).map((g) => (
+                    <div key={g.referrer_id} className="p-2 space-y-1">
+                      <div className="flex flex-wrap items-baseline justify-between gap-2">
+                        <div>
+                          <span className="text-primary font-bold">{g.referrer_username}</span>
+                          <span className="text-mutedForeground ml-2">({g.referee_count} referees)</span>
+                        </div>
+                        <div className="text-[9px] text-mutedForeground">
+                          cash-like: <span className="text-foreground">{(g.referral_cash_like_total ?? 0).toLocaleString()}</span>
+                          {' · '}
+                          melt bullets: <span className="text-foreground">{(g.referral_bullets_from_melt ?? 0).toLocaleString()}</span>
+                        </div>
+                      </div>
+                      {g.referral_earnings && (
+                        <div className="font-mono text-[9px] text-zinc-400 pl-1">
+                          {Object.entries(g.referral_earnings).map(([k, v]) => (
+                            <span key={k} className="mr-2">{k.replace('referral_earnings_', '')}: {Number(v).toLocaleString()}</span>
+                          ))}
+                        </div>
+                      )}
+                      <div className="pl-2 border-l border-primary/25 space-y-0.5 max-h-32 overflow-y-auto">
+                        {(g.referees || []).map((r) => (
+                          <div key={r.user_id} className="flex flex-wrap gap-x-2 gap-y-0">
+                            <Link to={`/profile/${encodeURIComponent(r.username)}`} className="text-primary hover:underline">{r.username}</Link>
+                            <span className="text-mutedForeground">{r.email || '—'}</span>
+                            <span className="text-zinc-500">{r.created_at ? new Date(r.created_at).toLocaleString() : '—'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                {(referralsReport.groups || []).length === 0 && (
+                  <p className="text-mutedForeground">No referral links found{referralsFilterUsername.trim() ? ' for this referrer' : ''}.</p>
+                )}
               </div>
             )}
           </div>
@@ -10165,6 +10305,71 @@ export default function Admin() {
                   </BtnPrimary>
                 </div>
               </div>
+            </div>
+          )}
+        </div>
+
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-cyan-500/25 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-cyan-500/35 to-transparent" />
+          <SectionHeader
+            icon={Trophy}
+            title="Main game leaderboards (weekly / top boards)"
+            isCollapsed={collapsed.mainLbStrip}
+            onToggle={() => toggleSection('mainLbStrip')}
+          />
+          {!collapsed.mainLbStrip && (
+            <div className="p-2 space-y-2">
+              <p className="text-[9px] text-mutedForeground font-heading pl-1">
+                Clears inputs for <span className="text-foreground">/leaderboards/top?period=weekly</span> (respect earned, bullets melted, stock profit, booze profit, etc.). Target username: field above. Stock/booze: zeros stored profit on rows and adjusts lifetime totals on the user so all-time totals stay consistent.
+              </p>
+              <div className="flex flex-wrap items-center gap-2 text-[10px] font-heading">
+                <span className="text-mutedForeground">Scope</span>
+                <select
+                  value={mainLbScope}
+                  onChange={(e) => setMainLbScope(e.target.value)}
+                  className="bg-zinc-900/80 border border-zinc-600 rounded px-2 py-1 text-xs"
+                >
+                  <option value="current">This week (Mon UTC)</option>
+                  <option value="all">All history</option>
+                </select>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[10px] font-heading rounded-md border border-cyan-500/20 bg-cyan-500/5 p-2">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" checked={mainLbRespect} onChange={(e) => setMainLbRespect(e.target.checked)} />
+                  Respect earned (<code className="text-[8px] bg-zinc-800/80 px-1 rounded">respect_events</code>)
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" checked={mainLbMelt} onChange={(e) => setMainLbMelt(e.target.checked)} />
+                  Bullets melted (<code className="text-[8px] bg-zinc-800/80 px-1 rounded">melt_events</code>)
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" checked={mainLbStock} onChange={(e) => setMainLbStock(e.target.checked)} />
+                  Stock profit (<code className="text-[8px] bg-zinc-800/80 px-1 rounded">profit_points</code> → 0)
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" checked={mainLbBooze} onChange={(e) => setMainLbBooze(e.target.checked)} />
+                  Booze run profit (<code className="text-[8px] bg-zinc-800/80 px-1 rounded">economy_events</code> sell)
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer text-zinc-400">
+                  <input type="checkbox" checked={mainLbKills} onChange={(e) => setMainLbKills(e.target.checked)} />
+                  Kills (attack_attempts killed)
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer text-zinc-400">
+                  <input type="checkbox" checked={mainLbCrimes} onChange={(e) => setMainLbCrimes(e.target.checked)} />
+                  Crimes (<code className="text-[8px] bg-zinc-800/80 px-1 rounded">crime_events</code>)
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer text-zinc-400">
+                  <input type="checkbox" checked={mainLbGta} onChange={(e) => setMainLbGta(e.target.checked)} />
+                  GTA (<code className="text-[8px] bg-zinc-800/80 px-1 rounded">gta_events</code>)
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer text-zinc-400">
+                  <input type="checkbox" checked={mainLbJail} onChange={(e) => setMainLbJail(e.target.checked)} />
+                  Jail busts (success)
+                </label>
+              </div>
+              <BtnDanger type="button" onClick={handleMainLeaderboardStrip} disabled={mainLbStripLoading || !(formData.targetUsername || '').trim()}>
+                {mainLbStripLoading ? '…' : 'Strip from main leaderboards'}
+              </BtnDanger>
             </div>
           )}
         </div>

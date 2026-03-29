@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Lock, ThumbsUp, ThumbsDown, Send, Pin, AlertCircle, Trash2, ArrowLeft, MessageCircle, Eye, Clock, Dice5, Package, UserPlus, Bold, Italic, Image, Palette, Pencil } from 'lucide-react';
 import api from '../../utils/api';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
@@ -158,6 +158,7 @@ function getAuctionEndStatusLabel(auction) {
 export default function ForumTopic() {
   const { topicId } = useParams();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [topic, setTopic] = useState(null);
   const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1102,6 +1103,7 @@ export default function ForumTopic() {
               return (
               <div
                 key={c.id}
+                id={c.id ? `forum-comment-${c.id}` : undefined}
                 className={`${styles.panel} border rounded-md p-3 sm:p-3.5 ${
                   isGameIdeasLog
                     ? 'border-amber-500/25 bg-amber-950/15'

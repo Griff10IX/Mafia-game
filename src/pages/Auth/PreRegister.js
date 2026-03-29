@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Link2, KeyRound, DollarSign, UserPlus, Crosshair, Building2, Car, Wine, BarChart3, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../utils/api';
@@ -66,7 +66,11 @@ export default function PreRegister() {
   const [redeemLoading, setRedeemLoading] = useState(false);
 
   const handleCreateAccount = () => {
-    navigate('/register');
+    if (refFromUrl) {
+      navigate(`/register?ref=${encodeURIComponent(refFromUrl)}`);
+    } else {
+      navigate('/register');
+    }
   };
 
   const copyReferralPlaceholder = () => {

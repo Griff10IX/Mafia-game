@@ -1748,6 +1748,184 @@ def register(router):
 
         return {"message": f"Recorded minigame leaderboard data for {uname}", **detail}
 
+    class AdminMainLeaderboardStripBody(BaseModel):
+        target_username: str = Field(..., min_length=1)
+        scope: str = Field(
+            "current",
+            description="'current' = this Mon UTC week only (matches /leaderboards/top?period=weekly); 'all' = full history for selected categories",
+        )
+        respect_events: bool = Field(True, description="Respect points earned (weekly board)")
+        melt_events: bool = Field(True, description="Bullets melted (weekly board)")
+        stock_profit_rows: bool = Field(
+            True,
+            description="Zero profit_points on stock_transactions; adjust users.stock_market_profit_total",
+        )
+        booze_run_events: bool = Field(
+            True,
+            description="Zero profit on economy_events booze_run_sell; adjust users.booze_run_profit_total",
+        )
+        kills: bool = Field(False, description="attack_attempts with outcome killed")
+        crimes: bool = Field(False, description="crime_events")
+        gta: bool = Field(False, description="gta_events")
+        jail_busts: bool = Field(False, description="bust_events success")
+
+    @router.post("/admin/leaderboards/strip-user-inputs")
+    async def admin_main_leaderboard_strip_user_inputs(
+        body: AdminMainLeaderboardStripBody,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Remove or zero rows that feed the main /leaderboards/top boards (weekly and/or all history). Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from utils.main_leaderboard_strip import strip_user_main_leaderboard_inputs
+
+        ws = (body.scope or "current").strip().lower()
+        if ws not in ("current", "all"):
+            raise HTTPException(status_code=400, detail="scope must be 'current' or 'all'")
+
+        username_pattern = _username_pattern((body.target_username or "").strip())
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = target["id"]
+
+        if not any(
+            [
+                body.respect_events,
+                body.melt_events,
+                body.stock_profit_rows,
+                body.booze_run_events,
+                body.kills,
+                body.crimes,
+                body.gta,
+                body.jail_busts,
+            ]
+        ):
+            raise HTTPException(status_code=400, detail="Select at least one category")
+
+        try:
+            detail = await strip_user_main_leaderboard_inputs(
+                db,
+                user_id=uid,
+                scope=ws,
+                respect_events=body.respect_events,
+                melt_events=body.melt_events,
+                stock_profit_rows=body.stock_profit_rows,
+                booze_run_events=body.booze_run_events,
+                kills=body.kills,
+                crimes=body.crimes,
+                gta=body.gta,
+                jail_busts=body.jail_busts,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        leaderboard_module.invalidate_leaderboard_cache()
+        return {
+            "message": f"Main leaderboard inputs stripped for {target.get('username')}",
+            "user_id": uid,
+            **detail,
+        }
+
+    _REFERRAL_EARNINGS_KEYS = (
+        "referral_earnings_booze",
+        "referral_earnings_crime",
+        "referral_earnings_oc",
+        "referral_earnings_garage_scrap",
+        "referral_earnings_melt_bullets",
+    )
+
+    @router.get("/admin/referrals/report")
+    async def admin_referrals_report(
+        referrer_username: Optional[str] = Query(None, description="Optional: filter to one referrer by username"),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Who referred whom (referred_by) and lifetime referral earnings on each referrer (pooled across all referees). Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        prereg_with_ref = await db.preregistrations.count_documents(
+            {"referral_code": {"$exists": True, "$nin": [None, ""]}}
+        )
+
+        q: Dict[str, object] = {"referred_by": {"$exists": True, "$ne": None, "$nin": [""]}}
+        ref_id_filter: Optional[str] = None
+        if (referrer_username or "").strip():
+            rp = _username_pattern(referrer_username.strip())
+            ref_user = await db.users.find_one({"username": rp}, {"_id": 0, "id": 1, "username": 1})
+            if not ref_user:
+                raise HTTPException(status_code=404, detail="Referrer username not found")
+            ref_id_filter = ref_user["id"]
+            q["referred_by"] = ref_id_filter
+
+        proj = {
+            "_id": 0,
+            "id": 1,
+            "username": 1,
+            "email": 1,
+            "created_at": 1,
+            "referred_by": 1,
+        }
+        rows = await db.users.find(q, proj).sort("created_at", -1).limit(5000).to_list(5000)
+
+        by_referrer: Dict[str, List[dict]] = defaultdict(list)
+        for r in rows:
+            rid = r.get("referred_by")
+            if not rid:
+                continue
+            by_referrer[str(rid)].append(
+                {
+                    "user_id": r.get("id"),
+                    "username": r.get("username"),
+                    "email": r.get("email"),
+                    "created_at": r.get("created_at"),
+                }
+            )
+
+        referrer_ids = list(by_referrer.keys())
+        referrers_raw = []
+        if referrer_ids:
+            referrers_raw = await db.users.find(
+                {"id": {"$in": referrer_ids}},
+                {
+                    "_id": 0,
+                    "id": 1,
+                    "username": 1,
+                    **{k: 1 for k in _REFERRAL_EARNINGS_KEYS},
+                },
+            ).to_list(len(referrer_ids) + 1)
+
+        ref_by_id = {str(x["id"]): x for x in referrers_raw}
+        groups = []
+        for rid, referees in sorted(by_referrer.items(), key=lambda x: len(x[1]), reverse=True):
+            ru = ref_by_id.get(rid, {})
+            earnings = {k: int(ru.get(k) or 0) for k in _REFERRAL_EARNINGS_KEYS}
+            cash_like = (
+                earnings["referral_earnings_booze"]
+                + earnings["referral_earnings_crime"]
+                + earnings["referral_earnings_oc"]
+                + earnings["referral_earnings_garage_scrap"]
+            )
+            groups.append(
+                {
+                    "referrer_id": rid,
+                    "referrer_username": ru.get("username") or "?",
+                    "referee_count": len(referees),
+                    "referral_earnings": earnings,
+                    "referral_cash_like_total": cash_like,
+                    "referral_bullets_from_melt": earnings["referral_earnings_melt_bullets"],
+                    "referees": referees,
+                }
+            )
+
+        return {
+            "preregistrations_with_referral_code_stored": prereg_with_ref,
+            "note": "Earnings are lifetime totals on the referrer account (not split per referee). referred_by is set only if signup sent referral_code or email prereg had referral_code.",
+            "referrer_filter": ref_id_filter,
+            "total_referee_links": len(rows),
+            "groups": groups,
+        }
+
     @router.post("/admin/daily-rewards/reset-timer")
     async def admin_daily_rewards_reset_timer(
         target_username: Optional[str] = Query(None, description="Reset this user only; omit to reset all users"),

@@ -93,6 +93,7 @@ class RevokeSessionBody(BaseModel):
 
 class PreRegisterBody(BaseModel):
     email: EmailStr
+    referral_code: Optional[str] = None  # optional ?ref= referrer username; stored for full signup if client omits it later
 
 
 # Pre-registration rewards (applied on first login after launch)
@@ -506,6 +507,8 @@ def register(router):
 
             # Referral: resolve referral_code (username) to referrer id; avoid self-referral
             referral_code = (user_data.referral_code or "").strip()
+            if not referral_code and email_prereg:
+                referral_code = (email_prereg.get("referral_code") or "").strip()
             if referral_code:
                 referrer = await db.users.find_one(
                     {

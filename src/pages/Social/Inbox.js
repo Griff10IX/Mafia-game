@@ -101,25 +101,86 @@ function ocInviteActionError(detail, action) {
   return action === "accept" ? "Failed to accept invite" : "Failed to decline invite";
 }
 
-// Render notification message; if actor_username is set, make it a profile link
-function NotificationMessage({ message, actorUsername, className }) {
+// Render notification message: optional profile link for actor_username; optional forum link for quoted topic when topic_id is set
+function NotificationMessage({ message, actorUsername, topicId, topicTitle, commentId, className }) {
   if (!message || typeof message !== 'string') return null;
-  if (!actorUsername || typeof actorUsername !== 'string') {
-    return <span className={className}>{message}</span>;
+
+  const linkCls = 'text-primary hover:underline font-heading';
+
+  const forumTopicTo = () => {
+    if (!topicId) return null;
+    const q = commentId ? `?comment=${encodeURIComponent(commentId)}` : '';
+    return `/social/forum/${encodeURIComponent(topicId)}${q}`;
+  };
+
+  const tryQuotedTopicLink = (text) => {
+    const to = forumTopicTo();
+    if (!to) return null;
+    if (topicTitle) {
+      const ttrunc = String(topicTitle).slice(0, 80);
+      const exactQuoted = `"${ttrunc}"`;
+      const qidx = text.indexOf(exactQuoted);
+      if (qidx !== -1) {
+        const beforeQ = text.slice(0, qidx);
+        const afterQ = text.slice(qidx + exactQuoted.length);
+        return (
+          <>
+            {beforeQ}
+            <Link to={to} className={`${linkCls} ${className || ''}`}>
+              {exactQuoted}
+            </Link>
+            {afterQ}
+          </>
+        );
+      }
+    }
+    const m = text.match(/"([^"]+)"\s*$/);
+    if (!m || m.index === undefined) return null;
+    const beforeQ = text.slice(0, m.index);
+    const quotedSlice = text.slice(m.index, m.index + m[0].length).replace(/\s+$/, '');
+    const afterQ = text.slice(m.index + m[0].length);
+    return (
+      <>
+        {beforeQ}
+        <Link to={to} className={`${linkCls} ${className || ''}`}>
+          {quotedSlice}
+        </Link>
+        {afterQ}
+      </>
+    );
+  };
+
+  let rest = message;
+  const parts = [];
+
+  if (actorUsername && typeof actorUsername === 'string') {
+    const idx = rest.indexOf(actorUsername);
+    if (idx !== -1) {
+      if (idx > 0) parts.push(<span key="pre-actor">{rest.slice(0, idx)}</span>);
+      parts.push(
+        <Link key="actor" to={`/profile/${encodeURIComponent(actorUsername)}`} className={`${linkCls} ${className || ''}`}>
+          {actorUsername}
+        </Link>
+      );
+      rest = rest.slice(idx + actorUsername.length);
+    }
   }
-  const idx = message.indexOf(actorUsername);
-  if (idx === -1) return <span className={className}>{message}</span>;
-  const before = message.slice(0, idx);
-  const after = message.slice(idx + actorUsername.length);
-  return (
-    <span className={className}>
-      {before}
-      <Link to={`/profile/${encodeURIComponent(actorUsername)}`} className="text-primary hover:underline font-heading">
-        {actorUsername}
-      </Link>
-      {after}
-    </span>
-  );
+
+  const topicLink = tryQuotedTopicLink(rest);
+  if (topicLink) {
+    return <span className={className}>{parts}{topicLink}</span>;
+  }
+
+  if (parts.length) {
+    return (
+      <span className={className}>
+        {parts}
+        {rest}
+      </span>
+    );
+  }
+
+  return <span className={className}>{message}</span>;
 }
 
 // Subcomponents
@@ -331,7 +392,14 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, o
           </span>
         </div>
         <p className="text-[9px] text-mutedForeground truncate">
-          <NotificationMessage message={notification.message} actorUsername={notification.actor_username} className="text-inherit" />
+          <NotificationMessage
+            message={notification.message}
+            actorUsername={notification.actor_username}
+            topicId={notification.topic_id}
+            topicTitle={notification.topic_title}
+            commentId={notification.comment_id}
+            className="text-inherit"
+          />
         </p>
       </div>
 
@@ -384,7 +452,14 @@ const MessageRow = ({ notification, isSelected, onClick, onMarkRead, onDelete, o
             
             {/* Preview Body */}
             <p className="text-[10px] text-foreground leading-snug max-h-32 overflow-y-auto whitespace-pre-wrap">
-              <NotificationMessage message={notification.message} actorUsername={notification.actor_username} className="text-inherit" />
+              <NotificationMessage
+                message={notification.message}
+                actorUsername={notification.actor_username}
+                topicId={notification.topic_id}
+                topicTitle={notification.topic_title}
+                commentId={notification.comment_id}
+                className="text-inherit"
+              />
             </p>
             
             {/* GIF Preview */}
@@ -498,7 +573,14 @@ const MessageDetail = ({ notification, onMarkRead, onDelete, onOcAccept, onOcDec
             />
           ) : (
             <p className="text-[11px] text-foreground leading-snug whitespace-pre-wrap">
-              <NotificationMessage message={notification.message} actorUsername={notification.actor_username} className="text-inherit" />
+              <NotificationMessage
+                message={notification.message}
+                actorUsername={notification.actor_username}
+                topicId={notification.topic_id}
+                topicTitle={notification.topic_title}
+                commentId={notification.comment_id}
+                className="text-inherit"
+              />
             </p>
           )}
 
