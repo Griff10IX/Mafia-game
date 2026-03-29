@@ -203,20 +203,35 @@ export default function Referral() {
         </div>
 
         {/* Referred by + signup bonus */}
-        {(data?.referred_by_username || data?.signup_bonus) && (
+        {(data?.referred_by_username || (Array.isArray(data?.referred_by_usernames) && data.referred_by_usernames.length) || data?.signup_bonus) && (
           <div className={cardClass} style={{ animationDelay: '0.1s' }}>
             <div className={cardHeaderClass}>
               <h2 className={cardTitleClass}>
                 <UserPlus size={14} className="sm:w-4 sm:h-4" />
-                Your referrer
+                {(Array.isArray(data?.referred_by_usernames) && data.referred_by_usernames.length > 1) ? 'Your referrers' : 'Your referrer'}
               </h2>
             </div>
             <div className="p-2.5 sm:p-3 space-y-1">
-              {data.referred_by_username && (
+              {(Array.isArray(data?.referred_by_usernames) && data.referred_by_usernames.length > 0) ? (
+                data.referred_by_usernames.length === 1 ? (
+                  <p className={`text-[10px] sm:text-xs font-heading ${styles.gmMuted}`}>
+                    Referred by: <span className="font-semibold text-foreground">{data.referred_by_usernames[0]}</span>
+                  </p>
+                ) : (
+                  <div className={`text-[10px] sm:text-xs font-heading ${styles.gmMuted}`}>
+                    <span className="block mb-1">Referred by:</span>
+                    <ul className="list-disc list-inside text-foreground font-semibold space-y-0.5">
+                      {data.referred_by_usernames.map((name, i) => (
+                        <li key={`${name}-${i}`}>{name}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )
+              ) : data.referred_by_username ? (
                 <p className={`text-[10px] sm:text-xs font-heading ${styles.gmMuted}`}>
                   Referred by: <span className="font-semibold text-foreground">{data.referred_by_username}</span>
                 </p>
-              )}
+              ) : null}
               {data.signup_bonus && (
                 <p className={`text-[9px] sm:text-[10px] ${styles.gmMuted} font-heading`}>{data.signup_bonus}</p>
               )}

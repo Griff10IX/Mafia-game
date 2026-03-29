@@ -190,17 +190,17 @@ def group_by_registration_ip_burst(users: List[dict], max_hours: float = 2.0) ->
 
 
 def group_by_referral_same_ip(users: List[dict]) -> List[dict]:
-    """Living accounts with the same referred_by and same registration_ip (≥2 accounts)."""
+    """Living accounts sharing a referrer + registration_ip (≥2 accounts). Supports referred_by string or list."""
+    from utils.referral_ids import normalize_referred_by_ids
+
     key_to_users: Dict[Tuple[Any, str], List[dict]] = {}
     for u in users:
-        ref = u.get("referred_by")
-        if not ref:
-            continue
         reg_ip = (u.get("registration_ip") or "").strip()
         if not reg_ip:
             continue
-        key = (ref, reg_ip)
-        key_to_users.setdefault(key, []).append(u)
+        for ref in normalize_referred_by_ids(u.get("referred_by")):
+            key = (ref, reg_ip)
+            key_to_users.setdefault(key, []).append(u)
     groups = []
     for (ref_id, reg_ip), accs in key_to_users.items():
         if len(accs) < 2:

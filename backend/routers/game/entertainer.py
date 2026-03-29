@@ -232,6 +232,12 @@ DEFAULT_REWARD_TYPE_WEIGHTS = {
 
 ENTERTAINER_REWARDS_CONFIG_KEY = "entertainer_rewards_config"
 
+
+def _game_config_doc_filter(doc_id: str) -> dict:
+    """game_config has a unique index on `id`. Legacy entertainer rows used only `key`, which upserted as id=null and caused E11000. Match either shape."""
+    return {"$or": [{"id": doc_id}, {"key": doc_id}]}
+
+
 _cached_rewards_config = None
 _cached_rewards_config_at = 0
 
@@ -242,7 +248,7 @@ async def _get_rewards_config() -> dict:
     now = time.monotonic()
     if _cached_rewards_config and (now - _cached_rewards_config_at) < 60:
         return _cached_rewards_config
-    doc = await db.game_config.find_one({"key": ENTERTAINER_REWARDS_CONFIG_KEY}, {"_id": 0})
+    doc = await db.game_config.find_one(_game_config_doc_filter(ENTERTAINER_REWARDS_CONFIG_KEY), {"_id": 0})
     if doc:
         merged_w = dict(DEFAULT_REWARD_TYPE_WEIGHTS)
         raw_w = doc.get("reward_type_weights")
@@ -695,7 +701,7 @@ def _parse_iso(iso_str):
 
 async def _maybe_auto_settle_open_games():
     """Settle all open (non-manual) games when we're in the '20 mins before next batch' window."""
-    doc = await db.game_config.find_one({"key": ENTERTAINER_CONFIG_KEY}, {"last_auto_create_at": 1})
+    doc = await db.game_config.find_one(_game_config_doc_filter(ENTERTAINER_CONFIG_KEY), {"last_auto_create_at": 1})
     last_at = _parse_iso(doc.get("last_auto_create_at") if doc else None)
     if not last_at:
         return
@@ -1072,8 +1078,14 @@ async def update_rewards_config_admin(
     if not update:
         raise HTTPException(status_code=400, detail="No changes provided")
     await db.game_config.update_one(
-        {"key": ENTERTAINER_REWARDS_CONFIG_KEY},
-        {"$set": {**update, "key": ENTERTAINER_REWARDS_CONFIG_KEY}},
+        _game_config_doc_filter(ENTERTAINER_REWARDS_CONFIG_KEY),
+        {
+            "$set": {
+                **update,
+                "id": ENTERTAINER_REWARDS_CONFIG_KEY,
+                "key": ENTERTAINER_REWARDS_CONFIG_KEY,
+            }
+        },
         upsert=True,
     )
     _invalidate_rewards_config_cache()
@@ -1084,7 +1096,7 @@ async def update_rewards_config_admin(
 # ---------- Admin: entertainer config (auto-create on/off) ----------
 async def get_entertainer_config(current_user: dict = Depends(get_current_user)):
     """Get entertainer config (auto_create_enabled, last/next run). Anyone can read."""
-    doc = await db.game_config.find_one({"key": ENTERTAINER_CONFIG_KEY}, {"_id": 0, "key": 0})
+    doc = await db.game_config.find_one(_game_config_doc_filter(ENTERTAINER_CONFIG_KEY), {"_id": 0, "key": 0})
     if not doc:
         return {"auto_create_enabled": False, "last_auto_create_at": None, "next_auto_create_at": None}
     last_at = doc.get("last_auto_create_at")
@@ -1165,8 +1177,14 @@ async def admin_auto_create_now(current_user: dict = Depends(get_current_user)):
         created.append(g)
     now_iso = datetime.now(timezone.utc).isoformat()
     await db.game_config.update_one(
-        {"key": ENTERTAINER_CONFIG_KEY},
-        {"$set": {"key": ENTERTAINER_CONFIG_KEY, "last_auto_create_at": now_iso}},
+        _game_config_doc_filter(ENTERTAINER_CONFIG_KEY),
+        {
+            "$set": {
+                "id": ENTERTAINER_CONFIG_KEY,
+                "key": ENTERTAINER_CONFIG_KEY,
+                "last_auto_create_at": now_iso,
+            }
+        },
         upsert=True,
     )
     try:
@@ -1188,7 +1206,7 @@ async def _count_open_entertainer_games() -> int:
 
 async def run_auto_create_if_enabled():
     """Called by scheduled task every 3h: if auto_create_enabled, create 3–5 games and notify. DB guards prevent spam."""
-    doc = await db.game_config.find_one({"key": ENTERTAINER_CONFIG_KEY}, {"_id": 0})
+    doc = await db.game_config.find_one(_game_config_doc_filter(ENTERTAINER_CONFIG_KEY), {"_id": 0})
     if not doc or not doc.get("auto_create_enabled"):
         return
     # Time guard: don't create if we already ran recently (e.g. server restarts within same interval)
@@ -1211,8 +1229,14 @@ async def run_auto_create_if_enabled():
         await _create_system_game(game_type, max_players)
     now_iso = now.isoformat()
     await db.game_config.update_one(
-        {"key": ENTERTAINER_CONFIG_KEY},
-        {"$set": {"key": ENTERTAINER_CONFIG_KEY, "last_auto_create_at": now_iso}},
+        _game_config_doc_filter(ENTERTAINER_CONFIG_KEY),
+        {
+            "$set": {
+                "id": ENTERTAINER_CONFIG_KEY,
+                "key": ENTERTAINER_CONFIG_KEY,
+                "last_auto_create_at": now_iso,
+            }
+        },
         upsert=True,
     )
     await send_notification_to_all(

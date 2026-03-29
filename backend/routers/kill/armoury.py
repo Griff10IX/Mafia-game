@@ -1866,6 +1866,17 @@ def _parse_until(iso_str):
     return dt
 
 
+def _format_boost_until_utc(dt: datetime) -> str:
+    """Readable UTC time for toasts (no ISO/microsecond noise)."""
+    if dt is None:
+        return "—"
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    else:
+        dt = dt.astimezone(timezone.utc)
+    return dt.strftime("%d %b %Y · %H:%M UTC")
+
+
 def _tokens_to_reach_stack_cap(user_doc: dict, token_type: str) -> Tuple[int, Optional[datetime]]:
     """How many tokens to consume and final until, without wasting tokens at stack cap."""
     cfg = TOKEN_CONFIG[token_type]
@@ -1967,7 +1978,10 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
                 "auto_rank_trial_until": new_until_iso,
             })
             return {
-                "message": f"Used {to_use} token(s). Auto Rank access active until {new_until_iso} (up to {max_stack_hours}h stack).",
+                "message": (
+                    f"Used {to_use} token(s). Auto Rank until {_format_boost_until_utc(sim_until)} "
+                    f"(max {max_stack_hours}h stack)."
+                ),
                 "tokens": tokens,
             }
 
@@ -2003,7 +2017,7 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
             "auto_rank_trial_until": new_until_iso,
         })
         return {
-            "message": f"Used 1 token. Auto Rank access active until {new_until_iso} (2h).",
+            "message": f"Auto Rank until {_format_boost_until_utc(new_until)} (2h per token).",
             "tokens": tokens,
         }
 
@@ -2090,7 +2104,7 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
                 if pass_activated_now
                 else "Game Pass already claimed."
                 if req.token_type == "rank_xp_pass"
-                else f"Used {n} token(s). Effect active until {new_until_iso} (up to {max_stack_hours}h stack)."
+                else f"Used {n} token(s). Boost until {_format_boost_until_utc(new_until)} (max {max_stack_hours}h stack)."
             ),
             "tokens": tokens,
         }
@@ -2150,7 +2164,7 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
             if pass_activated_now
             else "Game Pass already claimed."
             if req.token_type == "rank_xp_pass"
-            else f"Token used. Effect active until {new_until_iso} (up to {max_stack_hours}h stack)."
+            else f"Used 1 token. Boost until {_format_boost_until_utc(new_until)} (max {max_stack_hours}h stack)."
         ),
         "tokens": tokens,
     }

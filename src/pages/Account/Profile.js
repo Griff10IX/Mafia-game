@@ -1689,7 +1689,7 @@ export default function Profile() {
                 {me?.referred_by_username && (
                   <>
                     <p className="text-[11px] text-mutedForeground font-heading">
-                      Referred by: <span className="text-foreground font-semibold">{me.referred_by_username}</span>
+                      {(me?.referred_by_ids?.length > 1) ? 'Referrers' : 'Referred by'}: <span className="text-foreground font-semibold">{me.referred_by_username}</span>
                     </p>
                     <p className="text-[11px] text-mutedForeground font-heading">
                       Your signup bonus: premium rank bar, 500 respect points, and 18 tokens (use them; they can&apos;t be sold on Quick Trade). You also get 2% higher crime payouts and a slight GTA rare car boost.

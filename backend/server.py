@@ -621,8 +621,9 @@ class UserResponse(BaseModel):
     rank_xp_pass_rewards_granted: bool = False
     shooting_range_bonus_plays: int = 0  # store upgrade: added to base 10 plays/hour in shooting range
     censor_profanity: bool = False  # when true, chat/forum show swear words as ***
-    referred_by: Optional[str] = None  # referrer user id (set at signup via referral code)
-    referred_by_username: Optional[str] = None  # referrer username for display
+    referred_by: Optional[str] = None  # first referrer id (legacy); see referred_by_ids for full list
+    referred_by_username: Optional[str] = None  # comma-separated referrer usernames for display
+    referred_by_ids: List[str] = Field(default_factory=list)  # all referrer user ids
     rules_accepted: bool = False
     rules_accepted_at: Optional[str] = None
 

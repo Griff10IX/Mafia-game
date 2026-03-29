@@ -4830,7 +4830,7 @@ export default function Admin() {
               </BtnPrimary>
             </div>
             <p className="text-[10px] text-mutedForeground font-heading">
-              <span className="text-foreground font-bold">Report:</span> who referred whom (<span className="text-foreground">referred_by</span>) and pooled referral earnings per referrer. Optional filter by referrer username.
+              <span className="text-foreground font-bold">Report:</span> who referred whom (referees can have multiple referrers; payouts split the % across them). Pooled earnings per referrer. Optional filter by referrer username.
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <input
@@ -4945,7 +4945,7 @@ export default function Admin() {
             </div>
             <div className="border-t border-primary/20 pt-3 space-y-2">
               <p className="text-[10px] text-mutedForeground font-heading">
-                <span className="text-foreground font-bold">Manual link:</span> set who was referred by whom. With bonuses on, the referee is topped up to the normal referred package (respect + each token type + premium bar; <span className="font-mono text-foreground">referral_tokens</span> synced). Referrer gets a one-time welcome respect (default 500, same as referee referral respect) only when the referee previously had no referrer (not on force-replace).
+                <span className="text-foreground font-bold">Manual link:</span> adds a referrer to the referee&apos;s list (multiple allowed). With bonuses on, referee top-up matches the normal referred package. Welcome respect applies when this referrer was not already on the list. <span className="text-foreground font-bold">Force</span> replaces the whole list with only the referrer you enter.
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <input
@@ -4979,7 +4979,7 @@ export default function Admin() {
                   onChange={(e) => setManualForce(e.target.checked)}
                   className="rounded border border-input"
                 />
-                Force replace existing referrer
+                Force: replace all referrers with only this one
               </label>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-[10px] text-mutedForeground font-heading">Referrer welcome respect (default 500; 0–5000, 0 = off):</span>
@@ -5002,8 +5002,8 @@ export default function Admin() {
                 <div className="rounded border border-primary/25 bg-primary/5 p-2 text-[10px] font-heading space-y-1">
                   <div><span className="text-mutedForeground">Referee:</span> <span className="text-foreground">{manualResult.referee_username}</span> → <span className="text-primary">{manualResult.referrer_username}</span></div>
                   <div><span className="text-mutedForeground">Referee signup bonuses:</span> {manualResult.referee_signup_bonuses_applied ? 'Yes' : 'No'}</div>
-                  <div><span className="text-mutedForeground">Referrer welcome respect:</span> {manualResult.referrer_welcome_respect_applied ? `${manualResult.referrer_welcome_respect_amount ?? 0} applied` : 'Not applied (already had referrer or set to 0)'}</div>
-                  {manualResult.replaced_existing_referrer && <div className="text-amber-400 text-[9px]">Replaced existing referred_by link.</div>}
+                  <div><span className="text-mutedForeground">Referrer welcome respect:</span> {manualResult.referrer_welcome_respect_applied ? `${manualResult.referrer_welcome_respect_amount ?? 0} applied` : 'Not applied (already linked / duplicate, or set to 0)'}</div>
+                  {manualResult.replaced_existing_referrer && <div className="text-amber-400 text-[9px]">Replaced entire referrer list with this single link.</div>}
                 </div>
               )}
             </div>

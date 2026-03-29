@@ -19,6 +19,7 @@ from pydantic import BaseModel, Field
 
 from middleware.security import is_proxy_or_vpn
 from utils.disposable_email import is_disposable_email
+from utils.referral_ids import normalize_referred_by_ids
 from utils.cheat_detection_utils import (
     group_by_domain,
     group_by_similar_username_strip_digits,
@@ -1865,7 +1866,12 @@ def register(router):
             {"referral_code": {"$exists": True, "$nin": [None, ""]}}
         )
 
-        q: Dict[str, object] = {"referred_by": {"$exists": True, "$ne": None, "$nin": [""]}}
+        q: Dict[str, object] = {
+            "$or": [
+                {"$and": [{"referred_by": {"$type": "string"}}, {"referred_by": {"$ne": ""}}]},
+                {"referred_by.0": {"$exists": True}},
+            ]
+        }
         ref_id_filter: Optional[str] = None
         if (referrer_username or "").strip():
             rp = _username_pattern(referrer_username.strip())
@@ -1873,7 +1879,7 @@ def register(router):
             if not ref_user:
                 raise HTTPException(status_code=404, detail="Referrer username not found")
             ref_id_filter = ref_user["id"]
-            q["referred_by"] = ref_id_filter
+            q = {"$and": [q, {"referred_by": ref_id_filter}]}
 
         proj = {
             "_id": 0,
@@ -1887,17 +1893,24 @@ def register(router):
 
         by_referrer: Dict[str, List[dict]] = defaultdict(list)
         for r in rows:
-            rid = r.get("referred_by")
-            if not rid:
-                continue
-            by_referrer[str(rid)].append(
-                {
-                    "user_id": r.get("id"),
-                    "username": r.get("username"),
-                    "email": r.get("email"),
-                    "created_at": r.get("created_at"),
-                }
-            )
+            for rid in normalize_referred_by_ids(r.get("referred_by")):
+                if ref_id_filter and str(rid) != str(ref_id_filter):
+                    continue
+                by_referrer[str(rid)].append(
+                    {
+                        "user_id": r.get("id"),
+                        "username": r.get("username"),
+                        "email": r.get("email"),
+                        "created_at": r.get("created_at"),
+                    }
+                )
+
+        total_referee_edges = 0
+        for r in rows:
+            for rid in normalize_referred_by_ids(r.get("referred_by")):
+                if ref_id_filter and str(rid) != str(ref_id_filter):
+                    continue
+                total_referee_edges += 1
 
         referrer_ids = list(by_referrer.keys())
         referrers_raw = []
@@ -1937,9 +1950,9 @@ def register(router):
 
         return {
             "preregistrations_with_referral_code_stored": prereg_with_ref,
-            "note": "Earnings are lifetime totals on the referrer account (not split per referee). referred_by is set only if signup sent referral_code or email prereg had referral_code.",
+            "note": "Earnings are lifetime totals on the referrer account. A referee may have multiple referrers (referred_by list); referral cuts are split evenly among them on each payout.",
             "referrer_filter": ref_id_filter,
-            "total_referee_links": len(rows),
+            "total_referee_links": total_referee_edges,
             "groups": groups,
         }
 

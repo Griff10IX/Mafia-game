@@ -10,12 +10,13 @@ import uuid
 logger = logging.getLogger(__name__)
 from datetime import datetime, timezone, timedelta
 
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, field_validator
 
 from utils.disposable_email import is_disposable_email
+from utils.referral_ids import normalize_referred_by_ids, user_has_referrers
 from middleware.security import is_proxy_or_vpn, get_ip_info
 
 
@@ -147,7 +148,7 @@ async def try_heal_referral_from_prereg(db, user: dict, *, dry_run: bool = False
     user_id = str(user.get("id") or "").strip()
     if not user_id or user.get("is_dead"):
         return None
-    if user.get("referred_by"):
+    if user_has_referrers(user.get("referred_by")):
         return None
     email_clean = (user.get("email") or "").strip().lower()
     if not email_clean:
@@ -181,6 +182,7 @@ async def try_heal_referral_from_prereg(db, user: dict, *, dry_run: bool = False
             {"referred_by": {"$exists": False}},
             {"referred_by": None},
             {"referred_by": ""},
+            {"referred_by": []},
         ],
     }
     detail = {
@@ -205,7 +207,7 @@ async def try_heal_referral_from_prereg(db, user: dict, *, dry_run: bool = False
         "referral_tokens": new_rt,
         "referral_prereg_heal_at": now_iso,
     }
-    set_fields = {"referred_by": referrer["id"], **set_bonus}
+    set_fields = {"referred_by": [referrer["id"]], **set_bonus}
     update_op: Dict[str, Any] = {"$set": set_fields}
     if inc_bonus:
         update_op["$inc"] = inc_bonus
@@ -228,10 +230,10 @@ async def apply_manual_referral_link(
     referrer_username: str,
     force: bool = False,
     grant_referee_signup_bonuses: bool = True,
-    grant_referrer_welcome_respect: int = 250,
+    grant_referrer_welcome_respect: int = REFERRED_USER_RESPECT,
 ) -> Dict[str, Any]:
-    """Admin: link referee → referrer (referred_by). Referee gets signup perks if missing referral_tokens.
-    Referrer gets one-time welcome respect only when referee previously had no referrer (not on force-replace)."""
+    """Admin: append referrer to referee's referred_by list, or replace the whole list if force=true.
+    Welcome respect applies when this referrer was not already linked."""
     ref_u = (referee_username or "").strip()
     rer_u = (referrer_username or "").strip()
     if not ref_u or not rer_u:
@@ -263,14 +265,19 @@ async def apply_manual_referral_link(
     if un_r == un_z:
         raise ValueError("Cannot refer yourself")
 
-    had_referrer = bool((referee.get("referred_by") or "").strip())
-    if had_referrer and not force:
-        raise ValueError("Referee already has a referrer; pass force=true to replace")
+    existing_ids = normalize_referred_by_ids(referee.get("referred_by"))
+    if force:
+        new_referred_by = [zid]
+    else:
+        if zid in existing_ids:
+            raise ValueError("This referrer is already linked to this referee.")
+        new_referred_by = existing_ids + [zid]
+    was_new_link_for_this_referrer = zid not in existing_ids
 
     now_iso = datetime.now(timezone.utc).isoformat()
 
     set_doc: Dict[str, Any] = {
-        "referred_by": zid,
+        "referred_by": new_referred_by,
         "referral_manual_assign_at": now_iso,
     }
     inc_doc: Dict[str, Any] = {}
@@ -290,10 +297,7 @@ async def apply_manual_referral_link(
     await db.users.update_one({"id": rid}, update_referee)
 
     referrer_bonus_applied = False
-    if (
-        grant_referrer_welcome_respect > 0
-        and not had_referrer
-    ):
+    if grant_referrer_welcome_respect > 0 and was_new_link_for_this_referrer:
         r2 = await db.users.update_one(
             {"id": zid},
             {"$inc": {"respect_points": int(grant_referrer_welcome_respect)}},
@@ -305,7 +309,7 @@ async def apply_manual_referral_link(
         "referee_username": referee.get("username"),
         "referrer_id": zid,
         "referrer_username": referrer.get("username"),
-        "replaced_existing_referrer": had_referrer and force,
+        "replaced_existing_referrer": force and bool(existing_ids),
         "referee_signup_bonuses_applied": referee_bonuses_applied,
         "referrer_welcome_respect_applied": referrer_bonus_applied,
         "referrer_welcome_respect_amount": grant_referrer_welcome_respect if referrer_bonus_applied else 0,
@@ -712,7 +716,7 @@ def register(router):
                     ref_username_lower = (referrer.get("username") or "").strip().lower()
                     ref_email_lower = (referrer.get("email") or "").strip().lower()
                     if ref_username_lower != new_username_lower and ref_email_lower != email_clean:
-                        user_doc["referred_by"] = referrer["id"]
+                        user_doc["referred_by"] = [referrer["id"]]
                         # Referred-user benefits: premium rank bar, respect, tokens (non-sellable on Quick Trade)
                         user_doc["premium_rank_bar"] = True
                         user_doc["respect_points"] = int(user_doc.get("respect_points") or 0) + REFERRED_USER_RESPECT
@@ -1570,9 +1574,9 @@ def register(router):
             u = current_user
             equipped_weapon_id = u.get("equipped_weapon_id")
             family_id = u.get("family_id")
-            referred_by = u.get("referred_by")
+            ref_ids = normalize_referred_by_ids(u.get("referred_by"))
             _noop = lambda: asyncio.sleep(0, result=None)
-            admin_color_doc, weapon_doc, fam, bodyguard_count, ref_user = await asyncio.gather(
+            admin_color_doc, weapon_doc, fam, bodyguard_count = await asyncio.gather(
                 db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1}),
                 db.weapons.find_one({"id": equipped_weapon_id}, {"_id": 0, "name": 1}) if equipped_weapon_id else _noop(),
                 db.families.find_one({"id": family_id}, {"_id": 0, "name": 1}) if family_id else _noop(),
@@ -1583,8 +1587,14 @@ def register(router):
                         {"is_robot": True},
                     ],
                 }),
-                db.users.find_one({"id": referred_by}, {"_id": 0, "username": 1}) if referred_by else _noop(),
             )
+            ref_users = []
+            if ref_ids:
+                ref_users = await db.users.find(
+                    {"id": {"$in": ref_ids}},
+                    {"_id": 0, "id": 1, "username": 1},
+                ).to_list(50)
+            id_to_ref_name = {str(x["id"]): (x.get("username") or "?") for x in ref_users}
             admin_online_color = (admin_color_doc.get("value") or "#a78bfa") if admin_color_doc else "#a78bfa"
             if not isinstance(admin_online_color, str) or not admin_online_color.strip():
                 admin_online_color = "#a78bfa"
@@ -1611,8 +1621,10 @@ def register(router):
                 gang_name = fam.get("name")
                 family_name = fam.get("name")
             referred_by_username = None
-            if ref_user:
-                referred_by_username = ref_user.get("username") or None
+            referred_by_legacy = None
+            if ref_ids:
+                referred_by_username = ", ".join(id_to_ref_name.get(i, "?") for i in ref_ids)
+                referred_by_legacy = ref_ids[0]
             return UserResponse(
                 id=str(u["id"]),
                 email=str(u.get("email") or ""),
@@ -1708,8 +1720,9 @@ def register(router):
                 rank_xp_pass_rewards_granted=bool(u.get("rank_xp_pass_rewards_granted", False)),
                 shooting_range_bonus_plays=_safe_int(u.get("shooting_range_bonus_plays"), 0),
                 censor_profanity=bool(u.get("censor_profanity", False)),
-                referred_by=referred_by,
+                referred_by=referred_by_legacy,
                 referred_by_username=referred_by_username,
+                referred_by_ids=list(ref_ids),
                 rules_accepted=bool(u.get("rules_accepted", False)),
                 rules_accepted_at=u.get("rules_accepted_at"),
             )
@@ -1793,12 +1806,17 @@ def register(router):
         """Referral page: link, referred-by, signup bonus if applicable, and earnings breakdown by source."""
         user_id = current_user.get("id")
         username = (current_user.get("username") or "").strip()
-        referred_by = current_user.get("referred_by")
+        ref_ids = normalize_referred_by_ids(current_user.get("referred_by"))
         referred_by_username = None
-        if referred_by:
-            ref_user = await db.users.find_one({"id": referred_by}, {"_id": 0, "username": 1})
-            if ref_user:
-                referred_by_username = ref_user.get("username") or None
+        referred_by_usernames_list: List[str] = []
+        if ref_ids:
+            ref_users = await db.users.find(
+                {"id": {"$in": ref_ids}},
+                {"_id": 0, "id": 1, "username": 1},
+            ).to_list(50)
+            id_to_name = {str(x["id"]): (x.get("username") or "?") for x in ref_users}
+            referred_by_usernames_list = [id_to_name.get(i, "?") for i in ref_ids]
+            referred_by_username = ", ".join(referred_by_usernames_list)
         earnings = {
             "melt_bullets": int(current_user.get("referral_earnings_melt_bullets") or 0),
             "crime_profit": int(current_user.get("referral_earnings_crime") or 0),
@@ -1820,6 +1838,7 @@ def register(router):
         return {
             "username": username,
             "referred_by_username": referred_by_username,
+            "referred_by_usernames": referred_by_usernames_list,
             "signup_bonus": signup_bonus,
             "earnings": earnings,
             "redeem_stats": redeem_stats,

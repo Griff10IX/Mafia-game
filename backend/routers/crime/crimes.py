@@ -9,6 +9,8 @@ import sys
 import logging
 from fastapi import Depends, HTTPException
 
+from utils.referral_ids import normalize_referred_by_ids, split_referral_pool, user_has_referrers
+
 logger = logging.getLogger(__name__)
 
 
@@ -581,7 +583,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
         reward = int(reward * _fm_cr)
         rank_points = int(rank_points * _fm_cr)
         # Referred user: 2% higher crime payouts
-        if current_user.get("referred_by"):
+        if user_has_referrers(current_user.get("referred_by")):
             reward = int(reward * 1.02)
         from server import rank_xp_pass_multiplier
         pass_mult = float(rank_xp_pass_multiplier(current_user))
@@ -650,15 +652,16 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
                 )
         except Exception:
             pass
-        # Referral: referrer gets 5% of crime profit (game-paid)
-        referred_by = current_user.get("referred_by")
-        if referred_by and referred_by != current_user["id"] and reward > 0:
-            referral_cash = max(0, int(reward * 0.05))
-            if referral_cash > 0:
-                await db.users.update_one(
-                    {"id": referred_by},
-                    {"$inc": {"money": referral_cash, "referral_earnings_crime": referral_cash}},
-                )
+        # Referral: referrers split 5% of crime profit evenly (game-paid)
+        ref_ids = normalize_referred_by_ids(current_user.get("referred_by"))
+        if ref_ids and reward > 0:
+            pool = max(0, int(reward * 0.05))
+            for rid, amt in split_referral_pool(pool, ref_ids, self_id=current_user["id"]):
+                if amt > 0:
+                    await db.users.update_one(
+                        {"id": rid},
+                        {"$inc": {"money": amt, "referral_earnings_crime": amt}},
+                    )
         if inc.get("respect_points"):
             await log_respect_earned(current_user["id"], inc["respect_points"], "crimes")
         if inc.get("loot_box_pieces"):

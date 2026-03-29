@@ -10,6 +10,8 @@ from fastapi import Depends, HTTPException, Query
 from bson.objectid import ObjectId
 from pydantic import BaseModel
 
+from utils.referral_ids import normalize_referred_by_ids, split_referral_pool, user_has_referrers
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -410,7 +412,7 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         except Exception:
             pass
         # Referred user: slight GTA rare car boost
-        if current_user.get("referred_by"):
+        if user_has_referrers(current_user.get("referred_by")):
             _rare_boost += REFERRED_USER_GTA_RARE_BOOST
         if _fm_gta > 1.0:
             _rare_boost += FOUNDING_MEMBER_GTA_RARE_BOOST
@@ -956,15 +958,16 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
                     "car_ids": car_ids[:limit],
                 },
             )
-            # Referral: referrer gets 10% of player-earned bullets (post family cut).
-            referred_by = user.get("referred_by")
-            if referred_by and referred_by != user["id"] and player_bullets > 0:
-                referral_bullets = max(0, int(player_bullets * 0.10))
-                if referral_bullets > 0:
-                    await db.users.update_one(
-                        {"id": referred_by},
-                        {"$inc": {"bullets": referral_bullets, "referral_earnings_melt_bullets": referral_bullets}},
-                    )
+            # Referral: referrers split 10% of player-earned bullets (post family cut).
+            ref_ids = normalize_referred_by_ids(user.get("referred_by"))
+            if ref_ids and player_bullets > 0:
+                pool = max(0, int(player_bullets * 0.10))
+                for rid, amt in split_referral_pool(pool, ref_ids, self_id=user["id"]):
+                    if amt > 0:
+                        await db.users.update_one(
+                            {"id": rid},
+                            {"$inc": {"bullets": amt, "referral_earnings_melt_bullets": amt}},
+                        )
             msg = (
                 f"Melted {deleted_count} car(s): {base_total_bullets} total bullets "
                 f"-> you kept {player_bullets}"
@@ -999,15 +1002,16 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
             "garage_scrap",
             {"action": "cash", "scrapped_count": deleted_count, "total_value": total_value, "car_ids": car_ids[:limit]},
         )
-        # Referral: referrer gets 5% of garage scrap profit (game-paid)
-        referred_by = user.get("referred_by")
-        if referred_by and referred_by != user["id"] and total_value > 0:
-            referral_cash = max(0, int(total_value * 0.05))
-            if referral_cash > 0:
-                await db.users.update_one(
-                    {"id": referred_by},
-                    {"$inc": {"money": referral_cash, "referral_earnings_garage_scrap": referral_cash}},
-                )
+        # Referral: referrers split 5% of garage scrap profit (game-paid)
+        ref_ids = normalize_referred_by_ids(user.get("referred_by"))
+        if ref_ids and total_value > 0:
+            pool = max(0, int(total_value * 0.05))
+            for rid, amt in split_referral_pool(pool, ref_ids, self_id=user["id"]):
+                if amt > 0:
+                    await db.users.update_one(
+                        {"id": rid},
+                        {"$inc": {"money": amt, "referral_earnings_garage_scrap": amt}},
+                    )
         return {
             "success": True,
             "scrapped_count": deleted_count,

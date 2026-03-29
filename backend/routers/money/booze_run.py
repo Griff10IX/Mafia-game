@@ -8,6 +8,8 @@ from pydantic import BaseModel
 
 from fastapi import Depends, HTTPException
 
+from utils.referral_ids import normalize_referred_by_ids, split_referral_pool
+
 from server import (
     db,
     get_current_user,
@@ -529,15 +531,16 @@ async def _booze_sell_impl(user: dict, booze_id: str, amount: int) -> dict:
             await update_objectives_progress(user["id"], "booze_runs", 1)
         except Exception:
             pass
-        # Referral: referrer gets 2% of booze profit (game-paid)
-        referred_by = user.get("referred_by")
-        if referred_by and referred_by != user["id"] and profit > 0:
-            referral_cash = max(0, int(profit * 0.02))
-            if referral_cash > 0:
-                await db.users.update_one(
-                    {"id": referred_by},
-                    {"$inc": {"money": referral_cash, "referral_earnings_booze": referral_cash}},
-                )
+        # Referral: referrers split 2% of booze profit (game-paid)
+        ref_ids = normalize_referred_by_ids(user.get("referred_by"))
+        if ref_ids and profit > 0:
+            pool = max(0, int(profit * 0.02))
+            for rid, amt in split_referral_pool(pool, ref_ids, self_id=user["id"]):
+                if amt > 0:
+                    await db.users.update_one(
+                        {"id": rid},
+                        {"$inc": {"money": amt, "referral_earnings_booze": amt}},
+                    )
     _invalidate_config_cache(user["id"])
     await log_activity(user.get("id", ""), user.get("username", ""), "booze_sell", {"booze": booze_name, "amount": amount, "revenue": revenue, "profit": profit})
     return {"message": f"Sold {amount} {booze_name}", "revenue": revenue, "profit": profit, "new_carrying": new_val, "is_run": is_run}
