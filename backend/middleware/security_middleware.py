@@ -11,6 +11,8 @@ from urllib.parse import urlencode
 import random
 from jose import jwt, JWTError
 
+from utils.ip_normalize import normalize_ip_string
+
 logger = logging.getLogger(__name__)
 
 # Master toggle - when False the entire security middleware is bypassed (off by default)
@@ -65,13 +67,17 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         # Cloudflare provides real IP in CF-Connecting-IP
         cf_ip = request.headers.get("cf-connecting-ip")
         if cf_ip:
-            return cf_ip.strip()
+            n = normalize_ip_string(cf_ip)
+            if n:
+                return n
         # Fallback to X-Forwarded-For (nginx or other proxies)
         forwarded = request.headers.get("x-forwarded-for")
         if forwarded:
-            return forwarded.split(",")[0].strip()
+            n = normalize_ip_string(forwarded)
+            if n:
+                return n
         if request.client:
-            return request.client.host or ""
+            return normalize_ip_string(request.client.host or "") or ""
         return ""
 
     async def dispatch(self, request: Request, call_next):

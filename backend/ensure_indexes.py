@@ -305,6 +305,17 @@ async def ensure_all_indexes(db):
         await db.bans.create_index([("active", 1), ("created_at", -1)])
         await db.ip_bans.create_index([("ip", 1), ("active", 1)])
         await db.ip_bans.create_index([("active", 1), ("created_at", -1)])
+        # One-time normalize: IPv6 has many equivalent strings; lookups use canonical form
+        try:
+            from utils.ip_normalize import normalize_ip_string
+
+            async for doc in db.ip_bans.find({}, {"_id": 1, "ip": 1}):
+                old = doc.get("ip") or ""
+                new = normalize_ip_string(old)
+                if new and new != old:
+                    await db.ip_bans.update_one({"_id": doc["_id"]}, {"$set": {"ip": new}})
+        except Exception as e:
+            logger.warning("ip_bans IP normalize: %s", e)
         await db.security_flags.create_index([("user_id", 1), ("created_at", -1)])
         await db.security_flags.create_index([("created_at", 1)])
         await db.rate_limit_clicks.create_index([("user_id", 1), ("endpoint_key", 1)], unique=True)

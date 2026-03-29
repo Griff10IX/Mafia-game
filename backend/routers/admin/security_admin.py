@@ -6,6 +6,8 @@ from typing import Optional
 
 from fastapi import Depends, HTTPException, Request
 
+from utils.ip_normalize import normalize_ip_string
+
 
 class BanUserRequest(BaseModel):
     user_id: str
@@ -102,7 +104,7 @@ def register(router):
     async def ban_ip_admin(request: BanIPRequest, current_user: dict = Depends(get_current_user)):
         if current_user.get("email") not in ADMIN_EMAILS:
             raise HTTPException(status_code=403, detail="Admin access required")
-        ip = (request.ip or "").strip()
+        ip = normalize_ip_string(request.ip or "")
         if not ip:
             raise HTTPException(status_code=400, detail="IP is required")
         now = datetime.now(timezone.utc)
@@ -137,13 +139,16 @@ def register(router):
         # Cloudflare provides real IP in CF-Connecting-IP
         cf_ip = req.headers.get("cf-connecting-ip")
         if cf_ip:
-            return cf_ip.strip()
-        # Fallback to X-Forwarded-For (nginx or other proxies)
+            n = normalize_ip_string(cf_ip)
+            if n:
+                return n
         forwarded = req.headers.get("x-forwarded-for")
         if forwarded:
-            return forwarded.split(",")[0].strip()
+            n = normalize_ip_string(forwarded)
+            if n:
+                return n
         if req.client:
-            return req.client.host or ""
+            return normalize_ip_string(req.client.host or "") or ""
         return ""
 
     async def test_ip_ban(request: Request, current_user: dict = Depends(get_current_user)):

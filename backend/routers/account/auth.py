@@ -1,6 +1,5 @@
 # Auth: register, login, password reset, /auth/me
 import asyncio
-import ipaddress
 import logging
 import random
 import re
@@ -341,25 +340,7 @@ def register(router):
     PRESTIGE_CONFIGS = getattr(srv, "PRESTIGE_CONFIGS", {})
     CARS = getattr(srv, "CARS", [])
 
-    def _normalize_ip(raw: str) -> str:
-        s = (raw or "").strip().strip('"').strip("'")
-        if not s:
-            return ""
-        if "," in s:
-            s = s.split(",")[0].strip()
-        if s.startswith("[") and "]" in s:
-            s = s[1:s.find("]")]
-        if s.count(":") == 1 and "." in s:
-            host, port = s.rsplit(":", 1)
-            if port.isdigit():
-                s = host
-        if "%" in s:
-            s = s.split("%", 1)[0]
-        try:
-            ipaddress.ip_address(s)
-            return s
-        except Exception:
-            return ""
+    from utils.ip_normalize import normalize_ip_string as _normalize_ip
 
     def _client_ip(request: Request):
         # Cloudflare provides real IP in CF-Connecting-IP
