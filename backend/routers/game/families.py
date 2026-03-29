@@ -50,7 +50,7 @@ from server import (
 MAX_FAMILIES = 10
 # Admin-seeded / tool-created families set player_cap_exempt=True so they do not count toward this cap.
 FAMILY_LIST_QUERY_LIMIT = 500  # list view: player crews + exempt crews
-FAMILY_CREATE_COST = 25_000_000  # $25M to create a family
+FAMILY_CREATE_COST = 50_000_000  # $50M to create a family
 FAMILY_ROLES = ["boss", "underboss", "consigliere", "capo", "soldier", "associate"]
 FAMILY_ROLE_LIMITS = {"boss": 1, "underboss": 1, "consigliere": 1, "capo": 4, "soldier": 15, "associate": 30}
 FAMILY_ROLE_ORDER = {"boss": 0, "underboss": 1, "consigliere": 2, "capo": 3, "soldier": 4, "associate": 5}
