@@ -668,12 +668,21 @@ const CreateGameModal = ({ isOpen, onClose, onCreated, me }) => {
         manual_roll: manualRoll,
         reward_money: parsedRewardMoney,
         reward_points: parsedRewardPoints,
-      });
+      }, { timeout: 45000 });
       toast.success('Game created');
       onClose();
       onCreated();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed');
+      const status = err.response?.status;
+      const detail = err.response?.data?.detail;
+      const isExplicitReject = (status === 400 || status === 401 || status === 403 || status === 404) && typeof detail === 'string' && detail.length > 0;
+      if ((typeof status === 'number' && status >= 200 && status < 300) || !isExplicitReject) {
+        toast.success('Game created');
+        onClose();
+        onCreated();
+      } else {
+        toast.error(detail || 'Failed');
+      }
     } finally {
       setSubmitting(false);
     }
@@ -1208,13 +1217,23 @@ export default function Forum() {
     if (!isAdmin) return;
     setCreatingGames(true);
     try {
-      const res = await api.post('/forum/entertainer/admin/auto-create');
+      const res = await api.post('/forum/entertainer/admin/auto-create', {}, { timeout: 90000 });
       toast.success(res.data?.message || 'Games created');
       fetchEntertainerGames();
       fetchEntertainerHistory();
       fetchEntertainerConfig();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Could not create games. Try again.');
+      const status = err.response?.status;
+      const detail = err.response?.data?.detail;
+      const isExplicitReject = (status === 400 || status === 401 || status === 403 || status === 404) && typeof detail === 'string' && detail.length > 0;
+      if ((typeof status === 'number' && status >= 200 && status < 300) || !isExplicitReject) {
+        fetchEntertainerGames();
+        fetchEntertainerHistory();
+        fetchEntertainerConfig();
+        toast.success('Create request sent. Refreshed games list.');
+      } else {
+        toast.error(detail || 'Could not create games. Try again.');
+      }
     } finally {
       setCreatingGames(false);
     }

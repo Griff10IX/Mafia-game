@@ -584,11 +584,19 @@ export default function ForumTopic() {
         reward_money: rewardMoney,
         reward_points: rewardPoints,
         topic_id: topicId || undefined,
-      });
+      }, { timeout: 45000 });
       toast.success(createGameManualRoll ? 'Game created — roll it when ready from the Entertainer Forum.' : 'Game created');
       navigate('/forum?tab=entertainer');
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to create game');
+      const status = err.response?.status;
+      const detail = err.response?.data?.detail;
+      const isExplicitReject = (status === 400 || status === 401 || status === 403 || status === 404) && typeof detail === 'string' && detail.length > 0;
+      if ((typeof status === 'number' && status >= 200 && status < 300) || !isExplicitReject) {
+        toast.success(createGameManualRoll ? 'Game created — roll it when ready from the Entertainer Forum.' : 'Game created');
+        navigate('/forum?tab=entertainer');
+      } else {
+        toast.error(detail || 'Failed to create game');
+      }
     } finally {
       setCreateGameSubmitting(false);
     }

@@ -504,7 +504,10 @@ async def _settle_game(game: dict):
         return
     participants = game.get("participants") or []
     now = datetime.now(timezone.utc).isoformat()
-    if game.get("game_type") == "gbox":
+    if game.get("manual_roll"):
+        # Manual games are creator-funded only; never inject system/house pots.
+        cash_pot, house_bonus = int(game.get("pot") or 0), 0
+    elif game.get("game_type") == "gbox":
         cash_pot, house_bonus = await _gbox_total_cash_pot(game)
     else:
         cash_pot, house_bonus = _house_bonus_pot_if_zero_stored_pot(game)
