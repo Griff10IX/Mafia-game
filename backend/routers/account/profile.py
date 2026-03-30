@@ -327,10 +327,11 @@ def register(router):
             )
 
         async def _messages_sent():
-            return await db.notifications.count_documents({
-                "sender_id": user_id,
-                "notification_type": {"$in": ["user_message", "user_message_sent"]},
-            })
+            # One row per outgoing DM: the sender's "sent" copy only. Do not also count the
+            # recipient's inbox row (user_message with sender_id=us) or sent is doubled.
+            return await db.notifications.count_documents(
+                {"user_id": user_id, "notification_type": "user_message_sent"}
+            )
 
         async def _family():
             fid = user.get("family_id")
@@ -558,11 +559,10 @@ def register(router):
             _user_owns_any_property(user_id),
             # Messages received: direct messages delivered to this user's inbox
             db.notifications.count_documents({"user_id": user_id, "notification_type": "user_message"}),
-            # Messages sent: any notification where this user is the sender (covers both inbox copies and sent copies)
-            db.notifications.count_documents({
-                "sender_id": user_id,
-                "notification_type": {"$in": ["user_message", "user_message_sent"]},
-            }),
+            # Messages sent: sender's outbox copy only (same as GET /notifications/sent)
+            db.notifications.count_documents(
+                {"user_id": user_id, "notification_type": "user_message_sent"}
+            ),
             _top_cars_for_profile(
                 user_id,
                 5,

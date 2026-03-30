@@ -687,6 +687,7 @@ function CharacterSelect({ characters, selected, onSelect, money, bestScore, onC
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           {characters.map(char => {
+            const CharPreview = char.render;
             const isSelected = selected === char.id;
             const isScoreLocked = char.unlockType === "score" && bestScore < char.unlockScore;
             const isOwned = char.unlockType === "free"
@@ -708,7 +709,7 @@ function CharacterSelect({ characters, selected, onSelect, money, bestScore, onC
                 {/* Character preview */}
                 <div style={{ display: "flex", justifyContent: "center", marginBottom: 8 }}>
                   <svg width="64" height="64" viewBox="0 0 36 36">
-                    <char.render x={0} y={0} rotation={0} accent={char.accentOverride || "var(--noir-primary)"} />
+                    <CharPreview x={0} y={0} rotation={0} accent={char.accentOverride || "var(--noir-primary)"} />
                   </svg>
                 </div>
                 <div style={{ fontFamily: "Cinzel,serif", fontSize: 11, color: isSelected ? "var(--noir-primary)" : "var(--noir-foreground)", letterSpacing: "0.1em", textAlign: "center", marginBottom: 4 }}>
@@ -1054,6 +1055,7 @@ export default function Gauntlet() {
   const spawnInterval = Math.max(40, Math.round(95 / speedOpt.mult));
   const character = CHARACTERS.find(c => c.id === characterId) || CHARACTERS[0];
   const charAccent = character.accentOverride || theme.accent;
+  const CharacterSprite = character.render;
 
   useEffect(() => {
     const onKey = e => {
@@ -1231,7 +1233,7 @@ export default function Gauntlet() {
             <button type="button" onClick={() => setShowCharSelect(true)}
               style={{ flex: 1, padding: "8px 10px", border: "1px solid var(--noir-border-mid)", borderRadius: 6, background: "var(--noir-raised)", cursor: "pointer", fontFamily: "Cinzel,serif", fontSize: 10, color: "var(--noir-primary)", letterSpacing: "0.1em", display: "flex", alignItems: "center", justifyContent: "center", gap: 6, position: "relative" }}>
               <svg width="18" height="18" viewBox="0 0 36 36">
-                <character.render x={0} y={0} rotation={0} accent={charAccent} />
+                <CharacterSprite x={0} y={0} rotation={0} accent={charAccent} />
               </svg>
               CHARACTER
               {newlyUnlockedChar && <span style={{ position: "absolute", top: 2, right: 6, width: 8, height: 8, borderRadius: "50%", background: "#22c55e" }} />}
@@ -1327,14 +1329,14 @@ export default function Gauntlet() {
 
               {/* Character */}
               {gameState !== "idle" && (
-                <g filter={flashGold ? "url(#charGlow)" : ""}>
-                  <character.render x={70 - BIRD_SIZE / 2} y={birdY - BIRD_SIZE / 2} rotation={birdRot} accent={charAccent} />
+                <g filter={flashGold ? "url(#charGlow)" : undefined}>
+                  <CharacterSprite x={70 - BIRD_SIZE / 2} y={birdY - BIRD_SIZE / 2} rotation={birdRot} accent={charAccent} />
                 </g>
               )}
 
               {/* Playing HUD */}
               {gameState === "playing" && (
-                <g filter={flashGold ? "url(#glow)" : ""}>
+                <g filter={flashGold ? "url(#glow)" : undefined}>
                   <text x={VIEW_W / 2} y={55} textAnchor="middle" fill={flashGold ? theme.accent : theme.accent} fontSize="42" fontFamily="Cinzel, serif" fontWeight="700" opacity="0.9">
                     {score}
                   </text>
@@ -1350,7 +1352,7 @@ export default function Gauntlet() {
               {gameState === "idle" && (
                 <g>
                   <rect width={VIEW_W} height={VIEW_H} fill="rgba(0,0,0,0.38)" />
-                  <character.render x={70 - BIRD_SIZE / 2} y={VIEW_H / 2 - BIRD_SIZE / 2} rotation={0} accent={charAccent} />
+                  <CharacterSprite x={70 - BIRD_SIZE / 2} y={VIEW_H / 2 - BIRD_SIZE / 2} rotation={0} accent={charAccent} />
                   <text x={VIEW_W / 2} y={VIEW_H / 2 - 80} textAnchor="middle" fill={theme.accent} fontSize="30" fontFamily="Cinzel, serif" fontWeight="700" letterSpacing="3">
                     FLAPPY GANGSTER
                   </text>
@@ -1396,28 +1398,43 @@ export default function Gauntlet() {
                     </g>
                   )}
 
-                  <rect x={VIEW_W / 2 - 140} y={VIEW_H / 2 + 14} width={280} height={90} rx="6" fill="rgba(var(--noir-primary-rgb),0.08)" stroke="var(--noir-border-mid)" strokeWidth="1" />
-                  <foreignObject x={VIEW_W / 2 - 140} y={VIEW_H / 2 + 14} width={280} height={90} style={{ overflow: "visible" }}>
-                    <div xmlns="http://www.w3.org/1999/xhtml" style={{ padding: "8px 12px", textAlign: "center", width: "100%", boxSizing: "border-box" }}>
-                      <div style={{ color: "var(--noir-primary)", fontSize: 13, letterSpacing: "0.15em", fontFamily: "Cinzel, serif", marginBottom: 4 }}>
-                        {reward.label !== "Nobody" ? reward.label.toUpperCase() : "NOBODY"}
-                      </div>
-                      <div style={{ color: claimStatus.state === "error" ? "#f87171" : claimStatus.cash > 0 || claimStatus.respect > 0 ? "var(--noir-primary-bright)" : "var(--noir-muted)", fontSize: 14, fontWeight: 700, fontFamily: "Cinzel, serif", lineHeight: 1.35, wordBreak: "break-word" }}>
-                        {claimStatus.state === "claiming" ? "CLAIMING..." : (claimStatus.message || (reward.cash > 0 ? `+$${reward.cash.toLocaleString()}${reward.respect > 0 ? ` & +${reward.respect}r` : ""} EARNED` : "Score 1+ to earn"))}
-                      </div>
-                      {nextTier && (
-                        <div style={{ color: "var(--noir-muted)", fontSize: 10, fontFamily: "Cinzel, serif", marginTop: 6, lineHeight: 1.3 }}>
-                          REACH {nextTier.score} FOR {nextTier.label?.toUpperCase() || `${nextTier.score} GATES`}
-                        </div>
-                      )}
-                    </div>
-                  </foreignObject>
                   <text x={VIEW_W / 2} y={VIEW_H / 2 + 136} textAnchor="middle" fill={canPlay ? "var(--noir-primary)" : "#dc2626"} fontSize="12" fontFamily="Cinzel, serif" letterSpacing="3" opacity="0.85">
                     {canPlay ? "TAP TO TRY AGAIN" : "HOURLY LIMIT REACHED"}
                   </text>
                 </g>
               )}
             </svg>
+            {gameState === "dead" && (
+              <div
+                style={{
+                  position: "absolute",
+                  zIndex: 1,
+                  left: "50%",
+                  top: `${((VIEW_H / 2 + 14) / VIEW_H) * 100}%`,
+                  transform: "translateX(-50%)",
+                  width: "min(280px, 90%)",
+                  pointerEvents: "none",
+                  borderRadius: 6,
+                  padding: "8px 12px",
+                  textAlign: "center",
+                  boxSizing: "border-box",
+                  background: "rgba(var(--noir-primary-rgb),0.08)",
+                  border: "1px solid var(--noir-border-mid)",
+                }}
+              >
+                <div style={{ color: "var(--noir-primary)", fontSize: 13, letterSpacing: "0.15em", fontFamily: "Cinzel, serif", marginBottom: 4 }}>
+                  {reward.label !== "Nobody" ? reward.label.toUpperCase() : "NOBODY"}
+                </div>
+                <div style={{ color: claimStatus.state === "error" ? "#f87171" : claimStatus.cash > 0 || claimStatus.respect > 0 ? "var(--noir-primary-bright)" : "var(--noir-muted)", fontSize: 14, fontWeight: 700, fontFamily: "Cinzel, serif", lineHeight: 1.35, wordBreak: "break-word" }}>
+                  {claimStatus.state === "claiming" ? "CLAIMING..." : (claimStatus.message || (reward.cash > 0 ? `+$${reward.cash.toLocaleString()}${reward.respect > 0 ? ` & +${reward.respect}r` : ""} EARNED` : "Score 1+ to earn"))}
+                </div>
+                {nextTier && (
+                  <div style={{ color: "var(--noir-muted)", fontSize: 10, fontFamily: "Cinzel, serif", marginTop: 6, lineHeight: 1.3 }}>
+                    REACH {nextTier.score} FOR {nextTier.label?.toUpperCase() || `${nextTier.score} GATES`}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Leaderboard */}

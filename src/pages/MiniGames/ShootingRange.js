@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Crosshair } from 'lucide-react';
 import api from '../../utils/api';
+import { formatMasteryTrainCooldownLabel, useMasteryCooldownTick } from '../../utils/shootingRangeCooldown';
 import { useMinigameCaptcha } from '../../hooks/useMinigameCaptcha';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -11,6 +12,7 @@ export default function ShootingRange() {
   const [masteryData, setMasteryData] = useState(null);
   const [weaponsList, setWeaponsList] = useState([]);
   const [trainingWeaponId, setTrainingWeaponId] = useState(null);
+  useMasteryCooldownTick(masteryData);
 
   const fetchMastery = useCallback(async () => {
     try {
@@ -88,7 +90,9 @@ export default function ShootingRange() {
                   const canTrain = info.can_train !== false;
                   const owned = weaponsList.some((x) => x.id === w.id && x.owned);
                   const training = trainingWeaponId === w.id;
-                  const disabled = !owned || training || pct >= 100 || !canTrain;
+                  const cooldownLabel = formatMasteryTrainCooldownLabel(info.next_train_at);
+                  const onCooldown = Boolean(cooldownLabel);
+                  const disabled = !owned || training || pct >= 100 || !canTrain || onCooldown;
                   return (
                     <div key={w.id} className="flex flex-wrap items-center gap-2 py-1.5 border-b border-zinc-700/30 last:border-0">
                       <span className="text-[10px] sm:text-[11px] font-heading text-foreground min-w-[100px] sm:min-w-[120px]">
@@ -105,11 +109,25 @@ export default function ShootingRange() {
                       <button
                         type="button"
                         disabled={disabled}
-                        title={!canTrain ? 'Master weaker owned guns to 100% first (in list order)' : undefined}
+                        title={
+                          onCooldown
+                            ? '5 min cooldown after each train on this weapon'
+                            : !canTrain
+                              ? 'Master weaker owned guns to 100% first (in list order)'
+                              : undefined
+                        }
                         onClick={() => trainWeapon(w.id)}
                         className="px-2 py-1 rounded text-[9px] sm:text-[10px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
                       >
-                        {training ? 'Training...' : pct >= 100 ? 'Mastered' : !canTrain ? 'Master previous first' : 'Train 5 min'}
+                        {training
+                          ? 'Training...'
+                          : pct >= 100
+                            ? 'Mastered'
+                            : !canTrain
+                              ? 'Master previous first'
+                              : cooldownLabel
+                                ? `Wait ${cooldownLabel}`
+                                : 'Train 5 min'}
                       </button>
                     </div>
                   );
