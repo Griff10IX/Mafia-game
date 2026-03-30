@@ -84,8 +84,8 @@ async def get_states(current_user: dict = Depends(get_current_user)):
         if d and d.get("owner_id"):
             u = user_map.get(d["owner_id"], {})
             money = int((u.get("money") or 0) or 0)
-            _, wealth_rank_name = get_wealth_rank(money)
-            dice_owners[st] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": dice_max, "buy_back_reward": d.get("buy_back_reward")}
+            _, wealth_rank_name, wealth_rank_color = get_wealth_rank(money)
+            dice_owners[st] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "wealth_rank_color": wealth_rank_color, "max_bet": dice_max, "buy_back_reward": d.get("buy_back_reward")}
         else:
             dice_owners[st] = {"username": None, "max_bet": dice_max}
 
@@ -95,8 +95,8 @@ async def get_states(current_user: dict = Depends(get_current_user)):
         if d and d.get("owner_id"):
             u = user_map.get(d["owner_id"], {})
             money = int((u.get("money") or 0) or 0)
-            _, wealth_rank_name = get_wealth_rank(money)
-            roulette_owners[st] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": rlt_max}
+            _, wealth_rank_name, wealth_rank_color = get_wealth_rank(money)
+            roulette_owners[st] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "wealth_rank_color": wealth_rank_color, "max_bet": rlt_max}
         else:
             roulette_owners[st] = {"username": None, "max_bet": rlt_max}
 
@@ -106,8 +106,8 @@ async def get_states(current_user: dict = Depends(get_current_user)):
         if d and d.get("owner_id"):
             u = user_map.get(d["owner_id"], {})
             money = int((u.get("money") or 0) or 0)
-            _, wealth_rank_name = get_wealth_rank(money)
-            blackjack_owners[st] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": bj_max, "buy_back_reward": d.get("buy_back_reward")}
+            _, wealth_rank_name, wealth_rank_color = get_wealth_rank(money)
+            blackjack_owners[st] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "wealth_rank_color": wealth_rank_color, "max_bet": bj_max, "buy_back_reward": d.get("buy_back_reward")}
         else:
             blackjack_owners[st] = {"username": None, "max_bet": bj_max}
 
@@ -117,8 +117,8 @@ async def get_states(current_user: dict = Depends(get_current_user)):
         if d and d.get("owner_id"):
             u = user_map.get(d["owner_id"], {})
             money = int((u.get("money") or 0) or 0)
-            _, wealth_rank_name = get_wealth_rank(money)
-            horseracing_owners[st] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": hr_max}
+            _, wealth_rank_name, wealth_rank_color = get_wealth_rank(money)
+            horseracing_owners[st] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "wealth_rank_color": wealth_rank_color, "max_bet": hr_max}
         else:
             horseracing_owners[st] = {"username": None, "max_bet": hr_max}
 
@@ -128,8 +128,8 @@ async def get_states(current_user: dict = Depends(get_current_user)):
         if d and d.get("owner_id"):
             u = user_map.get(d["owner_id"], {})
             money = int((u.get("money") or 0) or 0)
-            _, wealth_rank_name = get_wealth_rank(money)
-            videopoker_owners[st] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": vp_max}
+            _, wealth_rank_name, wealth_rank_color = get_wealth_rank(money)
+            videopoker_owners[st] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "wealth_rank_color": wealth_rank_color, "max_bet": vp_max}
         else:
             videopoker_owners[st] = {"username": None, "max_bet": vp_max}
 
@@ -141,8 +141,8 @@ async def get_states(current_user: dict = Depends(get_current_user)):
         if doc and doc.get("owner_id") and not _slots_expired(doc):
             u = user_map.get(doc["owner_id"], {})
             money = int((u.get("money") or 0) or 0)
-            _, wealth_rank_name = get_wealth_rank(money)
-            slots_owners[st] = {"user_id": doc["owner_id"], "username": doc.get("owner_username") or u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "max_bet": slots_max, "buy_back_reward": doc.get("buy_back_reward"), "next_draw_at": next_draw_at}
+            _, wealth_rank_name, wealth_rank_color = get_wealth_rank(money)
+            slots_owners[st] = {"user_id": doc["owner_id"], "username": doc.get("owner_username") or u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "wealth_rank_color": wealth_rank_color, "max_bet": slots_max, "buy_back_reward": doc.get("buy_back_reward"), "next_draw_at": next_draw_at}
         else:
             # State-owned or no doc: still include so frontend can show "State owned" and next_draw_at
             slots_owners[st] = {"username": None, "max_bet": slots_max, "next_draw_at": next_draw_at}

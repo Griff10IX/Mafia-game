@@ -407,7 +407,7 @@ def register(router):
             rank_name = f"(HDO) {_game_rank_name}"
         _prestige_level = int(user.get("prestige_level") or 0)
         _prestige_name = PRESTIGE_CONFIGS.get(_prestige_level, {}).get("name", "") if _prestige_level > 0 else ""
-        wealth_id, wealth_name = get_wealth_rank(user.get("money", 0))
+        wealth_id, wealth_name, wealth_color = get_wealth_rank(user.get("money", 0))
         is_dead = bool(user.get("is_dead"))
         now_utc = datetime.now(timezone.utc)
         five_min_ago = now_utc - timedelta(minutes=5)
@@ -625,6 +625,7 @@ def register(router):
             "prestige_name": _prestige_name,
             "wealth_rank": wealth_id,
             "wealth_rank_name": wealth_name,
+            "wealth_rank_color": wealth_color,
             "wealth_rank_range": wealth_range,
             "hide_kills_on_profile": bool(user.get("hide_kills_on_profile", False)),
             "hide_jailbusts_on_profile": bool(user.get("hide_jailbusts_on_profile", False)),

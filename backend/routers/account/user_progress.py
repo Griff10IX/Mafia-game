@@ -73,17 +73,23 @@ async def get_rank_progress(current_user: dict = Depends(get_current_user)):
 
 async def get_wealth_ranks_list():
     """Return the full wealth rank ladder. No auth required."""
-    return {"wealth_ranks": [{"id": r["id"], "name": r["name"], "min_money": r["min_money"]} for r in WEALTH_RANKS]}
+    return {
+        "wealth_ranks": [
+            {"id": r["id"], "name": r["name"], "min_money": r["min_money"], "color": r.get("color", "#64748b")}
+            for r in WEALTH_RANKS
+        ]
+    }
 
 
 async def get_wealth_progress(current_user: dict = Depends(get_current_user)):
     money = int(current_user.get("money", 0) or 0)
-    wealth_id, wealth_name = get_wealth_rank(money)
+    wealth_id, wealth_name, wealth_color = get_wealth_rank(money)
     is_max = wealth_id >= WEALTH_RANKS[-1]["id"]
     if is_max:
         return {
             "wealth_rank": wealth_id,
             "wealth_rank_name": wealth_name,
+            "wealth_rank_color": wealth_color,
             "money": money,
             "next_rank": None,
             "next_rank_name": None,
@@ -92,11 +98,21 @@ async def get_wealth_progress(current_user: dict = Depends(get_current_user)):
         }
     next_tier = next((r for r in WEALTH_RANKS if r["id"] == wealth_id + 1), None)
     if not next_tier:
-        return {"wealth_rank": wealth_id, "wealth_rank_name": wealth_name, "money": money, "next_rank": None, "next_rank_name": None, "min_money_next": None, "money_needed": 0}
+        return {
+            "wealth_rank": wealth_id,
+            "wealth_rank_name": wealth_name,
+            "wealth_rank_color": wealth_color,
+            "money": money,
+            "next_rank": None,
+            "next_rank_name": None,
+            "min_money_next": None,
+            "money_needed": 0,
+        }
     min_next = next_tier["min_money"]
     return {
         "wealth_rank": wealth_id,
         "wealth_rank_name": wealth_name,
+        "wealth_rank_color": wealth_color,
         "money": money,
         "next_rank": next_tier["id"],
         "next_rank_name": next_tier["name"],

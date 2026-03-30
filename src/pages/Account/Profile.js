@@ -174,15 +174,19 @@ const StaffProfileActions = ({ username, isDead, isAdmin, isModerator, onDone })
   );
 };
 
-const WealthRankWithTooltip = ({ wealthRankName, wealthRankRange }) => {
+const WealthRankWithTooltip = ({ wealthRankName, wealthRankRange, wealthRankColor }) => {
   const value = wealthRankName ?? '—';
   const rangeStr = wealthRankRange ?? '—';
-  
+  const color = wealthRankColor && /^#[0-9A-Fa-f]{6}$/.test(wealthRankColor.trim()) ? wealthRankColor.trim() : '#64748b';
+
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <span className="cursor-help underline decoration-dotted decoration-primary/50 underline-offset-2 text-emerald-400 font-bold">
+          <span
+            className="cursor-help underline decoration-dotted decoration-primary/50 underline-offset-2 font-bold"
+            style={{ color }}
+          >
             {value}
           </span>
         </TooltipTrigger>
@@ -261,7 +265,13 @@ const ProfileInfoCard = ({
     { 
       label: 'Wealth', 
       icon: Trophy,
-      component: <WealthRankWithTooltip wealthRankName={profile.wealth_rank_name} wealthRankRange={profile.wealth_rank_range} />
+      component: (
+        <WealthRankWithTooltip
+          wealthRankName={profile.wealth_rank_name}
+          wealthRankRange={profile.wealth_rank_range}
+          wealthRankColor={profile.wealth_rank_color}
+        />
+      )
     },
     { 
       label: 'Status', 

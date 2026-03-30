@@ -123,11 +123,18 @@ const RankProgressCard = ({ rankProgress, hasPremiumBar }) => {
 
 const StatCard = ({ stat, delay = 0 }) => {
   const Icon = stat.icon;
+  const valueStyle = stat.valueColor && /^#[0-9A-Fa-f]{6}$/.test(String(stat.valueColor).trim())
+    ? { color: String(stat.valueColor).trim() }
+    : undefined;
+  const valueClass =
+    stat.valueColor && valueStyle
+      ? 'text-sm font-heading font-bold truncate cursor-default underline decoration-dotted decoration-primary/50 underline-offset-2'
+      : 'text-sm font-heading font-bold text-foreground truncate cursor-default underline decoration-dotted decoration-primary/50 underline-offset-2';
   const valueEl = stat.tooltip ? (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
-          <p className="text-sm font-heading font-bold text-foreground truncate cursor-default underline decoration-dotted decoration-primary/50 underline-offset-2">
+          <p className={valueClass} style={valueStyle}>
             {stat.value}
           </p>
         </TooltipTrigger>
@@ -140,7 +147,7 @@ const StatCard = ({ stat, delay = 0 }) => {
       </Tooltip>
     </TooltipProvider>
   ) : (
-    <p className="text-sm font-heading font-bold text-foreground truncate">{stat.value}</p>
+    <p className={valueClass} style={valueStyle}>{stat.value}</p>
   );
 
   return (
@@ -301,7 +308,15 @@ export default function Dashboard() {
   const allStats = [
     { id: 'money', label: 'Cash', icon: DollarSign, value: `$${Math.floor(Number(user?.money ?? 0)).toLocaleString()}`, testId: 'stat-money' },
     { id: 'rank', label: 'Rank', icon: TrendingUp, value: user?.rank_name ?? '—', sub: `#${user?.rank ?? 0}`, testId: 'stat-rank' },
-    { id: 'wealth', label: 'Wealth tier', icon: DollarSign, value: user?.wealth_rank_name ?? '—', tooltip: user?.wealth_rank_range ?? '$0', testId: 'stat-wealth' },
+    {
+      id: 'wealth',
+      label: 'Wealth tier',
+      icon: DollarSign,
+      value: user?.wealth_rank_name ?? '—',
+      tooltip: user?.wealth_rank_range ?? '$0',
+      valueColor: user?.wealth_rank_color,
+      testId: 'stat-wealth',
+    },
     { id: 'rp', label: 'Rank points', icon: Target, value: Number(user?.rank_points ?? 0).toLocaleString(), testId: 'stat-rank-points' },
     { id: 'location', label: 'Location', icon: MapPin, value: user?.current_state ?? '—', testId: 'stat-location' },
     { id: 'kills', label: 'Kills', icon: Swords, value: user?.total_kills ?? 0, testId: 'stat-kills' },

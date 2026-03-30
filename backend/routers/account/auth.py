@@ -1681,7 +1681,7 @@ def register(router):
             elif current_user.get("is_help_desk_operator"):
                 rank_name = f"(HDO) {rank_name}"
             money_val = _safe_float(current_user.get("money"), 0.0)
-            wealth_id, wealth_name = get_wealth_rank(money_val)
+            wealth_id, wealth_name, wealth_color = get_wealth_rank(money_val)
             wealth_range = get_wealth_rank_range(money_val)
             # Casino/property loaded separately via GET /user/casino-property to keep auth/me fast
             u = current_user
@@ -1746,6 +1746,7 @@ def register(router):
                 rank_name=rank_name,
                 wealth_rank=wealth_id,
                 wealth_rank_name=wealth_name,
+                wealth_rank_color=wealth_color,
                 wealth_rank_range=wealth_range,
                 money=money_val,
                 points=_safe_int(u.get("points"), 0),

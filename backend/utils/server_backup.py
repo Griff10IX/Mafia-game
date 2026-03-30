@@ -59,34 +59,34 @@ RANKS = [
     {"id": 11, "name": "The Commission", "required_money": 50000000, "required_points": 50000}
 ]
 
-# Wealth ranks: based on cash on hand (ordered by min_money ascending)
+# Wealth ranks: based on cash on hand (ordered by min_money ascending). "color" is hex for UI.
 WEALTH_RANKS = [
-    {"id": 1, "name": "Broke", "min_money": 0},
-    {"id": 2, "name": "Bum", "min_money": 1},
-    {"id": 3, "name": "Very Poor", "min_money": 50_000},
-    {"id": 4, "name": "Poor", "min_money": 200_000},
-    {"id": 5, "name": "Rich", "min_money": 500_000},
-    {"id": 6, "name": "Millionaire", "min_money": 1_000_000},
-    {"id": 7, "name": "Extremely Rich", "min_money": 2_000_000},
-    {"id": 8, "name": "Fat Cat", "min_money": 5_000_000},
-    {"id": 9, "name": "Multi Millionaire", "min_money": 10_000_000},
-    {"id": 10, "name": "Big Hitter", "min_money": 25_000_000},
-    {"id": 11, "name": "Power Broker", "min_money": 50_000_000},
-    {"id": 12, "name": "Centimillionaire", "min_money": 100_000_000},
-    {"id": 13, "name": "Quarter Billionaire", "min_money": 250_000_000},
-    {"id": 14, "name": "Tycoon", "min_money": 500_000_000},
-    {"id": 15, "name": "Billionaire", "min_money": 1_000_000_000},
-    {"id": 16, "name": "Double Billionaire", "min_money": 2_000_000_000},
-    {"id": 17, "name": "Five-Billion Magnate", "min_money": 5_000_000_000},
-    {"id": 18, "name": "Multi Billionaire", "min_money": 10_000_000_000},
-    {"id": 19, "name": "Ultra Billionaire", "min_money": 50_000_000_000},
-    {"id": 20, "name": "Mega Billionaire", "min_money": 100_000_000_000},
-    {"id": 21, "name": "Quarter Trillionaire", "min_money": 250_000_000_000},
-    {"id": 22, "name": "Half Trillionaire", "min_money": 500_000_000_000},
-    {"id": 23, "name": "Trillionaire", "min_money": 1_000_000_000_000},
-    {"id": 24, "name": "Double Trillionaire", "min_money": 2_000_000_000_000},
-    {"id": 25, "name": "Grand Trillionaire", "min_money": 5_000_000_000_000},
-    {"id": 26, "name": "Multi Trillionaire", "min_money": 10_000_000_000_000},
+    {"id": 1, "name": "Broke", "min_money": 0, "color": "#64748b"},
+    {"id": 2, "name": "Bum", "min_money": 1, "color": "#78716c"},
+    {"id": 3, "name": "Very Poor", "min_money": 50_000, "color": "#94a3b8"},
+    {"id": 4, "name": "Poor", "min_money": 200_000, "color": "#cbd5e1"},
+    {"id": 5, "name": "Rich", "min_money": 500_000, "color": "#fcd34d"},
+    {"id": 6, "name": "Millionaire", "min_money": 1_000_000, "color": "#fbbf24"},
+    {"id": 7, "name": "Extremely Rich", "min_money": 2_000_000, "color": "#f59e0b"},
+    {"id": 8, "name": "Fat Cat", "min_money": 5_000_000, "color": "#84cc16"},
+    {"id": 9, "name": "Multi Millionaire", "min_money": 10_000_000, "color": "#65a30d"},
+    {"id": 10, "name": "Big Hitter", "min_money": 25_000_000, "color": "#4ade80"},
+    {"id": 11, "name": "Power Broker", "min_money": 50_000_000, "color": "#22c55e"},
+    {"id": 12, "name": "Centimillionaire", "min_money": 100_000_000, "color": "#10b981"},
+    {"id": 13, "name": "Quarter Billionaire", "min_money": 250_000_000, "color": "#14b8a6"},
+    {"id": 14, "name": "Tycoon", "min_money": 500_000_000, "color": "#2dd4bf"},
+    {"id": 15, "name": "Billionaire", "min_money": 1_000_000_000, "color": "#06b6d4"},
+    {"id": 16, "name": "Double Billionaire", "min_money": 2_000_000_000, "color": "#0ea5e9"},
+    {"id": 17, "name": "Five-Billion Magnate", "min_money": 5_000_000_000, "color": "#38bdf8"},
+    {"id": 18, "name": "Multi Billionaire", "min_money": 10_000_000_000, "color": "#60a5fa"},
+    {"id": 19, "name": "Ultra Billionaire", "min_money": 50_000_000_000, "color": "#818cf8"},
+    {"id": 20, "name": "Mega Billionaire", "min_money": 100_000_000_000, "color": "#a78bfa"},
+    {"id": 21, "name": "Quarter Trillionaire", "min_money": 250_000_000_000, "color": "#c084fc"},
+    {"id": 22, "name": "Half Trillionaire", "min_money": 500_000_000_000, "color": "#e879f9"},
+    {"id": 23, "name": "Trillionaire", "min_money": 1_000_000_000_000, "color": "#f472b6"},
+    {"id": 24, "name": "Double Trillionaire", "min_money": 2_000_000_000_000, "color": "#fb7185"},
+    {"id": 25, "name": "Grand Trillionaire", "min_money": 5_000_000_000_000, "color": "#fcd34d"},
+    {"id": 26, "name": "Multi Trillionaire", "min_money": 10_000_000_000_000, "color": "#fef08a"},
 ]
 
 BODYGUARD_SLOT_COSTS = [100, 200, 300, 400]
@@ -329,6 +329,7 @@ class UserResponse(BaseModel):
     rank_name: str
     wealth_rank: int = 1
     wealth_rank_name: str = "Broke"
+    wealth_rank_color: str = "#64748b"
     wealth_rank_range: str = "$0"
     money: float
     points: int
@@ -921,13 +922,15 @@ def get_rank_info(rank_points: int):
     return 1, RANKS[0]["name"]
 
 
-def get_wealth_rank(money: int | float) -> tuple[int, str]:
-    """Get wealth rank (1920s–1930s style) based on cash on hand. Returns (id, name)."""
+def get_wealth_rank(money: int | float) -> tuple[int, str, str]:
+    """Get wealth rank based on cash on hand. Returns (id, name, color_hex)."""
     m = int(money) if money is not None else 0
     for i in range(len(WEALTH_RANKS) - 1, -1, -1):
         if m >= WEALTH_RANKS[i]["min_money"]:
-            return WEALTH_RANKS[i]["id"], WEALTH_RANKS[i]["name"]
-    return WEALTH_RANKS[0]["id"], WEALTH_RANKS[0]["name"]
+            r = WEALTH_RANKS[i]
+            return r["id"], r["name"], r.get("color", "#64748b")
+    r0 = WEALTH_RANKS[0]
+    return r0["id"], r0["name"], r0.get("color", "#64748b")
 
 
 def get_wealth_rank_range(money: int | float) -> str:
@@ -1085,7 +1088,7 @@ async def get_me(current_user: dict = Depends(get_current_user)):
     )
     
     rank_id, rank_name = get_rank_info(current_user.get("rank_points", 0))
-    wealth_id, wealth_name = get_wealth_rank(current_user.get("money", 0))
+    wealth_id, wealth_name, wealth_color = get_wealth_rank(current_user.get("money", 0))
     wealth_range = get_wealth_rank_range(current_user.get("money", 0))
     return UserResponse(
         id=current_user["id"],
@@ -1095,6 +1098,7 @@ async def get_me(current_user: dict = Depends(get_current_user)):
         rank_name=rank_name,
         wealth_rank=wealth_id,
         wealth_rank_name=wealth_name,
+        wealth_rank_color=wealth_color,
         wealth_rank_range=wealth_range,
         money=current_user["money"],
         points=current_user["points"],
@@ -1128,7 +1132,7 @@ async def get_user_profile(username: str, current_user: dict = Depends(get_curre
         raise HTTPException(status_code=404, detail="User not found")
 
     rank_id, rank_name = get_rank_info(user.get("rank_points", 0))
-    wealth_id, wealth_name = get_wealth_rank(user.get("money", 0))
+    wealth_id, wealth_name, wealth_color = get_wealth_rank(user.get("money", 0))
     is_dead = bool(user.get("is_dead"))
     online = False
     last_seen = user.get("last_seen")
@@ -1157,6 +1161,7 @@ async def get_user_profile(username: str, current_user: dict = Depends(get_curre
         "rank_name": rank_name,
         "wealth_rank": wealth_id,
         "wealth_rank_name": wealth_name,
+        "wealth_rank_color": wealth_color,
         "wealth_rank_range": wealth_range,
         "kills": user.get("total_kills", 0),
         "jail_busts": user.get("jail_busts", 0),
@@ -2506,19 +2511,25 @@ async def get_rank_progress(current_user: dict = Depends(get_current_user)):
 @api_router.get("/wealth-ranks")
 async def get_wealth_ranks_list():
     """Return the full wealth rank ladder (1920s–1930s style). No auth required."""
-    return {"wealth_ranks": [{"id": r["id"], "name": r["name"], "min_money": r["min_money"]} for r in WEALTH_RANKS]}
+    return {
+        "wealth_ranks": [
+            {"id": r["id"], "name": r["name"], "min_money": r["min_money"], "color": r.get("color", "#64748b")}
+            for r in WEALTH_RANKS
+        ]
+    }
 
 
 @api_router.get("/user/wealth-progress")
 async def get_wealth_progress(current_user: dict = Depends(get_current_user)):
     """Current wealth rank and progress to next tier."""
     money = int(current_user.get("money", 0) or 0)
-    wealth_id, wealth_name = get_wealth_rank(money)
+    wealth_id, wealth_name, wealth_color = get_wealth_rank(money)
     is_max = wealth_id >= WEALTH_RANKS[-1]["id"]
     if is_max:
         return {
             "wealth_rank": wealth_id,
             "wealth_rank_name": wealth_name,
+            "wealth_rank_color": wealth_color,
             "money": money,
             "next_rank": None,
             "next_rank_name": None,
@@ -2527,11 +2538,21 @@ async def get_wealth_progress(current_user: dict = Depends(get_current_user)):
         }
     next_tier = next((r for r in WEALTH_RANKS if r["id"] == wealth_id + 1), None)
     if not next_tier:
-        return {"wealth_rank": wealth_id, "wealth_rank_name": wealth_name, "money": money, "next_rank": None, "next_rank_name": None, "min_money_next": None, "money_needed": 0}
+        return {
+            "wealth_rank": wealth_id,
+            "wealth_rank_name": wealth_name,
+            "wealth_rank_color": wealth_color,
+            "money": money,
+            "next_rank": None,
+            "next_rank_name": None,
+            "min_money_next": None,
+            "money_needed": 0,
+        }
     min_next = next_tier["min_money"]
     return {
         "wealth_rank": wealth_id,
         "wealth_rank_name": wealth_name,
+        "wealth_rank_color": wealth_color,
         "money": money,
         "next_rank": next_tier["id"],
         "next_rank_name": next_tier["name"],
@@ -4850,8 +4871,8 @@ async def get_states(current_user: dict = Depends(get_current_user)):
     for d in dice_docs:
         u = user_map.get(d["owner_id"], {})
         money = int((u.get("money") or 0) or 0)
-        _, wealth_rank_name = get_wealth_rank(money)
-        dice_owners[d["city"]] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name}
+        _, wealth_rank_name, wealth_rank_color = get_wealth_rank(money)
+        dice_owners[d["city"]] = {"user_id": d["owner_id"], "username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "wealth_rank_color": wealth_rank_color}
     return {"cities": list(STATES), "games": CASINO_GAMES, "dice_owners": dice_owners}
 
 @api_router.get("/travel/info")
