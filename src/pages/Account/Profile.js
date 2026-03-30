@@ -22,7 +22,7 @@ const PROFILE_STYLES = `
   .prof-row { transition: all 0.2s ease; }
   .prof-row:hover { background-color: rgba(var(--noir-primary-rgb), 0.04); }
   .prof-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
-  .prof-banner-content .forum-content-media { max-width: 100%; height: auto; border-radius: 8px; margin: 0.25em 0; display: block; }
+  .prof-banner-content .forum-content-media { max-width: 100% !important; height: auto !important; border-radius: 8px; margin: 0.25em 0; display: block; }
   .prof-banner-content .forum-content-ytube { position: relative; width: 100%; max-width: 560px; margin: 0.5em auto; padding-bottom: 56.25%; }
   .prof-banner-content .forum-content-ytube-iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; border-radius: 8px; }
 `;

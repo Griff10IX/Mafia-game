@@ -98,6 +98,12 @@ function summarizeRedeemRewardsForAdmin(rewards) {
   return parts.length ? parts.join(' · ') : '—';
 }
 
+function formatWholeCash(x) {
+  const n = Number(x ?? 0);
+  if (!Number.isFinite(n)) return '0';
+  return Math.trunc(n).toLocaleString();
+}
+
 // Searchable tools list - each item has: label (searchable), categoryId (scroll target), collapseKey (optional - to expand section)
 const SEARCHABLE_TOOLS = [
   // Player Management
@@ -413,6 +419,7 @@ export default function Admin() {
   const [giveAllPoints, setGiveAllPoints] = useState(100);
   const [giveAllMoney, setGiveAllMoney] = useState(10000);
   const [removeAllPointsLoading, setRemoveAllPointsLoading] = useState(false);
+  const [zeroAllPointsLoading, setZeroAllPointsLoading] = useState(false);
   const [clearSearchesLoading, setClearSearchesLoading] = useState(false);
   const [dropHumanBgLoading, setDropHumanBgLoading] = useState(false);
   const [testPayoutLoading, setTestPayoutLoading] = useState(false);
@@ -4062,6 +4069,19 @@ export default function Admin() {
       toast.error(error.response?.data?.detail || 'Failed to remove all points');
     } finally {
       setRemoveAllPointsLoading(false);
+    }
+  };
+
+  const handleZeroAllPoints = async () => {
+    if (!window.confirm('FINAL WARNING: Set ALL points=0 for alive accounts? This is irreversible.')) return;
+    setZeroAllPointsLoading(true);
+    try {
+      const res = await api.post('/admin/zero-all-points?max_users=100000');
+      toast.success(res.data?.message || 'Points set to 0');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to zero out all points');
+    } finally {
+      setZeroAllPointsLoading(false);
     }
   };
 
@@ -8391,7 +8411,7 @@ export default function Admin() {
                     <div key={u.username || idx} className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30 text-[10px] font-heading space-y-0.5">
                       <div className="font-bold text-primary text-[11px]">{u.username ?? '—'}</div>
                       <div className="text-mutedForeground">Email: {u.email ?? '—'}</div>
-                      <div>Cash: ${(u.money ?? 0).toLocaleString()} · Bank: ${(u.bank_balance ?? 0).toLocaleString()}</div>
+                      <div>Cash: ${formatWholeCash(u.money)} · Bank: ${formatWholeCash(u.bank_balance)}</div>
                       <div>Points: {(u.points ?? 0).toLocaleString()} · Prestige: {u.prestige ?? 0}</div>
                       <div className="text-mutedForeground">Registered: {u.created_at ? new Date(u.created_at).toLocaleString() : '—'}</div>
                       <div className="text-mutedForeground">Last login: {u.last_login ? new Date(u.last_login).toLocaleString() : '—'}</div>
@@ -9124,11 +9144,11 @@ export default function Admin() {
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px] font-heading">
                   <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
                     <div className="text-mutedForeground uppercase">Cash in circulation</div>
-                    <div className="font-bold text-foreground">${(economyOverview.total_money ?? 0).toLocaleString()}</div>
+                    <div className="font-bold text-foreground">${formatWholeCash(economyOverview.total_money)}</div>
                   </div>
                   <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
                     <div className="text-mutedForeground uppercase">Banked + Swiss</div>
-                    <div className="font-bold text-foreground">${(economyOverview.total_banked ?? ((economyOverview.total_bank ?? 0) + (economyOverview.total_swiss ?? 0))).toLocaleString()}</div>
+                    <div className="font-bold text-foreground">${formatWholeCash(economyOverview.total_banked ?? ((economyOverview.total_bank ?? 0) + (economyOverview.total_swiss ?? 0)))}</div>
                   </div>
                   <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
                     <div className="text-mutedForeground uppercase">Total Points</div>
@@ -9136,7 +9156,7 @@ export default function Admin() {
                   </div>
                   <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
                     <div className="text-mutedForeground uppercase">Avg Cash / Player</div>
-                    <div className="font-bold text-foreground">${(economyOverview.avg_money ?? 0).toLocaleString()}</div>
+                    <div className="font-bold text-foreground">${formatWholeCash(economyOverview.avg_money)}</div>
                   </div>
                   <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
                     <div className="text-mutedForeground uppercase">Avg Points / Player</div>
@@ -9154,7 +9174,7 @@ export default function Admin() {
                       {economyOverview.top5_richest.map((u, i) => (
                         <div key={u.username || i} className="flex justify-between px-1">
                           <span className="font-bold text-foreground">{i + 1}. {u.username}</span>
-                          <span className="text-mutedForeground">${(u.money ?? 0).toLocaleString()} cash · ${((u.banked_total ?? ((u.bank ?? 0) + (u.swiss ?? 0))) || 0).toLocaleString()} banked · ${(u.swiss ?? 0).toLocaleString()} swiss · {(u.points ?? 0).toLocaleString()} pts</span>
+                          <span className="text-mutedForeground">${formatWholeCash(u.money)} cash · ${formatWholeCash((u.banked_total ?? ((u.bank ?? 0) + (u.swiss ?? 0))) || 0)} banked · ${formatWholeCash(u.swiss)} swiss · {(u.points ?? 0).toLocaleString()} pts</span>
                         </div>
                       ))}
                     </div>
@@ -9262,10 +9282,10 @@ export default function Admin() {
                           {capitalBreakdown.top_combined_liquid.map((u, i) => (
                             <tr key={u.username || i} className="border-b border-zinc-700/20">
                               <td className="py-1 pr-1 font-medium">{u.username}</td>
-                              <td className="py-1 text-right">${(u.money ?? 0).toLocaleString()}</td>
-                              <td className="py-1 text-right">${(u.bank_balance ?? 0).toLocaleString()}</td>
-                              <td className="py-1 text-right">${(u.swiss_balance ?? 0).toLocaleString()}</td>
-                              <td className="py-1 text-right font-bold text-primary">${(u.liquid ?? 0).toLocaleString()}</td>
+                              <td className="py-1 text-right">${formatWholeCash(u.money)}</td>
+                              <td className="py-1 text-right">${formatWholeCash(u.bank_balance)}</td>
+                              <td className="py-1 text-right">${formatWholeCash(u.swiss_balance)}</td>
+                              <td className="py-1 text-right font-bold text-primary">${formatWholeCash(u.liquid)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -9278,7 +9298,7 @@ export default function Admin() {
                     <div className="text-[10px] font-heading text-mutedForeground uppercase mb-1">Top 20 cash on hand only</div>
                     <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[9px]">
                       {capitalBreakdown.top_cash_on_hand.map((u, i) => (
-                        <span key={u.username || i} className="text-foreground"><span className="font-bold">{u.username}</span> ${(u.money ?? 0).toLocaleString()}</span>
+                        <span key={u.username || i} className="text-foreground"><span className="font-bold">{u.username}</span> ${formatWholeCash(u.money)}</span>
                       ))}
                     </div>
                   </div>
@@ -11658,6 +11678,11 @@ export default function Admin() {
                 <ActionRow icon={Trash2} label="Remove All Points" description="Remove ALL points from alive accounts. Items granted by those points are not auto-removed; use the store spends table + Remove button to retract entitlements.">
                   <BtnDanger onClick={handleRemoveAllPoints} disabled={removeAllPointsLoading}>
                     {removeAllPointsLoading ? 'Removing…' : 'Remove All'}
+                  </BtnDanger>
+                </ActionRow>
+                <ActionRow icon={Trash2} label="Set All Points to 0" description="Emergency fix: force users.points = 0 for alive accounts (prevents negative balances).">
+                  <BtnDanger onClick={handleZeroAllPoints} disabled={zeroAllPointsLoading}>
+                    {zeroAllPointsLoading ? 'Setting…' : 'Set to 0'}
                   </BtnDanger>
                 </ActionRow>
             <ActionRow icon={Gift} label="Give All Money" description="Give money to all alive accounts">

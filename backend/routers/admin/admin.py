@@ -757,6 +757,38 @@ def register(router):
             "removed_total": removed_total,
         }
 
+    @router.post("/admin/zero-all-points")
+    async def admin_zero_all_points(
+        max_users: int = Query(5000, ge=1, le=100000),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Set `users.points` to 0 for up to `max_users` alive accounts (safe against negative balances).
+        This does not attempt to reconcile point_lots/ledger provenance; it is intended as an emergency admin reset.
+        """
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        scope_match = {
+            "is_dead": {"$ne": True},
+            "is_npc": {"$ne": True},
+            "is_bodyguard": {"$ne": True},
+            "points": {"$ne": 0},
+        }
+
+        target_users = await db.users.find(
+            scope_match,
+            {"_id": 0, "id": 1},
+        ).limit(int(max_users)).to_list(int(max_users))
+
+        user_ids = [u.get("id") for u in (target_users or []) if u.get("id")]
+        if not user_ids:
+            return {"message": "No users with non-zero points found.", "updated": 0}
+
+        res = await db.users.update_many({"id": {"$in": user_ids}}, {"$set": {"points": 0}})
+        leaderboard_module.invalidate_leaderboard_cache()
+        return {"message": f"Set points=0 for {res.modified_count} user(s).", "updated": res.modified_count}
+
     @router.get("/admin/points/spend-store")
     async def admin_points_spend_store_list(
         limit: int = Query(200, ge=1, le=1000),
