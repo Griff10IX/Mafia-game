@@ -289,9 +289,9 @@ async def _update_auto_rank_stats_gta(db, user_id: str, car: dict, now: datetime
 
 
 async def _update_auto_rank_stats_booze(db, user_id: str, now: datetime, profit: int = 0):
-    """Record one booze run and its profit. Profit is already (sell revenue - buy cost) from booze_run sell impl."""
+    """Record Auto Rank booze stats. Do not increment booze_run_profit_total here — _booze_sell_impl already does."""
     await _ensure_stats_since(db, user_id, now)
-    await db.users.update_one({"id": user_id}, {"$inc": {"auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": int(profit), "booze_run_profit_total": int(profit)}})
+    await db.users.update_one({"id": user_id}, {"$inc": {"auto_rank_total_booze_runs": 1, "auto_rank_total_booze_profit": int(profit)}})
 
 
 async def _update_auto_rank_stats_melt(db, user_id: str, melted_count: int = 0, total_bullets: int = 0, scrapped_count: int = 0, total_cash: int = 0):

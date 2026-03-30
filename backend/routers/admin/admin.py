@@ -5054,6 +5054,102 @@ def register(router):
             "leaders": leaders,
         }
 
+    @router.post("/admin/booze-run/repair-double-counted-profit")
+    async def admin_booze_run_repair_double_counted_profit(
+        dry_run: bool = Query(True, description="If true, only return counts and a sample preview; no DB writes"),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Fix legacy double-count: Auto Rank once added booze_run_profit_total twice (impl + stats).
+        Sets booze_run_profit_total := max(0, booze_run_profit_total - auto_rank_total_booze_profit).
+        Admin only. Test on backup/staging first.
+        """
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin only")
+
+        dedup_flag = "booze_run_profit_auto_rank_dedup_applied"
+        match = {
+            "auto_rank_total_booze_profit": {"$gt": 0},
+            dedup_flag: {"$ne": True},
+        }
+        n_match = await db.users.count_documents(match)
+
+        sample = []
+        async for r in db.users.aggregate(
+            [
+                {"$match": match},
+                {
+                    "$project": {
+                        "_id": 0,
+                        "id": 1,
+                        "username": 1,
+                        "before": {"$ifNull": ["$booze_run_profit_total", 0]},
+                        "subtract": {"$ifNull": ["$auto_rank_total_booze_profit", 0]},
+                        "after": {
+                            "$max": [
+                                0,
+                                {
+                                    "$subtract": [
+                                        {"$ifNull": ["$booze_run_profit_total", 0]},
+                                        {"$ifNull": ["$auto_rank_total_booze_profit", 0]},
+                                    ]
+                                },
+                            ]
+                        },
+                    }
+                },
+                {"$limit": 20},
+            ]
+        ):
+            sample.append(
+                {
+                    "id": r.get("id"),
+                    "username": r.get("username") or "?",
+                    "booze_run_profit_total_before": int(r.get("before") or 0),
+                    "subtract": int(r.get("subtract") or 0),
+                    "booze_run_profit_total_after": int(r.get("after") or 0),
+                }
+            )
+
+        if dry_run:
+            return {
+                "dry_run": True,
+                "users_matched": n_match,
+                "sample": sample,
+                "message": "No changes applied. Call with dry_run=false to apply.",
+            }
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        pipeline = [
+            {
+                "$set": {
+                    "booze_run_profit_total": {
+                        "$max": [
+                            0,
+                            {
+                                "$subtract": [
+                                    {"$ifNull": ["$booze_run_profit_total", 0]},
+                                    {"$ifNull": ["$auto_rank_total_booze_profit", 0]},
+                                ]
+                            },
+                        ]
+                    },
+                    dedup_flag: True,
+                    "booze_run_profit_auto_rank_dedup_applied_at": now_iso,
+                }
+            }
+        ]
+        result = await db.users.update_many(match, pipeline)
+        from routers.game import leaderboard as leaderboard_module
+
+        leaderboard_module.invalidate_leaderboard_cache()
+        return {
+            "dry_run": False,
+            "users_matched": result.matched_count,
+            "users_modified": result.modified_count,
+            "sample": sample,
+        }
+
     @router.get("/admin/booze-run/analytics/user/{user_id_or_username}")
     async def admin_booze_run_analytics_user(
         user_id_or_username: str,
