@@ -4970,6 +4970,14 @@ def register(router):
                     jail_sell += 1
                 if uid:
                     jail_users.add(uid)
+        # Revenue = cash from completed sells; profit = net after buy cost & run multipliers.
+        # Sum(revenue) − sum(profit) ≈ aggregate buy cost for goods sold (per-event identity in game code).
+        buy_cost_approx = max(0, sell_revenue - sell_profit)
+        avg_profit = round((sell_profit / sell_count), 2) if sell_count > 0 else 0.0
+        avg_revenue = round((sell_revenue / sell_count), 2) if sell_count > 0 else 0.0
+        profit_pct_of_revenue = (
+            round(100.0 * (sell_profit / sell_revenue), 2) if sell_revenue > 0 else 0.0
+        )
         return {
             "generated_at": now.isoformat(),
             "days": days,
@@ -4977,6 +4985,10 @@ def register(router):
                 "count": sell_count,
                 "total_profit": sell_profit,
                 "total_revenue": sell_revenue,
+                "total_buy_cost_approx": buy_cost_approx,
+                "avg_profit_per_sell": avg_profit,
+                "avg_revenue_per_sell": avg_revenue,
+                "profit_pct_of_revenue": profit_pct_of_revenue,
                 "unique_users": len(sell_users),
             },
             "booze_run_jail": {
@@ -5204,6 +5216,9 @@ def register(router):
                         "win_profit": {
                             "$sum": {"$cond": [{"$eq": ["$type", "booze_run_sell"]}, {"$ifNull": ["$profit", 0]}, 0]}
                         },
+                        "win_revenue": {
+                            "$sum": {"$cond": [{"$eq": ["$type", "booze_run_sell"]}, {"$ifNull": ["$revenue", 0]}, 0]}
+                        },
                         "win_jails": {"$sum": {"$cond": [{"$eq": ["$type", "booze_run_jail"]}, 1, 0]}},
                         "win_loss_basis": {
                             "$sum": {
@@ -5221,8 +5236,10 @@ def register(router):
         g = agg_rows[0] if agg_rows else {}
         win_sells = int(g.get("win_sells") or 0)
         win_profit = int(g.get("win_profit") or 0)
+        win_revenue = int(g.get("win_revenue") or 0)
         win_jails = int(g.get("win_jails") or 0)
         win_loss_basis = int(g.get("win_loss_basis") or 0)
+        win_buy_cost_approx = max(0, win_revenue - win_profit)
         recent_events: List[dict] = []
         ev_cursor = db.economy_events.find(match, {"_id": 0}).sort("at", -1).limit(100)
         async for e in ev_cursor:
@@ -5262,6 +5279,8 @@ def register(router):
             "window": {
                 "completed_runs": win_sells,
                 "total_profit": win_profit,
+                "total_revenue": win_revenue,
+                "total_buy_cost_approx": win_buy_cost_approx,
                 "avg_profit_per_run": win_avg,
                 "jail_events": win_jails,
                 "total_confiscation_basis": win_loss_basis,

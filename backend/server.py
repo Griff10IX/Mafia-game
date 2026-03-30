@@ -2305,6 +2305,12 @@ async def startup_db():
                 logging.info("Loaded car override for %s: value=%s travel=%s", car_id, car.get("value"), car.get("travel_bonus"))
     except Exception as e:
         logging.warning("Failed to load car overrides: %s", e)
+    try:
+        from routers.money import booze_run as _booze_run_mod
+
+        await _booze_run_mod.load_booze_globals_from_db()
+    except Exception as e:
+        logging.warning("Failed to load booze listed-price globals: %s", e)
     from routers.account.profile import ensure_profile_indexes
     from ensure_indexes import ensure_all_indexes
     await ensure_profile_indexes(db)

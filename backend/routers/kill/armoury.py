@@ -57,8 +57,9 @@ ARMOURY_MAX_STOCK_PER_ITEM = 15
 # Store: buy bullets with points (pack size -> points cost)
 BULLET_PACKS = {5000: 100, 10000: 175, 50000: 775, 100000: 1525}  # matches store
 
-# Consumable tokens: 1 token = 1 hour effect. Stackable up to max_stack_hours per type.
+# Consumable tokens: 1 token = 1 hour effect. Stackable up to max_stack_hours per type (24h cap).
 TOKEN_DURATION_HOURS = 1
+TOKEN_MAX_STACK_HOURS = 24
 TOKEN_TYPES = (
     "xp_crimes",
     "xp_gta",
@@ -80,16 +81,16 @@ TOKEN_TYPES = (
 # expiry_field: optional "token expiry" ISO timestamp (for unactivated tokens)
 # max_stack_hours: cap when stacking (per-token stacking rules)
 TOKEN_CONFIG = {
-    "xp_crimes":     {"count_field": "xp_crimes_tokens",     "until_field": "xp_crimes_until",     "max_stack_hours": 6},
-    "xp_gta":        {"count_field": "xp_gta_tokens",        "until_field": "xp_gta_until",        "max_stack_hours": 6},
-    "auto_rank_2h":  {"count_field": "auto_rank_2h_tokens",  "until_field": "auto_rank_trial_until", "duration_hours": 2, "max_stack_hours": 6},
-    "melt":          {"count_field": "melt_tokens",          "until_field": "melt_until",          "max_stack_hours": 6},
-    "oc_reduced":    {"count_field": "oc_reduced_tokens",    "until_field": "oc_reduced_until",    "max_stack_hours": 6},
-    "booze":         {"count_field": "booze_tokens",         "until_field": "booze_until",         "max_stack_hours": 6},
-    "racket":        {"count_field": "racket_tokens",        "until_field": "racket_until",        "max_stack_hours": 6},
-    "travel":        {"count_field": "travel_tokens",        "until_field": "travel_until",        "max_stack_hours": 2},
-    "properties":    {"count_field": "properties_tokens",    "until_field": "properties_until",    "max_stack_hours": 3},
-    "jailbust_bonus": {"count_field": "jailbust_tokens",     "until_field": "jailbust_bonus_until", "max_stack_hours": 6},
+    "xp_crimes":     {"count_field": "xp_crimes_tokens",     "until_field": "xp_crimes_until",     "max_stack_hours": TOKEN_MAX_STACK_HOURS},
+    "xp_gta":        {"count_field": "xp_gta_tokens",        "until_field": "xp_gta_until",        "max_stack_hours": TOKEN_MAX_STACK_HOURS},
+    "auto_rank_2h":  {"count_field": "auto_rank_2h_tokens",  "until_field": "auto_rank_trial_until", "duration_hours": 2, "max_stack_hours": TOKEN_MAX_STACK_HOURS},
+    "melt":          {"count_field": "melt_tokens",          "until_field": "melt_until",          "max_stack_hours": TOKEN_MAX_STACK_HOURS},
+    "oc_reduced":    {"count_field": "oc_reduced_tokens",    "until_field": "oc_reduced_until",    "max_stack_hours": TOKEN_MAX_STACK_HOURS},
+    "booze":         {"count_field": "booze_tokens",         "until_field": "booze_until",         "max_stack_hours": TOKEN_MAX_STACK_HOURS},
+    "racket":        {"count_field": "racket_tokens",        "until_field": "racket_until",        "max_stack_hours": TOKEN_MAX_STACK_HOURS},
+    "travel":        {"count_field": "travel_tokens",        "until_field": "travel_until",        "max_stack_hours": TOKEN_MAX_STACK_HOURS},
+    "properties":    {"count_field": "properties_tokens",    "until_field": "properties_until",    "max_stack_hours": TOKEN_MAX_STACK_HOURS},
+    "jailbust_bonus": {"count_field": "jailbust_tokens",     "until_field": "jailbust_bonus_until", "max_stack_hours": TOKEN_MAX_STACK_HOURS},
     # 24h multiplier window, only when the token is activated.
     "rank_xp_pass": {
         "count_field": "rank_xp_pass_tokens",
@@ -1948,7 +1949,7 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
     if count < 1:
         raise HTTPException(status_code=400, detail="No tokens of this type available.")
 
-    # Special case: auto_rank_2h grants temporary Auto Rank access (stackable up to 6h).
+    # Special case: auto_rank_2h grants temporary Auto Rank access (stackable up to TOKEN_MAX_STACK_HOURS).
     if req.token_type == "auto_rank_2h":
         # Parse current temporary Auto Rank window.
         now = datetime.now(timezone.utc)
@@ -2017,6 +2018,16 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
         if existing_until and existing_until > now:
             add_until = existing_until + duration_td
             new_until = min(add_until, cap_until)
+            if new_until <= existing_until:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Already at the maximum Auto Rank stack ({max_stack_hours}h). Wait for it to expire or use 'Apply all' after it runs down.",
+                )
+            if new_until < add_until:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Using one token would exceed the stack cap and waste time. Use 'Apply all' to add only the tokens needed to reach the cap.",
+                )
         else:
             new_until = now + timedelta(hours=min(duration_hours, max_stack_hours))
         new_until_iso = new_until.isoformat()
@@ -2144,6 +2155,23 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
         add_until = current_until + timedelta(hours=duration_hours)
         cap_until = now + timedelta(hours=max_stack_hours)
         new_until = min(add_until, cap_until)
+        if new_until <= current_until:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Already at the maximum stack ({max_stack_hours}h). Wait for this boost to expire, "
+                    "or use 'Apply all' after it runs down."
+                ),
+            )
+        # Do not consume a full token if it would only partially apply before hitting the cap (users lose time).
+        if req.token_type != "rank_xp_pass" and new_until < add_until:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Using one token would exceed the {max_stack_hours}h cap and waste time. "
+                    "Use 'Apply all' to add only the tokens needed to reach the cap without losing tokens."
+                ),
+            )
     else:
         new_until = now + timedelta(hours=min(duration_hours, max_stack_hours))
     new_until_iso = new_until.isoformat()

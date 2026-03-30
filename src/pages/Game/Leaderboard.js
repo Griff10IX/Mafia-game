@@ -127,7 +127,18 @@ function StatBoard({ title, icon: Icon, entries, valueLabel, topLabel }) {
                   )}
                 </div>
                 <div className="text-[10px] text-primary font-heading">
-                  {typeof entry.value === 'number' ? entry.value.toLocaleString() : (entry.value ?? '—')} {valueLabel}
+                  {(() => {
+                    const formatted =
+                      typeof entry.value === 'number' ? entry.value.toLocaleString() : (entry.value ?? '—');
+                    if (valueLabel === '$') {
+                      return formatted === '—' ? '—' : `$${formatted}`;
+                    }
+                    return (
+                      <>
+                        {formatted} {valueLabel}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
               {entry.rank <= 3 && (

@@ -1757,7 +1757,11 @@ export default function Layout({ children }) {
             }
           }
           const msg = typeof lockedMessage === 'object' ? lockedMessage?.message : lockedMessage;
-          if (msg && !isAdmin) {
+          // Admins with "act as normal" are not isAdmin but still have hasAdminEmail — allow bodyguards
+          // (points purchases) when combat/store-style locks are on so staff can test or play guards.
+          const isBodyguardsPage = pathNorm === '/kill/bodyguards' || pathNorm.startsWith('/kill/bodyguards/');
+          const bypassMaintenanceLock = isAdmin || (hasAdminEmail && isBodyguardsPage);
+          if (msg && !bypassMaintenanceLock) {
             return (
               <div className="flex flex-col items-center justify-center min-h-[50vh] px-4 text-center">
                 <div className="rounded-xl border-2 p-8 max-w-md w-full" style={{ borderColor: 'var(--noir-primary)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.08)' }}>

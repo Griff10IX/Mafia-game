@@ -209,9 +209,17 @@ export default function Bodyguards() {
       const response = await api.post('/bodyguards/hire', { slot, is_robot: isRobot });
       toast.success(response?.data?.message ?? 'Bodyguard hired', { duration: 10000 });
       refreshUser().catch(() => {});
-      // No automatic slot update — user refreshes the page when they want to see the new bodyguard
+      await fetchData();
     } catch (error) {
-      const detail = (error.response?.data?.detail || 'Failed to hire bodyguard').toString();
+      const raw = error.response?.data?.detail;
+      const detail =
+        typeof raw === 'string'
+          ? raw
+          : Array.isArray(raw)
+            ? raw.map((x) => (typeof x === 'string' ? x : x?.msg || x?.message || JSON.stringify(x))).join(', ')
+            : raw != null
+              ? String(raw)
+              : 'Failed to hire bodyguard';
       refreshUser().catch(() => {});
       fetchData().catch(() => {});
       if (detail.includes('Slot already occupied')) {

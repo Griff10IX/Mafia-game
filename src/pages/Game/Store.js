@@ -37,14 +37,14 @@ const STORE_TOKEN_MAX_HELD = 15;
 
 /** Single consumable tokens (armoury); activate from My Inventory */
 const TOKEN_STORE_ITEMS = [
-  { tokenType: 'xp_crimes', title: 'Crimes XP Token', price: 42, userKey: 'xp_crimes_tokens', desc: '2× crime XP for 1h when activated (stack caps apply).' },
-  { tokenType: 'xp_gta', title: 'GTA XP Token', price: 42, userKey: 'xp_gta_tokens', desc: '2× GTA XP for 1h when activated.' },
-  { tokenType: 'melt', title: 'Melt Token', price: 42, userKey: 'melt_tokens', desc: 'Melt bonus hour when activated.' },
-  { tokenType: 'oc_reduced', title: 'OC Token', price: 42, userKey: 'oc_reduced_tokens', desc: 'Reduced OC cooldown hour when activated.' },
-  { tokenType: 'booze', title: 'Booze Token', price: 42, userKey: 'booze_tokens', desc: 'Booze run bonus hour when activated.' },
-  { tokenType: 'racket', title: 'Racket Token', price: 42, userKey: 'racket_tokens', desc: 'Racket income bonus hour when activated.' },
-  { tokenType: 'properties', title: 'Properties Token', price: 48, userKey: 'properties_tokens', desc: 'Property income bonus when activated.' },
-  { tokenType: 'travel', title: 'Travel Token', price: 55, userKey: 'travel_tokens', desc: 'Travel bonus when activated (shorter stack cap).' },
+  { tokenType: 'xp_crimes', title: 'Crimes XP Token', price: 42, userKey: 'xp_crimes_tokens', desc: '2× crime XP for 1h when activated (stack up to 24h).' },
+  { tokenType: 'xp_gta', title: 'GTA XP Token', price: 42, userKey: 'xp_gta_tokens', desc: '2× GTA XP for 1h when activated (stack up to 24h).' },
+  { tokenType: 'melt', title: 'Melt Token', price: 42, userKey: 'melt_tokens', desc: 'Melt bonus hour when activated (stack up to 24h).' },
+  { tokenType: 'oc_reduced', title: 'OC Token', price: 42, userKey: 'oc_reduced_tokens', desc: 'Reduced OC cooldown hour when activated (stack up to 24h).' },
+  { tokenType: 'booze', title: 'Booze Token', price: 42, userKey: 'booze_tokens', desc: 'Booze run bonus hour when activated (stack up to 24h).' },
+  { tokenType: 'racket', title: 'Racket Token', price: 42, userKey: 'racket_tokens', desc: 'Racket income bonus hour when activated (stack up to 24h).' },
+  { tokenType: 'properties', title: 'Properties Token', price: 48, userKey: 'properties_tokens', desc: 'Property income bonus when activated (stack up to 24h).' },
+  { tokenType: 'travel', title: 'Travel Token', price: 55, userKey: 'travel_tokens', desc: 'Travel bonus when activated (stack up to 24h).' },
   { tokenType: 'jailbust_bonus', title: 'Jailbust Token', price: 48, userKey: 'jailbust_tokens', desc: '+10% bust success for 1h when activated.' },
 ];
 

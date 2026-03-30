@@ -504,8 +504,13 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
     slots = int(current_user.get("bodyguard_slots") or 0)
     if slot < 1 or slot > 4:
         raise HTTPException(status_code=400, detail="Invalid bodyguard slot")
-    if slot > slots:
-        raise HTTPException(status_code=400, detail=f"You must purchase bodyguard slot {slots + 1} first before hiring into slot {slot}")
+    # Hiring a robot unlocks the next slot automatically (same points as hire — no separate slot purchase).
+    if slot > slots + 1:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Hire bodyguards in order (next available is slot {slots + 1}).",
+        )
+    unlock_next_slot = slot == slots + 1
     existing = await db.bodyguards.find_one(
         {"user_id": current_user["id"], "slot_number": slot},
         {"_id": 0}
@@ -526,13 +531,16 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
     total_cost = int(base_cost * event_cost_mult * inflation_mult)
     now = datetime.now(timezone.utc)
     window_end = now + timedelta(hours=BODYGUARD_INFLATION_HOURS)
+    inc_doc = {
+        "points": -total_cost,
+        "bodyguard_lifetime_hires": 1,
+        "bodyguard_lifetime_spent_hires": total_cost,
+        "lifetime_points_spent": total_cost,
+    }
+    if unlock_next_slot:
+        inc_doc["bodyguard_slots"] = 1
     update_op = {
-        "$inc": {
-            "points": -total_cost,
-            "bodyguard_lifetime_hires": 1,
-            "bodyguard_lifetime_spent_hires": total_cost,
-            "lifetime_points_spent": total_cost,
-        },
+        "$inc": inc_doc,
         "$set": {
             "bodyguard_inflation_until": window_end.isoformat(),
             "bodyguard_inflation_level": inflation_level + 1,

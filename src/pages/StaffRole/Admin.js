@@ -201,22 +201,27 @@ const SEARCHABLE_TOOLS = [
   { label: 'Events Toggle', categoryId: 'admin-gameworld', collapseKey: 'events', keywords: ['events', 'toggle', 'enable', 'disable'] },
   { label: 'Beta Round Signup', categoryId: 'admin-gameworld', collapseKey: 'betaSignup', keywords: ['beta', 'signup', 'round', 'points', 'cash', 'testing'] },
   { label: 'Pre-Registered Accounts', categoryId: 'admin-gameworld', collapseKey: 'preregisterAccounts', keywords: ['pre-register', 'preregister', 'emails', 'launch list'] },
-  { label: 'Booze Run Rotation', categoryId: 'admin-gameworld', collapseKey: 'boozeRun', keywords: ['booze', 'run', 'rotation', 'prices', 'jail', 'bust'] },
+  { label: 'Booze Run rotation & global discount', categoryId: 'admin-gameworld', collapseKey: 'boozeRun', keywords: ['booze', 'run', 'rotation', 'prices', 'discount', 'listed', 'nudge', 'global', 'jail', 'bust', 'prohibition'] },
+  { label: 'Booze Run analytics', categoryId: 'admin-analytics-monitoring', collapseKey: 'boozeRunAnalytics', keywords: ['booze', 'analytics', 'economy', 'events', 'profit', 'revenue', 'jail', 'leaderboard'] },
   { label: 'Presence simulator', categoryId: 'admin-gameworld', collapseKey: 'presenceSimulator', keywords: ['presence', 'simulator', 'online', 'active', 'fake', 'last_seen'] },
   { label: 'Slots Draw', categoryId: 'admin-gameworld', collapseKey: 'slotsDraw', keywords: ['slots', 'draw', 'lottery'] },
   { label: 'Crack the Safe jackpot', categoryId: 'admin-gameworld', collapseKey: 'crackSafeJackpot', keywords: ['crack', 'safe', 'jackpot', 'pot', 'lower'] },
   { label: 'State Heads', categoryId: 'admin-gameworld', collapseKey: 'stateHeads', keywords: ['state', 'heads', 'family', 'territory'] },
   { label: 'Release soft-launch', categoryId: 'admin-gameworld', collapseKey: 'releaseSoftLaunch', keywords: ['release', 'soft', 'launch', 'pvp', 'kill', 'game pass'] },
   { label: 'Reset Racket Cooldown', categoryId: 'admin-gameworld', collapseKey: 'racketReset', keywords: ['racket', 'cooldown', 'reset', 'family'] },
-  { label: 'Casino Settings', categoryId: 'admin-gameworld', collapseKey: 'casinoCaps', keywords: ['casino', 'caps', 'max bet', 'buyback'] },
-  { label: 'Admin Settings', categoryId: 'admin-gameworld', collapseKey: 'adminSettings', keywords: ['admin', 'settings', 'config', 'banner', 'stock'] },
-  { label: 'Login Lock', categoryId: 'admin-gameworld', collapseKey: 'adminSettings', keywords: ['login', 'lock', 'maintenance'] },
+  { label: 'Casino limits (global caps)', categoryId: 'admin-gameworld', collapseKey: 'casinoLimits', keywords: ['casino', 'limits', 'caps', 'max bet', 'buyback', 'poker', 'blind'] },
+  { label: 'Casino per-game max bets', categoryId: 'admin-gameworld', collapseKey: 'casinoMaxBets', keywords: ['casino', 'max bet', 'per game', 'slots', 'blackjack', 'roulette'] },
+  { label: 'Admin display & signup', categoryId: 'admin-gameworld', collapseKey: 'adminDisplay', keywords: ['admin', 'display', 'colour', 'color', 'online', 'email', 'verification', 'vpn', 'proxy', 'user agent', 'signup'] },
+  { label: 'Launch & login lock', categoryId: 'admin-gameworld', collapseKey: 'launchSettings', keywords: ['login', 'lock', 'launch', 'store', 'preorder', 'preregister', 'banner', 'landing'] },
+  { label: 'Maintenance banner', categoryId: 'admin-gameworld', collapseKey: 'maintenanceBanner', keywords: ['maintenance', 'banner', 'downtime'] },
   // Security
   { label: 'Security Summary', categoryId: 'admin-security', collapseKey: 'securitySummary', keywords: ['security', 'summary', 'flags'] },
   { label: 'Session stats', categoryId: 'admin-security', collapseKey: 'sessionStats', keywords: ['session', 'sessions', 'active', 'log out', 'revoke', '24h'] },
   { label: 'IP Bans', categoryId: 'admin-security', collapseKey: 'ipBans', keywords: ['ip', 'ban', 'block'] },
   { label: 'Rate Limits', categoryId: 'admin-security', collapseKey: 'rateLimits', keywords: ['rate', 'limit', 'throttle'] },
   { label: 'Cloudflare Bot Block', categoryId: 'admin-security', collapseKey: 'cfBotBlock', keywords: ['cloudflare', 'bot', 'block', 'cf'] },
+  { label: 'Cloudflare auto block', categoryId: 'admin-security', collapseKey: 'cfAutoBlock', keywords: ['cloudflare', 'auto', 'block', 'cf'] },
+  { label: 'Security panel', categoryId: 'admin-security', collapseKey: 'security', keywords: ['security', 'flags', 'threat', 'monitor'] },
   // Cheat Detection
   { label: 'Cheat Detection', categoryId: 'admin-cheat', collapseKey: 'cheat', keywords: ['cheat', 'detection', 'suspicious'] },
   { label: 'Find Duplicates', categoryId: 'admin-cheat', collapseKey: 'duplicates', keywords: ['duplicate', 'multi', 'account'] },
@@ -227,12 +232,28 @@ const SEARCHABLE_TOOLS = [
   { label: 'Swiss Bank Overview', categoryId: 'admin-analytics', collapseKey: 'swissBank', keywords: ['swiss', 'bank', 'balance', 'hidden', 'money', 'wipe'] },
   { label: 'Points purchases (store spends)', categoryId: 'admin-analytics', collapseKey: 'pointsStoreSpends', keywords: ['points', 'store', 'spend', 'bought', 'purchases', 'refund'] },
   { label: 'User Analytics', categoryId: 'admin-analytics', collapseKey: 'analytics', keywords: ['analytics', 'stats', 'users'] },
+  { label: 'Analytics V2 workspace', categoryId: 'admin-analytics-monitoring', collapseKey: 'analyticsWorkspaceV2', keywords: ['analytics', 'v2', 'workspace', 'rollup', 'rollups'] },
+  { label: 'Economy overview', categoryId: 'admin-analytics-monitoring', collapseKey: 'economyOverview', keywords: ['economy', 'overview', 'gdp', 'money'] },
+  { label: 'Capital breakdown', categoryId: 'admin-analytics-monitoring', collapseKey: 'capitalBreakdown', keywords: ['capital', 'breakdown', 'wealth'] },
+  { label: 'Player activity', categoryId: 'admin-analytics-monitoring', collapseKey: 'playerActivity', keywords: ['player', 'activity', 'dau', 'mau'] },
+  { label: 'Attack analytics', categoryId: 'admin-analytics-monitoring', collapseKey: 'attackAnalytics', keywords: ['attack', 'analytics', 'pvp', 'kills'] },
+  { label: 'Crime analytics', categoryId: 'admin-analytics-monitoring', collapseKey: 'crimeAnalytics', keywords: ['crime', 'analytics'] },
+  { label: 'Casino analytics', categoryId: 'admin-analytics-monitoring', collapseKey: 'casinoAnalytics', keywords: ['casino', 'analytics', 'house'] },
+  { label: 'Trades analytics', categoryId: 'admin-analytics-monitoring', collapseKey: 'tradesAnalytics', keywords: ['trades', 'analytics', 'stock', 'market'] },
+  { label: 'Hitlist & bodyguards analytics', categoryId: 'admin-analytics-monitoring', collapseKey: 'hitlistBodyguardsAnalytics', keywords: ['hitlist', 'bodyguard', 'analytics'] },
+  { label: 'Economy analytics', categoryId: 'admin-analytics-monitoring', collapseKey: 'economyAnalytics', keywords: ['economy', 'analytics', 'sink', 'faucet'] },
+  { label: 'Player compare', categoryId: 'admin-analytics-monitoring', collapseKey: 'playerCompare', keywords: ['compare', 'players', 'side by side'] },
   // Logs
   { label: 'Live Activity Feed', categoryId: 'admin-logs', collapseKey: 'activityFeed', keywords: ['activity', 'feed', 'live', 'real-time', 'actions', 'gambling', 'bank', 'transfer'] },
   { label: 'Minigame Payouts', categoryId: 'admin-logs', collapseKey: 'minigamePayouts', keywords: ['minigame', 'payout', 'reward', 'cash', 'mini', 'game'] },
   { label: 'Weekly Leaderboard Payouts', categoryId: 'admin-logs', collapseKey: 'weeklyLeaderboardPayouts', keywords: ['leaderboard', 'weekly', 'payout', 'respect', 'points', 'top 10'] },
   { label: 'Attack Logs', categoryId: 'admin-logs', collapseKey: 'attackLogs', keywords: ['attack', 'log', 'kill'] },
   { label: 'Mod Action Logs', categoryId: 'admin-logs', collapseKey: 'modLogs', keywords: ['mod', 'action', 'log'] },
+  { label: 'Crime logs', categoryId: 'admin-logs', collapseKey: 'crimeLogs', keywords: ['crime', 'log', 'heist'] },
+  { label: 'GTA logs', categoryId: 'admin-logs', collapseKey: 'gtaLogs', keywords: ['gta', 'log', 'theft', 'car'] },
+  { label: 'Jail logs', categoryId: 'admin-logs', collapseKey: 'jailLogs', keywords: ['jail', 'log', 'sentence'] },
+  { label: 'Bank logs', categoryId: 'admin-logs', collapseKey: 'bankLogs', keywords: ['bank', 'log', 'transfer'] },
+  { label: 'Stock logs', categoryId: 'admin-logs', collapseKey: 'stockLogs', keywords: ['stock', 'log', 'shares'] },
   // Testing Tools
   { label: 'Search & Attack Tools', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['search', 'attack', 'time'] },
   { label: 'Set Search Time', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['search', 'time', 'minutes'] },
@@ -248,6 +269,13 @@ const SEARCHABLE_TOOLS = [
   { label: 'Generate Bodyguards', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'generate', 'robot'] },
   { label: 'Test Bodyguard Payout', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'payout', 'test'] },
   { label: 'Lifetime Objectives Testing', categoryId: 'admin-testing', collapseKey: 'lifetimeObjectives', keywords: ['lifetime', 'objectives', 'completed it', 'test'] },
+  { label: 'GTA exclusive pool & dealer', categoryId: 'admin-world-systems', collapseKey: 'gtaPool', keywords: ['gta', 'exclusive', 'pool', 'dealer', 'cars', 'values'] },
+  { label: 'System health', categoryId: 'admin-operations', collapseKey: 'systemHealth', keywords: ['system', 'health', 'uptime', 'status', 'db'] },
+  { label: 'Moderation related accounts', categoryId: 'admin-operations', collapseKey: 'moderationRelated', keywords: ['moderation', 'related', 'linked', 'accounts'] },
+  { label: 'Page locks (admin)', categoryId: 'admin-operations', collapseKey: 'pageLocks', keywords: ['page', 'lock', 'route'] },
+  { label: 'Mod display', categoryId: 'admin-operations', collapseKey: 'modDisplay', keywords: ['mod', 'display', 'colour', 'color', 'badge'] },
+  { label: 'Cheat detection (mod)', categoryId: 'admin-operations', collapseKey: 'cheatDetectionMod', keywords: ['cheat', 'detection', 'mod', 'suspicious'] },
+  { label: 'Database tools', categoryId: 'admin-world-systems', collapseKey: 'database', keywords: ['database', 'mongo', 'wipe', 'migrate'] },
   // Quick & Bulk
   { label: 'Give All Points', categoryId: 'admin-quick', collapseKey: 'quick', keywords: ['give', 'all', 'points', 'bulk'] },
   { label: 'Give All Money', categoryId: 'admin-quick', collapseKey: 'quick', keywords: ['give', 'all', 'money', 'bulk'] },
@@ -390,6 +418,8 @@ export default function Admin() {
   const [boozeJailMinPct, setBoozeJailMinPct] = useState('');
   const [boozeJailMaxPct, setBoozeJailMaxPct] = useState('');
   const [boozeJailSaving, setBoozeJailSaving] = useState(false);
+  const [boozeListedPrice, setBoozeListedPrice] = useState(null);
+  const [boozePriceSaving, setBoozePriceSaving] = useState(false);
   const [presenceSim, setPresenceSim] = useState(null);
   const [presenceSimLoading, setPresenceSimLoading] = useState(false);
   const [psForm, setPsForm] = useState({
@@ -508,14 +538,19 @@ export default function Admin() {
 
   const filteredTools = useMemo(() => {
     if (!toolSearch.trim()) return [];
-    const q = toolSearch.toLowerCase().trim();
+    const raw = toolSearch.toLowerCase().trim();
+    const words = raw.split(/\s+/).filter(Boolean);
     const visibleIds = isAdmin ? null : new Set(modVisibleCategoryIds);
-    return SEARCHABLE_TOOLS.filter(tool => {
+    return SEARCHABLE_TOOLS.filter((tool) => {
       const normalizedCategoryId = normalizeCategoryId(tool.categoryId);
       if (['Hitlist NPCs', 'Jail NPCs', 'Reset Hitlist NPC Timers', 'Seed Families'].includes(tool.label)) return false;
       if (visibleIds && !visibleIds.has(normalizedCategoryId)) return false;
-      return tool.label.toLowerCase().includes(q) || tool.keywords.some(kw => kw.toLowerCase().includes(q));
-    }).map(tool => ({ ...tool, categoryId: normalizeCategoryId(tool.categoryId) })).slice(0, 8);
+      const label = tool.label.toLowerCase();
+      const matchWord = (w) => label.includes(w) || tool.keywords.some((kw) => kw.toLowerCase().includes(w));
+      return words.every(matchWord);
+    })
+      .map((tool) => ({ ...tool, categoryId: normalizeCategoryId(tool.categoryId) }))
+      .slice(0, 14);
   }, [toolSearch, isAdmin, modVisibleCategoryIds]);
 
   const handleToolSelect = (tool) => {
@@ -912,6 +947,7 @@ export default function Admin() {
         fetchBetaSignupStatus();
         fetchBoozeRotation();
         fetchBoozeJailChances();
+        fetchBoozeListedPrice();
         fetchAdminSettings();
         fetchModerators();
         fetchCfBotBlockStatus();
@@ -1147,6 +1183,45 @@ export default function Admin() {
       setBoozeRotationSeconds(res.data?.rotation_seconds ?? null);
     } catch {
       setBoozeRotationSeconds(null);
+    }
+  };
+
+  const fetchBoozeListedPrice = async () => {
+    try {
+      const res = await api.get('/admin/booze-listed-price');
+      setBoozeListedPrice(res.data ?? null);
+    } catch {
+      setBoozeListedPrice(null);
+    }
+  };
+
+  const handleBoozeListedPriceNudge = async (delta) => {
+    setBoozePriceSaving(true);
+    try {
+      const res = await api.post('/admin/booze-listed-price', { delta_percent_off: delta });
+      const pct = res.data?.percent_off;
+      const label = pct != null && Number(pct) > 0
+        ? `Now ${Number(pct).toFixed(2).replace(/\.?0+$/, '')}% off listed prices`
+        : 'Full listed prices (no global discount)';
+      toast.success(label);
+      await fetchBoozeListedPrice();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to update booze prices');
+    } finally {
+      setBoozePriceSaving(false);
+    }
+  };
+
+  const handleBoozeListedPriceReset = async () => {
+    setBoozePriceSaving(true);
+    try {
+      await api.post('/admin/booze-listed-price', { reset: true });
+      toast.success('Booze listed prices restored to full (no global discount)');
+      await fetchBoozeListedPrice();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to reset');
+    } finally {
+      setBoozePriceSaving(false);
     }
   };
 
@@ -6831,11 +6906,16 @@ export default function Admin() {
           icon={Clock}
           title="Booze Run rotation"
           badge={
-            <span className="text-[10px] font-heading">
+            <span className="text-[10px] font-heading flex flex-wrap items-center gap-x-2 gap-y-0.5 justify-end max-w-[min(100%,14rem)]">
               {boozeRotationSeconds != null ? (
                 <span className="text-amber-400">{boozeRotationSeconds}s (test)</span>
               ) : (
                 <span className="text-mutedForeground">3h (normal)</span>
+              )}
+              {boozeListedPrice != null && Number(boozeListedPrice.percent_off) > 0 && (
+                <span className="text-emerald-400 font-bold whitespace-nowrap">
+                  −{Number(boozeListedPrice.percent_off).toFixed(1).replace(/\.0$/, '')}% global
+                </span>
               )}
             </span>
           }
@@ -6845,6 +6925,7 @@ export default function Admin() {
             if (collapsed.boozeRun) {
               fetchBoozeRotation();
               fetchBoozeJailChances();
+              fetchBoozeListedPrice();
             }
           }}
         />
@@ -6854,6 +6935,32 @@ export default function Admin() {
             <div className="flex flex-wrap gap-2">
               <BtnPrimary onClick={handleBoozeRotation15s}>Set rotation to 15s</BtnPrimary>
               <BtnSecondary onClick={handleBoozeRotationReset}>Reset to 3h</BtnSecondary>
+            </div>
+            <div className="border-t border-zinc-700/40 pt-3 mt-3 space-y-2">
+              <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wide">Listed price discount (global)</div>
+              <p className="text-[10px] text-mutedForeground">
+                Nudge the <strong className="text-foreground/90">global discount</strong> on rotation buy/sell listed prices (all cities &amp; types). Persists in{' '}
+                <code className="text-[9px] bg-zinc-800/80 px-0.5 rounded">game_settings</code>.{' '}
+                <strong className="text-foreground/90">−1% / −5%</strong> = one more point off listed prices (cheaper);{' '}
+                <strong className="text-foreground/90">+1% / +5%</strong> = one fewer point off (pricier). Caps at full price and 99% off.
+              </p>
+              {boozeListedPrice && (
+                <p className="text-[9px] text-mutedForeground font-heading">
+                  Active: {(Number(boozeListedPrice.percent_off) > 0
+                    ? `${Number(boozeListedPrice.percent_off).toFixed(2).replace(/\.?0+$/, '')}% off`
+                    : 'no discount')}
+                  {' '}(×{Number(boozeListedPrice.listed_price_mult).toFixed(4)})
+                </p>
+              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[9px] text-mutedForeground font-heading uppercase w-full sm:w-auto">Nudge</span>
+                <BtnSecondary type="button" onClick={() => handleBoozeListedPriceNudge(5)} disabled={boozePriceSaving}>−5%</BtnSecondary>
+                <BtnSecondary type="button" onClick={() => handleBoozeListedPriceNudge(1)} disabled={boozePriceSaving}>−1%</BtnSecondary>
+                <BtnSecondary type="button" onClick={() => handleBoozeListedPriceNudge(-1)} disabled={boozePriceSaving}>+1%</BtnSecondary>
+                <BtnSecondary type="button" onClick={() => handleBoozeListedPriceNudge(-5)} disabled={boozePriceSaving}>+5%</BtnSecondary>
+                <BtnSecondary onClick={handleBoozeListedPriceReset} disabled={boozePriceSaving}>Full price</BtnSecondary>
+                <BtnSecondary type="button" onClick={fetchBoozeListedPrice} disabled={boozePriceSaving}>Refresh</BtnSecondary>
+              </div>
             </div>
             <div className="border-t border-zinc-700/40 pt-3 mt-3 space-y-2">
               <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wide">Jail bust chance (buy &amp; sell)</div>
@@ -10246,9 +10353,20 @@ export default function Admin() {
           />
           {!collapsed.boozeRunAnalytics && (
             <div className="p-3 space-y-3">
-              <p className="text-[10px] text-mutedForeground font-heading">
-                Completed runs and jails from <code className="text-[9px] bg-zinc-800/80 px-1 rounded">economy_events</code>; lifetime totals from <code className="text-[9px] bg-zinc-800/80 px-1 rounded">users</code> (net of confiscation).
-              </p>
+              <div className="text-[10px] text-mutedForeground font-heading space-y-1 leading-relaxed">
+                <p>
+                  <span className="text-foreground/90 font-semibold">How to read this</span>
+                  {' — '}
+                  Numbers in the overview are summed from <code className="text-[9px] bg-zinc-800/80 px-1 rounded">economy_events</code> in the selected window.
+                  <strong className="text-foreground/80"> Sell revenue</strong> is cash from completed runs; <strong className="text-foreground/80">sell profit</strong> is net after buy cost and run rules (badges, multiplier).
+                  They are <em>not</em> supposed to match confiscation — jail rows track inventory cost lost separately.
+                </p>
+                <p>
+                  Leaderboard rows use lifetime fields on <code className="text-[9px] bg-zinc-800/80 px-1 rounded">users</code>.
+                  <strong className="text-foreground/80"> Run profit (LB)</strong> is <code className="text-[9px]">booze_run_profit_total</code> (leaderboard);
+                  <strong className="text-foreground/80"> Net profit (stored)</strong> is <code className="text-[9px]">booze_profit_total</code> (same sell logic, not double-counted by Auto Rank).
+                </p>
+              </div>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-[9px] text-mutedForeground font-heading uppercase">Overview / leaders</span>
                 {[7, 30, 90].map((d) => (
@@ -10288,46 +10406,88 @@ export default function Admin() {
                 </BtnPrimary>
               </div>
               {boozeRunOverview && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
-                    <div className="text-[9px] text-mutedForeground font-heading uppercase">Sells (runs)</div>
-                    <div className="text-sm font-heading font-bold">{boozeRunOverview.booze_run_sell?.count?.toLocaleString?.() ?? '—'}</div>
-                  </div>
-                  <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
-                    <div className="text-[9px] text-mutedForeground font-heading uppercase">Sell profit</div>
-                    <div className="text-sm font-heading font-bold text-green-400">${(boozeRunOverview.booze_run_sell?.total_profit ?? 0).toLocaleString()}</div>
-                  </div>
-                  <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
-                    <div className="text-[9px] text-mutedForeground font-heading uppercase">Sell revenue</div>
-                    <div className="text-sm font-heading font-bold">${(boozeRunOverview.booze_run_sell?.total_revenue ?? 0).toLocaleString()}</div>
-                  </div>
-                  <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
-                    <div className="text-[9px] text-mutedForeground font-heading uppercase">Unique sellers</div>
-                    <div className="text-sm font-heading font-bold">{boozeRunOverview.booze_run_sell?.unique_users?.toLocaleString?.() ?? '—'}</div>
-                  </div>
-                  <div className="bg-zinc-800/60 rounded p-2 border border-amber-700/30">
-                    <div className="text-[9px] text-mutedForeground font-heading uppercase">Jails</div>
-                    <div className="text-sm font-heading font-bold text-amber-400">{boozeRunOverview.booze_run_jail?.count?.toLocaleString?.() ?? '—'}</div>
-                  </div>
-                  <div className="bg-zinc-800/60 rounded p-2 border border-amber-700/30">
-                    <div className="text-[9px] text-mutedForeground font-heading uppercase">Confiscation basis</div>
-                    <div className="text-sm font-heading font-bold text-amber-400">${(boozeRunOverview.booze_run_jail?.total_inventory_loss_basis ?? 0).toLocaleString()}</div>
-                  </div>
-                  <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
-                    <div className="text-[9px] text-mutedForeground font-heading uppercase">Jail buy / sell</div>
-                    <div className="text-sm font-heading font-bold">
-                      {(boozeRunOverview.booze_run_jail?.buy_phase_count ?? 0).toLocaleString()} / {(boozeRunOverview.booze_run_jail?.sell_phase_count ?? 0).toLocaleString()}
+                <div className="space-y-2">
+                  <div className="text-[9px] font-heading text-primary/90 uppercase tracking-wide">Completed sells (window)</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                    <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase">Completed sells</div>
+                      <div className="text-[8px] text-mutedForeground font-heading normal-case">economy_events booze_run_sell</div>
+                      <div className="text-sm font-heading font-bold">{boozeRunOverview.booze_run_sell?.count?.toLocaleString?.() ?? '—'}</div>
+                    </div>
+                    <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase">Sell revenue</div>
+                      <div className="text-[8px] text-mutedForeground font-heading normal-case">Cash in from sales</div>
+                      <div className="text-sm font-heading font-bold">${(boozeRunOverview.booze_run_sell?.total_revenue ?? 0).toLocaleString()}</div>
+                    </div>
+                    <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase">Net sell profit</div>
+                      <div className="text-[8px] text-mutedForeground font-heading normal-case">After buy cost &amp; rules</div>
+                      <div className="text-sm font-heading font-bold text-green-400">${(boozeRunOverview.booze_run_sell?.total_profit ?? 0).toLocaleString()}</div>
+                    </div>
+                    <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase">Buy cost (approx.)</div>
+                      <div className="text-[8px] text-mutedForeground font-heading normal-case">Revenue − profit (sum)</div>
+                      <div className="text-sm font-heading font-bold">${(boozeRunOverview.booze_run_sell?.total_buy_cost_approx ?? 0).toLocaleString()}</div>
+                    </div>
+                    <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase">Profit / revenue</div>
+                      <div className="text-[8px] text-mutedForeground font-heading normal-case">Aggregate margin</div>
+                      <div className="text-sm font-heading font-bold">{(boozeRunOverview.booze_run_sell?.profit_pct_of_revenue ?? 0).toLocaleString()}%</div>
+                    </div>
+                    <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase">Avg / sell</div>
+                      <div className="text-[8px] text-mutedForeground font-heading normal-case">Profit · Revenue</div>
+                      <div className="text-xs font-heading font-bold">
+                        ${(boozeRunOverview.booze_run_sell?.avg_profit_per_sell ?? 0).toLocaleString()}
+                        <span className="text-mutedForeground font-normal"> · </span>
+                        ${(boozeRunOverview.booze_run_sell?.avg_revenue_per_sell ?? 0).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase">Unique sellers</div>
+                      <div className="text-[8px] text-mutedForeground font-heading normal-case">Users with ≥1 sell</div>
+                      <div className="text-sm font-heading font-bold">{boozeRunOverview.booze_run_sell?.unique_users?.toLocaleString?.() ?? '—'}</div>
                     </div>
                   </div>
-                  <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
-                    <div className="text-[9px] text-mutedForeground font-heading uppercase">Users (any)</div>
-                    <div className="text-sm font-heading font-bold">{boozeRunOverview.unique_users_any?.toLocaleString?.() ?? '—'}</div>
+                  <div className="text-[9px] font-heading text-amber-400/90 uppercase tracking-wide pt-1">Jails (window)</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div className="bg-zinc-800/60 rounded p-2 border border-amber-700/30">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase">Jail events</div>
+                      <div className="text-[8px] text-mutedForeground font-heading normal-case">booze_run_jail</div>
+                      <div className="text-sm font-heading font-bold text-amber-400">{boozeRunOverview.booze_run_jail?.count?.toLocaleString?.() ?? '—'}</div>
+                    </div>
+                    <div className="bg-zinc-800/60 rounded p-2 border border-amber-700/30">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase">Confiscation basis</div>
+                      <div className="text-[8px] text-mutedForeground font-heading normal-case">Inventory cost lost</div>
+                      <div className="text-sm font-heading font-bold text-amber-400">${(boozeRunOverview.booze_run_jail?.total_inventory_loss_basis ?? 0).toLocaleString()}</div>
+                    </div>
+                    <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase">Jail at buy / sell</div>
+                      <div className="text-[8px] text-mutedForeground font-heading normal-case">Phase counts</div>
+                      <div className="text-sm font-heading font-bold">
+                        {(boozeRunOverview.booze_run_jail?.buy_phase_count ?? 0).toLocaleString()} / {(boozeRunOverview.booze_run_jail?.sell_phase_count ?? 0).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase">Unique jailed</div>
+                      <div className="text-[8px] text-mutedForeground font-heading normal-case">Users with ≥1 jail</div>
+                      <div className="text-sm font-heading font-bold">{boozeRunOverview.booze_run_jail?.unique_users?.toLocaleString?.() ?? '—'}</div>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="bg-zinc-900/40 rounded p-2 border border-zinc-700/30">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase">Distinct users (sell or jail)</div>
+                      <div className="text-[8px] text-mutedForeground font-heading normal-case">Union of seller and jailed user ids</div>
+                      <div className="text-sm font-heading font-bold">{boozeRunOverview.unique_users_any?.toLocaleString?.() ?? '—'}</div>
+                    </div>
                   </div>
                 </div>
               )}
               {boozeRunLeaders?.leaders && (
                 <div className="overflow-x-auto max-h-64">
-                  <p className="text-[10px] text-mutedForeground font-heading mb-1">Leaders — sort: {boozeRunLeaders.sort}; lifetime stats on users.</p>
+                  <p className="text-[10px] text-mutedForeground font-heading mb-1">
+                    Leaders — sort: {boozeRunLeaders.sort}; lifetime fields from <code className="text-[9px] bg-zinc-800/80 px-0.5 rounded">users</code>. Run profit (LB) = leaderboard total; net profit = stored stats field.
+                  </p>
                   {boozeRunLeaders.leaders.length === 0 ? (
                     <p className="text-[10px] text-mutedForeground font-heading">No users with booze runs or jails.</p>
                   ) : (
@@ -10337,7 +10497,8 @@ export default function Admin() {
                           <th className="text-left p-1.5 text-mutedForeground">User</th>
                           <th className="text-right p-1.5 text-mutedForeground">Runs</th>
                           <th className="text-right p-1.5 text-mutedForeground">Jails</th>
-                          <th className="text-right p-1.5 text-mutedForeground">Run profit</th>
+                          <th className="text-right p-1.5 text-mutedForeground" title="booze_run_profit_total">Run profit (LB)</th>
+                          <th className="text-right p-1.5 text-mutedForeground" title="booze_profit_total">Net profit (stored)</th>
                           <th className="text-right p-1.5 text-mutedForeground">Avg/run</th>
                           <th className="text-right p-1.5 text-mutedForeground">Auto runs</th>
                           <th className="text-right p-1.5 text-mutedForeground">Auto profit</th>
@@ -10349,7 +10510,8 @@ export default function Admin() {
                             <td className="py-1.5 pr-2 font-medium">{row.username || '—'}</td>
                             <td className="py-1.5 text-right">{row.booze_runs_count != null ? row.booze_runs_count.toLocaleString() : '—'}</td>
                             <td className="py-1.5 text-right">{row.booze_jail_count != null ? row.booze_jail_count.toLocaleString() : '—'}</td>
-                            <td className="py-1.5 text-right">${(row.booze_run_profit_total ?? 0).toLocaleString()}</td>
+                            <td className="py-1.5 text-right text-green-400/90">${(row.booze_run_profit_total ?? 0).toLocaleString()}</td>
+                            <td className="py-1.5 text-right">${(row.booze_profit_total ?? 0).toLocaleString()}</td>
                             <td className="py-1.5 text-right">${(row.avg_profit_per_run_lifetime ?? 0).toLocaleString()}</td>
                             <td className="py-1.5 text-right">{(row.auto_rank_total_booze_runs ?? 0).toLocaleString()}</td>
                             <td className="py-1.5 text-right">${(row.auto_rank_total_booze_profit ?? 0).toLocaleString()}</td>
@@ -10389,7 +10551,7 @@ export default function Admin() {
                     <p className="text-[10px] font-heading font-bold text-primary">
                       {boozeRunUserProfile.username} <span className="text-mutedForeground font-normal">({boozeRunUserProfile.user_id})</span>
                     </p>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
                       <div className="bg-zinc-800/50 rounded p-2 border border-zinc-700/30">
                         <div className="text-[9px] text-mutedForeground uppercase">Lifetime runs</div>
                         <div className="text-sm font-bold">{boozeRunUserProfile.lifetime?.booze_runs_count?.toLocaleString?.() ?? 0}</div>
@@ -10399,17 +10561,45 @@ export default function Admin() {
                         <div className="text-sm font-bold text-amber-400">{boozeRunUserProfile.lifetime?.booze_jail_count?.toLocaleString?.() ?? 0}</div>
                       </div>
                       <div className="bg-zinc-800/50 rounded p-2 border border-zinc-700/30">
-                        <div className="text-[9px] text-mutedForeground uppercase">Lifetime run profit</div>
+                        <div className="text-[9px] text-mutedForeground uppercase">Run profit (LB)</div>
+                        <div className="text-[8px] text-mutedForeground normal-case">booze_run_profit_total</div>
                         <div className="text-sm font-bold text-green-400">${(boozeRunUserProfile.lifetime?.booze_run_profit_total ?? 0).toLocaleString()}</div>
+                      </div>
+                      <div className="bg-zinc-800/50 rounded p-2 border border-zinc-700/30">
+                        <div className="text-[9px] text-mutedForeground uppercase">Net profit (stored)</div>
+                        <div className="text-[8px] text-mutedForeground normal-case">booze_profit_total</div>
+                        <div className="text-sm font-bold">${(boozeRunUserProfile.lifetime?.booze_profit_total ?? 0).toLocaleString()}</div>
                       </div>
                       <div className="bg-zinc-800/50 rounded p-2 border border-zinc-700/30">
                         <div className="text-[9px] text-mutedForeground uppercase">Avg / completed run</div>
                         <div className="text-sm font-bold">${(boozeRunUserProfile.lifetime?.avg_profit_per_completed_run ?? 0).toLocaleString()}</div>
                       </div>
+                      <div className="bg-zinc-800/50 rounded p-2 border border-zinc-700/30">
+                        <div className="text-[9px] text-mutedForeground uppercase">Auto rank</div>
+                        <div className="text-[8px] text-mutedForeground normal-case">runs / profit</div>
+                        <div className="text-xs font-bold">
+                          {(boozeRunUserProfile.lifetime?.auto_rank_total_booze_runs ?? 0).toLocaleString()}
+                          <span className="text-mutedForeground font-normal"> · </span>
+                          ${(boozeRunUserProfile.lifetime?.auto_rank_total_booze_profit ?? 0).toLocaleString()}
+                        </div>
+                      </div>
                     </div>
-                    <p className="text-[10px] text-mutedForeground font-heading">
-                      Window last {boozeRunUserProfile.window_days}d: {boozeRunUserProfile.window?.completed_runs ?? 0} runs, ${(boozeRunUserProfile.window?.total_profit ?? 0).toLocaleString()} profit, avg ${(boozeRunUserProfile.window?.avg_profit_per_run ?? 0).toLocaleString()}; jails {boozeRunUserProfile.window?.jail_events ?? 0}, confiscation basis ${(boozeRunUserProfile.window?.total_confiscation_basis ?? 0).toLocaleString()}.
-                    </p>
+                    <div className="text-[10px] text-mutedForeground font-heading space-y-1 leading-relaxed border border-zinc-700/30 rounded p-2 bg-zinc-900/30">
+                      <div className="text-[9px] text-primary/90 uppercase tracking-wide">Window (economy_events)</div>
+                      <p>
+                        Last <strong className="text-foreground/90">{boozeRunUserProfile.window_days}d</strong>:{' '}
+                        <strong className="text-foreground/90">{boozeRunUserProfile.window?.completed_runs ?? 0}</strong> completed sells;{' '}
+                        revenue <strong className="text-foreground/90">${(boozeRunUserProfile.window?.total_revenue ?? 0).toLocaleString()}</strong>,{' '}
+                        net profit <strong className="text-green-400/90">${(boozeRunUserProfile.window?.total_profit ?? 0).toLocaleString()}</strong>,{' '}
+                        buy cost (approx.) <strong className="text-foreground/90">${(boozeRunUserProfile.window?.total_buy_cost_approx ?? 0).toLocaleString()}</strong>{' '}
+                        (revenue − profit); avg profit/sell <strong className="text-foreground/90">${(boozeRunUserProfile.window?.avg_profit_per_run ?? 0).toLocaleString()}</strong>.
+                      </p>
+                      <p>
+                        Jails in window: <strong className="text-amber-400/90">{boozeRunUserProfile.window?.jail_events ?? 0}</strong> events;{' '}
+                        confiscation basis (inventory cost) <strong className="text-amber-400/90">${(boozeRunUserProfile.window?.total_confiscation_basis ?? 0).toLocaleString()}</strong>{' '}
+                        — separate from sell revenue/profit above.
+                      </p>
+                    </div>
                     <div className="overflow-x-auto max-h-40">
                       <div className="text-[9px] text-mutedForeground font-heading mb-1">Recent booze history (last 10)</div>
                       {(!boozeRunUserProfile.booze_run_history || boozeRunUserProfile.booze_run_history.length === 0) ? (

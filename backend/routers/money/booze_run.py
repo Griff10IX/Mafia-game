@@ -81,9 +81,38 @@ _booze_top_profit_leader_cache_ids: frozenset[str] = frozenset()
 _booze_jail_min_override: Optional[float] = None
 _booze_jail_max_override: Optional[float] = None
 
+# Global listed-price multiplier (buy & sell use same listed price before booze token discount on buy).
+# Persisted in game_settings _id=booze_run_globals; loaded at server startup.
+BOOZE_GLOBALS_DOC_ID = "booze_run_globals"
+BOOZE_LISTED_PRICE_MULT_MIN = 0.01  # up to 99% off vs full rotation prices
+BOOZE_LISTED_PRICE_MULT_MAX = 1.0
+_booze_listed_price_mult: float = 1.0
+
 
 def _invalidate_config_cache(user_id: str):
     _config_cache.pop(user_id, None)
+
+
+def _invalidate_all_booze_config_cache():
+    _config_cache.clear()
+
+
+def get_booze_listed_price_mult() -> float:
+    """Effective multiplier on rotation listed prices (1.0 = no change). Clamped to BOOZE_LISTED_PRICE_MULT_*."""
+    m = float(_booze_listed_price_mult)
+    return max(BOOZE_LISTED_PRICE_MULT_MIN, min(BOOZE_LISTED_PRICE_MULT_MAX, m))
+
+
+async def load_booze_globals_from_db():
+    """Restore listed_price_mult after process restart."""
+    global _booze_listed_price_mult
+    try:
+        doc = await db.game_settings.find_one({"_id": BOOZE_GLOBALS_DOC_ID}, {"_id": 0, "listed_price_mult": 1})
+        if doc and doc.get("listed_price_mult") is not None:
+            _booze_listed_price_mult = float(doc["listed_price_mult"])
+    except Exception:
+        pass
+    _booze_listed_price_mult = get_booze_listed_price_mult()
 
 
 # ----- Rotation (exported for server flash news) -----
@@ -145,6 +174,10 @@ def _booze_prices_for_rotation():
     if price_a_ba <= price_b_ba + profit_min:
         price_a_ba = min(2000, price_b_ba + profit_min + (idx % 60))
         out[(locA, booze_ba)] = price_a_ba
+    mult = get_booze_listed_price_mult()
+    if mult < 1.0:
+        for k in list(out.keys()):
+            out[k] = max(100, min(2000, int(round(out[k] * mult))))
     return out
 
 
@@ -295,6 +328,15 @@ class AdminBoozeJailChanceRequest(BaseModel):
     reset: bool = False
     jail_chance_min: Optional[float] = None
     jail_chance_max: Optional[float] = None
+
+
+class AdminBoozeListedPriceRequest(BaseModel):
+    """Listed prices: reset=true, or delta_percent_off (nudge current discount), or percent_off / listed_price_mult (absolute)."""
+
+    reset: bool = False
+    delta_percent_off: Optional[float] = None
+    percent_off: Optional[float] = None
+    listed_price_mult: Optional[float] = None
 
 
 # ----- Internal impls (for auto-rank) -----
@@ -609,6 +651,7 @@ async def booze_run_config(current_user: dict = Depends(get_current_user)):
     travel_leg_sec = await booze_travel_seconds_per_leg(db, uid)
     daily_estimate_rough = _booze_daily_estimate_rough(capacity, prices_map, travel_leg_sec)
 
+    _lpm = get_booze_listed_price_mult()
     payload = {
         "locations": list(STATES),
         "booze_types": list(BOOZE_TYPES),
@@ -622,6 +665,8 @@ async def booze_run_config(current_user: dict = Depends(get_current_user)):
         "capacity_bonus": capacity_bonus,
         "capacity_bonus_max": BOOZE_CAPACITY_BONUS_MAX,
         "carrying_total": _booze_user_carrying_total(carrying),
+        "listed_price_global_mult": _lpm,
+        "listed_price_global_percent_off": round((1.0 - _lpm) * 100.0, 2) if _lpm < 1.0 else 0.0,
         "rotation_ends_at": _booze_rotation_ends_at(),
         "rotation_hours": BOOZE_ROTATION_HOURS,
         "rotation_seconds": _booze_rotation_override_seconds,
@@ -703,6 +748,74 @@ async def admin_get_booze_jail_chances(current_user: dict = Depends(get_current_
     }
 
 
+async def admin_get_booze_listed_price(current_user: dict = Depends(get_current_user)):
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    m = get_booze_listed_price_mult()
+    return {
+        "listed_price_mult": m,
+        "percent_off": round((1.0 - m) * 100.0, 4) if m < 1.0 else 0.0,
+        "min_mult": BOOZE_LISTED_PRICE_MULT_MIN,
+        "max_mult": BOOZE_LISTED_PRICE_MULT_MAX,
+    }
+
+
+async def admin_set_booze_listed_price(request: AdminBoozeListedPriceRequest, current_user: dict = Depends(get_current_user)):
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    global _booze_listed_price_mult
+    if request.reset:
+        mult = 1.0
+    elif request.delta_percent_off is not None:
+        d = float(request.delta_percent_off)
+        cur = get_booze_listed_price_mult()
+        cur_pct = (1.0 - cur) * 100.0
+        new_pct = cur_pct + d
+        new_pct = max(0.0, min(99.0, new_pct))
+        mult = 1.0 - new_pct / 100.0
+    elif request.percent_off is not None:
+        po = float(request.percent_off)
+        if po < 0 or po > 99:
+            raise HTTPException(status_code=400, detail="percent_off must be between 0 and 99 (100 would zero all prices)")
+        mult = 1.0 - po / 100.0
+    elif request.listed_price_mult is not None:
+        mult = float(request.listed_price_mult)
+        if mult < BOOZE_LISTED_PRICE_MULT_MIN or mult > BOOZE_LISTED_PRICE_MULT_MAX:
+            raise HTTPException(
+                status_code=400,
+                detail=f"listed_price_mult must be between {BOOZE_LISTED_PRICE_MULT_MIN} and {BOOZE_LISTED_PRICE_MULT_MAX}",
+            )
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Provide delta_percent_off, percent_off, listed_price_mult, or reset=true",
+        )
+    mult = max(BOOZE_LISTED_PRICE_MULT_MIN, min(BOOZE_LISTED_PRICE_MULT_MAX, mult))
+    _booze_listed_price_mult = mult
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.game_settings.update_one(
+        {"_id": BOOZE_GLOBALS_DOC_ID},
+        {"$set": {"listed_price_mult": mult, "updated_at": now_iso}},
+        upsert=True,
+    )
+    _invalidate_all_booze_config_cache()
+    pct = round((1.0 - mult) * 100.0, 4) if mult < 1.0 else 0.0
+    log_extra = {"listed_price_mult": mult, "percent_off": pct}
+    if request.delta_percent_off is not None:
+        log_extra["delta_percent_off"] = float(request.delta_percent_off)
+    await log_activity(
+        current_user.get("id", ""),
+        current_user.get("username", ""),
+        "admin_booze_listed_price",
+        log_extra,
+    )
+    return {
+        "message": "Booze listed prices updated (applies to all locations this rotation).",
+        "listed_price_mult": mult,
+        "percent_off": pct,
+    }
+
+
 async def admin_set_booze_jail_chances(request: AdminBoozeJailChanceRequest, current_user: dict = Depends(get_current_user)):
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin only")
@@ -749,3 +862,5 @@ def register(router):
     router.add_api_route("/admin/booze-rotation", admin_set_booze_rotation, methods=["POST"])
     router.add_api_route("/admin/booze-jail-chances", admin_get_booze_jail_chances, methods=["GET"])
     router.add_api_route("/admin/booze-jail-chances", admin_set_booze_jail_chances, methods=["POST"])
+    router.add_api_route("/admin/booze-listed-price", admin_get_booze_listed_price, methods=["GET"])
+    router.add_api_route("/admin/booze-listed-price", admin_set_booze_listed_price, methods=["POST"])
