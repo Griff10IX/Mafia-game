@@ -8508,6 +8508,43 @@ def register(router):
         history = await cursor.to_list(10)
         return {"history": history}
 
+    @router.get("/admin/leaderboard-weekly-payouts")
+    async def get_weekly_leaderboard_payouts(
+        username: str = "",
+        category: str = "",
+        week_start: str = "",
+        limit: int = 200,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Get past main-game weekly leaderboard payout entries (admin audit)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin only")
+
+        query: Dict[str, object] = {}
+        if username.strip():
+            # Exact username match, case-insensitive
+            u = username.strip()
+            query["username"] = {"$regex": f"^{u}$", "$options": "i"}
+
+        cat = (category or "").strip().lower()
+        if cat and cat != "all":
+            allowed = {"kills", "crimes", "gta", "jail_busts"}
+            if cat not in allowed:
+                raise HTTPException(status_code=400, detail=f"Invalid category. Allowed: {sorted(allowed)}")
+            query["category"] = cat
+
+        if week_start.strip():
+            query["week_start"] = week_start.strip()
+
+        cap = min(max(1, int(limit) if limit is not None else 200), 1000)
+        cursor = (
+            db.leaderboard_weekly_payouts.find(query, {"_id": 0})
+            .sort("paid_at", -1)
+            .limit(cap)
+        )
+        rows = await cursor.to_list(cap)
+        return {"entries": rows, "count": len(rows)}
+
     # ─────────────────────────────────────────────────────────────────────────────
     # Minigame Play Payouts Log (Admin Only)
     # ─────────────────────────────────────────────────────────────────────────────

@@ -164,6 +164,7 @@ const SEARCHABLE_TOOLS = [
   // Logs
   { label: 'Live Activity Feed', categoryId: 'admin-logs', collapseKey: 'activityFeed', keywords: ['activity', 'feed', 'live', 'real-time', 'actions', 'gambling', 'bank', 'transfer'] },
   { label: 'Minigame Payouts', categoryId: 'admin-logs', collapseKey: 'minigamePayouts', keywords: ['minigame', 'payout', 'reward', 'cash', 'mini', 'game'] },
+  { label: 'Weekly Leaderboard Payouts', categoryId: 'admin-logs', collapseKey: 'weeklyLeaderboardPayouts', keywords: ['leaderboard', 'weekly', 'payout', 'respect', 'points', 'top 10'] },
   { label: 'Attack Logs', categoryId: 'admin-logs', collapseKey: 'attackLogs', keywords: ['attack', 'log', 'kill'] },
   { label: 'Mod Action Logs', categoryId: 'admin-logs', collapseKey: 'modLogs', keywords: ['mod', 'action', 'log'] },
   // Testing Tools
@@ -674,6 +675,11 @@ export default function Admin() {
   const [minigamePayoutsLoading, setMinigamePayoutsLoading] = useState(false);
   const [minigamePayoutsUsername, setMinigamePayoutsUsername] = useState('');
   const [minigamePayoutsGame, setMinigamePayoutsGame] = useState('');
+  const [weeklyLeaderboardPayouts, setWeeklyLeaderboardPayouts] = useState({ entries: [] });
+  const [weeklyLeaderboardPayoutsLoading, setWeeklyLeaderboardPayoutsLoading] = useState(false);
+  const [weeklyLeaderboardPayoutsUsername, setWeeklyLeaderboardPayoutsUsername] = useState('');
+  const [weeklyLeaderboardPayoutsCategory, setWeeklyLeaderboardPayoutsCategory] = useState('all');
+  const [weeklyLeaderboardPayoutsLimit, setWeeklyLeaderboardPayoutsLimit] = useState(200);
   const [gamblingLog, setGamblingLog] = useState({ entries: [] });
   const [gamblingLogLoading, setGamblingLogLoading] = useState(false);
   const [gamblingLogUsername, setGamblingLogUsername] = useState('');
@@ -4182,6 +4188,24 @@ export default function Admin() {
       setMinigamePayouts({ entries: [] });
     } finally {
       setMinigamePayoutsLoading(false);
+    }
+  };
+
+  const fetchWeeklyLeaderboardPayouts = async () => {
+    setWeeklyLeaderboardPayoutsLoading(true);
+    try {
+      const params = {
+        limit: weeklyLeaderboardPayoutsLimit,
+      };
+      if (weeklyLeaderboardPayoutsUsername.trim()) params.username = weeklyLeaderboardPayoutsUsername.trim();
+      if (weeklyLeaderboardPayoutsCategory && weeklyLeaderboardPayoutsCategory !== 'all') params.category = weeklyLeaderboardPayoutsCategory;
+      const res = await api.get('/admin/leaderboard-weekly-payouts', { params });
+      setWeeklyLeaderboardPayouts(res.data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load leaderboard weekly payouts');
+      setWeeklyLeaderboardPayouts({ entries: [] });
+    } finally {
+      setWeeklyLeaderboardPayoutsLoading(false);
     }
   };
 
@@ -10559,6 +10583,101 @@ export default function Admin() {
               )}
               {minigamePayouts.entries?.length === 0 && !minigamePayoutsLoading && (
                 <p className="text-[10px] text-mutedForeground font-heading">No payout records found. Load data or adjust filters.</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Weekly Leaderboard Payouts */}
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Trophy}
+            title="Weekly Leaderboard Payouts"
+            badge={weeklyLeaderboardPayouts.entries?.length ? <span className="text-[10px] font-heading text-primary">{weeklyLeaderboardPayouts.count} entries</span> : null}
+            isCollapsed={collapsed.weeklyLeaderboardPayouts}
+            onToggle={() => toggleSection('weeklyLeaderboardPayouts')}
+          />
+          {!collapsed.weeklyLeaderboardPayouts && (
+            <div className="p-3 space-y-2">
+              <p className="text-[10px] text-mutedForeground font-heading">
+                Audit trail for the automatic Monday weekly leaderboard payout (which user got how many points, per category).
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={weeklyLeaderboardPayoutsUsername}
+                  onChange={(e) => setWeeklyLeaderboardPayoutsUsername(e.target.value)}
+                  placeholder="Filter by username"
+                  className="flex-1 min-w-[120px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                <select
+                  value={weeklyLeaderboardPayoutsCategory}
+                  onChange={(e) => setWeeklyLeaderboardPayoutsCategory(e.target.value)}
+                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                >
+                  <option value="all">All categories</option>
+                  <option value="kills">Kills</option>
+                  <option value="crimes">Crimes</option>
+                  <option value="gta">GTA</option>
+                  <option value="jail_busts">Jail Busts</option>
+                </select>
+                <input
+                  type="number"
+                  min={1}
+                  max={1000}
+                  value={weeklyLeaderboardPayoutsLimit}
+                  onChange={(e) => setWeeklyLeaderboardPayoutsLimit(Math.max(1, Math.min(1000, parseInt(e.target.value, 10) || 200)))}
+                  className="w-20 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none font-mono"
+                />
+                <BtnPrimary onClick={fetchWeeklyLeaderboardPayouts} disabled={weeklyLeaderboardPayoutsLoading}>
+                  {weeklyLeaderboardPayoutsLoading ? '...' : 'Load'}
+                </BtnPrimary>
+              </div>
+
+              {weeklyLeaderboardPayouts.entries?.length > 0 && (
+                <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+                  <table className="w-full text-[10px] font-mono">
+                    <thead className="sticky top-0 bg-zinc-900/90">
+                      <tr className="text-left text-mutedForeground">
+                        <th className="p-2">Time</th>
+                        <th className="p-2">Week</th>
+                        <th className="p-2">User</th>
+                        <th className="p-2">Category</th>
+                        <th className="p-2">Rank</th>
+                        <th className="p-2">Event Count</th>
+                        <th className="p-2">Points</th>
+                        <th className="p-2">User Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {weeklyLeaderboardPayouts.entries.map((e) => {
+                        const catLabel = (
+                          e.category === 'kills' ? 'Kills' :
+                          e.category === 'crimes' ? 'Crimes' :
+                          e.category === 'gta' ? 'GTA' :
+                          e.category === 'jail_busts' ? 'Jail Busts' :
+                          e.category
+                        );
+                        return (
+                          <tr key={`${e.week_start || 'w'}:${e.paid_at || 't'}:${e.category || 'c'}:${e.user_id || 'u'}:${e.rank || 0}`} className="border-t border-zinc-700/30 hover:bg-zinc-800/30">
+                            <td className="p-2 text-mutedForeground whitespace-nowrap">{e.paid_at ? new Date(e.paid_at).toLocaleString() : '—'}</td>
+                            <td className="p-2 text-mutedForeground whitespace-nowrap">{e.week_start || '—'}</td>
+                            <td className="p-2 text-foreground">{e.username}</td>
+                            <td className="p-2 text-primary">{catLabel}</td>
+                            <td className="p-2 text-foreground">{Number(e.rank).toLocaleString()}</td>
+                            <td className="p-2 text-foreground">{Number(e.event_value).toLocaleString()}</td>
+                            <td className="p-2 text-blue-400">{Number(e.points_awarded).toLocaleString()}</td>
+                            <td className="p-2 text-mutedForeground">{Number(e.user_week_total_points).toLocaleString()}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {weeklyLeaderboardPayouts.entries?.length === 0 && !weeklyLeaderboardPayoutsLoading && (
+                <p className="text-[10px] text-mutedForeground font-heading">No weekly payout entries found. Load data or adjust filters.</p>
               )}
             </div>
           )}

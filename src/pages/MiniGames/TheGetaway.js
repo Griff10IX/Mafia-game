@@ -936,7 +936,7 @@ export default function TheGetaway() {
         />
       </div>
 
-      <div className="flex justify-center gap-2 flex-wrap">
+      <div className="flex w-full justify-between gap-2 flex-wrap">
         <button
           onClick={() => { if (gameState === 'playing') moveLeft(); else void handleStart(); }}
           className={`px-4 py-2 rounded border border-primary/30 text-primary text-sm font-heading hover:bg-primary/10 touch-manipulation min-w-[60px]`}

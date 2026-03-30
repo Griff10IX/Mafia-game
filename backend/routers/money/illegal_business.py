@@ -943,6 +943,7 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
     attacker_str = _attacker_strength(current_user)
     win_prob = _raid_win_probability(attacker_str, defender_str)
     won = _rng.random() < win_prob
+    attacker_username = current_user.get("username", "?")
     loot_cash = 0
     loot_points = 0
     loot_cash_credited = 0
@@ -973,11 +974,37 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
                     {"$set": {"last_collected_at": new_last.isoformat()}},
                 )
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"illegal_business_raids_won": 1}})
-        await send_notification(current_user["id"], "Raid", f"You hit the place. Took ${loot_cash_credited:,}.", "attack", category="attacks")
-        await send_notification(target_id, "Raid", f"Your joint was hit. You lost ${loot_cash:,}.", "attack", category="attacks")
+        target_username = target_user.get("username") or "?"
+        await send_notification(
+            current_user["id"],
+            "Raid",
+            f"You hit {target_username}'s joint. Took ${loot_cash_credited:,}.",
+            "attack",
+            category="attacks",
+        )
+        await send_notification(
+            target_id,
+            "Raid",
+            f"Your joint was hit by {attacker_username}. You lost ${loot_cash:,}.",
+            "attack",
+            category="attacks",
+        )
     else:
-        await send_notification(current_user["id"], "Raid", "They were ready—you got nothing.", "attack", category="attacks")
-        await send_notification(target_id, "Raid", "Someone tried to hit your joint. They were turned away.", "attack", category="attacks")
+        target_username = target_user.get("username") or "?"
+        await send_notification(
+            current_user["id"],
+            "Raid",
+            f"You tried to hit {target_username}'s joint. They were ready—you got nothing.",
+            "attack",
+            category="attacks",
+        )
+        await send_notification(
+            target_id,
+            "Raid",
+            f"Someone tried to hit your joint ({attacker_username}). They were turned away.",
+            "attack",
+            category="attacks",
+        )
     await log_activity(current_user["id"], current_user.get("username", "?"), "illegal_biz_raid", {
         "target": target_user.get("username"), "success": won, "cash": loot_cash_credited if won else 0,
     })
@@ -985,7 +1012,11 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
         "success": won,
         "loot_cash": loot_cash_credited if won else loot_cash,
         "loot_points": loot_points,
-        "message": f"You hit the place. Took ${loot_cash_credited:,}." if won else "They were ready—you got nothing.",
+        "message": (
+            f"You hit {target_user.get('username') or '?'}'s joint. Took ${loot_cash_credited:,}."
+            if won
+            else f"You tried to hit {target_user.get('username') or '?'}'s joint. They were ready—you got nothing."
+        ),
         "target_username": target_user.get("username"),
     }
 

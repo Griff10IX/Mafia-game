@@ -638,9 +638,6 @@ export default function IllegalBusiness() {
                     <span className="text-[10px] text-emerald-400 font-heading">· {formatMoney(raidResult.loot_cash)} taken</span>
                   )}
                 </div>
-                {raidResult.target_username && (
-                  <p className="text-[10px] text-mutedForeground font-heading mb-0.5">You hit {raidResult.target_username}&apos;s joint.</p>
-                )}
                 <p className="text-xs text-foreground">{raidResult.message}</p>
               </div>
             )}

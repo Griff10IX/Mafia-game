@@ -325,8 +325,8 @@ async def run_weekly_leaderboard_payout(database, test_run: bool = False):
         {"id": LEADERBOARD_PAYOUT_CONFIG_ID},
         {"_id": 0, "last_run_week_start": 1, "top1_points": 1, "top2_points": 1, "top3_points": 1, "top4_10_points": 1},
     )
-    if cfg and cfg.get("last_run_week_start") == last_week_start_str and not test_run:
-        return
+    already_paid = bool(cfg and cfg.get("last_run_week_start") == last_week_start_str and not test_run)
+    should_award = not already_paid
 
     top1 = int(cfg.get("top1_points") or DEFAULT_TOP1_POINTS) if cfg else DEFAULT_TOP1_POINTS
     top2 = int(cfg.get("top2_points") or DEFAULT_TOP2_POINTS) if cfg else DEFAULT_TOP2_POINTS
@@ -344,7 +344,7 @@ async def run_weekly_leaderboard_payout(database, test_run: bool = False):
             return top4_10
         return 0
 
-    if not test_run:
+    if should_award:
         claim_filter = {
             "id": LEADERBOARD_PAYOUT_CONFIG_ID,
             "$or": [
@@ -394,16 +394,81 @@ async def run_weekly_leaderboard_payout(database, test_run: bool = False):
         )
         return
 
-    for user_id, points in user_points.items():
-        if points <= 0:
-            continue
-        await database.users.update_one({"id": user_id}, {"$inc": {"points": points}})
+    if should_award:
+        for user_id, points in user_points.items():
+            if points <= 0:
+                continue
+            await database.users.update_one({"id": user_id}, {"$inc": {"points": points}})
+
+    # Persist an audit trail so admins can inspect "who got what" each week.
+    try:
+        audit_already_exists = False
+        if already_paid:
+            try:
+                audit_already_exists = (await database.leaderboard_weekly_payouts.count_documents({"week_start": last_week_start_str})) > 0
+            except Exception:
+                audit_already_exists = False
+
+        all_ids = set()
+        for lst in (kills, crimes, gta, jail_busts):
+            for e in lst:
+                uid = e.get("user_id")
+                if uid:
+                    all_ids.add(uid)
+
+        users_map: dict = {}
+        if all_ids:
+            users = await database.users.find(
+                {"id": {"$in": list(all_ids)}},
+                {"_id": 0, "id": 1, "username": 1},
+            ).to_list(len(all_ids) + 1)
+            users_map = {u["id"]: (u.get("username") or "") for u in users}
+
+        paid_at_iso = now.isoformat().replace("+00:00", "Z")
+        week_total_points = user_points or {}
+        payout_entries: list = []
+        categories = (
+            ("kills", kills),
+            ("crimes", crimes),
+            ("gta", gta),
+            ("jail_busts", jail_busts),
+        )
+        for cat, entries in categories:
+            for e in entries:
+                uid = e.get("user_id")
+                if not uid:
+                    continue
+                rank = int(e.get("rank") or 0)
+                pts = points_for_rank(rank)
+                if pts <= 0:
+                    continue
+                payout_entries.append(
+                    {
+                        "week_start": last_week_start_str,
+                        "paid_at": paid_at_iso,
+                        "category": cat,
+                        "user_id": uid,
+                        "username": users_map.get(uid, ""),
+                        "rank": rank,
+                        "event_value": int(e.get("value") or 0),
+                        "points_awarded": int(pts),
+                        "user_week_total_points": int(week_total_points.get(uid, 0)),
+                    }
+                )
+
+        if payout_entries and not audit_already_exists:
+            await database.leaderboard_weekly_payouts.insert_many(payout_entries)
+    except Exception:
+        # Never break payouts because the admin audit write failed.
+        log.exception("Weekly leaderboard payout: failed to persist audit trail")
 
     if user_points:
         log.info(
             "Weekly leaderboard payout: week %s paid %d users total %d points",
             last_week_start_str, len(user_points), sum(user_points.values()),
         )
+    # Prevent weekly board cache from serving the prior week's values.
+    invalidate_leaderboard_cache()
 
 
 async def get_leaderboard(current_user: dict = Depends(get_current_user)):
@@ -494,8 +559,14 @@ async def get_top_leaderboards(
 ):
     """Top N leaderboards per stat. Results are cached for 30s to keep background refreshes fast."""
     username = current_user.get("username") or ""
-    cache_key = f"{limit}:{dead}:{(period or 'alltime').lower()}"
     now = time.monotonic()
+    period_l = (period or "alltime").lower()
+    cache_key = f"{limit}:{dead}:{period_l}"
+    # If we key only by period, "weekly" would reuse the previous week's cached data
+    # until TTL expires. Include week_start so Monday reset becomes immediate.
+    if period_l == "weekly":
+        week_start = _week_start(datetime.now(timezone.utc)).strftime("%Y-%m-%d")
+        cache_key = f"{cache_key}:{week_start}"
     def _add_last_winners(resp: dict) -> dict:
         lrw = _last_reward_winners_cache.get("data")
         if lrw is None or (now - _last_reward_winners_cache.get("ts", 0)) >= _LAST_WINNERS_CACHE_TTL:
