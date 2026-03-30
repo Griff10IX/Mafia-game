@@ -536,16 +536,17 @@ FAMILY_ROLES = ["boss", "underboss", "consigliere", "capo", "soldier", "associat
 FAMILY_ROLE_LIMITS = {"boss": 1, "underboss": 1, "consigliere": 1, "capo": 4, "soldier": 15, "associate": 30}
 FAMILY_ROLE_ORDER = {"boss": 0, "underboss": 1, "consigliere": 2, "capo": 3, "soldier": 4, "associate": 5}
 # Rackets: 1920s-30s family businesses. Cooldown hours, base income per level.
+RACKET_BASE_COOLDOWN_HOURS = 10 / 60  # 10 minutes
 FAMILY_RACKETS = [
-    {"id": "protection", "name": "Protection Racket", "cooldown_hours": 6, "base_income": 5000, "description": "Extortion from businesses"},
-    {"id": "gambling", "name": "Gambling Operation", "cooldown_hours": 12, "base_income": 8000, "description": "Numbers & bookmaking"},
-    {"id": "loansharking", "name": "Loan Sharking", "cooldown_hours": 24, "base_income": 12000, "description": "High-interest loans"},
-    {"id": "labour", "name": "Labour Racketeering", "cooldown_hours": 8, "base_income": 6000, "description": "Union kickbacks"},
-    {"id": "distillery", "name": "Distillery", "cooldown_hours": 10, "base_income": 6500, "description": "Bootleg liquor production"},
-    {"id": "warehouse", "name": "Warehouse", "cooldown_hours": 8, "base_income": 5000, "description": "Storage and distribution"},
-    {"id": "restaurant_bar", "name": "Restaurant & Bar", "cooldown_hours": 6, "base_income": 5500, "description": "Front and steady income"},
-    {"id": "funeral_home", "name": "Funeral Home", "cooldown_hours": 12, "base_income": 7000, "description": "Respectable front"},
-    {"id": "garment_shop", "name": "Garment Shop", "cooldown_hours": 9, "base_income": 6000, "description": "Garment district operations"},
+    {"id": "protection", "name": "Protection Racket", "cooldown_hours": RACKET_BASE_COOLDOWN_HOURS, "base_income": 5000, "description": "Extortion from businesses"},
+    {"id": "gambling", "name": "Gambling Operation", "cooldown_hours": RACKET_BASE_COOLDOWN_HOURS, "base_income": 8000, "description": "Numbers & bookmaking"},
+    {"id": "loansharking", "name": "Loan Sharking", "cooldown_hours": RACKET_BASE_COOLDOWN_HOURS, "base_income": 12000, "description": "High-interest loans"},
+    {"id": "labour", "name": "Labour Racketeering", "cooldown_hours": RACKET_BASE_COOLDOWN_HOURS, "base_income": 6000, "description": "Union kickbacks"},
+    {"id": "distillery", "name": "Distillery", "cooldown_hours": RACKET_BASE_COOLDOWN_HOURS, "base_income": 6500, "description": "Bootleg liquor production"},
+    {"id": "warehouse", "name": "Warehouse", "cooldown_hours": RACKET_BASE_COOLDOWN_HOURS, "base_income": 5000, "description": "Storage and distribution"},
+    {"id": "restaurant_bar", "name": "Restaurant & Bar", "cooldown_hours": RACKET_BASE_COOLDOWN_HOURS, "base_income": 5500, "description": "Front and steady income"},
+    {"id": "funeral_home", "name": "Funeral Home", "cooldown_hours": RACKET_BASE_COOLDOWN_HOURS, "base_income": 7000, "description": "Respectable front"},
+    {"id": "garment_shop", "name": "Garment Shop", "cooldown_hours": RACKET_BASE_COOLDOWN_HOURS, "base_income": 6000, "description": "Garment district operations"},
 ]
 RACKET_UPGRADE_COST = 50_000
 RACKET_MAX_LEVEL = 5
