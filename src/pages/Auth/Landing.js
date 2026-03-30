@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { Copy } from 'lucide-react';
 import { toast } from 'sonner';
+import { Turnstile } from '@marsidev/react-turnstile';
 import api, { getBaseURL, AUTH_ERROR_KEY } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
 
@@ -66,6 +67,38 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
     isTaken: null,
     message: '',
   });
+
+  const [loginTurnstileCfg, setLoginTurnstileCfg] = useState(null);
+  const [loginCaptchaToken, setLoginCaptchaToken] = useState(null);
+  const [loginTurnstileWidgetKey, setLoginTurnstileWidgetKey] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    api
+      .get('/auth/login-turnstile-config')
+      .then((r) => {
+        if (!cancelled) setLoginTurnstileCfg(r.data || { enabled: false });
+      })
+      .catch(() => {
+        if (!cancelled) setLoginTurnstileCfg({ enabled: false });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    setLoginCaptchaToken(null);
+    if (isLogin) {
+      setLoginTurnstileWidgetKey((k) => k + 1);
+    }
+  }, [isLogin]);
+
+  const needsLoginCaptcha =
+    isLogin
+    && loginTurnstileCfg
+    && !!loginTurnstileCfg.enabled
+    && !!(loginTurnstileCfg.site_key || '').trim();
 
   // Track login/landing visits for admin stats.
   useEffect(() => {
@@ -246,10 +279,20 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
       return;
     }
 
+    if (isLogin && needsLoginCaptcha && !(loginCaptchaToken || '').trim()) {
+      toast.error('Complete the verification below before logging in.');
+      setLoading(false);
+      return;
+    }
+
     try {
       const endpoint = isLogin ? '/auth/login' : '/auth/register';
       const payload  = isLogin
-        ? { email: formData.email, password: formData.password }
+        ? {
+            email: formData.email,
+            password: formData.password,
+            ...(needsLoginCaptcha && loginCaptchaToken ? { captcha_token: loginCaptchaToken } : {}),
+          }
         : {
             email: formData.email,
             username: formData.username,
@@ -289,8 +332,10 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
         403: 'Access denied. Your account may be dead or your IP may be banned.',
         404: 'Login endpoint not found. Backend may be down or misconfigured.',
         422: 'Invalid email or password format. Check your input.',
+        423: 'Login is not available until launch.',
         429: 'Too many attempts. Wait a few minutes or use Forgot password.',
         500: 'Server error. Please try again in a moment.',
+        503: 'Login verification is temporarily unavailable. Try again later or contact support.',
       };
       if (error.code === 'ERR_NETWORK' || !error.response) {
         const base = error.config?.baseURL || getBaseURL();
@@ -310,7 +355,9 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
           msg.startsWith('Cannot log in') || msg.startsWith('Login failed') ||
           msg.startsWith('No account found') || msg.startsWith('Wrong password') ||
           msg.startsWith('Too many failed') || msg.startsWith('Please verify your email') ||
-          msg.startsWith('This account is dead')
+          msg.startsWith('This account is dead') ||
+          msg.startsWith('Complete the captcha') || msg.startsWith('Captcha verification') ||
+          msg.includes('Captcha is enabled but the server')
         );
         if (!skipPrefix && !msg.startsWith('Registration failed')) msg = `${prefix}${msg}`;
       } else if (error.response?.status === 404) {
@@ -336,6 +383,10 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
         status: error.response?.status || null,
         supportCode: `AUTH-${(error.response?.status || 'X')}-${Date.now().toString().slice(-6)}`,
       });
+      if (isLogin && needsLoginCaptcha) {
+        setLoginCaptchaToken(null);
+        setLoginTurnstileWidgetKey((k) => k + 1);
+      }
     } finally {
       setLoading(false);
     }
@@ -890,11 +941,29 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
                 </>
               )}
 
+              {needsLoginCaptcha && (
+                <div className="flex flex-col items-center gap-2 py-1">
+                  <p className="text-[10px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-muted)' }}>
+                    Verify before signing in
+                  </p>
+                  <Turnstile
+                    key={loginTurnstileWidgetKey}
+                    siteKey={loginTurnstileCfg.site_key}
+                    onSuccess={(token) => setLoginCaptchaToken(token)}
+                    onExpire={() => {
+                      setLoginCaptchaToken(null);
+                      setLoginTurnstileWidgetKey((k) => k + 1);
+                    }}
+                    options={{ theme: 'dark' }}
+                  />
+                </div>
+              )}
+
               {/* Submit */}
               <button
                 type="submit"
                 data-testid="submit-button"
-                disabled={loading}
+                disabled={loading || (needsLoginCaptcha && !loginCaptchaToken)}
                 className={`w-full ${styles.btnPrimary} hover:opacity-90 active:scale-[0.98] rounded-sm font-heading font-bold uppercase tracking-wider py-3.5 transition-all disabled:opacity-50 touch-manipulation`}
               >
                 {loading ? 'Processing…' : isLogin ? 'Enter the Family' : 'Join the Family'}

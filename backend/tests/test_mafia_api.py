@@ -216,6 +216,52 @@ class TestAdmin:
                 headers={"Authorization": f"Bearer {admin_token}"}
             )
             assert response.status_code == 200
+
+    def test_admin_remove_points(self, admin_token):
+        """Test admin remove points"""
+        unique_id = str(uuid.uuid4())[:8]
+        reg_res = requests.post(f"{BASE_URL}/api/auth/register", json={
+            "email": f"TEST_points_rm_{unique_id}@test.com",
+            "username": f"TEST_PointsRm_{unique_id}",
+            "password": "testpass123"
+        })
+        if reg_res.status_code == 200:
+            username = reg_res.json()["user"]["username"]
+
+            # Give some points first so removal has something to consume.
+            add_resp = requests.post(
+                f"{BASE_URL}/api/admin/add-points?target_username={username}&points=100",
+                headers={"Authorization": f"Bearer {admin_token}"}
+            )
+            assert add_resp.status_code == 200
+
+            rm_resp = requests.post(
+                f"{BASE_URL}/api/admin/remove-points?target_username={username}&amount=50",
+                headers={"Authorization": f"Bearer {admin_token}"}
+            )
+            assert rm_resp.status_code == 200
+
+    def test_admin_remove_all_points(self, admin_token):
+        """Test admin remove-all-points endpoint (should not 500)."""
+        unique_id = str(uuid.uuid4())[:8]
+        reg_res = requests.post(f"{BASE_URL}/api/auth/register", json={
+            "email": f"TEST_points_all_rm_{unique_id}@test.com",
+            "username": f"TEST_PointsAllRm_{unique_id}",
+            "password": "testpass123"
+        })
+        if reg_res.status_code == 200:
+            username = reg_res.json()["user"]["username"]
+            add_resp = requests.post(
+                f"{BASE_URL}/api/admin/add-points?target_username={username}&points=100",
+                headers={"Authorization": f"Bearer {admin_token}"}
+            )
+            assert add_resp.status_code == 200
+
+        rm_all_resp = requests.post(
+            f"{BASE_URL}/api/admin/remove-all-points?max_users=50",
+            headers={"Authorization": f"Bearer {admin_token}"}
+        )
+        assert rm_all_resp.status_code == 200
             
     def test_admin_add_car(self, admin_token):
         """Test admin add car"""

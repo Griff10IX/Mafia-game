@@ -42,6 +42,7 @@ from utils.point_provenance import (
     chargeback_preview,
     execute_chargeback_best_effort,
     ensure_user_legacy_seed_lot,
+    consume_points_fifo,
 )
 
 # Cloudflare API config for bot blocking toggle
@@ -136,6 +137,7 @@ class AdminSettingsUpdate(BaseModel):
     block_script_user_agent_login: Optional[bool] = None  # UA + browser-like checks: auth + minigame routes
     minigame_turnstile_enabled: Optional[bool] = None  # Cloudflare Turnstile before minigame run start
     minigame_turnstile_site_key: Optional[str] = None  # Public site key (secret stays in TURNSTILE_SECRET_KEY env)
+    login_turnstile_enabled: Optional[bool] = None  # Turnstile on /auth/login; reuses site key above
     spotify_feature_enabled: Optional[bool] = None
     stock_market_max_points: Optional[int] = None
     landing_banner_enabled: Optional[bool] = None
@@ -432,6 +434,59 @@ def register(router):
         )
         return {"message": f"Added {points} points to {target_username}"}
 
+    @router.post("/admin/remove-points")
+    async def admin_remove_points(target_username: str, amount: int, current_user: dict = Depends(get_current_user)):
+        """Remove up to `amount` rank points (clamped to current balance). Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="amount must be a positive number")
+
+        # Import locally to keep admin.py import graph stable.
+        from utils.point_provenance import consume_points_fifo
+
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1, "points": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        current_points = max(0, int(target.get("points") or 0))
+        remove = min(int(amount), current_points)
+        if remove <= 0:
+            return {
+                "message": f"{target.get('username') or target_username} has 0 points; nothing removed.",
+                "removed": 0,
+                "new_points": 0,
+            }
+
+        # Consume points from oldest FIFO lots and record provenance in point_lots/point_ledger_events.
+        # consume_points_fifo returns the slices it actually removed (should equal `remove` after legacy seeding).
+        slices = await consume_points_fifo(
+            db,
+            user_id=target["id"],
+            points=remove,
+            event_type="admin_remove_points",
+            event_ref=f"admin:{current_user.get('id') or 'unknown'}",
+            meta={
+                "admin_user_id": current_user.get("id"),
+                "admin_username": current_user.get("username") or "?",
+                "source": "admin",
+                "target_username": target.get("username") or target_username,
+            },
+        )
+        actual_removed = sum(int(s.get("amount") or 0) for s in (slices or []))
+
+        # Update the denormalized `users.points` balance to match what provenance consumed.
+        await db.users.update_one({"id": target["id"]}, {"$inc": {"points": -actual_removed}})
+        leaderboard_module.invalidate_leaderboard_cache()
+
+        new_points = current_points - actual_removed
+        return {
+            "message": f"Removed {actual_removed:,} points from {target.get('username') or target_username} (balance now {new_points:,}).",
+            "removed": actual_removed,
+            "new_points": new_points,
+        }
+
     @router.post("/admin/remove-respect-points")
     async def admin_remove_respect_points(
         target_username: str,
@@ -639,6 +694,248 @@ def register(router):
         )
         return {"message": f"Gave {points} points to {result.modified_count} accounts", "updated": result.modified_count}
 
+    @router.post("/admin/remove-all-points")
+    async def admin_remove_all_points(
+        max_users: int = Query(5000, ge=1, le=100000),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Remove rank points from (up to) `max_users` accounts that currently have points (alive players).
+        Safe-ish for ledger consistency: consumes from point FIFO lots and writes point_lots + point_ledger_events.
+        """
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        scope_match = {
+            "is_dead": {"$ne": True},
+            "is_npc": {"$ne": True},
+            "is_bodyguard": {"$ne": True},
+            "points": {"$gt": 0},
+        }
+
+        # Fetch a bounded set first (this is a single request; avoid huge timeouts).
+        target_users = await db.users.find(
+            scope_match,
+            {"_id": 0, "id": 1, "username": 1, "points": 1},
+        ).sort("points", -1).limit(int(max_users)).to_list(int(max_users))
+
+        removed_total = 0
+        processed = 0
+        for u in (target_users or []):
+            uid = u.get("id")
+            if not uid:
+                continue
+            current_points = max(0, int(u.get("points") or 0))
+            if current_points <= 0:
+                continue
+
+            slices = await consume_points_fifo(
+                db,
+                user_id=uid,
+                points=current_points,
+                event_type="admin_remove_all_points",
+                event_ref=f"remove-all:{current_user.get('id') or 'unknown'}",
+                meta={
+                    "admin_user_id": current_user.get("id"),
+                    "admin_username": current_user.get("username") or "?",
+                    "scope": "alive_players",
+                },
+            )
+            actual_removed = sum(int(s.get("amount") or 0) for s in (slices or []))
+            if actual_removed <= 0:
+                continue
+            await db.users.update_one({"id": uid}, {"$inc": {"points": -actual_removed}})
+            removed_total += actual_removed
+            processed += 1
+
+        # Also invalidate leaderboard cache so rank lists update.
+        leaderboard_module.invalidate_leaderboard_cache()
+
+        return {
+            "message": f"Removed {removed_total:,} points from {processed} user(s) (max_users={max_users}).",
+            "processed": processed,
+            "removed_total": removed_total,
+        }
+
+    @router.get("/admin/points/spend-store")
+    async def admin_points_spend_store_list(
+        limit: int = Query(200, ge=1, le=1000),
+        username: Optional[str] = Query(None, description="Filter by username (regex-ish via username pattern)"),
+        store_event_ref: Optional[str] = Query(None, description="Filter by store spend origin_ref, e.g. buy-silencer"),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Lists store spends recorded in point_ledger_events (event_type='spend_store'), grouped by (user_id, origin_ref).
+        This shows what users 'bought with points' at the provenance layer; refunds can be performed per row.
+        """
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        base_match: Dict = {"event_type": "spend_store", "points": {"$lt": 0}}
+        if store_event_ref:
+            base_match["origin_ref"] = store_event_ref
+
+        user_ids: Optional[List[str]] = None
+        if username and str(username).strip():
+            username_pattern = _username_pattern(str(username).strip())
+            matched = await db.users.find({"username": username_pattern}, {"_id": 0, "id": 1}).limit(50).to_list(50)
+            user_ids = [m.get("id") for m in matched if m.get("id")]
+            if not user_ids:
+                return {"spends": [], "count": 0}
+
+        match_extra = base_match.copy()
+        if user_ids:
+            match_extra["user_id"] = {"$in": user_ids}
+
+        pipeline = [
+            {"$match": match_extra},
+            {
+                "$group": {
+                    "_id": {"user_id": "$user_id", "origin_ref": "$origin_ref"},
+                    "total_points_spent": {"$sum": {"$cond": [{"$lt": ["$points", 0]}, {"$multiply": ["$points", -1]}, 0]}},
+                    "spend_count": {"$sum": 1},
+                    "first_at": {"$min": "$created_at"},
+                    "last_at": {"$max": "$created_at"},
+                }
+            },
+            {"$sort": {"last_at": -1}},
+            {"$limit": int(limit)},
+            {
+                "$lookup": {
+                    "from": "users",
+                    "localField": "_id.user_id",
+                    "foreignField": "id",
+                    "as": "u",
+                }
+            },
+            {
+                "$addFields": {
+                    "username": {"$ifNull": [{"$arrayElemAt": ["$u.username", 0]}, "?"]},
+                }
+            },
+            {
+                "$project": {
+                    "_id": 0,
+                    "user_id": "$_id.user_id",
+                    "username": 1,
+                    "store_event_ref": "$_id.origin_ref",
+                    "total_points_spent": 1,
+                    "spend_count": 1,
+                    "first_at": 1,
+                    "last_at": 1,
+                }
+            },
+        ]
+
+        rows = await db.point_ledger_events.aggregate(pipeline).to_list(int(limit))
+        # Normalize numbers (Mongo returns ints but keep safe).
+        spends = []
+        for r in rows or []:
+            spends.append(
+                {
+                    "user_id": r.get("user_id"),
+                    "username": r.get("username") or "?",
+                    "store_event_ref": r.get("store_event_ref"),
+                    "total_points_spent": int(r.get("total_points_spent") or 0),
+                    "spend_count": int(r.get("spend_count") or 0),
+                    "first_at": r.get("first_at"),
+                    "last_at": r.get("last_at"),
+                }
+            )
+
+        return {"spends": spends, "count": len(spends)}
+
+    @router.post("/admin/points/refund-store-spend")
+    async def admin_refund_store_spend(
+        user_id: str,
+        store_event_ref: str,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Refund points back to a user for a specific store spend origin_ref (e.g. buy-silencer).
+        Does NOT automatically undo the purchased item entitlement/flags; it only restores points balance + provenance.
+        """
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        if not user_id or not store_event_ref:
+            raise HTTPException(status_code=400, detail="user_id and store_event_ref are required")
+
+        # If already refunded for this (user, store_event_ref), do not double-refund.
+        refund_origin_ref = f"admin_store_refund:{user_id}:{store_event_ref}"
+        existing = await db.point_ledger_events.find_one(
+            {
+                "event_type": "admin_refund_store_spend",
+                "user_id": user_id,
+                "origin_ref": refund_origin_ref,
+            },
+            {"_id": 1},
+        )
+        if existing:
+            return {"message": "Already refunded for this user + store spend type.", "refunded": 0}
+
+        total = await db.point_ledger_events.aggregate(
+            [
+                {"$match": {"event_type": "spend_store", "user_id": user_id, "origin_ref": store_event_ref, "points": {"$lt": 0}}},
+                {
+                    "$group": {
+                        "_id": None,
+                        "total_abs": {"$sum": {"$cond": [{"$lt": ["$points", 0]}, {"$multiply": ["$points", -1]}, 0]}},
+                        "count": {"$sum": 1},
+                    }
+                },
+            ]
+        ).to_list(1)
+        if not total:
+            return {"message": "No matching spend_store events found.", "refunded": 0}
+        refund_amount = int(total[0].get("total_abs") or 0)
+        spend_count = int(total[0].get("count") or 0)
+        if refund_amount <= 0:
+            return {"message": "Nothing to refund (total spend was 0).", "refunded": 0}
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        lot_id = refund_origin_ref
+        # Insert the lot + ledger event.
+        await db.users.update_one({"id": user_id}, {"$inc": {"points": refund_amount}})
+        await db.point_lots.insert_one(
+            {
+                "id": lot_id,
+                "owner_user_id": user_id,
+                "origin_type": "admin_refund_store_spend",
+                "origin_ref": refund_origin_ref,
+                "remaining_points": refund_amount,
+                "root_purchase_ref": None,
+                "parent_lot_id": None,
+                "created_at": now_iso,
+                "updated_at": now_iso,
+            }
+        )
+        await db.point_ledger_events.insert_one(
+            {
+                "id": str(uuid.uuid4()),
+                "event_type": "admin_refund_store_spend",
+                "user_id": user_id,
+                "points": refund_amount,
+                "lot_id": lot_id,
+                "origin_ref": refund_origin_ref,
+                "root_purchase_ref": None,
+                "meta": {
+                    "admin_user_id": current_user.get("id"),
+                    "admin_username": current_user.get("username") or "?",
+                    "store_event_ref": store_event_ref,
+                    "refunded_from_spend_count": spend_count,
+                },
+                "created_at": now_iso,
+            }
+        )
+
+        leaderboard_module.invalidate_leaderboard_cache()
+
+        return {
+            "message": f"Refunded {refund_amount:,} points for store spend `{store_event_ref}`.",
+            "refunded": refund_amount,
+            "store_event_ref": store_event_ref,
+        }
+
     @router.post("/admin/give-all-money")
     async def admin_give_all_money(amount: int, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
@@ -745,6 +1042,77 @@ def register(router):
         except Exception:
             pass
         return {"message": f"Wiped ${old_balance:,} from {target['username']}'s Swiss Bank.", "old_balance": old_balance}
+
+    @router.get("/admin/interest-bank/players")
+    async def admin_interest_bank_players(
+        include_staff: bool = Query(False, description="If true, include staff deposits (default excludes staff, same as capital breakdown)."),
+        limit: int = Query(500, ge=1, le=2000),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Unclaimed interest-bank deposits aggregated by player, with usernames. Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        match_q: Dict = {"claimed_at": None}
+        if not include_staff:
+            staff_ids = await srv._get_staff_user_ids()
+            if staff_ids:
+                match_q["user_id"] = {"$nin": list(staff_ids)}
+        pipeline = [
+            {"$match": match_q},
+            {
+                "$group": {
+                    "_id": "$user_id",
+                    "deposit_count": {"$sum": 1},
+                    "principal": {"$sum": {"$ifNull": ["$principal", 0]}},
+                    "interest_amount": {"$sum": {"$ifNull": ["$interest_amount", 0]}},
+                }
+            },
+            {"$addFields": {"total_locked": {"$add": ["$principal", "$interest_amount"]}}},
+            {"$sort": {"total_locked": -1}},
+            {"$limit": limit},
+            {
+                "$lookup": {
+                    "from": "users",
+                    "localField": "_id",
+                    "foreignField": "id",
+                    "as": "_u",
+                }
+            },
+            {
+                "$addFields": {
+                    "username": {"$ifNull": [{"$arrayElemAt": ["$_u.username", 0]}, "?"]},
+                }
+            },
+            {"$project": {"_u": 0}},
+        ]
+        rows = await db.bank_deposits.aggregate(pipeline).to_list(limit)
+        players: List[Dict] = []
+        tp = ti = tt = 0
+        for r in rows:
+            uid = str(r.get("_id") or "")
+            principal = int(r.get("principal") or 0)
+            interest_amt = int(r.get("interest_amount") or 0)
+            total_locked = principal + interest_amt
+            tp += principal
+            ti += interest_amt
+            tt += total_locked
+            players.append(
+                {
+                    "user_id": uid,
+                    "username": (r.get("username") or "?") if isinstance(r.get("username"), str) else "?",
+                    "deposit_count": int(r.get("deposit_count") or 0),
+                    "principal": principal,
+                    "interest_amount": interest_amt,
+                    "total_locked": total_locked,
+                }
+            )
+        return {
+            "players": players,
+            "count": len(players),
+            "totals": {"principal": tp, "interest": ti, "total_locked": tt},
+            "include_staff": include_staff,
+            "limit": limit,
+        }
 
     @router.post("/admin/add-loot-pieces")
     async def admin_add_loot_pieces(target_username: str, pieces: int, current_user: dict = Depends(get_current_user)):
@@ -3205,6 +3573,7 @@ def register(router):
         block_script_user_agent_login = True if not main_doc else bool(main_doc.get("block_script_user_agent_login", True))
         minigame_turnstile_enabled = bool(main_doc.get("minigame_turnstile_enabled")) if main_doc else False
         minigame_turnstile_site_key = (main_doc.get("minigame_turnstile_site_key") or "") if main_doc else ""
+        login_turnstile_enabled = bool(main_doc.get("login_turnstile_enabled")) if main_doc else False
         spotify_feature_enabled = bool(main_doc.get("spotify_feature_enabled", False)) if main_doc else False
         preorder_points_release_date = main_doc.get("preorder_points_release_date") if main_doc else None
         store_points_auto_credit = main_doc.get("store_points_auto_credit") if main_doc else None
@@ -3228,6 +3597,7 @@ def register(router):
             "block_script_user_agent_login": block_script_user_agent_login,
             "minigame_turnstile_enabled": minigame_turnstile_enabled,
             "minigame_turnstile_site_key": (minigame_turnstile_site_key or "").strip(),
+            "login_turnstile_enabled": login_turnstile_enabled,
             "spotify_feature_enabled": spotify_feature_enabled,
             "stock_market_max_points": stock_market_max_points,
             "landing_banner_enabled": landing_banner_enabled,
@@ -3300,6 +3670,12 @@ def register(router):
             await db.game_settings.update_one(
                 {"_id": "main"},
                 {"$set": {"minigame_turnstile_site_key": sk or None}},
+                upsert=True,
+            )
+        if body.login_turnstile_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"login_turnstile_enabled": bool(body.login_turnstile_enabled)}},
                 upsert=True,
             )
         if body.spotify_feature_enabled is not None:
@@ -3431,6 +3807,7 @@ def register(router):
         block_script_user_agent_login = True if not main_doc else bool(main_doc.get("block_script_user_agent_login", True))
         minigame_turnstile_enabled = bool(main_doc.get("minigame_turnstile_enabled")) if main_doc else False
         minigame_turnstile_site_key = (main_doc.get("minigame_turnstile_site_key") or "") if main_doc else ""
+        login_turnstile_enabled = bool(main_doc.get("login_turnstile_enabled")) if main_doc else False
         spotify_feature_enabled = bool(main_doc.get("spotify_feature_enabled", False)) if main_doc else False
         preorder_points_release_date = main_doc.get("preorder_points_release_date") if main_doc else None
         store_points_auto_credit = main_doc.get("store_points_auto_credit") if main_doc else None
@@ -3448,6 +3825,7 @@ def register(router):
             "block_script_user_agent_login": block_script_user_agent_login,
             "minigame_turnstile_enabled": minigame_turnstile_enabled,
             "minigame_turnstile_site_key": (minigame_turnstile_site_key or "").strip(),
+            "login_turnstile_enabled": login_turnstile_enabled,
             "spotify_feature_enabled": spotify_feature_enabled,
             "stock_market_max_points": stock_market_max_points,
             "landing_banner_enabled": landing_banner_enabled,

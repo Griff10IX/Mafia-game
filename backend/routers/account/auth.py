@@ -19,6 +19,7 @@ from utils.disposable_email import is_disposable_email
 from utils.login_user_agent import auth_client_headers_blocked
 from utils.staff_bot_client_alert import maybe_notify_staff_bot_client_blocked
 from utils.referral_ids import normalize_referred_by_ids, user_has_referrers
+from utils.login_turnstile_gate import login_turnstile_effective_config, require_turnstile_for_login
 from middleware.security import is_proxy_or_vpn, get_ip_info
 
 
@@ -43,6 +44,7 @@ class UserRegister(BaseModel):
 class UserLogin(BaseModel):
     email: str  # email or username (login with either)
     password: str
+    captcha_token: Optional[str] = None  # Cloudflare Turnstile when login_turnstile_enabled
 
 
 class PasswordResetRequest(BaseModel):
@@ -1029,6 +1031,16 @@ def register(router):
             logging.warning("track_login_page_view: %s", e)
         return {"ok": True}
 
+    @router.get("/auth/login-turnstile-config")
+    async def login_turnstile_config():
+        """Public: whether login requires Turnstile and the site key (if fully configured)."""
+        main = await db.game_settings.find_one(
+            {"_id": "main"},
+            {"_id": 0, "login_turnstile_enabled": 1, "minigame_turnstile_site_key": 1},
+        )
+        enabled, site_key = login_turnstile_effective_config(main)
+        return {"enabled": enabled, "site_key": site_key if enabled else None}
+
     @router.post("/auth/login")
     async def login(user_data: UserLogin, request: Request):
         login_input = (user_data.email or "").strip()
@@ -1088,6 +1100,9 @@ def register(router):
                     raise
                 except (ValueError, TypeError):
                     pass
+
+        if not staff_route:
+            await require_turnstile_for_login(db, request=request, captcha_token=user_data.captcha_token)
 
         ip = _client_ip(request)
         block_proxy_vpn_login = bool(settings.get("block_proxy_vpn_login", True)) if settings else True

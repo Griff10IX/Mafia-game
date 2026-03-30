@@ -60,6 +60,25 @@ const ADMIN_CATEGORIES = [
 ];
 const MOD_ONLY_CATEGORY_IDS = ['admin-cheat', 'admin-logs', 'admin-staff', 'admin-mod-tools', 'admin-donations', 'admin-moderation'];
 
+/** Short labels for horizontal category chips on mobile */
+const ADMIN_CATEGORY_MOBILE_SHORT = {
+  'admin-players': 'Players',
+  'admin-moderation': 'Mod',
+  'admin-donations': 'Donate',
+  'admin-gameworld': 'World',
+  'admin-security': 'Security',
+  'admin-cheat': 'Cheat',
+  'admin-analytics': 'Stats',
+  'admin-logs': 'Logs',
+  'admin-testing': 'Test',
+  'admin-quick': 'Quick',
+  'admin-database': 'DB',
+  'admin-staff': 'Staff',
+  'admin-mod-tools': 'Mod UI',
+};
+
+const ADMIN_MOBILE_TARGET_OPEN_KEY = 'admin_mobile_target_open';
+
 function summarizeRedeemRewardsForAdmin(rewards) {
   if (!rewards || typeof rewards !== 'object') return '—';
   const parts = [];
@@ -86,6 +105,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Search Users', categoryId: 'admin-players', collapseKey: 'searchUsers', keywords: ['search', 'users', 'email', 'find'] },
   { label: 'Change Rank', categoryId: 'admin-players', collapseKey: 'rank', keywords: ['rank', 'change', 'prestige', 'level'] },
   { label: 'Add Points', categoryId: 'admin-players', collapseKey: 'points', keywords: ['points', 'add', 'give'] },
+  { label: 'Remove points', categoryId: 'admin-players', collapseKey: 'points', keywords: ['points', 'remove', 'deduct', 'take'] },
   { label: 'Add respect points', categoryId: 'admin-players', collapseKey: 'player', keywords: ['respect', 'add', 'grant', 'give', 'points'] },
   { label: 'Remove respect points', categoryId: 'admin-players', collapseKey: 'player', keywords: ['respect', 'remove', 'deduct', 'take'] },
   { label: 'Points Provenance', categoryId: 'admin-donations', collapseKey: 'donationsProvenance', keywords: ['chargeback', 'provenance', 'payment session', 'points tree'] },
@@ -137,7 +157,9 @@ const SEARCHABLE_TOOLS = [
   // Analytics
   { label: 'Login page unique visitors', categoryId: 'admin-analytics', collapseKey: 'loginPageVisitors', keywords: ['login', 'visitors', 'unique', 'page', 'stats'] },
   { label: 'Casino Ownership Profits', categoryId: 'admin-analytics', collapseKey: 'ownershipProfits', keywords: ['casino', 'ownership', 'profit', 'owner', 'earnings'] },
+  { label: 'Interest bank by player', categoryId: 'admin-analytics', collapseKey: 'interestBankPlayers', keywords: ['interest', 'bank', 'deposits', 'holders'] },
   { label: 'Swiss Bank Overview', categoryId: 'admin-analytics', collapseKey: 'swissBank', keywords: ['swiss', 'bank', 'balance', 'hidden', 'money', 'wipe'] },
+  { label: 'Points purchases (store spends)', categoryId: 'admin-analytics', collapseKey: 'pointsStoreSpends', keywords: ['points', 'store', 'spend', 'bought', 'purchases', 'refund'] },
   { label: 'User Analytics', categoryId: 'admin-analytics', collapseKey: 'analytics', keywords: ['analytics', 'stats', 'users'] },
   // Logs
   { label: 'Live Activity Feed', categoryId: 'admin-logs', collapseKey: 'activityFeed', keywords: ['activity', 'feed', 'live', 'real-time', 'actions', 'gambling', 'bank', 'transfer'] },
@@ -322,11 +344,21 @@ export default function Admin() {
   const [cars, setCars] = useState([]);
   const [bgTestCount, setBgTestCount] = useState(2);
   const [collapsed, setCollapsed] = useState(() => loadCollapsed());
+  const [adminMobileTargetOpen, setAdminMobileTargetOpen] = useState(() => {
+    try {
+      const v = localStorage.getItem(ADMIN_MOBILE_TARGET_OPEN_KEY);
+      if (v === null) return true;
+      return v !== '0' && v !== 'false';
+    } catch {
+      return true;
+    }
+  });
   const [formData, setFormData] = useState({
     targetUsername: '',
     newRank: 1,
     prestigeLevel: 0,
     points: 100,
+    pointsRemove: 100,
     bullets: 5000,
     lootPieces: 100,
     carId: 'car1',
@@ -379,6 +411,7 @@ export default function Admin() {
   const [dbFreshLoading, setDbFreshLoading] = useState(false);
   const [giveAllPoints, setGiveAllPoints] = useState(100);
   const [giveAllMoney, setGiveAllMoney] = useState(10000);
+  const [removeAllPointsLoading, setRemoveAllPointsLoading] = useState(false);
   const [clearSearchesLoading, setClearSearchesLoading] = useState(false);
   const [dropHumanBgLoading, setDropHumanBgLoading] = useState(false);
   const [testPayoutLoading, setTestPayoutLoading] = useState(false);
@@ -400,6 +433,14 @@ export default function Admin() {
     }
     if (!isAdmin && visible.length > 0) setActiveCategoryId(visible[0].id);
   }, [isAdmin, modVisibleCategoryIds]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(ADMIN_MOBILE_TARGET_OPEN_KEY, adminMobileTargetOpen ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  }, [adminMobileTargetOpen]);
 
   const filteredTools = useMemo(() => {
     if (!toolSearch.trim()) return [];
@@ -528,6 +569,13 @@ export default function Admin() {
   const [swissBankList, setSwissBankList] = useState(null);
   const [swissBankLoading, setSwissBankLoading] = useState(false);
   const [swissBankWiping, setSwissBankWiping] = useState('');
+  const [interestBankByPlayer, setInterestBankByPlayer] = useState(null);
+  const [interestBankByPlayerLoading, setInterestBankByPlayerLoading] = useState(false);
+  const [interestBankIncludeStaff, setInterestBankIncludeStaff] = useState(false);
+  const [pointsStoreSpends, setPointsStoreSpends] = useState(null);
+  const [pointsStoreSpendsLoading, setPointsStoreSpendsLoading] = useState(false);
+  const [pointsStoreRefundingKey, setPointsStoreRefundingKey] = useState(null);
+  const [pointsStoreSpendsUsernameQuery, setPointsStoreSpendsUsernameQuery] = useState('');
   const [tradesAnalyticsDays, setTradesAnalyticsDays] = useState(7);
   const [tradesAnalytics, setTradesAnalytics] = useState(null);
   const [tradesAnalyticsLoading, setTradesAnalyticsLoading] = useState(false);
@@ -673,6 +721,7 @@ export default function Admin() {
   const [blockScriptUaSaving, setBlockScriptUaSaving] = useState(false);
   const [minigameTurnstileEnabled, setMinigameTurnstileEnabled] = useState(false);
   const [minigameTurnstileSiteKey, setMinigameTurnstileSiteKey] = useState('');
+  const [loginTurnstileEnabled, setLoginTurnstileEnabled] = useState(false);
   const [captchaFailModalOpen, setCaptchaFailModalOpen] = useState(false);
   const [captchaFailRows, setCaptchaFailRows] = useState([]);
   const [captchaFailTotal, setCaptchaFailTotal] = useState(0);
@@ -1184,6 +1233,7 @@ export default function Admin() {
       setBlockScriptUserAgentLogin(res.data?.block_script_user_agent_login !== false);
       setMinigameTurnstileEnabled(!!res.data?.minigame_turnstile_enabled);
       setMinigameTurnstileSiteKey((res.data?.minigame_turnstile_site_key ?? '').trim());
+      setLoginTurnstileEnabled(!!res.data?.login_turnstile_enabled);
       setSpotifyFeatureEnabled(!!res.data?.spotify_feature_enabled);
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
       setLandingBannerMessage(res.data?.landing_banner_message ?? '');
@@ -1214,6 +1264,7 @@ export default function Admin() {
       setBlockScriptUserAgentLogin(true);
       setMinigameTurnstileEnabled(false);
       setMinigameTurnstileSiteKey('');
+      setLoginTurnstileEnabled(false);
       setSpotifyFeatureEnabled(false);
       setLandingBannerMessage('');
       setStockMarketMaxPoints(3000);
@@ -1269,6 +1320,7 @@ export default function Admin() {
         block_script_user_agent_login: blockScriptUserAgentLogin,
         minigame_turnstile_enabled: minigameTurnstileEnabled,
         minigame_turnstile_site_key: minigameTurnstileSiteKey.trim(),
+        login_turnstile_enabled: loginTurnstileEnabled,
         spotify_feature_enabled: spotifyFeatureEnabled,
         landing_banner_enabled: landingBannerEnabled,
         landing_banner_message: landingBannerMessage,
@@ -1283,6 +1335,7 @@ export default function Admin() {
       if (res.data?.minigame_turnstile_site_key !== undefined) {
         setMinigameTurnstileSiteKey((res.data.minigame_turnstile_site_key ?? '').trim());
       }
+      setLoginTurnstileEnabled(!!res.data?.login_turnstile_enabled);
       setSpotifyFeatureEnabled(!!res.data?.spotify_feature_enabled);
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
       if (res.data?.landing_banner_message !== undefined) setLandingBannerMessage(res.data.landing_banner_message ?? '');
@@ -1951,6 +2004,27 @@ export default function Admin() {
       const response = await api.post(`/admin/add-points?target_username=${formData.targetUsername}&points=${formData.points}`);
       toast.success(response.data.message);
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  const handleRemovePoints = async () => {
+    const username = (formData.targetUsername || '').trim();
+    if (!username) {
+      toast.error('Enter target username above');
+      return;
+    }
+    const amt = Math.max(0, parseInt(String(formData.pointsRemove), 10) || 0);
+    if (amt <= 0) {
+      toast.error('Enter a positive amount to remove');
+      return;
+    }
+    if (!window.confirm(`Remove up to ${amt.toLocaleString()} points from ${username}? (Cannot remove more than they have.)`)) return;
+    try {
+      const params = new URLSearchParams({ target_username: username, amount: String(amt) });
+      const response = await api.post(`/admin/remove-points?${params.toString()}`);
+      toast.success(response.data?.message || 'Done');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    }
   };
 
   const handleAddRespectPoints = async () => {
@@ -3226,6 +3300,64 @@ export default function Admin() {
     }
   };
 
+  const handleFetchPointsStoreSpends = async () => {
+    setPointsStoreSpendsLoading(true);
+    try {
+      const params = { limit: 200 };
+      if ((pointsStoreSpendsUsernameQuery || '').trim()) params.username = pointsStoreSpendsUsernameQuery.trim();
+      const res = await api.get('/admin/points/spend-store', { params });
+      setPointsStoreSpends(res.data || null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load points store spends');
+      setPointsStoreSpends({ spends: [], count: 0 });
+    } finally {
+      setPointsStoreSpendsLoading(false);
+    }
+  };
+
+  const handleRefundStoreSpend = async (userId, storeEventRef) => {
+    const key = `${userId}:${storeEventRef}`;
+    if (pointsStoreRefundingKey === key) return;
+    if (!window.confirm(`Refund points for ${storeEventRef} spent by this user? (Refund points only; does NOT un-buy item)`)) return;
+    setPointsStoreRefundingKey(key);
+    try {
+      const res = await api.post('/admin/points/refund-store-spend', null, {
+        params: { user_id: userId, store_event_ref: storeEventRef },
+      });
+      toast.success(res.data?.message || 'Refunded');
+      await handleFetchPointsStoreSpends();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to refund');
+    } finally {
+      setPointsStoreRefundingKey(null);
+    }
+  };
+
+  const handleFetchInterestBankPlayers = async (opts) => {
+    const includeStaff = opts?.include_staff !== undefined ? opts.include_staff : interestBankIncludeStaff;
+    setInterestBankByPlayerLoading(true);
+    try {
+      const res = await api.get('/admin/interest-bank/players', {
+        params: { include_staff: includeStaff, limit: 500 },
+      });
+      setInterestBankByPlayer(res.data || null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load interest bank data');
+    } finally {
+      setInterestBankByPlayerLoading(false);
+    }
+  };
+
+  const handleJumpToInterestBankPlayers = () => {
+    setActiveCategoryId('admin-analytics');
+    if (typeof window !== 'undefined') window.location.hash = 'admin-analytics';
+    setCollapsed((prev) => ({ ...prev, interestBankPlayers: false }));
+    handleFetchInterestBankPlayers({ include_staff: false });
+    setTimeout(() => {
+      document.getElementById('admin-interest-bank-players')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 200);
+  };
+
   const handleFetchTradesAnalytics = async () => {
     setTradesAnalyticsLoading(true);
     try {
@@ -3916,6 +4048,19 @@ export default function Admin() {
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
   };
 
+  const handleRemoveAllPoints = async () => {
+    if (!window.confirm('FINAL WARNING: Remove ALL points from alive accounts? This is irreversible.')) return;
+    setRemoveAllPointsLoading(true);
+    try {
+      const res = await api.post('/admin/remove-all-points?max_users=100000');
+      toast.success(res.data?.message || 'Points removed');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to remove all points');
+    } finally {
+      setRemoveAllPointsLoading(false);
+    }
+  };
+
   const handleGiveAllMoney = async () => {
     if (!window.confirm(`Give $${giveAllMoney.toLocaleString()} to ALL?`)) return;
     try {
@@ -4403,7 +4548,7 @@ export default function Admin() {
   const Select = AdminSelect;
 
   return (
-    <div className={`space-y-2 ${styles.pageContent} mobile-page-root admin-mobile-shell pb-6 md:pb-0`} data-testid="admin-page">
+    <div className={`space-y-2 ${styles.pageContent} mobile-page-root admin-mobile-shell pb-6 md:pb-0 flex flex-col max-md:min-h-[min(calc(100dvh-5.5rem),100%)]`} data-testid="admin-page">
       <style>{ADMIN_STYLES}</style>
       <div className="relative admin-fade-in flex items-center justify-between gap-2 flex-wrap">
         <p className="text-[10px] text-zinc-500 font-heading italic">Use with caution</p>
@@ -4436,58 +4581,98 @@ export default function Admin() {
       )}
 
       {/* Sidebar + main layout: stack on mobile, side-by-side on desktop */}
-      <div className="flex flex-col md:flex-row gap-4 flex-1 min-h-0 min-w-0">
-        {/* Sidebar: search + category list */}
+      <div className="flex flex-col md:flex-row gap-4 flex-1 min-h-0 min-w-0 max-md:flex-1 max-md:min-h-0">
+        {/* Sidebar: search + categories (mobile: sticky strip + chips; desktop: vertical nav) */}
         <aside className="w-full md:w-[220px] shrink-0 flex flex-col gap-3 border-r-0 md:border-r border-primary/20 pr-0 md:pr-4">
-          <div className="relative">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-mutedForeground" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={toolSearch}
-              onChange={(e) => setToolSearch(e.target.value)}
-              onFocus={() => setToolSearchFocused(true)}
-              onBlur={() => setTimeout(() => setToolSearchFocused(false), 150)}
-              placeholder="Search tools..."
-              className="w-full pl-8 pr-3 py-1.5 rounded-md border border-primary/30 bg-zinc-900/80 text-[11px] font-heading text-foreground placeholder:text-mutedForeground focus:border-primary/60 focus:outline-none"
-            />
-            {toolSearch && (
-              <button
-                type="button"
-                onClick={() => { setToolSearch(''); searchInputRef.current?.focus(); }}
-                className="absolute right-2 top-1/2 -translate-y-1/2 text-mutedForeground hover:text-foreground"
+          <div className="sticky top-0 z-20 md:static md:z-auto space-y-2 pb-1 -mx-0.5 px-0.5 md:mx-0 md:px-0 bg-background/95 md:bg-transparent backdrop-blur md:backdrop-blur-none border-b border-primary/25 md:border-b-0">
+            <div className="relative">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-mutedForeground" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={toolSearch}
+                onChange={(e) => setToolSearch(e.target.value)}
+                onFocus={() => setToolSearchFocused(true)}
+                onBlur={() => setTimeout(() => setToolSearchFocused(false), 150)}
+                placeholder="Search tools..."
+                className="w-full pl-8 pr-3 py-2 md:py-1.5 rounded-md border border-primary/30 bg-zinc-900/80 text-[11px] font-heading text-foreground placeholder:text-mutedForeground focus:border-primary/60 focus:outline-none"
+              />
+              {toolSearch && (
+                <button
+                  type="button"
+                  onClick={() => { setToolSearch(''); searchInputRef.current?.focus(); }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-mutedForeground hover:text-foreground"
+                >
+                  <X size={12} />
+                </button>
+              )}
+              {toolSearchFocused && filteredTools.length > 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-zinc-900 border border-primary/30 rounded-md shadow-lg max-h-64 overflow-y-auto z-30">
+                  {filteredTools.map((tool, idx) => {
+                    const category = ADMIN_CATEGORIES.find(c => c.id === tool.categoryId);
+                    return (
+                      <button
+                        key={tool.label + idx}
+                        type="button"
+                        onMouseDown={(e) => { e.preventDefault(); handleToolSelect(tool); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-primary/20 transition-colors border-b border-zinc-800 last:border-b-0"
+                      >
+                        {category?.icon && <category.icon size={12} className="text-primary shrink-0" />}
+                        <div className="flex-1 min-w-0">
+                          <div className="text-[11px] font-heading font-bold text-foreground truncate">{tool.label}</div>
+                          <div className="text-[9px] text-mutedForeground">{category?.label || ''}</div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+              {toolSearchFocused && toolSearch && filteredTools.length === 0 && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-zinc-900 border border-primary/30 rounded-md shadow-lg p-3 z-30">
+                  <p className="text-[10px] text-mutedForeground text-center">No tools found for &quot;{toolSearch}&quot;</p>
+                </div>
+              )}
+            </div>
+            <div className="md:hidden">
+              <label htmlFor="admin-category-jump" className="sr-only">Jump to admin section</label>
+              <select
+                id="admin-category-jump"
+                value={activeCategoryId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setActiveCategoryId(id);
+                  if (typeof window !== 'undefined') window.location.hash = id;
+                }}
+                className="w-full px-2 py-2 rounded-md border border-primary/30 bg-zinc-900/90 text-[11px] font-heading font-bold text-foreground"
               >
-                <X size={12} />
-              </button>
-            )}
-            {toolSearchFocused && filteredTools.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-zinc-900 border border-primary/30 rounded-md shadow-lg max-h-64 overflow-y-auto z-30">
-                {filteredTools.map((tool, idx) => {
-                  const category = ADMIN_CATEGORIES.find(c => c.id === tool.categoryId);
-                  return (
-                    <button
-                      key={tool.label + idx}
-                      type="button"
-                      onMouseDown={(e) => { e.preventDefault(); handleToolSelect(tool); }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-primary/20 transition-colors border-b border-zinc-800 last:border-b-0"
-                    >
-                      {category?.icon && <category.icon size={12} className="text-primary shrink-0" />}
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[11px] font-heading font-bold text-foreground truncate">{tool.label}</div>
-                        <div className="text-[9px] text-mutedForeground">{category?.label || ''}</div>
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-            {toolSearchFocused && toolSearch && filteredTools.length === 0 && (
-              <div className="absolute top-full left-0 right-0 mt-1 bg-zinc-900 border border-primary/30 rounded-md shadow-lg p-3 z-30">
-                <p className="text-[10px] text-mutedForeground text-center">No tools found for &quot;{toolSearch}&quot;</p>
-              </div>
-            )}
+                {visibleCategories.map(({ id, label }) => (
+                  <option key={id} value={id}>{label}</option>
+                ))}
+              </select>
+            </div>
+            <div className="flex md:hidden gap-1.5 overflow-x-auto pb-1 snap-x snap-mandatory -mx-0.5 px-0.5 touch-pan-x">
+              {visibleCategories.map(({ id, icon: Icon }) => {
+                const shortLabel = ADMIN_CATEGORY_MOBILE_SHORT[id] || id.replace(/^admin-/, '');
+                const active = activeCategoryId === id;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => { setActiveCategoryId(id); if (typeof window !== 'undefined') window.location.hash = id; }}
+                    className={`snap-center shrink-0 flex items-center gap-1.5 px-2.5 py-2 min-h-[40px] rounded-md text-[10px] font-heading font-bold uppercase tracking-wide border transition-colors ${
+                      active
+                        ? 'border-primary bg-primary/25 text-primary'
+                        : 'border-primary/30 bg-primary/10 text-primary/90 hover:bg-primary/20'
+                    }`}
+                  >
+                    <Icon size={14} className="shrink-0 opacity-90" />
+                    <span className="whitespace-nowrap">{shortLabel}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
-          <nav className="flex flex-col gap-1">
+          <nav className="hidden md:flex flex-col gap-1">
             {visibleCategories.map(({ id, label, icon: Icon }) => (
               <button
                 key={id}
@@ -4506,26 +4691,39 @@ export default function Admin() {
           </nav>
         </aside>
 
-        {/* Main: Target Username (sticky) + active category content only */}
-        <main className="flex-1 min-w-0 min-h-0 space-y-4 overflow-x-hidden md:overflow-y-auto md:max-h-[min(100vh-10rem,100dvh-10rem)]">
-          {/* Target Username - sticky so it stays visible when scrolling */}
-          <div className={`sticky top-0 z-10 relative admin-module admin-focus-block ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bg-background/95 backdrop-blur mobile-panel`}>
-        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
-          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">🎯 Target Username</span>
-        </div>
-        <div className="p-3">
-          <input
-            type="text"
-            value={formData.targetUsername}
-            onChange={(e) => setFormData((prev) => ({ ...prev, targetUsername: e.target.value }))}
-            className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
-            placeholder="Enter username for actions below"
-          />
-        </div>
-        <div className="admin-art-line text-primary mx-3" />
+        {/* Main: target username + scrollable tools (mobile); desktop unchanged scroll */}
+        <main className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden md:block md:overflow-y-auto md:max-h-[min(100vh-10rem,100dvh-10rem)] md:overflow-x-hidden md:space-y-4">
+          <div className={`shrink-0 z-10 relative admin-module admin-focus-block ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bg-background/95 backdrop-blur mobile-panel md:sticky md:top-0`}>
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <button
+              type="button"
+              className="md:pointer-events-none w-full px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2 text-left"
+              onClick={() => setAdminMobileTargetOpen((o) => !o)}
+              aria-expanded={adminMobileTargetOpen}
+            >
+              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Target Username</span>
+              <span className="md:hidden text-primary/80 shrink-0" aria-hidden>
+                {adminMobileTargetOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+              </span>
+            </button>
+            {!adminMobileTargetOpen && (
+              <div className="md:hidden px-3 py-2 text-[10px] font-heading text-mutedForeground border-b border-primary/10">
+                Target: <span className="text-foreground font-medium">{(formData.targetUsername || '').trim() || '—'}</span>
+              </div>
+            )}
+            <div className={`${adminMobileTargetOpen ? '' : 'hidden '}md:block p-3`}>
+              <input
+                type="text"
+                value={formData.targetUsername}
+                onChange={(e) => setFormData((prev) => ({ ...prev, targetUsername: e.target.value }))}
+                className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+                placeholder="Enter username for actions below"
+              />
+            </div>
+            <div className="admin-art-line text-primary mx-3" />
           </div>
 
+          <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain space-y-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] md:contents md:overflow-visible md:pb-0">
           {activeCategoryId === 'admin-players' && (
           <>
       {/* Search users (username or email) */}
@@ -5500,6 +5698,11 @@ export default function Admin() {
             <ActionRow icon={Coins} label="Add Points">
               <FormattedNumberInput value={formData.points != null ? String(formData.points) : ''} onChange={(raw) => setFormData((prev) => ({ ...prev, points: raw === '' ? 0 : parseInt(raw, 10) }))} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" />
               <BtnPrimary onClick={handleAddPoints}>Add</BtnPrimary>
+            </ActionRow>
+
+            <ActionRow icon={Coins} label="Remove points" description="Deducts up to this amount (clamped to current balance). Uses target username above.">
+              <FormattedNumberInput value={formData.pointsRemove != null ? String(formData.pointsRemove) : ''} onChange={(raw) => setFormData((prev) => ({ ...prev, pointsRemove: raw === '' ? 0 : parseInt(raw, 10) }))} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" />
+              <BtnDanger onClick={handleRemovePoints}>Remove</BtnDanger>
             </ActionRow>
 
             <ActionRow icon={Award} label="Add respect points" description="Grants respect to the target user. Logged as admin_add. Uses target username above.">
@@ -7162,7 +7365,7 @@ export default function Admin() {
             <div className="space-y-2 pt-2 border-t border-primary/10">
               <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Minigames — Cloudflare Turnstile</p>
               <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                Require a captcha before each minigame run (and gauntlet). Set <code className="text-[9px] bg-muted px-1 rounded">TURNSTILE_SECRET_KEY</code> in the server environment; optionally override the public site key here or via <code className="text-[9px] bg-muted px-1 rounded">TURNSTILE_SITE_KEY</code>.
+                Require a captcha before each minigame run (and gauntlet). Set <code className="text-[9px] bg-muted px-1 rounded">TURNSTILE_SECRET_KEY</code> in the server environment; optionally override the public site key here or via <code className="text-[9px] bg-muted px-1 rounded">TURNSTILE_SITE_KEY</code>. Login Turnstile uses the same public site key and secret.
               </p>
               <label className="flex items-center gap-2 cursor-pointer text-sm font-heading">
                 <input
@@ -7172,6 +7375,15 @@ export default function Admin() {
                   className="rounded border-input"
                 />
                 <span>Enable Turnstile before minigame / gauntlet runs</span>
+              </label>
+              <label className="flex items-center gap-2 cursor-pointer text-sm font-heading">
+                <input
+                  type="checkbox"
+                  checked={loginTurnstileEnabled}
+                  onChange={(e) => setLoginTurnstileEnabled(e.target.checked)}
+                  className="rounded border-input"
+                />
+                <span>Require Turnstile on login</span>
               </label>
               <div className="flex flex-col gap-1 max-w-md">
                 <label className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Site key (public)</label>
@@ -8971,9 +9183,12 @@ export default function Admin() {
                     <div className="text-mutedForeground uppercase">Stats Swiss total</div>
                     <div className="font-bold text-foreground">${(capitalBreakdown.public_stats_alignment?.swiss_total ?? 0).toLocaleString()}</div>
                   </div>
-                  <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
+                  <div className="p-2 rounded bg-zinc-800/50 border border-zinc-700/30 flex flex-col gap-1.5">
                     <div className="text-mutedForeground uppercase">Stats interest bank</div>
                     <div className="font-bold text-foreground">${(capitalBreakdown.public_stats_alignment?.interest_bank_total ?? 0).toLocaleString()}</div>
+                    <BtnSecondary type="button" onClick={handleJumpToInterestBankPlayers} className="self-start mt-0.5">
+                      By player
+                    </BtnSecondary>
                   </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -9924,6 +10139,100 @@ export default function Admin() {
           )}
         </div>
 
+        {/* Interest bank — active deposits by player */}
+        <div
+          id="admin-interest-bank-players"
+          className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}
+        >
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Landmark}
+            title="Interest bank (active deposits)"
+            badge={
+              interestBankByPlayer?.players ? (
+                <span className="text-[10px] font-heading text-mutedForeground">
+                  {interestBankByPlayer.count} players — ${(interestBankByPlayer.totals?.total_locked ?? 0).toLocaleString()} locked
+                </span>
+              ) : null
+            }
+            isCollapsed={collapsed.interestBankPlayers}
+            onToggle={() => toggleSection('interestBankPlayers')}
+          />
+          {!collapsed.interestBankPlayers && (
+            <div className="p-3 space-y-2">
+              <p className="text-[10px] text-mutedForeground font-heading">
+                Unclaimed time deposits only (principal + accrued interest). Excludes staff by default — same as capital breakdown.
+              </p>
+              <label className="flex items-center gap-2 cursor-pointer text-[10px] font-heading text-foreground">
+                <input
+                  type="checkbox"
+                  checked={interestBankIncludeStaff}
+                  onChange={(e) => setInterestBankIncludeStaff(e.target.checked)}
+                  className="rounded border-input"
+                />
+                <span>Include staff deposits</span>
+              </label>
+              <BtnPrimary onClick={() => handleFetchInterestBankPlayers()} disabled={interestBankByPlayerLoading}>
+                {interestBankByPlayerLoading ? 'Loading…' : 'Load interest bank by player'}
+              </BtnPrimary>
+              {interestBankByPlayer && (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase">Players</div>
+                      <div className="text-sm font-heading font-bold">{interestBankByPlayer.count ?? 0}</div>
+                    </div>
+                    <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase">Principal</div>
+                      <div className="text-sm font-heading font-bold">${(interestBankByPlayer.totals?.principal ?? 0).toLocaleString()}</div>
+                    </div>
+                    <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase">Accrued interest</div>
+                      <div className="text-sm font-heading font-bold text-emerald-400/90">
+                        ${(interestBankByPlayer.totals?.interest ?? 0).toLocaleString()}
+                      </div>
+                    </div>
+                    <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
+                      <div className="text-[9px] text-mutedForeground font-heading uppercase">Total locked</div>
+                      <div className="text-sm font-heading font-bold text-primary">
+                        ${(interestBankByPlayer.totals?.total_locked ?? 0).toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+                  <div className="overflow-x-auto max-h-[400px]">
+                    {(!interestBankByPlayer.players || interestBankByPlayer.players.length === 0) ? (
+                      <p className="text-[10px] text-mutedForeground font-heading">No active interest deposits.</p>
+                    ) : (
+                      <table className="w-full text-[10px] font-heading">
+                        <thead>
+                          <tr>
+                            <th className="text-left p-1.5 text-mutedForeground sticky top-0 bg-zinc-900">Username</th>
+                            <th className="text-right p-1.5 text-mutedForeground sticky top-0 bg-zinc-900">#</th>
+                            <th className="text-right p-1.5 text-mutedForeground sticky top-0 bg-zinc-900">Principal</th>
+                            <th className="text-right p-1.5 text-mutedForeground sticky top-0 bg-zinc-900">Interest</th>
+                            <th className="text-right p-1.5 text-mutedForeground sticky top-0 bg-zinc-900">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {interestBankByPlayer.players.map((u) => (
+                            <tr key={u.user_id} className="border-b border-zinc-700/30 hover:bg-zinc-800/30">
+                              <td className="p-1.5 font-medium">{u.username || '—'}</td>
+                              <td className="p-1.5 text-right text-mutedForeground">{u.deposit_count ?? 0}</td>
+                              <td className="p-1.5 text-right">${Number(u.principal ?? 0).toLocaleString()}</td>
+                              <td className="p-1.5 text-right text-emerald-400/90">${Number(u.interest_amount ?? 0).toLocaleString()}</td>
+                              <td className="p-1.5 text-right font-bold text-primary">${Number(u.total_locked ?? 0).toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Swiss Bank Overview */}
 
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
@@ -9986,6 +10295,84 @@ export default function Admin() {
                     )}
                   </div>
                 </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Points purchases (store spends) */}
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Coins}
+            title="Points purchases (store spends)"
+            badge={pointsStoreSpends?.spends ? <span className="text-[10px] font-heading text-mutedForeground">{pointsStoreSpends.count} rows</span> : null}
+            isCollapsed={collapsed.pointsStoreSpends}
+            onToggle={() => toggleSection('pointsStoreSpends')}
+          />
+          {!collapsed.pointsStoreSpends && (
+            <div className="p-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={pointsStoreSpendsUsernameQuery}
+                  onChange={(e) => setPointsStoreSpendsUsernameQuery(e.target.value)}
+                  placeholder="Filter username (optional)"
+                  className="flex-1 min-w-[120px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                <BtnPrimary onClick={handleFetchPointsStoreSpends} disabled={pointsStoreSpendsLoading}>
+                  {pointsStoreSpendsLoading ? 'Loading…' : 'Load'}
+                </BtnPrimary>
+              </div>
+              <p className="text-[10px] text-mutedForeground font-heading">
+                Refund restores points balance only; it does NOT automatically un-buy item entitlements.
+              </p>
+
+              {pointsStoreSpends && (
+                <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+                  {(!pointsStoreSpends.spends || pointsStoreSpends.spends.length === 0) ? (
+                    <p className="text-[10px] text-mutedForeground font-heading">No store point spends found.</p>
+                  ) : (
+                    <table className="w-full text-[10px] font-heading">
+                      <thead>
+                        <tr>
+                          <th className="text-left p-1.5 text-mutedForeground sticky top-0 bg-zinc-900">User</th>
+                          <th className="text-left p-1.5 text-mutedForeground sticky top-0 bg-zinc-900">Item</th>
+                          <th className="text-right p-1.5 text-mutedForeground sticky top-0 bg-zinc-900">Points spent</th>
+                          <th className="text-right p-1.5 text-mutedForeground sticky top-0 bg-zinc-900">#</th>
+                          <th className="text-right p-1.5 text-mutedForeground sticky top-0 bg-zinc-900">Last</th>
+                          <th className="text-right p-1.5 text-mutedForeground sticky top-0 bg-zinc-900">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {pointsStoreSpends.spends.map((s) => {
+                          const refundKey = `${s.user_id}:${s.store_event_ref}`;
+                          return (
+                            <tr key={refundKey} className="border-b border-zinc-700/30 hover:bg-zinc-800/30">
+                              <td className="p-1.5 font-medium">{s.username || '—'}</td>
+                              <td className="p-1.5 text-mutedForeground font-mono max-w-[120px] truncate">{s.store_event_ref || '—'}</td>
+                              <td className="p-1.5 text-right">{Number(s.total_points_spent || 0).toLocaleString()}</td>
+                              <td className="p-1.5 text-right text-mutedForeground">{Number(s.spend_count || 0).toLocaleString()}</td>
+                              <td className="p-1.5 text-right text-mutedForeground whitespace-nowrap">
+                                {s.last_at ? new Date(s.last_at).toLocaleString() : '—'}
+                              </td>
+                              <td className="p-1.5 text-right">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRefundStoreSpend(s.user_id, s.store_event_ref)}
+                                  disabled={pointsStoreRefundingKey === refundKey}
+                                  className="px-2 py-0.5 rounded border border-emerald-500/40 bg-emerald-500/20 text-emerald-400 text-[9px] font-heading hover:bg-emerald-500/30 disabled:opacity-50"
+                                >
+                                  {pointsStoreRefundingKey === refundKey ? '...' : 'Refund'}
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -11151,6 +11538,11 @@ export default function Admin() {
               <FormattedNumberInput value={String(giveAllPoints)} onChange={(raw) => setGiveAllPoints(parseInt(raw, 10) || 1)} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" />
               <BtnPrimary onClick={handleGiveAllPoints}>Give</BtnPrimary>
             </ActionRow>
+                <ActionRow icon={Trash2} label="Remove All Points" description="Remove ALL points from alive accounts (refund/unbuy not automatic).">
+                  <BtnDanger onClick={handleRemoveAllPoints} disabled={removeAllPointsLoading}>
+                    {removeAllPointsLoading ? 'Removing…' : 'Remove All'}
+                  </BtnDanger>
+                </ActionRow>
             <ActionRow icon={Gift} label="Give All Money" description="Give money to all alive accounts">
               <FormattedNumberInput value={String(giveAllMoney)} onChange={(raw) => setGiveAllMoney(parseInt(raw, 10) || 10000)} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" />
               <BtnPrimary onClick={handleGiveAllMoney}>Give</BtnPrimary>
@@ -11891,6 +12283,8 @@ export default function Admin() {
         </div>
       </section>
       )}
+
+          </div>
 
       {/* Captcha failures: outside category sections so "View captcha failures" works from Security & Cloudflare */}
       {captchaFailModalOpen && (
