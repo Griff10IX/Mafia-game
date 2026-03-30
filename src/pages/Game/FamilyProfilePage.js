@@ -6,6 +6,12 @@ import { toast } from 'sonner';
 import { parseForumContent, insertAtCursor } from '../../utils/forumContent';
 import styles from '../../styles/noir.module.css';
 
+/** Preset notepad backgrounds (dark greys) — same options as player profile. */
+const NOTEPAD_COLOR_PRESETS = [
+  { hex: '#333333', label: 'Charcoal' },
+  { hex: '#282828', label: 'Graphite' },
+];
+
 function formatMoney(n) {
   const num = Number(n ?? 0);
   if (Number.isNaN(num)) return '$0';
@@ -184,6 +190,7 @@ export default function FamilyProfilePage() {
   const [loading, setLoading] = useState(true);
   const [crewOCApplyLoading, setCrewOCApplyLoading] = useState(false);
   const [profileTextEdit, setProfileTextEdit] = useState('');
+  const [notepadColorEdit, setNotepadColorEdit] = useState('');
   const [savingProfileText, setSavingProfileText] = useState(false);
   const profileTextareaRef = useRef(null);
 
@@ -198,6 +205,7 @@ export default function FamilyProfilePage() {
         const res = await api.get('/families/lookup', { params });
         setFamily(res.data);
         setProfileTextEdit((res.data?.profile_text || '').trim() || '');
+        setNotepadColorEdit(res.data?.profile_notepad_color ?? '');
         if (isUuid && res.data?.tag) {
           navigate(`/game/family/${encodeURIComponent(res.data.tag)}`, { replace: true });
         }
@@ -253,6 +261,8 @@ export default function FamilyProfilePage() {
       toast.success(res.data?.message || 'Applied.');
       const r = await api.get('/families/lookup', { params: { tag: family.tag } });
       setFamily(r.data);
+      setProfileTextEdit((r.data?.profile_text || '').trim() || '');
+      setNotepadColorEdit(r.data?.profile_notepad_color ?? '');
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to apply');
     } finally { setCrewOCApplyLoading(false); }
@@ -277,11 +287,15 @@ export default function FamilyProfilePage() {
   const saveFamilyProfile = async () => {
     setSavingProfileText(true);
     try {
-      await api.patch('/families/profile-text', { profile_text: (profileTextEdit || '').trim() || null });
+      await api.patch('/families/profile-text', {
+        profile_text: (profileTextEdit || '').trim() || null,
+        notepad_color: (notepadColorEdit || '').trim() === '' ? '' : notepadColorEdit.trim(),
+      });
       toast.success('Family profile updated.');
       const r = await api.get('/families/lookup', { params: { tag: family.tag } });
       setFamily(r.data);
       setProfileTextEdit((r.data?.profile_text || '').trim() || '');
+      setNotepadColorEdit(r.data?.profile_notepad_color ?? '');
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to save');
     } finally { setSavingProfileText(false); }
@@ -639,9 +653,14 @@ export default function FamilyProfilePage() {
           {/* Display profile text */}
           {((family.profile_text || '').trim() || '').length > 0 ? (
             <div
-              className="fp-profile-content font-heading text-sm text-foreground prose prose-invert prose-sm max-w-none prose-p:my-1 prose-img:my-2 prose-div:my-1"
-              dangerouslySetInnerHTML={{ __html: parseForumContent((family.profile_text || '').trim()) }}
-            />
+              className="rounded-lg overflow-hidden px-1 -mx-1 py-1 -my-0.5"
+              style={family.profile_notepad_color ? { backgroundColor: family.profile_notepad_color } : undefined}
+            >
+              <div
+                className="fp-profile-content font-heading text-sm text-foreground prose prose-invert prose-sm max-w-none prose-p:my-1 prose-img:my-2 prose-div:my-1"
+                dangerouslySetInnerHTML={{ __html: parseForumContent((family.profile_text || '').trim()) }}
+              />
+            </div>
           ) : !canEditProfile ? (
             <p className="text-[10px] text-mutedForeground font-heading text-center py-4">No family profile set</p>
           ) : null}
@@ -664,6 +683,54 @@ export default function FamilyProfilePage() {
                   <button type="button" onClick={() => insertFamilyMarkup('[i]', '[/i]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Italic"><Italic size={14} /></button>
                   <button type="button" onClick={() => insertFamilyMarkup('[center]', '[/center]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Center"><AlignCenter size={14} /></button>
                   <button type="button" onClick={() => { const u = window.prompt('Image URL (e.g. family picture):'); if (u && u.trim()) insertFamilyMarkup('[img]' + u.trim() + '[/img]'); }} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Image"><Image size={14} /></button>
+                </div>
+                <div className="pt-2 border-t border-zinc-700/40 space-y-2">
+                  <label className="block text-[9px] font-heading font-bold text-primary/70 uppercase tracking-[0.2em]">Notepad background</label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="color"
+                      value={notepadColorEdit || '#1e293b'}
+                      onChange={(e) => setNotepadColorEdit(e.target.value)}
+                      className="h-9 w-9 sm:h-10 sm:w-10 cursor-pointer rounded border border-zinc-600 bg-zinc-900 p-0.5"
+                      title="Pick a colour"
+                      aria-label="Notepad background colour"
+                    />
+                    {NOTEPAD_COLOR_PRESETS.map(({ hex, label }) => (
+                      <button
+                        key={hex}
+                        type="button"
+                        onClick={() => setNotepadColorEdit(hex)}
+                        title={`${label} ${hex}`}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-[10px] font-heading transition-colors ${
+                          (notepadColorEdit || '').toLowerCase() === hex
+                            ? 'border-primary/60 bg-primary/15 text-primary'
+                            : 'border-zinc-600 text-mutedForeground hover:text-foreground hover:bg-zinc-800'
+                        }`}
+                      >
+                        <span
+                          className="h-4 w-4 rounded border border-zinc-500/60 shrink-0"
+                          style={{ backgroundColor: hex }}
+                          aria-hidden
+                        />
+                        {label}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => setNotepadColorEdit('')}
+                      className="px-2.5 py-1.5 rounded-md border border-zinc-600 text-[10px] font-heading text-mutedForeground hover:text-foreground hover:bg-zinc-800 transition-colors"
+                    >
+                      Default (theme)
+                    </button>
+                  </div>
+                  <div
+                    className="rounded-md border border-zinc-700/50 p-3 min-h-[52px] flex items-center"
+                    style={notepadColorEdit ? { backgroundColor: notepadColorEdit } : undefined}
+                  >
+                    <p className={`text-[11px] font-heading ${notepadColorEdit ? 'text-foreground' : 'text-mutedForeground'}`}>
+                      {notepadColorEdit ? 'Preview: notepad area' : 'No background tint — matches profile card (default)'}
+                    </p>
+                  </div>
                 </div>
                 <button
                   type="button"

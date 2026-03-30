@@ -23,44 +23,12 @@ from pydantic import BaseModel, Field
 
 from utils.bbcode_normalize import normalize_bbcode_media_typos
 from utils.imgbb_resolve import rewrite_imgbb_urls_in_banner_text
+from utils.notepad_color import (
+    notepad_color_for_api_response as _notepad_color_for_api_response,
+    normalize_notepad_color_for_set as _normalize_notepad_color_for_set,
+)
 
 logger = logging.getLogger(__name__)
-
-_NOTEPAD_HEX_6 = re.compile(r"^#[0-9A-Fa-f]{6}$")
-_NOTEPAD_HEX_3 = re.compile(r"^#[0-9A-Fa-f]{3}$")
-
-
-def _notepad_color_for_api_response(raw) -> Optional[str]:
-    """Normalize stored user notepad colour for JSON (#RRGGBB or None). Invalid legacy values become None."""
-    if raw is None:
-        return None
-    s = str(raw).strip()
-    if not s:
-        return None
-    if _NOTEPAD_HEX_6.match(s):
-        return s.upper()
-    if _NOTEPAD_HEX_3.match(s):
-        r, g, b = s[1], s[2], s[3]
-        return f"#{r}{r}{g}{g}{b}{b}".upper()
-    return None
-
-
-def _normalize_notepad_color_for_set(raw: str) -> Optional[str]:
-    """
-    Validate PATCH input: empty string clears to None; otherwise require #RGB or #RRGGBB.
-    Raises HTTPException on invalid input.
-    """
-    s = (raw or "").strip()
-    if not s:
-        return None
-    if not s.startswith("#"):
-        raise HTTPException(status_code=400, detail="Notepad color must be a hex value like #RRGGBB.")
-    if _NOTEPAD_HEX_6.match(s):
-        return s.upper()
-    if _NOTEPAD_HEX_3.match(s):
-        r, g, b = s[1], s[2], s[3]
-        return f"#{r}{r}{g}{g}{b}{b}".upper()
-    raise HTTPException(status_code=400, detail="Notepad color must be #RGB or #RRGGBB.")
 
 
 SPOTIFY_ALLOWED_TYPES = {"track", "album", "playlist", "artist", "episode", "show"}

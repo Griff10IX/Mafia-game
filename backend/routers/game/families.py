@@ -25,6 +25,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import Depends, HTTPException, Body
 from pydantic import BaseModel
 
+from utils.notepad_color import notepad_color_for_api_response, normalize_notepad_color_for_set
+
 from server import (
     db,
     get_current_user,
@@ -282,6 +284,7 @@ class FamilyCrewOCApplyRequest(BaseModel):
 
 class FamilyProfileTextRequest(BaseModel):
     profile_text: Optional[str] = None
+    notepad_color: Optional[str] = None
 
 
 class FamilyAvatarRequest(BaseModel):
@@ -1023,6 +1026,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             "crew_oc_auto_accept": bool(fam.get("crew_oc_auto_accept")),
             "crew_oc_forum_topic_id": fam.get("crew_oc_forum_topic_id") if fam.get("crew_oc_forum_topic_id") and await db.forum_topics.find_one({"id": fam["crew_oc_forum_topic_id"]}, {"_id": 1}) else None,
             "profile_text": (fam.get("profile_text") or "").strip() or None,
+            "profile_notepad_color": notepad_color_for_api_response(fam.get("profile_notepad_color")),
             "racket_income_bonus_percent": float((fam.get("racket_income_bonus_percent") or 0) or 0),
             "head_of_state": head_of_state,
             "state_head_income": fam.get("state_head_income") or {},
@@ -1152,6 +1156,7 @@ async def families_lookup(tag: Optional[str] = None, id: Optional[str] = None, c
         "treasury_bullets": int(fam.get("treasury_bullets") or 0),
         "head_of_state": fam.get("head_of_state"),
         "profile_text": (fam.get("profile_text") or "").strip() or None,
+        "profile_notepad_color": notepad_color_for_api_response(fam.get("profile_notepad_color")),
         "avatar_url": fam.get("avatar_url"),
         "member_count": len(members), "members": members, "fallen": fallen, "rackets": rackets, "my_role": my_role,
         "crew_oc_join_fee": crew_oc_join_fee, "crew_oc_cooldown_until": crew_oc_cooldown_until,
@@ -1949,19 +1954,36 @@ FAMILY_PROFILE_TEXT_MAX_LENGTH = 10000
 
 
 async def families_update_profile_text(request: FamilyProfileTextRequest, current_user: dict = Depends(get_current_user)):
-    """Update your family's profile text (BBCode: [b], [i], [center], [img]url[/img], etc.). Only Boss, Underboss, or Capo."""
+    """Update your family's profile text and/or notepad background colour (hex). Only Boss, Underboss, or Capo."""
     if (current_user.get("family_role") or "").strip().lower() not in ("boss", "underboss", "capo"):
         raise HTTPException(status_code=403, detail="Only Boss, Underboss, or Capo can edit family profile")
     family_id = current_user.get("family_id")
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
-    raw = (request.profile_text or "").strip() or None
-    if raw is not None and len(raw) > FAMILY_PROFILE_TEXT_MAX_LENGTH:
-        raise HTTPException(status_code=400, detail=f"Profile text cannot exceed {FAMILY_PROFILE_TEXT_MAX_LENGTH} characters")
-    await db.families.update_one({"id": family_id}, {"$set": {"profile_text": raw if raw else ""}})
+    updates = {}
+    if request.profile_text is not None:
+        raw = (request.profile_text or "").strip() or None
+        if raw is not None and len(raw) > FAMILY_PROFILE_TEXT_MAX_LENGTH:
+            raise HTTPException(status_code=400, detail=f"Profile text cannot exceed {FAMILY_PROFILE_TEXT_MAX_LENGTH} characters")
+        updates["profile_text"] = raw if raw else ""
+    if request.notepad_color is not None:
+        updates["profile_notepad_color"] = normalize_notepad_color_for_set(request.notepad_color)
+    if not updates:
+        doc = await db.families.find_one({"id": family_id}, {"_id": 0, "profile_text": 1, "profile_notepad_color": 1})
+        return {
+            "message": "No profile changes",
+            "profile_text": (doc.get("profile_text") or "").strip() or None,
+            "profile_notepad_color": notepad_color_for_api_response(doc.get("profile_notepad_color")),
+        }
+    await db.families.update_one({"id": family_id}, {"$set": updates})
     _invalidate_my_cache(current_user["id"])
     _invalidate_list_cache()
-    return {"message": "Family profile updated.", "profile_text": raw}
+    doc = await db.families.find_one({"id": family_id}, {"_id": 0, "profile_text": 1, "profile_notepad_color": 1})
+    return {
+        "message": "Family profile updated.",
+        "profile_text": (doc.get("profile_text") or "").strip() or None,
+        "profile_notepad_color": notepad_color_for_api_response(doc.get("profile_notepad_color")),
+    }
 
 
 FAMILY_AVATAR_MAX_BYTES = 250_000  # same as user avatar
