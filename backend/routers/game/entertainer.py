@@ -543,7 +543,14 @@ async def _settle_game(game: dict):
                     winner_id = (result or {}).get("winner_id")
                     reward = (result or {}).get("reward")
                     if uid == winner_id and reward:
-                        msg = f"You won! Winnings: {_format_reward_desc(reward)}. Pot was ${pot:,}."
+                        reward_money = int((reward or {}).get("money") or 0)
+                        total_money = int(pot or 0) + reward_money
+                        points = int((reward or {}).get("points") or 0)
+                        points_str = f" + {points:,} points" if points > 0 else ""
+                        msg = (
+                            f"You won! Reward: {_format_reward_desc(reward)}. "
+                            f"Pot: ${pot:,}. Total cash paid: ${total_money:,}{points_str}."
+                        )
                     else:
                         winner_name = (result or {}).get("winner_username") or "Someone"
                         msg = f"Game over. Winner: {winner_name}. Pot was ${pot:,}. Better luck next time!"
