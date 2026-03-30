@@ -8,6 +8,7 @@ import os
 import sys
 import logging
 from fastapi import Depends, HTTPException
+from pymongo import ReturnDocument
 
 from utils.referral_ids import (
     apply_referrer_referral_increment,
@@ -490,20 +491,32 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
     else:
         _cd_seconds = int(float(_cd_seconds))
     cooldown_until = (now + timedelta(seconds=_cd_seconds)).isoformat()
-    user_crime = await db.user_crimes.find_one_and_update(
-        {"user_id": current_user["id"], "crime_id": crime_id,
-         "$or": [
-             {"cooldown_until": {"$exists": False}},
-             {"cooldown_until": None},
-             {"cooldown_until": {"$lte": now.isoformat()}},
-         ]},
-        {"$set": {"cooldown_until": cooldown_until},
-         "$setOnInsert": {"attempts": 0, "successes": 0}},
-        projection={"_id": 0},
+    now_iso = now.isoformat()
+    uid = current_user["id"]
+    # One row per (user, crime). Never upsert on the cooldown $or filter: if nothing matched
+    # while on cooldown, Mongo upserted a *second* row (index was not unique), and return None
+    # was treated as "go ahead" — parallel commits all slipped through.
+    await db.user_crimes.update_one(
+        {"user_id": uid, "crime_id": crime_id},
+        {"$setOnInsert": {"attempts": 0, "successes": 0}},
         upsert=True,
-        return_document=False,
     )
-    if user_crime is not None and user_crime.get("cooldown_until") and user_crime["cooldown_until"] > now.isoformat():
+    user_crime = await db.user_crimes.find_one_and_update(
+        {
+            "user_id": uid,
+            "crime_id": crime_id,
+            "$or": [
+                {"cooldown_until": {"$exists": False}},
+                {"cooldown_until": None},
+                {"cooldown_until": {"$lte": now_iso}},
+            ],
+        },
+        {"$set": {"cooldown_until": cooldown_until}},
+        projection={"_id": 0},
+        upsert=False,
+        return_document=ReturnDocument.BEFORE,
+    )
+    if user_crime is None:
         raise HTTPException(status_code=400, detail="Crime on cooldown")
     
     # PROGRESS BAR: 10-92%. Success +6-8%. Fail -1-3%; once hit 92%, floor is 77%

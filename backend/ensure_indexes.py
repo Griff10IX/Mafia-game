@@ -146,7 +146,7 @@ async def ensure_all_indexes(db):
         await db.oc_invites.create_index([("pending_heist_id", 1), ("role", 1)])
         await db.oc_invites.create_index("pending_heist_id")
         await db.user_crimes.create_index("user_id")
-        await db.user_crimes.create_index([("user_id", 1), ("crime_id", 1)])
+        await db.user_crimes.create_index([("user_id", 1), ("crime_id", 1)], unique=True)
 
         # --- Jail ---
         await db.jail_npcs.create_index("username", unique=True)
