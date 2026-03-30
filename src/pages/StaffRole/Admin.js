@@ -48,6 +48,12 @@ const ADMIN_STYLES = `
     .admin-mobile-shell .overflow-x-auto {
       max-width: 100%;
     }
+    .admin-mobile-shell input,
+    .admin-mobile-shell select,
+    .admin-mobile-shell button,
+    .admin-mobile-shell textarea {
+      max-width: 100%;
+    }
     .admin-mobile-shell [class*="min-w-["] {
       min-width: 0 !important;
     }
@@ -57,6 +63,28 @@ const ADMIN_STYLES = `
     .admin-mobile-shell pre {
       white-space: pre-wrap;
       word-break: break-word;
+    }
+    .admin-mobile-shell table {
+      display: block;
+      width: 100%;
+      max-width: 100%;
+      overflow-x: auto;
+    }
+    .admin-mobile-shell thead,
+    .admin-mobile-shell tbody {
+      display: table;
+      width: 100%;
+      table-layout: fixed;
+    }
+    .admin-mobile-shell th,
+    .admin-mobile-shell td {
+      white-space: normal !important;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
+    .admin-mobile-shell .grid.grid-cols-12 {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      gap: 6px !important;
     }
   }
   .admin-command-bar {
@@ -4689,7 +4717,7 @@ export default function Admin() {
       <div className="flex flex-col md:flex-row gap-4 flex-1 min-h-0 min-w-0 max-md:flex-1 max-md:min-h-0">
         {/* Sidebar: search + categories (mobile: sticky strip + chips; desktop: vertical nav) */}
         <aside className="w-full md:w-[220px] shrink-0 flex flex-col gap-3 border-r-0 md:border-r border-primary/20 pr-0 md:pr-4">
-          <div className="sticky top-0 z-20 md:static md:z-auto space-y-2 pb-1 -mx-0.5 px-0.5 md:mx-0 md:px-0 bg-background/95 md:bg-transparent backdrop-blur md:backdrop-blur-none border-b border-primary/25 md:border-b-0">
+          <div className="sticky top-0 z-20 md:static md:z-auto space-y-2 pb-1 mx-0 px-0 md:mx-0 md:px-0 bg-background/95 md:bg-transparent backdrop-blur md:backdrop-blur-none border-b border-primary/25 md:border-b-0">
             <div className="relative">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-mutedForeground" />
               <input
@@ -4755,7 +4783,7 @@ export default function Admin() {
                 ))}
               </select>
             </div>
-            <div className="flex md:hidden gap-1.5 overflow-x-auto pb-1 snap-x snap-mandatory -mx-0.5 px-0.5 touch-pan-x">
+            <div className="flex md:hidden gap-1.5 overflow-x-auto pb-1 snap-x snap-mandatory mx-0 px-0 touch-pan-x">
               {visibleCategories.map(({ id, icon: Icon }) => {
                 const shortLabel = ADMIN_CATEGORY_MOBILE_SHORT[id] || id.replace(/^admin-/, '');
                 const active = activeCategoryId === id;
@@ -4797,7 +4825,7 @@ export default function Admin() {
         </aside>
 
         {/* Main: target username + scrollable tools (mobile); desktop unchanged scroll */}
-        <main className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden md:block md:overflow-y-auto md:max-h-[min(100vh-10rem,100dvh-10rem)] md:overflow-x-hidden md:space-y-4">
+        <main className="flex-1 min-w-0 min-h-0 flex flex-col overflow-visible md:block md:overflow-y-auto md:max-h-[min(100vh-10rem,100dvh-10rem)] md:overflow-x-hidden md:space-y-4">
           <div className={`shrink-0 z-10 relative admin-module admin-focus-block ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bg-background/95 backdrop-blur mobile-panel md:sticky md:top-0`}>
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <button
@@ -4828,7 +4856,7 @@ export default function Admin() {
             <div className="admin-art-line text-primary mx-3" />
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain space-y-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] md:contents md:overflow-visible md:pb-0">
+          <div className="flex-1 min-h-0 overflow-visible overscroll-y-contain space-y-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] md:contents md:overflow-visible md:pb-0">
           {activeCategoryId === 'admin-operations' && (
           <>
       {/* Search users (username or email) */}
@@ -5498,7 +5526,7 @@ export default function Admin() {
               <p className="text-[10px] text-mutedForeground font-heading">
                 <span className="text-foreground font-bold">Prereg heal:</span> backfill <span className="text-foreground">referred_by</span> for accounts where prereg stored a referral code but signup missed it. Use <span className="text-foreground">Prereg dry run</span> first, then <span className="text-foreground">Prereg apply heal</span> (same buttons in the bar above).
               </p>
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 w-full">
                 <BtnSecondary onClick={() => runPreregHeal(true)} disabled={referralsHealLoading}>
                   {referralsHealLoading ? '…' : 'Dry run (preview only)'}
                 </BtnSecondary>
@@ -10629,7 +10657,7 @@ export default function Admin() {
                   value={pointsStoreSpendsUsernameQuery}
                   onChange={(e) => setPointsStoreSpendsUsernameQuery(e.target.value)}
                   placeholder="Filter username (optional)"
-                  className="flex-1 min-w-[120px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                  className="w-full sm:flex-1 sm:min-w-[120px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
                 />
                 <BtnPrimary onClick={handleFetchPointsStoreSpends} disabled={pointsStoreSpendsLoading}>
                   {pointsStoreSpendsLoading ? 'Loading…' : 'Load'}
@@ -10710,20 +10738,20 @@ export default function Admin() {
           />
           {!collapsed.activityFeed && (
             <div className="p-3 space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2 w-full">
                 <input
                   type="text"
                   value={activityFeedUsername}
                   onChange={(e) => setActivityFeedUsername(e.target.value)}
                   placeholder="Username filter"
-                  className="flex-1 min-w-[100px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                  className="w-full sm:flex-1 sm:min-w-[100px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
                 />
                 <input
                   type="text"
                   value={activityFeedFilter}
                   onChange={(e) => setActivityFeedFilter(e.target.value)}
                   placeholder="Action filter (e.g. bank, dice)"
-                  className="flex-1 min-w-[120px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                  className="w-full sm:flex-1 sm:min-w-[120px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
                 />
                 {[15, 60, 360, 1440].map((m) => (
                   <button
