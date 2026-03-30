@@ -53,6 +53,46 @@ const formatTimeLeft = (isoUntil) => {
   } catch { return null; }
 };
 
+/** Live countdown for racket raid crew window (matches server sliding 3h window). */
+const formatRaidCountdown = (isoUntil) => {
+  if (!isoUntil) return null;
+  try {
+    const sec = Math.max(0, Math.floor((new Date(isoUntil) - Date.now()) / 1000));
+    if (sec <= 0) return 'Ready';
+    const h = Math.floor(sec / 3600);
+    const m = Math.floor((sec % 3600) / 60);
+    const s = sec % 60;
+    if (h > 0) return `${h}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`;
+    if (m > 0) return `${m}m ${String(s).padStart(2, '0')}s`;
+    return `${s}s`;
+  } catch { return null; }
+};
+
+function RaidNextRaidCountdown({ nextRaidAt }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!nextRaidAt) return undefined;
+    const id = setInterval(() => setTick((x) => x + 1), 1000);
+    return () => clearInterval(id);
+  }, [nextRaidAt]);
+  const text = formatRaidCountdown(nextRaidAt);
+  if (!nextRaidAt || !text) return null;
+  if (text === 'Ready') {
+    return (
+      <span className="flex items-center gap-1 text-[9px] text-emerald-400/90 font-heading">
+        <Clock size={10} className="shrink-0 opacity-80" />
+        Ready — tap refresh
+      </span>
+    );
+  }
+  return (
+    <span className="flex items-center gap-1 text-[9px] text-amber-400/90 font-heading">
+      <Clock size={10} className="shrink-0 opacity-80" />
+      Next hit in <span className="font-mono tabular-nums font-bold">{text}</span>
+    </span>
+  );
+}
+
 const isRacketReadyAt = (isoUntil) => {
   if (!isoUntil) return true;
   const t = new Date(isoUntil).getTime();
@@ -580,6 +620,11 @@ const RaidTab = ({ targets, loading, onRaid, onRefresh, refreshing }) => (
                   ))}
                 </div>
               </div>
+              {!canRaid && t.next_raid_at && (
+                <div className="px-2.5 sm:px-3 py-1 border-b border-zinc-700/20 bg-zinc-950/40">
+                  <RaidNextRaidCountdown nextRaidAt={t.next_raid_at} />
+                </div>
+              )}
               <div className="p-2 space-y-1">
                 {(t.rackets || []).slice(0, 3).map((r) => {
                   const key = `${t.family_id}-${r.racket_id}`;
@@ -1944,7 +1989,6 @@ export default function FamilyPage() {
   const [racketAttackTargets, setRacketAttackTargets] = useState([]);
   const [racketAttackLoading, setRacketAttackLoading] = useState(null);
   const [collectAllRacketsLoading, setCollectAllRacketsLoading] = useState(false);
-  const [raidCooldownUntil, setRaidCooldownUntil] = useState(0);
   const [targetsRefreshing, setTargetsRefreshing] = useState(false);
   const [crewOCCommitting, setCrewOCCommitting] = useState(false);
   const [crewOCFeeInput, setCrewOCFeeInput] = useState('');
@@ -2161,7 +2205,7 @@ export default function FamilyPage() {
       res.data?.success ? toast.success(res.data?.message || 'Success!') : toast.error(res.data?.message || 'Failed');
       fetchRacketAttackTargets(); fetchData();
     } catch (e) { toast.error(apiDetail(e)); }
-    finally { setRacketAttackLoading(null); setRaidCooldownUntil(Date.now() + 2000); }
+    finally { setRacketAttackLoading(null); }
   };
   const handleOfferTruce = async () => { const entry = activeWars[selectedWarIndex]; if (!entry?.war?.id) return; try { await api.post('/families/war/truce/offer', { war_id: entry.war.id }); toast.success('Truce offered'); fetchData(); setShowWarModal(false); } catch (e) { toast.error(apiDetail(e)); } };
   const handleAcceptTruce = async () => { const entry = activeWars[selectedWarIndex]; if (!entry?.war?.id) return; try { await api.post('/families/war/truce/accept', { war_id: entry.war.id }); toast.success('Accepted'); fetchData(); setShowWarModal(false); } catch (e) { toast.error(apiDetail(e)); } };
@@ -2413,7 +2457,6 @@ export default function FamilyPage() {
               )}
               {activeTab === 'raid' && (
                 <RaidTab targets={racketAttackTargets} loading={racketAttackLoading}
-                  raidCooldown={raidCooldownUntil > 0 && Date.now() < raidCooldownUntil}
                   onRaid={attackFamilyRacket} onRefresh={fetchRacketAttackTargets} refreshing={targetsRefreshing} />
               )}
               {activeTab === 'treasury' && <TreasuryTab

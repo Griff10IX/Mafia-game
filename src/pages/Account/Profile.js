@@ -611,8 +611,12 @@ const ProfileInfoCard = ({
       {(() => {
         const displayText = (bannerText || '').trim() || null;
         const renderedHtml = displayText ? parseForumContent(displayText, { censorProfanity }) : '';
+        const notepadBg = profile.profile_notepad_color || null;
         return (
-          <div className="border-t border-zinc-700/30">
+          <div
+            className="border-t border-zinc-700/30"
+            style={notepadBg ? { backgroundColor: notepadBg } : undefined}
+          >
             <div className="relative min-h-[60px] flex flex-col justify-center py-4 px-3 md:px-4">
               <div className="w-full">
                 {renderedHtml ? (
@@ -1042,6 +1046,7 @@ export default function Profile() {
   const [modOnlineColor, setModOnlineColor] = useState('#1e3a5f');
   const [savingModColor, setSavingModColor] = useState(false);
   const [bannerTextEdit, setBannerTextEdit] = useState('');
+  const [notepadColorEdit, setNotepadColorEdit] = useState('');
   const [savingBanner, setSavingBanner] = useState(false);
   const bannerTextareaRef = React.useRef(null);
   const [staffDetailsOpen, setStaffDetailsOpen] = useState(false);
@@ -1159,6 +1164,7 @@ export default function Profile() {
   useEffect(() => {
     if (profile) {
       setBannerTextEdit(profile.profile_banner_text ?? '');
+      setNotepadColorEdit(profile.profile_notepad_color ?? '');
     }
   }, [profile]);
 
@@ -1459,6 +1465,7 @@ export default function Profile() {
       await api.patch('/profile/banner', {
         banner_image_url: null,
         banner_text: (bannerTextEdit || '').trim() || null,
+        notepad_color: (notepadColorEdit || '').trim() === '' ? '' : notepadColorEdit.trim(),
       });
       toast.success('Profile text updated');
       const res = await api.get(`/users/${encodeURIComponent(profile?.username)}/profile`);
@@ -1686,6 +1693,36 @@ export default function Profile() {
                   <button type="button" onClick={() => insertBannerMarkup('[center]', '[/center]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Center"><AlignCenter size={14} /></button>
                   <button type="button" onClick={() => insertBannerMarkup('[color=#eab308]', '[/color]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Colour"><Palette size={14} /></button>
                   <button type="button" onClick={() => { const u = window.prompt('Image URL (direct file, or ImgBB page link https://ibb.co/…):'); if (u && u.trim()) insertBannerMarkup('[img]' + u.trim() + '[/img]'); }} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Insert image — ImgBB short links are converted on save"><Image size={14} /></button>
+                </div>
+                <div className="pt-2 border-t border-zinc-700/40 space-y-2">
+                  <label className="block text-[10px] font-heading font-bold text-primary uppercase tracking-wider">
+                    Notepad background
+                  </label>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <input
+                      type="color"
+                      value={notepadColorEdit || '#1e293b'}
+                      onChange={(e) => setNotepadColorEdit(e.target.value)}
+                      className="h-9 w-9 sm:h-10 sm:w-10 cursor-pointer rounded border border-zinc-600 bg-zinc-900 p-0.5"
+                      title="Pick a colour"
+                      aria-label="Notepad background colour"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setNotepadColorEdit('')}
+                      className="px-2.5 py-1.5 rounded-md border border-zinc-600 text-[10px] font-heading text-mutedForeground hover:text-foreground hover:bg-zinc-800 transition-colors"
+                    >
+                      Default (theme)
+                    </button>
+                  </div>
+                  <div
+                    className="rounded-md border border-zinc-700/50 p-3 min-h-[52px] flex items-center"
+                    style={notepadColorEdit ? { backgroundColor: notepadColorEdit } : undefined}
+                  >
+                    <p className={`text-[11px] font-heading ${notepadColorEdit ? 'text-foreground' : 'text-mutedForeground'}`}>
+                      {notepadColorEdit ? 'Preview: notepad area' : 'No background tint — matches profile card (default)'}
+                    </p>
+                  </div>
                 </div>
                 <button
                   type="button"

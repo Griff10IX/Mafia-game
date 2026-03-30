@@ -26,6 +26,43 @@ from utils.imgbb_resolve import rewrite_imgbb_urls_in_banner_text
 
 logger = logging.getLogger(__name__)
 
+_NOTEPAD_HEX_6 = re.compile(r"^#[0-9A-Fa-f]{6}$")
+_NOTEPAD_HEX_3 = re.compile(r"^#[0-9A-Fa-f]{3}$")
+
+
+def _notepad_color_for_api_response(raw) -> Optional[str]:
+    """Normalize stored user notepad colour for JSON (#RRGGBB or None). Invalid legacy values become None."""
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    if not s:
+        return None
+    if _NOTEPAD_HEX_6.match(s):
+        return s.upper()
+    if _NOTEPAD_HEX_3.match(s):
+        r, g, b = s[1], s[2], s[3]
+        return f"#{r}{r}{g}{g}{b}{b}".upper()
+    return None
+
+
+def _normalize_notepad_color_for_set(raw: str) -> Optional[str]:
+    """
+    Validate PATCH input: empty string clears to None; otherwise require #RGB or #RRGGBB.
+    Raises HTTPException on invalid input.
+    """
+    s = (raw or "").strip()
+    if not s:
+        return None
+    if not s.startswith("#"):
+        raise HTTPException(status_code=400, detail="Notepad color must be a hex value like #RRGGBB.")
+    if _NOTEPAD_HEX_6.match(s):
+        return s.upper()
+    if _NOTEPAD_HEX_3.match(s):
+        r, g, b = s[1], s[2], s[3]
+        return f"#{r}{r}{g}{g}{b}{b}".upper()
+    raise HTTPException(status_code=400, detail="Notepad color must be #RGB or #RRGGBB.")
+
+
 SPOTIFY_ALLOWED_TYPES = {"track", "album", "playlist", "artist", "episode", "show"}
 SPOTIFY_ID_RE = re.compile(r"^[A-Za-z0-9]{22}$")
 SPOTIFY_OAUTH_SCOPE = "streaming user-read-email user-read-private user-modify-playback-state user-read-playback-state user-read-currently-playing"
@@ -653,6 +690,7 @@ def register(router):
             "spotify_embed_url": (user.get("profile_spotify_embed_url") or "").strip() or None,
             "profile_banner_image_url": (user.get("profile_banner_image_url") or "").strip() or None,
             "profile_banner_text": (user.get("profile_banner_text") or "").strip() or None,
+            "profile_notepad_color": _notepad_color_for_api_response(user.get("profile_notepad_color")),
             "badges": user.get("badges") or [],
             "founding_member": bool(user.get("founding_member")),
             "achievement_badges": achievement_badges,
@@ -1414,8 +1452,9 @@ def register(router):
         current_user: dict = Depends(get_current_user),
         banner_image_url: Optional[str] = Body(None, embed=True),
         banner_text: Optional[str] = Body(None, embed=True),
+        notepad_color: Optional[str] = Body(None, embed=True),
     ):
-        """Set or clear profile banner image URL and/or banner text (motto) shown on your profile."""
+        """Set or clear profile banner image URL, banner text, and/or profile notepad background colour (hex)."""
         uid = current_user["id"]
         updates = {}
         if banner_image_url is not None:
@@ -1432,19 +1471,29 @@ def register(router):
             if raw and len(raw) > 10000:
                 raise HTTPException(status_code=400, detail="Banner text too long.")
             updates["profile_banner_text"] = raw
+        if notepad_color is not None:
+            updates["profile_notepad_color"] = _normalize_notepad_color_for_set(notepad_color)
         if not updates:
-            doc = await db.users.find_one({"id": uid}, {"_id": 0, "profile_banner_image_url": 1, "profile_banner_text": 1})
+            doc = await db.users.find_one(
+                {"id": uid},
+                {"_id": 0, "profile_banner_image_url": 1, "profile_banner_text": 1, "profile_notepad_color": 1},
+            )
             return {
                 "message": "No banner changes",
                 "profile_banner_image_url": (doc.get("profile_banner_image_url") or "").strip() or None,
                 "profile_banner_text": (doc.get("profile_banner_text") or "").strip() or None,
+                "profile_notepad_color": _notepad_color_for_api_response(doc.get("profile_notepad_color")),
             }
         await db.users.update_one({"id": uid}, {"$set": updates})
-        doc = await db.users.find_one({"id": uid}, {"_id": 0, "profile_banner_image_url": 1, "profile_banner_text": 1})
+        doc = await db.users.find_one(
+            {"id": uid},
+            {"_id": 0, "profile_banner_image_url": 1, "profile_banner_text": 1, "profile_notepad_color": 1},
+        )
         return {
             "message": "Profile banner updated",
             "profile_banner_image_url": (doc.get("profile_banner_image_url") or "").strip() or None,
             "profile_banner_text": (doc.get("profile_banner_text") or "").strip() or None,
+            "profile_notepad_color": _notepad_color_for_api_response(doc.get("profile_notepad_color")),
         }
 
     @router.get("/profile/video-autoplay")

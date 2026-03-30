@@ -650,6 +650,48 @@ async def dislike_comment(
     return {"disliked": True, "dislikes": comment.get("dislikes", 0) + 1, "liked": False, "likes": likes}
 
 
+async def list_comment_like_users(
+    topic_id: str,
+    comment_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """List users who liked this comment (alphabetical by username)."""
+    comment = await db.forum_comments.find_one({"id": comment_id, "topic_id": topic_id}, {"_id": 0, "id": 1})
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    docs = await db.forum_comment_likes.find({"comment_id": comment_id}, {"_id": 0, "user_id": 1}).to_list(500)
+    user_ids = [d["user_id"] for d in docs if d.get("user_id")]
+    if not user_ids:
+        return {"users": []}
+    unique_ids = list(dict.fromkeys(user_ids))
+    users = await db.users.find({"id": {"$in": unique_ids}}, {"_id": 0, "id": 1, "username": 1}).to_list(500)
+    by_id = {u["id"]: (u.get("username") or "").strip() or u["id"] for u in users}
+    rows = [{"user_id": uid, "username": by_id.get(uid, "Unknown")} for uid in unique_ids]
+    rows.sort(key=lambda r: (r["username"] or "").lower())
+    return {"users": rows}
+
+
+async def list_comment_dislike_users(
+    topic_id: str,
+    comment_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """List users who disliked this comment (alphabetical by username)."""
+    comment = await db.forum_comments.find_one({"id": comment_id, "topic_id": topic_id}, {"_id": 0, "id": 1})
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    docs = await db.forum_comment_dislikes.find({"comment_id": comment_id}, {"_id": 0, "user_id": 1}).to_list(500)
+    user_ids = [d["user_id"] for d in docs if d.get("user_id")]
+    if not user_ids:
+        return {"users": []}
+    unique_ids = list(dict.fromkeys(user_ids))
+    users = await db.users.find({"id": {"$in": unique_ids}}, {"_id": 0, "id": 1, "username": 1}).to_list(500)
+    by_id = {u["id"]: (u.get("username") or "").strip() or u["id"] for u in users}
+    rows = [{"user_id": uid, "username": by_id.get(uid, "Unknown")} for uid in unique_ids]
+    rows.sort(key=lambda r: (r["username"] or "").lower())
+    return {"users": rows}
+
+
 async def update_topic(
     topic_id: str,
     request: TopicUpdate,
@@ -831,6 +873,8 @@ def register(router):
     router.add_api_route("/forum/topics/{topic_id}/comments", add_comment, methods=["POST"])
     router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/like", like_comment, methods=["POST"])
     router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/dislike", dislike_comment, methods=["POST"])
+    router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/likes", list_comment_like_users, methods=["GET"])
+    router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/dislikes", list_comment_dislike_users, methods=["GET"])
     router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}", delete_comment, methods=["DELETE"])
     router.add_api_route("/forum/topics/{topic_id}", update_topic, methods=["PATCH"])
     router.add_api_route("/forum/topics/{topic_id}", delete_topic, methods=["DELETE"])

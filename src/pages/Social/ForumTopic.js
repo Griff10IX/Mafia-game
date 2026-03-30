@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { Lock, ThumbsUp, ThumbsDown, Send, Pin, AlertCircle, Trash2, ArrowLeft, MessageCircle, Eye, Clock, Dice5, Package, UserPlus, Bold, Italic, Image, Palette, Pencil } from 'lucide-react';
+import { Lock, ThumbsUp, ThumbsDown, Send, Pin, AlertCircle, Trash2, ArrowLeft, MessageCircle, Eye, Clock, Dice5, Package, UserPlus, Bold, Italic, Image, Palette, Pencil, X } from 'lucide-react';
 import api from '../../utils/api';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
@@ -199,6 +199,9 @@ export default function ForumTopic() {
   const [designerSubmitLoading, setDesignerSubmitLoading] = useState(false);
   const [designerSubmittingCommentId, setDesignerSubmittingCommentId] = useState(null);
   const [deletingCommentId, setDeletingCommentId] = useState(null);
+  const [reactionModal, setReactionModal] = useState(null); // { kind: 'like'|'dislike', commentId }
+  const [reactionUsers, setReactionUsers] = useState([]);
+  const [reactionLoading, setReactionLoading] = useState(false);
   const [activeGameIdeaSeason, setActiveGameIdeaSeason] = useState(null);
   const [gameIdeaMyEntryCommentId, setGameIdeaMyEntryCommentId] = useState(null);
   const [gameIdeaSubmittingCommentId, setGameIdeaSubmittingCommentId] = useState(null);
@@ -679,6 +682,30 @@ export default function ForumTopic() {
       toast.error('Failed');
     } finally {
       setDislikingId(null);
+    }
+  };
+
+  const closeReactionModal = () => {
+    setReactionModal(null);
+    setReactionUsers([]);
+    setReactionLoading(false);
+  };
+
+  const openReactionUsers = async (commentId, kind) => {
+    if (!topicId) return;
+    setReactionModal({ kind, commentId });
+    setReactionLoading(true);
+    setReactionUsers([]);
+    try {
+      const path = kind === 'like' ? 'likes' : 'dislikes';
+      const res = await api.get(`/forum/topics/${topicId}/comments/${commentId}/${path}`);
+      setReactionUsers(res.data?.users ?? []);
+    } catch (err) {
+      const d = err.response?.data?.detail;
+      toast.error(typeof d === 'string' ? d : 'Failed to load list');
+      setReactionModal(null);
+    } finally {
+      setReactionLoading(false);
     }
   };
 
@@ -1176,14 +1203,24 @@ export default function ForumTopic() {
                   </div>
                   <div className="flex items-center gap-2">
                     {c.likes > 0 && (
-                      <span className="text-[10px] text-emerald-400 flex items-center gap-0.5 whitespace-nowrap">
+                      <button
+                        type="button"
+                        title="Who liked this"
+                        onClick={() => openReactionUsers(c.id, 'like')}
+                        className="text-[10px] text-emerald-400 flex items-center gap-0.5 whitespace-nowrap hover:underline hover:text-emerald-300"
+                      >
                         <ThumbsUp size={10} /> {c.likes}
-                      </span>
+                      </button>
                     )}
                     {(c.dislikes || 0) > 0 && (
-                      <span className="text-[10px] text-red-400 flex items-center gap-0.5 whitespace-nowrap">
+                      <button
+                        type="button"
+                        title="Who disliked this"
+                        onClick={() => openReactionUsers(c.id, 'dislike')}
+                        className="text-[10px] text-red-400 flex items-center gap-0.5 whitespace-nowrap hover:underline hover:text-red-300"
+                      >
                         <ThumbsDown size={10} /> {c.dislikes}
-                      </span>
+                      </button>
                     )}
                   </div>
                 </div>
@@ -1241,28 +1278,60 @@ export default function ForumTopic() {
                 <div className="mt-2 flex items-center gap-2 flex-wrap">
                   {!isGameIdeasLog && (
                   <>
-                  <button
-                    onClick={() => likeComment(c.id)}
-                    disabled={likingId === c.id || dislikingId === c.id}
-                    className={`flex items-center gap-1 text-[10px] font-heading px-2 py-1 rounded transition-all ${
-                      c.liked 
-                        ? 'bg-emerald-500/20 text-emerald-400' 
-                        : 'text-mutedForeground hover:text-emerald-400 hover:bg-emerald-500/10'
+                  <div
+                    className={`inline-flex items-stretch rounded-md overflow-hidden border text-[10px] font-heading transition-all ${
+                      c.liked ? 'border-emerald-500/40 bg-emerald-500/15' : 'border-zinc-700/50 bg-zinc-900/40'
                     }`}
                   >
-                    <ThumbsUp size={10} /> {c.likes > 0 ? c.likes : ''} {c.liked ? 'Liked' : 'Like'}
-                  </button>
-                  <button
-                    onClick={() => dislikeComment(c.id)}
-                    disabled={likingId === c.id || dislikingId === c.id}
-                    className={`flex items-center gap-1 text-[10px] font-heading px-2 py-1 rounded transition-all ${
-                      c.disliked 
-                        ? 'bg-red-500/20 text-red-400' 
-                        : 'text-mutedForeground hover:text-red-400 hover:bg-red-500/10'
+                    <button
+                      type="button"
+                      title="Who liked this"
+                      onClick={() => openReactionUsers(c.id, 'like')}
+                      disabled={likingId === c.id || dislikingId === c.id}
+                      className={`px-1.5 py-1 shrink-0 transition-colors ${
+                        c.liked ? 'text-emerald-400 hover:bg-emerald-500/25' : 'text-mutedForeground hover:text-emerald-400 hover:bg-emerald-500/10'
+                      } disabled:opacity-50`}
+                    >
+                      <ThumbsUp size={10} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => likeComment(c.id)}
+                      disabled={likingId === c.id || dislikingId === c.id}
+                      className={`px-2 py-1 border-l border-zinc-700/50 transition-colors ${
+                        c.liked ? 'text-emerald-400 hover:bg-emerald-500/25' : 'text-mutedForeground hover:text-emerald-400 hover:bg-emerald-500/10'
+                      } disabled:opacity-50`}
+                    >
+                      {c.likes > 0 ? c.likes : ''} {c.liked ? 'Liked' : 'Like'}
+                    </button>
+                  </div>
+                  <div
+                    className={`inline-flex items-stretch rounded-md overflow-hidden border text-[10px] font-heading transition-all ${
+                      c.disliked ? 'border-red-500/40 bg-red-500/15' : 'border-zinc-700/50 bg-zinc-900/40'
                     }`}
                   >
-                    <ThumbsDown size={10} /> {(c.dislikes || 0) > 0 ? c.dislikes : ''} {c.disliked ? 'Disliked' : 'Dislike'}
-                  </button>
+                    <button
+                      type="button"
+                      title="Who disliked this"
+                      onClick={() => openReactionUsers(c.id, 'dislike')}
+                      disabled={likingId === c.id || dislikingId === c.id}
+                      className={`px-1.5 py-1 shrink-0 transition-colors ${
+                        c.disliked ? 'text-red-400 hover:bg-red-500/25' : 'text-mutedForeground hover:text-red-400 hover:bg-red-500/10'
+                      } disabled:opacity-50`}
+                    >
+                      <ThumbsDown size={10} />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => dislikeComment(c.id)}
+                      disabled={likingId === c.id || dislikingId === c.id}
+                      className={`px-2 py-1 border-l border-zinc-700/50 transition-colors ${
+                        c.disliked ? 'text-red-400 hover:bg-red-500/25' : 'text-mutedForeground hover:text-red-400 hover:bg-red-500/10'
+                      } disabled:opacity-50`}
+                    >
+                      {(c.dislikes || 0) > 0 ? c.dislikes : ''} {c.disliked ? 'Disliked' : 'Dislike'}
+                    </button>
+                  </div>
                   <button
                     type="button"
                     onClick={() => {
@@ -1435,6 +1504,57 @@ export default function ForumTopic() {
                 </div>
               )}
             </form>
+          </div>
+        </div>
+      )}
+
+      {reactionModal && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/70"
+          onClick={closeReactionModal}
+          role="presentation"
+        >
+          <div
+            className={`${styles.panel} border border-zinc-700/60 rounded-lg max-w-sm w-full max-h-[min(70vh,420px)] overflow-hidden flex flex-col shadow-xl`}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="forum-reaction-modal-title"
+          >
+            <div className="flex items-center justify-between px-3 py-2.5 border-b border-zinc-700/50 bg-zinc-900/80">
+              <span id="forum-reaction-modal-title" className="text-xs font-heading font-bold uppercase tracking-wider text-foreground">
+                {reactionModal.kind === 'like' ? 'Liked by' : 'Disliked by'}
+              </span>
+              <button
+                type="button"
+                onClick={closeReactionModal}
+                className="p-1.5 rounded-md text-mutedForeground hover:text-foreground hover:bg-zinc-800 transition-colors"
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-3 overflow-y-auto overflow-x-hidden">
+              {reactionLoading ? (
+                <p className="text-xs text-mutedForeground font-heading">Loading...</p>
+              ) : reactionUsers.length === 0 ? (
+                <p className="text-xs text-mutedForeground font-heading">No one yet.</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {reactionUsers.map((u) => (
+                    <li key={u.user_id}>
+                      <Link
+                        to={`/profile/${encodeURIComponent(u.username)}`}
+                        className="text-sm text-primary hover:underline font-heading"
+                        onClick={closeReactionModal}
+                      >
+                        {u.username}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
         </div>
       )}

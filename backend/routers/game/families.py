@@ -2459,10 +2459,39 @@ async def families_racket_attack_targets(debug: bool = False, current_user: dict
             racket_list.append({"racket_id": rid, "racket_name": r_def["name"] if r_def else rid, "level": lv, "potential_take": potential_take, "success_chance_pct": success_chance_pct})
         if racket_list:
             window_start = datetime.now(timezone.utc) - timedelta(hours=FAMILY_RACKET_ATTACK_CREW_WINDOW_HOURS)
-            raids_on_crew = await db.family_racket_attacks.count_documents({"attacker_family_id": my_family_id, "target_family_id": fam["id"], "last_at": {"$gte": window_start.isoformat()}})
+            window_start_iso = window_start.isoformat()
+            raids_on_crew = await db.family_racket_attacks.count_documents({"attacker_family_id": my_family_id, "target_family_id": fam["id"], "last_at": {"$gte": window_start_iso}})
             raids_used = min(raids_on_crew, FAMILY_RACKET_ATTACK_MAX_PER_CREW)
             raids_remaining = max(0, FAMILY_RACKET_ATTACK_MAX_PER_CREW - raids_used)
-            targets.append({"family_id": fam["id"], "family_name": fam["name"], "family_tag": fam["tag"], "treasury": fam.get("treasury", 0), "rackets": racket_list, "raids_used": raids_used, "raids_remaining": raids_remaining})
+            next_raid_at = None
+            if raids_remaining == 0 and raids_on_crew > 0:
+                oldest = await db.family_racket_attacks.find(
+                    {"attacker_family_id": my_family_id, "target_family_id": fam["id"], "last_at": {"$gte": window_start_iso}},
+                    {"_id": 0, "last_at": 1},
+                ).sort("last_at", 1).limit(1).to_list(1)
+                if oldest:
+                    la_raw = oldest[0].get("last_at")
+                    if la_raw is not None:
+                        la_s = str(la_raw).replace("Z", "+00:00")
+                        try:
+                            la_dt = datetime.fromisoformat(la_s)
+                            if la_dt.tzinfo is None:
+                                la_dt = la_dt.replace(tzinfo=timezone.utc)
+                            next_raid_at = (la_dt + timedelta(hours=FAMILY_RACKET_ATTACK_CREW_WINDOW_HOURS)).isoformat()
+                        except (ValueError, TypeError):
+                            next_raid_at = None
+            targets.append(
+                {
+                    "family_id": fam["id"],
+                    "family_name": fam["name"],
+                    "family_tag": fam["tag"],
+                    "treasury": fam.get("treasury", 0),
+                    "rackets": racket_list,
+                    "raids_used": raids_used,
+                    "raids_remaining": raids_remaining,
+                    "next_raid_at": next_raid_at,
+                }
+            )
     return {"targets": targets}
 
 
