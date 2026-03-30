@@ -936,6 +936,256 @@ def register(router):
             "store_event_ref": store_event_ref,
         }
 
+    @router.post("/admin/points/retract-store-spend")
+    async def admin_retract_store_spend(
+        user_id: str,
+        store_event_ref: str,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Retracts the store entitlement for a points purchase (spend_store origin_ref),
+        and only re-deducts points if this user was previously refunded via this admin panel
+        (i.e. if an admin_refund_store_spend ledger exists for this purchase).
+
+        This avoids "refund points unless manually clicked" while still letting admins
+        remove items granted via points they believe should not have been in-game.
+        """
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        if not user_id or not store_event_ref:
+            raise HTTPException(status_code=400, detail="user_id and store_event_ref are required")
+
+        # Idempotency: once retracted, don't do it again.
+        revoke_origin_ref = f"admin_store_retract:{user_id}:{store_event_ref}"
+        existing = await db.point_ledger_events.find_one(
+            {
+                "event_type": "admin_retract_store_spend",
+                "user_id": user_id,
+                "origin_ref": revoke_origin_ref,
+            },
+            {"_id": 1},
+        )
+        if existing:
+            return {"message": "Already retracted for this user + store spend.", "retracted": False}
+
+        # Compute total points refunded earlier (if any).
+        refund_origin_ref = f"admin_store_refund:{user_id}:{store_event_ref}"
+        refund_rows = await db.point_ledger_events.aggregate(
+            [
+                {
+                    "$match": {
+                        "event_type": "admin_refund_store_spend",
+                        "user_id": user_id,
+                        "origin_ref": refund_origin_ref,
+                    }
+                },
+                {
+                    "$group": {
+                        "_id": None,
+                        "refunded_points": {"$sum": {"$ifNull": ["$points", 0]}},
+                    }
+                },
+            ]
+        ).to_list(1)
+        refunded_points = int(refund_rows[0].get("refunded_points") or 0) if refund_rows else 0
+
+        # Spend stats: how many purchases of this type were recorded and the points portion spent.
+        spend_stats_rows = await db.point_ledger_events.aggregate(
+            [
+                {
+                    "$match": {
+                        "event_type": "spend_store",
+                        "user_id": user_id,
+                        "origin_ref": store_event_ref,
+                        "points": {"$lt": 0},
+                    }
+                },
+                {
+                    "$group": {
+                        "_id": None,
+                        "spend_count": {"$sum": 1},
+                        "total_abs_spent": {
+                            "$sum": {
+                                "$cond": [
+                                    {"$lt": ["$points", 0]},
+                                    {"$multiply": ["$points", -1]},
+                                    0,
+                                ]
+                            }
+                        },
+                    }
+                },
+            ]
+        ).to_list(1)
+        spend_count = int(spend_stats_rows[0].get("spend_count") or 0) if spend_stats_rows else 0
+        total_abs_spent = int(spend_stats_rows[0].get("total_abs_spent") or 0) if spend_stats_rows else 0
+
+        # Optional: if previously refunded, re-deduct those refunded points back out.
+        points_deducted = 0
+        if refunded_points > 0:
+            slices = await consume_points_fifo(
+                db,
+                user_id=user_id,
+                points=refunded_points,
+                event_type="admin_retract_store_spend",
+                event_ref=revoke_origin_ref,
+                meta={
+                    "admin_user_id": current_user.get("id"),
+                    "admin_username": current_user.get("username") or "?",
+                    "store_event_ref": store_event_ref,
+                    "reason": "retract_store_spend_after_refund",
+                },
+            )
+            actual_removed = sum(int(s.get("amount") or 0) for s in (slices or []))
+            if actual_removed > 0:
+                await db.users.update_one({"id": user_id}, {"$inc": {"points": -actual_removed}})
+                points_deducted = actual_removed
+        else:
+            # Insert marker event so idempotency works even if no points were refunded.
+            now_iso = datetime.now(timezone.utc).isoformat()
+            await db.point_ledger_events.insert_one(
+                {
+                    "id": str(uuid.uuid4()),
+                    "event_type": "admin_retract_store_spend",
+                    "user_id": user_id,
+                    "points": 0,
+                    "lot_id": None,
+                    "origin_ref": revoke_origin_ref,
+                    "root_purchase_ref": None,
+                    "meta": {
+                        "admin_user_id": current_user.get("id"),
+                        "admin_username": current_user.get("username") or "?",
+                        "store_event_ref": store_event_ref,
+                        "reason": "retract_store_spend_item_only",
+                    },
+                    "created_at": now_iso,
+                }
+            )
+
+        # Retract entitlement (item) based on store_event_ref.
+        # Note: some store purchases are entitlement/flag flips (can be retracted exactly),
+        # while others are token-count increments; we do best-effort subtraction based on spend_store stats.
+        from routers.kill.armoury import TOKEN_CONFIG
+        from routers.money.booze_run import BOOZE_CAPACITY_UPGRADE_AMOUNT, _invalidate_config_cache
+        from server import (
+            DEFAULT_GARAGE_BATCH_LIMIT,
+            GARAGE_BATCH_UPGRADE_INCREMENT,
+            GARAGE_BATCH_LIMIT_MAX,
+        )
+
+        retract_ops = {}
+        set_updates = {}
+        unset_updates = {}
+
+        # Normalize: store_event_ref looks like:
+        # - "buy-booze-capacity"
+        # - "buy-silencer"
+        # - "buy-token:booze" or "buy-token-bundle:<bid>"
+        # - "upgrade-garage-batch"
+        # - etc.
+        try:
+            if store_event_ref == "buy-rank-bar":
+                set_updates["premium_rank_bar"] = False
+            elif store_event_ref == "buy-silencer":
+                set_updates["has_silencer"] = False
+            elif store_event_ref == "buy-anti-snitch":
+                set_updates["anti_snitch"] = False
+            elif store_event_ref == "buy-oc-timer":
+                set_updates["oc_timer_reduced"] = False
+            elif store_event_ref == "buy-crew-oc-timer":
+                set_updates["crew_oc_timer_reduced"] = False
+            elif store_event_ref == "buy-auto-rank":
+                set_updates["auto_rank_purchased"] = False
+                set_updates["auto_rank_trial"] = False
+                set_updates["auto_rank_enabled"] = False
+                unset_updates["auto_rank_trial_until"] = ""
+            elif store_event_ref == "buy-booze-capacity":
+                # Best-effort: retract the total capacity bonus added by these purchases.
+                # If purchases hit the cap, the exact previous value may be unknown; we clamp at 0.
+                user = await db.users.find_one({"id": user_id}, {"_id": 0, "booze_capacity_bonus": 1})
+                cur = int((user or {}).get("booze_capacity_bonus") or 0)
+                dec = min(cur, int(spend_count) * int(BOOZE_CAPACITY_UPGRADE_AMOUNT or 0))
+                if dec > 0:
+                    set_updates["booze_capacity_bonus"] = max(0, cur - dec)
+                    await db.users.update_one({"id": user_id}, {"$set": set_updates})
+                    _invalidate_config_cache(user_id)
+                    set_updates = {}
+            elif store_event_ref == "buy-token-bundle":
+                # Not expected: bundles are "buy-token-bundle:<bid>"
+                pass
+            elif store_event_ref.startswith("buy-token:"):
+                token_type = store_event_ref.split(":", 1)[1] or ""
+                if token_type in TOKEN_CONFIG:
+                    count_field = TOKEN_CONFIG[token_type]["count_field"]
+                    # Best-effort: assume points portion maps linearly to token amount.
+                    unit_price = {
+                        "xp_crimes": 42,
+                        "xp_gta": 42,
+                        "melt": 42,
+                        "oc_reduced": 42,
+                        "booze": 42,
+                        "racket": 42,
+                        "properties": 48,
+                        "travel": 55,
+                        "jailbust_bonus": 48,
+                    }.get(token_type)
+                    if unit_price:
+                        remove_tokens = int(total_abs_spent // int(unit_price))
+                        if remove_tokens > 0:
+                            user = await db.users.find_one({"id": user_id}, {"_id": 0, count_field: 1})
+                            cur = int((user or {}).get(count_field) or 0)
+                            remove = min(cur, remove_tokens)
+                            if remove > 0:
+                                await db.users.update_one({"id": user_id}, {"$inc": {count_field: -remove}})
+            elif store_event_ref.startswith("buy-token-bundle:"):
+                bid = store_event_ref.split(":", 1)[1] or ""
+                TOKEN_STORE_BUNDLES = {
+                    "grinder": (75, {"xp_crimes_tokens": 1, "xp_gta_tokens": 1}),
+                    "racket_runner": (78, {"racket_tokens": 1, "booze_tokens": 1}),
+                    "builder": (100, {"travel_tokens": 1, "properties_tokens": 1}),
+                }
+                bundle = TOKEN_STORE_BUNDLES.get(bid)
+                if bundle:
+                    _, field_inc = bundle
+                    user = await db.users.find_one({"id": user_id}, {"_id": 0, **{k: 1 for k in field_inc.keys()}})
+                    for field, add in (field_inc or {}).items():
+                        cur = int((user or {}).get(field) or 0)
+                        remove = min(cur, int(spend_count) * int(add))
+                        if remove > 0:
+                            await db.users.update_one({"id": user_id}, {"$inc": {field: -remove}})
+            elif store_event_ref == "upgrade-garage-batch":
+                user = await db.users.find_one({"id": user_id}, {"_id": 0, "garage_batch_limit": 1})
+                cur = int((user or {}).get("garage_batch_limit") or DEFAULT_GARAGE_BATCH_LIMIT or 0)
+                dec = int(spend_count) * int(GARAGE_BATCH_UPGRADE_INCREMENT or 0)
+                new_val = max(int(DEFAULT_GARAGE_BATCH_LIMIT or 0), cur - dec)
+                new_val = min(int(GARAGE_BATCH_LIMIT_MAX or new_val), new_val)
+                if new_val != cur:
+                    await db.users.update_one({"id": user_id}, {"$set": {"garage_batch_limit": new_val}})
+            elif store_event_ref == "buy-shooting-range-bonus":
+                user = await db.users.find_one({"id": user_id}, {"_id": 0, "shooting_range_bonus_plays": 1})
+                cur = int((user or {}).get("shooting_range_bonus_plays") or 0)
+                # Each purchase adds 2 plays (best-effort).
+                dec = int(spend_count) * 2
+                new_val = max(0, cur - dec)
+                if new_val != cur:
+                    await db.users.update_one({"id": user_id}, {"$set": {"shooting_range_bonus_plays": new_val}})
+        except Exception:
+            # Item retraction should not break points retraction; log and continue.
+            logger.exception("retract-store-spend item removal failed user_id=%s store_event_ref=%s", user_id, store_event_ref)
+
+        # Apply remaining set/unset updates (flags) if any.
+        if set_updates:
+            await db.users.update_one({"id": user_id}, {"$set": set_updates})
+        if unset_updates:
+            await db.users.update_one({"id": user_id}, {"$unset": {k: "" for k in unset_updates.keys()}})
+
+        return {
+            "message": f"Retracted store spend `{store_event_ref}` for {user_id}.",
+            "retracted": True,
+            "points_deducted_if_refunded": points_deducted,
+            "spend_count": spend_count,
+        }
+
     @router.post("/admin/give-all-money")
     async def admin_give_all_money(amount: int, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):

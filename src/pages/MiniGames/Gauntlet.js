@@ -876,6 +876,7 @@ export default function Gauntlet() {
   const birdYRef = useRef(birdY);
   const birdVelRef = useRef(birdVel);
   const pipesRef = useRef(pipes);
+  const pipeIdRef = useRef(0);
   const scoreRef = useRef(score);
   const bgOffsetRef = useRef(bgOffset);
   const tickRef = useRef(0);
@@ -1020,7 +1021,12 @@ export default function Gauntlet() {
           setGameState("playing");
           setGameFrame(prev => ({
             ...prev, birdVel: JUMP_FORCE,
-            pipes: [{ x: VIEW_W + 80, topHeight: 100 + Math.random() * 200, scored: false }],
+            pipes: [{
+              id: `pipe-${pipeIdRef.current++}`,
+              x: VIEW_W + 80,
+              topHeight: 100 + Math.random() * 200,
+              scored: false
+            }],
             score: 0, bgOffset: 0,
           }));
           tickRef.current = 0;
@@ -1087,7 +1093,12 @@ export default function Gauntlet() {
 
           let newPipes = pipesRef.current.map(p => ({ ...p, x: p.x - pipeSpeed }));
           if (tickRef.current % spawnInterval === 0) {
-            newPipes.push({ x: VIEW_W + 20, topHeight: 80 + Math.random() * 240, scored: false });
+            newPipes.push({
+              id: `pipe-${pipeIdRef.current++}`,
+              x: VIEW_W + 20,
+              topHeight: 80 + Math.random() * 240,
+              scored: false
+            });
           }
           newPipes = newPipes.filter(p => p.x > -PIPE_WIDTH - 20);
 
@@ -1307,7 +1318,7 @@ export default function Gauntlet() {
               <rect x={0} y={VIEW_H - 30} width={VIEW_W} height={3} fill={theme.accent} opacity="0.25" />
 
               {/* Pipes */}
-              {pipes.map((p, i) => <Pipe key={i} x={p.x} topHeight={p.topHeight} gap={pipeGap} theme={theme} />)}
+              {pipes.map((p) => <Pipe key={p.id || `${p.x}-${p.topHeight}`} x={p.x} topHeight={p.topHeight} gap={pipeGap} theme={theme} />)}
 
               {/* Particles */}
               {particles.map(pt => (

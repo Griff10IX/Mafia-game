@@ -574,7 +574,7 @@ export default function Admin() {
   const [interestBankIncludeStaff, setInterestBankIncludeStaff] = useState(false);
   const [pointsStoreSpends, setPointsStoreSpends] = useState(null);
   const [pointsStoreSpendsLoading, setPointsStoreSpendsLoading] = useState(false);
-  const [pointsStoreRefundingKey, setPointsStoreRefundingKey] = useState(null);
+  const [pointsStoreRetractingKey, setPointsStoreRetractingKey] = useState(null);
   const [pointsStoreSpendsUsernameQuery, setPointsStoreSpendsUsernameQuery] = useState('');
   const [tradesAnalyticsDays, setTradesAnalyticsDays] = useState(7);
   const [tradesAnalytics, setTradesAnalytics] = useState(null);
@@ -3315,22 +3315,20 @@ export default function Admin() {
     }
   };
 
-  const handleRefundStoreSpend = async (userId, storeEventRef) => {
+  const handleRetractStoreSpend = async (userId, storeEventRef) => {
     const key = `${userId}:${storeEventRef}`;
-    if (pointsStoreRefundingKey === key) return;
-    if (!window.confirm(`Refund points for ${storeEventRef} spent by this user? (Refund points only; does NOT un-buy item)`)) return;
-    setPointsStoreRefundingKey(key);
+    if (pointsStoreRetractingKey === key) return;
+    if (!window.confirm(`Remove store entitlement for ${storeEventRef} on this user.\n\n- Item will be removed.\n- Points will only be deducted if you previously clicked Refund for this same row.\n- No automatic refunds happen.`)) return;
+    setPointsStoreRetractingKey(key);
     try {
-      const res = await api.post('/admin/points/refund-store-spend', null, {
+      const res = await api.post('/admin/points/retract-store-spend', null, {
         params: { user_id: userId, store_event_ref: storeEventRef },
       });
-      toast.success(res.data?.message || 'Refunded');
+      toast.success(res.data?.message || 'Removed');
       await handleFetchPointsStoreSpends();
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to refund');
-    } finally {
-      setPointsStoreRefundingKey(null);
-    }
+      toast.error(e.response?.data?.detail || 'Failed to remove item');
+    } finally { setPointsStoreRetractingKey(null); }
   };
 
   const handleFetchInterestBankPlayers = async (opts) => {
@@ -10325,7 +10323,7 @@ export default function Admin() {
                 </BtnPrimary>
               </div>
               <p className="text-[10px] text-mutedForeground font-heading">
-                Refund restores points balance only; it does NOT automatically un-buy item entitlements.
+                No automatic refunds. Use the per-row <strong>Remove</strong> button to retract the store entitlement. Points are only re-deducted if you previously clicked <strong>Refund</strong> for the same row.
               </p>
 
               {pointsStoreSpends && (
@@ -10359,11 +10357,11 @@ export default function Admin() {
                               <td className="p-1.5 text-right">
                                 <button
                                   type="button"
-                                  onClick={() => handleRefundStoreSpend(s.user_id, s.store_event_ref)}
-                                  disabled={pointsStoreRefundingKey === refundKey}
+                                onClick={() => handleRetractStoreSpend(s.user_id, s.store_event_ref)}
+                                  disabled={pointsStoreRetractingKey === refundKey}
                                   className="px-2 py-0.5 rounded border border-emerald-500/40 bg-emerald-500/20 text-emerald-400 text-[9px] font-heading hover:bg-emerald-500/30 disabled:opacity-50"
                                 >
-                                  {pointsStoreRefundingKey === refundKey ? '...' : 'Refund'}
+                                  {pointsStoreRetractingKey === refundKey ? '...' : 'Remove'}
                                 </button>
                               </td>
                             </tr>
@@ -11538,7 +11536,7 @@ export default function Admin() {
               <FormattedNumberInput value={String(giveAllPoints)} onChange={(raw) => setGiveAllPoints(parseInt(raw, 10) || 1)} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" />
               <BtnPrimary onClick={handleGiveAllPoints}>Give</BtnPrimary>
             </ActionRow>
-                <ActionRow icon={Trash2} label="Remove All Points" description="Remove ALL points from alive accounts (refund/unbuy not automatic).">
+                <ActionRow icon={Trash2} label="Remove All Points" description="Remove ALL points from alive accounts. Items granted by those points are not auto-removed; use the store spends table + Remove button to retract entitlements.">
                   <BtnDanger onClick={handleRemoveAllPoints} disabled={removeAllPointsLoading}>
                     {removeAllPointsLoading ? 'Removing…' : 'Remove All'}
                   </BtnDanger>
