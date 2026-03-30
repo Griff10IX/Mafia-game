@@ -141,7 +141,7 @@ def _is_car_usable(uc: dict) -> bool:
 
 
 async def _booze_garage_travel_leg_seconds(db, user_id: str) -> tuple[Optional[str], int]:
-    """Travel method id and seconds per leg for booze: custom car if owned and usable, else fastest non-destroyed garage car by TRAVEL_TIMES."""
+    """Travel method id and seconds per leg for booze: fastest usable garage car by TRAVEL_TIMES (including custom)."""
     import server as srv
 
     CARS = getattr(srv, "CARS", None) or []
@@ -151,29 +151,29 @@ async def _booze_garage_travel_leg_seconds(db, user_id: str) -> tuple[Optional[s
     if not user_id:
         return None, default_leg
     cursor = db.user_cars.find({"user_id": user_id}, {"_id": 1, "id": 1, "car_id": 1, "damage_percent": 1})
-    all_cars = await cursor.to_list(50)
+    all_cars = await cursor.to_list(5000)
     usable = [uc for uc in all_cars if _is_car_usable(uc)]
     if not usable:
         return None, default_leg
-    custom = next((uc for uc in usable if uc.get("car_id") == "car_custom"), None)
-    if custom:
-        return "custom", int(TRAVEL_TIMES.get("custom", 20))
-    best_car = None
+
+    best_method: Optional[str] = None
     best_time = 999
     for uc in usable:
         if uc.get("car_id") == "car_custom":
-            continue
-        car_info = next((c for c in CARS if c.get("id") == uc.get("car_id")), None)
-        travel_time = TRAVEL_TIMES.get(car_info.get("rarity", "common"), 45) if car_info else 45
+            travel_time = int(TRAVEL_TIMES.get("custom", 20))
+            method = "custom"
+        else:
+            car_info = next((c for c in CARS if c.get("id") == uc.get("car_id")), None)
+            travel_time = int(TRAVEL_TIMES.get(car_info.get("rarity", "common"), 45) if car_info else 45)
+            method = uc.get("id") or str(uc.get("_id", ""))
+            if not method:
+                continue
         if travel_time < best_time:
             best_time = travel_time
-            best_car = uc
-    if not best_car:
+            best_method = method
+    if not best_method:
         return None, default_leg
-    result = best_car.get("id") or str(best_car.get("_id", ""))
-    if not result:
-        return None, default_leg
-    return result, int(best_time)
+    return best_method, int(best_time)
 
 
 async def booze_travel_seconds_per_leg(db, user_id: str) -> int:
@@ -183,7 +183,7 @@ async def booze_travel_seconds_per_leg(db, user_id: str) -> int:
 
 
 async def _get_travel_method(db, user_id: str) -> Optional[str]:
-    """Find the fastest travel method for a user: custom car first, then fastest non-destroyed car by rarity. Used for booze (cars only, no airport)."""
+    """Find the fastest travel method for a user (cars only, no airport)."""
     mid, _ = await _booze_garage_travel_leg_seconds(db, user_id)
     return mid
 
