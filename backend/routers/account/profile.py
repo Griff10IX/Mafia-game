@@ -21,6 +21,7 @@ import httpx
 from fastapi import Body, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from utils.bbcode_normalize import normalize_bbcode_media_typos
 from utils.imgbb_resolve import rewrite_imgbb_urls_in_banner_text
 
 logger = logging.getLogger(__name__)
@@ -1424,6 +1425,7 @@ def register(router):
         if banner_text is not None:
             raw = (banner_text or "").strip() or None
             if raw:
+                raw = normalize_bbcode_media_typos(raw)
                 # Turn ImgBB page URLs (ibb.co/…) into direct i.ibb.co links inside [img] tags
                 raw = await rewrite_imgbb_urls_in_banner_text(raw)
             if raw and len(raw) > 10000:

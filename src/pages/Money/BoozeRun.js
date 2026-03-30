@@ -793,12 +793,6 @@ export default function BoozeRun() {
     return { city, minPrice, maxPrice, lowestBooze: lowestBooze?.name, highestBooze: highestBooze?.name };
   });
 
-  const listedGlobalPct = Number(config.listed_price_global_percent_off ?? 0);
-  const listedGlobalPctLabel =
-    listedGlobalPct > 0 && listedGlobalPct % 1 !== 0
-      ? listedGlobalPct.toFixed(1).replace(/\.0$/, '')
-      : String(Math.round(listedGlobalPct));
-
   return (
     <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="booze-run-page">
       <style>{BOOZE_STYLES}</style>
@@ -812,18 +806,6 @@ export default function BoozeRun() {
       {user?.booze_until && (
         <div className="bz-fade-in">
           <ActiveTokenBadge tokenType="booze" untilIso={user.booze_until} />
-        </div>
-      )}
-
-      {listedGlobalPct > 0 && (
-        <div
-          className="bz-fade-in rounded-md border border-emerald-500/45 bg-emerald-500/[0.08] px-3 py-2.5 shadow-[0_0_0_1px_rgba(16,185,129,0.12)]"
-          role="status"
-        >
-          <div className="text-[9px] font-heading font-bold text-emerald-400 uppercase tracking-[0.14em] mb-0.5">Global price cut</div>
-          <p className="text-[11px] text-foreground/95 font-heading leading-snug">
-            Listed buy &amp; sell prices are <strong className="text-emerald-400 tabular-nums">{listedGlobalPctLabel}%</strong> below normal (all cities, this rotation).
-          </p>
         </div>
       )}
 

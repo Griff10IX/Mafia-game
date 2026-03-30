@@ -607,10 +607,35 @@ const SMILEYS = [
  *   [hr]                  horizontal rule / divider
  *   :smiley: codes        see SMILEYS list above
  *
+ * Before parsing, common [img]/[gif] typos are fixed (e.g. [img/] → [/img], extra spaces, doubled tags).
+ *
  * Options:
  *   censorProfanity: boolean - if true, replace swear words with ***
  *   dmUnicodeSmileys: boolean - in DMs, map :wink: / ;) / ;-) to Unicode before image smileys (reliable if PNG path fails)
  */
+
+/** Fix common [img]/[gif] mistakes: XML-style [img/], [/img/], stray spaces, doubled open/close. */
+export function normalizeCommonBbcodeTypos(s) {
+  if (s == null || typeof s !== 'string' || !s) return s;
+  let t = s;
+  const mediaTags = ['img', 'gif'];
+  for (const tag of mediaTags) {
+    t = t.replace(new RegExp(`\\[\\s*${tag}\\s*/\\s*\\]`, 'gi'), `[/${tag}]`);
+    t = t.replace(new RegExp(`\\[\\s*/\\s*${tag}\\s*/\\s*\\]`, 'gi'), `[/${tag}]`);
+    t = t.replace(new RegExp(`\\[\\s*/\\s*${tag}\\s*\\]`, 'gi'), `[/${tag}]`);
+    t = t.replace(new RegExp(`\\[\\s*${tag}\\s*\\]`, 'gi'), `[${tag}]`);
+  }
+  let prev;
+  do {
+    prev = t;
+    t = t.replace(/\[img\]\s*\[img\]/gi, '[img]');
+    t = t.replace(/\[gif\]\s*\[gif\]/gi, '[gif]');
+    t = t.replace(/\[\/img\]\s*\[\/img\]/gi, '[/img]');
+    t = t.replace(/\[\/gif\]\s*\[\/gif\]/gi, '[/gif]');
+  } while (t !== prev);
+  return t;
+}
+
 export function parseForumContent(content, options = {}) {
   if (content == null || typeof content !== 'string') return '';
   let s = content;
@@ -620,6 +645,8 @@ export function parseForumContent(content, options = {}) {
     const { filterProfanity } = require('./profanityFilter');
     s = filterProfanity(s);
   }
+
+  s = normalizeCommonBbcodeTypos(s);
 
   // 1) Escape HTML so raw < > & are safe
   s = escapeHtml(s);
