@@ -27,6 +27,12 @@ const PROFILE_STYLES = `
   .prof-banner-content .forum-content-ytube-iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; border-radius: 8px; }
 `;
 
+/** Preset notepad backgrounds (dark greys). */
+const NOTEPAD_COLOR_PRESETS = [
+  { hex: '#333333', label: 'Charcoal' },
+  { hex: '#282828', label: 'Graphite' },
+];
+
 function formatDateTime(iso) {
   if (!iso) return '-';
   const d = new Date(iso);
@@ -502,10 +508,14 @@ const ProfileInfoCard = ({
         <div className="border-t border-zinc-700/30">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 px-2.5 py-1.5 md:px-3 md:py-1.5">
             <div>
-              <div className="flex items-center gap-0.5 mb-0.5">
+              <Link
+                to="/game/leaderboard"
+                className="inline-flex items-center gap-0.5 mb-0.5 rounded-sm hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                title="Open leaderboards"
+              >
                 <Trophy size={9} className="text-primary shrink-0" />
-                <span className="text-[8px] font-heading font-bold text-primary uppercase tracking-wider">Honours</span>
-              </div>
+                <span className="text-[8px] font-heading font-bold text-primary uppercase tracking-wider underline-offset-2 hover:underline">Honours</span>
+              </Link>
               <div className="grid grid-cols-2 gap-0.5">
                 {honours.length === 0 ? (
                   <span className="text-[8px] text-mutedForeground font-heading col-span-2">—</span>
@@ -513,15 +523,17 @@ const ProfileInfoCard = ({
                   honours.map((h, i) => {
                     const top10 = Number(h.rank) <= 10;
                     return (
-                      <span
+                      <Link
                         key={i}
-                        className={`flex items-center gap-0.5 px-1 py-0.5 rounded border text-[8px] font-heading leading-tight min-w-0 w-full ${
+                        to="/game/leaderboard"
+                        title="View leaderboards"
+                        className={`flex items-center gap-0.5 px-1 py-0.5 rounded border text-[8px] font-heading leading-tight min-w-0 w-full transition-colors hover:border-primary/40 hover:bg-primary/10 ${
                           top10 ? 'border-primary/20 bg-primary/5' : 'border-zinc-500/30 bg-zinc-500/5'
                         }`}
                       >
                         <span className={`font-bold shrink-0 ${top10 ? 'text-primary' : 'text-zinc-400'}`}>#{h.rank}</span>
                         <span className="text-foreground truncate min-w-0">{h.label}</span>
-                      </span>
+                      </Link>
                     );
                   })
                 )}
@@ -691,10 +703,14 @@ const HonoursCard = ({ honours }) => (
   <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in mobile-panel`} style={{ animationDelay: '0.05s' }}>
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
-      <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex items-center justify-center gap-1">
+      <Link
+        to="/game/leaderboard"
+        title="View leaderboards"
+        className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex items-center justify-center gap-1 hover:underline underline-offset-2"
+      >
         <Trophy size={12} className="md:w-3.5 md:h-3.5" />
         Honours ({honours.length})
-      </h3>
+      </Link>
     </div>
     <div className="p-2.5">
       {honours.length === 0 ? (
@@ -709,9 +725,11 @@ const HonoursCard = ({ honours }) => (
           {honours.map((h, i) => {
             const top10 = Number(h.rank) <= 10;
             return (
-              <div
+              <Link
                 key={i}
-                className={`prof-row flex items-center gap-2 rounded-md border px-2.5 py-1.5 ${
+                to="/game/leaderboard"
+                title="View leaderboards"
+                className={`prof-row flex items-center gap-2 rounded-md border px-2.5 py-1.5 transition-colors hover:border-primary/40 hover:bg-primary/10 ${
                   top10 ? 'border-primary/20 bg-primary/5' : 'border-zinc-500/20 bg-zinc-500/5'
                 }`}
               >
@@ -727,7 +745,7 @@ const HonoursCard = ({ honours }) => (
                 <span className="text-foreground font-heading text-[10px] md:text-xs flex-1 leading-tight">
                   {h.label}
                 </span>
-              </div>
+              </Link>
             );
           })}
         </div>
@@ -1707,6 +1725,26 @@ export default function Profile() {
                       title="Pick a colour"
                       aria-label="Notepad background colour"
                     />
+                    {NOTEPAD_COLOR_PRESETS.map(({ hex, label }) => (
+                      <button
+                        key={hex}
+                        type="button"
+                        onClick={() => setNotepadColorEdit(hex)}
+                        title={`${label} ${hex}`}
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border text-[10px] font-heading transition-colors ${
+                          (notepadColorEdit || '').toLowerCase() === hex
+                            ? 'border-primary/60 bg-primary/15 text-primary'
+                            : 'border-zinc-600 text-mutedForeground hover:text-foreground hover:bg-zinc-800'
+                        }`}
+                      >
+                        <span
+                          className="h-4 w-4 rounded border border-zinc-500/60 shrink-0"
+                          style={{ backgroundColor: hex }}
+                          aria-hidden
+                        />
+                        {label}
+                      </button>
+                    ))}
                     <button
                       type="button"
                       onClick={() => setNotepadColorEdit('')}
