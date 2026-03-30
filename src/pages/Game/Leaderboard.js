@@ -22,8 +22,25 @@ const EMPTY_BOARDS = {
 const LB_CACHE_STORAGE_KEY = 'mafia_lb_top_v1';
 const LB_CACHE_MAX_KEYS = 12;
 
+function _weekStartUTCString() {
+  const now = new Date();
+  // getUTCDay(): 0=Sunday ... 6=Saturday
+  const day = now.getUTCDay();
+  // Monday-based offset: Monday => 0, Tuesday => 1, ..., Sunday => 6
+  const diff = (day + 6) % 7;
+  const mondayUTC = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate() - diff,
+    0, 0, 0, 0
+  ));
+  return mondayUTC.toISOString().slice(0, 10);
+}
+
 function _lbCacheKey(period, topLimit, dead) {
-  return `${period}|${topLimit}|${dead ? '1' : '0'}`;
+  const p = (period || '').toLowerCase();
+  const weekStart = p === 'weekly' ? _weekStartUTCString() : '';
+  return `${p}|${weekStart}|${topLimit}|${dead ? '1' : '0'}`;
 }
 
 function readLbEntry(period, topLimit, dead) {
