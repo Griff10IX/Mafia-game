@@ -748,7 +748,7 @@ async def create_redeem_code_forum_topic(
         footer = (
             "[i][b]Automated topic[/b] — posted by the game when this code was created (not by a player). "
             "Redeem on Referral / Redeem; one redemption per account. "
-            f"If this code has a global limit, this topic is removed automatically after all {cap} uses have been claimed.[/i]"
+            f"This topic is removed automatically after all {cap} uses have been claimed.[/i]"
         )
     else:
         footer = (

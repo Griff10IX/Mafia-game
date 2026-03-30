@@ -33,6 +33,10 @@ def normalize_ip_string(raw: Optional[str]) -> str:
     if "%" in s:
         s = s.split("%", 1)[0]
     try:
-        return str(ipaddress.ip_address(s))
+        ip_obj = ipaddress.ip_address(s)
+        # Normalize IPv4-mapped IPv6 (::ffff:x.x.x.x) to plain IPv4 for storage/display consistency.
+        if isinstance(ip_obj, ipaddress.IPv6Address) and ip_obj.ipv4_mapped:
+            return str(ip_obj.ipv4_mapped)
+        return str(ip_obj)
     except ValueError:
         return ""

@@ -10,7 +10,7 @@ import random
 import re
 import uuid
 from datetime import datetime, timezone, timedelta
-from collections import defaultdict
+from collections import Counter, defaultdict
 from typing import Dict, List, Optional, Set, Tuple
 
 import httpx
@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 from middleware.security import is_proxy_or_vpn, get_ip_info
 from utils.disposable_email import is_disposable_email
 from utils.referral_ids import normalize_referred_by_ids
+from utils.ip_normalize import normalize_ip_string
 from utils.cheat_detection_utils import (
     group_by_domain,
     group_by_similar_username_strip_digits,
@@ -336,24 +337,115 @@ def register(router):
     from routers.money.crack_safe import SAFE_JACKPOT_SEED as _CRACK_SAFE_JACKPOT_SEED
 
     def _normalize_ip(raw: str) -> Optional[str]:
-        s = (raw or "").strip().strip('"').strip("'")
-        if not s:
-            return None
-        if "," in s:
-            s = s.split(",", 1)[0].strip()
-        if s.startswith("[") and "]" in s:
-            s = s[1:s.find("]")]
-        if s.count(":") == 1 and "." in s:
-            host, port = s.rsplit(":", 1)
-            if port.isdigit():
-                s = host
-        if "%" in s:
-            s = s.split("%", 1)[0]
-        try:
-            ipaddress.ip_address(s)
-            return s
-        except Exception:
-            return None
+        n = normalize_ip_string(raw)
+        return n or None
+
+    @router.post("/admin/ip-normalize-mapped-v6")
+    async def admin_ip_normalize_mapped_v6(
+        dry_run: bool = Query(True, description="Preview only; no writes when true"),
+        limit: int = Query(20000, ge=100, le=200000, description="Max users to scan"),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Normalize stored IPv4-mapped IPv6 (::ffff:x.x.x.x) user IPs to plain IPv4."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        def _is_mapped_ipv6_raw(v: str) -> bool:
+            s = str(v or "").strip().lower()
+            return s.startswith("::ffff:") or s.startswith("[::ffff:")
+
+        query = {
+            "$or": [
+                {"registration_ip": {"$regex": r"^::ffff:", "$options": "i"}},
+                {"last_login_ip": {"$regex": r"^::ffff:", "$options": "i"}},
+                {"last_request_ip": {"$regex": r"^::ffff:", "$options": "i"}},
+                {"login_ips": {"$elemMatch": {"$regex": r"^::ffff:", "$options": "i"}}},
+                {"sessions.ip": {"$regex": r"^::ffff:", "$options": "i"}},
+            ]
+        }
+        users = await db.users.find(
+            query,
+            {"_id": 0, "id": 1, "username": 1, "registration_ip": 1, "last_login_ip": 1, "last_request_ip": 1, "login_ips": 1, "sessions": 1},
+        ).limit(limit).to_list(limit)
+
+        scanned = len(users)
+        users_with_changes = 0
+        fields_changed = 0
+        sample = []
+
+        for u in users:
+            updates_set = {}
+            changed_here = 0
+
+            for key in ("registration_ip", "last_login_ip", "last_request_ip"):
+                old = (u.get(key) or "").strip()
+                if not old or not _is_mapped_ipv6_raw(old):
+                    continue
+                new = _normalize_ip(old)
+                if new and new != old:
+                    updates_set[key] = new
+                    changed_here += 1
+
+            login_ips = u.get("login_ips") or []
+            if isinstance(login_ips, list) and login_ips:
+                new_login_ips = []
+                changed_login = 0
+                for ip in login_ips:
+                    old = (ip or "").strip()
+                    if old and _is_mapped_ipv6_raw(old):
+                        new = _normalize_ip(old)
+                        if new and new != old:
+                            new_login_ips.append(new)
+                            changed_login += 1
+                            continue
+                    new_login_ips.append(old)
+                if changed_login > 0:
+                    updates_set["login_ips"] = new_login_ips
+                    changed_here += changed_login
+
+            sessions = u.get("sessions") or []
+            if isinstance(sessions, list) and sessions:
+                new_sessions = []
+                changed_sessions = 0
+                for s in sessions:
+                    if not isinstance(s, dict):
+                        new_sessions.append(s)
+                        continue
+                    ip_old = (s.get("ip") or "").strip()
+                    if ip_old and _is_mapped_ipv6_raw(ip_old):
+                        ip_new = _normalize_ip(ip_old)
+                        if ip_new and ip_new != ip_old:
+                            s2 = dict(s)
+                            s2["ip"] = ip_new
+                            new_sessions.append(s2)
+                            changed_sessions += 1
+                            continue
+                    new_sessions.append(s)
+                if changed_sessions > 0:
+                    updates_set["sessions"] = new_sessions
+                    changed_here += changed_sessions
+
+            if changed_here <= 0:
+                continue
+            users_with_changes += 1
+            fields_changed += changed_here
+            if len(sample) < 20:
+                sample.append({"user_id": u.get("id"), "username": u.get("username"), "changed_fields": changed_here})
+            if not dry_run:
+                await db.users.update_one({"id": u["id"]}, {"$set": updates_set})
+
+        return {
+            "dry_run": bool(dry_run),
+            "scanned": scanned,
+            "users_with_changes": users_with_changes,
+            "fields_changed": fields_changed,
+            "sample": sample,
+            "message": (
+                f"Dry run complete. {users_with_changes} user(s), {fields_changed} field(s) would be normalized."
+                if dry_run
+                else f"Normalized mapped IPv6 on {users_with_changes} user(s), {fields_changed} field(s)."
+            ),
+        }
 
     @router.post("/admin/ghost-mode")
     async def admin_toggle_ghost_mode(current_user: dict = Depends(get_current_user)):
@@ -5684,6 +5776,10 @@ def register(router):
         flags_days: int = Query(30, ge=1, le=365),
         password_reset_days: int = Query(7, ge=1, le=90),
         password_reset_min: int = Query(3, ge=2, le=30),
+        cadence_days: int = Query(7, ge=1, le=30, description="Window for automation cadence analysis"),
+        cadence_limit: int = Query(4000, ge=500, le=12000, description="Max activity/security docs to scan for cadence"),
+        session_overlap_hours: int = Query(8, ge=1, le=48, description="Recent session overlap window in hours"),
+        referral_min_accounts: int = Query(3, ge=2, le=20, description="Min referees for referral abuse grouping"),
         current_user: dict = Depends(get_current_user),
     ):
         """
@@ -5707,6 +5803,20 @@ def register(router):
                 return "consumer_paid_isp"
             return "unknown"
 
+        def _confidence_from_evidence(evidence_count: int) -> str:
+            if evidence_count >= 3:
+                return "high"
+            if evidence_count >= 2:
+                return "medium"
+            return "low"
+
+        def _confidence_rank(conf: str) -> int:
+            if conf == "high":
+                return 3
+            if conf == "medium":
+                return 2
+            return 1
+
         def _all_ips(u: dict) -> Tuple[List[str], dict]:
             return user_ip_union(u, include_session_ips=include_session_ips)
 
@@ -5726,9 +5836,8 @@ def register(router):
             "device_fingerprint": 1,
             "created_at": 1,
             "referred_by": 1,
+            "sessions": 1,
         }
-        if include_session_ips:
-            proj["sessions"] = 1
         users = await db.users.find(query, proj).to_list(5000)
 
         ip_to_accounts = {}
@@ -5776,14 +5885,22 @@ def register(router):
             has_reg = any(a.get("sources", {}).get("registration") == ip for a in accs) and len(by_user) >= 2
             risk = "high" if has_reg else "medium"
             risk_score = compute_dupe_risk_score("same_ip", len(by_user), has_registration_ip=has_reg)
+            evidence_reasons = ["shared_ip"]
+            evidence_count = 1
+            if has_reg:
+                evidence_count += 1
+                evidence_reasons.append("shared_registration_ip")
             same_ip_groups.append({
                 "ip": ip,
                 "count": len(by_user),
                 "accounts": list(by_user.values()),
                 "risk": risk,
                 "risk_score": risk_score,
+                "evidence_count": evidence_count,
+                "evidence_reasons": evidence_reasons,
+                "confidence": _confidence_from_evidence(evidence_count),
             })
-        same_ip_groups.sort(key=lambda g: (-g["risk_score"], -g["count"]))
+        same_ip_groups.sort(key=lambda g: (-_confidence_rank(g.get("confidence", "low")), -g["risk_score"], -g["count"]))
 
         same_subnet_groups = group_by_same_subnet(users, include_session_ips=include_session_ips)
 
@@ -5813,8 +5930,11 @@ def register(router):
                 "distinct_ip_count": len(all_ips),
                 "accounts": accs,
                 "risk_score": compute_dupe_risk_score("same_ua", len(accs), has_same_device=True),
+                "evidence_count": 2 if len(all_ips) >= 2 else 1,
+                "evidence_reasons": ["shared_fingerprint"] + (["multiple_ips"] if len(all_ips) >= 2 else []),
+                "confidence": _confidence_from_evidence(2 if len(all_ips) >= 2 else 1),
             })
-        same_fingerprint_groups.sort(key=lambda g: (-g["risk_score"], -g["account_count"]))
+        same_fingerprint_groups.sort(key=lambda g: (-_confidence_rank(g.get("confidence", "low")), -g["risk_score"], -g["account_count"]))
 
         ua_to_users = {}
         ua_raw_sample = {}
@@ -5851,8 +5971,11 @@ def register(router):
                 "distinct_ip_count": len(all_ips),
                 "accounts": accs,
                 "risk_score": risk_score,
+                "evidence_count": 2,
+                "evidence_reasons": ["shared_user_agent", "multiple_ips"],
+                "confidence": _confidence_from_evidence(2),
             })
-        same_ua_groups.sort(key=lambda g: (-g["risk_score"], -g["account_count"]))
+        same_ua_groups.sort(key=lambda g: (-_confidence_rank(g.get("confidence", "low")), -g["risk_score"], -g["account_count"]))
 
         domain_groups = group_by_domain(users)
         name_groups = group_by_similar_username_strip_digits(users)
@@ -5916,8 +6039,23 @@ def register(router):
             g["ip_as"] = meta.get("as") or None
             g["ip_proxy"] = bool(meta.get("proxy"))
             g["ip_hosting"] = bool(meta.get("hosting"))
+            if network_type in ("vpn_or_proxy", "datacenter_or_hosting"):
+                g["evidence_count"] = int(g.get("evidence_count") or 0) + 1
+                reasons = list(g.get("evidence_reasons") or [])
+                reasons.append("ip_reputation_strong")
+                g["evidence_reasons"] = sorted(set(reasons))
+                g["confidence"] = _confidence_from_evidence(g["evidence_count"])
+                g["ip_accuracy_note"] = "Strong IP evidence (VPN/proxy or hosting/datacenter)."
+            elif network_type == "consumer_paid_isp":
+                g["ip_accuracy_note"] = "Likely paid/residential ISP; shared IP alone may be weaker evidence (CGNAT/mobile risk)."
+                if not any(a.get("role_at_this_ip") == "registration" for a in (g.get("accounts") or [])):
+                    g["risk_score"] = max(0, int(g.get("risk_score") or 0) - 5)
+            else:
+                g["ip_accuracy_note"] = "IP intelligence unavailable; treat as neutral."
             if g.get("ip_vpn"):
                 g["risk_score"] = min(100, g["risk_score"] + 10)
+            g["risk_score"] = min(100, max(0, int(g.get("risk_score") or 0)))
+        same_ip_groups.sort(key=lambda g: (-_confidence_rank(g.get("confidence", "low")), -g["risk_score"], -g["count"]))
 
         # Proxy/VPN users: users whose IPs are detected as VPN/proxy (beyond same_ip_groups)
         proxy_users_list: List[dict] = []
@@ -6066,6 +6204,11 @@ def register(router):
             })
         suspicious_ip_correlations.sort(key=lambda g: (-g["risk_score"], -g["event_count"]))
 
+        uid_ips: Dict[str, Set[str]] = {}
+        for u in users:
+            ips, _ = _all_ips(u)
+            uid_ips[u["id"]] = set(ips)
+
         transfer_cut = (now_utc - timedelta(days=transfer_days)).isoformat()
         xfer_pipe = [
             {"$match": {"created_at": {"$gte": transfer_cut}}},
@@ -6075,10 +6218,6 @@ def register(router):
             {"$limit": transfer_limit},
         ]
         xfer_agg = await db.money_transfers.aggregate(xfer_pipe).to_list(transfer_limit)
-        uid_ips: Dict[str, Set[str]] = {}
-        for u in users:
-            ips, _ = _all_ips(u)
-            uid_ips[u["id"]] = set(ips)
         heavy_transfer_pairs: List[dict] = []
         for row in xfer_agg:
             ids = row.get("_id") or {}
@@ -6102,6 +6241,64 @@ def register(router):
                 "shared_ip_count": len(s1 & s2),
                 "risk_score": compute_dupe_risk_score("heavy_transfers", cnt),
             })
+
+        transfer_ring_groups: List[dict] = []
+        edge_count: Dict[Tuple[str, str], int] = {}
+        next_nodes: Dict[str, Set[str]] = defaultdict(set)
+        for row in xfer_agg:
+            ids = row.get("_id") or {}
+            fid = ids.get("from")
+            tid = ids.get("to")
+            if not fid or not tid or fid == tid:
+                continue
+            cnt = int(row.get("transfer_count") or 0)
+            if cnt <= 0:
+                continue
+            edge_count[(fid, tid)] = cnt
+            next_nodes[fid].add(tid)
+        seen_cycles: Set[Tuple[str, str, str]] = set()
+        for a, bset in next_nodes.items():
+            for b in bset:
+                cset = next_nodes.get(b) or set()
+                for c in cset:
+                    if c == a or c == b:
+                        continue
+                    if a not in (next_nodes.get(c) or set()):
+                        continue
+                    cyc = tuple(sorted([a, b, c]))
+                    if cyc in seen_cycles:
+                        continue
+                    seen_cycles.add(cyc)
+                    members = list(cyc)
+                    c1 = edge_count.get((a, b), 0)
+                    c2 = edge_count.get((b, c), 0)
+                    c3 = edge_count.get((c, a), 0)
+                    edge_total = c1 + c2 + c3
+                    shared_ip_count = len(uid_ips.get(a, set()) & uid_ips.get(b, set()) & uid_ips.get(c, set()))
+                    member_rows = []
+                    for uid in members:
+                        u0 = id_to_user.get(uid) or {}
+                        member_rows.append({"user_id": uid, "username": u0.get("username"), "email": u0.get("email")})
+                    evidence_count = 1
+                    evidence_reasons = ["transfer_cycle"]
+                    if edge_total >= max(3, transfer_min_count * 3):
+                        evidence_count += 1
+                        evidence_reasons.append("high_transfer_volume")
+                    if shared_ip_count > 0:
+                        evidence_count += 1
+                        evidence_reasons.append("shared_ip")
+                    risk_score = compute_dupe_risk_score("transfer_ring", max(3, edge_total // max(1, transfer_min_count)))
+                    transfer_ring_groups.append({
+                        "member_count": 3,
+                        "members": member_rows,
+                        "edge_total": edge_total,
+                        "shared_ip_count": shared_ip_count,
+                        "risk_score": risk_score,
+                        "evidence_count": evidence_count,
+                        "evidence_reasons": evidence_reasons,
+                        "confidence": _confidence_from_evidence(evidence_count),
+                    })
+        transfer_ring_groups.sort(key=lambda g: (-_confidence_rank(g.get("confidence", "low")), -g["risk_score"], -g["edge_total"]))
 
         prereg_ip_cross_accounts: List[dict] = []
         if include_prereg_cross and users:
@@ -6147,6 +6344,181 @@ def register(router):
                             "risk_score": compute_dupe_risk_score("prereg_ip_cross", 1 + len(olist)),
                         })
                 prereg_ip_cross_accounts.sort(key=lambda g: (-g["risk_score"], g.get("username") or ""))
+
+        overlapping_session_device_groups: List[dict] = []
+        session_cutoff = now_utc - timedelta(hours=session_overlap_hours)
+        fp_session_map: Dict[str, List[dict]] = defaultdict(list)
+        for u in users:
+            fp = (u.get("device_fingerprint") or "").strip()
+            if not fp:
+                continue
+            sess = u.get("sessions") or []
+            if not isinstance(sess, list) or not sess:
+                continue
+            for s in sess:
+                if not isinstance(s, dict):
+                    continue
+                la = s.get("last_used_at") or s.get("created_at")
+                if not la:
+                    continue
+                try:
+                    dt = datetime.fromisoformat(str(la).replace("Z", "+00:00"))
+                    if dt.tzinfo is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                except Exception:
+                    continue
+                if dt < session_cutoff:
+                    continue
+                fp_session_map[fp].append({"user_id": u["id"], "username": u.get("username"), "at": dt, "ip": (s.get("ip") or "").strip()})
+        for fp, rows in fp_session_map.items():
+            users_seen = {}
+            for r in rows:
+                users_seen[r["user_id"]] = r.get("username")
+            if len(users_seen) < 2:
+                continue
+            rows_sorted = sorted(rows, key=lambda x: x["at"])
+            overlap_hits = 0
+            for i in range(len(rows_sorted) - 1):
+                a = rows_sorted[i]
+                b = rows_sorted[i + 1]
+                if a["user_id"] == b["user_id"]:
+                    continue
+                if (b["at"] - a["at"]).total_seconds() <= 600:
+                    overlap_hits += 1
+            if overlap_hits <= 0:
+                continue
+            member_ids = list(users_seen.keys())
+            shared_ip = False
+            if len(member_ids) >= 2:
+                base = uid_ips.get(member_ids[0], set())
+                for uid in member_ids[1:]:
+                    base = base & uid_ips.get(uid, set())
+                shared_ip = bool(base)
+            evidence_count = 1 + (1 if overlap_hits >= 2 else 0) + (1 if shared_ip else 0)
+            overlapping_session_device_groups.append({
+                "device_fingerprint": fp[:32] + ("..." if len(fp) > 32 else ""),
+                "account_count": len(users_seen),
+                "overlap_hits": overlap_hits,
+                "shared_ip": shared_ip,
+                "members": [{"user_id": uid, "username": uname} for uid, uname in users_seen.items()],
+                "risk_score": compute_dupe_risk_score("session_overlap_device", len(users_seen)),
+                "evidence_count": evidence_count,
+                "evidence_reasons": ["shared_fingerprint", "session_overlap"] + (["shared_ip"] if shared_ip else []),
+                "confidence": _confidence_from_evidence(evidence_count),
+            })
+        overlapping_session_device_groups.sort(key=lambda g: (-_confidence_rank(g.get("confidence", "low")), -g["risk_score"], -g["overlap_hits"]))
+
+        automation_cadence_groups: List[dict] = []
+        cadence_cut = (now_utc - timedelta(days=cadence_days)).isoformat()
+        act_docs = await db.activity_log.find(
+            {"created_at": {"$gte": cadence_cut}},
+            {"_id": 0, "user_id": 1, "username": 1, "created_at": 1, "action": 1, "endpoint": 1},
+        ).sort("created_at", -1).limit(cadence_limit).to_list(cadence_limit)
+        by_user_times: Dict[str, List[datetime]] = defaultdict(list)
+        by_user_name: Dict[str, str] = {}
+        for d in act_docs:
+            uid = d.get("user_id")
+            if not uid:
+                continue
+            if uid not in id_to_user:
+                continue
+            raw = d.get("created_at")
+            if not raw:
+                continue
+            try:
+                dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+            except Exception:
+                continue
+            by_user_times[uid].append(dt)
+            by_user_name[uid] = (id_to_user.get(uid) or {}).get("username") or d.get("username")
+        cadence_signature_users: Dict[int, List[str]] = defaultdict(list)
+        cadence_samples: Dict[int, List[int]] = {}
+        for uid, times in by_user_times.items():
+            if len(times) < 8:
+                continue
+            ts = sorted(times)
+            diffs = [int((ts[i + 1] - ts[i]).total_seconds()) for i in range(len(ts) - 1)]
+            diffs = [x for x in diffs if x >= 0]
+            if len(diffs) < 6:
+                continue
+            c = Counter(diffs)
+            mode_val, mode_count = c.most_common(1)[0]
+            if mode_val > 20:
+                continue
+            ratio = mode_count / max(1, len(diffs))
+            if ratio < 0.7:
+                continue
+            sig = mode_val
+            cadence_signature_users[sig].append(uid)
+            cadence_samples[sig] = diffs[:8]
+        for sig, uids in cadence_signature_users.items():
+            if len(uids) < 2:
+                continue
+            shared_ip_any = False
+            for i in range(len(uids)):
+                for j in range(i + 1, len(uids)):
+                    if uid_ips.get(uids[i], set()) & uid_ips.get(uids[j], set()):
+                        shared_ip_any = True
+                        break
+                if shared_ip_any:
+                    break
+            if not shared_ip_any:
+                continue
+            evidence_count = 3
+            automation_cadence_groups.append({
+                "cadence_seconds": sig,
+                "account_count": len(uids),
+                "members": [{"user_id": uid, "username": by_user_name.get(uid) or uid} for uid in uids[:20]],
+                "sample_intervals": cadence_samples.get(sig) or [],
+                "risk_score": compute_dupe_risk_score("automation_cadence", len(uids)),
+                "evidence_count": evidence_count,
+                "evidence_reasons": ["regular_action_cadence", "multi_account_pattern", "shared_ip"],
+                "confidence": _confidence_from_evidence(evidence_count),
+            })
+        automation_cadence_groups.sort(key=lambda g: (-_confidence_rank(g.get("confidence", "low")), -g["risk_score"], -g["account_count"]))
+
+        referral_abuse_groups: List[dict] = []
+        ref_to_refs: Dict[str, List[str]] = defaultdict(list)
+        for u in users:
+            uid = u.get("id")
+            if not uid:
+                continue
+            for rid in normalize_referred_by_ids(u.get("referred_by")):
+                ref_to_refs[rid].append(uid)
+        for rid, refs in ref_to_refs.items():
+            uniq_refs = sorted(set(refs))
+            if len(uniq_refs) < referral_min_accounts:
+                continue
+            ref_ips = uid_ips.get(rid, set())
+            shared_with_ref = sum(1 for uid in uniq_refs if ref_ips & uid_ips.get(uid, set()))
+            shared_between_refs = 0
+            for i in range(len(uniq_refs)):
+                for j in range(i + 1, len(uniq_refs)):
+                    if uid_ips.get(uniq_refs[i], set()) & uid_ips.get(uniq_refs[j], set()):
+                        shared_between_refs += 1
+            if shared_with_ref <= 0 and shared_between_refs <= 0:
+                continue
+            evidence_count = 1 + (1 if shared_with_ref > 0 else 0) + (1 if shared_between_refs > 0 else 0)
+            ruser = id_to_user.get(rid) or {}
+            members = []
+            for uid in uniq_refs[:25]:
+                u0 = id_to_user.get(uid) or {}
+                members.append({"user_id": uid, "username": u0.get("username"), "email": u0.get("email")})
+            referral_abuse_groups.append({
+                "referrer_user_id": rid,
+                "referrer_username": ruser.get("username"),
+                "referee_count": len(uniq_refs),
+                "shared_ip_with_referrer_count": shared_with_ref,
+                "shared_ip_pairs_among_referees": shared_between_refs,
+                "members": members,
+                "risk_score": compute_dupe_risk_score("referral_abuse_graph", len(uniq_refs)),
+                "evidence_count": evidence_count,
+                "evidence_reasons": ["referral_cluster"] + (["shared_ip_with_referrer"] if shared_with_ref > 0 else []) + (["shared_ip_among_referees"] if shared_between_refs > 0 else []),
+                "confidence": _confidence_from_evidence(evidence_count),
+            })
+        referral_abuse_groups.sort(key=lambda g: (-_confidence_rank(g.get("confidence", "low")), -g["risk_score"], -g["referee_count"]))
 
         alive_dead_fingerprint_groups: List[dict] = []
         if include_dead_fingerprint:
@@ -6281,6 +6653,14 @@ def register(router):
             "total_referral_same_ip_groups": len(referral_same_ip_groups),
             "heavy_transfer_pairs": heavy_transfer_pairs[:transfer_limit],
             "total_heavy_transfer_pairs": len(heavy_transfer_pairs),
+            "transfer_ring_groups": transfer_ring_groups[:40],
+            "total_transfer_ring_groups": len(transfer_ring_groups),
+            "overlapping_session_device_groups": overlapping_session_device_groups[:40],
+            "total_overlapping_session_device_groups": len(overlapping_session_device_groups),
+            "automation_cadence_groups": automation_cadence_groups[:40],
+            "total_automation_cadence_groups": len(automation_cadence_groups),
+            "referral_abuse_groups": referral_abuse_groups[:40],
+            "total_referral_abuse_groups": len(referral_abuse_groups),
             "prereg_ip_cross_accounts": prereg_ip_cross_accounts[:80],
             "total_prereg_ip_cross_accounts": len(prereg_ip_cross_accounts),
             "alive_dead_fingerprint_groups": alive_dead_fingerprint_groups[:35],

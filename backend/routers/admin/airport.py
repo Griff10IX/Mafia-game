@@ -32,7 +32,8 @@ MAX_EXTRA_AIRMILES = 50
 # Travel token: car/custom travel time multiplier (airport stays instant; airport *points* discount is separate)
 TRAVEL_TOKEN_CAR_TIME_FACTOR = 0.9
 TRAVEL_TOKEN_CAR_TIME_MIN = 3
-USER_CARS_FETCH_LIMIT = 500
+# Travel must account for large garages so fastest options/custom aren't skipped.
+USER_CARS_FETCH_LIMIT = 5000
 
 
 def _parse_iso_datetime(s):
@@ -170,11 +171,11 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
             current_user["travels_this_hour"] = 0
 
     now_utc = datetime.now(timezone.utc)
-    user_cars = await db.user_cars.find({"user_id": uid}).to_list(USER_CARS_FETCH_LIMIT)
+    # Fetch custom separately so it is never dropped by non-custom pagination/limits.
+    custom_cars = await db.user_cars.find({"user_id": uid, "car_id": "car_custom"}).to_list(20)
+    user_cars = await db.user_cars.find({"user_id": uid, "car_id": {"$ne": "car_custom"}}).to_list(USER_CARS_FETCH_LIMIT)
     cars_with_travel_times = []
     for uc in user_cars:
-        if uc.get("car_id") == "car_custom":
-            continue  # Custom car is returned separately as custom_car; don't duplicate in cars list
         car_info = next((c for c in CARS if c["id"] == uc["car_id"]), None)
         if car_info:
             base_time = TRAVEL_TIMES.get(car_info["rarity"], 45)
@@ -198,7 +199,14 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
     cars_with_travel_times.sort(key=lambda c: (c["travel_time"], c.get("name", "")))
 
     custom_car = None
-    first_custom = next((uc for uc in user_cars if uc.get("car_id") == "car_custom"), None)
+    # If a user has multiple custom rows, prefer a usable one (lowest damage).
+    first_custom = None
+    if custom_cars:
+        custom_cars_sorted = sorted(
+            custom_cars,
+            key=lambda uc: min(100, max(0, float(uc.get("damage_percent", 0))))
+        )
+        first_custom = next((uc for uc in custom_cars_sorted if min(100, max(0, float(uc.get("damage_percent", 0)))) < 100), None) or custom_cars_sorted[0]
     if first_custom:
         custom_damage = min(100, max(0, float(first_custom.get("damage_percent", 0))))
         custom_car = {
@@ -351,10 +359,16 @@ async def _start_travel_impl(
                 {"$inc": {"total_earnings": airport_price}}
             )
     elif travel_method == "custom":
-        first_custom = await db.user_cars.find_one(
-            {"user_id": user["id"], "car_id": "car_custom"},
-            sort=[("acquired_at", 1)]
-        )
+        custom_rows = await db.user_cars.find(
+            {"user_id": user["id"], "car_id": "car_custom"}
+        ).to_list(20)
+        first_custom = None
+        if custom_rows:
+            custom_rows_sorted = sorted(
+                custom_rows,
+                key=lambda uc: min(100, max(0, float(uc.get("damage_percent", 0))))
+            )
+            first_custom = next((uc for uc in custom_rows_sorted if min(100, max(0, float(uc.get("damage_percent", 0)))) < 100), None) or custom_rows_sorted[0]
         if not first_custom:
             raise HTTPException(status_code=400, detail="You don't own a custom car")
         if min(100, max(0, float(first_custom.get("damage_percent", 0)))) >= 100:

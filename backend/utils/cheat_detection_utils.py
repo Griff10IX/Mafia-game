@@ -293,7 +293,8 @@ def compute_dupe_risk_score(
     Compute risk score 0-100 for a dupe group.
     group_type: same_ip, same_subnet, same_ua, domain, similar_username, similar_email, same_day_ip,
     dead_ip_overlap, dead_fingerprint_overlap, suspicious_ip, registration_burst, referral_same_ip,
-    heavy_transfers, prereg_ip_cross, security_flag_user, password_reset_heavy.
+    heavy_transfers, prereg_ip_cross, security_flag_user, password_reset_heavy,
+    transfer_ring, session_overlap_device, ip_reputation_combo, automation_cadence, referral_abuse_graph.
     """
     base = 0
     if group_type == "same_ip":
@@ -328,6 +329,16 @@ def compute_dupe_risk_score(
         base = 42
     elif group_type == "password_reset_heavy":
         base = 36
+    elif group_type == "transfer_ring":
+        base = 76
+    elif group_type == "session_overlap_device":
+        base = 68
+    elif group_type == "ip_reputation_combo":
+        base = 60
+    elif group_type == "automation_cadence":
+        base = 64
+    elif group_type == "referral_abuse_graph":
+        base = 70
     else:
         base = 30
 

@@ -2,6 +2,7 @@
 # Escape through city streets after a heist, avoiding cops and collecting cash
 # Integrated with mini games weekly leaderboard
 
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -9,6 +10,7 @@ from fastapi import Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 
 from server import db, get_current_user, _get_staff_user_ids, _is_admin, log_activity, log_minigame_payout
+from routers.minigames.minigame_leaderboard import log_minigame_play
 from utils.minigame_security import skip_minigame_session
 from utils.minigame_repeat_guard import check_identical_payload_spam
 from utils.minigame_run_session import (
@@ -39,6 +41,7 @@ BONUS_RESPECT_PER_100M = 2
 COIN_TO_CASH = 25
 MIN_DISTANCE = 50
 MAX_DISTANCE = 50000
+logger = logging.getLogger(__name__)
 
 
 class GetawayRunRequest(BaseModel):
@@ -164,11 +167,11 @@ def register(router):
         await log_minigame_payout(uid, current_user.get("username", "?"), "the_getaway", distance + (coins_collected * 50), {"money": cash, "respect_points": respect})
 
         try:
-            from routers.minigames.minigame_leaderboard import log_minigame_play
             score = distance + (coins_collected * 50)
             await log_minigame_play(current_user["id"], current_user.get("username"), "the_getaway", score)
-        except Exception:
-            pass
+        except Exception as e:
+            # Do not fail payout flow, but make failures visible for debugging.
+            logger.warning("the_getaway: failed to log minigame leaderboard play: %s", e)
 
         plays_info = await get_plays_left(db, user_id=uid, game=GETAWAY_GAME)
         return {
