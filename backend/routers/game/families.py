@@ -2349,11 +2349,13 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
             pass
     now_iso = now.isoformat()
     rackets[racket_id] = {**state, "level": level, "last_collected_at": now_iso}
-    filter_cond = {"id": family_id}
+    filter_cond: dict = {"id": family_id}
     if last_at:
         filter_cond[f"rackets.{racket_id}.last_collected_at"] = last_at
     else:
-        filter_cond[f"rackets.{racket_id}.last_collected_at"] = {"$exists": False}
+        # Unlocks store last_collected_at: null (field exists). {"$exists": false} does not match null → update never ran.
+        lc_key = f"rackets.{racket_id}.last_collected_at"
+        filter_cond["$or"] = [{lc_key: {"$exists": False}}, {lc_key: None}]
     collect_result = await db.families.update_one(filter_cond, {"$set": {"rackets": rackets}, "$inc": {"treasury": income_final}})
     if collect_result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Racket on cooldown. Another collection likely just happened.")
