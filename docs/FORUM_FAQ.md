@@ -197,6 +197,40 @@ Lock cash for a fixed term; interest is a percentage of what you deposit (check 
 [*][color=#FFD700]THE most important bank - always keep money here![/color]
 [/list]
 
+[color=#2ECC71][b]Wealth ranks (cash on hand)[/b][/color]
+Your [b]wealth tier[/b] is separate from your [b]rank[/b] (the rank-points ladder). It is based only on [b]cash on hand[/b] (liquid wallet). Money in the [b]Swiss Bank[/b] does [b]not[/b] count. Cash you lock in the [b]Interest Bank[/b] is not in your wallet either, so it also does not count while locked. The game shows your tier on [b]Profile[/b] and [b]Dashboard[/b]; each tier is [b]color-coded[/b] in the UI (lower tiers = muted greys, higher tiers = greens, blues, violets, then golds).
+
+[i]You hold a tier when your cash on hand is at least the threshold below, until you reach the next threshold.[/i]
+
+[list]
+[*][color=#888888][b]1 — Broke[/b] — $0[/color]
+[*][color=#888888][b]2 — Bum[/b] — $1[/color]
+[*][color=#888888][b]3 — Very Poor[/b] — $50,000[/color]
+[*][color=#888888][b]4 — Poor[/b] — $200,000[/color]
+[*][color=#888888][b]5 — Rich[/b] — $500,000[/color]
+[*][color=#888888][b]6 — Millionaire[/b] — $1,000,000[/color]
+[*][color=#888888][b]7 — Extremely Rich[/b] — $2,000,000[/color]
+[*][color=#888888][b]8 — Fat Cat[/b] — $5,000,000[/color]
+[*][color=#888888][b]9 — Multi Millionaire[/b] — $10,000,000[/color]
+[*][color=#888888][b]10 — Big Hitter[/b] — $25,000,000[/color]
+[*][color=#888888][b]11 — Power Broker[/b] — $50,000,000[/color]
+[*][color=#888888][b]12 — Centimillionaire[/b] — $100,000,000[/color]
+[*][color=#888888][b]13 — Quarter Billionaire[/b] — $250,000,000[/color]
+[*][color=#888888][b]14 — Tycoon[/b] — $500,000,000[/color]
+[*][color=#888888][b]15 — Billionaire[/b] — $1,000,000,000[/color]
+[*][color=#888888][b]16 — Double Billionaire[/b] — $2,000,000,000[/color]
+[*][color=#888888][b]17 — Five-Billion Magnate[/b] — $5,000,000,000[/color]
+[*][color=#888888][b]18 — Multi Billionaire[/b] — $10,000,000,000[/color]
+[*][color=#888888][b]19 — Ultra Billionaire[/b] — $50,000,000,000[/color]
+[*][color=#888888][b]20 — Mega Billionaire[/b] — $100,000,000,000[/color]
+[*][color=#888888][b]21 — Quarter Trillionaire[/b] — $250,000,000,000[/color]
+[*][color=#888888][b]22 — Half Trillionaire[/b] — $500,000,000,000[/color]
+[*][color=#888888][b]23 — Trillionaire[/b] — $1,000,000,000,000[/color]
+[*][color=#888888][b]24 — Double Trillionaire[/b] — $2,000,000,000,000[/color]
+[*][color=#888888][b]25 — Grand Trillionaire[/b] — $5,000,000,000,000[/color]
+[*][color=#888888][b]26 — Multi Trillionaire[/b] — $10,000,000,000,000[/color]
+[/list]
+
 [color=#2ECC71][b]Daily global events[/b][/color]
 When enabled, the game runs a [b]game-wide daily modifier[/b] (examples: double rank points, kill cash, cheaper bodyguards, racket payouts — the exact mix rotates). Check the [b]dashboard banner / flash news ticker[/b] for today’s message; bonuses apply only while that event is active.
 
@@ -1207,6 +1241,9 @@ If someone used your card without permission:
 
 [color=#3498DB][b]Q: What's the Interest Bank vs Swiss Bank?[/b][/color]
 [color=#AAAAAA]A: Interest Bank pays interest but locks cash for your chosen term (3h–72h — see the Banks section above). Swiss Bank protects money when you die but pays no interest. USE SWISS BANK for savings you can't afford to lose![/color]
+
+[color=#3498DB][b]Q: What are wealth ranks?[/b][/color]
+[color=#AAAAAA]A: They are [b]26 cosmetic titles[/b] based on [b]cash on hand[/b] only — [b]not[/b] Swiss Bank, and not cash locked in the Interest Bank. Shown on Profile/Dashboard with tier colors. See [b]MONEY MAKING → Wealth ranks (cash on hand)[/b] above for every name and dollar threshold (source: [b]WEALTH_RANKS[/b] in the server config).[/color]
 
 [color=#3498DB][b]Q: How do I report a bug?[/b][/color]
 [color=#AAAAAA]A: Use the Help Desk forum category or message a staff member directly. Include screenshots if possible.[/color]
