@@ -52,11 +52,29 @@ CF_ZONE_ID = os.environ.get("CF_ZONE_ID", "")
 CF_API_TOKEN = os.environ.get("CF_API_TOKEN", "")
 
 # Mod-visible admin categories: which Admin Tool categories moderators can see (configurable by admin)
-MOD_VISIBLE_CATEGORY_IDS_DEFAULT = ["admin-cheat", "admin-logs", "admin-staff", "admin-mod-tools", "admin-moderation"]
+MOD_VISIBLE_CATEGORY_IDS_DEFAULT = [
+    "admin-operations",
+    "admin-analytics-monitoring",
+    "admin-world-systems",
+]
 ADMIN_CATEGORY_IDS = {
-    "admin-players", "admin-moderation", "admin-donations", "admin-gameworld", "admin-security",
-    "admin-cheat", "admin-analytics", "admin-logs", "admin-testing", "admin-quick",
-    "admin-database", "admin-staff", "admin-mod-tools",
+    "admin-players",
+    "admin-moderation",
+    "admin-donations",
+    "admin-gameworld",
+    "admin-security",
+    "admin-cheat",
+    "admin-analytics",
+    "admin-logs",
+    "admin-testing",
+    "admin-quick",
+    "admin-database",
+    "admin-staff",
+    "admin-mod-tools",
+    "admin-operations",
+    "admin-economy-progression",
+    "admin-world-systems",
+    "admin-analytics-monitoring",
 }
 
 
@@ -3649,9 +3667,12 @@ def register(router):
             doc = await db.game_settings.find_one({"key": "mod_visible_category_ids"}, {"_id": 0, "value": 1})
             raw = doc.get("value") if doc else None
             if isinstance(raw, list) and raw and all(isinstance(x, str) and x in ADMIN_CATEGORY_IDS for x in raw):
-                out["mod_visible_category_ids"] = raw
+                merged = list(raw)
+                if "admin-world-systems" not in merged:
+                    merged.append("admin-world-systems")
+                out["mod_visible_category_ids"] = merged
             else:
-                out["mod_visible_category_ids"] = MOD_VISIBLE_CATEGORY_IDS_DEFAULT
+                out["mod_visible_category_ids"] = list(MOD_VISIBLE_CATEGORY_IDS_DEFAULT)
         return out
 
     @router.get("/admin/moderators")
@@ -3992,7 +4013,7 @@ def register(router):
         if isinstance(raw_mod_cats, list) and raw_mod_cats and all(isinstance(x, str) and x in ADMIN_CATEGORY_IDS for x in raw_mod_cats):
             mod_visible_category_ids = raw_mod_cats
         else:
-            mod_visible_category_ids = MOD_VISIBLE_CATEGORY_IDS_DEFAULT
+            mod_visible_category_ids = list(MOD_VISIBLE_CATEGORY_IDS_DEFAULT)
         return {
             "admin_online_color": admin_online_color.strip(),
             "mod_default_online_color": mod_default_online_color.strip(),

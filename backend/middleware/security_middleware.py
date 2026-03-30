@@ -11,11 +11,12 @@ from urllib.parse import urlencode
 import random
 from jose import jwt, JWTError
 
-from utils.ip_normalize import normalize_ip_string
+from utils.ip_ban_check import client_ip_from_request, json_response_if_ip_banned
 
 logger = logging.getLogger(__name__)
 
-# Master toggle - when False the entire security middleware is bypassed (off by default)
+# When False: skip spam / duplicate-request / per-endpoint rate limits only.
+# IP bans (ip_bans collection) are always enforced so admin bans take effect in production.
 SECURITY_MIDDLEWARE_ENABLED = False
 
 # Track consecutive 429 hits per user for escalating cooldowns (10-30s)
@@ -64,66 +65,20 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         return hashlib.md5(raw.encode()).hexdigest()[:16]
 
     def _client_ip(self, request: Request) -> str:
-        # Cloudflare provides real IP in CF-Connecting-IP
-        cf_ip = request.headers.get("cf-connecting-ip")
-        if cf_ip:
-            n = normalize_ip_string(cf_ip)
-            if n:
-                return n
-        # Fallback to X-Forwarded-For (nginx or other proxies)
-        forwarded = request.headers.get("x-forwarded-for")
-        if forwarded:
-            n = normalize_ip_string(forwarded)
-            if n:
-                return n
-        if request.client:
-            return normalize_ip_string(request.client.host or "") or ""
-        return ""
+        return client_ip_from_request(request)
 
     async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+        client_ip = self._client_ip(request)
+        # IP ban: always on (not gated by SECURITY_MIDDLEWARE_ENABLED). No path whitelist.
+        blocked = await json_response_if_ip_banned(self.db, client_ip)
+        if blocked is not None:
+            return blocked
+
         if not SECURITY_MIDDLEWARE_ENABLED:
             return await call_next(request)
 
-        path = request.url.path
-        # IP ban: blocked from accessing the server at all (checked first, no path skip)
-        client_ip = self._client_ip(request)
-        if client_ip:
-            try:
-                ban = await self.db.ip_bans.find_one(
-                    {"ip": client_ip, "active": True},
-                    {"_id": 0, "expires_at": 1},
-                )
-                if ban:
-                    expires_at = ban.get("expires_at")
-                    if expires_at:
-                        try:
-                            exp = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
-                            if exp.tzinfo is None:
-                                exp = exp.replace(tzinfo=timezone.utc)
-                            if datetime.now(timezone.utc) >= exp:
-                                await self.db.ip_bans.update_many(
-                                    {"ip": client_ip, "active": True},
-                                    {"$set": {"active": False}},
-                                )
-                            else:
-                                return JSONResponse(
-                                    status_code=403,
-                                    content={"detail": "Your IP has been banned from this server."},
-                                )
-                        except Exception:
-                            return JSONResponse(
-                                status_code=403,
-                                content={"detail": "Your IP has been banned from this server."},
-                            )
-                    else:
-                        return JSONResponse(
-                            status_code=403,
-                            content={"detail": "Your IP has been banned from this server."},
-                        )
-            except Exception as e:
-                logger.warning("IP ban check failed: %s", e)
-
-        # Skip security checks for certain paths
+        # Skip spam / rate-limit for certain paths (IP ban already applied above)
         # Exact matches for root/docs (avoid "/" matching everything via startswith)
         _skip_exact = {"/", "/docs", "/openapi.json"}
         _skip_prefix = [

@@ -27,6 +27,14 @@ export default function LockedPage() {
         }
       } catch (e) {
         if (cancelled) return;
+        const detail = e.response?.data?.detail;
+        const detailStr = typeof detail === 'string' ? detail : '';
+        // IP ban is enforced before account_locked; leave locked page so user is not stuck in a loop.
+        if (e.response?.status === 403 && /IP has been banned|banned from this server/i.test(detailStr)) {
+          localStorage.removeItem('token');
+          window.location.replace('/');
+          return;
+        }
         if (e.response?.status === 403) {
           navigate('/locked', { replace: true });
           return;

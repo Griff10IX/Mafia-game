@@ -18,6 +18,7 @@ from typing import List, Optional, Dict, Union
 import uuid
 from datetime import datetime, timezone, timedelta
 from utils.ban_user_wipe import user_has_active_account_ban
+from utils.ip_ban_check import raise_http_if_ip_banned
 from utils.game_pass_micro_rewards import (
     micro_tier_from_rank_points,
     rewards_for_micro_tier,
@@ -219,11 +220,25 @@ WEALTH_RANKS = [
     {"id": 5, "name": "Rich", "min_money": 500_000},
     {"id": 6, "name": "Millionaire", "min_money": 1_000_000},
     {"id": 7, "name": "Extremely Rich", "min_money": 2_000_000},
-    {"id": 8, "name": "Multi Millionaire", "min_money": 10_000_000},
-    {"id": 9, "name": "Billionaire", "min_money": 1_000_000_000},
-    {"id": 10, "name": "Multi Billionaire", "min_money": 10_000_000_000},
-    {"id": 11, "name": "Trillionaire", "min_money": 1_000_000_000_000},
-    {"id": 12, "name": "Multi Trillionaire", "min_money": 10_000_000_000_000},
+    {"id": 8, "name": "Fat Cat", "min_money": 5_000_000},
+    {"id": 9, "name": "Multi Millionaire", "min_money": 10_000_000},
+    {"id": 10, "name": "Big Hitter", "min_money": 25_000_000},
+    {"id": 11, "name": "Power Broker", "min_money": 50_000_000},
+    {"id": 12, "name": "Centimillionaire", "min_money": 100_000_000},
+    {"id": 13, "name": "Quarter Billionaire", "min_money": 250_000_000},
+    {"id": 14, "name": "Tycoon", "min_money": 500_000_000},
+    {"id": 15, "name": "Billionaire", "min_money": 1_000_000_000},
+    {"id": 16, "name": "Double Billionaire", "min_money": 2_000_000_000},
+    {"id": 17, "name": "Five-Billion Magnate", "min_money": 5_000_000_000},
+    {"id": 18, "name": "Multi Billionaire", "min_money": 10_000_000_000},
+    {"id": 19, "name": "Ultra Billionaire", "min_money": 50_000_000_000},
+    {"id": 20, "name": "Mega Billionaire", "min_money": 100_000_000_000},
+    {"id": 21, "name": "Quarter Trillionaire", "min_money": 250_000_000_000},
+    {"id": 22, "name": "Half Trillionaire", "min_money": 500_000_000_000},
+    {"id": 23, "name": "Trillionaire", "min_money": 1_000_000_000_000},
+    {"id": 24, "name": "Double Trillionaire", "min_money": 2_000_000_000_000},
+    {"id": 25, "name": "Grand Trillionaire", "min_money": 5_000_000_000_000},
+    {"id": 26, "name": "Multi Trillionaire", "min_money": 10_000_000_000_000},
 ]
 
 # Banking
@@ -847,7 +862,10 @@ async def get_current_user(
     except JWTError:
         _log_auth_failure(user_id, 401, "Invalid or expired token")
         raise HTTPException(status_code=401, detail="Invalid authentication credentials")
-    
+
+    # Before user load / account_locked whitelist: IP ban must win over "investigation" locked messaging.
+    await raise_http_if_ip_banned(db, request)
+
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if user is None:
         _log_auth_failure(user_id, 401, "User not found")
