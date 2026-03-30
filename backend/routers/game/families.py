@@ -1528,19 +1528,27 @@ async def families_kick(request: FamilyKickRequest, current_user: dict = Depends
 
 
 async def families_assign_role(request: FamilyRoleRequest, current_user: dict = Depends(get_current_user)):
-    if current_user.get("family_role") != "boss":
-        raise HTTPException(status_code=403, detail="Only Boss can assign roles")
+    my_role = (current_user.get("family_role") or "").strip().lower()
+    if my_role not in ("boss", "underboss"):
+        raise HTTPException(status_code=403, detail="Only Boss or Underboss can assign roles")
     family_id = current_user.get("family_id")
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
     if request.role not in FAMILY_ROLES:
         raise HTTPException(status_code=400, detail="Invalid role")
-    # Only the current boss can assign the boss role (transfer leadership)
-    if request.role == "boss" and current_user.get("family_role") != "boss":
+    # Only the Don can transfer leadership (assign boss)
+    if request.role == "boss" and my_role != "boss":
         raise HTTPException(status_code=400, detail="Only the Don can transfer leadership")
     member = await db.family_members.find_one({"family_id": family_id, "user_id": request.user_id}, {"_id": 0})
     if not member:
         raise HTTPException(status_code=404, detail="Member not found")
+    target_role = (member.get("role") or "").strip().lower()
+    # Underboss can only manage capo / soldier / associate ranks (not Don, Underboss, or Consigliere)
+    if my_role == "underboss":
+        if request.role in ("boss", "underboss", "consigliere"):
+            raise HTTPException(status_code=403, detail="Only the Don can assign that rank")
+        if target_role in ("boss", "underboss", "consigliere"):
+            raise HTTPException(status_code=403, detail="Only the Don can change that member's rank")
     counts = await db.family_members.aggregate([
         {"$match": {"family_id": family_id}},
         {"$group": {"_id": "$role", "c": {"$sum": 1}}},

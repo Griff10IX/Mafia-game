@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Users, Building2, DollarSign, TrendingUp, TrendingDown, LogOut, Swords, Trophy, Shield, Skull, X, Crosshair, RefreshCw, Clock, ChevronRight, MessageSquare, UserPlus, Lock, Unlock, ArrowUpCircle, Flame, MapPin } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
@@ -696,6 +696,21 @@ const RosterTab = ({
     }
   };
 
+  const isDon = (myRole || '').toLowerCase() === 'boss';
+  const assignableRoleKeys = useMemo(
+    () => (isDon ? (config?.roles || []) : ['capo', 'soldier', 'associate']),
+    [isDon, config?.roles],
+  );
+  const assignableMembers = useMemo(() => members.filter((m) => {
+    if (m.role === 'boss') return false;
+    if (!isDon && ['underboss', 'consigliere'].includes(m.role)) return false;
+    return true;
+  }), [members, isDon]);
+
+  useEffect(() => {
+    setAssignRole((r) => (assignableRoleKeys.includes(r) ? r : (assignableRoleKeys[0] || 'associate')));
+  }, [assignableRoleKeys]);
+
   const sorted = [...members].sort((a, b) => (getRoleConfig(a.role).rank ?? 5) - (getRoleConfig(b.role).rank ?? 5));
 
   return (
@@ -736,14 +751,19 @@ const RosterTab = ({
         })}
       </div>
       
-      {/* Assign Role */}
-      {myRole === 'boss' && (
+      {/* Assign Rank — Don: full roster; Underboss: capo / soldier / associate only */}
+      {canManage && (
         <div className="pt-3 border-t border-zinc-700/30">
-          <p className="text-[9px] text-zinc-500 font-heading uppercase tracking-[0.2em] mb-2">Assign Rank</p>
+          <p className="text-[9px] text-zinc-500 font-heading uppercase tracking-[0.2em] mb-1">Assign Rank</p>
+          {!isDon && (
+            <p className="text-[8px] text-zinc-600 font-heading mb-2 leading-relaxed">
+              As Underboss you can set Capo, Soldier, and Associate. Don, Underboss, and Consigliere are set by the Don only.
+            </p>
+          )}
           <form onSubmit={handleAssign} className="flex flex-wrap gap-2">
             <select value={assignRole} onChange={(e) => setAssignRole(e.target.value)}
               className="bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-2 py-1.5 text-[10px] text-foreground font-heading focus:border-primary/50 focus:outline-none">
-              {(config?.roles || []).map((role) => (
+              {assignableRoleKeys.map((role) => (
                 <option key={role} value={role}>
                   {role === 'boss' ? 'Don (transfer family)' : getRoleConfig(role).label}
                 </option>
@@ -752,7 +772,7 @@ const RosterTab = ({
             <select value={assignUserId} onChange={(e) => setAssignUserId(e.target.value)}
               className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-2 py-1.5 text-[10px] text-foreground font-heading focus:border-primary/50 focus:outline-none min-w-[80px]">
               <option value="">Member...</option>
-              {members.filter((m) => m.role !== 'boss').map((m) => <option key={m.user_id} value={m.user_id}>{m.username}</option>)}
+              {assignableMembers.map((m) => <option key={m.user_id} value={m.user_id}>{m.username}</option>)}
             </select>
             <button type="submit" className="px-3 py-1.5 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 transition-all">
               Assign
