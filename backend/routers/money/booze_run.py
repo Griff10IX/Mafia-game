@@ -85,7 +85,11 @@ _booze_jail_max_override: Optional[float] = None
 # Persisted in game_settings _id=booze_run_globals; loaded at server startup.
 BOOZE_GLOBALS_DOC_ID = "booze_run_globals"
 BOOZE_LISTED_PRICE_MULT_MIN = 0.01  # up to 99% off vs full rotation prices
-BOOZE_LISTED_PRICE_MULT_MAX = 1.0
+# Above 1.0 = premium vs rotation baseline (e.g. 1.1 = +10%). Capped for safety.
+BOOZE_LISTED_PRICE_MULT_MAX = 1.5
+# Nudge math uses "percent off" (positive = discount). Negative = premium above baseline; cap matches mult max.
+BOOZE_LISTED_PREMIUM_MAX_PCT = (BOOZE_LISTED_PRICE_MULT_MAX - 1.0) * 100.0  # 50 → mult ≤ 1.5
+BOOZE_LISTED_DISCOUNT_MAX_PCT = 99.0
 _booze_listed_price_mult: float = 1.0
 
 
@@ -107,7 +111,10 @@ async def load_booze_globals_from_db():
     """Restore listed_price_mult after process restart."""
     global _booze_listed_price_mult
     try:
-        doc = await db.game_settings.find_one({"_id": BOOZE_GLOBALS_DOC_ID}, {"_id": 0, "listed_price_mult": 1})
+        doc = await db.game_settings.find_one(
+            {"$or": [{"_id": BOOZE_GLOBALS_DOC_ID}, {"key": BOOZE_GLOBALS_DOC_ID}]},
+            {"_id": 0, "listed_price_mult": 1},
+        )
         if doc and doc.get("listed_price_mult") is not None:
             _booze_listed_price_mult = float(doc["listed_price_mult"])
     except Exception:
@@ -755,6 +762,7 @@ async def admin_get_booze_listed_price(current_user: dict = Depends(get_current_
     return {
         "listed_price_mult": m,
         "percent_off": round((1.0 - m) * 100.0, 4) if m < 1.0 else 0.0,
+        "percent_premium": round((m - 1.0) * 100.0, 4) if m > 1.0 else 0.0,
         "min_mult": BOOZE_LISTED_PRICE_MULT_MIN,
         "max_mult": BOOZE_LISTED_PRICE_MULT_MAX,
     }
@@ -771,7 +779,8 @@ async def admin_set_booze_listed_price(request: AdminBoozeListedPriceRequest, cu
         cur = get_booze_listed_price_mult()
         cur_pct = (1.0 - cur) * 100.0
         new_pct = cur_pct + d
-        new_pct = max(0.0, min(99.0, new_pct))
+        # Negative percent_off = premium above rotation (e.g. −1 → mult 1.01). Was clamped at 0, so +1% nudge did nothing at full price.
+        new_pct = max(-BOOZE_LISTED_PREMIUM_MAX_PCT, min(BOOZE_LISTED_DISCOUNT_MAX_PCT, new_pct))
         mult = 1.0 - new_pct / 100.0
     elif request.percent_off is not None:
         po = float(request.percent_off)
@@ -795,12 +804,20 @@ async def admin_set_booze_listed_price(request: AdminBoozeListedPriceRequest, cu
     now_iso = datetime.now(timezone.utc).isoformat()
     await db.game_settings.update_one(
         {"_id": BOOZE_GLOBALS_DOC_ID},
-        {"$set": {"listed_price_mult": mult, "updated_at": now_iso}},
+        {
+            "$set": {
+                "listed_price_mult": mult,
+                "updated_at": now_iso,
+                # Stable key for game_settings (sparse unique index on key allows _id-only docs; this doc is keyed)
+                "key": BOOZE_GLOBALS_DOC_ID,
+            }
+        },
         upsert=True,
     )
     _invalidate_all_booze_config_cache()
-    pct = round((1.0 - mult) * 100.0, 4) if mult < 1.0 else 0.0
-    log_extra = {"listed_price_mult": mult, "percent_off": pct}
+    pct_off = round((1.0 - mult) * 100.0, 4) if mult < 1.0 else 0.0
+    pct_prem = round((mult - 1.0) * 100.0, 4) if mult > 1.0 else 0.0
+    log_extra = {"listed_price_mult": mult, "percent_off": pct_off, "percent_premium": pct_prem}
     if request.delta_percent_off is not None:
         log_extra["delta_percent_off"] = float(request.delta_percent_off)
     await log_activity(
@@ -812,7 +829,8 @@ async def admin_set_booze_listed_price(request: AdminBoozeListedPriceRequest, cu
     return {
         "message": "Booze listed prices updated (applies to all locations this rotation).",
         "listed_price_mult": mult,
-        "percent_off": pct,
+        "percent_off": pct_off,
+        "percent_premium": pct_prem,
     }
 
 

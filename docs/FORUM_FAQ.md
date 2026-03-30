@@ -705,7 +705,7 @@ Family-based running game:
 [/list]
 
 [color=#00BCD4][b]Famiglia (Mafia RPG)[/b][/color]
-Top-down Chicago-map mini-RPG: missions, respect, street work — submit a session to record your run. The server scores your session (respect, missions done, lifetime cash earned in-run) for weekly mini-game points and a small cash payout; [b]up to 8 session submits per rolling hour[/b] per account ([i]backend/routers/minigames/mafia_rpg.py[/i]).
+Top-down Chicago-map mini-RPG: missions, respect, street work — submit a session to record your run. The server scores your session (respect, missions done, lifetime cash earned in-run) for weekly mini-game points and a small cash payout; [b]up to 8 session submits per rolling hour[/b] per account.
 
 [color=#00BCD4][b]Mini-Games Leaderboard[/b][/color]
 Combined weekly points from the mini-games that count toward the leaderboard (listed in-game):
@@ -836,10 +836,10 @@ Collect loot box pieces to open a box (piece cost is shown in-game). Pieces drop
 [*][color=#888888]OC Timer Reduction (300 pts) — one-time: personal OC cooldown [b]6h → 4h[/b][/color]
 [*][color=#888888]Crew OC Timer (350 pts) — one-time: family Crew OC [b]8h → 6h[/b][/color]
 [*][color=#888888]Custom Car (500 pts) - Design your own unique car[/color]
-[*][color=#888888]Garage batch limit — [b]75 pts[/b] per +[b]10[/b] cars per melt/scrap batch (cap [b]100[/b]; starts at [b]6[/b]; [i]GARAGE_BATCH_UPGRADE_COST[/i] in [i]server.py[/i])[/color]
+[*][color=#888888]Garage batch limit — [b]75 pts[/b] per +[b]10[/b] cars per melt/scrap batch (cap [b]100[/b]; starts at [b]6[/b])[/color]
 [*][color=#888888]Username changes are [b]not[/b] sold in the Point Store — ask staff / Help Desk if a rename is offered[/color]
 [*][color=#888888]Extra bodyguard slots — buy on the [b]Bodyguards[/b] screen ([b]75 / 150 / 300 / 450[/b] pts per unlock; [b]max 4[/b] filled at once, robots and/or humans — see [b]COMBAT → Bodyguards[/b])[/color]
-[*][color=#888888]Booze Capacity Upgrade ([b]100 pts[/b] per purchase from Store) — +[b]100[/b] carry capacity each time, up to +[b]1000[/b] bonus cap (see Store / Booze screens; [i]BOOZE_CAPACITY_UPGRADE_COST[/i] in [i]booze_run.py[/i])[/color]
+[*][color=#888888]Booze Capacity Upgrade ([b]100 pts[/b] per purchase from Store) — +[b]100[/b] carry capacity each time, up to +[b]1000[/b] bonus cap (see Store / Booze screens)[/color]
 [*][color=#888888]Premium Rank Bar (50 pts)[/color] - Enhanced rank display on profile
 [/list]
 
@@ -918,14 +918,14 @@ Community discussion boards:
 [list]
 [*][color=#888888]Use the [b]pre-register[/b] page before launch to reserve interest with your email and see the current reward bundle in the UI.[/color]
 [*][color=#2ECC71][b]Founding Member badge[/b] — shown on your profile for bragging rights; it also gates the founding passive bonus below (if you lose the badge, that bonus no longer applies).[/color]
-[*][color=#888888][b]Launch-day bundle[/b] — bonus [b]points[/b] and [b]cash[/b] on first login after launch (exact amounts are shown on the pre-register page and may be tuned — see [b]backend/routers/account/auth.py[/b] → [b]PREREGISTER_REWARDS[/b]).[/color]
-[*][color=#888888][b]Permanent founding passive:[/b] about [b]+2.5%[/b] extra on crime payouts (cash, rank points & respect), GTA car sale value & rare-car luck, OC heist payouts, hitlist NPC rewards, property income, family racket collects, and mission rewards — [b]while you have the Founding Member badge[/b]. Server multiplier: [b]founding_member_income_mult[/b] in [b]server.py[/b].[/color]
+[*][color=#888888][b]Launch-day bundle[/b] — bonus [b]points[/b] and [b]cash[/b] on first login after launch (exact amounts are shown on the pre-register page and may be tuned).[/color]
+[*][color=#888888][b]Permanent founding passive:[/b] about [b]+2.5%[/b] extra on crime payouts (cash, rank points & respect), GTA car sale value & rare-car luck, OC heist payouts, hitlist NPC rewards, property income, family racket collects, and mission rewards — [b]while you have the Founding Member badge[/b].[/color]
 [/list]
 
 [color=#1ABC9C][b]Inbox & notifications[/b][/color]
 [list]
 [*][color=#888888]Open [b]Social → Inbox[/b] for system alerts, rank-ups, attacks, forum pings, and [b]direct messages[/b] in one place.[/color]
-[*][color=#888888][b]Retention (auto-cleanup):[/b] items you have [b]marked read[/b] are removed after [b]5 days[/b] (from when they were read). Items left [b]unread[/b] are removed after about [b]60 days[/b]. This keeps the database healthy — copy anything you need to keep. Constants: [b]READ_NOTIFICATION_RETENTION_DAYS[/b], [b]UNREAD_NOTIFICATION_RETENTION_DAYS[/b] in [b]backend/routers/game/notifications.py[/b].[/color]
+[*][color=#888888][b]Retention (auto-cleanup):[/b] items you have [b]marked read[/b] are removed after [b]5 days[/b] (from when they were read). Items left [b]unread[/b] are removed after about [b]60 days[/b]. This keeps the database healthy — copy anything you need to keep.[/color]
 [/list]
 
 [color=#1ABC9C][b]Direct Messages[/b][/color]
@@ -1230,7 +1230,7 @@ If someone used your card without permission:
 [color=#AAAAAA]A: After reaching Godfather (top of the 13-rank ladder), you can Prestige up to 5 times for permanent bonuses — stronger crime/OC/NPC/illegal-business payouts, GTA rare-car luck, mission redo scaling, and exclusive Prestige Crimes. See the Prestige screen for exact numbers.[/color]
 
 [color=#3498DB][b]Q: What are Daily Rewards?[/b][/color]
-[color=#AAAAAA]A: [b]Rock Paper Scissors[/b] and [b]Noughts & Crosses[/b] vs the house. You get [b]up to 3 plays per rolling 6-hour window[/b] (shared across both games). Wins pay cash and sometimes cars (see [i]daily_rewards.py[/i]).[/color]
+[color=#AAAAAA]A: [b]Rock Paper Scissors[/b] and [b]Noughts & Crosses[/b] vs the house. You get [b]up to 3 plays per rolling 6-hour window[/b] (shared across both games). Wins pay cash and sometimes cars (see the Daily Rewards screen).[/color]
 
 [color=#3498DB][b]Q: How do I own a casino table or airport slot?[/b][/color]
 [color=#AAAAAA]A: Kill the current owner! Casino tables and airport slots transfer to whoever kills the owner. Great passive income source.[/color]

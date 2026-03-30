@@ -27,7 +27,12 @@ async def ensure_all_indexes(db):
         except Exception:
             pass
         await db.game_config.create_index([("key", 1)], unique=True, sparse=True)
-        await db.game_settings.create_index("key", unique=True)
+        # Sparse: docs like _id "main" / "booze_run_globals" have no "key"; non-sparse unique would only allow one null key (breaks booze listed-price upsert).
+        try:
+            await db.game_settings.drop_index("key_1")
+        except Exception:
+            pass
+        await db.game_settings.create_index([("key", 1)], unique=True, sparse=True)
         await db.captcha_turnstile_failures.create_index([("at", -1)])
         await db.captcha_turnstile_failures.create_index([("user_id", 1), ("at", -1)])
 

@@ -627,7 +627,7 @@ const ProfileInfoCard = ({
                     ref={bannerTextareaRef}
                     value={editText ?? ''}
                     onChange={(e) => onEditTextChange?.(e.target.value)}
-                    placeholder="Write your profile text... [b]bold[/b], [i]italic[/i], [center]centered[/center], [color=red]colour[/color], [img]url[/img], [url]link[/url], :) smileys"
+                    placeholder="Write your profile text... [b]bold[/b], [i]italic[/i], [center]centered[/center], [color=red]colour[/color], [img]url[/img] (direct image or ImgBB short link), [url]link[/url], :) smileys"
                     rows={6}
                     className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-[11px] md:text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-y font-mono leading-relaxed"
                   />
@@ -636,7 +636,7 @@ const ProfileInfoCard = ({
                     <button type="button" onClick={() => onInsertBannerMarkup?.('[i]', '[/i]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Italic"><Italic size={14} /></button>
                     <button type="button" onClick={() => onInsertBannerMarkup?.('[center]', '[/center]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Center"><AlignCenter size={14} /></button>
                     <button type="button" onClick={() => onInsertBannerMarkup?.('[color=#eab308]', '[/color]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Colour"><Palette size={14} /></button>
-                    <button type="button" onClick={() => { const u = window.prompt('Image URL (http/https):'); if (u && u.trim()) onInsertBannerMarkup?.('[img]' + u.trim() + '[/img]'); }} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Image"><Image size={14} /></button>
+                    <button type="button" onClick={() => { const u = window.prompt('Image URL (direct file, or ImgBB page link https://ibb.co/…):'); if (u && u.trim()) onInsertBannerMarkup?.('[img]' + u.trim() + '[/img]'); }} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Insert image — ImgBB short links are converted on save"><Image size={14} /></button>
                     <button type="button" onClick={() => { const u = window.prompt('YouTube URL or video ID:'); if (u && u.trim()) onInsertBannerMarkup?.('[ytube]' + u.trim() + '[/ytube]'); }} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="YouTube"><Youtube size={14} /></button>
                   </div>
                 </div>
@@ -1666,7 +1666,7 @@ export default function Profile() {
                   ref={bannerTextareaRef}
                   value={bannerTextEdit}
                   onChange={(e) => setBannerTextEdit(e.target.value)}
-                  placeholder="Write your profile text... [b]bold[/b], [i]italic[/i], [center]centered[/center], [color=red]colour[/color], [img]url[/img], [url]link[/url], :) smileys"
+                  placeholder="Write your profile text... [b]bold[/b], [i]italic[/i], [center]centered[/center], [color=red]colour[/color], [img]url[/img] (direct image or ImgBB short link), [url]link[/url], :) smileys"
                   rows={12}
                   className="w-full px-3 py-2 rounded-md bg-secondary border border-border text-[11px] md:text-sm text-foreground placeholder:text-mutedForeground focus:outline-none focus:ring-2 focus:ring-primary/50 resize-y font-mono leading-relaxed"
                 />
@@ -1675,7 +1675,7 @@ export default function Profile() {
                   <button type="button" onClick={() => insertBannerMarkup('[i]', '[/i]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Italic"><Italic size={14} /></button>
                   <button type="button" onClick={() => insertBannerMarkup('[center]', '[/center]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Center"><AlignCenter size={14} /></button>
                   <button type="button" onClick={() => insertBannerMarkup('[color=#eab308]', '[/color]')} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Colour"><Palette size={14} /></button>
-                  <button type="button" onClick={() => { const u = window.prompt('Image URL (http/https):'); if (u && u.trim()) insertBannerMarkup('[img]' + u.trim() + '[/img]'); }} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Image"><Image size={14} /></button>
+                  <button type="button" onClick={() => { const u = window.prompt('Image URL (direct file, or ImgBB page link https://ibb.co/…):'); if (u && u.trim()) insertBannerMarkup('[img]' + u.trim() + '[/img]'); }} className="p-1.5 rounded border border-zinc-700/50 text-mutedForeground hover:text-foreground hover:bg-primary/10" title="Insert image — ImgBB short links are converted on save"><Image size={14} /></button>
                 </div>
                 <button
                   type="button"

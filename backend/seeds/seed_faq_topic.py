@@ -32,20 +32,18 @@ FAQ_TITLE = "FAQs"
 FAQ_MD_PATH = PROJECT_ROOT / "docs" / "FORUM_FAQ.md"
 FAQ_MD_PATH_LEGACY = PROJECT_ROOT / "FORUM_FAQ.md"
 
-FALLBACK_FAQ_CONTENT = """[b]NOTE:[/b] This text is only used if [i]FORUM_FAQ.md[/i] is missing from the project root when you run this seed script. The real FAQ lives in [b]docs/FORUM_FAQ.md[/b] — fix the path and re-seed.
+FALLBACK_FAQ_CONTENT = """[b]NOTE (operators):[/b] Used only if [i]docs/FORUM_FAQ.md[/i] is missing when seeding. Restore that file and re-run the FAQ update.
 
-[b]Verified snapshot (still read code / in-game UI for live values):[/b]
-• Cities ([b]STATES[/b]): Chicago, New York, Las Vegas, Atlantic City.
-• Ranks / RP: see [b]backend/server.py[/b] → [b]RANKS[/b] (13 ranks; Godfather at 1.02M RP).
-• Interest bank %: see [b]BANK_INTEREST_OPTIONS[/b] in [b]server.py[/b].
-• Personal OC cooldown: 6h → 4h after one-time store purchase ([b]oc.py[/b] / store).
-• GTA locations & cooldowns: [b]backend/routers/cars/gta.py[/b] → [b]GTA_OPTIONS[/b].
-• Booze: [b]booze_run.py[/b] → [b]BOOZE_TYPES[/b], jail chance 2.5–6.5% per buy/sell, 20s jail.
-• Bodyguards: up to 4 slots; robot hire; slot purchases [b]75/150/300/450[/b] pts — [b]bodyguards.py[/b].
-• Dead > Alive: ~99.95% of dead account cash/points at death to a new account (password); tokens partial restore — [b]dead_alive.py[/b].
-• Mini-game weekly LB: Monday UTC week start, top 5 rewards — [b]minigame_leaderboard.py[/b].
-
-For the full BBCode FAQ, open [b]docs/FORUM_FAQ.md[/b] in the repo.
+[b]Short snapshot[/b] — players should rely on in-game screens for live numbers:
+• Cities: Chicago, New York, Las Vegas, Atlantic City.
+• Ranks: 13 ranks; Godfather at about 1.02M rank points.
+• Interest bank: current terms on the bank screen.
+• Personal OC cooldown: [b]6h[/b], or [b]4h[/b] after a one-time Point Store purchase.
+• GTA: locations, cooldowns, and rates shown in-game.
+• Booze: jail chance about 2.5–6.5% per buy/sell when caught; short jail.
+• Bodyguards: up to 4 slots; robot hire; slot purchases [b]75 / 150 / 300 / 450[/b] pts.
+• Dead > Alive: about [b]99.95%[/b] of dead account cash/points at death to a new account (password); token restore rules on the in-game pages.
+• Mini-game weekly leaderboard: Monday [b]00:00 UTC[/b] week start; top [b]5[/b] earn rewards (see leaderboard).
 """
 
 

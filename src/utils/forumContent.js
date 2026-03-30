@@ -6,6 +6,47 @@
 
 const ALLOWED_URL_PREFIX = /^https?:\/\//i;
 
+/**
+ * Normalize user-pasted URLs for [img], [url], [gif], [ytube].
+ * Only http(s) are emitted; blocks javascript:, data:, etc.
+ * Accepts protocol-relative //host/… and bare www. / domain.tld / localhost so
+ * pasted links work without manually adding https://.
+ */
+function safeUrl(url) {
+  const raw = (url || '').trim();
+  if (!raw) return '';
+  if (ALLOWED_URL_PREFIX.test(raw)) return raw;
+
+  // Protocol-relative: //cdn.example.com/foo → https
+  if (raw.startsWith('//') && /^\/\/[a-zA-Z0-9._-]/.test(raw)) {
+    try {
+      const u = new URL('https:' + raw);
+      if (u.protocol === 'http:' || u.protocol === 'https:') return u.href;
+    } catch {
+      /* ignore */
+    }
+    return '';
+  }
+
+  // Already has some scheme (javascript:, data:, mailto:, etc.) — reject
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(raw)) return '';
+
+  const looksLikeHost =
+    /^www\./i.test(raw) ||
+    /^localhost(\:\d+)?(\/|$)/i.test(raw) ||
+    /^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?(\.[a-zA-Z0-9-]+)*\.[a-zA-Z]{2,}(\/|$)/.test(raw);
+
+  if (looksLikeHost) {
+    try {
+      const u = new URL('https://' + raw.replace(/^\/+/, ''));
+      if (u.protocol === 'http:' || u.protocol === 'https:') return u.href;
+    } catch {
+      /* ignore */
+    }
+  }
+  return '';
+}
+
 function escapeHtml(s) {
   if (typeof s !== 'string') return '';
   return s
@@ -18,11 +59,6 @@ function escapeHtml(s) {
 function escapeAttr(s) {
   if (typeof s !== 'string') return '';
   return s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
-
-function safeUrl(url) {
-  const u = (url || '').trim();
-  return ALLOWED_URL_PREFIX.test(u) ? u : '';
 }
 
 function getYoutubeVideoId(urlOrId) {

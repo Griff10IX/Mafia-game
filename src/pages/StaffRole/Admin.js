@@ -1199,10 +1199,14 @@ export default function Admin() {
     setBoozePriceSaving(true);
     try {
       const res = await api.post('/admin/booze-listed-price', { delta_percent_off: delta });
-      const pct = res.data?.percent_off;
-      const label = pct != null && Number(pct) > 0
-        ? `Now ${Number(pct).toFixed(2).replace(/\.?0+$/, '')}% off listed prices`
-        : 'Full listed prices (no global discount)';
+      const prem = res.data?.percent_premium;
+      const off = res.data?.percent_off;
+      let label = 'Full listed prices (no discount / premium)';
+      if (prem != null && Number(prem) > 0) {
+        label = `Listed +${Number(prem).toFixed(2).replace(/\.?0+$/, '')}% vs rotation baseline`;
+      } else if (off != null && Number(off) > 0) {
+        label = `Now ${Number(off).toFixed(2).replace(/\.?0+$/, '')}% off listed prices`;
+      }
       toast.success(label);
       await fetchBoozeListedPrice();
     } catch (e) {
@@ -6917,6 +6921,11 @@ export default function Admin() {
                   −{Number(boozeListedPrice.percent_off).toFixed(1).replace(/\.0$/, '')}% global
                 </span>
               )}
+              {boozeListedPrice != null && Number(boozeListedPrice.percent_premium) > 0 && (
+                <span className="text-amber-400 font-bold whitespace-nowrap">
+                  +{Number(boozeListedPrice.percent_premium).toFixed(1).replace(/\.0$/, '')}% vs base
+                </span>
+              )}
             </span>
           }
           isCollapsed={collapsed.boozeRun}
@@ -6942,13 +6951,16 @@ export default function Admin() {
                 Nudge the <strong className="text-foreground/90">global discount</strong> on rotation buy/sell listed prices (all cities &amp; types). Persists in{' '}
                 <code className="text-[9px] bg-zinc-800/80 px-0.5 rounded">game_settings</code>.{' '}
                 <strong className="text-foreground/90">−1% / −5%</strong> = one more point off listed prices (cheaper);{' '}
-                <strong className="text-foreground/90">+1% / +5%</strong> = one fewer point off (pricier). Caps at full price and 99% off.
+                <strong className="text-foreground/90">+1% / +5%</strong> = one fewer point off, or above full price up to +50% vs rotation. Max 99% off; max +50% premium.
               </p>
               {boozeListedPrice && (
                 <p className="text-[9px] text-mutedForeground font-heading">
-                  Active: {(Number(boozeListedPrice.percent_off) > 0
+                  Active:{' '}
+                  {Number(boozeListedPrice.percent_off) > 0
                     ? `${Number(boozeListedPrice.percent_off).toFixed(2).replace(/\.?0+$/, '')}% off`
-                    : 'no discount')}
+                    : Number(boozeListedPrice.percent_premium) > 0
+                      ? `+${Number(boozeListedPrice.percent_premium).toFixed(2).replace(/\.?0+$/, '')}% vs rotation`
+                      : 'no discount / premium'}
                   {' '}(×{Number(boozeListedPrice.listed_price_mult).toFixed(4)})
                 </p>
               )}

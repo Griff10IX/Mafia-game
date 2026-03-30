@@ -21,6 +21,8 @@ import httpx
 from fastapi import Body, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from utils.imgbb_resolve import rewrite_imgbb_urls_in_banner_text
+
 logger = logging.getLogger(__name__)
 
 SPOTIFY_ALLOWED_TYPES = {"track", "album", "playlist", "artist", "episode", "show"}
@@ -1421,6 +1423,9 @@ def register(router):
             updates["profile_banner_image_url"] = raw
         if banner_text is not None:
             raw = (banner_text or "").strip() or None
+            if raw:
+                # Turn ImgBB page URLs (ibb.co/…) into direct i.ibb.co links inside [img] tags
+                raw = await rewrite_imgbb_urls_in_banner_text(raw)
             if raw and len(raw) > 10000:
                 raise HTTPException(status_code=400, detail="Banner text too long.")
             updates["profile_banner_text"] = raw
