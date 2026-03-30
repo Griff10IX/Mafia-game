@@ -116,7 +116,7 @@ Your health affects combat effectiveness.
 [*][color=#888888]Health ranges from 0% to 100%[/color]
 [*][color=#888888]Low health makes you easier to kill[/color]
 [*][color=#888888]Health passively refills while you’re alive: about [b]0→100% over 2 hours[/b] of real time, applied whenever the server checks your account (playing, menu refresh, etc.) — or buy an instant restore from the Store[/color]
-[*][color=#888888]Restore health instantly from the store: 15 points or 75 respect[/color]
+[*][color=#888888]Restore health instantly from the store: 15 points or 102 respect (if paid fully with respect)[/color]
 [*][color=#888888]Always check your health before attacking[/color]
 [/list]
 
@@ -832,7 +832,7 @@ Separate from the [b]mini-games weekly[/b] board: open [b]Game → Leaderboard[/
 Open [b]Ranking → Badges[/b] (and related stats). Earning badges gives [b]small stacking bonuses[/b] across many systems — crime cash, OC payouts, jail bust odds, melt cooldown, and more — with stronger effect as your [b]prestige[/b] grows where the game applies prestige scaling. Exact % values are shown on the Badges page. The [b]Founding Member[/b] badge from [b]pre-launch registration[/b] is a separate profile badge with its own passive payout bonus (about [b]+2.5%[/b] on listed income while you wear it) — see [b]SOCIAL FEATURES → Pre-launch registration (Founding Member)[/b] below.
 
 [color=#FFD700][b]Respect (secondary currency)[/b][/color]
-Earn respect from kills, crimes, jail busts, missions, mini-games, and other activities. Spend it in the [b]Store[/b] (e.g. health restore [b]75 respect[/b]) and on [b]respect-priced[/b] items where the UI lists a respect cost. Respect is [b]not[/b] sendable like cash/points unless a specific feature says otherwise.
+Earn respect from kills, crimes, jail busts, missions, mini-games, and other activities. Spend it in the [b]Store[/b] (e.g. health restore [b]102 respect[/b] if all-respect) and on [b]respect-priced[/b] items where the UI lists a respect cost. Respect is [b]not[/b] sendable like cash/points unless a specific feature says otherwise.
 [/quote]
 
 [hr]
@@ -881,7 +881,7 @@ Collect loot box pieces to open a box (piece cost is shown in-game). Pieces drop
 [list]
 [*][color=#888888]Silencer (150 pts)[/color] - Fewer witness statements when you kill
 [*][color=#888888]Anti-Snitch (120 pts)[/color] - Cannot be snitched on while in jail
-[*][color=#888888]Health Restore (15 pts or 75 respect)[/color] - Instantly restore to 100% health
+[*][color=#888888]Health Restore (15 pts or 102 respect if all-respect)[/color] - Instantly restore to 100% health
 [*][color=#888888][b]Respect[/b] — also earned in-game; some store purchases accept respect instead of points (see each item)[/color]
 [/list]
 

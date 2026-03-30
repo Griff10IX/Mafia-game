@@ -33,6 +33,13 @@ const CUSTOM_BULLETS_MAX = 250_000;
 const VALID_TABS = ['points', 'sendpts', 'upgrades', 'bullets'];
 const bulletCost = (bullets) => bullets < 5000 ? Math.max(1, Math.floor(bullets * 0.02)) : 100 + Math.ceil((bullets - 5000) * 75 / 5000);
 
+/** Match backend store._store_respect_cost_for_points: +35% vs old 5:1 → ceil(6.75×pts) = (pts×27+3)//4 */
+function storeRespectForPoints(pts) {
+  const p = Math.max(0, Math.floor(Number(pts) || 0));
+  if (p <= 0) return 0;
+  return Math.floor((p * 27 + 3) / 4);
+}
+
 const STORE_TOKEN_MAX_HELD = 15;
 
 /** Must match backend AUTO_RANK_COST_POINTS / pricing logic (8× token pts ≈ full unlock pts for 16h only). */
@@ -341,7 +348,7 @@ export default function Store() {
       return;
     }
     const cost = bulletCost(b);
-    const respectCost = cost * 5;
+    const respectCost = storeRespectForPoints(cost);
     if (user && (user.points ?? 0) < cost && (user.respect_points ?? 0) < respectCost) {
       toast.error(`Need ${cost} pts or ${respectCost} respect`);
       return;
@@ -736,7 +743,7 @@ export default function Store() {
                 Icon={u.Icon}
                 desc={u.desc}
                 price={u.price}
-                respectPrice={u.price * 5}
+                respectPrice={storeRespectForPoints(u.price)}
                 owned={false}
                 loading={loading}
                 disabled={disabled}
@@ -768,7 +775,7 @@ export default function Store() {
                     Icon={Package}
                     desc={t.desc}
                     price={t.price}
-                    respectPrice={t.price * 5}
+                    respectPrice={storeRespectForPoints(t.price)}
                     owned={false}
                     loading={loading}
                     disabled={atCap}
@@ -792,7 +799,7 @@ export default function Store() {
                   Icon={Package}
                   desc={b.desc}
                   price={b.price}
-                  respectPrice={b.price * 5}
+                  respectPrice={storeRespectForPoints(b.price)}
                   owned={false}
                   loading={loading}
                   disabled={!user}
@@ -834,10 +841,10 @@ export default function Store() {
                       }
                       apiBuy('/store/buy-custom-car', { car_name: name }, 'Custom car purchased').then(() => setCustomCarName(''));
                     }}
-                    disabled={!user || ((user.points ?? 0) < 500 && (user.respect_points ?? 0) < 2500) || !customCarName.trim()}
+                    disabled={!user || ((user.points ?? 0) < 500 && (user.respect_points ?? 0) < storeRespectForPoints(500)) || !customCarName.trim()}
                     className="w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
                   >
-                    500 pts or 2500 resp
+                    {`500 pts or ${storeRespectForPoints(500)} resp`}
                   </button>
                 </div>
               </div>
@@ -850,7 +857,7 @@ export default function Store() {
         <div className="space-y-3">
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-2">
             {BULLET_PACKS.map((pack) => {
-              const respectCost = pack.cost * 5;
+              const respectCost = storeRespectForPoints(pack.cost);
               return (
                 <div key={pack.bullets} className={`relative ${styles.panel} rounded-lg border border-primary/20 overflow-hidden mobile-panel`}>
                   <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -891,7 +898,7 @@ export default function Store() {
                     if (!Number.isFinite(b) || b < 1) return null;
                     if (b > CUSTOM_BULLETS_MAX) return '—';
                     const c = bulletCost(b);
-                    return `${c} pts or ${c * 5} resp`;
+                    return `${c} pts or ${storeRespectForPoints(c)} resp`;
                   })() || '—'
                 ) : (
                   '—'

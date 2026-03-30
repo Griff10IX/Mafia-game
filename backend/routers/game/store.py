@@ -11,15 +11,31 @@ from fastapi import Depends, HTTPException, Query
 from utils.profanity import contains_profanity
 
 
+def _store_respect_cost_for_points(k: int) -> int:
+    """Respect spent to cover k 'points' of store price using respect (+35% vs old 5*k: ceil(6.75*k))."""
+    k = int(k)
+    if k <= 0:
+        return 0
+    return (k * 27 + 3) // 4
+
+
+def _store_max_points_coverable_by_respect(respect_balance: int, points_cost: int) -> int:
+    """Largest k in [0, points_cost] with _store_respect_cost_for_points(k) <= respect_balance."""
+    r = int(respect_balance)
+    p = int(points_cost)
+    if r <= 0 or p <= 0:
+        return 0
+    return min(p, (4 * r) // 27)
+
+
 def _store_cost_inc(current_user: dict, points_cost: int):
     """Return (cost_used, $inc dict, $gte filter dict) for atomic store purchases.
-    Uses respect points first (5 respect = 1 point), then points for the remainder.
+    Uses respect first at ceil(6.75 respect per point of price) vs old 5:1, then points for the remainder.
     Returns (None, None, None) if insufficient funds."""
     respect_balance = int(current_user.get("respect_points") or 0)
     points_balance = int(current_user.get("points") or 0)
-    respect_equiv = respect_balance // 5
-    use_respect_equiv = min(respect_equiv, points_cost)
-    respect_decrement = use_respect_equiv * 5
+    use_respect_equiv = _store_max_points_coverable_by_respect(respect_balance, points_cost)
+    respect_decrement = _store_respect_cost_for_points(use_respect_equiv)
     points_decrement = points_cost - use_respect_equiv
     if points_balance < points_decrement:
         return None, None, None
@@ -393,7 +409,7 @@ async def buy_auto_rank(
 async def buy_health(
     current_user: dict = Depends(get_current_user),
 ):
-    """Restore health to 100% for 15 points (or 75 respect points)."""
+    """Restore health to 100% for 15 points (or 102 respect if paid fully with respect)."""
     current_health = float(current_user.get("health", FULL_HEALTH))
     if current_health >= FULL_HEALTH:
         raise HTTPException(status_code=400, detail="You already have full health")

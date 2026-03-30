@@ -1027,7 +1027,7 @@ def _calculate_bullet_cost(bullets: int) -> int:
     return 100 + ((bullets - 5000) * 75 + 4999) // 5000
 
 async def store_buy_bullets(bullets: int, current_user: dict = Depends(get_current_user)):
-    """Buy bullets from store: use respect points first (5 respect = 1 point), then points."""
+    """Buy bullets from store: respect first at ceil(6.75 respect per point of price) via store._store_cost_inc, then points."""
     if bullets < 1 or bullets > CUSTOM_BULLETS_MAX:
         raise HTTPException(status_code=400, detail=f"Bullet amount must be between 1 and {CUSTOM_BULLETS_MAX:,}")
     cost = _calculate_bullet_cost(bullets)
