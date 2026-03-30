@@ -86,7 +86,8 @@ async def _top_by_field_weekly(
     limit = max(1, min(100, int(limit)))
     now = datetime.now(timezone.utc)
     week_start = _week_start(now)
-    match_stage = {"_lb_ts": {"$gte": week_start}}
+    week_end = week_start + timedelta(days=7)
+    match_stage = {"_lb_ts": {"$gte": week_start, "$lt": week_end}}
     if extra_match:
         match_stage.update(extra_match)
     pipeline = [
@@ -150,7 +151,8 @@ async def _top_by_field_weekly_sum(
     limit = max(1, min(100, int(limit)))
     now = datetime.now(timezone.utc)
     week_start = _week_start(now)
-    match_stage = {"_lb_ts": {"$gte": week_start}}
+    week_end = week_start + timedelta(days=7)
+    match_stage = {"_lb_ts": {"$gte": week_start, "$lt": week_end}}
     if extra_match:
         match_stage.update(extra_match)
     pipeline = [
@@ -323,10 +325,11 @@ async def run_weekly_leaderboard_payout(database, test_run: bool = False):
 
     cfg = await database.game_config.find_one(
         {"id": LEADERBOARD_PAYOUT_CONFIG_ID},
-        {"_id": 0, "last_run_week_start": 1, "top1_points": 1, "top2_points": 1, "top3_points": 1, "top4_10_points": 1},
+        {"_id": 0, "last_run_week_start": 1, "last_respect_conversion_week_start": 1, "top1_points": 1, "top2_points": 1, "top3_points": 1, "top4_10_points": 1},
     )
     already_paid = bool(cfg and cfg.get("last_run_week_start") == last_week_start_str and not test_run)
     should_award = not already_paid
+    conversion_done = bool(cfg and cfg.get("last_respect_conversion_week_start") == last_week_start_str)
 
     top1 = int(cfg.get("top1_points") or DEFAULT_TOP1_POINTS) if cfg else DEFAULT_TOP1_POINTS
     top2 = int(cfg.get("top2_points") or DEFAULT_TOP2_POINTS) if cfg else DEFAULT_TOP2_POINTS
@@ -398,7 +401,24 @@ async def run_weekly_leaderboard_payout(database, test_run: bool = False):
         for user_id, points in user_points.items():
             if points <= 0:
                 continue
-            await database.users.update_one({"id": user_id}, {"$inc": {"points": points}})
+            # Weekly leaderboard awards are respect points.
+            await database.users.update_one({"id": user_id}, {"$inc": {"respect_points": points}})
+
+    # If we already paid the week (older code), it likely credited `users.points` instead of `users.respect_points`.
+    # Convert once per week so admins don't have to manually fix balances.
+    if already_paid and not conversion_done and user_points:
+        for user_id, points in user_points.items():
+            if points <= 0:
+                continue
+            await database.users.update_one(
+                {"id": user_id},
+                {"$inc": {"respect_points": points, "points": -points}},
+            )
+        await database.game_config.update_one(
+            {"id": LEADERBOARD_PAYOUT_CONFIG_ID},
+            {"$set": {"last_respect_conversion_week_start": last_week_start_str}},
+            upsert=True,
+        )
 
     # Persist an audit trail so admins can inspect "who got what" each week.
     try:
