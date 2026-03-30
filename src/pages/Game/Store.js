@@ -35,6 +35,10 @@ const bulletCost = (bullets) => bullets < 5000 ? Math.max(1, Math.floor(bullets 
 
 const STORE_TOKEN_MAX_HELD = 15;
 
+/** Must match backend AUTO_RANK_COST_POINTS / pricing logic (8× token pts ≈ full unlock pts for 16h only). */
+const AUTO_RANK_COST_POINTS = 5000;
+const AUTO_RANK_2H_TOKEN_STORE_PTS = Math.ceil(AUTO_RANK_COST_POINTS / 8);
+
 /** Single consumable tokens (armoury); activate from My Inventory */
 const TOKEN_STORE_ITEMS = [
   { tokenType: 'xp_crimes', title: 'Crimes XP Token', price: 42, userKey: 'xp_crimes_tokens', desc: '2× crime XP for 1h when activated (stack up to 24h).' },
@@ -46,6 +50,13 @@ const TOKEN_STORE_ITEMS = [
   { tokenType: 'properties', title: 'Properties Token', price: 48, userKey: 'properties_tokens', desc: 'Property income bonus when activated (stack up to 24h).' },
   { tokenType: 'travel', title: 'Travel Token', price: 55, userKey: 'travel_tokens', desc: 'Travel bonus when activated (stack up to 24h).' },
   { tokenType: 'jailbust_bonus', title: 'Jailbust Token', price: 48, userKey: 'jailbust_tokens', desc: '+10% bust success for 1h when activated.' },
+  {
+    tokenType: 'auto_rank_2h',
+    title: 'Auto Rank (2h) Token',
+    price: AUTO_RANK_2H_TOKEN_STORE_PTS,
+    userKey: 'auto_rank_2h_tokens',
+    desc: `+2h Auto Rank when activated (stack to 24h). ${AUTO_RANK_2H_TOKEN_STORE_PTS} pts each — eight tokens equal ${AUTO_RANK_COST_POINTS.toLocaleString()} pts but only 16h vs permanent unlock.`,
+  },
 ];
 
 const TOKEN_BUNDLES = [
@@ -57,7 +68,7 @@ const TOKEN_BUNDLES = [
 const UPGRADES = [
   { id: 'health', title: 'Full Health', Icon: Heart, price: 15, path: '/store/buy-health', ownedKey: null, desc: 'Restore health to 100%', extra: (u) => ({ line: 'Health', value: `${Number(u?.health ?? 100).toFixed(0)}%` }) },
   { id: 'rank-bar', title: 'Premium Rank Bar', Icon: Star, price: 50, path: '/store/buy-rank-bar', ownedKey: 'premium_rank_bar', desc: 'Exact numbers & amounts for next rank' },
-  { id: 'auto-rank', title: 'Auto Rank', Icon: Bot, price: 5000, path: '/store/buy-auto-rank', ownedKey: 'auto_rank_purchased', desc: 'Auto-commit crimes, GTA, busts, OC. Optional: set Telegram in Profile for notifications.' },
+  { id: 'auto-rank', title: 'Auto Rank', Icon: Bot, price: AUTO_RANK_COST_POINTS, path: '/store/buy-auto-rank', ownedKey: 'auto_rank_purchased', desc: 'Auto-commit crimes, GTA, busts, OC. Optional: set Telegram in Profile for notifications.' },
   { id: 'silencer', title: 'Silencer', Icon: VolumeX, price: 150, path: '/store/buy-silencer', ownedKey: 'has_silencer', desc: 'Fewer witness statements when you kill' },
   { id: 'anti-snitch', title: 'Anti Snitch', Icon: Shield, price: 120, path: '/store/buy-anti-snitch', ownedKey: 'anti_snitch', desc: 'Cannot be snitched on when others are in jail' },
   { id: 'oc-timer', title: 'OC Timer', Icon: Clock, price: 300, path: '/store/buy-oc-timer', ownedKey: 'oc_timer_reduced', desc: 'Heist cooldown 4h instead of 6h' },

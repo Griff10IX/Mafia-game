@@ -79,6 +79,8 @@ ANTI_SNITCH_COST_POINTS = 120
 OC_TIMER_COST_POINTS = 300
 CREW_OC_TIMER_COST_POINTS = 350  # Family Crew OC: 6h cooldown instead of 8h
 AUTO_RANK_COST_POINTS = 5000  # Auto Rank: auto-commit crimes + GTAs, results to Telegram
+# Per 2h token: 8 tokens cost the same points as permanent unlock but only stack 16h — not a cheap bypass
+AUTO_RANK_2H_TOKEN_STORE_POINTS = (AUTO_RANK_COST_POINTS + 7) // 8
 BULLET_PACKS = {5000: 100, 10000: 175, 50000: 775, 100000: 1525}  # 5k→100, 10k→175, +75 per 5k
 CUSTOM_BULLETS_MAX = 250_000
 
@@ -170,6 +172,7 @@ TOKEN_STORE_UNIT_PRICE_POINTS = {
     "properties": 48,
     "travel": 55,
     "jailbust_bonus": 48,
+    "auto_rank_2h": AUTO_RANK_2H_TOKEN_STORE_POINTS,
 }
 # bundle_id -> points cost, { count_field: amount }
 TOKEN_STORE_BUNDLES = {
