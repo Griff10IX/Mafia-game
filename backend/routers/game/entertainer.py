@@ -473,6 +473,8 @@ def _format_reward_desc(desc: dict) -> str:
     parts = []
     if desc.get("money"):
         parts.append(f"${desc['money']:,}")
+    if desc.get("points"):
+        parts.append(f"{int(desc['points']):,} points")
     if desc.get("bullets"):
         parts.append(f"{desc['bullets']} bullets")
     if desc.get("tokens"):
@@ -563,6 +565,8 @@ class CreateGameRequest(BaseModel):
     join_fee: int = 0  # entry fee per player (added to pot when they join)
     pot: int = 0  # creator-funded pot (deducted from creator on create)
     manual_roll: bool = False  # if True, creator rolls when ready (no auto-settle by time)
+    reward_money: int = 0  # manual games: fixed cash reward
+    reward_points: int = 0  # manual games: fixed points reward
     topic_id: Optional[str] = None  # optional; when created from a topic
 
 
@@ -636,7 +640,7 @@ def _with_public_hangman(game: dict, current_user_id: Optional[str]) -> dict:
 
 
 async def _run_dice_payout(game: dict):
-    """One winner by roll; winner gets a random reward (cash/bullets/tokens/cars)."""
+    """One winner by roll; manual games use fixed cash/points rewards."""
     participants = game.get("participants") or []
     if not participants:
         return None
@@ -656,7 +660,20 @@ async def _run_dice_payout(game: dict):
     winner_username = next((a["username"] for a in assignments if a["user_id"] == winner_id), None)
     reward = None
     if winner_id:
-        reward = await _give_random_reward(winner_id)
+        manual_reward = game.get("manual_reward") or {}
+        reward_money = max(0, int(manual_reward.get("money") or 0))
+        reward_points = max(0, int(manual_reward.get("points") or 0))
+        if game.get("manual_roll") and (reward_money > 0 or reward_points > 0):
+            inc = {}
+            if reward_money > 0:
+                inc["money"] = reward_money
+            if reward_points > 0:
+                inc["points"] = reward_points
+            if inc:
+                await db.users.update_one({"id": winner_id}, {"$inc": inc})
+            reward = {"reward_type": "manual", "money": reward_money, "points": reward_points, "bullets": 0, "cars": [], "tokens": {}}
+        else:
+            reward = await _give_random_reward(winner_id)
     return {"assignments": assignments, "roll": roll, "winner_id": winner_id, "winner_username": winner_username, "reward": reward}
 
 
@@ -696,7 +713,20 @@ async def _run_hangman_payout(game: dict):
         winner_username = fallback.get("username")
     reward = None
     if winner_id:
-        reward = await _give_random_reward(winner_id)
+        manual_reward = game.get("manual_reward") or {}
+        reward_money = max(0, int(manual_reward.get("money") or 0))
+        reward_points = max(0, int(manual_reward.get("points") or 0))
+        if game.get("manual_roll") and (reward_money > 0 or reward_points > 0):
+            inc = {}
+            if reward_money > 0:
+                inc["money"] = reward_money
+            if reward_points > 0:
+                inc["points"] = reward_points
+            if inc:
+                await db.users.update_one({"id": winner_id}, {"$inc": inc})
+            reward = {"reward_type": "manual", "money": reward_money, "points": reward_points, "bullets": 0, "cars": [], "tokens": {}}
+        else:
+            reward = await _give_random_reward(winner_id)
     # revealed_pattern for history display
     revealed = state.get("revealed_pattern") or ["_"] * len(word)
     if isinstance(revealed, list):
@@ -716,7 +746,9 @@ async def _run_hangman_payout(game: dict):
 
 
 async def _run_gbox_payout(game: dict, cash_pot: int):
-    """One cash pot split randomly among all participants; each also gets a non-cash secondary reward."""
+    """One cash pot split randomly among all participants.
+    Manual games use fixed cash/points rewards per participant.
+    """
     participants = game.get("participants") or []
     if not participants:
         return None
@@ -728,12 +760,33 @@ async def _run_gbox_payout(game: dict, cash_pot: int):
     shares = _random_partition(int(cash_pot or 0), n)
     _rng.shuffle(shares)
     rewards_by_user = {}
+    manual_reward = game.get("manual_reward") or {}
+    reward_money = max(0, int(manual_reward.get("money") or 0))
+    reward_points = max(0, int(manual_reward.get("points") or 0))
+    manual_mode = bool(game.get("manual_roll")) and (reward_money > 0 or reward_points > 0)
     for i, uid in enumerate(uids):
         share = shares[i] if i < len(shares) else 0
+        inc = {}
         if share:
-            await db.users.update_one({"id": uid}, {"$inc": {"money": share}})
-        reward_desc = await _give_random_reward(uid, exclude_cash=True)
-        reward_desc["money"] = int(share)
+            inc["money"] = int(share)
+        if manual_mode:
+            if reward_money > 0:
+                inc["money"] = int(inc.get("money", 0)) + reward_money
+            if reward_points > 0:
+                inc["points"] = int(inc.get("points", 0)) + reward_points
+            reward_desc = {
+                "reward_type": "manual",
+                "money": int(share) + reward_money,
+                "points": reward_points,
+                "bullets": 0,
+                "cars": [],
+                "tokens": {},
+            }
+        else:
+            reward_desc = await _give_random_reward(uid, exclude_cash=True)
+            reward_desc["money"] = int(share)
+        if inc:
+            await db.users.update_one({"id": uid}, {"$inc": inc})
         rewards_by_user[uid] = reward_desc
     return {"rewards_by_user": rewards_by_user, "total_cash_pot": int(cash_pot or 0)}
 
@@ -856,25 +909,49 @@ async def create_game(
     request: CreateGameRequest,
     current_user: dict = Depends(get_current_user),
 ):
-    """Create a dice or gbox game. Admins can only create manual-roll games (auto games use admin auto-create)."""
-    if _is_admin(current_user) and not bool(request.manual_roll):
-        raise HTTPException(status_code=403, detail="Admins can only create manual-roll games here. Use admin auto-create for system games.")
+    """Create a dice or gbox game. Non-admin users can only create manual-roll games."""
+    is_admin = _is_admin(current_user)
     if request.game_type not in ("dice", "gbox"):
         raise HTTPException(status_code=400, detail="game_type must be dice or gbox")
     max_players = max(1, min(10, request.max_players))
     join_fee = max(0, int(request.join_fee or 0))
     pot = max(0, int(request.pot or 0))
-    if pot > 0:
-        result = await db.users.update_one(
-            {"id": current_user["id"], "money": {"$gte": pot}},
-            {"$inc": {"money": -pot}}
-        )
-        if result.modified_count == 0:
-            raise HTTPException(status_code=400, detail=f"You need ${pot:,} to fund the pot")
+    reward_money = max(0, int(request.reward_money or 0))
+    reward_points = max(0, int(request.reward_points or 0))
     game_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     participants = []
-    manual_roll = bool(request.manual_roll)
+    # Safety: keep non-admin created games manual-only even if the client sends false.
+    manual_roll = bool(request.manual_roll) if is_admin else True
+    if manual_roll and reward_money <= 0 and reward_points <= 0:
+        raise HTTPException(status_code=400, detail="Manual games must include a cash reward, points reward, or both.")
+    reward_multiplier = max_players if request.game_type == "gbox" else 1
+    reserve_money = (reward_money * reward_multiplier) if manual_roll else 0
+    reserve_points = (reward_points * reward_multiplier) if manual_roll else 0
+    total_money_needed = int(pot + reserve_money)
+    # Creator must fully fund creator pot + manual rewards at create time.
+    if total_money_needed > 0 or reserve_points > 0:
+        user_filter = {"id": current_user["id"]}
+        if total_money_needed > 0:
+            user_filter["money"] = {"$gte": total_money_needed}
+        if reserve_points > 0:
+            user_filter["points"] = {"$gte": reserve_points}
+        inc = {}
+        if total_money_needed > 0:
+            inc["money"] = -total_money_needed
+        if reserve_points > 0:
+            inc["points"] = -reserve_points
+        result = await db.users.update_one(user_filter, {"$inc": inc})
+        if result.modified_count == 0:
+            need_parts = []
+            if total_money_needed > 0:
+                need_parts.append(f"${total_money_needed:,}")
+            if reserve_points > 0:
+                need_parts.append(f"{reserve_points:,} points")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient balance to fund this game. Required: {' and '.join(need_parts)}.",
+            )
     topic_id = (request.topic_id or "").strip() or None
     doc = {
         "id": game_id,
@@ -890,6 +967,8 @@ async def create_game(
         "completed_at": None,
         "result": None,
         "manual_roll": manual_roll,
+        "manual_reward": {"money": reward_money, "points": reward_points},
+        "manual_reward_reserve": {"money": reserve_money, "points": reserve_points},
         "topic_id": topic_id,
     }
     if request.game_type == "hangman":

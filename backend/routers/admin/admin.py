@@ -17,7 +17,7 @@ import httpx
 from fastapi import Body, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
-from middleware.security import is_proxy_or_vpn
+from middleware.security import is_proxy_or_vpn, get_ip_info
 from utils.disposable_email import is_disposable_email
 from utils.referral_ids import normalize_referred_by_ids
 from utils.cheat_detection_utils import (
@@ -5537,11 +5537,12 @@ def register(router):
         if username:
             pattern = re.compile(f".*{re.escape(username)}.*", re.IGNORECASE)
             users = await db.users.find(
-                {"username": pattern},
+                {"username": pattern, "is_npc": {"$ne": True}},
                 {"_id": 0, "id": 1, "username": 1, "email": 1, "total_kills": 1, "money": 1, "rank_points": 1, "current_state": 1, "created_at": 1, "is_dead": 1}
             ).to_list(50)
             return {"query": username, "count": len(users), "users": users}
         pipeline = [
+            {"$match": {"is_npc": {"$ne": True}}},
             {"$group": {"_id": {"$toLower": "$username"}, "count": {"$sum": 1}, "users": {"$push": {"id": "$id", "username": "$username", "email": "$email", "total_kills": "$total_kills", "money": "$money", "created_at": "$created_at"}}}},
             {"$match": {"count": {"$gt": 1}}},
             {"$sort": {"count": -1}},
@@ -5555,7 +5556,7 @@ def register(router):
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         users = await db.users.find(
-            {"is_dead": {"$ne": True}},
+            {"is_dead": {"$ne": True}, "is_npc": {"$ne": True}},
             {"_id": 0, "id": 1, "username": 1, "email": 1, "registration_ip": 1, "login_ips": 1, "last_login_ip": 1, "last_request_ip": 1, "created_at": 1},
         ).to_list(5000)
         ip_to_users = {}
@@ -5633,7 +5634,7 @@ def register(router):
     ):
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        query = {"is_dead": {"$ne": True}}
+        query = {"is_dead": {"$ne": True}, "is_npc": {"$ne": True}}
         if username and username.strip():
             query["username"] = re.compile(re.escape(username.strip()), re.IGNORECASE)
         users = await db.users.find(
@@ -5694,10 +5695,22 @@ def register(router):
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
 
+        def _ip_network_type(ip: str) -> str:
+            meta = ip_meta.get(ip) or {}
+            if ip_vpn.get(ip):
+                return "vpn_or_proxy"
+            if bool(meta.get("proxy")):
+                return "vpn_or_proxy"
+            if bool(meta.get("hosting")):
+                return "datacenter_or_hosting"
+            if meta.get("isp") or meta.get("org") or meta.get("as"):
+                return "consumer_paid_isp"
+            return "unknown"
+
         def _all_ips(u: dict) -> Tuple[List[str], dict]:
             return user_ip_union(u, include_session_ips=include_session_ips)
 
-        query = {"is_dead": {"$ne": True}}
+        query = {"is_dead": {"$ne": True}, "is_npc": {"$ne": True}}
         if username and username.strip():
             query["username"] = re.compile(re.escape(username.strip()), re.IGNORECASE)
         proj = {
@@ -5876,6 +5889,7 @@ def register(router):
             g["risk_score"] = compute_dupe_risk_score("referral_same_ip", g["count"])
 
         ip_vpn: Dict[str, bool] = {}
+        ip_meta: Dict[str, dict] = {}
         if check_vpn and same_ip_groups:
             unique_ips = set()
             for g in same_ip_groups:
@@ -5886,9 +5900,22 @@ def register(router):
                     ip_vpn[ip] = await is_proxy_or_vpn(ip)
                 except Exception:
                     ip_vpn[ip] = False
+                try:
+                    ip_meta[ip] = await get_ip_info(ip)
+                except Exception:
+                    ip_meta[ip] = {}
                 await asyncio.sleep(0.15)
         for g in same_ip_groups:
-            g["ip_vpn"] = ip_vpn.get(g["ip"], False)
+            ip = g.get("ip")
+            meta = ip_meta.get(ip) or {}
+            network_type = _ip_network_type(ip)
+            g["ip_vpn"] = ip_vpn.get(ip, False)
+            g["ip_network_type"] = network_type
+            g["ip_isp"] = meta.get("isp") or None
+            g["ip_org"] = meta.get("org") or None
+            g["ip_as"] = meta.get("as") or None
+            g["ip_proxy"] = bool(meta.get("proxy"))
+            g["ip_hosting"] = bool(meta.get("hosting"))
             if g.get("ip_vpn"):
                 g["risk_score"] = min(100, g["risk_score"] + 10)
 
@@ -5940,6 +5967,7 @@ def register(router):
                 dead_docs = await db.users.find(
                     {
                         "is_dead": True,
+                        "is_npc": {"$ne": True},
                         "$or": [{"registration_ip": {"$in": chunk}}, {"login_ips": {"$in": chunk}}],
                     },
                     {"_id": 0, "id": 1, "username": 1, "registration_ip": 1, "login_ips": 1, "dead_at": 1, "created_at": 1},
@@ -6143,7 +6171,7 @@ def register(router):
             for i in range(0, len(fp_list), 200):
                 chunk = fp_list[i : i + 200]
                 ddocs = await db.users.find(
-                    {"is_dead": True, "device_fingerprint": {"$in": chunk}},
+                    {"is_dead": True, "is_npc": {"$ne": True}, "device_fingerprint": {"$in": chunk}},
                     {"_id": 0, "id": 1, "username": 1, "device_fingerprint": 1, "dead_at": 1, "created_at": 1},
                 ).to_list(1500)
                 for d in ddocs:
@@ -6279,7 +6307,7 @@ def register(router):
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         users = await db.users.find(
-            {"is_dead": {"$ne": True}},
+            {"is_dead": {"$ne": True}, "is_npc": {"$ne": True}},
             {"_id": 0, "id": 1, "username": 1, "email": 1, "registration_ip": 1, "login_ips": 1, "last_login_ip": 1, "last_request_ip": 1, "last_user_agent": 1, "device_fingerprint": 1},
         ).to_list(10000)
 

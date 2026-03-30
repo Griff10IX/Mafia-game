@@ -8485,14 +8485,41 @@ export default function Admin() {
                       <div className="max-h-80 overflow-y-auto space-y-2">
                         {cheatDupeIntelligent.same_ip_groups.slice(0, 40).map((g, i) => (
                           <div key={i} className="p-2 rounded bg-zinc-900/50 border border-amber-500/20">
+                            {(() => {
+                              const networkType = g.ip_network_type || 'unknown';
+                              const networkLabel = networkType === 'consumer_paid_isp'
+                                ? 'Paid ISP'
+                                : networkType === 'datacenter_or_hosting'
+                                  ? 'Hosting'
+                                  : networkType === 'vpn_or_proxy'
+                                    ? 'VPN/Proxy'
+                                    : 'Unknown';
+                              const networkClass = networkType === 'consumer_paid_isp'
+                                ? 'bg-emerald-500/20 text-emerald-300'
+                                : networkType === 'datacenter_or_hosting'
+                                  ? 'bg-orange-500/20 text-orange-300'
+                                  : networkType === 'vpn_or_proxy'
+                                    ? 'bg-purple-500/20 text-purple-300'
+                                    : 'bg-zinc-600/40 text-zinc-300';
+                              const ispParts = [g.ip_isp, g.ip_org, g.ip_as].filter(Boolean);
+                              return (
+                                <>
                             <div className="text-[10px] font-heading text-amber-400 mb-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                               <span>IP: {g.ip}</span>
                               <span>— {g.count} account(s)</span>
                               {typeof g.risk_score === 'number' && <span className="px-1 rounded text-[9px] bg-zinc-600/50" title="Risk score 0-100">Score: {g.risk_score}</span>}
                               {g.risk && <span className={`px-1 rounded text-[9px] ${g.risk === 'high' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'}`}>{g.risk}</span>}
+                              <span className={`px-1 rounded text-[9px] ${networkClass}`} title="Network type from VPN/proxy + ISP enrichment">
+                                {networkLabel}
+                              </span>
                               {g.ip_vpn && <span className="px-1 rounded text-[9px] bg-purple-500/20 text-purple-400" title="IP detected as VPN/proxy">VPN</span>}
                               <button type="button" onClick={() => handleBanIpQuick(g.ip)} className="ml-auto shrink-0 bg-red-500/20 hover:bg-red-500/30 text-red-400 rounded px-2 py-0.5 text-[9px] font-bold border border-red-500/40">Ban IP</button>
                             </div>
+                            {ispParts.length > 0 && (
+                              <div className="text-[9px] font-mono text-zinc-500 mb-1">
+                                {ispParts.join(' | ')}
+                              </div>
+                            )}
                             <div className="space-y-1">
                               {(g.accounts || []).map((a, j) => (
                                 <div key={j} className="text-[10px] pl-1 border-l border-zinc-600/50 flex flex-wrap items-center gap-x-2">
@@ -8504,6 +8531,9 @@ export default function Admin() {
                                 </div>
                               ))}
                             </div>
+                                </>
+                              );
+                            })()}
                           </div>
                         ))}
                       </div>

@@ -177,6 +177,8 @@ export default function ForumTopic() {
   const [createGameManualRoll, setCreateGameManualRoll] = useState(true);
   const [createGamePot, setCreateGamePot] = useState('0');
   const [createGameJoinFee, setCreateGameJoinFee] = useState('0');
+  const [createGameRewardMoney, setCreateGameRewardMoney] = useState('0');
+  const [createGameRewardPoints, setCreateGameRewardPoints] = useState('0');
   const [createGameSubmitting, setCreateGameSubmitting] = useState(false);
   const [crewOCApplyLoading, setCrewOCApplyLoading] = useState(false);
   const [user, setUser] = useState(null);
@@ -545,14 +547,42 @@ export default function ForumTopic() {
   const createGameInTopic = async (e) => {
     e.preventDefault();
     if (topic?.is_locked) return;
+    const parsedMaxPlayers = Math.max(1, Math.min(10, parseInt(createGameMaxPlayers, 10) || 10));
+    const parsedJoinFee = Math.max(0, parseInt(String(createGameJoinFee).replace(/\D/g, ''), 10) || 0);
+    const parsedPot = Math.max(0, parseInt(String(createGamePot).replace(/\D/g, ''), 10) || 0);
+    const rewardMoney = Math.max(0, parseInt(String(createGameRewardMoney).replace(/\D/g, ''), 10) || 0);
+    const rewardPoints = Math.max(0, parseInt(String(createGameRewardPoints).replace(/\D/g, ''), 10) || 0);
+    if (createGameManualRoll) {
+      if (rewardMoney <= 0 && rewardPoints <= 0) {
+        toast.error('Set reward cash, points, or both for manual games.');
+        return;
+      }
+      const multiplier = createGameType === 'gbox' ? parsedMaxPlayers : 1;
+      const reserveMoney = rewardMoney * multiplier;
+      const reservePoints = rewardPoints * multiplier;
+      const totalMoney = parsedPot + reserveMoney;
+      const rewardNote = createGameType === 'gbox'
+        ? `\nThis gbox pays each player, so rewards are x${multiplier}.`
+        : '';
+      const ok = window.confirm(
+        `Create game and deduct now?\n\n` +
+        `From your account:\n` +
+        `- Cash: $${totalMoney.toLocaleString()} (${parsedPot.toLocaleString()} pot + ${reserveMoney.toLocaleString()} rewards)\n` +
+        `- Points: ${reservePoints.toLocaleString()}\n` +
+        `${rewardNote}`
+      );
+      if (!ok) return;
+    }
     setCreateGameSubmitting(true);
     try {
       await api.post('/forum/entertainer/games', {
         game_type: createGameType,
-        max_players: Math.max(1, Math.min(10, parseInt(createGameMaxPlayers, 10) || 10)),
-        join_fee: Math.max(0, parseInt(String(createGameJoinFee).replace(/\D/g, ''), 10) || 0),
-        pot: Math.max(0, parseInt(String(createGamePot).replace(/\D/g, ''), 10) || 0),
+        max_players: parsedMaxPlayers,
+        join_fee: parsedJoinFee,
+        pot: parsedPot,
         manual_roll: createGameManualRoll,
+        reward_money: rewardMoney,
+        reward_points: rewardPoints,
         topic_id: topicId || undefined,
       });
       toast.success(createGameManualRoll ? 'Game created — roll it when ready from the Entertainer Forum.' : 'Game created');
@@ -1048,7 +1078,7 @@ export default function ForumTopic() {
             <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">🎲 Create Game</span>
           </div>
           <div className="p-3">
-            <p className="text-xs text-mutedForeground mb-3">Start a dice or gbox game linked to this topic. Use manual roll to roll it yourself when everyone has joined.</p>
+            <p className="text-xs text-mutedForeground mb-3">Start a dice or gbox game linked to this topic. Manual games use rewards you set here (cash, points, or both).</p>
             <form onSubmit={createGameInTopic} className="space-y-3">
               <div>
                 <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Type</label>
@@ -1077,6 +1107,14 @@ export default function ForumTopic() {
                 <input type="checkbox" checked={createGameManualRoll} onChange={(e) => setCreateGameManualRoll(e.target.checked)} className="w-4 h-4 accent-primary" />
                 <span className="text-xs font-heading text-foreground">Manual roll — I&apos;ll roll when ready (no auto-roll)</span>
               </label>
+              <div>
+                <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Reward cash ($)</label>
+                <FormattedNumberInput value={createGameRewardMoney} onChange={setCreateGameRewardMoney} placeholder="0" className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground font-heading focus:border-primary/50 focus:outline-none" />
+              </div>
+              <div>
+                <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Reward points</label>
+                <FormattedNumberInput value={createGameRewardPoints} onChange={setCreateGameRewardPoints} placeholder="0" className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground font-heading focus:border-primary/50 focus:outline-none" />
+              </div>
               <div className="flex gap-2 pt-1">
                 <button type="submit" disabled={createGameSubmitting} className="px-4 py-2 bg-primary/20 text-primary text-xs font-heading font-bold uppercase rounded border border-primary/40 hover:bg-primary/30 disabled:opacity-50">
                   {createGameSubmitting ? '...' : 'Create game'}

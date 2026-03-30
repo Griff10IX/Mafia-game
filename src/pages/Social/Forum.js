@@ -626,18 +626,48 @@ const CreateGameModal = ({ isOpen, onClose, onCreated, me }) => {
   const [pot, setPot] = useState(0);
   const [joinFee, setJoinFee] = useState(0);
   const [manualRoll, setManualRoll] = useState(true);
+  const [rewardMoney, setRewardMoney] = useState('0');
+  const [rewardPoints, setRewardPoints] = useState('0');
   const [submitting, setSubmitting] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const parsedMaxPlayers = Math.max(1, Math.min(10, parseInt(maxPlayers, 10) || 10));
+    const parsedJoinFee = Math.max(0, parseInt(String(joinFee).replace(/\D/g, ''), 10) || 0);
+    const parsedPot = Math.max(0, parseInt(String(pot).replace(/\D/g, ''), 10) || 0);
+    const parsedRewardMoney = Math.max(0, parseInt(String(rewardMoney).replace(/\D/g, ''), 10) || 0);
+    const parsedRewardPoints = Math.max(0, parseInt(String(rewardPoints).replace(/\D/g, ''), 10) || 0);
+    if (manualRoll && parsedRewardMoney <= 0 && parsedRewardPoints <= 0) {
+      toast.error('Set reward cash, points, or both for manual games.');
+      return;
+    }
+    if (manualRoll) {
+      const multiplier = gameType === 'gbox' ? parsedMaxPlayers : 1;
+      const reserveMoney = parsedRewardMoney * multiplier;
+      const reservePoints = parsedRewardPoints * multiplier;
+      const totalMoney = parsedPot + reserveMoney;
+      const rewardNote = gameType === 'gbox'
+        ? `\nThis gbox pays each player, so rewards are x${multiplier}.`
+        : '';
+      const ok = window.confirm(
+        `Create game and deduct now?\n\n` +
+        `From your account:\n` +
+        `- Cash: $${totalMoney.toLocaleString()} (${parsedPot.toLocaleString()} pot + ${reserveMoney.toLocaleString()} rewards)\n` +
+        `- Points: ${reservePoints.toLocaleString()}\n` +
+        `${rewardNote}`
+      );
+      if (!ok) return;
+    }
     setSubmitting(true);
     try {
       await api.post('/forum/entertainer/games', {
         game_type: gameType,
-        max_players: Math.max(1, Math.min(10, parseInt(maxPlayers, 10) || 10)),
-        join_fee: Math.max(0, parseInt(joinFee, 10) || 0),
-        pot: Math.max(0, parseInt(pot, 10) || 0),
+        max_players: parsedMaxPlayers,
+        join_fee: parsedJoinFee,
+        pot: parsedPot,
         manual_roll: manualRoll,
+        reward_money: parsedRewardMoney,
+        reward_points: parsedRewardPoints,
       });
       toast.success('Game created');
       onClose();
@@ -668,7 +698,7 @@ const CreateGameModal = ({ isOpen, onClose, onCreated, me }) => {
                 <Package size={14} /> Gbox
               </button>
             </div>
-            <p className="text-[10px] text-mutedForeground mt-1">Winnings: random — points, cash, bullets, or cars. Optional pot & entry fee.</p>
+            <p className="text-[10px] text-mutedForeground mt-1">Manual games use rewards you set: cash, points, or both.</p>
           </div>
           <div>
             <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Players (1–10)</label>
@@ -686,6 +716,14 @@ const CreateGameModal = ({ isOpen, onClose, onCreated, me }) => {
             <input type="checkbox" checked={manualRoll} onChange={(e) => setManualRoll(e.target.checked)} className="w-4 h-4 accent-primary" />
             <span className="text-xs font-heading text-foreground">Manual roll (I roll when ready)</span>
           </label>
+          <div>
+            <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Reward cash ($)</label>
+            <FormattedNumberInput value={rewardMoney} onChange={setRewardMoney} placeholder="0" className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground font-heading focus:border-primary/50 focus:outline-none" />
+          </div>
+          <div>
+            <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Reward points</label>
+            <FormattedNumberInput value={rewardPoints} onChange={setRewardPoints} placeholder="0" className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground font-heading focus:border-primary/50 focus:outline-none" />
+          </div>
           <div className="flex gap-2 pt-1">
             <button type="button" onClick={onClose} className="flex-1 px-4 py-2 bg-zinc-700/50 text-foreground text-xs font-heading uppercase rounded border border-zinc-600/50">Cancel</button>
             <button type="submit" disabled={submitting} className="flex-1 px-4 py-2 bg-primary/20 text-primary text-xs font-heading uppercase rounded border border-primary/40 hover:bg-primary/30 disabled:opacity-50">{submitting ? '...' : 'Create'}</button>
