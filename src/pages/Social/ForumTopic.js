@@ -113,6 +113,8 @@ const FORUM_FAQ_STYLES = `
   .forum-faq-content details[open] summary { border-bottom: 1px solid var(--noir-border-light); }
   .forum-faq-content details > div { padding: 0.6em 0.9em; background: var(--noir-content); color: var(--noir-foreground); line-height: 1.45; }
   .forum-faq-content strong { color: var(--noir-primary); }
+  /* BBCode [color] wraps list rows in <span style="color:…">; [b] becomes <strong> — let bold inherit tier color (e.g. wealth ranks FAQ). */
+  .forum-faq-content li span[style*="color:"] strong { color: inherit !important; }
   .forum-faq-content p { margin: 0.35em 0; color: var(--noir-foreground); }
   .forum-faq-content ul, .forum-faq-content ol { margin: 0.35em 0; padding-left: 1.25em; color: var(--noir-foreground); }
   .forum-faq-content li { color: var(--noir-foreground); margin: 0.15em 0; }
