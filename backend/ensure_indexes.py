@@ -338,6 +338,15 @@ async def ensure_all_indexes(db):
         await db.gambling_log.create_index([("user_id", 1), ("created_at", -1)])
         await db.gambling_log.create_index([("username", 1), ("created_at", -1)])
         await db.gambling_log.create_index([("game_type", 1), ("created_at", -1)])
+        await db.analytics_events.create_index([("created_at", -1)])
+        await db.analytics_events.create_index([("domain", 1), ("created_at", -1)])
+        await db.analytics_events.create_index([("domain", 1), ("metric", 1), ("created_at", -1)])
+        await db.analytics_events.create_index([("user_id", 1), ("created_at", -1)])
+        await db.analytics_events.create_index([("idempotency_key", 1)], unique=True)
+        await db.analytics_events.create_index([("buckets.daily", 1), ("domain", 1)])
+        await db.analytics_events.create_index([("buckets.weekly", 1), ("domain", 1)])
+        await db.analytics_rollups.create_index([("bucket", 1), ("bucket_start", -1), ("domain", 1)], unique=True)
+        await db.analytics_rollups.create_index([("bucket", 1), ("domain", 1), ("bucket_start", -1)])
 
         # --- Entertainer ---
         await db.entertainer_games.create_index("id", unique=True)

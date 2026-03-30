@@ -27,6 +27,7 @@ from utils.game_pass_micro_rewards import (
     REWARD_KEY_LABELS,
     free_unlocked_key_for_micro_tier,
 )
+from utils.analytics_events import log_analytics_event
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 import random
@@ -1712,14 +1713,45 @@ ADMIN_EMAILS = [e.strip().lower() for e in _raw.split(",") if e.strip()] if _raw
 async def log_activity(user_id: str, username: str, action: str, details: dict):
     """Append to activity_log for admin monitoring (crimes, forum, etc.)."""
     try:
+        now = datetime.now(timezone.utc)
         await db.activity_log.insert_one({
             "id": str(uuid.uuid4()),
             "user_id": user_id,
             "username": username,
             "action": action,
             "details": details,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": now.isoformat(),
         })
+        a = (action or "").strip().lower()
+        domain = "other"
+        value = 1.0
+        if a.startswith("booze_") or "booze" in a:
+            domain = "booze_run"
+            value = float((details or {}).get("profit") or (details or {}).get("cash") or 1)
+        elif a.startswith("crime") or a.startswith("oc_") or a.startswith("gta") or "jail" in a:
+            domain = "crime_suite"
+            value = float((details or {}).get("profit") or (details or {}).get("cash") or 1)
+        elif a.startswith("minigame_") or "minigame" in a:
+            domain = "minigames"
+            value = float((details or {}).get("score") or 1)
+        elif a.startswith("attack") or a.startswith("family_") or "racket" in a or "war" in a:
+            domain = "combat_family"
+        elif a.startswith("store_") or "token" in a or "buy_" in a:
+            domain = "store"
+            value = float((details or {}).get("points_spent") or (details or {}).get("cost") or 1)
+        elif "transfer" in a or "economy" in a or "bank" in a:
+            domain = "economy"
+            value = float((details or {}).get("amount") or (details or {}).get("profit") or 1)
+        await log_analytics_event(
+            db,
+            user_id=user_id,
+            username=username,
+            domain=domain,
+            metric=(a or "activity")[:64],
+            value=value,
+            tags={"source": "activity_log"},
+            created_at=now,
+        )
     except Exception:
         pass
 
@@ -1727,6 +1759,7 @@ async def log_activity(user_id: str, username: str, action: str, details: dict):
 async def log_minigame_payout(user_id: str, username: str, game: str, score, rewards: dict):
     """Log every individual minigame play payout for admin auditing."""
     try:
+        now = datetime.now(timezone.utc)
         await db.minigame_play_payouts.insert_one({
             "id": str(uuid.uuid4()),
             "user_id": user_id,
@@ -1734,8 +1767,24 @@ async def log_minigame_payout(user_id: str, username: str, game: str, score, rew
             "game": game,
             "score": score,
             "rewards": rewards,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": now.isoformat(),
         })
+        reward_total = float(
+            (rewards or {}).get("money", 0)
+            + (rewards or {}).get("respect_points", 0)
+            + (rewards or {}).get("bullets", 0)
+            + (rewards or {}).get("loot_box_pieces", 0)
+        )
+        await log_analytics_event(
+            db,
+            user_id=user_id,
+            username=username,
+            domain="minigames",
+            metric=f"payout_{(game or 'unknown')[:40]}",
+            value=reward_total if reward_total > 0 else 1,
+            tags={"game": game, "source": "minigame_play_payouts"},
+            created_at=now,
+        )
     except Exception:
         pass
 
@@ -1743,14 +1792,28 @@ async def log_minigame_payout(user_id: str, username: str, game: str, score, rew
 async def log_gambling(user_id: str, username: str, game_type: str, details: dict):
     """Append to gambling_log for admin anti-cheat monitoring. Used by all casinos: blackjack, slots, roulette, dice, videopoker, horseracing, sports_bet, mdg."""
     try:
+        now = datetime.now(timezone.utc)
         await db.gambling_log.insert_one({
             "id": str(uuid.uuid4()),
             "user_id": user_id,
             "username": username,
             "game_type": game_type,
             "details": details,
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": now.isoformat(),
         })
+        stake = float((details or {}).get("stake") or (details or {}).get("bet") or 0)
+        payout = float((details or {}).get("payout") or 0)
+        profit = payout - stake
+        await log_analytics_event(
+            db,
+            user_id=user_id,
+            username=username,
+            domain="casino",
+            metric=f"play_{(game_type or 'unknown')[:40]}",
+            value=profit if profit != 0 else 1,
+            tags={"game_type": game_type, "stake": stake, "payout": payout},
+            created_at=now,
+        )
     except Exception:
         pass
 

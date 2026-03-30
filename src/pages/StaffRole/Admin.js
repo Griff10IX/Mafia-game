@@ -23,6 +23,40 @@ const ADMIN_STYLES = `
     .admin-mobile-shell.mobile-page-root {
       padding-left: 12px;
       padding-right: 12px;
+      overflow-x: hidden;
+      max-width: 100vw;
+      width: 100%;
+      box-sizing: border-box;
+    }
+    .admin-mobile-shell,
+    .admin-mobile-shell * {
+      box-sizing: border-box;
+    }
+    .admin-mobile-shell .admin-category-nav,
+    .admin-mobile-shell main,
+    .admin-mobile-shell section,
+    .admin-mobile-shell div {
+      max-width: 100%;
+      min-width: 0;
+    }
+    .admin-mobile-shell .mobile-panel {
+      width: 100%;
+      max-width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
+    }
+    .admin-mobile-shell .overflow-x-auto {
+      max-width: 100%;
+    }
+    .admin-mobile-shell [class*="min-w-["] {
+      min-width: 0 !important;
+    }
+    .admin-mobile-shell [class*="max-w-["] {
+      max-width: 100% !important;
+    }
+    .admin-mobile-shell pre {
+      white-space: pre-wrap;
+      word-break: break-word;
     }
   }
   .admin-command-bar {
@@ -44,38 +78,38 @@ const ADMIN_STYLES = `
 `;
 
 const ADMIN_CATEGORIES = [
-  { id: 'admin-players', label: 'Player Management', icon: UserCog },
-  { id: 'admin-moderation', label: 'Moderation', icon: Lock },
-  { id: 'admin-donations', label: 'Donations', icon: HandCoins },
-  { id: 'admin-gameworld', label: 'Game World', icon: Zap },
-  { id: 'admin-security', label: 'Security & Cloudflare', icon: Globe },
-  { id: 'admin-cheat', label: 'Cheat Detection', icon: AlertTriangle },
-  { id: 'admin-analytics', label: 'Analytics', icon: BarChart3 },
-  { id: 'admin-logs', label: 'Logs', icon: ScrollText },
-  { id: 'admin-testing', label: 'Testing Tools', icon: Wrench },
-  { id: 'admin-quick', label: 'Quick & Bulk', icon: Gift },
-  { id: 'admin-database', label: 'Database', icon: Database },
-  { id: 'admin-staff', label: 'Staff Management', icon: Shield },
-  { id: 'admin-mod-tools', label: 'Mod Tools', icon: Palette },
+  { id: 'admin-operations', label: 'Operations', icon: UserCog },
+  { id: 'admin-economy-progression', label: 'Economy & Progression', icon: Coins },
+  { id: 'admin-world-systems', label: 'World & Systems', icon: Zap },
+  { id: 'admin-analytics-monitoring', label: 'Analytics & Monitoring', icon: BarChart3 },
 ];
-const MOD_ONLY_CATEGORY_IDS = ['admin-cheat', 'admin-logs', 'admin-staff', 'admin-mod-tools', 'admin-donations', 'admin-moderation'];
+const MOD_ONLY_CATEGORY_IDS = ['admin-operations', 'admin-analytics-monitoring'];
 
 /** Short labels for horizontal category chips on mobile */
 const ADMIN_CATEGORY_MOBILE_SHORT = {
-  'admin-players': 'Players',
-  'admin-moderation': 'Mod',
-  'admin-donations': 'Donate',
-  'admin-gameworld': 'World',
-  'admin-security': 'Security',
-  'admin-cheat': 'Cheat',
-  'admin-analytics': 'Stats',
-  'admin-logs': 'Logs',
-  'admin-testing': 'Test',
-  'admin-quick': 'Quick',
-  'admin-database': 'DB',
-  'admin-staff': 'Staff',
-  'admin-mod-tools': 'Mod UI',
+  'admin-operations': 'Ops',
+  'admin-economy-progression': 'Economy',
+  'admin-world-systems': 'World',
+  'admin-analytics-monitoring': 'Stats',
 };
+
+const LEGACY_CATEGORY_MAP = {
+  'admin-players': 'admin-operations',
+  'admin-moderation': 'admin-operations',
+  'admin-security': 'admin-operations',
+  'admin-cheat': 'admin-operations',
+  'admin-staff': 'admin-operations',
+  'admin-mod-tools': 'admin-operations',
+  'admin-donations': 'admin-economy-progression',
+  'admin-quick': 'admin-economy-progression',
+  'admin-gameworld': 'admin-world-systems',
+  'admin-testing': 'admin-world-systems',
+  'admin-database': 'admin-world-systems',
+  'admin-analytics': 'admin-analytics-monitoring',
+  'admin-logs': 'admin-analytics-monitoring',
+};
+
+const normalizeCategoryId = (id) => LEGACY_CATEGORY_MAP[id] || id;
 
 const ADMIN_MOBILE_TARGET_OPEN_KEY = 'admin_mobile_target_open';
 
@@ -146,8 +180,6 @@ const SEARCHABLE_TOOLS = [
   { label: 'State Heads', categoryId: 'admin-gameworld', collapseKey: 'stateHeads', keywords: ['state', 'heads', 'family', 'territory'] },
   { label: 'Release soft-launch', categoryId: 'admin-gameworld', collapseKey: 'releaseSoftLaunch', keywords: ['release', 'soft', 'launch', 'pvp', 'kill', 'game pass'] },
   { label: 'Reset Racket Cooldown', categoryId: 'admin-gameworld', collapseKey: 'racketReset', keywords: ['racket', 'cooldown', 'reset', 'family'] },
-  { label: 'Hitlist NPCs', categoryId: 'admin-gameworld', collapseKey: 'hitlistNpcs', keywords: ['hitlist', 'npc', 'bounty'] },
-  { label: 'Jail NPCs', categoryId: 'admin-gameworld', collapseKey: 'jailNpcs', keywords: ['jail', 'npc', 'prisoner'] },
   { label: 'Casino Settings', categoryId: 'admin-gameworld', collapseKey: 'casinoCaps', keywords: ['casino', 'caps', 'max bet', 'buyback'] },
   { label: 'Admin Settings', categoryId: 'admin-gameworld', collapseKey: 'adminSettings', keywords: ['admin', 'settings', 'config', 'banner', 'stock'] },
   { label: 'Login Lock', categoryId: 'admin-gameworld', collapseKey: 'adminSettings', keywords: ['login', 'lock', 'maintenance'] },
@@ -182,7 +214,6 @@ const SEARCHABLE_TOOLS = [
   { label: 'Clear minigame records (user)', categoryId: 'admin-testing', collapseKey: 'minigameLbAdmin', keywords: ['minigame', 'records', 'clear', 'user', 'scores'] },
   { label: 'Minigame weekly leaderboard strip/add', categoryId: 'admin-testing', collapseKey: 'minigameLbAdmin', keywords: ['minigame', 'leaderboard', 'weekly', 'strip', 'add', 'score', 'flappy', 'gauntlet'] },
   { label: 'Main leaderboards strip (respect melt stock booze)', categoryId: 'admin-testing', collapseKey: 'mainLbStrip', keywords: ['leaderboard', 'weekly', 'respect', 'melt', 'stock', 'booze', 'strip', 'top 10'] },
-  { label: 'Reset Hitlist NPC Timers', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['hitlist', 'npc', 'timer', 'reset'] },
   { label: 'Reset OC Timers', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['oc', 'organised', 'crime', 'timer'] },
   { label: 'Reset Daily Rewards Timer', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['daily', 'rewards', 'timer', 'rps'] },
   { label: 'Bodyguard Tools', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'robot', 'generate'] },
@@ -190,7 +221,6 @@ const SEARCHABLE_TOOLS = [
   { label: 'Test Bodyguard Payout', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'payout', 'test'] },
   { label: 'Lifetime Objectives Testing', categoryId: 'admin-testing', collapseKey: 'lifetimeObjectives', keywords: ['lifetime', 'objectives', 'completed it', 'test'] },
   // Quick & Bulk
-  { label: 'Seed Families', categoryId: 'admin-quick', collapseKey: 'quick', keywords: ['seed', 'families', 'create'] },
   { label: 'Give All Points', categoryId: 'admin-quick', collapseKey: 'quick', keywords: ['give', 'all', 'points', 'bulk'] },
   { label: 'Give All Money', categoryId: 'admin-quick', collapseKey: 'quick', keywords: ['give', 'all', 'money', 'bulk'] },
   { label: 'Bulk User Action', categoryId: 'admin-quick', collapseKey: 'bulkAction', keywords: ['bulk', 'action', 'multiple', 'users'] },
@@ -326,8 +356,6 @@ export default function Admin() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [npcData, setNpcData] = useState({ npcs: [], npcs_enabled: false, npc_count: 0 });
-  const [npcCount, setNpcCount] = useState(10);
   const [forceOnlineInfo, setForceOnlineInfo] = useState(null);
   const [boozeRotationSeconds, setBoozeRotationSeconds] = useState(null);
   const [boozeJailChances, setBoozeJailChances] = useState(null);
@@ -424,16 +452,16 @@ export default function Admin() {
   const [dropHumanBgLoading, setDropHumanBgLoading] = useState(false);
   const [testPayoutLoading, setTestPayoutLoading] = useState(false);
   const [lifetimeTestLoading, setLifetimeTestLoading] = useState(false);
-  const [resetNpcTimersLoading, setResetNpcTimersLoading] = useState(false);
   const [toolSearch, setToolSearch] = useState('');
   const [toolSearchFocused, setToolSearchFocused] = useState(false);
   const searchInputRef = useRef(null);
 
-  const [activeCategoryId, setActiveCategoryId] = useState('admin-players');
+  const [activeCategoryId, setActiveCategoryId] = useState('admin-operations');
   const [modVisibleCategoryIds, setModVisibleCategoryIds] = useState(() => [...MOD_ONLY_CATEGORY_IDS]);
   const visibleCategories = isAdmin ? ADMIN_CATEGORIES : ADMIN_CATEGORIES.filter((c) => modVisibleCategoryIds.includes(c.id));
   useEffect(() => {
-    const h = (typeof window !== 'undefined' && window.location.hash) ? window.location.hash.slice(1) : '';
+    const hRaw = (typeof window !== 'undefined' && window.location.hash) ? window.location.hash.slice(1) : '';
+    const h = normalizeCategoryId(hRaw);
     const visible = isAdmin ? ADMIN_CATEGORIES : ADMIN_CATEGORIES.filter((c) => modVisibleCategoryIds.includes(c.id));
     if (h && ADMIN_CATEGORIES.some((c) => c.id === h) && visible.some((c) => c.id === h)) {
       setActiveCategoryId(h);
@@ -455,20 +483,23 @@ export default function Admin() {
     const q = toolSearch.toLowerCase().trim();
     const visibleIds = isAdmin ? null : new Set(modVisibleCategoryIds);
     return SEARCHABLE_TOOLS.filter(tool => {
-      if (visibleIds && !visibleIds.has(tool.categoryId)) return false;
+      const normalizedCategoryId = normalizeCategoryId(tool.categoryId);
+      if (['Hitlist NPCs', 'Jail NPCs', 'Reset Hitlist NPC Timers', 'Seed Families'].includes(tool.label)) return false;
+      if (visibleIds && !visibleIds.has(normalizedCategoryId)) return false;
       return tool.label.toLowerCase().includes(q) || tool.keywords.some(kw => kw.toLowerCase().includes(q));
-    }).slice(0, 8);
+    }).map(tool => ({ ...tool, categoryId: normalizeCategoryId(tool.categoryId) })).slice(0, 8);
   }, [toolSearch, isAdmin, modVisibleCategoryIds]);
 
   const handleToolSelect = (tool) => {
-    setActiveCategoryId(tool.categoryId);
+    const normalizedCategoryId = normalizeCategoryId(tool.categoryId);
+    setActiveCategoryId(normalizedCategoryId);
     if (tool.collapseKey) {
       setCollapsed(prev => ({ ...prev, [tool.collapseKey]: false }));
     }
     setToolSearch('');
     setToolSearchFocused(false);
     searchInputRef.current?.blur();
-    if (typeof window !== 'undefined') window.location.hash = tool.categoryId;
+    if (typeof window !== 'undefined') window.location.hash = normalizedCategoryId;
   };
   const [resetOcTimersLoading, setResetOcTimersLoading] = useState(false);
   const [fixLoginFieldsLoading, setFixLoginFieldsLoading] = useState(false);
@@ -594,6 +625,14 @@ export default function Admin() {
   const [economyAnalyticsDays, setEconomyAnalyticsDays] = useState(7);
   const [economyAnalytics, setEconomyAnalytics] = useState(null);
   const [economyAnalyticsLoading, setEconomyAnalyticsLoading] = useState(false);
+  const [analyticsV2Bucket, setAnalyticsV2Bucket] = useState('daily');
+  const [analyticsV2Periods, setAnalyticsV2Periods] = useState(14);
+  const [analyticsV2Domain, setAnalyticsV2Domain] = useState('');
+  const [analyticsV2Overview, setAnalyticsV2Overview] = useState(null);
+  const [analyticsV2Trends, setAnalyticsV2Trends] = useState(null);
+  const [analyticsV2Leaders, setAnalyticsV2Leaders] = useState(null);
+  const [analyticsV2Loading, setAnalyticsV2Loading] = useState(false);
+  const [analyticsV2RollupLoading, setAnalyticsV2RollupLoading] = useState(false);
   const [boozeRunAnalyticsDays, setBoozeRunAnalyticsDays] = useState(30);
   const [boozeRunUserDays, setBoozeRunUserDays] = useState(90);
   const [boozeRunOverview, setBoozeRunOverview] = useState(null);
@@ -990,7 +1029,7 @@ export default function Admin() {
   useEffect(() => { checkAdmin(); }, []);
 
   useEffect(() => {
-    if (activeCategoryId === 'admin-database' && isAdmin) {
+    if (activeCategoryId === 'admin-world-systems' && isAdmin) {
       api.get('/admin/families-list').then((res) => setAdminFamiliesList(res.data?.families || [])).catch(() => {});
     }
   }, [activeCategoryId, isAdmin]);
@@ -1017,22 +1056,22 @@ export default function Admin() {
     }
     if (s.activityLogUsername != null && s.activityLogUsername !== '') {
       setActivityLogUsername(String(s.activityLogUsername));
-      setActiveCategoryId('admin-logs');
+      setActiveCategoryId('admin-analytics-monitoring');
       setCollapsed((prev) => ({ ...prev, activityLog: false }));
-      if (typeof window !== 'undefined') window.location.hash = 'admin-logs';
+      if (typeof window !== 'undefined') window.location.hash = 'admin-analytics-monitoring';
     }
     if (s.gamblingLogUsername != null && s.gamblingLogUsername !== '') {
       setGamblingLogUsername(String(s.gamblingLogUsername));
-      setActiveCategoryId('admin-logs');
+      setActiveCategoryId('admin-analytics-monitoring');
       setCollapsed((prev) => ({ ...prev, gamblingLog: false }));
-      if (typeof window !== 'undefined') window.location.hash = 'admin-logs';
+      if (typeof window !== 'undefined') window.location.hash = 'admin-analytics-monitoring';
     }
     if (s.respectLogUserId != null && String(s.respectLogUserId).trim()) {
       const rid = String(s.respectLogUserId).trim();
       setRespectLogUserId(rid);
-      setActiveCategoryId('admin-players');
+      setActiveCategoryId('admin-operations');
       setCollapsed((prev) => ({ ...prev, respectPointsLog: false }));
-      if (typeof window !== 'undefined') window.location.hash = 'admin-players';
+      if (typeof window !== 'undefined') window.location.hash = 'admin-operations';
       const lim = Math.max(1, Math.min(1000, parseInt(String(respectLogLimit), 10) || 200));
       setRespectLogLoading(true);
       setRespectLogData(null);
@@ -1268,7 +1307,14 @@ export default function Admin() {
       setCasinoBuybackMaxPoints(res.data?.casino_buyback_max_points || 15000);
       setMpPokerMaxBlind(res.data?.mp_poker_max_blind || 2500000);
       if (Array.isArray(res.data?.mod_visible_category_ids)) {
-        setModVisibleCategoryIds(res.data.mod_visible_category_ids.length ? res.data.mod_visible_category_ids : [...MOD_ONLY_CATEGORY_IDS]);
+        const mapped = Array.from(
+          new Set(
+            (res.data.mod_visible_category_ids || [])
+              .map((id) => normalizeCategoryId(String(id || '').trim()))
+              .filter((id) => ADMIN_CATEGORIES.some((c) => c.id === id)),
+          ),
+        );
+        setModVisibleCategoryIds(mapped.length ? mapped : [...MOD_ONLY_CATEGORY_IDS]);
       }
     } catch {
       setAdminOnlineColor('#a78bfa');
@@ -1796,7 +1842,7 @@ export default function Admin() {
   }, []);
 
   useEffect(() => {
-    if (activeCategoryId === 'admin-gameworld' && isAdmin) {
+    if (activeCategoryId === 'admin-world-systems' && isAdmin) {
       fetchPreregisterAccounts();
     }
   }, [activeCategoryId, isAdmin, fetchPreregisterAccounts]);
@@ -1969,25 +2015,10 @@ export default function Admin() {
   };
 
   useEffect(() => {
-    if (activeCategoryId !== 'admin-quick' || !isAdmin) return;
+    if (activeCategoryId !== 'admin-economy-progression' || !isAdmin) return;
     if (collapsed.redeemCodes) return;
     fetchRedeemCodes();
   }, [activeCategoryId, isAdmin, collapsed.redeemCodes, fetchRedeemCodes]);
-
-  const fetchNPCs = async () => {
-    try {
-      const response = await api.get('/admin/npcs');
-      setNpcData(response.data);
-    } catch {}
-  };
-
-  const handleToggleNPCs = async (enabled) => {
-    try {
-      const response = await api.post('/admin/npcs/toggle', { enabled, count: enabled ? npcCount : 0 });
-      toast.success(response.data.message);
-      fetchNPCs();
-    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
-  };
 
   const handleChangeRank = async () => {
     const username = (formData.targetUsername || '').trim();
@@ -2729,9 +2760,9 @@ export default function Admin() {
 
   const handleViewUserFromCheat = (username) => {
     setFormData((prev) => ({ ...prev, targetUsername: (username || '').trim() }));
-    setActiveCategoryId('admin-players');
+    setActiveCategoryId('admin-operations');
     setCollapsed((prev) => ({ ...prev, searchUsers: false }));
-    if (typeof window !== 'undefined') window.location.hash = 'admin-players';
+    if (typeof window !== 'undefined') window.location.hash = 'admin-operations';
   };
 
   const handleFetchGamblingAnomalies = async () => {
@@ -2789,16 +2820,6 @@ export default function Admin() {
       toast.success(res.data?.message || 'Cleared');
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
     finally { setClearSearchesLoading(false); }
-  };
-
-  const handleResetHitlistNpcTimers = async () => {
-    if (!window.confirm('Reset hitlist NPC timers for everyone?')) return;
-    setResetNpcTimersLoading(true);
-    try {
-      const res = await api.post('/admin/hitlist/reset-npc-timers');
-      toast.success(res.data?.message || 'Reset');
-    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
-    finally { setResetNpcTimersLoading(false); }
   };
 
   const handleResetAllOcTimers = async () => {
@@ -3149,7 +3170,7 @@ export default function Admin() {
   };
 
   useEffect(() => {
-    if (!isAdmin || activeCategoryId !== 'admin-database' || collapsed.imageHostAdmin) return;
+    if (!isAdmin || activeCategoryId !== 'admin-world-systems' || collapsed.imageHostAdmin) return;
     fetchImageHostAdmin();
   }, [imageHostAdminSkip, collapsed.imageHostAdmin, activeCategoryId, isAdmin, fetchImageHostAdmin]);
 
@@ -3374,8 +3395,8 @@ export default function Admin() {
   };
 
   const handleJumpToInterestBankPlayers = () => {
-    setActiveCategoryId('admin-analytics');
-    if (typeof window !== 'undefined') window.location.hash = 'admin-analytics';
+    setActiveCategoryId('admin-analytics-monitoring');
+    if (typeof window !== 'undefined') window.location.hash = 'admin-analytics-monitoring';
     setCollapsed((prev) => ({ ...prev, interestBankPlayers: false }));
     handleFetchInterestBankPlayers({ include_staff: false });
     setTimeout(() => {
@@ -3416,6 +3437,42 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed to load economy analytics');
     } finally {
       setEconomyAnalyticsLoading(false);
+    }
+  };
+
+  const handleFetchAnalyticsV2 = async () => {
+    setAnalyticsV2Loading(true);
+    try {
+      const params = { bucket: analyticsV2Bucket, periods: analyticsV2Periods };
+      const domain = (analyticsV2Domain || '').trim();
+      const [overviewRes, trendsRes] = await Promise.all([
+        api.get('/admin/analytics/v2/overview', { params }),
+        api.get('/admin/analytics/v2/trends', { params: { ...params, ...(domain ? { domain } : {}) } }),
+      ]);
+      setAnalyticsV2Overview(overviewRes.data || null);
+      setAnalyticsV2Trends(trendsRes.data || null);
+      if (domain) {
+        const leadersRes = await api.get('/admin/analytics/v2/leaders', { params: { ...params, domain, limit: 25 } });
+        setAnalyticsV2Leaders(leadersRes.data || null);
+      } else {
+        setAnalyticsV2Leaders(null);
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load v2 analytics');
+    } finally {
+      setAnalyticsV2Loading(false);
+    }
+  };
+
+  const handleRunAnalyticsV2Rollup = async () => {
+    setAnalyticsV2RollupLoading(true);
+    try {
+      await api.post('/admin/analytics/v2/rollups/run', null, { params: { days_back: 31 } });
+      toast.success('Analytics rollups refreshed');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to run analytics rollups');
+    } finally {
+      setAnalyticsV2RollupLoading(false);
     }
   };
 
@@ -3758,7 +3815,7 @@ export default function Admin() {
 
   useEffect(() => {
     const showingPanel = !collapsed.gtaPool || !collapsed.gtaLogs;
-    const inCategory = activeCategoryId === 'admin-gameworld' || activeCategoryId === 'admin-logs';
+    const inCategory = activeCategoryId === 'admin-world-systems' || activeCategoryId === 'admin-analytics-monitoring';
     if (!isAdmin || !inCategory || !showingPanel) return;
     fetchGtaExclusivePool();
     if (!collapsed.gtaPool) fetchExclusiveCarValues();
@@ -4035,14 +4092,6 @@ export default function Admin() {
     finally { setDbLoading(false); }
   };
 
-  const handleSeedFamilies = async () => {
-    if (!window.confirm('Create seed families from admin config (NPC members, exempt from player crew cap)?')) return;
-    try {
-      const res = await api.post('/admin/seed-families');
-      toast.success(res.data?.message || 'Seeded');
-    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
-  };
-
   const handleCreateTestUsers = async () => {
     if (!window.confirm('Create 30 real test users (random ranks, crews, casino/property owners)? Password: test1234')) return;
     try {
@@ -4285,10 +4334,10 @@ export default function Admin() {
     if (!id) return;
     setUserDetailData(null);
     setRespectLogUserId(id);
-    setActiveCategoryId('admin-players');
+    setActiveCategoryId('admin-operations');
     setCollapsed((prev) => ({ ...prev, respectPointsLog: false }));
     if (typeof window !== 'undefined') {
-      window.location.hash = 'admin-players';
+      window.location.hash = 'admin-operations';
       setTimeout(() => document.getElementById('admin-respect-points-log')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
     }
     const lim = Math.max(1, Math.min(1000, parseInt(String(respectLogLimit), 10) || 200));
@@ -4627,7 +4676,7 @@ export default function Admin() {
               </p>
             ))}
             <button
-              onClick={() => { setActiveCategoryId('admin-gameworld'); setCollapsed((prev) => ({ ...prev, stateHeads: false })); if (typeof window !== 'undefined') window.location.hash = 'admin-gameworld'; }}
+              onClick={() => { setActiveCategoryId('admin-world-systems'); setCollapsed((prev) => ({ ...prev, stateHeads: false })); if (typeof window !== 'undefined') window.location.hash = 'admin-world-systems'; }}
               className="mt-2 text-[10px] font-heading font-bold text-red-400 underline hover:text-red-300"
             >
               → Go to State Heads section to fix
@@ -4780,7 +4829,7 @@ export default function Admin() {
           </div>
 
           <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain space-y-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] md:contents md:overflow-visible md:pb-0">
-          {activeCategoryId === 'admin-players' && (
+          {activeCategoryId === 'admin-operations' && (
           <>
       {/* Search users (username or email) */}
       <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
@@ -5903,7 +5952,7 @@ export default function Admin() {
           </>
           )}
 
-      {activeCategoryId === 'admin-moderation' && (isAdmin || isModerator) && (
+      {activeCategoryId === 'admin-operations' && (isAdmin || isModerator) && (
       <section id="admin-moderation" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Lock size={12} />
@@ -6068,11 +6117,11 @@ export default function Admin() {
             <div className="p-3 space-y-2">
               <p className="text-[10px] text-mutedForeground font-heading">Quick jump to adjacent moderation surfaces.</p>
               <div className="flex flex-wrap gap-2">
-                <BtnSecondary onClick={() => { setActiveCategoryId('admin-cheat'); setCollapsed(prev => ({ ...prev, cheat: false })); if (typeof window !== 'undefined') window.location.hash = 'admin-cheat'; }}>
+                <BtnSecondary onClick={() => { setActiveCategoryId('admin-operations'); setCollapsed(prev => ({ ...prev, cheat: false })); if (typeof window !== 'undefined') window.location.hash = 'admin-operations'; }}>
                   Open Cheat Detection
                 </BtnSecondary>
                 {isAdmin && (
-                  <BtnSecondary onClick={() => { setActiveCategoryId('admin-security'); if (typeof window !== 'undefined') window.location.hash = 'admin-security'; }}>
+                  <BtnSecondary onClick={() => { setActiveCategoryId('admin-operations'); if (typeof window !== 'undefined') window.location.hash = 'admin-operations'; }}>
                     Open Security & Cloudflare
                   </BtnSecondary>
                 )}
@@ -6083,7 +6132,7 @@ export default function Admin() {
       </section>
       )}
 
-      {activeCategoryId === 'admin-donations' && isAdmin && (
+      {activeCategoryId === 'admin-economy-progression' && isAdmin && (
       <section id="admin-donations" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <HandCoins size={12} />
@@ -6370,7 +6419,7 @@ export default function Admin() {
       </section>
       )}
 
-      {activeCategoryId === 'admin-gameworld' && isAdmin && (
+      {activeCategoryId === 'admin-world-systems' && isAdmin && (
       <section id="admin-gameworld" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <LayoutGrid size={12} />
@@ -7757,7 +7806,7 @@ export default function Admin() {
       </section>
       )}
 
-      {activeCategoryId === 'admin-security' && isAdmin && (
+      {activeCategoryId === 'admin-operations' && isAdmin && (
       <section id="admin-security" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Globe size={12} />
@@ -8388,7 +8437,7 @@ export default function Admin() {
       </section>
       )}
 
-      {activeCategoryId === 'admin-cheat' && (
+      {activeCategoryId === 'admin-operations' && (
       <section id="admin-cheat" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <AlertTriangle size={12} />
@@ -9243,7 +9292,7 @@ export default function Admin() {
       </section>
       )}
 
-      {activeCategoryId === 'admin-analytics' && isAdmin && (
+      {activeCategoryId === 'admin-analytics-monitoring' && isAdmin && (
       <section id="admin-analytics" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <BarChart3 size={12} />
@@ -10086,6 +10135,76 @@ export default function Admin() {
           )}
         </div>
 
+        {/* Unified analytics workspace (v2) */}
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={BarChart3}
+            title="Analytics Workspace (V2)"
+            badge={analyticsV2Overview?.items ? <span className="text-[10px] font-heading text-mutedForeground">{analyticsV2Overview.items.length} domains</span> : null}
+            isCollapsed={collapsed.analyticsWorkspaceV2}
+            onToggle={() => toggleSection('analyticsWorkspaceV2')}
+          />
+          {!collapsed.analyticsWorkspaceV2 && (
+            <div className="p-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <AdminSelect value={analyticsV2Bucket} onChange={(e) => setAnalyticsV2Bucket(e.target.value)} className="w-28">
+                  <option value="realtime_5m">5m</option>
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                </AdminSelect>
+                <AdminInput type="number" min="1" max="365" value={analyticsV2Periods} onChange={(e) => setAnalyticsV2Periods(Number(e.target.value) || 14)} className="w-20" />
+                <AdminInput value={analyticsV2Domain} onChange={(e) => setAnalyticsV2Domain(e.target.value)} placeholder="optional domain" className="w-36" />
+                <BtnPrimary onClick={handleFetchAnalyticsV2} disabled={analyticsV2Loading}>{analyticsV2Loading ? 'Loading…' : 'Load v2'}</BtnPrimary>
+                <BtnSecondary onClick={handleRunAnalyticsV2Rollup} disabled={analyticsV2RollupLoading}>{analyticsV2RollupLoading ? 'Running…' : 'Run rollups'}</BtnSecondary>
+              </div>
+              {analyticsV2Overview && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40"><div className="text-[9px] text-mutedForeground font-heading uppercase">Events</div><div className="text-sm font-heading font-bold">{(analyticsV2Overview.total_events || 0).toLocaleString()}</div></div>
+                  <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40"><div className="text-[9px] text-mutedForeground font-heading uppercase">Total value</div><div className="text-sm font-heading font-bold">{Math.round(analyticsV2Overview.total_value || 0).toLocaleString()}</div></div>
+                  <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40"><div className="text-[9px] text-mutedForeground font-heading uppercase">Bucket</div><div className="text-sm font-heading font-bold">{analyticsV2Overview.bucket}</div></div>
+                  <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40"><div className="text-[9px] text-mutedForeground font-heading uppercase">Periods</div><div className="text-sm font-heading font-bold">{analyticsV2Overview.periods}</div></div>
+                </div>
+              )}
+              {analyticsV2Overview?.items?.length > 0 && (
+                <div className="overflow-x-auto max-h-56">
+                  <table className="w-full text-[10px] font-heading">
+                    <thead><tr><th className="text-left p-1.5 text-mutedForeground">Domain</th><th className="text-right p-1.5 text-mutedForeground">Events</th><th className="text-right p-1.5 text-mutedForeground">Value</th><th className="text-right p-1.5 text-mutedForeground">Users</th></tr></thead>
+                    <tbody>
+                      {analyticsV2Overview.items.map((it) => (
+                        <tr key={it.domain} className="border-b border-zinc-700/30">
+                          <td className="py-1.5 pr-2 font-medium">{it.domain || '—'}</td>
+                          <td className="py-1.5 text-right">{(it.events || 0).toLocaleString()}</td>
+                          <td className="py-1.5 text-right">{Math.round(it.total_value || 0).toLocaleString()}</td>
+                          <td className="py-1.5 text-right">{(it.unique_users || 0).toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {analyticsV2Leaders?.leaders?.length > 0 && (
+                <div className="overflow-x-auto max-h-48">
+                  <p className="text-[10px] text-mutedForeground font-heading mb-1">Top users for domain: {(analyticsV2Leaders.domain || '').trim()}</p>
+                  <table className="w-full text-[10px] font-heading">
+                    <thead><tr><th className="text-left p-1.5 text-mutedForeground">User</th><th className="text-right p-1.5 text-mutedForeground">Events</th><th className="text-right p-1.5 text-mutedForeground">Value</th></tr></thead>
+                    <tbody>
+                      {analyticsV2Leaders.leaders.map((it) => (
+                        <tr key={it.user_id || it.username} className="border-b border-zinc-700/30">
+                          <td className="py-1.5 pr-2 font-medium">{it.username || '—'}</td>
+                          <td className="py-1.5 text-right">{(it.events || 0).toLocaleString()}</td>
+                          <td className="py-1.5 text-right">{Math.round(it.total_value || 0).toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Booze-run analytics (economy_events + user counters) */}
 
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
@@ -10573,7 +10692,7 @@ export default function Admin() {
       </section>
       )}
 
-      {activeCategoryId === 'admin-logs' && (
+      {activeCategoryId === 'admin-analytics-monitoring' && (
       <section id="admin-logs" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <ScrollText size={12} />
@@ -11467,7 +11586,7 @@ export default function Admin() {
       </section>
       )}
 
-      {activeCategoryId === 'admin-testing' && isAdmin && (
+      {activeCategoryId === 'admin-world-systems' && isAdmin && (
       <section id="admin-testing" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Wrench size={12} />
@@ -11499,12 +11618,6 @@ export default function Admin() {
               <BtnDanger onClick={handleClearAllSearches} disabled={clearSearchesLoading}>
                 {clearSearchesLoading ? '...' : 'Clear'}
               </BtnDanger>
-            </ActionRow>
-
-            <ActionRow icon={Clock} label="Reset Hitlist NPC Timers" description="All users can add NPCs again">
-              <BtnPrimary onClick={handleResetHitlistNpcTimers} disabled={resetNpcTimersLoading}>
-                {resetNpcTimersLoading ? '...' : 'Reset'}
-              </BtnPrimary>
             </ActionRow>
 
             <ActionRow icon={Clock} label="Reset All OC Timers" description="Clear OC cooldown for everyone; all can run Organised Crime immediately">
@@ -11805,7 +11918,7 @@ export default function Admin() {
       </section>
       )}
 
-      {activeCategoryId === 'admin-quick' && isAdmin && (
+      {activeCategoryId === 'admin-economy-progression' && isAdmin && (
       <section id="admin-quick" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Gift size={12} />
@@ -11821,9 +11934,6 @@ export default function Admin() {
         />
         {!collapsed.quick && (
           <div className="p-2 space-y-1">
-            <ActionRow icon={Building2} label="Seed Families" description="Create seed crews from config (10 named families, 10–15 NPC members each). Admin seed crews do not count toward the player cap (10). Skips if name/tag exists">
-              <BtnPrimary onClick={handleSeedFamilies}>Seed</BtnPrimary>
-            </ActionRow>
             <ActionRow icon={Gift} label="Give All Points" description="Give points to all alive accounts">
               <FormattedNumberInput value={String(giveAllPoints)} onChange={(raw) => setGiveAllPoints(parseInt(raw, 10) || 1)} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" />
               <BtnPrimary onClick={handleGiveAllPoints}>Give</BtnPrimary>
@@ -12028,7 +12138,7 @@ export default function Admin() {
       </section>
       )}
 
-      {activeCategoryId === 'admin-database' && isAdmin && (
+      {activeCategoryId === 'admin-world-systems' && isAdmin && (
       <section id="admin-database" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Skull size={12} />
@@ -12285,7 +12395,7 @@ export default function Admin() {
       )}
 
 
-      {activeCategoryId === 'admin-staff' && (isAdmin || isModerator) && (
+      {activeCategoryId === 'admin-operations' && (isAdmin || isModerator) && (
       <section id="admin-staff" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Shield size={12} />
@@ -12452,7 +12562,7 @@ export default function Admin() {
       </section>
       )}
 
-      {activeCategoryId === 'admin-mod-tools' && isModerator && (
+      {activeCategoryId === 'admin-operations' && isModerator && (
       <section id="admin-mod-tools" className="admin-category-nav space-y-4">
         <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
           <Palette size={12} />
@@ -12566,9 +12676,9 @@ export default function Admin() {
               <p className="text-[10px] text-mutedForeground font-heading">Same-IP report, same-device report, login attempts, duplicate suspects.</p>
               <BtnPrimary
                 onClick={() => {
-                  setActiveCategoryId('admin-cheat');
+                  setActiveCategoryId('admin-operations');
                   setCollapsed(prev => ({ ...prev, cheat: false }));
-                  if (typeof window !== 'undefined') window.location.hash = 'admin-cheat';
+                  if (typeof window !== 'undefined') window.location.hash = 'admin-operations';
                 }}
               >
                 Open Cheat Detection

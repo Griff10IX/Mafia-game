@@ -801,52 +801,13 @@ async def snitch(
 async def get_admin_npcs(current_user: dict = Depends(get_current_user)):
     if current_user["email"] not in ADMIN_EMAILS:
         raise HTTPException(status_code=403, detail="Admin access required")
-    npcs = await db.test_npcs.find({}, {"_id": 0}).to_list(100)
-    settings = await db.game_settings.find_one({"key": "npcs_enabled"}, {"_id": 0})
-    return {
-        "npcs": npcs,
-        "npcs_enabled": settings.get("value", False) if settings else False,
-        "npc_count": len(npcs),
-    }
+    raise HTTPException(status_code=410, detail="Deprecated: NPC seeding tools have been removed")
 
 
 async def toggle_npcs(request: NPCToggleRequest, current_user: dict = Depends(get_current_user)):
     if current_user["email"] not in ADMIN_EMAILS:
         raise HTTPException(status_code=403, detail="Admin access required")
-    await db.game_settings.update_one(
-        {"key": "npcs_enabled"},
-        {"$set": {"value": request.enabled}},
-        upsert=True,
-    )
-    if request.enabled and request.count > 0:
-        npc_first = ["Big", "Mad", "Lucky", "Fast", "Iron", "Steel", "Crazy", "Silent", "Golden", "Diamond"]
-        npc_last = ["Tony", "Mike", "Sal", "Vinny", "Frank", "Lou", "Carlo", "Marco", "Rico", "Dom"]
-        await db.test_npcs.delete_many({})
-        npcs_to_create = []
-        for i in range(min(request.count, 50)):
-            rank_idx = _rng.randint(0, len(RANKS) - 1)
-            rank = RANKS[rank_idx]
-            npc = {
-                "id": str(uuid.uuid4()),
-                "username": f"{_rng.choice(npc_first)} {_rng.choice(npc_last)} #{i+1}",
-                "rank": rank["id"],
-                "rank_name": rank["name"],
-                "rank_points": _rng.randint(rank["required_points"], rank["required_points"] + 500),
-                "money": _rng.randint(1000, 10000000),
-                "current_state": _rng.choice(STATES),
-                "in_jail": _rng.random() < 0.2,
-                "bullets": _rng.randint(0, 1000),
-                "is_npc": True,
-                "created_at": datetime.now(timezone.utc).isoformat(),
-            }
-            npcs_to_create.append(npc)
-        if npcs_to_create:
-            await db.test_npcs.insert_many(npcs_to_create)
-        return {"message": f"NPCs enabled. Created {len(npcs_to_create)} test NPCs."}
-    elif not request.enabled:
-        await db.test_npcs.delete_many({})
-        return {"message": "NPCs disabled and cleared."}
-    return {"message": "NPCs setting updated"}
+    raise HTTPException(status_code=410, detail="Deprecated: NPC seeding tools have been removed")
 
 
 async def list_npcs_for_attack(current_user: dict = Depends(get_current_user)):

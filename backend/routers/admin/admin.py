@@ -11,7 +11,7 @@ import re
 import uuid
 from datetime import datetime, timezone, timedelta
 from collections import Counter, defaultdict
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 import httpx
 from fastapi import Body, Depends, HTTPException, Query
@@ -21,6 +21,7 @@ from middleware.security import is_proxy_or_vpn, get_ip_info
 from utils.disposable_email import is_disposable_email
 from utils.referral_ids import normalize_referred_by_ids
 from utils.ip_normalize import normalize_ip_string
+from utils.analytics_events import VALID_BUCKETS, bucket_start
 from utils.cheat_detection_utils import (
     group_by_domain,
     group_by_similar_username_strip_digits,
@@ -2351,11 +2352,7 @@ def register(router):
     async def admin_reset_hitlist_npc_timers(current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        result = await db.users.update_many(
-            {},
-            {"$set": {"hitlist_npc_add_timestamps": []}}
-        )
-        return {"message": f"Reset hitlist NPC timers for all users ({result.modified_count} accounts)", "modified_count": result.modified_count}
+        raise HTTPException(status_code=410, detail="Deprecated: NPC seeding tools have been removed")
 
     @router.post("/admin/oc/reset-all-timers")
     async def admin_reset_all_oc_timers(current_user: dict = Depends(get_current_user)):
@@ -5177,6 +5174,222 @@ def register(router):
             "recent_events": recent_events,
         }
 
+    def _analytics_since(now: datetime, bucket: str, periods: int) -> datetime:
+        p = max(1, int(periods or 1))
+        if bucket == "realtime_5m":
+            return now - timedelta(minutes=5 * p)
+        if bucket == "daily":
+            return now - timedelta(days=p)
+        if bucket == "weekly":
+            return now - timedelta(days=7 * p)
+        if bucket == "monthly":
+            return now - timedelta(days=31 * p)
+        raise HTTPException(status_code=400, detail="Invalid bucket")
+
+    @router.get("/admin/analytics/v2/overview")
+    async def admin_analytics_v2_overview(
+        bucket: str = Query("daily"),
+        periods: int = Query(7, ge=1, le=365),
+        current_user: dict = Depends(get_current_user),
+    ):
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        b = (bucket or "daily").strip().lower()
+        if b not in VALID_BUCKETS:
+            raise HTTPException(status_code=400, detail=f"bucket must be one of {', '.join(VALID_BUCKETS)}")
+        now = datetime.now(timezone.utc)
+        since_iso = _analytics_since(now, b, periods).isoformat()
+        pipeline = [
+            {"$match": {"created_at": {"$gte": since_iso}}},
+            {
+                "$group": {
+                    "_id": "$domain",
+                    "events": {"$sum": 1},
+                    "total_value": {"$sum": "$value"},
+                    "users": {"$addToSet": "$user_id"},
+                }
+            },
+            {"$sort": {"events": -1}},
+        ]
+        rows = await db.analytics_events.aggregate(pipeline).to_list(200)
+        items = [
+            {
+                "domain": r.get("_id") or "unknown",
+                "events": int(r.get("events") or 0),
+                "total_value": float(r.get("total_value") or 0),
+                "unique_users": len(r.get("users") or []),
+            }
+            for r in rows
+        ]
+        total_events = sum(x["events"] for x in items)
+        total_value = sum(x["total_value"] for x in items)
+        return {
+            "generated_at": now.isoformat(),
+            "bucket": b,
+            "periods": int(periods),
+            "total_events": total_events,
+            "total_value": total_value,
+            "items": items,
+        }
+
+    @router.get("/admin/analytics/v2/trends")
+    async def admin_analytics_v2_trends(
+        bucket: str = Query("daily"),
+        periods: int = Query(14, ge=1, le=365),
+        domain: Optional[str] = Query(None),
+        current_user: dict = Depends(get_current_user),
+    ):
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        b = (bucket or "daily").strip().lower()
+        if b not in VALID_BUCKETS:
+            raise HTTPException(status_code=400, detail=f"bucket must be one of {', '.join(VALID_BUCKETS)}")
+        now = datetime.now(timezone.utc)
+        since_iso = _analytics_since(now, b, periods).isoformat()
+        match: Dict[str, Any] = {"created_at": {"$gte": since_iso}}
+        if domain and domain.strip():
+            match["domain"] = domain.strip()
+        pipeline = [
+            {"$match": match},
+            {
+                "$group": {
+                    "_id": {"bucket": f"$buckets.{b}", "domain": "$domain"},
+                    "events": {"$sum": 1},
+                    "total_value": {"$sum": "$value"},
+                }
+            },
+            {"$sort": {"_id.bucket": 1, "_id.domain": 1}},
+        ]
+        rows = await db.analytics_events.aggregate(pipeline).to_list(5000)
+        series = [
+            {
+                "bucket_start": (r.get("_id") or {}).get("bucket"),
+                "domain": (r.get("_id") or {}).get("domain") or "unknown",
+                "events": int(r.get("events") or 0),
+                "total_value": float(r.get("total_value") or 0),
+            }
+            for r in rows
+        ]
+        return {"generated_at": now.isoformat(), "bucket": b, "periods": int(periods), "series": series}
+
+    @router.get("/admin/analytics/v2/leaders")
+    async def admin_analytics_v2_leaders(
+        domain: str = Query(...),
+        bucket: str = Query("daily"),
+        periods: int = Query(30, ge=1, le=365),
+        limit: int = Query(25, ge=1, le=200),
+        current_user: dict = Depends(get_current_user),
+    ):
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        b = (bucket or "daily").strip().lower()
+        if b not in VALID_BUCKETS:
+            raise HTTPException(status_code=400, detail=f"bucket must be one of {', '.join(VALID_BUCKETS)}")
+        d = (domain or "").strip()
+        if not d:
+            raise HTTPException(status_code=400, detail="domain required")
+        now = datetime.now(timezone.utc)
+        since_iso = _analytics_since(now, b, periods).isoformat()
+        pipeline = [
+            {"$match": {"created_at": {"$gte": since_iso}, "domain": d}},
+            {
+                "$group": {
+                    "_id": "$user_id",
+                    "username": {"$last": "$username"},
+                    "events": {"$sum": 1},
+                    "total_value": {"$sum": "$value"},
+                }
+            },
+            {"$sort": {"total_value": -1, "events": -1}},
+            {"$limit": int(limit)},
+        ]
+        rows = await db.analytics_events.aggregate(pipeline).to_list(int(limit))
+        leaders = [
+            {
+                "user_id": r.get("_id"),
+                "username": r.get("username") or "?",
+                "events": int(r.get("events") or 0),
+                "total_value": float(r.get("total_value") or 0),
+            }
+            for r in rows
+        ]
+        return {"generated_at": now.isoformat(), "domain": d, "bucket": b, "periods": int(periods), "leaders": leaders}
+
+    @router.post("/admin/analytics/v2/rollups/run")
+    async def admin_analytics_v2_rollups_run(
+        days_back: int = Query(31, ge=1, le=365),
+        current_user: dict = Depends(get_current_user),
+    ):
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        now = datetime.now(timezone.utc)
+        since = now - timedelta(days=int(days_back))
+        docs = await db.analytics_events.find(
+            {"created_at": {"$gte": since.isoformat()}},
+            {"_id": 0, "domain": 1, "value": 1, "user_id": 1, "buckets": 1},
+        ).limit(500000).to_list(500000)
+        aggregates: Dict[tuple, dict] = {}
+        for d in docs:
+            domain = (d.get("domain") or "unknown").strip() or "unknown"
+            val = float(d.get("value") or 0)
+            uid = d.get("user_id")
+            bmap = d.get("buckets") or {}
+            for b in ("realtime_5m", "daily", "weekly", "monthly"):
+                start = (bmap.get(b) or "").strip()
+                if not start:
+                    continue
+                key = (b, start, domain)
+                row = aggregates.setdefault(key, {"events": 0, "total_value": 0.0, "users": set()})
+                row["events"] += 1
+                row["total_value"] += val
+                if uid:
+                    row["users"].add(uid)
+        upserts = 0
+        for (b, start, domain), row in aggregates.items():
+            await db.analytics_rollups.update_one(
+                {"bucket": b, "bucket_start": start, "domain": domain},
+                {
+                    "$set": {
+                        "bucket": b,
+                        "bucket_start": start,
+                        "domain": domain,
+                        "events": int(row["events"]),
+                        "total_value": float(row["total_value"]),
+                        "unique_users": len(row["users"]),
+                        "updated_at": now.isoformat(),
+                    }
+                },
+                upsert=True,
+            )
+            upserts += 1
+        return {
+            "generated_at": now.isoformat(),
+            "days_back": int(days_back),
+            "source_events_scanned": len(docs),
+            "rollup_rows_upserted": upserts,
+        }
+
+    @router.get("/admin/analytics/v2/history")
+    async def admin_analytics_v2_history(
+        bucket: str = Query("daily"),
+        domain: Optional[str] = Query(None),
+        periods: int = Query(31, ge=1, le=365),
+        current_user: dict = Depends(get_current_user),
+    ):
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        b = (bucket or "daily").strip().lower()
+        if b not in VALID_BUCKETS:
+            raise HTTPException(status_code=400, detail=f"bucket must be one of {', '.join(VALID_BUCKETS)}")
+        now = datetime.now(timezone.utc)
+        since = _analytics_since(now, b, periods)
+        since_start = bucket_start(since, b).isoformat().replace("+00:00", "Z")
+        q: Dict[str, Any] = {"bucket": b, "bucket_start": {"$gte": since_start}}
+        if domain and domain.strip():
+            q["domain"] = domain.strip()
+        rows = await db.analytics_rollups.find(q, {"_id": 0}).sort("bucket_start", 1).to_list(5000)
+        return {"generated_at": now.isoformat(), "bucket": b, "periods": int(periods), "rows": rows}
+
     @router.get("/admin/attacks/analytics/summary")
     async def admin_attacks_analytics_summary(
         days: int = Query(7, ge=1, le=90),
@@ -7778,6 +7991,7 @@ def register(router):
     async def admin_seed_families(current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPException(status_code=410, detail="Deprecated: NPC seeding tools have been removed")
         import random
         from routers.game.families import cleanup_dead_families, _invalidate_list_cache
         await cleanup_dead_families()
