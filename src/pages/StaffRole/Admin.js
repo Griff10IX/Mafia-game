@@ -494,6 +494,7 @@ export default function Admin() {
   const [mainLbCrimes, setMainLbCrimes] = useState(false);
   const [mainLbGta, setMainLbGta] = useState(false);
   const [mainLbJail, setMainLbJail] = useState(false);
+  const [mainLbResetBoozeLoading, setMainLbResetBoozeLoading] = useState(false);
   const [resetDailyRewardsLoading, setResetDailyRewardsLoading] = useState(false);
   const [pointsProvSessionId, setPointsProvSessionId] = useState('');
   const [pointsProvUserId, setPointsProvUserId] = useState('');
@@ -2924,6 +2925,19 @@ export default function Admin() {
       toast.error(error.response?.data?.detail || 'Failed');
     } finally {
       setMainLbStripLoading(false);
+    }
+  };
+
+  const handleResetWeeklyBoozeProfit = async () => {
+    if (!window.confirm('Reset THIS WEEK booze-run leaderboard profit for ALL users to 0?')) return;
+    setMainLbResetBoozeLoading(true);
+    try {
+      const res = await api.post('/admin/leaderboards/reset-weekly-booze-profit');
+      toast.success(res.data?.message || 'Weekly booze-run profit reset');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    } finally {
+      setMainLbResetBoozeLoading(false);
     }
   };
 
@@ -11547,6 +11561,9 @@ export default function Admin() {
               </div>
               <BtnDanger type="button" onClick={handleMainLeaderboardStrip} disabled={mainLbStripLoading || !(formData.targetUsername || '').trim()}>
                 {mainLbStripLoading ? '…' : 'Strip from main leaderboards'}
+              </BtnDanger>
+              <BtnDanger type="button" onClick={handleResetWeeklyBoozeProfit} disabled={mainLbResetBoozeLoading}>
+                {mainLbResetBoozeLoading ? '…' : 'Reset weekly booze profit (all users)'}
               </BtnDanger>
             </div>
           )}

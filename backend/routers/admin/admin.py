@@ -2529,6 +2529,39 @@ def register(router):
             **detail,
         }
 
+    @router.post("/admin/leaderboards/reset-weekly-booze-profit")
+    async def admin_reset_weekly_booze_profit(current_user: dict = Depends(get_current_user)):
+        """
+        Zero this week's booze-run leaderboard inputs for ALL users by setting
+        economy_events.profit = 0 on type=booze_run_sell rows in the current Mon UTC week.
+        """
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        now = datetime.now(timezone.utc)
+        week_start = now - timedelta(days=now.weekday())
+        week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
+
+        match = {
+            "type": "booze_run_sell",
+            "$expr": {"$and": [
+                {"$gte": [{"$toDate": "$at"}, week_start]},
+                {"$lt": [{"$toDate": "$at"}, week_start + timedelta(days=7)]},
+            ]},
+        }
+
+        # Only touch rows where profit is non-zero to reduce writes.
+        res = await db.economy_events.update_many(
+            {**match, "profit": {"$ne": 0}},
+            {"$set": {"profit": 0}},
+        )
+        leaderboard_module.invalidate_leaderboard_cache()
+        return {
+            "message": f"Reset weekly booze-run profit rows to 0 (modified {int(res.modified_count or 0)} rows).",
+            "week_start_utc": week_start.strftime("%Y-%m-%d"),
+            "modified": int(res.modified_count or 0),
+        }
+
     _REFERRAL_EARNINGS_KEYS = (
         "referral_earnings_booze",
         "referral_earnings_crime",

@@ -1106,8 +1106,8 @@ async def get_current_user(
 
                             await send_notification(
                                 user_id,
-                                "Game Pass reward",
-                                f"You received {received_text}. Next reward: {next_summary}.",
+                                "Free Game Pass tier reward",
+                                f"You received {received_text} as a free Game Pass tier reward (no Game Pass purchase required). Next reward: {next_summary}.",
                                 "reward",
                                 category="system",
                                 reward_key=free_key,

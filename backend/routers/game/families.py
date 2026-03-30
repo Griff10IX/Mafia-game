@@ -899,6 +899,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
         else:
             members.append(entry)
     rackets_raw = fam.get("rackets") or {}
+    staff_debug = _is_admin(current_user)
     racket_bonus_pct = float((fam.get("racket_income_bonus_percent") or 0) or 0)
     rackets = []
     now = datetime.now(timezone.utc)
@@ -939,6 +940,8 @@ async def families_my(current_user: dict = Depends(get_current_user)):
                 "cooldown_hours": r["cooldown_hours"], "effective_cooldown_hours": cooldown_h,
                 "income_per_collect": income_per, "effective_income_per_collect": effective_income,
                 "next_collect_at": next_collect_at,
+                "debug_last_collected_at": last_at if staff_debug else None,
+                "debug_next_collect_at": next_collect_at if staff_debug else None,
             })
         except Exception:
             continue
@@ -2332,7 +2335,14 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
             war_sec = await _family_war_duration_seconds(family_id, last_dt, now)
             effective_cooldown_end = last_dt + timedelta(hours=cooldown_h) + timedelta(seconds=war_sec)
             if effective_cooldown_end > now:
-                raise HTTPException(status_code=400, detail="Racket on cooldown")
+                secs = max(1, int((effective_cooldown_end - now).total_seconds()))
+                hrs = secs // 3600
+                mins = (secs % 3600) // 60
+                if hrs > 0:
+                    detail = f"Racket on cooldown. Try again in {hrs}h {mins}m."
+                else:
+                    detail = f"Racket on cooldown. Try again in {mins}m."
+                raise HTTPException(status_code=400, detail=detail)
         except HTTPException:
             raise
         except Exception:
@@ -2346,7 +2356,7 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
         filter_cond[f"rackets.{racket_id}.last_collected_at"] = {"$exists": False}
     collect_result = await db.families.update_one(filter_cond, {"$set": {"rackets": rackets}, "$inc": {"treasury": income_final}})
     if collect_result.modified_count == 0:
-        raise HTTPException(status_code=400, detail="Racket on cooldown")
+        raise HTTPException(status_code=400, detail="Racket on cooldown. Another collection likely just happened.")
     msg = _rng.choice(FAMILY_RACKET_COLLECT_SUCCESS_MESSAGES).format(income=income_final)
     _invalidate_my_cache(current_user["id"])
     return {"message": msg, "amount": income_final}

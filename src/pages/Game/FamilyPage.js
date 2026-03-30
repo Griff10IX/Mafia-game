@@ -60,6 +60,13 @@ const isRacketReadyAt = (isoUntil) => {
   return t <= Date.now();
 };
 
+const formatUtcDateTime = (iso) => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return String(iso);
+  return d.toLocaleString();
+};
+
 const apiDetail = (e) => {
   const d = e.response?.data?.detail;
   return typeof d === 'string' ? d : Array.isArray(d) && d.length ? d.map((x) => x.msg || x.loc?.join('.')).join('; ') : 'Request failed';
@@ -142,7 +149,7 @@ const RoleBadge = ({ role, size = 'sm' }) => {
 // RACKET CARD — business front with progress & glow
 // ============================================================================
 
-const RacketCard = ({ racket, maxLevel, canUpgrade, canCollect = true, onCollect, onUpgrade, onUnlock }) => {
+const RacketCard = ({ racket, maxLevel, canUpgrade, canCollect = true, onCollect, onUpgrade, onUnlock, showDebugReadout = false }) => {
   const timeLeft = formatTimeLeft(racket.next_collect_at);
   const isReady = racket.level > 0 && isRacketReadyAt(racket.next_collect_at);
   const onCooldown = racket.level > 0 && !isReady;
@@ -229,6 +236,12 @@ const RacketCard = ({ racket, maxLevel, canUpgrade, canCollect = true, onCollect
             </button>
           )}
         </div>
+        {showDebugReadout && (
+          <div className="mt-1.5 pt-1.5 border-t border-zinc-700/30 text-[9px] font-mono text-zinc-500 space-y-0.5">
+            <div>last_collected_at: {formatUtcDateTime(racket.debug_last_collected_at)}</div>
+            <div>next_collect_at: {formatUtcDateTime(racket.debug_next_collect_at || racket.next_collect_at)}</div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -479,6 +492,7 @@ const TreasuryTab = ({
 
 const RacketsTab = ({ rackets, config, canUpgrade, vaultAndRacketsLocked, onCollect, onCollectAll, collectAllLoading, readyCount, onUpgrade, onUnlock, event, eventsEnabled }) => {
   const maxLevel = config?.racket_max_level ?? 5;
+  const showDebugReadout = (rackets || []).some((r) => r.debug_last_collected_at || r.debug_next_collect_at);
 
   const effectiveCanUpgrade = canUpgrade && !vaultAndRacketsLocked;
   const effectiveCanCollect = !vaultAndRacketsLocked;
@@ -513,7 +527,7 @@ const RacketsTab = ({ rackets, config, canUpgrade, vaultAndRacketsLocked, onColl
       {/* Racket Cards Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
         {rackets.map((r) => (
-          <RacketCard key={r.id} racket={r} maxLevel={maxLevel} canUpgrade={effectiveCanUpgrade} canCollect={effectiveCanCollect} onCollect={onCollect} onUpgrade={onUpgrade} onUnlock={onUnlock} />
+          <RacketCard key={r.id} racket={r} maxLevel={maxLevel} canUpgrade={effectiveCanUpgrade} canCollect={effectiveCanCollect} onCollect={onCollect} onUpgrade={onUpgrade} onUnlock={onUnlock} showDebugReadout={showDebugReadout} />
         ))}
       </div>
 
