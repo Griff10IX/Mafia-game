@@ -805,7 +805,14 @@ const TopicRowDesktop = ({ topic, canStickyImportant, canLock, onUpdate, updatin
         </div>
         <div className="col-span-2 text-right truncate">
           {topic.redeem_code ? (
-            <span className="truncate block text-mutedForeground font-heading font-semibold text-[10px] uppercase tracking-wide" title="Posted automatically by the game">System</span>
+            <span className="truncate block text-mutedForeground font-heading font-semibold text-[10px] uppercase tracking-wide" title="Posted automatically by the game">
+              System
+              {topic.redeem_max_uses != null && topic.redeem_uses_remaining != null && (
+                <span className="block text-amber-400/90 tabular-nums normal-case mt-0.5">
+                  {topic.redeem_uses_remaining}/{topic.redeem_max_uses} left
+                </span>
+              )}
+            </span>
           ) : (
             <Link to={`/profile/${encodeURIComponent(topic.author_username || '?')}`} className="hover:text-primary hover:underline truncate block" style={topic.author_online_color ? { color: topic.author_online_color } : undefined}>{topic.author_username || '?'}</Link>
           )}
@@ -882,9 +889,16 @@ const TopicRowMobile = ({ topic, canStickyImportant, canLock, onUpdate, updating
           )}
           {topic.is_locked && <Lock size={10} className="text-mutedForeground shrink-0" />}
         </div>
-        <div className="flex items-center gap-3 mt-1 text-[10px] text-mutedForeground">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[10px] text-mutedForeground">
           {topic.redeem_code ? (
-            <span className="font-heading font-semibold text-mutedForeground uppercase tracking-wide" title="Posted automatically by the game">System</span>
+            <span className="inline-flex flex-col gap-0.5" title="Posted automatically by the game">
+              <span className="font-heading font-semibold text-mutedForeground uppercase tracking-wide">System</span>
+              {topic.redeem_max_uses != null && topic.redeem_uses_remaining != null && (
+                <span className="font-heading font-semibold text-amber-400/90 tabular-nums normal-case">
+                  {topic.redeem_uses_remaining}/{topic.redeem_max_uses} left
+                </span>
+              )}
+            </span>
           ) : (
             <Link to={`/profile/${encodeURIComponent(topic.author_username || '?')}`} onClick={(e) => e.stopPropagation()} className="hover:text-primary hover:underline" style={topic.author_online_color ? { color: topic.author_online_color } : undefined}>{topic.author_username || '?'}</Link>
           )}

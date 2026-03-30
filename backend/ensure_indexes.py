@@ -298,6 +298,9 @@ async def ensure_all_indexes(db):
         await db.forum_comments.create_index([("topic_id", 1), ("created_at", 1)])
         await db.forum_comment_likes.create_index([("comment_id", 1), ("user_id", 1)])
         await db.forum_comment_dislikes.create_index([("comment_id", 1), ("user_id", 1)])
+        await db.forum_comment_reactions.create_index([("comment_id", 1), ("user_id", 1)], unique=True)
+        await db.forum_comment_reactions.create_index([("topic_id", 1), ("comment_id", 1)])
+        await db.forum_topic_reactions.create_index([("topic_id", 1), ("user_id", 1)], unique=True)
 
         # --- Image host (user uploads) ---
         await db.image_host_uploads.create_index("public_id", unique=True)

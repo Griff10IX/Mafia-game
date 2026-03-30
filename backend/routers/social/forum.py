@@ -1,11 +1,12 @@
 # Forum: topics, comments, views, likes
+from collections import defaultdict
 from datetime import datetime, timezone, timedelta
-from typing import List, Optional
+from typing import List, Optional, Tuple
 import re
 
 CREW_OC_TOPIC_WINDOW_MINUTES = 10  # Can create Crew OC topic only when OC is available or within this many mins before
 import uuid
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel
 
 import os
@@ -30,6 +31,189 @@ def _parse_iso_datetime(s):
 
 MOD_DEFAULT = "#1e3a5f"
 ADMIN_DEFAULT = "#a78bfa"
+
+# Must match EMOJI_STRIP in src/pages/Social/ForumTopic.js (composer picker).
+FORUM_REACTION_EMOJIS = frozenset(
+    [
+        "😀",
+        "😃",
+        "😄",
+        "😁",
+        "😊",
+        "🙂",
+        "😉",
+        "😎",
+        "🤩",
+        "😍",
+        "😂",
+        "🤣",
+        "😅",
+        "😢",
+        "😭",
+        "😤",
+        "😡",
+        "🤬",
+        "😱",
+        "😰",
+        "🤔",
+        "😐",
+        "😑",
+        "🙄",
+        "😏",
+        "😒",
+        "🥱",
+        "😴",
+        "🤢",
+        "🤮",
+        "👍",
+        "👎",
+        "👋",
+        "🤝",
+        "🙏",
+        "💪",
+        "✊",
+        "👊",
+        "🤙",
+        "✌️",
+        "❤️",
+        "🧡",
+        "💛",
+        "💚",
+        "💙",
+        "💜",
+        "🖤",
+        "💔",
+        "❣️",
+        "💕",
+        "🔥",
+        "⭐",
+        "✨",
+        "💥",
+        "💯",
+        "🎉",
+        "🎊",
+        "🏆",
+        "👑",
+        "💎",
+        "💰",
+        "💵",
+        "💸",
+        "🔫",
+        "💀",
+        "☠️",
+        "⚔️",
+        "🔪",
+        "🎲",
+        "🃏",
+        "❓",
+        "❗",
+        "⚠️",
+        "✅",
+        "❌",
+        "🚫",
+        "➕",
+        "➖",
+        "➡️",
+        "⬅️",
+    ]
+)
+
+
+def _forum_reaction_emoji_allowed(raw: str) -> Optional[str]:
+    e = (raw or "").strip()
+    if not e:
+        return None
+    return e if e in FORUM_REACTION_EMOJIS else None
+
+
+async def _forum_reaction_user_rows(user_ids: List[str]) -> dict:
+    if not user_ids:
+        return {}
+    uq = list(dict.fromkeys(user_ids))
+    users = await db.users.find({"id": {"$in": uq}}, {"_id": 0, "id": 1, "username": 1, "avatar_url": 1}).to_list(600)
+    out = {}
+    for u in users:
+        uid = u.get("id")
+        if not uid:
+            continue
+        av = (u.get("avatar_url") or "").strip()
+        safe_av = av if (av.startswith("http://") or av.startswith("https://")) else None
+        out[uid] = {
+            "user_id": uid,
+            "username": (u.get("username") or "").strip() or "?",
+            "avatar_url": safe_av,
+        }
+    return out
+
+
+def _summarize_reaction_docs(
+    docs: list,
+    current_uid: str,
+    user_rows: dict,
+) -> Tuple[list, Optional[str]]:
+    """Build emoji_reactions rows + current user's emoji (one reaction per user)."""
+    my_emoji = None
+    for d in docs:
+        if d.get("user_id") == current_uid:
+            my_emoji = d.get("emoji")
+            break
+    by_emoji: dict = defaultdict(list)
+    for d in sorted(docs, key=lambda x: (x.get("created_at") or "")):
+        em = d.get("emoji")
+        uid = d.get("user_id")
+        if em and uid:
+            by_emoji[em].append(uid)
+    emoji_order = []
+    seen_e = set()
+    for d in sorted(docs, key=lambda x: (x.get("created_at") or "")):
+        em = d.get("emoji")
+        if em and em not in seen_e:
+            seen_e.add(em)
+            emoji_order.append(em)
+    rows = []
+    for em in emoji_order:
+        uids = by_emoji[em]
+        preview = []
+        for uid in uids[:4]:
+            preview.append(user_rows.get(uid, {"user_id": uid, "username": "Unknown", "avatar_url": None}))
+        rows.append({"emoji": em, "count": len(uids), "users": preview})
+    return rows, my_emoji
+
+
+async def _attach_emoji_reactions(topic: dict, comments: list, current_uid: str) -> None:
+    topic_id = topic.get("id")
+    if not topic_id:
+        return
+    cids = [c["id"] for c in comments if c.get("id")]
+    q_comment = []
+    if cids:
+        q_comment = await db.forum_comment_reactions.find(
+            {"topic_id": topic_id, "comment_id": {"$in": cids}},
+            {"_id": 0, "comment_id": 1, "user_id": 1, "emoji": 1, "created_at": 1},
+        ).sort("created_at", 1).to_list(5000)
+    q_topic = await db.forum_topic_reactions.find(
+        {"topic_id": topic_id},
+        {"_id": 0, "user_id": 1, "emoji": 1, "created_at": 1},
+    ).sort("created_at", 1).to_list(500)
+    all_uids = list({d["user_id"] for d in q_comment + q_topic if d.get("user_id")})
+    user_rows = await _forum_reaction_user_rows(all_uids)
+    by_cid = defaultdict(list)
+    for d in q_comment:
+        cid = d.get("comment_id")
+        if cid:
+            by_cid[cid].append(d)
+    t_summary, t_my = _summarize_reaction_docs(q_topic, current_uid, user_rows)
+    topic["emoji_reactions"] = t_summary
+    topic["my_emoji_reaction"] = t_my
+    for c in comments:
+        lst = by_cid.get(c.get("id"), [])
+        summ, my = _summarize_reaction_docs(lst, current_uid, user_rows)
+        c["emoji_reactions"] = summ
+        c["my_emoji_reaction"] = my
+
+
+class ForumReactionBody(BaseModel):
+    emoji: str
 
 
 async def _get_author_display_colors(author_ids) -> dict:
@@ -188,6 +372,24 @@ async def get_topics(
             tid = a.get("topic_id")
             if tid:
                 auction_by_topic[tid] = a
+    redeem_codes_on_page = list(
+        {(t.get("redeem_code") or "").strip().upper() for t in topics if (t.get("redeem_code") or "").strip()}
+    )
+    redeem_stats_by_code: dict = {}
+    if redeem_codes_on_page:
+        async for rc in db.redeem_codes.find(
+            {"code": {"$in": redeem_codes_on_page}},
+            {"_id": 0, "code": 1, "used_count": 1, "max_uses": 1},
+        ):
+            ckey = (rc.get("code") or "").strip().upper()
+            max_u = rc.get("max_uses")
+            if ckey and max_u is not None:
+                cap = int(max_u)
+                used = int(rc.get("used_count") or 0)
+                redeem_stats_by_code[ckey] = {
+                    "redeem_max_uses": cap,
+                    "redeem_uses_remaining": max(0, cap - used),
+                }
     out = []
     for t in topics:
         comment_count = count_by_topic.get(t["id"], 0)
@@ -217,6 +419,9 @@ async def get_topics(
                 item["crew_oc_join_fee"] = int(fam.get("crew_oc_join_fee") or 0)
         if t.get("redeem_code"):
             item["redeem_code"] = t["redeem_code"]
+            rkey = (t["redeem_code"] or "").strip().upper()
+            if rkey and rkey in redeem_stats_by_code:
+                item.update(redeem_stats_by_code[rkey])
         if item.get("category") == "designer":
             auc = auction_by_topic.get(t.get("id"))
             if auc:
@@ -292,6 +497,7 @@ async def get_topic(topic_id: str, current_user: dict = Depends(get_current_user
         cid = c.get("id")
         c["liked"] = cid in liked_ids if cid else False
         c["disliked"] = cid in disliked_ids if cid else False
+    await _attach_emoji_reactions(topic, comments, uid)
     if topic.get("crew_oc_family_id"):
         fam = await db.families.find_one({"id": topic["crew_oc_family_id"]}, {"_id": 0, "name": 1, "tag": 1, "crew_oc_join_fee": 1, "crew_oc_cooldown_until": 1})
         if fam:
@@ -328,6 +534,17 @@ async def get_topic(topic_id: str, current_user: dict = Depends(get_current_user
                 "end_at": auc.get("end_at"),
                 "winner_username": auc.get("winner_username"),
             }
+    if (topic.get("redeem_code") or "").strip():
+        rc_code = (topic["redeem_code"] or "").strip().upper()
+        rc_doc = await db.redeem_codes.find_one(
+            {"code": rc_code},
+            {"_id": 0, "used_count": 1, "max_uses": 1},
+        )
+        if rc_doc and rc_doc.get("max_uses") is not None:
+            cap = int(rc_doc["max_uses"])
+            used = int(rc_doc.get("used_count") or 0)
+            topic["redeem_max_uses"] = cap
+            topic["redeem_uses_remaining"] = max(0, cap - used)
     return {
         "topic": topic,
         "comments": comments,
@@ -593,7 +810,18 @@ async def add_comment(
                         )
                         notified_ids.add(uid)
 
-    return {"id": comment_id, "message": "Comment posted", "comment": {**doc, "liked": False, "disliked": False, "dislikes": 0}}
+    return {
+        "id": comment_id,
+        "message": "Comment posted",
+        "comment": {
+            **doc,
+            "liked": False,
+            "disliked": False,
+            "dislikes": 0,
+            "emoji_reactions": [],
+            "my_emoji_reaction": None,
+        },
+    }
 
 
 async def like_comment(
@@ -681,6 +909,160 @@ async def list_comment_dislike_users(
     if not comment:
         raise HTTPException(status_code=404, detail="Comment not found")
     docs = await db.forum_comment_dislikes.find({"comment_id": comment_id}, {"_id": 0, "user_id": 1}).to_list(500)
+    user_ids = [d["user_id"] for d in docs if d.get("user_id")]
+    if not user_ids:
+        return {"users": []}
+    unique_ids = list(dict.fromkeys(user_ids))
+    users = await db.users.find({"id": {"$in": unique_ids}}, {"_id": 0, "id": 1, "username": 1}).to_list(500)
+    by_id = {u["id"]: (u.get("username") or "").strip() or u["id"] for u in users}
+    rows = [{"user_id": uid, "username": by_id.get(uid, "Unknown")} for uid in unique_ids]
+    rows.sort(key=lambda r: (r["username"] or "").lower())
+    return {"users": rows}
+
+
+async def _forum_reactions_require_unlocked_topic(topic_id: str) -> None:
+    t = await db.forum_topics.find_one({"id": topic_id}, {"_id": 0, "is_locked": 1})
+    if not t:
+        raise HTTPException(status_code=404, detail="Topic not found")
+    if t.get("is_locked"):
+        raise HTTPException(status_code=400, detail="Topic is locked")
+
+
+async def _comment_emoji_summary(topic_id: str, comment_id: str, current_uid: str) -> dict:
+    docs = await db.forum_comment_reactions.find(
+        {"topic_id": topic_id, "comment_id": comment_id},
+        {"_id": 0, "user_id": 1, "emoji": 1, "created_at": 1},
+    ).sort("created_at", 1).to_list(500)
+    uids = [d["user_id"] for d in docs if d.get("user_id")]
+    user_rows = await _forum_reaction_user_rows(uids)
+    summ, my = _summarize_reaction_docs(docs, current_uid, user_rows)
+    return {"emoji_reactions": summ, "my_emoji_reaction": my}
+
+
+async def _topic_emoji_summary(topic_id: str, current_uid: str) -> dict:
+    docs = await db.forum_topic_reactions.find(
+        {"topic_id": topic_id},
+        {"_id": 0, "user_id": 1, "emoji": 1, "created_at": 1},
+    ).sort("created_at", 1).to_list(500)
+    uids = [d["user_id"] for d in docs if d.get("user_id")]
+    user_rows = await _forum_reaction_user_rows(uids)
+    summ, my = _summarize_reaction_docs(docs, current_uid, user_rows)
+    return {"emoji_reactions": summ, "my_emoji_reaction": my}
+
+
+async def set_comment_emoji_reaction(
+    topic_id: str,
+    comment_id: str,
+    body: ForumReactionBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Set or toggle emoji reaction on a comment (one per user). Same emoji again removes yours."""
+    await _forum_reactions_require_unlocked_topic(topic_id)
+    comment = await db.forum_comments.find_one({"id": comment_id, "topic_id": topic_id}, {"_id": 0, "id": 1})
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    uid = current_user.get("id") or ""
+    em = _forum_reaction_emoji_allowed(body.emoji)
+    if not em:
+        raise HTTPException(status_code=400, detail="That emoji is not allowed for reactions.")
+    existing = await db.forum_comment_reactions.find_one({"comment_id": comment_id, "user_id": uid})
+    now = datetime.now(timezone.utc).isoformat()
+    if existing:
+        if existing.get("emoji") == em:
+            await db.forum_comment_reactions.delete_one({"comment_id": comment_id, "user_id": uid})
+        else:
+            await db.forum_comment_reactions.update_one(
+                {"comment_id": comment_id, "user_id": uid},
+                {"$set": {"emoji": em, "created_at": now}},
+            )
+    else:
+        await db.forum_comment_reactions.insert_one(
+            {
+                "comment_id": comment_id,
+                "topic_id": topic_id,
+                "user_id": uid,
+                "emoji": em,
+                "created_at": now,
+            }
+        )
+    return await _comment_emoji_summary(topic_id, comment_id, uid)
+
+
+async def set_topic_emoji_reaction(
+    topic_id: str,
+    body: ForumReactionBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Set or toggle emoji reaction on the topic (original post). One per user."""
+    await _forum_reactions_require_unlocked_topic(topic_id)
+    topic = await db.forum_topics.find_one({"id": topic_id}, {"_id": 0, "id": 1})
+    if not topic:
+        raise HTTPException(status_code=404, detail="Topic not found")
+    uid = current_user.get("id") or ""
+    em = _forum_reaction_emoji_allowed(body.emoji)
+    if not em:
+        raise HTTPException(status_code=400, detail="That emoji is not allowed for reactions.")
+    existing = await db.forum_topic_reactions.find_one({"topic_id": topic_id, "user_id": uid})
+    now = datetime.now(timezone.utc).isoformat()
+    if existing:
+        if existing.get("emoji") == em:
+            await db.forum_topic_reactions.delete_one({"topic_id": topic_id, "user_id": uid})
+        else:
+            await db.forum_topic_reactions.update_one(
+                {"topic_id": topic_id, "user_id": uid},
+                {"$set": {"emoji": em, "created_at": now}},
+            )
+    else:
+        await db.forum_topic_reactions.insert_one(
+            {"topic_id": topic_id, "user_id": uid, "emoji": em, "created_at": now}
+        )
+    return await _topic_emoji_summary(topic_id, uid)
+
+
+async def list_comment_emoji_reaction_users(
+    topic_id: str,
+    comment_id: str,
+    emoji: str = Query(..., min_length=1, max_length=32),
+    current_user: dict = Depends(get_current_user),
+):
+    """Users who reacted with this emoji on a comment."""
+    comment = await db.forum_comments.find_one({"id": comment_id, "topic_id": topic_id}, {"_id": 0, "id": 1})
+    if not comment:
+        raise HTTPException(status_code=404, detail="Comment not found")
+    em = _forum_reaction_emoji_allowed(emoji)
+    if not em:
+        raise HTTPException(status_code=400, detail="Invalid reaction.")
+    docs = await db.forum_comment_reactions.find(
+        {"topic_id": topic_id, "comment_id": comment_id, "emoji": em},
+        {"_id": 0, "user_id": 1},
+    ).to_list(500)
+    user_ids = [d["user_id"] for d in docs if d.get("user_id")]
+    if not user_ids:
+        return {"users": []}
+    unique_ids = list(dict.fromkeys(user_ids))
+    users = await db.users.find({"id": {"$in": unique_ids}}, {"_id": 0, "id": 1, "username": 1}).to_list(500)
+    by_id = {u["id"]: (u.get("username") or "").strip() or u["id"] for u in users}
+    rows = [{"user_id": uid, "username": by_id.get(uid, "Unknown")} for uid in unique_ids]
+    rows.sort(key=lambda r: (r["username"] or "").lower())
+    return {"users": rows}
+
+
+async def list_topic_emoji_reaction_users(
+    topic_id: str,
+    emoji: str = Query(..., min_length=1, max_length=32),
+    current_user: dict = Depends(get_current_user),
+):
+    """Users who reacted with this emoji on the topic (original post)."""
+    topic = await db.forum_topics.find_one({"id": topic_id}, {"_id": 0, "id": 1})
+    if not topic:
+        raise HTTPException(status_code=404, detail="Topic not found")
+    em = _forum_reaction_emoji_allowed(emoji)
+    if not em:
+        raise HTTPException(status_code=400, detail="Invalid reaction.")
+    docs = await db.forum_topic_reactions.find(
+        {"topic_id": topic_id, "emoji": em},
+        {"_id": 0, "user_id": 1},
+    ).to_list(500)
     user_ids = [d["user_id"] for d in docs if d.get("user_id")]
     if not user_ids:
         return {"users": []}
@@ -862,6 +1244,7 @@ async def delete_comment(
         raise HTTPException(status_code=404, detail="Comment not found")
     await db.forum_comment_likes.delete_many({"comment_id": comment_id})
     await db.forum_comment_dislikes.delete_many({"comment_id": comment_id})
+    await db.forum_comment_reactions.delete_many({"comment_id": comment_id})
     await db.forum_comments.delete_one({"id": comment_id})
     return {"message": "Comment deleted"}
 
@@ -871,10 +1254,14 @@ def register(router):
     router.add_api_route("/forum/topics", create_topic, methods=["POST"])
     router.add_api_route("/forum/topics/{topic_id}", get_topic, methods=["GET"])
     router.add_api_route("/forum/topics/{topic_id}/comments", add_comment, methods=["POST"])
+    router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/reactions/users", list_comment_emoji_reaction_users, methods=["GET"])
+    router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/reactions", set_comment_emoji_reaction, methods=["POST"])
     router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/like", like_comment, methods=["POST"])
     router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/dislike", dislike_comment, methods=["POST"])
     router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/likes", list_comment_like_users, methods=["GET"])
     router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/dislikes", list_comment_dislike_users, methods=["GET"])
+    router.add_api_route("/forum/topics/{topic_id}/reactions/users", list_topic_emoji_reaction_users, methods=["GET"])
+    router.add_api_route("/forum/topics/{topic_id}/reactions", set_topic_emoji_reaction, methods=["POST"])
     router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}", delete_comment, methods=["DELETE"])
     router.add_api_route("/forum/topics/{topic_id}", update_topic, methods=["PATCH"])
     router.add_api_route("/forum/topics/{topic_id}", delete_topic, methods=["DELETE"])

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { Lock, ThumbsUp, ThumbsDown, Send, Pin, AlertCircle, Trash2, ArrowLeft, MessageCircle, Eye, Clock, Dice5, Package, UserPlus, Bold, Italic, Image, Palette, Pencil, X } from 'lucide-react';
+import { Lock, ThumbsUp, ThumbsDown, Send, Pin, AlertCircle, Trash2, ArrowLeft, MessageCircle, Eye, Clock, Dice5, Package, UserPlus, Bold, Italic, Image, Palette, Pencil, X, Plus } from 'lucide-react';
 import api from '../../utils/api';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
@@ -141,6 +141,142 @@ function getTimeAgo(iso) {
   return `${Math.floor(s / 86400)}d ago`;
 }
 
+/** Telegram-style emoji reactions on topic OP or a comment */
+function ForumEmojiReactionBar({
+  topicId,
+  commentId,
+  reactions,
+  myEmoji,
+  locked,
+  onApplied,
+  onShowWho,
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const wrapRef = useRef(null);
+
+  useEffect(() => {
+    if (!pickerOpen) return;
+    const onDoc = (e) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setPickerOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [pickerOpen]);
+
+  const apply = async (emoji) => {
+    if (busy || !topicId) return;
+    if (locked) {
+      toast.error('Topic is locked');
+      return;
+    }
+    setBusy(true);
+    try {
+      const url =
+        commentId != null
+          ? `/forum/topics/${topicId}/comments/${commentId}/reactions`
+          : `/forum/topics/${topicId}/reactions`;
+      const res = await api.post(url, { emoji });
+      onApplied(res.data);
+      setPickerOpen(false);
+    } catch (err) {
+      const d = err.response?.data?.detail;
+      toast.error(typeof d === 'string' ? d : 'Failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const list = Array.isArray(reactions) ? reactions : [];
+
+  return (
+    <div className="flex flex-wrap items-center gap-1 mt-2" ref={wrapRef}>
+      {list.map((row) => (
+        <button
+          key={row.emoji}
+          type="button"
+          disabled={busy}
+          title={
+            locked && myEmoji === row.emoji
+              ? 'Topic is locked'
+              : myEmoji === row.emoji
+                ? 'Remove your reaction'
+                : 'Who reacted'
+          }
+          onClick={() => {
+            if (!locked && myEmoji === row.emoji) {
+              apply(row.emoji);
+            } else {
+              onShowWho(row.emoji);
+            }
+          }}
+          className={`inline-flex items-center gap-1 rounded-full border px-1.5 py-0.5 text-[11px] transition-colors ${
+            myEmoji === row.emoji
+              ? 'border-primary/50 bg-primary/12 shadow-[0_0_0_1px_rgba(var(--noir-primary-rgb),0.15)]'
+              : 'border-zinc-700/70 bg-zinc-900/85 hover:bg-zinc-800/90'
+          } disabled:opacity-60`}
+        >
+          <span className="leading-none select-none" aria-hidden>
+            {row.emoji}
+          </span>
+          <span className="flex -space-x-1.5">
+            {(row.users || []).slice(0, 3).map((u) =>
+              u.avatar_url ? (
+                <img
+                  key={u.user_id}
+                  src={u.avatar_url}
+                  alt=""
+                  className="w-4 h-4 rounded-full border border-zinc-800 object-cover shrink-0"
+                />
+              ) : (
+                <span
+                  key={u.user_id}
+                  className="w-4 h-4 rounded-full border border-zinc-800 bg-zinc-700 text-[8px] flex items-center justify-center font-heading text-zinc-200 shrink-0 uppercase"
+                >
+                  {(u.username || '?').slice(0, 1)}
+                </span>
+              ),
+            )}
+          </span>
+          {(row.count || 0) > 1 && (
+            <span className="tabular-nums text-mutedForeground text-[10px] font-heading shrink-0">{row.count}</span>
+          )}
+        </button>
+      ))}
+      {!locked && (
+        <div className="relative">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setPickerOpen((o) => !o)}
+            className="inline-flex items-center justify-center w-7 h-7 rounded-full border border-dashed border-zinc-600/80 text-mutedForeground hover:text-primary hover:border-primary/50 hover:bg-primary/5 transition-colors disabled:opacity-50"
+            title="Add reaction"
+            aria-label="Add reaction"
+          >
+            <Plus size={14} strokeWidth={2.5} />
+          </button>
+          {pickerOpen && (
+            <div className="absolute bottom-full left-0 mb-1 z-40 p-2 rounded-lg border border-zinc-700/80 bg-zinc-950 shadow-xl max-w-[240px]">
+              <div className="flex flex-wrap gap-0.5 max-h-44 overflow-y-auto">
+                {EMOJI_STRIP.map((em) => (
+                  <button
+                    key={em}
+                    type="button"
+                    className="text-lg p-0.5 hover:bg-zinc-800 rounded leading-none"
+                    onClick={() => apply(em)}
+                  >
+                    {em}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function getAuctionEndStatusLabel(auction) {
   if (!auction?.end_at) return 'No end';
   const end = new Date(auction.end_at);
@@ -199,7 +335,7 @@ export default function ForumTopic() {
   const [designerSubmitLoading, setDesignerSubmitLoading] = useState(false);
   const [designerSubmittingCommentId, setDesignerSubmittingCommentId] = useState(null);
   const [deletingCommentId, setDeletingCommentId] = useState(null);
-  const [reactionModal, setReactionModal] = useState(null); // { kind: 'like'|'dislike', commentId }
+  const [reactionModal, setReactionModal] = useState(null); // { kind: 'like'|'dislike'|'emoji', commentId?, emoji? }
   const [reactionUsers, setReactionUsers] = useState([]);
   const [reactionLoading, setReactionLoading] = useState(false);
   const [activeGameIdeaSeason, setActiveGameIdeaSeason] = useState(null);
@@ -497,7 +633,16 @@ export default function ForumTopic() {
       }, { timeout: 30000 });
       setCommentText('');
       setReplyToComment(null);
-      const newComment = res.data?.comment ? { ...res.data.comment, liked: res.data.comment.liked ?? false, disliked: res.data.comment.disliked ?? false, dislikes: res.data.comment.dislikes ?? 0 } : null;
+      const newComment = res.data?.comment
+        ? {
+            ...res.data.comment,
+            liked: res.data.comment.liked ?? false,
+            disliked: res.data.comment.disliked ?? false,
+            dislikes: res.data.comment.dislikes ?? 0,
+            emoji_reactions: res.data.comment.emoji_reactions ?? [],
+            my_emoji_reaction: res.data.comment.my_emoji_reaction ?? null,
+          }
+        : null;
       if (newComment) setComments((prev) => [newComment, ...prev]);
       toast.success('Posted');
       setReplyToComment(null);
@@ -529,7 +674,16 @@ export default function ForumTopic() {
         gif_url: gifUrl,
         reply_to_comment_id: replyToComment?.id || undefined,
       }, { timeout: 30000 });
-      const newComment = res.data?.comment ? { ...res.data.comment, liked: res.data.comment.liked ?? false, disliked: res.data.comment.disliked ?? false, dislikes: res.data.comment.dislikes ?? 0 } : null;
+      const newComment = res.data?.comment
+        ? {
+            ...res.data.comment,
+            liked: res.data.comment.liked ?? false,
+            disliked: res.data.comment.disliked ?? false,
+            dislikes: res.data.comment.dislikes ?? 0,
+            emoji_reactions: res.data.comment.emoji_reactions ?? [],
+            my_emoji_reaction: res.data.comment.my_emoji_reaction ?? null,
+          }
+        : null;
       if (newComment) setComments((prev) => [newComment, ...prev]);
       setReplyToComment(null);
       toast.success('GIF posted');
@@ -709,6 +863,28 @@ export default function ForumTopic() {
     }
   };
 
+  const openEmojiReactionUsers = async (commentId, emoji) => {
+    if (!topicId || !emoji) return;
+    setReactionModal({ kind: 'emoji', commentId: commentId ?? null, emoji });
+    setReactionLoading(true);
+    setReactionUsers([]);
+    try {
+      const q = `?emoji=${encodeURIComponent(emoji)}`;
+      const url =
+        commentId != null
+          ? `/forum/topics/${topicId}/comments/${commentId}/reactions/users${q}`
+          : `/forum/topics/${topicId}/reactions/users${q}`;
+      const res = await api.get(url);
+      setReactionUsers(res.data?.users ?? []);
+    } catch (err) {
+      const d = err.response?.data?.detail;
+      toast.error(typeof d === 'string' ? d : 'Failed to load list');
+      setReactionModal(null);
+    } finally {
+      setReactionLoading(false);
+    }
+  };
+
   const deleteComment = async (commentId) => {
     if (!window.confirm('Delete this comment? This cannot be undone.')) return;
     setDeletingCommentId(commentId);
@@ -767,9 +943,16 @@ export default function ForumTopic() {
               />
               {topic.is_locked && <Lock size={14} className="text-red-400" />}
             </div>
-            <div className="flex items-center gap-3 mt-1 text-[10px] text-mutedForeground">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-[10px] text-mutedForeground">
               {topic.redeem_code ? (
-                <span className="font-heading font-semibold text-mutedForeground uppercase tracking-wide" title="Posted automatically by the game">System</span>
+                <span className="inline-flex flex-col gap-0.5 sm:flex-row sm:items-center sm:gap-2">
+                  <span className="font-heading font-semibold text-mutedForeground uppercase tracking-wide" title="Posted automatically by the game">System</span>
+                  {topic.redeem_max_uses != null && topic.redeem_uses_remaining != null && (
+                    <span className="font-heading font-semibold text-amber-400/95 tabular-nums normal-case" title="Global redemption limit for this code">
+                      {topic.redeem_uses_remaining} of {topic.redeem_max_uses} uses left
+                    </span>
+                  )}
+                </span>
               ) : (
                 <Link to={`/profile/${encodeURIComponent(topic.author_username || '?')}`} className="text-foreground font-bold hover:text-primary hover:underline" style={topic.author_online_color ? { color: topic.author_online_color } : undefined}>{topic.author_username || '?'}</Link>
               )}
@@ -1032,8 +1215,13 @@ export default function ForumTopic() {
 
       {/* Topic Content */}
       <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
-        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
+        <div className="px-3 py-2 bg-primary/10 border-b border-primary/30 flex flex-wrap items-center justify-between gap-2">
           <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">📝 Original Post</span>
+          {topic.redeem_code && topic.redeem_max_uses != null && topic.redeem_uses_remaining != null && (
+            <span className="text-[10px] font-heading font-semibold text-amber-400/95 tabular-nums" title="Global redemption limit for this code">
+              {topic.redeem_uses_remaining} of {topic.redeem_max_uses} uses left
+            </span>
+          )}
         </div>
         <div className="p-3">
           {topic.gif_url && (
@@ -1055,6 +1243,25 @@ export default function ForumTopic() {
               dangerouslySetInnerHTML={{ __html: parseForumContent(topicContent, { censorProfanity: user?.censor_profanity }) }}
             />
           )}
+          <ForumEmojiReactionBar
+            topicId={topicId}
+            commentId={null}
+            reactions={topic.emoji_reactions}
+            myEmoji={topic.my_emoji_reaction}
+            locked={!!topic.is_locked}
+            onApplied={(data) =>
+              setTopic((t) =>
+                t
+                  ? {
+                      ...t,
+                      emoji_reactions: data.emoji_reactions,
+                      my_emoji_reaction: data.my_emoji_reaction,
+                    }
+                  : t,
+              )
+            }
+            onShowWho={(emoji) => openEmojiReactionUsers(null, emoji)}
+          />
         </div>
       </div>
 
@@ -1273,7 +1480,24 @@ export default function ForumTopic() {
                     dangerouslySetInnerHTML={{ __html: parseForumContent(c.content, { censorProfanity: user?.censor_profanity }) }}
                   />
                 )}
-                
+                <ForumEmojiReactionBar
+                  topicId={topicId}
+                  commentId={c.id}
+                  reactions={c.emoji_reactions}
+                  myEmoji={c.my_emoji_reaction}
+                  locked={!!topic?.is_locked}
+                  onApplied={(data) =>
+                    setComments((prev) =>
+                      prev.map((x) =>
+                        x.id === c.id
+                          ? { ...x, emoji_reactions: data.emoji_reactions, my_emoji_reaction: data.my_emoji_reaction }
+                          : x,
+                      ),
+                    )
+                  }
+                  onShowWho={(emoji) => openEmojiReactionUsers(c.id, emoji)}
+                />
+
                 {/* Like + Dislike + Reply (hidden for automated Game Ideas season logs) */}
                 <div className="mt-2 flex items-center gap-2 flex-wrap">
                   {!isGameIdeasLog && (
@@ -1523,7 +1747,15 @@ export default function ForumTopic() {
           >
             <div className="flex items-center justify-between px-3 py-2.5 border-b border-zinc-700/50 bg-zinc-900/80">
               <span id="forum-reaction-modal-title" className="text-xs font-heading font-bold uppercase tracking-wider text-foreground">
-                {reactionModal.kind === 'like' ? 'Liked by' : 'Disliked by'}
+                {reactionModal.kind === 'emoji' ? (
+                  <span className="normal-case">
+                    Reacted with {reactionModal.emoji}
+                  </span>
+                ) : reactionModal.kind === 'like' ? (
+                  'Liked by'
+                ) : (
+                  'Disliked by'
+                )}
               </span>
               <button
                 type="button"
