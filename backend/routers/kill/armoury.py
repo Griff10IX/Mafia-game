@@ -145,7 +145,7 @@ TOKEN_TYPES = (
     "travel",
     "properties",
     "jailbust_bonus",
-    # Rank-XP (£4.99) pass token: 24h window granted only when activated via Armoury/My Inventory.
+    # Rank-XP (£9.99) pass token: 24h window granted only when activated via Armoury/My Inventory.
     "rank_xp_pass",
 )
 # count_field: user doc key for token count

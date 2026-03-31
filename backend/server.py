@@ -481,7 +481,7 @@ POINT_PACKAGES = {
     "platinum": {"points": 50000, "price_gbp": 99.99},
     "diamond": {"points": 100000, "price_gbp": 189.99},
     # Rank-XP pass entitlement (no points credited; token is activated in Armoury).
-    "rank_xp_pass_499": {"points": 0, "price_gbp": 4.99},
+    "rank_xp_pass_499": {"points": 0, "price_gbp": 9.99},
 }
 
 # Travel times based on car rarity (in seconds)

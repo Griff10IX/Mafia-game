@@ -16,7 +16,7 @@ from utils.release_soft_launch import game_pass_purchase_locked_detail, get_rele
 logger = logging.getLogger(__name__)
 
 RANK_XP_PASS_PACKAGE_ID = "rank_xp_pass_499"
-GAME_PASS_POINTS_PRICE = 8_000
+GAME_PASS_POINTS_PRICE = 10_000
 
 
 def _parse_utc(s: Optional[str]):

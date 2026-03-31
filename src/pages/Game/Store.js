@@ -6,6 +6,12 @@ import { toast } from 'sonner';
 import { containsProfanity } from '../../utils/profanityFilter';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
+import {
+  GAME_PASS_PRICE_GBP,
+  GAME_PASS_POINTS_PRICE,
+  SILVER_PACK_POINTS,
+  SILVER_PACK_PRICE_GBP,
+} from '../../constants/gamePassPricing';
 
 const STORE_STYLES = `
   .store-fade-in { animation: store-fade-in 0.4s ease-out both; }
@@ -563,12 +569,12 @@ export default function Store() {
           <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`} data-testid="store-game-pass-inline">
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
-              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] truncate">Game Pass (£4.99)</span>
+              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] truncate">{`Game Pass (£${GAME_PASS_PRICE_GBP})`}</span>
               <Package className="text-primary shrink-0" size={14} />
             </div>
             <div className="p-3 space-y-2">
               <p className="text-[10px] text-zinc-400 font-heading">
-                Opens the Game Pass page — £4.99, 8,000 pts, rewards & status (grouped with Points, not Combat).
+                {`Opens the Game Pass page — £${GAME_PASS_PRICE_GBP}, ${GAME_PASS_POINTS_PRICE.toLocaleString()} pts, rewards & status (grouped with Points, not Combat).`}
               </p>
               <Link
                 to="/game-pass"
@@ -576,6 +582,9 @@ export default function Store() {
               >
                 Open Game Pass →
               </Link>
+              <p className="text-[8px] text-zinc-500/90 font-heading leading-snug pt-1">
+                Not the same as {SILVER_PACK_POINTS.toLocaleString()} pts (£{SILVER_PACK_PRICE_GBP}): that adds spendable points; Game Pass unlocks rank tier rewards, not a points balance.
+              </p>
             </div>
             <div className="store-art-line text-primary mx-3" />
           </div>

@@ -5,9 +5,13 @@ import api, { refreshUser } from '../../utils/api';
 import { formatReleaseUnlockLine } from '../../utils/releaseSoftLaunchDisplay';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
-
-const GAME_PASS_PACKAGE_ID = 'rank_xp_pass_499';
-const GAME_PASS_POINTS_PRICE = 8_000;
+import {
+  GAME_PASS_PACKAGE_ID,
+  GAME_PASS_POINTS_PRICE,
+  GAME_PASS_PRICE_GBP,
+  SILVER_PACK_POINTS,
+  SILVER_PACK_PRICE_GBP,
+} from '../../constants/gamePassPricing';
 
 // Must stay in sync with backend `routers/kill/armoury.py` micro-tier reward scaling.
 // We only display; activation/entitlement is still handled by the existing rank_xp_pass flow.
@@ -593,7 +597,7 @@ export default function GamePass() {
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
               <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] truncate">
-                Game Pass (£4.99)
+                Game Pass (£{GAME_PASS_PRICE_GBP})
               </span>
               <Package className="text-primary shrink-0" size={14} />
             </div>
@@ -620,7 +624,7 @@ export default function GamePass() {
                   disabled={!user || loading || gamePassPurchaseLocked || vipClaimed || passIsUnactivatedValid || passIsUnactivatedUnknownExpiry}
                   className="flex-1 w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
                 >
-                  {loading ? '...' : gamePassPurchaseLocked ? 'Unavailable until unlock' : vipClaimed ? 'VIP claimed' : passIsUnactivatedValid ? 'Token ready (activate to claim)' : 'Buy for £4.99'}
+                  {loading ? '...' : gamePassPurchaseLocked ? 'Unavailable until unlock' : vipClaimed ? 'VIP claimed' : passIsUnactivatedValid ? 'Token ready (activate to claim)' : `Buy for £${GAME_PASS_PRICE_GBP}`}
                 </button>
                 <Link
                   to="/account/inventory"
@@ -638,12 +642,19 @@ export default function GamePass() {
                   disabled={!user || loading || gamePassPurchaseLocked || vipClaimed || passIsUnactivatedValid || passIsUnactivatedUnknownExpiry || pointsBalance < GAME_PASS_POINTS_PRICE}
                   className="flex-1 w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 disabled:opacity-50 touch-manipulation"
                 >
-                  {loading ? '...' : gamePassPurchaseLocked ? 'Unavailable until unlock' : pointsBalance < GAME_PASS_POINTS_PRICE ? `Need ${GAME_PASS_POINTS_PRICE.toLocaleString()} points` : 'Buy for 8,000 points'}
+                  {loading ? '...' : gamePassPurchaseLocked ? 'Unavailable until unlock' : pointsBalance < GAME_PASS_POINTS_PRICE ? `Need ${GAME_PASS_POINTS_PRICE.toLocaleString()} points` : `Buy for ${GAME_PASS_POINTS_PRICE.toLocaleString()} points`}
                 </button>
                 <div className="text-[9px] text-zinc-400 font-heading italic sm:text-right sm:flex-1">
                   Deducts points to grant an unactivated Game Pass token.
                 </div>
               </div>
+
+              <p className="text-[8px] text-zinc-500/90 font-heading leading-relaxed border-t border-primary/10 pt-2">
+                Why this isn&apos;t the same as {SILVER_PACK_POINTS.toLocaleString()} pts for £{SILVER_PACK_PRICE_GBP}: that pack adds{' '}
+                <span className="text-zinc-400">spendable points</span> to your balance. Game Pass (£{GAME_PASS_PRICE_GBP}) does not credit store points — it
+                unlocks <span className="text-zinc-400">rank tier rewards</span> (cash, bullets, tokens, etc.) as you earn rank XP. Different product, different
+                price.
+              </p>
 
               <p className="text-[10px] text-mutedForeground font-heading">
                 Value estimate for VIP: <span className="text-primary font-bold">~{TARGET_POINTS_TOTAL.toLocaleString()} points</span> +{" "}
