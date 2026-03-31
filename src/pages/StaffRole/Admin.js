@@ -569,6 +569,7 @@ export default function Admin() {
   const [clearCrimeTimersLoading, setClearCrimeTimersLoading] = useState(false);
   const [inspectCrimesLoading, setInspectCrimesLoading] = useState(false);
   const [inspectCrimesData, setInspectCrimesData] = useState(null);
+  const [dedupCrimesLoading, setDedupCrimesLoading] = useState(false);
   const [clearMinigameRecordsLoading, setClearMinigameRecordsLoading] = useState(false);
   const [minigameLbStripLoading, setMinigameLbStripLoading] = useState(false);
   const [minigameLbAddLoading, setMinigameLbAddLoading] = useState(false);
@@ -2980,6 +2981,19 @@ export default function Admin() {
       setInspectCrimesData(res.data);
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed to inspect'); }
     finally { setInspectCrimesLoading(false); }
+  };
+
+  const handleDedupCrimes = async () => {
+    const username = (formData.targetUsername || '').trim();
+    if (!username) { toast.error('Enter a username'); return; }
+    if (!window.confirm(`Remove duplicate crime rows for ${username}? This keeps the best row per crime.`)) return;
+    setDedupCrimesLoading(true);
+    try {
+      const res = await api.post(`/admin/crimes/dedup?target_username=${encodeURIComponent(username)}`);
+      toast.success(`${res.data?.message || 'Done'} Removed ${res.data?.rows_removed || 0} duplicates.`);
+      setInspectCrimesData(null);
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed to dedup'); }
+    finally { setDedupCrimesLoading(false); }
   };
 
   const handleClearUserMinigameRecords = async () => {
@@ -6339,14 +6353,28 @@ export default function Admin() {
             {inspectCrimesData && (
               <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-[10px] font-heading space-y-2 pl-6">
                 <div className="flex items-center justify-between">
-                  <span className="font-bold text-primary">Crime data — {inspectCrimesData.username} ({inspectCrimesData.total_rows} rows)</span>
-                  <button onClick={() => setInspectCrimesData(null)} className="text-mutedForeground hover:text-foreground text-xs">✕</button>
+                  <div>
+                    <span className="font-bold text-primary">Crime data — {inspectCrimesData.username}</span>
+                    <span className="ml-2 text-mutedForeground">{inspectCrimesData.total_rows} rows, {inspectCrimesData.unique_crimes} crimes</span>
+                    {inspectCrimesData.total_duplicates > 0 && (
+                      <span className="ml-2 px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 font-bold">{inspectCrimesData.total_duplicates} duplicates!</span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {inspectCrimesData.total_duplicates > 0 && (
+                      <button onClick={handleDedupCrimes} disabled={dedupCrimesLoading} className="px-2 py-0.5 rounded bg-red-500/20 text-red-400 hover:bg-red-500/30 text-[10px] font-bold">
+                        {dedupCrimesLoading ? 'Deduping…' : `Remove ${inspectCrimesData.total_duplicates} duplicates`}
+                      </button>
+                    )}
+                    <button onClick={() => setInspectCrimesData(null)} className="text-mutedForeground hover:text-foreground text-xs">✕</button>
+                  </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-[10px]">
                     <thead><tr className="text-mutedForeground border-b border-zinc-700/40">
                       <th className="text-left p-1">Crime</th>
-                      <th className="text-left p-1">Cooldown Type</th>
+                      <th className="text-right p-1">Dupes</th>
+                      <th className="text-left p-1">CD Type</th>
                       <th className="text-left p-1">Cooldown Value</th>
                       <th className="text-center p-1">Expired?</th>
                       <th className="text-right p-1">Attempts</th>
@@ -6355,8 +6383,9 @@ export default function Admin() {
                     </tr></thead>
                     <tbody>
                       {inspectCrimesData.crimes.map((c, i) => (
-                        <tr key={i} className={`border-b border-zinc-800/40 ${c.cooldown_until_type !== 'unset' && c.cooldown_until_type !== 'str' ? 'bg-red-500/10' : ''} ${c.cooldown_expired === false ? 'bg-amber-500/10' : ''}`}>
+                        <tr key={i} className={`border-b border-zinc-800/40 ${c.duplicates > 1 ? 'bg-red-500/10' : ''} ${c.cooldown_expired === false ? 'bg-amber-500/10' : ''}`}>
                           <td className="p-1 text-foreground">{c.crime_id}</td>
+                          <td className="p-1 text-right">{c.duplicates > 1 ? <span className="text-red-400 font-bold">{c.duplicates}</span> : '1'}</td>
                           <td className="p-1"><span className={`px-1 rounded ${c.cooldown_until_type === 'str' ? 'bg-green-500/20 text-green-400' : c.cooldown_until_type === 'unset' ? 'text-mutedForeground' : 'bg-red-500/20 text-red-400'}`}>{c.cooldown_until_type}</span></td>
                           <td className="p-1 text-mutedForeground font-mono truncate max-w-[180px]">{c.cooldown_until_raw || '—'}</td>
                           <td className="p-1 text-center">{c.cooldown_expired === true ? '✓' : c.cooldown_expired === false ? <span className="text-amber-400 font-bold">ACTIVE</span> : '—'}</td>

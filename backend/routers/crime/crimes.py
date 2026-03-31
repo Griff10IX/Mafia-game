@@ -146,6 +146,23 @@ def _parse_iso_datetime(val):
     return datetime.fromisoformat(s)
 
 
+async def _dedup_user_crimes(user_id: str, crime_id: str):
+    """Remove duplicate user_crimes rows for one (user, crime), keeping the best row."""
+    try:
+        docs = await db.user_crimes.find(
+            {"user_id": user_id, "crime_id": crime_id},
+        ).to_list(500)
+        if len(docs) <= 1:
+            return
+        best = max(docs, key=lambda r: int(r.get("attempts", 0) or 0))
+        ids_to_delete = [d["_id"] for d in docs if d["_id"] != best["_id"]]
+        if ids_to_delete:
+            await db.user_crimes.delete_many({"_id": {"$in": ids_to_delete}})
+            logger.info("Deduped user_crimes for user=%s crime=%s: removed %d duplicates", user_id, crime_id, len(ids_to_delete))
+    except Exception as e:
+        logger.warning("_dedup_user_crimes error: %s", e)
+
+
 def _merge_user_crime_duplicate_rows(rows: list) -> Optional[dict]:
     """Multiple user_crimes for one crime_id: strictest cooldown (latest future until) + row with max attempts for progress."""
     if not rows:
@@ -389,7 +406,7 @@ async def get_crimes(current_user: dict = Depends(get_current_user)):
     user_crimes_list = await db.user_crimes.find(
         {"user_id": current_user["id"], "crime_id": {"$in": [c["id"] for c in all_crimes]}},
         {"_id": 0, "crime_id": 1, "cooldown_until": 1, "attempts": 1, "successes": 1, "progress": 1, "progress_max": 1},
-    ).to_list(len(all_crimes) * 2)
+    ).to_list(5000)
     by_cid = defaultdict(list)
     for uc in user_crimes_list:
         by_cid[uc["crime_id"]].append(uc)
@@ -830,6 +847,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
         {"user_id": current_user["id"], "crime_id": crime_id},
         {"$set": set_fields},
     )
+    await _dedup_user_crimes(current_user["id"], crime_id)
     # Lightweight per-crime event for analytics and anti-cheat (no public exposure).
     # Stored as a single small document per attempt.
     city = (current_user.get("current_state") or "").strip() or None

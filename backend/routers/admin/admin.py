@@ -3190,10 +3190,17 @@ def register(router):
         target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
-        docs = await db.user_crimes.find({"user_id": target["id"]}).to_list(200)
+        docs = await db.user_crimes.find({"user_id": target["id"]}).to_list(5000)
         now = datetime.now(timezone.utc)
+        from collections import Counter
+        dup_counts = Counter(d.get("crime_id") for d in docs)
+        seen = set()
         rows = []
         for d in docs:
+            cid = d.get("crime_id")
+            if cid in seen:
+                continue
+            seen.add(cid)
             cd = d.get("cooldown_until")
             cd_type = type(cd).__name__ if cd is not None else "unset"
             cd_str = cd.isoformat() if hasattr(cd, "isoformat") else str(cd) if cd is not None else None
@@ -3207,20 +3214,59 @@ def register(router):
                 except Exception:
                     expired = None
             rows.append({
-                "crime_id": d.get("crime_id"),
+                "crime_id": cid,
+                "duplicates": dup_counts.get(cid, 1),
                 "cooldown_until_raw": cd_str,
                 "cooldown_until_type": cd_type,
                 "cooldown_expired": expired,
                 "attempts": d.get("attempts", 0),
                 "successes": d.get("successes", 0),
                 "progress": d.get("progress"),
-                "doc_id": str(d.get("_id", "")),
             })
+        total_dupes = sum(max(0, c - 1) for c in dup_counts.values())
         return {
             "username": target.get("username"),
             "user_id": target["id"],
-            "total_rows": len(rows),
+            "total_rows": len(docs),
+            "unique_crimes": len(rows),
+            "total_duplicates": total_dupes,
             "crimes": rows,
+        }
+
+    @router.post("/admin/crimes/dedup")
+    async def admin_crimes_dedup(
+        target_username: str = Query(..., description="Username to deduplicate crime rows for"),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Remove duplicate user_crimes rows for a user, keeping one best row per crime_id."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        raw = (target_username or "").strip()
+        if not raw:
+            raise HTTPException(status_code=400, detail="target_username required")
+        username_pattern = _username_pattern(raw)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        docs = await db.user_crimes.find({"user_id": target["id"]}).to_list(5000)
+        from collections import defaultdict as _dd
+        by_cid = _dd(list)
+        for d in docs:
+            by_cid[d.get("crime_id")].append(d)
+        total_removed = 0
+        for cid, crime_docs in by_cid.items():
+            if len(crime_docs) <= 1:
+                continue
+            best = max(crime_docs, key=lambda r: int(r.get("attempts", 0) or 0))
+            ids_to_delete = [d["_id"] for d in crime_docs if d["_id"] != best["_id"]]
+            if ids_to_delete:
+                await db.user_crimes.delete_many({"_id": {"$in": ids_to_delete}})
+                total_removed += len(ids_to_delete)
+        return {
+            "message": f"Deduped crimes for {target.get('username') or raw}.",
+            "rows_before": len(docs),
+            "rows_removed": total_removed,
+            "rows_after": len(docs) - total_removed,
         }
 
     @router.post("/admin/force-online")

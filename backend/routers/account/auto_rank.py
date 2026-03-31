@@ -818,7 +818,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
             user = await db.users.find_one({"id": user_id}, {"_id": 0})
             if not user or user.get("in_jail"):
                 break
-            user_crimes = await db.user_crimes.find({"user_id": user_id}, {"_id": 0, "crime_id": 1, "cooldown_until": 1}).to_list(100)
+            user_crimes = await db.user_crimes.find({"user_id": user_id}, {"_id": 0, "crime_id": 1, "cooldown_until": 1}).to_list(5000)
             cooldown_by_crime = {uc["crime_id"]: _parse_iso(uc.get("cooldown_until")) for uc in user_crimes}
             rank_id, _ = get_rank_info(int(user.get("rank_points") or 0))
             user_prestige = int(user.get("prestige_level") or 0)
