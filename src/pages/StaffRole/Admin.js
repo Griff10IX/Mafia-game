@@ -301,6 +301,13 @@ const SEARCHABLE_TOOLS = [
   { label: 'Lock page', categoryId: 'admin-moderation', collapseKey: 'moderationPageLocks', keywords: ['lock', 'page', 'maintenance'] },
 ];
 
+/** Display names for /admin/casinos/analytics/summary game_type keys */
+const CASINO_ANALYTICS_GAME_LABELS = {
+  mp_poker_vs_dealer: 'Poker (vs dealer)',
+  mp_poker_vs_players: 'Poker (multiplayer)',
+  mp_poker: 'Poker (legacy)',
+};
+
 const SECTIONS_KEY = 'admin_sections_collapsed';
 
 function loadCollapsed() {
@@ -10469,7 +10476,7 @@ export default function Admin() {
                         <tbody>
                           {casinoAnalytics.items.map((item, idx) => (
                             <tr key={idx} className="border-b border-zinc-700/30">
-                              <td className="py-1.5 pr-2 font-medium">{item.game_type || '—'}</td>
+                              <td className="py-1.5 pr-2 font-medium">{CASINO_ANALYTICS_GAME_LABELS[item.game_type] || item.game_type || '—'}</td>
                               <td className="py-1.5 text-right">{item.attempts != null ? item.attempts.toLocaleString() : '—'}</td>
                               <td className="py-1.5 text-right">{item.wins != null ? item.wins.toLocaleString() : '—'}</td>
                               <td className="py-1.5 text-right">{item.win_rate != null ? `${(item.win_rate * 100).toFixed(1)}%` : '—'}</td>

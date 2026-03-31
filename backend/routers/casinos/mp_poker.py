@@ -829,7 +829,7 @@ def register(router):
             "ready": False,
             "is_bot": False,
         })
-        await log_gambling(uid, username, "mp_poker", {"action": "join", "game_id": game_id, "buy_in": buy_in})
+        await log_gambling(uid, username, "mp_poker", {"action": "join", "game_id": game_id, "buy_in": buy_in, "mode": "vs_players"})
         # 2+ players is enough to enter ready phase; creator can start once all current players are ready
         phase = "ready" if len(players) >= 2 else "lobby"
         await db.mp_poker_games.update_one(

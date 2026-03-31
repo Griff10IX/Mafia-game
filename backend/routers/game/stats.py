@@ -69,6 +69,23 @@ def _gambling_profit_from_details(game_type: str, details: dict) -> int:
     return payout - stake
 
 
+def _gambling_analytics_bucket(game_type: str, details: dict) -> str:
+    """Stable aggregation key for gambling_log (splits mp_poker vs dealer vs multiplayer)."""
+    gt = (game_type or "").strip() or "unknown"
+    if gt != "mp_poker":
+        return gt
+    d = details or {}
+    mode = d.get("mode")
+    if mode == "vs_dealer":
+        return "mp_poker_vs_dealer"
+    if mode == "vs_players":
+        return "mp_poker_vs_players"
+    # Join is only used for multiplayer tables; older rows omitted mode.
+    if d.get("action") == "join":
+        return "mp_poker_vs_players"
+    return "mp_poker"
+
+
 def _stats_parse_iso(s: Optional[str]) -> Optional[datetime]:
     if not s or not isinstance(s, str):
         return None
@@ -555,11 +572,12 @@ def register(router):
             profit = _gambling_profit_from_details(gt, details)
             if profit == 0:
                 continue
-            gambling_by_game_lt[gt] = gambling_by_game_lt.get(gt, 0) + profit
+            bucket = _gambling_analytics_bucket(gt, details)
+            gambling_by_game_lt[bucket] = gambling_by_game_lt.get(bucket, 0) + profit
             gambling_total_lt += profit
             entry_dt = _stats_parse_iso(entry.get("created_at") if isinstance(entry.get("created_at"), str) else None)
             if stats_gambling_reset_dt is None or (entry_dt is not None and entry_dt >= stats_gambling_reset_dt):
-                gambling_by_game_period[gt] = gambling_by_game_period.get(gt, 0) + profit
+                gambling_by_game_period[bucket] = gambling_by_game_period.get(bucket, 0) + profit
                 gambling_total_period += profit
 
         return {

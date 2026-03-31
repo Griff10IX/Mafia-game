@@ -51,12 +51,14 @@ const GAME_LABELS = {
   slots: 'Slots',
   mdg: 'MDG',
   mp_blackjack: 'MP Blackjack',
-  mp_poker: 'Poker',
+  mp_poker: 'Poker (legacy)',
+  mp_poker_vs_dealer: 'Poker (vs dealer)',
+  mp_poker_vs_players: 'Poker (multiplayer)',
   sports_bet: 'Sports',
 };
 
 /** All casino games in display order (for Gambling section to show every casino). */
-const ALL_CASINO_GAMES = ['dice', 'roulette', 'blackjack', 'horseracing', 'videopoker', 'slots', 'mdg', 'mp_blackjack', 'mp_poker'];
+const ALL_CASINO_GAMES = ['dice', 'roulette', 'blackjack', 'horseracing', 'videopoker', 'slots', 'mdg', 'mp_blackjack', 'mp_poker_vs_dealer', 'mp_poker_vs_players', 'mp_poker'];
 
 const MY_STATS_CACHE_KEY = 'mafia_stats_me_v1';
 
