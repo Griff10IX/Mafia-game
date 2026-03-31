@@ -6,6 +6,7 @@ import { formatReleaseUnlockLine } from '../../utils/releaseSoftLaunchDisplay';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import {
+  GAME_PASS_DEAD_ALIVE_FINE_PRINT,
   GAME_PASS_PACKAGE_ID,
   GAME_PASS_POINTS_PRICE,
   GAME_PASS_PRICE_GBP,
@@ -654,6 +655,10 @@ export default function GamePass() {
                 <span className="text-zinc-400">spendable points</span> to your balance. Game Pass (£{GAME_PASS_PRICE_GBP}) does not credit store points — it
                 unlocks <span className="text-zinc-400">rank tier rewards</span> (cash, bullets, tokens, etc.) as you earn rank XP. Different product, different
                 price.
+              </p>
+
+              <p className="text-[8px] text-zinc-500/90 font-heading leading-relaxed border-t border-primary/10 pt-2">
+                {GAME_PASS_DEAD_ALIVE_FINE_PRINT}
               </p>
 
               <p className="text-[10px] text-mutedForeground font-heading">

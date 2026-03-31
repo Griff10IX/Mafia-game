@@ -11,6 +11,54 @@ TOKEN_RESTORE_PERCENT = 0.50  # 50% of tokens restored on Dead > Alive
 REVIVE_COST = 50_000  # points to revive one dead account (same email, once per email)
 
 
+def _parse_iso_utc(s):
+    if not s:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(s).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return None
+
+
+def _dead_has_rank_xp_pass_carryover(dead_user: dict, now, pass_bonus_until_dt, pass_token_expires_dt) -> bool:
+    """True if dead account has Game Pass / rank-tier state worth merging onto the recipient."""
+    if bool(dead_user.get("rank_xp_pass_rewards_granted")):
+        return True
+    if int(dead_user.get("rank_xp_pass_last_granted_micro_tier") or 0) > 0:
+        return True
+    if dead_user.get("rank_xp_pass_tier_snapshot") is not None:
+        return True
+    if dead_user.get("rank_xp_pass_pending_tier_snapshot") is not None:
+        return True
+    if int(dead_user.get("rank_xp_pass_free_last_micro_tier_granted") or 0) > 0:
+        return True
+    if int(dead_user.get("rank_xp_pass_tokens") or 0) > 0:
+        if not pass_token_expires_dt or pass_token_expires_dt > now:
+            return True
+    if pass_bonus_until_dt and pass_bonus_until_dt > now:
+        return True
+    return False
+
+
+def _compute_token_restore_for_dead_alive(tokens_at_death: dict, pass_token_expires_dt, now) -> tuple:
+    """50% token restore from tokens_at_death snapshot. Returns (token_inc dict, tokens_restored dict)."""
+    token_inc = {}
+    tokens_restored = {}
+    for token_type, cfg in TOKEN_CONFIG.items():
+        count_field = cfg["count_field"]
+        original_count = int(tokens_at_death.get(count_field, 0) or 0)
+        if original_count > 0:
+            if token_type == "rank_xp_pass" and pass_token_expires_dt and pass_token_expires_dt <= now:
+                continue
+            restored = max(1, int(original_count * TOKEN_RESTORE_PERCENT))
+            token_inc[count_field] = restored
+            tokens_restored[token_type] = restored
+    return token_inc, tokens_restored
+
+
 def register(router):
     """Register dead-alive routes. Dependencies from server to avoid circular imports."""
     import server as srv
@@ -68,23 +116,21 @@ def register(router):
             raise HTTPException(status_code=401, detail="Invalid password for that account")
         points_at_death = int(dead_user.get("points_at_death") or 0)
         money_at_death = int(dead_user.get("money_at_death") or 0)
-        if points_at_death <= 0 and money_at_death <= 0:
-            raise HTTPException(status_code=400, detail="That account had no points or cash to transfer")
         now = datetime.now(timezone.utc)
+        pass_bonus_until_dt = _parse_iso_utc(dead_user.get("rank_xp_pass_bonus_until"))
+        pass_token_expires_dt = _parse_iso_utc(dead_user.get("rank_xp_pass_token_expires_at"))
+        tokens_at_death_raw = dead_user.get("tokens_at_death") or {}
+        token_inc, tokens_restored = _compute_token_restore_for_dead_alive(tokens_at_death_raw, pass_token_expires_dt, now)
 
-        def _parse_iso(s):
-            if not s:
-                return None
-            try:
-                dt = datetime.fromisoformat(str(s).replace("Z", "+00:00"))
-                if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=timezone.utc)
-                return dt
-            except Exception:
-                return None
+        has_estate = points_at_death > 0 or money_at_death > 0
+        has_rank_xp_merge = _dead_has_rank_xp_pass_carryover(dead_user, now, pass_bonus_until_dt, pass_token_expires_dt)
+        has_token_restore = bool(token_inc)
+        if not has_estate and not has_token_restore and not has_rank_xp_merge:
+            raise HTTPException(
+                status_code=400,
+                detail="That account had no points, cash, restorable tokens, or Game Pass state to transfer.",
+            )
 
-        pass_bonus_until_dt = _parse_iso(dead_user.get("rank_xp_pass_bonus_until"))
-        pass_token_expires_dt = _parse_iso(dead_user.get("rank_xp_pass_token_expires_at"))
         # Atomically claim — prevents double-retrieval race condition
         claim = await db.users.find_one_and_update(
             {"id": dead_user["id"], "is_dead": True, "retrieval_used": {"$ne": True}},
@@ -96,20 +142,6 @@ def register(router):
         add_money = max(0, int(money_at_death * DEAD_ALIVE_PERCENT))
         tax_money = max(0, int(money_at_death * (1 - DEAD_ALIVE_PERCENT)))
         tax_points = max(0, int(points_at_death * (1 - DEAD_ALIVE_PERCENT)))
-        # Calculate 50% token restoration
-        tokens_at_death = dead_user.get("tokens_at_death") or {}
-        token_inc = {}
-        tokens_restored = {}
-        for token_type, cfg in TOKEN_CONFIG.items():
-            count_field = cfg["count_field"]
-            original_count = int(tokens_at_death.get(count_field, 0) or 0)
-            if original_count > 0:
-                # Rank-XP pass: skip restoring an expired unactivated token.
-                if token_type == "rank_xp_pass" and pass_token_expires_dt and pass_token_expires_dt <= now:
-                    continue
-                restored = max(1, int(original_count * TOKEN_RESTORE_PERCENT))
-                token_inc[count_field] = restored
-                tokens_restored[token_type] = restored
         dead_state = (dead_user.get("current_state") or "").strip()
         head_family_id = await get_head_family_id_for_state(dead_state) if dead_state else None
         if head_family_id:
@@ -136,37 +168,41 @@ def register(router):
                 {"$inc": user_inc}
             )
 
-        # Dead > Alive carry-over for Rank-XP pass state.
-        # Support both simultaneously:
-        # - Active bonus window (rank_xp_pass_bonus_until + rank_xp_pass_tier_snapshot)
-        # - Unactivated token entitlement (rank_xp_pass_tokens + rank_xp_pass_token_expires_at + rank_xp_pass_pending_tier_snapshot)
-        pass_updates = {}
-        pass_active = bool(pass_bonus_until_dt and pass_bonus_until_dt > now)
-        pass_rewards_granted = bool(dead_user.get("rank_xp_pass_rewards_granted", False))
-        pass_pending = bool(pass_token_expires_dt and pass_token_expires_dt > now)
+        # Dead > Alive carry-over for Rank-XP pass state (only when dead had meaningful Game Pass data — do not wipe recipient).
+        if has_rank_xp_merge:
+            pass_updates = {}
+            pass_active = bool(pass_bonus_until_dt and pass_bonus_until_dt > now)
+            pass_rewards_granted = bool(dead_user.get("rank_xp_pass_rewards_granted", False))
+            pass_pending = bool(pass_token_expires_dt and pass_token_expires_dt > now)
 
-        if pass_active or pass_rewards_granted:
-            # Rewards claimed must survive even when the 24h bonus window is disabled/absent.
-            pass_updates["rank_xp_pass_bonus_until"] = pass_bonus_until_dt.isoformat() if pass_active else None
-            pass_updates["rank_xp_pass_tier_snapshot"] = dead_user.get("rank_xp_pass_tier_snapshot")
-        else:
-            pass_updates["rank_xp_pass_bonus_until"] = None
-            pass_updates["rank_xp_pass_tier_snapshot"] = None
+            if pass_active or pass_rewards_granted:
+                pass_updates["rank_xp_pass_bonus_until"] = pass_bonus_until_dt.isoformat() if pass_active else None
+                pass_updates["rank_xp_pass_tier_snapshot"] = dead_user.get("rank_xp_pass_tier_snapshot")
+            else:
+                pass_updates["rank_xp_pass_bonus_until"] = None
+                pass_updates["rank_xp_pass_tier_snapshot"] = None
 
-        if pass_pending:
-            pass_updates["rank_xp_pass_token_expires_at"] = pass_token_expires_dt.isoformat()
-            pass_updates["rank_xp_pass_pending_tier_snapshot"] = dead_user.get("rank_xp_pass_pending_tier_snapshot")
-        else:
-            pass_updates["rank_xp_pass_token_expires_at"] = None
-            pass_updates["rank_xp_pass_pending_tier_snapshot"] = None
+            if pass_pending:
+                pass_updates["rank_xp_pass_token_expires_at"] = pass_token_expires_dt.isoformat()
+                pass_updates["rank_xp_pass_pending_tier_snapshot"] = dead_user.get("rank_xp_pass_pending_tier_snapshot")
+            else:
+                pass_updates["rank_xp_pass_token_expires_at"] = None
+                pass_updates["rank_xp_pass_pending_tier_snapshot"] = None
 
-        # Preserve idempotency/reward-grant state for whichever token (pending) might be activated later.
-        pass_updates["rank_xp_pass_rewards_granted"] = pass_rewards_granted
-        pass_updates["rank_xp_pass_last_granted_micro_tier"] = int(dead_user.get("rank_xp_pass_last_granted_micro_tier") or 0) if pass_rewards_granted else 0
+            pass_updates["rank_xp_pass_rewards_granted"] = pass_rewards_granted
+            pass_updates["rank_xp_pass_last_granted_micro_tier"] = (
+                int(dead_user.get("rank_xp_pass_last_granted_micro_tier") or 0) if pass_rewards_granted else 0
+            )
+            pass_updates["rank_xp_pass_free_last_micro_tier_granted"] = int(
+                dead_user.get("rank_xp_pass_free_last_micro_tier_granted") or 0
+            )
 
-        if pass_updates:
             await db.users.update_one({"id": current_user["id"]}, {"$set": pass_updates})
-        msg = f"Transferred 99.95% from your dead account ({dead_user['username']}, 0.05% tax): "
+
+        if has_estate or has_token_restore:
+            msg = f"Transferred 99.95% from your dead account ({dead_user['username']}, 0.05% tax): "
+        else:
+            msg = f"Inheritance from your dead account ({dead_user['username']}): "
         parts = []
         if add_money > 0:
             parts.append(f"${add_money:,} cash")
@@ -175,7 +211,12 @@ def register(router):
         if tokens_restored:
             token_parts = [f"{count} {ttype.replace('_', ' ')}" for ttype, count in tokens_restored.items()]
             parts.append(f"50% tokens restored: {', '.join(token_parts)}")
-        msg += ", ".join(parts) if parts else "nothing (account had no cash, points, or tokens)"
+        if has_rank_xp_merge:
+            parts.append("Game Pass progression transferred")
+        if parts:
+            msg += ", ".join(parts)
+        else:
+            msg += "nothing (account had no cash, points, or tokens)"
         msg += ". One-time transfer complete."
         return {
             "message": msg,

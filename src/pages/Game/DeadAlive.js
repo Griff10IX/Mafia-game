@@ -3,6 +3,7 @@ import { KeyRound, AlertCircle, Skull, DollarSign, Info, Zap } from 'lucide-reac
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
+import { GAME_PASS_DEAD_ALIVE_FINE_PRINT } from '../../constants/gamePassPricing';
 
 const REVIVE_COST = 50000;
 
@@ -176,6 +177,10 @@ export default function DeadAlive() {
               <KeyRound size={15} />
               {loading ? 'Counting the coins…' : 'Claim Inheritance'}
             </button>
+
+            <p className="text-[8px] text-zinc-500/90 font-heading leading-relaxed border-t border-primary/10 pt-3">
+              {GAME_PASS_DEAD_ALIVE_FINE_PRINT}
+            </p>
           </form>
 
           <div className="h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
