@@ -13,12 +13,12 @@ from server import db, get_current_user, get_current_user_verified, _is_admin, l
 
 # Token types that can drop as bonus reward (matches armoury TOKEN_TYPES)
 SAFE_TOKEN_REWARD_TYPES = (
-    "xp_crimes", "xp_gta", "melt", "oc_reduced", "booze", "racket", "travel", "properties", "jailbust_bonus"
+    "xp_crimes", "xp_gta", "auto_rank_2h", "melt", "oc_reduced", "booze", "racket", "travel", "properties", "jailbust_bonus"
 )
 SAFE_TOKEN_REWARD_CHANCE = 0.25  # 25% chance for bonus tokens on win
-SAFE_TOKEN_REWARD_MIN_TYPES = 1   # 1–3 different token types
-SAFE_TOKEN_REWARD_MAX_TYPES = 3
-SAFE_TOKEN_REWARD_MIN_AMOUNT = 1  # 1–2 per type
+SAFE_TOKEN_REWARD_MIN_TYPES = 1   # exactly 1 token type
+SAFE_TOKEN_REWARD_MAX_TYPES = 1
+SAFE_TOKEN_REWARD_MIN_AMOUNT = 1  # 1–2 total tokens
 SAFE_TOKEN_REWARD_MAX_AMOUNT = 2
 
 # 75% reduction for beta
@@ -131,6 +131,7 @@ def register(router):
         _token_desc = {
             "xp_crimes": "2x XP from crimes, 1h",
             "xp_gta": "2x XP from GTA, 1h",
+            "auto_rank_2h": "Auto Rank access, 2h",
             "melt": "Reduced melt cooldown, 1h",
             "oc_reduced": "Reduced OC cost & cooldown, 1h",
             "booze": "Cheaper booze, 1h",
@@ -142,7 +143,7 @@ def register(router):
         possible_rewards = [{"id": "cash", "name": "Cash Jackpot", "desc": "Full jackpot amount (always)"}]
         for t in SAFE_TOKEN_REWARD_TYPES:
             name = t.replace("_", " ").title() + " Token"
-            desc = (_token_desc.get(t, "1h bonus") + " — 1–3 types, 1–2 each (25% chance)")
+            desc = (_token_desc.get(t, "1h bonus") + " — 1 type, 1–2 tokens (25% chance)")
             possible_rewards.append({"id": t, "name": name, "desc": desc})
 
         cd = user.get("crack_safe_cooldown_until")

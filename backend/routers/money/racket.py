@@ -19,6 +19,9 @@ PROPERTY_ATTACK_LEVEL_PENALTY = 0.10  # per defender level
 PROPERTY_ATTACK_MIN_SUCCESS = 0.10
 PROPERTY_ATTACK_REVENUE_PCT = 0.25  # 25% of revenue (12h worth)
 PROPERTY_ATTACK_HOURS = 12
+RACKET_AUTO_RANK_TOKEN_CHANCE = 0.20
+RACKET_AUTO_RANK_TOKEN_MIN = 1
+RACKET_AUTO_RANK_TOKEN_MAX = 1
 
 
 async def extort_property(request: ProtectionRacketRequest, current_user: dict = Depends(get_current_user)):
@@ -95,14 +98,20 @@ async def extort_property(request: ProtectionRacketRequest, current_user: dict =
             extortion_filter,
             {"$set": {"amount": extortion_amount}},
         )
+        auto_rank_tokens_awarded = 0
+        if _rng.random() < RACKET_AUTO_RANK_TOKEN_CHANCE:
+            auto_rank_tokens_awarded = _rng.randint(RACKET_AUTO_RANK_TOKEN_MIN, RACKET_AUTO_RANK_TOKEN_MAX)
+            await db.users.update_one({"id": current_user["id"]}, {"$inc": {"auto_rank_2h_tokens": auto_rank_tokens_awarded}})
         await log_activity(current_user["id"], current_user.get("username", "?"), "racket_extort", {
-            "target": target["username"], "property": prop["name"], "amount": extortion_amount,
+            "target": target["username"], "property": prop["name"], "amount": extortion_amount, "auto_rank_2h_tokens": auto_rank_tokens_awarded,
         })
+        bonus_msg = f" Bonus: +{auto_rank_tokens_awarded} Auto Rank 2h token." if auto_rank_tokens_awarded > 0 else ""
         return {
             "success": True,
-            "message": f"Raid successful! You took ${extortion_amount:,} ({PROPERTY_ATTACK_REVENUE_PCT*100:.0f}% of revenue) from {target['username']}'s {prop['name']}.",
+            "message": f"Raid successful! You took ${extortion_amount:,} ({PROPERTY_ATTACK_REVENUE_PCT*100:.0f}% of revenue) from {target['username']}'s {prop['name']}.{bonus_msg}",
             "amount": extortion_amount,
             "rank_points_earned": rank_points,
+            "auto_rank_2h_tokens_awarded": auto_rank_tokens_awarded,
         }
     return {
         "success": False,
