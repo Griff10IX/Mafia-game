@@ -220,7 +220,7 @@ export default function MDGPage() {
                           <span className="text-mutedForeground">Potential Win: </span>
                           <span className="font-semibold text-primary">{formatPot(g)}</span>
                         </p>
-                        <p className="text-[9px] font-heading text-mutedForeground truncate">
+                        <p className="text-[9px] font-heading text-mutedForeground break-words">
                           {playerNames || '—'} {entries.length > 0 && `– ${entries.length} Players`}
                           {(g.extra_pot_points > 0 || g.extra_pot_money > 0) && ` – Extra Pot: ${formatExtraPot(g)}`}
                         </p>

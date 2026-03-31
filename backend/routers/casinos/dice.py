@@ -12,6 +12,8 @@ from bson.objectid import ObjectId
 
 from fastapi import Depends, HTTPException
 
+from utils.claim_costs import load_claim_costs
+
 from server import (
     db,
     get_current_user,
@@ -36,8 +38,7 @@ DICE_SIDES_MAX = 5000
 DICE_HOUSE_EDGE = 0.0005  # 0.05% house edge
 DICE_MAX_BET = 5_000_000          # default max bet for new tables
 DICE_ABSOLUTE_MAX_BET = 500_000_000  # hard ceiling owners can set up to
-DICE_CLAIM_COST_POINTS = 0  # cost in points to claim a dice table (0 = free)
-DICE_CLAIM_COST = 125_000_000  # $125M to claim
+# Dice claim costs: utils.claim_costs.DEFAULT_CLAIM_COSTS (dice_cash, dice_points); override via game_settings key claim_costs
 DICE_SIDES_BONUS_MULT = 1.05  # physical die has 5% more faces (ceil), e.g. 2→3, 1000→1050
 
 
@@ -129,13 +130,15 @@ def register(router):
     @router.get("/casino/dice/config")
     async def casino_dice_config(current_user: dict = Depends(get_current_user_verified)):
         """Dice game config: sides range, default max bet, house edge (state head tax)."""
+        cc = await load_claim_costs(db)
         return {
             "sides_min": DICE_SIDES_MIN,
             "sides_max": DICE_SIDES_MAX,
             "max_bet": DICE_MAX_BET,
             "house_edge": DICE_HOUSE_EDGE,
             "sides_bonus_mult": DICE_SIDES_BONUS_MULT,
-            "claim_cost": DICE_CLAIM_COST,
+            "claim_cost": cc["dice_cash"],
+            "claim_cost_points": cc["dice_points"],
         }
 
     @router.get("/casino/dice/ownership")
@@ -356,11 +359,14 @@ def register(router):
         if user_city != city:
             raise HTTPException(status_code=400, detail="You must be in this city to claim the dice table")
         stored_city, existing = await _get_dice_ownership_doc(city)
+        cc = await load_claim_costs(db)
+        cash_cost = cc["dice_cash"]
+        pts_cost = cc["dice_points"]
         user = await db.users.find_one({"id": current_user.get("id") or ""})
-        if not user or user.get("money", 0) < DICE_CLAIM_COST:
-            raise HTTPException(status_code=400, detail=f"You need ${DICE_CLAIM_COST:,} to claim")
+        if not user or user.get("money", 0) < cash_cost:
+            raise HTTPException(status_code=400, detail=f"You need ${cash_cost:,} to claim")
         points = int((current_user.get("points") or 0) or 0)
-        if points < DICE_CLAIM_COST_POINTS:
+        if points < pts_cost:
             raise HTTPException(status_code=400, detail="Not enough points to claim")
         db_city = stored_city or city
         res = await db.dice_ownership.update_one(
@@ -378,9 +384,9 @@ def register(router):
         )
         if res.matched_count == 0 and res.upserted_id is None:
             raise HTTPException(status_code=400, detail="This table is already owned")
-        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -DICE_CLAIM_COST}})
-        if DICE_CLAIM_COST_POINTS > 0:
-            await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"points": -DICE_CLAIM_COST_POINTS}})
+        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -cash_cost}})
+        if pts_cost > 0:
+            await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"points": -pts_cost}})
         return {"message": f"You now own the dice table in {city}!"}
 
     @router.post("/casino/dice/relinquish")

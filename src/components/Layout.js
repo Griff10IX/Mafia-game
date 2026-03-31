@@ -1274,6 +1274,7 @@ export default function Layout({ children }) {
     }
 
     if (statId === 'property') {
+      if (!hasCasinoOrProperty) return null;
       const casinoNum = Number(casinoProfit);
       const propertyNum = Number(propertyProfit);
       const casinoStr = `$${(Number.isFinite(casinoNum) ? casinoNum : 0).toLocaleString()}`;
@@ -1483,7 +1484,7 @@ export default function Layout({ children }) {
           </div>
 
           {/* Casino & property profit — show on mobile when bottom bar, but not when top bar stats selected */}
-          {isMobileViewport && mobileNavStyle === 'bottom' && mobileStatsDisplay !== 'top_bar' && user && (
+          {isMobileViewport && mobileNavStyle === 'bottom' && mobileStatsDisplay !== 'top_bar' && user && hasCasinoOrProperty && (
             <Link
               to="/my-properties"
               className="flex items-center gap-1 min-h-[1.5rem] rounded px-1.5 py-0.5 border border-primary/15 bg-primary/5 shrink-0 hover:bg-primary/10 hover:border-primary/25 transition-colors"
@@ -2253,10 +2254,12 @@ export default function Layout({ children }) {
                       <span className="font-heading text-sm truncate" style={{ color: 'var(--noir-foreground)' }}>{s.value}</span>
                     </div>
                   ))}
+                  {hasCasinoOrProperty && (
                   <div className="col-span-2 flex items-center gap-2 py-2 px-3 rounded-lg border" style={{ borderColor: 'var(--noir-border)', backgroundColor: 'var(--noir-surface)' }}>
                     <Building2 size={18} className="shrink-0 text-emerald-400" />
                     <span className="font-heading text-xs truncate" style={{ color: 'var(--noir-foreground)' }}>C {formatMoneyCompact(user.casino_profit ?? 0)} · P {formatCompact(user.property_profit ?? 0)} pts</span>
                   </div>
+                  )}
                 </div>
                 {/* Game Chat — same as right sidebar, bounded height in touch ball panel */}
                 <div className="pt-2 border-t flex flex-col min-h-0 overflow-hidden" style={{ borderColor: 'var(--noir-border)', maxHeight: '320px' }}>

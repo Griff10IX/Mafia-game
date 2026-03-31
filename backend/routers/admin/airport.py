@@ -8,6 +8,8 @@ from pydantic import BaseModel
 from fastapi import Depends, HTTPException
 from bson.objectid import ObjectId
 
+from utils.claim_costs import load_claim_costs
+
 from server import (
     db,
     get_current_user,
@@ -24,7 +26,7 @@ AIRPORT_COST = 10
 AIRPORT_PRICE_MIN = 10
 AIRPORT_PRICE_MAX = 30
 AIRPORT_SLOTS_PER_STATE = 1
-AIRPORT_CLAIM_COST = 175_000_000  # $175M to claim
+# Airport claim cost: utils.claim_costs (key airport)
 MAX_TRAVELS_PER_HOUR = 15
 EXTRA_AIRMILES_COST = 25
 MAX_EXTRA_AIRMILES = 50
@@ -519,6 +521,7 @@ async def list_airports(current_user: dict = Depends(get_current_user)):
     now = time.monotonic()
     if _airports_list_cache is not None and now <= _airports_list_cache_ts + _AIRPORTS_LIST_TTL_SEC:
         return _airports_list_cache
+    cc = await load_claim_costs(db)
     result = []
     for state in STATES:
         for slot in range(1, AIRPORT_SLOTS_PER_STATE + 1):
@@ -528,7 +531,7 @@ async def list_airports(current_user: dict = Depends(get_current_user)):
                 doc = await db.airport_ownership.find_one({"state": state, "slot": slot}, {"_id": 0})
             price = max(AIRPORT_PRICE_MIN, min(doc.get("price_per_travel") or AIRPORT_COST, AIRPORT_PRICE_MAX))
             result.append({"state": state, "slot": slot, "owner_username": doc.get("owner_username") or "Unclaimed", "price_per_travel": price})
-    payload = {"airports": result, "claim_cost": AIRPORT_CLAIM_COST}
+    payload = {"airports": result, "claim_cost": cc["airport"]}
     _airports_list_cache = payload
     _airports_list_cache_ts = now
     return payload
@@ -557,10 +560,12 @@ async def claim_airport(req: AirportClaimRequest, current_user: dict = Depends(g
         doc = await db.airport_ownership.find_one({"state": req.state, "slot": req.slot}, {"_id": 0})
     if doc.get("owner_id"):
         raise HTTPException(status_code=400, detail="This airport slot is already owned")
+    cc = await load_claim_costs(db)
+    claim_cost = cc["airport"]
     user = await db.users.find_one({"id": current_user["id"]})
-    if not user or user.get("money", 0) < AIRPORT_CLAIM_COST:
-        raise HTTPException(status_code=400, detail=f"You need ${AIRPORT_CLAIM_COST:,} to claim an airport")
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -AIRPORT_CLAIM_COST}})
+    if not user or user.get("money", 0) < claim_cost:
+        raise HTTPException(status_code=400, detail=f"You need ${claim_cost:,} to claim an airport")
+    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": -claim_cost}})
     await db.airport_ownership.update_one(
         {"state": req.state, "slot": req.slot},
         {"$set": {"owner_id": current_user["id"], "owner_username": current_user.get("username"), "price_per_travel": AIRPORT_COST, "total_earnings": 0}}

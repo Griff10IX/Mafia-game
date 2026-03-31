@@ -210,6 +210,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Release soft-launch', categoryId: 'admin-gameworld', collapseKey: 'releaseSoftLaunch', keywords: ['release', 'soft', 'launch', 'pvp', 'kill', 'game pass'], adminOnly: true },
   { label: 'Reset Racket Cooldown', categoryId: 'admin-gameworld', collapseKey: 'racketReset', keywords: ['racket', 'cooldown', 'reset', 'family'], adminOnly: true },
   { label: 'Casino limits (global caps)', categoryId: 'admin-gameworld', collapseKey: 'casinoLimits', keywords: ['casino', 'limits', 'caps', 'max bet', 'buyback', 'poker', 'blind'] },
+  { label: 'Claim costs (casino, airport, armoury)', categoryId: 'admin-gameworld', collapseKey: 'claimCosts', keywords: ['claim', 'cost', 'casino', 'airport', 'armoury', 'bullet', 'factory', 'dice', 'roulette'], adminOnly: true },
   { label: 'Casino per-game max bets', categoryId: 'admin-gameworld', collapseKey: 'casinoMaxBets', keywords: ['casino', 'max bet', 'per game', 'slots', 'blackjack', 'roulette'] },
   { label: 'Admin display & signup', categoryId: 'admin-gameworld', collapseKey: 'adminDisplay', keywords: ['admin', 'display', 'colour', 'color', 'online', 'email', 'verification', 'vpn', 'proxy', 'user agent', 'signup'], adminOnly: true },
   { label: 'Launch & login lock', categoryId: 'admin-gameworld', collapseKey: 'launchSettings', keywords: ['login', 'lock', 'launch', 'store', 'preorder', 'preregister', 'banner', 'landing'], adminOnly: true },
@@ -888,6 +889,18 @@ export default function Admin() {
   const [casinoBuybackMaxPoints, setCasinoBuybackMaxPoints] = useState(15000);
   const [mpPokerMaxBlind, setMpPokerMaxBlind] = useState(2500000);
   const [casinoCapsSaving, setCasinoCapsSaving] = useState(false);
+  const [claimCosts, setClaimCosts] = useState({
+    dice_cash: 0,
+    dice_points: 0,
+    roulette: 0,
+    blackjack: 0,
+    horseracing: 0,
+    video_poker: 0,
+    airport: 0,
+    armoury: 0,
+  });
+  const [claimCostsLoading, setClaimCostsLoading] = useState(false);
+  const [claimCostsSaving, setClaimCostsSaving] = useState(false);
   const [pageLocks, setPageLocks] = useState({});
   const [pageLockPath, setPageLockPath] = useState('');
   const [pageLockMessage, setPageLockMessage] = useState('Down for maintenance');
@@ -974,6 +987,7 @@ export default function Admin() {
         fetchCfBotBlockStatus();
         fetchCfAutoBlockStatus();
         fetchPageLocks();
+        fetchClaimCosts();
         fetchStateHeads();  // Auto-load state heads to show duplicate warnings
       }
       if (admin || mod) {
@@ -1654,6 +1668,63 @@ export default function Admin() {
       toast.error(e.response?.data?.detail ?? 'Failed to save casino caps');
     } finally {
       setCasinoCapsSaving(false);
+    }
+  };
+
+  const fetchClaimCosts = async () => {
+    setClaimCostsLoading(true);
+    try {
+      const res = await api.get('/admin/claim-costs');
+      const d = res.data || {};
+      const n = (k) => Math.max(0, parseInt(String(d[k] ?? 0).replace(/\D/g, ''), 10) || 0);
+      setClaimCosts({
+        dice_cash: n('dice_cash'),
+        dice_points: n('dice_points'),
+        roulette: n('roulette'),
+        blackjack: n('blackjack'),
+        horseracing: n('horseracing'),
+        video_poker: n('video_poker'),
+        airport: n('airport'),
+        armoury: n('armoury'),
+      });
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to load claim costs');
+    } finally {
+      setClaimCostsLoading(false);
+    }
+  };
+
+  const handleSaveClaimCosts = async () => {
+    const parseN = (v) => Math.max(0, parseInt(String(v).replace(/\D/g, ''), 10) || 0);
+    setClaimCostsSaving(true);
+    try {
+      const res = await api.patch('/admin/claim-costs', {
+        dice_cash: parseN(claimCosts.dice_cash),
+        dice_points: parseN(claimCosts.dice_points),
+        roulette: parseN(claimCosts.roulette),
+        blackjack: parseN(claimCosts.blackjack),
+        horseracing: parseN(claimCosts.horseracing),
+        video_poker: parseN(claimCosts.video_poker),
+        airport: parseN(claimCosts.airport),
+        armoury: parseN(claimCosts.armoury),
+      });
+      const d = res.data || {};
+      const n = (k) => Math.max(0, parseInt(String(d[k] ?? 0).replace(/\D/g, ''), 10) || 0);
+      setClaimCosts({
+        dice_cash: n('dice_cash'),
+        dice_points: n('dice_points'),
+        roulette: n('roulette'),
+        blackjack: n('blackjack'),
+        horseracing: n('horseracing'),
+        video_poker: n('video_poker'),
+        airport: n('airport'),
+        armoury: n('armoury'),
+      });
+      toast.success('Claim costs saved');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to save claim costs');
+    } finally {
+      setClaimCostsSaving(false);
     }
   };
 
@@ -7363,6 +7434,76 @@ export default function Admin() {
           </div>
         )}
         </div>
+
+        {isAdmin && (
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={HandCoins}
+          title="Claim costs"
+          badge={
+            <span className="text-[10px] font-heading text-mutedForeground">
+              {claimCostsLoading ? 'Loading…' : 'Casino · airport · armoury'}
+            </span>
+          }
+          isCollapsed={collapsed.claimCosts}
+          onToggle={() => toggleSection('claimCosts')}
+        />
+        {!collapsed.claimCosts && (
+          <div className="p-3 space-y-3">
+            <p className="text-[10px] text-mutedForeground">
+              Cash (and dice points where used) to claim each property type. Values persist in <span className="font-mono text-[9px]">game_settings</span> until changed again.
+            </p>
+            <div className="space-y-2">
+              {[
+                { key: 'dice_cash', label: 'Dice (cash $)' },
+                { key: 'dice_points', label: 'Dice (points)' },
+                { key: 'roulette', label: 'Roulette ($)' },
+                { key: 'blackjack', label: 'Blackjack ($)' },
+                { key: 'horseracing', label: 'Horse racing ($)' },
+                { key: 'video_poker', label: 'Video poker ($)' },
+                { key: 'airport', label: 'Airport ($)' },
+                { key: 'armoury', label: 'Armoury / bullet factory ($)' },
+              ].map(({ key, label }) => (
+                <div key={key} className="flex items-center gap-2">
+                  <span className="text-[10px] text-mutedForeground w-40 sm:w-44 shrink-0">{label}</span>
+                  <input
+                    type="text"
+                    value={typeof claimCosts[key] === 'number' ? claimCosts[key].toLocaleString() : String(claimCosts[key] ?? '')}
+                    onChange={(e) =>
+                      setClaimCosts((prev) => ({
+                        ...prev,
+                        [key]: parseInt(e.target.value.replace(/\D/g, ''), 10) || 0,
+                      }))
+                    }
+                    disabled={claimCostsLoading || claimCostsSaving}
+                    className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none font-mono min-w-0"
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <button
+                type="button"
+                onClick={fetchClaimCosts}
+                disabled={claimCostsLoading || claimCostsSaving}
+                className="flex-1 py-2 text-[10px] font-heading font-bold uppercase rounded bg-zinc-800/80 text-mutedForeground border border-zinc-600/50 hover:bg-zinc-700/80 disabled:opacity-50"
+              >
+                {claimCostsLoading ? 'Loading…' : 'Reload'}
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveClaimCosts}
+                disabled={claimCostsLoading || claimCostsSaving}
+                className="flex-1 py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
+              >
+                {claimCostsSaving ? 'Saving…' : 'Save claim costs'}
+              </button>
+            </div>
+          </div>
+        )}
+        </div>
+        )}
 
         {isAdmin && (
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>

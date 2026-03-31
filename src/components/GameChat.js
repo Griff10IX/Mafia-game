@@ -548,8 +548,8 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
         className="shrink-0 px-2 pt-2 pb-2 flex flex-col gap-1.5"
         style={{ borderTop: '1px solid rgba(var(--noir-primary-rgb), 0.1)', background: 'rgba(0,0,0,0.2)' }}
       >
-        {/* Text input + action buttons — touch-friendly on mobile */}
-        <form onSubmit={handleSend} className="flex items-stretch gap-1 flex-wrap sm:flex-nowrap">
+        {/* Text input + action buttons — stacked on mobile, inline on desktop */}
+        <form onSubmit={handleSend} className="flex flex-col sm:flex-row items-stretch gap-1">
           <input
             type="text"
             data-chat-part="input"
@@ -558,7 +558,7 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
             placeholder={prefs.muted ? 'Muted' : 'Say something, wise guy...'}
             maxLength={MAX_MESSAGE_LEN}
             disabled={prefs.muted}
-            className="flex-1 min-w-0 text-[11px] px-2.5 py-2.5 sm:py-1.5 rounded-sm disabled:opacity-60 disabled:cursor-not-allowed outline-none transition-colors min-h-[44px] sm:min-h-0"
+            className="w-full sm:flex-1 sm:min-w-0 text-[11px] px-2.5 py-2.5 sm:py-1.5 rounded-sm disabled:opacity-60 disabled:cursor-not-allowed outline-none transition-colors min-h-[44px] sm:min-h-0"
             style={{
               background: 'rgba(0,0,0,0.5)',
               border: '1px solid rgba(var(--noir-primary-rgb), 0.18)',
@@ -569,54 +569,56 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
             onBlur={(e) => (e.target.style.borderColor = 'rgba(var(--noir-primary-rgb), 0.18)')}
           />
 
-          {/* GIF */}
-          <button
-            type="button"
-            data-chat-part="aux-btn"
-            onClick={() => setShowGifPicker((v) => !v)}
-            disabled={prefs.muted}
-            className="shrink-0 min-w-[36px] min-h-[44px] sm:min-w-0 sm:min-h-0 px-2 rounded-sm font-heading text-[9px] tracking-wider transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center touch-manipulation active:scale-95"
-            style={{
-              background: 'rgba(var(--noir-primary-rgb), 0.07)',
-              border: '1px solid rgba(var(--noir-primary-rgb), 0.2)',
-              color: 'rgba(var(--noir-primary-rgb), 0.7)',
-            }}
-            title="GIF"
-          >
-            GIF
-          </button>
+          <div className="flex items-stretch gap-1">
+            {/* GIF */}
+            <button
+              type="button"
+              data-chat-part="aux-btn"
+              onClick={() => setShowGifPicker((v) => !v)}
+              disabled={prefs.muted}
+              className="flex-1 sm:flex-none shrink-0 sm:min-w-0 min-h-[40px] sm:min-h-0 px-2 rounded-sm font-heading text-[9px] tracking-wider transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center touch-manipulation active:scale-95"
+              style={{
+                background: 'rgba(var(--noir-primary-rgb), 0.07)',
+                border: '1px solid rgba(var(--noir-primary-rgb), 0.2)',
+                color: 'rgba(var(--noir-primary-rgb), 0.7)',
+              }}
+              title="GIF"
+            >
+              GIF
+            </button>
 
-          {/* Emoji toggle */}
-          <button
-            type="button"
-            data-chat-part="aux-btn"
-            onClick={() => setShowEmojis((v) => !v)}
-            disabled={prefs.muted}
-            className="shrink-0 min-w-[36px] min-h-[44px] sm:min-w-0 sm:min-h-0 px-2 rounded-sm text-[13px] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center touch-manipulation active:scale-95"
-            style={{
-              background: 'rgba(var(--noir-primary-rgb), 0.07)',
-              border: '1px solid rgba(var(--noir-primary-rgb), 0.2)',
-            }}
-            title={showEmojis ? 'Hide emoji' : 'Emoji'}
-          >
-            😀
-          </button>
+            {/* Emoji toggle */}
+            <button
+              type="button"
+              data-chat-part="aux-btn"
+              onClick={() => setShowEmojis((v) => !v)}
+              disabled={prefs.muted}
+              className="flex-1 sm:flex-none shrink-0 sm:min-w-0 min-h-[40px] sm:min-h-0 px-2 rounded-sm text-[13px] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center touch-manipulation active:scale-95"
+              style={{
+                background: 'rgba(var(--noir-primary-rgb), 0.07)',
+                border: '1px solid rgba(var(--noir-primary-rgb), 0.2)',
+              }}
+              title={showEmojis ? 'Hide emoji' : 'Emoji'}
+            >
+              😀
+            </button>
 
-          {/* Send */}
-          <button
-            type="submit"
-            data-chat-part="send"
-            disabled={sending || prefs.muted || !(input || '').trim()}
-            className="shrink-0 min-w-[44px] min-h-[44px] sm:min-w-0 sm:min-h-0 px-2.5 rounded-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center touch-manipulation active:scale-95"
-            style={{
-              background: 'rgba(var(--noir-primary-rgb), 0.15)',
-              border: '1px solid rgba(var(--noir-primary-rgb), 0.35)',
-              color: 'var(--noir-primary)',
-            }}
-            aria-label="Send"
-          >
-            <Send size={12} />
-          </button>
+            {/* Send */}
+            <button
+              type="submit"
+              data-chat-part="send"
+              disabled={sending || prefs.muted || !(input || '').trim()}
+              className="flex-1 sm:flex-none shrink-0 sm:min-w-0 min-h-[40px] sm:min-h-0 px-2.5 rounded-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center touch-manipulation active:scale-95"
+              style={{
+                background: 'rgba(var(--noir-primary-rgb), 0.15)',
+                border: '1px solid rgba(var(--noir-primary-rgb), 0.35)',
+                color: 'var(--noir-primary)',
+              }}
+              aria-label="Send"
+            >
+              <Send size={12} />
+            </button>
+          </div>
         </form>
 
         {/* Emoji strip — horizontal scrolling, touch-friendly buttons */}

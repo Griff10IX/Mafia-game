@@ -10,6 +10,8 @@ from bson.objectid import ObjectId
 
 from fastapi import Depends, HTTPException
 
+from utils.claim_costs import load_claim_costs
+
 from server import (
     db,
     get_current_user,
@@ -31,7 +33,7 @@ from routers.casinos.dice import DiceSellOnTradeRequest
 
 # ----- Constants -----
 HORSERACING_MAX_BET = 10_000_000
-HORSERACING_CLAIM_COST = 500_000_000  # $500M to claim track (per city)
+# Horse racing claim cost: utils.claim_costs (key horseracing)
 HORSERACING_ABSOLUTE_MAX_BET = 50_000_000  # owner can set max_bet up to this
 HORSERACING_HOUSE_EDGE = 0.0005  # 0.05%
 HORSERACING_HORSES = [
@@ -165,11 +167,12 @@ def register(router):
         city = _normalize_city_for_horseracing(raw) if raw else (STATES[0] if STATES else "")
         _, doc = await _get_horseracing_ownership_doc(city) if city else (None, None)
         max_bet = doc.get("max_bet", HORSERACING_MAX_BET) if doc else HORSERACING_MAX_BET
+        cc = await load_claim_costs(db)
         return {
             "horses": list(HORSERACING_HORSES),
             "max_bet": max_bet,
             "house_edge": HORSERACING_HOUSE_EDGE,
-            "claim_cost": HORSERACING_CLAIM_COST,
+            "claim_cost": cc["horseracing"],
         }
 
     @router.get("/casino/horseracing/ownership")
@@ -179,7 +182,8 @@ def register(router):
         now_ts = time.time()
         entry = _ownership_cache.get(user_id)
         if entry and (now_ts - entry["ts"]) < _OWNERSHIP_TTL_SEC:
-            return entry["data"]
+            cc = await load_claim_costs(db)
+            return {**entry["data"], "claim_cost": cc["horseracing"]}
         now = datetime.now(timezone.utc)
         # Clean up expired buyback offers for this user
         await db.horseracing_buy_back_offers.delete_many({
@@ -190,6 +194,7 @@ def register(router):
         city = _normalize_city_for_horseracing(raw) if raw else (STATES[0] if STATES else "Chicago")
         display_city = city or raw or "Chicago"
         stored_city, doc = await _get_horseracing_ownership_doc(city)
+        cc = await load_claim_costs(db)
         if not doc:
             out = {
                 "current_city": display_city,
@@ -197,7 +202,7 @@ def register(router):
                 "owner_name": None,
                 "is_owner": False,
                 "is_unclaimed": True,
-                "claim_cost": HORSERACING_CLAIM_COST,
+                "claim_cost": cc["horseracing"],
                 "max_bet": HORSERACING_MAX_BET,
                 "buy_back_reward": None,
                 "buy_back_offer": None,
@@ -240,7 +245,7 @@ def register(router):
             "owner_name": owner_name,
             "is_owner": is_owner,
             "is_unclaimed": owner_id is None,
-            "claim_cost": HORSERACING_CLAIM_COST,
+            "claim_cost": cc["horseracing"],
             "max_bet": max_bet,
             "buy_back_reward": buy_back_reward,
             "total_earnings": total_earnings if is_owner else None,
@@ -265,9 +270,11 @@ def register(router):
         if owned and (owned.get("type") != "horseracing" or owned.get("city") != city):
             raise HTTPException(status_code=400, detail="You may only own 1 casino. Relinquish it first (Casino or My Properties).")
         stored_city, doc = await _get_horseracing_ownership_doc(city)
+        cc = await load_claim_costs(db)
+        claim_cost = cc["horseracing"]
         user = await db.users.find_one({"id": current_user.get("id") or ""})
-        if not user or user.get("money", 0) < HORSERACING_CLAIM_COST:
-            raise HTTPException(status_code=400, detail=f"You need ${HORSERACING_CLAIM_COST:,} to claim")
+        if not user or user.get("money", 0) < claim_cost:
+            raise HTTPException(status_code=400, detail=f"You need ${claim_cost:,} to claim")
         res = await db.horseracing_ownership.update_one(
             {"city": stored_city or city, "owner_id": None},
             {"$set": {"owner_id": current_user.get("id") or "", "owner_username": current_user.get("username") or "", "max_bet": HORSERACING_MAX_BET, "buy_back_reward": 0}},
@@ -275,7 +282,7 @@ def register(router):
         )
         if not res.modified_count and not res.upserted_id:
             raise HTTPException(status_code=400, detail="This track already has an owner")
-        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -HORSERACING_CLAIM_COST}})
+        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -claim_cost}})
         return {"message": f"You now own the race track in {city}!"}
 
     @router.post("/casino/horseracing/relinquish")

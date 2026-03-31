@@ -12,6 +12,8 @@ from bson.objectid import ObjectId
 
 from fastapi import Depends, HTTPException
 
+from utils.claim_costs import load_claim_costs
+
 from server import (
     db,
     get_current_user,
@@ -35,7 +37,7 @@ from routers.casinos.dice import DiceSellOnTradeRequest
 VIDEO_POKER_MAX_BET = 50_000_000
 VIDEO_POKER_DEFAULT_MAX_BET = 50_000_000
 VIDEO_POKER_ABSOLUTE_MAX_BET = 500_000_000
-VIDEO_POKER_CLAIM_COST = 750_000_000  # $750M to claim
+# Video poker claim cost: utils.claim_costs (key video_poker)
 VIDEO_POKER_HISTORY_MAX = 10
 VIDEO_POKER_HOUSE_EDGE = 0.0005  # 0.05% of profit to house (state head when no owner), like dice
 
@@ -209,9 +211,10 @@ def register(router):
         city = _normalize_city(raw) if raw else (STATES[0] if STATES else "")
         _, doc = await _get_ownership_doc(city) if city else (None, None)
         max_bet = doc.get("max_bet", VIDEO_POKER_DEFAULT_MAX_BET) if doc else VIDEO_POKER_DEFAULT_MAX_BET
+        cc = await load_claim_costs(db)
         return {
             "max_bet": max_bet,
-            "claim_cost": VIDEO_POKER_CLAIM_COST,
+            "claim_cost": cc["video_poker"],
             "house_edge": VIDEO_POKER_HOUSE_EDGE,
             "pay_table": PAY_TABLE,
             "hand_names": HAND_NAMES,
@@ -235,6 +238,7 @@ def register(router):
         city = _normalize_city(raw) if raw else (STATES[0] if STATES else "Chicago")
         display_city = city or raw or "Chicago"
         stored_city, doc = await _get_ownership_doc(city)
+        cc = await load_claim_costs(db)
         if not doc:
             out = {
                 "current_city": display_city,
@@ -242,7 +246,7 @@ def register(router):
                 "owner_name": None,
                 "is_owner": False,
                 "is_unclaimed": True,
-                "claim_cost": VIDEO_POKER_CLAIM_COST,
+                "claim_cost": cc["video_poker"],
                 "max_bet": VIDEO_POKER_DEFAULT_MAX_BET,
                 "buy_back_reward": None,
                 "buy_back_offer": None,
@@ -285,7 +289,7 @@ def register(router):
             "owner_name": owner_name,
             "is_owner": is_owner,
             "is_unclaimed": owner_id is None,
-            "claim_cost": VIDEO_POKER_CLAIM_COST,
+            "claim_cost": cc["video_poker"],
             "max_bet": max_bet,
             "buy_back_reward": buy_back_reward,
             "total_earnings": total_earnings if is_owner else None,
@@ -310,9 +314,11 @@ def register(router):
         if owned and (owned.get("type") != "videopoker" or owned.get("city") != city):
             raise HTTPException(status_code=400, detail="You may only own 1 casino. Relinquish it first (Casino or My Properties).")
         stored_city, doc = await _get_ownership_doc(city)
+        cc = await load_claim_costs(db)
+        claim_cost = cc["video_poker"]
         user = await db.users.find_one({"id": current_user.get("id") or ""})
-        if not user or user.get("money", 0) < VIDEO_POKER_CLAIM_COST:
-            raise HTTPException(status_code=400, detail=f"You need ${VIDEO_POKER_CLAIM_COST:,} to claim")
+        if not user or user.get("money", 0) < claim_cost:
+            raise HTTPException(status_code=400, detail=f"You need ${claim_cost:,} to claim")
         res = await db.videopoker_ownership.update_one(
             {"city": stored_city or city, "owner_id": None},
             {"$set": {"owner_id": current_user.get("id") or "", "owner_username": current_user.get("username") or "", "max_bet": VIDEO_POKER_DEFAULT_MAX_BET, "buy_back_reward": 0}},
@@ -320,7 +326,7 @@ def register(router):
         )
         if not res.modified_count and not res.upserted_id:
             raise HTTPException(status_code=400, detail="This table already has an owner")
-        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -VIDEO_POKER_CLAIM_COST}})
+        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -claim_cost}})
         return {"message": f"You now own the video poker table in {city}!"}
 
     @router.post("/casino/videopoker/relinquish")

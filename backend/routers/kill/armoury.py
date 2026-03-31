@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict
 from bson.objectid import ObjectId
 
 from server import db, get_current_user, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, _family_in_active_war, CARS, _get_staff_user_ids, send_notification, log_activity, log_minigame_payout
+from utils.claim_costs import load_claim_costs
 from utils.game_pass_micro_rewards import (
     micro_tier_from_rank_points,
     rewards_for_micro_tier,
@@ -43,7 +44,7 @@ BULLET_FACTORY_PRODUCTION_PER_HOUR = BULLET_FACTORY_TOTAL_PER_24H / 24  # ~208.3
 BULLET_FACTORY_MAX_HOURS_CAP = 24  # cap accumulated at 24h of production (5000 total)
 BULLET_FACTORY_BUY_MAX_PER_PURCHASE = 5000  # max bullets per single purchase
 BULLET_FACTORY_BUY_COOLDOWN_MINUTES = 15  # must wait this long between purchases
-BULLET_FACTORY_CLAIM_COST = 200_000_000  # $200M to claim
+# Armoury claim cost: utils.claim_costs (key armoury)
 BULLET_FACTORY_PRICE_MIN = 1
 BULLET_FACTORY_PRICE_MAX = 100_000  # max $ per bullet (when owned)
 # 75% reduction for beta
@@ -554,6 +555,7 @@ async def get_bullet_factory(
 ):
     """Status for one state (default: user's current state). Bullets + armoury production/stock."""
     state = _normalize_state(state or current_user.get("current_state"))
+    cc = await load_claim_costs(db)
     factory = await _get_or_create_factory(state)
     owner_id = factory.get("owner_id")
     if owner_id:
@@ -592,7 +594,7 @@ async def get_bullet_factory(
         "production_per_hour": prod_per_hour,
         "production_per_24h": cap_24,
         "production_tick_minutes": BULLET_FACTORY_TICK_MINUTES,
-        "claim_cost": BULLET_FACTORY_CLAIM_COST,
+        "claim_cost": cc["armoury"],
         "owner_id": owner_id,
         "owner_username": owner_username,
         "accumulated_bullets": accumulated,
@@ -722,15 +724,17 @@ async def claim_bullet_factory(
     factory = await _get_or_create_factory(state)
     if factory.get("owner_id"):
         raise HTTPException(status_code=400, detail="The armoury in this state already has an owner")
+    cc = await load_claim_costs(db)
+    claim_cost = cc["armoury"]
     now = datetime.now(timezone.utc).isoformat()
     result = await db.users.update_one(
-        {"id": current_user["id"], "money": {"$gte": BULLET_FACTORY_CLAIM_COST}},
-        {"$inc": {"money": -BULLET_FACTORY_CLAIM_COST}},
+        {"id": current_user["id"], "money": {"$gte": claim_cost}},
+        {"$inc": {"money": -claim_cost}},
     )
     if result.modified_count == 0:
         raise HTTPException(
             status_code=400,
-            detail=f"You need ${BULLET_FACTORY_CLAIM_COST:,} to claim the armoury",
+            detail=f"You need ${claim_cost:,} to claim the armoury",
         )
     await db.bullet_factory.update_one(
         {"state": state},

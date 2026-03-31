@@ -46,6 +46,12 @@ from utils.point_provenance import (
     ensure_user_legacy_seed_lot,
     consume_points_fifo,
 )
+from utils.claim_costs import (
+    CLAIM_COSTS_SETTINGS_KEY,
+    invalidate_claim_costs_cache,
+    load_claim_costs,
+    merge_claim_costs,
+)
 
 # Cloudflare API config for bot blocking toggle
 CF_ZONE_ID = os.environ.get("CF_ZONE_ID", "")
@@ -174,6 +180,19 @@ class AdminSettingsUpdate(BaseModel):
     casino_buyback_max_points: Optional[int] = None  # Max points for buy-back reward (default 15000)
     mp_poker_max_blind: Optional[int] = None  # Max MP poker small blind cap (default 2.5M)
     mod_visible_category_ids: Optional[List[str]] = None  # Admin Tool category ids visible to moderators
+
+
+class AdminClaimCostsPatch(BaseModel):
+    """Partial update for property/casino claim costs (cash/points in dollars / whole points)."""
+
+    dice_cash: Optional[int] = None
+    dice_points: Optional[int] = None
+    roulette: Optional[int] = None
+    blackjack: Optional[int] = None
+    horseracing: Optional[int] = None
+    video_poker: Optional[int] = None
+    airport: Optional[int] = None
+    armoury: Optional[int] = None
 
 
 class TestUsersAutoRankRequest(BaseModel):
@@ -4657,6 +4676,50 @@ def register(router):
             "casino_buyback_max_points": casino_buyback_max_points,
             "mp_poker_max_blind": mp_poker_max_blind,
         }
+
+    _CLAIM_COST_MAX = 10**15
+
+    @router.get("/admin/claim-costs")
+    async def admin_get_claim_costs(current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        return await load_claim_costs(db, ttl_sec=0.0)
+
+    @router.patch("/admin/claim-costs")
+    async def admin_patch_claim_costs(body: AdminClaimCostsPatch, current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        def _ok(n: int) -> bool:
+            return 0 <= n <= _CLAIM_COST_MAX
+
+        doc = await db.game_settings.find_one({"key": CLAIM_COSTS_SETTINGS_KEY}, {"_id": 0, "value": 1})
+        raw = (doc or {}).get("value")
+        merged = merge_claim_costs(raw if isinstance(raw, dict) else None)
+        patch = body.model_dump(exclude_unset=True)
+        for key, val in patch.items():
+            if val is None:
+                continue
+            try:
+                n = int(val)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail=f"Invalid integer for {key}")
+            if not _ok(n):
+                raise HTTPException(status_code=400, detail=f"{key} must be between 0 and {_CLAIM_COST_MAX:,}")
+            merged[key] = n
+        await db.game_settings.update_one(
+            {"key": CLAIM_COSTS_SETTINGS_KEY},
+            {"$set": {"key": CLAIM_COSTS_SETTINGS_KEY, "value": merged}},
+            upsert=True,
+        )
+        invalidate_claim_costs_cache()
+        try:
+            from routers.admin.airport import _invalidate_airports_list_cache
+
+            _invalidate_airports_list_cache()
+        except Exception:
+            pass
+        return await load_claim_costs(db)
 
     PAGE_LOCKS_KEY = "page_locks"
 
