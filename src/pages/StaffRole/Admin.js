@@ -264,6 +264,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Clear minigame records (user)', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['minigame', 'records', 'clear', 'user', 'scores'], adminOnly: true },
   { label: 'Minigame weekly leaderboard strip/add', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['minigame', 'leaderboard', 'weekly', 'strip', 'add', 'score', 'flappy', 'gauntlet'], adminOnly: true },
   { label: 'Main leaderboards strip (respect melt stock booze)', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['leaderboard', 'weekly', 'respect', 'melt', 'stock', 'booze', 'strip', 'top 10'], adminOnly: true },
+  { label: 'Reconcile Game Pass tiers', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['game pass', 'reconcile', 'tier', 'vip', 'rank xp', 'micro tier'], adminOnly: true },
   { label: 'Reset OC Timers', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['oc', 'organised', 'crime', 'timer'] },
   { label: 'Reset Daily Rewards Timer', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['daily', 'rewards', 'timer', 'rps'] },
   { label: 'Bodyguard Tools', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'robot', 'generate'] },
@@ -2417,6 +2418,32 @@ export default function Admin() {
       const qs = new URLSearchParams({ target_username: formData.targetUsername.trim() });
       const response = await api.post(`/admin/remove-game-pass?${qs.toString()}`);
       toast.success(response.data.message);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    }
+  };
+
+  const handleReconcileGamePassTiers = async (ignoreTokenExpiry = false) => {
+    const u = (formData.targetUsername || '').trim();
+    if (!u) {
+      toast.error('Enter target username');
+      return;
+    }
+    if (
+      ignoreTokenExpiry &&
+      !window.confirm(
+        `Grant missing VIP tier rewards for ${u} even if their Game Pass token date has expired? Only use for support / bug recovery.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      const qs = new URLSearchParams({
+        target_username: u,
+        ignore_token_expiry: ignoreTokenExpiry ? 'true' : 'false',
+      });
+      const response = await api.post(`/admin/reconcile-game-pass-tiers?${qs.toString()}`);
+      toast.success(response.data?.message || 'Reconciled');
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed');
     }
@@ -6705,6 +6732,15 @@ export default function Admin() {
               />
               <BtnPrimary onClick={handleGrantGamePass}>Add</BtnPrimary>
               <BtnDanger onClick={handleRemoveGamePass}>Remove</BtnDanger>
+            </ActionRow>
+
+            <ActionRow
+              icon={Gift}
+              label="Reconcile Game Pass tiers"
+              description="Grants missing VIP micro-tier rewards for their current rank XP (same as login). Use if rewards were stuck after a bug. Optional second button ignores token expiry (support only)."
+            >
+              <BtnPrimary onClick={() => handleReconcileGamePassTiers(false)}>Reconcile</BtnPrimary>
+              <BtnSecondary onClick={() => handleReconcileGamePassTiers(true)}>Ignore expiry</BtnSecondary>
             </ActionRow>
 
             <ActionRow icon={Award} label="Founding Member" description="Grant or remove Founding Member badge">

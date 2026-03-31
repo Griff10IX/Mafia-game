@@ -1870,6 +1870,63 @@ def register(router):
             "message": f"Removed Game Pass state for {un}. They can purchase or receive a grant again anytime.",
         }
 
+    @router.post("/admin/reconcile-game-pass-tiers")
+    async def admin_reconcile_game_pass_tiers(
+        target_username: str,
+        ignore_token_expiry: bool = Query(False),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Grant any missing VIP Game Pass micro-tier rewards for the user's current rank XP
+        (same logic as passive middleware). Use after bugfixes or stuck cursors.
+
+        ignore_token_expiry: if True, also run when the Game Pass token date has passed (support only).
+        """
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        from utils.game_pass_tier_reconcile import grant_missing_vip_micro_tier_rewards
+
+        result = await grant_missing_vip_micro_tier_rewards(
+            db,
+            target["id"],
+            target,
+            send_notifications=True,
+            ignore_token_expiry=ignore_token_expiry,
+        )
+        un = target.get("username") or target_username
+        if not result.get("ok"):
+            reason = result.get("reason") or "unknown"
+            if reason == "not_vip_claimed":
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"{un} has not activated Game Pass (VIP rewards not claimed).",
+                )
+            if reason == "vip_token_expired_or_inactive":
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"{un}: Game Pass token window expired. "
+                        "Retry with ignore_token_expiry=true only if you intend to grant missing tiers anyway."
+                    ),
+                )
+            raise HTTPException(status_code=400, detail=reason)
+
+        tiers = result.get("tiers_granted") or []
+        reason = result.get("reason")
+        if reason == "already_caught_up":
+            msg = f"{un}: already up to date (micro tier {result.get('current_micro')}, last granted {result.get('last_granted')})."
+        elif tiers:
+            msg = f"{un}: granted VIP tier reward(s) for micro tier(s) {tiers}."
+        else:
+            msg = f"{un}: reconcile ran; no new tiers to grant."
+        return {**result, "message": msg}
+
     @router.post("/admin/add-car")
     async def admin_add_car(target_username: str, car_id: str, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
