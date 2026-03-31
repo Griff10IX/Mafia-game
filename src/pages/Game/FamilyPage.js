@@ -1069,43 +1069,73 @@ const RosterTab = ({
 // ALL FAMILIES TAB
 // ============================================================================
 
-const FamiliesTab = ({ families, myFamilyId }) => (
-  <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2 max-h-80 overflow-y-auto pr-1">
-    {families.length === 0 ? (
-      <div className="text-center py-10 col-span-2">
-        <Building2 size={28} className="mx-auto text-zinc-700 mb-2" />
-        <p className="text-xs text-zinc-500 font-heading tracking-wider uppercase">No known families</p>
-        <p className="text-[9px] text-zinc-600 font-heading mt-1 italic">The underworld awaits its first Don</p>
-      </div>
-    ) : families.map((f, idx) => (
-      <Link 
-        key={f.id} 
-        to={`/families/${encodeURIComponent(f.tag || f.id)}`} 
-        className={`relative flex items-center justify-between px-2.5 sm:px-3 py-2 min-h-[44px] sm:min-h-0 rounded-lg transition-all group fam-member-row fam-fade-in overflow-hidden touch-manipulation ${myFamilyId === f.id ? 'bg-primary/5 border border-primary/25' : 'bg-zinc-800/30 border border-zinc-700/30 hover:border-zinc-600/50'}`}
-        style={{ animationDelay: `${idx * 0.03}s` }}
-      >
-        {myFamilyId === f.id && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary/60" />}
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="font-heading font-bold text-foreground text-xs group-hover:text-primary transition-colors tracking-wide">{f.name}</span>
-            <span className="text-primary/50 text-[10px]">[{f.tag}]</span>
-            {myFamilyId === f.id && <span className="text-[9px] text-primary font-heading font-bold">(Yours)</span>}
-            {f.at_war && (
-              <span className="inline-flex items-center gap-0.5 text-[8px] font-heading font-bold text-red-400 bg-red-500/10 border border-red-500/20 rounded px-1 py-0.5 animate-pulse">
-                <Swords size={8} /> AT WAR
-              </span>
-            )}
-          </div>
+function FamilyListCrewOCHint({ isoUntil }) {
+  const text = formatRaidCountdown(isoUntil);
+  const ready = !isoUntil || !text || text === 'Ready';
+  return (
+    <span
+      className={`inline-flex items-center gap-0.5 text-[8px] font-heading font-bold tracking-tight ${
+        ready ? 'text-emerald-400/90' : 'text-amber-400/90'
+      }`}
+      title={ready ? 'Crew OC available' : 'Time until this family can Crew OC again'}
+    >
+      <Crosshair size={9} className="shrink-0 opacity-80" />
+      <span className="font-mono tabular-nums normal-case tracking-tight">{ready ? 'OC ready' : text}</span>
+    </span>
+  );
+}
+
+const FamiliesTab = ({ families, myFamilyId }) => {
+  const [, setFamiliesOcTick] = useState(0);
+  useEffect(() => {
+    if (!families?.length) return undefined;
+    const id = setInterval(() => setFamiliesOcTick((x) => x + 1), 1000);
+    return () => clearInterval(id);
+  }, [families]);
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 sm:gap-2 max-h-80 overflow-y-auto pr-1">
+      {families.length === 0 ? (
+        <div className="text-center py-10 col-span-2">
+          <Building2 size={28} className="mx-auto text-zinc-700 mb-2" />
+          <p className="text-xs text-zinc-500 font-heading tracking-wider uppercase">No known families</p>
+          <p className="text-[9px] text-zinc-600 font-heading mt-1 italic">The underworld awaits its first Don</p>
         </div>
-        <div className="flex items-center gap-3 text-[10px] shrink-0">
-          <span className="text-zinc-400 flex items-center gap-0.5"><Users size={10} /> {f.member_count}</span>
-          <span className="text-primary font-heading font-bold">{formatMoney(f.treasury)}</span>
-          <ChevronRight size={12} className="text-zinc-600 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
-        </div>
-      </Link>
-    ))}
-  </div>
-);
+      ) : (
+        families.map((f, idx) => (
+          <Link
+            key={f.id}
+            to={`/families/${encodeURIComponent(f.tag || f.id)}`}
+            className={`relative flex items-center justify-between gap-2 px-2.5 sm:px-3 py-2 min-h-[44px] sm:min-h-0 rounded-lg transition-all group fam-member-row fam-fade-in overflow-hidden touch-manipulation ${myFamilyId === f.id ? 'bg-primary/5 border border-primary/25' : 'bg-zinc-800/30 border border-zinc-700/30 hover:border-zinc-600/50'}`}
+            style={{ animationDelay: `${idx * 0.03}s` }}
+          >
+            {myFamilyId === f.id && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary/60" />}
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="font-heading font-bold text-foreground text-xs group-hover:text-primary transition-colors tracking-wide">{f.name}</span>
+                <span className="text-primary/50 text-[10px]">[{f.tag}]</span>
+                {myFamilyId === f.id && <span className="text-[9px] text-primary font-heading font-bold">(Yours)</span>}
+                {f.at_war && (
+                  <span className="inline-flex items-center gap-0.5 text-[8px] font-heading font-bold text-red-400 bg-red-500/10 border border-red-500/20 rounded px-1 py-0.5 animate-pulse">
+                    <Swords size={8} /> AT WAR
+                  </span>
+                )}
+              </div>
+              <div className="mt-0.5">
+                <FamilyListCrewOCHint isoUntil={f.crew_oc_cooldown_until} />
+              </div>
+            </div>
+            <div className="flex items-center gap-2 sm:gap-3 text-[10px] shrink-0">
+              <span className="text-zinc-400 flex items-center gap-0.5"><Users size={10} /> {f.member_count}</span>
+              <span className="text-primary font-heading font-bold">{formatMoney(f.treasury)}</span>
+              <ChevronRight size={12} className="text-zinc-600 group-hover:text-primary group-hover:translate-x-0.5 transition-all" />
+            </div>
+          </Link>
+        ))
+      )}
+    </div>
+  );
+};
 
 // ============================================================================
 // WAR HISTORY TAB

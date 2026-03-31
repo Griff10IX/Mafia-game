@@ -1112,7 +1112,10 @@ async def families_list(current_user: dict = Depends(get_current_user)):
     if marked:
         _invalidate_list_cache()
     # No in-memory cache: multi-worker setups would show stale data (e.g. deleted families) until TTL
-    cursor = db.families.find({"wiped": {"$ne": True}}, {"_id": 0, "id": 1, "name": 1, "tag": 1, "treasury": 1, "join_mode": 1})
+    cursor = db.families.find(
+        {"wiped": {"$ne": True}},
+        {"_id": 0, "id": 1, "name": 1, "tag": 1, "treasury": 1, "join_mode": 1, "crew_oc_cooldown_until": 1},
+    )
     fams = await cursor.to_list(FAMILY_LIST_QUERY_LIMIT)
     out = []
     if fams:
@@ -1149,6 +1152,7 @@ async def families_list(current_user: dict = Depends(get_current_user)):
                     "member_count": living_count, "treasury": f.get("treasury", 0),
                     "at_war": False,
                     "join_mode": f.get("join_mode") or "open",
+                    "crew_oc_cooldown_until": f.get("crew_oc_cooldown_until"),
                 })
     # Tag families that are currently in an active war
     active_wars = await db.family_wars.find(
