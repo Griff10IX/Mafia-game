@@ -70,17 +70,23 @@ const useCooldownTicker = (crimes, onCooldownExpired) => {
 
   useEffect(() => {
     const hasCooldown = crimes.some((c) => c.next_available && secondsUntil(c.next_available) > 0);
-    if (!hasCooldown) return;
+    const needsStaleSync = crimes.some(
+      (c) => c.next_available && !c.can_commit && secondsUntil(c.next_available) === 0
+    );
+    if (!hasCooldown && !needsStaleSync) return;
 
-    let hasRefetched = false;
+    const lastRefetchAt = { t: 0 };
     const intervalId = setInterval(() => {
+      const now = Date.now();
       const stillHasCooldown = crimes.some((c) => c.next_available && secondsUntil(c.next_available) > 0);
-      
-      if (!stillHasCooldown && !hasRefetched) {
-        hasRefetched = true;
+      const staleSync = crimes.some(
+        (c) => c.next_available && !c.can_commit && secondsUntil(c.next_available) === 0
+      );
+      if ((!stillHasCooldown || staleSync) && now - lastRefetchAt.t > 1500) {
+        lastRefetchAt.t = now;
         onCooldownExpired();
       }
-      
+
       setTick((prev) => prev + 1);
     }, TICK_INTERVAL);
 
@@ -574,11 +580,9 @@ export default function Crimes() {
       const successRate = progress / 100;
       const risk = Math.round(100 - progress);
       const remaining = crime.next_available ? secondsUntil(crime.next_available) : null;
-      
-      const canCommit = !inJail && (
-        crime.can_commit || 
-        (crime.next_available && (remaining === null || remaining <= 0))
-      );
+
+      // Server can_commit is authoritative — local timer-only override caused COMMIT while API returned "Crime on cooldown".
+      const canCommit = !inJail && crime.can_commit;
       
       const lockedByRank = crime.unlocked === false && crime.min_rank_name;
       const wait = canCommit
@@ -632,7 +636,7 @@ export default function Crimes() {
         } else {
           failed += 1;
           const detail = result.reason?.response?.data?.detail ?? result.reason?.message ?? 'Request failed';
-          toast.error(detail);
+          toast.error(typeof detail === 'string' ? `${crime.name}: ${detail}` : detail);
         }
       }
 

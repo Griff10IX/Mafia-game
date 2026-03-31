@@ -742,7 +742,7 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
 # Auto rank abides the same timer rules as manual play:
 # - Crimes: only commits crimes whose user_crimes.cooldown_until has passed (per-crime cooldown from crimes collection).
 #   commit_crime_locked serializes per user; _commit_crime_impl enforces cooldown and sets cooldown_until.
-# - GTA: only runs when gta_cooldowns shows no active cooldown. _attempt_gta_impl enforces cooldown and sets
+# - GTA: only runs when gta_cooldowns shows no active cooldown. attempt_gta_locked serializes; impl sets
 #   cooldown_until from the attempted option's cooldown (one attempt = all options on cooldown).
 # - OC: run_oc_heist_npc_only checks oc_cooldown_until and returns without running if on cooldown.
 # - Booze: uses same buy/sell/travel impls; travel duration and arrival are enforced there.
@@ -753,7 +753,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     """Commit all crimes off cooldown, then one GTA (if off cooldown), then melt (if enabled), then booze if enabled. Abides all game timer rules; impls enforce cooldowns. Telegram is optional; if not set, actions still run and no notifications are sent."""
     import server as srv
     from routers.crime.crimes import commit_crime_locked
-    from routers.cars.gta import _attempt_gta_impl, _melt_cars_impl, GTA_OPTIONS
+    from routers.cars.gta import attempt_gta_locked, melt_cars_locked, GTA_OPTIONS
     CARS = getattr(srv, "CARS", None) or []
     from middleware.security import send_telegram_to_chat
 
@@ -902,7 +902,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                 next_index = int(user.get("auto_rank_next_gta_option_index") or 0) % max(1, len(unlocked))
                 opt = unlocked[next_index]
                 try:
-                    out = await _attempt_gta_impl(opt["id"], user, caller_updates_total_gta=True)
+                    out = await attempt_gta_locked(opt["id"], user, caller_updates_total_gta=True)
                     # Advance to next unlocked option so we rotate through all GTAs as they unlock
                     await db.users.update_one(
                         {"id": user_id},
@@ -967,7 +967,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                 car_ids_cash = car_ids[half:]
                 try:
                     if car_ids_bullets:
-                        result_b = await _melt_cars_impl(user, car_ids_bullets, "bullets")
+                        result_b = await melt_cars_locked(user, car_ids_bullets, "bullets")
                         if not result_b.get("cooldown") and result_b.get("success"):
                             mc = result_b.get("melted_count", 0)
                             melted_this_cycle += mc
@@ -977,7 +977,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                             lines.append(f"**Melt** — Melted {mc} car(s) for {tb} bullets.")
                             await _update_auto_rank_stats_melt(db, user_id, melted_count=mc, total_bullets=tb)
                     if car_ids_cash:
-                        result_c = await _melt_cars_impl(user, car_ids_cash, "cash")
+                        result_c = await melt_cars_locked(user, car_ids_cash, "cash")
                         if result_c.get("success"):
                             mc = result_c.get("scrapped_count", 0)
                             melted_this_cycle += mc
@@ -999,7 +999,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                     if not car_ids:
                         break
                     try:
-                        result = await _melt_cars_impl(user, car_ids, action)
+                        result = await melt_cars_locked(user, car_ids, action)
                         if result.get("cooldown"):
                             continue  # skip bullets this cycle, still try cash
                         if result.get("success"):
@@ -1078,7 +1078,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                 car_ids = [e["user_car_id"] for e in eligible[:batch_limit]]
                 if car_ids:
                     try:
-                        result = await _melt_cars_impl(user, car_ids, "cash")
+                        result = await melt_cars_locked(user, car_ids, "cash")
                         if result.get("success"):
                             mc = result.get("scrapped_count", 0)
                             tv = result.get("total_value", 0)

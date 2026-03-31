@@ -1,5 +1,6 @@
 # Crime endpoints: list crimes, commit crime
 import asyncio
+from collections import defaultdict
 from typing import Dict, List, Optional
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
@@ -143,6 +144,40 @@ def _parse_iso_datetime(val):
         return val
     s = str(val).strip().replace("Z", "+00:00")
     return datetime.fromisoformat(s)
+
+
+def _merge_user_crime_duplicate_rows(rows: list) -> Optional[dict]:
+    """Multiple user_crimes for one crime_id: strictest cooldown (latest future until) + row with max attempts for progress."""
+    if not rows:
+        return None
+    if len(rows) == 1:
+        return rows[0]
+    now = datetime.now(timezone.utc)
+    base = max(rows, key=lambda r: int(r.get("attempts", 0) or 0))
+    out = dict(base)
+    strictest_iso = None
+    strictest_dt = None
+    for r in rows:
+        iso = r.get("cooldown_until")
+        if not iso:
+            continue
+        dt = _parse_iso_datetime(iso)
+        if dt is None:
+            continue
+        if getattr(dt, "tzinfo", None) is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        if dt > now:
+            if strictest_dt is None or dt > strictest_dt:
+                strictest_dt = dt
+                strictest_iso = iso
+    if strictest_iso is not None:
+        out["cooldown_until"] = strictest_iso
+    else:
+        out.pop("cooldown_until", None)
+    pmax_vals = [int(r["progress_max"]) for r in rows if r.get("progress_max") is not None]
+    if pmax_vals:
+        out["progress_max"] = max(pmax_vals)
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -354,8 +389,11 @@ async def get_crimes(current_user: dict = Depends(get_current_user)):
     user_crimes_list = await db.user_crimes.find(
         {"user_id": current_user["id"], "crime_id": {"$in": [c["id"] for c in all_crimes]}},
         {"_id": 0, "crime_id": 1, "cooldown_until": 1, "attempts": 1, "successes": 1, "progress": 1, "progress_max": 1},
-    ).to_list(len(all_crimes))
-    user_crime_by_id = {uc["crime_id"]: uc for uc in user_crimes_list}
+    ).to_list(len(all_crimes) * 2)
+    by_cid = defaultdict(list)
+    for uc in user_crimes_list:
+        by_cid[uc["crime_id"]].append(uc)
+    user_crime_by_id = {cid: _merge_user_crime_duplicate_rows(lst) for cid, lst in by_cid.items()}
     result = []
     for crime in all_crimes:
         user_crime = user_crime_by_id.get(crime["id"])

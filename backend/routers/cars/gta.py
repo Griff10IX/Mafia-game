@@ -21,6 +21,19 @@ from utils.referral_ids import (
 
 logger = logging.getLogger(__name__)
 
+# One mutex per user for GTA attempts + melt/scrap (garage mutations). Same limitation as crime locks: single process only.
+_gta_garage_locks: Dict[str, asyncio.Lock] = {}
+_gta_garage_locks_guard = asyncio.Lock()
+
+
+async def _get_gta_garage_lock(user_id: str) -> asyncio.Lock:
+    uid = user_id or ""
+    async with _gta_garage_locks_guard:
+        if uid not in _gta_garage_locks:
+            _gta_garage_locks[uid] = asyncio.Lock()
+        return _gta_garage_locks[uid]
+
+
 # ---------------------------------------------------------------------------
 # GTA options and request/response models
 # ---------------------------------------------------------------------------
@@ -548,6 +561,26 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
     )
 
 
+async def attempt_gta_locked(
+    option_id: str,
+    current_user: dict,
+    caller_updates_total_gta: bool = False,
+) -> GTAAttemptResponse:
+    """HTTP route and auto_rank: serialize GTA attempts with melt/scrap for this user."""
+    lock = await _get_gta_garage_lock(current_user.get("id") or "")
+    async with lock:
+        return await _attempt_gta_impl(
+            option_id, current_user, caller_updates_total_gta=caller_updates_total_gta
+        )
+
+
+async def melt_cars_locked(user: dict, car_ids: list, action: str) -> dict:
+    """HTTP route and auto_rank: serialize melt/scrap with GTA for this user."""
+    lock = await _get_gta_garage_lock(user.get("id") or "")
+    async with lock:
+        return await _melt_cars_impl(user, car_ids, action)
+
+
 async def attempt_gta(
     request: GTAAttemptRequest, current_user: dict = Depends(get_current_user_verified)
 ):
@@ -573,46 +606,48 @@ async def attempt_gta(
             status_code=403,
             detail=f"Requires {rank_name} (rank {option['min_rank']})",
         )
-    now = datetime.now(timezone.utc)
-    cooldown_doc = await db.gta_cooldowns.find_one(
-        {"user_id": current_user.get("id") or ""},
-        {"_id": 0, "cooldown_until": 1},
-    )
-    if cooldown_doc:
-        until = _parse_iso_datetime(cooldown_doc.get("cooldown_until"))
-        if until and until > now:
-            secs = int((until - now).total_seconds())
-            raise HTTPException(
-                status_code=400, detail=f"GTA cooldown: try again in {secs}s"
-            )
-    result = await _attempt_gta_impl(request.option_id, current_user)
-    now = datetime.now(timezone.utc)
-    success = getattr(result, "success", False)
-    profit = int((result.car.get("value", 0) or 0)) if (getattr(result, "car", None) and success) else 0
-    option = next((o for o in GTA_OPTIONS if o["id"] == request.option_id), None)
-    car = getattr(result, "car", None)
-    jailed = getattr(result, "jailed", False)
-    jail_seconds = int(option["jail_time"]) if (option and jailed) else None
-    event_doc = {
-        "user_id": current_user.get("id") or "",
-        "username": current_user.get("username") or "",
-        "at": now,
-        "success": success,
-        "profit": profit,
-        "option_id": request.option_id,
-        "option_name": (option or {}).get("name") or request.option_id,
-        "car_id": car.get("id") if car else None,
-        "car_name": car.get("name") if car else None,
-        "car_value": int(car.get("value", 0)) if car else 0,
-        "jailed": jailed,
-        "jail_seconds": jail_seconds,
-    }
-    await db.gta_events.insert_one(event_doc)
-    await log_activity(current_user.get("id", ""), current_user.get("username", "?"), "gta_attempt", {
-        "option": (option or {}).get("name", request.option_id), "success": success,
-        "car": car.get("name") if car else None, "jailed": jailed,
-    })
-    return result
+    lock = await _get_gta_garage_lock(current_user.get("id") or "")
+    async with lock:
+        now = datetime.now(timezone.utc)
+        cooldown_doc = await db.gta_cooldowns.find_one(
+            {"user_id": current_user.get("id") or ""},
+            {"_id": 0, "cooldown_until": 1},
+        )
+        if cooldown_doc:
+            until = _parse_iso_datetime(cooldown_doc.get("cooldown_until"))
+            if until and until > now:
+                secs = int((until - now).total_seconds())
+                raise HTTPException(
+                    status_code=400, detail=f"GTA cooldown: try again in {secs}s"
+                )
+        result = await _attempt_gta_impl(request.option_id, current_user)
+        now = datetime.now(timezone.utc)
+        success = getattr(result, "success", False)
+        profit = int((result.car.get("value", 0) or 0)) if (getattr(result, "car", None) and success) else 0
+        option = next((o for o in GTA_OPTIONS if o["id"] == request.option_id), None)
+        car = getattr(result, "car", None)
+        jailed = getattr(result, "jailed", False)
+        jail_seconds = int(option["jail_time"]) if (option and jailed) else None
+        event_doc = {
+            "user_id": current_user.get("id") or "",
+            "username": current_user.get("username") or "",
+            "at": now,
+            "success": success,
+            "profit": profit,
+            "option_id": request.option_id,
+            "option_name": (option or {}).get("name") or request.option_id,
+            "car_id": car.get("id") if car else None,
+            "car_name": car.get("name") if car else None,
+            "car_value": int(car.get("value", 0)) if car else 0,
+            "jailed": jailed,
+            "jail_seconds": jail_seconds,
+        }
+        await db.gta_events.insert_one(event_doc)
+        await log_activity(current_user.get("id", ""), current_user.get("username", "?"), "gta_attempt", {
+            "option": (option or {}).get("name", request.option_id), "success": success,
+            "car": car.get("name") if car else None, "jailed": jailed,
+        })
+        return result
 
 
 async def get_gta_stats(current_user: dict = Depends(get_current_user)):
@@ -1072,7 +1107,7 @@ async def melt_cars(
 ):
     if not request.car_ids:
         raise HTTPException(status_code=400, detail="No cars selected")
-    result = await _melt_cars_impl(current_user, request.car_ids, request.action)
+    result = await melt_cars_locked(current_user, request.car_ids, request.action)
     if result.get("cooldown"):
         raise HTTPException(status_code=400, detail=result.get("detail", "Melt on cooldown"))
     return result
