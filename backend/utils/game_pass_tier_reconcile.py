@@ -14,9 +14,9 @@ from utils.game_pass_micro_rewards import (
     REWARD_KEY_LABELS,
     REWARD_KEY_ORDER,
     format_rewards_summary,
-    free_unlocked_key_for_micro_tier,
     micro_tier_from_rank_points,
     rewards_for_micro_tier,
+    vip_rewards_after_free_dedupe,
 )
 
 
@@ -75,11 +75,7 @@ async def grant_missing_vip_micro_tier_rewards(
         expiry_filter = {"rank_xp_pass_token_expires_at": {"$gt": now_iso}}
 
     for t in range(last_granted + 1, current_micro + 1):
-        rewards = rewards_for_micro_tier(t)
-        if free_cash_last_micro >= t:
-            free_key = free_unlocked_key_for_micro_tier(t, rewards)
-            if free_key:
-                rewards[free_key] = 0
+        rewards = vip_rewards_after_free_dedupe(t, free_cash_last_micro)
         inc = {k: int(v) for k, v in rewards.items() if int(v or 0) > 0}
 
         updated = await db.users.update_one(

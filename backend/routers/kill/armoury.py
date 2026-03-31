@@ -19,10 +19,10 @@ from utils.game_pass_micro_rewards import (
     micro_tier_from_rank_points,
     rewards_for_micro_tier,
     format_rewards_summary,
-    free_unlocked_key_for_micro_tier,
     REWARD_KEY_ORDER,
     REWARD_KEY_LABELS,
     MAX_MICRO_TIER,
+    vip_rewards_after_free_dedupe,
 )
 from routers.game.store import _store_cost_inc
 from routers.minigames.minigame_leaderboard import log_minigame_play
@@ -190,14 +190,7 @@ async def _try_grant_rank_xp_pass_micro_tier(
     if t <= 0:
         return None
 
-    rewards = rewards_for_micro_tier(t)
-
-    # Free auto-grants exactly 1 reward bucket per micro tier (deterministic).
-    # Suppress that same bucket here to prevent duplicates.
-    if int(free_cash_last_micro_tier_granted or 0) >= t:
-        free_key = free_unlocked_key_for_micro_tier(t, rewards)
-        if free_key:
-            rewards[free_key] = 0
+    rewards = vip_rewards_after_free_dedupe(t, free_cash_last_micro_tier_granted)
 
     inc = {k: int(v) for k, v in rewards.items() if int(v or 0) > 0}
     if not inc:

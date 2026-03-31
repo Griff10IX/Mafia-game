@@ -767,12 +767,19 @@ export default function GamePass() {
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
               <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] truncate">Progress</div>
-              <div className="text-[9px] text-zinc-400 font-heading italic mt-0.5">Earn tier rewards as you reach RP milestones</div>
+              <div className="text-[9px] text-zinc-400 font-heading italic mt-0.5">
+                Milestones every {MICRO_TIER_STEP_RP.toLocaleString()} rank XP (tier 1 at {MICRO_TIER_STEP_RP.toLocaleString()}, tier 2 at {(MICRO_TIER_STEP_RP * 2).toLocaleString()}, etc.)
+              </div>
             </div>
             <div className="p-3 space-y-2">
               <div className="w-full h-2 bg-zinc-900/30 border border-primary/10 rounded-full overflow-hidden">
                 <div className="h-full bg-gradient-to-r from-primary via-primary to-primary" style={{ width: `${seasonLevel}%` }} />
               </div>
+              {vipGrantingActive && (
+                <p className="text-[9px] text-zinc-500 font-heading leading-relaxed">
+                  VIP rewards are applied automatically: when you activate the pass, anything you already earned with rank XP is granted immediately; after that, each new tier credits on its own as soon as you pass the next milestone (you don’t need to buy again).
+                </p>
+              )}
             </div>
             <div className="store-art-line text-primary mx-3" />
           </div>

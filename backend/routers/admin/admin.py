@@ -1874,6 +1874,7 @@ def register(router):
     async def admin_reconcile_game_pass_tiers(
         target_username: str,
         ignore_token_expiry: bool = Query(False),
+        rewind_last_granted_to: Optional[int] = Query(None),
         current_user: dict = Depends(get_current_user),
     ):
         """
@@ -1881,6 +1882,8 @@ def register(router):
         (same logic as passive middleware). Use after bugfixes or stuck cursors.
 
         ignore_token_expiry: if True, also run when the Game Pass token date has passed (support only).
+        rewind_last_granted_to: if set (0..100), sets rank_xp_pass_last_granted_micro_tier first
+        (e.g. 0 to re-apply tiers after a bad cursor advance with no payout).
         """
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
@@ -1889,6 +1892,22 @@ def register(router):
         target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
+
+        if rewind_last_granted_to is not None:
+            from utils.game_pass_micro_rewards import MAX_MICRO_TIER
+
+            try:
+                rw = int(rewind_last_granted_to)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="rewind_last_granted_to must be an integer")
+            rw = max(0, min(int(MAX_MICRO_TIER), rw))
+            await db.users.update_one(
+                {"id": target["id"]},
+                {"$set": {"rank_xp_pass_last_granted_micro_tier": rw}},
+            )
+            target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
+            if not target:
+                raise HTTPException(status_code=404, detail="User not found")
 
         from utils.game_pass_tier_reconcile import grant_missing_vip_micro_tier_rewards
 

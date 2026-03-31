@@ -474,6 +474,7 @@ export default function Admin() {
     tokenType: 'xp_crimes',
     tokenAmount: 5,
     gamePassTierSnapshot: '',
+    gamePassRewindCursor: '',
     respectAdd: 100,
     respectRemove: 100,
   });
@@ -6737,8 +6738,17 @@ export default function Admin() {
             <ActionRow
               icon={Gift}
               label="Reconcile Game Pass tiers"
-              description="Grants missing VIP micro-tier rewards for their current rank XP (same as login). Use if rewards were stuck after a bug. Optional second button ignores token expiry (support only)."
+              description="Grants missing VIP micro-tier rewards for their current rank XP (same as login). Rewind cursor (e.g. 0) first if tier advanced with no payout, then Reconcile."
             >
+              <Input
+                type="number"
+                min={0}
+                value={String(formData.gamePassRewindCursor ?? '')}
+                onChange={(e) => setFormData((prev) => ({ ...prev, gamePassRewindCursor: e.target.value }))}
+                className="w-16"
+                placeholder="0"
+                title="Optional: set last granted micro tier before reconcile (0 = re-run from start)"
+              />
               <BtnPrimary onClick={() => handleReconcileGamePassTiers(false)}>Reconcile</BtnPrimary>
               <BtnSecondary onClick={() => handleReconcileGamePassTiers(true)}>Ignore expiry</BtnSecondary>
             </ActionRow>

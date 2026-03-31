@@ -375,6 +375,39 @@ def free_unlocked_key_for_micro_tier(micro_tier: int, rewards: Dict[str, int]) -
     return None
 
 
+def vip_rewards_after_free_dedupe(micro_tier: int, free_cash_last_micro_tier_granted: int) -> Dict[str, int]:
+    """
+    VIP payout for a micro tier after optionally zeroing the bucket already granted by
+    the free Game Pass track for that tier (avoid double-paying the same bucket).
+
+    If zeroing that bucket would remove *all* rewards (e.g. tier 1 is only xp_gta_tokens
+    and the free track already granted it), skip suppression so VIP still credits the tier
+    instead of advancing the cursor with an empty $inc.
+    """
+    try:
+        t = int(micro_tier or 0)
+    except Exception:
+        t = 0
+    if t < 1:
+        return {}
+
+    r = dict(rewards_for_micro_tier(t))
+    if int(free_cash_last_micro_tier_granted or 0) < t:
+        return r
+
+    fk = free_unlocked_key_for_micro_tier(t, r)
+    if not fk:
+        return r
+
+    trial = dict(r)
+    trial[fk] = 0
+    if not any(int(v or 0) > 0 for v in trial.values()):
+        return r
+
+    r[fk] = 0
+    return r
+
+
 def _format_amount(amount: int) -> str:
     return f"{int(amount):,}"
 
