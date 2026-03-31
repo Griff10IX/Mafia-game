@@ -53,7 +53,7 @@ async def log_captcha_turnstile_failure(
         ip = _client_ip(request)[:64]
         doc: Dict[str, Any] = {
             "id": str(uuid.uuid4()),
-            "at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
+            "at": datetime.now(timezone.utc).replace(microsecond=0),
             "user_id": str(uid) if uid is not None else "",
             "username": (current_user.get("username") or "")[:120],
             "reason": (reason or "")[:64],

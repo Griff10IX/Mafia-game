@@ -174,6 +174,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Change Rank', categoryId: 'admin-players', collapseKey: 'rank', keywords: ['rank', 'change', 'prestige', 'level'] },
   { label: 'Add Points', categoryId: 'admin-players', collapseKey: 'points', keywords: ['points', 'add', 'give'] },
   { label: 'Remove points', categoryId: 'admin-players', collapseKey: 'points', keywords: ['points', 'remove', 'deduct', 'take'] },
+  { label: 'Point sources audit', categoryId: 'admin-players', collapseKey: 'player', keywords: ['points', 'sources', 'audit', 'where', 'breakdown', 'ledger', 'stripe', 'transfers'] },
   { label: 'Add respect points', categoryId: 'admin-players', collapseKey: 'player', keywords: ['respect', 'add', 'grant', 'give', 'points'] },
   { label: 'Remove respect points', categoryId: 'admin-players', collapseKey: 'player', keywords: ['respect', 'remove', 'deduct', 'take'] },
   { label: 'Points Provenance', categoryId: 'admin-donations', collapseKey: 'donationsProvenance', keywords: ['chargeback', 'provenance', 'payment session', 'points tree'], adminOnly: true },
@@ -599,6 +600,8 @@ export default function Admin() {
   const [pointsProvPreview, setPointsProvPreview] = useState(null);
   const [pointsProvUserData, setPointsProvUserData] = useState(null);
   const [pointsProvPaymentData, setPointsProvPaymentData] = useState(null);
+  const [pointsSourcesReport, setPointsSourcesReport] = useState(null);
+  const [pointsSourcesLoading, setPointsSourcesLoading] = useState(false);
   const [viewRegistrationInfo, setViewRegistrationInfo] = useState(null);
   const [adminUserSessions, setAdminUserSessions] = useState(null);
   const [adminUserSessionsLoading, setAdminUserSessionsLoading] = useState(false);
@@ -2111,6 +2114,25 @@ export default function Admin() {
       const response = await api.post(`/admin/add-points?target_username=${formData.targetUsername}&points=${formData.points}`);
       toast.success(response.data.message);
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  const handleLoadPointsSources = async () => {
+    const username = (formData.targetUsername || '').trim();
+    if (!username) {
+      toast.error('Enter target username above');
+      return;
+    }
+    setPointsSourcesLoading(true);
+    setPointsSourcesReport(null);
+    try {
+      const res = await api.get(`/admin/points/sources/${encodeURIComponent(username)}`);
+      setPointsSourcesReport(res.data || null);
+      toast.success('Point sources loaded');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to load point sources');
+    } finally {
+      setPointsSourcesLoading(false);
+    }
   };
 
   const handleRemovePoints = async () => {
@@ -6253,6 +6275,161 @@ export default function Admin() {
               <FormattedNumberInput value={formData.pointsRemove != null ? String(formData.pointsRemove) : ''} onChange={(raw) => setFormData((prev) => ({ ...prev, pointsRemove: raw === '' ? 0 : parseInt(raw, 10) }))} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" />
               <BtnDanger onClick={handleRemovePoints}>Remove</BtnDanger>
             </ActionRow>
+
+            <ActionRow
+              icon={BarChart3}
+              label="Point sources (full audit)"
+              description="Uses target username above. Summarizes store points: provenance lots, ledger, Stripe purchases, player transfers, and key profile counters."
+            >
+              <BtnSecondary type="button" onClick={handleLoadPointsSources} disabled={pointsSourcesLoading}>
+                {pointsSourcesLoading ? 'Loading…' : 'Load breakdown'}
+              </BtnSecondary>
+            </ActionRow>
+            {pointsSourcesReport && (
+              <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-[10px] font-heading space-y-2 pl-6">
+                <div className="font-bold text-primary">Point sources — {pointsSourcesReport.user?.username || '?'}</div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/40">
+                    <div className="text-mutedForeground uppercase text-[9px]">Balance</div>
+                    <div className="text-foreground font-bold">{(pointsSourcesReport.user?.points ?? 0).toLocaleString()}</div>
+                  </div>
+                  <div className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/40">
+                    <div className="text-mutedForeground uppercase text-[9px]">Lots sum</div>
+                    <div className="text-foreground font-bold">{(pointsSourcesReport.lots_remaining_sum ?? 0).toLocaleString()}</div>
+                  </div>
+                  <div className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/40">
+                    <div className="text-mutedForeground uppercase text-[9px]">Stripe (completed)</div>
+                    <div className="text-foreground font-bold">{(pointsSourcesReport.stripe_purchases_completed?.total_points ?? 0).toLocaleString()}</div>
+                  </div>
+                  <div className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/40">
+                    <div className="text-mutedForeground uppercase text-[9px]">Transfers in</div>
+                    <div className="text-foreground font-bold">{(pointsSourcesReport.points_transfers_received?.total_points ?? 0).toLocaleString()}</div>
+                  </div>
+                </div>
+                {pointsSourcesReport.balance_matches_lots === false && (
+                  <div className="text-amber-400 text-[9px]">
+                    Lots total does not match balance (expected when legacy seed has not run or data is mid-migration).
+                  </div>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="p-1.5 rounded bg-zinc-900/40 border border-zinc-700/30">
+                    <div className="text-mutedForeground text-[9px]">Lifetime points spent (store)</div>
+                    <div className="text-foreground">{(pointsSourcesReport.user_stats?.lifetime_points_spent ?? 0).toLocaleString()}</div>
+                  </div>
+                  <div className="p-1.5 rounded bg-zinc-900/40 border border-zinc-700/30">
+                    <div className="text-mutedForeground text-[9px]">Redeem codes (points total)</div>
+                    <div className="text-foreground">{(pointsSourcesReport.user_stats?.redeem_codes_points_total ?? 0).toLocaleString()}</div>
+                  </div>
+                  <div className="p-1.5 rounded bg-zinc-900/40 border border-zinc-700/30">
+                    <div className="text-mutedForeground text-[9px]">Stock market profit (points)</div>
+                    <div className="text-foreground">{(pointsSourcesReport.user_stats?.stock_market_profit_total_points ?? 0).toLocaleString()}</div>
+                  </div>
+                </div>
+                <div className="text-[9px] text-mutedForeground">
+                  Transfers out: {(pointsSourcesReport.points_transfers_sent?.total_points ?? 0).toLocaleString()} across {pointsSourcesReport.points_transfers_sent?.transfer_count ?? 0} sends
+                </div>
+                <div className="overflow-x-auto max-h-48 border border-zinc-700/30 rounded">
+                  <table className="w-full text-[9px]">
+                    <thead>
+                      <tr className="text-left text-mutedForeground border-b border-zinc-700/40">
+                        <th className="p-1 font-heading">Lot origin</th>
+                        <th className="p-1 font-heading">Remaining</th>
+                        <th className="p-1 font-heading"># lots</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(pointsSourcesReport.lots_remaining_by_origin || []).map((row, i) => (
+                        <tr key={`${row.origin_type}-${i}`} className="border-b border-zinc-800/50">
+                          <td className="p-1 font-mono text-emerald-200/90">{String(row.origin_type ?? '—')}</td>
+                          <td className="p-1">{(row.remaining_points ?? 0).toLocaleString()}</td>
+                          <td className="p-1">{row.lot_count ?? 0}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div>
+                    <div className="text-[9px] font-bold text-primary mb-0.5">Ledger inflows (+)</div>
+                    <div className="overflow-x-auto max-h-36 border border-zinc-700/30 rounded">
+                      <table className="w-full text-[9px]">
+                        <thead>
+                          <tr className="text-left text-mutedForeground border-b border-zinc-700/40">
+                            <th className="p-1">Event</th>
+                            <th className="p-1">Pts</th>
+                            <th className="p-1">#</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(pointsSourcesReport.ledger_inflows_by_event || []).map((row, i) => (
+                            <tr key={`in-${i}`} className="border-b border-zinc-800/50">
+                              <td className="p-1 font-mono">{String(row.event_type ?? '—')}</td>
+                              <td className="p-1">{(row.points ?? 0).toLocaleString()}</td>
+                              <td className="p-1">{row.events ?? 0}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[9px] font-bold text-primary mb-0.5">Ledger outflows (−)</div>
+                    <div className="overflow-x-auto max-h-36 border border-zinc-700/30 rounded">
+                      <table className="w-full text-[9px]">
+                        <thead>
+                          <tr className="text-left text-mutedForeground border-b border-zinc-700/40">
+                            <th className="p-1">Event</th>
+                            <th className="p-1">Pts</th>
+                            <th className="p-1">#</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(pointsSourcesReport.ledger_outflows_by_event || []).map((row, i) => (
+                            <tr key={`out-${i}`} className="border-b border-zinc-800/50">
+                              <td className="p-1 font-mono">{String(row.event_type ?? '—')}</td>
+                              <td className="p-1">{(row.points ?? 0).toLocaleString()}</td>
+                              <td className="p-1">{row.events ?? 0}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+                {(pointsSourcesReport.stripe_purchases_completed?.recent || []).length > 0 && (
+                  <div>
+                    <div className="text-[9px] font-bold text-primary mb-0.5">Recent completed Stripe credits</div>
+                    <div className="overflow-x-auto max-h-32 border border-zinc-700/30 rounded">
+                      <table className="w-full text-[9px]">
+                        <thead>
+                          <tr className="text-left text-mutedForeground border-b border-zinc-700/40">
+                            <th className="p-1">Session</th>
+                            <th className="p-1">Package</th>
+                            <th className="p-1">Pts</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(pointsSourcesReport.stripe_purchases_completed.recent || []).map((row, ri) => (
+                            <tr key={row.session_id || `stripe-${ri}`} className="border-b border-zinc-800/50">
+                              <td className="p-1 font-mono break-all max-w-[140px]">{row.session_id ?? '—'}</td>
+                              <td className="p-1">{row.package_id ?? '—'}</td>
+                              <td className="p-1">{(row.points ?? 0).toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+                {(pointsSourcesReport.notes || []).length > 0 && (
+                  <ul className="list-disc pl-4 text-[9px] text-mutedForeground space-y-0.5">
+                    {pointsSourcesReport.notes.map((n, i) => (
+                      <li key={i}>{n}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
 
             <ActionRow icon={Award} label="Add respect points" description="Grants respect to the target user. Logged as admin_add. Uses target username above.">
               <FormattedNumberInput value={formData.respectAdd != null ? String(formData.respectAdd) : ''} onChange={(raw) => setFormData((prev) => ({ ...prev, respectAdd: raw === '' ? 0 : parseInt(raw, 10) }))} className="flex h-9 w-24 min-w-[5rem] rounded-md border border-input bg-transparent px-3 py-1 text-sm" />

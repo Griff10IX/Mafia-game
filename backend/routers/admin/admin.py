@@ -683,6 +683,139 @@ def register(router):
         ).sort("created_at", -1).limit(200).to_list(200)
         return {"user": u, "lots": lots, "ledger": ledger}
 
+    @router.get("/admin/points/sources/{user_id_or_username}")
+    async def admin_points_sources(user_id_or_username: str, current_user: dict = Depends(get_current_user)):
+        """Aggregate store-currency point sources: lots, ledger, completed Stripe payments, transfers, and key user counters."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        raw = (user_id_or_username or "").strip()
+        if not raw:
+            raise HTTPException(status_code=400, detail="User id or username required")
+        u = await db.users.find_one({"id": raw}, {"_id": 0})
+        if not u:
+            username_pattern = _username_pattern(raw)
+            u = await db.users.find_one({"username": username_pattern}, {"_id": 0})
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        user_id = u["id"]
+
+        lots_rows = await db.point_lots.aggregate(
+            [
+                {"$match": {"owner_user_id": user_id}},
+                {
+                    "$group": {
+                        "_id": "$origin_type",
+                        "remaining": {"$sum": "$remaining_points"},
+                        "lots": {"$sum": 1},
+                    }
+                },
+                {"$sort": {"remaining": -1}},
+            ]
+        ).to_list(200)
+
+        ledger_in = await db.point_ledger_events.aggregate(
+            [
+                {"$match": {"user_id": user_id, "points": {"$gt": 0}}},
+                {"$group": {"_id": "$event_type", "total": {"$sum": "$points"}, "n": {"$sum": 1}}},
+                {"$sort": {"total": -1}},
+            ]
+        ).to_list(500)
+
+        ledger_out = await db.point_ledger_events.aggregate(
+            [
+                {"$match": {"user_id": user_id, "points": {"$lt": 0}}},
+                {"$group": {"_id": "$event_type", "total": {"$sum": "$points"}, "n": {"$sum": 1}}},
+                {"$sort": {"total": 1}},
+            ]
+        ).to_list(500)
+
+        pay_match = {"user_id": user_id, "payment_status": "completed"}
+        pay_agg = await db.payment_transactions.aggregate(
+            [
+                {"$match": pay_match},
+                {"$group": {"_id": None, "total_points": {"$sum": "$points"}, "count": {"$sum": 1}}},
+            ]
+        ).to_list(1)
+        pay_total = int(pay_agg[0]["total_points"]) if pay_agg else 0
+        pay_count = int(pay_agg[0]["count"]) if pay_agg else 0
+        recent_payments = await db.payment_transactions.find(
+            pay_match,
+            {"_id": 0, "session_id": 1, "package_id": 1, "points": 1, "created_at": 1, "points_credited_at": 1},
+        ).sort("created_at", -1).limit(40).to_list(40)
+
+        tin = await db.points_transfers.aggregate(
+            [
+                {"$match": {"to_user_id": user_id}},
+                {"$group": {"_id": None, "total": {"$sum": "$amount"}, "n": {"$sum": 1}}},
+            ]
+        ).to_list(1)
+        tout = await db.points_transfers.aggregate(
+            [
+                {"$match": {"from_user_id": user_id}},
+                {"$group": {"_id": None, "total": {"$sum": "$amount"}, "n": {"$sum": 1}}},
+            ]
+        ).to_list(1)
+
+        lot_sum = sum(int(r.get("remaining") or 0) for r in lots_rows)
+        balance = int(u.get("points") or 0)
+
+        return {
+            "user": {
+                "id": user_id,
+                "username": u.get("username"),
+                "points": balance,
+            },
+            "user_stats": {
+                "lifetime_points_spent": int(u.get("lifetime_points_spent") or 0),
+                "redeem_codes_points_total": int(u.get("redeem_stats_total_points") or 0),
+                "stock_market_profit_total_points": int(u.get("stock_market_profit_total") or 0),
+            },
+            "lots_remaining_by_origin": [
+                {
+                    "origin_type": r.get("_id"),
+                    "remaining_points": int(r.get("remaining") or 0),
+                    "lot_count": int(r.get("lots") or 0),
+                }
+                for r in lots_rows
+            ],
+            "lots_remaining_sum": lot_sum,
+            "balance_matches_lots": lot_sum == balance,
+            "ledger_inflows_by_event": [
+                {
+                    "event_type": r.get("_id"),
+                    "points": int(r.get("total") or 0),
+                    "events": int(r.get("n") or 0),
+                }
+                for r in ledger_in
+            ],
+            "ledger_outflows_by_event": [
+                {
+                    "event_type": r.get("_id"),
+                    "points": int(r.get("total") or 0),
+                    "events": int(r.get("n") or 0),
+                }
+                for r in ledger_out
+            ],
+            "stripe_purchases_completed": {
+                "total_points": pay_total,
+                "transaction_count": pay_count,
+                "recent": recent_payments,
+            },
+            "points_transfers_received": {
+                "total_points": int(tin[0]["total"]) if tin else 0,
+                "transfer_count": int(tin[0]["n"]) if tin else 0,
+            },
+            "points_transfers_sent": {
+                "total_points": int(tout[0]["total"]) if tout else 0,
+                "transfer_count": int(tout[0]["n"]) if tout else 0,
+            },
+            "notes": [
+                "This report is for store currency (users.points). Rank progression uses rank_points separately.",
+                "Current balance is represented as FIFO lots; legacy or untracked grants (e.g. some in-game rewards, admin add-points) may be bucketed as legacy_seed.",
+                "Ledger rows aggregate point_ledger_events; not every feature writes to this log.",
+            ],
+        }
+
     @router.get("/admin/points/chargeback/preview/{payment_session_id}")
     async def admin_points_chargeback_preview(payment_session_id: str, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):

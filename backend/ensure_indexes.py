@@ -8,6 +8,8 @@ logger = logging.getLogger(__name__)
 # Raw event rows used for weekly boards / analytics; all-time totals live on users.* fields.
 EVENT_LOG_TTL_DAYS = 14
 CRIME_EVENTS_TTL_DAYS = EVENT_LOG_TTL_DAYS  # backwards compat
+# Activity / gambling / analytics raw rows — longer retention than gameplay event logs.
+AUDIT_LOG_TTL_DAYS = 90
 
 
 async def _ensure_event_log_ttl(
@@ -383,8 +385,7 @@ async def ensure_all_indexes(db):
         await db.boxing_events.create_index([("user_id", 1), ("at", -1)])
         await db.boxing_events.create_index([("at", -1)])
 
-        # --- Respect earned (weekly leaderboard / objectives; documents use at or created_at) ---
-        await db.respect_events.create_index([("user_id", 1), ("at", -1)])
+        # --- Respect earned: legacy docs may use created_at; at+TTL handled in event-log section ---
         await db.respect_events.create_index([("user_id", 1), ("created_at", -1)])
 
         # --- Racing (road races / championship; shares user_racing_cars with garage car instances) ---
@@ -541,6 +542,78 @@ async def ensure_all_indexes(db):
         # --- The Getaway ---
         await db.the_getaway_runs.create_index([("distance", -1), ("coins_collected", -1)])
         await db.the_getaway_runs.create_index([("user_id", 1)])
+
+        # --- TTL: other high-churn append-only logs (gameplay-adjacent / audit) ---
+        await _ensure_event_log_ttl(
+            db,
+            "hitlist_bodyguard_events",
+            "at",
+            ttl_days=EVENT_LOG_TTL_DAYS,
+            compound_indexes=[[("type", 1), ("at", -1)]],
+        )
+        await _ensure_event_log_ttl(
+            db,
+            "boxing_events",
+            "at",
+            ttl_days=EVENT_LOG_TTL_DAYS,
+            compound_indexes=[[("user_id", 1), ("at", -1)]],
+        )
+        await _ensure_event_log_ttl(
+            db,
+            "trade_events",
+            "at",
+            ttl_days=EVENT_LOG_TTL_DAYS,
+            compound_indexes=[
+                [("type", 1), ("at", -1)],
+                [("direction", 1), ("at", -1)],
+            ],
+        )
+        await _ensure_event_log_ttl(
+            db,
+            "war_kill_feed",
+            "created_at",
+            ttl_days=EVENT_LOG_TTL_DAYS,
+            compound_indexes=[[("war_id", 1), ("created_at", -1)]],
+        )
+        await _ensure_event_log_ttl(
+            db,
+            "captcha_turnstile_failures",
+            "at",
+            ttl_days=EVENT_LOG_TTL_DAYS,
+            compound_indexes=[[("user_id", 1), ("at", -1)]],
+        )
+        await _ensure_event_log_ttl(
+            db,
+            "activity_log",
+            "created_at",
+            ttl_days=AUDIT_LOG_TTL_DAYS,
+            compound_indexes=[
+                [("user_id", 1), ("created_at", -1)],
+                [("action", 1), ("created_at", -1)],
+                [("username", 1), ("created_at", -1)],
+            ],
+        )
+        await _ensure_event_log_ttl(
+            db,
+            "gambling_log",
+            "created_at",
+            ttl_days=AUDIT_LOG_TTL_DAYS,
+            compound_indexes=[
+                [("user_id", 1), ("created_at", -1)],
+                [("username", 1), ("created_at", -1)],
+                [("game_type", 1), ("created_at", -1)],
+            ],
+        )
+        await _ensure_event_log_ttl(
+            db,
+            "minigame_play_payouts",
+            "created_at",
+            ttl_days=AUDIT_LOG_TTL_DAYS,
+            compound_indexes=[[("user_id", 1), ("created_at", -1)]],
+        )
+        await _prune_mixed_date_string_field(
+            db, "analytics_events", "created_at", ttl_days=AUDIT_LOG_TTL_DAYS
+        )
 
         logger.info("All non-profile indexes ensured.")
     except Exception as e:

@@ -1741,7 +1741,7 @@ async def log_activity(user_id: str, username: str, action: str, details: dict):
             "username": username,
             "action": action,
             "details": details,
-            "created_at": now.isoformat(),
+            "created_at": now,
         })
         a = (action or "").strip().lower()
         domain = "other"
@@ -1788,7 +1788,7 @@ async def log_minigame_payout(user_id: str, username: str, game: str, score, rew
             "game": game,
             "score": score,
             "rewards": rewards,
-            "created_at": now.isoformat(),
+            "created_at": now,
         })
         reward_total = float(
             (rewards or {}).get("money", 0)
@@ -1820,7 +1820,7 @@ async def log_gambling(user_id: str, username: str, game_type: str, details: dic
             "username": username,
             "game_type": game_type,
             "details": details,
-            "created_at": now.isoformat(),
+            "created_at": now,
         })
         stake = float((details or {}).get("stake") or (details or {}).get("bet") or 0)
         payout = float((details or {}).get("payout") or 0)

@@ -443,9 +443,8 @@ async def upgrade_bodyguard_armour(slot: int, current_user: dict = Depends(get_c
     )
     await db.users.update_one({"id": bg["bodyguard_user_id"]}, {"$set": {"armour_level": new_level}})
     _invalidate_bodyguards_cache(current_user["id"])
-    now_iso = datetime.now(timezone.utc).isoformat()
     await db.hitlist_bodyguard_events.insert_one({
-        "at": now_iso,
+        "at": datetime.now(timezone.utc),
         "type": "bodyguard_armour_upgrade",
         "owner_id": current_user["id"],
         "owner_username": current_user.get("username") or "",
@@ -473,9 +472,8 @@ async def buy_bodyguard_slot(current_user: dict = Depends(get_current_user)):
     )
     if slot_result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
-    now_iso = datetime.now(timezone.utc).isoformat()
     await db.hitlist_bodyguard_events.insert_one({
-        "at": now_iso,
+        "at": datetime.now(timezone.utc),
         "type": "bodyguard_slot_bought",
         "user_id": current_user["id"],
         "username": current_user.get("username") or "",
@@ -570,9 +568,8 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
         "hire_cost": total_cost,
     }
     await db.bodyguards.insert_one(bodyguard_doc)
-    now_iso = datetime.now(timezone.utc).isoformat()
     await db.hitlist_bodyguard_events.insert_one({
-        "at": now_iso,
+        "at": datetime.now(timezone.utc),
         "type": "bodyguard_hired",
         "owner_id": current_user["id"],
         "owner_username": current_user.get("username") or "",
@@ -652,9 +649,8 @@ async def invite_bodyguard(request: BodyguardInviteRequest, current_user: dict =
         "status": "pending",
         "created_at": datetime.now(timezone.utc).isoformat()
     })
-    now_iso = datetime.now(timezone.utc).isoformat()
     await db.hitlist_bodyguard_events.insert_one({
-        "at": now_iso,
+        "at": datetime.now(timezone.utc),
         "type": "bodyguard_invite_sent",
         "inviter_id": current_user["id"],
         "inviter_username": current_user.get("username") or "",
@@ -854,9 +850,8 @@ async def _do_accept_bodyguard_invite(invite_id: str, current_user: dict):
         {"id": invite_id},
         {"$set": {"status": "accepted"}}
     )
-    now_iso = datetime.now(timezone.utc).isoformat()
     await db.hitlist_bodyguard_events.insert_one({
-        "at": now_iso,
+        "at": datetime.now(timezone.utc),
         "type": "bodyguard_invite_accepted",
         "inviter_id": inviter["id"],
         "inviter_username": inviter.get("username") or "",
@@ -891,9 +886,8 @@ async def decline_bodyguard_invite(invite_id: str, current_user: dict = Depends(
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="Invite not found")
     if invite:
-        now_iso = datetime.now(timezone.utc).isoformat()
         await db.hitlist_bodyguard_events.insert_one({
-            "at": now_iso,
+            "at": datetime.now(timezone.utc),
             "type": "bodyguard_invite_declined",
             "inviter_id": invite.get("inviter_id"),
             "inviter_username": invite.get("inviter_username") or "",
@@ -913,9 +907,8 @@ async def cancel_bodyguard_invite(invite_id: str, current_user: dict = Depends(g
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="Invite not found")
     if invite:
-        now_iso = datetime.now(timezone.utc).isoformat()
         await db.hitlist_bodyguard_events.insert_one({
-            "at": now_iso,
+            "at": datetime.now(timezone.utc),
             "type": "bodyguard_invite_cancelled",
             "inviter_id": current_user["id"],
             "inviter_username": current_user.get("username") or "",
@@ -1484,7 +1477,7 @@ async def drop_bodyguard(slot: int, current_user: dict = Depends(get_current_use
 
     now = datetime.now(timezone.utc)
     await db.hitlist_bodyguard_events.insert_one({
-        "at": now.isoformat(),
+        "at": now,
         "type": "bodyguard_dropped",
         "owner_id": current_user["id"],
         "owner_username": current_user.get("username") or "",
