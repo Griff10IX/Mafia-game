@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import api from '../../utils/api';
-import { Building2, Users, TrendingUp, ArrowLeft, Crosshair, Clock, Skull, MapPin, Bold, Italic, AlignCenter, Image } from 'lucide-react';
+import { Building2, Users, TrendingUp, Plane, ArrowLeft, Crosshair, Clock, Skull, MapPin, Bold, Italic, AlignCenter, Image, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { parseForumContent, insertAtCursor } from '../../utils/forumContent';
 import styles from '../../styles/noir.module.css';
@@ -253,6 +253,13 @@ export default function FamilyProfilePage() {
   const crewOCCooldown  = family.crew_oc_cooldown_until;
   const crewOCAvailable = !crewOCCooldown || formatTimeLeft(crewOCCooldown) === 'Ready';
   const crewOCApp   = family.crew_oc_application;
+  const ph = family.property_holdings ?? { airports: [], armouries: [], casinos: [] };
+  const cb = family.crew_bonuses ?? {
+    summary_lines: [],
+    treasury_bullets_hourly: { active: false, min: 100, max: 200, label: 'Hourly vault bullets' },
+    airport_crew_perk: { selected: 'none', active: false, points_discount_percent: 0, travel_time_reduction_seconds: 0 },
+  };
+  const holdingsCount = (ph.airports?.length || 0) + (ph.armouries?.length || 0) + (ph.casinos?.length || 0);
 
   const handleApplyCrewOC = async () => {
     setCrewOCApplyLoading(true);
@@ -384,6 +391,82 @@ export default function FamilyProfilePage() {
         </div>
 
         <div className="h-px mx-5 mb-0" style={{ background: 'repeating-linear-gradient(90deg,transparent,transparent 4px,rgba(var(--noir-primary-rgb),.1) 4px,rgba(var(--noir-primary-rgb),.1) 8px)' }} />
+      </div>
+
+      {/* Territory: crew-owned properties + vault / travel perks */}
+      <div className={`relative ${styles.panel} rounded-xl overflow-hidden border border-primary/15 fp-in mobile-panel`} style={{ animationDelay: '0.05s' }}>
+        <div className="px-4 py-2.5 flex items-center gap-2 border-b border-primary/10">
+          <Building2 size={11} className="text-primary/60" />
+          <span className="text-[10px] font-heading font-bold text-primary/70 uppercase tracking-[0.2em]">Territory and perks</span>
+          {holdingsCount > 0 && (
+            <span className="text-[9px] text-zinc-500 font-heading ml-auto">{holdingsCount} holding{holdingsCount !== 1 ? 's' : ''}</span>
+          )}
+        </div>
+        <div className="px-4 py-3 space-y-4 text-[10px] text-zinc-400">
+          <div>
+            <p className="text-[9px] font-heading uppercase tracking-wider text-zinc-500 mb-2 flex items-center gap-1">
+              <Plane size={10} className="text-primary/50" /> Airports and armouries
+            </p>
+            {holdingsCount === 0 ? (
+              <p className="text-zinc-600 leading-relaxed">No airports, armouries, or casinos held by crew members yet.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {(ph.airports || []).map((a, i) => (
+                  <li key={`ap-${a.state}-${a.slot}-${i}`} className="flex flex-wrap gap-x-2 gap-y-0.5 text-zinc-300">
+                    <span className="text-primary/80 font-heading font-bold">Airport</span>
+                    <span>{a.state}{a.slot != null ? ` #${a.slot}` : ''}</span>
+                    <span className="text-zinc-500">— {a.owner_username}</span>
+                  </li>
+                ))}
+                {(ph.armouries || []).map((a, i) => (
+                  <li key={`bf-${a.state}-${i}`} className="flex flex-wrap gap-x-2 gap-y-0.5 text-zinc-300">
+                    <span className="text-primary/80 font-heading font-bold">Armoury</span>
+                    <span>{a.state}</span>
+                    <span className="text-zinc-500">— {a.owner_username}</span>
+                  </li>
+                ))}
+                {(ph.casinos || []).map((c, i) => (
+                  <li key={`cas-${c.game}-${c.city}-${i}`} className="flex flex-wrap gap-x-2 gap-y-0.5 text-zinc-300">
+                    <span className="text-primary/80 font-heading font-bold">{c.game}</span>
+                    <span>{c.city}{c.state && c.state !== c.city ? ` (${c.state})` : ''}</span>
+                    <span className="text-zinc-500">— {c.owner_username}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div>
+            <p className="text-[9px] font-heading uppercase tracking-wider text-zinc-500 mb-2 flex items-center gap-1">
+              <Sparkles size={10} className="text-amber-500/70" /> Crew bonuses (vault and travel)
+            </p>
+            {(cb.summary_lines || []).length > 0 ? (
+              <ul className="space-y-1.5 text-zinc-300 leading-relaxed">
+                {(cb.summary_lines || []).map((line, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span className="text-emerald-500/80 shrink-0">+</span>
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-zinc-600 leading-relaxed">
+                No active vault or airport crew bonuses right now. Bonuses apply when high command owns the right properties (airport + armoury for hourly vault bullets; airport crew perk set by the Don).
+              </p>
+            )}
+            {cb.treasury_bullets_hourly?.active && (
+              <p className="mt-2 text-[9px] text-emerald-400/90 font-heading">
+                Vault drip: {cb.treasury_bullets_hourly.min}–{cb.treasury_bullets_hourly.max} bullets/hour (UTC)
+              </p>
+            )}
+            {cb.airport_crew_perk?.active && (
+              <p className="mt-1 text-[9px] text-sky-400/90 font-heading">
+                {cb.airport_crew_perk.points_discount_percent > 0
+                  ? `Airport points: ${cb.airport_crew_perk.points_discount_percent}% off for the crew`
+                  : `Airport travel: −${cb.airport_crew_perk.travel_time_reduction_seconds || 1}s when flights use a timer`}
+              </p>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* ══════════════════════════════════════════

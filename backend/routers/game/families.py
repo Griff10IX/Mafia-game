@@ -772,6 +772,119 @@ async def any_top3_owns_bullet_factory(family_id: str) -> bool:
     return doc is not None
 
 
+# Casinos: collection name -> display label (ownership docs use owner_id, city, state)
+CASINO_OWNERSHIP_COLLECTIONS = (
+    ("Dice", "dice_ownership"),
+    ("Roulette", "roulette_ownership"),
+    ("Blackjack", "blackjack_ownership"),
+    ("Slots", "slots_ownership"),
+    ("Video Poker", "videopoker_ownership"),
+    ("Horse Racing", "horseracing_ownership"),
+)
+
+
+async def all_family_member_uids(family_id: str, fam_doc: Optional[dict] = None) -> List[str]:
+    """All living member user ids (family_members + boss_id if missing from list)."""
+    if not (family_id or "").strip():
+        return []
+    members = await db.family_members.find({"family_id": family_id}, {"_id": 0, "user_id": 1}).to_list(200)
+    out: List[str] = []
+    seen = set()
+    for m in members:
+        uid = _uid_str(m.get("user_id"))
+        if uid and uid not in seen:
+            seen.add(uid)
+            out.append(uid)
+    bid = _uid_str((fam_doc or {}).get("boss_id"))
+    if not bid and fam_doc is None:
+        fam = await db.families.find_one({"id": family_id}, {"_id": 0, "boss_id": 1})
+        bid = _uid_str((fam or {}).get("boss_id"))
+    if bid and bid not in seen:
+        out.append(bid)
+    return out
+
+
+async def family_property_holdings_summary(family_id: str, fam_doc: dict) -> dict:
+    """Properties owned by any crew member: airports, armouries, casinos."""
+    uids = await all_family_member_uids(family_id, fam_doc)
+    oc = _owner_id_or_clauses_for_uids(uids)
+    airports: List[dict] = []
+    armouries: List[dict] = []
+    casinos: List[dict] = []
+    if not oc:
+        return {"airports": airports, "armouries": armouries, "casinos": casinos}
+    q = {"$or": oc}
+    async for doc in db.airport_ownership.find(q, {"_id": 0, "state": 1, "slot": 1, "owner_username": 1}):
+        airports.append({
+            "state": doc.get("state"),
+            "slot": doc.get("slot"),
+            "owner_username": (doc.get("owner_username") or "—").strip() or "—",
+        })
+    async for doc in db.bullet_factory.find(q, {"_id": 0, "state": 1, "owner_username": 1, "owner_id": 1}):
+        if not doc.get("owner_id"):
+            continue
+        armouries.append({
+            "state": doc.get("state"),
+            "owner_username": (doc.get("owner_username") or "—").strip() or "—",
+        })
+    for label, coll in CASINO_OWNERSHIP_COLLECTIONS:
+        try:
+            async for doc in db[coll].find(q, {"_id": 0, "city": 1, "state": 1, "owner_username": 1, "owner_id": 1}):
+                if doc.get("owner_id") is None:
+                    continue
+                city = (doc.get("city") or doc.get("state") or "—")
+                casinos.append({
+                    "game": label,
+                    "city": str(city).strip() or "—",
+                    "state": doc.get("state"),
+                    "owner_username": (doc.get("owner_username") or "—").strip() or "—",
+                })
+        except Exception:
+            logger.exception("family_property_holdings_summary casino %s", coll)
+    return {"airports": airports, "armouries": armouries, "casinos": casinos}
+
+
+async def family_crew_bonuses_summary(family_id: str, fam_doc: dict) -> dict:
+    """Vault + travel perks tied to high command properties (public-safe copy)."""
+    perk = (fam_doc.get("airport_crew_perk") or AIRPORT_CREW_PERK_NONE)
+    top3_air = await any_top3_owns_airport(family_id)
+    top3_bf = await any_top3_owns_bullet_factory(family_id)
+    treasury_hourly_active = bool(top3_air and top3_bf)
+    perk_active = perk in (AIRPORT_CREW_PERK_TRAVEL_TIME, AIRPORT_CREW_PERK_POINTS_DISCOUNT) and top3_air
+    pts_pct = 0
+    travel_red_s = 0
+    if perk_active:
+        if perk == AIRPORT_CREW_PERK_POINTS_DISCOUNT:
+            pts_pct = 10
+        else:
+            travel_red_s = 1
+    lines: List[str] = []
+    if treasury_hourly_active:
+        lines.append("Family vault earns 100–200 random bullets per hour (high command holds an airport and an armoury).")
+    if perk_active:
+        if pts_pct:
+            lines.append("Airport crew: 10% off airport points for all members (Don's perk, high command owns an airport).")
+        else:
+            lines.append("Airport crew: -1 second airport travel time for all members when flights use a timer (Don's perk).")
+    elif perk != AIRPORT_CREW_PERK_NONE and not top3_air:
+        lines.append("Airport crew perk is selected but inactive until Don, Underboss, or Consigliere owns an airport.")
+    return {
+        "treasury_bullets_hourly": {
+            "active": treasury_hourly_active,
+            "min": 100,
+            "max": 200,
+            "label": "Hourly vault bullets",
+        },
+        "airport_crew_perk": {
+            "selected": perk,
+            "active": perk_active,
+            "points_discount_percent": pts_pct,
+            "travel_time_reduction_seconds": travel_red_s,
+        },
+        "summary_lines": lines,
+    }
+
+
 async def family_airport_crew_perk_context(current_user: dict) -> dict:
     """
     Airport crew perk for travel UI/charges: −1s travel OR 10% points off for all members when
@@ -1199,6 +1312,23 @@ async def families_my(current_user: dict = Depends(get_current_user)):
     if head_of_state:
         state_head_casino_week_stats = await _state_head_casino_week_stats(head_of_state)
 
+    try:
+        _ph = await family_property_holdings_summary(family_id, fam)
+        _cb = await family_crew_bonuses_summary(family_id, fam)
+    except Exception:
+        logger.exception("families_my property_holdings / crew_bonuses")
+        _ph = {"airports": [], "armouries": [], "casinos": []}
+        _cb = {
+            "treasury_bullets_hourly": {"active": False, "min": 100, "max": 200, "label": "Hourly vault bullets"},
+            "airport_crew_perk": {
+                "selected": AIRPORT_CREW_PERK_NONE,
+                "active": False,
+                "points_discount_percent": 0,
+                "travel_time_reduction_seconds": 0,
+            },
+            "summary_lines": [],
+        }
+
     payload = {
         "family": {
             "id": fam["id"], "name": fam["name"], "tag": fam["tag"],
@@ -1225,6 +1355,8 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             "join_auto_accept_rank_min": fam.get("join_auto_accept_rank_min"),
             "airport_crew_perk": (fam.get("airport_crew_perk") or AIRPORT_CREW_PERK_NONE),
             "airport_crew_perk_set_at": fam.get("airport_crew_perk_set_at"),
+            "property_holdings": _ph,
+            "crew_bonuses": _cb,
         },
         "members": members, "fallen": fallen, "rackets": rackets, "my_role": my_role,
         "vault_and_rackets_locked": vault_and_rackets_locked,
@@ -1357,6 +1489,22 @@ async def families_lookup(tag: Optional[str] = None, id: Optional[str] = None, c
         "airport_crew_perk": (fam.get("airport_crew_perk") or AIRPORT_CREW_PERK_NONE),
         "airport_crew_perk_set_at": fam.get("airport_crew_perk_set_at"),
     }
+    try:
+        out["property_holdings"] = await family_property_holdings_summary(fam["id"], fam)
+        out["crew_bonuses"] = await family_crew_bonuses_summary(fam["id"], fam)
+    except Exception:
+        logger.exception("families_lookup property_holdings / crew_bonuses")
+        out["property_holdings"] = {"airports": [], "armouries": [], "casinos": []}
+        out["crew_bonuses"] = {
+            "treasury_bullets_hourly": {"active": False, "min": 100, "max": 200, "label": "Hourly vault bullets"},
+            "airport_crew_perk": {
+                "selected": AIRPORT_CREW_PERK_NONE,
+                "active": False,
+                "points_discount_percent": 0,
+                "travel_time_reduction_seconds": 0,
+            },
+            "summary_lines": [],
+        }
     if fam.get("wiped"):
         out["wiped"] = True
         out["wiped_at"] = fam.get("wiped_at")

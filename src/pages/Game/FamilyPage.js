@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, Building2, DollarSign, TrendingUp, TrendingDown, LogOut, Swords, Trophy, Shield, Skull, X, Crosshair, RefreshCw, Clock, ChevronRight, MessageSquare, UserPlus, Lock, Unlock, ArrowUpCircle, Flame, MapPin } from 'lucide-react';
+import { Users, Building2, DollarSign, TrendingUp, TrendingDown, LogOut, Swords, Trophy, Shield, Skull, X, Crosshair, RefreshCw, Clock, ChevronRight, MessageSquare, UserPlus, Lock, Unlock, ArrowUpCircle, Flame, MapPin, Plane, Sparkles } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 import { getRacketAccent } from '../../constants';
@@ -2419,6 +2419,46 @@ export default function FamilyPage() {
             <StatCard label="Rackets" value={`${unlockedRackets}/${rackets.length}`} icon={<TrendingUp size={10} />} delay={0.1} />
             <StatCard label="Ready" value={readyRackets} highlight={readyRackets > 0} icon={<Clock size={10} />} delay={0.15} />
           </div>
+
+          {(() => {
+            const ph = family.property_holdings ?? { airports: [], armouries: [], casinos: [] };
+            const cb = family.crew_bonuses ?? { summary_lines: [], treasury_bullets_hourly: { active: false }, airport_crew_perk: { active: false } };
+            const n = (ph.airports?.length || 0) + (ph.armouries?.length || 0) + (ph.casinos?.length || 0);
+            return (
+              <div className="rounded-lg border border-primary/15 bg-zinc-900/40 px-3 py-2.5 space-y-2">
+                <div className="flex items-center gap-2 text-[9px] font-heading font-bold uppercase tracking-wider text-primary/70">
+                  <Building2 size={11} className="text-primary/60 shrink-0" />
+                  Territory and perks
+                  {n > 0 && <span className="text-zinc-500 font-normal normal-case ml-auto">{n} crew holding{n !== 1 ? 's' : ''}</span>}
+                </div>
+                {n > 0 ? (
+                  <ul className="text-[10px] text-zinc-400 space-y-0.5 max-h-28 overflow-y-auto">
+                    {(ph.airports || []).map((a, i) => (
+                      <li key={`a-${i}`}><span className="text-primary/80 font-heading">Airport</span> {a.state}{a.slot != null ? ` #${a.slot}` : ''} <span className="text-zinc-600">— {a.owner_username}</span></li>
+                    ))}
+                    {(ph.armouries || []).map((a, i) => (
+                      <li key={`m-${i}`}><span className="text-primary/80 font-heading">Armoury</span> {a.state} <span className="text-zinc-600">— {a.owner_username}</span></li>
+                    ))}
+                    {(ph.casinos || []).map((c, i) => (
+                      <li key={`c-${i}`}><span className="text-primary/80 font-heading">{c.game}</span> {c.city} <span className="text-zinc-600">— {c.owner_username}</span></li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-[9px] text-zinc-600">No crew-owned airports, armouries, or casinos yet.</p>
+                )}
+                {(cb.summary_lines || []).length > 0 ? (
+                  <div className="pt-1 border-t border-primary/10 space-y-0.5">
+                    <p className="text-[9px] font-heading uppercase tracking-wider text-zinc-500 flex items-center gap-1"><Sparkles size={9} /> Bonuses</p>
+                    {(cb.summary_lines || []).map((line, i) => (
+                      <p key={i} className="text-[9px] text-emerald-400/90 leading-snug pl-2 border-l border-emerald-500/30">{line}</p>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[9px] text-zinc-600 pt-1 border-t border-primary/10 flex items-start gap-1"><Plane size={10} className="shrink-0 mt-0.5 opacity-50" /> Hourly vault bullets and airport crew perks apply when high command owns the right properties.</p>
+                )}
+              </div>
+            );
+          })()}
 
           {/* ── State Takeover Offer Banner ── */}
           {family?.pending_state_takeover && canManage && (
