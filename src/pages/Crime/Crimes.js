@@ -567,6 +567,9 @@ export default function Crimes() {
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to commit crime');
       console.error('Error committing crime:', error);
+      // Keep cooldown UI authoritative on server state (important on mobile taps/races).
+      clearCrimesPrefetch();
+      await fetchCrimes();
     }
   };
 
