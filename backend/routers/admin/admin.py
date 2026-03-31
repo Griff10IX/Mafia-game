@@ -3386,6 +3386,9 @@ def register(router):
         max_add_per_tick: Optional[int] = None
         max_remove_per_tick: Optional[int] = None
         max_pool: Optional[int] = None
+        skip_usernames: Optional[List[str]] = None
+        gradual_add: Optional[bool] = None
+        seconds_between_adds: Optional[int] = None
         run_now: bool = False
 
     @router.get("/admin/presence-simulator")
@@ -3421,6 +3424,12 @@ def register(router):
             cur["max_remove_per_tick"] = body.max_remove_per_tick
         if body.max_pool is not None:
             cur["max_pool"] = body.max_pool
+        if body.skip_usernames is not None:
+            cur["skip_usernames"] = list(body.skip_usernames)
+        if body.gradual_add is not None:
+            cur["gradual_add"] = bool(body.gradual_add)
+        if body.seconds_between_adds is not None:
+            cur["seconds_between_adds"] = body.seconds_between_adds
         await save_presence_config(db, cur)
         cur = await load_presence_config(db)
         if body.run_now and cur.get("enabled"):

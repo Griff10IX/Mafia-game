@@ -436,6 +436,9 @@ export default function Admin() {
     maxAdd: '3',
     maxRemove: '2',
     maxPool: '25',
+    skipUsernames: '',
+    gradualAdd: true,
+    secondsBetweenAdds: '25',
   });
   const [crackSafeInfo, setCrackSafeInfo] = useState(null);
   const [crackSafeJackpotInput, setCrackSafeJackpotInput] = useState('');
@@ -1319,6 +1322,9 @@ export default function Admin() {
           maxAdd: String(d.max_add_per_tick ?? 3),
           maxRemove: String(d.max_remove_per_tick ?? 2),
           maxPool: String(d.max_pool ?? 25),
+          skipUsernames: Array.isArray(d.skip_usernames) ? d.skip_usernames.join('\n') : '',
+          gradualAdd: d.gradual_add !== false,
+          secondsBetweenAdds: String(d.seconds_between_adds ?? 25),
         });
       }
     } catch {
@@ -1352,6 +1358,11 @@ export default function Admin() {
       toast.error('Enter valid numbers');
       return;
     }
+    const skipUsernames = String(psForm.skipUsernames || '')
+      .split(/[\r\n,]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    const secBetween = parseInt(String(psForm.secondsBetweenAdds).replace(/\D/g, ''), 10);
     setPresenceSimLoading(true);
     try {
       const res = await api.post('/admin/presence-simulator', {
@@ -1360,6 +1371,9 @@ export default function Admin() {
         max_add_per_tick: maxAdd,
         max_remove_per_tick: maxRemove,
         max_pool: maxPool,
+        skip_usernames: skipUsernames,
+        gradual_add: !!psForm.gradualAdd,
+        seconds_between_adds: Number.isNaN(secBetween) ? 25 : secBetween,
       });
       setPresenceSim(res.data);
       toast.success('Presence simulator settings saved');
@@ -7722,7 +7736,8 @@ export default function Admin() {
             <p className="text-[10px] text-mutedForeground font-heading">
               On each tick, removes up to “max remove” sim users from the pool (they then drift off Users Online as{' '}
               <code className="text-[9px] bg-zinc-800/80 px-1 rounded">last_seen</code> ages) and adds up to “max add” new offline players.{' '}
-              <code className="text-[9px] bg-zinc-800/80 px-1 rounded">last_seen</code> is staggered per user so counts don’t jump in one instant; use an interval under ~5 minutes so pool members stay inside the online window. Overlapping ticks (loop + Run tick now) are deduped unless you use Run tick now (that always runs). Auto-rank (non-idle) accounts are skipped.
+              <code className="text-[9px] bg-zinc-800/80 px-1 rounded">last_seen</code> is staggered per user so counts don’t jump in one instant; use an interval under ~5 minutes so pool members stay inside the online window. Overlapping ticks (loop + Run tick now) are deduped unless you use Run tick now (that always runs). Auto-rank (non-idle) accounts are skipped.{' '}
+              <span className="text-mutedForeground/90">Usernames listed below are never added and are dropped from the pool if present. With “Gradual adds”, new pool members get their first bump spaced apart (capped so one tick stays within most of the interval).</span>
             </p>
             {presenceSimLoading && !presenceSim ? (
               <p className="text-[10px] text-mutedForeground font-heading">Loading…</p>
@@ -7778,6 +7793,34 @@ export default function Admin() {
                       value={psForm.maxPool}
                       onChange={(e) => setPsForm((f) => ({ ...f, maxPool: e.target.value }))}
                       className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground"
+                    />
+                  </label>
+                  <label className="flex flex-col gap-0.5 sm:col-span-2">
+                    <span className="text-mutedForeground">Seconds between new adds (gradual)</span>
+                    <input
+                      value={psForm.secondsBetweenAdds}
+                      onChange={(e) => setPsForm((f) => ({ ...f, secondsBetweenAdds: e.target.value }))}
+                      disabled={!psForm.gradualAdd}
+                      className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground disabled:opacity-50"
+                    />
+                  </label>
+                  <label className="flex flex-row sm:col-span-3 items-center gap-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={!!psForm.gradualAdd}
+                      onChange={(e) => setPsForm((f) => ({ ...f, gradualAdd: e.target.checked }))}
+                      className="rounded border-zinc-600"
+                    />
+                    <span className="text-mutedForeground">Gradual adds (space new pool members over time)</span>
+                  </label>
+                  <label className="flex flex-col gap-0.5 sm:col-span-3">
+                    <span className="text-mutedForeground">Skip usernames (one per line; never simulated)</span>
+                    <textarea
+                      rows={4}
+                      value={psForm.skipUsernames}
+                      onChange={(e) => setPsForm((f) => ({ ...f, skipUsernames: e.target.value }))}
+                      placeholder={'player_one\nOtherAccount'}
+                      className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground font-mono min-h-[4rem]"
                     />
                   </label>
                 </div>
