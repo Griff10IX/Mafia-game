@@ -772,6 +772,17 @@ async def any_top3_owns_bullet_factory(family_id: str) -> bool:
     return doc is not None
 
 
+async def family_has_major_property_conflict(family_id: str, fam_doc: Optional[dict] = None) -> bool:
+    """True if any crew members own both an airport and an armoury (only one type allowed per family for bonuses)."""
+    uids = await all_family_member_uids(family_id, fam_doc)
+    oc = _owner_id_or_clauses_for_uids(uids)
+    if not oc:
+        return False
+    air = await db.airport_ownership.find_one({"$or": oc}, {"_id": 1})
+    bf = await db.bullet_factory.find_one({"$or": oc}, {"_id": 1})
+    return bool(air and bf)
+
+
 # Casinos: collection name -> display label (ownership docs use owner_id, city, state)
 CASINO_OWNERSHIP_COLLECTIONS = (
     ("Dice", "dice_ownership"),
@@ -849,8 +860,13 @@ async def family_crew_bonuses_summary(family_id: str, fam_doc: dict) -> dict:
     perk = (fam_doc.get("airport_crew_perk") or AIRPORT_CREW_PERK_NONE)
     top3_air = await any_top3_owns_airport(family_id)
     top3_bf = await any_top3_owns_bullet_factory(family_id)
-    treasury_hourly_active = bool(top3_air and top3_bf)
-    perk_active = perk in (AIRPORT_CREW_PERK_TRAVEL_TIME, AIRPORT_CREW_PERK_POINTS_DISCOUNT) and top3_air
+    conflict = await family_has_major_property_conflict(family_id, fam_doc)
+    treasury_hourly_active = bool(not conflict and (top3_air or top3_bf))
+    perk_active = (
+        not conflict
+        and perk in (AIRPORT_CREW_PERK_TRAVEL_TIME, AIRPORT_CREW_PERK_POINTS_DISCOUNT)
+        and top3_air
+    )
     pts_pct = 0
     travel_red_s = 0
     if perk_active:
@@ -858,18 +874,29 @@ async def family_crew_bonuses_summary(family_id: str, fam_doc: dict) -> dict:
             pts_pct = 10
         else:
             travel_red_s = 1
+    bonus_warnings: List[str] = []
     lines: List[str] = []
-    if treasury_hourly_active:
-        lines.append(
-            "Family vault earns 100-200 random bullets per hour when high command includes an airport owner and an armoury owner "
-            "(two different members; each person may only own an airport or an armoury, not both)."
+    if conflict:
+        bonus_warnings.append(
+            "Family holds both an airport and an armoury — only one is allowed for the crew. Bonuses are paused until only one property type remains."
         )
+    elif treasury_hourly_active:
+        if top3_air:
+            lines.append(
+                "Family vault earns 100-200 random bullets per hour while Don, Underboss, or Consigliere owns the crew airport "
+                "(only one of airport or armoury per family — one bonus from whichever you hold)."
+            )
+        else:
+            lines.append(
+                "Family vault earns 100-200 random bullets per hour while Don, Underboss, or Consigliere owns the crew armoury "
+                "(only one of airport or armoury per family — one bonus from whichever you hold)."
+            )
     if perk_active:
         if pts_pct:
-            lines.append("Airport crew: 10% off airport points for all members (Don's perk, high command owns an airport).")
+            lines.append("Airport crew: 10% off airport points for all members (Don's perk, high command owns the airport).")
         else:
             lines.append("Airport crew: -1 second airport travel time for all members when flights use a timer (Don's perk).")
-    elif perk != AIRPORT_CREW_PERK_NONE and not top3_air:
+    elif perk != AIRPORT_CREW_PERK_NONE and not top3_air and not conflict:
         lines.append("Airport crew perk is selected but inactive until Don, Underboss, or Consigliere owns an airport.")
     return {
         "treasury_bullets_hourly": {
@@ -884,6 +911,8 @@ async def family_crew_bonuses_summary(family_id: str, fam_doc: dict) -> dict:
             "points_discount_percent": pts_pct,
             "travel_time_reduction_seconds": travel_red_s,
         },
+        "major_property_conflict": conflict,
+        "bonus_warnings": bonus_warnings,
         "summary_lines": lines,
     }
 
@@ -900,9 +929,11 @@ async def family_airport_crew_perk_context(current_user: dict) -> dict:
     fid = await resolve_family_id(str(uid))
     if not fid:
         return {"family_airport_points_discount": False, "family_airport_travel_reduction_seconds": 0}
-    fam = await db.families.find_one({"id": fid}, {"_id": 0, "airport_crew_perk": 1})
+    fam = await db.families.find_one({"id": fid}, {"_id": 0, "airport_crew_perk": 1, "boss_id": 1})
     perk = (fam or {}).get("airport_crew_perk") or AIRPORT_CREW_PERK_NONE
     if perk not in (AIRPORT_CREW_PERK_TRAVEL_TIME, AIRPORT_CREW_PERK_POINTS_DISCOUNT):
+        return {"family_airport_points_discount": False, "family_airport_travel_reduction_seconds": 0}
+    if await family_has_major_property_conflict(fid, fam):
         return {"family_airport_points_discount": False, "family_airport_travel_reduction_seconds": 0}
     if not await any_top3_owns_airport(fid):
         return {"family_airport_points_discount": False, "family_airport_travel_reduction_seconds": 0}
@@ -930,7 +961,7 @@ async def verify_cron_secret_families(x_cron_secret: Optional[str] = Header(None
 
 
 async def families_cron_treasury_bullets_hourly(_: None = Depends(verify_cron_secret_families)):
-    """Hourly: families where high command owns an airport and another high command owns an armoury get 100–200 treasury bullets."""
+    """Hourly: families with no airport+armoury conflict where high command owns the crew airport or armoury get 100–200 treasury bullets."""
     now = datetime.now(timezone.utc)
     hour_bucket = now.strftime("%Y-%m-%dT%H")
     families = await db.families.find(
@@ -942,7 +973,9 @@ async def families_cron_treasury_bullets_hourly(_: None = Depends(verify_cron_se
         fid = fam.get("id")
         if not fid:
             continue
-        if not (await any_top3_owns_airport(fid) and await any_top3_owns_bullet_factory(fid)):
+        if await family_has_major_property_conflict(fid, None):
+            continue
+        if not (await any_top3_owns_airport(fid) or await any_top3_owns_bullet_factory(fid)):
             continue
         amount = _rng.randint(100, 200)
         res = await db.families.update_one(
@@ -1329,6 +1362,8 @@ async def families_my(current_user: dict = Depends(get_current_user)):
                 "points_discount_percent": 0,
                 "travel_time_reduction_seconds": 0,
             },
+            "major_property_conflict": False,
+            "bonus_warnings": [],
             "summary_lines": [],
         }
 
@@ -1506,6 +1541,8 @@ async def families_lookup(tag: Optional[str] = None, id: Optional[str] = None, c
                 "points_discount_percent": 0,
                 "travel_time_reduction_seconds": 0,
             },
+            "major_property_conflict": False,
+            "bonus_warnings": [],
             "summary_lines": [],
         }
     if fam.get("wiped"):

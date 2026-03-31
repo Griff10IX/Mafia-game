@@ -2422,7 +2422,7 @@ export default function FamilyPage() {
 
           {(() => {
             const ph = family.property_holdings ?? { airports: [], armouries: [], casinos: [] };
-            const cb = family.crew_bonuses ?? { summary_lines: [], treasury_bullets_hourly: { active: false }, airport_crew_perk: { active: false } };
+            const cb = family.crew_bonuses ?? { summary_lines: [], bonus_warnings: [], treasury_bullets_hourly: { active: false }, airport_crew_perk: { active: false } };
             const n = (ph.airports?.length || 0) + (ph.armouries?.length || 0) + (ph.casinos?.length || 0);
             return (
               <div className="rounded-lg border border-primary/15 bg-zinc-900/40 px-3 py-2.5 space-y-2">
@@ -2432,7 +2432,7 @@ export default function FamilyPage() {
                   {n > 0 && <span className="text-zinc-500 font-normal normal-case ml-auto">{n} crew holding{n !== 1 ? 's' : ''}</span>}
                 </div>
                 <p className="text-[8px] text-zinc-600 leading-snug border-b border-primary/5 pb-2">
-                  Each member may only own <span className="text-zinc-400 font-heading font-bold">one</span> major property: an airport <span className="text-zinc-500">or</span> an armoury (never both). Casinos are separate.
+                  Each member: one airport <span className="text-zinc-500">or</span> one armoury (not both). The crew may only have <span className="text-zinc-400 font-heading font-bold">one</span> of those two family-wide — one vault bonus from whichever high command holds. Casinos are separate.
                 </p>
                 {n > 0 ? (
                   <ul className="text-[10px] text-zinc-400 space-y-0.5 max-h-28 overflow-y-auto">
@@ -2449,15 +2449,18 @@ export default function FamilyPage() {
                 ) : (
                   <p className="text-[9px] text-zinc-600">No crew-owned airports, armouries, or casinos yet.</p>
                 )}
-                {(cb.summary_lines || []).length > 0 ? (
+                {(cb.summary_lines || []).length > 0 || (cb.bonus_warnings || []).length > 0 ? (
                   <div className="pt-1 border-t border-primary/10 space-y-0.5">
                     <p className="text-[9px] font-heading uppercase tracking-wider text-zinc-500 flex items-center gap-1"><Sparkles size={9} /> Bonuses</p>
+                    {(cb.bonus_warnings || []).map((line, i) => (
+                      <p key={`w-${i}`} className="text-[9px] text-amber-400/90 leading-snug pl-2 border-l border-amber-500/30">{line}</p>
+                    ))}
                     {(cb.summary_lines || []).map((line, i) => (
                       <p key={i} className="text-[9px] text-emerald-400/90 leading-snug pl-2 border-l border-emerald-500/30">{line}</p>
                     ))}
                   </div>
                 ) : (
-                  <p className="text-[9px] text-zinc-600 pt-1 border-t border-primary/10 flex items-start gap-1 leading-snug"><Plane size={10} className="shrink-0 mt-0.5 opacity-50" /> No active vault or airport crew bonuses right now. Hourly vault bullets need high command (Don, Underboss, or Consigliere) to own both an airport and an armoury — one account cannot hold both, so that is always two members. The Don can pick an airport crew perk (travel or points) when high command holds an airport.</p>
+                  <p className="text-[9px] text-zinc-600 pt-1 border-t border-primary/10 flex items-start gap-1 leading-snug"><Plane size={10} className="shrink-0 mt-0.5 opacity-50" /> No active vault or airport crew bonuses right now. Hourly vault bullets apply when high command owns the crew&apos;s airport or armoury (only one type per family). The Don can pick an airport crew perk when the family holds an airport.</p>
                 )}
               </div>
             );
