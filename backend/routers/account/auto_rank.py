@@ -741,7 +741,7 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
 # ─── Main per-user cycle (crimes + GTA + booze) ──────────────────
 # Auto rank abides the same timer rules as manual play:
 # - Crimes: only commits crimes whose user_crimes.cooldown_until has passed (per-crime cooldown from crimes collection).
-#   _commit_crime_impl also enforces cooldown and sets next cooldown_until from the crime's cooldown_seconds.
+#   commit_crime_locked serializes per user; _commit_crime_impl enforces cooldown and sets cooldown_until.
 # - GTA: only runs when gta_cooldowns shows no active cooldown. _attempt_gta_impl enforces cooldown and sets
 #   cooldown_until from the attempted option's cooldown (one attempt = all options on cooldown).
 # - OC: run_oc_heist_npc_only checks oc_cooldown_until and returns without running if on cooldown.
@@ -752,7 +752,7 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
 async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id: Optional[str] = None, bot_token: Optional[str] = None, crimes: Optional[list] = None):
     """Commit all crimes off cooldown, then one GTA (if off cooldown), then melt (if enabled), then booze if enabled. Abides all game timer rules; impls enforce cooldowns. Telegram is optional; if not set, actions still run and no notifications are sent."""
     import server as srv
-    from routers.crime.crimes import _commit_crime_impl
+    from routers.crime.crimes import commit_crime_locked
     from routers.cars.gta import _attempt_gta_impl, _melt_cars_impl, GTA_OPTIONS
     CARS = getattr(srv, "CARS", None) or []
     from middleware.security import send_telegram_to_chat
@@ -856,7 +856,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
             if not available:
                 break
             try:
-                out = await _commit_crime_impl(available[0]["id"], user)
+                out = await commit_crime_locked(available[0]["id"], user)
                 if out.success:
                     crime_success_count += 1
                     crime_total_cash += out.reward if out.reward is not None else 0

@@ -1,5 +1,6 @@
 # Crime endpoints: list crimes, commit crime
-from typing import List, Optional
+import asyncio
+from typing import Dict, List, Optional
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
 import secrets
@@ -8,7 +9,6 @@ import os
 import sys
 import logging
 from fastapi import Depends, HTTPException
-from pymongo import ReturnDocument
 
 from utils.referral_ids import (
     apply_referrer_referral_increment,
@@ -19,6 +19,18 @@ from utils.referral_ids import (
 )
 
 logger = logging.getLogger(__name__)
+
+# Serialize crime commits per user within this process (same pattern as family raid / stock buy locks).
+# Multiple API workers do not share this — use Redis Redlock or MongoDB advisory docs if you scale horizontally.
+_crime_commit_locks: Dict[str, asyncio.Lock] = {}
+_crime_commit_locks_guard = asyncio.Lock()
+
+
+async def _get_crime_commit_lock(user_id: str) -> asyncio.Lock:
+    async with _crime_commit_locks_guard:
+        if user_id not in _crime_commit_locks:
+            _crime_commit_locks[user_id] = asyncio.Lock()
+        return _crime_commit_locks[user_id]
 
 
 # Progress bar: 25-92%. Success +6-8%. Fail -1-3%; once you've hit max, floor is 77% (never drop more than 15% from max)
@@ -402,9 +414,15 @@ async def get_crimes(current_user: dict = Depends(get_current_user)):
     return result
 
 
+async def commit_crime_locked(crime_id: str, current_user: dict) -> CommitCrimeResponse:
+    lock = await _get_crime_commit_lock(current_user["id"])
+    async with lock:
+        return await _commit_crime_impl(crime_id, current_user)
+
+
 async def commit_crime(crime_id: str, current_user: dict = Depends(get_current_user_verified)):
     try:
-        return await _commit_crime_impl(crime_id, current_user)
+        return await commit_crime_locked(crime_id, current_user)
     except HTTPException:
         raise
     except Exception as e:
@@ -493,15 +511,15 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
     cooldown_until = (now + timedelta(seconds=_cd_seconds)).isoformat()
     now_iso = now.isoformat()
     uid = current_user["id"]
-    # One row per (user, crime). Never upsert on the cooldown $or filter: if nothing matched
-    # while on cooldown, Mongo upserted a *second* row (index was not unique), and return None
-    # was treated as "go ahead" — parallel commits all slipped through.
+    # find_one_and_update only updated one document. Duplicate user_crimes rows (from the old
+    # upsert bug) each looked "off cooldown" in parallel — four rows => four commits. Claim with
+    # update_many so every matching row gets the new cooldown in one write; only one request wins.
     await db.user_crimes.update_one(
         {"user_id": uid, "crime_id": crime_id},
         {"$setOnInsert": {"attempts": 0, "successes": 0}},
         upsert=True,
     )
-    user_crime = await db.user_crimes.find_one_and_update(
+    claim = await db.user_crimes.update_many(
         {
             "user_id": uid,
             "crime_id": crime_id,
@@ -512,12 +530,13 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
             ],
         },
         {"$set": {"cooldown_until": cooldown_until}},
-        projection={"_id": 0},
-        upsert=False,
-        return_document=ReturnDocument.BEFORE,
     )
-    if user_crime is None:
+    if claim.matched_count == 0:
         raise HTTPException(status_code=400, detail="Crime on cooldown")
+    user_crime = await db.user_crimes.find_one(
+        {"user_id": uid, "crime_id": crime_id},
+        {"_id": 0},
+    )
     
     # PROGRESS BAR: 10-92%. Success +6-8%. Fail -1-3%; once hit 92%, floor is 77%
     stored = (user_crime or {}).get("progress")
@@ -765,13 +784,12 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
     }
     if progress_max is not None:
         set_fields["progress_max"] = progress_max
-    await db.user_crimes.update_one(
+    # Absolute counts so update_many keeps duplicate rows in sync (no $inc across N dupes).
+    set_fields["attempts"] = crime_attempts + 1
+    set_fields["successes"] = int((user_crime or {}).get("successes", 0) or 0) + (1 if success else 0)
+    await db.user_crimes.update_many(
         {"user_id": current_user["id"], "crime_id": crime_id},
-        {
-            "$set": set_fields,
-            "$inc": {"attempts": 1, "successes": 1 if success else 0}
-        },
-        upsert=True,
+        {"$set": set_fields},
     )
     # Lightweight per-crime event for analytics and anti-cheat (no public exposure).
     # Stored as a single small document per attempt.

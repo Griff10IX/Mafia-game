@@ -9,6 +9,7 @@ from typing import List, Optional, Dict
 from fastapi import Depends, HTTPException, Query
 from bson.objectid import ObjectId
 from pydantic import BaseModel
+from pymongo import ReturnDocument
 
 from utils.referral_ids import (
     apply_referrer_referral_increment,
@@ -760,19 +761,46 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
     family_id = user.get("family_id")
     in_war = family_id and await _family_in_active_war(family_id)
 
+    # Bullets melt: claim cooldown atomically before deleting cars (parallel POSTs used to share the same read).
+    claimed_bullets_melt = False
+    prev_user_before_bullets_claim = None
+
     if action == "bullets":
-        user_doc = await db.users.find_one(
-            {"id": user["id"]},
-            {"_id": 0, "melt_bullets_cooldown_until": 1, "melt_until": 1},
-        )
-        cooldown_until = _parse_melt_cooldown((user_doc or {}).get("melt_bullets_cooldown_until"))
-        melt_until = _parse_melt_cooldown((user_doc or {}).get("melt_until"))
-        melt_token_active = bool(melt_until and now < melt_until)
-        if cooldown_until and now < cooldown_until:
-            secs = int((cooldown_until - now).total_seconds())
-            return {"success": False, "cooldown": True, "detail": f"Melt for bullets on cooldown. Next melt in {secs}s."}
         batch_limit = user.get("garage_batch_limit", DEFAULT_GARAGE_BATCH_LIMIT)
         limit = min(batch_limit, len(car_ids))
+        now_iso = now.isoformat()
+        # Upper-bound CD so the claim blocks other requests until this melt finishes; final $set may shorten.
+        pessimistic_until = (now + timedelta(seconds=MELT_BULLETS_COOLDOWN_SECONDS * max(1, limit))).isoformat()
+        prev_user_before_bullets_claim = await db.users.find_one_and_update(
+            {
+                "id": user["id"],
+                "$or": [
+                    {"melt_bullets_cooldown_until": {"$exists": False}},
+                    {"melt_bullets_cooldown_until": None},
+                    {"melt_bullets_cooldown_until": {"$lte": now_iso}},
+                ],
+            },
+            {"$set": {"melt_bullets_cooldown_until": pessimistic_until}},
+            projection={"_id": 0, "melt_bullets_cooldown_until": 1, "melt_until": 1},
+            return_document=ReturnDocument.BEFORE,
+        )
+        if prev_user_before_bullets_claim is None:
+            existing = await db.users.find_one(
+                {"id": user["id"]},
+                {"_id": 0, "melt_bullets_cooldown_until": 1},
+            )
+            cd = _parse_melt_cooldown((existing or {}).get("melt_bullets_cooldown_until"))
+            if cd and now < cd:
+                secs = int((cd - now).total_seconds())
+                return {
+                    "success": False,
+                    "cooldown": True,
+                    "detail": f"Melt for bullets on cooldown. Next melt in {secs}s.",
+                }
+            return {"success": False, "cooldown": True, "detail": "Melt for bullets on cooldown."}
+        claimed_bullets_melt = True
+        melt_until = _parse_melt_cooldown(prev_user_before_bullets_claim.get("melt_until"))
+        melt_token_active = bool(melt_until and now < melt_until)
     else:
         batch_limit = user.get("garage_batch_limit", DEFAULT_GARAGE_BATCH_LIMIT)
         limit = min(batch_limit, len(car_ids))
@@ -1024,6 +1052,18 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
             "total_value": total_value,
             "message": f"Scrapped {deleted_count} car(s) for ${total_value:,}",
         }
+    if claimed_bullets_melt and prev_user_before_bullets_claim is not None:
+        old_cd = prev_user_before_bullets_claim.get("melt_bullets_cooldown_until")
+        if old_cd:
+            await db.users.update_one(
+                {"id": user["id"]},
+                {"$set": {"melt_bullets_cooldown_until": old_cd}},
+            )
+        else:
+            await db.users.update_one(
+                {"id": user["id"]},
+                {"$unset": {"melt_bullets_cooldown_until": ""}},
+            )
     return {"success": False, "message": "No cars were processed"}
 
 
