@@ -7,6 +7,8 @@ import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import {
   GAME_PASS_DEAD_ALIVE_FINE_PRINT,
+  GAME_PASS_DURATION_FINE_PRINT,
+  GAME_PASS_DURATION_LABEL,
   GAME_PASS_PACKAGE_ID,
   GAME_PASS_POINTS_PRICE,
   GAME_PASS_PRICE_GBP,
@@ -34,6 +36,46 @@ function microTierToThresholdRp(microTier) {
   const t = Number(microTier || 0);
   if (!Number.isFinite(t) || t <= 0) return 0;
   return Math.max(0, Math.floor(t * MICRO_TIER_STEP_RP));
+}
+
+function ordinalSuffix(n) {
+  const j = n % 10;
+  const k = n % 100;
+  if (j === 1 && k !== 11) return 'st';
+  if (j === 2 && k !== 12) return 'nd';
+  if (j === 3 && k !== 13) return 'rd';
+  return 'th';
+}
+
+/** e.g. Tuesday, 9th August 2026 — 12:00 (BST) — local timezone */
+function formatGamePassEndDateTime(d) {
+  const date = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(date.getTime())) return '—';
+  const weekday = date.toLocaleDateString('en-GB', { weekday: 'long' });
+  const dayNum = date.getDate();
+  const mon = date.toLocaleDateString('en-GB', { month: 'long' });
+  const year = date.getFullYear();
+  const time = date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
+  const tz =
+    new Intl.DateTimeFormat('en-GB', { timeZoneName: 'short' }).formatToParts(date).find((p) => p.type === 'timeZoneName')
+      ?.value || '';
+  const line = `${weekday}, ${dayNum}${ordinalSuffix(dayNum)} ${mon} ${year} — ${time}`;
+  return tz ? `${line} (${tz})` : line;
+}
+
+function formatCountdown(ms) {
+  if (ms <= 0) return 'Expired';
+  const totalSec = Math.floor(ms / 1000);
+  const s = totalSec % 60;
+  const m = Math.floor(totalSec / 60) % 60;
+  const h = Math.floor(totalSec / 3600) % 24;
+  const d = Math.floor(totalSec / 86400);
+  const parts = [];
+  if (d > 0) parts.push(`${d}d`);
+  if (d > 0 || h > 0) parts.push(`${h}h`);
+  if (d > 0 || h > 0 || m > 0) parts.push(`${m}m`);
+  parts.push(`${s}s`);
+  return parts.join(' ');
 }
 
 // Reward math / deterministic bucket selection must stay in sync with backend `game_pass_micro_rewards.py`.
@@ -393,6 +435,7 @@ export default function GamePass() {
   const [releaseSoftLaunch, setReleaseSoftLaunch] = useState(null);
   const [selectedBandIndex, setSelectedBandIndex] = useState(null);
   const [selectedMicroTier, setSelectedMicroTier] = useState(null);
+  const [tickMs, setTickMs] = useState(() => Date.now());
 
   const fetchData = useCallback(async () => {
     try {
@@ -411,7 +454,17 @@ export default function GamePass() {
     fetchData();
   }, [fetchData]);
 
-  const nowTs = Date.now();
+  const expiryIso = user?.rank_xp_pass_token_expires_at;
+  useEffect(() => {
+    if (!expiryIso) return undefined;
+    const end = new Date(expiryIso).getTime();
+    if (Number.isNaN(end) || end <= Date.now()) return undefined;
+    const id = setInterval(() => setTickMs(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [expiryIso]);
+
+  // When a pass expiry exists, drive "now" off tickMs so VIP/token state flips with the countdown.
+  const nowTs = expiryIso ? tickMs : Date.now();
   const passTokensHeld = Number(user?.rank_xp_pass_tokens ?? 0);
   const vipClaimed = user?.rank_xp_pass_rewards_granted === true;
   const pointsBalance = Number(user?.points ?? 0);
@@ -443,7 +496,10 @@ export default function GamePass() {
       ? 'VIP (Token Ready)'
       : 'Free';
 
-  const closeDate = passIsUnactivatedValid ? passExpiryUntil : null;
+  const passExpiryEndMs =
+    passExpiryUntil && !Number.isNaN(passExpiryUntil.getTime()) ? passExpiryUntil.getTime() : null;
+  const passExpiryRemainingMs = passExpiryEndMs != null ? passExpiryEndMs - tickMs : null;
+  const showGamePassExpiryPanel = Boolean(expiryIso && passExpiryUntil && !Number.isNaN(passExpiryUntil.getTime()));
 
   useEffect(() => {
     // Default selection = current band. Keeps selection stable once picked.
@@ -658,6 +714,10 @@ export default function GamePass() {
               </p>
 
               <p className="text-[8px] text-zinc-500/90 font-heading leading-relaxed border-t border-primary/10 pt-2">
+                <span className="text-zinc-400 font-bold">Duration: {GAME_PASS_DURATION_LABEL}</span> from purchase. {GAME_PASS_DURATION_FINE_PRINT}
+              </p>
+
+              <p className="text-[8px] text-zinc-500/90 font-heading leading-relaxed border-t border-primary/10 pt-2">
                 {GAME_PASS_DEAD_ALIVE_FINE_PRINT}
               </p>
 
@@ -672,20 +732,31 @@ export default function GamePass() {
                 <p className="text-[10px] text-emerald-400 font-heading">Rewards claimed.</p>
               )}
 
-              {passIsUnactivatedValid && passExpiryUntil && (
-                <p className="text-[10px] text-primary font-heading">
-                  Token ready. Expires {passExpiryUntil?.toLocaleDateString('en-GB')}.
-                </p>
+              {showGamePassExpiryPanel && (
+                <div className="rounded-md border border-primary/30 bg-zinc-950/40 px-2.5 py-2.5 space-y-1.5">
+                  <div className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider">Game Pass end date</div>
+                  <div className="text-[11px] font-heading font-bold text-primary leading-snug">{formatGamePassEndDateTime(passExpiryUntil)}</div>
+                  {passExpiryRemainingMs != null && passExpiryRemainingMs > 0 ? (
+                    <>
+                      <div className="text-[10px] font-heading text-emerald-300/95">
+                        Time remaining:{' '}
+                        <span className="text-emerald-200 font-bold tabular-nums tracking-tight">{formatCountdown(passExpiryRemainingMs)}</span>
+                      </div>
+                      {passIsUnactivatedValid && !vipClaimed && (
+                        <p className="text-[9px] text-zinc-400 font-heading">Activate your token before this time.</p>
+                      )}
+                      {vipGrantingActive && (
+                        <p className="text-[9px] text-zinc-400 font-heading">VIP tier rewards run until this time.</p>
+                      )}
+                    </>
+                  ) : (
+                    <div className="text-[10px] font-heading text-amber-400/95">This Game Pass window has ended.</div>
+                  )}
+                </div>
               )}
 
               {passIsUnactivatedExpired && (
                 <p className="text-[10px] text-amber-400 font-heading">Previous token expired — you can buy again.</p>
-              )}
-
-              {closeDate && (
-                <p className="text-[10px] text-mutedForeground font-heading">
-                  Close Date: <span className="text-primary font-bold">{closeDate.toLocaleDateString('en-GB')}</span>
-                </p>
               )}
             </div>
             <div className="store-art-line text-primary mx-3" />

@@ -163,11 +163,12 @@ async def _state_head_casino_week_stats(state_name: str):
     return result
 CREW_OC_COOLDOWN_HOURS_REDUCED = 6
 CREW_OC_REWARD_RP = 80
-CREW_OC_REWARD_CASH = 10_000  # 75% reduction
-CREW_OC_REWARD_BULLETS = 25  # 75% reduction
-CREW_OC_REWARD_POINTS = 3
+CREW_OC_REWARD_CASH = 250_000
+CREW_OC_REWARD_BULLETS = 500
+CREW_OC_REWARD_POINTS_MIN = 5
+CREW_OC_REWARD_POINTS_MAX = 25  # rolled per crew member on commit
 CREW_OC_REWARD_BOOZE = 10
-CREW_OC_TREASURY_LUMP = 50_000  # 75% reduction
+CREW_OC_TREASURY_LUMP = 500_000
 
 FAMILY_RACKET_RAID_SUCCESS_MESSAGES = [
     "Raid successful! Took ${amount:,} from {family_name}'s {racket_name}.",
@@ -2710,24 +2711,41 @@ async def families_crew_oc_commit(current_user: dict = Depends(get_current_user)
     living_ids = [u["id"] for u in living]
     if not living_ids:
         raise HTTPException(status_code=400, detail="No living crew members")
+    fam_name = (fam.get("name") or fam.get("tag") or "Crew").strip() or "Crew"
     for u in living:
         uid = u["id"]
         rp_before = int(u.get("rank_points") or 0)
-        await db.users.update_one({"id": uid}, {"$inc": {"rank_points": CREW_OC_REWARD_RP, "money": CREW_OC_REWARD_CASH, "bullets": CREW_OC_REWARD_BULLETS, "respect_points": CREW_OC_REWARD_POINTS, "booze": CREW_OC_REWARD_BOOZE}})
-        if CREW_OC_REWARD_POINTS:
-            await log_respect_earned(uid, CREW_OC_REWARD_POINTS, "crew_oc")
+        respect_roll = _rng.randint(CREW_OC_REWARD_POINTS_MIN, CREW_OC_REWARD_POINTS_MAX)
+        await db.users.update_one(
+            {"id": uid},
+            {
+                "$inc": {
+                    "rank_points": CREW_OC_REWARD_RP,
+                    "money": CREW_OC_REWARD_CASH,
+                    "bullets": CREW_OC_REWARD_BULLETS,
+                    "respect_points": respect_roll,
+                    "booze": CREW_OC_REWARD_BOOZE,
+                }
+            },
+        )
+        if respect_roll:
+            await log_respect_earned(uid, respect_roll, "crew_oc")
         try:
             await maybe_process_rank_up(uid, rp_before, CREW_OC_REWARD_RP, u.get("username", ""))
         except Exception:
             logging.exception("Rank-up notification (Crew OC)")
+        await send_notification(
+            uid,
+            "Crew OC committed",
+            f"{fam_name} committed the Organised Crime. You received +{CREW_OC_REWARD_RP} RP, +${CREW_OC_REWARD_CASH:,} cash, +{CREW_OC_REWARD_BULLETS} bullets, +{respect_roll} respect points, +{CREW_OC_REWARD_BOOZE} booze. Family Treasury +${CREW_OC_TREASURY_LUMP:,}.",
+            "reward",
+            category="crew_oc",
+        )
     await db.families.update_one({"id": family_id}, {"$inc": {"treasury": CREW_OC_TREASURY_LUMP}, "$set": {"crew_oc_cooldown_until": new_cooldown_until.isoformat()}, "$unset": {"crew_oc_forum_topic_id": ""}})
     await db.family_crew_oc_applications.delete_many({"family_id": family_id})
     topic_id = fam.get("crew_oc_forum_topic_id")
     if topic_id:
         await db.forum_topics.update_one({"id": topic_id}, {"$set": {"is_locked": True}})
-    fam_name = (fam.get("name") or fam.get("tag") or "Crew").strip() or "Crew"
-    for uid in living_ids:
-        await send_notification(uid, "Crew OC committed", f"{fam_name} committed the Organised Crime. You received +{CREW_OC_REWARD_RP} RP, +${CREW_OC_REWARD_CASH:,} cash, +{CREW_OC_REWARD_BULLETS} bullets, +{CREW_OC_REWARD_POINTS} respect points, +{CREW_OC_REWARD_BOOZE} booze. Family Treasury +${CREW_OC_TREASURY_LUMP:,}.", "reward", category="crew_oc")
     _invalidate_my_cache(current_user["id"])
     return {"message": "Crew OC committed. All crew rewarded.", "crew_oc_cooldown_until": new_cooldown_until.isoformat(), "cooldown_hours": cooldown_hours}
 

@@ -93,6 +93,32 @@ function RaidNextRaidCountdown({ nextRaidAt }) {
   );
 }
 
+/** Compact nav hint under “Crew OC” tab label. */
+function CrewOCNavCountdown({ isoUntil }) {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!isoUntil) return undefined;
+    const end = new Date(isoUntil).getTime();
+    if (!Number.isFinite(end) || end <= Date.now()) return undefined;
+    const id = setInterval(() => setTick((x) => x + 1), 1000);
+    return () => clearInterval(id);
+  }, [isoUntil]);
+  const text = formatRaidCountdown(isoUntil);
+  const ready = !isoUntil || !text || text === 'Ready';
+  return (
+    <span className="flex items-center gap-0.5 max-w-[5.5rem] sm:max-w-none whitespace-nowrap">
+      {!ready && <Clock size={9} className="shrink-0 text-amber-400/80" />}
+      <span
+        className={`text-[8px] leading-none font-heading font-bold uppercase tracking-tight ${
+          ready ? 'text-emerald-400/95' : 'text-amber-400/95'
+        }`}
+      >
+        {ready ? 'OC ready' : text}
+      </span>
+    </span>
+  );
+}
+
 const isRacketReadyAt = (isoUntil) => {
   if (!isoUntil) return true;
   const t = new Date(isoUntil).getTime();
@@ -154,19 +180,34 @@ const StatCard = ({ label, value, highlight, icon, accent: accentColor, delay = 
 // TAB BUTTON — sleek underline tabs
 // ============================================================================
 
-const Tab = ({ active, onClick, children, icon }) => (
+const Tab = ({ active, onClick, children, icon, subline }) => (
   <button
     type="button"
     onClick={onClick}
-    className={`flex items-center gap-1 px-2 sm:px-2.5 py-2.5 min-h-[44px] sm:min-h-0 text-[10px] font-heading font-bold uppercase tracking-wider transition-all border-b-2 whitespace-nowrap touch-manipulation shrink-0 snap-start ${
+    className={`flex items-center gap-1 px-2 sm:px-2.5 py-2 sm:py-2.5 min-h-[44px] sm:min-h-0 text-[10px] font-heading font-bold uppercase tracking-wider transition-all border-b-2 touch-manipulation shrink-0 snap-start ${
+      subline ? 'whitespace-normal' : 'whitespace-nowrap'
+    } ${
       active
         ? 'text-primary border-primary bg-primary/5'
         : 'text-zinc-500 border-transparent hover:text-zinc-300 hover:border-zinc-600'
     }`}
   >
-    {icon}
-    <span className="hidden sm:inline">{children}</span>
-    <span className="sm:hidden">{children}</span>
+    {subline ? (
+      <span className="flex flex-col items-start gap-0.5 min-w-0 text-left">
+        <span className="flex items-center gap-1 whitespace-nowrap">
+          {icon}
+          <span className="hidden sm:inline">{children}</span>
+          <span className="sm:hidden">{children}</span>
+        </span>
+        {subline}
+      </span>
+    ) : (
+      <>
+        {icon}
+        <span className="hidden sm:inline">{children}</span>
+        <span className="sm:hidden">{children}</span>
+      </>
+    )}
   </button>
 );
 
@@ -1734,10 +1775,21 @@ const CrewOCTab = ({
 }) => {
   const canCommit = ['boss', 'underboss', 'capo'].includes(myRole?.toLowerCase());
   const cooldownHours = committerHasTimer ? 6 : 8;
+  const [, setCrewOcTick] = useState(0);
+  useEffect(() => {
+    const iso = family?.crew_oc_cooldown_until;
+    if (!iso) return undefined;
+    const end = new Date(iso).getTime();
+    if (!Number.isFinite(end) || end <= Date.now()) return undefined;
+    const id = setInterval(() => setCrewOcTick((x) => x + 1), 1000);
+    return () => clearInterval(id);
+  }, [family?.crew_oc_cooldown_until]);
+
   const now = Date.now();
   const until = family?.crew_oc_cooldown_until ? new Date(family.crew_oc_cooldown_until).getTime() : 0;
   const onCooldown = until > now;
-  const timeLeft = onCooldown ? formatTimeLeft(family.crew_oc_cooldown_until) : 'Ready';
+  const liveCountdown = formatRaidCountdown(family?.crew_oc_cooldown_until);
+  const crewOcReady = !family?.crew_oc_cooldown_until || !liveCountdown || liveCountdown === 'Ready';
   const pending = (crewOCApplications || []).filter((a) => a.status === 'pending');
   const accepted = (crewOCApplications || []).filter((a) => a.status === 'accepted');
 
@@ -1787,10 +1839,12 @@ const CrewOCTab = ({
         </div>
       )}
 
-      {/* Cooldown & commit */}
-      <div className="flex items-center justify-between px-2.5 sm:px-3 py-2 rounded-lg bg-zinc-800/30 border border-zinc-700/30">
-        <span className="text-[10px] text-zinc-500 font-heading flex items-center gap-1"><Clock size={10} /> Next commit</span>
-        <span className={`text-xs font-heading font-bold ${onCooldown ? 'text-amber-400' : 'text-emerald-400'}`}>{timeLeft}</span>
+      {/* Cooldown & commit — live countdown (matches crew_oc_cooldown_until) */}
+      <div className="flex items-center justify-between px-2.5 sm:px-3 py-2 rounded-lg bg-zinc-800/30 border border-zinc-700/30 gap-2">
+        <span className="text-[10px] text-zinc-500 font-heading flex items-center gap-1 shrink-0"><Clock size={10} /> Next commit</span>
+        <span className={`text-xs font-heading font-bold text-right min-w-0 ${crewOcReady ? 'text-emerald-400' : 'text-amber-400'}`}>
+          {crewOcReady ? 'Ready' : <span className="font-mono tabular-nums tracking-tight">{liveCountdown}</span>}
+        </span>
       </div>
 
       {canCommit ? (
@@ -1800,7 +1854,7 @@ const CrewOCTab = ({
               ? 'opacity-40 cursor-not-allowed bg-zinc-800 text-zinc-500 border-zinc-700'
               : 'bg-gradient-to-b from-primary/30 to-primary/10 border-primary/50 text-primary hover:from-primary/40 hover:shadow-lg hover:shadow-primary/10'
           }`}>
-          {committing ? 'Committing...' : onCooldown ? `Cooldown ${timeLeft}` : 'Commit Crew OC'}
+          {committing ? 'Committing...' : onCooldown ? `Cooldown ${liveCountdown}` : 'Commit Crew OC'}
         </button>
       ) : (
         <p className="text-[10px] text-zinc-500 font-heading">Only Boss, Underboss, or Capo can commit.</p>
@@ -2525,7 +2579,14 @@ export default function FamilyPage() {
             <div className="flex overflow-x-auto overflow-y-hidden scrollbar-hide scroll-smooth border-b border-zinc-700/40 bg-zinc-900/70 snap-x snap-mandatory">
               <Tab active={activeTab === 'rackets'} onClick={() => setActiveTab('rackets')} icon={<TrendingUp size={10} />}>Rackets</Tab>
               <Tab active={activeTab === 'raid'} onClick={() => setActiveTab('raid')} icon={<Swords size={10} />}>Hit Jobs</Tab>
-              <Tab active={activeTab === 'crewoc'} onClick={() => setActiveTab('crewoc')} icon={<Crosshair size={10} />}>Crew OC</Tab>
+              <Tab
+                active={activeTab === 'crewoc'}
+                onClick={() => setActiveTab('crewoc')}
+                icon={<Crosshair size={10} />}
+                subline={<CrewOCNavCountdown isoUntil={family?.crew_oc_cooldown_until} />}
+              >
+                Crew OC
+              </Tab>
               <Tab active={activeTab === 'treasury'} onClick={() => setActiveTab('treasury')} icon={<DollarSign size={10} />}>Vault</Tab>
               {family?.head_of_state && (
                 <Tab active={activeTab === 'statehead'} onClick={() => setActiveTab('statehead')} icon={<MapPin size={10} />}>Head of state</Tab>
@@ -2540,7 +2601,7 @@ export default function FamilyPage() {
               {activeTab === 'rackets' && <RacketsTab rackets={rackets} config={config} canUpgrade={canUpgradeRacket} vaultAndRacketsLocked={vaultAndRacketsLocked} onCollect={collectRacket} onCollectAll={collectAllRackets} collectAllLoading={collectAllRacketsLoading} readyCount={readyRackets} onUpgrade={upgradeRacket} onUnlock={unlockRacket} event={event} eventsEnabled={eventsEnabled} />}
               {activeTab === 'crewoc' && (
                 <CrewOCTab
-                  family={family} myRole={myRole} crewOCCooldownUntil={family?.crew_oc_cooldown_until}
+                  family={family} myRole={myRole}
                   committerHasTimer={myFamily?.crew_oc_committer_has_timer} crewOCJoinFee={family?.crew_oc_join_fee}
                   crewOCAutoAccept={family?.crew_oc_auto_accept} crewOCForumTopicId={family?.crew_oc_forum_topic_id}
                   crewOCApplications={myFamily?.crew_oc_applications}
