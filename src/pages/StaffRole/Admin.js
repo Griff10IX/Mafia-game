@@ -566,6 +566,7 @@ export default function Admin() {
   const [resetOcTimersLoading, setResetOcTimersLoading] = useState(false);
   const [fixLoginFieldsLoading, setFixLoginFieldsLoading] = useState(false);
   const [clearOcInvitesLoading, setClearOcInvitesLoading] = useState(false);
+  const [clearCrimeTimersLoading, setClearCrimeTimersLoading] = useState(false);
   const [clearMinigameRecordsLoading, setClearMinigameRecordsLoading] = useState(false);
   const [minigameLbStripLoading, setMinigameLbStripLoading] = useState(false);
   const [minigameLbAddLoading, setMinigameLbAddLoading] = useState(false);
@@ -2952,6 +2953,18 @@ export default function Admin() {
       toast.success(res.data?.message || 'OC invites cleared');
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
     finally { setClearOcInvitesLoading(false); }
+  };
+
+  const handleClearUserCrimeTimers = async () => {
+    const username = (formData.targetUsername || '').trim();
+    if (!username) { toast.error('Enter a username'); return; }
+    if (!window.confirm(`Clear all crime cooldown timers for ${username}?`)) return;
+    setClearCrimeTimersLoading(true);
+    try {
+      const res = await api.post(`/admin/crimes/reset-timers?target_username=${encodeURIComponent(username)}`);
+      toast.success(res.data?.message || 'Crime timers cleared');
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+    finally { setClearCrimeTimersLoading(false); }
   };
 
   const handleClearUserMinigameRecords = async () => {
@@ -6298,6 +6311,12 @@ export default function Admin() {
             <ActionRow icon={Coins} label="Remove points" description="Deducts up to this amount (clamped to current balance). Uses target username above.">
               <FormattedNumberInput value={formData.pointsRemove != null ? String(formData.pointsRemove) : ''} onChange={(raw) => setFormData((prev) => ({ ...prev, pointsRemove: raw === '' ? 0 : parseInt(raw, 10) }))} className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm" />
               <BtnDanger onClick={handleRemovePoints}>Remove</BtnDanger>
+            </ActionRow>
+
+            <ActionRow icon={Clock} label="Reset crime cooldown timers" description="Clears all crime timers for target username above.">
+              <BtnDanger onClick={handleClearUserCrimeTimers} disabled={clearCrimeTimersLoading}>
+                {clearCrimeTimersLoading ? 'Clearing…' : 'Clear timers'}
+              </BtnDanger>
             </ActionRow>
 
             <ActionRow

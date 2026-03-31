@@ -3134,6 +3134,31 @@ def register(router):
             "ttt_deleted_count": ttt_res.deleted_count,
         }
 
+    @router.post("/admin/crimes/reset-timers")
+    async def admin_crimes_reset_timers(
+        target_username: str = Query(..., description="Username to clear crime cooldown timers for"),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Clear all crime cooldown timers for one user by removing user_crimes.cooldown_until."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        raw = (target_username or "").strip()
+        if not raw:
+            raise HTTPException(status_code=400, detail="target_username required")
+        username_pattern = _username_pattern(raw)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        res = await db.user_crimes.update_many(
+            {"user_id": target["id"]},
+            {"$unset": {"cooldown_until": ""}},
+        )
+        return {
+            "message": f"Cleared crime cooldown timers for {target.get('username') or raw}.",
+            "modified_count": int(res.modified_count or 0),
+        }
+
     @router.post("/admin/force-online")
     async def admin_force_online(current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
