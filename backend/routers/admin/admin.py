@@ -2636,6 +2636,88 @@ def register(router):
             **detail,
         }
 
+    @router.get("/admin/leaderboards/user-scores")
+    async def admin_leaderboard_user_scores(
+        target_username: str = Query(..., min_length=1, description="Exact or case-insensitive username match"),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Preview weekly (Mon UTC) vs all-time values that feed /leaderboards/top for one user. Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from utils.admin_leaderboard_user import get_user_leaderboard_scores
+
+        username_pattern = _username_pattern((target_username or "").strip())
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        scores = await get_user_leaderboard_scores(db, user_id=target["id"])
+        return scores
+
+    class AdminLeaderboardAdjustBody(BaseModel):
+        target_username: str = Field(..., min_length=1)
+        metric: str = Field(..., description="crimes | gta | jail_busts | kills")
+        period: str = Field(..., description="weekly | alltime")
+        remove_count: int = Field(..., ge=1, le=50_000)
+        dry_run: bool = Field(False)
+
+    @router.post("/admin/leaderboards/adjust-user")
+    async def admin_leaderboard_adjust_user(
+        body: AdminLeaderboardAdjustBody,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Remove oldest N event rows for a user (weekly window or all-time); sync users.* counters for successes where applicable. Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from utils.admin_leaderboard_user import adjust_user_leaderboard_metric
+
+        username_pattern = _username_pattern((body.target_username or "").strip())
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = target["id"]
+        try:
+            result = await adjust_user_leaderboard_metric(
+                db,
+                user_id=uid,
+                metric=body.metric,
+                period=body.period,
+                remove_count=body.remove_count,
+                dry_run=body.dry_run,
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+        if not body.dry_run and (result.get("deleted_count") or 0) > 0:
+            leaderboard_module.invalidate_leaderboard_cache()
+            try:
+                await srv.log_activity(
+                    current_user.get("id") or "",
+                    current_user.get("username") or "?",
+                    "admin_leaderboard_adjust",
+                    {
+                        "target_user_id": uid,
+                        "target_username": target.get("username"),
+                        "metric": body.metric,
+                        "period": body.period,
+                        "remove_count": body.remove_count,
+                        "deleted_count": result.get("deleted_count"),
+                        "user_counter_delta": result.get("user_counter_delta"),
+                    },
+                )
+            except Exception:
+                pass
+
+        return {
+            "message": (
+                f"Dry run: would remove {result.get('documents_matched', 0)} document(s)"
+                if body.dry_run
+                else f"Removed {result.get('deleted_count', 0)} document(s) for {target.get('username')}"
+            ),
+            "user_id": uid,
+            "username": target.get("username"),
+            **result,
+        }
+
     @router.post("/admin/leaderboards/reset-weekly-booze-profit")
     async def admin_reset_weekly_booze_profit(current_user: dict = Depends(get_current_user)):
         """

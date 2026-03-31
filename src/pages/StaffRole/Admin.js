@@ -188,6 +188,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Kill Player', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['kill', 'death', 'player'] },
   { label: 'Revive Player', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['revive', 'resurrect', 'alive'] },
   { label: 'User Details', categoryId: 'admin-players', collapseKey: 'userDetails', keywords: ['user', 'details', 'info', 'profile', 'jail', 'bust', 'reward'] },
+  { label: 'User give / take & leaderboards', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['leaderboard', 'adjust', 'strip', 'username', 'crimes', 'scores', 'gta', 'busts', 'kills', 'minigame', 'money', 'points', 'respect', 'bullets', 'weekly', 'alltime', 'preview', 'partial'] },
   { label: 'Referrals & prereg heal', categoryId: 'admin-players', collapseKey: 'referralsReport', keywords: ['referral', 'referrer', 'referee', 'invite', 'earnings', 'ref', 'heal', 'prereg', 'backfill', 'manual', 'assign', 'link', 'remove', 'unlink', 'clear'] },
   { label: 'Respect points log', categoryId: 'admin-players', collapseKey: 'respectPointsLog', keywords: ['respect', 'points', 'log', 'earned', 'audit', 'player'] },
   { label: 'Gambling Log', categoryId: 'admin-logs', collapseKey: 'gamblingLog', keywords: ['gambling', 'log', 'casino', 'bet'] },
@@ -258,9 +259,9 @@ const SEARCHABLE_TOOLS = [
   { label: 'Clear All Searches', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['clear', 'searches', 'delete'], adminOnly: true },
   { label: 'Fix login fields (user)', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['login', 'fix', 'repair', 'sessions', 'ip', 'lockout'] },
   { label: 'Clear OC invites (user)', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['oc', 'organised', 'crime', 'invite', 'clear', 'user'] },
-  { label: 'Clear minigame records (user)', categoryId: 'admin-testing', collapseKey: 'minigameLbAdmin', keywords: ['minigame', 'records', 'clear', 'user', 'scores'], adminOnly: true },
-  { label: 'Minigame weekly leaderboard strip/add', categoryId: 'admin-testing', collapseKey: 'minigameLbAdmin', keywords: ['minigame', 'leaderboard', 'weekly', 'strip', 'add', 'score', 'flappy', 'gauntlet'], adminOnly: true },
-  { label: 'Main leaderboards strip (respect melt stock booze)', categoryId: 'admin-testing', collapseKey: 'mainLbStrip', keywords: ['leaderboard', 'weekly', 'respect', 'melt', 'stock', 'booze', 'strip', 'top 10'], adminOnly: true },
+  { label: 'Clear minigame records (user)', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['minigame', 'records', 'clear', 'user', 'scores'], adminOnly: true },
+  { label: 'Minigame weekly leaderboard strip/add', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['minigame', 'leaderboard', 'weekly', 'strip', 'add', 'score', 'flappy', 'gauntlet'], adminOnly: true },
+  { label: 'Main leaderboards strip (respect melt stock booze)', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['leaderboard', 'weekly', 'respect', 'melt', 'stock', 'booze', 'strip', 'top 10'], adminOnly: true },
   { label: 'Reset OC Timers', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['oc', 'organised', 'crime', 'timer'] },
   { label: 'Reset Daily Rewards Timer', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['daily', 'rewards', 'timer', 'rps'] },
   { label: 'Bodyguard Tools', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'robot', 'generate'] },
@@ -305,8 +306,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, ...parsed };
-  } catch { return { referralsReport: false }; }
+    return { referralsReport: false, userAdjustHub: true, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true }; }
 }
 
 function saveCollapsed(state) {
@@ -579,6 +580,15 @@ export default function Admin() {
   const [mainLbGta, setMainLbGta] = useState(false);
   const [mainLbJail, setMainLbJail] = useState(false);
   const [mainLbResetBoozeLoading, setMainLbResetBoozeLoading] = useState(false);
+  const [userLbScores, setUserLbScores] = useState(null);
+  const [userLbScoresLoading, setUserLbScoresLoading] = useState(false);
+  const [userLbAdjustMetric, setUserLbAdjustMetric] = useState('crimes');
+  const [userLbAdjustPeriod, setUserLbAdjustPeriod] = useState('weekly');
+  const [userLbAdjustRemoveCount, setUserLbAdjustRemoveCount] = useState('10');
+  const [userLbAdjustDryRun, setUserLbAdjustDryRun] = useState(false);
+  const [userLbAdjustLoading, setUserLbAdjustLoading] = useState(false);
+  const [userHubMoneyDelta, setUserHubMoneyDelta] = useState(0);
+  const [userHubMoneyLoading, setUserHubMoneyLoading] = useState(false);
   const [resetDailyRewardsLoading, setResetDailyRewardsLoading] = useState(false);
   const [pointsProvSessionId, setPointsProvSessionId] = useState('');
   const [pointsProvUserId, setPointsProvUserId] = useState('');
@@ -2998,6 +3008,85 @@ export default function Admin() {
       toast.error(error.response?.data?.detail || 'Failed');
     } finally {
       setMainLbStripLoading(false);
+    }
+  };
+
+  const fetchUserLeaderboardScores = async (silent) => {
+    const username = (formData.targetUsername || '').trim();
+    if (!username) {
+      toast.error('Enter target username');
+      return;
+    }
+    setUserLbScoresLoading(true);
+    try {
+      const res = await api.get('/admin/leaderboards/user-scores', { params: { target_username: username } });
+      setUserLbScores(res.data);
+      if (!silent) toast.success('Scores loaded');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to load scores');
+      setUserLbScores(null);
+    } finally {
+      setUserLbScoresLoading(false);
+    }
+  };
+
+  const handleUserLeaderboardPartialAdjust = async (opts) => {
+    const dryRun = opts?.dryRun === true;
+    const username = (formData.targetUsername || '').trim();
+    if (!username) {
+      toast.error('Enter target username');
+      return;
+    }
+    const n = parseInt(String(userLbAdjustRemoveCount), 10);
+    if (!Number.isFinite(n) || n < 1 || n > 50000) {
+      toast.error('Remove count must be 1–50,000');
+      return;
+    }
+    const useDry = dryRun || userLbAdjustDryRun;
+    if (!useDry && !window.confirm(`Remove oldest ${n} row(s): ${userLbAdjustMetric} (${userLbAdjustPeriod}) for ${username}? This cannot be undone.`)) return;
+    setUserLbAdjustLoading(true);
+    try {
+      const res = await api.post('/admin/leaderboards/adjust-user', {
+        target_username: username,
+        metric: userLbAdjustMetric,
+        period: userLbAdjustPeriod,
+        remove_count: n,
+        dry_run: useDry,
+      });
+      toast.success(res.data?.message || 'Done');
+      if (!useDry && (res.data?.deleted_count ?? 0) > 0) {
+        await fetchUserLeaderboardScores(true);
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    } finally {
+      setUserLbAdjustLoading(false);
+    }
+  };
+
+  const handleUserHubAdjustMoney = async () => {
+    const username = (formData.targetUsername || '').trim();
+    if (!username) {
+      toast.error('Enter target username');
+      return;
+    }
+    const amt = parseInt(String(userHubMoneyDelta), 10);
+    if (!Number.isFinite(amt) || amt === 0) {
+      toast.error('Enter a non-zero dollar amount (negative removes)');
+      return;
+    }
+    const label = amt < 0
+      ? `Remove $${Math.abs(amt).toLocaleString()} from ${username}?`
+      : `Add $${amt.toLocaleString()} to ${username}?`;
+    if (!window.confirm(label)) return;
+    setUserHubMoneyLoading(true);
+    try {
+      const res = await api.post(`/admin/adjust-money?target_username=${encodeURIComponent(username)}&amount=${amt}`);
+      toast.success(res.data?.message || 'Done');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    } finally {
+      setUserHubMoneyLoading(false);
     }
   };
 
@@ -5433,6 +5522,322 @@ export default function Admin() {
           <UserCog size={12} />
           Player Management
         </h2>
+
+        <div id="admin-user-adjust-hub" className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-amber-500/30 mobile-panel scroll-mt-24`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-400/40 to-transparent" />
+          <SectionHeader
+            icon={Trophy}
+            title="User give / take & leaderboards"
+            isCollapsed={collapsed.userAdjustHub}
+            onToggle={() => toggleSection('userAdjustHub')}
+          />
+          {!collapsed.userAdjustHub && (
+            <div className="p-3 space-y-4">
+              <p className="text-[9px] text-mutedForeground font-heading">
+                Shared <span className="text-foreground font-bold">target username</span> for this panel (syncs with the command bar). Preview main-board metrics, partially remove oldest event rows, strip full categories, and run common money/points/bullet tools without opening the dossier.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider">Username</span>
+                <input
+                  type="text"
+                  value={formData.targetUsername}
+                  onChange={(e) => setFormData((prev) => ({ ...prev, targetUsername: e.target.value }))}
+                  placeholder="Target username"
+                  className="flex-1 min-w-[160px] max-w-sm px-2 py-1 rounded border border-input bg-transparent text-[11px]"
+                />
+              </div>
+
+              <div className="rounded-md border border-primary/25 bg-primary/5 p-3 space-y-2">
+                <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Quick give / take</div>
+                <div className="flex flex-wrap items-center gap-2 text-[10px] font-heading">
+                  <span className="text-mutedForeground shrink-0">Money ($)</span>
+                  <input
+                    type="number"
+                    value={userHubMoneyDelta}
+                    onChange={(e) => setUserHubMoneyDelta(parseInt(e.target.value, 10) || 0)}
+                    placeholder="e.g. -50000"
+                    className="w-28 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs"
+                  />
+                  <BtnPrimary type="button" onClick={handleUserHubAdjustMoney} disabled={userHubMoneyLoading || !(formData.targetUsername || '').trim()}>
+                    {userHubMoneyLoading ? '…' : userHubMoneyDelta < 0 ? 'Remove' : 'Add'}
+                  </BtnPrimary>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-[10px] font-heading">
+                  <span className="text-mutedForeground shrink-0">Points</span>
+                  <AdminInput type="number" value={formData.points} onChange={(e) => setFormData((p) => ({ ...p, points: parseInt(e.target.value, 10) || 0 }))} className="w-20" />
+                  <BtnPrimary type="button" onClick={handleAddPoints}>Add</BtnPrimary>
+                  <AdminInput type="number" value={formData.pointsRemove} onChange={(e) => setFormData((p) => ({ ...p, pointsRemove: parseInt(e.target.value, 10) || 0 }))} className="w-20" />
+                  <BtnSecondary type="button" onClick={handleRemovePoints}>Remove</BtnSecondary>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-[10px] font-heading">
+                  <span className="text-mutedForeground shrink-0">Bullets</span>
+                  <AdminInput type="number" value={formData.bullets} onChange={(e) => setFormData((p) => ({ ...p, bullets: parseInt(e.target.value, 10) || 0 }))} className="w-24" />
+                  <BtnPrimary type="button" onClick={handleAddBullets}>Give</BtnPrimary>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-[10px] font-heading">
+                  <span className="text-mutedForeground shrink-0">Respect</span>
+                  <AdminInput type="number" value={formData.respectAdd} onChange={(e) => setFormData((p) => ({ ...p, respectAdd: parseInt(e.target.value, 10) || 0 }))} className="w-20" />
+                  <BtnPrimary type="button" onClick={handleAddRespectPoints}>Add</BtnPrimary>
+                  <AdminInput type="number" value={formData.respectRemove} onChange={(e) => setFormData((p) => ({ ...p, respectRemove: parseInt(e.target.value, 10) || 0 }))} className="w-20" />
+                  <BtnSecondary type="button" onClick={handleRemoveRespectPoints}>Remove</BtnSecondary>
+                </div>
+              </div>
+
+              <div className="rounded-md border border-cyan-500/25 bg-cyan-500/5 p-3 space-y-2">
+                <div className="text-[10px] font-heading font-bold text-cyan-300/90 uppercase tracking-wider">Leaderboard scores (main /leaderboards/top)</div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <BtnPrimary type="button" onClick={() => fetchUserLeaderboardScores(false)} disabled={userLbScoresLoading || !(formData.targetUsername || '').trim()}>
+                    {userLbScoresLoading ? '…' : 'Load scores'}
+                  </BtnPrimary>
+                </div>
+                {userLbScores && (
+                  <div className="space-y-2 text-[10px] font-heading">
+                    <div className="text-[9px] text-mutedForeground">
+                      Week (UTC): <span className="text-foreground font-mono">{userLbScores.week_start_utc}</span>
+                      {' → '}
+                      <span className="text-foreground font-mono">{userLbScores.week_end_utc}</span>
+                    </div>
+                    <div className="overflow-x-auto rounded border border-cyan-500/20 max-h-72 overflow-y-auto">
+                      <table className="w-full text-left text-[9px] border-collapse">
+                        <thead>
+                          <tr className="border-b border-zinc-700/60 text-mutedForeground uppercase sticky top-0 bg-zinc-900/95">
+                            <th className="py-1 px-2">Metric</th>
+                            <th className="py-1 px-2 text-right">Weekly</th>
+                            <th className="py-1 px-2 text-right">All-time</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[
+                            ['Crimes', userLbScores.weekly?.crimes, userLbScores.alltime?.total_crimes],
+                            ['GTA', userLbScores.weekly?.gta, userLbScores.alltime?.total_gta],
+                            ['Jail busts', userLbScores.weekly?.jail_busts, userLbScores.alltime?.jail_busts],
+                            ['Kills', userLbScores.weekly?.kills, userLbScores.alltime?.total_kills],
+                            ['Stock profit (pts)', userLbScores.weekly?.stock_profit_points, userLbScores.alltime?.stock_market_profit_total],
+                            ['Booze profit', userLbScores.weekly?.booze_profit, userLbScores.alltime?.booze_run_profit_total],
+                            ['Respect', userLbScores.weekly?.respect_earned, userLbScores.alltime?.respect_points],
+                            ['Melt (bullets)', userLbScores.weekly?.melt_bullets, userLbScores.alltime?.bullets_melted],
+                            ['Points spent', '—', userLbScores.alltime?.lifetime_points_spent],
+                          ].map(([label, w, a]) => (
+                            <tr key={label} className="border-b border-zinc-800/50">
+                              <td className="py-1 px-2 text-foreground">{label}</td>
+                              <td className="py-1 px-2 text-right font-mono text-zinc-300">{w === '—' ? '—' : Number(w ?? 0).toLocaleString()}</td>
+                              <td className="py-1 px-2 text-right font-mono text-zinc-300">{a === '—' ? '—' : Number(a ?? 0).toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-md border border-amber-600/30 bg-amber-950/20 p-3 space-y-2">
+                <div className="text-[10px] font-heading font-bold text-amber-200/90 uppercase tracking-wider">Partial remove (oldest rows first)</div>
+                <p className="text-[9px] text-mutedForeground font-heading">
+                  Crimes / GTA: user totals decrement only for deleted rows with <code className="text-[8px] bg-zinc-800/80 px-1 rounded">success: true</code>. Cap 50,000 per request.
+                </p>
+                <div className="flex flex-wrap items-center gap-2 text-[10px] font-heading">
+                  <AdminSelect value={userLbAdjustMetric} onChange={(e) => setUserLbAdjustMetric(e.target.value)}>
+                    <option value="crimes">crimes</option>
+                    <option value="gta">gta</option>
+                    <option value="jail_busts">jail_busts</option>
+                    <option value="kills">kills</option>
+                  </AdminSelect>
+                  <AdminSelect value={userLbAdjustPeriod} onChange={(e) => setUserLbAdjustPeriod(e.target.value)}>
+                    <option value="weekly">weekly (Mon UTC)</option>
+                    <option value="alltime">all-time</option>
+                  </AdminSelect>
+                  <input
+                    type="number"
+                    min={1}
+                    max={50000}
+                    value={userLbAdjustRemoveCount}
+                    onChange={(e) => setUserLbAdjustRemoveCount(e.target.value)}
+                    className="w-24 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs"
+                  />
+                  <label className="flex items-center gap-1 cursor-pointer text-mutedForeground">
+                    <input type="checkbox" checked={userLbAdjustDryRun} onChange={(e) => setUserLbAdjustDryRun(e.target.checked)} />
+                    Dry run (apply button)
+                  </label>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <BtnSecondary type="button" onClick={() => handleUserLeaderboardPartialAdjust({ dryRun: true })} disabled={userLbAdjustLoading || !(formData.targetUsername || '').trim()}>
+                    {userLbAdjustLoading ? '…' : 'Dry run only'}
+                  </BtnSecondary>
+                  <BtnDanger type="button" onClick={() => handleUserLeaderboardPartialAdjust({})} disabled={userLbAdjustLoading || !(formData.targetUsername || '').trim()}>
+                    {userLbAdjustLoading ? '…' : userLbAdjustDryRun ? 'Apply (dry run)' : 'Apply remove'}
+                  </BtnDanger>
+                </div>
+              </div>
+
+              <div className={`relative rounded-lg overflow-hidden border border-amber-500/25`}>
+                <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
+                <SectionHeader
+                  icon={BarChart3}
+                  title="Minigame leaderboards & records"
+                  isCollapsed={collapsed.minigameLbAdmin}
+                  onToggle={() => toggleSection('minigameLbAdmin')}
+                />
+                {!collapsed.minigameLbAdmin && (
+                  <div className="p-2 space-y-1 bg-zinc-950/40">
+                    <ActionRow icon={Trash2} label="Clear minigame records (user)" description="Delete minigame scores/history rows across all minigame collections" color="text-red-400">
+                      <BtnDanger onClick={handleClearUserMinigameRecords} disabled={clearMinigameRecordsLoading || !(formData.targetUsername || '').trim()}>
+                        {clearMinigameRecordsLoading ? '...' : 'Clear'}
+                      </BtnDanger>
+                    </ActionRow>
+
+                    <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 space-y-2 ml-0 sm:ml-0">
+                      <div className="text-[10px] font-heading text-amber-200/90 uppercase tracking-wider">Weekly board + per-game tables</div>
+                      <p className="text-[9px] text-mutedForeground font-heading">
+                        Strip: remove <code className="text-[8px] bg-zinc-800/80 px-1 rounded">minigame_plays</code> (combined weekly points) and/or per-game score collections. Does not delete{' '}
+                        <code className="text-[8px] bg-zinc-800/80 px-1 rounded">minigame_run_sessions</code> — use &quot;Clear minigame records&quot; for a full wipe.
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2 text-[10px] font-heading">
+                        <label className="flex items-center gap-1 cursor-pointer">
+                          <input type="checkbox" checked={minigameLbStripWeekly} onChange={(e) => setMinigameLbStripWeekly(e.target.checked)} />
+                          Weekly plays
+                        </label>
+                        <select
+                          value={minigameLbWeekScope}
+                          onChange={(e) => setMinigameLbWeekScope(e.target.value)}
+                          disabled={!minigameLbStripWeekly}
+                          className="bg-zinc-900/80 border border-zinc-600 rounded px-2 py-1 text-xs"
+                        >
+                          <option value="current">This week (Mon UTC)</option>
+                          <option value="all">All weeks</option>
+                        </select>
+                        <label className="flex items-center gap-1 cursor-pointer">
+                          <input type="checkbox" checked={minigameLbStripPerGame} onChange={(e) => setMinigameLbStripPerGame(e.target.checked)} />
+                          Per-game scores
+                        </label>
+                      </div>
+                      <input
+                        type="text"
+                        placeholder="Optional: gauntlet, snake (comma-separated slugs; empty = all)"
+                        value={minigameLbStripGames}
+                        onChange={(e) => setMinigameLbStripGames(e.target.value)}
+                        className="w-full max-w-md bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs"
+                      />
+                      <div>
+                        <BtnDanger type="button" onClick={handleMinigameLbStrip} disabled={minigameLbStripLoading || !(formData.targetUsername || '').trim()}>
+                          {minigameLbStripLoading ? '…' : 'Strip leaderboard rows'}
+                        </BtnDanger>
+                      </div>
+                      <hr className="border-zinc-700/50 my-2" />
+                      <p className="text-[9px] text-mutedForeground font-heading">
+                        Add: append one synthetic play for combined weekly points and/or one high-score row. No cash/respect payout. Per-game row supported for snake, gauntlet, shooting_range, mafia_rpg, family_run, whack_a_copper only.
+                      </p>
+                      <div className="flex flex-wrap items-center gap-2 text-[10px] font-heading">
+                        <select
+                          value={minigameLbAddGame}
+                          onChange={(e) => setMinigameLbAddGame(e.target.value)}
+                          className="bg-zinc-900/80 border border-zinc-600 rounded px-2 py-1 text-xs"
+                        >
+                          <option value="gauntlet">gauntlet (Flappy)</option>
+                          <option value="snake">snake</option>
+                          <option value="shooting_range">shooting_range</option>
+                          <option value="mafia_rpg">mafia_rpg</option>
+                          <option value="family_run">family_run</option>
+                          <option value="whack_a_copper">whack_a_copper</option>
+                          <option value="minesweeper">minesweeper (weekly only)</option>
+                          <option value="battleships">battleships (weekly only)</option>
+                          <option value="the_getaway">the_getaway (weekly only)</option>
+                          <option value="pool_8ball">pool_8ball (weekly only)</option>
+                        </select>
+                        <input
+                          type="number"
+                          min={0}
+                          value={minigameLbAddScore}
+                          onChange={(e) => setMinigameLbAddScore(e.target.value)}
+                          className="w-24 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs"
+                        />
+                        <label className="flex items-center gap-1 cursor-pointer">
+                          <input type="checkbox" checked={minigameLbAddWeekly} onChange={(e) => setMinigameLbAddWeekly(e.target.checked)} />
+                          Weekly points
+                        </label>
+                        <label className="flex items-center gap-1 cursor-pointer">
+                          <input type="checkbox" checked={minigameLbAddPerGame} onChange={(e) => setMinigameLbAddPerGame(e.target.checked)} />
+                          Per-game row
+                        </label>
+                        <BtnPrimary type="button" onClick={handleMinigameLbAddPlay} disabled={minigameLbAddLoading || !(formData.targetUsername || '').trim()}>
+                          {minigameLbAddLoading ? '…' : 'Add play / score'}
+                        </BtnPrimary>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className={`relative rounded-lg overflow-hidden border border-cyan-500/25`}>
+                <div className="h-0.5 bg-gradient-to-r from-transparent via-cyan-500/35 to-transparent" />
+                <SectionHeader
+                  icon={Trophy}
+                  title="Main game leaderboards (weekly / top boards)"
+                  isCollapsed={collapsed.mainLbStrip}
+                  onToggle={() => toggleSection('mainLbStrip')}
+                />
+                {!collapsed.mainLbStrip && (
+                  <div className="p-2 space-y-2 bg-zinc-950/40">
+                    <p className="text-[9px] text-mutedForeground font-heading pl-1">
+                      Clears inputs for <span className="text-foreground">/leaderboards/top?period=weekly</span> (respect earned, bullets melted, stock profit, booze profit, etc.). Stock/booze: zeros stored profit on rows and adjusts lifetime totals on the user so all-time totals stay consistent.
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2 text-[10px] font-heading">
+                      <span className="text-mutedForeground">Scope</span>
+                      <select
+                        value={mainLbScope}
+                        onChange={(e) => setMainLbScope(e.target.value)}
+                        className="bg-zinc-900/80 border border-zinc-600 rounded px-2 py-1 text-xs"
+                      >
+                        <option value="current">This week (Mon UTC)</option>
+                        <option value="all">All history</option>
+                      </select>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[10px] font-heading rounded-md border border-cyan-500/20 bg-cyan-500/5 p-2">
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input type="checkbox" checked={mainLbRespect} onChange={(e) => setMainLbRespect(e.target.checked)} />
+                        Respect earned (<code className="text-[8px] bg-zinc-800/80 px-1 rounded">respect_events</code>)
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input type="checkbox" checked={mainLbMelt} onChange={(e) => setMainLbMelt(e.target.checked)} />
+                        Bullets melted (<code className="text-[8px] bg-zinc-800/80 px-1 rounded">melt_events</code>)
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input type="checkbox" checked={mainLbStock} onChange={(e) => setMainLbStock(e.target.checked)} />
+                        Stock profit (<code className="text-[8px] bg-zinc-800/80 px-1 rounded">profit_points</code> → 0)
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer">
+                        <input type="checkbox" checked={mainLbBooze} onChange={(e) => setMainLbBooze(e.target.checked)} />
+                        Booze run profit (<code className="text-[8px] bg-zinc-800/80 px-1 rounded">economy_events</code> sell)
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer text-zinc-400">
+                        <input type="checkbox" checked={mainLbKills} onChange={(e) => setMainLbKills(e.target.checked)} />
+                        Kills (attack_attempts killed)
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer text-zinc-400">
+                        <input type="checkbox" checked={mainLbCrimes} onChange={(e) => setMainLbCrimes(e.target.checked)} />
+                        Crimes (<code className="text-[8px] bg-zinc-800/80 px-1 rounded">crime_events</code>)
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer text-zinc-400">
+                        <input type="checkbox" checked={mainLbGta} onChange={(e) => setMainLbGta(e.target.checked)} />
+                        GTA (<code className="text-[8px] bg-zinc-800/80 px-1 rounded">gta_events</code>)
+                      </label>
+                      <label className="flex items-center gap-1.5 cursor-pointer text-zinc-400">
+                        <input type="checkbox" checked={mainLbJail} onChange={(e) => setMainLbJail(e.target.checked)} />
+                        Jail busts (success)
+                      </label>
+                    </div>
+                    <BtnDanger type="button" onClick={handleMainLeaderboardStrip} disabled={mainLbStripLoading || !(formData.targetUsername || '').trim()}>
+                      {mainLbStripLoading ? '…' : 'Strip from main leaderboards'}
+                    </BtnDanger>
+                    <BtnDanger type="button" onClick={handleResetWeeklyBoozeProfit} disabled={mainLbResetBoozeLoading}>
+                      {mainLbResetBoozeLoading ? '…' : 'Reset weekly booze profit (all users)'}
+                    </BtnDanger>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
 
         <div id="admin-referrals" className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel scroll-mt-24`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -11718,172 +12123,29 @@ export default function Admin() {
         </div>
 
         {isAdmin && (
-        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-amber-500/25 mobile-panel`}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
-          <SectionHeader
-            icon={BarChart3}
-            title="Minigame leaderboards & records"
-            isCollapsed={collapsed.minigameLbAdmin}
-            onToggle={() => toggleSection('minigameLbAdmin')}
-          />
-          {!collapsed.minigameLbAdmin && (
-            <div className="p-2 space-y-1">
-              <ActionRow icon={Trash2} label="Clear minigame records (user)" description="Target Username: delete minigame scores/history rows across all minigame collections" color="text-red-400">
-                <BtnDanger onClick={handleClearUserMinigameRecords} disabled={clearMinigameRecordsLoading || !(formData.targetUsername || '').trim()}>
-                  {clearMinigameRecordsLoading ? '...' : 'Clear'}
-                </BtnDanger>
-              </ActionRow>
-
-              <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3 space-y-2 ml-0 sm:ml-0">
-                <div className="text-[10px] font-heading text-amber-200/90 uppercase tracking-wider">Weekly board + per-game tables</div>
-                <p className="text-[9px] text-mutedForeground font-heading">
-                  Strip: remove <code className="text-[8px] bg-zinc-800/80 px-1 rounded">minigame_plays</code> (combined weekly points) and/or per-game score collections. Does not delete{' '}
-                  <code className="text-[8px] bg-zinc-800/80 px-1 rounded">minigame_run_sessions</code> — use &quot;Clear minigame records&quot; for a full wipe.
-                </p>
-                <div className="flex flex-wrap items-center gap-2 text-[10px] font-heading">
-                  <label className="flex items-center gap-1 cursor-pointer">
-                    <input type="checkbox" checked={minigameLbStripWeekly} onChange={(e) => setMinigameLbStripWeekly(e.target.checked)} />
-                    Weekly plays
-                  </label>
-                  <select
-                    value={minigameLbWeekScope}
-                    onChange={(e) => setMinigameLbWeekScope(e.target.value)}
-                    disabled={!minigameLbStripWeekly}
-                    className="bg-zinc-900/80 border border-zinc-600 rounded px-2 py-1 text-xs"
-                  >
-                    <option value="current">This week (Mon UTC)</option>
-                    <option value="all">All weeks</option>
-                  </select>
-                  <label className="flex items-center gap-1 cursor-pointer">
-                    <input type="checkbox" checked={minigameLbStripPerGame} onChange={(e) => setMinigameLbStripPerGame(e.target.checked)} />
-                    Per-game scores
-                  </label>
-                </div>
-                <input
-                  type="text"
-                  placeholder="Optional: gauntlet, snake (comma-separated slugs; empty = all)"
-                  value={minigameLbStripGames}
-                  onChange={(e) => setMinigameLbStripGames(e.target.value)}
-                  className="w-full max-w-md bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs"
-                />
-                <div>
-                  <BtnDanger type="button" onClick={handleMinigameLbStrip} disabled={minigameLbStripLoading || !(formData.targetUsername || '').trim()}>
-                    {minigameLbStripLoading ? '…' : 'Strip leaderboard rows'}
-                  </BtnDanger>
-                </div>
-                <hr className="border-zinc-700/50 my-2" />
-                <p className="text-[9px] text-mutedForeground font-heading">
-                  Add: append one synthetic play for combined weekly points and/or one high-score row. No cash/respect payout. Per-game row supported for snake, gauntlet, shooting_range, mafia_rpg, family_run, whack_a_copper only.
-                </p>
-                <div className="flex flex-wrap items-center gap-2 text-[10px] font-heading">
-                  <select
-                    value={minigameLbAddGame}
-                    onChange={(e) => setMinigameLbAddGame(e.target.value)}
-                    className="bg-zinc-900/80 border border-zinc-600 rounded px-2 py-1 text-xs"
-                  >
-                    <option value="gauntlet">gauntlet (Flappy)</option>
-                    <option value="snake">snake</option>
-                    <option value="shooting_range">shooting_range</option>
-                    <option value="mafia_rpg">mafia_rpg</option>
-                    <option value="family_run">family_run</option>
-                    <option value="whack_a_copper">whack_a_copper</option>
-                    <option value="minesweeper">minesweeper (weekly only)</option>
-                    <option value="battleships">battleships (weekly only)</option>
-                    <option value="the_getaway">the_getaway (weekly only)</option>
-                    <option value="pool_8ball">pool_8ball (weekly only)</option>
-                  </select>
-                  <input
-                    type="number"
-                    min={0}
-                    value={minigameLbAddScore}
-                    onChange={(e) => setMinigameLbAddScore(e.target.value)}
-                    className="w-24 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs"
-                  />
-                  <label className="flex items-center gap-1 cursor-pointer">
-                    <input type="checkbox" checked={minigameLbAddWeekly} onChange={(e) => setMinigameLbAddWeekly(e.target.checked)} />
-                    Weekly points
-                  </label>
-                  <label className="flex items-center gap-1 cursor-pointer">
-                    <input type="checkbox" checked={minigameLbAddPerGame} onChange={(e) => setMinigameLbAddPerGame(e.target.checked)} />
-                    Per-game row
-                  </label>
-                  <BtnPrimary type="button" onClick={handleMinigameLbAddPlay} disabled={minigameLbAddLoading || !(formData.targetUsername || '').trim()}>
-                    {minigameLbAddLoading ? '…' : 'Add play / score'}
-                  </BtnPrimary>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-        )}
-
-        {isAdmin && (
-        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-cyan-500/25 mobile-panel`}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-cyan-500/35 to-transparent" />
-          <SectionHeader
-            icon={Trophy}
-            title="Main game leaderboards (weekly / top boards)"
-            isCollapsed={collapsed.mainLbStrip}
-            onToggle={() => toggleSection('mainLbStrip')}
-          />
-          {!collapsed.mainLbStrip && (
-            <div className="p-2 space-y-2">
-              <p className="text-[9px] text-mutedForeground font-heading pl-1">
-                Clears inputs for <span className="text-foreground">/leaderboards/top?period=weekly</span> (respect earned, bullets melted, stock profit, booze profit, etc.). Target username: field above. Stock/booze: zeros stored profit on rows and adjusts lifetime totals on the user so all-time totals stay consistent.
-              </p>
-              <div className="flex flex-wrap items-center gap-2 text-[10px] font-heading">
-                <span className="text-mutedForeground">Scope</span>
-                <select
-                  value={mainLbScope}
-                  onChange={(e) => setMainLbScope(e.target.value)}
-                  className="bg-zinc-900/80 border border-zinc-600 rounded px-2 py-1 text-xs"
-                >
-                  <option value="current">This week (Mon UTC)</option>
-                  <option value="all">All history</option>
-                </select>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[10px] font-heading rounded-md border border-cyan-500/20 bg-cyan-500/5 p-2">
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input type="checkbox" checked={mainLbRespect} onChange={(e) => setMainLbRespect(e.target.checked)} />
-                  Respect earned (<code className="text-[8px] bg-zinc-800/80 px-1 rounded">respect_events</code>)
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input type="checkbox" checked={mainLbMelt} onChange={(e) => setMainLbMelt(e.target.checked)} />
-                  Bullets melted (<code className="text-[8px] bg-zinc-800/80 px-1 rounded">melt_events</code>)
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input type="checkbox" checked={mainLbStock} onChange={(e) => setMainLbStock(e.target.checked)} />
-                  Stock profit (<code className="text-[8px] bg-zinc-800/80 px-1 rounded">profit_points</code> → 0)
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input type="checkbox" checked={mainLbBooze} onChange={(e) => setMainLbBooze(e.target.checked)} />
-                  Booze run profit (<code className="text-[8px] bg-zinc-800/80 px-1 rounded">economy_events</code> sell)
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer text-zinc-400">
-                  <input type="checkbox" checked={mainLbKills} onChange={(e) => setMainLbKills(e.target.checked)} />
-                  Kills (attack_attempts killed)
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer text-zinc-400">
-                  <input type="checkbox" checked={mainLbCrimes} onChange={(e) => setMainLbCrimes(e.target.checked)} />
-                  Crimes (<code className="text-[8px] bg-zinc-800/80 px-1 rounded">crime_events</code>)
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer text-zinc-400">
-                  <input type="checkbox" checked={mainLbGta} onChange={(e) => setMainLbGta(e.target.checked)} />
-                  GTA (<code className="text-[8px] bg-zinc-800/80 px-1 rounded">gta_events</code>)
-                </label>
-                <label className="flex items-center gap-1.5 cursor-pointer text-zinc-400">
-                  <input type="checkbox" checked={mainLbJail} onChange={(e) => setMainLbJail(e.target.checked)} />
-                  Jail busts (success)
-                </label>
-              </div>
-              <BtnDanger type="button" onClick={handleMainLeaderboardStrip} disabled={mainLbStripLoading || !(formData.targetUsername || '').trim()}>
-                {mainLbStripLoading ? '…' : 'Strip from main leaderboards'}
-              </BtnDanger>
-              <BtnDanger type="button" onClick={handleResetWeeklyBoozeProfit} disabled={mainLbResetBoozeLoading}>
-                {mainLbResetBoozeLoading ? '…' : 'Reset weekly booze profit (all users)'}
-              </BtnDanger>
-            </div>
-          )}
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-zinc-600/35 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/25 to-transparent" />
+          <div className="p-3 text-[10px] text-mutedForeground font-heading space-y-2">
+            <p>
+              <span className="text-foreground font-bold">Minigame & main leaderboard tools</span>
+              {' '}live under{' '}
+              <button
+                type="button"
+                className="text-primary hover:underline font-bold"
+                onClick={() => {
+                  setActiveCategoryId('admin-players');
+                  setCollapsed((prev) => ({ ...prev, userAdjustHub: false }));
+                  if (typeof window !== 'undefined') {
+                    window.location.hash = 'admin-players';
+                    document.getElementById('admin-user-adjust-hub')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }
+                }}
+              >
+                Player Management → User give / take & leaderboards
+              </button>
+              . Search still finds them via the same keywords.
+            </p>
+          </div>
         </div>
         )}
 

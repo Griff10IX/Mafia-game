@@ -388,7 +388,11 @@ def register(router):
         pot = int(g.get("pot") or 0)
         bot_stack = int(bot.get("stack") or 0)
         cat, _ = _best_hand_seven(bot.get("hole_cards") or [], board)
-        call_amount = min(to_call - int(bot.get("current_bet") or 0), bot_stack)
+        # Chips needed to match human's street bet (do not mix "to_call" face vs delta — always derive from faces).
+        human_face = int(human.get("current_bet") or 0)
+        bot_face = int(bot.get("current_bet") or 0)
+        call_amount = min(max(0, human_face - bot_face), bot_stack)
+        human_all_in = human.get("status") == "all_in"
         if call_amount < 0:
             call_amount = 0
         if to_call <= 0:
@@ -397,7 +401,8 @@ def register(router):
             await db.mp_poker_games.update_one({"id": game_id}, {"$set": {"players": players}})
             await _vs_dealer_advance_street(game_id)
             return await db.mp_poker_games.find_one({"id": game_id})
-        if cat >= HAND_PAIR and bot_stack >= min_raise and _rng.random() < 0.6:
+        # Human already all-in: dealer can only call or fold (no raise — no one can respond).
+        if cat >= HAND_PAIR and bot_stack >= min_raise and _rng.random() < 0.6 and not human_all_in:
             raise_amt = min(min_raise, bot_stack)
             bot["stack"] -= raise_amt
             bot["current_bet"] = int(bot.get("current_bet") or 0) + raise_amt
@@ -414,7 +419,14 @@ def register(router):
             if human.get("status") == "all_in":
                 await _vs_dealer_run_out_all_in(game_id)
             return await db.mp_poker_games.find_one({"id": game_id})
-        elif call_amount <= bot_stack and (call_amount <= int(g.get("big_blind") or 0) * 2 or cat >= HAND_PAIR or _rng.random() < 0.5):
+        # Facing an all-in: always call if affordable (heads-up). Folding half the time was exploitable
+        # (players could shove every hand and collect dead money when dealer folded).
+        elif call_amount <= bot_stack and (
+            human_all_in
+            or call_amount <= int(g.get("big_blind") or 0) * 2
+            or cat >= HAND_PAIR
+            or _rng.random() < 0.5
+        ):
             bot["stack"] -= call_amount
             bot["current_bet"] = int(bot.get("current_bet") or 0) + call_amount
             bot["total_bet_this_hand"] = int(bot.get("total_bet_this_hand") or 0) + call_amount
