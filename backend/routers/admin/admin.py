@@ -3134,6 +3134,20 @@ def register(router):
             "ttt_deleted_count": ttt_res.deleted_count,
         }
 
+    async def _normalize_user_crime_cooldowns(user_id: str) -> int:
+        """Convert any datetime-typed cooldown_until values to ISO strings for a user.
+        Returns number of documents fixed."""
+        fixed = 0
+        async for doc in db.user_crimes.find({"user_id": user_id, "cooldown_until": {"$exists": True}}):
+            cd = doc.get("cooldown_until")
+            if cd is not None and hasattr(cd, "isoformat") and not isinstance(cd, str):
+                await db.user_crimes.update_one(
+                    {"_id": doc["_id"]},
+                    {"$set": {"cooldown_until": cd.isoformat()}},
+                )
+                fixed += 1
+        return fixed
+
     @router.post("/admin/crimes/reset-timers")
     async def admin_crimes_reset_timers(
         target_username: str = Query(..., description="Username to clear crime cooldown timers for"),
@@ -3154,9 +3168,59 @@ def register(router):
             {"user_id": target["id"]},
             {"$unset": {"cooldown_until": ""}},
         )
+        norm = await _normalize_user_crime_cooldowns(target["id"])
         return {
             "message": f"Cleared crime cooldown timers for {target.get('username') or raw}.",
             "modified_count": int(res.modified_count or 0),
+            "normalized_datetime_fields": norm,
+        }
+
+    @router.get("/admin/crimes/inspect/{target_username}")
+    async def admin_crimes_inspect(
+        target_username: str,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Return raw user_crimes documents for a user so admins can diagnose data issues."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        raw = (target_username or "").strip()
+        if not raw:
+            raise HTTPException(status_code=400, detail="target_username required")
+        username_pattern = _username_pattern(raw)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        docs = await db.user_crimes.find({"user_id": target["id"]}).to_list(200)
+        now = datetime.now(timezone.utc)
+        rows = []
+        for d in docs:
+            cd = d.get("cooldown_until")
+            cd_type = type(cd).__name__ if cd is not None else "unset"
+            cd_str = cd.isoformat() if hasattr(cd, "isoformat") else str(cd) if cd is not None else None
+            expired = True
+            if cd is not None:
+                try:
+                    dt = cd if hasattr(cd, "year") else datetime.fromisoformat(str(cd).replace("Z", "+00:00"))
+                    if getattr(dt, "tzinfo", None) is None:
+                        dt = dt.replace(tzinfo=timezone.utc)
+                    expired = dt <= now
+                except Exception:
+                    expired = None
+            rows.append({
+                "crime_id": d.get("crime_id"),
+                "cooldown_until_raw": cd_str,
+                "cooldown_until_type": cd_type,
+                "cooldown_expired": expired,
+                "attempts": d.get("attempts", 0),
+                "successes": d.get("successes", 0),
+                "progress": d.get("progress"),
+                "doc_id": str(d.get("_id", "")),
+            })
+        return {
+            "username": target.get("username"),
+            "user_id": target["id"],
+            "total_rows": len(rows),
+            "crimes": rows,
         }
 
     @router.post("/admin/force-online")

@@ -567,6 +567,8 @@ export default function Admin() {
   const [fixLoginFieldsLoading, setFixLoginFieldsLoading] = useState(false);
   const [clearOcInvitesLoading, setClearOcInvitesLoading] = useState(false);
   const [clearCrimeTimersLoading, setClearCrimeTimersLoading] = useState(false);
+  const [inspectCrimesLoading, setInspectCrimesLoading] = useState(false);
+  const [inspectCrimesData, setInspectCrimesData] = useState(null);
   const [clearMinigameRecordsLoading, setClearMinigameRecordsLoading] = useState(false);
   const [minigameLbStripLoading, setMinigameLbStripLoading] = useState(false);
   const [minigameLbAddLoading, setMinigameLbAddLoading] = useState(false);
@@ -2963,8 +2965,21 @@ export default function Admin() {
     try {
       const res = await api.post(`/admin/crimes/reset-timers?target_username=${encodeURIComponent(username)}`);
       toast.success(res.data?.message || 'Crime timers cleared');
+      setInspectCrimesData(null);
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
     finally { setClearCrimeTimersLoading(false); }
+  };
+
+  const handleInspectCrimes = async () => {
+    const username = (formData.targetUsername || '').trim();
+    if (!username) { toast.error('Enter a username'); return; }
+    setInspectCrimesLoading(true);
+    setInspectCrimesData(null);
+    try {
+      const res = await api.get(`/admin/crimes/inspect/${encodeURIComponent(username)}`);
+      setInspectCrimesData(res.data);
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed to inspect'); }
+    finally { setInspectCrimesLoading(false); }
   };
 
   const handleClearUserMinigameRecords = async () => {
@@ -6317,7 +6332,44 @@ export default function Admin() {
               <BtnDanger onClick={handleClearUserCrimeTimers} disabled={clearCrimeTimersLoading}>
                 {clearCrimeTimersLoading ? 'Clearing…' : 'Clear timers'}
               </BtnDanger>
+              <BtnSecondary onClick={handleInspectCrimes} disabled={inspectCrimesLoading}>
+                {inspectCrimesLoading ? 'Loading…' : 'Inspect data'}
+              </BtnSecondary>
             </ActionRow>
+            {inspectCrimesData && (
+              <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-[10px] font-heading space-y-2 pl-6">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-primary">Crime data — {inspectCrimesData.username} ({inspectCrimesData.total_rows} rows)</span>
+                  <button onClick={() => setInspectCrimesData(null)} className="text-mutedForeground hover:text-foreground text-xs">✕</button>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[10px]">
+                    <thead><tr className="text-mutedForeground border-b border-zinc-700/40">
+                      <th className="text-left p-1">Crime</th>
+                      <th className="text-left p-1">Cooldown Type</th>
+                      <th className="text-left p-1">Cooldown Value</th>
+                      <th className="text-center p-1">Expired?</th>
+                      <th className="text-right p-1">Attempts</th>
+                      <th className="text-right p-1">Successes</th>
+                      <th className="text-right p-1">Progress</th>
+                    </tr></thead>
+                    <tbody>
+                      {inspectCrimesData.crimes.map((c, i) => (
+                        <tr key={i} className={`border-b border-zinc-800/40 ${c.cooldown_until_type !== 'unset' && c.cooldown_until_type !== 'str' ? 'bg-red-500/10' : ''} ${c.cooldown_expired === false ? 'bg-amber-500/10' : ''}`}>
+                          <td className="p-1 text-foreground">{c.crime_id}</td>
+                          <td className="p-1"><span className={`px-1 rounded ${c.cooldown_until_type === 'str' ? 'bg-green-500/20 text-green-400' : c.cooldown_until_type === 'unset' ? 'text-mutedForeground' : 'bg-red-500/20 text-red-400'}`}>{c.cooldown_until_type}</span></td>
+                          <td className="p-1 text-mutedForeground font-mono truncate max-w-[180px]">{c.cooldown_until_raw || '—'}</td>
+                          <td className="p-1 text-center">{c.cooldown_expired === true ? '✓' : c.cooldown_expired === false ? <span className="text-amber-400 font-bold">ACTIVE</span> : '—'}</td>
+                          <td className="p-1 text-right">{c.attempts}</td>
+                          <td className="p-1 text-right">{c.successes}</td>
+                          <td className="p-1 text-right">{c.progress ?? '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
             <ActionRow
               icon={BarChart3}

@@ -565,6 +565,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
                 {"cooldown_until": {"$exists": False}},
                 {"cooldown_until": None},
                 {"cooldown_until": {"$lte": now_iso}},
+                {"cooldown_until": {"$lte": now}},
             ],
         },
         {"$set": {"cooldown_until": cooldown_until}},
