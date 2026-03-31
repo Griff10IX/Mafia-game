@@ -57,6 +57,15 @@ FAMILY_ROLES = ["boss", "underboss", "consigliere", "capo", "soldier", "associat
 FAMILY_ROLE_LIMITS = {"boss": 1, "underboss": 1, "consigliere": 1, "capo": 4, "soldier": 15, "associate": 30}
 FAMILY_ROLE_ORDER = {"boss": 0, "underboss": 1, "consigliere": 2, "capo": 3, "soldier": 4, "associate": 5}
 
+# High command (chain of command top 3) + legacy "don" role stored on some crews
+TOP3_FAMILY_ROLES = ("boss", "don", "underboss", "consigliere")
+AIRPORT_CREW_PERK_NONE = "none"
+AIRPORT_CREW_PERK_TRAVEL_TIME = "travel_time"
+AIRPORT_CREW_PERK_POINTS_DISCOUNT = "points_discount"
+AIRPORT_CREW_PERK_VALUES = frozenset(
+    {AIRPORT_CREW_PERK_NONE, AIRPORT_CREW_PERK_TRAVEL_TIME, AIRPORT_CREW_PERK_POINTS_DISCOUNT}
+)
+
 # Per-crew garage melt contribution (user doc); reset when leaving/kick/join — not global bullets_melted
 def _family_melt_stats_reset_fields() -> dict:
     """Values to clear per-crew garage melt contribution on the user (not global bullets_melted)."""
