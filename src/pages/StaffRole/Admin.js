@@ -789,6 +789,13 @@ export default function Admin() {
   const [activityFeedMinutes, setActivityFeedMinutes] = useState(60);
   const [activityFeedFilter, setActivityFeedFilter] = useState('');
   const [activityFeedUsername, setActivityFeedUsername] = useState('');
+  const [activityFeedUsernameMode, setActivityFeedUsernameMode] = useState('exact');
+  const [activityFeedMinAmount, setActivityFeedMinAmount] = useState('');
+  const [activityFeedSources, setActivityFeedSources] = useState({
+    activity: true,
+    gambling: true,
+    minigame: true,
+  });
   const [activityFeedAutoRefresh, setActivityFeedAutoRefresh] = useState(false);
   const activityFeedIntervalRef = useRef(null);
   const [minigamePayouts, setMinigamePayouts] = useState({ entries: [] });
@@ -4372,7 +4379,17 @@ export default function Admin() {
       const mins = activityFeedAutoRefresh ? 15 : activityFeedMinutes;
       const params = { since_minutes: mins, limit: 200 };
       if (activityFeedUsername.trim()) params.username = activityFeedUsername.trim();
+      if (activityFeedUsernameMode) params.username_mode = activityFeedUsernameMode;
       if (activityFeedFilter.trim()) params.action = activityFeedFilter.trim();
+      if (activityFeedMinAmount !== '' && Number(activityFeedMinAmount) >= 0) {
+        params.min_amount = Math.max(0, parseInt(String(activityFeedMinAmount), 10) || 0);
+      }
+      const selectedSources = Object.entries(activityFeedSources)
+        .filter(([, enabled]) => Boolean(enabled))
+        .map(([name]) => name);
+      if (selectedSources.length > 0) {
+        params.sources = selectedSources.join(',');
+      }
       const res = await api.get('/admin/activity-feed', { params });
       setActivityFeed(res.data);
     } catch (e) {
@@ -4398,7 +4415,7 @@ export default function Admin() {
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activityFeedAutoRefresh, activityFeedUsername, activityFeedFilter]);
+  }, [activityFeedAutoRefresh, activityFeedUsername, activityFeedUsernameMode, activityFeedFilter, activityFeedMinAmount, activityFeedSources]);
 
   const fetchActivityLog = async () => {
     setActivityLogLoading(true);
@@ -11364,6 +11381,14 @@ export default function Admin() {
                   placeholder="Username filter"
                   className="w-full sm:flex-1 sm:min-w-[100px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
                 />
+                <select
+                  value={activityFeedUsernameMode}
+                  onChange={(e) => setActivityFeedUsernameMode(e.target.value)}
+                  className="px-2 py-1.5 text-xs rounded border border-zinc-700/50 bg-zinc-900/50 text-foreground"
+                >
+                  <option value="exact">Exact user</option>
+                  <option value="contains">Contains user</option>
+                </select>
                 <input
                   type="text"
                   value={activityFeedFilter}
@@ -11371,6 +11396,28 @@ export default function Admin() {
                   placeholder="Action filter (e.g. bank, dice)"
                   className="w-full sm:flex-1 sm:min-w-[120px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
                 />
+                <input
+                  type="number"
+                  min="0"
+                  value={activityFeedMinAmount}
+                  onChange={(e) => setActivityFeedMinAmount(e.target.value)}
+                  placeholder="Min $/pts"
+                  className="w-full sm:w-24 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                {[
+                  ['activity', 'Actions'],
+                  ['gambling', 'Casino'],
+                  ['minigame', 'Minigames'],
+                ].map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setActivityFeedSources((prev) => ({ ...prev, [key]: !prev[key] }))}
+                    className={`px-2 py-1 rounded border text-[10px] font-heading ${activityFeedSources[key] ? 'bg-primary/30 border-primary/60 text-primary-foreground' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
                 {[15, 60, 360, 1440].map((m) => (
                   <button
                     key={m}
@@ -11395,8 +11442,19 @@ export default function Admin() {
               </div>
               {activityFeed && (
                 <div className="overflow-x-auto max-h-[500px]">
+                  <div className="mb-2 flex flex-wrap items-center gap-2 text-[10px] font-heading">
+                    <span className="text-mutedForeground">Window: {activityFeed?.window_start ? new Date(activityFeed.window_start).toLocaleTimeString() : '—'} - {activityFeed?.window_end ? new Date(activityFeed.window_end).toLocaleTimeString() : '—'}</span>
+                    <span className="px-1.5 py-0.5 rounded bg-zinc-800/60 border border-zinc-700/40 text-primary">{activityFeed?.count ?? 0} total</span>
+                    <span className="px-1.5 py-0.5 rounded bg-blue-900/30 border border-blue-700/40 text-blue-300">Actions: {activityFeed?.counts_by_source?.activity ?? 0}</span>
+                    <span className="px-1.5 py-0.5 rounded bg-amber-900/30 border border-amber-700/40 text-amber-300">Casino: {activityFeed?.counts_by_source?.gambling ?? 0}</span>
+                    <span className="px-1.5 py-0.5 rounded bg-emerald-900/30 border border-emerald-700/40 text-emerald-300">Minigames: {activityFeed?.counts_by_source?.minigame ?? 0}</span>
+                  </div>
                   {(!activityFeed.entries || activityFeed.entries.length === 0) ? (
-                    <p className="text-[10px] text-mutedForeground font-heading">No activity in the last {activityFeedMinutes < 60 ? `${activityFeedMinutes} minutes` : `${activityFeedMinutes / 60} hours`}.</p>
+                    <p className="text-[10px] text-mutedForeground font-heading">
+                      {(activityFeed?.applied_filters?.username || activityFeed?.applied_filters?.action || activityFeed?.applied_filters?.min_amount) ?
+                        'No events matched your filters in this window.' :
+                        `No activity in the last ${activityFeedMinutes < 60 ? `${activityFeedMinutes} minutes` : `${activityFeedMinutes / 60} hours`}.`}
+                    </p>
                   ) : (
                     <table className="w-full text-[10px] font-heading">
                       <thead><tr>
@@ -11411,8 +11469,8 @@ export default function Admin() {
                           <tr key={idx} className="border-b border-zinc-700/30 hover:bg-zinc-800/30">
                             <td className="p-1.5 text-mutedForeground whitespace-nowrap">{e.created_at ? new Date(e.created_at).toLocaleTimeString() : '—'}</td>
                             <td className="p-1.5">
-                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${e.source === 'gambling' ? 'bg-amber-900/40 text-amber-400' : 'bg-blue-900/40 text-blue-400'}`}>
-                                {e.source === 'gambling' ? 'CASINO' : 'ACTION'}
+                              <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${e.source === 'gambling' ? 'bg-amber-900/40 text-amber-400' : e.source === 'minigame' ? 'bg-emerald-900/40 text-emerald-400' : 'bg-blue-900/40 text-blue-400'}`}>
+                                {e.source === 'gambling' ? 'CASINO' : e.source === 'minigame' ? 'MINIGAME' : (e.category === 'bank_transfer' ? 'BANK/TRANSFER' : 'ACTION')}
                               </span>
                             </td>
                             <td className="p-1.5 font-medium">{e.username || '—'}</td>
@@ -11420,6 +11478,9 @@ export default function Admin() {
                             <td className="p-1.5 text-mutedForeground max-w-xs truncate">
                               {e.details ? (() => {
                                 const d = e.details;
+                                if (e.source === 'minigame') {
+                                  return `${d.game || 'game'} | score ${Number(d.score || 0).toLocaleString()} | cash $${Number(d.cash || 0).toLocaleString()} | respect ${Number(d.respect || 0).toLocaleString()} | points ${Number(d.points || 0).toLocaleString()}`;
+                                }
                                 if (d.stake != null && d.payout != null) return `Stake: $${Number(d.stake).toLocaleString()} → Payout: $${Number(d.payout).toLocaleString()}`;
                                 if (d.amount != null && d.recipient) return `$${Number(d.amount).toLocaleString()} → ${d.recipient}`;
                                 if (d.amount != null) return `$${Number(d.amount).toLocaleString()}`;

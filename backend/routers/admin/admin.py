@@ -4593,55 +4593,184 @@ def register(router):
         limit: int = Query(200, ge=1, le=500),
         action: Optional[str] = None,
         username: Optional[str] = None,
+        username_mode: str = Query("exact", pattern="^(exact|contains)$"),
+        sources: Optional[str] = None,
+        min_amount: Optional[int] = Query(None, ge=0),
         since_minutes: int = Query(60, ge=1, le=1440),
         current_user: dict = Depends(get_current_user),
     ):
-        """Combined activity + gambling feed for recent player actions. Supports filtering by action type and username."""
+        """Combined admin feed across recent activity sources with filters and normalized rows."""
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         now = datetime.now(timezone.utc)
-        since_iso = (now - timedelta(minutes=int(since_minutes))).isoformat()
+        since_dt = now - timedelta(minutes=int(since_minutes))
+        since_iso = since_dt.isoformat()
         limit = min(max(1, limit), 500)
 
-        activity_query: dict = {"created_at": {"$gte": since_iso}}
-        gambling_query: dict = {"created_at": {"$gte": since_iso}}
-        if username and username.strip():
-            pat = re.compile("^" + re.escape(username.strip()) + "$", re.IGNORECASE)
-            activity_query["username"] = pat
-            gambling_query["username"] = pat
-        if action and action.strip():
-            a = action.strip().lower()
-            activity_query["action"] = re.compile(re.escape(a), re.IGNORECASE)
-            gambling_query["game_type"] = re.compile(re.escape(a), re.IGNORECASE)
+        selected_sources = {s.strip().lower() for s in (sources or "").split(",") if s.strip()}
+        if not selected_sources:
+            selected_sources = {"activity", "gambling", "minigame"}
+        allowed_sources = {"activity", "gambling", "minigame"}
+        selected_sources = {s for s in selected_sources if s in allowed_sources}
+        if not selected_sources:
+            selected_sources = {"activity", "gambling", "minigame"}
 
-        activity_rows = await db.activity_log.find(activity_query, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
-        gambling_rows = await db.gambling_log.find(gambling_query, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+        source_limit = min(1000, max(limit * 4, 200))
+
+        def _ts_filter(field: str = "created_at") -> dict:
+            # Support both datetime and legacy ISO-string timestamps.
+            return {
+                "$or": [
+                    {field: {"$gte": since_dt}},
+                    {field: {"$type": "string", "$gte": since_iso}},
+                ]
+            }
+
+        def _to_dt(v):
+            if isinstance(v, datetime):
+                return v if v.tzinfo else v.replace(tzinfo=timezone.utc)
+            if isinstance(v, str):
+                try:
+                    return datetime.fromisoformat(v.replace("Z", "+00:00"))
+                except Exception:
+                    return None
+            return None
+
+        def _to_iso(v) -> str:
+            dt = _to_dt(v)
+            return dt.isoformat() if dt else (str(v) if v is not None else "")
+
+        uname = (username or "").strip()
+        action_filter = (action or "").strip().lower()
+        username_contains = username_mode == "contains"
+        min_amt = int(min_amount or 0)
+
+        async def _read_activity_rows():
+            query: dict = _ts_filter("created_at")
+            if uname:
+                if username_contains:
+                    query["username"] = re.compile(re.escape(uname), re.IGNORECASE)
+                else:
+                    query["username"] = re.compile("^" + re.escape(uname) + "$", re.IGNORECASE)
+            if action_filter:
+                query["action"] = re.compile(re.escape(action_filter), re.IGNORECASE)
+            return await db.activity_log.find(query, {"_id": 0}).sort("created_at", -1).limit(source_limit).to_list(source_limit)
+
+        async def _read_gambling_rows():
+            query: dict = _ts_filter("created_at")
+            if uname:
+                if username_contains:
+                    query["username"] = re.compile(re.escape(uname), re.IGNORECASE)
+                else:
+                    query["username"] = re.compile("^" + re.escape(uname) + "$", re.IGNORECASE)
+            if action_filter:
+                query["game_type"] = re.compile(re.escape(action_filter), re.IGNORECASE)
+            return await db.gambling_log.find(query, {"_id": 0}).sort("created_at", -1).limit(source_limit).to_list(source_limit)
+
+        async def _read_minigame_rows():
+            query: dict = _ts_filter("created_at")
+            if uname:
+                if username_contains:
+                    query["username"] = re.compile(re.escape(uname), re.IGNORECASE)
+                else:
+                    query["username"] = re.compile("^" + re.escape(uname) + "$", re.IGNORECASE)
+            if action_filter:
+                query["game"] = re.compile(re.escape(action_filter), re.IGNORECASE)
+            return await db.minigame_play_payouts.find(query, {"_id": 0}).sort("created_at", -1).limit(source_limit).to_list(source_limit)
 
         merged = []
-        for row in activity_rows:
-            merged.append({
-                "source": "activity",
-                "user_id": row.get("user_id"),
-                "username": row.get("username"),
-                "action": row.get("action"),
-                "details": row.get("details"),
-                "created_at": row.get("created_at"),
-            })
-        for row in gambling_rows:
-            details = row.get("details") or {}
-            stake = int(details.get("stake") or details.get("bet") or 0)
-            payout = int(details.get("payout") or 0)
-            merged.append({
-                "source": "gambling",
-                "user_id": row.get("user_id"),
-                "username": row.get("username"),
-                "action": row.get("game_type"),
-                "details": {"stake": stake, "payout": payout, "win": details.get("win"), **{k: v for k, v in details.items() if k not in ("stake", "bet", "payout", "win")}},
-                "created_at": row.get("created_at"),
-            })
+        if "activity" in selected_sources:
+            for row in await _read_activity_rows():
+                created_dt = _to_dt(row.get("created_at"))
+                if created_dt is None or created_dt < since_dt:
+                    continue
+                details = row.get("details") or {}
+                amount = int(details.get("amount") or 0)
+                category = "bank_transfer" if (
+                    "bank" in str(row.get("action") or "").lower()
+                    or "transfer" in str(row.get("action") or "").lower()
+                    or details.get("recipient") is not None
+                ) else "action"
+                merged.append({
+                    "source": "activity",
+                    "category": category,
+                    "user_id": row.get("user_id"),
+                    "username": row.get("username"),
+                    "action": row.get("action"),
+                    "details": details,
+                    "amount": amount,
+                    "created_at": _to_iso(row.get("created_at")),
+                })
+
+        if "gambling" in selected_sources:
+            for row in await _read_gambling_rows():
+                created_dt = _to_dt(row.get("created_at"))
+                if created_dt is None or created_dt < since_dt:
+                    continue
+                details = row.get("details") or {}
+                stake = int(details.get("stake") or details.get("bet") or 0)
+                payout = int(details.get("payout") or 0)
+                merged.append({
+                    "source": "gambling",
+                    "category": "casino",
+                    "user_id": row.get("user_id"),
+                    "username": row.get("username"),
+                    "action": row.get("game_type"),
+                    "details": {"stake": stake, "payout": payout, "win": details.get("win"), **{k: v for k, v in details.items() if k not in ("stake", "bet", "payout", "win")}},
+                    "amount": max(stake, payout),
+                    "created_at": _to_iso(row.get("created_at")),
+                })
+
+        if "minigame" in selected_sources:
+            for row in await _read_minigame_rows():
+                created_dt = _to_dt(row.get("created_at"))
+                if created_dt is None or created_dt < since_dt:
+                    continue
+                details = {
+                    "game": row.get("game"),
+                    "score": int(row.get("score") or 0),
+                    "cash": int(row.get("cash") or 0),
+                    "respect": int(row.get("respect") or 0),
+                    "points": int(row.get("points") or 0),
+                }
+                merged.append({
+                    "source": "minigame",
+                    "category": "minigame",
+                    "user_id": row.get("user_id"),
+                    "username": row.get("username"),
+                    "action": f"minigame_{row.get('game') or 'play'}",
+                    "details": details,
+                    "amount": max(int(row.get("cash") or 0), int(row.get("points") or 0)),
+                    "created_at": _to_iso(row.get("created_at")),
+                })
+
+        if min_amt > 0:
+            merged = [e for e in merged if int(e.get("amount") or 0) >= min_amt]
+
         merged.sort(key=lambda x: x.get("created_at") or "", reverse=True)
         merged = merged[:limit]
-        return {"entries": merged, "count": len(merged), "since_minutes": since_minutes}
+
+        counts_by_source: Dict[str, int] = {"activity": 0, "gambling": 0, "minigame": 0}
+        for e in merged:
+            src = str(e.get("source") or "")
+            if src in counts_by_source:
+                counts_by_source[src] += 1
+
+        return {
+            "entries": merged,
+            "count": len(merged),
+            "counts_by_source": counts_by_source,
+            "since_minutes": since_minutes,
+            "window_start": since_iso,
+            "window_end": now.isoformat(),
+            "applied_filters": {
+                "username": uname,
+                "username_mode": username_mode,
+                "action": action_filter,
+                "sources": sorted(selected_sources),
+                "min_amount": min_amt if min_amount is not None else None,
+            },
+        }
 
     @router.get("/admin/gambling-log")
     async def admin_gambling_log(
