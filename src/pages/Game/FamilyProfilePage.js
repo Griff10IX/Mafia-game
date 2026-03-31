@@ -708,7 +708,7 @@ export default function FamilyProfilePage() {
               </ul>
             ) : (
               <p className="text-zinc-600 leading-relaxed">
-                No active vault or airport crew bonuses right now. Hourly vault bullets need <span className="text-zinc-400">two</span> high-command members: one with an airport and one with an armoury. The Don can pick an airport crew perk (travel or points) when high command holds an airport.
+                No active vault or airport crew bonuses right now. Hourly vault bullets need <span className="text-zinc-400">high command</span> (Don, Underboss, or Consigliere) to own <span className="text-zinc-400">both</span> an airport and an armoury — one account cannot hold both, so that is always two different members. The Don can pick an airport crew perk (travel or points) when high command holds an airport.
               </p>
             )}
             {cb.treasury_bullets_hourly?.active && (

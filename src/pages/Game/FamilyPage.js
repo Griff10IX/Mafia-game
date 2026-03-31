@@ -2457,7 +2457,7 @@ export default function FamilyPage() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-[9px] text-zinc-600 pt-1 border-t border-primary/10 flex items-start gap-1 leading-snug"><Plane size={10} className="shrink-0 mt-0.5 opacity-50" /> No active vault or airport crew bonuses right now. Hourly vault bullets need <span className="text-zinc-400">two</span> high-command members: one with an airport and one with an armoury. The Don can pick an airport crew perk (travel or points) when high command holds an airport.</p>
+                  <p className="text-[9px] text-zinc-600 pt-1 border-t border-primary/10 flex items-start gap-1 leading-snug"><Plane size={10} className="shrink-0 mt-0.5 opacity-50" /> No active vault or airport crew bonuses right now. Hourly vault bullets need high command (Don, Underboss, or Consigliere) to own both an airport and an armoury — one account cannot hold both, so that is always two members. The Don can pick an airport crew perk (travel or points) when high command holds an airport.</p>
                 )}
               </div>
             );

@@ -23,6 +23,7 @@ MP_POKER_MAX_PLAYERS = 9
 MP_POKER_MAX_BUY_IN = 1_000_000_000
 MP_POKER_MAX_EXTRA_PRIZE = 1_000_000_000
 MP_POKER_VS_DEALER_MIN_BLIND = 1000
+MP_POKER_VS_DEALER_MAX_SMALL_BLIND = 25_000  # Hard cap for vs-dealer small blind (UI + API)
 MP_POKER_VS_DEALER_MAX_BLIND_DEFAULT = 2_500_000
 
 
@@ -463,7 +464,7 @@ def register(router):
     ):
         """Start a new 1v1 vs dealer game. Body: { blind?: number }."""
         uid = current_user.get("id") or ""
-        max_blind = await _get_mp_poker_max_blind()
+        max_blind = min(await _get_mp_poker_max_blind(), MP_POKER_VS_DEALER_MAX_SMALL_BLIND)
         blind = blind or 5000
         blind = max(MP_POKER_VS_DEALER_MIN_BLIND, min(max_blind, int(blind)))
         game_id = str(uuid.uuid4())

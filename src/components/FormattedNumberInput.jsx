@@ -49,14 +49,20 @@ function parseRaw(input, allowDecimals = false) {
  * allowDecimals: boolean - if true, allow one decimal point (e.g. money with cents)
  */
 const FormattedNumberInput = React.forwardRef(function FormattedNumberInput(
-  { value, onChange, allowDecimals = false, className, type, ...props },
+  { value, onChange, allowDecimals = false, max, className, type, ...props },
   ref
 ) {
   const raw = value === undefined || value === null ? '' : String(value);
   const display = formatWithCommas(raw, allowDecimals);
 
   const handleChange = (e) => {
-    const nextRaw = parseRaw(e.target.value, allowDecimals);
+    let nextRaw = parseRaw(e.target.value, allowDecimals);
+    if (!allowDecimals && max != null && nextRaw !== '') {
+      const n = parseInt(nextRaw, 10);
+      if (!Number.isNaN(n) && n > max) {
+        nextRaw = String(max);
+      }
+    }
     onChange(nextRaw);
   };
 

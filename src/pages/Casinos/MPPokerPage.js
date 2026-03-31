@@ -6,6 +6,8 @@ import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
 
+const VS_DEALER_MAX_SMALL_BLIND = 25000;
+
 function formatMoney(n) {
   const num = Number(n ?? 0);
   if (Number.isNaN(num)) return '$0';
@@ -48,7 +50,8 @@ export default function MPPokerPage() {
   }, [fetchGames]);
 
   const handlePlayVsDealer = async () => {
-    const blind = parseInt(String(vsDealerBlind).replace(/\D/g, ''), 10) || 5000;
+    const parsed = parseInt(String(vsDealerBlind).replace(/\D/g, ''), 10) || 5000;
+    const blind = Math.min(VS_DEALER_MAX_SMALL_BLIND, parsed);
     setVsDealerStarting(true);
     try {
       const res = await api.post('/casino/mp-poker/vs-dealer/start', { blind });
@@ -158,7 +161,7 @@ export default function MPPokerPage() {
             {vsDealerOpen && (
               <div className="mt-3 space-y-2 pt-3 border-t border-primary/20">
                 <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider block">Small Blind</label>
-                <FormattedNumberInput value={vsDealerBlind} onChange={setVsDealerBlind} placeholder="5,000"
+                <FormattedNumberInput value={vsDealerBlind} onChange={setVsDealerBlind} max={VS_DEALER_MAX_SMALL_BLIND} placeholder="5,000"
                   className="w-full px-2.5 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={inputStyle} />
                 <button type="button" onClick={handlePlayVsDealer} disabled={vsDealerStarting}
                   className="w-full py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase disabled:opacity-50 active:scale-[0.97] transition-all"
