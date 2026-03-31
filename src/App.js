@@ -1,5 +1,11 @@
 import { useState, useEffect, Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Navigate, useParams, useLocation } from "react-router-dom";
+
+/** Legacy `/store?...` links keep query string when redirecting to `/game/store`. */
+function RedirectStoreToGameStore() {
+  const { search } = useLocation();
+  return <Navigate to={`/game/store${search}`} replace />;
+}
 import { ThemedToaster } from "./components/ThemedToaster";
 import Landing from "./pages/Auth/Landing";
 import PreRegister from "./pages/Auth/PreRegister";
@@ -1152,7 +1158,7 @@ function App() {
               )
             }
           />
-          <Route path="/store" element={<Navigate to="/game/store" replace />} />
+          <Route path="/store" element={<RedirectStoreToGameStore />} />
           <Route
             path="/money/quick-trade"
             element={

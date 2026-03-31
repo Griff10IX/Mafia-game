@@ -1603,11 +1603,12 @@ export default function Attack() {
           <AlertTriangle size={16} className="text-amber-400 shrink-0 mt-0.5" />
           <div className="text-[10px] text-amber-100 font-heading leading-snug space-y-1.5 min-w-0">
             <p>
-              Release mode: attacks on other players are off until the scheduled unlock (same time as{' '}
-              <Link to="/game-pass" className="text-primary font-bold underline-offset-2 hover:underline">
-                Game Pass
-              </Link>{' '}
-              and the points store).
+              Release mode: attacks on other players are off until the scheduled unlock (same clock as the{' '}
+              <Link to="/game/store?tab=upgrades" className="text-primary font-bold underline-offset-2 hover:underline">
+                points store
+              </Link>
+              ). Game Pass and other point purchases live under{' '}
+              <span className="text-foreground font-semibold">Store → Upgrades</span>, not on Attack.
             </p>
             {releaseUnlockKillDisplay && (
               <p>
