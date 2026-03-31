@@ -563,25 +563,25 @@ export default function GamePass() {
                 <p>Release mode is active.</p>
                 {gamePassUnlockDisplay && (
                   <p>
-                    <span className="text-amber-200/90 uppercase tracking-wider font-bold">Opens / unlocks</span>
+                    <span className="text-amber-200/90 uppercase tracking-wider font-bold">Points / Game Pass unlock</span>
                     {': '}
                     <span className="text-foreground font-bold break-words">{gamePassUnlockDisplay.line}</span>
-                    <span className="text-amber-200/80"> — same schedule as the points store release.</span>
+                    <span className="text-amber-200/80"> — tied to the points store, not PvP kills.</span>
                   </p>
                 )}
                 {gamePassPurchaseLocked ? (
                   <p>
-                    Game Pass checkout and player vs player kills are <span className="text-foreground font-bold">off</span> until that time.
+                    Game Pass checkout is <span className="text-foreground font-bold">off</span> until that time.
                   </p>
                 ) : (
                   <p>
-                    Game Pass checkout and player vs player kills are <span className="text-emerald-300 font-bold">on</span> (unlock time has passed; this banner stays until staff disable soft-launch).
+                    Game Pass checkout is <span className="text-emerald-300 font-bold">on</span> (this banner may stay until staff disable soft-launch).
                   </p>
                 )}
-                <p>
-                  Hitlist NPCs and other NPC targets can always be hunted during this window — see{' '}
+                <p className="text-amber-200/70">
+                  Player vs player on the Kill page may unlock on a different schedule — see{' '}
                   <Link to="/attack" className="text-primary font-bold underline-offset-2 hover:underline">
-                    Kill
+                    Attack
                   </Link>
                   .
                 </p>

@@ -923,6 +923,7 @@ export default function Admin() {
   const [releaseSoftLaunchAdmin, setReleaseSoftLaunchAdmin] = useState(null);
   const [releaseSoftLaunchLoading, setReleaseSoftLaunchLoading] = useState(false);
   const [releaseSoftLaunchUnlockAt, setReleaseSoftLaunchUnlockAt] = useState('2026-04-04T17:00:00+00:00');
+  const [releaseSoftLaunchPvpUnlockAt, setReleaseSoftLaunchPvpUnlockAt] = useState('2026-04-04T17:00:00+00:00');
   const [maintenanceMsg, setMaintenanceMsg] = useState('');
   const [maintenanceDuration, setMaintenanceDuration] = useState(60);
   const [bulkUsernames, setBulkUsernames] = useState('');
@@ -4819,6 +4820,8 @@ export default function Admin() {
       setReleaseSoftLaunchAdmin(res.data ?? null);
       const u = res.data?.game_pass_unlock_at || res.data?.stored?.game_pass_unlock_at;
       if (u) setReleaseSoftLaunchUnlockAt(String(u));
+      const pv = res.data?.pvp_kills_unlock_at || res.data?.stored?.pvp_kills_unlock_at;
+      if (pv) setReleaseSoftLaunchPvpUnlockAt(String(pv));
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed to load release soft-launch'); }
     finally { setReleaseSoftLaunchLoading(false); }
   };
@@ -4829,6 +4832,7 @@ export default function Admin() {
       const res = await api.post('/admin/release-soft-launch', {
         enabled,
         game_pass_unlock_at: releaseSoftLaunchUnlockAt.trim() || undefined,
+        pvp_kills_unlock_at: releaseSoftLaunchPvpUnlockAt.trim() || undefined,
       });
       setReleaseSoftLaunchAdmin(res.data ?? null);
       toast.success(res.data?.message || 'Updated release soft-launch');
@@ -8303,7 +8307,7 @@ export default function Admin() {
         {!collapsed.releaseSoftLaunch && (
           <div className="p-3 space-y-2">
             <p className="text-[10px] text-mutedForeground font-heading">
-              While enabled, before the unlock time: player vs player kills and Game Pass checkout are both off (same clock; hitlist NPCs still work). After that time they turn on automatically while this flag stays enabled — disable soft-launch when you want to clear the in-game release banner entirely.
+              While enabled, each feature stays off until its own unlock time (below). Game Pass / points use the first field; PvP kills on real players use the second (often later). Hitlist NPCs are unaffected. Leave this enabled if you still want banners until staff disable it.
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <BtnPrimary onClick={handleFetchReleaseSoftLaunch} disabled={releaseSoftLaunchLoading}>
@@ -8314,25 +8318,43 @@ export default function Admin() {
               </span>
             </div>
             {releaseSoftLaunchAdmin && (
-              <p className="text-[10px] text-mutedForeground font-heading">
-                Pre-unlock lock (Game Pass + PvP kills):{' '}
-                <span className={releaseSoftLaunchAdmin.game_pass_purchase_locked ? 'text-amber-400 font-bold' : 'text-emerald-400'}>
-                  {releaseSoftLaunchAdmin.game_pass_purchase_locked ? 'active (before unlock time)' : 'off (unlock time passed)'}
-                </span>
-                {releaseSoftLaunchAdmin.game_pass_unlock_at && (
-                  <>
-                    {' · '}
-                    Unlock: <span className="text-foreground font-mono text-[9px]">{releaseSoftLaunchAdmin.game_pass_unlock_at}</span>
-                  </>
-                )}
-              </p>
+              <div className="text-[10px] text-mutedForeground font-heading space-y-1">
+                <p>
+                  Game Pass / points:{' '}
+                  <span className={releaseSoftLaunchAdmin.game_pass_purchase_locked ? 'text-amber-400 font-bold' : 'text-emerald-400'}>
+                    {releaseSoftLaunchAdmin.game_pass_purchase_locked ? 'locked' : 'unlocked'}
+                  </span>
+                  {releaseSoftLaunchAdmin.game_pass_unlock_at && (
+                    <span className="text-foreground font-mono text-[9px] ml-1">{releaseSoftLaunchAdmin.game_pass_unlock_at}</span>
+                  )}
+                </p>
+                <p>
+                  PvP kills:{' '}
+                  <span className={releaseSoftLaunchAdmin.pvp_kills_disabled ? 'text-amber-400 font-bold' : 'text-emerald-400'}>
+                    {releaseSoftLaunchAdmin.pvp_kills_disabled ? 'paused' : 'allowed'}
+                  </span>
+                  {releaseSoftLaunchAdmin.pvp_kills_unlock_at && (
+                    <span className="text-foreground font-mono text-[9px] ml-1">{releaseSoftLaunchAdmin.pvp_kills_unlock_at}</span>
+                  )}
+                </p>
+              </div>
             )}
             <div>
-              <label className="block text-[10px] font-heading uppercase tracking-wider text-mutedForeground mb-1">Unlock time — Game Pass + PvP kills (ISO 8601, UTC)</label>
+              <label className="block text-[10px] font-heading uppercase tracking-wider text-mutedForeground mb-1">Unlock — points store / Game Pass (ISO 8601, UTC)</label>
               <input
                 type="text"
                 value={releaseSoftLaunchUnlockAt}
                 onChange={(e) => setReleaseSoftLaunchUnlockAt(e.target.value)}
+                className="w-full px-2 py-1.5 rounded border border-input bg-transparent text-[11px] font-mono text-foreground"
+                placeholder="2026-04-01T12:00:00+00:00"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-heading uppercase tracking-wider text-mutedForeground mb-1">Unlock — PvP kills on players (ISO 8601, UTC)</label>
+              <input
+                type="text"
+                value={releaseSoftLaunchPvpUnlockAt}
+                onChange={(e) => setReleaseSoftLaunchPvpUnlockAt(e.target.value)}
                 className="w-full px-2 py-1.5 rounded border border-input bg-transparent text-[11px] font-mono text-foreground"
                 placeholder="2026-04-04T17:00:00+00:00"
               />

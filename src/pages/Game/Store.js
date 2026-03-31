@@ -134,7 +134,7 @@ export default function Store() {
   const [event, setEvent] = useState(null);
   const [eventsEnabled, setEventsEnabled] = useState(false);
   const [customCarName, setCustomCarName] = useState('');
-  const [activeTab, setActiveTab] = useState('upgrades');
+  const [activeTab, setActiveTab] = useState('points');
   const [searchParams, setSearchParams] = useSearchParams();
   const tabFromUrl = searchParams.get('tab');
   useEffect(() => {
@@ -520,7 +520,6 @@ export default function Store() {
               <p className="text-[9px] text-mutedForeground mt-1">Points purchase is temporarily unavailable. Upgrades, bullets, and send pts remain available.</p>
             </div>
           ) : (
-          <>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-3">
             {PACKAGES.map((pkg) => (
               <div
@@ -560,8 +559,26 @@ export default function Store() {
               </div>
             ))}
           </div>
-          </>
           )}
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`} data-testid="store-game-pass-inline">
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
+              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] truncate">Game Pass (£4.99)</span>
+              <Package className="text-primary shrink-0" size={14} />
+            </div>
+            <div className="p-3 space-y-2">
+              <p className="text-[10px] text-zinc-400 font-heading">
+                Opens the Game Pass page — £4.99, 8,000 pts, rewards & status (grouped with Points, not Combat).
+              </p>
+              <Link
+                to="/game-pass"
+                className="w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation flex items-center justify-center gap-2"
+              >
+                Open Game Pass →
+              </Link>
+            </div>
+            <div className="store-art-line text-primary mx-3" />
+          </div>
         </div>
       )}
 
@@ -743,26 +760,6 @@ export default function Store() {
             );
           })}
             </div>
-          </div>
-
-          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
-            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
-              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] truncate">Game Pass (£4.99)</span>
-              <Package className="text-primary shrink-0" size={14} />
-            </div>
-            <div className="p-3 space-y-2">
-              <p className="text-[10px] text-zinc-400 font-heading">
-                Same tab as points upgrades — open the full Game Pass page for purchase and reward status.
-              </p>
-              <Link
-                to="/game-pass"
-                className="w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation flex items-center justify-center gap-2"
-              >
-                Open Game Pass →
-              </Link>
-            </div>
-            <div className="store-art-line text-primary mx-3" />
           </div>
 
           <div className="space-y-2">

@@ -9555,10 +9555,11 @@ def register(router):
     class ReleaseSoftLaunchRequest(BaseModel):
         enabled: bool
         game_pass_unlock_at: Optional[str] = None
+        pvp_kills_unlock_at: Optional[str] = None
 
     @router.get("/admin/release-soft-launch")
     async def admin_get_release_soft_launch(current_user: dict = Depends(get_current_user)):
-        """Release soft-launch: block PvP kills on real players; optional Game Pass lock until unlock time."""
+        """Release soft-launch: separate unlock times for points/Game Pass vs PvP kills."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         doc = await db.game_settings.find_one({"key": RELEASE_SOFT_LAUNCH_KEY}, {"_id": 0, "value": 1})
@@ -9572,11 +9573,19 @@ def register(router):
     async def admin_set_release_soft_launch(req: ReleaseSoftLaunchRequest, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
+        doc = await db.game_settings.find_one({"key": RELEASE_SOFT_LAUNCH_KEY}, {"_id": 0, "value": 1})
+        prev = (doc or {}).get("value") if isinstance((doc or {}).get("value"), dict) else {}
         unlock_raw = (req.game_pass_unlock_at or "").strip() if req.game_pass_unlock_at else ""
-        game_pass_unlock_at = unlock_raw or DEFAULT_GAME_PASS_UNLOCK_AT
+        game_pass_unlock_at = unlock_raw or prev.get("game_pass_unlock_at") or DEFAULT_GAME_PASS_UNLOCK_AT
+        pvp_raw = (req.pvp_kills_unlock_at or "").strip() if req.pvp_kills_unlock_at else ""
+        if pvp_raw:
+            pvp_kills_unlock_at = pvp_raw
+        else:
+            pvp_kills_unlock_at = prev.get("pvp_kills_unlock_at") or game_pass_unlock_at
         value = {
             "enabled": req.enabled,
             "game_pass_unlock_at": game_pass_unlock_at,
+            "pvp_kills_unlock_at": pvp_kills_unlock_at,
             "set_by": current_user.get("username", "?"),
             "set_at": datetime.now(timezone.utc).isoformat(),
         }

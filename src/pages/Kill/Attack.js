@@ -1572,7 +1572,9 @@ export default function Attack() {
   const filteredIds = useMemo(() => filteredAttacks.map((a) => a.attack_id), [filteredAttacks]);
 
   const pvpKillsDisabled = !!releaseSoftLaunch?.pvp_kills_disabled;
-  const releaseUnlockKillDisplay = formatReleaseUnlockLine(releaseSoftLaunch?.game_pass_unlock_at);
+  const releaseUnlockKillDisplay = formatReleaseUnlockLine(
+    releaseSoftLaunch?.pvp_kills_unlock_at || releaseSoftLaunch?.game_pass_unlock_at,
+  );
 
   const killPvpBlocked = useMemo(() => {
     if (!pvpKillsDisabled) return false;
@@ -1603,16 +1605,16 @@ export default function Attack() {
           <AlertTriangle size={16} className="text-amber-400 shrink-0 mt-0.5" />
           <div className="text-[10px] text-amber-100 font-heading leading-snug space-y-1.5 min-w-0">
             <p>
-              Release mode: attacks on other players are off until the scheduled unlock (same clock as the{' '}
-              <Link to="/game/store?tab=upgrades" className="text-primary font-bold underline-offset-2 hover:underline">
-                points store
-              </Link>
-              ). Game Pass and other point purchases live under{' '}
-              <span className="text-foreground font-semibold">Store → Upgrades</span>, not on Attack.
+              Release mode: player vs player attacks stay off until the <span className="text-foreground font-semibold">PvP unlock</span> below.
+              That is separate from Game Pass / point packs — those use the{' '}
+              <Link to="/game/store?tab=points" className="text-primary font-bold underline-offset-2 hover:underline">
+                Store → Points
+              </Link>{' '}
+              unlock (usually earlier).
             </p>
             {releaseUnlockKillDisplay && (
               <p>
-                <span className="text-amber-200/90 uppercase tracking-wider font-bold">Opens / unlocks</span>
+                <span className="text-amber-200/90 uppercase tracking-wider font-bold">PvP unlock</span>
                 {': '}
                 <span className="text-foreground font-bold break-words">{releaseUnlockKillDisplay.line}</span>
               </p>

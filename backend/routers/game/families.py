@@ -57,6 +57,16 @@ FAMILY_ROLES = ["boss", "underboss", "consigliere", "capo", "soldier", "associat
 FAMILY_ROLE_LIMITS = {"boss": 1, "underboss": 1, "consigliere": 1, "capo": 4, "soldier": 15, "associate": 30}
 FAMILY_ROLE_ORDER = {"boss": 0, "underboss": 1, "consigliere": 2, "capo": 3, "soldier": 4, "associate": 5}
 
+# Per-crew garage melt contribution (user doc); reset when leaving/kick/join — not global bullets_melted
+def _family_melt_stats_reset_fields() -> dict:
+    """Values to clear per-crew garage melt contribution on the user (not global bullets_melted)."""
+    return {
+        "family_bullets_melted": 0,
+        "family_melt_reward_money_earned": 0,
+        "family_melt_reward_hits": 0,
+    }
+
+
 # 75% reduction for beta on all racket base_income
 RACKET_BASE_COOLDOWN_HOURS = 10 / 60  # 10 minutes
 FAMILY_RACKETS = [
@@ -864,7 +874,10 @@ async def families_my(current_user: dict = Depends(get_current_user)):
         return {"family": None, "members": [], "rackets": [], "my_role": None}
     fam = await db.families.find_one({"id": family_id}, {"_id": 0})
     if not fam:
-        await db.users.update_one({"id": current_user["id"]}, {"$set": {"family_id": None, "family_role": None}})
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": {"family_id": None, "family_role": None, **_family_melt_stats_reset_fields()}},
+        )
         return {"family": None, "members": [], "rackets": [], "my_role": None}
     members_docs = await db.family_members.find({"family_id": family_id}, {"_id": 0}).to_list(100)
     my_role = current_user.get("family_role")
@@ -1211,15 +1224,16 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
         "id": str(uuid.uuid4()), "family_id": family_id, "user_id": current_user["id"],
         "role": "boss", "joined_at": now,
     })
+    melt_reset = _family_melt_stats_reset_fields()
     if is_admin:
         result = await db.users.update_one(
             {"id": current_user["id"]},
-            {"$set": {"family_id": family_id, "family_role": "boss"}},
+            {"$set": {"family_id": family_id, "family_role": "boss", **melt_reset}},
         )
     else:
         result = await db.users.update_one(
             {"id": current_user["id"], "money": {"$gte": FAMILY_CREATE_COST}},
-            {"$set": {"family_id": family_id, "family_role": "boss"}, "$inc": {"money": -FAMILY_CREATE_COST}},
+            {"$set": {"family_id": family_id, "family_role": "boss", **melt_reset}, "$inc": {"money": -FAMILY_CREATE_COST}},
         )
     if result.modified_count == 0:
         await db.families.delete_one({"id": family_id})
@@ -1243,7 +1257,10 @@ async def _add_member_to_family(family_id: str, user_id: str) -> None:
         "id": str(uuid.uuid4()), "family_id": family_id, "user_id": user_id,
         "role": "associate", "joined_at": now,
     })
-    await db.users.update_one({"id": user_id}, {"$set": {"family_id": family_id, "family_role": "associate"}})
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"family_id": family_id, "family_role": "associate", **_family_melt_stats_reset_fields()}},
+    )
 
 
 async def _resolve_family_id(identifier: str):
@@ -1278,7 +1295,10 @@ async def families_join(request: FamilyJoinRequest, current_user: dict = Depends
         "id": str(uuid.uuid4()), "family_id": family_id, "user_id": current_user["id"],
         "role": "associate", "joined_at": now,
     })
-    await db.users.update_one({"id": current_user["id"]}, {"$set": {"family_id": family_id, "family_role": "associate"}})
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"family_id": family_id, "family_role": "associate", **_family_melt_stats_reset_fields()}},
+    )
     _invalidate_list_cache()
     _invalidate_my_cache(current_user["id"])
     return {"message": "Joined family"}
@@ -1480,7 +1500,10 @@ async def families_leave(current_user: dict = Depends(get_current_user)):
     if fam and fam.get("boss_id") == current_user["id"]:
         raise HTTPException(status_code=400, detail="Boss must transfer leadership or dissolve family first")
     await db.family_members.delete_one({"family_id": family_id, "user_id": current_user["id"]})
-    await db.users.update_one({"id": current_user["id"]}, {"$set": {"family_id": None, "family_role": None}})
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$set": {"family_id": None, "family_role": None, **_family_melt_stats_reset_fields()}},
+    )
     _invalidate_list_cache()
     _invalidate_my_cache(current_user["id"])
 
@@ -1520,7 +1543,10 @@ async def families_kick(request: FamilyKickRequest, current_user: dict = Depends
     if member.get("role") == "boss":
         raise HTTPException(status_code=400, detail="Cannot kick the Boss")
     await db.family_members.delete_one({"family_id": family_id, "user_id": request.user_id})
-    await db.users.update_one({"id": request.user_id}, {"$set": {"family_id": None, "family_role": None}})
+    await db.users.update_one(
+        {"id": request.user_id},
+        {"$set": {"family_id": None, "family_role": None, **_family_melt_stats_reset_fields()}},
+    )
     _invalidate_list_cache()
     _invalidate_my_cache(current_user["id"])
     _invalidate_my_cache(request.user_id)

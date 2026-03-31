@@ -1829,7 +1829,7 @@ export default function Layout({ children }) {
               <div className="space-y-0">
                 {[
                   { label: 'Cash', value: formatMoney(user.money), className: 'text-primary', isLink: true, to: '/bank' },
-                  { label: 'Points', value: formatInt(user.points), isLink: true, to: '/game/store?tab=upgrades' },
+                  { label: 'Points', value: formatInt(user.points), isLink: true, to: '/game/store?tab=points' },
                   { label: 'Respect', value: formatInt(user.respect_points ?? 0), isLink: true, to: '/game/store?tab=upgrades' },
                   { label: 'Bullets', value: formatInt(user.bullets), isLink: true, to: '/game/store?tab=bullets' },
                   { label: 'Health', value: Number.isFinite(Number(user.health)) ? `${Math.max(0, Math.min(100, Math.round(Number(user.health))))}%` : '100%', className: Number(user.health) > 50 ? 'text-emerald-400' : Number(user.health) > 25 ? 'text-amber-400' : 'text-red-400', isLink: true, to: '/game/store?tab=upgrades' },

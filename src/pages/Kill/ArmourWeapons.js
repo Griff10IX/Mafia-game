@@ -240,11 +240,16 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
   const [activeTab, setActiveTab] = useState('shop');
   const [claiming, setClaiming] = useState(false);
   const [settingPrice, setSettingPrice] = useState(false);
+  const [settingItemPrices, setSettingItemPrices] = useState(false);
+  const [armourPriceInputs, setArmourPriceInputs] = useState({});
+  const [weaponPriceInputs, setWeaponPriceInputs] = useState({});
   const [buying, setBuying] = useState(false);
   const [priceInput, setPriceInput] = useState('');
   const [buyAmount, setBuyAmount] = useState('');
   const [producingArmour, setProducingArmour] = useState(false);
   const [producingWeapon, setProducingWeapon] = useState(false);
+  const [producingArmourLevel, setProducingArmourLevel] = useState(null);
+  const [producingWeaponOneId, setProducingWeaponOneId] = useState(null);
   const [armourOptions, setArmourOptions] = useState([]);
   const [weaponsList, setWeaponsList] = useState([]);
   const [buyingArmourLevel, setBuyingArmourLevel] = useState(null);
@@ -285,6 +290,22 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  useEffect(() => {
+    if (!data?.is_owner || !data?.armour_money_price_defaults) return;
+    const a = {};
+    data.armour_money_price_defaults.forEach((d) => {
+      const cur = data.armour_sell_price_money?.[String(d.level)];
+      a[d.level] = cur != null ? String(cur) : String(d.default_list_money);
+    });
+    setArmourPriceInputs(a);
+    const w = {};
+    (data.weapon_money_price_defaults || []).forEach((d) => {
+      const cur = data.weapon_sell_price_money?.[d.id];
+      w[d.id] = cur != null ? String(cur) : String(d.default_list_money);
+    });
+    setWeaponPriceInputs(w);
+  }, [data, data?.is_owner, data?.armour_sell_price_money, data?.weapon_sell_price_money, data?.armour_money_price_defaults, data?.weapon_money_price_defaults]);
 
   useEffect(() => {
     if (!data) return;
@@ -450,6 +471,45 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
     }
   };
 
+  const saveItemPrices = async (e) => {
+    e.preventDefault();
+    if (!data?.armour_money_price_defaults?.length && !data?.weapon_money_price_defaults?.length) return;
+    setSettingItemPrices(true);
+    try {
+      const armour_sell_price_money = {};
+      (data.armour_money_price_defaults || []).forEach((d) => {
+        const raw = String(armourPriceInputs[d.level] ?? '').trim();
+        if (raw === '') {
+          armour_sell_price_money[String(d.level)] = null;
+        } else {
+          const n = parseInt(raw, 10);
+          if (Number.isFinite(n)) armour_sell_price_money[String(d.level)] = n;
+        }
+      });
+      const weapon_sell_price_money = {};
+      (data.weapon_money_price_defaults || []).forEach((d) => {
+        const raw = String(weaponPriceInputs[d.id] ?? '').trim();
+        if (raw === '') {
+          weapon_sell_price_money[d.id] = null;
+        } else {
+          const n = parseInt(raw, 10);
+          if (Number.isFinite(n)) weapon_sell_price_money[d.id] = n;
+        }
+      });
+      await api.post('/bullet-factory/set-item-prices', {
+        state: data?.state || effectiveState,
+        armour_sell_price_money,
+        weapon_sell_price_money,
+      });
+      toast.success('Cash item prices saved (points armour & points guns unchanged)');
+      fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to save item prices');
+    } finally {
+      setSettingItemPrices(false);
+    }
+  };
+
   const setPrice = async (e) => {
     e.preventDefault();
     const p = parseInt(priceInput, 10);
@@ -516,6 +576,40 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
       toast.error(e.response?.data?.detail || 'Failed to start weapon production');
     } finally {
       setProducingWeapon(false);
+    }
+  };
+
+  const startArmourProductionOne = async (level) => {
+    setProducingArmourLevel(level);
+    try {
+      const res = await api.post('/bullet-factory/start-armour-production', {
+        level,
+        state: data?.state || effectiveState,
+      });
+      toast.success(res.data?.message || 'Armour production started');
+      refreshUser();
+      fetchData();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to start armour production');
+    } finally {
+      setProducingArmourLevel(null);
+    }
+  };
+
+  const startWeaponProductionOne = async (weaponId) => {
+    setProducingWeaponOneId(weaponId);
+    try {
+      const res = await api.post('/bullet-factory/start-weapon-production', {
+        weapon_id: weaponId,
+        state: data?.state || effectiveState,
+      });
+      toast.success(res.data?.message || 'Weapon production started');
+      refreshUser();
+      fetchData();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to start weapon production');
+    } finally {
+      setProducingWeaponOneId(null);
     }
   };
 
@@ -662,6 +756,15 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
         <div className="p-3 sm:p-4">
           {activeTab === 'shop' && (
             <div className="space-y-3 sm:space-y-4">
+              {data?.is_unowned && (
+                <div className="rounded-lg p-2.5 sm:p-3 bg-amber-950/30 border border-amber-700/40">
+                  <p className="text-[9px] sm:text-[10px] text-amber-200/90 font-heading leading-relaxed">
+                    <strong className="text-amber-400">Unclaimed armoury:</strong> bullet stock caps at{' '}
+                    <strong className="text-primary">{(data?.production_per_24h ?? 1000).toLocaleString()}</strong> per 24h. You can only buy{' '}
+                    <strong>basic armour (level 1)</strong> and <strong>Brass Knuckles</strong> here — claim this armoury (or use another state&apos;s owned shop) for higher tiers.
+                  </p>
+                </div>
+              )}
               {/* Buy Bullets Section */}
               {canBuy && pricePerBullet != null && (
                 <div className="rounded-lg p-2.5 sm:p-3 bg-gradient-to-br from-zinc-800/60 to-zinc-800/40 border border-zinc-700/40">
@@ -781,12 +884,12 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                               ) : (
                                 <button
                                   type="button"
-                                  disabled={buyingArmourLevel != null || !canAffordArmour}
+                                  disabled={buyingArmourLevel != null || !canAffordArmour || opt.unowned_restricted}
                                   onClick={() => buyArmour(opt.level)}
                                   className={`px-2 sm:px-2.5 py-1 sm:py-1.5 rounded text-[9px] sm:text-[10px] font-heading font-bold border transition-all truncate max-w-[140px] sm:max-w-[160px] ${
-                                    inStock ? 'bg-primary/10 border-primary/40 text-primary hover:bg-primary/20 active:scale-95' : 'bg-zinc-800/50 border-zinc-700/30 text-zinc-500'
+                                    inStock && !opt.unowned_restricted ? 'bg-primary/10 border-primary/40 text-primary hover:bg-primary/20 active:scale-95' : 'bg-zinc-800/50 border-zinc-700/30 text-zinc-500'
                                   } disabled:opacity-50 disabled:cursor-not-allowed`}
-                                  title={opt.name}
+                                  title={opt.unowned_restricted ? 'Claim an owned armoury for higher tiers' : opt.name}
                                 >
                                   {opt.name} {isPoints ? `${Number(cost).toLocaleString()}p` : formatMoney(cost)}
                                   {inStock && <span className="ml-1 text-[7px] text-emerald-400">({opt.armoury_stock})</span>}
@@ -1185,43 +1288,174 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                         );
                       })()}
                     </div>
+
+                    {/* Single tier / single weapon (1 hr each) — pay only what you start */}
+                    {(data?.armour_produce_tier_costs?.length > 0 || data?.weapon_produce_costs?.length > 0) && (
+                      <div className="space-y-2 pt-2 border-t border-zinc-700/40">
+                        <p className="text-[8px] sm:text-[9px] text-zinc-500 font-heading uppercase tracking-widest">
+                          Or produce one item (1 hr)
+                        </p>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                          <div className="rounded bg-zinc-900/40 p-2 border border-zinc-700/30 space-y-1.5">
+                            <p className="text-[8px] text-zinc-500 font-heading uppercase">Armour by level</p>
+                            {(data?.armour_produce_tier_costs || []).map((row) => {
+                              const hrs = Number(data?.armour_production_hours?.[String(row.level)] ?? data?.armour_production_hours?.[row.level] ?? 0);
+                              const busy = hrs > 0.01;
+                              const cm = row.cost_money || 0;
+                              const cp = row.cost_points || 0;
+                              const canAffordOne = (me?.money ?? 0) >= cm && (me?.points ?? 0) >= cp;
+                              const label = [cm > 0 ? formatMoney(cm) : null, cp > 0 ? `${cp.toLocaleString()}p` : null].filter(Boolean).join(' · ') || '—';
+                              return (
+                                <button
+                                  key={row.level}
+                                  type="button"
+                                  disabled={producingArmourLevel != null || busy || !canAffordOne}
+                                  onClick={() => startArmourProductionOne(row.level)}
+                                  className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded text-[9px] sm:text-[10px] font-heading border ${
+                                    busy
+                                      ? 'border-amber-700/40 text-amber-500/80 cursor-not-allowed'
+                                      : canAffordOne
+                                        ? 'border-zinc-600/50 text-foreground hover:border-primary/40'
+                                        : 'border-zinc-700/30 text-zinc-600 cursor-not-allowed'
+                                  } disabled:opacity-50`}
+                                >
+                                  <span>Lv.{row.level}{busy ? ` (${hrs.toFixed(1)}h left)` : ''}</span>
+                                  <span className="text-zinc-400 truncate">{producingArmourLevel === row.level ? '…' : label}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <div className="rounded bg-zinc-900/40 p-2 border border-zinc-700/30 space-y-1.5 max-h-56 overflow-y-auto">
+                            <p className="text-[8px] text-zinc-500 font-heading uppercase sticky top-0 bg-zinc-900/95 pb-1">Weapons (one at a time)</p>
+                            {(data?.weapon_produce_costs || []).map((w) => {
+                              const hrs = Number(data?.weapon_production_hours?.[w.id] ?? 0);
+                              const busy = hrs > 0.01;
+                              const cm = w.cost_money || 0;
+                              const cp = w.cost_points || 0;
+                              const canAffordOne = (me?.money ?? 0) >= cm && (me?.points ?? 0) >= cp;
+                              const label = [cm > 0 ? formatMoney(cm) : null, cp > 0 ? `${cp.toLocaleString()}p` : null].filter(Boolean).join(' · ') || '—';
+                              const shortName = (w.name || w.id || '').replace(/\s*\(.*\)/, '').trim();
+                              return (
+                                <button
+                                  key={w.id}
+                                  type="button"
+                                  disabled={producingWeaponOneId != null || busy || !canAffordOne}
+                                  onClick={() => startWeaponProductionOne(w.id)}
+                                  className={`w-full flex items-center justify-between gap-2 px-2 py-1.5 rounded text-[8px] sm:text-[9px] font-heading border ${
+                                    busy
+                                      ? 'border-amber-700/40 text-amber-500/80 cursor-not-allowed'
+                                      : canAffordOne
+                                        ? 'border-zinc-600/50 text-foreground hover:border-primary/40'
+                                        : 'border-zinc-700/30 text-zinc-600 cursor-not-allowed'
+                                  } disabled:opacity-50`}
+                                >
+                                  <span className="truncate text-left">{shortName}{busy ? ` (${hrs.toFixed(1)}h)` : ''}</span>
+                                  <span className="text-zinc-400 shrink-0">{producingWeaponOneId === w.id ? '…' : label}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
 
               {/* Bullet Price & Claim */}
               {isOwner && (
-                <div className="rounded-lg p-2.5 sm:p-3 bg-gradient-to-br from-zinc-800/60 to-zinc-800/40 border border-zinc-700/40">
-                  <div className="text-[9px] sm:text-[10px] text-zinc-500 font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <Crosshair size={10} className="sm:w-[11px] sm:h-[11px]" />
-                    Set Sell Price
-                  </div>
-                  <form onSubmit={setPrice} className="flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-500 text-xs">$</span>
-                      <input
-                        type="number"
-                        min={priceMin}
-                        max={priceMax}
-                        placeholder={pricePerBullet != null ? String(pricePerBullet) : 'Price'}
-                        value={priceInput}
-                        onChange={(e) => setPriceInput(e.target.value)}
-                        className="w-full pl-5 pr-2 py-1.5 sm:py-2 bg-zinc-900/80 border border-zinc-600/40 rounded text-foreground font-heading text-xs sm:text-sm focus:border-primary/50 focus:outline-none"
-                      />
+                <>
+                  <div className="rounded-lg p-2.5 sm:p-3 bg-gradient-to-br from-zinc-800/60 to-zinc-800/40 border border-zinc-700/40">
+                    <div className="text-[9px] sm:text-[10px] text-zinc-500 font-heading uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                      <Crosshair size={10} className="sm:w-[11px] sm:h-[11px]" />
+                      Set Sell Price
                     </div>
-                    <span className="text-[9px] sm:text-[10px] text-zinc-500 shrink-0">/bullet</span>
-                    <button
-                      type="submit"
-                      disabled={settingPrice}
-                      className="px-3 sm:px-4 py-1.5 sm:py-2 bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-[10px] sm:text-xs uppercase rounded hover:bg-primary/30 active:scale-95 disabled:opacity-50 transition-all"
-                    >
-                      {settingPrice ? '...' : 'Set'}
-                    </button>
-                  </form>
-                  {pricePerBullet != null && (
-                    <p className="text-[9px] sm:text-[10px] text-zinc-500 mt-1.5">Current: {formatMoney(pricePerBullet)}/bullet</p>
+                    <form onSubmit={setPrice} className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-zinc-500 text-xs">$</span>
+                        <input
+                          type="number"
+                          min={priceMin}
+                          max={priceMax}
+                          placeholder={pricePerBullet != null ? String(pricePerBullet) : 'Price'}
+                          value={priceInput}
+                          onChange={(e) => setPriceInput(e.target.value)}
+                          className="w-full pl-5 pr-2 py-1.5 sm:py-2 bg-zinc-900/80 border border-zinc-600/40 rounded text-foreground font-heading text-xs sm:text-sm focus:border-primary/50 focus:outline-none"
+                        />
+                      </div>
+                      <span className="text-[9px] sm:text-[10px] text-zinc-500 shrink-0">/bullet</span>
+                      <button
+                        type="submit"
+                        disabled={settingPrice}
+                        className="px-3 sm:px-4 py-1.5 sm:py-2 bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-[10px] sm:text-xs uppercase rounded hover:bg-primary/30 active:scale-95 disabled:opacity-50 transition-all"
+                      >
+                        {settingPrice ? '...' : 'Set'}
+                      </button>
+                    </form>
+                    {pricePerBullet != null && (
+                      <p className="text-[9px] sm:text-[10px] text-zinc-500 mt-1.5">Current: {formatMoney(pricePerBullet)}/bullet</p>
+                    )}
+                  </div>
+
+                  {(data?.armour_money_price_defaults?.length > 0 || data?.weapon_money_price_defaults?.length > 0) && (
+                    <div className="rounded-lg p-2.5 sm:p-3 bg-gradient-to-br from-zinc-800/60 to-zinc-800/40 border border-zinc-700/40">
+                      <div className="text-[9px] sm:text-[10px] text-zinc-500 font-heading uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                        <Package size={10} className="sm:w-[11px] sm:h-[11px]" />
+                        Cash list prices (armour L1–3 & money guns)
+                      </div>
+                      <p className="text-[8px] sm:text-[9px] text-zinc-500 mb-2 font-heading">
+                        List price before event multiplier. Points armour (L4–5) and points weapons stay on the default formula. Max{' '}
+                        {formatMoney(data?.armoury_item_money_price_max ?? 5_000_000)} each. Clear a field + save to reset to default.
+                      </p>
+                      <form onSubmit={saveItemPrices} className="space-y-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <p className="text-[8px] text-zinc-600 font-heading uppercase">Armour (cash tiers)</p>
+                            {(data?.armour_money_price_defaults || []).map((d) => (
+                              <label key={d.level} className="flex items-center gap-2 text-[9px] sm:text-[10px] font-heading">
+                                <span className="text-zinc-500 w-14 shrink-0">L{d.level}</span>
+                                <span className="text-zinc-600 truncate flex-1" title={d.name}>{d.name}</span>
+                                <span className="text-zinc-600">$</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={data?.armoury_item_money_price_max ?? 5_000_000}
+                                  value={armourPriceInputs[d.level] ?? ''}
+                                  onChange={(e) => setArmourPriceInputs((prev) => ({ ...prev, [d.level]: e.target.value }))}
+                                  className="w-24 sm:w-28 px-1.5 py-1 bg-zinc-900/80 border border-zinc-600/40 rounded text-foreground text-[9px] sm:text-[10px]"
+                                />
+                              </label>
+                            ))}
+                          </div>
+                          <div className="space-y-1 max-h-40 overflow-y-auto pr-1">
+                            <p className="text-[8px] text-zinc-600 font-heading uppercase sticky top-0 bg-zinc-900/0">Weapons (cash)</p>
+                            {(data?.weapon_money_price_defaults || []).map((d) => (
+                              <label key={d.id} className="flex items-center gap-2 text-[8px] sm:text-[9px] font-heading">
+                                <span className="text-zinc-600 truncate flex-1" title={d.name}>{d.name}</span>
+                                <span className="text-zinc-600">$</span>
+                                <input
+                                  type="number"
+                                  min={1}
+                                  max={data?.armoury_item_money_price_max ?? 5_000_000}
+                                  value={weaponPriceInputs[d.id] ?? ''}
+                                  onChange={(e) => setWeaponPriceInputs((prev) => ({ ...prev, [d.id]: e.target.value }))}
+                                  className="w-24 sm:w-28 px-1.5 py-1 bg-zinc-900/80 border border-zinc-600/40 rounded text-foreground"
+                                />
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                        <button
+                          type="submit"
+                          disabled={settingItemPrices}
+                          className="w-full sm:w-auto px-3 py-1.5 bg-primary/15 border border-primary/45 text-primary font-heading font-bold text-[9px] sm:text-[10px] uppercase rounded hover:bg-primary/25 disabled:opacity-50"
+                        >
+                          {settingItemPrices ? 'Saving…' : 'Save item prices'}
+                        </button>
+                      </form>
+                    </div>
                   )}
-                </div>
+                </>
               )}
 
               {!hasOwner && (

@@ -21,7 +21,7 @@ export default function StoreWidget({ user }) {
           <ShoppingBag size={10} />
           Store
         </h2>
-        <Link to="/game/store" className="text-[9px] font-heading text-primary hover:text-primary/80 flex items-center gap-0.5">
+        <Link to="/game/store?tab=points" className="text-[9px] font-heading text-primary hover:text-primary/80 flex items-center gap-0.5">
           Browse <ChevronRight size={10} />
         </Link>
       </div>

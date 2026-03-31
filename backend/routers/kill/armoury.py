@@ -6,7 +6,7 @@ import os
 import sys
 import random
 import time
-from typing import Optional, List, Tuple
+from typing import Optional, List, Tuple, Dict
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import Depends, HTTPException, Request, Body
@@ -37,6 +37,7 @@ from utils.minigame_captcha_gate import require_turnstile_for_minigame_start
 
 # 5k bullets per 24h, effectively delivered every 20 mins (72 ticks per day)
 BULLET_FACTORY_TOTAL_PER_24H = 5000
+BULLET_FACTORY_UNOWNED_TOTAL_PER_24H = 1000  # unclaimed armoury: lower bullet stock cap
 BULLET_FACTORY_TICK_MINUTES = 20
 BULLET_FACTORY_PRODUCTION_PER_HOUR = BULLET_FACTORY_TOTAL_PER_24H / 24  # ~208.33
 BULLET_FACTORY_MAX_HOURS_CAP = 24  # cap accumulated at 24h of production (5000 total)
@@ -53,6 +54,78 @@ BULLET_FACTORY_UNOWNED_PRICE_MAX = 1000
 ARMOURY_ARMOUR_RATE_PER_HOUR = 5
 ARMOURY_WEAPON_RATE_PER_HOUR = 5
 ARMOURY_MAX_STOCK_PER_ITEM = 15
+
+# Unclaimed armoury: only basic stock sold to players (tier 1 armour, weapon1)
+ARMOURY_UNOWNED_ONLY_WEAPON_ID = "weapon1"
+
+# Owner-set cash list price (pre-event mult) for money armour / money weapons; points tiers unchanged
+ARMOURY_ITEM_MONEY_PRICE_MAX = 5_000_000
+
+
+def _clamp_armoury_money_list_price(v: int) -> int:
+    return max(1, min(ARMOURY_ITEM_MONEY_PRICE_MAX, int(v)))
+
+
+def _armour_money_list_base(armour: dict) -> Optional[int]:
+    cm = armour.get("cost_money")
+    if cm is None:
+        return None
+    return int(cm * ARMOUR_WEAPON_MARGIN)
+
+
+def _armour_money_override_list(factory: Optional[dict], level: int) -> Optional[int]:
+    if not factory:
+        return None
+    d = factory.get("armour_sell_price_money") or {}
+    v = d.get(str(level), d.get(level))
+    if v is None:
+        return None
+    try:
+        return _clamp_armoury_money_list_price(int(v))
+    except (TypeError, ValueError):
+        return None
+
+
+def _effective_armour_money_sell(armour: dict, factory: Optional[dict], mult: float) -> int:
+    base = _armour_money_list_base(armour)
+    if base is None:
+        return int(armour["cost_points"] * ARMOUR_WEAPON_MARGIN * mult)
+    ov = _armour_money_override_list(factory, int(armour["level"]))
+    list_pre_mult = ov if ov is not None else base
+    return int(list_pre_mult * mult)
+
+
+def _effective_armour_points_sell(armour: dict, mult: float) -> int:
+    return int(armour["cost_points"] * ARMOUR_WEAPON_MARGIN * mult)
+
+
+def _weapon_money_list_base(weapon: dict) -> Optional[int]:
+    pm = weapon.get("price_money")
+    if pm is None:
+        return None
+    return int(pm * ARMOUR_WEAPON_MARGIN)
+
+
+def _weapon_money_override_list(factory: Optional[dict], weapon_id: str) -> Optional[int]:
+    if not factory:
+        return None
+    d = factory.get("weapon_sell_price_money") or {}
+    v = d.get(weapon_id)
+    if v is None:
+        return None
+    try:
+        return _clamp_armoury_money_list_price(int(v))
+    except (TypeError, ValueError):
+        return None
+
+
+def _effective_weapon_money_sell(weapon: dict, factory: Optional[dict], mult: float) -> Optional[int]:
+    if weapon.get("price_money") is None:
+        return None
+    base = _weapon_money_list_base(weapon)
+    ov = _weapon_money_override_list(factory, weapon["id"])
+    list_pre_mult = ov if ov is not None else (base or 0)
+    return int(list_pre_mult * mult)
 
 # Store: buy bullets with points (pack size -> points cost)
 BULLET_PACKS = {5000: 100, 10000: 175, 50000: 775, 100000: 1525}  # matches store
@@ -247,6 +320,13 @@ class StateOptionalRequest(BaseModel):
 class SetPriceRequest(BaseModel):
     price_per_bullet: int
     state: Optional[str] = None
+
+
+class SetArmouryItemPricesRequest(BaseModel):
+    """Cash list prices (pre-event mult) for money armour L1–3 and money weapons. Points tiers unchanged. Max per field: ARMOURY_ITEM_MONEY_PRICE_MAX."""
+    state: Optional[str] = None
+    armour_sell_price_money: Optional[Dict[str, Optional[int]]] = None
+    weapon_sell_price_money: Optional[Dict[str, Optional[int]]] = None
 
 
 class SendToUserRequest(BaseModel):
@@ -445,6 +525,14 @@ async def _tick_armoury_production(state: str, factory: dict) -> dict:
     return factory
 
 
+def _bullet_cap_24h(factory: dict) -> int:
+    return BULLET_FACTORY_TOTAL_PER_24H if factory.get("owner_id") else BULLET_FACTORY_UNOWNED_TOTAL_PER_24H
+
+
+def _bullet_production_per_hour(factory: dict) -> float:
+    return _bullet_cap_24h(factory) / 24
+
+
 def _accumulated_bullets(factory: dict) -> int:
     last = factory.get("last_collected_at")
     if not last:
@@ -454,8 +542,10 @@ def _accumulated_bullets(factory: dict) -> int:
         return 0
     now = datetime.now(timezone.utc)
     hours = (now - last_dt).total_seconds() / 3600
-    raw = int(hours * BULLET_FACTORY_PRODUCTION_PER_HOUR)
-    return min(raw, BULLET_FACTORY_TOTAL_PER_24H)
+    cap = _bullet_cap_24h(factory)
+    rate = cap / 24
+    raw = int(hours * rate)
+    return min(raw, cap)
 
 
 async def get_bullet_factory(
@@ -473,6 +563,9 @@ async def get_bullet_factory(
         user = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1})
         owner_username = user.get("username") if user else "?"
     accumulated = _accumulated_bullets(factory)
+    cap_24 = _bullet_cap_24h(factory)
+    prod_per_hour = _bullet_production_per_hour(factory)
+    buy_max = min(BULLET_FACTORY_BUY_MAX_PER_PURCHASE, cap_24)
     is_owner = str(current_user.get("id") or "") == str(owner_id or "")
     price = factory.get("price_per_bullet")
     unowned_price = factory.get("unowned_price")
@@ -496,8 +589,8 @@ async def get_bullet_factory(
                 next_buy_available_at = next_ok.isoformat()
     out = {
         "state": state,
-        "production_per_hour": BULLET_FACTORY_PRODUCTION_PER_HOUR,
-        "production_per_24h": BULLET_FACTORY_TOTAL_PER_24H,
+        "production_per_hour": prod_per_hour,
+        "production_per_24h": cap_24,
         "production_tick_minutes": BULLET_FACTORY_TICK_MINUTES,
         "claim_cost": BULLET_FACTORY_CLAIM_COST,
         "owner_id": owner_id,
@@ -512,7 +605,7 @@ async def get_bullet_factory(
         "is_unowned": owner_id is None,
         "last_collected_at": factory.get("last_collected_at"),
         "is_owner": is_owner,
-        "buy_max_per_purchase": BULLET_FACTORY_BUY_MAX_PER_PURCHASE,
+        "buy_max_per_purchase": buy_max,
         "buy_cooldown_minutes": BULLET_FACTORY_BUY_COOLDOWN_MINUTES,
         "next_buy_available_at": next_buy_available_at,
     }
@@ -539,9 +632,43 @@ async def get_bullet_factory(
         # Produce-all costs (1 hr each for every armour level / every weapon)
         out["produce_all_armour_cost_money"] = sum((a.get("cost_money") or 0) for a in ARMOUR_SETS) * ARMOURY_ARMOUR_RATE_PER_HOUR
         out["produce_all_armour_cost_points"] = sum((a.get("cost_points") or 0) for a in ARMOUR_SETS) * ARMOURY_ARMOUR_RATE_PER_HOUR
-        weapons_for_cost = await db.weapons.find({}, {"_id": 0, "price_money": 1, "price_points": 1}).to_list(200)
+        weapons_for_cost = await db.weapons.find(
+            {},
+            {"_id": 0, "id": 1, "name": 1, "damage": 1, "price_money": 1, "price_points": 1, "loot_exclusive": 1},
+        ).to_list(200)
         out["produce_all_weapons_cost_money"] = sum((w.get("price_money") or 0) for w in weapons_for_cost) * ARMOURY_WEAPON_RATE_PER_HOUR
         out["produce_all_weapons_cost_points"] = sum((w.get("price_points") or 0) for w in weapons_for_cost) * ARMOURY_WEAPON_RATE_PER_HOUR
+        out["armour_produce_tier_costs"] = [
+            {
+                "level": a["level"],
+                "cost_money": int((a.get("cost_money") or 0) * ARMOURY_ARMOUR_RATE_PER_HOUR),
+                "cost_points": int((a.get("cost_points") or 0) * ARMOURY_ARMOUR_RATE_PER_HOUR),
+            }
+            for a in ARMOUR_SETS
+        ]
+        weapons_produce = [w for w in weapons_for_cost if not w.get("loot_exclusive")]
+        weapons_produce.sort(key=lambda w: (int(w.get("damage") or 0), str(w.get("id") or "")))
+        out["weapon_produce_costs"] = [
+            {
+                "id": w["id"],
+                "name": w.get("name") or w["id"],
+                "cost_money": int((w.get("price_money") or 0) * ARMOURY_WEAPON_RATE_PER_HOUR),
+                "cost_points": int((w.get("price_points") or 0) * ARMOURY_WEAPON_RATE_PER_HOUR),
+            }
+            for w in weapons_produce
+        ]
+        out["armour_sell_price_money"] = factory.get("armour_sell_price_money") or {}
+        out["weapon_sell_price_money"] = factory.get("weapon_sell_price_money") or {}
+        out["armour_money_price_defaults"] = [
+            {"level": a["level"], "name": a["name"], "default_list_money": int(a["cost_money"] * ARMOUR_WEAPON_MARGIN)}
+            for a in ARMOUR_SETS if a.get("cost_money") is not None
+        ]
+        out["weapon_money_price_defaults"] = [
+            {"id": w["id"], "name": w.get("name") or w["id"], "default_list_money": int(w["price_money"] * ARMOUR_WEAPON_MARGIN)}
+            for w in weapons_produce
+            if w.get("price_money") is not None
+        ]
+        out["armoury_item_money_price_max"] = ARMOURY_ITEM_MONEY_PRICE_MAX
     return out
 
 
@@ -880,6 +1007,57 @@ async def set_price(
     return {"message": f"Price set to ${price:,} per bullet", "price_per_bullet": price, "state": state}
 
 
+async def set_armoury_item_prices(
+    request: SetArmouryItemPricesRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Owner sets cash list price (before event multiplier) per money armour tier and per money weapon. Points armour/weapons use fixed formula."""
+    state = _normalize_state(request.state or current_user.get("current_state"))
+    factory = await _get_or_create_factory(state)
+    if factory.get("owner_id") != current_user["id"]:
+        raise HTTPException(status_code=403, detail="You do not own the armoury in this state")
+    weapons = await db.weapons.find(
+        {},
+        {"_id": 0, "id": 1, "price_money": 1, "price_points": 1, "loot_exclusive": 1},
+    ).to_list(200)
+    money_weapon_ids = {
+        w["id"] for w in weapons
+        if w.get("price_money") is not None and not w.get("loot_exclusive")
+    }
+    set_doc: dict = {}
+    if request.armour_sell_price_money is not None:
+        cur = dict(factory.get("armour_sell_price_money") or {})
+        for k, v in request.armour_sell_price_money.items():
+            try:
+                lv = int(k)
+            except (TypeError, ValueError):
+                continue
+            if lv not in (1, 2, 3):
+                continue
+            arm = next((a for a in ARMOUR_SETS if a["level"] == lv), None)
+            if not arm or arm.get("cost_money") is None:
+                continue
+            if v is None:
+                cur.pop(str(lv), None)
+            else:
+                cur[str(lv)] = _clamp_armoury_money_list_price(int(v))
+        set_doc["armour_sell_price_money"] = cur
+    if request.weapon_sell_price_money is not None:
+        cur = dict(factory.get("weapon_sell_price_money") or {})
+        for wid, v in request.weapon_sell_price_money.items():
+            if wid not in money_weapon_ids:
+                continue
+            if v is None:
+                cur.pop(wid, None)
+            else:
+                cur[wid] = _clamp_armoury_money_list_price(int(v))
+        set_doc["weapon_sell_price_money"] = cur
+    if not set_doc:
+        raise HTTPException(status_code=400, detail="No price updates provided")
+    await db.bullet_factory.update_one({"state": state}, {"$set": set_doc})
+    return {"message": "Item prices updated", "state": state, **set_doc}
+
+
 async def relinquish_bullet_factory(
     body: StateOptionalRequest = Body(default=StateOptionalRequest()),
     current_user: dict = Depends(get_current_user),
@@ -891,7 +1069,10 @@ async def relinquish_bullet_factory(
         raise HTTPException(status_code=403, detail="You do not own the armoury in this state")
     await db.bullet_factory.update_one(
         {"state": state},
-        {"$set": {"owner_id": None, "owner_username": None}},
+        {
+            "$set": {"owner_id": None, "owner_username": None},
+            "$unset": {"armour_sell_price_money": "", "weapon_sell_price_money": ""},
+        },
     )
     return {"message": f"Armoury in {state} relinquished. It is now unclaimed.", "state": state}
 
@@ -1043,7 +1224,8 @@ async def buy_bullets(
     last = _parse_utc(factory.get("last_collected_at"))
     if last is None:
         last = datetime.now(timezone.utc)
-    hours_consumed = amount / BULLET_FACTORY_PRODUCTION_PER_HOUR
+    prod_h = _bullet_production_per_hour(factory)
+    hours_consumed = amount / prod_h if prod_h > 0 else 0
     new_last = last + timedelta(seconds=hours_consumed * 3600)
     await db.bullet_factory.update_one(
         {"state": state},
@@ -1125,20 +1307,28 @@ async def get_armour_options(request: Request, current_user: dict = Depends(get_
     state = state_param or (current_user.get("current_state") or "").strip()
     factory = await get_armoury_for_state(state) if state else None
     armour_stock = (factory.get("armour_stock") or {}) if factory else {}
+    factory_owner_id = factory.get("owner_id") if factory else None
+    is_unowned_armoury = bool(factory and not factory_owner_id)
     rows = []
     for s in ARMOUR_SETS:
         cost_money = s.get("cost_money")
         cost_points = s.get("cost_points")
-        # Sell price = production cost * 35% margin, then event multiplier
-        effective_money = int(cost_money * ARMOUR_WEAPON_MARGIN * mult) if cost_money is not None else None
-        effective_points = int(cost_points * ARMOUR_WEAPON_MARGIN * mult) if cost_points is not None else None
+        if cost_money is not None:
+            effective_money = _effective_armour_money_sell(s, factory, mult)
+            effective_points = None
+        else:
+            effective_money = None
+            effective_points = _effective_armour_points_sell(s, mult)
         affordable = True
         # Must buy tiers in order: can only buy level L if you already own level L-1
         if s["level"] > 1 and owned_max < s["level"] - 1:
             affordable = False
-        if effective_money is not None and money < effective_money:
+        if cost_money is not None and money < effective_money:
             affordable = False
-        if effective_points is not None and points < effective_points:
+        if cost_points is not None and points < effective_points:
+            affordable = False
+        unowned_restricted = is_unowned_armoury and s["level"] > 1
+        if unowned_restricted:
             affordable = False
         level_key = str(s["level"])
         rows.append({
@@ -1153,6 +1343,7 @@ async def get_armour_options(request: Request, current_user: dict = Depends(get_
             "equipped": equipped_level == s["level"],
             "affordable": affordable,
             "armoury_stock": int(armour_stock.get(level_key, 0) or 0),
+            "unowned_restricted": unowned_restricted,
         })
     # Loot-exclusive armour (level 6) — always shown: owned → equip; not owned → grayed "Loot exclusive"
     from routers.money.loot_box import ARMOUR_LEVEL_6_NAME
@@ -1169,8 +1360,14 @@ async def get_armour_options(request: Request, current_user: dict = Depends(get_
         "affordable": False,
         "armoury_stock": 0,
         "loot_exclusive": True,
+        "unowned_restricted": False,
     })
-    return {"current_level": equipped_level, "owned_max": owned_max, "options": rows}
+    return {
+        "current_level": equipped_level,
+        "owned_max": owned_max,
+        "options": rows,
+        "unowned_armoury": is_unowned_armoury,
+    }
 
 
 async def buy_armour(request: ArmourBuyRequest, current_user: dict = Depends(get_current_user)):
@@ -1191,16 +1388,24 @@ async def buy_armour(request: ArmourBuyRequest, current_user: dict = Depends(get
     armour = next((a for a in ARMOUR_SETS if a["level"] == level), None)
     if not armour:
         raise HTTPException(status_code=404, detail="Armour not found")
+    state = (request.state or current_user.get("current_state") or "").strip()
+    factory = await get_armoury_for_state(state) if state else None
+    owner_id = factory.get("owner_id") if factory else None
+    if factory and not owner_id and level != 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Unclaimed armoury only sells basic armour (level 1). Claim an armoury for higher tiers.",
+        )
     ev = await get_effective_event()
     mult = ev.get("armour_weapon_cost", 1.0)
-    price = int(armour["cost_money"] * ARMOUR_WEAPON_MARGIN * mult) if armour.get("cost_money") is not None else int(armour["cost_points"] * ARMOUR_WEAPON_MARGIN * mult)
+    if armour.get("cost_money") is not None:
+        price = _effective_armour_money_sell(armour, factory, mult)
+    else:
+        price = _effective_armour_points_sell(armour, mult)
     currency_field = "money" if armour.get("cost_money") is not None else "points"
     insufficient_msg = "Insufficient cash" if currency_field == "money" else "Insufficient points"
 
     # Fulfill from armoury in same state if stock available (stock always decrements; owner gets 35% margin when buyer is not owner)
-    state = (request.state or current_user.get("current_state") or "").strip()
-    factory = await get_armoury_for_state(state) if state else None
-    owner_id = factory.get("owner_id") if factory else None
     state_key = factory.get("state") or _normalize_state(state) if factory else None
     if factory and state_key:
         if owner_id and owner_id != current_user["id"]:
@@ -1375,10 +1580,12 @@ async def get_weapons(request: Request, current_user: dict = Depends(get_current
     mult = ev.get("armour_weapon_cost", 1.0)
     weapons_dict = {w["id"]: w for w in weapons}
     weapon_stock = {}
+    unowned_armoury = False
     if state:
         factory = await get_armoury_for_state(state)
         if factory:
             weapon_stock = factory.get("weapon_stock") or {}
+            unowned_armoury = not factory.get("owner_id")
     result = []
     for weapon in weapons:
         if weapon.get("loot_exclusive") and weapons_map.get(weapon["id"], 0) < 1:
@@ -1401,7 +1608,13 @@ async def get_weapons(request: Request, current_user: dict = Depends(get_current
                 prev_quantity = weapons_map.get(prev_weapon_id, 0)
                 if prev_quantity < 1:
                     locked = True
+        if unowned_armoury and weapon["id"] != ARMOURY_UNOWNED_ONLY_WEAPON_ID:
+            locked = True
+            required_weapon_name = "Claim an owned armoury for better weapons"
         armoury_stock = int(weapon_stock.get(weapon["id"], 0) or 0)
+        ff = factory if state and factory else None
+        efm = _effective_weapon_money_sell(weapon, ff, mult)
+        efp = int(pp * ARMOUR_WEAPON_MARGIN * mult) if pp is not None else None
         result.append(WeaponResponse(
             id=weapon["id"],
             name=weapon["name"],
@@ -1411,8 +1624,8 @@ async def get_weapons(request: Request, current_user: dict = Depends(get_current
             rank_required=weapon["rank_required"],
             price_money=pm,
             price_points=pp,
-            effective_price_money=int(pm * ARMOUR_WEAPON_MARGIN * mult) if pm is not None else None,
-            effective_price_points=int(pp * ARMOUR_WEAPON_MARGIN * mult) if pp is not None else None,
+            effective_price_money=efm,
+            effective_price_points=efp,
             owned=quantity > 0,
             quantity=quantity,
             equipped=(quantity > 0 and equipped_weapon_id == weapon["id"]),
@@ -1476,6 +1689,14 @@ async def buy_weapon(weapon_id: str, request: WeaponBuyRequest, current_user: di
                     status_code=400,
                     detail=f"You must own {prev_weapon['name']} before buying this weapon"
                 )
+    state = (request.state or current_user.get("current_state") or "").strip()
+    factory = await get_armoury_for_state(state) if state else None
+    owner_id = factory.get("owner_id") if factory else None
+    if factory and not owner_id and weapon_id != ARMOURY_UNOWNED_ONLY_WEAPON_ID:
+        raise HTTPException(
+            status_code=400,
+            detail="Unclaimed armoury only sells Brass Knuckles. Claim an armoury for better weapons.",
+        )
     ev = await get_effective_event()
     mult = ev.get("armour_weapon_cost", 1.0)
     currency = (request.currency or "").strip().lower()
@@ -1484,7 +1705,10 @@ async def buy_weapon(weapon_id: str, request: WeaponBuyRequest, current_user: di
     if currency == "money":
         if weapon.get("price_money") is None:
             raise HTTPException(status_code=400, detail="This weapon can only be bought with points")
-        price = int(weapon["price_money"] * ARMOUR_WEAPON_MARGIN * mult)
+        pm = _effective_weapon_money_sell(weapon, factory, mult)
+        if pm is None:
+            raise HTTPException(status_code=400, detail="Invalid weapon price")
+        price = pm
         insufficient_msg = "Insufficient money"
     else:
         if weapon.get("price_points") is None:
@@ -1493,9 +1717,6 @@ async def buy_weapon(weapon_id: str, request: WeaponBuyRequest, current_user: di
         insufficient_msg = "Insufficient points"
 
     # Fulfill from armoury in same state if stock available (stock always decrements; owner gets 35% margin when buyer is not owner)
-    state = (request.state or current_user.get("current_state") or "").strip()
-    factory = await get_armoury_for_state(state) if state else None
-    owner_id = factory.get("owner_id") if factory else None
     state_key = factory.get("state") or _normalize_state(state) if factory else None
     if factory and state_key:
         needs_payment = owner_id and owner_id != current_user["id"]
@@ -2321,6 +2542,7 @@ def register(router):
     router.add_api_route("/bullet-factory/list", get_bullet_factory_list, methods=["GET"])
     router.add_api_route("/bullet-factory/claim", claim_bullet_factory, methods=["POST"])
     router.add_api_route("/bullet-factory/set-price", set_price, methods=["POST"])
+    router.add_api_route("/bullet-factory/set-item-prices", set_armoury_item_prices, methods=["POST"])
     router.add_api_route("/bullet-factory/relinquish", relinquish_bullet_factory, methods=["POST"])
     router.add_api_route("/bullet-factory/send-to-user", bullet_factory_send_to_user, methods=["POST"])
     router.add_api_route("/bullet-factory/sell-on-trade", bullet_factory_sell_on_trade, methods=["POST"])
