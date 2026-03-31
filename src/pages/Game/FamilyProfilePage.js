@@ -393,82 +393,6 @@ export default function FamilyProfilePage() {
         <div className="h-px mx-5 mb-0" style={{ background: 'repeating-linear-gradient(90deg,transparent,transparent 4px,rgba(var(--noir-primary-rgb),.1) 4px,rgba(var(--noir-primary-rgb),.1) 8px)' }} />
       </div>
 
-      {/* Territory: crew-owned properties + vault / travel perks */}
-      <div className={`relative ${styles.panel} rounded-xl overflow-hidden border border-primary/15 fp-in mobile-panel`} style={{ animationDelay: '0.05s' }}>
-        <div className="px-4 py-2.5 flex items-center gap-2 border-b border-primary/10">
-          <Building2 size={11} className="text-primary/60" />
-          <span className="text-[10px] font-heading font-bold text-primary/70 uppercase tracking-[0.2em]">Territory and perks</span>
-          {holdingsCount > 0 && (
-            <span className="text-[9px] text-zinc-500 font-heading ml-auto">{holdingsCount} holding{holdingsCount !== 1 ? 's' : ''}</span>
-          )}
-        </div>
-        <div className="px-4 py-3 space-y-4 text-[10px] text-zinc-400">
-          <div>
-            <p className="text-[9px] font-heading uppercase tracking-wider text-zinc-500 mb-2 flex items-center gap-1">
-              <Plane size={10} className="text-primary/50" /> Airports and armouries
-            </p>
-            {holdingsCount === 0 ? (
-              <p className="text-zinc-600 leading-relaxed">No airports, armouries, or casinos held by crew members yet.</p>
-            ) : (
-              <ul className="space-y-1.5">
-                {(ph.airports || []).map((a, i) => (
-                  <li key={`ap-${a.state}-${a.slot}-${i}`} className="flex flex-wrap gap-x-2 gap-y-0.5 text-zinc-300">
-                    <span className="text-primary/80 font-heading font-bold">Airport</span>
-                    <span>{a.state}{a.slot != null ? ` #${a.slot}` : ''}</span>
-                    <span className="text-zinc-500">— {a.owner_username}</span>
-                  </li>
-                ))}
-                {(ph.armouries || []).map((a, i) => (
-                  <li key={`bf-${a.state}-${i}`} className="flex flex-wrap gap-x-2 gap-y-0.5 text-zinc-300">
-                    <span className="text-primary/80 font-heading font-bold">Armoury</span>
-                    <span>{a.state}</span>
-                    <span className="text-zinc-500">— {a.owner_username}</span>
-                  </li>
-                ))}
-                {(ph.casinos || []).map((c, i) => (
-                  <li key={`cas-${c.game}-${c.city}-${i}`} className="flex flex-wrap gap-x-2 gap-y-0.5 text-zinc-300">
-                    <span className="text-primary/80 font-heading font-bold">{c.game}</span>
-                    <span>{c.city}{c.state && c.state !== c.city ? ` (${c.state})` : ''}</span>
-                    <span className="text-zinc-500">— {c.owner_username}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-          <div>
-            <p className="text-[9px] font-heading uppercase tracking-wider text-zinc-500 mb-2 flex items-center gap-1">
-              <Sparkles size={10} className="text-amber-500/70" /> Crew bonuses (vault and travel)
-            </p>
-            {(cb.summary_lines || []).length > 0 ? (
-              <ul className="space-y-1.5 text-zinc-300 leading-relaxed">
-                {(cb.summary_lines || []).map((line, i) => (
-                  <li key={i} className="flex gap-2">
-                    <span className="text-emerald-500/80 shrink-0">+</span>
-                    <span>{line}</span>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-zinc-600 leading-relaxed">
-                No active vault or airport crew bonuses right now. Bonuses apply when high command owns the right properties (airport + armoury for hourly vault bullets; airport crew perk set by the Don).
-              </p>
-            )}
-            {cb.treasury_bullets_hourly?.active && (
-              <p className="mt-2 text-[9px] text-emerald-400/90 font-heading">
-                Vault drip: {cb.treasury_bullets_hourly.min}–{cb.treasury_bullets_hourly.max} bullets/hour (UTC)
-              </p>
-            )}
-            {cb.airport_crew_perk?.active && (
-              <p className="mt-1 text-[9px] text-sky-400/90 font-heading">
-                {cb.airport_crew_perk.points_discount_percent > 0
-                  ? `Airport points: ${cb.airport_crew_perk.points_discount_percent}% off for the crew`
-                  : `Airport travel: −${cb.airport_crew_perk.travel_time_reduction_seconds || 1}s when flights use a timer`}
-              </p>
-            )}
-          </div>
-        </div>
-      </div>
-
       {/* ══════════════════════════════════════════
           HIERARCHY ORG CHART
       ══════════════════════════════════════════ */}
@@ -722,6 +646,85 @@ export default function FamilyProfilePage() {
             </div>
           </div>
         )}
+      </div>
+
+      {/* Territory: crew-owned properties + vault / travel perks (below chain of command) */}
+      <div className={`relative ${styles.panel} rounded-xl overflow-hidden border border-primary/15 fp-in mobile-panel`} style={{ animationDelay: '0.15s' }}>
+        <div className="px-4 py-2.5 flex items-center gap-2 border-b border-primary/10">
+          <Building2 size={11} className="text-primary/60" />
+          <span className="text-[10px] font-heading font-bold text-primary/70 uppercase tracking-[0.2em]">Territory and perks</span>
+          {holdingsCount > 0 && (
+            <span className="text-[9px] text-zinc-500 font-heading ml-auto">{holdingsCount} holding{holdingsCount !== 1 ? 's' : ''}</span>
+          )}
+        </div>
+        <div className="px-4 py-3 space-y-4 text-[10px] text-zinc-400">
+          <p className="text-[9px] text-zinc-600 leading-relaxed border-b border-primary/5 pb-3">
+            Each member may only own <span className="text-zinc-400 font-heading font-bold">one</span> major property: an airport <span className="text-zinc-500">or</span> an armoury (never both on the same account). Casinos are separate.
+          </p>
+          <div>
+            <p className="text-[9px] font-heading uppercase tracking-wider text-zinc-500 mb-2 flex items-center gap-1">
+              <Plane size={10} className="text-primary/50" /> Crew properties
+            </p>
+            {holdingsCount === 0 ? (
+              <p className="text-zinc-600 leading-relaxed">No airports, armouries, or casinos held by crew members yet.</p>
+            ) : (
+              <ul className="space-y-1.5">
+                {(ph.airports || []).map((a, i) => (
+                  <li key={`ap-${a.state}-${a.slot}-${i}`} className="flex flex-wrap gap-x-2 gap-y-0.5 text-zinc-300">
+                    <span className="text-primary/80 font-heading font-bold">Airport</span>
+                    <span>{a.state}{a.slot != null ? ` #${a.slot}` : ''}</span>
+                    <span className="text-zinc-500">— {a.owner_username}</span>
+                  </li>
+                ))}
+                {(ph.armouries || []).map((a, i) => (
+                  <li key={`bf-${a.state}-${i}`} className="flex flex-wrap gap-x-2 gap-y-0.5 text-zinc-300">
+                    <span className="text-primary/80 font-heading font-bold">Armoury</span>
+                    <span>{a.state}</span>
+                    <span className="text-zinc-500">— {a.owner_username}</span>
+                  </li>
+                ))}
+                {(ph.casinos || []).map((c, i) => (
+                  <li key={`cas-${c.game}-${c.city}-${i}`} className="flex flex-wrap gap-x-2 gap-y-0.5 text-zinc-300">
+                    <span className="text-primary/80 font-heading font-bold">{c.game}</span>
+                    <span>{c.city}{c.state && c.state !== c.city ? ` (${c.state})` : ''}</span>
+                    <span className="text-zinc-500">— {c.owner_username}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div>
+            <p className="text-[9px] font-heading uppercase tracking-wider text-zinc-500 mb-2 flex items-center gap-1">
+              <Sparkles size={10} className="text-amber-500/70" /> Crew bonuses (vault and travel)
+            </p>
+            {(cb.summary_lines || []).length > 0 ? (
+              <ul className="space-y-1.5 text-zinc-300 leading-relaxed">
+                {(cb.summary_lines || []).map((line, i) => (
+                  <li key={i} className="flex gap-2">
+                    <span className="text-emerald-500/80 shrink-0">+</span>
+                    <span>{line}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-zinc-600 leading-relaxed">
+                No active vault or airport crew bonuses right now. Hourly vault bullets need <span className="text-zinc-400">two</span> high-command members: one with an airport and one with an armoury. The Don can pick an airport crew perk (travel or points) when high command holds an airport.
+              </p>
+            )}
+            {cb.treasury_bullets_hourly?.active && (
+              <p className="mt-2 text-[9px] text-emerald-400/90 font-heading">
+                Vault drip: {cb.treasury_bullets_hourly.min}–{cb.treasury_bullets_hourly.max} bullets/hour (UTC)
+              </p>
+            )}
+            {cb.airport_crew_perk?.active && (
+              <p className="mt-1 text-[9px] text-sky-400/90 font-heading">
+                {cb.airport_crew_perk.points_discount_percent > 0
+                  ? `Airport points: ${cb.airport_crew_perk.points_discount_percent}% off for the crew`
+                  : `Airport travel: −${cb.airport_crew_perk.travel_time_reduction_seconds || 1}s when flights use a timer`}
+              </p>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* ══════════════════════════════════════════

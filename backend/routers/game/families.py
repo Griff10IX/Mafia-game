@@ -860,7 +860,10 @@ async def family_crew_bonuses_summary(family_id: str, fam_doc: dict) -> dict:
             travel_red_s = 1
     lines: List[str] = []
     if treasury_hourly_active:
-        lines.append("Family vault earns 100–200 random bullets per hour (high command holds an airport and an armoury).")
+        lines.append(
+            "Family vault earns 100-200 random bullets per hour when high command includes an airport owner and an armoury owner "
+            "(two different members; each person may only own an airport or an armoury, not both)."
+        )
     if perk_active:
         if pts_pct:
             lines.append("Airport crew: 10% off airport points for all members (Don's perk, high command owns an airport).")

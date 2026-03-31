@@ -2431,6 +2431,9 @@ export default function FamilyPage() {
                   Territory and perks
                   {n > 0 && <span className="text-zinc-500 font-normal normal-case ml-auto">{n} crew holding{n !== 1 ? 's' : ''}</span>}
                 </div>
+                <p className="text-[8px] text-zinc-600 leading-snug border-b border-primary/5 pb-2">
+                  Each member may only own <span className="text-zinc-400 font-heading font-bold">one</span> major property: an airport <span className="text-zinc-500">or</span> an armoury (never both). Casinos are separate.
+                </p>
                 {n > 0 ? (
                   <ul className="text-[10px] text-zinc-400 space-y-0.5 max-h-28 overflow-y-auto">
                     {(ph.airports || []).map((a, i) => (
@@ -2454,7 +2457,7 @@ export default function FamilyPage() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-[9px] text-zinc-600 pt-1 border-t border-primary/10 flex items-start gap-1"><Plane size={10} className="shrink-0 mt-0.5 opacity-50" /> Hourly vault bullets and airport crew perks apply when high command owns the right properties.</p>
+                  <p className="text-[9px] text-zinc-600 pt-1 border-t border-primary/10 flex items-start gap-1 leading-snug"><Plane size={10} className="shrink-0 mt-0.5 opacity-50" /> No active vault or airport crew bonuses right now. Hourly vault bullets need <span className="text-zinc-400">two</span> high-command members: one with an airport and one with an armoury. The Don can pick an airport crew perk (travel or points) when high command holds an airport.</p>
                 )}
               </div>
             );
