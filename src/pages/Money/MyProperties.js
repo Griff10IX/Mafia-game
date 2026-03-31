@@ -43,6 +43,7 @@ export default function MyProperties() {
   const [bulletPrice, setBulletPrice] = useState('');
   const [armouryDetail, setArmouryDetail] = useState(null);
   const [armourySellPoints, setArmourySellPoints] = useState('');
+  const [armouryTransferUsername, setArmouryTransferUsername] = useState('');
 
   const fetchMyProperties = useCallback(async () => {
     try {
@@ -313,6 +314,25 @@ export default function MyProperties() {
     }
   };
 
+  const handleArmouryTransfer = async () => {
+    const p = data.property;
+    if (!p || p.type !== 'bullet_factory' || saving) return;
+    const username = (armouryTransferUsername || '').trim();
+    if (!username) { toast.error('Enter a username'); return; }
+    setSaving(true);
+    try {
+      await api.post('/bullet-factory/send-to-user', { state: p.state, target_username: username });
+      toast.success('Armoury transferred');
+      setArmouryTransferUsername('');
+      fetchMyProperties();
+      window.dispatchEvent(new CustomEvent('app:refresh-user'));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
@@ -553,6 +573,19 @@ export default function MyProperties() {
                   <span className="text-[11px] text-mutedForeground w-16 shrink-0">Collect</span>
                   <button type="button" onClick={handleBulletCollect} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading uppercase disabled:opacity-50">
                     {saving ? '...' : 'Collect'}
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-2 items-center mb-2">
+                  <span className="text-[11px] text-mutedForeground w-16 shrink-0">Transfer</span>
+                  <input
+                    type="text"
+                    value={armouryTransferUsername}
+                    onChange={(e) => setArmouryTransferUsername(e.target.value)}
+                    placeholder="Username"
+                    className="flex-1 min-w-24 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm"
+                  />
+                  <button type="button" onClick={handleArmouryTransfer} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading uppercase disabled:opacity-50">
+                    {saving ? '...' : 'Send'}
                   </button>
                 </div>
                 <div className="flex flex-wrap gap-2 items-center mb-2">

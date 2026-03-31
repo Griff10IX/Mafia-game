@@ -249,6 +249,11 @@ class SetPriceRequest(BaseModel):
     state: Optional[str] = None
 
 
+class SendToUserRequest(BaseModel):
+    target_username: str
+    state: Optional[str] = None
+
+
 class SellOnTradeRequest(BaseModel):
     points: int
     state: Optional[str] = None
@@ -889,6 +894,47 @@ async def relinquish_bullet_factory(
         {"$set": {"owner_id": None, "owner_username": None}},
     )
     return {"message": f"Armoury in {state} relinquished. It is now unclaimed.", "state": state}
+
+
+async def bullet_factory_send_to_user(
+    request: SendToUserRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """Transfer armoury ownership to another user."""
+    from server import _user_owns_any_property
+    target_username = (request.target_username or "").strip()
+    if not target_username:
+        raise HTTPException(status_code=400, detail="Enter a username")
+    state = _normalize_state(request.state or current_user.get("current_state"))
+    factory = await _get_or_create_factory(state)
+    if factory.get("owner_id") != current_user["id"]:
+        owned = await db.bullet_factory.find_one({"owner_id": current_user["id"]}, {"_id": 0, "state": 1})
+        if not owned:
+            raise HTTPException(status_code=403, detail="You do not own an armoury")
+        state = _normalize_state(owned["state"])
+        factory = await _get_or_create_factory(state)
+        if factory.get("owner_id") != current_user["id"]:
+            raise HTTPException(status_code=403, detail="You do not own the armoury in this state")
+    target_pattern = _username_pattern(target_username)
+    target = await db.users.find_one({"username": target_pattern}, {"_id": 0, "id": 1, "username": 1, "rank_points": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    if target["id"] == current_user["id"]:
+        raise HTTPException(status_code=400, detail="Cannot transfer to yourself")
+    owned_prop = await _user_owns_any_property(target["id"])
+    if owned_prop:
+        raise HTTPException(status_code=400, detail="That user already owns a property (airport or armoury)")
+    transfer_set = {"owner_id": target["id"], "owner_username": target.get("username", target_username), "total_earnings": 0}
+    if get_rank_info(target.get("rank_points", 0))[0] < CAPO_RANK_ID:
+        transfer_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
+    await db.bullet_factory.update_one({"state": state}, {"$set": transfer_set})
+    await log_activity(
+        current_user["id"],
+        current_user.get("username", "?"),
+        "armoury_transfer",
+        {"state": state, "to_user": target.get("username", target_username), "to_user_id": target["id"]},
+    )
+    return {"message": f"Armoury in {state} transferred to {target.get('username', target_username)}.", "state": state}
 
 
 async def bullet_factory_sell_on_trade(
@@ -2288,6 +2334,7 @@ def register(router):
     router.add_api_route("/bullet-factory/claim", claim_bullet_factory, methods=["POST"])
     router.add_api_route("/bullet-factory/set-price", set_price, methods=["POST"])
     router.add_api_route("/bullet-factory/relinquish", relinquish_bullet_factory, methods=["POST"])
+    router.add_api_route("/bullet-factory/send-to-user", bullet_factory_send_to_user, methods=["POST"])
     router.add_api_route("/bullet-factory/sell-on-trade", bullet_factory_sell_on_trade, methods=["POST"])
     router.add_api_route("/bullet-factory/collect", collect_bullet_factory, methods=["POST"])
     router.add_api_route("/bullet-factory/buy", buy_bullets, methods=["POST"])

@@ -185,16 +185,6 @@ def register(router):
         if elapsed < MIN_PLAY_SECONDS:
             raise HTTPException(status_code=400, detail="Game too short.")
 
-        sess_meta = sess.get("meta") or {}
-        sess_theme = (sess_meta.get("theme") or "classic").strip()
-        sess_speed = sess_meta.get("speed", "normal")
-        sess_diff = sess_meta.get("difficulty", "normal")
-        claim_theme = (payload.theme or "classic").strip()
-        claim_speed = (payload.speed or "normal").strip()
-        claim_diff = (payload.difficulty or "normal").strip()
-        if claim_theme != sess_theme or claim_speed != sess_speed or claim_diff != sess_diff:
-            raise HTTPException(status_code=400, detail="Theme/speed/difficulty mismatch with session.")
-
         score = raw_score
 
         result = await db.user_meta.update_one(
