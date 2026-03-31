@@ -295,7 +295,9 @@ export default function MyInventory() {
                       </div>
                       {desc && <div className="text-[9px] text-mutedForeground mt-0.5">{desc}</div>}
                       {active && t.active_until && (
-                        <div className="text-[9px] text-primary mt-0.5">Active until {new Date(t.active_until).toLocaleString()}</div>
+                        <div className="text-[9px] text-primary mt-0.5">
+                          Active until {new Date(t.active_until).toLocaleString(undefined, { timeZone: 'UTC' })} UTC
+                        </div>
                       )}
                       {!active && key === 'rank_xp_pass' && t.expires_at && (
                         <div className="text-[9px] text-amber-300 mt-0.5">
