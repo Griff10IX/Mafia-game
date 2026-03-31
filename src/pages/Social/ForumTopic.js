@@ -1063,7 +1063,7 @@ export default function ForumTopic() {
         </div>
       )}
 
-      {/* Staff controls: Admin/Mod = sticky, important, lock; HDO = lock only; Admin only = delete */}
+      {/* Staff controls: Admin/Mod = sticky, important, lock; HDO = lock only; Admin/Mod/HDO = delete topic */}
       {(isAdmin || isModerator || isHdo) && (
         <div className="flex flex-wrap items-center gap-1.5">
           {(isAdmin || isModerator || isHdo) && <span className="text-[10px] text-amber-400 font-heading uppercase mr-1">Staff:</span>}
@@ -1100,7 +1100,7 @@ export default function ForumTopic() {
               <Lock size={10} /> {topic.is_locked ? 'Unlock' : 'Lock'}
             </button>
           )}
-          {isAdmin && (
+          {(isAdmin || isModerator || isHdo) && (
             <button
               onClick={deleteTopic}
               disabled={adminBusy}

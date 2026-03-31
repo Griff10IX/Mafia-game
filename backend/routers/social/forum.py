@@ -1215,9 +1215,9 @@ async def delete_topic(
     topic_id: str,
     current_user: dict = Depends(get_current_user),
 ):
-    """Admin only: delete a topic and all its comments."""
-    if not _is_admin(current_user):
-        raise HTTPException(status_code=403, detail="Admin only")
+    """Admin/Mod/HDO: delete a topic and all its comments."""
+    if not (_is_admin(current_user) or _is_moderator(current_user) or _is_hdo(current_user)):
+        raise HTTPException(status_code=403, detail="Staff only")
     topic = await db.forum_topics.find_one({"id": topic_id}, {"_id": 0})
     if not topic:
         raise HTTPException(status_code=404, detail="Topic not found")
