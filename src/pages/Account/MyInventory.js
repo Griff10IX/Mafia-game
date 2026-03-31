@@ -276,7 +276,7 @@ export default function MyInventory() {
             </div>
             <div className="p-2.5 space-y-2">
               <p className="text-[8px] text-mutedForeground font-heading leading-snug border-b border-zinc-700/30 pb-2 mb-1">
-                Use all spends every token needed to reach this row&apos;s max stack (or until you run out). Extra tokens stay in your inventory.
+                Use all only spends tokens that add a full token duration toward this row&apos;s max stack (or until you run out). Tiny leftover headroom is not filled, and extra tokens stay in your inventory.
               </p>
               {TOKEN_TYPES.filter((key) => (tokens[key]?.count ?? 0) > 0 || tokens[key]?.active_until).map((key) => {
                 const t = tokens[key] || { count: 0, active_until: null, expires_at: null };

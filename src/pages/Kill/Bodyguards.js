@@ -106,10 +106,16 @@ export default function Bodyguards() {
     return () => clearInterval(id);
   }, [inflationWindowEndsAt]);
 
+  /** Avoid stale cached GET responses (browser/CDN) so hire price + inflation % update without full page refresh. */
+  const noCacheGetConfig = () => ({
+    params: { _: Date.now() },
+    headers: { 'Cache-Control': 'no-cache', Pragma: 'no-cache' },
+  });
+
   const fetchData = async () => {
     try {
       const [bodyguardsRes, userRes, eventsRes, inflationRes, statsRes, invitesRes] = await Promise.all([
-        api.get('/bodyguards'),
+        api.get('/bodyguards', noCacheGetConfig()),
         api.get('/auth/me'),
         api.get('/events/active').catch((e) => {
           if (process.env.NODE_ENV === 'development') {
@@ -117,7 +123,7 @@ export default function Bodyguards() {
           }
           return { data: { event: null, events_enabled: false } };
         }),
-        api.get('/bodyguards/inflation').catch((e) => {
+        api.get('/bodyguards/inflation', noCacheGetConfig()).catch((e) => {
           if (process.env.NODE_ENV === 'development') {
             console.warn('[Bodyguards] inflation failed', e?.response?.status, e?.response?.data);
           }
@@ -210,6 +216,14 @@ export default function Bodyguards() {
       toast.success(response?.data?.message ?? 'Bodyguard hired', { duration: 10000 });
       refreshUser().catch(() => {});
       await fetchData();
+      // Second inflation fetch after hire so button PTS / +% always reflect server (avoids any stale parallel read).
+      try {
+        const inflRes = await api.get('/bodyguards/inflation', noCacheGetConfig());
+        setNextHireInflationPct(inflRes.data?.next_hire_inflation_pct ?? 0);
+        setInflationWindowEndsAt(inflRes.data?.inflation_window_ends_at ?? null);
+      } catch {
+        /* ignore; fetchData already set inflation */
+      }
     } catch (error) {
       const raw = error.response?.data?.detail;
       const detail =

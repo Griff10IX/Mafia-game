@@ -1964,21 +1964,23 @@ def _tokens_to_reach_stack_cap(user_doc: dict, token_type: str) -> Tuple[int, Op
         return 0, None
     now = datetime.now(timezone.utc)
     cap_until = now + timedelta(hours=max_stack_hours)
-    sim_until = _parse_until(user_doc.get(until_field))
-    to_use = 0
-    sim_count = count
-    while sim_count > 0:
-        if sim_until and sim_until > now:
-            add_until = sim_until + timedelta(hours=duration_hours)
-            new_until = min(add_until, cap_until)
-            if new_until <= sim_until:
-                break
-        else:
-            new_until = now + timedelta(hours=min(duration_hours, max_stack_hours))
-        sim_until = new_until
-        sim_count -= 1
-        to_use += 1
-    return to_use, sim_until
+    current_until = _parse_until(user_doc.get(until_field))
+    baseline = current_until if current_until and current_until > now else now
+
+    duration_seconds = int(timedelta(hours=duration_hours).total_seconds())
+    if duration_seconds <= 0:
+        return 0, None
+
+    headroom_seconds = int((cap_until - baseline).total_seconds())
+    if headroom_seconds < duration_seconds:
+        return 0, None
+
+    full_tokens_that_fit = headroom_seconds // duration_seconds
+    to_use = min(count, full_tokens_that_fit)
+    if to_use < 1:
+        return 0, None
+
+    return to_use, baseline + timedelta(seconds=duration_seconds * to_use)
 
 
 async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depends(get_current_user)):
@@ -2007,21 +2009,7 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
         duration_td = timedelta(hours=duration_hours)
 
         if req.use_all:
-            to_use = 0
-            sim_count = count
-            sim_until = existing_until
-            while sim_count > 0:
-                if sim_until and sim_until > now:
-                    add_until = sim_until + duration_td
-                    new_until = min(add_until, cap_until)
-                    if new_until <= sim_until:
-                        break
-                else:
-                    new_until = now + timedelta(hours=min(duration_hours, max_stack_hours))
-                sim_until = new_until
-                sim_count -= 1
-                to_use += 1
-
+            to_use, sim_until = _tokens_to_reach_stack_cap(current_user, req.token_type)
             if to_use < 1 or sim_until is None:
                 raise HTTPException(
                     status_code=400,

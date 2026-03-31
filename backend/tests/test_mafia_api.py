@@ -6,6 +6,10 @@ import pytest
 import requests
 import os
 import uuid
+from datetime import datetime, timedelta, timezone
+
+from fastapi import HTTPException
+from routers.kill.armoury import UseTokenRequest, _tokens_to_reach_stack_cap, use_consumable_token
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://gangsters-haven.preview.emergentagent.com').rstrip('/')
 
@@ -424,3 +428,49 @@ class TestPointProvenance:
         assert data["payment_session_id"] == fake_session
         assert "requested" in data
         assert "eligible_remaining" in data
+
+
+class TestTokenUseAllNoWaste:
+    """Unit-level checks for inventory token use_all edge behavior."""
+
+    def test_tokens_to_reach_stack_cap_ignores_tiny_headroom(self):
+        now = datetime.now(timezone.utc)
+        user_doc = {
+            "xp_crimes_tokens": 10,
+            "xp_crimes_until": (now + timedelta(hours=23, minutes=59)).isoformat(),
+        }
+        to_use, new_until = _tokens_to_reach_stack_cap(user_doc, "xp_crimes")
+        assert to_use == 0
+        assert new_until is None
+
+    def test_tokens_to_reach_stack_cap_exact_multiple_consumes_expected_count(self):
+        user_doc = {
+            "xp_crimes_tokens": 30,
+            "xp_crimes_until": None,
+        }
+        to_use, new_until = _tokens_to_reach_stack_cap(user_doc, "xp_crimes")
+        assert to_use == 24
+        assert new_until is not None
+
+    def test_auto_rank_use_all_near_cap_consumes_zero_tokens(self):
+        now = datetime.now(timezone.utc)
+        user_doc = {
+            "auto_rank_2h_tokens": 10,
+            "auto_rank_trial_until": (now + timedelta(hours=23)).isoformat(),
+        }
+        to_use, new_until = _tokens_to_reach_stack_cap(user_doc, "auto_rank_2h")
+        assert to_use == 0
+        assert new_until is None
+
+    @pytest.mark.asyncio
+    async def test_use_all_returns_400_when_headroom_less_than_one_token(self):
+        now = datetime.now(timezone.utc)
+        user_doc = {
+            "id": "test-user-1",
+            "xp_crimes_tokens": 4,
+            "xp_crimes_until": (now + timedelta(hours=23, minutes=59)).isoformat(),
+        }
+        req = UseTokenRequest(token_type="xp_crimes", use_all=True)
+        with pytest.raises(HTTPException) as exc_info:
+            await use_consumable_token(req, current_user=user_doc)
+        assert exc_info.value.status_code == 400
