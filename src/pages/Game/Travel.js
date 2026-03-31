@@ -135,6 +135,8 @@ const DestinationCard = ({
   const listedAirport = airport ? (airport.price_per_travel ?? 10) : (travelInfo.airport_cost ?? 10);
   const payAirport = airport ? (airport.effective_price ?? listedAirport) : (travelInfo.airport_cost ?? 10);
   const canUse = !travelDisabled && !travelInfo.carrying_booze && (travelInfo.user_points ?? 0) >= payAirport;
+  const familyAirportPts = !!travelInfo.family_airport_points_discount;
+  const familyAirportTimeRed = (travelInfo.family_airport_travel_reduction_seconds ?? 0) > 0;
 
   const destImgSrc = locationImageSrc(destination);
   return (
@@ -163,8 +165,10 @@ const DestinationCard = ({
                   ? ' (5% off – you own an airport)'
                   : travelInfo.travel_boost_applies_to_car_times
                     ? ' (travel boost)'
-                    : ' (discount)')
-            : '';
+                    : familyAirportPts
+                      ? ' (10% off – family airport perk)'
+                      : ' (discount)')
+            : (familyAirportTimeRed ? ' (family airport perk: faster travel)' : '');
           return (
             <button
               key={airport.slot}
@@ -185,7 +189,7 @@ const DestinationCard = ({
               </span>
               <span className="text-[9px] text-mutedForeground font-heading">
                 {travelInfo.airport_time > 0 ? `${travelInfo.airport_time}s` : 'Instant'} · {displayPrice}pts
-                {cheaperThanListed && <span className="text-emerald-400 ml-0.5">{getsOwnerDiscount && travelInfo.travel_boost_applies_to_car_times ? '(off)' : getsOwnerDiscount ? '(5% off)' : '(boost)'}</span>}
+                {cheaperThanListed && <span className="text-emerald-400 ml-0.5">{getsOwnerDiscount && travelInfo.travel_boost_applies_to_car_times ? '(off)' : getsOwnerDiscount ? '(5% off)' : familyAirportPts ? '(10% crew)' : '(boost)'}</span>}
               </span>
             </button>
           );

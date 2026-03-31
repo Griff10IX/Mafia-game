@@ -494,7 +494,7 @@ TRAVEL_TIMES = {
     "uncommon": 35,
     "common": 45,
     "custom": 12,  # Custom car from points
-    "airport": 0   # Airport (instant)
+    "airport": 0   # Airport (instant); set > 0 for timed flights (family -1s perk applies to this value)
 }
 
 # Melt-for-bullets: floor(car_value / MELT_VALUE_PER_BULLET) per car — see gta._melt_cars_impl

@@ -2322,6 +2322,21 @@ export default function Admin() {
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
   };
 
+  const handleRemoveGamePass = async () => {
+    if (!(formData.targetUsername || '').trim()) {
+      toast.error('Enter target username');
+      return;
+    }
+    if (!window.confirm(`Remove Game Pass state for ${formData.targetUsername}? Unactivated tokens, active bonus, and tier snapshots are cleared. They can buy or receive a pass again.`)) return;
+    try {
+      const qs = new URLSearchParams({ target_username: formData.targetUsername.trim() });
+      const response = await api.post(`/admin/remove-game-pass?${qs.toString()}`);
+      toast.success(response.data.message);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    }
+  };
+
   const handleAddBullets = async () => {
     try {
       const response = await api.post(`/admin/add-bullets?target_username=${formData.targetUsername}&bullets=${formData.bullets}`);
@@ -6593,7 +6608,7 @@ export default function Admin() {
             <ActionRow
               icon={Gift}
               label="Grant Game Pass"
-              description="Grants an unactivated Game Pass token; user activates it in My Inventory."
+              description="Grants an unactivated Game Pass token; user activates it in My Inventory. Remove clears all pass state so they can buy again."
             >
               <Input
                 type="number"
@@ -6604,6 +6619,7 @@ export default function Admin() {
                 placeholder="Tier snapshot (optional)"
               />
               <BtnPrimary onClick={handleGrantGamePass}>Add</BtnPrimary>
+              <BtnDanger onClick={handleRemoveGamePass}>Remove</BtnDanger>
             </ActionRow>
 
             <ActionRow icon={Award} label="Founding Member" description="Grant or remove Founding Member badge">

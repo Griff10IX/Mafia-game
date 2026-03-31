@@ -66,11 +66,19 @@ def _effective_car_travel_seconds(base_seconds: int, user: dict, now_utc: dateti
     return max(TRAVEL_TOKEN_CAR_TIME_MIN, int(base_seconds * TRAVEL_TOKEN_CAR_TIME_FACTOR))
 
 
-def _effective_airport_points(listed_price: int, user: dict, now_utc: datetime, user_owns_any_airport: bool) -> int:
-    """Points charged for airport travel; same order as _start_travel_impl (owner 5%, perk 10%, travel token 10%)."""
+def _effective_airport_points(
+    listed_price: int,
+    user: dict,
+    now_utc: datetime,
+    user_owns_any_airport: bool,
+    family_crew_points_discount: bool = False,
+) -> int:
+    """Points charged for airport travel; same order as _start_travel_impl (owner 5%, family crew 10%, perk 10%, travel token 10%)."""
     p = max(AIRPORT_PRICE_MIN, min(int(listed_price), AIRPORT_PRICE_MAX))
     if user_owns_any_airport:
         p = max(1, round(p * 0.95))
+    if family_crew_points_discount:
+        p = max(1, round(p * 0.9))
     airport_perk_until = user.get("airport_cost_perk_until")
     if airport_perk_until:
         until = _parse_iso_datetime(airport_perk_until)
@@ -94,6 +102,22 @@ _AIRPORTS_LIST_TTL_SEC = 20
 
 def _invalidate_travel_info_cache(user_id: str):
     _travel_info_cache.pop(user_id, None)
+
+
+async def invalidate_travel_info_cache_for_family(family_id: str):
+    """Clear per-user travel info cache for all members (e.g. after airport crew perk change)."""
+    if not (family_id or "").strip():
+        return
+    members = await db.family_members.find({"family_id": family_id}, {"_id": 0, "user_id": 1}).to_list(200)
+    for m in members:
+        uid = m.get("user_id")
+        if uid is None:
+            continue
+        _travel_info_cache.pop(str(uid), None)
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "boss_id": 1})
+    bid = (fam or {}).get("boss_id")
+    if bid is not None:
+        _travel_info_cache.pop(str(bid), None)
 
 
 def _invalidate_airports_list_cache():
@@ -171,6 +195,12 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
             current_user["travels_this_hour"] = 0
 
     now_utc = datetime.now(timezone.utc)
+    from routers.game.families import family_airport_crew_perk_context
+
+    crew_ctx = await family_airport_crew_perk_context(current_user)
+    family_crew_pts = bool(crew_ctx.get("family_airport_points_discount"))
+    fam_time_red = int(crew_ctx.get("family_airport_travel_reduction_seconds") or 0)
+    airport_time_effective = max(0, TRAVEL_TIMES["airport"] - fam_time_red)
     # Fetch custom separately so it is never dropped by non-custom pagination/limits.
     custom_cars = await db.user_cars.find({"user_id": uid, "car_id": "car_custom"}).to_list(20)
     user_cars = await db.user_cars.find({"user_id": uid, "car_id": {"$ne": "car_custom"}}).to_list(USER_CARS_FETCH_LIMIT)
@@ -238,7 +268,9 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
             doc = await db.airport_ownership.find_one({"state": current_state, "slot": slot}, {"_id": 0})
         price = max(AIRPORT_PRICE_MIN, min(doc.get("price_per_travel") or AIRPORT_COST, AIRPORT_PRICE_MAX))
         you_own = doc.get("owner_id") == uid
-        effective_price = _effective_airport_points(price, current_user, now_utc, bool(user_owns_any_airport))
+        effective_price = _effective_airport_points(
+            price, current_user, now_utc, bool(user_owns_any_airport), family_crew_pts
+        )
         airports.append({
             "slot": slot,
             "owner_username": doc.get("owner_username") or "Unclaimed",
@@ -247,7 +279,9 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
             "you_own": you_own,
         })
 
-    airport_cost_display = _effective_airport_points(AIRPORT_COST, current_user, now_utc, bool(user_owns_any_airport))
+    airport_cost_display = _effective_airport_points(
+        AIRPORT_COST, current_user, now_utc, bool(user_owns_any_airport), family_crew_pts
+    )
     if airports:
         airport_cost_display = airports[0].get("effective_price", airport_cost_display)
 
@@ -259,8 +293,10 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
         "travels_this_hour": current_user.get("travels_this_hour", 0),
         "max_travels": max_travels,
         "airport_cost": airport_cost_display,
-        "airport_time": TRAVEL_TIMES["airport"],
+        "airport_time": airport_time_effective,
         "user_gets_airport_discount": bool(user_owns_any_airport),
+        "family_airport_points_discount": family_crew_pts,
+        "family_airport_travel_reduction_seconds": fam_time_red,
         "airports": airports,
         "extra_airmiles_cost": EXTRA_AIRMILES_COST,
         "cars": cars_with_travel_times,
@@ -342,9 +378,16 @@ async def _start_travel_impl(
             airport_doc = await db.airport_ownership.find_one({"state": current_location, "slot": slot}, {"_id": 0})
         listed = max(AIRPORT_PRICE_MIN, min(airport_doc.get("price_per_travel") or AIRPORT_COST, AIRPORT_PRICE_MAX))
         user_owns_any_airport = await db.airport_ownership.find_one({"owner_id": user["id"]}, {"_id": 1})
-        airport_price = _effective_airport_points(listed, user, now_utc, bool(user_owns_any_airport))
+        from routers.game.families import family_airport_crew_perk_context
+
+        crew_ctx = await family_airport_crew_perk_context(user)
+        family_crew_pts = bool(crew_ctx.get("family_airport_points_discount"))
+        fam_time_red = int(crew_ctx.get("family_airport_travel_reduction_seconds") or 0)
+        airport_price = _effective_airport_points(
+            listed, user, now_utc, bool(user_owns_any_airport), family_crew_pts
+        )
         owner_id = airport_doc.get("owner_id")
-        travel_time = TRAVEL_TIMES["airport"]
+        travel_time = max(0, TRAVEL_TIMES["airport"] - fam_time_red)
         method_name = f"Airport #{slot}"
         result = await db.users.update_one(
             {"id": user["id"], "points": {"$gte": airport_price}},

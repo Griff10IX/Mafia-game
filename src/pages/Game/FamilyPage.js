@@ -667,6 +667,7 @@ const RaidTab = ({ targets, loading, onRaid, onRefresh, refreshing }) => (
 const RosterTab = ({
   members, fallen, canManage, myRole, config, onKick, onAssignRole, joinApplications, joinMode, joinAutoAccept, joinAutoAcceptRankMin,
   onAcceptJoinApplication, onDenyJoinApplication, onJoinSettingsUpdate, meltTreasuryPct, meltRewardTiers, onMeltSettingsUpdate,
+  airportCrewPerk, onAirportCrewPerkUpdate,
 }) => {
   const [assignUserId, setAssignUserId] = useState('');
   const [assignRole, setAssignRole] = useState('associate');
@@ -858,6 +859,28 @@ const RosterTab = ({
                 )}
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Airport crew perk (Don only): −1s travel OR 10% points — mutually exclusive ── */}
+      {myRole === 'boss' && onAirportCrewPerkUpdate && (
+        <div className="pt-3 border-t border-zinc-700/30 space-y-2">
+          <p className="text-[9px] text-zinc-500 font-heading uppercase tracking-[0.2em]">Airport crew perk</p>
+          <p className="text-[10px] text-zinc-400">
+            When the Don, Underboss, or Consigliere owns an airport, pick one family-wide bonus. You cannot have both.
+          </p>
+          <div className="flex flex-wrap gap-2 items-center">
+            <label className="text-[9px] text-zinc-500 font-heading">Perk</label>
+            <select
+              value={airportCrewPerk ?? 'none'}
+              onChange={(e) => onAirportCrewPerkUpdate(e.target.value)}
+              className="bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-2 py-1.5 text-[10px] font-heading focus:border-primary/50 focus:outline-none min-w-[200px]"
+            >
+              <option value="none">None</option>
+              <option value="travel_time">−1s airport travel time (all members)</option>
+              <option value="points_discount">10% off airport points cost (all members)</option>
+            </select>
           </div>
         </div>
       )}
@@ -2086,6 +2109,13 @@ export default function FamilyPage() {
   const handleDenyJoinApplication = async (applicationId) => { try { await api.post(`/families/join-applications/${applicationId}/deny`); toast.success('Application denied'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const handleJoinSettingsUpdate = async (payload) => { try { await api.patch('/families/join-settings', payload); toast.success('Join settings updated'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const handleMeltSettingsUpdate = async (payload) => { try { await api.patch('/families/melt-settings', payload); toast.success('Melt settings updated'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
+  const handleAirportCrewPerkUpdate = async (airport_crew_perk) => {
+    try {
+      await api.patch('/families/airport-crew-perk', { airport_crew_perk });
+      toast.success('Airport crew perk updated');
+      fetchData();
+    } catch (e) { toast.error(apiDetail(e)); }
+  };
   const handleAssignRole = async (userId, role) => {
     if (role === 'boss' && !window.confirm('Transfer family leadership to this member? You will become Underboss.')) return;
     try { await api.post('/families/assign-role', { user_id: userId, role }); toast.success(role === 'boss' ? 'Leadership transferred.' : `Assigned ${getRoleConfig(role).label}`); refreshUser(); fetchData(); } catch (e) { toast.error(apiDetail(e)); }
@@ -2553,6 +2583,8 @@ export default function FamilyPage() {
                   onDenyJoinApplication={handleDenyJoinApplication}
                   onJoinSettingsUpdate={handleJoinSettingsUpdate}
                   onMeltSettingsUpdate={handleMeltSettingsUpdate}
+                  airportCrewPerk={family?.airport_crew_perk ?? 'none'}
+                  onAirportCrewPerkUpdate={handleAirportCrewPerkUpdate}
                 />
               )}
               {activeTab === 'families' && <FamiliesTab families={families} myFamilyId={family?.id} />}

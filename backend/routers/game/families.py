@@ -22,7 +22,7 @@ _my_cache_ttl_sec = 10
 _my_cache_max_entries = 2000
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from fastapi import Depends, HTTPException, Body
+from fastapi import Depends, HTTPException, Body, Header
 from pydantic import BaseModel
 
 from utils.notepad_color import notepad_color_for_api_response, normalize_notepad_color_for_set
@@ -303,6 +303,10 @@ class FamilyAvatarRequest(BaseModel):
 
 class WarTruceRequest(BaseModel):
     war_id: str
+
+
+class FamilyAirportCrewPerkRequest(BaseModel):
+    airport_crew_perk: str  # none | travel_time | points_discount
 
 
 # ============ Helpers ============
@@ -701,6 +705,167 @@ async def _users_map_by_ids(user_ids: list, projection: Optional[dict] = None) -
     return out
 
 
+def _owner_id_or_clauses_for_uids(uids: list) -> list:
+    """Mongo $or clauses for owner_id matching string/int user ids."""
+    or_clauses = []
+    seen = set()
+    for uid in uids:
+        s = _uid_str(uid)
+        if not s:
+            continue
+        or_clauses.append({"owner_id": s})
+        seen.add(s)
+        if s.isdigit():
+            try:
+                n = int(s)
+                key = f"int:{n}"
+                if key not in seen:
+                    seen.add(key)
+                    or_clauses.append({"owner_id": n})
+            except ValueError:
+                pass
+    return or_clauses
+
+
+async def top3_user_ids(family_id: str) -> List[str]:
+    """User ids for boss/don, underboss, consigliere in this family."""
+    if not (family_id or "").strip():
+        return []
+    members = await db.family_members.find(
+        {"family_id": family_id, "role": {"$in": list(TOP3_FAMILY_ROLES)}},
+        {"_id": 0, "user_id": 1},
+    ).to_list(20)
+    out: List[str] = []
+    seen = set()
+    for m in members:
+        uid = _uid_str(m.get("user_id"))
+        if uid and uid not in seen:
+            seen.add(uid)
+            out.append(uid)
+    return out
+
+
+async def any_top3_owns_airport(family_id: str) -> bool:
+    uids = await top3_user_ids(family_id)
+    oc = _owner_id_or_clauses_for_uids(uids)
+    if not oc:
+        return False
+    doc = await db.airport_ownership.find_one({"$or": oc}, {"_id": 1})
+    return doc is not None
+
+
+async def any_top3_owns_bullet_factory(family_id: str) -> bool:
+    uids = await top3_user_ids(family_id)
+    oc = _owner_id_or_clauses_for_uids(uids)
+    if not oc:
+        return False
+    doc = await db.bullet_factory.find_one({"$or": oc}, {"_id": 1})
+    return doc is not None
+
+
+async def family_airport_crew_perk_context(current_user: dict) -> dict:
+    """
+    Airport crew perk for travel UI/charges: −1s travel OR 10% points off for all members when
+    high command owns an airport and family has chosen a perk. Mutually exclusive perk types.
+    Returns: family_airport_points_discount (bool), family_airport_travel_reduction_seconds (int).
+    """
+    uid = current_user.get("id")
+    if uid is None:
+        return {"family_airport_points_discount": False, "family_airport_travel_reduction_seconds": 0}
+    fid = await resolve_family_id(str(uid))
+    if not fid:
+        return {"family_airport_points_discount": False, "family_airport_travel_reduction_seconds": 0}
+    fam = await db.families.find_one({"id": fid}, {"_id": 0, "airport_crew_perk": 1})
+    perk = (fam or {}).get("airport_crew_perk") or AIRPORT_CREW_PERK_NONE
+    if perk not in (AIRPORT_CREW_PERK_TRAVEL_TIME, AIRPORT_CREW_PERK_POINTS_DISCOUNT):
+        return {"family_airport_points_discount": False, "family_airport_travel_reduction_seconds": 0}
+    if not await any_top3_owns_airport(fid):
+        return {"family_airport_points_discount": False, "family_airport_travel_reduction_seconds": 0}
+    if perk == AIRPORT_CREW_PERK_POINTS_DISCOUNT:
+        return {"family_airport_points_discount": True, "family_airport_travel_reduction_seconds": 0}
+    return {"family_airport_points_discount": False, "family_airport_travel_reduction_seconds": 1}
+
+
+_cron_secret_cached: Optional[str] = None
+
+
+def _cron_secret() -> str:
+    global _cron_secret_cached
+    if _cron_secret_cached is None:
+        _cron_secret_cached = (os.environ.get("CRON_SECRET") or "").strip()
+    return _cron_secret_cached
+
+
+async def verify_cron_secret_families(x_cron_secret: Optional[str] = Header(None, alias="X-Cron-Secret")):
+    sec = _cron_secret()
+    if not sec:
+        raise HTTPException(status_code=503, detail="Cron not configured (CRON_SECRET unset)")
+    if (x_cron_secret or "").strip() != sec:
+        raise HTTPException(status_code=403, detail="Invalid cron secret")
+
+
+async def families_cron_treasury_bullets_hourly(_: None = Depends(verify_cron_secret_families)):
+    """Hourly: families where high command owns an airport and another high command owns an armoury get 100–200 treasury bullets."""
+    now = datetime.now(timezone.utc)
+    hour_bucket = now.strftime("%Y-%m-%dT%H")
+    families = await db.families.find(
+        {"wiped": {"$ne": True}},
+        {"_id": 0, "id": 1},
+    ).to_list(FAMILY_LIST_QUERY_LIMIT)
+    credited = 0
+    for fam in families:
+        fid = fam.get("id")
+        if not fid:
+            continue
+        if not (await any_top3_owns_airport(fid) and await any_top3_owns_bullet_factory(fid)):
+            continue
+        amount = _rng.randint(100, 200)
+        res = await db.families.update_one(
+            {
+                "id": fid,
+                "wiped": {"$ne": True},
+                "$or": [
+                    {"last_treasury_bullet_hour_utc": {"$ne": hour_bucket}},
+                    {"last_treasury_bullet_hour_utc": None},
+                    {"last_treasury_bullet_hour_utc": {"$exists": False}},
+                ],
+            },
+            {"$inc": {"treasury_bullets": amount}, "$set": {"last_treasury_bullet_hour_utc": hour_bucket}},
+        )
+        if res.modified_count:
+            credited += 1
+    return {"ok": True, "hour_utc": hour_bucket, "families_credited": credited}
+
+
+async def families_set_airport_crew_perk(
+    request: FamilyAirportCrewPerkRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    perk = (request.airport_crew_perk or "").strip().lower()
+    if perk not in AIRPORT_CREW_PERK_VALUES:
+        raise HTTPException(status_code=400, detail="Invalid airport_crew_perk")
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    role = (current_user.get("family_role") or "").strip().lower()
+    if role not in ("boss", "don"):
+        raise HTTPException(status_code=403, detail="Only the Don can set the airport crew perk")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.families.update_one(
+        {"id": family_id},
+        {"$set": {"airport_crew_perk": perk, "airport_crew_perk_set_at": now_iso}},
+    )
+    _invalidate_my_cache(current_user["id"])
+    _invalidate_list_cache()
+    try:
+        from routers.admin.airport import invalidate_travel_info_cache_for_family
+
+        await invalidate_travel_info_cache_for_family(family_id)
+    except Exception:
+        logger.exception("invalidate_travel_info_cache_for_family failed")
+    return {"ok": True, "airport_crew_perk": perk, "airport_crew_perk_set_at": now_iso}
+
+
 async def family_qualifies_for_state_head(family_id: str) -> bool:
     """True if the family's boss has prestige_level >= 1."""
     if not (family_id or "").strip():
@@ -1049,6 +1214,8 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             "join_mode": fam.get("join_mode") or "open",
             "join_auto_accept": fam.get("join_auto_accept") or "none",
             "join_auto_accept_rank_min": fam.get("join_auto_accept_rank_min"),
+            "airport_crew_perk": (fam.get("airport_crew_perk") or AIRPORT_CREW_PERK_NONE),
+            "airport_crew_perk_set_at": fam.get("airport_crew_perk_set_at"),
         },
         "members": members, "fallen": fallen, "rackets": rackets, "my_role": my_role,
         "vault_and_rackets_locked": vault_and_rackets_locked,
@@ -1178,6 +1345,8 @@ async def families_lookup(tag: Optional[str] = None, id: Optional[str] = None, c
         "join_mode": fam.get("join_mode") or "open",
         "melt_treasury_pct": int(fam.get("melt_treasury_pct") or 0),
         "melt_reward_tiers": fam.get("melt_reward_tiers") or [],
+        "airport_crew_perk": (fam.get("airport_crew_perk") or AIRPORT_CREW_PERK_NONE),
+        "airport_crew_perk_set_at": fam.get("airport_crew_perk_set_at"),
     }
     if fam.get("wiped"):
         out["wiped"] = True
@@ -1216,6 +1385,7 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
         "join_auto_accept_rank_min": None,
         "melt_treasury_pct": 0,
         "melt_reward_tiers": [],
+        "airport_crew_perk": AIRPORT_CREW_PERK_NONE,
     }
     if is_admin:
         fam_doc["player_cap_exempt"] = True
@@ -3169,3 +3339,5 @@ def register(router):
     router.add_api_route("/families/wars/history", families_wars_history, methods=["GET"])
     router.add_api_route("/families/state-takeover/accept", state_takeover_accept, methods=["POST"])
     router.add_api_route("/families/state-takeover/reject", state_takeover_reject, methods=["POST"])
+    router.add_api_route("/families/cron/treasury-bullets-hourly", families_cron_treasury_bullets_hourly, methods=["POST"])
+    router.add_api_route("/families/airport-crew-perk", families_set_airport_crew_perk, methods=["PATCH"])

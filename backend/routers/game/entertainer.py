@@ -13,6 +13,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from server import db, get_current_user, send_notification, send_notification_to_all, _is_admin, CARS
 from routers.kill.armoury import TOKEN_TYPES, TOKEN_CONFIG
 
+# E-Games prizes: Rank-XP Pass is shop-only (not listed in "what you can win" and never rolled here).
+ENTERTAINER_TOKEN_TYPES = tuple(t for t in TOKEN_TYPES if t != "rank_xp_pass")
+
 # Auto-create runs every 3 hours; open games roll 20 mins before the next batch (so plenty of time to join)
 AUTO_CREATE_INTERVAL_SECONDS = 3 * 3600   # 3 hours between batches
 ROLL_BEFORE_NEXT_CREATE_SECONDS = 20 * 60  # roll current games 20 mins before next batch
@@ -392,25 +395,25 @@ async def _give_random_reward(user_id: str, *, exclude_cash: bool = False) -> di
         updates["money"], updates["bullets"] = c, b
         desc["money"], desc["bullets"] = c, b
     elif reward_type == "token":
-        _add_token(_rng.choice(list(TOKEN_TYPES)), 1)
+        _add_token(_rng.choice(list(ENTERTAINER_TOKEN_TYPES)), 1)
     elif reward_type == "all_tokens":
-        for token_type in TOKEN_TYPES:
+        for token_type in ENTERTAINER_TOKEN_TYPES:
             _add_token(token_type, 1)
     elif reward_type == "cash_token":
         c = _random_cash_range(rcfg)
         updates["money"] = c
         desc["money"] = c
-        _add_token(_rng.choice(list(TOKEN_TYPES)), 1)
+        _add_token(_rng.choice(list(ENTERTAINER_TOKEN_TYPES)), 1)
     elif reward_type == "bullets_token":
         b = _random_bullets_range(rcfg)
         updates["bullets"] = b
         desc["bullets"] = b
-        _add_token(_rng.choice(list(TOKEN_TYPES)), 1)
+        _add_token(_rng.choice(list(ENTERTAINER_TOKEN_TYPES)), 1)
     elif reward_type == "cash_bullets_token":
         c, b = _random_cash_range(rcfg), _random_bullets_range(rcfg)
         updates["money"], updates["bullets"] = c, b
         desc["money"], desc["bullets"] = c, b
-        _add_token(_rng.choice(list(TOKEN_TYPES)), 1)
+        _add_token(_rng.choice(list(ENTERTAINER_TOKEN_TYPES)), 1)
     elif reward_type == "car":
         if E_GAME_CAR_IDS:
             car_id = _rng.choice(E_GAME_CAR_IDS)
@@ -847,11 +850,11 @@ async def get_prizes(current_user: dict = Depends(get_current_user)):
         for c in CARS
         if c.get("id") not in ("car_custom", "car20") and c.get("rarity") in ("common", "uncommon", "rare")
     ]
-    token_labels = [{"token_type": t, "label": _token_label(t)} for t in TOKEN_TYPES]
+    token_labels = [{"token_type": t, "label": _token_label(t)} for t in ENTERTAINER_TOKEN_TYPES]
     return {
         "cash": {"min": rcfg["cash_min"], "max": rcfg["cash_max"]},
         "bullets": {"min": rcfg["bullets_min"], "max": rcfg["bullets_max"]},
-        "tokens": {"min": 1, "max": len(TOKEN_TYPES), "types": token_labels},
+        "tokens": {"min": 1, "max": len(ENTERTAINER_TOKEN_TYPES), "types": token_labels},
         "cars": prize_cars,
     }
 

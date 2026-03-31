@@ -1811,6 +1811,46 @@ def register(router):
 
         return {"message": f"Granted unactivated Game Pass to {target['username']}"}
 
+    @router.post("/admin/remove-game-pass")
+    async def admin_remove_game_pass(
+        target_username: str,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Admin: clear Rank-XP / Game Pass entitlement (unactivated token, active window, snapshots).
+        User can buy or be granted a pass again afterward.
+        """
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        unset_gp = {
+            "rank_xp_pass_bonus_until": "",
+            "rank_xp_pass_token_expires_at": "",
+            "rank_xp_pass_tier_snapshot": "",
+            "rank_xp_pass_pending_tier_snapshot": "",
+            "rank_xp_pass_free_last_micro_tier_granted": "",
+        }
+        await db.users.update_one(
+            {"id": target["id"]},
+            {
+                "$set": {
+                    "rank_xp_pass_tokens": 0,
+                    "rank_xp_pass_rewards_granted": False,
+                    "rank_xp_pass_last_granted_micro_tier": 0,
+                },
+                "$unset": unset_gp,
+            },
+        )
+        un = target.get("username") or target_username
+        return {
+            "message": f"Removed Game Pass state for {un}. They can purchase or receive a grant again anytime.",
+        }
+
     @router.post("/admin/add-car")
     async def admin_add_car(target_username: str, car_id: str, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
