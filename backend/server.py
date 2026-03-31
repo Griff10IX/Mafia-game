@@ -1180,7 +1180,7 @@ async def log_respect_earned(user_id: str, amount: int, source: str = ""):
     """Log respect points earned for weekly leaderboard aggregation. Call after awarding respect_points (positive amount only)."""
     if not amount or amount <= 0:
         return
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc)
     await db.respect_events.insert_one({"user_id": user_id, "amount": amount, "at": now, "source": source or "misc"})
 
 
@@ -1188,7 +1188,7 @@ async def log_respect_delta(user_id: str, delta: int, source: str = ""):
     """Log any non-zero respect change for weekly leaderboard and lifetime objectives (positive earn or negative correction)."""
     if not delta:
         return
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc)
     await db.respect_events.insert_one({"user_id": user_id, "amount": delta, "at": now, "source": source or "misc"})
 
 
@@ -1196,7 +1196,7 @@ async def log_melt_event(user_id: str, bullets: int):
     """Log bullets melted for weekly leaderboard aggregation. Call after a melt-for-bullets action."""
     if not bullets or bullets <= 0:
         return
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc)
     await db.melt_events.insert_one({"user_id": user_id, "bullets": bullets, "at": now})
 
 

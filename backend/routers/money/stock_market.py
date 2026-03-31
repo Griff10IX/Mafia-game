@@ -177,7 +177,7 @@ async def _process_auto_sell_expired(uid: str, now: datetime, live_list: list, c
                 "points_spent": cost_to_cover,
                 "points_received": 0,
                 "profit_points": profit_points,
-                "created_at": now_iso,
+                "created_at": now,
                 "auto_sold": True,
             })
             if profit_points > 0:
@@ -203,7 +203,7 @@ async def _process_auto_sell_expired(uid: str, now: datetime, live_list: list, c
                 "points_spent": 0,
                 "points_received": value_points,
                 "profit_points": profit_points,
-                "created_at": now_iso,
+                "created_at": now,
                 "auto_sold": True,
             })
             if profit_points > 0:
@@ -470,7 +470,7 @@ def register(router):
                     "points_spent": 0,
                     "points_received": points,
                     "profit_points": 0,
-                    "created_at": now_iso,
+                    "created_at": now,
                 })
                 await log_activity(uid, current_user.get("username", "?"), "stock_buy", {"stock": stock.get("name"), "side": "short", "points": points})
                 return {"message": f"Opened short {stock.get('name')} for {points} points notional", "position_id": position_id, "units": round(units, 6), "price": current_price, "side": "short"}
@@ -563,7 +563,7 @@ def register(router):
                 "points_spent": cost_to_cover,
                 "points_received": 0,
                 "profit_points": profit_points,
-                "created_at": now_iso,
+                "created_at": now,
             })
             if profit_points > 0:
                 await send_notification(uid, "📉 Short closed", f"You covered {stock.get('name')} for a profit of {profit_points} points!", "reward")
@@ -586,7 +586,7 @@ def register(router):
             "points_spent": 0,
             "points_received": value_points,
             "profit_points": profit_points,
-            "created_at": now_iso,
+            "created_at": now,
         })
         if profit_points > 0:
             await send_notification(uid, "📈 Stock sold", f"You sold {stock.get('name')} for a profit of {profit_points} points!", "reward")

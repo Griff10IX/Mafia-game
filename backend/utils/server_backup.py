@@ -4395,7 +4395,7 @@ async def execute_attack(request: AttackExecuteRequest, current_user: dict = Dep
         "target_armour_level": int(target_armour or 0),
         "target_rank_id": int(target_rank_id or 1),
         "attacker_rank_id": int(attacker_rank_id or 1),
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(timezone.utc),
     }
 
     if killed:

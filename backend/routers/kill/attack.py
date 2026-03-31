@@ -186,7 +186,7 @@ async def _log_attack_error(attacker_id: str, attacker_username: str, player_mes
             "attacker_username": attacker_username or "?",
             "outcome": "error",
             "player_message": (player_message or "")[:1000],
-            "created_at": datetime.now(timezone.utc).isoformat(),
+            "created_at": datetime.now(timezone.utc),
             **meta,
         })
     except Exception:
@@ -318,7 +318,7 @@ async def _record_vendetta_bg_kill(
                 "cash_taken": 0,
                 "props_taken": 0,
                 "cars_taken": 0,
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": datetime.now(timezone.utc),
             })
         except Exception as feed_exc:
             logger.exception("War kill feed (BG): %s", feed_exc)
@@ -998,7 +998,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     "player_message": msg,
                     "bullets_used": 0,
                     "first_bodyguard": {"display_name": display_name, "search_username": search_username, "slot_number": slot_n, "target_username": target_name},
-                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "created_at": datetime.now(timezone.utc),
                     **meta,
                 })
                 await _notify_target_if_bot_attack(
@@ -1031,7 +1031,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 "player_message": msg,
                 "bullets_used": 0,
                 "first_bodyguard": {"display_name": display_name or "bodyguard", "search_username": None, "slot_number": slot_n, "target_username": target_name},
-                "created_at": datetime.now(timezone.utc).isoformat(),
+                "created_at": datetime.now(timezone.utc),
                 **meta,
             })
             await _notify_target_if_bot_attack(
@@ -1112,7 +1112,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         "target_state": target_state,
         "state": attack.get("location_state"),
         "bullets_spent": int(effective_bullets),
-        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_at": datetime.now(timezone.utc),
     }
     if killed:
         death_message = (request.death_message or "").strip()
@@ -1646,7 +1646,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     "bullets_used": bullets_used,
                     "bullets_required": bullets_required,
                     "make_public": True,
-                    "created_at": datetime.now(timezone.utc).isoformat(),
+                    "created_at": datetime.now(timezone.utc),
                 })
             except Exception:
                 pass
@@ -1701,7 +1701,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                             "cash_taken": cash_loot,
                             "props_taken": victim_props_count,
                             "cars_taken": victim_cars_count,
-                            "created_at": datetime.now(timezone.utc).isoformat(),
+                            "created_at": datetime.now(timezone.utc),
                         })
                     except Exception as feed_exc:
                         logging.exception("War kill feed (player): %s", feed_exc)

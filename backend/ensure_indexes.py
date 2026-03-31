@@ -1,8 +1,73 @@
 # Central place for MongoDB indexes used across routers (except profile-specific ones in routers/profile.py).
 # Idempotent: safe to run on every startup.
 import logging
+from datetime import datetime, timedelta, timezone
 
 logger = logging.getLogger(__name__)
+
+# Raw event rows used for weekly boards / analytics; all-time totals live on users.* fields.
+EVENT_LOG_TTL_DAYS = 14
+CRIME_EVENTS_TTL_DAYS = EVENT_LOG_TTL_DAYS  # backwards compat
+
+
+async def _ensure_event_log_ttl(
+    db,
+    coll_name: str,
+    date_field: str,
+    *,
+    compound_indexes=None,
+    ttl_days: int = EVENT_LOG_TTL_DAYS,
+):
+    """TTL index + startup prune on a date field. Idempotent compound indexes for queries."""
+    coll = getattr(db, coll_name)
+    idx_name = f"{date_field}_1"
+    try:
+        await coll.drop_index(idx_name)
+    except Exception:
+        pass
+    try:
+        await coll.create_index([(date_field, 1)], expireAfterSeconds=ttl_days * 24 * 3600)
+    except Exception as e:
+        logger.warning("%s TTL on %s: %s", coll_name, date_field, e)
+    if compound_indexes:
+        for spec in compound_indexes:
+            try:
+                await coll.create_index(spec)
+            except Exception as e:
+                logger.warning("%s index %s: %s", coll_name, spec, e)
+    try:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=ttl_days)
+        pr = await coll.delete_many({date_field: {"$lt": cutoff}})
+        if pr.deleted_count:
+            logger.info(
+                "%s: removed %s documents older than %sd",
+                coll_name,
+                pr.deleted_count,
+                ttl_days,
+            )
+    except Exception as e:
+        logger.warning("%s startup prune: %s", coll_name, e)
+
+
+async def _prune_mixed_date_string_field(
+    db,
+    coll_name: str,
+    field_name: str,
+    *,
+    ttl_days: int = EVENT_LOG_TTL_DAYS,
+):
+    """Remove old docs where field is BSON Date or ISO string (legacy inserts)."""
+    coll = getattr(db, coll_name)
+    cutoff = datetime.now(timezone.utc) - timedelta(days=ttl_days)
+    cutoff_iso = cutoff.isoformat()
+    try:
+        r1 = await coll.delete_many({field_name: {"$lt": cutoff}})
+        r2 = await coll.delete_many({field_name: {"$lt": cutoff_iso}})
+        n = int(r1.deleted_count or 0) + int(r2.deleted_count or 0)
+        if n:
+            logger.info("%s: pruned %s old documents (%s)", coll_name, n, field_name)
+    except Exception as e:
+        logger.warning("%s mixed prune: %s", coll_name, e)
 
 
 async def ensure_all_indexes(db):
@@ -17,7 +82,7 @@ async def ensure_all_indexes(db):
         await db.bank_deposits.create_index("id")
 
         # --- Stock market ---
-        await db.stock_transactions.create_index([("user_id", 1), ("created_at", -1)])
+        # stock_transactions: compound + TTL on created_at in --- Crimes / event logs --- below
 
         # --- Game config / settings ---
         await db.game_config.create_index("id", unique=True)
@@ -178,6 +243,62 @@ async def ensure_all_indexes(db):
 
         # --- Crimes ---
         await db.crimes.create_index("id", unique=True)
+        # Per-attempt / event logs for weekly leaderboards (Mon UTC week). TTL + prune = 14d retention.
+        # All-time totals (total_crimes, total_gta, respect_points, stock_market_profit_total, etc.) stay on users.
+        await _ensure_event_log_ttl(
+            db,
+            "crime_events",
+            "at",
+            compound_indexes=[[("user_id", 1), ("at", -1)]],
+        )
+        await _ensure_event_log_ttl(
+            db,
+            "gta_events",
+            "at",
+            compound_indexes=[[("user_id", 1), ("at", -1)]],
+        )
+        await _ensure_event_log_ttl(
+            db,
+            "bust_events",
+            "at",
+            compound_indexes=[[("user_id", 1), ("at", -1)]],
+        )
+        await _ensure_event_log_ttl(
+            db,
+            "respect_events",
+            "at",
+            compound_indexes=[[("user_id", 1), ("at", -1)]],
+        )
+        await _ensure_event_log_ttl(
+            db,
+            "melt_events",
+            "at",
+            compound_indexes=[[("user_id", 1), ("at", -1)]],
+        )
+        await _ensure_event_log_ttl(
+            db,
+            "attack_attempts",
+            "created_at",
+            compound_indexes=[[("attacker_id", 1), ("created_at", -1)]],
+        )
+        await _ensure_event_log_ttl(
+            db,
+            "stock_transactions",
+            "created_at",
+            compound_indexes=[[("user_id", 1), ("created_at", -1)]],
+        )
+        # economy_events: booze/property/etc.; some legacy docs store `at` as ISO string — prune both; TTL applies to BSON dates.
+        try:
+            await db.economy_events.drop_index("at_1")
+        except Exception:
+            pass
+        try:
+            await db.economy_events.create_index(
+                [("at", 1)], expireAfterSeconds=EVENT_LOG_TTL_DAYS * 24 * 3600
+            )
+        except Exception as e:
+            logger.warning("economy_events TTL: %s", e)
+        await _prune_mixed_date_string_field(db, "economy_events", "at")
 
         # --- Reference / config data ---
         await db.weapons.create_index("id", unique=True)
