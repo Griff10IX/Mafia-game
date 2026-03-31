@@ -852,12 +852,18 @@ export default function GamePass() {
             <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
               <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
               <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                   <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] truncate">
                     Tiers {selectedBand.start}-{selectedBand.end}
                   </div>
-                  <div className="text-[9px] text-zinc-500 font-heading italic">
-                    Current tier: {microTierCurrent}
+                  <div className="flex flex-wrap items-center justify-end gap-x-3 text-[9px] text-zinc-500 font-heading">
+                    <span className="italic">
+                      Current tier: <span className="text-primary font-bold not-italic tabular-nums">{microTierCurrent}</span>
+                    </span>
+                    <span>
+                      Current XP:{' '}
+                      <span className="text-primary font-bold not-italic tabular-nums">{previewRankPoints.toLocaleString()}</span>
+                    </span>
                   </div>
                 </div>
               </div>
@@ -868,12 +874,19 @@ export default function GamePass() {
 
                 {selectedTierObj && (
                   <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 space-y-2">
-                    <div className="flex items-baseline justify-between gap-2">
+                    <div className="flex items-start justify-between gap-2">
                       <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
                         Selected tier {selectedMicroTier}
                       </div>
-                      <div className="text-[9px] text-zinc-500 font-heading">
-                        XP Needed: {selectedTierObj.thresholdRp.toLocaleString()} XP
+                      <div className="text-[9px] text-zinc-500 font-heading text-right space-y-0.5 shrink-0">
+                        <div>
+                          Current XP:{' '}
+                          <span className="text-foreground font-bold tabular-nums">{previewRankPoints.toLocaleString()}</span>
+                        </div>
+                        <div>
+                          XP Needed:{' '}
+                          <span className="text-foreground font-bold tabular-nums">{selectedTierObj.thresholdRp.toLocaleString()}</span> XP
+                        </div>
                       </div>
                     </div>
 
