@@ -2085,10 +2085,11 @@ def register(router):
         fix: bool = Query(False),
         current_user: dict = Depends(get_current_user),
     ):
-        """Find VIP users whose last_granted cursor is ahead of their actual micro tier (broken state)."""
+        """Find VIP users whose last_granted cursor is ahead of their actual micro tier (broken state).
+        fix=true: force-grants rewards directly to each stuck user's account."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        from utils.game_pass_micro_rewards import micro_tier_from_rank_points
+        from utils.game_pass_micro_rewards import micro_tier_from_rank_points, vip_rewards_after_free_dedupe
 
         cursor = db.users.find(
             {"rank_xp_pass_rewards_granted": True, "rank_xp_pass_last_granted_micro_tier": {"$gt": 0}},
@@ -2114,15 +2115,27 @@ def register(router):
             }
             stuck.append(entry)
 
-            if fix:
-                from utils.game_pass_tier_reconcile import grant_missing_vip_micro_tier_rewards
-                result = await grant_missing_vip_micro_tier_rewards(
-                    db, row["id"], row, send_notifications=True, ignore_token_expiry=True,
-                )
-                entry["fix_result"] = result.get("reason")
-                entry["tiers_granted"] = result.get("tiers_granted", [])
-                if result.get("cursor_repaired"):
-                    fixed.append(row.get("username", "?"))
+            if fix and current_micro > 0:
+                free_last = int(row.get("rank_xp_pass_free_last_micro_tier_granted") or 0)
+                total_inc: Dict[str, int] = {}
+                for t in range(1, current_micro + 1):
+                    rewards = vip_rewards_after_free_dedupe(t, free_last)
+                    for k, v in rewards.items():
+                        v = int(v or 0)
+                        if v > 0:
+                            total_inc[k] = total_inc.get(k, 0) + v
+                update: Dict[str, Any] = {
+                    "$set": {
+                        "rank_xp_pass_rewards_granted": True,
+                        "rank_xp_pass_last_granted_micro_tier": current_micro,
+                    }
+                }
+                if total_inc:
+                    update["$inc"] = total_inc
+                await db.users.update_one({"id": row["id"]}, update)
+                entry["fix_result"] = "force_granted"
+                entry["credited"] = total_inc
+                fixed.append(row.get("username", "?"))
 
         stuck.sort(key=lambda x: x["gap"], reverse=True)
         return {

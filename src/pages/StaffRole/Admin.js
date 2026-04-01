@@ -6953,14 +6953,14 @@ export default function Admin() {
               <div className="border-t border-violet-500/20 pt-2 space-y-2">
                 <div className="text-[10px] font-heading font-bold text-amber-300 uppercase tracking-wider">Stuck Cursor Detector</div>
                 <p className="text-[9px] text-mutedForeground font-heading">
-                  Finds VIP users whose reward cursor is ahead of their actual tier progress (rewards won't grant). "Fix all" rewinds cursors and grants missing rewards.
+                  Finds VIP users whose reward cursor is ahead of their actual tier progress (rewards won't grant). "Fix all" force-grants missing rewards directly to each stuck user's account.
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
                   <BtnPrimary type="button" onClick={() => loadGamePassStuck(false)} disabled={gamePassStuckLoading}>
                     {gamePassStuckLoading ? '...' : 'Scan for stuck users'}
                   </BtnPrimary>
                   {gamePassStuck && gamePassStuck.stuck_count > 0 && (
-                    <BtnDanger type="button" onClick={() => loadGamePassStuck(true)} disabled={gamePassStuckLoading}>
+                    <BtnDanger type="button" onClick={() => { if (window.confirm(`Force-grant rewards for ${gamePassStuck.stuck_count} stuck user(s)? This directly credits cash/tokens/points to their accounts.`)) loadGamePassStuck(true); }} disabled={gamePassStuckLoading}>
                       {gamePassStuckLoading ? '...' : `Fix all ${gamePassStuck.stuck_count} stuck`}
                     </BtnDanger>
                   )}
@@ -6971,8 +6971,11 @@ export default function Admin() {
                       <div className="text-[10px] text-green-400 font-heading">No stuck users found.</div>
                     ) : (
                       <>
-                        <div className="text-[10px] text-amber-300 font-heading">{gamePassStuck.stuck_count} stuck user(s) found</div>
-                        <div className="overflow-x-auto max-h-48 border border-amber-500/20 rounded">
+                        <div className="text-[10px] text-amber-300 font-heading">
+                          {gamePassStuck.stuck_count} stuck user(s) found
+                          {gamePassStuck.fixed_count > 0 && <span className="text-green-400 ml-2">({gamePassStuck.fixed_count} fixed)</span>}
+                        </div>
+                        <div className="overflow-x-auto max-h-64 border border-amber-500/20 rounded">
                           <table className="w-full text-left text-[9px] border-collapse">
                             <thead>
                               <tr className="text-mutedForeground border-b border-zinc-700/50 sticky top-0 bg-zinc-900/95">
@@ -6981,19 +6984,21 @@ export default function Admin() {
                                 <th className="px-2 py-1">Actual Tier</th>
                                 <th className="px-2 py-1">Cursor At</th>
                                 <th className="px-2 py-1">Gap</th>
-                                {gamePassStuck.fixed_count > 0 && <th className="px-2 py-1">Fix</th>}
+                                {gamePassStuck.fixed_count > 0 && <th className="px-2 py-1">Credited</th>}
                               </tr>
                             </thead>
                             <tbody>
                               {(gamePassStuck.stuck_users || []).map((u) => (
-                                <tr key={u.username} className="border-b border-zinc-800/50">
+                                <tr key={u.username} className="border-b border-zinc-800/50 align-top">
                                   <td className="px-2 py-1 font-semibold">{u.username}</td>
                                   <td className="px-2 py-1">{(u.rank_points || 0).toLocaleString()}</td>
                                   <td className="px-2 py-1">{u.current_micro}</td>
                                   <td className="px-2 py-1 text-red-400">{u.last_granted}</td>
                                   <td className="px-2 py-1 text-amber-400">+{u.gap}</td>
                                   {gamePassStuck.fixed_count > 0 && (
-                                    <td className="px-2 py-1 text-green-400">{u.fix_result || '—'}</td>
+                                    <td className="px-2 py-1 text-green-400 text-[8px]">
+                                      {u.credited ? Object.entries(u.credited).map(([k,v]) => `${k}: ${v.toLocaleString()}`).join(', ') : u.fix_result || '—'}
+                                    </td>
                                   )}
                                 </tr>
                               ))}

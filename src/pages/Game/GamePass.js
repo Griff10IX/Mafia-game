@@ -135,7 +135,7 @@ function fnv1a32(str) {
   let h = 0x811c9dc5;
   for (let i = 0; i < str.length; i += 1) {
     h ^= str.charCodeAt(i) & 0xff;
-    h = (h * 0x01000193) >>> 0;
+    h = Math.imul(h, 0x01000193) >>> 0;
   }
   return h >>> 0;
 }
@@ -266,7 +266,7 @@ for (let t = 1; t <= 100; t += 1) {
 }
 
 function initialBaseGuess(tiers, baseTier, targetTotal) {
-  const denom = tiers.reduce((acc, tt) => acc + rewardWeight(tt, baseTier), 0);
+  const denom = tiers.reduce((acc, tt) => acc + (tt / baseTier), 0);
   if (!denom) return 1;
   return targetTotal / denom;
 }
