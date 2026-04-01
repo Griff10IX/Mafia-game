@@ -634,7 +634,12 @@ export default function Layout({ children }) {
   const rankingDebounceRef = useRef(null);
   useEffect(() => {
     const path = location.pathname;
-    const needRanking = ['/ranking', '/crimes', '/gta', '/jail'].includes(path) || (userId && mobileStatsDisplay === 'right_sidebar');
+    // Match real routes: /crime/crimes, /crime/gta, /crime/jail, /game/ranking, etc. (old list used /gta, /crimes which never matched)
+    const needRanking =
+      path.startsWith('/crime/') ||
+      path.startsWith('/game/ranking') ||
+      path === '/ranking' ||
+      (userId && mobileStatsDisplay === 'right_sidebar');
     if (rankingDebounceRef.current) clearTimeout(rankingDebounceRef.current);
     rankingDebounceRef.current = setTimeout(() => {
       if (needRanking) fetchRankingCounts();
@@ -787,15 +792,28 @@ export default function Layout({ children }) {
       const crimesRes = settled[0].status === 'fulfilled' ? settled[0].value : null;
       const gtaRes = settled[1].status === 'fulfilled' ? settled[1].value : null;
       const jailPlayersRes = settled[2].status === 'fulfilled' ? settled[2].value : null;
-      const exclusiveRes = settled[3].status === 'fulfilled' ? settled[3].value : { data: { exclusive_in_pool: false } };
       const now = new Date();
       const crimesAvailable = crimesRes && Array.isArray(crimesRes.data) ? crimesRes.data.filter((c) => c?.can_commit).length : 0;
       const gtaAvailable = gtaRes && Array.isArray(gtaRes.data) ? gtaRes.data.filter((o) => { if (!o?.unlocked) return false; if (!o?.cooldown_until) return true; const t = new Date(o.cooldown_until); return !Number.isNaN(t.getTime()) && t <= now; }).length : 0;
       const jailCount = jailPlayersRes && Array.isArray(jailPlayersRes.data?.players) ? jailPlayersRes.data.players.length : 0;
       setRankingCounts({ crimes: crimesAvailable, gta: gtaAvailable, jail: jailCount });
-      setGtaExclusiveInPool(!!exclusiveRes?.data?.exclusive_in_pool);
+      // Only update when the request succeeds; failed requests used to clear the ★ intermittently
+      if (settled[3].status === 'fulfilled') {
+        const d = settled[3].value?.data;
+        if (d && typeof d.exclusive_in_pool !== 'undefined') {
+          setGtaExclusiveInPool(!!d.exclusive_in_pool);
+        }
+      }
     } catch (error) { }
   };
+
+  useEffect(() => {
+    if (!userId) {
+      setGtaExclusiveInPool(false);
+      return;
+    }
+    fetchRankingCounts();
+  }, [userId]); // eslint-disable-line
 
   const fetchTravelStatus = useCallback(async () => {
     try {
