@@ -965,8 +965,12 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
             car_ids = [e["user_car_id"] for e in eligible[:max(0, batch_limit - melted_this_cycle)]]
             actions = [a for a in melt_action_ids if a in ("bullets", "cash")]
             if len(actions) == 2:
-                # Both bullets and cash: full upgraded batch for each (same as manual garage), re-fetch between
-                car_ids_bullets = [e["user_car_id"] for e in eligible[:batch_limit]]
+                # Both bullets and cash: split one batch pool 50/50 (odd limit → first half gets +1)
+                pool = [e["user_car_id"] for e in eligible[:batch_limit]]
+                n = len(pool)
+                half = (n + 1) // 2
+                car_ids_bullets = pool[:half]
+                car_ids_cash = pool[half:]
                 try:
                     if car_ids_bullets:
                         result_b = await melt_cars_locked(user, car_ids_bullets, "bullets")
@@ -978,8 +982,6 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                             tb = result_b.get("total_bullets", 0)
                             lines.append(f"**Melt** — Melted {mc} car(s) for {tb} bullets.")
                             await _update_auto_rank_stats_melt(db, user_id, melted_count=mc, total_bullets=tb)
-                    eligible = await _melt_eligible_rows()
-                    car_ids_cash = [e["user_car_id"] for e in eligible[:batch_limit]]
                     if car_ids_cash:
                         result_c = await melt_cars_locked(user, car_ids_cash, "cash")
                         if result_c.get("success"):

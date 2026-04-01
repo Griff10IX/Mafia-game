@@ -122,6 +122,7 @@ from routers.account.objectives import update_objectives_progress
 from routers.admin.airport import _invalidate_travel_info_cache
 from routers.game.families import resolve_family_id
 from utils.family_vault_log import log_family_vault_tx
+from utils.minigame_captcha_gate import require_turnstile_for_game_action
 
 
 def effective_garage_batch_limit(user: dict) -> int:
