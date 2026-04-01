@@ -6,7 +6,8 @@ Layers:
 - Sec-Fetch-* headers (modern browsers send at least one on fetch/XHR; many script clients omit them)
 
 All are coarse heuristics — trivial to spoof together — but they catch lazy bots and mistyped scripts.
-Disable via main game_settings: block_script_user_agent_login = false.
+Disable via main game_settings: block_script_user_agent_login = false (auth + minigames),
+or block_script_user_agent_game_actions = false (crimes, GTA, jail, OC, bodyguards, attack).
 """
 from __future__ import annotations
 
@@ -74,14 +75,15 @@ def _has_sec_fetch_header(headers: Mapping[str, str]) -> bool:
 def auth_client_headers_blocked(
     headers: Mapping[str, str],
     settings: dict | None,
+    setting_key: str = "block_script_user_agent_login",
 ) -> Tuple[bool, str]:
     """
-    Combined checks for /auth/login (non-staff), /auth/register, /auth/preregister, etc.
+    Combined checks for /auth/login (non-staff), /auth/register, /auth/preregister, minigames, core game APIs, etc.
 
-    settings key: block_script_user_agent_login (default True when missing).
+    settings keys on main doc: block_script_user_agent_login, block_script_user_agent_game_actions (default True when missing).
     Returns (blocked, internal_reason) for logging only.
     """
-    enabled = bool(settings.get("block_script_user_agent_login", True)) if settings else True
+    enabled = bool(settings.get(setting_key, True)) if settings else True
     if not enabled:
         return False, ""
 

@@ -162,6 +162,7 @@ class AdminSettingsUpdate(BaseModel):
     require_email_verification: Optional[bool] = None
     block_proxy_vpn_login: Optional[bool] = None
     block_script_user_agent_login: Optional[bool] = None  # UA + browser-like checks: auth + minigame routes
+    block_script_user_agent_game_actions: Optional[bool] = None  # UA checks: crimes, GTA, jail, OC, bodyguards, attack
     minigame_turnstile_enabled: Optional[bool] = None  # Cloudflare Turnstile before minigame run start
     minigame_turnstile_site_key: Optional[str] = None  # Public site key (secret stays in TURNSTILE_SECRET_KEY env)
     login_turnstile_enabled: Optional[bool] = None  # Turnstile on /auth/login; reuses site key above
@@ -4770,6 +4771,7 @@ def register(router):
         preregister_landing_banner_preview_open = bool(main_doc.get("preregister_landing_banner_preview_open")) if main_doc else False
         block_proxy_vpn_login = True if not main_doc else bool(main_doc.get("block_proxy_vpn_login", True))
         block_script_user_agent_login = True if not main_doc else bool(main_doc.get("block_script_user_agent_login", True))
+        block_script_user_agent_game_actions = True if not main_doc else bool(main_doc.get("block_script_user_agent_game_actions", True))
         minigame_turnstile_enabled = bool(main_doc.get("minigame_turnstile_enabled")) if main_doc else False
         minigame_turnstile_site_key = (main_doc.get("minigame_turnstile_site_key") or "") if main_doc else ""
         login_turnstile_enabled = bool(main_doc.get("login_turnstile_enabled")) if main_doc else False
@@ -4794,6 +4796,7 @@ def register(router):
             "require_email_verification": require_email_verification,
             "block_proxy_vpn_login": block_proxy_vpn_login,
             "block_script_user_agent_login": block_script_user_agent_login,
+            "block_script_user_agent_game_actions": block_script_user_agent_game_actions,
             "minigame_turnstile_enabled": minigame_turnstile_enabled,
             "minigame_turnstile_site_key": (minigame_turnstile_site_key or "").strip(),
             "login_turnstile_enabled": login_turnstile_enabled,
@@ -4856,6 +4859,12 @@ def register(router):
             await db.game_settings.update_one(
                 {"_id": "main"},
                 {"$set": {"block_script_user_agent_login": bool(body.block_script_user_agent_login)}},
+                upsert=True,
+            )
+        if body.block_script_user_agent_game_actions is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"block_script_user_agent_game_actions": bool(body.block_script_user_agent_game_actions)}},
                 upsert=True,
             )
         if body.minigame_turnstile_enabled is not None:
@@ -5004,6 +5013,7 @@ def register(router):
         preregister_landing_banner_preview_open = bool(main_doc.get("preregister_landing_banner_preview_open")) if main_doc else False
         block_proxy_vpn_login = True if not main_doc else bool(main_doc.get("block_proxy_vpn_login", True))
         block_script_user_agent_login = True if not main_doc else bool(main_doc.get("block_script_user_agent_login", True))
+        block_script_user_agent_game_actions = True if not main_doc else bool(main_doc.get("block_script_user_agent_game_actions", True))
         minigame_turnstile_enabled = bool(main_doc.get("minigame_turnstile_enabled")) if main_doc else False
         minigame_turnstile_site_key = (main_doc.get("minigame_turnstile_site_key") or "") if main_doc else ""
         login_turnstile_enabled = bool(main_doc.get("login_turnstile_enabled")) if main_doc else False
@@ -5022,6 +5032,7 @@ def register(router):
             "require_email_verification": require_email_verification,
             "block_proxy_vpn_login": block_proxy_vpn_login,
             "block_script_user_agent_login": block_script_user_agent_login,
+            "block_script_user_agent_game_actions": block_script_user_agent_game_actions,
             "minigame_turnstile_enabled": minigame_turnstile_enabled,
             "minigame_turnstile_site_key": (minigame_turnstile_site_key or "").strip(),
             "login_turnstile_enabled": login_turnstile_enabled,

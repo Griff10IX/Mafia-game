@@ -36,7 +36,11 @@ export default function QuickTrade() {
   const [tokenType, setTokenType] = useState('xp_crimes');
   const [tokenQuantity, setTokenQuantity] = useState('1');
   const [tokenPrice, setTokenPrice] = useState('');
+  /** 'points' | 'money' — cash listings require min $250k per token (server-enforced). */
+  const [tokenPriceCurrency, setTokenPriceCurrency] = useState('points');
   const [creatingToken, setCreatingToken] = useState(false);
+
+  const TOKEN_MIN_CASH_PER_TOKEN = 250_000;
 
   useEffect(() => {
     fetchTrades();
@@ -215,14 +219,26 @@ export default function QuickTrade() {
       );
       return;
     }
-    const price = Math.max(1, parseInt(String(tokenPrice).replace(/,/g, ''), 10) || 0);
-    if (!price) {
-      toast.error('Enter price in points');
-      return;
+    const minCash = TOKEN_MIN_CASH_PER_TOKEN * qty;
+    let body;
+    if (tokenPriceCurrency === 'points') {
+      const price = Math.max(1, parseInt(String(tokenPrice).replace(/,/g, ''), 10) || 0);
+      if (!price) {
+        toast.error('Enter price in points');
+        return;
+      }
+      body = { token_type: tokenType, quantity: qty, price_currency: 'points', price_points: price, price_money: 0 };
+    } else {
+      const cash = Math.round(parseFloat(String(tokenPrice).replace(/,/g, '')) || 0);
+      if (!cash || cash < minCash) {
+        toast.error(`Minimum cash for ${qty} token(s) is $${formatNumber(minCash)} ($${formatNumber(TOKEN_MIN_CASH_PER_TOKEN)} per token)`);
+        return;
+      }
+      body = { token_type: tokenType, quantity: qty, price_currency: 'money', price_points: 0, price_money: cash };
     }
     setCreatingToken(true);
     try {
-      await api.post('/trade/token-offer', { token_type: tokenType, quantity: qty, price_points: price });
+      await api.post('/trade/token-offer', body);
       toast.success('Token offer created!');
       setTokenQuantity('1');
       setTokenPrice('');
@@ -487,14 +503,14 @@ export default function QuickTrade() {
         </section>
       </div>
 
-      {/* Token offers: sell tokens for points only */}
+      {/* Token offers: sell for points or cash */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
             <div className="flex items-center gap-2">
               <Zap className="w-5 h-5 text-primary" />
-              <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Sell tokens (points only)</h2>
+              <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Sell tokens (points or cash)</h2>
             </div>
           </div>
           <div className="p-4 space-y-2.5">
@@ -549,20 +565,65 @@ export default function QuickTrade() {
               />
             </div>
             <div>
-              <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">Price (points)</label>
-              <FormattedNumberInput
-                value={tokenPrice}
-                onChange={setTokenPrice}
-                placeholder="e.g. 100"
-                className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
-              />
+              <span className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1.5">Price in</span>
+              <div className="flex flex-wrap gap-3 mb-2">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-heading text-foreground">
+                  <input
+                    type="radio"
+                    name="tokenPriceCurrency"
+                    checked={tokenPriceCurrency === 'points'}
+                    onChange={() => setTokenPriceCurrency('points')}
+                    className="rounded border-zinc-600"
+                  />
+                  Points
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-heading text-foreground">
+                  <input
+                    type="radio"
+                    name="tokenPriceCurrency"
+                    checked={tokenPriceCurrency === 'money'}
+                    onChange={() => setTokenPriceCurrency('money')}
+                    className="rounded border-zinc-600"
+                  />
+                  Cash ($)
+                </label>
+              </div>
+              <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">
+                {tokenPriceCurrency === 'points' ? 'Price (points)' : 'Price (total $ for this listing)'}
+              </label>
+              {tokenPriceCurrency === 'points' ? (
+                <FormattedNumberInput
+                  value={tokenPrice}
+                  onChange={setTokenPrice}
+                  placeholder="e.g. 100"
+                  className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+                />
+              ) : (
+                <FormattedNumberInput
+                  value={tokenPrice}
+                  onChange={setTokenPrice}
+                  allowDecimals
+                  placeholder={`min ${formatNumber(TOKEN_MIN_CASH_PER_TOKEN)} per token`}
+                  className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+                />
+              )}
+              {tokenPriceCurrency === 'money' && (
+                <p className="text-[9px] text-mutedForeground font-heading mt-1">
+                  Minimum <span className="text-primary font-bold">${formatNumber(TOKEN_MIN_CASH_PER_TOKEN)}</span> per token
+                  (e.g. {tokenQuantity || '1'} token(s) → min ${formatNumber(TOKEN_MIN_CASH_PER_TOKEN * Math.max(1, parseInt(String(tokenQuantity).replace(/,/g, ''), 10) || 1))}).
+                </p>
+              )}
             </div>
             <button
               onClick={handleCreateTokenOffer}
               disabled={!tokenPrice || creatingToken}
               className="w-full px-4 py-2 rounded bg-primary/20 text-primary text-xs font-heading font-bold border border-primary/40 hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {creatingToken ? 'Creating…' : `List ${tokenQuantity || '0'} ${formatTokenName(tokenType)} for ${tokenPrice ? formatNumber(tokenPrice) : '0'} pts`}
+              {creatingToken
+                ? 'Creating…'
+                : tokenPriceCurrency === 'points'
+                  ? `List ${tokenQuantity || '0'} ${formatTokenName(tokenType)} for ${tokenPrice ? formatNumber(tokenPrice) : '0'} pts`
+                  : `List ${tokenQuantity || '0'} ${formatTokenName(tokenType)} for $${tokenPrice ? formatNumber(tokenPrice) : '0'}`}
             </button>
           </div>
           <div className="qt-art-line text-primary mx-3" />
@@ -588,7 +649,16 @@ export default function QuickTrade() {
                       </span>
                     </div>
                     <div className="text-[10px] text-mutedForeground mt-0.5">
-                      <span className="text-primary font-bold">{offer.quantity}</span> {formatTokenName(offer.token_type || '')} · <span className="text-foreground font-bold">{formatNumber(offer.price_points)}</span> pts
+                      <span className="text-primary font-bold">{offer.quantity}</span> {formatTokenName(offer.token_type || '')} ·{' '}
+                      {(offer.price_currency || 'points') === 'money' ? (
+                        <>
+                          <span className="text-foreground font-bold">${formatNumber(offer.price_money || 0)}</span> cash
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-foreground font-bold">{formatNumber(offer.price_points)}</span> pts
+                        </>
+                      )}
                     </div>
                   </div>
                   <div className="shrink-0">

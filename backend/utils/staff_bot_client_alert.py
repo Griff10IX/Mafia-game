@@ -70,7 +70,13 @@ async def maybe_notify_staff_bot_client_blocked(
     source: str,
     context_note: str = "",
 ) -> None:
-    """Notify admins/mods (inbox) when a request is blocked for script-like client headers."""
+    """Notify admins/mods (inbox) when a request is blocked for script-like client headers.
+
+    Use source labels like auth_login, auth_minigames, auth_gameplay (underscores become spaces in the message).
+
+    For auth_minigames / auth_gameplay, appends a line like login's "Login attempt (identifier): Moss":
+    "Minigame attempt (username): …" / "Gameplay attempt (username): …" when Bearer resolves to a user.
+    """
     now = time.monotonic()
     ip = client_ip_from_request(request)
     path = request.url.path
@@ -111,6 +117,22 @@ async def maybe_notify_staff_bot_client_blocked(
     cn = (context_note or "").strip()
     if cn:
         lines.append(cn)
+
+    # Parallel to auth_login's "Login attempt (identifier): Moss" — who is attempting to bot (from session).
+    if source == "auth_gameplay":
+        if username:
+            lines.append(f"Gameplay attempt (username): {username}")
+        elif user_id:
+            lines.append(f"Gameplay attempt (username): unknown (user id {user_id})")
+        else:
+            lines.append("Gameplay attempt (username): not identified (no Bearer token in Authorization)")
+    elif source == "auth_minigames":
+        if username:
+            lines.append(f"Minigame attempt (username): {username}")
+        elif user_id:
+            lines.append(f"Minigame attempt (username): unknown (user id {user_id})")
+        else:
+            lines.append("Minigame attempt (username): not identified (no Bearer token in Authorization)")
 
     try:
         from server import _get_staff_user_ids, send_notification

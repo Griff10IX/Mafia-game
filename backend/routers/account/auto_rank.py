@@ -160,7 +160,7 @@ async def _booze_garage_travel_leg_seconds(db, user_id: str) -> tuple[Optional[s
     best_time = 999
     for uc in usable:
         if uc.get("car_id") == "car_custom":
-            travel_time = int(TRAVEL_TIMES.get("custom", 20))
+            travel_time = int(TRAVEL_TIMES.get("custom", 12))
             method = "custom"
         else:
             car_info = next((c for c in CARS if c.get("id") == uc.get("car_id")), None)

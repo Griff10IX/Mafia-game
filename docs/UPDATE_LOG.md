@@ -30,6 +30,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-01 20:00 UTC[/color][/b] — [b]Quick Trade: sell tokens for points or cash[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] On [b]Money → Quick Trade[/b], [b]Sell tokens[/b] now lets you choose [b]Points[/b] or [b]Cash ($)[/b]. Cash listings must total at least [b]$250,000 per token[/b] in the offer (e.g. 2 tokens → min $500,000 for the listing). Buyers paying cash spend from their in-game cash wallet; points listings work as before.[/color]
+[*][color=#888888][b]Player action:[/b] Open Quick Trade, pick token type and quantity, choose [b]Points[/b] or [b]Cash ($)[/b], enter your price, and list. Buyers see offers as points or cash accordingly.[/color]
+[*][color=#888888][b]Impact:[/b] More ways to trade tokens; large minimum on cash offers to match the economy.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-01 18:00 UTC[/color][/b] — [b]Store: Auto Rank visible during trial[/b][/size]
 [quote]
 [list]

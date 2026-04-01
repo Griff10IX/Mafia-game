@@ -9,7 +9,7 @@ from typing import Optional
 from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel
 
-from server import send_notification
+from server import send_notification, _get_staff_user_ids
 from utils.point_provenance import mint_purchase_lot_if_missing, log_points_event
 from utils.release_soft_launch import game_pass_purchase_locked_detail, get_release_soft_launch_public
 
@@ -86,6 +86,79 @@ def _get_stripe_key():
     return os.environ.get("STRIPE_SECRET_KEY") or os.environ.get("STRIPE_API_KEY")
 
 
+async def _notify_staff_manual_credit_pending(
+    db,
+    *,
+    session_id: str,
+    user_id: str,
+    package_id: str,
+    points: int,
+    manual_eta: Optional[str],
+) -> None:
+    """Inbox all staff when a paid session is held for manual points credit (store_points_auto_credit off)."""
+    username = ""
+    try:
+        u = await db.users.find_one({"id": user_id}, {"_id": 0, "username": 1})
+        if u:
+            username = (u.get("username") or "").strip()[:64]
+    except Exception:
+        pass
+    eta_line = (manual_eta or "").strip() or "—"
+    title = "Store points — manual credit needed"
+    msg = (
+        "A player paid for points while automatic crediting is turned off in settings. "
+        "Credit them in Admin → Payments (manual credit / check Stripe session).\n\n"
+        f"User: {username or '(unknown)'} ({user_id})\n"
+        f"Points: {points:,}\n"
+        f"Package: {package_id}\n"
+        f"Stripe session: {session_id}\n"
+        f"ETA shown to players (informational): {eta_line}"
+    )
+    try:
+        staff_ids = await _get_staff_user_ids()
+        for staff_uid in staff_ids:
+            try:
+                await send_notification(staff_uid, title, msg, "staff_store_manual_credit")
+            except Exception as e:
+                logger.warning("staff manual credit inbox notify %s: %s", staff_uid, e)
+    except Exception:
+        logger.exception("notify_staff_manual_credit_pending failed")
+
+
+async def _notify_staff_game_pass_fulfillment_blocked(
+    db,
+    *,
+    session_id: str,
+    user_id: str,
+    detail: str,
+) -> None:
+    """Inbox staff when Stripe captured payment but Game Pass cannot be auto-fulfilled (e.g. final window rule)."""
+    username = ""
+    try:
+        u = await db.users.find_one({"id": user_id}, {"_id": 0, "username": 1})
+        if u:
+            username = (u.get("username") or "").strip()[:64]
+    except Exception:
+        pass
+    title = "Game Pass payment — fulfillment blocked"
+    msg = (
+        "Stripe payment was received but the Game Pass was not granted automatically. "
+        "Resolve in Admin (Payments / user account).\n\n"
+        f"User: {username or '(unknown)'} ({user_id})\n"
+        f"Stripe session: {session_id}\n"
+        f"Detail: {(detail or '')[:800]}"
+    )
+    try:
+        staff_ids = await _get_staff_user_ids()
+        for staff_uid in staff_ids:
+            try:
+                await send_notification(staff_uid, title, msg, "staff_game_pass_fulfillment_blocked")
+            except Exception as e:
+                logger.warning("staff fulfillment blocked inbox notify %s: %s", staff_uid, e)
+    except Exception:
+        logger.exception("notify_staff_game_pass_fulfillment_blocked failed")
+
+
 async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_id: str, points: int) -> dict:
     """
     Credit points only once per session (idempotent). Returns dict with status info.
@@ -134,6 +207,15 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
                     session_id,
                     user_id,
                 )
+                try:
+                    await _notify_staff_game_pass_fulfillment_blocked(
+                        db,
+                        session_id=session_id,
+                        user_id=user_id,
+                        detail=block_msg or "",
+                    )
+                except Exception:
+                    logger.exception("staff inbox notify fulfillment_blocked failed")
                 return {"credited": False, "preorder": False, "fulfillment_blocked": True, "detail": block_msg}
             snap = await db.payment_transactions.find_one(
                 {"session_id": session_id},
@@ -263,6 +345,17 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
             "Payment manual credit pending: session_id=%s user_id=%s package_id=%s points=%s",
             session_id, user_id, package_id, points,
         )
+        try:
+            await _notify_staff_manual_credit_pending(
+                db,
+                session_id=session_id,
+                user_id=user_id,
+                package_id=package_id,
+                points=points,
+                manual_eta=manual_eta,
+            )
+        except Exception:
+            logger.exception("staff inbox notify manual credit pending failed")
         return {"credited": True, "preorder": False, "manual_credit_pending": True, "manual_credit_eta": manual_eta}
 
     # Preorder when auto-credit is on

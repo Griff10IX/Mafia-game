@@ -892,7 +892,9 @@ export default function Admin() {
   const [requireEmailVerification, setRequireEmailVerification] = useState(false);
   const [blockProxyVpnLogin, setBlockProxyVpnLogin] = useState(true);
   const [blockScriptUserAgentLogin, setBlockScriptUserAgentLogin] = useState(true);
+  const [blockScriptUserAgentGameActions, setBlockScriptUserAgentGameActions] = useState(true);
   const [blockScriptUaSaving, setBlockScriptUaSaving] = useState(false);
+  const [blockScriptGameActionsSaving, setBlockScriptGameActionsSaving] = useState(false);
   const [minigameTurnstileEnabled, setMinigameTurnstileEnabled] = useState(false);
   const [minigameTurnstileSiteKey, setMinigameTurnstileSiteKey] = useState('');
   const [loginTurnstileEnabled, setLoginTurnstileEnabled] = useState(false);
@@ -1464,6 +1466,7 @@ export default function Admin() {
       setRequireEmailVerification(!!res.data?.require_email_verification);
       setBlockProxyVpnLogin(res.data?.block_proxy_vpn_login !== false);
       setBlockScriptUserAgentLogin(res.data?.block_script_user_agent_login !== false);
+      setBlockScriptUserAgentGameActions(res.data?.block_script_user_agent_game_actions !== false);
       setMinigameTurnstileEnabled(!!res.data?.minigame_turnstile_enabled);
       setMinigameTurnstileSiteKey((res.data?.minigame_turnstile_site_key ?? '').trim());
       setLoginTurnstileEnabled(!!res.data?.login_turnstile_enabled);
@@ -1502,6 +1505,7 @@ export default function Admin() {
       setRequireEmailVerification(false);
       setBlockProxyVpnLogin(true);
       setBlockScriptUserAgentLogin(true);
+      setBlockScriptUserAgentGameActions(true);
       setMinigameTurnstileEnabled(false);
       setMinigameTurnstileSiteKey('');
       setLoginTurnstileEnabled(false);
@@ -1558,6 +1562,7 @@ export default function Admin() {
         require_email_verification: requireEmailVerification,
         block_proxy_vpn_login: blockProxyVpnLogin,
         block_script_user_agent_login: blockScriptUserAgentLogin,
+        block_script_user_agent_game_actions: blockScriptUserAgentGameActions,
         minigame_turnstile_enabled: minigameTurnstileEnabled,
         minigame_turnstile_site_key: minigameTurnstileSiteKey.trim(),
         login_turnstile_enabled: loginTurnstileEnabled,
@@ -1571,6 +1576,7 @@ export default function Admin() {
       setRequireEmailVerification(!!res.data?.require_email_verification);
       setBlockProxyVpnLogin(res.data?.block_proxy_vpn_login !== false);
       setBlockScriptUserAgentLogin(res.data?.block_script_user_agent_login !== false);
+      setBlockScriptUserAgentGameActions(res.data?.block_script_user_agent_game_actions !== false);
       setMinigameTurnstileEnabled(!!res.data?.minigame_turnstile_enabled);
       if (res.data?.minigame_turnstile_site_key !== undefined) {
         setMinigameTurnstileSiteKey((res.data.minigame_turnstile_site_key ?? '').trim());
@@ -1593,11 +1599,26 @@ export default function Admin() {
     try {
       const res = await api.patch('/admin/settings', { block_script_user_agent_login: !!enabled });
       setBlockScriptUserAgentLogin(res.data?.block_script_user_agent_login !== false);
+      setBlockScriptUserAgentGameActions(res.data?.block_script_user_agent_game_actions !== false);
       toast.success(enabled ? 'Bot/script blocking enabled' : 'Bot/script blocking disabled');
     } catch (e) {
       toast.error(e.response?.data?.detail ?? 'Failed to update');
     } finally {
       setBlockScriptUaSaving(false);
+    }
+  };
+
+  const applyBlockScriptUserAgentGameActions = async (enabled) => {
+    setBlockScriptGameActionsSaving(true);
+    try {
+      const res = await api.patch('/admin/settings', { block_script_user_agent_game_actions: !!enabled });
+      setBlockScriptUserAgentLogin(res.data?.block_script_user_agent_login !== false);
+      setBlockScriptUserAgentGameActions(res.data?.block_script_user_agent_game_actions !== false);
+      toast.success(enabled ? 'Gameplay bot blocking enabled' : 'Gameplay bot blocking disabled');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to update');
+    } finally {
+      setBlockScriptGameActionsSaving(false);
     }
   };
 
@@ -8910,6 +8931,38 @@ export default function Admin() {
                   {blockScriptUaSaving ? '…' : 'Disable blocking'}
                 </button>
                 <span className="text-[10px] text-mutedForeground font-heading">Applies immediately. Also saved with &quot;Save settings&quot; below.</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="flex items-center gap-2 cursor-pointer text-sm font-heading">
+                  <input
+                    type="checkbox"
+                    checked={blockScriptUserAgentGameActions}
+                    onChange={(e) => setBlockScriptUserAgentGameActions(e.target.checked)}
+                    className="rounded border-input"
+                  />
+                  <span>
+                    Block script-like clients on crimes, GTA, jail, OC (crew + organised crime), bodyguards, and attack (same
+                    User-Agent / Sec-Fetch checks as above; independent toggle)
+                  </span>
+                </label>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 pl-0 sm:pl-6">
+                <button
+                  type="button"
+                  disabled={blockScriptGameActionsSaving || blockScriptUserAgentGameActions}
+                  onClick={() => applyBlockScriptUserAgentGameActions(true)}
+                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {blockScriptGameActionsSaving ? '…' : 'Enable gameplay blocking'}
+                </button>
+                <button
+                  type="button"
+                  disabled={blockScriptGameActionsSaving || !blockScriptUserAgentGameActions}
+                  onClick={() => applyBlockScriptUserAgentGameActions(false)}
+                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {blockScriptGameActionsSaving ? '…' : 'Disable gameplay blocking'}
+                </button>
               </div>
             </div>
             <div className="space-y-2 pt-2 border-t border-primary/10">

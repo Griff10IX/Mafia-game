@@ -24,7 +24,7 @@ const TRAVEL_TIMES = {
   rare: 25,
   uncommon: 35,
   common: 45,
-  custom: 20,
+  custom: 12,
 };
 
 const RARITY_LABELS = {

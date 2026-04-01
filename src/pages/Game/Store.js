@@ -839,7 +839,7 @@ export default function Store() {
                 <Car className="text-primary shrink-0" size={14} />
               </div>
               <div className="p-2.5">
-                <p className="text-[10px] text-mutedForeground font-heading mb-1.5">Named car, 20s travel, below Exclusive.</p>
+                <p className="text-[10px] text-mutedForeground font-heading mb-1.5">Named car, 12s travel, below Exclusive.</p>
                 <input
                   type="text"
                   placeholder="Name (2–30 chars)"

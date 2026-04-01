@@ -28,6 +28,9 @@ _FOUNDING_LOCK_EXEMPT_COUNT_FIELDS = frozenset(
     {"melt_tokens", "travel_tokens", "properties_tokens", "jailbust_tokens"}
 )
 
+# Minimum total cash (USD) for a token Quick Trade listing when selling for money: $250,000 per token.
+TOKEN_MIN_CASH_PER_TOKEN = 250_000
+
 
 def _invalidate_trade_caches():
     global _sell_offers_cache, _sell_offers_ts, _buy_offers_cache, _buy_offers_ts, _token_offers_cache, _token_offers_ts, _properties_cache, _properties_ts
@@ -82,7 +85,10 @@ class CreateBuyOffer(BaseModel):
 class CreateTokenOffer(BaseModel):
     token_type: str
     quantity: int
-    price_points: int
+    # "points" = buyer pays pts; "money" = buyer pays cash (min $250k per token, server-enforced).
+    price_currency: str = "points"
+    price_points: int = 0
+    price_money: int = 0
 
 
 # ----- Sell offers -----
@@ -331,12 +337,15 @@ async def get_token_offers(current_user: dict = Depends(get_current_user)):
             return []
     result = []
     for offer in raw_list:
+        cur = offer.get("price_currency") or "points"
         result.append({
             "id": str(offer["_id"]),
             "username": offer.get("username", "Anonymous"),
             "token_type": offer["token_type"],
             "quantity": offer["quantity"],
-            "price_points": offer["price_points"],
+            "price_currency": cur,
+            "price_points": int(offer.get("price_points") or 0),
+            "price_money": int(offer.get("price_money") or 0),
             "created_at": offer.get("created_at"),
             "is_own": offer.get("user_id") == current_user["id"],
         })
@@ -378,13 +387,30 @@ async def get_my_token_balances(current_user: dict = Depends(get_current_user)):
 
 
 async def create_token_offer(offer: CreateTokenOffer, current_user: dict = Depends(get_current_user)):
-    """Create a token sell offer. Deducts tokens from seller; buyer will pay points and receive tokens."""
+    """Create a token sell offer. Deducts tokens from seller; buyer pays points or cash and receives tokens."""
     user_id = current_user["id"]
     username = current_user.get("username", "Unknown")
     if offer.token_type not in TOKEN_TYPES:
         raise HTTPException(status_code=400, detail="Invalid token type")
-    if offer.quantity <= 0 or offer.price_points <= 0:
-        raise HTTPException(status_code=400, detail="Quantity and price must be positive")
+    if offer.quantity <= 0:
+        raise HTTPException(status_code=400, detail="Quantity must be positive")
+    cur = (offer.price_currency or "points").strip().lower()
+    if cur not in ("points", "money"):
+        raise HTTPException(status_code=400, detail="price_currency must be 'points' or 'money'")
+    price_points = int(offer.price_points or 0)
+    price_money = int(offer.price_money or 0)
+    if cur == "points":
+        if price_points <= 0:
+            raise HTTPException(status_code=400, detail="Price in points must be positive")
+        price_money = 0
+    else:
+        min_cash = TOKEN_MIN_CASH_PER_TOKEN * offer.quantity
+        if price_money < min_cash:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Minimum cash for this listing is ${min_cash:,} (${TOKEN_MIN_CASH_PER_TOKEN:,} per token × {offer.quantity})",
+            )
+        price_points = 0
     active_token_offers = await db.trade_token_offers.count_documents({"user_id": user_id, "status": "active"})
     if active_token_offers >= 10:
         raise HTTPException(status_code=400, detail="Maximum 10 token offers at once")
@@ -420,18 +446,36 @@ async def create_token_offer(offer: CreateTokenOffer, current_user: dict = Depen
         "username": username,
         "token_type": offer.token_type,
         "quantity": offer.quantity,
-        "price_points": offer.price_points,
+        "price_currency": cur,
+        "price_points": price_points,
+        "price_money": price_money,
         "status": "active",
         "created_at": datetime.now(timezone.utc),
     }
     result = await db.trade_token_offers.insert_one(new_offer)
     _invalidate_trade_caches()
-    await log_activity(user_id, username, "quicktrade_token_offer", {"token_type": offer.token_type, "quantity": offer.quantity, "price_points": offer.price_points})
-    return {"message": f"Token offer created: {offer.quantity} {offer.token_type} for {offer.price_points} points", "offer_id": str(result.inserted_id)}
+    await log_activity(
+        user_id,
+        username,
+        "quicktrade_token_offer",
+        {
+            "token_type": offer.token_type,
+            "quantity": offer.quantity,
+            "price_currency": cur,
+            "price_points": price_points,
+            "price_money": price_money,
+        },
+    )
+    if cur == "money":
+        return {
+            "message": f"Token offer created: {offer.quantity} {offer.token_type} for ${price_money:,} cash",
+            "offer_id": str(result.inserted_id),
+        }
+    return {"message": f"Token offer created: {offer.quantity} {offer.token_type} for {price_points} points", "offer_id": str(result.inserted_id)}
 
 
 async def accept_token_offer(offer_id: str, current_user: dict = Depends(get_current_user)):
-    """Buyer pays points and receives tokens; seller receives points."""
+    """Buyer pays points or cash and receives tokens; seller receives points or cash."""
     buyer_id = current_user["id"]
     buyer_username = current_user.get("username", "Unknown")
     now = datetime.now(timezone.utc)
@@ -453,12 +497,57 @@ async def accept_token_offer(offer_id: str, current_user: dict = Depends(get_cur
             {"_id": ObjectId(offer_id)},
             {"$set": {"status": "active"}, "$unset": {"buyer_id": 1, "buyer_username": 1, "completed_at": 1}},
         )
-        raise HTTPException(status_code=400, detail="Insufficient points")
+        raise HTTPException(status_code=400, detail="Buyer not found")
     token_type = offer["token_type"]
     field = TOKEN_CONFIG[token_type]["count_field"]
+    currency = offer.get("price_currency") or "points"
+    price_points = int(offer.get("price_points") or 0)
+    price_money = int(offer.get("price_money") or 0)
+
+    if currency == "money":
+        if price_money <= 0:
+            await db.trade_token_offers.update_one(
+                {"_id": ObjectId(offer_id)},
+                {"$set": {"status": "active"}, "$unset": {"buyer_id": 1, "buyer_username": 1, "completed_at": 1}},
+            )
+            raise HTTPException(status_code=400, detail="Invalid cash offer")
+        result = await db.users.update_one(
+            {"id": buyer_id, "money": {"$gte": float(price_money)}},
+            {"$inc": {"money": -float(price_money), field: offer["quantity"]}},
+        )
+        if result.modified_count == 0:
+            await db.trade_token_offers.update_one(
+                {"_id": ObjectId(offer_id)},
+                {"$set": {"status": "active"}, "$unset": {"buyer_id": 1, "buyer_username": 1, "completed_at": 1}},
+            )
+            raise HTTPException(status_code=400, detail="Insufficient cash")
+        await db.users.update_one({"id": offer["user_id"]}, {"$inc": {"money": float(price_money)}})
+        _invalidate_trade_caches()
+        await log_activity(
+            buyer_id,
+            buyer_username,
+            "quicktrade_accept_token",
+            {
+                "seller_id": offer["user_id"],
+                "token_type": token_type,
+                "quantity": offer["quantity"],
+                "cash_paid": price_money,
+                "price_currency": "money",
+                "offer_id": offer_id,
+            },
+        )
+        return {
+            "message": "Trade completed",
+            "token_type": token_type,
+            "quantity": offer["quantity"],
+            "price_currency": "money",
+            "cash_paid": price_money,
+        }
+
+    # Points (legacy listings have no price_currency → treat as points)
     result = await db.users.update_one(
-        {"id": buyer_id, "points": {"$gte": offer["price_points"]}},
-        {"$inc": {"points": -offer["price_points"], field: offer["quantity"]}}
+        {"id": buyer_id, "points": {"$gte": price_points}},
+        {"$inc": {"points": -price_points, field: offer["quantity"]}},
     )
     if result.modified_count == 0:
         await db.trade_token_offers.update_one(
@@ -466,19 +555,32 @@ async def accept_token_offer(offer_id: str, current_user: dict = Depends(get_cur
             {"$set": {"status": "active"}, "$unset": {"buyer_id": 1, "buyer_username": 1, "completed_at": 1}},
         )
         raise HTTPException(status_code=400, detail="Insufficient points")
-    if offer["price_points"] != 0:
-        await log_points_event(db, user_id=buyer_id, points=-offer["price_points"], event_type="quicktrade_item_shop", meta={"offer_id": offer_id, "token_type": token_type, "quantity": offer["quantity"]})
-    await db.users.update_one({"id": offer["user_id"]}, {"$inc": {"points": offer["price_points"]}})
-    if offer["price_points"] != 0:
-        await log_points_event(db, user_id=offer["user_id"], points=offer["price_points"], event_type="quicktrade_sell", meta={"offer_id": offer_id, "token_type": token_type, "quantity": offer["quantity"]})
+    if price_points != 0:
+        await log_points_event(db, user_id=buyer_id, points=-price_points, event_type="quicktrade_item_shop", meta={"offer_id": offer_id, "token_type": token_type, "quantity": offer["quantity"]})
+    await db.users.update_one({"id": offer["user_id"]}, {"$inc": {"points": price_points}})
+    if price_points != 0:
+        await log_points_event(db, user_id=offer["user_id"], points=price_points, event_type="quicktrade_sell", meta={"offer_id": offer_id, "token_type": token_type, "quantity": offer["quantity"]})
     _invalidate_trade_caches()
     await log_activity(
         buyer_id,
         buyer_username,
         "quicktrade_accept_token",
-        {"seller_id": offer["user_id"], "token_type": token_type, "quantity": offer["quantity"], "points_paid": offer["price_points"], "offer_id": offer_id},
+        {
+            "seller_id": offer["user_id"],
+            "token_type": token_type,
+            "quantity": offer["quantity"],
+            "points_paid": price_points,
+            "price_currency": "points",
+            "offer_id": offer_id,
+        },
     )
-    return {"message": "Trade completed", "token_type": token_type, "quantity": offer["quantity"], "points_paid": offer["price_points"]}
+    return {
+        "message": "Trade completed",
+        "token_type": token_type,
+        "quantity": offer["quantity"],
+        "price_currency": "points",
+        "points_paid": price_points,
+    }
 
 
 async def cancel_token_offer(offer_id: str, current_user: dict = Depends(get_current_user)):

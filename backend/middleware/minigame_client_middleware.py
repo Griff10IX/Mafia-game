@@ -1,4 +1,4 @@
-# Browser-like client checks for minigame API routes (same rules as /auth/register + login).
+# Browser-like client checks for minigame API routes and core gameplay routes (same rules as /auth/register + login).
 import logging
 import time
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -27,6 +27,19 @@ _MINIGAME_PREFIXES = (
     "/api/racing",
 )
 
+# Crimes, GTA, jail, crew OC, solo organised crime, bodyguards (player routes), attack.
+_GAME_ACTION_PREFIXES = (
+    "/api/crimes",
+    "/api/gta",
+    "/api/jail",
+    "/api/oc",
+    "/api/organised-crime",
+    "/api/bodyguards",
+    "/api/attack",
+)
+
+_FORBIDDEN_DETAIL = "This action must use the official game app or a normal web browser."
+
 
 def _is_protected_minigame_path(path: str) -> bool:
     if path.startswith("/api/racing/cron/") or path.startswith("/api/racing/admin/"):
@@ -34,8 +47,12 @@ def _is_protected_minigame_path(path: str) -> bool:
     return any(path.startswith(p) for p in _MINIGAME_PREFIXES)
 
 
+def _is_protected_game_action_path(path: str) -> bool:
+    return any(path.startswith(p) for p in _GAME_ACTION_PREFIXES)
+
+
 class MinigameClientGuardMiddleware(BaseHTTPMiddleware):
-    """Reject script-like clients on minigame endpoints (toggle: main.block_script_user_agent_login)."""
+    """Reject script-like clients on minigame and core gameplay endpoints (toggles on main game_settings)."""
 
     def __init__(self, app, db):
         super().__init__(app)
@@ -50,7 +67,11 @@ class MinigameClientGuardMiddleware(BaseHTTPMiddleware):
         try:
             self._settings_doc = await self.db.game_settings.find_one(
                 {"_id": "main"},
-                {"_id": 0, "block_script_user_agent_login": 1},
+                {
+                    "_id": 0,
+                    "block_script_user_agent_login": 1,
+                    "block_script_user_agent_game_actions": 1,
+                },
             )
         except Exception:
             logger.exception("MinigameClientGuard: game_settings read failed")
@@ -63,30 +84,52 @@ class MinigameClientGuardMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         path = request.url.path
-        if not _is_protected_minigame_path(path):
+        settings = await self._main_settings_slice()
+
+        if _is_protected_minigame_path(path):
+            blocked, reason = auth_client_headers_blocked(request.headers, settings)
+            if blocked:
+                logger.warning(
+                    "Minigame client guard: blocked reason=%s path=%s method=%s",
+                    reason,
+                    path,
+                    request.method,
+                )
+                try:
+                    await maybe_notify_staff_bot_client_blocked(
+                        db=self.db,
+                        request=request,
+                        internal_reason=reason,
+                        source="auth_minigames",
+                    )
+                except Exception:
+                    logger.exception("Minigame client guard: staff inbox notify failed")
+                return JSONResponse(status_code=403, content={"detail": _FORBIDDEN_DETAIL})
             return await call_next(request)
 
-        settings = await self._main_settings_slice()
-        blocked, reason = auth_client_headers_blocked(request.headers, settings)
-        if blocked:
-            logger.warning(
-                "Minigame client guard: blocked reason=%s path=%s method=%s",
-                reason,
-                path,
-                request.method,
+        if _is_protected_game_action_path(path):
+            blocked, reason = auth_client_headers_blocked(
+                request.headers,
+                settings,
+                setting_key="block_script_user_agent_game_actions",
             )
-            try:
-                await maybe_notify_staff_bot_client_blocked(
-                    db=self.db,
-                    request=request,
-                    internal_reason=reason,
-                    source="minigames",
+            if blocked:
+                logger.warning(
+                    "Game action client guard: blocked reason=%s path=%s method=%s",
+                    reason,
+                    path,
+                    request.method,
                 )
-            except Exception:
-                logger.exception("Minigame client guard: staff inbox notify failed")
-            return JSONResponse(
-                status_code=403,
-                content={"detail": "This action must use the official game app or a normal web browser."},
-            )
+                try:
+                    await maybe_notify_staff_bot_client_blocked(
+                        db=self.db,
+                        request=request,
+                        internal_reason=reason,
+                        source="auth_gameplay",
+                    )
+                except Exception:
+                    logger.exception("Game action client guard: staff inbox notify failed")
+                return JSONResponse(status_code=403, content={"detail": _FORBIDDEN_DETAIL})
+            return await call_next(request)
 
         return await call_next(request)
