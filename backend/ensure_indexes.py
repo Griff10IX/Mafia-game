@@ -123,6 +123,7 @@ async def ensure_all_indexes(db):
         await db.family_crew_oc_applications.create_index([("family_id", 1), ("user_id", 1)])
         await db.family_crew_oc_applications.create_index([("id", 1), ("family_id", 1)])
         await db.family_racket_attacks.create_index([("attacker_family_id", 1), ("target_family_id", 1), ("last_at", -1)])
+        await db.family_vault_transactions.create_index([("family_id", 1), ("at", -1)])
         await db.family_war_stats.create_index("war_id")
         await db.family_war_stats.create_index([("war_id", 1), ("user_id", 1)], unique=True)
         await db.families.create_index("id", unique=True)

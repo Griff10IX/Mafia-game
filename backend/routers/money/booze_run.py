@@ -353,6 +353,7 @@ class BoozeBuyRequest(BaseModel):
 class BoozeSellRequest(BaseModel):
     booze_id: str
     amount: int
+    captcha_token: Optional[str] = None
 
 
 class AdminBoozeRotationRequest(BaseModel):

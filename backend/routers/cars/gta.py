@@ -111,6 +111,8 @@ from server import (
     CARS,
     TRAVEL_TIMES,
     MELT_VALUE_PER_BULLET,
+    MELT_BULLETS_VALUE_MULT_NUM,
+    MELT_BULLETS_VALUE_MULT_DEN,
     DEFAULT_GARAGE_BATCH_LIMIT,
     GARAGE_BATCH_LIMIT_MAX,
     CustomCarImageUpdate,
@@ -119,6 +121,7 @@ from server import (
 from routers.account.objectives import update_objectives_progress
 from routers.admin.airport import _invalidate_travel_info_cache
 from routers.game.families import resolve_family_id
+from utils.family_vault_log import log_family_vault_tx
 
 
 def effective_garage_batch_limit(user: dict) -> int:
@@ -810,7 +813,8 @@ def _parse_melt_cooldown(iso_str):
 async def _melt_cars_impl(user: dict, car_ids: list, action: str):
     """Core melt logic. Returns dict with success/melted_count/etc. On bullets cooldown returns {success: False, cooldown: True, detail: ...}."""
     now = datetime.now(timezone.utc)
-    family_id = user.get("family_id")
+    # Prefer DB-resolved crew (membership row) so melt rewards still apply if users.family_id is stale/missing.
+    family_id = await resolve_family_id(user.get("id") or "") or (str(user.get("family_id") or "").strip() or None)
     in_war = family_id and await _family_in_active_war(family_id)
 
     # Bullets melt: claim cooldown atomically before deleting cars (parallel POSTs used to share the same read).
@@ -888,7 +892,7 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
                     uncommon_count += 1
                 car_value = int(car_info.get("value", 0) or 0)
                 if action == "bullets":
-                    melt_value = (car_value * 112) // 100
+                    melt_value = (car_value * MELT_BULLETS_VALUE_MULT_NUM) // MELT_BULLETS_VALUE_MULT_DEN
                     car_bullets = melt_value // MELT_VALUE_PER_BULLET
                     if car_info.get("rarity") == "common":
                         if car_bullets < 2:
@@ -931,6 +935,7 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
                     {"_id": 0, "melt_treasury_pct": 1, "melt_reward_tiers": 1, "treasury": 1, "name": 1},
                 )
                 if fam:
+                    individual_rewards = []
                     configured_pct = max(0, min(50, int(fam.get("melt_treasury_pct") or 0)))
                     tiers_raw = fam.get("melt_reward_tiers") or []
                     valid_tiers = []
@@ -956,23 +961,32 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
                             melt_reward_hits_due = len(individual_rewards)
                             melt_reward_due = sum(individual_rewards)
                     if melt_reward_due > 0:
-                        treasury_balance = int(fam.get("treasury") or 0)
-                        affordable = []
-                        remaining = treasury_balance
-                        for reward_amount in individual_rewards:
-                            if remaining >= reward_amount:
-                                affordable.append(reward_amount)
-                                remaining -= reward_amount
-                        melt_reward_paid = sum(affordable)
-                        melt_reward_hits_paid = len(affordable)
-                        if melt_reward_paid > 0:
-                            payout_res = await db.families.update_one(
-                                {"id": family_id, "treasury": {"$gte": melt_reward_paid}},
-                                {"$inc": {"treasury": -melt_reward_paid}},
+                        # Fresh treasury read + retry: stale reads or concurrent spends used to fail the atomic debit and zero the whole payout.
+                        melt_reward_paid = 0
+                        melt_reward_hits_paid = 0
+                        for _attempt in range(2):
+                            fam_pay = await db.families.find_one(
+                                {"id": family_id, "wiped": {"$ne": True}},
+                                {"_id": 0, "treasury": 1},
                             )
-                            if payout_res.modified_count == 0:
-                                melt_reward_paid = 0
-                                melt_reward_hits_paid = 0
+                            treasury_balance = int((fam_pay or {}).get("treasury") or 0)
+                            affordable = []
+                            remaining = treasury_balance
+                            for reward_amount in individual_rewards:
+                                if remaining >= reward_amount:
+                                    affordable.append(reward_amount)
+                                    remaining -= reward_amount
+                            candidate = sum(affordable)
+                            if candidate <= 0:
+                                break
+                            payout_res = await db.families.update_one(
+                                {"id": family_id, "treasury": {"$gte": candidate}},
+                                {"$inc": {"treasury": -candidate}},
+                            )
+                            if payout_res.modified_count > 0:
+                                melt_reward_paid = candidate
+                                melt_reward_hits_paid = len(affordable)
+                                break
                         if melt_reward_paid < melt_reward_due:
                             await db.families.update_one({"id": family_id}, {"$set": {"melt_treasury_pct": 0}})
                     if configured_pct > 0 and base_total_bullets > 0:
@@ -1006,6 +1020,21 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
                 },
             )
             await log_melt_event(user["id"], player_bullets)
+            if family_id and (family_cut > 0 or melt_reward_paid > 0):
+                await log_family_vault_tx(
+                    db,
+                    family_id,
+                    "gta_melt",
+                    user["id"],
+                    user.get("username") or "?",
+                    cash_delta=-melt_reward_paid,
+                    bullets_delta=family_cut,
+                    meta={
+                        "melt_reward_hits_paid": melt_reward_hits_paid,
+                        "melt_reward_hits_due": melt_reward_hits_due,
+                        "melt_treasury_pct": melt_pct_applied,
+                    },
+                )
             if melt_reward_paid > 0:
                 updated_user = await db.users.find_one(
                     {"id": user["id"]},
@@ -1033,6 +1062,7 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
                 "garage_melt",
                 {
                     "action": "bullets",
+                    "family_id": family_id,
                     "melted_count": deleted_count,
                     "total_bullets": player_bullets,
                     "base_total_bullets": base_total_bullets,

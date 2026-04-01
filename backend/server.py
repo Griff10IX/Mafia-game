@@ -30,6 +30,7 @@ from utils.game_pass_micro_rewards import (
 from utils.game_pass_tier_reconcile import grant_missing_vip_micro_tier_rewards
 from utils.analytics_events import log_analytics_event
 from utils.point_provenance import log_points_event
+from utils.family_vault_log import log_family_vault_tx
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 import random
@@ -498,8 +499,10 @@ TRAVEL_TIMES = {
     "airport": 0   # Airport (instant); set > 0 for timed flights (family -1s perk applies to this value)
 }
 
-# Melt-for-bullets: floor(car_value / MELT_VALUE_PER_BULLET) per car — see gta._melt_cars_impl
-MELT_VALUE_PER_BULLET = 500
+# Melt-for-bullets: melt_value = car_value * NUM // DEN, then bullets = melt_value // MELT_VALUE_PER_BULLET — see gta._melt_cars_impl
+MELT_VALUE_PER_BULLET = 385
+MELT_BULLETS_VALUE_MULT_NUM = 122
+MELT_BULLETS_VALUE_MULT_DEN = 100
 
 # Base car cash values (GTA sell, scrap, melt, dealer, etc.). Non-exclusive tiers + custom: ×1.25 on prior table (rounded). exclusive + loot_exclusive: unchanged.
 CARS = [
@@ -1322,6 +1325,21 @@ async def _family_war_check_wipe_and_award(victim_family_id: str, killer_family_
     else:
         if total_cash_prize > 0:
             await db.families.update_one({"id": winner_id}, {"$inc": {"treasury": total_cash_prize}})
+            await log_family_vault_tx(
+                db,
+                winner_id,
+                "war_prize_in",
+                "",
+                "War spoils",
+                cash_delta=total_cash_prize,
+                meta={
+                    "loser_family_id": loser_id,
+                    "loser_family_name": loser_family_name,
+                    "loser_treasury": loser_treasury,
+                    "prize_racket_cash": prize_racket_cash,
+                    "source": "war_kill_resolution",
+                },
+            )
         if loser_compound_points > 0 or loser_compound_loot_pieces > 0:
             await db.families.update_one(
                 {"id": winner_id},

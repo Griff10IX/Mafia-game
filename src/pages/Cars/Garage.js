@@ -23,9 +23,9 @@ const GARAGE_STYLES = `
 const RARITY_ORDER = { exclusive: 7, loot_exclusive: 6, custom: 5, legendary: 4, ultra_rare: 3, rare: 2, uncommon: 1, common: 0 };
 const DEFAULT_VISIBLE = 16;
 const MELT_SCRAP_RARITIES_KEY = 'garage_melt_scrap_rarities';
-/** Keep in sync with backend melt math in `routers/cars/gta.py`. */
-const MELT_VALUE_PER_BULLET = 500;
-const MELT_VALUE_MULTIPLIER_NUM = 112; // +12% per car before conversion
+/** Keep in sync with backend `server.py` + `routers/cars/gta.py` melt math. */
+const MELT_VALUE_PER_BULLET = 385;
+const MELT_VALUE_MULTIPLIER_NUM = 122;
 const MELT_VALUE_MULTIPLIER_DEN = 100;
 const ALL_RARITIES = ['common', 'uncommon', 'rare', 'ultra_rare', 'legendary', 'custom', 'loot_exclusive', 'exclusive'];
 

@@ -28,6 +28,56 @@ const TREASURY_QUICK = [
   { label: '1B', value: 1_000_000_000 },
 ];
 
+const VAULT_TX_KIND_LABELS = {
+  deposit: 'Deposit',
+  withdraw: 'Withdraw',
+  give_bullets: 'Give bullets',
+  split_bullets: 'Split all bullets',
+  compound_to_vault: 'Compound → vault',
+  crew_oc_join_fee: 'Crew OC join fee',
+  crew_oc_refund: 'Crew OC refund',
+  crew_oc_commit: 'Crew OC commit',
+  racket_collect: 'Racket income',
+  racket_unlock: 'Racket unlock',
+  racket_upgrade: 'Racket upgrade',
+  racket_raid_lost: 'Raided (lost cash)',
+  racket_raid_won: 'Raid (stolen)',
+  gta_melt: 'Garage melt',
+  hourly_bullets_bonus: 'Hourly vault bullets',
+  war_prize_in: 'War spoils',
+};
+
+const formatVaultTxDeltas = (tx) => {
+  const parts = [];
+  const c = Number(tx.cash_delta || 0);
+  const b = Number(tx.bullets_delta || 0);
+  const p = Number(tx.points_delta || 0);
+  const l = Number(tx.loot_delta || 0);
+  if (c !== 0) parts.push(c > 0 ? `+$${Math.abs(c).toLocaleString()} cash` : `-$${Math.abs(c).toLocaleString()} cash`);
+  if (b !== 0) parts.push(b > 0 ? `+${b.toLocaleString()} bullets` : `-${Math.abs(b).toLocaleString()} bullets`);
+  if (p !== 0) parts.push(p > 0 ? `+${p.toLocaleString()} pts` : `-${Math.abs(p).toLocaleString()} pts`);
+  if (l !== 0) parts.push(l > 0 ? `+${l.toLocaleString()} loot` : `-${Math.abs(l).toLocaleString()} loot`);
+  return parts.length ? parts.join(' · ') : '—';
+};
+
+const vaultTxSubtitle = (tx) => {
+  const bits = [];
+  const actor = (tx.actor_username || '').trim();
+  if (actor && actor !== '?' && actor !== 'System' && actor !== 'War spoils') bits.push(actor);
+  if (tx.target_username) bits.push(`→ ${tx.target_username}`);
+  const m = tx.meta || {};
+  if (m.racket_id) bits.push(String(m.racket_id).replace(/_/g, ' '));
+  if (tx.kind === 'gta_melt' && (m.melt_reward_hits_paid > 0 || m.melt_treasury_pct > 0)) {
+    const hits = m.melt_reward_hits_paid != null ? `${m.melt_reward_hits_paid} melt reward hit${m.melt_reward_hits_paid === 1 ? '' : 's'}` : '';
+    const pct = m.melt_treasury_pct != null ? `${m.melt_treasury_pct}% cut` : '';
+    bits.push([hits, pct].filter(Boolean).join(', '));
+  }
+  if (m.attacker_family_name && tx.kind === 'racket_raid_lost') bits.push(`by ${m.attacker_family_name}`);
+  if (m.target_family_name && tx.kind === 'racket_raid_won') bits.push(`from ${m.target_family_name}`);
+  if ((m.loser_family_name || m.loser_family_id) && tx.kind === 'war_prize_in') bits.push(`from ${m.loser_family_name || m.loser_family_id}`);
+  return bits.filter(Boolean).join(' · ') || null;
+};
+
 const formatMoney = (n) => {
   const num = Number(n ?? 0);
   if (Number.isNaN(num)) return '$0';
@@ -343,6 +393,7 @@ const TreasuryTab = ({
   compoundWithdrawCash, setCompoundWithdrawCash, compoundWithdrawPoints, setCompoundWithdrawPoints, compoundWithdrawLootPieces, setCompoundWithdrawLootPieces,
   onCompoundDeposit, onCompoundWithdraw,
   returningMembersWithBalance, onCompoundReturnToMember, onCompoundClaimForFamily,
+  vaultTransactions, vaultTxTotal,
 }) => (
   <div className="space-y-3">
     {vaultAndRacketsLocked && (
@@ -374,6 +425,35 @@ const TreasuryTab = ({
       <p className="text-[9px] text-zinc-500 font-heading mt-1">
         Family melt cut: {Number(meltTreasuryPct || 0)}%
       </p>
+    </div>
+
+    <div className="bg-zinc-800/30 rounded-lg border border-zinc-700/30 p-2.5 sm:p-3 fam-fade-in" style={{ animationDelay: '0.05s' }}>
+      <p className="text-[10px] text-zinc-500 font-heading uppercase tracking-[0.15em] mb-2 flex items-center gap-1.5">
+        <Clock size={10} /> Recent vault activity
+      </p>
+      {(!vaultTransactions || vaultTransactions.length === 0) ? (
+        <p className="text-[10px] text-zinc-600">No transactions yet — deposits, melts, rackets, and raids show up here.</p>
+      ) : (
+        <ul className="space-y-2 max-h-64 overflow-y-auto pr-1 text-left">
+          {vaultTransactions.map((tx) => {
+            const sub = vaultTxSubtitle(tx);
+            const when = tx.at ? new Date(tx.at).toLocaleString() : '';
+            return (
+              <li key={tx.id} className="text-[10px] border-b border-zinc-700/30 pb-2 last:border-0 last:pb-0">
+                <div className="flex justify-between gap-2 items-start">
+                  <span className="font-heading font-bold text-zinc-200">{VAULT_TX_KIND_LABELS[tx.kind] || tx.kind}</span>
+                  <span className="text-zinc-500 shrink-0 font-mono text-[9px]">{when}</span>
+                </div>
+                <div className="text-primary/90 font-heading mt-0.5">{formatVaultTxDeltas(tx)}</div>
+                {sub && <div className="text-zinc-500 mt-0.5 leading-snug">{sub}</div>}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {vaultTxTotal > (vaultTransactions?.length || 0) && (
+        <p className="text-[9px] text-zinc-600 mt-2">Showing {vaultTransactions.length} of {vaultTxTotal} entries.</p>
+      )}
     </div>
 
     {/* Deposit */}
@@ -2123,6 +2203,8 @@ export default function FamilyPage() {
   const [crewOCAdvertiseLoading, setCrewOCAdvertiseLoading] = useState(false);
   const [detailsWarId, setDetailsWarId] = useState(null);
   const [stateTakeoverLoading, setStateTakeoverLoading] = useState(false);
+  const [vaultTransactions, setVaultTransactions] = useState([]);
+  const [vaultTxTotal, setVaultTxTotal] = useState(0);
 
   const family = myFamily?.family;
   const members = myFamily?.members || [];
@@ -2149,10 +2231,26 @@ export default function FamilyPage() {
       if (myRes.status === 'fulfilled' && myRes.value?.data) {
         setMyFamily(myRes.value.data);
         if (myRes.value.data?.family) {
-          const [statsRes, targetsRes] = await Promise.allSettled([api.get('/families/war/stats'), api.get('/families/racket-attack-targets', { params: { _: Date.now() } })]);
+          const [statsRes, targetsRes, vaultRes] = await Promise.allSettled([
+            api.get('/families/war/stats'),
+            api.get('/families/racket-attack-targets', { params: { _: Date.now() } }),
+            api.get('/families/vault-transactions', { params: { limit: 50 } }).catch(() => ({ data: { transactions: [], total: 0 } })),
+          ]);
           if (statsRes.status === 'fulfilled') setWarStats(statsRes.value?.data);
           setRacketAttackTargets(targetsRes.status === 'fulfilled' ? targetsRes.value?.data?.targets ?? [] : []);
-        } else { setWarStats(null); setRacketAttackTargets([]); }
+          if (vaultRes.status === 'fulfilled') {
+            setVaultTransactions(vaultRes.value?.data?.transactions ?? []);
+            setVaultTxTotal(vaultRes.value?.data?.total ?? 0);
+          } else {
+            setVaultTransactions([]);
+            setVaultTxTotal(0);
+          }
+        } else {
+          setWarStats(null);
+          setRacketAttackTargets([]);
+          setVaultTransactions([]);
+          setVaultTxTotal(0);
+        }
       }
       if (configRes.status === 'fulfilled') setConfig(configRes.value?.data);
       if (historyRes.status === 'fulfilled') setWarHistory(historyRes.value?.data?.wars || []);
@@ -2697,6 +2795,8 @@ export default function FamilyPage() {
                 returningMembersWithBalance={myFamily.returning_members_with_balance}
                 onCompoundReturnToMember={handleCompoundReturnToMember}
                 onCompoundClaimForFamily={handleCompoundClaimForFamily}
+                vaultTransactions={vaultTransactions}
+                vaultTxTotal={vaultTxTotal}
               />}
               {activeTab === 'statehead' && family?.head_of_state && (
                 <StateHeadTab headOfState={family.head_of_state} stateHeadIncome={family.state_head_income} stateHeadCasinoWeekStats={myFamily?.state_head_casino_week_stats} />

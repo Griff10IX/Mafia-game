@@ -22,11 +22,12 @@ _my_cache_ttl_sec = 10
 _my_cache_max_entries = 2000
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from fastapi import Depends, HTTPException, Body, Header
+from fastapi import Depends, HTTPException, Body, Header, Query
 from pydantic import BaseModel
 
 from utils.notepad_color import notepad_color_for_api_response, normalize_notepad_color_for_set
 from utils.point_provenance import log_points_event
+from utils.family_vault_log import log_family_vault_tx
 
 from server import (
     db,
@@ -481,6 +482,20 @@ async def cleanup_dead_families():
                     if winner_fam is not None:
                         if total_cash_prize > 0:
                             await db.families.update_one({"id": winner_id}, {"$inc": {"treasury": total_cash_prize}})
+                            await log_family_vault_tx(
+                                db,
+                                winner_id,
+                                "war_prize_in",
+                                "",
+                                "War spoils",
+                                cash_delta=total_cash_prize,
+                                meta={
+                                    "loser_family_id": family_id,
+                                    "loser_family_name": fam.get("name") or fam.get("tag"),
+                                    "loser_treasury": treasury,
+                                    "prize_racket_cash": prize_racket_cash,
+                                },
+                            )
                             prize_treasury = treasury
                             prize_racket_cash_record = prize_racket_cash
                         if compound_points > 0 or compound_loot_pieces > 0:
@@ -1064,6 +1079,15 @@ async def families_cron_treasury_bullets_hourly(_: None = Depends(verify_cron_se
         )
         if res.modified_count:
             credited += 1
+            await log_family_vault_tx(
+                db,
+                fid,
+                "hourly_bullets_bonus",
+                "",
+                "System",
+                bullets_delta=amount,
+                meta={"hour_utc": hour_bucket},
+            )
     return {"ok": True, "hour_utc": hour_bucket, "families_credited": credited}
 
 
@@ -2086,6 +2110,15 @@ async def families_deposit(request: FamilyDepositRequest, current_user: dict = D
     if not result:
         raise HTTPException(status_code=400, detail="Not enough cash or bullets")
     await db.families.update_one({"id": family_id}, {"$inc": {"treasury": amount, "treasury_bullets": bullets}})
+    await log_family_vault_tx(
+        db,
+        family_id,
+        "deposit",
+        current_user["id"],
+        current_user.get("username") or "?",
+        cash_delta=amount,
+        bullets_delta=bullets,
+    )
     _invalidate_my_cache(current_user["id"])
     await log_activity(current_user["id"], current_user.get("username", "?"), "family_deposit", {"cash": amount, "bullets": bullets})
     return {"message": "Deposited to treasury"}
@@ -2118,6 +2151,15 @@ async def families_withdraw(request: FamilyWithdrawRequest, current_user: dict =
     if not result:
         raise HTTPException(status_code=400, detail="Not enough treasury cash or bullets")
     await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": amount, "bullets": bullets}})
+    await log_family_vault_tx(
+        db,
+        family_id,
+        "withdraw",
+        current_user["id"],
+        current_user.get("username") or "?",
+        cash_delta=-amount,
+        bullets_delta=-bullets,
+    )
     _invalidate_my_cache(current_user["id"])
     await log_activity(current_user["id"], current_user.get("username", "?"), "family_withdraw", {"cash": amount, "bullets": bullets})
     return {"message": "Withdrew from treasury"}
@@ -2150,6 +2192,17 @@ async def families_give_bullets(request: FamilyGiveBulletsRequest, current_user:
     if debited.modified_count == 0:
         raise HTTPException(status_code=400, detail="Not enough family bullets")
     await db.users.update_one({"id": target_id}, {"$inc": {"bullets": bullets}})
+    tu = await db.users.find_one({"id": target_id}, {"_id": 0, "username": 1})
+    await log_family_vault_tx(
+        db,
+        family_id,
+        "give_bullets",
+        current_user["id"],
+        current_user.get("username") or "?",
+        bullets_delta=-bullets,
+        target_user_id=target_id,
+        target_username=(tu or {}).get("username") or "?",
+    )
     _invalidate_my_cache(current_user["id"])
     _invalidate_my_cache(target_id)
     return {"message": f"Gave {bullets:,} bullets to family member"}
@@ -2199,6 +2252,15 @@ async def families_split_all_bullets(current_user: dict = Depends(get_current_us
     for uid, amt in distribution.items():
         await db.users.update_one({"id": uid}, {"$inc": {"bullets": amt}})
         _invalidate_my_cache(uid)
+    await log_family_vault_tx(
+        db,
+        family_id,
+        "split_bullets",
+        current_user["id"],
+        current_user.get("username") or "?",
+        bullets_delta=-to_distribute,
+        meta={"member_count": len(distribution), "total_split": to_distribute},
+    )
     _invalidate_my_cache(current_user["id"])
     return {
         "message": f"Split {to_distribute:,} bullets across {len(distribution)} living members",
@@ -2207,6 +2269,21 @@ async def families_split_all_bullets(current_user: dict = Depends(get_current_us
         "each_base": each,
         "remainder_distributed": remainder,
     }
+
+
+async def families_vault_transactions(
+    limit: int = Query(50, ge=1, le=100),
+    skip: int = Query(0, ge=0),
+    current_user: dict = Depends(get_current_user),
+):
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    q = {"family_id": family_id}
+    total = await db.family_vault_transactions.count_documents(q)
+    cursor = db.family_vault_transactions.find(q, {"_id": 0}).sort("at", -1).skip(skip).limit(limit)
+    txs = await cursor.to_list(length=limit)
+    return {"transactions": txs, "total": total, "limit": limit, "skip": skip}
 
 
 async def families_compound_deposit(request: CompoundDepositRequest, current_user: dict = Depends(get_current_user)):
@@ -2407,6 +2484,19 @@ async def families_compound_claim_for_family(request: CompoundClaimForFamilyRequ
         "$unset": {f"compound_deposits_by_user.{target_id}": ""},
     }
     await db.families.update_one({"id": family_id}, updates)
+    tgt_u = await db.users.find_one({"id": target_id}, {"_id": 0, "username": 1})
+    await log_family_vault_tx(
+        db,
+        family_id,
+        "compound_to_vault",
+        current_user["id"],
+        current_user.get("username") or "?",
+        cash_delta=ac,
+        points_delta=ap,
+        loot_delta=al,
+        target_user_id=target_id,
+        target_username=(tgt_u or {}).get("username") or "?",
+    )
     fam_name = fam.get("name") or fam.get("tag") or "The family"
     officer = current_user.get("username") or "An officer"
     parts = []
@@ -2662,6 +2752,15 @@ async def families_crew_oc_apply(request: FamilyCrewOCApplyRequest, current_user
             raise HTTPException(status_code=400, detail=f"Join fee is ${fee:,}. You need ${fee - money:,} more cash.")
         await db.users.update_one({"id": uid}, {"$inc": {"money": -fee}})
         await db.families.update_one({"id": family_id}, {"$inc": {"treasury": fee}})
+        await log_family_vault_tx(
+            db,
+            family_id,
+            "crew_oc_join_fee",
+            uid,
+            current_user.get("username") or "?",
+            cash_delta=fee,
+            meta={"crew_oc_application": True},
+        )
         status = "accepted" if auto_accept else "pending"
         await db.family_crew_oc_applications.insert_one({
             "id": application_id, "family_id": family_id, "user_id": uid,
@@ -2744,6 +2843,18 @@ async def families_crew_oc_reject(application_id: str, current_user: dict = Depe
         if refund_result:
             await db.users.update_one({"id": app["user_id"]}, {"$inc": {"money": amount_paid}})
             refunded = amount_paid
+            ru = await db.users.find_one({"id": app["user_id"]}, {"_id": 0, "username": 1})
+            await log_family_vault_tx(
+                db,
+                family_id,
+                "crew_oc_refund",
+                current_user["id"],
+                current_user.get("username") or "?",
+                cash_delta=-refunded,
+                target_user_id=app["user_id"],
+                target_username=(ru or {}).get("username") or "?",
+                meta={"reason": "application_rejected"},
+            )
     _invalidate_my_cache(current_user["id"])
     _invalidate_my_cache(app["user_id"])
     return {"message": "Application rejected." + (f" ${refunded:,} refunded." if refunded > 0 else " (Treasury insufficient for refund)" if amount_paid > 0 else "")}
@@ -2772,6 +2883,18 @@ async def families_crew_oc_kick(application_id: str, current_user: dict = Depend
         if refund_result:
             await db.users.update_one({"id": app["user_id"]}, {"$inc": {"money": amount_paid}})
             refunded = amount_paid
+            ru = await db.users.find_one({"id": app["user_id"]}, {"_id": 0, "username": 1})
+            await log_family_vault_tx(
+                db,
+                family_id,
+                "crew_oc_refund",
+                current_user["id"],
+                current_user.get("username") or "?",
+                cash_delta=-refunded,
+                target_user_id=app["user_id"],
+                target_username=(ru or {}).get("username") or "?",
+                meta={"reason": "crew_oc_kick"},
+            )
     fam = await db.families.find_one({"id": family_id}, {"_id": 0, "name": 1, "tag": 1})
     fam_name = (fam or {}).get("name") or (fam or {}).get("tag") or "the family"
     await send_notification(app["user_id"], "Crew OC – Kicked", f"You were removed from {fam_name} Crew OC." + (f" ${refunded:,} has been refunded." if refunded > 0 else ""), "system", category="crew_oc")
@@ -2844,6 +2967,15 @@ async def families_crew_oc_commit(current_user: dict = Depends(get_current_user)
             category="crew_oc",
         )
     await db.families.update_one({"id": family_id}, {"$inc": {"treasury": CREW_OC_TREASURY_LUMP}, "$set": {"crew_oc_cooldown_until": new_cooldown_until.isoformat()}, "$unset": {"crew_oc_forum_topic_id": ""}})
+    await log_family_vault_tx(
+        db,
+        family_id,
+        "crew_oc_commit",
+        current_user["id"],
+        current_user.get("username") or "?",
+        cash_delta=CREW_OC_TREASURY_LUMP,
+        meta={"crew_oc_cooldown_until": new_cooldown_until.isoformat(), "cooldown_hours": cooldown_hours},
+    )
     await db.family_crew_oc_applications.delete_many({"family_id": family_id})
     topic_id = fam.get("crew_oc_forum_topic_id")
     if topic_id:
@@ -2903,6 +3035,15 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
     collect_result = await db.families.update_one(filter_cond, {"$set": {"rackets": rackets}, "$inc": {"treasury": income_final}})
     if collect_result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Racket on cooldown. Another collection likely just happened.")
+    await log_family_vault_tx(
+        db,
+        family_id,
+        "racket_collect",
+        current_user["id"],
+        current_user.get("username") or "?",
+        cash_delta=income_final,
+        meta={"racket_id": racket_id},
+    )
     msg = _rng.choice(FAMILY_RACKET_COLLECT_SUCCESS_MESSAGES).format(income=income_final)
     _invalidate_my_cache(current_user["id"])
     return {"message": msg, "amount": income_final}
@@ -2942,6 +3083,15 @@ async def families_racket_unlock(racket_id: str, current_user: dict = Depends(ge
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Not enough treasury (balance may have changed)")
+    await log_family_vault_tx(
+        db,
+        family_id,
+        "racket_unlock",
+        current_user["id"],
+        current_user.get("username") or "?",
+        cash_delta=-RACKET_UNLOCK_COST,
+        meta={"racket_id": racket_id},
+    )
     _invalidate_my_cache(current_user["id"])
     return {"message": "Racket unlocked"}
 
@@ -2976,6 +3126,15 @@ async def families_racket_upgrade(racket_id: str, current_user: dict = Depends(g
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Not enough treasury (balance may have changed)")
+    await log_family_vault_tx(
+        db,
+        family_id,
+        "racket_upgrade",
+        current_user["id"],
+        current_user.get("username") or "?",
+        cash_delta=-RACKET_UPGRADE_COST,
+        meta={"racket_id": racket_id, "new_level": level + 1},
+    )
     _invalidate_my_cache(current_user["id"])
     return {"message": f"Upgraded to level {level + 1}"}
 
@@ -3076,6 +3235,36 @@ async def families_attack_racket(request: FamilyAttackRacketRequest, current_use
                 )
                 if raid_result:
                     await db.families.update_one({"id": my_family_id}, {"$inc": {"treasury": actual}})
+                    atk_fam = await db.families.find_one({"id": my_family_id}, {"_id": 0, "name": 1, "tag": 1})
+                    atk_label = (atk_fam or {}).get("name") or (atk_fam or {}).get("tag") or my_family_id
+                    await log_family_vault_tx(
+                        db,
+                        request.family_id,
+                        "racket_raid_lost",
+                        current_user["id"],
+                        current_user.get("username") or "?",
+                        cash_delta=-actual,
+                        meta={
+                            "attacker_family_id": my_family_id,
+                            "attacker_family_name": atk_label,
+                            "racket_id": request.racket_id,
+                            "racket_name": racket_name,
+                        },
+                    )
+                    await log_family_vault_tx(
+                        db,
+                        my_family_id,
+                        "racket_raid_won",
+                        current_user["id"],
+                        current_user.get("username") or "?",
+                        cash_delta=actual,
+                        meta={
+                            "target_family_id": request.family_id,
+                            "target_family_name": family_name,
+                            "racket_id": request.racket_id,
+                            "racket_name": racket_name,
+                        },
+                    )
                 else:
                     actual = 0
             msg = _rng.choice(FAMILY_RACKET_RAID_SUCCESS_MESSAGES).format(amount=actual, family_name=family_name, racket_name=racket_name)
@@ -3625,6 +3814,7 @@ def register(router):
     router.add_api_route("/families/assign-role", families_assign_role, methods=["POST"])
     router.add_api_route("/families/deposit", families_deposit, methods=["POST"])
     router.add_api_route("/families/withdraw", families_withdraw, methods=["POST"])
+    router.add_api_route("/families/vault-transactions", families_vault_transactions, methods=["GET"])
     router.add_api_route("/families/bullets/give", families_give_bullets, methods=["POST"])
     router.add_api_route("/families/bullets/split-all", families_split_all_bullets, methods=["POST"])
     router.add_api_route("/families/compound/deposit", families_compound_deposit, methods=["POST"])
