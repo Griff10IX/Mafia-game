@@ -2229,6 +2229,23 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
     duration_hours = cfg.get("duration_hours", TOKEN_DURATION_HOURS)
     max_stack_hours = cfg["max_stack_hours"]
     expiry_field = cfg.get("expiry_field")
+    # Game Pass: JWT/current_user can be stale if Stripe webhook just updated the user — refresh before use.
+    if req.token_type == "rank_xp_pass":
+        fresh = await db.users.find_one(
+            {"id": current_user["id"]},
+            {
+                "_id": 0,
+                "rank_xp_pass_tokens": 1,
+                "rank_xp_pass_token_expires_at": 1,
+                "rank_xp_pass_pending_tier_snapshot": 1,
+                "rank_xp_pass_tier_snapshot": 1,
+                "rank_xp_pass_rewards_granted": 1,
+                "rank_xp_pass_last_granted_micro_tier": 1,
+                "rank_xp_pass_free_last_micro_tier_granted": 1,
+            },
+        )
+        if fresh:
+            current_user = {**current_user, **fresh}
     count = int(current_user.get(count_field) or 0)
     if count < 1:
         raise HTTPException(status_code=400, detail="No tokens of this type available.")
@@ -2407,11 +2424,26 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
                 tier_snapshot,
                 free_cash_last_micro_tier_granted=free_cash_last_micro,
             )
+        if req.token_type == "rank_xp_pass":
+            if pass_activated_now:
+                gp_msg_all = "Game Pass activated. Rewards granted."
+            else:
+                vip_row_all = await db.users.find_one(
+                    {"id": current_user["id"]},
+                    {"_id": 0, "rank_xp_pass_rewards_granted": 1},
+                )
+                if (vip_row_all or {}).get("rank_xp_pass_rewards_granted") is True:
+                    gp_msg_all = (
+                        "Game Pass was already active (rewards were granted when you purchased or on a prior activation). "
+                        "This token was consumed."
+                    )
+                else:
+                    gp_msg_all = "Game Pass already claimed."
+        else:
+            gp_msg_all = ""
         return {
             "message": (
-                "Game Pass activated. Rewards granted."
-                if pass_activated_now
-                else "Game Pass already claimed."
+                gp_msg_all
                 if req.token_type == "rank_xp_pass"
                 else f"Used {n} token(s). Boost until {_format_boost_until_utc(new_until)} (max {max_stack_hours}h stack)."
             ),
@@ -2484,11 +2516,26 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
             tier_snapshot,
             free_cash_last_micro_tier_granted=free_cash_last_micro,
         )
+    if req.token_type == "rank_xp_pass":
+        if pass_activated_now:
+            gp_msg = "Game Pass activated. Rewards granted."
+        else:
+            vip_row = await db.users.find_one(
+                {"id": current_user["id"]},
+                {"_id": 0, "rank_xp_pass_rewards_granted": 1},
+            )
+            if (vip_row or {}).get("rank_xp_pass_rewards_granted") is True:
+                gp_msg = (
+                    "Game Pass was already active (rewards were granted when you purchased or on a prior activation). "
+                    "This token was consumed."
+                )
+            else:
+                gp_msg = "Game Pass already claimed."
+    else:
+        gp_msg = ""
     return {
         "message": (
-            "Game Pass activated. Rewards granted."
-            if pass_activated_now
-            else "Game Pass already claimed."
+            gp_msg
             if req.token_type == "rank_xp_pass"
             else f"Used 1 token. Boost until {_format_boost_until_utc(new_until)} (max {max_stack_hours}h stack)."
         ),

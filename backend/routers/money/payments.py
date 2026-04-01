@@ -170,6 +170,8 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
 
         rank_points = int((user or {}).get("rank_points") or 0)
         expires_at = _add_months(now, 1).isoformat()
+        # Match `/payments/buy-game-pass-with-points`: clear stale VIP snapshot fields so activation
+        # is not blocked by a previous pass / admin state.
         await db.users.update_one(
             {"id": user_id},
             {
@@ -180,18 +182,33 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
                     "rank_xp_pass_pending_tier_snapshot": rank_points,
                     "rank_xp_pass_rewards_granted": False,
                     "rank_xp_pass_last_granted_micro_tier": 0,
+                    "rank_xp_pass_tier_snapshot": None,
+                    "rank_xp_pass_bonus_until": None,
                 }
             },
         )
         # Auto-activate: grant VIP rewards for all tiers already completed.
         from routers.kill.armoury import _activate_rank_xp_pass_and_grant_cumulative_micro_tiers
-        free_cash_last_micro = int((user or {}).get("rank_xp_pass_free_last_micro_tier_granted") or 0)
+
+        u2 = await db.users.find_one(
+            {"id": user_id},
+            {"_id": 0, "rank_points": 1, "rank_xp_pass_free_last_micro_tier_granted": 1},
+        )
+        rp_for_activate = int((u2 or {}).get("rank_points") or 0) or rank_points
+        free_cash_last_micro = int((u2 or {}).get("rank_xp_pass_free_last_micro_tier_granted") or 0)
         activated = await _activate_rank_xp_pass_and_grant_cumulative_micro_tiers(
             db,
             user_id,
-            rank_points,
+            rp_for_activate,
             free_cash_last_micro_tier_granted=free_cash_last_micro,
         )
+        # If auto-activation succeeded, consume the token in DB (same intent as points purchase response).
+        # Otherwise users still see "1 token" and re-activating hits "already claimed" with no new rewards.
+        if activated:
+            await db.users.update_one(
+                {"id": user_id},
+                {"$set": {"rank_xp_pass_tokens": 0}},
+            )
 
         if activated:
             await send_notification(
@@ -610,13 +627,24 @@ def register(router):
 
         # Auto-activate: grant VIP rewards for all tiers already completed.
         from routers.kill.armoury import _activate_rank_xp_pass_and_grant_cumulative_micro_tiers
-        free_cash_last_micro = int(current_user.get("rank_xp_pass_free_last_micro_tier_granted") or 0)
+
+        u_pts = await db.users.find_one(
+            {"id": current_user["id"]},
+            {"_id": 0, "rank_points": 1, "rank_xp_pass_free_last_micro_tier_granted": 1},
+        )
+        rp_pts = int((u_pts or {}).get("rank_points") or 0) or rank_points
+        free_cash_last_micro = int((u_pts or {}).get("rank_xp_pass_free_last_micro_tier_granted") or 0)
         activated = await _activate_rank_xp_pass_and_grant_cumulative_micro_tiers(
             db,
             current_user["id"],
-            rank_points,
+            rp_pts,
             free_cash_last_micro_tier_granted=free_cash_last_micro,
         )
+        if activated:
+            await db.users.update_one(
+                {"id": current_user["id"]},
+                {"$set": {"rank_xp_pass_tokens": 0}},
+            )
 
         if activated:
             await send_notification(
