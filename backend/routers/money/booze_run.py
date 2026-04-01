@@ -24,6 +24,7 @@ from server import (
     log_activity,
     _staff_exclude_user_filter,
 )
+from utils.point_provenance import log_points_event
 
 
 def _parse_iso_datetime(s):
@@ -713,6 +714,7 @@ async def buy_booze_capacity(current_user: dict = Depends(get_current_user)):
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
+    await log_points_event(db, user_id=current_user["id"], points=-BOOZE_CAPACITY_UPGRADE_COST, event_type="booze_upgrade", meta={"add_bonus": add_bonus, "new_bonus": current_bonus + add_bonus})
     new_capacity = _booze_user_capacity({**current_user, "booze_capacity_bonus": current_bonus + add_bonus})
     _invalidate_config_cache(current_user["id"])
     return {"message": f"+{add_bonus} booze capacity for {BOOZE_CAPACITY_UPGRADE_COST} points", "new_capacity": new_capacity, "capacity_bonus": current_bonus + add_bonus, "capacity_bonus_max": BOOZE_CAPACITY_BONUS_MAX}

@@ -26,6 +26,7 @@ from fastapi import Depends, HTTPException, Body, Header
 from pydantic import BaseModel
 
 from utils.notepad_color import notepad_color_for_api_response, normalize_notepad_color_for_set
+from utils.point_provenance import log_points_event
 
 from server import (
     db,
@@ -2142,6 +2143,8 @@ async def families_compound_deposit(request: CompoundDepositRequest, current_use
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient resources for deposit")
+    if points > 0:
+        await log_points_event(db, user_id=uid, points=-points, event_type="family_compound_deposit", meta={"family_id": family_id})
     inc_fields = {"compound_cash": cash, "compound_points": points, "compound_loot_pieces": loot_pieces}
     if cash > 0:
         inc_fields[f"compound_deposits_by_user.{uid}.cash"] = cash
@@ -2203,6 +2206,8 @@ async def families_compound_withdraw(request: CompoundWithdrawRequest, current_u
         {"id": current_user["id"]},
         {"$inc": {"money": cash_take, "points": points_take, "loot_box_pieces": loot_take}},
     )
+    if points_take > 0:
+        await log_points_event(db, user_id=current_user["id"], points=points_take, event_type="family_compound_withdraw", meta={"family_id": family_id})
     _invalidate_my_cache(current_user["id"])
     return {"message": "Withdrew from compound"}
 

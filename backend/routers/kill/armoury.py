@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict
 from bson.objectid import ObjectId
 
 from server import db, get_current_user, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, _family_in_active_war, CARS, _get_staff_user_ids, send_notification, log_activity, log_minigame_payout
+from utils.point_provenance import log_points_event
 from utils.claim_costs import load_claim_costs
 from utils.game_pass_micro_rewards import (
     micro_tier_from_rank_points,
@@ -780,6 +781,8 @@ async def collect_bullet_factory(
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": pending_money}})
     if pending_points > 0:
         await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": pending_points}})
+        await log_points_event(db, user_id=current_user["id"], points=pending_points, event_type="armoury_claim_profit",
+                               event_ref=f"state:{state}", meta={"state": state})
     return {
         "message": f"Collected ${pending_money:,} and {pending_points:,} points from armoury sales.",
         "state": state,
@@ -816,6 +819,7 @@ async def start_armour_production(
         result = await db.users.update_one({"id": current_user["id"], "points": {"$gte": pay}}, {"$inc": {"points": -pay}})
         if result.modified_count == 0:
             raise HTTPException(status_code=400, detail=f"Insufficient points. Need {pay} for 1 hour of production.")
+        await log_points_event(db, user_id=current_user["id"], points=-pay, event_type="armoury_produce_armour", meta={"level": level})
     else:
         raise HTTPException(status_code=400, detail="Armour level has no production cost")
     armour_hours = dict(factory.get("armour_production_hours") or {})
@@ -870,6 +874,7 @@ async def start_weapon_production(
         result = await db.users.update_one({"id": current_user["id"], "points": {"$gte": pay}}, {"$inc": {"points": -pay}})
         if result.modified_count == 0:
             raise HTTPException(status_code=400, detail=f"Insufficient points. Need {pay} for 1 hour of production.")
+        await log_points_event(db, user_id=current_user["id"], points=-pay, event_type="armoury_produce_weapon", meta={"weapon_id": weapon_id})
     else:
         raise HTTPException(status_code=400, detail="Weapon has no production cost")
     weapon_hours = dict(factory.get("weapon_production_hours") or {})
@@ -924,6 +929,8 @@ async def start_armour_production_all(
             if total_money > 0 and (fresh.get("money") or 0) < total_money:
                 raise HTTPException(status_code=400, detail=f"Insufficient cash. Need ${total_money:,} for 1 hr on {len(levels_to_add)} level(s).")
             raise HTTPException(status_code=400, detail=f"Insufficient points. Need {total_points} pts for 1 hr on {len(levels_to_add)} level(s).")
+        if total_points > 0:
+            await log_points_event(db, user_id=current_user["id"], points=-total_points, event_type="armoury_bulk_produce_armour")
     now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
     for a in levels_to_add:
@@ -972,6 +979,8 @@ async def start_weapon_production_all(
             if total_money > 0 and (fresh.get("money") or 0) < total_money:
                 raise HTTPException(status_code=400, detail=f"Insufficient cash. Need ${total_money:,} for 1 hr on {len(weapons_to_add)} weapon(s).")
             raise HTTPException(status_code=400, detail=f"Insufficient points. Need {total_points} pts for 1 hr on {len(weapons_to_add)} weapon(s).")
+        if total_points > 0:
+            await log_points_event(db, user_id=current_user["id"], points=-total_points, event_type="armoury_bulk_produce_weapon")
     now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
     for w in weapons_to_add:
@@ -1507,6 +1516,8 @@ async def sell_armour(current_user: dict = Depends(get_current_user)):
     elif refund_points is not None:
         updates["$inc"] = {"points": refund_points}
     await db.users.update_one({"id": current_user["id"]}, updates)
+    if refund_points is not None and refund_points > 0:
+        await log_points_event(db, user_id=current_user["id"], points=refund_points, event_type="armoury_sell_armour", meta={"item": armour.get("name")})
     msg = f"Sold {armour['name']} for "
     msg += f"${refund_money:,}" if refund_money is not None else f"{refund_points} points"
     return {"message": msg + " (50% of purchase price).", "refund_money": refund_money, "refund_points": refund_points}

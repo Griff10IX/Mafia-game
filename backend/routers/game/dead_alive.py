@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 
 from fastapi import Depends, HTTPException
 from routers.kill.armoury import TOKEN_CONFIG
+from utils.point_provenance import log_points_event
 
 REVEAL_KILLER_COST = 1000
 TOKEN_RESTORE_PERCENT = 0.50  # 50% of tokens restored on Dead > Alive
@@ -95,6 +96,7 @@ def register(router):
         )
         if result.modified_count == 0:
             raise HTTPException(status_code=400, detail=f"You need {REVEAL_KILLER_COST:,} points to reveal your killer")
+        await log_points_event(db, user_id=current_user["id"], points=-REVEAL_KILLER_COST, event_type="dead_alive_reveal")
         return {
             "killer_username": current_user.get("killed_by_username"),
             "killer_family": current_user.get("killed_by_family_name"),
@@ -167,6 +169,8 @@ def register(router):
                 {"id": current_user["id"]},
                 {"$inc": user_inc}
             )
+        if add_points > 0:
+            await log_points_event(db, user_id=current_user["id"], points=add_points, event_type="dead_alive_retrieve", event_ref=dead_user["id"])
 
         # Dead > Alive carry-over for Rank-XP pass state (only when dead had meaningful Game Pass data — do not wipe recipient).
         if has_rank_xp_merge:
@@ -333,6 +337,7 @@ def register(router):
         if not res:
             await db.revive_used_by_email.delete_one({"email": email, "reviver_id": current_user["id"]})
             raise HTTPException(status_code=400, detail="Not enough points (balance may have changed).")
+        await log_points_event(db, user_id=current_user["id"], points=-REVIVE_COST, event_type="dead_alive_revive_cost", event_ref=dead_user["id"])
 
         try:
             # 3) Revive dead account: alive, receive reviver's money and points (after 50k deduction)
@@ -361,6 +366,8 @@ def register(router):
                     },
                 },
             )
+            if reviver_points_after > 0:
+                await log_points_event(db, user_id=dead_user["id"], points=reviver_points_after, event_type="dead_alive_reviver_pay", event_ref=current_user["id"])
             # 4) Kill reviving account
             await db.users.update_one(
                 {"id": current_user["id"]},

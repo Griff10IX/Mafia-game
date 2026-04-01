@@ -9,6 +9,7 @@ from fastapi import Depends, Query
 from pydantic import BaseModel
 
 from server import ADMIN_EMAILS, db, get_current_user, _staff_exclude_user_filter
+from utils.point_provenance import log_points_event
 
 _lb_cache: dict = {}
 _LB_CACHE_TTL = 30
@@ -414,6 +415,8 @@ async def run_weekly_leaderboard_payout(database, test_run: bool = False):
                 {"id": user_id},
                 {"$inc": {"respect_points": points, "points": -points}},
             )
+            if points > 0:
+                await log_points_event(database, user_id=user_id, points=-points, event_type="leaderboard_tip", meta={"week": last_week_start_str})
         await database.game_config.update_one(
             {"id": LEADERBOARD_PAYOUT_CONFIG_ID},
             {"$set": {"last_respect_conversion_week_start": last_week_start_str}},

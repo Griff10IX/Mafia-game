@@ -394,6 +394,7 @@ from server import (
 )
 from routers.account.objectives import update_objectives_progress
 from routers.kill.armoury import TOKEN_TYPES, TOKEN_CONFIG
+from utils.point_provenance import log_points_event
 
 
 async def get_crimes(current_user: dict = Depends(get_current_user)):
@@ -796,6 +797,8 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
                     await db.users.update_one({"id": current_user["id"]}, {"$inc": bonus_inc})
                     if bonus_inc.get("respect_points"):
                         await log_respect_earned(current_user["id"], bonus_inc["respect_points"], "crimes_prestige")
+                    if bonus_inc.get("points", 0) > 0:
+                        await log_points_event(db, user_id=current_user["id"], points=bonus_inc["points"], event_type="prestige_crime_bonus", event_ref=crime.get("id"), meta={"crime_name": crime.get("name")})
                 # Merge prestige bonuses into the response dict (preserving any global molotov drop)
                 if prestige_bonus_earned is None:
                     prestige_bonus_earned = dict(prestige_bonus_from_prestige)

@@ -9,6 +9,7 @@ import random
 from pydantic import BaseModel
 
 from fastapi import Depends, HTTPException
+from utils.point_provenance import log_points_event
 
 logger = logging.getLogger(__name__)
 
@@ -436,6 +437,8 @@ async def upgrade_bodyguard_armour(slot: int, current_user: dict = Depends(get_c
     )
     if upgrade_result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
+    await log_points_event(db, user_id=current_user["id"], points=-cost, event_type="bodyguard_armour_upgrade",
+                           event_ref=f"slot:{slot}", meta={"slot": slot, "new_level": new_level})
     await db.bodyguards.update_one(
         {"user_id": current_user["id"], "slot_number": slot},
         {"$set": {"armour_level": new_level}}
@@ -471,6 +474,7 @@ async def buy_bodyguard_slot(current_user: dict = Depends(get_current_user)):
     )
     if slot_result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
+    await log_points_event(db, user_id=current_user["id"], points=-cost, event_type="bodyguard_slot_buy", meta={"cost": cost})
     await db.hitlist_bodyguard_events.insert_one({
         "at": datetime.now(timezone.utc),
         "type": "bodyguard_slot_bought",
@@ -543,6 +547,8 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
     )
     if hire_result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
+    await log_points_event(db, user_id=current_user["id"], points=-total_cost, event_type="bodyguard_hire",
+                           event_ref=f"slot:{slot}", meta={"slot": slot, "is_robot": is_robot, "cost": total_cost})
     robot_name = None
     robot_user_id = None
     if is_robot:
@@ -760,6 +766,8 @@ async def _do_accept_bodyguard_invite(invite_id: str, current_user: dict):
             status_code=400,
             detail=f"Inviter does not have enough points for the hire cost ({human_hire_cost} pts, 25% off robot price)",
         )
+    await log_points_event(db, user_id=inviter["id"], points=-human_hire_cost, event_type="bodyguard_hire",
+                           event_ref=f"human:{current_user['id']}", meta={"guard_username": current_user.get("username"), "is_robot": False})
     duration_hours = int(invite.get("duration_hours") or 168)
     end_time = now + timedelta(hours=duration_hours) if duration_hours > 0 else None
     pay_pts = int(invite.get("payment_points") or 0)
@@ -796,6 +804,11 @@ async def _do_accept_bodyguard_invite(invite_id: str, current_user: dict):
                 {"id": current_user["id"]},
                 {"$inc": {"points": pay_pts, "money": pay_money_val}},
             )
+            if pay_pts > 0:
+                await log_points_event(db, user_id=inviter["id"], points=-pay_pts, event_type="bodyguard_pay_debit",
+                                       event_ref=f"guard:{current_user['id']}", meta={"guard_username": current_user.get("username")})
+                await log_points_event(db, user_id=current_user["id"], points=pay_pts, event_type="bodyguard_pay_credit",
+                                       event_ref=f"owner:{inviter['id']}", meta={"owner_username": inviter.get("username")})
             set_doc["last_payout_date"] = today_str
             # Avoid duplicate key: (owner_id, slot_number, payout_date) is unique. After admin clear, an old record may exist for this slot+date.
             existing_payout = await db.bodyguard_payouts.find_one(
@@ -1378,6 +1391,11 @@ async def run_bodyguard_weekly_payout(database, test_run: bool = False):
             updates_guard["$inc"]["money"] = pay_money
         if updates_guard["$inc"]:
             await database.users.update_one({"id": guard_id}, updates_guard)
+        if pay_pts:
+            await log_points_event(database, user_id=owner_id, points=-pay_pts, event_type="bodyguard_weekly_pay_debit",
+                                   event_ref=f"guard:{guard_id}", meta={"slot": slot_number})
+            await log_points_event(database, user_id=guard_id, points=pay_pts, event_type="bodyguard_weekly_pay_credit",
+                                   event_ref=f"owner:{owner_id}", meta={"slot": slot_number})
         paid += 1
         try:
             await database.bodyguards.update_one(

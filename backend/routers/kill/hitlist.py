@@ -10,6 +10,7 @@ from pydantic import BaseModel
 from fastapi import Depends, HTTPException
 
 from utils.kill_search_duration import KILL_SEARCH_RANDOM_MAX_MINUTES, KILL_SEARCH_RANDOM_MIN_MINUTES
+from utils.point_provenance import log_points_event
 from server import (
     db,
     get_current_user,
@@ -148,6 +149,9 @@ async def hitlist_add(request: HitlistAddRequest, current_user: dict = Depends(g
         deduct_result = await db.users.update_one(gte_filter, updates)
         if deduct_result.modified_count == 0:
             raise HTTPException(status_code=400, detail="Insufficient funds")
+        if cost_points > 0:
+            await log_points_event(db, user_id=user_id, points=-cost_points, event_type="hitlist_place_bounty",
+                                   event_ref=f"target:{target['id']}", meta={"target_username": target.get("username")})
 
     inserted = []
     if use_dual:
@@ -494,6 +498,8 @@ async def hitlist_buy_off(current_user: dict = Depends(get_current_user)):
             if cost_cash > 0:
                 raise HTTPException(status_code=400, detail=f"Insufficient cash (need ${cost_cash:,})")
             raise HTTPException(status_code=400, detail=f"Insufficient points (need {cost_points:,})")
+        if cost_points > 0:
+            await log_points_event(db, user_id=user_id, points=-cost_points, event_type="hitlist_buyoff", event_ref="self")
     res = await db.hitlist.delete_many({"target_id": user_id})
     cost_parts = []
     if cost_cash > 0:
@@ -568,6 +574,9 @@ async def hitlist_buy_off_user(request: HitlistBuyOffUserRequest, current_user: 
             if cost_cash > 0:
                 raise HTTPException(status_code=400, detail=f"Insufficient cash (need ${cost_cash:,})")
             raise HTTPException(status_code=400, detail=f"Insufficient points (need {cost_points:,})")
+        if cost_points > 0:
+            await log_points_event(db, user_id=current_user["id"], points=-cost_points, event_type="hitlist_buyoff",
+                                   event_ref=f"target:{target['id']}", meta={"target_username": target.get("username")})
     res = await db.hitlist.delete_many({"target_id": target["id"], "target_type": {"$in": ["user", "bodyguards"]}})
     cost_parts = []
     if cost_cash > 0:
@@ -626,6 +635,7 @@ async def hitlist_reveal(current_user: dict = Depends(get_current_user)):
     )
     if reveal_result.modified_count == 0:
         raise HTTPException(status_code=400, detail=f"Insufficient points (need {cost})")
+    await log_points_event(db, user_id=user_id, points=-cost, event_type="hitlist_reveal")
     entries = await db.hitlist.find({"target_id": user_id}, {"_id": 0}).to_list(100)
     # Show actual placer names; hidden only affects public list, not the target who paid to reveal.
     who = [{"placer_username": e.get("placer_username") or "Unknown", "reward_type": e.get("reward_type"), "reward_amount": e.get("reward_amount", 0), "target_type": e.get("target_type"), "created_at": e.get("created_at")} for e in entries]

@@ -9,6 +9,7 @@ from bson.objectid import ObjectId
 
 from server import db, get_current_user, get_rank_info, log_activity, CAPO_RANK_ID, _user_owns_any_property
 from routers.kill.armoury import TOKEN_CONFIG, TOKEN_TYPES
+from utils.point_provenance import log_points_event
 
 # Cache for list endpoints (short TTL; invalidate on any mutation)
 _sell_offers_cache: Optional[tuple] = None
@@ -147,6 +148,7 @@ async def create_sell_offer(offer: CreateSellOffer, current_user: dict = Depends
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
+    await log_points_event(db, user_id=user_id, points=-offer.points, event_type="quicktrade_create", meta={"direction": "sell", "listed_points": points_after_fee, "fee": fee, "cost": offer.cost})
     new_offer = {
         "user_id": user_id,
         "username": username,
@@ -219,6 +221,8 @@ async def accept_sell_offer(offer_id: str, current_user: dict = Depends(get_curr
             {"$set": {"status": "active"}, "$unset": {"buyer_id": 1, "buyer_username": 1, "completed_at": 1}},
         )
         raise HTTPException(status_code=400, detail="Insufficient cash")
+    if offer["points"] != 0:
+        await log_points_event(db, user_id=buyer_id, points=offer["points"], event_type="quicktrade_buy", meta={"offer_id": offer_id, "direction": "sell_offer_accepted", "cost_cash": offer["cost"]})
     await db.users.update_one({"id": offer["user_id"]}, {"$inc": {"money": offer["cost"]}})
     _invalidate_trade_caches()
     await log_activity(
@@ -258,6 +262,8 @@ async def cancel_sell_offer_delete(offer_id: str, current_user: dict = Depends(g
         raise HTTPException(status_code=404, detail="Offer not found or already cancelled")
     refund_amount = offer.get("original_points", offer["points"])
     await db.users.update_one({"id": user_id}, {"$inc": {"points": refund_amount}})
+    if refund_amount != 0:
+        await log_points_event(db, user_id=user_id, points=refund_amount, event_type="quicktrade_cancel", meta={"offer_id": offer_id, "direction": "sell_cancel", "fee_refunded": offer.get("fee", 0)})
     _invalidate_trade_caches()
     try:
         await db.trade_events.insert_one(
@@ -287,6 +293,8 @@ async def cancel_sell_offer_post(offer_id: str, current_user: dict = Depends(get
         raise HTTPException(status_code=404, detail="Offer not found or already cancelled")
     original_points = offer.get("original_points", offer["points"])
     await db.users.update_one({"id": user_id}, {"$inc": {"points": original_points}})
+    if original_points != 0:
+        await log_points_event(db, user_id=user_id, points=original_points, event_type="quicktrade_cancel", meta={"offer_id": offer_id, "direction": "sell_cancel"})
     _invalidate_trade_caches()
     try:
         await db.trade_events.insert_one(
@@ -456,7 +464,11 @@ async def accept_token_offer(offer_id: str, current_user: dict = Depends(get_cur
             {"$set": {"status": "active"}, "$unset": {"buyer_id": 1, "buyer_username": 1, "completed_at": 1}},
         )
         raise HTTPException(status_code=400, detail="Insufficient points")
+    if offer["price_points"] != 0:
+        await log_points_event(db, user_id=buyer_id, points=-offer["price_points"], event_type="quicktrade_item_shop", meta={"offer_id": offer_id, "token_type": token_type, "quantity": offer["quantity"]})
     await db.users.update_one({"id": offer["user_id"]}, {"$inc": {"points": offer["price_points"]}})
+    if offer["price_points"] != 0:
+        await log_points_event(db, user_id=offer["user_id"], points=offer["price_points"], event_type="quicktrade_sell", meta={"offer_id": offer_id, "token_type": token_type, "quantity": offer["quantity"]})
     _invalidate_trade_caches()
     await log_activity(
         buyer_id,
@@ -620,7 +632,11 @@ async def accept_buy_offer(offer_id: str, current_user: dict = Depends(get_curre
             {"$set": {"status": "active"}, "$unset": {"seller_id": 1, "seller_username": 1, "completed_at": 1}},
         )
         raise HTTPException(status_code=400, detail="Insufficient points")
+    if offer["points"] != 0:
+        await log_points_event(db, user_id=seller_id, points=-offer["points"], event_type="quicktrade_sell", meta={"offer_id": offer_id, "direction": "buy_offer_accepted", "cash_received": offer["offer"]})
     await db.users.update_one({"id": offer["user_id"]}, {"$inc": {"points": offer["points"]}})
+    if offer["points"] != 0:
+        await log_points_event(db, user_id=offer["user_id"], points=offer["points"], event_type="quicktrade_buy", meta={"offer_id": offer_id, "direction": "buy_offer_fulfilled"})
     _invalidate_trade_caches()
     await log_activity(
         seller_id,
@@ -770,8 +786,12 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
     if result.modified_count == 0:
         await _restore()
         raise HTTPException(status_code=400, detail="Insufficient points")
+    if sale_price != 0:
+        await log_points_event(db, user_id=buyer_id, points=-sale_price, event_type="quicktrade_property", meta={"property_id": property_id, "property_name": prop.get("name"), "property_type": prop.get("type")})
     if prop.get("owner_id"):
         await db.users.update_one({"id": prop["owner_id"]}, {"$inc": {"points": sale_price}})
+        if sale_price != 0:
+            await log_points_event(db, user_id=prop["owner_id"], points=sale_price, event_type="quicktrade_property", meta={"property_id": property_id, "property_name": prop.get("name"), "buyer_id": buyer_id})
     prop_type = prop.get("type")
     if prop_type == "casino_dice":
         city = prop.get("location")

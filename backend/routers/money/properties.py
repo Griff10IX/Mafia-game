@@ -9,6 +9,7 @@ _rng = secrets.SystemRandom()
 from fastapi import Depends, HTTPException
 
 from server import db, get_current_user, founding_member_income_mult, log_activity
+from utils.point_provenance import log_points_event
 
 
 def _parse_iso_datetime(s):
@@ -503,6 +504,7 @@ def register(router):
         )
         if result.modified_count == 0:
             raise HTTPException(status_code=400, detail="Insufficient points")
+        await log_points_event(db, user_id=current_user["id"], points=-BUFF_COST_POINTS, event_type="property_buff", meta={"property_id": property_id, "property_name": prop["name"]})
         await db.user_properties.update_one(
             {"user_id": current_user["id"], "property_id": property_id},
             {"$set": {"income_buff_until": buff_until.isoformat()}},

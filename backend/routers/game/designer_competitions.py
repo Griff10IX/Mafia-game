@@ -12,6 +12,7 @@ from pydantic import BaseModel, field_validator
 
 from server import db, get_current_user, send_notification, send_notification_to_all, _is_admin, _is_moderator
 from utils.text import strip_emoji
+from utils.point_provenance import log_points_event
 
 VOTER_REWARD_POINTS = 100
 
@@ -443,6 +444,7 @@ async def vote(comp_id: str, body: VoteRequest, current_user: dict = Depends(get
     if vote_result.upserted_id is None:
         raise HTTPException(status_code=400, detail="You have already voted in this competition")
     await db.users.update_one({"id": current_user["id"]}, {"$inc": {"points": VOTER_REWARD_POINTS}})
+    await log_points_event(db, user_id=current_user["id"], points=VOTER_REWARD_POINTS, event_type="designer_comp_vote", event_ref=comp_id)
     await send_notification(
         current_user["id"],
         "You voted!",
@@ -482,6 +484,7 @@ async def withdraw_vote(comp_id: str, current_user: dict = Depends(get_current_u
             status_code=400,
             detail=f"You need {VOTER_REWARD_POINTS} points to withdraw your vote (to return the reward).",
         )
+    await log_points_event(db, user_id=current_user["id"], points=-VOTER_REWARD_POINTS, event_type="designer_comp_unvote", event_ref=comp_id)
     await db.designer_competition_votes.delete_one(
         {"competition_id": comp_id, "user_id": current_user["id"]},
     )

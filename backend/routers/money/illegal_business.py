@@ -24,6 +24,7 @@ from server import (
     CAPO_RANK_ID,
 )
 from routers.kill.armoury import TOKEN_CONFIG, TOKEN_TYPES
+from utils.point_provenance import log_points_event
 
 logger = logging.getLogger(__name__)
 
@@ -504,6 +505,8 @@ async def start_illegal_business(req: StartBusinessRequest, current_user: dict =
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail=f"Need ${START_COST_CASH:,} to start.")
+    if START_COST_POINTS > 0:
+        await log_points_event(db, user_id=current_user["id"], points=-START_COST_POINTS, event_type="illegal_biz_start", meta={"business_id": business_id, "type_id": type_id})
     await db.illegal_businesses.insert_one(doc)
     return {"message": f"You've taken over a joint in {state}.", "business_id": business_id}
 
@@ -641,6 +644,8 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
                 {"$inc": {f"booze_carrying.{default_booze_id}": booze_earned}},
             )
     await db.users.update_one({"id": current_user["id"]}, {"$inc": inc})
+    if points_earned > 0:
+        await log_points_event(db, user_id=current_user["id"], points=points_earned, event_type="illegal_biz_collect", meta={"business_id": business["id"]})
     if respect_earned > 0:
         await log_respect_earned(current_user["id"], respect_earned, "illegal_business")
     vault_income = int(income)

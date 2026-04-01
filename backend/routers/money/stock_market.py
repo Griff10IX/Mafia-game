@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from fastapi import Depends, HTTPException
 
 from server import db, get_current_user, send_notification, log_activity
+from utils.point_provenance import log_points_event
 
 _stock_buy_locks: dict = {}
 
@@ -165,6 +166,9 @@ async def _process_auto_sell_expired(uid: str, now: datetime, live_list: list, c
             if not deleted:
                 continue
             await db.users.update_one({"id": uid}, {"$inc": {"points": profit_points - cost_to_cover, "stock_market_profit_total": profit_points}})
+            net_points = profit_points - cost_to_cover
+            if net_points != 0:
+                await log_points_event(db, user_id=uid, points=int(net_points), event_type="stock_close", meta={"side": "short", "stock_id": pos.get("stock_id"), "stock_name": stock.get("name"), "units": units, "open_price": open_price, "close_price": current_price, "auto_sold": True})
             await db.stock_transactions.insert_one({
                 "id": str(uuid.uuid4()),
                 "user_id": uid,
@@ -191,6 +195,8 @@ async def _process_auto_sell_expired(uid: str, now: datetime, live_list: list, c
             if not deleted:
                 continue
             await db.users.update_one({"id": uid}, {"$inc": {"points": value_points, "stock_market_profit_total": profit_points}})
+            if value_points != 0:
+                await log_points_event(db, user_id=uid, points=int(value_points), event_type="stock_close", meta={"side": "long", "stock_id": pos.get("stock_id"), "stock_name": stock.get("name"), "units": units, "buy_price": buy_price, "close_price": current_price, "auto_sold": True})
             await db.stock_transactions.insert_one({
                 "id": str(uuid.uuid4()),
                 "user_id": uid,
@@ -449,6 +455,7 @@ def register(router):
 
             if side == "short":
                 await db.users.update_one({"id": uid}, {"$inc": {"points": points}})
+                await log_points_event(db, user_id=uid, points=points, event_type="stock_open", meta={"side": "short", "stock_id": request.stock_id, "stock_name": stock.get("name"), "units": round(units, 6), "price": current_price, "position_id": position_id})
                 await db.stock_positions.insert_one({
                     "id": position_id,
                     "user_id": uid,
@@ -481,6 +488,7 @@ def register(router):
             )
             if result.modified_count == 0:
                 raise HTTPException(status_code=400, detail="Insufficient points")
+            await log_points_event(db, user_id=uid, points=-points, event_type="stock_open", meta={"side": "long", "stock_id": request.stock_id, "stock_name": stock.get("name"), "units": round(units, 6), "price": current_price, "position_id": position_id})
             await db.stock_positions.insert_one({
                 "id": position_id,
                 "user_id": uid,
@@ -551,6 +559,9 @@ def register(router):
             if int(user.get("points") or 0) < cost_to_cover:
                 raise HTTPException(status_code=400, detail=f"Insufficient points to cover. Need {cost_to_cover} points.")
             await db.users.update_one({"id": uid}, {"$inc": {"points": profit_points - cost_to_cover, "stock_market_profit_total": profit_points}})
+            net_points = profit_points - cost_to_cover
+            if net_points != 0:
+                await log_points_event(db, user_id=uid, points=int(net_points), event_type="stock_close", meta={"side": "short", "stock_id": pos.get("stock_id"), "stock_name": stock.get("name"), "units": units, "open_price": open_price, "close_price": current_price})
             await db.stock_transactions.insert_one({
                 "id": str(uuid.uuid4()),
                 "user_id": uid,
@@ -574,6 +585,8 @@ def register(router):
         cost_points = round(units * buy_price, 0)
         profit_points = value_points - cost_points
         await db.users.update_one({"id": uid}, {"$inc": {"points": value_points, "stock_market_profit_total": profit_points}})
+        if value_points != 0:
+            await log_points_event(db, user_id=uid, points=int(value_points), event_type="stock_close", meta={"side": "long", "stock_id": pos.get("stock_id"), "stock_name": stock.get("name"), "units": units, "buy_price": buy_price, "close_price": current_price})
         await db.stock_transactions.insert_one({
             "id": str(uuid.uuid4()),
             "user_id": uid,

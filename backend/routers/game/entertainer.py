@@ -12,6 +12,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from server import db, get_current_user, send_notification, send_notification_to_all, _is_admin, CARS
 from routers.kill.armoury import TOKEN_TYPES, TOKEN_CONFIG
+from utils.point_provenance import log_points_event
 
 # E-Games prizes: Rank-XP Pass is shop-only (not listed in "what you can win" and never rolled here).
 ENTERTAINER_TOKEN_TYPES = tuple(t for t in TOKEN_TYPES if t != "rank_xp_pass")
@@ -684,6 +685,8 @@ async def _run_dice_payout(game: dict):
                 inc["points"] = reward_points
             if inc:
                 await db.users.update_one({"id": winner_id}, {"$inc": inc})
+            if reward_points > 0:
+                await log_points_event(db, user_id=winner_id, points=reward_points, event_type="entertainer_payout", event_ref=game.get("id"))
             reward = {"reward_type": "manual", "money": reward_money, "points": reward_points, "bullets": 0, "cars": [], "tokens": {}}
         else:
             reward = await _give_random_reward(winner_id)
@@ -737,6 +740,8 @@ async def _run_hangman_payout(game: dict):
                 inc["points"] = reward_points
             if inc:
                 await db.users.update_one({"id": winner_id}, {"$inc": inc})
+            if reward_points > 0:
+                await log_points_event(db, user_id=winner_id, points=reward_points, event_type="entertainer_payout", event_ref=game.get("id"))
             reward = {"reward_type": "manual", "money": reward_money, "points": reward_points, "bullets": 0, "cars": [], "tokens": {}}
         else:
             reward = await _give_random_reward(winner_id)
@@ -800,6 +805,8 @@ async def _run_gbox_payout(game: dict, cash_pot: int):
             reward_desc["money"] = int(share)
         if inc:
             await db.users.update_one({"id": uid}, {"$inc": inc})
+        if int(inc.get("points", 0)) > 0:
+            await log_points_event(db, user_id=uid, points=int(inc["points"]), event_type="entertainer_payout", event_ref=game.get("id"))
         rewards_by_user[uid] = reward_desc
     return {"rewards_by_user": rewards_by_user, "total_cash_pot": int(cash_pot or 0)}
 
@@ -965,6 +972,8 @@ async def create_game(
                 status_code=400,
                 detail=f"Insufficient balance to fund this game. Required: {' and '.join(need_parts)}.",
             )
+        if reserve_points > 0:
+            await log_points_event(db, user_id=current_user["id"], points=-reserve_points, event_type="entertainer_reserve", event_ref=game_id)
     topic_id = (request.topic_id or "").strip() or None
     doc = {
         "id": game_id,

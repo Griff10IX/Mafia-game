@@ -22,6 +22,7 @@ from server import (
     ARMOUR_BASE_BULLETS,
 )
 from routers.kill.armoury import _invalidate_weapons_cache, TOKEN_CONFIG, TOKEN_TYPES
+from utils.point_provenance import log_points_event
 
 logger = logging.getLogger(__name__)
 
@@ -537,6 +538,8 @@ async def open_loot_box(
             if merged_set:
                 update["$set"] = merged_set
             await db.users.update_one({"id": user_id}, update)
+            if merged_inc.get("points", 0) > 0:
+                await log_points_event(db, user_id=user_id, points=merged_inc["points"], event_type="loot_box", meta={"box_quality": box_quality, "prizes_count": len(rewards)})
 
         # Append to last-10 wins (newest at end; frontend can reverse for display)
         win_entry = {

@@ -10,7 +10,7 @@ from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from server import send_notification
-from utils.point_provenance import mint_purchase_lot_if_missing
+from utils.point_provenance import mint_purchase_lot_if_missing, log_points_event
 from utils.release_soft_launch import game_pass_purchase_locked_detail, get_release_soft_launch_public
 
 logger = logging.getLogger(__name__)
@@ -585,6 +585,7 @@ def register(router):
         )
         if updated.modified_count == 0:
             raise HTTPException(status_code=400, detail="Could not process purchase (race condition).")
+        await log_points_event(db, user_id=current_user["id"], points=-GAME_PASS_POINTS_PRICE, event_type="buy_game_pass_points", meta={"expires_at": expires_at})
 
         await send_notification(
             current_user["id"],

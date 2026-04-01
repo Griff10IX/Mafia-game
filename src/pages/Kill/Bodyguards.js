@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Shield, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api, { refreshUser } from '../../utils/api';
@@ -78,6 +78,8 @@ export default function Bodyguards() {
   const [hiringSlots, setHiringSlots] = useState(new Set());
   const [refreshing, setRefreshing] = useState(false);
   const [hireBanner, setHireBanner] = useState(null);
+  const claimedSlotsRef = useRef(new Set());
+  const pendingHiresRef = useRef(0);
 
   const DROP_COOLDOWN_HOURS = 3;
 
@@ -215,21 +217,25 @@ export default function Bodyguards() {
     setTimeout(() => setHireBanner((prev) => (prev?.message === message ? null : prev)), 6000);
   };
 
-  const hireBodyguard = async (slot, isRobot) => {
-    setHiringSlots((prev) => new Set(prev).add(slot));
+  const claimNextSlot = () => {
+    const slot = bodyguards.find((b) => !b.bodyguard_username && !claimedSlotsRef.current.has(b.slot_number))?.slot_number;
+    if (slot != null) {
+      claimedSlotsRef.current.add(slot);
+      setHiringSlots(new Set(claimedSlotsRef.current));
+    }
+    return slot;
+  };
+
+  const hireBodyguard = async (isRobot) => {
+    const slot = claimNextSlot();
+    if (slot == null) return;
+    pendingHiresRef.current += 1;
     try {
       const response = await api.post('/bodyguards/hire', { slot, is_robot: isRobot });
       showHireBanner('success', response?.data?.message ?? 'Bodyguard hired');
-      refreshUser().catch(() => {});
-      await fetchData();
-      try {
-        const inflRes = await api.get('/bodyguards/inflation', noCacheGetConfig());
-        setNextHireInflationPct(inflRes.data?.next_hire_inflation_pct ?? 0);
-        setInflationWindowEndsAt(inflRes.data?.inflation_window_ends_at ?? null);
-      } catch {
-        /* ignore; fetchData already set inflation */
-      }
     } catch (error) {
+      claimedSlotsRef.current.delete(slot);
+      setHiringSlots(new Set(claimedSlotsRef.current));
       const raw = error.response?.data?.detail;
       const detail =
         typeof raw === 'string'
@@ -239,19 +245,23 @@ export default function Bodyguards() {
             : raw != null
               ? String(raw)
               : 'Failed to hire bodyguard';
-      refreshUser().catch(() => {});
-      fetchData().catch(() => {});
       if (detail.includes('Slot already occupied')) {
         showHireBanner('info', 'Slot already filled — list updated');
       } else {
         showHireBanner('error', detail);
       }
     } finally {
-      setHiringSlots((prev) => {
-        const next = new Set(prev);
-        next.delete(slot);
-        return next;
-      });
+      pendingHiresRef.current -= 1;
+      if (pendingHiresRef.current === 0) {
+        claimedSlotsRef.current.clear();
+        refreshUser().catch(() => {});
+        await fetchData();
+        try {
+          const inflRes = await api.get('/bodyguards/inflation', noCacheGetConfig());
+          setNextHireInflationPct(inflRes.data?.next_hire_inflation_pct ?? 0);
+          setInflationWindowEndsAt(inflRes.data?.inflation_window_ends_at ?? null);
+        } catch { /* fetchData already set inflation */ }
+      }
     }
   };
 
@@ -295,7 +305,7 @@ export default function Bodyguards() {
     return Math.round(base * mult * inflationMult);
   };
 
-  const nextEmptySlot = bodyguards.find((b) => !b.bodyguard_username && !hiringSlots.has(b.slot_number))?.slot_number;
+  const nextEmptySlot = bodyguards.find((b) => !b.bodyguard_username && !hiringSlots.has(b.slot_number) && !claimedSlotsRef.current.has(b.slot_number))?.slot_number;
   // All active bodyguards sorted by slot number (mixed robots and humans together)
   const activeBodyguards = bodyguards
     .filter((b) => b.bodyguard_username)
@@ -614,7 +624,7 @@ export default function Bodyguards() {
         <div className="flex items-center gap-3 text-xs font-heading">
           {activeCount < 4 && nextEmptySlot && !bodyguardFor?.owner_username && (
             <button
-              onClick={() => hireBodyguard(nextEmptySlot, true)}
+              onClick={() => hireBodyguard(true)}
               data-testid="hire-robot-next"
               className="bg-primary/20 text-primary rounded px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation font-heading shrink-0"
             >

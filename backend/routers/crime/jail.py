@@ -51,6 +51,7 @@ from server import (
     STATES,
 )
 from routers.account.objectives import update_objectives_progress
+from utils.point_provenance import log_points_event
 
 logger = logging.getLogger(__name__)
 
@@ -639,6 +640,7 @@ async def leave_jail(current_user: dict = Depends(get_current_user_verified)):
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="You need at least 3 points to leave jail")
+    await log_points_event(db, user_id=current_user["id"], points=-3, event_type="jail_leave", event_ref=current_user["id"], meta={"points_spent": 3})
     await log_activity(current_user["id"], current_user.get("username", "?"), "jail_leave", {"points_spent": 3})
     return {
         "success": True,

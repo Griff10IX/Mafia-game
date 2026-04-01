@@ -42,6 +42,7 @@ _backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _backend not in sys.path:
     sys.path.insert(0, _backend)
 from server import db, get_current_user, get_effective_event, log_activity, maybe_process_rank_up, send_notification
+from utils.point_provenance import log_points_event
 
 # Roles (team of 4)
 OC_ROLES = [
@@ -197,6 +198,7 @@ async def buy_oc_timer(current_user: dict = Depends(get_current_user)):
     )
     if oc_result.modified_count == 0:
         raise HTTPException(status_code=400, detail=f"Insufficient points (need {OC_TIMER_COST_POINTS})")
+    await log_points_event(db, user_id=current_user["id"], points=-OC_TIMER_COST_POINTS, event_type="oc_timer_skip", event_ref=current_user["id"], meta={})
     return {"message": "OC timer reduced! Heist cooldown is now 4 hours.", "cost": OC_TIMER_COST_POINTS}
 
 
