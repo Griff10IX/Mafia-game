@@ -99,6 +99,7 @@ const LootBox = lazy(() => import("./pages/Money/LootBox"));
 const MyProperties = lazy(() => import("./pages/Money/MyProperties"));
 const Properties = lazy(() => import("./pages/Money/Properties"));
 const QuickTrade = lazy(() => import("./pages/Money/QuickTrade"));
+const Lottery = lazy(() => import("./pages/Money/Lottery"));
 const StockMarket = lazy(() => import("./pages/Money/StockMarket"));
 
 // Social pages
@@ -1236,6 +1237,19 @@ function App() {
             }
           />
           <Route path="/racket" element={<Navigate to="/money/racket" replace />} />
+          <Route
+            path="/money/lottery"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <Lottery />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route path="/lottery" element={<Navigate to="/money/lottery" replace />} />
           {/* ═══ SOCIAL GROUP ═══ */}
           <Route
             path="/social/inbox"

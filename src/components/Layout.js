@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket } from 'lucide-react';
 import api, { getApiErrorMessage, onCooldownChange, invalidateApiCache } from '../utils/api';
 import { setCrimesPrefetch, getCrimesPrefetch } from '../utils/prefetchCache';
 import { toast } from 'sonner';
@@ -148,6 +148,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
         { path: '/game/store', label: 'Store' },
         { path: '/game-pass', label: 'Game Pass' },
         { path: '/money/quick-trade', label: 'Quick Trade' },
+        { path: '/money/lottery', label: 'Lottery' },
       ],
     },
   ];
@@ -871,7 +872,7 @@ export default function Layout({ children }) {
         '/game/travel': 'travel', '/game/states': 'travel', '/my-properties': 'travel', '/money/booze-run': 'travel',
         '/social/forum': 'messaging', '/social/inbox': 'messaging', '/social/image-host': 'messaging',
         '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game-pass': 'money', '/game/daily-rewards': 'money',
-        '/cars/garage': 'money', '/cars/sell': 'money', '/cars/buy': 'money', '/money/crack-safe': 'money', '/casino': 'money', '/money/loot-box': 'money',
+        '/cars/garage': 'money', '/cars/sell': 'money', '/cars/buy': 'money', '/money/crack-safe': 'money', '/money/lottery': 'money', '/casino': 'money', '/money/loot-box': 'money',
         '/game/family/list': 'other', '/game/dead-alive': 'other', '/account/autorank': 'other',
         '/mini-games': 'minigames',
       }
@@ -884,7 +885,7 @@ export default function Layout({ children }) {
         '/game/travel': 'travel', '/game/states': 'travel', '/my-properties': 'travel', '/money/booze-run': 'travel',
         '/social/forum': 'messaging', '/social/inbox': 'messaging', '/social/image-host': 'messaging',
         '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game-pass': 'money', '/game/daily-rewards': 'money', '/casino/mini-games/flappy': 'money',
-        '/cars/garage': 'money', '/cars/sell': 'money', '/cars/buy': 'money', '/money/crack-safe': 'money', '/casino': 'money', '/game/leaderboard': 'money',
+        '/cars/garage': 'money', '/cars/sell': 'money', '/cars/buy': 'money', '/money/crack-safe': 'money', '/money/lottery': 'money', '/casino': 'money', '/game/leaderboard': 'money',
         '/game/family/list': 'other', '/game/dead-alive': 'other', '/account/autorank': 'other',
         '/mini-games': 'minigames',
       };
@@ -914,6 +915,7 @@ export default function Layout({ children }) {
     { path: '/game/stats', icon: TrendingUp, label: 'Stats' },
     { path: '/account/stats', icon: BarChart3, label: 'My Stats' },
     { path: '/money/bank', icon: Landmark, label: 'Bank' },
+    { path: '/money/lottery', icon: Ticket, label: 'Lottery' },
     { path: '/money/stocks', icon: TrendingUp, label: 'Stock Market' },
     { path: '/game/travel', icon: Plane, label: 'Travel' },
     { path: '/game/states', icon: MapPin, label: 'States' },

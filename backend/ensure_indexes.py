@@ -623,14 +623,16 @@ async def ensure_all_indexes(db):
             db, "analytics_events", "created_at", ttl_days=AUDIT_LOG_TTL_DAYS
         )
 
-        await _ensure(
-            db,
-            "deleted_messages_archive",
-            [
-                [("user_id", 1), ("deleted_at", -1)],
-                [("source", 1), ("deleted_at", -1)],
-            ],
-        )
+        await db.deleted_messages_archive.create_index([("user_id", 1), ("deleted_at", -1)])
+        await db.deleted_messages_archive.create_index([("source", 1), ("deleted_at", -1)])
+
+        # --- Lottery (Wed/Sun draw cron + ticket buys) ---
+        try:
+            await db.lottery_tickets.create_index([("round_id", 1)])
+            await db.lottery_tickets.create_index([("round_id", 1), ("user_id", 1)])
+            await db.lottery_rounds.create_index([("status", 1), ("closes_at", 1)])
+        except Exception as e:
+            logger.warning("lottery indexes: %s", e)
 
         logger.info("All non-profile indexes ensured.")
     except Exception as e:
