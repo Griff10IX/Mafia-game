@@ -501,6 +501,10 @@ const CrimesGtaSettingsCard = ({
             />
           ))}
         </div>
+        <p className="text-[9px] text-zinc-500 font-heading mt-1.5 leading-snug">
+          If both &quot;Melt for Bullets&quot; and &quot;Scrap for Cash&quot; are on, each cycle splits your garage batch about 50/50 between melt and scrap (one shared pool).
+          For scrap-only automation here, turn off &quot;Melt for Bullets&quot;. Garage Melt / Scrap buttons always use only the action you press.
+        </p>
       </div>
 
       <div>

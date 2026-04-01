@@ -253,9 +253,10 @@ const ActionsBar = ({
               )}
             </button>
             <button
+              type="button"
               onClick={onScrap}
               className="bg-secondary text-foreground border border-border hover:bg-secondary/80 hover:border-primary/30 rounded px-3 py-1.5 text-[10px] font-heading font-bold uppercase tracking-wide transition-all active:scale-95 inline-flex items-center gap-1.5 touch-manipulation"
-              title="Scrap for cash (no cooldown)"
+              title="Scrap selected cars for cash only (no cooldown)"
             >
               <DollarSign size={12} />
               Scrap
@@ -593,6 +594,7 @@ export default function Garage() {
       const response = await api.post('/gta/melt', {
         car_ids: eligibleIds,
         action: 'bullets',
+        manual_garage: true,
         ...(captchaToken ? { captcha_token: captchaToken } : {}),
       });
       toast.success(response.data.message);
@@ -629,6 +631,7 @@ export default function Garage() {
       const response = await api.post('/gta/melt', {
         car_ids: eligibleIds,
         action: 'cash',
+        manual_garage: true,
         ...(captchaToken ? { captcha_token: captchaToken } : {}),
       });
       toast.success(response.data.message);

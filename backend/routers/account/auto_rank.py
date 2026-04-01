@@ -965,7 +965,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
             car_ids = [e["user_car_id"] for e in eligible[:max(0, batch_limit - melted_this_cycle)]]
             actions = [a for a in melt_action_ids if a in ("bullets", "cash")]
             if len(actions) == 2:
-                # Both bullets and cash: split one batch pool 50/50 (odd limit → first half gets +1)
+                # Both bullets and cash: split one batch pool 50/50 (odd count → first half gets one extra)
                 pool = [e["user_car_id"] for e in eligible[:batch_limit]]
                 n = len(pool)
                 half = (n + 1) // 2
@@ -973,7 +973,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                 car_ids_cash = pool[half:]
                 try:
                     if car_ids_bullets:
-                        result_b = await melt_cars_locked(user, car_ids_bullets, "bullets")
+                        result_b = await melt_cars_locked(user, car_ids_bullets, "bullets", manual_garage=False)
                         if not result_b.get("cooldown") and result_b.get("success"):
                             mc = result_b.get("melted_count", 0)
                             melted_this_cycle += mc
@@ -983,7 +983,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                             lines.append(f"**Melt** — Melted {mc} car(s) for {tb} bullets.")
                             await _update_auto_rank_stats_melt(db, user_id, melted_count=mc, total_bullets=tb)
                     if car_ids_cash:
-                        result_c = await melt_cars_locked(user, car_ids_cash, "cash")
+                        result_c = await melt_cars_locked(user, car_ids_cash, "cash", manual_garage=False)
                         if result_c.get("success"):
                             mc = result_c.get("scrapped_count", 0)
                             melted_this_cycle += mc
@@ -1005,7 +1005,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                     if not car_ids:
                         break
                     try:
-                        result = await melt_cars_locked(user, car_ids, action)
+                        result = await melt_cars_locked(user, car_ids, action, manual_garage=False)
                         if result.get("cooldown"):
                             continue  # skip bullets this cycle, still try cash
                         if result.get("success"):
@@ -1069,7 +1069,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                 car_ids = [e["user_car_id"] for e in eligible[:batch_limit]]
                 if car_ids:
                     try:
-                        result = await melt_cars_locked(user, car_ids, "cash")
+                        result = await melt_cars_locked(user, car_ids, "cash", manual_garage=False)
                         if result.get("success"):
                             mc = result.get("scrapped_count", 0)
                             tv = result.get("total_value", 0)

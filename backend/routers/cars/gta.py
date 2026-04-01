@@ -56,6 +56,8 @@ class GTAMeltRequest(BaseModel):
     car_ids: List[str]
     action: str  # "bullets" or "cash"
     captcha_token: Optional[str] = None
+    # True = Garage: process all selected car_ids (cap GARAGE_BATCH_LIMIT_MAX) with only `action`. False = Auto Rank batch rules.
+    manual_garage: bool = True
 
 
 class GTABuyCarRequest(BaseModel):
@@ -137,6 +139,29 @@ def effective_garage_batch_limit(user: dict) -> int:
     if n <= 0:
         return DEFAULT_GARAGE_BATCH_LIMIT
     return min(n, GARAGE_BATCH_LIMIT_MAX)
+
+
+def _user_car_owner_clause(user_id) -> dict:
+    """Match user_cars.user_id whether stored as str or int (Mongo type-strict)."""
+    out = []
+    if user_id is None:
+        return {"user_id": "__none__"}
+    s = str(user_id).strip()
+    if s:
+        out.append(s)
+    if isinstance(user_id, int):
+        out.append(user_id)
+    elif isinstance(user_id, str) and user_id.isdigit():
+        try:
+            out.append(int(user_id))
+        except ValueError:
+            pass
+    out = list(dict.fromkeys(out))
+    if not out:
+        return {"user_id": "__none__"}
+    if len(out) == 1:
+        return {"user_id": out[0]}
+    return {"user_id": {"$in": out}}
 from utils.image_upload_security import (
     CAR_IMAGE_MAX_DATA_URL_BYTES,
     validate_custom_car_image_value,
@@ -595,11 +620,11 @@ async def attempt_gta_locked(
         )
 
 
-async def melt_cars_locked(user: dict, car_ids: list, action: str) -> dict:
+async def melt_cars_locked(user: dict, car_ids: list, action: str, *, manual_garage: bool = False) -> dict:
     """HTTP route and auto_rank: serialize melt/scrap with GTA for this user."""
     lock = await _get_gta_garage_lock(user.get("id") or "")
     async with lock:
-        return await _melt_cars_impl(user, car_ids, action)
+        return await _melt_cars_impl(user, car_ids, action, manual_garage=manual_garage)
 
 
 async def attempt_gta(
@@ -811,9 +836,18 @@ def _parse_melt_cooldown(iso_str):
         return None
 
 
-async def _melt_cars_impl(user: dict, car_ids: list, action: str):
+async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_garage: bool = False):
     """Core melt logic. Returns dict with success/melted_count/etc. On bullets cooldown returns {success: False, cooldown: True, detail: ...}."""
     now = datetime.now(timezone.utc)
+    action = (action or "").strip().lower()
+    if action not in ("bullets", "cash"):
+        return {"success": False, "message": "Invalid action"}
+    # Garage: honor full selection (capped). Auto Rank / internal: upgraded batch limit only.
+    if manual_garage:
+        limit = min(len(car_ids), GARAGE_BATCH_LIMIT_MAX)
+    else:
+        limit = min(effective_garage_batch_limit(user), len(car_ids))
+    owner = _user_car_owner_clause(user.get("id"))
     # Prefer DB-resolved crew (membership row) so melt rewards still apply if users.family_id is stale/missing.
     family_id = await resolve_family_id(user.get("id") or "") or (str(user.get("family_id") or "").strip() or None)
     in_war = family_id and await _family_in_active_war(family_id)
@@ -823,9 +857,6 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
     prev_user_before_bullets_claim = None
 
     if action == "bullets":
-        # Must match scrap path and auto_rank: raw user.get() misses coercion / cap and treats explicit null badly.
-        batch_limit = effective_garage_batch_limit(user)
-        limit = min(batch_limit, len(car_ids))
         now_iso = now.isoformat()
         # Upper-bound CD so the claim blocks other requests until this melt finishes; final $set may shorten.
         pessimistic_until = (now + timedelta(seconds=MELT_BULLETS_COOLDOWN_SECONDS * max(1, limit))).isoformat()
@@ -859,9 +890,6 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
         claimed_bullets_melt = True
         melt_until = _parse_melt_cooldown(prev_user_before_bullets_claim.get("melt_until"))
         melt_token_active = bool(melt_until and now < melt_until)
-    else:
-        batch_limit = effective_garage_batch_limit(user)
-        limit = min(batch_limit, len(car_ids))
 
     total_value = 0
     total_bullets = 0
@@ -872,17 +900,14 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
         if processed >= limit:
             break
         deleted_car = None
-        delete_filter = {"user_id": user["id"], "id": car_id, "listed_for_sale": {"$ne": True}}
+        delete_filter = {**owner, "id": car_id, "listed_for_sale": {"$ne": True}}
         deleted_car = await db.user_cars.find_one_and_delete(delete_filter)
         if not deleted_car:
             try:
-                delete_filter = {"user_id": user["id"], "_id": ObjectId(car_id), "listed_for_sale": {"$ne": True}}
+                delete_filter = {**owner, "_id": ObjectId(car_id), "listed_for_sale": {"$ne": True}}
                 deleted_car = await db.user_cars.find_one_and_delete(delete_filter)
             except Exception:
                 pass
-        if not deleted_car:
-            delete_filter = {"user_id": user["id"], "car_id": car_id, "listed_for_sale": {"$ne": True}}
-            deleted_car = await db.user_cars.find_one_and_delete(delete_filter)
         if deleted_car:
             model_id = deleted_car["car_id"]
             car_info = next((c for c in CARS if c["id"] == model_id), None)
@@ -1064,6 +1089,8 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
                 "garage_melt",
                 {
                     "action": "bullets",
+                    "manual_garage": manual_garage,
+                    "source": "garage_ui" if manual_garage else "auto_rank_or_internal",
                     "family_id": family_id,
                     "melted_count": deleted_count,
                     "total_bullets": player_bullets,
@@ -1118,7 +1145,14 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
             user["id"],
             user.get("username") or "?",
             "garage_scrap",
-            {"action": "cash", "scrapped_count": deleted_count, "total_value": total_value, "car_ids": car_ids[:limit]},
+            {
+                "action": "cash",
+                "manual_garage": manual_garage,
+                "source": "garage_ui" if manual_garage else "auto_rank_or_internal",
+                "scrapped_count": deleted_count,
+                "total_value": total_value,
+                "car_ids": car_ids[:limit],
+            },
         )
         # Referral: referrers split 5% of garage scrap profit (game-paid)
         _rb = await db.users.find_one({"id": user["id"]}, {"_id": 0, "referred_by": 1})
@@ -1165,7 +1199,14 @@ async def melt_cars(
     )
     if not body.car_ids:
         raise HTTPException(status_code=400, detail="No cars selected")
-    result = await melt_cars_locked(current_user, body.car_ids, body.action)
+    if (body.action or "").strip().lower() not in ("bullets", "cash"):
+        raise HTTPException(status_code=400, detail='action must be "bullets" or "cash"')
+    result = await melt_cars_locked(
+        current_user,
+        body.car_ids,
+        body.action,
+        manual_garage=body.manual_garage,
+    )
     if result.get("cooldown"):
         raise HTTPException(status_code=400, detail=result.get("detail", "Melt on cooldown"))
     return result

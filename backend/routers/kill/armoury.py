@@ -272,25 +272,29 @@ async def _activate_rank_xp_pass_and_grant_cumulative_micro_tiers(
                 next_rewards_cache[next_t] = next_rewards
             next_summary = f"Tier {next_t} rewards: {format_rewards_summary(next_rewards)}"
 
+        received_parts = []
+        granted_keys = []
         for reward_key in REWARD_KEY_ORDER:
             amount = int(applied.get(reward_key) or 0)
             if amount <= 0:
                 continue
+            granted_keys.append(reward_key)
             if reward_key == "money":
-                received_text = f"${amount:,} cash"
+                received_parts.append(f"${amount:,} cash")
             elif reward_key in ("bullets", "points", "respect_points"):
-                received_text = f"{amount:,} {REWARD_KEY_LABELS.get(reward_key, reward_key)}"
+                received_parts.append(f"{amount:,} {REWARD_KEY_LABELS.get(reward_key, reward_key)}")
             else:
-                received_text = f"{amount:,}x {REWARD_KEY_LABELS.get(reward_key, reward_key)}"
-
+                received_parts.append(f"{amount:,}x {REWARD_KEY_LABELS.get(reward_key, reward_key)}")
+        if received_parts:
+            blob = "; ".join(received_parts)
             await send_notification(
                 user_id,
                 "Game Pass reward",
-                f"You received {received_text}. Next reward: {next_summary}.",
+                f"You received {blob}. Next reward: {next_summary}.",
                 "reward",
-                reward_key=reward_key,
                 tier_micro=t,
                 next_tier=next_t,
+                reward_keys=granted_keys,
             )
 
     return True

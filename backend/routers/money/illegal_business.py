@@ -986,6 +986,7 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
             f"You hit {target_username}'s joint. Took ${loot_cash_credited:,}.",
             "attack",
             category="attacks",
+            actor_username=target_username,
         )
         await send_notification(
             target_id,
@@ -993,6 +994,7 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
             f"Your joint was hit by {attacker_username}. You lost ${loot_cash:,}.",
             "attack",
             category="attacks",
+            actor_username=attacker_username,
         )
     else:
         target_username = target_user.get("username") or "?"
@@ -1002,6 +1004,7 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
             f"You tried to hit {target_username}'s joint. They were ready—you got nothing.",
             "attack",
             category="attacks",
+            actor_username=target_username,
         )
         await send_notification(
             target_id,
@@ -1009,6 +1012,7 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
             f"Someone tried to hit your joint ({attacker_username}). They were turned away.",
             "attack",
             category="attacks",
+            actor_username=attacker_username,
         )
     await log_activity(current_user["id"], current_user.get("username", "?"), "illegal_biz_raid", {
         "target": target_user.get("username"), "success": won, "cash": loot_cash_credited if won else 0,
