@@ -822,7 +822,8 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
     prev_user_before_bullets_claim = None
 
     if action == "bullets":
-        batch_limit = user.get("garage_batch_limit", DEFAULT_GARAGE_BATCH_LIMIT)
+        # Must match scrap path and auto_rank: raw user.get() misses coercion / cap and treats explicit null badly.
+        batch_limit = effective_garage_batch_limit(user)
         limit = min(batch_limit, len(car_ids))
         now_iso = now.isoformat()
         # Upper-bound CD so the claim blocks other requests until this melt finishes; final $set may shorten.

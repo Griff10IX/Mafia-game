@@ -671,24 +671,89 @@ function Pipe({ x, topHeight, gap, theme }) {
 // ─── CHARACTER SELECT SCREEN ─────────────────────────────────────────────────
 function CharacterSelect({ characters, selected, onSelect, money, bestScore, onClose, onBuy, ownedChars = [] }) {
   return (
-    <div style={{
-      position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.92)",
-      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-      padding: "20px", overflowY: "auto",
-    }}>
-      <div style={{
-        width: "100%", maxWidth: 480,
-        background: "var(--noir-surface)", border: "1px solid var(--noir-border-mid)",
-        borderRadius: 12, padding: "24px 20px",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-          <h2 style={{ fontFamily: "Cinzel,serif", color: "var(--noir-primary)", fontSize: 18, letterSpacing: "0.15em", margin: 0 }}>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="gauntlet-char-select-title"
+      style={{
+        position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.92)",
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start",
+        padding: "12px", paddingTop: "max(12px, env(safe-area-inset-top))",
+        overflow: "hidden",
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      {/* Always visible on small screens — header row used to scroll away */}
+      <button
+        type="button"
+        aria-label="Close character selection"
+        onClick={onClose}
+        style={{
+          position: "fixed",
+          top: "max(10px, env(safe-area-inset-top))",
+          right: "max(10px, env(safe-area-inset-right))",
+          zIndex: 102,
+          width: 44,
+          height: 44,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: 10,
+          border: "1px solid rgba(255,255,255,0.25)",
+          background: "rgba(0,0,0,0.55)",
+          color: "var(--noir-foreground)",
+          cursor: "pointer",
+          fontSize: 20,
+          lineHeight: 1,
+          boxShadow: "0 2px 12px rgba(0,0,0,0.45)",
+        }}
+      >
+        ✕
+      </button>
+
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "100%",
+          maxWidth: 480,
+          maxHeight: "calc(100dvh - 24px)",
+          marginTop: 8,
+          background: "var(--noir-surface)",
+          border: "1px solid var(--noir-border-mid)",
+          borderRadius: 12,
+          padding: "16px 14px 18px",
+          display: "flex",
+          flexDirection: "column",
+          minHeight: 0,
+          overflow: "hidden",
+        }}
+      >
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          marginBottom: 14,
+          flexShrink: 0,
+          paddingRight: 40,
+        }}
+        >
+          <h2 id="gauntlet-char-select-title" style={{ fontFamily: "Cinzel,serif", color: "var(--noir-primary)", fontSize: 16, letterSpacing: "0.12em", margin: 0 }}>
             SELECT CHARACTER
           </h2>
-          <button type="button" onClick={onClose} style={{ background: "none", border: "1px solid var(--noir-border)", color: "var(--noir-muted)", cursor: "pointer", padding: "4px 10px", borderRadius: 4, fontFamily: "Cinzel,serif", fontSize: 11 }}>✕ CLOSE</button>
+          <button type="button" onClick={onClose} style={{ background: "none", border: "1px solid var(--noir-border)", color: "var(--noir-muted)", cursor: "pointer", padding: "6px 12px", borderRadius: 4, fontFamily: "Cinzel,serif", fontSize: 11, flexShrink: 0 }}>CLOSE</button>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 12,
+          overflowY: "auto",
+          WebkitOverflowScrolling: "touch",
+          paddingBottom: 4,
+          minHeight: 0,
+        }}
+        >
           {characters.map(char => {
             const CharPreview = char.render;
             const isSelected = selected === char.id;
@@ -770,24 +835,88 @@ function CharacterSelect({ characters, selected, onSelect, money, bestScore, onC
 // ─── THEME SELECT SCREEN ─────────────────────────────────────────────────────
 function ThemeSelect({ themes, selected, onSelect, money, bestScore, onClose }) {
   return (
-    <div style={{
-      position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.92)",
-      display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
-      padding: "20px", overflowY: "auto",
-    }}>
-      <div style={{
-        width: "100%", maxWidth: 480,
-        background: "var(--noir-surface)", border: "1px solid var(--noir-border-mid)",
-        borderRadius: 12, padding: "24px 20px",
-      }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
-          <h2 style={{ fontFamily: "Cinzel,serif", color: "var(--noir-primary)", fontSize: 18, letterSpacing: "0.15em", margin: 0 }}>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="gauntlet-theme-select-title"
+      style={{
+        position: "fixed", inset: 0, zIndex: 100, background: "rgba(0,0,0,0.92)",
+        display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "flex-start",
+        padding: "12px", paddingTop: "max(12px, env(safe-area-inset-top))",
+        overflow: "hidden",
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <button
+        type="button"
+        aria-label="Close world selection"
+        onClick={onClose}
+        style={{
+          position: "fixed",
+          top: "max(10px, env(safe-area-inset-top))",
+          right: "max(10px, env(safe-area-inset-right))",
+          zIndex: 102,
+          width: 44,
+          height: 44,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: 10,
+          border: "1px solid rgba(255,255,255,0.25)",
+          background: "rgba(0,0,0,0.55)",
+          color: "var(--noir-foreground)",
+          cursor: "pointer",
+          fontSize: 20,
+          lineHeight: 1,
+          boxShadow: "0 2px 12px rgba(0,0,0,0.45)",
+        }}
+      >
+        ✕
+      </button>
+
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "100%",
+          maxWidth: 480,
+          maxHeight: "calc(100dvh - 24px)",
+          marginTop: 8,
+          background: "var(--noir-surface)",
+          border: "1px solid var(--noir-border-mid)",
+          borderRadius: 12,
+          padding: "16px 14px 18px",
+          display: "flex",
+          flexDirection: "column",
+          minHeight: 0,
+          overflow: "hidden",
+        }}
+      >
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 12,
+          marginBottom: 14,
+          flexShrink: 0,
+          paddingRight: 40,
+        }}
+        >
+          <h2 id="gauntlet-theme-select-title" style={{ fontFamily: "Cinzel,serif", color: "var(--noir-primary)", fontSize: 16, letterSpacing: "0.12em", margin: 0 }}>
             SELECT WORLD
           </h2>
-          <button type="button" onClick={onClose} style={{ background: "none", border: "1px solid var(--noir-border)", color: "var(--noir-muted)", cursor: "pointer", padding: "4px 10px", borderRadius: 4, fontFamily: "Cinzel,serif", fontSize: 11 }}>✕ CLOSE</button>
+          <button type="button" onClick={onClose} style={{ background: "none", border: "1px solid var(--noir-border)", color: "var(--noir-muted)", cursor: "pointer", padding: "6px 12px", borderRadius: 4, fontFamily: "Cinzel,serif", fontSize: 11, flexShrink: 0 }}>CLOSE</button>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: 10,
+          overflowY: "auto",
+          WebkitOverflowScrolling: "touch",
+          paddingBottom: 4,
+          minHeight: 0,
+        }}
+        >
           {themes.map(theme => {
             const isSelected = selected === theme.id;
             const scoreLocked = theme.unlockType === "score" && bestScore < theme.unlockScore;
