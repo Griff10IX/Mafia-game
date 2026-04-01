@@ -58,6 +58,12 @@ function saveMeltScrapRarities(rarities) {
   } catch (_) {}
 }
 
+/** Normalize server/local rarity ids so they match `car.rarity` / auto-rank filters. */
+function normalizeMeltScrapRarityList(arr) {
+  if (!Array.isArray(arr)) return [];
+  return arr.map((x) => String(x).trim()).filter((r) => ALL_RARITIES.includes(r));
+}
+
 // Subcomponents
 const LoadingSpinner = () => (
   <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
@@ -165,7 +171,7 @@ const ActionsBar = ({
   return (
     <div className={`relative ${styles.panel} rounded-lg border border-primary/20 p-3 gar-fade-in overflow-hidden mobile-panel`}>
       <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
           {!showAll && hiddenCount > 0 && (
             <span className="text-[10px] text-mutedForeground font-heading">
@@ -471,6 +477,33 @@ export default function Garage() {
     api.get('/auth/me').then((r) => setUser(r.data)).catch(() => {});
   }, [fetchGarage]);
 
+  // Keep melt/scrap rarity filters in sync with the server so Auto Rank uses the same rules as the garage.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await api.get('/auto-rank/me');
+        if (cancelled) return;
+        const serverList = normalizeMeltScrapRarityList(r.data?.auto_rank_melt_rarity_ids);
+        const localList = loadMeltScrapRarities();
+        if (localList.length === 0 && serverList.length > 0) {
+          setMeltScrapRarities(serverList);
+          saveMeltScrapRarities(serverList);
+        } else if (localList.length > 0 && serverList.length === 0) {
+          await api.patch('/auto-rank/me', {
+            auto_rank_melt_rarity_ids: localList,
+            auto_rank_scrap_rarity_ids: localList,
+          });
+        }
+      } catch (_) {
+        /* not logged in or auto-rank unavailable */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     const id = setInterval(() => fetchGarage(true), 60_000);
     return () => clearInterval(id);
@@ -639,10 +672,19 @@ export default function Garage() {
     setMeltScrapSettingsOpen(true);
   };
 
-  const saveMeltScrapSettings = () => {
-    setMeltScrapRarities(meltScrapSettingsDraft);
-    saveMeltScrapRarities(meltScrapSettingsDraft);
+  const saveMeltScrapSettings = async () => {
+    const next = normalizeMeltScrapRarityList(meltScrapSettingsDraft);
+    setMeltScrapRarities(next);
+    saveMeltScrapRarities(next);
     setMeltScrapSettingsOpen(false);
+    try {
+      await api.patch('/auto-rank/me', {
+        auto_rank_melt_rarity_ids: next,
+        auto_rank_scrap_rarity_ids: next,
+      });
+    } catch (_) {
+      /* local + LS still apply; server sync best-effort */
+    }
   };
 
   const toggleDraftRarity = (rarity) => {

@@ -7,6 +7,8 @@ import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
 import ActiveTokenBadge from '../../components/ActiveTokenBadge';
 
+const DEFAULT_MOD_COLOR = '#1e3a5f';
+
 const JAIL_STYLES = `
   @keyframes j-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .j-fade-in { animation: j-fade-in 0.4s ease-out both; }
@@ -163,15 +165,22 @@ const AutoRankIcon = () => (
 /** Jail list rows: real inmates use rp_reward 15, NPC rows 25 (server contract; no is_npc on wire). */
 const rowIsJailNpc = (player) => (player?.rp_reward ?? 0) === 25;
 
-const JailedPlayerRow = ({ player, index, onBust, loading, userInJail, manualPlayDisabled }) => {
+const JailedPlayerRow = ({ player, index, onBust, loading, userInJail, manualPlayDisabled, adminOnlineColor, modDefaultOnlineColor }) => {
   const rp = player.rp_reward ?? (rowIsJailNpc(player) ? 25 : 15);
   const isNpc = rowIsJailNpc(player);
+  const adminColor = (adminOnlineColor && adminOnlineColor.trim()) || '#a78bfa';
+  const modColor = (modDefaultOnlineColor && modDefaultOnlineColor.trim()) || DEFAULT_MOD_COLOR;
+  // Match Users Online / admin settings: per-user online_color (mod custom colour), else global admin/mod defaults
+  const displayColor =
+    !isNpc &&
+    (player.online_color ||
+      (player.is_admin ? adminColor : player.is_moderator ? modColor : undefined));
 
   return (
     <div
       className={`flex items-center justify-between gap-2 px-2 py-1 rounded-md transition-all j-row ${
-        player.is_self 
-          ? 'bg-red-500/10 border border-red-500/20 opacity-60' 
+        player.is_self
+          ? 'bg-red-500/10 border border-red-500/20 opacity-60'
           : 'bg-zinc-800/30 border border-transparent hover:border-primary/20'
       }`}
       data-testid={`jailed-player-${index}`}
@@ -179,8 +188,18 @@ const JailedPlayerRow = ({ player, index, onBust, loading, userInJail, manualPla
       {/* Player info */}
       <div className="flex items-center gap-2 min-w-0 flex-1">
         <div className="min-w-0">
-          <div className="text-[11px] font-heading font-bold text-foreground truncate">
-            {isNpc ? player.username : <Link to={`/profile/${encodeURIComponent(player.username)}`} className="text-primary hover:underline">{player.username}</Link>}
+          <div className="text-[11px] font-heading font-bold truncate">
+            {isNpc ? (
+              <span className="text-foreground">{player.username}</span>
+            ) : (
+              <Link
+                to={`/profile/${encodeURIComponent(player.username)}`}
+                className={`transition-colors hover:underline ${displayColor ? '' : 'text-primary'}`}
+                style={displayColor ? { color: displayColor } : undefined}
+              >
+                {player.username}
+              </Link>
+            )}
           </div>
           <div className="text-[9px] text-mutedForeground truncate">
             {player.rank_name}
@@ -291,6 +310,10 @@ export default function Jail() {
 
   const [autoRankJailDisabled, setAutoRankJailDisabled] = useState(false);
   const [user, setUser] = useState(null);
+  const [staffListColors, setStaffListColors] = useState({
+    admin_online_color: '#a78bfa',
+    mod_default_online_color: DEFAULT_MOD_COLOR,
+  });
 
   const fetchJailData = async () => {
     try {
@@ -302,7 +325,12 @@ export default function Jail() {
         api.get('/auth/me').catch(() => ({ data: null })),
       ]);
       setJailStatus(jailRes.data || { in_jail: false });
-      setJailedPlayers(Array.isArray(playersRes.data?.players) ? playersRes.data.players : []);
+      const pd = playersRes.data || {};
+      setJailedPlayers(Array.isArray(pd.players) ? pd.players : []);
+      setStaffListColors({
+        admin_online_color: pd.admin_online_color || '#a78bfa',
+        mod_default_online_color: pd.mod_default_online_color || DEFAULT_MOD_COLOR,
+      });
       setJailStats(statsRes.data || {});
       const ar = autoRankRes.data || {};
       setAutoRankJailDisabled(!!(ar.auto_rank_enabled && ar.auto_rank_bust_every_5_sec));
@@ -321,7 +349,14 @@ export default function Jail() {
   const fetchJailPlayers = async () => {
     try {
       const res = await api.get('/jail/players');
-      setJailedPlayers(Array.isArray(res.data?.players) ? res.data.players : []);
+      const pd = res.data || {};
+      setJailedPlayers(Array.isArray(pd.players) ? pd.players : []);
+      if (pd.admin_online_color != null || pd.mod_default_online_color != null) {
+        setStaffListColors((prev) => ({
+          admin_online_color: pd.admin_online_color ?? prev.admin_online_color,
+          mod_default_online_color: pd.mod_default_online_color ?? prev.mod_default_online_color,
+        }));
+      }
     } catch (error) {
       // Silent fail — players list will refresh on next full fetch
       console.error('Failed to refresh jail players:', error);
@@ -587,6 +622,8 @@ export default function Jail() {
                 loading={loading}
                 userInJail={jailStatus.in_jail}
                 manualPlayDisabled={autoRankJailDisabled}
+                adminOnlineColor={staffListColors.admin_online_color}
+                modDefaultOnlineColor={staffListColors.mod_default_online_color}
               />
             ))}
           </div>

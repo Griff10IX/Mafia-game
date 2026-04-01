@@ -2576,13 +2576,16 @@ def register(router):
     async def admin_rate_limit_log(
         limit: int = 100,
         username: str = None,
+        user_id: str = None,
         current_user: dict = Depends(get_current_user)
     ):
         """Get rate limit violations log with detailed info about why users got rate limited."""
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin or moderator access required")
         query = {"flag_type": "endpoint_rate_limit", "resolved": {"$ne": True}}
-        if username:
+        if user_id and str(user_id).strip():
+            query["user_id"] = str(user_id).strip()
+        elif username:
             query["username"] = {"$regex": f"^{re.escape(username)}", "$options": "i"}
         flags = await db.security_flags.find(query, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
         by_user = {}

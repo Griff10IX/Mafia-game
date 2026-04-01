@@ -103,6 +103,13 @@ async def ensure_all_indexes(db):
         await db.captcha_turnstile_failures.create_index([("at", -1)])
         await db.captcha_turnstile_failures.create_index([("user_id", 1), ("at", -1)])
 
+        # Bot/script client block audit (admin investigation; TTL on expires_at)
+        try:
+            await db.bot_client_block_events.create_index([("user_id", 1), ("created_at", -1)])
+            await db.bot_client_block_events.create_index([("expires_at", 1)], expireAfterSeconds=0)
+        except Exception as e:
+            logger.warning("bot_client_block_events indexes: %s", e)
+
         # --- Families ---
         await db.family_members.create_index("family_id")
         await db.family_members.create_index([("family_id", 1), ("user_id", 1)])

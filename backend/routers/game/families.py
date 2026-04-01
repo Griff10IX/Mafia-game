@@ -8,7 +8,7 @@ import time
 import uuid
 import os
 import sys
-from typing import Optional, Dict, List
+from typing import Optional, Dict, List, Any
 from collections import defaultdict
 
 logger = logging.getLogger(__name__)
@@ -675,6 +675,39 @@ def _uid_str(uid) -> Optional[str]:
     return s or None
 
 
+def _user_id_variants_for_family_members(user_id: Any) -> list:
+    """String/int variants for family_members.user_id (Mongo matches type strictly)."""
+    out = []
+    if user_id is None:
+        return out
+    s = _uid_str(user_id)
+    if s:
+        out.append(s)
+    if isinstance(user_id, int):
+        out.append(user_id)
+    elif isinstance(user_id, str) and user_id.isdigit():
+        try:
+            out.append(int(user_id))
+        except ValueError:
+            pass
+    return list(dict.fromkeys(out))
+
+
+async def _delete_family_memberships_for_user(user_id: Any) -> None:
+    """Remove all family_members rows for this user (stale/orphan cleanup)."""
+    variants = _user_id_variants_for_family_members(user_id)
+    if not variants:
+        return
+    await db.family_members.delete_many({"user_id": {"$in": variants}})
+
+
+def _user_belongs_on_family_roster(u: Optional[dict], family_id: str) -> bool:
+    """True if this user should appear on the family's live roster (matches manual leave/kick clearing users.family_id)."""
+    if not u:
+        return False
+    return _norm_fid(u.get("family_id")) == _norm_fid(family_id)
+
+
 async def _users_map_by_ids(user_ids: list, projection: Optional[dict] = None) -> dict:
     """Return dict id -> user doc for non-empty unique ids (keys are normalized string ids)."""
     if not user_ids:
@@ -685,6 +718,7 @@ async def _users_map_by_ids(user_ids: list, projection: Optional[dict] = None) -
         "id": 1,
         "username": 1,
         "rank": 1,
+        "family_id": 1,
         "is_dead": 1,
         "dead_at": 1,
         "bullets_melted": 1,
@@ -1224,6 +1258,8 @@ async def families_my(current_user: dict = Depends(get_current_user)):
     fallen = []
     for m in members_docs:
         u = users_by_id.get(_uid_str(m["user_id"]))
+        if not _user_belongs_on_family_roster(u, family_id):
+            continue
         rank_name = "—"
         if u:
             rid = u.get("rank", 1)
@@ -1312,9 +1348,9 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             my_compound_cars += 1
     returning_raw = []
     if my_role and my_role in ("boss", "underboss", "consigliere"):
-        member_ids = {m["user_id"] for m in members_docs}
+        roster_uids = {_uid_str(e["user_id"]) for e in members + fallen if e.get("user_id")}
         for uid, attrib in compound_deposits_by_user.items():
-            if uid in member_ids:
+            if _uid_str(uid) in roster_uids:
                 ac = int((attrib.get("cash") or 0) or 0)
                 ap = int((attrib.get("points") or 0) or 0)
                 al = int((attrib.get("loot_pieces") or 0) or 0)
@@ -1463,13 +1499,15 @@ async def families_lookup(tag: Optional[str] = None, id: Optional[str] = None, c
                     pass
             bu = await db.users.find_one(
                 {"$or": or_c},
-                {"_id": 0, "username": 1, "rank": 1, "is_dead": 1, "dead_at": 1},
+                {"_id": 0, "username": 1, "rank": 1, "is_dead": 1, "dead_at": 1, "family_id": 1},
             )
             if bu:
                 u = bu
                 if RANKS:
                     rank_name = next((x["name"] for x in RANKS if x.get("id") == u.get("rank", 1)), str(u.get("rank", 1)))
                 uname = ((u.get("username") if u else None) or "").strip() or "?"
+        if not _user_belongs_on_family_roster(u, fam["id"]):
+            continue
         entry = {
             "user_id": m["user_id"],
             "username": uname,
@@ -1593,6 +1631,7 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
     if is_admin:
         fam_doc["player_cap_exempt"] = True
     await db.families.insert_one(fam_doc)
+    await _delete_family_memberships_for_user(current_user["id"])
     await db.family_members.insert_one({
         "id": str(uuid.uuid4()), "family_id": family_id, "user_id": current_user["id"],
         "role": "boss", "joined_at": now,
@@ -1626,6 +1665,7 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
 
 async def _add_member_to_family(family_id: str, user_id: str) -> None:
     now = datetime.now(timezone.utc).isoformat()
+    await _delete_family_memberships_for_user(user_id)
     await db.family_members.insert_one({
         "id": str(uuid.uuid4()), "family_id": family_id, "user_id": user_id,
         "role": "associate", "joined_at": now,
@@ -1663,15 +1703,7 @@ async def families_join(request: FamilyJoinRequest, current_user: dict = Depends
     count = await db.family_members.count_documents({"family_id": family_id})
     if count >= sum(FAMILY_ROLE_LIMITS.values()):
         raise HTTPException(status_code=400, detail="Family is full")
-    now = datetime.now(timezone.utc).isoformat()
-    await db.family_members.insert_one({
-        "id": str(uuid.uuid4()), "family_id": family_id, "user_id": current_user["id"],
-        "role": "associate", "joined_at": now,
-    })
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$set": {"family_id": family_id, "family_role": "associate", **_family_melt_stats_reset_fields()}},
-    )
+    await _add_member_to_family(family_id, current_user["id"])
     _invalidate_list_cache()
     _invalidate_my_cache(current_user["id"])
     return {"message": "Joined family"}
@@ -1872,7 +1904,9 @@ async def families_leave(current_user: dict = Depends(get_current_user)):
     fam = await db.families.find_one({"id": family_id}, {"_id": 0, "boss_id": 1})
     if fam and fam.get("boss_id") == current_user["id"]:
         raise HTTPException(status_code=400, detail="Boss must transfer leadership or dissolve family first")
-    await db.family_members.delete_one({"family_id": family_id, "user_id": current_user["id"]})
+    variants = _user_id_variants_for_family_members(current_user["id"])
+    if variants:
+        await db.family_members.delete_many({"family_id": family_id, "user_id": {"$in": variants}})
     await db.users.update_one(
         {"id": current_user["id"]},
         {"$set": {"family_id": None, "family_role": None, **_family_melt_stats_reset_fields()}},
@@ -1915,7 +1949,9 @@ async def families_kick(request: FamilyKickRequest, current_user: dict = Depends
         raise HTTPException(status_code=404, detail="Member not found")
     if member.get("role") == "boss":
         raise HTTPException(status_code=400, detail="Cannot kick the Boss")
-    await db.family_members.delete_one({"family_id": family_id, "user_id": request.user_id})
+    variants = _user_id_variants_for_family_members(request.user_id)
+    if variants:
+        await db.family_members.delete_many({"family_id": family_id, "user_id": {"$in": variants}})
     await db.users.update_one(
         {"id": request.user_id},
         {"$set": {"family_id": None, "family_role": None, **_family_melt_stats_reset_fields()}},

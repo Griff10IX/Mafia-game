@@ -933,8 +933,9 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         melt_action_ids = user.get("auto_rank_melt_action_ids") or []
         melt_rarity_ids = user.get("auto_rank_melt_rarity_ids") or []
         if isinstance(melt_action_ids, list) and len(melt_action_ids) > 0:
-            # No rarities selected = don't melt/scrap any cars
+            # No rarities selected = don't melt/scrap any cars (ids must match CARS[].rarity, same as garage)
             allowed_rarities = set(melt_rarity_ids) if isinstance(melt_rarity_ids, list) and len(melt_rarity_ids) > 0 else set()
+            allowed_rarities = {r for r in allowed_rarities if r in MELT_RARITIES}
             batch_limit = user.get("garage_batch_limit") or getattr(srv, "DEFAULT_GARAGE_BATCH_LIMIT", 6)
             booze_protected = await _get_booze_protected_car_ids(db, user_id) if user.get("auto_rank_booze") else set()
             cars_cursor = db.user_cars.find({"user_id": user_id})
@@ -1049,6 +1050,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     if run_scrap:
         scrap_rarity_ids = user.get("auto_rank_scrap_rarity_ids") or []
         allowed_scrap_rarities = set(scrap_rarity_ids) if isinstance(scrap_rarity_ids, list) and len(scrap_rarity_ids) > 0 else set()
+        allowed_scrap_rarities = {r for r in allowed_scrap_rarities if r in SCRAP_RARITIES}
         if allowed_scrap_rarities:
             next_scrap_at = _parse_iso(user.get("auto_rank_next_scrap_at"))
             if next_scrap_at is None or now >= next_scrap_at:

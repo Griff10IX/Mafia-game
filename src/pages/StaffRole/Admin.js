@@ -234,6 +234,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Security panel', categoryId: 'admin-security', collapseKey: 'security', keywords: ['security', 'flags', 'threat', 'monitor'] },
   // Cheat Detection
   { label: 'Cheat Detection', categoryId: 'admin-cheat', collapseKey: 'cheat', keywords: ['cheat', 'detection', 'suspicious'] },
+  { label: 'Bot / script investigation', categoryId: 'admin-cheat', collapseKey: 'botInvestigation', keywords: ['bot', 'script', 'automation', 'investigation', 'cheat', 'suspicious'] },
   { label: 'Find Duplicates', categoryId: 'admin-cheat', collapseKey: 'duplicates', keywords: ['duplicate', 'multi', 'account'] },
   // Analytics
   { label: 'Login page unique visitors', categoryId: 'admin-analytics', collapseKey: 'loginPageVisitors', keywords: ['login', 'visitors', 'unique', 'page', 'stats'] },
@@ -328,8 +329,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, userAdjustHub: true, ...parsed };
-  } catch { return { referralsReport: false, userAdjustHub: true }; }
+    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false }; }
 }
 
 function saveCollapsed(state) {
@@ -886,6 +887,13 @@ export default function Admin() {
   const [gamblingAnomalies, setGamblingAnomalies] = useState(null);
   const [gamblingAnomaliesLoading, setGamblingAnomaliesLoading] = useState(false);
   const [duplicateSuspectsUsername, setDuplicateSuspectsUsername] = useState('');
+  const [botInvestQuery, setBotInvestQuery] = useState('');
+  const [botInvestProfile, setBotInvestProfile] = useState(null);
+  const [botInvestActivity, setBotInvestActivity] = useState(null);
+  const [botInvestDupe, setBotInvestDupe] = useState(null);
+  const [botInvestRateLimit, setBotInvestRateLimit] = useState(null);
+  const [botInvestBlocks, setBotInvestBlocks] = useState(null);
+  const [botInvestLoading, setBotInvestLoading] = useState(false);
 
   const [adminOnlineColor, setAdminOnlineColor] = useState('#a78bfa');
   const [modDefaultOnlineColor, setModDefaultOnlineColor] = useState('#1e3a5f');
@@ -3744,6 +3752,128 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed');
     } finally {
       setCheatLoading(false);
+    }
+  };
+
+  const resolveBotInvestParams = (raw) => {
+    const t = (raw || '').trim();
+    if (!t) return {};
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (uuidRe.test(t)) return { user_id: t };
+    return { username: t };
+  };
+
+  const loadBotInvestigationProfile = async () => {
+    const params = resolveBotInvestParams(botInvestQuery);
+    if (!params.user_id && !params.username) {
+      toast.error('Enter a username or user id');
+      return;
+    }
+    setBotInvestLoading(true);
+    setBotInvestActivity(null);
+    setBotInvestDupe(null);
+    setBotInvestRateLimit(null);
+    setBotInvestBlocks(null);
+    try {
+      const search = new URLSearchParams();
+      if (params.user_id) search.set('user_id', params.user_id);
+      if (params.username) search.set('username', params.username);
+      const res = await api.get(`/admin/investigate/user-profile?${search.toString()}`);
+      setBotInvestProfile(res.data);
+      toast.success('Investigation profile loaded');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load investigation profile');
+      setBotInvestProfile(null);
+    } finally {
+      setBotInvestLoading(false);
+    }
+  };
+
+  const loadBotInvestigationActivity = async () => {
+    const u = botInvestProfile?.user?.username;
+    if (!u) {
+      toast.error('Load profile first');
+      return;
+    }
+    setBotInvestLoading(true);
+    try {
+      const res = await api.get(`/admin/activity-feed?username=${encodeURIComponent(u)}&since_minutes=1440&limit=200`);
+      setBotInvestActivity(res.data);
+      toast.success('Activity feed loaded');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load activity');
+    } finally {
+      setBotInvestLoading(false);
+    }
+  };
+
+  const loadBotInvestigationDupe = async () => {
+    const u = botInvestProfile?.user?.username;
+    if (!u) {
+      toast.error('Load profile first');
+      return;
+    }
+    setCheatLoading(true);
+    try {
+      const params = new URLSearchParams();
+      params.set('username', u);
+      params.set('check_vpn', 'true');
+      const res = await api.get(`/admin/cheat-detection/dupe-check-intelligent?${params.toString()}`);
+      setBotInvestDupe(res.data);
+      toast.success('Intelligent dupe check loaded');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setCheatLoading(false);
+    }
+  };
+
+  const loadBotInvestigationRateLimit = async () => {
+    const uid = botInvestProfile?.user?.id;
+    if (!uid) {
+      toast.error('Load profile first');
+      return;
+    }
+    setBotInvestLoading(true);
+    try {
+      const res = await api.get(`/admin/rate-limit-log?user_id=${encodeURIComponent(uid)}&limit=100`);
+      setBotInvestRateLimit(res.data);
+      toast.success('Rate limit log loaded');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setBotInvestLoading(false);
+    }
+  };
+
+  const loadBotInvestigationBlocksForUser = async () => {
+    const uid = botInvestProfile?.user?.id;
+    if (!uid) {
+      toast.error('Load profile first');
+      return;
+    }
+    setBotInvestLoading(true);
+    try {
+      const res = await api.get(`/admin/investigate/bot-blocks?user_id=${encodeURIComponent(uid)}&limit=100`);
+      setBotInvestBlocks(res.data);
+      toast.success('Bot block history loaded');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setBotInvestLoading(false);
+    }
+  };
+
+  const loadBotInvestigationBlocksRecent = async () => {
+    setBotInvestLoading(true);
+    try {
+      const res = await api.get('/admin/investigate/bot-blocks?limit=100');
+      setBotInvestBlocks(res.data);
+      toast.success('Recent bot-block events loaded');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setBotInvestLoading(false);
     }
   };
 
@@ -9964,6 +10094,137 @@ export default function Admin() {
           <AlertTriangle size={12} />
           Cheat Detection
         </h2>
+
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-violet-500/25 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-violet-500/30 to-transparent" />
+          <SectionHeader
+            icon={Bot}
+            title="Bot / script investigation"
+            badge={botInvestProfile?.user?.username ? <span className="text-[10px] font-heading text-violet-400">{botInvestProfile.user.username}</span> : null}
+            isCollapsed={collapsed.botInvestigation}
+            onToggle={() => toggleSection('botInvestigation')}
+          />
+          {!collapsed.botInvestigation && (
+            <div className="p-3 space-y-3">
+              <p className="text-[10px] text-mutedForeground font-heading">
+                One place to review automation signals: aggregated profile, activity, intelligent dupe check, rate limits, and script-client block history. Moderators can use all actions here.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={botInvestQuery}
+                  onChange={(e) => setBotInvestQuery(e.target.value)}
+                  placeholder="Username or user id (UUID)"
+                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs w-56 max-w-full"
+                  autoComplete="off"
+                />
+                <BtnPrimary onClick={loadBotInvestigationProfile} disabled={botInvestLoading}>
+                  {botInvestLoading ? '…' : 'Load profile'}
+                </BtnPrimary>
+                <BtnSecondary type="button" onClick={loadBotInvestigationBlocksRecent} disabled={botInvestLoading}>
+                  Recent bot blocks (all users)
+                </BtnSecondary>
+              </div>
+              {botInvestProfile && (
+                <div className="space-y-3 rounded border border-zinc-700/50 bg-zinc-900/40 p-2">
+                  <div className="text-[10px] font-heading text-primary uppercase">Summary</div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[10px] font-heading text-mutedForeground">
+                    <div>
+                      <span className="text-foreground font-bold">{botInvestProfile.user?.username}</span>
+                      <span className="ml-2 font-mono text-[9px]">{botInvestProfile.user?.id}</span>
+                    </div>
+                    <div>Dead: {botInvestProfile.user?.is_dead ? 'yes' : 'no'} · NPC: {botInvestProfile.user?.is_npc ? 'yes' : 'no'}</div>
+                    <div className="sm:col-span-2 font-mono break-all">Reg IP: {botInvestProfile.user?.registration_ip || '—'} · Last req IP: {botInvestProfile.user?.last_request_ip || '—'}</div>
+                    <div className="sm:col-span-2 font-mono break-all text-[9px]" title={botInvestProfile.user?.last_user_agent || ''}>
+                      UA: {botInvestProfile.user?.last_user_agent ? `${String(botInvestProfile.user.last_user_agent).slice(0, 160)}…` : '—'}
+                    </div>
+                    <div className="sm:col-span-2 font-mono break-all text-[9px]">Fingerprint: {botInvestProfile.user?.device_fingerprint || '—'}</div>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-[10px]">
+                    <span className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-600/50">
+                      Security flags (30d): <span className="text-foreground font-bold">{botInvestProfile.security_flags_summary?.total_last_30d ?? 0}</span>
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-600/50">
+                      Activity ({botInvestProfile.activity?.window_hours ?? '—'}h): <span className="text-foreground font-bold">{botInvestProfile.activity?.total_actions ?? 0}</span> actions
+                    </span>
+                    {botInvestProfile.minigame_timing?.inter_arrival_seconds_mean != null && (
+                      <span className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-600/50" title="Minigame plays — seconds between consecutive plays (lower variance can suggest automation)">
+                        Minigame Δt mean: {Number(botInvestProfile.minigame_timing.inter_arrival_seconds_mean).toFixed(1)}s
+                        {botInvestProfile.minigame_timing.inter_arrival_seconds_stddev != null && (
+                          <> · σ {Number(botInvestProfile.minigame_timing.inter_arrival_seconds_stddev).toFixed(1)}s</>
+                        )}
+                      </span>
+                    )}
+                    <span className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-600/50">
+                      Suspicious logins (30d): <span className="text-foreground font-bold">{botInvestProfile.suspicious_logins?.count_30d ?? 0}</span>
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-600/50">
+                      Auto-rank Telegram: {botInvestProfile.auto_rank?.telegram_linked ? 'linked' : 'not linked'}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <BtnSecondary type="button" onClick={loadBotInvestigationActivity} disabled={botInvestLoading}>
+                      Load 24h activity feed
+                    </BtnSecondary>
+                    <BtnSecondary type="button" onClick={loadBotInvestigationDupe} disabled={cheatLoading}>
+                      Load intelligent dupe check
+                    </BtnSecondary>
+                    <BtnSecondary type="button" onClick={loadBotInvestigationRateLimit} disabled={botInvestLoading}>
+                      Load rate limits (this user)
+                    </BtnSecondary>
+                    <BtnSecondary type="button" onClick={loadBotInvestigationBlocksForUser} disabled={botInvestLoading}>
+                      Load bot blocks (this user)
+                    </BtnSecondary>
+                  </div>
+                  {(botInvestProfile.security_flags_recent?.length ?? 0) > 0 && (
+                    <div>
+                      <div className="text-[10px] font-heading text-amber-400/90 uppercase mb-1">Recent security flags (sample)</div>
+                      <div className="max-h-40 overflow-y-auto space-y-1 text-[9px] font-mono">
+                        {botInvestProfile.security_flags_recent.slice(0, 12).map((f, i) => (
+                          <div key={i} className="border-b border-zinc-800/80 pb-1">
+                            {f.flag_type || '—'} · {f.created_at || '—'} · {JSON.stringify(f.details || {}).slice(0, 120)}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {botInvestActivity && (
+                <div>
+                  <div className="text-[10px] font-heading text-primary uppercase mb-1">Activity feed (24h)</div>
+                  <pre className="text-[9px] p-2 rounded bg-zinc-950/80 border border-zinc-700/50 text-mutedForeground overflow-auto max-h-72 whitespace-pre-wrap break-words">
+                    {JSON.stringify(botInvestActivity, null, 2)}
+                  </pre>
+                </div>
+              )}
+              {botInvestDupe && (
+                <div>
+                  <div className="text-[10px] font-heading text-primary uppercase mb-1">Intelligent dupe check (filtered to this username cohort)</div>
+                  <pre className="text-[9px] p-2 rounded bg-zinc-950/80 border border-zinc-700/50 text-mutedForeground overflow-auto max-h-96 whitespace-pre-wrap break-words">
+                    {JSON.stringify(botInvestDupe, null, 2)}
+                  </pre>
+                </div>
+              )}
+              {botInvestRateLimit && (
+                <div>
+                  <div className="text-[10px] font-heading text-primary uppercase mb-1">Rate limit log (this user)</div>
+                  <pre className="text-[9px] p-2 rounded bg-zinc-950/80 border border-zinc-700/50 text-mutedForeground overflow-auto max-h-64 whitespace-pre-wrap break-words">
+                    {JSON.stringify(botInvestRateLimit, null, 2)}
+                  </pre>
+                </div>
+              )}
+              {botInvestBlocks && (
+                <div>
+                  <div className="text-[10px] font-heading text-primary uppercase mb-1">Script / bot client blocks (audit)</div>
+                  <pre className="text-[9px] p-2 rounded bg-zinc-950/80 border border-zinc-700/50 text-mutedForeground overflow-auto max-h-64 whitespace-pre-wrap break-words">
+                    {JSON.stringify(botInvestBlocks, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />

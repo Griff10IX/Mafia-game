@@ -6,9 +6,14 @@ from __future__ import annotations
 
 import logging
 import time
+import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger(__name__)
+
+BOT_CLIENT_BLOCK_COLLECTION = "bot_client_block_events"
+_BOT_BLOCK_RETENTION_DAYS = 90
 
 _ALERT_TTL_BLOCKED_SEC = 900.0
 _ALERT_TTL_ATTACK_BOT_SEC = 3600.0
@@ -62,6 +67,40 @@ def decode_bearer_sub(authorization: Optional[str]) -> Optional[str]:
         return None
 
 
+async def record_bot_client_block_event(
+    *,
+    db,
+    user_id: Optional[str],
+    username: str,
+    ip: str,
+    path: str,
+    method: str,
+    internal_reason: str,
+    source: str,
+    user_agent_short: str,
+) -> None:
+    """Persist a script/bot client block for admin investigation (TTL via expires_at)."""
+    try:
+        now = datetime.now(timezone.utc)
+        expires = now + timedelta(days=_BOT_BLOCK_RETENTION_DAYS)
+        doc = {
+            "id": uuid.uuid4().hex,
+            "user_id": user_id or None,
+            "username": (username or "")[:64],
+            "ip": (ip or "")[:64],
+            "path": (path or "")[:256],
+            "method": (method or "")[:16],
+            "reason": (internal_reason or "")[:256],
+            "source": (source or "")[:64],
+            "user_agent_short": (user_agent_short or "")[:300],
+            "created_at": now.isoformat(),
+            "expires_at": expires,
+        }
+        await db[BOT_CLIENT_BLOCK_COLLECTION].insert_one(doc)
+    except Exception:
+        logger.exception("record_bot_client_block_event failed")
+
+
 async def maybe_notify_staff_bot_client_blocked(
     *,
     db,
@@ -93,6 +132,18 @@ async def maybe_notify_staff_bot_client_blocked(
                 username = (u.get("username") or "").strip()[:48]
         except Exception:
             pass
+
+    await record_bot_client_block_event(
+        db=db,
+        user_id=user_id,
+        username=username,
+        ip=ip,
+        path=path,
+        method=method,
+        internal_reason=internal_reason,
+        source=source,
+        user_agent_short=ua_short,
+    )
 
     ident = user_id or f"ip:{ip or 'unknown'}"
     key = f"blk|{source}|{ident}|{internal_reason}"

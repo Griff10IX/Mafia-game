@@ -66,6 +66,50 @@ def _safe_int(val, default: int = 0) -> int:
         return default
 
 
+MOD_DEFAULT_ONLINE_COLOR = "#1e3a5f"
+HDO_ONLINE_COLOR = "#166534"
+
+
+async def _get_mod_default_online_color_jail():
+    doc = await db.game_settings.find_one({"key": "mod_default_online_color"}, {"_id": 0, "value": 1})
+    raw = (doc.get("value") or MOD_DEFAULT_ONLINE_COLOR) if doc else MOD_DEFAULT_ONLINE_COLOR
+    if not isinstance(raw, str) or not raw.strip():
+        return MOD_DEFAULT_ONLINE_COLOR
+    raw = raw.strip()
+    return raw if raw.startswith("#") and len(raw) <= 9 else MOD_DEFAULT_ONLINE_COLOR
+
+
+def _jail_row_online_styling(
+    user: dict,
+    admin_online_color: str,
+    mod_default_online_color: str,
+) -> Optional[dict]:
+    """Username colours for jail list: same sources as /users/online (admin global, mod custom or default). Ghost staff omitted."""
+    is_admin = user.get("email") in ADMIN_EMAILS
+    is_mod = bool(user.get("is_moderator"))
+    is_hdo = bool(user.get("is_help_desk_operator"))
+    if (is_admin or is_mod) and user.get("admin_ghost_mode"):
+        return None
+
+    online_color = None
+    if is_admin:
+        online_color = admin_online_color
+    elif is_mod:
+        raw = (user.get("mod_online_color") or "").strip()
+        if raw and raw.startswith("#") and len(raw) <= 9:
+            online_color = raw
+        if online_color is None:
+            online_color = mod_default_online_color
+    elif is_hdo:
+        online_color = HDO_ONLINE_COLOR
+
+    return {
+        "is_admin": is_admin,
+        "is_moderator": is_mod,
+        "online_color": online_color,
+    }
+
+
 def _jailbust_bonus_active(user: dict) -> bool:
     raw = user.get("jailbust_bonus_until")
     if not raw:
@@ -172,9 +216,32 @@ async def _get_jail_npcs():
 
 async def get_jailed_players(current_user: dict = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
+    five_min_ago = now - timedelta(minutes=5)
+    ten_min_ago = now - timedelta(minutes=10)
+    admin_color_doc = await db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1})
+    admin_online_color = (admin_color_doc.get("value") or "#a78bfa") if admin_color_doc else "#a78bfa"
+    if not isinstance(admin_online_color, str) or not admin_online_color.strip():
+        admin_online_color = "#a78bfa"
+    admin_online_color = admin_online_color.strip()
+    mod_default_online_color = await _get_mod_default_online_color_jail()
+
     real_players_raw = await db.users.find(
         {"in_jail": True},
-        {"_id": 0, "username": 1, "id": 1, "rank_points": 1, "jail_until": 1, "bust_reward_cash": 1, "money": 1},
+        {
+            "_id": 0,
+            "username": 1,
+            "id": 1,
+            "rank_points": 1,
+            "prestige_rank_multiplier": 1,
+            "jail_until": 1,
+            "bust_reward_cash": 1,
+            "money": 1,
+            "email": 1,
+            "is_moderator": 1,
+            "is_help_desk_operator": 1,
+            "mod_online_color": 1,
+            "admin_ghost_mode": 1,
+        },
     ).to_list(50)
     real_players = []
     for p in real_players_raw:
@@ -186,7 +253,7 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
             )
             continue
         try:
-            jail_until = datetime.fromisoformat(jail_until_iso)
+            jail_until = datetime.fromisoformat(str(jail_until_iso).replace("Z", "+00:00"))
             if jail_until.tzinfo is None:
                 jail_until = jail_until.replace(tzinfo=timezone.utc)
         except Exception:
@@ -199,22 +266,55 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
             continue
         real_players.append(p)
     npcs = await _get_jail_npcs()
+    hitlist_totals = {}
+    if real_players:
+        user_ids = [p["id"] for p in real_players if p.get("id") is not None]
+        if user_ids:
+            hitlist_entries = await db.hitlist.find(
+                {"target_id": {"$in": user_ids}, "target_type": {"$in": ["user", "bodyguards"]}},
+                {"_id": 0, "target_id": 1, "reward_type": 1, "reward_amount": 1},
+            ).to_list(1000)
+            for e in hitlist_entries:
+                tid = e.get("target_id")
+                if tid is None:
+                    continue
+                tkey = str(tid)
+                if tkey not in hitlist_totals:
+                    hitlist_totals[tkey] = [0, 0]
+                if e.get("reward_type") == "cash":
+                    hitlist_totals[tkey][0] += int(e.get("reward_amount") or 0)
+                elif e.get("reward_type") == "points":
+                    hitlist_totals[tkey][1] += int(e.get("reward_amount") or 0)
+
     players_data = []
     for player in real_players:
-        rank_id, rank_name = get_rank_info(player.get("rank_points", 0))
+        _rp = int(player.get("rank_points") or 0)
+        _prestige_mult = float(player.get("prestige_rank_multiplier") or 1.0)
+        _rank_id, rank_name = get_rank_info(_rp, _prestige_mult)
+        is_admin = player.get("email") in ADMIN_EMAILS
+        is_mod = bool(player.get("is_moderator"))
+        is_hdo = bool(player.get("is_help_desk_operator"))
+        if is_admin:
+            rank_name = "Admin"
+        elif is_mod:
+            rank_name = "Moderator"
+        elif is_hdo:
+            rank_name = f"(HDO) {rank_name}"
         stored = _safe_int(player.get("bust_reward_cash"), 0)
         on_hand = _safe_int(player.get("money"), 0)
-        # Cannot pay more than cash on hand at bust time; list should not advertise impossible rewards
         reward_cash = min(stored, on_hand) if stored > 0 else 0
         username = (player.get("username") or "").strip() or "?"
+        styling = _jail_row_online_styling(player, admin_online_color, mod_default_online_color)
+        if styling is None:
+            continue
         players_data.append(
             {
                 "username": username,
                 "rank_name": rank_name,
                 "is_self": player["id"] == current_user["id"],
-                # 15 RP = real inmate (UI: profile link). Do not send is_npc — use rp_reward to distinguish rows.
                 "rp_reward": 15,
                 "bust_reward_cash": reward_cash,
+                **styling,
             }
         )
     for npc in npcs:
@@ -223,13 +323,16 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
             {
                 "username": npc["username"],
                 "rank_name": npc.get("rank_name", "Goon"),
-                # 25 RP = jail NPC row only (UI). Server resolves bust target via jail_npcs vs users.
                 "rp_reward": 25,
                 "bust_reward_cash": bust_reward_cash,
             }
         )
     players_data.sort(key=lambda x: int(x.get("bust_reward_cash") or 0), reverse=True)
-    return {"players": players_data}
+    return {
+        "players": players_data,
+        "admin_online_color": admin_online_color,
+        "mod_default_online_color": mod_default_online_color,
+    }
 
 
 async def _record_bust_event(user_id: str, success: bool, profit: int, target_username: str = None, is_npc: bool = False):
