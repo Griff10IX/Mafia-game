@@ -7,6 +7,7 @@ import sys
 from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.point_provenance import log_points_event
 from fastapi import Depends, HTTPException, Body
 from pydantic import BaseModel
 from server import (
@@ -672,6 +673,8 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
         )
         if result.modified_count == 0:
             raise HTTPException(status_code=400, detail="Lifetime objectives already claimed")
+        if LIFETIME_COMPLETION_REWARD.get("points", 0) > 0:
+            await log_points_event(db, user_id=user_id, points=LIFETIME_COMPLETION_REWARD["points"], event_type="objectives_claim", event_ref="lifetime", meta={"objective_type": "lifetime"})
         await send_notification(
             user_id, "Completed it!",
             "You've completed all lifetime objectives! $15B cash, 15K points, 1M bullets, and permanent perks granted.",
@@ -702,6 +705,8 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
         )
         if result.modified_count == 0:
             raise HTTPException(status_code=400, detail="Daily objectives already claimed")
+        if inc.get("points", 0) > 0:
+            await log_points_event(db, user_id=user_id, points=inc["points"], event_type="objectives_claim", event_ref="daily", meta={"objective_type": "daily"})
         if inc.get("respect_points"):
             await log_respect_earned(user_id, inc["respect_points"], "objectives_daily")
         if rp_added > 0:
@@ -734,6 +739,8 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
         )
         if result.modified_count == 0:
             raise HTTPException(status_code=400, detail="Weekly objectives already claimed")
+        if inc.get("points", 0) > 0:
+            await log_points_event(db, user_id=user_id, points=inc["points"], event_type="objectives_claim", event_ref="weekly", meta={"objective_type": "weekly"})
         if inc.get("respect_points"):
             await log_respect_earned(user_id, inc["respect_points"], "objectives_weekly")
         if rp_added > 0:
@@ -766,6 +773,8 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
         )
         if result.modified_count == 0:
             raise HTTPException(status_code=400, detail="Monthly objectives already claimed")
+        if inc.get("points", 0) > 0:
+            await log_points_event(db, user_id=user_id, points=inc["points"], event_type="objectives_claim", event_ref="monthly", meta={"objective_type": "monthly"})
         if inc.get("respect_points"):
             await log_respect_earned(user_id, inc["respect_points"], "objectives_monthly")
         if rp_added > 0:

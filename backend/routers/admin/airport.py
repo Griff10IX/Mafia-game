@@ -9,6 +9,7 @@ from fastapi import Depends, HTTPException
 from bson.objectid import ObjectId
 
 from utils.claim_costs import load_claim_costs
+from utils.point_provenance import log_points_event
 
 from server import (
     db,
@@ -397,8 +398,24 @@ async def _start_travel_impl(
         )
         if result.modified_count == 0:
             raise HTTPException(status_code=400, detail=f"Insufficient points for airport ({airport_price} pts)")
+        await log_points_event(
+            db,
+            user_id=user["id"],
+            points=-airport_price,
+            event_type="airport_travel",
+            event_ref=f"airport:{current_location}:{slot}",
+            meta={"state": current_location, "slot": slot, "destination": destination},
+        )
         if owner_id:
             await db.users.update_one({"id": owner_id}, {"$inc": {"points": airport_price}})
+            await log_points_event(
+                db,
+                user_id=owner_id,
+                points=airport_price,
+                event_type="airport_owner_income",
+                event_ref=f"airport:{current_location}:{slot}",
+                meta={"state": current_location, "slot": slot, "traveller_id": user["id"]},
+            )
             await db.airport_ownership.update_one(
                 {"state": current_location, "slot": slot},
                 {"$inc": {"total_earnings": airport_price}}
@@ -509,6 +526,14 @@ async def buy_extra_airmiles(current_user: dict = Depends(get_current_user)):
     await db.users.update_one(
         {"id": current_user["id"]},
         {"$inc": {"points": -EXTRA_AIRMILES_COST, "extra_airmiles": to_add}}
+    )
+    await log_points_event(
+        db,
+        user_id=current_user["id"],
+        points=-EXTRA_AIRMILES_COST,
+        event_type="airport_airmiles",
+        event_ref=f"airmiles:{to_add}",
+        meta={"airmiles_purchased": to_add, "new_total": current_airmiles + to_add},
     )
     new_total = current_airmiles + to_add
     _invalidate_travel_info_cache(current_user["id"])

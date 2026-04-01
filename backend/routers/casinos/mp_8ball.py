@@ -12,6 +12,7 @@ from pydantic import BaseModel, field_validator
 
 from server import db, get_current_user, get_current_user_verified, maybe_process_rank_up, log_gambling, _is_admin
 from utils.minigame_captcha_gate import require_turnstile_for_minigame_start
+from utils.point_provenance import log_points_event
 from routers.minigames.minigame_leaderboard import log_minigame_play
 
 _rng = random.SystemRandom()
@@ -1619,6 +1620,7 @@ def register(router):
             if not user or int(user.get("points") or 0) < price:
                 raise HTTPException(status_code=400, detail="Not enough points")
             await db.users.update_one({"id": uid, "points": {"$gte": price}}, {"$inc": {"points": -price}})
+            await log_points_event(db, user_id=uid, points=-price, event_type="pool_buy_cue", event_ref=cue["id"], meta={"cue_name": cue.get("name")})
         owned_count = await db.user_pool_cues.count_documents({"user_id": uid})
         inst_id = f"cue_{uuid.uuid4().hex[:10]}"
         await db.user_pool_cues.insert_one(

@@ -11,6 +11,8 @@ from pydantic import BaseModel, field_validator
 
 from fastapi import Depends, HTTPException
 
+from utils.point_provenance import log_points_event
+
 from server import (
     db,
     get_current_user,
@@ -494,7 +496,9 @@ def register(router):
         )
         if not deduct_res:
             raise HTTPException(status_code=400, detail="Previous owner does not have enough points")
+        await log_points_event(db, user_id=from_owner_id, points=-points_offered, event_type="casino_slots", event_ref=f"buyback:{request.offer_id}", meta={"action": "buyback_deduct", "state": state, "offer_id": request.offer_id})
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"points": points_offered}})
+        await log_points_event(db, user_id=current_user.get("id") or "", points=points_offered, event_type="casino_slots", event_ref=f"buyback:{request.offer_id}", meta={"action": "buyback_credit", "state": state, "offer_id": request.offer_id})
         stored_state, _ = await _get_slots_ownership_doc(state)
         next_draw_iso = _next_draw_utc().isoformat()
         # Reset max_bet to 0 when ownership returns - owner must set it again

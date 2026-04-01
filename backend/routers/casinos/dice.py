@@ -13,6 +13,7 @@ from bson.objectid import ObjectId
 from fastapi import Depends, HTTPException
 
 from utils.claim_costs import load_claim_costs
+from utils.point_provenance import log_points_event
 
 from server import (
     db,
@@ -387,6 +388,7 @@ def register(router):
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -cash_cost}})
         if pts_cost > 0:
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"points": -pts_cost}})
+            await log_points_event(db, user_id=current_user.get("id") or "", points=-pts_cost, event_type="casino_dice", event_ref=f"claim:{city}", meta={"action": "claim_cost", "city": city})
         return {"message": f"You now own the dice table in {city}!"}
 
     @router.post("/casino/dice/relinquish")
@@ -501,7 +503,9 @@ def register(router):
         )
         if not deduct_res:
             raise HTTPException(status_code=400, detail="Previous owner does not have enough points")
+        await log_points_event(db, user_id=from_owner_id, points=-points_offered, event_type="casino_dice", event_ref=f"buyback:{request.offer_id}", meta={"action": "buyback_deduct", "city": city, "offer_id": request.offer_id})
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"points": points_offered}})
+        await log_points_event(db, user_id=current_user.get("id") or "", points=points_offered, event_type="casino_dice", event_ref=f"buyback:{request.offer_id}", meta={"action": "buyback_credit", "city": city, "offer_id": request.offer_id})
         # Reset max_bet to 0 when ownership returns - owner must set it again
         await db.dice_ownership.update_one({"city": city}, {"$set": {"owner_id": from_owner_id, "owner_username": from_user.get("username"), "max_bet": 0}})
         _invalidate_ownership_cache(current_user.get("id") or "")

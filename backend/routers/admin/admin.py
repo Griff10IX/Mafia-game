@@ -45,6 +45,7 @@ from utils.point_provenance import (
     execute_chargeback_best_effort,
     ensure_user_legacy_seed_lot,
     consume_points_fifo,
+    log_points_event,
 )
 from utils.claim_costs import (
     CLAIM_COSTS_SETTINGS_KEY,
@@ -562,6 +563,18 @@ def register(router):
             {"id": target["id"]},
             {"$inc": {"points": points}}
         )
+        await log_points_event(
+            db,
+            user_id=target["id"],
+            points=points,
+            event_type="admin_add_points",
+            event_ref=f"admin:{current_user.get('id') or 'unknown'}",
+            meta={
+                "admin_user_id": current_user.get("id"),
+                "admin_username": current_user.get("username") or "?",
+                "target_username": target.get("username") or target_username,
+            },
+        )
         return {"message": f"Added {points} points to {target_username}"}
 
     @router.post("/admin/remove-points")
@@ -954,6 +967,18 @@ def register(router):
         result = await db.users.update_many(
             {"is_dead": {"$ne": True}, "is_npc": {"$ne": True}, "is_bodyguard": {"$ne": True}},
             {"$inc": {"points": points}}
+        )
+        await log_points_event(
+            db,
+            user_id=current_user.get("id") or "admin",
+            points=points,
+            event_type="admin_give_all_points",
+            event_ref=f"admin_bulk:{result.modified_count}",
+            meta={
+                "admin_user_id": current_user.get("id"),
+                "admin_username": current_user.get("username") or "?",
+                "accounts_affected": result.modified_count,
+            },
         )
         return {"message": f"Gave {points} points to {result.modified_count} accounts", "updated": result.modified_count}
 

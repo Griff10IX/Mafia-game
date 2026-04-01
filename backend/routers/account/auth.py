@@ -16,6 +16,7 @@ from pydantic import BaseModel, EmailStr, field_validator
 
 from utils.ban_user_wipe import user_has_active_account_ban
 from utils.disposable_email import is_disposable_email
+from utils.point_provenance import log_points_event
 from utils.login_user_agent import auth_client_headers_blocked
 from utils.staff_bot_client_alert import maybe_notify_staff_bot_client_blocked
 from utils.referral_ids import normalize_referred_by_ids, user_has_referrers
@@ -2024,6 +2025,8 @@ def register(router):
         inc["redeem_stats_total_tokens"] = sum(int(a) for a in (rewards.get("tokens") or {}).values())
         if inc:
             await db.users.update_one({"id": user_id}, {"$inc": inc})
+        if inc.get("points", 0) > 0:
+            await log_points_event(db, user_id=user_id, points=inc["points"], event_type="redeem_code", event_ref=code_normalized, meta={"code": code_normalized})
         for car_id in (rewards.get("cars") or []):
             car_info = next((c for c in CARS if c.get("id") == car_id), None)
             if car_info:

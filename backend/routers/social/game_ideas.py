@@ -12,6 +12,7 @@ from pydantic import BaseModel, field_validator
 
 from server import db, get_current_user, _is_admin, send_notification, send_notification_to_all
 from utils.text import strip_emoji
+from utils.point_provenance import log_points_event
 
 logger = logging.getLogger(__name__)
 
@@ -238,6 +239,8 @@ def register(router):
                     if fp:
                         inc["points"] = fp
                     await db.users.update_one({"id": uid}, {"$inc": inc})
+                    if fp:
+                        await log_points_event(db, user_id=uid, points=fp, event_type="game_ideas_finalist", event_ref=season_id, meta={"entry_id": eid, "season_title": season_title})
                 if uid:
                     parts = []
                     if fm:
@@ -388,6 +391,8 @@ def register(router):
         if wp:
             inc["points"] = wp
         await db.users.update_one({"id": uid}, {"$inc": inc})
+        if wp:
+            await log_points_event(db, user_id=uid, points=wp, event_type="game_ideas_winner", event_ref=season_id, meta={"entry_id": eid, "season_title": strip_emoji((season.get("title") or "Game Ideas").strip())})
         await db.game_idea_entries.update_one({"id": eid}, {"$set": {"implementation_reward_paid_at": now}})
         parts = []
         if wm:

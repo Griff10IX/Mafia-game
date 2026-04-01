@@ -8,6 +8,8 @@ import uuid
 from pydantic import BaseModel
 from fastapi import Depends, HTTPException
 
+from utils.point_provenance import log_points_event
+
 from server import db, get_current_user, get_current_user_verified, send_notification, log_gambling, _is_admin, _is_moderator
 
 MDG_MIN_PLAYERS = 2
@@ -111,6 +113,8 @@ def register(router):
             result = await db.users.update_one(deduct_filter, {"$inc": deduct_inc})
             if result.modified_count == 0:
                 raise HTTPException(status_code=400, detail="Insufficient points or money to create and join (fee + extra pot)")
+            if total_pts > 0:
+                await log_points_event(db, user_id=uid, points=-total_pts, event_type="casino_mdg", event_ref=f"create:{game_id}", meta={"action": "create_fee", "game_id": game_id, "fee_points": fee_pts, "extra_pot_points": extra_pts})
         await db.mdg_games.insert_one(doc)
         await log_gambling(
             uid,
@@ -157,6 +161,8 @@ def register(router):
             result = await db.users.update_one(deduct_filter, {"$inc": deduct_inc})
             if result.modified_count == 0:
                 raise HTTPException(status_code=400, detail="Insufficient points or money")
+            if fee_pts > 0:
+                await log_points_event(db, user_id=uid, points=-fee_pts, event_type="casino_mdg", event_ref=f"join:{request.game_id}", meta={"action": "join_fee", "game_id": request.game_id})
 
         await log_gambling(
             uid,
@@ -172,6 +178,8 @@ def register(router):
         )
         if result.matched_count == 0:
             await db.users.update_one({"id": uid}, {"$inc": {"points": fee_pts, "money": fee_money}})
+            if fee_pts > 0:
+                await log_points_event(db, user_id=uid, points=fee_pts, event_type="casino_mdg", event_ref=f"refund:{request.game_id}", meta={"action": "join_refund", "game_id": request.game_id})
             raise HTTPException(status_code=400, detail="You are already in this game")
 
         # Auto-roll if threshold reached
@@ -204,6 +212,8 @@ def register(router):
                 {"id": winner_id},
                 {"$inc": {"points": new_pot_pts, "money": new_pot_money}},
             )
+            if new_pot_pts > 0:
+                await log_points_event(db, user_id=winner_id, points=new_pot_pts, event_type="casino_mdg", event_ref=f"payout:{request.game_id}", meta={"action": "winner_payout", "game_id": request.game_id, "trigger": "auto_roll"})
             await log_gambling(
                 winner_id,
                 winner_username,
@@ -252,6 +262,8 @@ def register(router):
         if not claim_res:
             raise HTTPException(status_code=400, detail="Game already closed")
         await db.users.update_one({"id": winner_id}, {"$inc": {"points": pot_pts, "money": pot_money}})
+        if pot_pts > 0:
+            await log_points_event(db, user_id=winner_id, points=pot_pts, event_type="casino_mdg", event_ref=f"payout:{request.game_id}", meta={"action": "winner_payout", "game_id": request.game_id, "trigger": "manual_roll"})
         await log_gambling(
             winner_id,
             winner_username,
