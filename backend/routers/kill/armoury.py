@@ -289,7 +289,6 @@ async def _activate_rank_xp_pass_and_grant_cumulative_micro_tiers(
                 "Game Pass reward",
                 f"You received {received_text}. Next reward: {next_summary}.",
                 "reward",
-                category="system",
                 reward_key=reward_key,
                 tier_micro=t,
                 next_tier=next_t,

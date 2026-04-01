@@ -216,7 +216,6 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
                 "Game Pass",
                 "Your Game Pass has been activated and rewards have been granted!",
                 "rank_xp_pass_activated",
-                category="system",
             )
         else:
             await send_notification(
@@ -227,7 +226,6 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
                     "Use it in the Armoury/My Inventory to claim your one-time rewards."
                 ),
                 "rank_xp_pass_token_entitled",
-                category="system",
             )
         logger.info(
             "Rank-XP pass entitlement granted: session_id=%s user_id=%s tier_snapshot=%s expires_at=%s auto_activated=%s",
@@ -652,7 +650,6 @@ def register(router):
                 "Game Pass",
                 "Your Game Pass has been activated and rewards have been granted!",
                 "rank_xp_pass_activated",
-                category="system",
             )
         else:
             await send_notification(
@@ -660,7 +657,6 @@ def register(router):
                 "Game Pass",
                 "Your Game Pass token is ready. Use it in the Armoury/My Inventory to claim your one-time rewards.",
                 "rank_xp_pass_token_entitled",
-                category="system",
             )
 
         return {

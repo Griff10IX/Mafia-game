@@ -1065,7 +1065,6 @@ async def get_current_user(
                                 "Free Game Pass tier reward",
                                 f"You received {received_text} as a free Game Pass tier reward (no Game Pass purchase required). Next reward: {next_summary}.",
                                 "reward",
-                                category="system",
                                 reward_key=free_key,
                                 tier_micro=t,
                                 next_tier=next_tier,

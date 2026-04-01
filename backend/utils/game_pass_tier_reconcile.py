@@ -134,7 +134,6 @@ async def grant_missing_vip_micro_tier_rewards(
                 "Game Pass reward",
                 f"You received {received_text}. Next reward: {next_summary}.",
                 "reward",
-                category="system",
                 reward_key=reward_key,
                 tier_micro=t,
                 next_tier=next_t,
