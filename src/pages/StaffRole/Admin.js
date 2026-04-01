@@ -19,10 +19,10 @@ const ADMIN_STYLES = `
     box-shadow: 0 0 20px rgba(var(--noir-primary-rgb), 0.06);
   }
   @media (max-width: 767px) {
-    /* Beat App.css .mobile-page-root { padding: 0 } so admin matches Store / dashboard gutters */
+    /* Match Crimes / GTA: no extra horizontal padding here — Layout main p-4 + .mobile-panel negative margins handle full-bleed cards */
     .admin-mobile-shell.mobile-page-root {
-      padding-left: 12px;
-      padding-right: 12px;
+      padding-left: 0;
+      padding-right: 0;
       overflow-x: hidden;
       max-width: 100vw;
       width: 100%;
@@ -85,6 +85,15 @@ const ADMIN_STYLES = `
     .admin-mobile-shell .grid.grid-cols-12 {
       grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
       gap: 6px !important;
+    }
+  }
+  /* Full-bleed mobile sidebar strip (uses global .mobile-panel margins); reset on md+ */
+  @media (min-width: 768px) {
+    .admin-mobile-shell aside.admin-aside-nav.mobile-panel {
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+      width: 220px;
+      max-width: 220px;
     }
   }
   .admin-command-bar {
@@ -5080,10 +5089,10 @@ export default function Admin() {
       )}
 
       {/* Sidebar + main layout: stack on mobile, side-by-side on desktop */}
-      <div className="flex flex-col md:flex-row gap-4 flex-1 min-h-0 min-w-0 max-md:flex-1 max-md:min-h-0">
-        {/* Sidebar: search + categories (mobile: sticky strip + chips; desktop: vertical nav) */}
-        <aside className="w-full md:w-[220px] shrink-0 flex flex-col gap-3 border-r-0 md:border-r border-primary/20 pr-0 md:pr-4">
-          <div className="sticky top-0 z-20 md:static md:z-auto space-y-2 pb-1 mx-0 px-0 md:mx-0 md:px-0 bg-background/95 md:bg-transparent backdrop-blur md:backdrop-blur-none border-b border-primary/25 md:border-b-0">
+      <div className="flex flex-col md:flex-row gap-2 md:gap-4 flex-1 min-h-0 min-w-0 max-md:flex-1 max-md:min-h-0">
+        {/* Sidebar: search + categories (mobile: full-bleed strip like Crimes panels; desktop: vertical nav) */}
+        <aside className="admin-aside-nav mobile-panel w-full md:w-[220px] shrink-0 flex flex-col gap-3 border-r-0 md:border-r border-primary/20 pr-0 md:pr-4">
+          <div className="sticky top-0 z-20 md:static md:z-auto space-y-2 pb-1 px-3 md:px-0 mx-0 md:mx-0 bg-background/95 md:bg-transparent backdrop-blur md:backdrop-blur-none border-b border-primary/25 md:border-b-0">
             <div className="relative">
               <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-mutedForeground" />
               <input
