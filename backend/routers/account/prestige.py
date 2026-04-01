@@ -2,6 +2,42 @@
 from fastapi import Depends, HTTPException
 
 
+def _fmt_mult(x: float) -> str:
+    """Short string for multipliers (drops trailing .0)."""
+    if abs(x - round(x)) < 1e-9:
+        return str(int(round(x)))
+    return str(x).rstrip("0").rstrip(".")
+
+
+def _format_prestige_unlock_benefits(cfg: dict) -> str:
+    """Human-readable list of bonuses for the prestige level just unlocked (matches UI table + extra fields)."""
+    parts: list[str] = []
+    crime = float(cfg.get("crime_mult") or 1.0)
+    if crime != 1.0:
+        parts.append(f"crime payouts +{round((crime - 1.0) * 100)}%")
+    oc = float(cfg.get("oc_mult") or 1.0)
+    if oc != 1.0:
+        parts.append(f"OC payouts +{round((oc - 1.0) * 100)}%")
+    gta = float(cfg.get("gta_rare_boost") or 0.0)
+    if gta:
+        parts.append(f"GTA rare car rolls +{_fmt_mult(gta)}×")
+    npc = float(cfg.get("npc_mult") or 1.0)
+    if npc != 1.0:
+        parts.append(f"NPC rewards +{round((npc - 1.0) * 100)}%")
+    mission_m = float(cfg.get("mission_reward_mult") if cfg.get("mission_reward_mult") is not None else 1.0)
+    parts.append(f"mission reward multiplier ×{_fmt_mult(mission_m)}")
+    ib = float(cfg.get("illegal_business_mult") or 1.0)
+    if ib != 1.0:
+        parts.append(f"illegal business income +{round((ib - 1.0) * 100)}%")
+    thr = float(cfg.get("threshold_mult") or 1.0)
+    if thr != 1.0:
+        parts.append(f"rank tier thresholds ×{_fmt_mult(thr)} (steeper climb to Godfather)")
+    if not parts:
+        return "See the Prestige page for details."
+    out = ", ".join(parts)
+    return out[0].upper() + out[1:] if out else out
+
+
 def register(router):
     import server as srv
 
@@ -123,11 +159,12 @@ def register(router):
             },
         )
 
+        benefits_line = _format_prestige_unlock_benefits(new_cfg)
         await srv.send_notification(
             current_user["id"],
             f"Prestige {new_level} — {new_cfg['name']}!",
-            f"You have prestiged to level {new_level} ({new_cfg['name']}). Your rank has reset to Rat. "
-            f"Next prestige requires {get_prestige_requirement(new_level):,} effective rank points at Godfather.",
+            f"You have prestiged to level {new_level} ({new_cfg['name']}). Your rank has reset to Rat.\n\n"
+            f"Benefits at this level: {benefits_line}.",
             "system",
             category="system",
         )

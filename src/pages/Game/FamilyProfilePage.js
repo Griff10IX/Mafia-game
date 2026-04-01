@@ -742,13 +742,14 @@ export default function FamilyProfilePage() {
           <Building2 size={11} className="text-primary/60" />
           <span className="text-[10px] font-heading font-bold text-primary/70 uppercase tracking-[0.2em]">Family profile</span>
         </div>
-        <div className="p-4 space-y-4">
+        {/* Tint the whole body (not just the prose wrapper) so modern .panel gradient does not show in padding / below short content. */}
+        <div
+          className="p-4 space-y-4"
+          style={family.profile_notepad_color ? { backgroundColor: family.profile_notepad_color } : undefined}
+        >
           {/* Display profile text */}
           {((family.profile_text || '').trim() || '').length > 0 ? (
-            <div
-              className="rounded-lg overflow-hidden px-1 -mx-1 py-1 -my-0.5"
-              style={family.profile_notepad_color ? { backgroundColor: family.profile_notepad_color } : undefined}
-            >
+            <div className="rounded-lg overflow-hidden px-1 -mx-1 py-1 -my-0.5">
               <div
                 className="fp-profile-content font-heading text-sm text-foreground prose prose-invert prose-sm max-w-none prose-p:my-1 prose-img:my-2 prose-div:my-1"
                 dangerouslySetInnerHTML={{ __html: parseForumContent((family.profile_text || '').trim()) }}
