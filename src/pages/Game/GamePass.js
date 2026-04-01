@@ -96,7 +96,7 @@ function formatCountdown(ms) {
 const TARGET_CASH_TOTAL = 500_000_000;
 const TARGET_POINTS_TOTAL = 10_000;
 const TARGET_BULLETS_TOTAL = 250_000;
-const TARGET_AUTO_RANK_2H_TOTAL = 50;
+const TARGET_AUTO_RANK_2H_TOTAL = 75;
 const TARGET_RANDOM_TOKENS_TOTAL = 250; // tokens chosen from this "random pool" set
 
 const MONEY_BASE_TIER = 10;
@@ -185,7 +185,6 @@ const SELECTABLE_KEYS = [
   'xp_gta_tokens',
   'points',
   ...SELECTABLE_RANDOM_TOKEN_KEYS,
-  'auto_rank_2h_tokens',
 ];
 
 const CATEGORY_WEIGHTS = {
@@ -198,7 +197,6 @@ const CATEGORY_WEIGHTS = {
   jailbust_tokens: 2,
   travel_tokens: 2,
   properties_tokens: 2,
-  auto_rank_2h_tokens: 2,
 };
 
 const BASE_TIER_BY_KEY = {
@@ -224,7 +222,6 @@ const TARGET_TOTAL_BY_KEY = {
   money: TARGET_CASH_TOTAL,
   bullets: TARGET_BULLETS_TOTAL,
   points: TARGET_POINTS_TOTAL,
-  auto_rank_2h_tokens: TARGET_AUTO_RANK_2H_TOTAL,
   ...targetRandomByKey,
 };
 
@@ -282,6 +279,13 @@ for (const [key, assignedTiers] of Object.entries(_tiersAssignedByKey)) {
   BASE_AMOUNT_BY_KEY[key] = normalizeBaseAmountToTotalForTiers(baseTier, targetTotal, assignedTiers, guess);
 }
 
+// Guaranteed auto_rank_2h_tokens: normalized across all 100 tiers, added as bonus to every tier.
+const AUTO_RANK_ALL_TIERS = Array.from({ length: 100 }, (_, i) => i + 1);
+const autoRankGuess = initialBaseGuess(AUTO_RANK_ALL_TIERS, AUTO_RANK_2H_BASE_TIER, TARGET_AUTO_RANK_2H_TOTAL);
+const AUTO_RANK_BASE_AMOUNT = normalizeBaseAmountToTotalForTiers(
+  AUTO_RANK_2H_BASE_TIER, TARGET_AUTO_RANK_2H_TOTAL, AUTO_RANK_ALL_TIERS, autoRankGuess,
+);
+
 // Now precompute rewards per tier.
 for (let t = 1; t <= 100; t += 1) {
   const rewards = {};
@@ -290,6 +294,8 @@ for (let t = 1; t <= 100; t += 1) {
     const baseAmount = FIXED_BASE_AMOUNT_BY_KEY[key] ?? BASE_AMOUNT_BY_KEY[key] ?? 1;
     rewards[key] = Math.ceil(baseAmount * rewardWeight(t, baseTier));
   }
+  const arAmt = Math.ceil(AUTO_RANK_BASE_AMOUNT * rewardWeight(t, AUTO_RANK_2H_BASE_TIER));
+  if (arAmt > 0) rewards.auto_rank_2h_tokens = arAmt;
   PRECOMPUTED_REWARDS_BY_TIER[t] = rewards;
 }
 

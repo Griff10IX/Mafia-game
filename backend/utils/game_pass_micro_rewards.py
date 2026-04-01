@@ -68,7 +68,7 @@ REWARD_KEY_LABELS = {
 TARGET_CASH_TOTAL = 500_000_000
 TARGET_POINTS_TOTAL = 10_000
 TARGET_BULLETS_TOTAL = 250_000
-TARGET_AUTO_RANK_2H_TOTAL = 50
+TARGET_AUTO_RANK_2H_TOTAL = 75
 
 _MONEY_BASE_TIER = 10
 _POINTS_BASE_TIER = 50
@@ -141,7 +141,7 @@ _SEED_FREE = "game_pass_micro_rewards:free:v2"
 
 TWO_BUCKET_CHANCE = 0.30
 
-# Category pool for selection (respect_points excluded; not part of the 1–2 reward bucket contract).
+# Category pool for bucket selection (auto_rank_2h_tokens is guaranteed separately).
 _SELECTABLE_KEYS = [
     "money",
     "bullets",
@@ -149,7 +149,6 @@ _SELECTABLE_KEYS = [
     "xp_gta_tokens",
     "points",
     *_RANDOM_TOKEN_KEYS,
-    "auto_rank_2h_tokens",
 ]
 
 # Weights are tuned so cash isn't overwhelming early, and variety appears inside the same 1-10 band.
@@ -164,7 +163,6 @@ _CATEGORY_WEIGHTS = {
     "jailbust_tokens": 2,
     "travel_tokens": 2,
     "properties_tokens": 2,
-    "auto_rank_2h_tokens": 2,
 }
 
 _BASE_TIER_BY_KEY = {
@@ -245,7 +243,6 @@ _TARGET_TOTAL_BY_KEY = {
     "money": TARGET_CASH_TOTAL,
     "bullets": TARGET_BULLETS_TOTAL,
     "points": TARGET_POINTS_TOTAL,
-    "auto_rank_2h_tokens": TARGET_AUTO_RANK_2H_TOTAL,
     **_target_random_by_key,
 }
 
@@ -311,6 +308,18 @@ for k, assigned_tiers in _tiers_assigned_by_key.items():
     )
 
 
+# --- Guaranteed auto_rank_2h_tokens: appears in every tier, scaled low→high. ---
+_AUTO_RANK_BASE_TIER = _BASE_TIER_BY_KEY["auto_rank_2h_tokens"]  # 100
+_auto_rank_initial = float(TARGET_AUTO_RANK_2H_TOTAL) / sum(
+    (t / float(_AUTO_RANK_BASE_TIER)) for t in range(1, MAX_MICRO_TIER + 1)
+) if MAX_MICRO_TIER else 1.0
+_AUTO_RANK_BASE_AMOUNT = _normalize_base_amount_to_total_for_tiers(
+    tiers=list(range(1, MAX_MICRO_TIER + 1)),
+    base_tier=_AUTO_RANK_BASE_TIER,
+    target_total=TARGET_AUTO_RANK_2H_TOTAL,
+    initial_base_amount=_auto_rank_initial,
+)
+
 # Baselines used at runtime to compute reward amounts.
 MICRO_TIER_REWARD_BASELINES = {}
 for key in _SELECTABLE_KEYS:
@@ -320,6 +329,10 @@ for key in _SELECTABLE_KEYS:
     else:
         base_amount = _BASE_AMOUNT_BY_KEY.get(key, 1.0)
     MICRO_TIER_REWARD_BASELINES[key] = {"baseTier": base_tier, "baseAmount": base_amount}
+MICRO_TIER_REWARD_BASELINES["auto_rank_2h_tokens"] = {
+    "baseTier": _AUTO_RANK_BASE_TIER,
+    "baseAmount": _AUTO_RANK_BASE_AMOUNT,
+}
 
 
 def micro_tier_from_rank_points(rank_points: Optional[int | float]) -> int:
@@ -365,6 +378,11 @@ def rewards_for_micro_tier(micro_tier: int) -> Dict[str, int]:
     for key in selected_keys:
         cfg = MICRO_TIER_REWARD_BASELINES[key]
         out[key] = int(math.ceil(cfg["baseAmount"] * _reward_weight(t, cfg["baseTier"])))
+    # Guaranteed auto_rank_2h_tokens bonus in every tier.
+    ar_cfg = MICRO_TIER_REWARD_BASELINES["auto_rank_2h_tokens"]
+    ar_amt = int(math.ceil(ar_cfg["baseAmount"] * _reward_weight(t, ar_cfg["baseTier"])))
+    if ar_amt > 0:
+        out["auto_rank_2h_tokens"] = ar_amt
     return out
 
 
