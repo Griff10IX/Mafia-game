@@ -1849,11 +1849,24 @@ def register(router):
                     "rank_xp_pass_pending_tier_snapshot": snap,
                     "rank_xp_pass_rewards_granted": False,
                     "rank_xp_pass_last_granted_micro_tier": 0,
+                    "rank_xp_pass_free_last_micro_tier_granted": 0,
                 }
             },
         )
 
-        return {"message": f"Granted unactivated Game Pass to {target['username']}"}
+        from routers.kill.armoury import _activate_rank_xp_pass_and_grant_cumulative_micro_tiers
+        free_cash_last_micro = int(target.get("rank_xp_pass_free_last_micro_tier_granted") or 0)
+        activated = await _activate_rank_xp_pass_and_grant_cumulative_micro_tiers(
+            db,
+            target["id"],
+            snap,
+            free_cash_last_micro_tier_granted=free_cash_last_micro,
+        )
+
+        un = target.get("username") or target_username
+        if activated:
+            return {"message": f"Granted and auto-activated Game Pass for {un}. VIP rewards applied."}
+        return {"message": f"Granted Game Pass to {un} (activation pending — user should open Armoury)."}
 
     @router.post("/admin/remove-game-pass")
     async def admin_remove_game_pass(
@@ -1963,8 +1976,11 @@ def register(router):
 
         tiers = result.get("tiers_granted") or []
         reason = result.get("reason")
+        repaired = result.get("cursor_repaired", False)
         if reason == "already_caught_up":
             msg = f"{un}: already up to date (micro tier {result.get('current_micro')}, last granted {result.get('last_granted')})."
+        elif repaired and tiers:
+            msg = f"{un}: cursor was ahead of progress — repaired and granted VIP tier reward(s) for micro tier(s) {tiers}."
         elif tiers:
             msg = f"{un}: granted VIP tier reward(s) for micro tier(s) {tiers}."
         else:

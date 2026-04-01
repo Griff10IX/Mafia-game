@@ -58,6 +58,16 @@ async def grant_missing_vip_micro_tier_rewards(
 
     current_micro = micro_tier_from_rank_points(user.get("rank_points"))
     last_granted = int(user.get("rank_xp_pass_last_granted_micro_tier") or 0)
+
+    cursor_repaired = False
+    if last_granted > current_micro:
+        await db.users.update_one(
+            {"id": user_id},
+            {"$set": {"rank_xp_pass_last_granted_micro_tier": 0}},
+        )
+        cursor_repaired = True
+        last_granted = 0
+
     if current_micro <= last_granted:
         return {
             "ok": True,
@@ -130,10 +140,15 @@ async def grant_missing_vip_micro_tier_rewards(
                 next_tier=next_t,
             )
 
+    reason = "granted" if tiers_granted else "no_new_tiers"
+    if cursor_repaired:
+        reason = "cursor_repaired"
+
     return {
         "ok": True,
-        "reason": "granted" if tiers_granted else "no_new_tiers",
+        "reason": reason,
         "tiers_granted": tiers_granted,
         "current_micro": current_micro,
         "last_granted_before": last_granted,
+        "cursor_repaired": cursor_repaired,
     }

@@ -112,6 +112,7 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
                 "rank_xp_pass_tokens": 1,
                 "rank_xp_pass_token_expires_at": 1,
                 "rank_xp_pass_rewards_granted": 1,
+                "rank_xp_pass_free_last_micro_tier_granted": 1,
             },
         )
         block_msg = game_pass_purchase_blocked_in_final_window(user, now)
@@ -182,24 +183,44 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
                 }
             },
         )
-        await send_notification(
+        # Auto-activate: grant VIP rewards for all tiers already completed.
+        from routers.kill.armoury import _activate_rank_xp_pass_and_grant_cumulative_micro_tiers
+        free_cash_last_micro = int((user or {}).get("rank_xp_pass_free_last_micro_tier_granted") or 0)
+        activated = await _activate_rank_xp_pass_and_grant_cumulative_micro_tiers(
+            db,
             user_id,
-            "Game Pass",
-            (
-                "Your Game Pass token is ready. "
-                "Use it in the Armoury/My Inventory to claim your one-time rewards."
-            ),
-            "rank_xp_pass_token_entitled",
-            category="system",
+            rank_points,
+            free_cash_last_micro_tier_granted=free_cash_last_micro,
         )
+
+        if activated:
+            await send_notification(
+                user_id,
+                "Game Pass",
+                "Your Game Pass has been activated and rewards have been granted!",
+                "rank_xp_pass_activated",
+                category="system",
+            )
+        else:
+            await send_notification(
+                user_id,
+                "Game Pass",
+                (
+                    "Your Game Pass token is ready. "
+                    "Use it in the Armoury/My Inventory to claim your one-time rewards."
+                ),
+                "rank_xp_pass_token_entitled",
+                category="system",
+            )
         logger.info(
-            "Rank-XP pass entitlement granted: session_id=%s user_id=%s tier_snapshot=%s expires_at=%s",
+            "Rank-XP pass entitlement granted: session_id=%s user_id=%s tier_snapshot=%s expires_at=%s auto_activated=%s",
             session_id,
             user_id,
             rank_points,
             expires_at,
+            activated,
         )
-        return {"credited": True, "preorder": False, "pass_entitled": True}
+        return {"credited": True, "preorder": False, "pass_entitled": True, "auto_activated": activated}
 
     settings = await db.game_settings.find_one({"_id": "main"})
     auto_credit = settings.get("store_points_auto_credit") if settings else None
@@ -587,19 +608,39 @@ def register(router):
             raise HTTPException(status_code=400, detail="Could not process purchase (race condition).")
         await log_points_event(db, user_id=current_user["id"], points=-GAME_PASS_POINTS_PRICE, event_type="buy_game_pass_points", meta={"expires_at": expires_at})
 
-        await send_notification(
+        # Auto-activate: grant VIP rewards for all tiers already completed.
+        from routers.kill.armoury import _activate_rank_xp_pass_and_grant_cumulative_micro_tiers
+        free_cash_last_micro = int(current_user.get("rank_xp_pass_free_last_micro_tier_granted") or 0)
+        activated = await _activate_rank_xp_pass_and_grant_cumulative_micro_tiers(
+            db,
             current_user["id"],
-            "Game Pass",
-            "Your Game Pass token is ready. Use it in the Armoury/My Inventory to claim your one-time rewards.",
-            "rank_xp_pass_token_entitled",
-            category="system",
+            rank_points,
+            free_cash_last_micro_tier_granted=free_cash_last_micro,
         )
 
+        if activated:
+            await send_notification(
+                current_user["id"],
+                "Game Pass",
+                "Your Game Pass has been activated and rewards have been granted!",
+                "rank_xp_pass_activated",
+                category="system",
+            )
+        else:
+            await send_notification(
+                current_user["id"],
+                "Game Pass",
+                "Your Game Pass token is ready. Use it in the Armoury/My Inventory to claim your one-time rewards.",
+                "rank_xp_pass_token_entitled",
+                category="system",
+            )
+
         return {
-            "message": "Game Pass purchased with points. Activate it in My Inventory/Armoury to claim rewards.",
-            "rank_xp_pass_tokens": 1,
+            "message": "Game Pass purchased and activated. Rewards granted!" if activated else "Game Pass purchased with points. Activate it in My Inventory/Armoury to claim rewards.",
+            "rank_xp_pass_tokens": 1 if not activated else 0,
             "rank_xp_pass_token_expires_at": expires_at,
             "points_spent": GAME_PASS_POINTS_PRICE,
+            "auto_activated": activated,
         }
 
     @router.post("/payments/checkout")

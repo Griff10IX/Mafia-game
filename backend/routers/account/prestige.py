@@ -154,6 +154,8 @@ def register(router):
                     "rank_points": 0,
                     "rank": 1,
                     "mission_completions": [],
+                    "rank_xp_pass_last_granted_micro_tier": 0,
+                    "rank_xp_pass_free_last_micro_tier_granted": 0,
                 },
                 "$unset": mission_reset_unset,
             },
