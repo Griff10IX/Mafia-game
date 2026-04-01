@@ -301,5 +301,9 @@ def register(router):
                 status_code=403,
                 detail="Only admins and moderators can clear game chat.",
             )
+        from utils.deleted_messages_archive import archive_many
+        docs = await db.game_chat_messages.find({}, {"_id": 0}).sort("created_at", -1).to_list(500)
+        if docs:
+            await archive_many(source="game_chat", docs=docs, deleted_by_id=current_user.get("id"), deleted_by_username=current_user.get("username"), reason="chat_cleared")
         result = await db.game_chat_messages.delete_many({})
         return {"message": "Game chat cleared", "deleted_count": result.deleted_count}

@@ -273,9 +273,10 @@ const SEARCHABLE_TOOLS = [
   { label: 'Clear minigame records (user)', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['minigame', 'records', 'clear', 'user', 'scores'], adminOnly: true },
   { label: 'Minigame weekly leaderboard strip/add', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['minigame', 'leaderboard', 'weekly', 'strip', 'add', 'score', 'flappy', 'gauntlet'], adminOnly: true },
   { label: 'Main leaderboards strip (respect melt stock booze)', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['leaderboard', 'weekly', 'respect', 'melt', 'stock', 'booze', 'strip', 'top 10'], adminOnly: true },
-  { label: 'Reconcile Game Pass tiers', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['game pass', 'reconcile', 'tier', 'vip', 'rank xp', 'micro tier'], adminOnly: true },
+  { label: 'Reconcile Game Pass tiers', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['game pass', 'reconcile', 'tier', 'vip', 'rank xp', 'micro tier', 'force grant', 'rewards'], adminOnly: true },
   { label: 'Game Pass inspector', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-game-pass-inspector', keywords: ['game pass', 'inspector', 'vip', 'token', 'stripe', 'rank xp', 'micro tier', 'entitlement'], adminOnly: true },
   { label: 'Game Pass stuck cursors', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-game-pass-inspector', keywords: ['game pass', 'stuck', 'cursor', 'broken', 'fix', 'repair', 'rewards'], adminOnly: true },
+  { label: 'Deleted messages', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-deleted-messages', keywords: ['deleted', 'messages', 'archive', 'forum', 'chat', 'dm', 'notification', 'history'], adminOnly: true },
   { label: 'Reset OC Timers', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['oc', 'organised', 'crime', 'timer'] },
   { label: 'Reset Daily Rewards Timer', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['daily', 'rewards', 'timer', 'rps'] },
   { label: 'Bodyguard Tools', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'robot', 'generate'] },
@@ -632,6 +633,9 @@ export default function Admin() {
   const [gamePassInspectDetailLoading, setGamePassInspectDetailLoading] = useState(false);
   const [gamePassStuck, setGamePassStuck] = useState(null);
   const [gamePassStuckLoading, setGamePassStuckLoading] = useState(false);
+  const [deletedMsgs, setDeletedMsgs] = useState(null);
+  const [deletedMsgsLoading, setDeletedMsgsLoading] = useState(false);
+  const [deletedMsgsFilter, setDeletedMsgsFilter] = useState('');
   const [resetDailyRewardsLoading, setResetDailyRewardsLoading] = useState(false);
   const [pointsProvSessionId, setPointsProvSessionId] = useState('');
   const [pointsProvUserId, setPointsProvUserId] = useState('');
@@ -2472,6 +2476,36 @@ export default function Admin() {
       toast.success(response.data?.message || 'Reconciled');
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed');
+    }
+  };
+
+  const handleForceGrantGamePassRewards = async () => {
+    const u = (formData.targetUsername || '').trim();
+    if (!u) { toast.error('Enter target username'); return; }
+    if (!window.confirm(`Force-grant ALL VIP Game Pass rewards for ${u}'s completed tiers? This directly credits cash/tokens/points to their account, bypassing all guards.`)) return;
+    try {
+      const res = await api.post(`/admin/force-grant-game-pass-rewards?target_username=${encodeURIComponent(u)}`);
+      const d = res.data;
+      const credited = Object.entries(d.total_credited || {}).map(([k,v]) => `${k}: ${v.toLocaleString()}`).join(', ');
+      toast.success(`${d.message}\nCredited: ${credited || 'none'}`, { duration: 8000 });
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    }
+  };
+
+  const loadDeletedMessages = async () => {
+    const u = (formData.targetUsername || '').trim();
+    if (!u) { toast.error('Enter a target username'); return; }
+    setDeletedMsgsLoading(true);
+    try {
+      const qs = new URLSearchParams({ limit_count: '100' });
+      if (deletedMsgsFilter) qs.set('source_filter', deletedMsgsFilter);
+      const res = await api.get(`/admin/deleted-messages/${encodeURIComponent(u)}?${qs.toString()}`);
+      setDeletedMsgs(res.data);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to load deleted messages');
+    } finally {
+      setDeletedMsgsLoading(false);
     }
   };
 
@@ -6826,6 +6860,7 @@ export default function Admin() {
               />
               <BtnPrimary onClick={() => handleReconcileGamePassTiers(false)}>Reconcile</BtnPrimary>
               <BtnSecondary onClick={() => handleReconcileGamePassTiers(true)}>Ignore expiry</BtnSecondary>
+              <BtnDanger onClick={handleForceGrantGamePassRewards}>Force grant rewards</BtnDanger>
             </ActionRow>
 
             <div id="admin-game-pass-inspector" className="rounded-md border border-violet-500/30 bg-violet-500/5 p-3 space-y-2 scroll-mt-24">
@@ -6970,6 +7005,74 @@ export default function Admin() {
                   </div>
                 )}
               </div>
+            </div>
+
+            <div id="admin-deleted-messages" className="rounded-md border border-orange-500/30 bg-orange-500/5 p-3 space-y-2 scroll-mt-24">
+              <div className="flex flex-wrap items-center gap-2">
+                <Eye size={14} className="text-orange-300 shrink-0" />
+                <span className="text-[10px] font-heading font-bold text-orange-300 uppercase tracking-wider">Deleted Messages</span>
+              </div>
+              <p className="text-[9px] text-mutedForeground font-heading">
+                View a user's last 100 deleted messages (forum comments, forum topics, game chat, DMs/notifications). Uses the target username above.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={deletedMsgsFilter}
+                  onChange={(e) => setDeletedMsgsFilter(e.target.value)}
+                  className="px-2 py-1 rounded border border-input bg-transparent text-[11px]"
+                >
+                  <option value="">All sources</option>
+                  <option value="forum_comment">Forum comments</option>
+                  <option value="forum_topic">Forum topics</option>
+                  <option value="game_chat">Game chat</option>
+                  <option value="notification">Notifications / DMs</option>
+                </select>
+                <BtnPrimary type="button" onClick={loadDeletedMessages} disabled={deletedMsgsLoading}>
+                  {deletedMsgsLoading ? '...' : 'Load deleted messages'}
+                </BtnPrimary>
+              </div>
+              {deletedMsgs && (
+                <div className="space-y-1">
+                  <div className="text-[9px] text-mutedForeground font-heading">
+                    {deletedMsgs.username}: {deletedMsgs.count} deleted message(s) found
+                  </div>
+                  {deletedMsgs.count === 0 ? (
+                    <div className="text-[10px] text-green-400 font-heading">No deleted messages in archive.</div>
+                  ) : (
+                    <div className="overflow-x-auto max-h-80 border border-orange-500/20 rounded">
+                      <table className="w-full text-left text-[9px] border-collapse min-w-[600px]">
+                        <thead>
+                          <tr className="text-mutedForeground border-b border-zinc-700/50 sticky top-0 bg-zinc-900/95">
+                            <th className="px-2 py-1">Source</th>
+                            <th className="px-2 py-1">Deleted At</th>
+                            <th className="px-2 py-1">Deleted By</th>
+                            <th className="px-2 py-1">Reason</th>
+                            <th className="px-2 py-1 max-w-xs">Content Preview</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(deletedMsgs.messages || []).map((m, i) => (
+                            <tr key={i} className="border-b border-zinc-800/50 align-top">
+                              <td className="px-2 py-1">
+                                <span className={`inline-block px-1 rounded text-[8px] font-bold ${
+                                  m.source === 'forum_comment' ? 'bg-blue-500/20 text-blue-300' :
+                                  m.source === 'forum_topic' ? 'bg-purple-500/20 text-purple-300' :
+                                  m.source === 'game_chat' ? 'bg-green-500/20 text-green-300' :
+                                  'bg-zinc-500/20 text-zinc-300'
+                                }`}>{m.source}</span>
+                              </td>
+                              <td className="px-2 py-1 whitespace-nowrap">{m.deleted_at ? new Date(m.deleted_at).toLocaleString() : '—'}</td>
+                              <td className="px-2 py-1">{m.deleted_by_username || '—'}</td>
+                              <td className="px-2 py-1">{m.reason || '—'}</td>
+                              <td className="px-2 py-1 max-w-xs truncate" title={m.content_preview}>{m.content_preview || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <ActionRow icon={Award} label="Founding Member" description="Grant or remove Founding Member badge">

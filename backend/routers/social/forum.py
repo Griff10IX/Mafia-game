@@ -282,20 +282,25 @@ class TopicUpdate(BaseModel):
     title_color: Optional[str] = None  # hex color for title
 
 
-async def _delete_topic_fully(topic_id: str) -> None:
+async def _delete_topic_fully(topic_id: str, deleted_by_id: str = None, deleted_by_username: str = None) -> None:
     """Delete a topic and all its comments and comment likes/dislikes. Clears crew OC link if applicable."""
-    topic = await db.forum_topics.find_one({"id": topic_id}, {"_id": 0, "crew_oc_family_id": 1})
+    from utils.deleted_messages_archive import archive_message, archive_many
+    topic = await db.forum_topics.find_one({"id": topic_id}, {"_id": 0})
     if topic and topic.get("crew_oc_family_id"):
         await db.families.update_one(
             {"id": topic["crew_oc_family_id"]},
             {"$unset": {"crew_oc_forum_topic_id": ""}},
         )
-    comments = await db.forum_comments.find({"topic_id": topic_id}, {"_id": 0, "id": 1}).to_list(500)
-    comment_ids = [c["id"] for c in comments]
+    comments = await db.forum_comments.find({"topic_id": topic_id}, {"_id": 0}).to_list(500)
+    comment_ids = [c.get("id") for c in comments if c.get("id")]
+    if comments:
+        await archive_many(source="forum_comment", docs=comments, deleted_by_id=deleted_by_id, deleted_by_username=deleted_by_username, reason="topic_deleted")
     if comment_ids:
         await db.forum_comment_likes.delete_many({"comment_id": {"$in": comment_ids}})
         await db.forum_comment_dislikes.delete_many({"comment_id": {"$in": comment_ids}})
     await db.forum_comments.delete_many({"topic_id": topic_id})
+    if topic:
+        await archive_message(source="forum_topic", doc=topic, deleted_by_id=deleted_by_id, deleted_by_username=deleted_by_username)
     await db.forum_topics.delete_one({"id": topic_id})
 
 
@@ -1227,7 +1232,7 @@ async def delete_topic(
             await db.forum_designer_auction_bids.delete_many({"auction_id": auc["id"]})
             await db.forum_designer_auction_disputes.delete_many({"auction_id": auc["id"]})
             await db.forum_designer_auctions.delete_one({"id": auc["id"]})
-    await _delete_topic_fully(topic_id)
+    await _delete_topic_fully(topic_id, deleted_by_id=current_user.get("id"), deleted_by_username=current_user.get("username"))
     return {"message": "Topic deleted"}
 
 
@@ -1242,6 +1247,8 @@ async def delete_comment(
     comment = await db.forum_comments.find_one({"id": comment_id, "topic_id": topic_id}, {"_id": 0})
     if not comment:
         raise HTTPException(status_code=404, detail="Comment not found")
+    from utils.deleted_messages_archive import archive_message
+    await archive_message(source="forum_comment", doc=comment, deleted_by_id=current_user.get("id"), deleted_by_username=current_user.get("username"))
     await db.forum_comment_likes.delete_many({"comment_id": comment_id})
     await db.forum_comment_dislikes.delete_many({"comment_id": comment_id})
     await db.forum_comment_reactions.delete_many({"comment_id": comment_id})

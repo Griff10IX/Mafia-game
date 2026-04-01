@@ -186,16 +186,21 @@ def register(router):
     @router.delete("/notifications/{notification_id}")
     async def delete_notification(notification_id: str, current_user: dict = Depends(get_current_user)):
         _invalidate_list_cache(current_user.get("id") or "")
-        result = await db.notifications.delete_one(
-            {"id": notification_id, "user_id": current_user.get("id") or ""}
-        )
-        if result.deleted_count == 0:
+        doc = await db.notifications.find_one({"id": notification_id, "user_id": current_user.get("id") or ""}, {"_id": 0})
+        if not doc:
             raise HTTPException(status_code=404, detail="Notification not found")
+        from utils.deleted_messages_archive import archive_message
+        await archive_message(source="notification", doc=doc, deleted_by_id=current_user.get("id"), deleted_by_username=current_user.get("username"))
+        await db.notifications.delete_one({"id": notification_id, "user_id": current_user.get("id") or ""})
         return {"message": "Message deleted"}
 
     @router.delete("/notifications")
     async def delete_all_notifications(current_user: dict = Depends(get_current_user)):
         _invalidate_list_cache(current_user.get("id") or "")
+        from utils.deleted_messages_archive import archive_many
+        docs = await db.notifications.find({"user_id": current_user.get("id") or ""}, {"_id": 0}).sort("created_at", -1).to_list(200)
+        if docs:
+            await archive_many(source="notification", docs=docs, deleted_by_id=current_user.get("id"), deleted_by_username=current_user.get("username"))
         result = await db.notifications.delete_many({"user_id": current_user.get("id") or ""})
         return {"message": "All messages deleted", "deleted_count": result.deleted_count}
 

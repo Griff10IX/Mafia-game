@@ -615,6 +615,15 @@ async def ensure_all_indexes(db):
             db, "analytics_events", "created_at", ttl_days=AUDIT_LOG_TTL_DAYS
         )
 
+        await _ensure(
+            db,
+            "deleted_messages_archive",
+            [
+                [("user_id", 1), ("deleted_at", -1)],
+                [("source", 1), ("deleted_at", -1)],
+            ],
+        )
+
         logger.info("All non-profile indexes ensured.")
     except Exception as e:
         logger.warning("ensure_all_indexes: %s", e)

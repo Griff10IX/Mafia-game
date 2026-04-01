@@ -1987,6 +1987,99 @@ def register(router):
             msg = f"{un}: reconcile ran; no new tiers to grant."
         return {**result, "message": msg}
 
+    @router.post("/admin/force-grant-game-pass-rewards")
+    async def admin_force_grant_game_pass_rewards(
+        target_username: str,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Force-grant VIP Game Pass rewards for all completed tiers.
+        Bypasses all guards: resets cursor, computes rewards, directly $inc's them.
+        Use when normal reconcile/activation doesn't credit rewards.
+        """
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        from utils.game_pass_micro_rewards import (
+            micro_tier_from_rank_points,
+            vip_rewards_after_free_dedupe,
+        )
+
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        uid = target["id"]
+        un = target.get("username", target_username)
+        rank_points = int(target.get("rank_points") or 0)
+        current_micro = micro_tier_from_rank_points(rank_points)
+        free_last = int(target.get("rank_xp_pass_free_last_micro_tier_granted") or 0)
+        old_last_granted = int(target.get("rank_xp_pass_last_granted_micro_tier") or 0)
+
+        if current_micro <= 0:
+            raise HTTPException(status_code=400, detail=f"{un} has 0 completed micro tiers (rank_points={rank_points})")
+
+        total_inc: Dict[str, int] = {}
+        tier_detail = []
+        for t in range(1, current_micro + 1):
+            rewards = vip_rewards_after_free_dedupe(t, free_last)
+            for k, v in rewards.items():
+                v = int(v or 0)
+                if v > 0:
+                    total_inc[k] = total_inc.get(k, 0) + v
+            tier_detail.append({"tier": t, "rewards": {k: int(v) for k, v in rewards.items() if int(v or 0) > 0}})
+
+        update_set = {
+            "rank_xp_pass_rewards_granted": True,
+            "rank_xp_pass_last_granted_micro_tier": current_micro,
+        }
+        update: Dict[str, Any] = {"$set": update_set}
+        if total_inc:
+            update["$inc"] = total_inc
+
+        await db.users.update_one({"id": uid}, update)
+
+        return {
+            "message": f"Force-granted {un}: tiers 1–{current_micro} rewards credited. Old cursor was {old_last_granted}, now {current_micro}.",
+            "username": un,
+            "rank_points": rank_points,
+            "current_micro": current_micro,
+            "old_last_granted": old_last_granted,
+            "total_credited": total_inc,
+            "tier_detail": tier_detail,
+        }
+
+    @router.get("/admin/deleted-messages/{username}")
+    async def admin_deleted_messages(
+        username: str,
+        limit_count: int = Query(100, ge=1, le=500),
+        source_filter: Optional[str] = Query(None),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """View a user's last N deleted messages from the archive."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        username_pattern = _username_pattern(username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        uid = target["id"]
+        filt: Dict[str, Any] = {"user_id": uid}
+        if source_filter:
+            filt["source"] = source_filter
+
+        cursor = db.deleted_messages_archive.find(filt, {"_id": 0}).sort("deleted_at", -1).limit(limit_count)
+        rows = await cursor.to_list(length=limit_count)
+        return {
+            "username": target.get("username"),
+            "user_id": uid,
+            "count": len(rows),
+            "messages": rows,
+        }
+
     @router.get("/admin/game-pass/stuck-cursors")
     async def admin_game_pass_stuck_cursors(
         fix: bool = Query(False),
