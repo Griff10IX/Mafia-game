@@ -1946,6 +1946,87 @@ def register(router):
             msg = f"{un}: reconcile ran; no new tiers to grant."
         return {**result, "message": msg}
 
+    @router.get("/admin/game-pass/users")
+    async def admin_game_pass_users_list(
+        skip: int = Query(0, ge=0),
+        limit: int = Query(50, ge=1, le=100),
+        q: Optional[str] = Query(None),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """List users with any Game Pass–related state (admin only)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from utils.game_pass_admin_inspect import (
+            GAME_PASS_USER_PROJECTION,
+            aggregate_latest_game_pass_entitlement_iso,
+            escape_regex_fragment,
+            game_pass_derived_fields,
+            game_pass_mongo_filter,
+        )
+
+        now = datetime.now(timezone.utc)
+        filt = game_pass_mongo_filter()
+        esc = escape_regex_fragment(q or "")
+        if esc:
+            filt = {"$and": [filt, {"username": {"$regex": esc, "$options": "i"}}]}
+        cursor = db.users.find(filt, GAME_PASS_USER_PROJECTION).sort("username", 1).skip(skip).limit(limit)
+        rows = await cursor.to_list(length=limit)
+        uids = [str(r["id"]) for r in rows if r.get("id")]
+        latest_stripe = await aggregate_latest_game_pass_entitlement_iso(db, uids)
+        items: List[Dict[str, Any]] = []
+        proj_keys = [k for k in GAME_PASS_USER_PROJECTION if k != "_id"]
+        for row in rows:
+            derived = game_pass_derived_fields(row, now_utc=now)
+            base = {k: row.get(k) for k in proj_keys}
+            uid = str(row.get("id") or "")
+            items.append(
+                {
+                    **base,
+                    **derived,
+                    "last_stripe_pass_entitled_at": latest_stripe.get(uid),
+                }
+            )
+        total = await db.users.count_documents(filt)
+        return {"items": items, "total": total, "skip": skip, "limit": limit}
+
+    @router.get("/admin/game-pass/user")
+    async def admin_game_pass_user_inspect(
+        target_username: str,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Drill-down: Game Pass fields, derived status, Stripe txns, purchase source, optional entitlement estimate."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from utils.game_pass_admin_inspect import (
+            GAME_PASS_USER_PROJECTION,
+            classify_purchase_source,
+            estimate_entitlement_from_token_expiry,
+            fetch_game_pass_payment_events,
+            game_pass_derived_fields,
+        )
+
+        username_pattern = _username_pattern(target_username)
+        u = await db.users.find_one({"username": username_pattern}, GAME_PASS_USER_PROJECTION)
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        now = datetime.now(timezone.utc)
+        derived = game_pass_derived_fields(u, now_utc=now)
+        uid = str(u["id"])
+        events = await fetch_game_pass_payment_events(db, uid)
+        purchase_source = classify_purchase_source(events, u)
+        estimated = None
+        if not events and u.get("rank_xp_pass_token_expires_at"):
+            estimated = estimate_entitlement_from_token_expiry(u.get("rank_xp_pass_token_expires_at"))
+        proj_keys = [k for k in GAME_PASS_USER_PROJECTION if k != "_id"]
+        user_out = {k: u.get(k) for k in proj_keys}
+        return {
+            "user": user_out,
+            "derived": derived,
+            "stripe_game_pass_events": events,
+            "purchase_source": purchase_source,
+            "estimated_entitlement": estimated,
+        }
+
     @router.post("/admin/add-car")
     async def admin_add_car(target_username: str, car_id: str, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):

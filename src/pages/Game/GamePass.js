@@ -794,8 +794,10 @@ export default function GamePass() {
             <div className="p-3">
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                 {BANDS.map((band) => {
+                  // Completed = reached this band's top micro tier (inclusive).
+                  // "Current" = still progressing inside the band (not yet at band.end); at band.end or max pass, show Done — avoids 91–100 staying "Current" at tier 100.
                   const isBandCompleted = microTierCurrent >= band.end;
-                  const isBandCurrent = microTierCurrent >= band.start && microTierCurrent <= band.end;
+                  const isBandCurrent = microTierCurrent >= band.start && microTierCurrent < band.end;
                   const isBandPreviousDone = isBandCompleted && !isBandCurrent;
                   const isFreeMembership = membershipType === 'Free';
                   const isClickable = microTierCurrent >= band.start;
@@ -926,7 +928,7 @@ export default function GamePass() {
                   {Array.from({ length: selectedBand.end - selectedBand.start + 1 }, (_, i) => selectedBand.start + i).map((t) => {
                     const tierObj = getTierRewardObj(t);
                     const isMicroCompleted = microTierCurrent >= t;
-                    const isCurrent = microTierCurrent === t;
+                    const isCurrent = microTierCurrent === t && t < MAX_MICRO_TIER;
                     const isNext = microTierCurrent + 1 === t;
                     return (
                       <div

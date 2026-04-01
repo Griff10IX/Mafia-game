@@ -265,6 +265,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Minigame weekly leaderboard strip/add', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['minigame', 'leaderboard', 'weekly', 'strip', 'add', 'score', 'flappy', 'gauntlet'], adminOnly: true },
   { label: 'Main leaderboards strip (respect melt stock booze)', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['leaderboard', 'weekly', 'respect', 'melt', 'stock', 'booze', 'strip', 'top 10'], adminOnly: true },
   { label: 'Reconcile Game Pass tiers', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['game pass', 'reconcile', 'tier', 'vip', 'rank xp', 'micro tier'], adminOnly: true },
+  { label: 'Game Pass inspector', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-game-pass-inspector', keywords: ['game pass', 'inspector', 'vip', 'token', 'stripe', 'rank xp', 'micro tier', 'entitlement'], adminOnly: true },
   { label: 'Reset OC Timers', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['oc', 'organised', 'crime', 'timer'] },
   { label: 'Reset Daily Rewards Timer', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['daily', 'rewards', 'timer', 'rps'] },
   { label: 'Bodyguard Tools', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'robot', 'generate'] },
@@ -568,6 +569,13 @@ export default function Admin() {
     setToolSearchFocused(false);
     searchInputRef.current?.blur();
     if (typeof window !== 'undefined') window.location.hash = normalizedCategoryId;
+    if (typeof window !== 'undefined' && tool.scrollToId) {
+      window.requestAnimationFrame(() => {
+        setTimeout(() => {
+          document.getElementById(tool.scrollToId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }, 200);
+      });
+    }
   };
   const [resetOcTimersLoading, setResetOcTimersLoading] = useState(false);
   const [fixLoginFieldsLoading, setFixLoginFieldsLoading] = useState(false);
@@ -607,6 +615,11 @@ export default function Admin() {
   const [userLbAdjustLoading, setUserLbAdjustLoading] = useState(false);
   const [userHubMoneyDelta, setUserHubMoneyDelta] = useState(0);
   const [userHubMoneyLoading, setUserHubMoneyLoading] = useState(false);
+  const [gamePassInspectList, setGamePassInspectList] = useState(null);
+  const [gamePassInspectLoading, setGamePassInspectLoading] = useState(false);
+  const [gamePassInspectQuery, setGamePassInspectQuery] = useState('');
+  const [gamePassInspectDetail, setGamePassInspectDetail] = useState(null);
+  const [gamePassInspectDetailLoading, setGamePassInspectDetailLoading] = useState(false);
   const [resetDailyRewardsLoading, setResetDailyRewardsLoading] = useState(false);
   const [pointsProvSessionId, setPointsProvSessionId] = useState('');
   const [pointsProvUserId, setPointsProvUserId] = useState('');
@@ -2447,6 +2460,39 @@ export default function Admin() {
       toast.success(response.data?.message || 'Reconciled');
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed');
+    }
+  };
+
+  const loadGamePassInspectList = async () => {
+    setGamePassInspectLoading(true);
+    try {
+      const qs = new URLSearchParams({ skip: '0', limit: '100' });
+      const q = (gamePassInspectQuery || '').trim();
+      if (q) qs.set('q', q);
+      const res = await api.get(`/admin/game-pass/users?${qs.toString()}`);
+      setGamePassInspectList(res.data);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to load Game Pass users');
+    } finally {
+      setGamePassInspectLoading(false);
+    }
+  };
+
+  const loadGamePassInspectUser = async (username) => {
+    const u = (username || formData.targetUsername || '').trim();
+    if (!u) {
+      toast.error('Enter target username or pick a row');
+      return;
+    }
+    setGamePassInspectDetailLoading(true);
+    try {
+      const res = await api.get(`/admin/game-pass/user?target_username=${encodeURIComponent(u)}`);
+      setGamePassInspectDetail(res.data);
+      setFormData((prev) => ({ ...prev, targetUsername: u }));
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Inspect failed');
+    } finally {
+      setGamePassInspectDetailLoading(false);
     }
   };
 
@@ -6752,6 +6798,94 @@ export default function Admin() {
               <BtnPrimary onClick={() => handleReconcileGamePassTiers(false)}>Reconcile</BtnPrimary>
               <BtnSecondary onClick={() => handleReconcileGamePassTiers(true)}>Ignore expiry</BtnSecondary>
             </ActionRow>
+
+            <div id="admin-game-pass-inspector" className="rounded-md border border-violet-500/30 bg-violet-500/5 p-3 space-y-2 scroll-mt-24">
+              <div className="flex flex-wrap items-center gap-2">
+                <Eye size={14} className="text-violet-300 shrink-0" />
+                <span className="text-[10px] font-heading font-bold text-violet-300 uppercase tracking-wider">Game Pass inspector</span>
+              </div>
+              <p className="text-[9px] text-mutedForeground font-heading">
+                Lists users with any Game Pass–related DB state. Stripe purchase times come from completed <span className="font-mono">rank_xp_pass_499</span> transactions; points buys have no row—detail view shows <span className="font-mono">purchase_source</span> and an optional estimate from token expiry.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={gamePassInspectQuery}
+                  onChange={(e) => setGamePassInspectQuery(e.target.value)}
+                  placeholder="Filter username (substring)"
+                  className="flex-1 min-w-[140px] max-w-xs px-2 py-1 rounded border border-input bg-transparent text-[11px]"
+                />
+                <BtnPrimary type="button" onClick={loadGamePassInspectList} disabled={gamePassInspectLoading}>
+                  {gamePassInspectLoading ? '…' : 'Load users with Game Pass state'}
+                </BtnPrimary>
+                <BtnSecondary type="button" onClick={() => loadGamePassInspectUser()} disabled={gamePassInspectDetailLoading}>
+                  {gamePassInspectDetailLoading ? '…' : 'Inspect target'}
+                </BtnSecondary>
+              </div>
+              {gamePassInspectList && (
+                <div className="space-y-1">
+                  <div className="text-[9px] text-mutedForeground font-heading">
+                    {(gamePassInspectList.total ?? 0).toLocaleString()} match(es); showing {(gamePassInspectList.items || []).length} (limit {(gamePassInspectList.limit ?? 100)})
+                  </div>
+                  <div className="overflow-x-auto max-h-64 border border-violet-500/20 rounded">
+                    <table className="w-full text-left text-[9px] border-collapse min-w-[720px]">
+                      <thead>
+                        <tr className="text-mutedForeground border-b border-zinc-700/50 sticky top-0 bg-zinc-900/95">
+                          <th className="p-1 font-heading">User</th>
+                          <th className="p-1 font-heading text-right">Rank XP</th>
+                          <th className="p-1 font-heading text-right">Micro</th>
+                          <th className="p-1 font-heading text-right">Tok</th>
+                          <th className="p-1 font-heading">Expires</th>
+                          <th className="p-1 font-heading">VIP</th>
+                          <th className="p-1 font-heading text-right">Last Δ</th>
+                          <th className="p-1 font-heading text-right">Free</th>
+                          <th className="p-1 font-heading">Status</th>
+                          <th className="p-1 font-heading">Stripe entitled</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(gamePassInspectList.items || []).map((row) => (
+                          <tr
+                            key={row.id || row.username}
+                            className="border-b border-zinc-800/50 cursor-pointer hover:bg-violet-500/10"
+                            onClick={() => loadGamePassInspectUser(row.username)}
+                            title="Click to inspect"
+                          >
+                            <td className="p-1 font-bold text-foreground">{row.username ?? '—'}</td>
+                            <td className="p-1 text-right font-mono">{(row.rank_points ?? 0).toLocaleString()}</td>
+                            <td className="p-1 text-right font-mono">{row.current_micro_tier ?? '—'}</td>
+                            <td className="p-1 text-right font-mono">{row.rank_xp_pass_tokens ?? 0}</td>
+                            <td className="p-1 font-mono text-[8px] max-w-[100px] truncate" title={row.rank_xp_pass_token_expires_at || ''}>
+                              {row.rank_xp_pass_token_expires_at ? String(row.rank_xp_pass_token_expires_at).slice(0, 16) : '—'}
+                            </td>
+                            <td className="p-1">{row.rank_xp_pass_rewards_granted ? 'yes' : 'no'}</td>
+                            <td className="p-1 text-right font-mono">{row.rank_xp_pass_last_granted_micro_tier ?? 0}</td>
+                            <td className="p-1 text-right font-mono">{row.rank_xp_pass_free_last_micro_tier_granted ?? 0}</td>
+                            <td className="p-1 font-mono text-violet-200/90">{row.game_pass_status ?? '—'}</td>
+                            <td className="p-1 font-mono text-[8px] max-w-[120px] truncate" title={row.last_stripe_pass_entitled_at || ''}>
+                              {row.last_stripe_pass_entitled_at
+                                ? new Date(row.last_stripe_pass_entitled_at).toLocaleString()
+                                : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+              {gamePassInspectDetail && (
+                <div className="rounded border border-zinc-700/40 bg-zinc-900/40 p-2 space-y-1">
+                  <div className="text-[9px] font-heading font-bold text-violet-300 uppercase tracking-wider flex items-center justify-between gap-2">
+                    <span>Detail — {gamePassInspectDetail.user?.username ?? formData.targetUsername}</span>
+                    <button type="button" className="text-mutedForeground hover:text-foreground text-[10px]" onClick={() => setGamePassInspectDetail(null)}>Clear</button>
+                  </div>
+                  <pre className="text-[9px] font-mono whitespace-pre-wrap break-words max-h-80 overflow-y-auto text-zinc-200/90">
+                    {JSON.stringify(gamePassInspectDetail, null, 2)}
+                  </pre>
+                </div>
+              )}
+            </div>
 
             <ActionRow icon={Award} label="Founding Member" description="Grant or remove Founding Member badge">
               <BtnPrimary onClick={() => handleSetFoundingMember(true)}>Grant</BtnPrimary>
