@@ -29,6 +29,7 @@ from utils.game_pass_micro_rewards import (
 )
 from utils.game_pass_tier_reconcile import grant_missing_vip_micro_tier_rewards
 from utils.analytics_events import log_analytics_event
+from utils.point_provenance import log_points_event
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 import random
@@ -1041,6 +1042,9 @@ async def get_current_user(
                             if res.modified_count <= 0:
                                 continue
                             user[free_key] = int(user.get(free_key) or 0) + reward_amount
+                            if free_key == "points":
+                                asyncio.create_task(log_points_event(db, user_id=user_id, points=reward_amount,
+                                    event_type="game_pass_free_grant", event_ref=f"tier:{t}"))
 
                             next_tier = t + 1 if t < MAX_MICRO_TIER else None
                             next_summary = (
@@ -1312,6 +1316,9 @@ async def _family_war_check_wipe_and_award(victim_family_id: str, killer_family_
                 inc["loot_box_pieces"] = loser_compound_loot_pieces
             if inc:
                 await db.users.update_one({"id": killer_id}, {"$inc": inc})
+                if loser_compound_points > 0:
+                    await log_points_event(db, user_id=killer_id, points=loser_compound_points, event_type="family_war_loot",
+                                           event_ref=f"loser:{loser_id}", meta={"loser_family": loser_family_name})
     else:
         if total_cash_prize > 0:
             await db.families.update_one({"id": winner_id}, {"$inc": {"treasury": total_cash_prize}})
