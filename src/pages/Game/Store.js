@@ -735,12 +735,17 @@ export default function Store() {
             <p className="text-[9px] text-zinc-500 font-heading leading-snug max-w-2xl">
               Includes <span className="text-primary font-bold">Auto Rank</span> for{' '}
               <span className="text-foreground font-semibold">5,000 pts</span> or the respect equivalent — the buy button shows both prices.
-              {' '}Bought upgrades are removed from this list (e.g. if you already own Auto Rank).
+              {' '}Bought upgrades are removed from this list once owned permanently (e.g. Auto Rank after purchase — trial access still shows the buy option).
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2">
           {UPGRADES.filter((u) => {
-            const owned = u.ownedKey && user?.[u.ownedKey];
-            if (owned) return false;
+            if (u.id === 'auto-rank') {
+              // Founding/trial sets auto_rank_purchased=true; only hide after permanent unlock (trial cleared).
+              if (user?.auto_rank_purchased && !user?.auto_rank_trial) return false;
+            } else {
+              const owned = u.ownedKey && user?.[u.ownedKey];
+              if (owned) return false;
+            }
             // Hide Garage Batch when already at max (100)
             if (u.id === 'garage' && (user?.garage_batch_limit ?? 0) >= 100) return false;
             // Hide Booze Capacity when already at max

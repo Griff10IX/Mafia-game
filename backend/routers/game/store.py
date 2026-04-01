@@ -71,6 +71,7 @@ from server import (
     get_current_user,
     get_current_user_verified,
     log_activity,
+    log_respect_delta,
     send_notification,
     _username_pattern,
     _is_admin,
@@ -115,20 +116,26 @@ FULL_HEALTH = 100
 
 
 async def _record_store_points_spend(user_id: str, inc: dict, event_ref: str):
+    """FIFO point lots for store + respect_events row when part of price was paid in respect (admin audit)."""
     spend_points = max(0, int(-(inc or {}).get("points", 0)))
-    if spend_points <= 0:
-        return
-    try:
-        await consume_points_fifo(
-            db,
-            user_id=user_id,
-            points=spend_points,
-            event_type="spend_store",
-            event_ref=event_ref,
-            meta={"source": "store"},
-        )
-    except Exception:
-        logger.exception("point provenance spend failed user_id=%s event_ref=%s", user_id, event_ref)
+    if spend_points > 0:
+        try:
+            await consume_points_fifo(
+                db,
+                user_id=user_id,
+                points=spend_points,
+                event_type="spend_store",
+                event_ref=event_ref,
+                meta={"source": "store"},
+            )
+        except Exception:
+            logger.exception("point provenance spend failed user_id=%s event_ref=%s", user_id, event_ref)
+    rp_delta = int((inc or {}).get("respect_points") or 0)
+    if rp_delta < 0:
+        try:
+            await log_respect_delta(user_id, rp_delta, f"store:{event_ref}")
+        except Exception:
+            logger.exception("respect audit log failed user_id=%s event_ref=%s", user_id, event_ref)
 
 
 async def _rollback_transfer_out_slices(sender_id: str, transfer_id: str, slices: list):

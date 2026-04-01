@@ -908,6 +908,25 @@ Consumable boosts (from [b]Inventory[/b]): each token adds [b]1 hour[/b] of effe
 
 [hr]
 
+[size=1.5][b][color=#C27C0E]:ticket: GAME PASS[/color][/b][/size]
+
+[quote]
+[color=#C27C0E][b]Overview[/b][/color]
+[list]
+[*][color=#888888]Open [b]Game → Game Pass[/b] ([i]/game-pass[/i]) to buy, compare tiers, and read the full reward tables.[/color]
+[*][color=#888888]Purchase with [b]Stripe[/b] ([b]£9.99[/b]) or spend [b]8,000 points[/b] from your balance (same entitlement either way, subject to store / unlock rules in-game).[/color]
+[*][color=#888888]You get a [b]Game Pass token[/b] with an expiry: [b]one calendar month[/b] from purchase. [b]Activate[/b] it in [b]Armoury / My Inventory[/b] before that time or the token lapses. While VIP is active, tier rewards run until that same end date and time (see the page for your exact end date).[/color]
+[*][color=#888888][b]VIP track (after you activate):[/b] full [b]micro-tier[/b] rewards as you earn rank XP — exact payouts are on the Game Pass page.[/color]
+[*][color=#888888][b]Free track:[/b] if you have [b]not[/b] claimed VIP yet, you can still earn [b]limited[/b] free-tier rewards as you rank up (bands and amounts in-game).[/color]
+[*][color=#888888]There is [b]no[/b] timed global “double rank XP” buff from Game Pass — bonuses are delivered as [b]one-time tier rewards[/b] (the in-game multiplier display for pass is [b]1×[/b] for rank XP).[/color]
+[*][color=#888888]You [b]cannot[/b] buy another Game Pass in the [b]final 14 days[/b] before your current pass window ends (unactivated token or active VIP); you can buy again after it expires.[/color]
+[*][color=#888888][b]Inbox:[/b] activation and tier-reward lines are sent to [b]Social → Inbox[/b] so you have a record.[/color]
+[*][color=#888888][b]Dead > Alive:[/b] Game Pass rank-tier [b]progression state[/b] can carry over with a dead account’s estate when rules allow — see in-game fine print on Game Pass / Dead > Alive.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#6C3483]:robot: AUTO RANK[/color][/b][/size]
 
 [quote]
@@ -982,7 +1001,7 @@ Community discussion boards:
 [*][color=#888888]Write a bio[/color]
 [*][color=#888888]Display your stats and achievements[/color]
 [*][color=#888888]Show your car collection[/color]
-[*][color=#888888][b]Notification settings[/b] — profile / settings let you toggle categories (e.g. E-Games, OC invites, attacks, system, messages). [b]Inbox[/b] still stores messages with [b]auto-retention[/b] (read ≈5 days, unread ≈60 days) — see [b]Inbox & notifications[/b] under Social Features.[/color]
+[*][color=#888888][b]Notification settings[/b] — profile / settings let you toggle categories (e.g. E-Games, OC invites, attacks, system, messages). [b]Muted categories[/b] can stop [b]some[/b] inbox notifications from being created. [b]Purchase and important reward[/b] messages (e.g. Game Pass) are still delivered so you have a record. Notifications that [b]are[/b] stored use [b]auto-retention[/b] (read ≈5 days, unread ≈60 days) — see [b]Inbox & notifications[/b] above.[/color]
 [/list]
 [/quote]
 

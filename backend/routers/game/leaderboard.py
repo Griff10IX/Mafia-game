@@ -543,7 +543,16 @@ async def _fetch_top_boards_raw(limit: int, dead: bool, period: str) -> dict:
             _top_by_field_weekly("bust_events", "user_id", "at", False, dummy_uid, limit, dead, {"success": True}),
             _top_by_field_weekly_sum("stock_transactions", "user_id", "created_at", "profit_points", dummy_uid, limit, dead),
             _top_by_field_weekly_sum("economy_events", "user_id", "at", "profit", dummy_uid, limit, dead, {"type": "booze_run_sell"}),
-            _top_by_field_weekly_sum("respect_events", "user_id", "at", "amount", dummy_uid, limit, dead),
+            _top_by_field_weekly_sum(
+                "respect_events",
+                "user_id",
+                "at",
+                "amount",
+                dummy_uid,
+                limit,
+                dead,
+                {"amount": {"$gt": 0}},
+            ),
             _top_by_field_weekly_sum("melt_events", "user_id", "at", "bullets", dummy_uid, limit, dead),
         )
     else:

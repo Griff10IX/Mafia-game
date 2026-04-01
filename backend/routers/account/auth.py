@@ -1771,6 +1771,7 @@ def register(router):
                 gang_name=gang_name,
                 anti_snitch=bool(u.get("anti_snitch", False)),
                 auto_rank_purchased=bool(u.get("auto_rank_purchased", False)),
+                auto_rank_trial=bool(u.get("auto_rank_trial", False)),
                 auto_rank_enabled=bool(u.get("auto_rank_enabled", False)),
                 custom_car_name=u.get("custom_car_name"),
                 travels_this_hour=_safe_int(u.get("travels_this_hour"), 0),

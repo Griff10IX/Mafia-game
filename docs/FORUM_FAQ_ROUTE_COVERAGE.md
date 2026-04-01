@@ -19,6 +19,7 @@ Crosswalk of major authenticated areas ([src/App.js](../src/App.js) routes and s
 | `/account/missions`, `/account/objectives`, `/account/prestige`, `/account/inventory` | PROGRESSION |
 | `/game/daily-rewards` | FAQ Q&A Daily Rewards |
 | `/game/store` | POINT STORE |
+| `/game-pass` | GAME PASS |
 | `/account/autorank` | AUTO RANK |
 | `/social/inbox`, `/social/forum`, `/social/image-host`, `/game/help-desk`, `/game/game-ideas` | SOCIAL FEATURES |
 | `/game/users-online` | SOCIAL FEATURES → Users online |

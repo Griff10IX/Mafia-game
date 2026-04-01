@@ -125,7 +125,7 @@ async def get_user_leaderboard_scores(db, *, user_id: str) -> Dict[str, Any]:
         "respect_earned": await _aggregate_sum_week(
             db,
             collection="respect_events",
-            user_match={"user_id": user_id},
+            user_match={"user_id": user_id, "amount": {"$gt": 0}},
             time_field="at",
             value_field="amount",
             week_start=week_start,

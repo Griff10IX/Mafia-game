@@ -60,3 +60,5 @@ Use this when updating [FORUM_FAQ.md](FORUM_FAQ.md) so numbers stay aligned with
 | Game Ideas seasons / voting | `backend/routers/social/game_ideas.py` |
 | Pre-register rewards, founding badge name, +% blurb | `backend/routers/account/auth.py` → `PREREGISTER_REWARDS`; founding payout mult `server.py` → `founding_member_income_mult` / `FOUNDING_MEMBER_INCOME_MULT` |
 | Inbox read/unread auto-delete | `backend/routers/game/notifications.py` → `READ_NOTIFICATION_RETENTION_DAYS`, `UNREAD_NOTIFICATION_RETENTION_DAYS`; list API returns `read_retention_days`, `unread_retention_days` |
+| Inbox delivery vs notification category mutes | `backend/server.py` → `send_notification` (when `category` is set, `notification_preferences[category] is False` skips insert) |
+| Game Pass (price GBP, points price, month window, 14d repurchase block, tier model) | `backend/server.py` → `POINT_PACKAGES["rank_xp_pass_499"]`; `backend/routers/money/payments.py` → `GAME_PASS_POINTS_PRICE`, `GAME_PASS_PURCHASE_CLOSE_WINDOW_DAYS`; `utils/game_pass_micro_rewards.py`; UI `src/constants/gamePassPricing.js` |

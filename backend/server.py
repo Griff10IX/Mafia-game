@@ -568,6 +568,7 @@ class UserResponse(BaseModel):
     gang_name: Optional[str] = None  # family name for sidebar
     anti_snitch: bool = False
     auto_rank_purchased: bool = False
+    auto_rank_trial: bool = False  # True during founding/token trial; Store hides permanent Auto Rank only when purchased and not trial
     auto_rank_enabled: bool = False
     custom_car_name: Optional[str]
     travels_this_hour: int

@@ -1,0 +1,51 @@
+[center][size=2][b][color=#FFD700]:memo: UPDATE LOG :memo:[/color][/b][/size][/center]
+
+[quote]
+[color=#AAAAAA]Use this topic for player-facing patch notes and live changes. Keep newest updates at the top.[/color]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#1ABC9C]How to post updates[/color][/b][/size]
+[quote]
+[list]
+[*][color=#888888]Add a new entry at the [b]top[/b] of this file[/color]
+[*][color=#888888]Include [b]UTC timestamp[/b], [b]what changed[/b], and [b]what players should do[/b][/color]
+[*][color=#888888]Keep lines short and clear (bullet points preferred)[/color]
+[*][color=#888888]After editing, run the update-log topic sync script to publish in forum[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#9B59B6]Entry template[/color][/b][/size]
+[quote]
+[b][color=#F1C40F]YYYY-MM-DD HH:MM UTC[/color][/b] — [b]Title[/b]
+[list]
+[*][color=#888888][b]Changed:[/b] ...[/color]
+[*][color=#888888][b]Player action:[/b] ...[/color]
+[*][color=#888888][b]Impact:[/b] ...[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-04-01 18:00 UTC[/color][/b] — [b]Store: Auto Rank visible during trial[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] The [b]Upgrades[/b] tab no longer hides the permanent [b]Auto Rank[/b] purchase while you are on a founding or token trial (trial accounts were incorrectly treated as already owned). [b]GET /auth/me[/b] now includes [b]auto_rank_trial[/b] so the client can tell trial from permanent.[/color]
+[*][color=#888888][b]Player action:[/b] If you are on an Auto Rank trial, open [b]Game → Store → Upgrades[/b] and you should see the [b]Auto Rank[/b] tile with points/respect prices; refresh if you still see the old list.[/color]
+[*][color=#888888][b]Impact:[/b] Trial players can buy the permanent unlock without confusion; no change to pricing or gameplay rules.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-04-01 00:00 UTC[/color][/b] — [b]Update log topic created[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Added a dedicated forum update-log pipeline (source file + updater script).[/color]
+[*][color=#888888][b]Player action:[/b] None.[/color]
+[*][color=#888888][b]Impact:[/b] Staff can now publish chronological changes in one pinned topic.[/color]
+[/list]
+[/quote]

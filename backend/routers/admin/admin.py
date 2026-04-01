@@ -5401,7 +5401,7 @@ def register(router):
         limit: int = Query(200, ge=1, le=1000),
         current_user: dict = Depends(get_current_user),
     ):
-        """Earned-respect audit from respect_events (log_respect_earned). Admin or moderator."""
+        """Respect audit from respect_events (earned positives; negative rows = admin removal or store respect spend logged after deploy). Admin or moderator."""
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         uid = user_id.strip()
@@ -5459,6 +5459,105 @@ def register(router):
             },
             "by_source": by_source,
             "events": recent,
+        }
+
+    @router.get("/admin/currency-spend-audit/{user_id_or_username}")
+    async def admin_currency_spend_audit(
+        user_id_or_username: str,
+        ledger_limit: int = Query(500, ge=1, le=2000),
+        respect_limit: int = Query(500, ge=1, le=2000),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Points + respect spending audit (ledger outflows, store origin refs, respect deltas). Admin or moderator."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        raw_key = (user_id_or_username or "").strip()
+        if not raw_key:
+            raise HTTPException(status_code=400, detail="User id or username required")
+        u = await db.users.find_one({"id": raw_key}, {"_id": 0})
+        if not u:
+            username_pattern = _username_pattern(raw_key)
+            u = await db.users.find_one({"username": username_pattern}, {"_id": 0})
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = u["id"]
+        cap = int(ledger_limit)
+        res_cap = int(respect_limit)
+
+        user_fields = {
+            "id": uid,
+            "username": u.get("username"),
+            "points": int(u.get("points") or 0),
+            "respect_points": int(u.get("respect_points") or 0),
+            "lifetime_points_spent": int(u.get("lifetime_points_spent") or 0),
+            "lifetime_respect_points_spent": int(u.get("lifetime_respect_points_spent") or 0),
+            "custom_car_name": u.get("custom_car_name"),
+            "premium_rank_bar": bool(u.get("premium_rank_bar")),
+            "has_silencer": bool(u.get("has_silencer")),
+            "anti_snitch": bool(u.get("anti_snitch")),
+            "oc_timer_reduced": bool(u.get("oc_timer_reduced")),
+            "crew_oc_timer_reduced": bool(u.get("crew_oc_timer_reduced")),
+            "auto_rank_purchased": bool(u.get("auto_rank_purchased")),
+            "garage_batch_limit": u.get("garage_batch_limit"),
+        }
+
+        neg_match = {"user_id": uid, "points": {"$lt": 0}}
+        by_type = await db.point_ledger_events.aggregate(
+            [
+                {"$match": neg_match},
+                {"$group": {"_id": "$event_type", "total": {"$sum": "$points"}, "n": {"$sum": 1}}},
+                {"$sort": {"total": 1}},
+            ]
+        ).to_list(300)
+
+        recent_ledger = await db.point_ledger_events.find(
+            neg_match,
+            {"_id": 0, "id": 1, "event_type": 1, "points": 1, "origin_ref": 1, "root_purchase_ref": 1, "created_at": 1, "meta": 1},
+        ).sort("created_at", -1).limit(cap).to_list(cap)
+
+        store_by_ref = await db.point_ledger_events.aggregate(
+            [
+                {"$match": {"user_id": uid, "event_type": "spend_store", "points": {"$lt": 0}}},
+                {
+                    "$group": {
+                        "_id": "$origin_ref",
+                        "total_points": {"$sum": {"$abs": "$points"}},
+                        "n": {"$sum": 1},
+                        "last_at": {"$max": "$created_at"},
+                    }
+                },
+                {"$sort": {"last_at": -1}},
+                {"$limit": 120},
+            ]
+        ).to_list(120)
+
+        respect_spent = await db.respect_events.find(
+            {"user_id": uid, "amount": {"$lt": 0}},
+            {"_id": 0, "amount": 1, "at": 1, "source": 1},
+        ).sort("at", -1).limit(res_cap).to_list(res_cap)
+
+        return {
+            "user": user_fields,
+            "points_spent_by_ledger_event_type": [
+                {"event_type": x.get("_id"), "total_points": int(x.get("total") or 0), "events": int(x.get("n") or 0)}
+                for x in (by_type or [])
+            ],
+            "points_ledger_recent": recent_ledger,
+            "store_point_spends_by_origin_ref": [
+                {
+                    "origin_ref": x.get("_id"),
+                    "total_points_spent": int(x.get("total_points") or 0),
+                    "purchase_count": int(x.get("n") or 0),
+                    "last_at": x.get("last_at"),
+                }
+                for x in (store_by_ref or [])
+            ],
+            "respect_spent_events": respect_spent,
+            "notes": [
+                "Negative point_ledger_events are currency leaving the account (store FIFO, transfers, game spends, etc.).",
+                "Rows with source store:* in respect_events are logged when a store purchase used respect (from deploy forward). Older respect-only store spend may only appear in lifetime_respect_points_spent.",
+                "Custom car: spend_store origin_ref buy-custom-car and sets custom_car_name.",
+            ],
         }
 
     @router.get("/admin/crimes/analytics/summary")

@@ -350,10 +350,10 @@ async def _get_lifetime_progress(user_id: str, user: dict) -> dict:
     progress["booze_runs_count"] = int(user.get("booze_runs_count") or 0)
     progress["hitlist_npc_kills"] = int(user.get("hitlist_npc_kills") or 0)
     
-    # Aggregate lifetime respect earned from respect_events collection
+    # Aggregate lifetime respect earned from respect_events (positive amounts only; store spends log negative)
     pipeline = [
-        {"$match": {"user_id": user_id}},
-        {"$group": {"_id": None, "total": {"$sum": "$amount"}}}
+        {"$match": {"user_id": user_id, "amount": {"$gt": 0}}},
+        {"$group": {"_id": None, "total": {"$sum": "$amount"}}},
     ]
     result = await db.respect_events.aggregate(pipeline).to_list(1)
     progress["lifetime_respect_earned"] = int(result[0]["total"]) if result else 0

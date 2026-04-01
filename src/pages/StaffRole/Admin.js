@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useLocation, Navigate } from 'react-router-dom';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle, Eye } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle, Eye, Receipt } from 'lucide-react';
 import api, { imageHostPublicUrl } from '../../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
@@ -854,6 +854,8 @@ export default function Admin() {
   const [respectLogLimit, setRespectLogLimit] = useState(200);
   const [respectLogData, setRespectLogData] = useState(null);
   const [respectLogLoading, setRespectLogLoading] = useState(false);
+  const [currencySpendAuditData, setCurrencySpendAuditData] = useState(null);
+  const [currencySpendAuditLoading, setCurrencySpendAuditLoading] = useState(false);
   const [clearGamblingDays, setClearGamblingDays] = useState(30);
   const [clearGamblingLoading, setClearGamblingLoading] = useState(false);
 
@@ -2267,6 +2269,27 @@ export default function Admin() {
       toast.error(error.response?.data?.detail || 'Failed to load point sources');
     } finally {
       setPointsSourcesLoading(false);
+    }
+  };
+
+  const handleLoadCurrencySpendAudit = async () => {
+    const username = (formData.targetUsername || '').trim();
+    if (!username) {
+      toast.error('Enter target username above');
+      return;
+    }
+    setCurrencySpendAuditLoading(true);
+    setCurrencySpendAuditData(null);
+    try {
+      const res = await api.get(`/admin/currency-spend-audit/${encodeURIComponent(username)}`, {
+        params: { ledger_limit: 500, respect_limit: 500 },
+      });
+      setCurrencySpendAuditData(res.data || null);
+      toast.success('Spend audit loaded');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to load spend audit');
+    } finally {
+      setCurrencySpendAuditLoading(false);
     }
   };
 
@@ -5364,7 +5387,7 @@ export default function Admin() {
         {!collapsed.respectPointsLog && (
           <div className="p-3 space-y-3">
             <p className="text-[10px] text-mutedForeground font-heading">
-              Earned respect from <span className="text-foreground">respect_events</span> (sources such as rank_up, crimes, minigames). Enter the user&apos;s ID from User details or search.
+              <span className="text-foreground">respect_events</span> — positive amounts are earned respect; negative amounts are spends/removals (e.g. store purchases paid with respect, admin_remove). Enter the user&apos;s ID from User details or search.
             </p>
             <div className="flex flex-wrap items-center gap-2">
               <input
@@ -6789,6 +6812,176 @@ export default function Admin() {
                 {(pointsSourcesReport.notes || []).length > 0 && (
                   <ul className="list-disc pl-4 text-[9px] text-mutedForeground space-y-0.5">
                     {pointsSourcesReport.notes.map((n, i) => (
+                      <li key={i}>{n}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+
+            <ActionRow
+              icon={Receipt}
+              label="Points & respect spend audit"
+              description="Ledger outflows (points leaving the account), store purchases by origin (e.g. buy-custom-car), and negative respect_events (store respect spend from deploy forward; admin removes)."
+            >
+              <BtnSecondary type="button" onClick={handleLoadCurrencySpendAudit} disabled={currencySpendAuditLoading}>
+                {currencySpendAuditLoading ? 'Loading…' : 'Load spend audit'}
+              </BtnSecondary>
+            </ActionRow>
+            {currencySpendAuditData && (
+              <div className="rounded-md border border-amber-500/25 bg-amber-500/5 p-2 text-[10px] font-heading space-y-2 pl-6">
+                <div className="font-bold text-amber-200/90">
+                  Spend audit — {currencySpendAuditData.user?.username || '?'}
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  <div className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/40">
+                    <div className="text-mutedForeground uppercase text-[9px]">Points balance</div>
+                    <div className="text-foreground font-bold">{(currencySpendAuditData.user?.points ?? 0).toLocaleString()}</div>
+                  </div>
+                  <div className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/40">
+                    <div className="text-mutedForeground uppercase text-[9px]">Respect balance</div>
+                    <div className="text-foreground font-bold">{(currencySpendAuditData.user?.respect_points ?? 0).toLocaleString()}</div>
+                  </div>
+                  <div className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/40">
+                    <div className="text-mutedForeground uppercase text-[9px]">Lifetime points spent</div>
+                    <div className="text-foreground font-bold">{(currencySpendAuditData.user?.lifetime_points_spent ?? 0).toLocaleString()}</div>
+                  </div>
+                  <div className="p-1.5 rounded bg-zinc-900/50 border border-zinc-700/40">
+                    <div className="text-mutedForeground uppercase text-[9px]">Lifetime respect spent</div>
+                    <div className="text-foreground font-bold">{(currencySpendAuditData.user?.lifetime_respect_points_spent ?? 0).toLocaleString()}</div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[9px]">
+                  <div className="p-1.5 rounded bg-zinc-900/40 border border-zinc-700/30">
+                    <span className="text-mutedForeground">Custom car</span>{' '}
+                    <span className="text-foreground font-mono">{currencySpendAuditData.user?.custom_car_name || '—'}</span>
+                  </div>
+                  <div className="p-1.5 rounded bg-zinc-900/40 border border-zinc-700/30">
+                    <span className="text-mutedForeground">Auto Rank</span>{' '}
+                    <span className="text-foreground">{currencySpendAuditData.user?.auto_rank_purchased ? 'yes' : 'no'}</span>
+                  </div>
+                  <div className="p-1.5 rounded bg-zinc-900/40 border border-zinc-700/30">
+                    <span className="text-mutedForeground">Silencer / Anti-snitch</span>{' '}
+                    <span className="text-foreground">
+                      {currencySpendAuditData.user?.has_silencer ? 'S' : '—'} / {currencySpendAuditData.user?.anti_snitch ? 'A' : '—'}
+                    </span>
+                  </div>
+                  <div className="p-1.5 rounded bg-zinc-900/40 border border-zinc-700/30">
+                    <span className="text-mutedForeground">Garage batch limit</span>{' '}
+                    <span className="text-foreground">{currencySpendAuditData.user?.garage_batch_limit ?? '—'}</span>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <div>
+                    <div className="text-[9px] font-bold text-amber-200/80 mb-0.5">Point outflows by ledger type</div>
+                    <div className="overflow-x-auto max-h-40 border border-zinc-700/30 rounded">
+                      <table className="w-full text-[9px]">
+                        <thead>
+                          <tr className="text-left text-mutedForeground border-b border-zinc-700/40">
+                            <th className="p-1">Event</th>
+                            <th className="p-1">Pts (sum)</th>
+                            <th className="p-1">#</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(currencySpendAuditData.points_spent_by_ledger_event_type || []).map((row, i) => (
+                            <tr key={`spend-${row.event_type}-${i}`} className="border-b border-zinc-800/50">
+                              <td className="p-1 font-mono">{String(row.event_type ?? '—')}</td>
+                              <td className="p-1">{(row.total_points ?? 0).toLocaleString()}</td>
+                              <td className="p-1">{row.events ?? 0}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-[9px] font-bold text-amber-200/80 mb-0.5">Store (points) by origin_ref</div>
+                    <div className="overflow-x-auto max-h-40 border border-zinc-700/30 rounded">
+                      <table className="w-full text-[9px]">
+                        <thead>
+                          <tr className="text-left text-mutedForeground border-b border-zinc-700/40">
+                            <th className="p-1">origin_ref</th>
+                            <th className="p-1">Pts</th>
+                            <th className="p-1">#</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(currencySpendAuditData.store_point_spends_by_origin_ref || []).map((row, i) => (
+                            <tr key={`store-${row.origin_ref}-${i}`} className="border-b border-zinc-800/50">
+                              <td className="p-1 font-mono break-all">{String(row.origin_ref ?? '—')}</td>
+                              <td className="p-1">{(row.total_points_spent ?? 0).toLocaleString()}</td>
+                              <td className="p-1">{row.purchase_count ?? 0}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[9px] font-bold text-amber-200/80 mb-0.5">Respect spent (negative rows)</div>
+                  <div className="overflow-x-auto max-h-32 border border-zinc-700/30 rounded">
+                    <table className="w-full text-[9px]">
+                      <thead>
+                        <tr className="text-left text-mutedForeground border-b border-zinc-700/40">
+                          <th className="p-1">Time</th>
+                          <th className="p-1">Source</th>
+                          <th className="p-1">Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(currencySpendAuditData.respect_spent_events || []).length === 0 ? (
+                          <tr>
+                            <td className="p-2 text-mutedForeground" colSpan={3}>
+                              None logged (older store respect spend may only be in lifetime total).
+                            </td>
+                          </tr>
+                        ) : (
+                          (currencySpendAuditData.respect_spent_events || []).map((ev, idx) => (
+                            <tr key={`r-spend-${idx}`} className="border-b border-zinc-800/50">
+                              <td className="p-1 text-mutedForeground whitespace-nowrap">
+                                {ev.at ? new Date(ev.at).toLocaleString() : '—'}
+                              </td>
+                              <td className="p-1 font-mono break-all">{ev.source ?? '—'}</td>
+                              <td className="p-1 text-right font-bold">{Number(ev.amount ?? 0).toLocaleString()}</td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div>
+                  <div className="text-[9px] font-bold text-amber-200/80 mb-0.5">Recent point ledger outflows</div>
+                  <div className="overflow-x-auto max-h-48 border border-zinc-700/30 rounded">
+                    <table className="w-full text-[9px]">
+                      <thead>
+                        <tr className="text-left text-mutedForeground border-b border-zinc-700/40">
+                          <th className="p-1">Time</th>
+                          <th className="p-1">Type</th>
+                          <th className="p-1">Pts</th>
+                          <th className="p-1">origin_ref</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(currencySpendAuditData.points_ledger_recent || []).map((row, i) => (
+                          <tr key={row.id || `ledger-${i}`} className="border-b border-zinc-800/50">
+                            <td className="p-1 text-mutedForeground whitespace-nowrap">
+                              {row.created_at ? new Date(row.created_at).toLocaleString() : '—'}
+                            </td>
+                            <td className="p-1 font-mono">{row.event_type ?? '—'}</td>
+                            <td className="p-1">{(row.points ?? 0).toLocaleString()}</td>
+                            <td className="p-1 font-mono break-all max-w-[140px]">{row.origin_ref ?? '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                {(currencySpendAuditData.notes || []).length > 0 && (
+                  <ul className="list-disc pl-4 text-[9px] text-mutedForeground space-y-0.5">
+                    {currencySpendAuditData.notes.map((n, i) => (
                       <li key={i}>{n}</li>
                     ))}
                   </ul>
