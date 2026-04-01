@@ -921,9 +921,10 @@ export default function Attack() {
   const [useMolotovs, setUseMolotovsState] = useState(() => {
     try {
       const v = sessionStorage.getItem('attack-use-molotovs');
-      return v === null || v === '' ? true : v === '1';
+      if (v === null || v === '') return false;
+      return v === '1';
     } catch {
-      return true;
+      return false;
     }
   });
   const setUseMolotovs = (value) => {

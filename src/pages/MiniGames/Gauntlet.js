@@ -20,16 +20,19 @@ const VIEW_H = 580;
 const GATE = (n) => n * 10;
 
 const SPEED_OPTIONS = [
-  { id: "slow", label: "Slow", mult: 0.7 },
+  { id: "crawl", label: "0.5×", mult: 0.5 },
+  { id: "slow", label: "Slow", mult: 0.72 },
   { id: "normal", label: "Normal", mult: 1 },
-  { id: "fast", label: "Fast", mult: 1.4 },
+  { id: "mult115", label: "1.15×", mult: 1.15 },
+  { id: "mult125", label: "1.25×", mult: 1.25 },
+  { id: "fast", label: "Fast", mult: 1.45 },
 ];
 
 const DIFFICULTY_OPTIONS = [
   { id: "easy", label: "Easy", gapOffset: 25, speedMult: 0.85 },
   { id: "normal", label: "Normal", gapOffset: 0, speedMult: 1 },
   { id: "hard", label: "Hard", gapOffset: -30, speedMult: 1.25 },
-  { id: "insane", label: "Insane", gapOffset: -55, speedMult: 1.65, unlockScore: GATE(25) },
+  { id: "insane", label: "Insane", gapOffset: -50, speedMult: 1.38, unlockScore: GATE(25) },
 ];
 
 // ─── CHARACTERS ──────────────────────────────────────────────────────────────
@@ -1048,7 +1051,7 @@ export default function Gauntlet() {
   }, [themeId, speedId, difficultyId, canPlay, updateFromStart, getCaptchaToken]);
 
   const theme = THEMES.find(t => t.id === themeId) || THEMES[0];
-  const speedOpt = SPEED_OPTIONS.find(s => s.id === speedId) || SPEED_OPTIONS[1];
+  const speedOpt = SPEED_OPTIONS.find(s => s.id === speedId) || SPEED_OPTIONS.find(s => s.id === "normal");
   const difficultyOpt = DIFFICULTY_OPTIONS.find(d => d.id === difficultyId) || DIFFICULTY_OPTIONS[1];
   const pipeSpeed = PIPE_SPEED_BASE * speedOpt.mult * difficultyOpt.speedMult;
   const pipeGap = PIPE_GAP_BASE + difficultyOpt.gapOffset;

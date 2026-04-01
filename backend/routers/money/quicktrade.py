@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from fastapi import Depends, HTTPException
 from bson.objectid import ObjectId
 
-from server import db, get_current_user, get_rank_info, log_activity, CAPO_RANK_ID, _user_owns_any_property
+from server import db, get_current_user, get_rank_info, log_activity, CAPO_RANK_ID, _user_owns_any_property, send_notification
 from routers.kill.armoury import TOKEN_CONFIG, TOKEN_TYPES
 from utils.point_provenance import log_points_event
 
@@ -30,6 +30,20 @@ _FOUNDING_LOCK_EXEMPT_COUNT_FIELDS = frozenset(
 
 # Minimum total cash (USD) for a token Quick Trade listing when selling for money: $250,000 per token.
 TOKEN_MIN_CASH_PER_TOKEN = 250_000
+
+
+def _token_type_label(token_type: str) -> str:
+    return (token_type or "").replace("_", " ").strip().title() or token_type
+
+
+async def _notify_quicktrade_seller(seller_id: Optional[str], title: str, message: str) -> None:
+    """Inbox the seller when a Quick Trade listing is bought or accepted."""
+    if not seller_id:
+        return
+    try:
+        await send_notification(seller_id, title, message, "quicktrade_sale", category="system")
+    except Exception:
+        pass
 
 
 def _invalidate_trade_caches():
@@ -256,6 +270,11 @@ async def accept_sell_offer(offer_id: str, current_user: dict = Depends(get_curr
         )
     except Exception:
         pass
+    await _notify_quicktrade_seller(
+        offer["user_id"],
+        "Quick Trade: points sold",
+        f"{buyer_username} bought your points listing: {int(offer['points']):,} points for ${int(offer['cost']):,} cash.",
+    )
     return {"message": "Trade completed successfully", "points_received": offer["points"], "cost_paid": offer["cost"]}
 
 
@@ -536,6 +555,11 @@ async def accept_token_offer(offer_id: str, current_user: dict = Depends(get_cur
                 "offer_id": offer_id,
             },
         )
+        await _notify_quicktrade_seller(
+            offer["user_id"],
+            "Quick Trade: tokens sold",
+            f"{buyer_username} bought your listing: {int(offer['quantity']):,}× {_token_type_label(token_type)} for ${price_money:,} cash.",
+        )
         return {
             "message": "Trade completed",
             "token_type": token_type,
@@ -573,6 +597,11 @@ async def accept_token_offer(offer_id: str, current_user: dict = Depends(get_cur
             "price_currency": "points",
             "offer_id": offer_id,
         },
+    )
+    await _notify_quicktrade_seller(
+        offer["user_id"],
+        "Quick Trade: tokens sold",
+        f"{buyer_username} bought your listing: {int(offer['quantity']):,}× {_token_type_label(token_type)} for {price_points:,} points.",
     )
     return {
         "message": "Trade completed",
@@ -767,6 +796,12 @@ async def accept_buy_offer(offer_id: str, current_user: dict = Depends(get_curre
         )
     except Exception:
         pass
+    buyer_name = "[Anonymous]" if offer.get("hide_name") else (offer.get("username") or "Unknown")
+    await _notify_quicktrade_seller(
+        seller_id,
+        "Quick Trade: buy offer filled",
+        f"{buyer_name} bought your points via their buy offer: {int(offer['points']):,} points for ${int(offer['offer']):,} cash.",
+    )
     return {"message": "Trade completed successfully", "points_sold": offer["points"], "cash_received": offer["offer"]}
 
 
@@ -898,6 +933,13 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
         await db.users.update_one({"id": prop["owner_id"]}, {"$inc": {"points": sale_price}})
         if sale_price != 0:
             await log_points_event(db, user_id=prop["owner_id"], points=sale_price, event_type="quicktrade_property", meta={"property_id": property_id, "property_name": prop.get("name"), "buyer_id": buyer_id})
+        loc = prop.get("location") or prop.get("state")
+        loc_suffix = f" ({loc})" if loc else ""
+        await _notify_quicktrade_seller(
+            prop["owner_id"],
+            "Quick Trade: property sold",
+            f"{buyer_username} bought your listing: {prop.get('name', 'Property')}{loc_suffix} for {sale_price:,} points.",
+        )
     prop_type = prop.get("type")
     if prop_type == "casino_dice":
         city = prop.get("location")
