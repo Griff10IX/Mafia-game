@@ -77,6 +77,7 @@ export default function Bodyguards() {
   const [bodyguardLastDropAt, setBodyguardLastDropAt] = useState(null);
   const [hiringSlots, setHiringSlots] = useState(new Set());
   const [refreshing, setRefreshing] = useState(false);
+  const [hireBanner, setHireBanner] = useState(null);
 
   const DROP_COOLDOWN_HOURS = 3;
 
@@ -209,14 +210,18 @@ export default function Bodyguards() {
     }
   };
 
+  const showHireBanner = (type, message) => {
+    setHireBanner({ type, message });
+    setTimeout(() => setHireBanner((prev) => (prev?.message === message ? null : prev)), 6000);
+  };
+
   const hireBodyguard = async (slot, isRobot) => {
     setHiringSlots((prev) => new Set(prev).add(slot));
     try {
       const response = await api.post('/bodyguards/hire', { slot, is_robot: isRobot });
-      toast.success(response?.data?.message ?? 'Bodyguard hired', { duration: 10000 });
+      showHireBanner('success', response?.data?.message ?? 'Bodyguard hired');
       refreshUser().catch(() => {});
       await fetchData();
-      // Second inflation fetch after hire so button PTS / +% always reflect server (avoids any stale parallel read).
       try {
         const inflRes = await api.get('/bodyguards/inflation', noCacheGetConfig());
         setNextHireInflationPct(inflRes.data?.next_hire_inflation_pct ?? 0);
@@ -237,9 +242,9 @@ export default function Bodyguards() {
       refreshUser().catch(() => {});
       fetchData().catch(() => {});
       if (detail.includes('Slot already occupied')) {
-        toast.info('Slot already filled — list updated', { duration: 4000 });
+        showHireBanner('info', 'Slot already filled — list updated');
       } else {
-        toast.error(detail, { duration: 10000 });
+        showHireBanner('error', detail);
       }
     } finally {
       setHiringSlots((prev) => {
@@ -640,6 +645,19 @@ export default function Bodyguards() {
             <span className="text-primary font-bold">✨ {event.name}</span>
             <span className="text-mutedForeground ml-2">{event.message}</span>
           </p>
+        </div>
+      )}
+
+      {/* Hire banner */}
+      {hireBanner && (
+        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-heading animate-in fade-in slide-in-from-top-1 duration-200 ${
+          hireBanner.type === 'success' ? 'bg-emerald-500/15 border border-emerald-500/30 text-emerald-400'
+          : hireBanner.type === 'info' ? 'bg-primary/10 border border-primary/30 text-primary'
+          : 'bg-red-500/15 border border-red-500/30 text-red-400'
+        }`}>
+          <span className="shrink-0">{hireBanner.type === 'success' ? '✓' : hireBanner.type === 'info' ? 'ℹ' : '✕'}</span>
+          <span className="flex-1 min-w-0">{hireBanner.message}</span>
+          <button type="button" onClick={() => setHireBanner(null)} className="shrink-0 opacity-60 hover:opacity-100 text-[10px]">✕</button>
         </div>
       )}
 
