@@ -88,17 +88,16 @@ _bodyguards_cache: dict = {}
 _BODYGUARDS_CACHE_TTL_SEC = 10
 _BODYGUARDS_CACHE_MAX_ENTRIES = 5000
 
-# Per (user_id, slot) lock: different slots can run in parallel (faster), same slot serialized (stops race)
+# Per-user lock: all hire requests for the same user are serialized so each sees fresh DB state
 _hire_locks: dict = {}
 _hire_locks_meta_lock = asyncio.Lock()
 
 
-async def _hire_lock(user_id: str, slot: int):
-    key = (user_id, slot)
+async def _hire_lock(user_id: str):
     async with _hire_locks_meta_lock:
-        if key not in _hire_locks:
-            _hire_locks[key] = asyncio.Lock()
-        return _hire_locks[key]
+        if user_id not in _hire_locks:
+            _hire_locks[user_id] = asyncio.Lock()
+        return _hire_locks[user_id]
 
 
 def _invalidate_bodyguards_cache(user_id: str):
@@ -485,10 +484,9 @@ async def buy_bodyguard_slot(current_user: dict = Depends(get_current_user)):
 
 
 async def hire_bodyguard(request: BodyguardHireRequest, current_user: dict = Depends(get_current_user)):
-    slot = request.slot
     is_robot = request.is_robot
-    async with await _hire_lock(current_user["id"], slot):
-        return await _do_hire_bodyguard(slot, is_robot, current_user)
+    async with await _hire_lock(current_user["id"]):
+        return await _do_hire_bodyguard(request.slot, is_robot, current_user)
 
 
 async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
@@ -499,22 +497,17 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
         )
     if not is_robot:
         raise HTTPException(status_code=400, detail="Human bodyguards are temporarily disabled. Use robot bodyguards.")
-    slots = int(current_user.get("bodyguard_slots") or 0)
-    if slot < 1 or slot > 4:
-        raise HTTPException(status_code=400, detail="Invalid bodyguard slot")
-    # Hiring a robot unlocks the next slot automatically (same points as hire — no separate slot purchase).
-    if slot > slots + 1:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Hire bodyguards in order (next available is slot {slots + 1}).",
-        )
-    unlock_next_slot = slot == slots + 1
-    existing = await db.bodyguards.find_one(
-        {"user_id": current_user["id"], "slot_number": slot},
-        {"_id": 0}
-    )
-    if existing:
-        raise HTTPException(status_code=400, detail="Slot already occupied")
+    fresh = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "bodyguard_slots": 1})
+    slots = int((fresh or {}).get("bodyguard_slots") or 0)
+    existing_bgs = await db.bodyguards.find(
+        {"user_id": current_user["id"]},
+        {"_id": 0, "slot_number": 1}
+    ).to_list(10)
+    occupied = {b["slot_number"] for b in existing_bgs}
+    slot = next((s for s in range(1, 5) if s not in occupied), None)
+    if slot is None:
+        raise HTTPException(status_code=400, detail="All bodyguard slots are full")
+    unlock_next_slot = slot > slots
     ev = await get_effective_event()
     event_cost_mult = ev.get("bodyguard_cost", 1.0)
     base_cost = BODYGUARD_SLOT_COSTS[slot - 1]
