@@ -142,6 +142,8 @@ async def create_sell_offer(offer: CreateSellOffer, current_user: dict = Depends
             raise HTTPException(status_code=400, detail="Maximum 10 regular offers allowed")
     fee = max(1, int(offer.points * 0.005))
     points_after_fee = offer.points - fee
+    if points_after_fee <= 0:
+        raise HTTPException(status_code=400, detail="Points are too low after fee. Minimum is 2 points.")
     result = await db.users.update_one(
         {"id": user_id, "points": {"$gte": offer.points}},
         {"$inc": {"points": -offer.points}}
@@ -554,6 +556,8 @@ async def create_buy_offer(offer: CreateBuyOffer, current_user: dict = Depends(g
         raise HTTPException(status_code=404, detail="User not found")
     fee = max(1, int(offer.points * 0.005))
     points_after_fee = offer.points - fee
+    if points_after_fee <= 0:
+        raise HTTPException(status_code=400, detail="Points are too low after fee. Minimum is 2 points.")
     result = await db.users.update_one(
         {"id": user_id, "money": {"$gte": offer.offer}},
         {"$inc": {"money": -offer.offer}}

@@ -342,8 +342,18 @@ def register(router):
             )
 
         async def _family():
-            fid = user.get("family_id")
+            member = await db.family_members.find_one(
+                {"user_id": user_id},
+                {"_id": 0, "family_id": 1},
+            )
+            fid = (member or {}).get("family_id")
+            # Self-heal stale user doc if membership row is gone.
             if not fid:
+                if user.get("family_id"):
+                    await db.users.update_one(
+                        {"id": user_id},
+                        {"$set": {"family_id": None, "family_role": None}},
+                    )
                 return None
             fam = await db.families.find_one({"id": str(fid)}, {"_id": 0, "name": 1, "tag": 1})
             if not fam:
@@ -507,9 +517,20 @@ def register(router):
             return out
 
         async def _family_name_and_tag():
-            if not user.get("family_id"):
+            member = await db.family_members.find_one(
+                {"user_id": user_id},
+                {"_id": 0, "family_id": 1},
+            )
+            fid = (member or {}).get("family_id")
+            # Self-heal stale user doc if membership row is gone.
+            if not fid:
+                if user.get("family_id"):
+                    await db.users.update_one(
+                        {"id": user_id},
+                        {"$set": {"family_id": None, "family_role": None}},
+                    )
                 return (None, None)
-            fam = await db.families.find_one({"id": user["family_id"]}, {"_id": 0, "name": 1, "tag": 1})
+            fam = await db.families.find_one({"id": str(fid)}, {"_id": 0, "name": 1, "tag": 1})
             if not fam:
                 return (None, None)
             return (fam.get("name"), fam.get("tag"))
@@ -796,7 +817,18 @@ def register(router):
         family_name = None
         if user.get("family_id"):
             try:
-                fam = await db.families.find_one({"id": str(user["family_id"])}, {"_id": 0, "name": 1})
+                member = await db.family_members.find_one(
+                    {"user_id": user.get("id")},
+                    {"_id": 0, "family_id": 1},
+                )
+                fid = (member or {}).get("family_id")
+                if not fid:
+                    await db.users.update_one(
+                        {"id": user.get("id")},
+                        {"$set": {"family_id": None, "family_role": None}},
+                    )
+                    fid = None
+                fam = await db.families.find_one({"id": str(fid)}, {"_id": 0, "name": 1}) if fid else None
                 if fam:
                     family_name = fam.get("name")
             except Exception as e:

@@ -84,13 +84,18 @@ export default function QuickTrade() {
       toast.error('Enter points and cost');
       return;
     }
+    const parsedSellPoints = parseInt(String(sellPoints).replace(/,/g, ''), 10) || 0;
+    if (parsedSellPoints < 2) {
+      toast.error('Minimum 2 points (1 point fee leaves 0 listed).');
+      return;
+    }
     const count = Math.max(1, Math.min(10, parseInt(String(sellOfferCount), 10) || 1));
     setCreatingOffers(true);
     let created = 0;
     try {
       for (let i = 0; i < count; i++) {
         await api.post('/trade/sell-offer', {
-          points: parseInt(String(sellPoints).replace(/,/g, ''), 10) || 0,
+          points: parsedSellPoints,
           cost: Math.round(parseFloat(String(sellCost).replace(/,/g, '')) || 0),
           hide_name: hideNameSell
         });
@@ -119,13 +124,18 @@ export default function QuickTrade() {
       toast.error('Enter points and offer amount');
       return;
     }
+    const parsedBuyPoints = parseInt(String(buyPoints).replace(/,/g, ''), 10) || 0;
+    if (parsedBuyPoints < 2) {
+      toast.error('Minimum 2 points (1 point fee leaves 0 listed).');
+      return;
+    }
     const count = Math.max(1, Math.min(10, parseInt(String(buyOfferCount), 10) || 1));
     setCreatingOffers(true);
     let created = 0;
     try {
       for (let i = 0; i < count; i++) {
         await api.post('/trade/buy-offer', {
-          points: parseInt(String(buyPoints).replace(/,/g, ''), 10) || 0,
+          points: parsedBuyPoints,
           offer: Math.round(parseFloat(String(buyOffer).replace(/,/g, '')) || 0),
           hide_name: hideNameBuy
         });
