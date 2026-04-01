@@ -275,6 +275,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Main leaderboards strip (respect melt stock booze)', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['leaderboard', 'weekly', 'respect', 'melt', 'stock', 'booze', 'strip', 'top 10'], adminOnly: true },
   { label: 'Reconcile Game Pass tiers', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['game pass', 'reconcile', 'tier', 'vip', 'rank xp', 'micro tier'], adminOnly: true },
   { label: 'Game Pass inspector', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-game-pass-inspector', keywords: ['game pass', 'inspector', 'vip', 'token', 'stripe', 'rank xp', 'micro tier', 'entitlement'], adminOnly: true },
+  { label: 'Game Pass stuck cursors', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-game-pass-inspector', keywords: ['game pass', 'stuck', 'cursor', 'broken', 'fix', 'repair', 'rewards'], adminOnly: true },
   { label: 'Reset OC Timers', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['oc', 'organised', 'crime', 'timer'] },
   { label: 'Reset Daily Rewards Timer', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['daily', 'rewards', 'timer', 'rps'] },
   { label: 'Bodyguard Tools', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'robot', 'generate'] },
@@ -629,6 +630,8 @@ export default function Admin() {
   const [gamePassInspectQuery, setGamePassInspectQuery] = useState('');
   const [gamePassInspectDetail, setGamePassInspectDetail] = useState(null);
   const [gamePassInspectDetailLoading, setGamePassInspectDetailLoading] = useState(false);
+  const [gamePassStuck, setGamePassStuck] = useState(null);
+  const [gamePassStuckLoading, setGamePassStuckLoading] = useState(false);
   const [resetDailyRewardsLoading, setResetDailyRewardsLoading] = useState(false);
   const [pointsProvSessionId, setPointsProvSessionId] = useState('');
   const [pointsProvUserId, setPointsProvUserId] = useState('');
@@ -2469,6 +2472,23 @@ export default function Admin() {
       toast.success(response.data?.message || 'Reconciled');
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed');
+    }
+  };
+
+  const loadGamePassStuck = async (fix = false) => {
+    setGamePassStuckLoading(true);
+    try {
+      const res = await api.get(`/admin/game-pass/stuck-cursors?fix=${fix}`);
+      setGamePassStuck(res.data);
+      if (fix && res.data?.fixed_count > 0) {
+        toast.success(`Fixed ${res.data.fixed_count} stuck user(s): ${res.data.fixed_users.join(', ')}`);
+      } else if (fix) {
+        toast.success('No stuck users to fix');
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to check stuck cursors');
+    } finally {
+      setGamePassStuckLoading(false);
     }
   };
 
@@ -6894,6 +6914,62 @@ export default function Admin() {
                   </pre>
                 </div>
               )}
+
+              <div className="border-t border-violet-500/20 pt-2 space-y-2">
+                <div className="text-[10px] font-heading font-bold text-amber-300 uppercase tracking-wider">Stuck Cursor Detector</div>
+                <p className="text-[9px] text-mutedForeground font-heading">
+                  Finds VIP users whose reward cursor is ahead of their actual tier progress (rewards won't grant). "Fix all" rewinds cursors and grants missing rewards.
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <BtnPrimary type="button" onClick={() => loadGamePassStuck(false)} disabled={gamePassStuckLoading}>
+                    {gamePassStuckLoading ? '...' : 'Scan for stuck users'}
+                  </BtnPrimary>
+                  {gamePassStuck && gamePassStuck.stuck_count > 0 && (
+                    <BtnDanger type="button" onClick={() => loadGamePassStuck(true)} disabled={gamePassStuckLoading}>
+                      {gamePassStuckLoading ? '...' : `Fix all ${gamePassStuck.stuck_count} stuck`}
+                    </BtnDanger>
+                  )}
+                </div>
+                {gamePassStuck && (
+                  <div className="space-y-1">
+                    {gamePassStuck.stuck_count === 0 ? (
+                      <div className="text-[10px] text-green-400 font-heading">No stuck users found.</div>
+                    ) : (
+                      <>
+                        <div className="text-[10px] text-amber-300 font-heading">{gamePassStuck.stuck_count} stuck user(s) found</div>
+                        <div className="overflow-x-auto max-h-48 border border-amber-500/20 rounded">
+                          <table className="w-full text-left text-[9px] border-collapse">
+                            <thead>
+                              <tr className="text-mutedForeground border-b border-zinc-700/50 sticky top-0 bg-zinc-900/95">
+                                <th className="px-2 py-1">User</th>
+                                <th className="px-2 py-1">Rank Points</th>
+                                <th className="px-2 py-1">Actual Tier</th>
+                                <th className="px-2 py-1">Cursor At</th>
+                                <th className="px-2 py-1">Gap</th>
+                                {gamePassStuck.fixed_count > 0 && <th className="px-2 py-1">Fix</th>}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(gamePassStuck.stuck_users || []).map((u) => (
+                                <tr key={u.username} className="border-b border-zinc-800/50">
+                                  <td className="px-2 py-1 font-semibold">{u.username}</td>
+                                  <td className="px-2 py-1">{(u.rank_points || 0).toLocaleString()}</td>
+                                  <td className="px-2 py-1">{u.current_micro}</td>
+                                  <td className="px-2 py-1 text-red-400">{u.last_granted}</td>
+                                  <td className="px-2 py-1 text-amber-400">+{u.gap}</td>
+                                  {gamePassStuck.fixed_count > 0 && (
+                                    <td className="px-2 py-1 text-green-400">{u.fix_result || '—'}</td>
+                                  )}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
 
             <ActionRow icon={Award} label="Founding Member" description="Grant or remove Founding Member badge">

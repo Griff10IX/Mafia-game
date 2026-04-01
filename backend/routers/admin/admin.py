@@ -1987,6 +1987,58 @@ def register(router):
             msg = f"{un}: reconcile ran; no new tiers to grant."
         return {**result, "message": msg}
 
+    @router.get("/admin/game-pass/stuck-cursors")
+    async def admin_game_pass_stuck_cursors(
+        fix: bool = Query(False),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Find VIP users whose last_granted cursor is ahead of their actual micro tier (broken state)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from utils.game_pass_micro_rewards import micro_tier_from_rank_points
+
+        cursor = db.users.find(
+            {"rank_xp_pass_rewards_granted": True, "rank_xp_pass_last_granted_micro_tier": {"$gt": 0}},
+            {"_id": 0, "id": 1, "username": 1, "rank_points": 1, "rank_xp_pass_last_granted_micro_tier": 1,
+             "rank_xp_pass_token_expires_at": 1, "rank_xp_pass_free_last_micro_tier_granted": 1,
+             "rank_xp_pass_rewards_granted": 1},
+        )
+        rows = await cursor.to_list(length=5000)
+
+        stuck: List[Dict[str, Any]] = []
+        fixed: List[str] = []
+        for row in rows:
+            current_micro = micro_tier_from_rank_points(row.get("rank_points"))
+            last_granted = int(row.get("rank_xp_pass_last_granted_micro_tier") or 0)
+            if last_granted <= current_micro:
+                continue
+            entry = {
+                "username": row.get("username"),
+                "rank_points": int(row.get("rank_points") or 0),
+                "current_micro": current_micro,
+                "last_granted": last_granted,
+                "gap": last_granted - current_micro,
+            }
+            stuck.append(entry)
+
+            if fix:
+                from utils.game_pass_tier_reconcile import grant_missing_vip_micro_tier_rewards
+                result = await grant_missing_vip_micro_tier_rewards(
+                    db, row["id"], row, send_notifications=True, ignore_token_expiry=True,
+                )
+                entry["fix_result"] = result.get("reason")
+                entry["tiers_granted"] = result.get("tiers_granted", [])
+                if result.get("cursor_repaired"):
+                    fixed.append(row.get("username", "?"))
+
+        stuck.sort(key=lambda x: x["gap"], reverse=True)
+        return {
+            "stuck_count": len(stuck),
+            "fixed_count": len(fixed),
+            "fixed_users": fixed,
+            "stuck_users": stuck,
+        }
+
     @router.get("/admin/game-pass/users")
     async def admin_game_pass_users_list(
         skip: int = Query(0, ge=0),
