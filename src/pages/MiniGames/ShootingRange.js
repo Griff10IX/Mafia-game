@@ -3,12 +3,10 @@ import { Link } from 'react-router-dom';
 import { Crosshair } from 'lucide-react';
 import api from '../../utils/api';
 import { formatMasteryTrainCooldownLabel, useMasteryCooldownTick } from '../../utils/shootingRangeCooldown';
-import { useMinigameCaptcha } from '../../hooks/useMinigameCaptcha';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 
 export default function ShootingRange() {
-  const { getCaptchaToken, captchaModal } = useMinigameCaptcha();
   const [masteryData, setMasteryData] = useState(null);
   const [weaponsList, setWeaponsList] = useState([]);
   const [trainingWeaponId, setTrainingWeaponId] = useState(null);
@@ -51,7 +49,6 @@ export default function ShootingRange() {
 
   return (
     <div className={`${styles.pageContent} mobile-page-root mx-auto px-0 md:px-4`} style={{ paddingTop: '1rem', paddingBottom: '1rem', maxWidth: 640 }}>
-      {captchaModal}
       <div className="flex items-center gap-2 mb-4">
         <Link to="/armour-weapons" className="text-[10px] font-heading uppercase tracking-wider" style={{ color: 'var(--noir-primary)' }}>
           ← Armoury

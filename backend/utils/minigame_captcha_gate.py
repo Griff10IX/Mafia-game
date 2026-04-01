@@ -94,3 +94,70 @@ async def require_turnstile_for_minigame_start(
             detail=vr.http_error,
         )
         raise HTTPException(status_code=400, detail="Captcha verification failed. Try again.")
+
+
+async def require_turnstile_for_game_action(
+    db,
+    *,
+    request: Request,
+    current_user: dict,
+    captcha_token: Optional[str],
+    is_admin: bool = False,
+) -> None:
+    """
+    When main.game_actions_turnstile_enabled is True and Turnstile keys are configured,
+    require a valid token on selected gameplay POSTs (e.g. GTA melt, booze sell — not crime commits).
+    Reuses the minigame public site key and TURNSTILE_SECRET_KEY.
+    """
+    if is_admin:
+        return
+
+    main = await db.game_settings.find_one(
+        {"_id": "main"},
+        {"_id": 0, "game_actions_turnstile_enabled": 1, "minigame_turnstile_site_key": 1},
+    )
+    enabled = bool(main.get("game_actions_turnstile_enabled")) if main else False
+    if not enabled:
+        return
+
+    site_key = (main.get("minigame_turnstile_site_key") or os.environ.get("TURNSTILE_SITE_KEY") or "").strip()
+    secret = turnstile_secret()
+    if not site_key or not secret:
+        logger.warning("game_actions_turnstile enabled but site key or TURNSTILE_SECRET_KEY missing")
+        await log_captcha_turnstile_failure(
+            db,
+            request=request,
+            current_user=current_user,
+            reason="misconfigured",
+            detail="game_actions_turnstile enabled but site key or TURNSTILE_SECRET_KEY missing",
+        )
+        raise HTTPException(
+            status_code=503,
+            detail="Captcha is enabled but the server is not fully configured (TURNSTILE_SECRET_KEY and site key).",
+        )
+
+    raw = (captcha_token or "").strip()
+    if not raw:
+        await log_captcha_turnstile_failure(
+            db,
+            request=request,
+            current_user=current_user,
+            reason="missing_token",
+        )
+        raise HTTPException(
+            status_code=400,
+            detail="Complete the captcha before this action.",
+        )
+
+    ip = _client_ip(request)
+    vr = await verify_turnstile_token(secret=secret, response=raw, remote_ip=ip or None)
+    if not vr.success:
+        await log_captcha_turnstile_failure(
+            db,
+            request=request,
+            current_user=current_user,
+            reason="verify_failed",
+            turnstile_error_codes=vr.error_codes,
+            detail=vr.http_error,
+        )
+        raise HTTPException(status_code=400, detail="Captcha verification failed. Try again.")

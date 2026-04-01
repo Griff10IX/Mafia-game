@@ -6,7 +6,7 @@ from datetime import datetime, timezone, timedelta
 _rng = secrets.SystemRandom()
 import uuid
 from typing import List, Optional, Dict
-from fastapi import Depends, HTTPException, Query
+from fastapi import Depends, HTTPException, Query, Request
 from bson.objectid import ObjectId
 from pydantic import BaseModel
 from pymongo import ReturnDocument
@@ -55,6 +55,7 @@ class GTAAttemptRequest(BaseModel):
 class GTAMeltRequest(BaseModel):
     car_ids: List[str]
     action: str  # "bullets" or "cash"
+    captcha_token: Optional[str] = None
 
 
 class GTABuyCarRequest(BaseModel):
@@ -97,6 +98,7 @@ from server import (
     db,
     get_current_user,
     get_current_user_verified,
+    _is_admin,
     get_rank_info,
     get_effective_event,
     maybe_process_rank_up,
@@ -1118,11 +1120,20 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
 
 
 async def melt_cars(
-    request: GTAMeltRequest, current_user: dict = Depends(get_current_user_verified)
+    body: GTAMeltRequest,
+    http_request: Request,
+    current_user: dict = Depends(get_current_user_verified),
 ):
-    if not request.car_ids:
+    await require_turnstile_for_game_action(
+        db,
+        request=http_request,
+        current_user=current_user,
+        captcha_token=body.captcha_token,
+        is_admin=_is_admin(current_user),
+    )
+    if not body.car_ids:
         raise HTTPException(status_code=400, detail="No cars selected")
-    result = await melt_cars_locked(current_user, request.car_ids, request.action)
+    result = await melt_cars_locked(current_user, body.car_ids, body.action)
     if result.get("cooldown"):
         raise HTTPException(status_code=400, detail=result.get("detail", "Melt on cooldown"))
     return result

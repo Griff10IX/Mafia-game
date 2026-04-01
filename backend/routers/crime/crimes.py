@@ -446,6 +446,9 @@ async def get_crimes(current_user: dict = Depends(get_current_user)):
         if cooldown_minutes is None:
             cooldown_minutes = 5.0
         crime_type = crime.get("crime_type") or "petty"
+        # Do not expose prestige-exclusive crimes until rank + prestige requirements are met (reduces ID scraping).
+        if crime_type == "prestige" and not unlocked:
+            continue
         result.append(
             CrimeResponse(
                 id=crime["id"],

@@ -5,7 +5,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
-from utils.login_user_agent import auth_client_headers_blocked
+from utils.login_user_agent import auth_client_headers_blocked, game_action_strict_headers_blocked
 from utils.staff_bot_client_alert import maybe_notify_staff_bot_client_blocked
 
 logger = logging.getLogger(__name__)
@@ -73,6 +73,7 @@ class MinigameClientGuardMiddleware(BaseHTTPMiddleware):
                     "_id": 0,
                     "block_script_user_agent_login": 1,
                     "block_script_user_agent_game_actions": 1,
+                    "game_actions_client_strict": 1,
                 },
             )
         except Exception:
@@ -131,6 +132,28 @@ class MinigameClientGuardMiddleware(BaseHTTPMiddleware):
                     )
                 except Exception:
                     logger.exception("Game action client guard: staff inbox notify failed")
+                return JSONResponse(status_code=403, content={"detail": _FORBIDDEN_DETAIL})
+            strict_blocked, strict_reason = game_action_strict_headers_blocked(
+                request.headers,
+                method=request.method,
+                settings=settings,
+            )
+            if strict_blocked:
+                logger.warning(
+                    "Game action client guard (strict): blocked reason=%s path=%s method=%s",
+                    strict_reason,
+                    path,
+                    request.method,
+                )
+                try:
+                    await maybe_notify_staff_bot_client_blocked(
+                        db=self.db,
+                        request=request,
+                        internal_reason=strict_reason,
+                        source="auth_gameplay_strict",
+                    )
+                except Exception:
+                    logger.exception("Game action client guard (strict): staff inbox notify failed")
                 return JSONResponse(status_code=403, content={"detail": _FORBIDDEN_DETAIL})
             return await call_next(request)
 

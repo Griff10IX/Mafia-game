@@ -92,7 +92,32 @@ class GauntletClaimRequest(BaseModel):
     difficulty: Optional[str] = None
 
 
+async def _gauntlet_best_score_for_user(user_id: str) -> int:
+    """Best gate score for unlocks: user_meta (authoritative) plus max from score history if present."""
+    doc = await db.user_meta.find_one({"user_id": user_id}, {"_id": 0, "gauntlet_best_score": 1})
+    meta_best = int((doc or {}).get("gauntlet_best_score") or 0)
+    try:
+        rows = await db.gauntlet_scores.find({"user_id": user_id}, {"_id": 0, "score": 1}).sort("score", -1).limit(1).to_list(1)
+        hist_best = int(rows[0]["score"]) if rows else 0
+    except Exception:
+        hist_best = 0
+    return max(meta_best, hist_best)
+
+
 def register(router):
+    @router.get("/gauntlet/me")
+    async def gauntlet_me(current_user: dict = Depends(get_current_user)):
+        """Personal best gate score (for character/theme unlocks) and plays window (optional for UI)."""
+        uid = current_user["id"]
+        best = await _gauntlet_best_score_for_user(uid)
+        pl = await get_plays_left(db, user_id=uid, game=GAUNTLET_GAME_SLUG)
+        return {
+            "best_score": best,
+            "plays_left": pl.get("plays_left"),
+            "max_plays": pl.get("max_plays"),
+            "resets_at": pl.get("resets_at"),
+        }
+
     @router.get("/gauntlet/leaderboard")
     async def gauntlet_leaderboard(
         period: str = Query("weekly", description="weekly (Mon UTC) or alltime"),

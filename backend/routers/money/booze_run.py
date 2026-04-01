@@ -6,7 +6,7 @@ import secrets
 _rng = secrets.SystemRandom()
 from pydantic import BaseModel
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 
 from utils.referral_ids import (
     apply_referrer_referral_increment,
@@ -24,6 +24,7 @@ from server import (
     log_activity,
     _staff_exclude_user_filter,
 )
+from utils.minigame_captcha_gate import require_turnstile_for_game_action
 from utils.point_provenance import log_points_event
 
 
@@ -725,8 +726,19 @@ async def booze_run_buy(request: BoozeBuyRequest, current_user: dict = Depends(g
     return await _booze_buy_impl(current_user, request.booze_id, request.amount)
 
 
-async def booze_run_sell(request: BoozeSellRequest, current_user: dict = Depends(get_current_user)):
-    return await _booze_sell_impl(current_user, request.booze_id, request.amount)
+async def booze_run_sell(
+    body: BoozeSellRequest,
+    http_request: Request,
+    current_user: dict = Depends(get_current_user),
+):
+    await require_turnstile_for_game_action(
+        db,
+        request=http_request,
+        current_user=current_user,
+        captcha_token=body.captcha_token,
+        is_admin=_is_admin(current_user),
+    )
+    return await _booze_sell_impl(current_user, body.booze_id, body.amount)
 
 
 async def buy_booze_capacity(current_user: dict = Depends(get_current_user)):

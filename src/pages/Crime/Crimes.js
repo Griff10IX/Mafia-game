@@ -662,7 +662,7 @@ export default function Crimes() {
   };
 
   const regularCrimeRows = crimeRows.filter((c) => c.crime_type !== 'prestige');
-  const prestigeCrimeRows = crimeRows.filter((c) => c.crime_type === 'prestige');
+  const prestigeCrimeRows = crimeRows.filter((c) => c.crime_type === 'prestige' && c.unlocked);
   const commitAllCount = regularCrimeRows.filter((c) => c.can_commit).length;
 
   if (loading) {

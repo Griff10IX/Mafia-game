@@ -132,6 +132,19 @@ def register(router):
         effective = enabled and bool(site_key) and secret_ok
         return {"enabled": effective, "site_key": site_key if effective else None}
 
+    @router.get("/game-actions/turnstile-config")
+    async def game_actions_turnstile_config(current_user: dict = Depends(get_current_user)):
+        """Public site key for Turnstile when game_actions_turnstile_enabled (GTA melt, booze sell)."""
+        main = await db.game_settings.find_one(
+            {"_id": "main"},
+            {"_id": 0, "game_actions_turnstile_enabled": 1, "minigame_turnstile_site_key": 1},
+        )
+        enabled = bool(main.get("game_actions_turnstile_enabled")) if main else False
+        site_key = (main.get("minigame_turnstile_site_key") or os.environ.get("TURNSTILE_SITE_KEY") or "").strip()
+        secret_ok = bool((os.environ.get("TURNSTILE_SECRET_KEY") or "").strip())
+        effective = enabled and bool(site_key) and secret_ok
+        return {"enabled": effective, "site_key": site_key if effective else None}
+
     @router.post("/minigames/run-session/start")
     async def minigame_run_session_start(
         body: MinigameRunSessionStartRequest,

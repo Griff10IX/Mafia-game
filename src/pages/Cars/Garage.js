@@ -11,6 +11,7 @@ import { filterProfanity } from '../../utils/profanityFilter';
 import styles from '../../styles/noir.module.css';
 import ActiveTokenBadge from '../../components/ActiveTokenBadge';
 import CustomCarImageModal from '../../components/CustomCarImageModal';
+import { useGameActionsTurnstile } from '../../hooks/useGameActionsTurnstile';
 
 const GARAGE_STYLES = `
   @keyframes gar-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -450,6 +451,7 @@ export default function Garage() {
   const [meltBulletsSecondsRemaining, setMeltBulletsSecondsRemaining] = useState(0);
   const [repairingCarId, setRepairingCarId] = useState(null);
   const [user, setUser] = useState(null);
+  const { getCaptchaToken, captchaModal } = useGameActionsTurnstile();
 
   const fetchGarage = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -580,8 +582,19 @@ export default function Garage() {
       return;
     }
     if (meltBulletsSecondsRemaining > 0) return;
+    let captchaToken = null;
     try {
-      const response = await api.post('/gta/melt', { car_ids: eligibleIds, action: 'bullets' });
+      captchaToken = await getCaptchaToken();
+    } catch (e) {
+      if (e?.message === 'captcha_cancelled') return;
+      throw e;
+    }
+    try {
+      const response = await api.post('/gta/melt', {
+        car_ids: eligibleIds,
+        action: 'bullets',
+        ...(captchaToken ? { captcha_token: captchaToken } : {}),
+      });
       toast.success(response.data.message);
       if (response.data.melt_bullets_cooldown_until) {
         setMeltBulletsCooldownUntil(response.data.melt_bullets_cooldown_until);
@@ -605,8 +618,19 @@ export default function Garage() {
       toast.error(meltScrapRarities.length === 0 ? 'Select rarities to melt or scrap (Melt/Scrap settings)' : 'No eligible cars selected');
       return;
     }
+    let captchaToken = null;
     try {
-      const response = await api.post('/gta/melt', { car_ids: eligibleIds, action: 'cash' });
+      captchaToken = await getCaptchaToken();
+    } catch (e) {
+      if (e?.message === 'captcha_cancelled') return;
+      throw e;
+    }
+    try {
+      const response = await api.post('/gta/melt', {
+        car_ids: eligibleIds,
+        action: 'cash',
+        ...(captchaToken ? { captcha_token: captchaToken } : {}),
+      });
       toast.success(response.data.message);
       setSelectedCars([]);
       refreshUser();
@@ -806,6 +830,7 @@ export default function Garage() {
         saving={savingCustomImage}
         censorProfanity={user?.censor_profanity}
       />
+      {captchaModal}
     </div>
   );
 }

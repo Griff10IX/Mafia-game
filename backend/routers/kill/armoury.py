@@ -35,7 +35,6 @@ from utils.minigame_run_session import (
     RATE_LIMIT_PERIOD_HOURS,
 )
 from utils.minigame_security import skip_minigame_session
-from utils.minigame_captcha_gate import require_turnstile_for_minigame_start
 
 # 5k bullets per 24h, effectively delivered every 20 mins (72 ticks per day)
 BULLET_FACTORY_TOTAL_PER_24H = 5000
@@ -368,7 +367,6 @@ class ShootingRangeTrainRequest(BaseModel):
     weapon_id: str
     mode: str = "auto_sim"  # "auto_sim" | "live" (3D game)
     hits: Optional[int] = None  # for mode=live: number of hits in session (1..MASTERY_LIVE_HITS_MAX_PER_REQUEST)
-    captcha_token: Optional[str] = None
 
 
 class ShootingRangeScoreRequest(BaseModel):
@@ -1906,7 +1904,6 @@ async def get_shooting_range_mastery(current_user: dict = Depends(get_current_us
 
 async def train_shooting_range(
     payload: ShootingRangeTrainRequest,
-    request: Request,
     current_user: dict = Depends(get_current_user),
 ):
     """Train one weapon (auto_sim chunk). User must own the weapon. Gun only (exclude Brass Knuckles). Earlier *owned* guns in damage order must be at 100% first (unowned guns do not block)."""
@@ -1948,15 +1945,7 @@ async def train_shooting_range(
                 )
     if payload.mode not in ("auto_sim", "live"):
         raise HTTPException(status_code=400, detail="Use mode 'auto_sim' or 'live'.")
-    # One-click auto train is bot-abusable; live mastery follows 3D play (run session already captcha-gated at start).
-    if payload.mode == "auto_sim":
-        await require_turnstile_for_minigame_start(
-            db,
-            request=request,
-            current_user=current_user,
-            captcha_token=payload.captcha_token,
-            is_admin=_is_admin(current_user),
-        )
+    # Turnstile: only on starting the 3D run (minigames/run-session/start); live train follows that session.
     now = datetime.now(timezone.utc)
     doc = await db.user_weapon_mastery.find_one({"user_id": current_user["id"], "weapon_id": weapon_id}, {"_id": 0, "mastery_pct": 1, "last_trained_at": 1})
     current_pct = min(100, max(0, int(doc.get("mastery_pct", 0) or 0))) if doc else 0

@@ -935,6 +935,8 @@ export default function Admin() {
   const [blockScriptUserAgentGameActions, setBlockScriptUserAgentGameActions] = useState(true);
   const [blockScriptUaSaving, setBlockScriptUaSaving] = useState(false);
   const [blockScriptGameActionsSaving, setBlockScriptGameActionsSaving] = useState(false);
+  const [gameActionsClientStrict, setGameActionsClientStrict] = useState(false);
+  const [gameActionsTurnstileEnabled, setGameActionsTurnstileEnabled] = useState(false);
   const [minigameTurnstileEnabled, setMinigameTurnstileEnabled] = useState(false);
   const [minigameTurnstileSiteKey, setMinigameTurnstileSiteKey] = useState('');
   const [loginTurnstileEnabled, setLoginTurnstileEnabled] = useState(false);
@@ -1512,6 +1514,8 @@ export default function Admin() {
       setBlockProxyVpnLogin(res.data?.block_proxy_vpn_login !== false);
       setBlockScriptUserAgentLogin(res.data?.block_script_user_agent_login !== false);
       setBlockScriptUserAgentGameActions(res.data?.block_script_user_agent_game_actions !== false);
+      setGameActionsClientStrict(!!res.data?.game_actions_client_strict);
+      setGameActionsTurnstileEnabled(!!res.data?.game_actions_turnstile_enabled);
       setMinigameTurnstileEnabled(!!res.data?.minigame_turnstile_enabled);
       setMinigameTurnstileSiteKey((res.data?.minigame_turnstile_site_key ?? '').trim());
       setLoginTurnstileEnabled(!!res.data?.login_turnstile_enabled);
@@ -1551,6 +1555,8 @@ export default function Admin() {
       setBlockProxyVpnLogin(true);
       setBlockScriptUserAgentLogin(true);
       setBlockScriptUserAgentGameActions(true);
+      setGameActionsClientStrict(false);
+      setGameActionsTurnstileEnabled(false);
       setMinigameTurnstileEnabled(false);
       setMinigameTurnstileSiteKey('');
       setLoginTurnstileEnabled(false);
@@ -1608,6 +1614,8 @@ export default function Admin() {
         block_proxy_vpn_login: blockProxyVpnLogin,
         block_script_user_agent_login: blockScriptUserAgentLogin,
         block_script_user_agent_game_actions: blockScriptUserAgentGameActions,
+        game_actions_client_strict: gameActionsClientStrict,
+        game_actions_turnstile_enabled: gameActionsTurnstileEnabled,
         minigame_turnstile_enabled: minigameTurnstileEnabled,
         minigame_turnstile_site_key: minigameTurnstileSiteKey.trim(),
         login_turnstile_enabled: loginTurnstileEnabled,
@@ -1622,6 +1630,10 @@ export default function Admin() {
       setBlockProxyVpnLogin(res.data?.block_proxy_vpn_login !== false);
       setBlockScriptUserAgentLogin(res.data?.block_script_user_agent_login !== false);
       setBlockScriptUserAgentGameActions(res.data?.block_script_user_agent_game_actions !== false);
+      if (res.data?.game_actions_client_strict !== undefined) setGameActionsClientStrict(!!res.data.game_actions_client_strict);
+      if (res.data?.game_actions_turnstile_enabled !== undefined) {
+        setGameActionsTurnstileEnabled(!!res.data.game_actions_turnstile_enabled);
+      }
       setMinigameTurnstileEnabled(!!res.data?.minigame_turnstile_enabled);
       if (res.data?.minigame_turnstile_site_key !== undefined) {
         setMinigameTurnstileSiteKey((res.data.minigame_turnstile_site_key ?? '').trim());
@@ -9186,6 +9198,18 @@ export default function Admin() {
                   {blockScriptGameActionsSaving ? '…' : 'Disable gameplay blocking'}
                 </button>
               </div>
+              <label className="flex items-start gap-2 cursor-pointer text-sm font-heading pt-1">
+                <input
+                  type="checkbox"
+                  checked={gameActionsClientStrict}
+                  onChange={(e) => setGameActionsClientStrict(e.target.checked)}
+                  className="rounded border-input mt-0.5"
+                />
+                <span>
+                  Strict client headers on gameplay actions (Sec-Fetch mode/dest/site + JSON Accept on writes). Off by default;
+                  QA on Safari iOS / Chrome Android before enabling in production.
+                </span>
+              </label>
             </div>
             <div className="space-y-2 pt-2 border-t border-primary/10">
               <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Minigames — Cloudflare Turnstile</p>
@@ -9209,6 +9233,18 @@ export default function Admin() {
                   className="rounded border-input"
                 />
                 <span>Require Turnstile on login</span>
+              </label>
+              <label className="flex items-start gap-2 cursor-pointer text-sm font-heading">
+                <input
+                  type="checkbox"
+                  checked={gameActionsTurnstileEnabled}
+                  onChange={(e) => setGameActionsTurnstileEnabled(e.target.checked)}
+                  className="rounded border-input mt-0.5"
+                />
+                <span>
+                  Require Turnstile before GTA melt/scrap and booze sell (same public site key as minigames; not used on crime
+                  commits)
+                </span>
               </label>
               <div className="flex flex-col gap-1 max-w-md">
                 <label className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Site key (public)</label>

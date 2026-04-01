@@ -4,6 +4,7 @@ import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import ActiveTokenBadge from '../../components/ActiveTokenBadge';
+import { useGameActionsTurnstile } from '../../hooks/useGameActionsTurnstile';
 
 function formatMoney(n) {
   const num = Number(n ?? 0);
@@ -621,6 +622,7 @@ export default function BoozeRun() {
   const [timer, setTimer] = useState('');
   const [autoRankBoozeDisabled, setAutoRankBoozeDisabled] = useState(false);
   const [user, setUser] = useState(null);
+  const { getCaptchaToken, captchaModal } = useGameActionsTurnstile();
 
   const fetchConfig = useCallback(async () => {
     try {
@@ -713,8 +715,19 @@ export default function BoozeRun() {
       toast.error('Enter a valid amount');
       return;
     }
+    let captchaToken = null;
     try {
-      const response = await api.post('/booze-run/sell', { booze_id: boozeId, amount });
+      captchaToken = await getCaptchaToken();
+    } catch (e) {
+      if (e?.message === 'captcha_cancelled') return;
+      throw e;
+    }
+    try {
+      const response = await api.post('/booze-run/sell', {
+        booze_id: boozeId,
+        amount,
+        ...(captchaToken ? { captcha_token: captchaToken } : {}),
+      });
       if (response.data.caught) {
         toast.error(response.data.message, {
           description: (
@@ -839,6 +852,8 @@ export default function BoozeRun() {
       <HistoryCard history={historyList} />
 
       <InfoCard rotationHours={config.rotation_hours} rotationSeconds={config.rotation_seconds} dailyEstimateRough={config.daily_estimate_rough} />
+
+      {captchaModal}
     </div>
   );
 }

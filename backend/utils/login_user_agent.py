@@ -8,6 +8,7 @@ Layers:
 All are coarse heuristics — trivial to spoof together — but they catch lazy bots and mistyped scripts.
 Disable via main game_settings: block_script_user_agent_login = false (auth + minigames),
 or block_script_user_agent_game_actions = false (crimes, GTA, jail, OC, bodyguards, attack, booze-run).
+Optional stricter Sec-Fetch / Accept for game-action writes when main game_settings game_actions_client_strict = true.
 """
 from __future__ import annotations
 
@@ -37,6 +38,8 @@ _BLOCKED_MARKERS: Tuple[str, ...] = (
     "sqlmap",
     "masscan",
     "nuclei",
+    "node-fetch/",
+    "axios/",
 )
 
 
@@ -98,5 +101,66 @@ def auth_client_headers_blocked(
 
     if not _has_sec_fetch_header(headers):
         return True, "missing_sec_fetch_headers"
+
+    return False, ""
+
+
+def _header_ci(headers: Mapping[str, str], name: str) -> str:
+    for k, v in headers.items():
+        if k.lower() == name.lower():
+            return (v or "").strip().lower()
+    return ""
+
+
+_MUTATING_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
+
+
+def game_action_strict_headers_blocked(
+    headers: Mapping[str, str],
+    *,
+    method: str,
+    settings: dict | None,
+) -> Tuple[bool, str]:
+    """
+    Extra checks for game-action API writes when main game_settings game_actions_client_strict is True.
+    Default False when missing.
+    """
+    if not settings or not bool(settings.get("game_actions_client_strict", False)):
+        return False, ""
+    m = (method or "").upper()
+    if m not in _MUTATING_METHODS:
+        return False, ""
+
+    mode = _header_ci(headers, "sec-fetch-mode")
+    dest = _header_ci(headers, "sec-fetch-dest")
+    site = _header_ci(headers, "sec-fetch-site")
+    accept = ""
+    for k, v in headers.items():
+        if k.lower() == "accept":
+            accept = v or ""
+            break
+
+    if mode:
+        if mode not in ("cors", "same-origin"):
+            return True, "strict_sec_fetch_mode"
+    else:
+        return True, "strict_sec_fetch_mode"
+
+    if dest:
+        if dest != "empty":
+            return True, "strict_sec_fetch_dest"
+    else:
+        if mode == "cors" and site == "same-origin":
+            pass
+        elif mode == "same-origin" and site in ("same-origin", "same-site"):
+            pass
+        else:
+            return True, "strict_sec_fetch_dest"
+
+    if site == "cross-site":
+        return True, "strict_sec_fetch_site"
+
+    if "application/json" not in (accept or "").lower():
+        return True, "strict_accept"
 
     return False, ""
