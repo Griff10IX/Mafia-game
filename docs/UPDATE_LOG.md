@@ -30,6 +30,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-01 23:45 UTC[/color][/b] — [b]Multiplayer Blackjack: fair play, stuck games, admin refund[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] You no longer see other players’ cards or stand/bust until you have finished your own turn for that round. Settlement after the last player acts is more reliable (games should no longer hang on a finished hand). [b]Admins[/b] get a [b]Refund table[/b] button on the MP Blackjack game screen to cancel a stuck table and return buy-ins (not available if the pot was already paid out).[/color]
+[*][color=#888888][b]Player action:[/b] Play as usual. If a table glitches, ask an admin to use Refund table; refresh the lobby if you still see a bad game.[/color]
+[*][color=#888888][b]Impact:[/b] Fairer blind play, fewer stuck tables, faster recovery when something breaks.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-01 22:00 UTC[/color][/b] — [b]Cars: higher sell / melt values (standard + custom)[/b][/size]
 [quote]
 [list]
