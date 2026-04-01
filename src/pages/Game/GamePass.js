@@ -348,30 +348,12 @@ function TierRewards({ rewards, isFreeMembership, isTierCompleted, microTier }) 
   return (
     <div className="space-y-1">
       {REWARD_DISPLAY_ORDER.map((k) => {
-        // UI compression: show Crimes+GTA token tiers as a single "Auto Rank Perks" line
-        // to avoid listing multiple lines for what the player experiences as one reward bucket.
-        if (k === 'xp_gta_tokens') return null;
         const v = rewards?.[k];
-        const text =
-          k === 'xp_crimes_tokens'
-            ? (() => {
-                const crimes = Number(rewards?.xp_crimes_tokens || 0);
-                const gta = Number(rewards?.xp_gta_tokens || 0);
-                let displayAmount = crimes + gta;
-                // Free membership unlocks exactly one bucket per micro tier.
-                // For the auto-rank tier we render as a single line, so we must not sum both buckets for Free previews.
-                if (isFreeMembership) {
-                  if (freeUnlockedRewardKey === 'xp_crimes_tokens') displayAmount = crimes;
-                  if (freeUnlockedRewardKey === 'xp_gta_tokens') displayAmount = gta;
-                }
-                return displayAmount > 0 ? `${displayAmount} Auto Rank Perks` : null;
-              })()
-            : formatTierRewardItem(k, v);
+        const text = formatTierRewardItem(k, v);
         if (!text) return null;
         const isUnlockedForThisLine =
           !isFreeMembership ||
-          (isTierCompleted &&
-            (k === freeUnlockedRewardKey || (k === 'xp_crimes_tokens' && freeUnlockedRewardKey === 'xp_gta_tokens')));
+          (isTierCompleted && k === freeUnlockedRewardKey);
         const lockedForFree = isFreeMembership && !isUnlockedForThisLine;
         return (
           <div key={k} className={`text-[9px] font-heading ${lockedForFree ? 'text-zinc-600/90' : 'text-zinc-300'}`}>
@@ -400,12 +382,8 @@ function getTierPrimaryLabel(tier, { isFreeMembership, freeUnlockedRewardKey } =
     if (key === 'travel_tokens') return `${n.toLocaleString()} Travel Token`;
     if (key === 'properties_tokens') return `${n.toLocaleString()} Properties Token`;
     if (key === 'auto_rank_2h_tokens') return `${n.toLocaleString()} Auto Rank (2h)`;
-    if (key === 'xp_crimes_tokens' || key === 'xp_gta_tokens') {
-      const crimes = Number(rewards.xp_crimes_tokens || 0);
-      const gta = Number(rewards.xp_gta_tokens || 0);
-      const amt = key === 'xp_crimes_tokens' ? crimes : gta;
-      return `${amt} Auto Rank Perks`;
-    }
+    if (key === 'xp_crimes_tokens') return `${n.toLocaleString()}x Crimes XP Token`;
+    if (key === 'xp_gta_tokens') return `${n.toLocaleString()}x GTA XP Token`;
     return null;
   };
 
@@ -418,11 +396,8 @@ function getTierPrimaryLabel(tier, { isFreeMembership, freeUnlockedRewardKey } =
   // VIP: show highest-priority non-zero key.
   if (rewards.money) return `$${Number(rewards.money).toLocaleString()} cash`;
   if (rewards.bullets) return `${Number(rewards.bullets).toLocaleString()} Bullets`;
-  if (rewards.xp_crimes_tokens || rewards.xp_gta_tokens) {
-    const crimes = Number(rewards.xp_crimes_tokens || 0);
-    const gta = Number(rewards.xp_gta_tokens || 0);
-    return `${crimes + gta} Auto Rank Perks`;
-  }
+  if (rewards.xp_crimes_tokens) return `${Number(rewards.xp_crimes_tokens).toLocaleString()}x Crimes XP Token`;
+  if (rewards.xp_gta_tokens) return `${Number(rewards.xp_gta_tokens).toLocaleString()}x GTA XP Token`;
   if (rewards.points) return `${Number(rewards.points).toLocaleString()} Points`;
   if (rewards.respect_points) return `${Number(rewards.respect_points).toLocaleString()} Respect`;
   if (rewards.melt_tokens) return `${Number(rewards.melt_tokens).toLocaleString()} Melt Tokens`;
