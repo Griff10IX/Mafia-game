@@ -112,12 +112,21 @@ function PlayerSeat({ p, isMe, isCurrent, showCards, isWinner }) {
   const isEliminated = p.eliminated || p.status === 'eliminated';
   const isWaiting = p.status === 'waiting' || p.status === 'waiting_ready';
   const isReady = p.ready && isWaiting;
+  const maskPeek = !isMe && !showCards;
 
   let badgeLabel = '—';
   let badgeStyle = { background: 'rgba(255,255,255,0.05)', color: 'rgba(255,255,255,0.3)' };
 
   if (isWinner)       { badgeLabel = '🏆 Win';  badgeStyle = { background: 'rgba(52,211,153,0.25)', color: '#34d399' }; }
   else if (isEliminated)   { badgeLabel = 'Out';     badgeStyle = { background: 'rgba(239,68,68,0.2)', color: '#ef4444' }; }
+  else if (maskPeek && hand.length && !isCurrent && p.status === 'playing') {
+    badgeLabel = 'Waiting';
+    badgeStyle = { background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.35)' };
+  }
+  else if (maskPeek && hand.length && !isCurrent) {
+    badgeLabel = '···';
+    badgeStyle = { background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.25)' };
+  }
   else if (isBust)    { badgeLabel = 'Bust';    badgeStyle = { background: 'rgba(248,113,113,0.2)', color: '#f87171' }; }
   else if (isStood)   { badgeLabel = 'Stand';   badgeStyle = { background: 'rgba(161,161,170,0.2)', color: '#a1a1aa' }; }
   else if (isCurrent) { badgeLabel = 'Playing'; badgeStyle = { background: 'rgba(212,175,55,0.2)', color: 'var(--noir-primary)' }; }
@@ -151,7 +160,7 @@ function PlayerSeat({ p, isMe, isCurrent, showCards, isWinner }) {
           : hand.length === 0
           ? <span className="text-[8px] font-heading" style={{ color: 'rgba(255,255,255,0.1)' }}>waiting…</span>
           : hand.map((card, i) => (
-              <PlayingCard key={i} card={card} hidden={!showCards} index={i} total={hand.length} />
+              <PlayingCard key={i} card={card} hidden={!showCards || card?.value === '?'} index={i} total={hand.length} />
             ))
         }
       </div>
@@ -220,6 +229,7 @@ export default function MPBlackjackGamePage() {
   const [cancelLoading, setCancelLoading] = useState(false);
   const [readyLoading, setReadyLoading] = useState(false);
   const [leaveLoading, setLeaveLoading] = useState(false);
+  const [refundStuckLoading, setRefundStuckLoading] = useState(false);
   const [showWin, setShowWin] = useState(false);
   const [prevStatus, setPrevStatus] = useState(null);
   const [prevPhase, setPrevPhase] = useState(null);
@@ -350,6 +360,22 @@ export default function MPBlackjackGamePage() {
     finally { setLeaveLoading(false); }
   };
 
+  const refundStuckGame = async () => {
+    if (!gameId || refundStuckLoading || !isAdmin) return;
+    if (!window.confirm('Cancel this game and refund all buy-ins to players?')) return;
+    setRefundStuckLoading(true);
+    try {
+      await api.post(`/casino/mp-blackjack/games/${gameId}/refund-stuck`);
+      await refreshUser();
+      toast.success('Bets refunded — game cancelled');
+      navigate('/casino/mp-blackjack');
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || 'Could not refund');
+    } finally {
+      setRefundStuckLoading(false);
+    }
+  };
+
   const triggerStart = useCallback(async () => {
     if (!gameId || startTriggeredRef.current) return;
     startTriggeredRef.current = true;
@@ -400,6 +426,7 @@ export default function MPBlackjackGamePage() {
   const isCreator = game?.creator_id === myUserId;
   const canCancelGame = (isCreator || isAdmin || isModerator) && phase !== 'playing' && phase !== 'dealer';
   const canLeaveGame = amIPlayer && !canCancelGame && phase !== 'playing' && phase !== 'dealer';
+  const showRefundStuckBtn = isAdmin && status !== 'completed' && status !== 'cancelled';
   const turnStartedAt = game?.turn_started_at;
   const allReadyAt = game?.all_ready_at;
   const eliminationRounds = game?.elimination_rounds || false;
@@ -566,6 +593,22 @@ export default function MPBlackjackGamePage() {
             </p>
           </div>
         </div>
+        {showRefundStuckBtn && (
+          <button
+            type="button"
+            disabled={refundStuckLoading}
+            onClick={refundStuckGame}
+            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border text-[8px] font-heading font-bold uppercase disabled:opacity-50 transition-colors"
+            style={{
+              borderColor: 'rgba(248,113,113,0.45)',
+              background: 'rgba(248,113,113,0.1)',
+              color: '#f87171',
+            }}
+          >
+            <XCircle size={10} />
+            {refundStuckLoading ? '…' : 'Refund table'}
+          </button>
+        )}
       </div>
 
       {/* ══ LOBBY (waiting for 2+ players) ══ */}
@@ -806,17 +849,18 @@ export default function MPBlackjackGamePage() {
               {players.map((p, idx) => {
                 const isMe = p.user_id === myUserId;
                 const isCurrent = idx === currentTurnIndex;
-                const roundOver = status === 'completed' || phase === 'settled';
-                const opponentRevealed = roundOver || p.status === 'stood' || p.status === 'bust' || p.eliminated;
+                const everyoneResolved = status === 'completed' || phase === 'settled' || phase === 'dealer';
+                const myFinished = !!(myPlayer && (myPlayer.status === 'stood' || myPlayer.status === 'bust' || amIEliminated));
+                const showOpponentCards = isMe || everyoneResolved || myFinished;
                 const winnerIds = game?.winner_ids || [];
-                const isWinner = roundOver && winnerIds.includes(p.user_id);
+                const isWinner = (status === 'completed' || phase === 'settled') && winnerIds.includes(p.user_id);
                 return (
                   <PlayerSeat
                     key={p.user_id}
                     p={p}
                     isMe={isMe}
                     isCurrent={isCurrent}
-                    showCards={isMe || opponentRevealed}
+                    showCards={showOpponentCards}
                     isWinner={isWinner}
                   />
                 );

@@ -122,7 +122,17 @@ def register(router):
 
     # ── helpers ──────────────────────────────────────────────────────────────
 
-    def _serialize_game(g):
+    def _uid_eq(a, b) -> bool:
+        if a is None or b is None:
+            return False
+        return str(a) == str(b)
+
+    def _player_turn_finished(p: dict) -> bool:
+        if p.get("eliminated"):
+            return True
+        return p.get("status") in ("stood", "bust")
+
+    def _serialize_game(g, viewer_user_id=None):
         out = {k: v for k, v in g.items() if k != "_id"}
         if g.get("anonymous"):
             out["creator_username"] = "Anonymous"
@@ -149,6 +159,21 @@ def register(router):
             out["eliminated"] = eliminated
             for c in out.get("chat") or []:
                 c["username"] = uid_to_label.get(c.get("user_id"), "Anonymous")
+        # Hide opponents' hands until this player has stood/busted (or is eliminated); prevents peeking via API.
+        if viewer_user_id is not None and g.get("status") == "playing" and g.get("phase") == "playing":
+            players = list(out.get("players") or [])
+            me = next((p for p in players if _uid_eq(p.get("user_id"), viewer_user_id)), None)
+            if me is not None and not _player_turn_finished(me):
+                new_players = []
+                for p in players:
+                    if _uid_eq(p.get("user_id"), viewer_user_id):
+                        new_players.append(dict(p))
+                        continue
+                    p2 = dict(p)
+                    n = len(p2.get("hand") or [])
+                    p2["hand"] = [{"suit": "H", "value": "?"} for _ in range(n)]
+                    new_players.append(p2)
+                out["players"] = new_players
         return out
 
     def _deal_round(players: list, deck: list) -> tuple:
@@ -165,6 +190,48 @@ def register(router):
         """Players who are still in the game (not eliminated)."""
         return [p for p in players if not p.get("eliminated")]
 
+    async def _mp_bj_refund_all_players(game: dict):
+        """Refund the pot to seated players and extra prize to creator (same rules as cancel)."""
+        players = list(game.get("players") or [])
+        pot = int(game.get("pot") or 0)
+        buy_in = int(game.get("buy_in") or 0)
+        extra_prize = int(game.get("extra_prize") or 0)
+        creator_id = (game.get("creator_id") or "").strip()
+
+        refund_map = {}
+        for p in players:
+            uid_p = (p.get("user_id") or "").strip()
+            if not uid_p:
+                continue
+            contributed_buy_in = int(p.get("bet") or buy_in or 0)
+            if contributed_buy_in > 0:
+                refund_map[uid_p] = int(refund_map.get(uid_p, 0)) + contributed_buy_in
+        if creator_id and extra_prize > 0:
+            refund_map[creator_id] = int(refund_map.get(creator_id, 0)) + extra_prize
+
+        planned_total = sum(int(v or 0) for v in refund_map.values())
+        if planned_total != pot:
+            adjust_uid = creator_id if creator_id else (players[0].get("user_id") if players else "")
+            if adjust_uid:
+                refund_map[adjust_uid] = int(refund_map.get(adjust_uid, 0)) + (pot - planned_total)
+
+        for uid_p, add in refund_map.items():
+            if add > 0:
+                await db.users.update_one({"id": uid_p}, {"$inc": {"money": int(add)}})
+
+    async def _credit_mp_bj_pot_once(game_id: str, winner_uid, username: str, pot: int):
+        """Pay the pot at most once (settlement may be retried from GET/timeout)."""
+        if pot <= 0:
+            return
+        gate = await db.mp_blackjack_games.update_one(
+            {"id": game_id, "mp_bj_pot_credited": {"$ne": True}},
+            {"$set": {"mp_bj_pot_credited": True}},
+        )
+        if gate.modified_count == 0:
+            return
+        await db.users.update_one({"id": winner_uid}, {"$inc": {"money": pot}})
+        await log_gambling(winner_uid, username or "?", "mp_blackjack", {"action": "payout", "game_id": game_id, "winnings": pot})
+
     async def _run_settle(game_id: str):
         """
         Settle current round.
@@ -173,14 +240,16 @@ def register(router):
           Refund eliminated players their buy-in from pot, winner gets remainder.
         - If not elimination_rounds: best hand wins the whole pot (original logic).
         """
-        claim_res = await db.mp_blackjack_games.update_one(
-            {"id": game_id, "status": {"$ne": "completed"}, "phase": {"$in": ("playing", "dealer")}},
+        # First caller sets _settlement_claimed. MongoDB returns modified_count 0 if already True — we must
+        # still run settlement when a prior attempt crashed after claiming (otherwise stuck in dealer forever).
+        await db.mp_blackjack_games.update_one(
+            {"id": game_id, "status": {"$ne": "completed"}, "phase": {"$in": ("playing", "dealer")}, "_settlement_claimed": {"$ne": True}},
             {"$set": {"_settlement_claimed": True}},
         )
-        if claim_res.modified_count == 0:
-            return
         game = await db.mp_blackjack_games.find_one({"id": game_id})
-        if not game or game.get("phase") not in ("playing", "dealer"):
+        if not game or game.get("status") == "completed":
+            return
+        if game.get("phase") not in ("playing", "dealer"):
             return
 
         players = list(game.get("players") or [])
@@ -270,9 +339,7 @@ def register(router):
                 for p in players:
                     uid = p["user_id"]
                     if uid in winner_ids:
-                        if pot > 0:
-                            await db.users.update_one({"id": uid}, {"$inc": {"money": pot}})
-                            await log_gambling(uid, p.get("username") or "?", "mp_blackjack", {"action": "payout", "game_id": game_id, "winnings": pot})
+                        await _credit_mp_bj_pot_once(game_id, uid, p.get("username") or "?", pot)
                         results.append({
                             "user_id": uid,
                             "username": p.get("username"),
@@ -398,6 +465,7 @@ def register(router):
                             "current_turn_index": -1,
                             "all_ready_at": None,
                         },
+                        "$unset": {"_settlement_claimed": ""},
                         "$push": {"round_history": {"$each": [round_entry], "$slice": -5}},
                     },
                 )
@@ -409,9 +477,7 @@ def register(router):
             # Single winner takes pot
             uid = players[winner_indices[0]].get("user_id")
             payouts[uid] = pot
-            if pot > 0:
-                await db.users.update_one({"id": uid}, {"$inc": {"money": pot}})
-                await log_gambling(uid, players[winner_indices[0]].get("username") or "?", "mp_blackjack", {"action": "payout", "game_id": game_id, "winnings": pot})
+            await _credit_mp_bj_pot_once(game_id, uid, players[winner_indices[0]].get("username") or "?", pot)
 
             results = []
             for p in players:
@@ -709,37 +775,39 @@ def register(router):
         )
         if claim_res.modified_count == 0:
             raise HTTPException(status_code=400, detail="Game cannot be cancelled at this stage")
-        players = list(game.get("players") or [])
-        pot = int(game.get("pot") or 0)
-        buy_in = int(game.get("buy_in") or 0)
-        extra_prize = int(game.get("extra_prize") or 0)
-        creator_id = (game.get("creator_id") or "").strip()
-
-        # Refund contributors, not equal shares:
-        # - each seated player gets their buy-in back
-        # - creator gets extra prize back (even if excluded from seating)
-        refund_map = {}
-        for p in players:
-            uid_p = (p.get("user_id") or "").strip()
-            if not uid_p:
-                continue
-            contributed_buy_in = int(p.get("bet") or buy_in or 0)
-            if contributed_buy_in > 0:
-                refund_map[uid_p] = int(refund_map.get(uid_p, 0)) + contributed_buy_in
-        if creator_id and extra_prize > 0:
-            refund_map[creator_id] = int(refund_map.get(creator_id, 0)) + extra_prize
-
-        planned_total = sum(int(v or 0) for v in refund_map.values())
-        if planned_total != pot:
-            # Keep economy balanced if legacy data is inconsistent.
-            adjust_uid = creator_id if creator_id else (players[0].get("user_id") if players else "")
-            if adjust_uid:
-                refund_map[adjust_uid] = int(refund_map.get(adjust_uid, 0)) + (pot - planned_total)
-
-        for uid_p, add in refund_map.items():
-            if add > 0:
-                await db.users.update_one({"id": uid_p}, {"$inc": {"money": int(add)}})
+        await _mp_bj_refund_all_players(game)
         return {"message": "Game cancelled; all players refunded", "game_id": game_id}
+
+    @router.post("/casino/mp-blackjack/games/{game_id}/refund-stuck")
+    async def mp_bj_refund_stuck(game_id: str, current_user: dict = Depends(get_current_user_verified)):
+        """
+        Admin only: cancel the game and refund all buy-ins when the table is stuck or needs to be cleared.
+        Refused if the pot was already credited to a winner.
+        """
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin only")
+        uid = current_user.get("id") or ""
+        username = (current_user.get("username") or "?").strip()
+        game = await db.mp_blackjack_games.find_one({"id": game_id})
+        if not game:
+            raise HTTPException(status_code=404, detail="Game not found")
+        if game.get("status") in ("completed", "cancelled"):
+            raise HTTPException(status_code=400, detail="Game is already finished")
+        if game.get("mp_bj_pot_credited"):
+            raise HTTPException(
+                status_code=400,
+                detail="Pot was already paid to a winner; automatic refunds are not available.",
+            )
+        now_iso = datetime.now(timezone.utc).isoformat()
+        claim_res = await db.mp_blackjack_games.update_one(
+            {"id": game_id, "status": {"$nin": ("completed", "cancelled")}, "mp_bj_pot_credited": {"$ne": True}},
+            {"$set": {"status": "cancelled", "completed_at": now_iso, "cancel_reason": "stuck_refund"}},
+        )
+        if claim_res.modified_count == 0:
+            raise HTTPException(status_code=400, detail="Could not refund this game (already finished or pot paid).")
+        await _mp_bj_refund_all_players(game)
+        await log_gambling(uid, username, "mp_blackjack", {"action": "stuck_refund", "game_id": game_id})
+        return {"message": "Bets refunded — game cancelled", "game_id": game_id}
 
     @router.post("/casino/mp-blackjack/games/{game_id}/leave")
     async def mp_bj_leave(game_id: str, current_user: dict = Depends(get_current_user_verified)):
@@ -790,7 +858,7 @@ def register(router):
         }
         await db.mp_blackjack_games.update_one({"id": game_id}, {"$set": updates})
         updated = await db.mp_blackjack_games.find_one({"id": game_id})
-        return {"game": _serialize_game(updated)}
+        return {"game": _serialize_game(updated, uid)}
 
     @router.post("/casino/mp-blackjack/games/{game_id}/join")
     async def mp_bj_join(game_id: str, current_user: dict = Depends(get_current_user_verified)):
@@ -849,7 +917,7 @@ def register(router):
             )
             await log_gambling(uid, username, "mp_blackjack", {"action": "join", "game_id": game_id, "buy_in": buy_in})
             updated = await db.mp_blackjack_games.find_one({"id": game_id})
-            return {"message": "Joined — table is full! Ready up to start.", "game": _serialize_game(updated)}
+            return {"message": "Joined — table is full! Ready up to start.", "game": _serialize_game(updated, uid)}
 
         if len(players) >= 2:
             # 2+ players is enough — creator can start once all current players are ready
@@ -864,7 +932,7 @@ def register(router):
             )
         await log_gambling(uid, username, "mp_blackjack", {"action": "join", "game_id": game_id, "buy_in": buy_in})
         updated = await db.mp_blackjack_games.find_one({"id": game_id})
-        return {"message": "Joined", "game": _serialize_game(updated)}
+        return {"message": "Joined", "game": _serialize_game(updated, uid)}
 
     @router.post("/casino/mp-blackjack/games/{game_id}/ready")
     async def mp_bj_ready(game_id: str, current_user: dict = Depends(get_current_user_verified)):
@@ -887,7 +955,7 @@ def register(router):
         updated = await _maybe_start_from_ready(game_id)
         if updated is None:
             updated = await db.mp_blackjack_games.find_one({"id": game_id})
-        return {"game": _serialize_game(updated)}
+        return {"game": _serialize_game(updated, uid)}
 
     @router.post("/casino/mp-blackjack/games/{game_id}/start")
     async def mp_bj_start(game_id: str, current_user: dict = Depends(get_current_user_verified)):
@@ -948,7 +1016,7 @@ def register(router):
             },
         )
         updated = await db.mp_blackjack_games.find_one({"id": game_id})
-        return {"message": "Game started", "game": _serialize_game(updated)}
+        return {"message": "Game started", "game": _serialize_game(updated, uid)}
 
     @router.get("/casino/mp-blackjack/games/{game_id}")
     async def mp_bj_get_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
@@ -959,7 +1027,11 @@ def register(router):
         updated = await _maybe_auto_stand(game_id)
         if updated is not None:
             game = updated
-        return {"game": _serialize_game(game)}
+        # Finish settlement if the last hand moved to dealer but payout didn't complete (e.g. interrupted request).
+        if game.get("phase") == "dealer" and game.get("status") != "completed":
+            await _run_settle(game_id)
+            game = await db.mp_blackjack_games.find_one({"id": game_id})
+        return {"game": _serialize_game(game, current_user.get("id"))}
 
     @router.post("/casino/mp-blackjack/games/{game_id}/hit")
     async def mp_bj_hit(game_id: str, current_user: dict = Depends(get_current_user_verified)):
@@ -1008,7 +1080,7 @@ def register(router):
                 {"$set": {"players": players, "deck": deck, "current_turn_index": turn_idx, "turn_started_at": now_iso}},
             )
         updated = await db.mp_blackjack_games.find_one({"id": game_id})
-        return {"game": _serialize_game(updated)}
+        return {"game": _serialize_game(updated, uid)}
 
     @router.post("/casino/mp-blackjack/games/{game_id}/stand")
     async def mp_bj_stand(game_id: str, current_user: dict = Depends(get_current_user_verified)):
@@ -1046,7 +1118,7 @@ def register(router):
                 {"$set": {"players": players, "deck": deck, "current_turn_index": turn_idx, "turn_started_at": now_iso}},
             )
         updated = await db.mp_blackjack_games.find_one({"id": game_id})
-        return {"game": _serialize_game(updated)}
+        return {"game": _serialize_game(updated, uid)}
 
     class MPChatRequest(BaseModel):
         message: str
@@ -1072,15 +1144,19 @@ def register(router):
             chat = chat[-MP_BJ_CHAT_MAX:]
         await db.mp_blackjack_games.update_one({"id": game_id}, {"$set": {"chat": chat}})
         updated = await db.mp_blackjack_games.find_one({"id": game_id})
-        return {"game": _serialize_game(updated)}
+        return {"game": _serialize_game(updated, uid)}
 
     @router.post("/casino/mp-blackjack/games/{game_id}/timeout")
     async def mp_bj_timeout(game_id: str, current_user: dict = Depends(get_current_user_verified)):
         """Trigger turn timeout check."""
+        uid = current_user.get("id") or ""
         game = await db.mp_blackjack_games.find_one({"id": game_id})
         if not game:
             raise HTTPException(status_code=404, detail="Game not found")
         updated = await _maybe_auto_stand(game_id)
         if updated is not None:
             game = updated
-        return {"game": _serialize_game(game)}
+        if game.get("phase") == "dealer" and game.get("status") != "completed":
+            await _run_settle(game_id)
+            game = await db.mp_blackjack_games.find_one({"id": game_id})
+        return {"game": _serialize_game(game, uid)}

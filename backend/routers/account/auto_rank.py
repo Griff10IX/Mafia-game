@@ -753,7 +753,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     """Commit all crimes off cooldown, then one GTA (if off cooldown), then melt (if enabled), then booze if enabled. Abides all game timer rules; impls enforce cooldowns. Telegram is optional; if not set, actions still run and no notifications are sent."""
     import server as srv
     from routers.crime.crimes import commit_crime_locked
-    from routers.cars.gta import attempt_gta_locked, melt_cars_locked, GTA_OPTIONS
+    from routers.cars.gta import attempt_gta_locked, melt_cars_locked, effective_garage_batch_limit, GTA_OPTIONS
     CARS = getattr(srv, "CARS", None) or []
     from middleware.security import send_telegram_to_chat
 
@@ -936,36 +936,37 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
             # No rarities selected = don't melt/scrap any cars (ids must match CARS[].rarity, same as garage)
             allowed_rarities = set(melt_rarity_ids) if isinstance(melt_rarity_ids, list) and len(melt_rarity_ids) > 0 else set()
             allowed_rarities = {r for r in allowed_rarities if r in MELT_RARITIES}
-            batch_limit = user.get("garage_batch_limit") or getattr(srv, "DEFAULT_GARAGE_BATCH_LIMIT", 6)
+            batch_limit = effective_garage_batch_limit(user)
             booze_protected = await _get_booze_protected_car_ids(db, user_id) if user.get("auto_rank_booze") else set()
-            cars_cursor = db.user_cars.find({"user_id": user_id})
-            user_cars = await cars_cursor.to_list(1000)
-            eligible = []
-            for uc in user_cars:
-                if uc.get("listed_for_sale"):
-                    continue
-                ucid = uc.get("id") or str(uc.get("_id", ""))
-                if ucid and ucid in booze_protected:
-                    continue
-                car_id = uc.get("car_id")
-                car_info = next((c for c in (CARS or []) if c.get("id") == car_id), None)
-                if not car_info:
-                    continue
-                rarity = car_info.get("rarity") or "common"
-                if rarity not in allowed_rarities:
-                    continue
-                value = int(car_info.get("value") or 0)
-                eligible.append({"user_car_id": ucid, "value": value})
-            eligible.sort(key=lambda x: x["value"])
-            melted_this_cycle = 0  # cap total melted per cycle at batch_limit
+
+            async def _melt_eligible_rows():
+                cars_cursor = db.user_cars.find({"user_id": user_id})
+                user_cars = await cars_cursor.to_list(1000)
+                rows = []
+                for uc in user_cars:
+                    if uc.get("listed_for_sale"):
+                        continue
+                    ucid = uc.get("id") or str(uc.get("_id", ""))
+                    if ucid and ucid in booze_protected:
+                        continue
+                    car_id = uc.get("car_id")
+                    car_info = next((c for c in (CARS or []) if c.get("id") == car_id), None)
+                    if not car_info:
+                        continue
+                    rarity = car_info.get("rarity") or "common"
+                    if rarity not in allowed_rarities:
+                        continue
+                    rows.append({"user_car_id": ucid, "value": int(car_info.get("value") or 0)})
+                rows.sort(key=lambda x: x["value"])
+                return rows
+
+            eligible = await _melt_eligible_rows()
+            melted_this_cycle = 0  # cap total melted per single-action loop at batch_limit
             car_ids = [e["user_car_id"] for e in eligible[:max(0, batch_limit - melted_this_cycle)]]
             actions = [a for a in melt_action_ids if a in ("bullets", "cash")]
             if len(actions) == 2:
-                # Both bullets and cash selected: use half batch for each per cycle
-                n = len(car_ids)
-                half = (n + 1) // 2
-                car_ids_bullets = car_ids[:half]
-                car_ids_cash = car_ids[half:]
+                # Both bullets and cash: full upgraded batch for each (same as manual garage), re-fetch between
+                car_ids_bullets = [e["user_car_id"] for e in eligible[:batch_limit]]
                 try:
                     if car_ids_bullets:
                         result_b = await melt_cars_locked(user, car_ids_bullets, "bullets")
@@ -977,6 +978,8 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                             tb = result_b.get("total_bullets", 0)
                             lines.append(f"**Melt** — Melted {mc} car(s) for {tb} bullets.")
                             await _update_auto_rank_stats_melt(db, user_id, melted_count=mc, total_bullets=tb)
+                    eligible = await _melt_eligible_rows()
+                    car_ids_cash = [e["user_car_id"] for e in eligible[:batch_limit]]
                     if car_ids_cash:
                         result_c = await melt_cars_locked(user, car_ids_cash, "cash")
                         if result_c.get("success"):
@@ -1017,23 +1020,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                                 lines.append(f"**Melt** — Scrapped {mc} car(s) for ${tv:,}.")
                                 await _update_auto_rank_stats_melt(db, user_id, scrapped_count=mc, total_cash=tv)
                             # Re-fetch eligible cars for next action (previous were deleted); cap by batch limit
-                            cars_cursor = db.user_cars.find({"user_id": user_id})
-                            user_cars = await cars_cursor.to_list(1000)
-                            eligible = []
-                            for uc in user_cars:
-                                if uc.get("listed_for_sale"):
-                                    continue
-                                ucid = uc.get("id") or str(uc.get("_id", ""))
-                                if ucid and ucid in booze_protected:
-                                    continue
-                                car_info = next((c for c in (CARS or []) if c.get("id") == uc.get("car_id")), None)
-                                if not car_info:
-                                    continue
-                                rarity = car_info.get("rarity") or "common"
-                                if rarity not in allowed_rarities:
-                                    continue
-                                eligible.append({"user_car_id": ucid, "value": int(car_info.get("value") or 0)})
-                            eligible.sort(key=lambda x: x["value"])
+                            eligible = await _melt_eligible_rows()
                             car_ids = [e["user_car_id"] for e in eligible[:max(0, batch_limit - melted_this_cycle)]]
                     except Exception as e:
                         logger.exception("Auto rank melt for %s: %s", user_id, e)
@@ -1057,7 +1044,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                 user = await db.users.find_one({"id": user_id}, {"_id": 0})
                 if not user or user.get("in_jail"):
                     return
-                batch_limit = user.get("garage_batch_limit") or getattr(srv, "DEFAULT_GARAGE_BATCH_LIMIT", 6)
+                batch_limit = effective_garage_batch_limit(user)
                 booze_protected = await _get_booze_protected_car_ids(db, user_id) if user.get("auto_rank_booze") else set()
                 cars_cursor = db.user_cars.find({"user_id": user_id})
                 user_cars = await cars_cursor.to_list(1000)

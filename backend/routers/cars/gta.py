@@ -110,12 +110,27 @@ from server import (
     TRAVEL_TIMES,
     MELT_VALUE_PER_BULLET,
     DEFAULT_GARAGE_BATCH_LIMIT,
+    GARAGE_BATCH_LIMIT_MAX,
     CustomCarImageUpdate,
     _family_in_active_war,
 )
 from routers.account.objectives import update_objectives_progress
 from routers.admin.airport import _invalidate_travel_info_cache
 from routers.game.families import resolve_family_id
+
+
+def effective_garage_batch_limit(user: dict) -> int:
+    """Melt/scrap batch size from user doc (Store garage upgrade). Never None/0; caps at GARAGE_BATCH_LIMIT_MAX."""
+    raw = (user or {}).get("garage_batch_limit")
+    if raw is None:
+        return DEFAULT_GARAGE_BATCH_LIMIT
+    try:
+        n = int(raw)
+    except (TypeError, ValueError):
+        return DEFAULT_GARAGE_BATCH_LIMIT
+    if n <= 0:
+        return DEFAULT_GARAGE_BATCH_LIMIT
+    return min(n, GARAGE_BATCH_LIMIT_MAX)
 from utils.image_upload_security import (
     CAR_IMAGE_MAX_DATA_URL_BYTES,
     validate_custom_car_image_value,
@@ -837,7 +852,7 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str):
         melt_until = _parse_melt_cooldown(prev_user_before_bullets_claim.get("melt_until"))
         melt_token_active = bool(melt_until and now < melt_until)
     else:
-        batch_limit = user.get("garage_batch_limit", DEFAULT_GARAGE_BATCH_LIMIT)
+        batch_limit = effective_garage_batch_limit(user)
         limit = min(batch_limit, len(car_ids))
 
     total_value = 0
