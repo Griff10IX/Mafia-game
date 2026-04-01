@@ -693,6 +693,16 @@ def _user_id_variants_for_family_members(user_id: Any) -> list:
     return list(dict.fromkeys(out))
 
 
+def _user_id_filter_for_users_collection(user_id: Any) -> dict:
+    """Match users.id whether stored as string or int (Mongo matches type strictly)."""
+    variants = _user_id_variants_for_family_members(user_id)
+    if not variants:
+        return {"id": "__no_such_user__"}
+    if len(variants) == 1:
+        return {"id": variants[0]}
+    return {"id": {"$in": variants}}
+
+
 async def _delete_family_memberships_for_user(user_id: Any) -> None:
     """Remove all family_members rows for this user (stale/orphan cleanup)."""
     variants = _user_id_variants_for_family_members(user_id)
@@ -876,6 +886,32 @@ async def family_property_holdings_summary(family_id: str, fam_doc: dict) -> dic
         })
     for label, coll in CASINO_OWNERSHIP_COLLECTIONS:
         try:
+            if coll == "slots_ownership":
+                # One active slots row per owner; ignore expired; if DB has duplicates, keep latest expires_at
+                from routers.casinos.slots import _is_slots_ownership_expired
+
+                best_by_owner: Dict[str, dict] = {}
+                async for doc in db[coll].find(
+                    q,
+                    {"_id": 0, "city": 1, "state": 1, "owner_username": 1, "owner_id": 1, "expires_at": 1},
+                ):
+                    if doc.get("owner_id") is None:
+                        continue
+                    if _is_slots_ownership_expired(doc):
+                        continue
+                    oid = str(doc.get("owner_id"))
+                    prev = best_by_owner.get(oid)
+                    if prev is None or (doc.get("expires_at") or "") > (prev.get("expires_at") or ""):
+                        best_by_owner[oid] = doc
+                for doc in best_by_owner.values():
+                    city = (doc.get("city") or doc.get("state") or "—")
+                    casinos.append({
+                        "game": label,
+                        "city": str(city).strip() or "—",
+                        "state": doc.get("state"),
+                        "owner_username": (doc.get("owner_username") or "—").strip() or "—",
+                    })
+                continue
             async for doc in db[coll].find(q, {"_id": 0, "city": 1, "state": 1, "owner_username": 1, "owner_id": 1}):
                 if doc.get("owner_id") is None:
                     continue
@@ -1238,7 +1274,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
     fam = await db.families.find_one({"id": family_id}, {"_id": 0})
     if not fam:
         await db.users.update_one(
-            {"id": current_user["id"]},
+            _user_id_filter_for_users_collection(current_user["id"]),
             {"$set": {"family_id": None, "family_role": None, **_family_melt_stats_reset_fields()}},
         )
         return {"family": None, "members": [], "rackets": [], "my_role": None}
@@ -1248,7 +1284,10 @@ async def families_my(current_user: dict = Depends(get_current_user)):
     if my_member and my_member.get("role"):
         my_role = str(my_member["role"]).strip().lower() or my_role
         if my_role and current_user.get("family_role") != my_role:
-            await db.users.update_one({"id": current_user["id"]}, {"$set": {"family_role": my_role}})
+            await db.users.update_one(
+                _user_id_filter_for_users_collection(current_user["id"]),
+                {"$set": {"family_role": my_role}},
+            )
     if my_role:
         my_role = str(my_role).strip().lower()
     ev = await get_effective_event()
@@ -1256,9 +1295,15 @@ async def families_my(current_user: dict = Depends(get_current_user)):
     users_by_id = await _users_map_by_ids(member_uids)
     members = []
     fallen = []
+    stale_member_rows_removed = 0
     for m in members_docs:
         u = users_by_id.get(_uid_str(m["user_id"]))
         if not _user_belongs_on_family_roster(u, family_id):
+            if u is not None:
+                v = _user_id_variants_for_family_members(m.get("user_id"))
+                if v:
+                    r = await db.family_members.delete_many({"family_id": family_id, "user_id": {"$in": v}})
+                    stale_member_rows_removed += int(r.deleted_count or 0)
             continue
         rank_name = "—"
         if u:
@@ -1280,6 +1325,8 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             fallen.append(entry)
         else:
             members.append(entry)
+    if stale_member_rows_removed:
+        _invalidate_list_cache()
     rackets_raw = fam.get("rackets") or {}
     staff_debug = _is_admin(current_user)
     racket_bonus_pct = float((fam.get("racket_income_bonus_percent") or 0) or 0)
@@ -1475,6 +1522,7 @@ async def families_lookup(tag: Optional[str] = None, id: Optional[str] = None, c
     users_by_id = await _users_map_by_ids(lookup_uids)
     members = []
     fallen = []
+    stale_member_rows_removed = 0
     bid_norm = _uid_str(fam.get("boss_id"))
     for m in members_docs:
         uid_s = _uid_str(m["user_id"])
@@ -1507,6 +1555,12 @@ async def families_lookup(tag: Optional[str] = None, id: Optional[str] = None, c
                     rank_name = next((x["name"] for x in RANKS if x.get("id") == u.get("rank", 1)), str(u.get("rank", 1)))
                 uname = ((u.get("username") if u else None) or "").strip() or "?"
         if not _user_belongs_on_family_roster(u, fam["id"]):
+            # Stale family_members row: user account's family_id does not match this crew (e.g. id type mismatch on leave/join)
+            if u is not None:
+                v = _user_id_variants_for_family_members(m.get("user_id"))
+                if v:
+                    r = await db.family_members.delete_many({"family_id": fam["id"], "user_id": {"$in": v}})
+                    stale_member_rows_removed += int(r.deleted_count or 0)
             continue
         entry = {
             "user_id": m["user_id"],
@@ -1523,6 +1577,8 @@ async def families_lookup(tag: Optional[str] = None, id: Optional[str] = None, c
             fallen.append(entry)
         else:
             members.append(entry)
+    if stale_member_rows_removed:
+        _invalidate_list_cache()
     rackets_raw = fam.get("rackets") or {}
     rackets = []
     for r in FAMILY_RACKETS:
@@ -1637,14 +1693,15 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
         "role": "boss", "joined_at": now,
     })
     melt_reset = _family_melt_stats_reset_fields()
+    uid_filter = _user_id_filter_for_users_collection(current_user["id"])
     if is_admin:
         result = await db.users.update_one(
-            {"id": current_user["id"]},
+            uid_filter,
             {"$set": {"family_id": family_id, "family_role": "boss", **melt_reset}},
         )
     else:
         result = await db.users.update_one(
-            {"id": current_user["id"], "money": {"$gte": FAMILY_CREATE_COST}},
+            {**uid_filter, "money": {"$gte": FAMILY_CREATE_COST}},
             {"$set": {"family_id": family_id, "family_role": "boss", **melt_reset}, "$inc": {"money": -FAMILY_CREATE_COST}},
         )
     if result.modified_count == 0:
@@ -1671,7 +1728,7 @@ async def _add_member_to_family(family_id: str, user_id: str) -> None:
         "role": "associate", "joined_at": now,
     })
     await db.users.update_one(
-        {"id": user_id},
+        _user_id_filter_for_users_collection(user_id),
         {"$set": {"family_id": family_id, "family_role": "associate", **_family_melt_stats_reset_fields()}},
     )
 
@@ -1908,7 +1965,7 @@ async def families_leave(current_user: dict = Depends(get_current_user)):
     if variants:
         await db.family_members.delete_many({"family_id": family_id, "user_id": {"$in": variants}})
     await db.users.update_one(
-        {"id": current_user["id"]},
+        _user_id_filter_for_users_collection(current_user["id"]),
         {"$set": {"family_id": None, "family_role": None, **_family_melt_stats_reset_fields()}},
     )
     _invalidate_list_cache()
@@ -1916,14 +1973,14 @@ async def families_leave(current_user: dict = Depends(get_current_user)):
 
     # 50% chance of retribution: family sends a hitman; you get shot and lose up to 50% health (you don't die)
     if _rng.random() < RETRIBUTION_CHANCE:
-        user_doc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "health": 1})
+        user_doc = await db.users.find_one(_user_id_filter_for_users_collection(current_user["id"]), {"_id": 0, "health": 1})
         health = max(0, min(100, float(user_doc.get("health") or 100)))
         loss_pct = _rng.uniform(0, RETRIBUTION_MAX_HEALTH_LOSS_PCT)
         damage = health * loss_pct
         new_health = max(MIN_HEALTH_PCT, health - damage)
         retrib_iso = datetime.now(timezone.utc).isoformat()
         await db.users.update_one(
-            {"id": current_user["id"]},
+            _user_id_filter_for_users_collection(current_user["id"]),
             {"$set": {"health": new_health, "health_regen_last_at": retrib_iso}},
         )
         _invalidate_my_cache(current_user["id"])
@@ -1953,7 +2010,7 @@ async def families_kick(request: FamilyKickRequest, current_user: dict = Depends
     if variants:
         await db.family_members.delete_many({"family_id": family_id, "user_id": {"$in": variants}})
     await db.users.update_one(
-        {"id": request.user_id},
+        _user_id_filter_for_users_collection(request.user_id),
         {"$set": {"family_id": None, "family_role": None, **_family_melt_stats_reset_fields()}},
     )
     _invalidate_list_cache()

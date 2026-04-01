@@ -30,6 +30,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-01 22:00 UTC[/color][/b] — [b]Cars: higher sell / melt values (standard + custom)[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Base [b]car cash values[/b] (garage sell, scrap, melt, dealer, etc.) are [b]+25%[/b] for [b]common through legendary[/b] cars and the [b]custom car[/b]. [b]Exclusive[/b] and [b]loot-exclusive[/b] cars are [b]unchanged[/b].[/color]
+[*][color=#888888][b]Player action:[/b] No action — new values apply automatically when you sell, melt, or use cars in systems that read base value.[/color]
+[*][color=#888888][b]Impact:[/b] More cash/bullets from melting and better resale on standard tiers; top-tier exclusive cars stay at the same values.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-01 20:00 UTC[/color][/b] — [b]Quick Trade: sell tokens for points or cash[/b][/size]
 [quote]
 [list]

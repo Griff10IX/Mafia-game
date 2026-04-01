@@ -96,6 +96,21 @@ def _is_slots_ownership_expired(doc: dict) -> bool:
         return True
 
 
+async def _active_slots_ownership_elsewhere(user_id: str, current_state: str) -> Optional[dict]:
+    """If user has non-expired slots ownership in any state other than current_state, return one such doc."""
+    uid = (user_id or "").strip()
+    if not uid:
+        return None
+    cur = _normalize_state(current_state)
+    async for doc in db.slots_ownership.find({"owner_id": uid}, {"_id": 0}):
+        st = doc.get("state") or ""
+        if _normalize_state(st) == cur:
+            continue
+        if not _is_slots_ownership_expired(doc):
+            return doc
+    return None
+
+
 def _parse_iso_datetime(s: str):
     """Parse ISO datetime; return None on error."""
     if not s:
@@ -139,7 +154,7 @@ async def _run_slots_draw_if_needed(state: str):
         logging.getLogger().info("Slots draw running for state=%s (doc=%s, next_draw_at=%s)", state, bool(doc), next_draw_at)
         next_draw_iso = _next_draw_utc().isoformat()
         previous_owner_id = doc.get("owner_id") if doc else None
-        # Get entries and filter by cooldown only. Slots lottery allows winners who own other casinos (unlike claim-based games).
+        # Get entries and filter by cooldown only. Slots: one active state per user (cleared on win); other casinos unchanged.
         # Match slots_entries by exact state first, then case-insensitive so we find entries regardless of casing
         entries_doc = await db.slots_entries.find_one({"state": st}, {"_id": 0, "user_ids": 1, "state": 1})
         if not entries_doc:
@@ -190,6 +205,14 @@ async def _run_slots_draw_if_needed(state: str):
                 {"$set": slots_set},
                 upsert=True,
             )
+            # One slots holding per user globally: remove stale owner_id from other states' docs
+            async for stale in db.slots_ownership.find({"owner_id": winner_id}, {"_id": 1, "state": 1}):
+                ost = _normalize_state((stale.get("state") or ""))
+                if ost != _normalize_state(filter_state):
+                    await db.slots_ownership.update_one(
+                        {"_id": stale["_id"]},
+                        {"$set": {"owner_id": None, "owner_username": None}},
+                    )
             logging.getLogger().info(
                 "Slots draw winner state=%s winner=%s (%s) matched=%s modified=%s",
                 state, winner_id, winner_name, res.matched_count, res.modified_count,
@@ -356,6 +379,8 @@ def register(router):
                     can_enter = True
             else:
                 can_enter = True
+        if can_enter and await _active_slots_ownership_elsewhere(str(current_user.get("id") or ""), state):
+            can_enter = False
         entries_doc = await db.slots_entries.find_one({"state": stored_state or state}, {"_id": 0, "user_ids": 1})
         entry_user_ids = (entries_doc or {}).get("user_ids") or []
         entries_count = len(entry_user_ids)
@@ -389,6 +414,11 @@ def register(router):
         stored_state, doc = await _get_slots_ownership_doc(state)
         if doc and doc.get("owner_id") == current_user.get("id") and not _is_slots_ownership_expired(doc):
             raise HTTPException(status_code=400, detail="You already own the slots here")
+        if await _active_slots_ownership_elsewhere(str(current_user.get("id") or ""), state):
+            raise HTTPException(
+                status_code=400,
+                detail="You already hold slots in another state; only one slots holding at a time",
+            )
         cooldown = current_user.get("slots_cooldown_until")
         if cooldown:
             try:
