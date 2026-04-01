@@ -9768,6 +9768,74 @@ def register(router):
             ],
         }
 
+    @router.get("/admin/economy/cash-holders")
+    async def admin_economy_cash_holders(
+        offset: int = Query(0, ge=0),
+        limit: int = Query(50, ge=1, le=200),
+        sort: str = Query("money_desc", description="money_desc | money_asc | username_asc"),
+        search: Optional[str] = Query(None, max_length=80),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Paginated list of wallet cash (users.money) for the same segment as GET /admin/economy/overview total_money:
+        alive, not moderator, not in ADMIN_EMAILS. Optional username search (case-insensitive substring).
+        """
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        if sort not in ("money_desc", "money_asc", "username_asc"):
+            raise HTTPException(status_code=400, detail="sort must be money_desc, money_asc, or username_asc")
+        base_match: dict = {"is_dead": {"$ne": True}, **_staff_exclude_user_filter()}
+        q = (search or "").strip()
+        if q:
+            base_match["username"] = {"$regex": re.escape(q), "$options": "i"}
+        if sort == "money_desc":
+            sort_spec: list = [("money", -1), ("username", 1)]
+        elif sort == "money_asc":
+            sort_spec = [("money", 1), ("username", 1)]
+        else:
+            sort_spec = [("username", 1)]
+
+        sum_pipe = [
+            {"$match": base_match},
+            {"$group": {"_id": None, "t": {"$sum": {"$ifNull": ["$money", 0]}}}},
+        ]
+        agg_sum, total_accounts, rows = await asyncio.gather(
+            db.users.aggregate(sum_pipe).to_list(1),
+            db.users.count_documents(base_match),
+            db.users.find(
+                base_match,
+                {"_id": 0, "id": 1, "username": 1, "money": 1, "bank_balance": 1, "swiss_balance": 1, "is_npc": 1},
+            )
+            .sort(sort_spec)
+            .skip(offset)
+            .limit(limit)
+            .to_list(limit),
+        )
+        total_cash = int((agg_sum[0].get("t", 0) if agg_sum else 0) or 0)
+        return {
+            "match_note": (
+                "Alive players, excludes moderators and ADMIN_EMAILS accounts (same as Economy overview → Cash in circulation)."
+                + (" Filtered by username search." if q else "")
+            ),
+            "total_cash_on_hand": total_cash,
+            "total_accounts": int(total_accounts or 0),
+            "offset": offset,
+            "limit": limit,
+            "sort": sort,
+            "search": q or None,
+            "rows": [
+                {
+                    "id": r.get("id") or "",
+                    "username": r.get("username") or "?",
+                    "money": int(r.get("money") or 0),
+                    "bank_balance": int(r.get("bank_balance") or 0),
+                    "swiss_balance": int(r.get("swiss_balance") or 0),
+                    "is_npc": bool(r.get("is_npc")),
+                }
+                for r in (rows or [])
+            ],
+        }
+
     @router.get("/admin/economy/capital-breakdown")
     async def admin_economy_capital_breakdown(current_user: dict = Depends(get_current_user)):
         """

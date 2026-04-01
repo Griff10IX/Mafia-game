@@ -7,7 +7,7 @@ Layers:
 
 All are coarse heuristics — trivial to spoof together — but they catch lazy bots and mistyped scripts.
 Disable via main game_settings: block_script_user_agent_login = false (auth + minigames),
-or block_script_user_agent_game_actions = false (crimes, GTA, jail, OC, bodyguards, attack).
+or block_script_user_agent_game_actions = false (crimes, GTA, jail, OC, bodyguards, attack, booze-run).
 """
 from __future__ import annotations
 

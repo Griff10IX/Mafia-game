@@ -1,21 +1,38 @@
 """Staff inbox alerts when bot/script clients are blocked or bot-like UAs attack.
 
 Uses lazy imports of server.* inside async functions to avoid circular imports with middleware.
+
+Env:
+  BOT_BLOCK_ALERT_RECIPIENTS=staff|admins  — "staff" (default) = admins + moderators; "admins" = ADMIN_EMAILS only.
+  BOT_BLOCK_STAFF_INBOX_COOLDOWN_SEC — min seconds between inbox alerts for the same user/IP + source (default 14400 = 4h).
+    Every block is still written to bot_client_block_events; only the inbox ping is throttled.
 """
 from __future__ import annotations
 
 import logging
+import os
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 BOT_CLIENT_BLOCK_COLLECTION = "bot_client_block_events"
 _BOT_BLOCK_RETENTION_DAYS = 90
 
-_ALERT_TTL_BLOCKED_SEC = 900.0
+def _staff_inbox_cooldown_sec() -> float:
+    raw = (os.environ.get("BOT_BLOCK_STAFF_INBOX_COOLDOWN_SEC") or "").strip()
+    if raw:
+        try:
+            v = float(raw)
+            if v >= 60.0:
+                return min(v, 86400.0 * 7)
+        except ValueError:
+            pass
+    return 14400.0  # 4h default — one inbox ping per actor per guard source; avoids spam across many endpoints
+
+
 _ALERT_TTL_ATTACK_BOT_SEC = 3600.0
 _last_blocked: dict[str, float] = {}
 _last_attack_bot: dict[str, float] = {}
@@ -78,13 +95,14 @@ async def record_bot_client_block_event(
     internal_reason: str,
     source: str,
     user_agent_short: str,
-) -> None:
-    """Persist a script/bot client block for admin investigation (TTL via expires_at)."""
+) -> Optional[str]:
+    """Persist a script/bot client block for admin investigation (TTL via expires_at). Returns event id."""
     try:
         now = datetime.now(timezone.utc)
         expires = now + timedelta(days=_BOT_BLOCK_RETENTION_DAYS)
+        eid = uuid.uuid4().hex
         doc = {
-            "id": uuid.uuid4().hex,
+            "id": eid,
             "user_id": user_id or None,
             "username": (username or "")[:64],
             "ip": (ip or "")[:64],
@@ -97,8 +115,84 @@ async def record_bot_client_block_event(
             "expires_at": expires,
         }
         await db[BOT_CLIENT_BLOCK_COLLECTION].insert_one(doc)
+        return eid
     except Exception:
         logger.exception("record_bot_client_block_event failed")
+        return None
+
+
+def _header_first(request, *names: str) -> str:
+    h = request.headers
+    for n in names:
+        v = h.get(n) or h.get(n.lower())
+        if v:
+            return str(v).strip()
+    return ""
+
+
+def _request_intel_lines(request) -> List[str]:
+    """Non-secret request metadata for staff inbox (helps distinguish browser vs script)."""
+    lines: List[str] = []
+    lines.append(f"Time (UTC): {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S')}")
+    referer = _header_first(request, "referer", "Referer")
+    if referer:
+        lines.append(f"Referer: {referer[:450]}{'…' if len(referer) > 450 else ''}")
+    origin = _header_first(request, "origin", "Origin")
+    if origin:
+        lines.append(f"Origin: {origin[:320]}")
+    xf = _header_first(request, "x-forwarded-for", "X-Forwarded-For")
+    if xf:
+        lines.append(f"X-Forwarded-For (full): {xf[:400]}")
+    for label, keys in (
+        ("CF-Connecting-IP", ("cf-connecting-ip", "CF-Connecting-IP")),
+        ("CF-IPCountry", ("cf-ipcountry", "CF-IPCountry")),
+        ("CF-Ray", ("cf-ray", "CF-Ray")),
+    ):
+        v = _header_first(request, *keys)
+        if v:
+            lines.append(f"{label}: {v[:200]}")
+    for sec in ("sec-fetch-site", "sec-fetch-mode", "sec-fetch-dest", "sec-fetch-user"):
+        v = _header_first(request, sec, sec.title())
+        if v:
+            lines.append(f"{sec}: {v}")
+    lang = _header_first(request, "accept-language", "Accept-Language")
+    if lang:
+        lines.append(f"Accept-Language: {lang[:160]}")
+    accept = _header_first(request, "accept", "Accept")
+    if accept:
+        lines.append(f"Accept: {accept[:200]}{'…' if len(accept) > 200 else ''}")
+    return lines
+
+
+async def _account_intel_lines(db, user_id: Optional[str]) -> List[str]:
+    """Account context for identified sessions (staff inbox)."""
+    if not user_id:
+        return []
+    try:
+        u = await db.users.find_one(
+            {"id": user_id},
+            {"_id": 0, "email": 1, "created_at": 1, "last_seen": 1, "is_moderator": 1, "is_help_desk_operator": 1},
+        )
+        if not u:
+            return ["Account: no user row for token sub (revoked user?)"]
+        out: List[str] = []
+        em = (u.get("email") or "").strip() or "—"
+        out.append(f"Account email: {em}")
+        if u.get("created_at"):
+            out.append(f"Account created: {u.get('created_at')}")
+        if u.get("last_seen"):
+            out.append(f"Last seen: {u.get('last_seen')}")
+        roles = []
+        if u.get("is_moderator"):
+            roles.append("moderator")
+        if u.get("is_help_desk_operator"):
+            roles.append("HDO")
+        if roles:
+            out.append(f"Staff roles on account: {', '.join(roles)}")
+        return out
+    except Exception:
+        logger.exception("_account_intel_lines failed")
+        return []
 
 
 async def maybe_notify_staff_bot_client_blocked(
@@ -133,7 +227,7 @@ async def maybe_notify_staff_bot_client_blocked(
         except Exception:
             pass
 
-    await record_bot_client_block_event(
+    event_id = await record_bot_client_block_event(
         db=db,
         user_id=user_id,
         username=username,
@@ -145,11 +239,14 @@ async def maybe_notify_staff_bot_client_blocked(
         user_agent_short=ua_short,
     )
 
+    # Inbox dedup: one notification per (guard source × user id or IP) per cooldown window.
+    # Path/reason omitted so rapid hits across /crimes/*, /gta, etc. do not flood staff (Mongo logs all rows).
     ident = user_id or f"ip:{ip or 'unknown'}"
-    key = f"blk|{source}|{ident}|{internal_reason}"
-    if _last_blocked.get(key, 0) + _ALERT_TTL_BLOCKED_SEC > now:
+    inbox_key = f"inbox|{source}|{ident}"
+    cooldown = _staff_inbox_cooldown_sec()
+    if _last_blocked.get(inbox_key, 0) + cooldown > now:
         return
-    _last_blocked[key] = now
+    _last_blocked[inbox_key] = now
     _prune(_last_blocked)
 
     if user_id:
@@ -158,19 +255,31 @@ async def maybe_notify_staff_bot_client_blocked(
         user_line = "User: not identified (no valid session in Authorization)"
 
     lines = [
-        f"Script/bot-style client blocked ({source.replace('_', ' ')}).",
-        f"Reason: {internal_reason}",
-        f"{method} {path}",
+        "— Bot / script client blocked (gameplay or minigame guard) —",
+        "Inbox alerts are throttled so staff are not spammed; every block is still stored in Mongo (collection bot_client_block_events).",
+        f"Source: {source.replace('_', ' ')}",
+        f"Block reason (internal): {internal_reason}",
+        f"HTTP: {method} {path}",
         user_line,
-        f"IP: {ip or '—'}",
+        f"Client IP (normalized): {ip or '—'}",
         f"User-Agent: {ua_short or '—'}",
     ]
+    if event_id:
+        lines.append(f"Persisted event id (Mongo bot_client_block_events): {event_id}")
+    lines.append("— Request metadata —")
+    lines.extend(_request_intel_lines(request))
+    acc = await _account_intel_lines(db, user_id)
+    if acc:
+        lines.append("— Account —")
+        lines.extend(acc)
     cn = (context_note or "").strip()
     if cn:
+        lines.append("— Note —")
         lines.append(cn)
 
     # Parallel to auth_login's "Login attempt (identifier): Moss" — who is attempting to bot (from session).
     if source == "auth_gameplay":
+        lines.append("— Session —")
         if username:
             lines.append(f"Gameplay attempt (username): {username}")
         elif user_id:
@@ -178,6 +287,7 @@ async def maybe_notify_staff_bot_client_blocked(
         else:
             lines.append("Gameplay attempt (username): not identified (no Bearer token in Authorization)")
     elif source == "auth_minigames":
+        lines.append("— Session —")
         if username:
             lines.append(f"Minigame attempt (username): {username}")
         elif user_id:
@@ -186,14 +296,24 @@ async def maybe_notify_staff_bot_client_blocked(
             lines.append("Minigame attempt (username): not identified (no Bearer token in Authorization)")
 
     try:
-        from server import _get_staff_user_ids, send_notification
+        from server import _get_admin_user_ids, _get_staff_user_ids, send_notification
 
-        staff_ids = await _get_staff_user_ids()
-        title = "Bot / script client blocked"
+        mode = (os.environ.get("BOT_BLOCK_ALERT_RECIPIENTS") or "staff").strip().lower()
+        if mode == "admins":
+            recipient_ids = await _get_admin_user_ids()
+            if not recipient_ids:
+                recipient_ids = await _get_staff_user_ids()
+        else:
+            recipient_ids = await _get_staff_user_ids()
+
+        title = "Security: bot / script client blocked"
         msg = "\n".join(lines)
-        for uid in staff_ids:
+        extra = {"staff_alert_kind": "bot_client_block"}
+        if event_id:
+            extra["staff_alert_event_id"] = event_id
+        for uid in recipient_ids:
             try:
-                await send_notification(uid, title, msg, "staff_bot_client")
+                await send_notification(uid, title, msg, "staff_bot_client", **extra)
             except Exception as e:
                 logger.warning("staff bot block notify %s: %s", uid, e)
     except Exception:

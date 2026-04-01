@@ -317,7 +317,12 @@ async def get_topics(
     query = {}
     if category and category in FORUM_CATEGORIES:
         if category == "general":
-            query["$or"] = [{"category": "general"}, {"category": {"$exists": False}}]
+            # Include announcements (e.g. Update Log from update_update_log_topic.py) in the General list
+            query["$or"] = [
+                {"category": "general"},
+                {"category": {"$exists": False}},
+                {"category": "announcements"},
+            ]
         else:
             query["category"] = category
     sort = [("is_important", -1), ("is_sticky", -1), ("updated_at", -1)]

@@ -57,7 +57,7 @@ def main():
     now = datetime.now(timezone.utc).isoformat()
     result = db.forum_topics.update_one(
         {"title": TOPIC_TITLE},
-        {"$set": {"content": body, "updated_at": now}},
+        {"$set": {"content": body, "updated_at": now, "category": "general"}},
     )
     if result.matched_count == 0:
         author_id, author_username = resolve_faq_topic_author_sync(db)
@@ -66,7 +66,7 @@ def main():
             "id": topic_id,
             "title": TOPIC_TITLE,
             "content": body,
-            "category": "announcements",
+            "category": "general",
             "author_id": author_id,
             "author_username": author_username,
             "created_at": now,

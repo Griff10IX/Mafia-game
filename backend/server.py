@@ -1811,6 +1811,16 @@ async def _get_staff_user_ids() -> list:
     return [u["id"] for u in await cursor.to_list(500)]
 
 
+async def _get_admin_user_ids() -> list:
+    """Return user IDs for accounts in ADMIN_EMAILS (game admins only)."""
+    admin_emails = [e.strip().lower() for e in (ADMIN_EMAILS or []) if e and str(e).strip()]
+    if not admin_emails:
+        return []
+    or_clauses = [{"email": re.compile("^" + re.escape(e) + "$", re.IGNORECASE)} for e in admin_emails]
+    cursor = db.users.find({"$or": or_clauses}, {"_id": 0, "id": 1})
+    return [u["id"] for u in await cursor.to_list(200)]
+
+
 # Admin endpoints -> routers/admin.py
 
 # Username lookup helpers

@@ -27,7 +27,8 @@ _MINIGAME_PREFIXES = (
     "/api/racing",
 )
 
-# Crimes, GTA, jail, crew OC, solo organised crime, bodyguards (player routes), attack.
+# Crimes, GTA (steal, garage, melt/scrap, repair-car, marketplace), jail, crew OC, solo organised crime,
+# bodyguards (player routes), attack, booze run (buy/sell/config).
 _GAME_ACTION_PREFIXES = (
     "/api/crimes",
     "/api/gta",
@@ -36,6 +37,7 @@ _GAME_ACTION_PREFIXES = (
     "/api/organised-crime",
     "/api/bodyguards",
     "/api/attack",
+    "/api/booze-run",
 )
 
 _FORBIDDEN_DETAIL = "This action must use the official game app or a normal web browser."

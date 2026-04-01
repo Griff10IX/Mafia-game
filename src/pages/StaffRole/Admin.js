@@ -146,6 +146,23 @@ const LEGACY_CATEGORY_MAP = {
   'admin-logs': 'admin-analytics-monitoring',
 };
 
+/** Section id inside the page for tools without a collapsible header (scroll target). */
+const LEGACY_CATEGORY_SECTION_ID = {
+  'admin-players': 'admin-players',
+  'admin-moderation': 'admin-moderation',
+  'admin-donations': 'admin-donations',
+  'admin-security': 'admin-security',
+  'admin-cheat': 'admin-cheat',
+  'admin-staff': 'admin-staff',
+  'admin-mod-tools': 'admin-mod-tools',
+  'admin-gameworld': 'admin-gameworld',
+  'admin-testing': 'admin-testing',
+  'admin-database': 'admin-database',
+  'admin-quick': 'admin-quick',
+  'admin-analytics': 'admin-analytics',
+  'admin-logs': 'admin-logs',
+};
+
 const normalizeCategoryId = (id) => LEGACY_CATEGORY_MAP[id] || id;
 
 const ADMIN_MOBILE_TARGET_OPEN_KEY = 'admin_mobile_target_open';
@@ -178,8 +195,8 @@ function formatWholeCash(x) {
 // Searchable tools list - each item has: label (searchable), categoryId (scroll target), collapseKey (optional - to expand section)
 const SEARCHABLE_TOOLS = [
   // Player Management
-  { label: 'Target Username', categoryId: 'admin-players', keywords: ['target', 'username', 'player'] },
-  { label: 'Search Users', categoryId: 'admin-players', collapseKey: 'searchUsers', keywords: ['search', 'users', 'email', 'find'] },
+  { label: 'Target Username', categoryId: 'admin-operations', scrollToId: 'admin-target-username', keywords: ['target', 'username', 'player', 'command'] },
+  { label: 'Search Users', categoryId: 'admin-players', scrollToId: 'admin-search-users', keywords: ['search', 'users', 'email', 'find'] },
   { label: 'Change Rank', categoryId: 'admin-players', collapseKey: 'rank', keywords: ['rank', 'change', 'prestige', 'level'] },
   { label: 'Add Points', categoryId: 'admin-players', collapseKey: 'points', keywords: ['points', 'add', 'give'] },
   { label: 'Remove points', categoryId: 'admin-players', collapseKey: 'points', keywords: ['points', 'remove', 'deduct', 'take'] },
@@ -188,7 +205,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Remove respect points', categoryId: 'admin-players', collapseKey: 'player', keywords: ['respect', 'remove', 'deduct', 'take'] },
   { label: 'Points Provenance', categoryId: 'admin-donations', collapseKey: 'donationsProvenance', keywords: ['chargeback', 'provenance', 'payment session', 'points tree'], adminOnly: true },
   { label: 'Add Tokens', categoryId: 'admin-players', collapseKey: 'tokens', keywords: ['tokens', 'crime', 'gta', 'melt', 'booze', 'travel', 'oc', 'racket', 'jailbust'] },
-  { label: 'Clear pool cue upgrades', categoryId: 'admin-players', keywords: ['pool', '8-ball', '8 ball', 'cue', 'upgrades', 'reset', 'minigame'] },
+  { label: 'Clear pool cue upgrades', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-user-adjust-hub', keywords: ['pool', '8-ball', '8 ball', 'cue', 'upgrades', 'reset', 'minigame'] },
   { label: 'Founding Member', categoryId: 'admin-players', collapseKey: 'founding', keywords: ['founding', 'member', 'badge', 'founder'] },
   { label: 'Add Money', categoryId: 'admin-players', collapseKey: 'money', keywords: ['money', 'cash', 'add', 'give'] },
   { label: 'Add Bullets', categoryId: 'admin-players', collapseKey: 'bullets', keywords: ['bullets', 'ammo', 'add'] },
@@ -225,10 +242,10 @@ const SEARCHABLE_TOOLS = [
   { label: 'Launch & login lock', categoryId: 'admin-gameworld', collapseKey: 'launchSettings', keywords: ['login', 'lock', 'launch', 'store', 'preorder', 'preregister', 'banner', 'landing'], adminOnly: true },
   { label: 'Maintenance banner', categoryId: 'admin-gameworld', collapseKey: 'maintenanceBanner', keywords: ['maintenance', 'banner', 'downtime'] },
   // Security
-  { label: 'Security Summary', categoryId: 'admin-security', collapseKey: 'securitySummary', keywords: ['security', 'summary', 'flags'] },
+  { label: 'Security Summary', categoryId: 'admin-security', collapseKey: 'security', keywords: ['security', 'summary', 'flags', 'rate', 'ban', 'ip', 'lockout', 'telegram'] },
   { label: 'Session stats', categoryId: 'admin-security', collapseKey: 'sessionStats', keywords: ['session', 'sessions', 'active', 'log out', 'revoke', '24h'] },
-  { label: 'IP Bans', categoryId: 'admin-security', collapseKey: 'ipBans', keywords: ['ip', 'ban', 'block'] },
-  { label: 'Rate Limits', categoryId: 'admin-security', collapseKey: 'rateLimits', keywords: ['rate', 'limit', 'throttle'] },
+  { label: 'IP Bans', categoryId: 'admin-security', collapseKey: 'security', keywords: ['ip', 'ban', 'block', 'unban', 'restore'] },
+  { label: 'Rate Limits', categoryId: 'admin-security', collapseKey: 'security', keywords: ['rate', 'limit', 'throttle', 'violations', 'cooldown'] },
   { label: 'Cloudflare Bot Block', categoryId: 'admin-security', collapseKey: 'cfBotBlock', keywords: ['cloudflare', 'bot', 'block', 'cf'] },
   { label: 'Cloudflare auto block', categoryId: 'admin-security', collapseKey: 'cfAutoBlock', keywords: ['cloudflare', 'auto', 'block', 'cf'] },
   { label: 'Security panel', categoryId: 'admin-security', collapseKey: 'security', keywords: ['security', 'flags', 'threat', 'monitor'] },
@@ -242,9 +259,8 @@ const SEARCHABLE_TOOLS = [
   { label: 'Interest bank by player', categoryId: 'admin-analytics', collapseKey: 'interestBankPlayers', keywords: ['interest', 'bank', 'deposits', 'holders'] },
   { label: 'Swiss Bank Overview', categoryId: 'admin-analytics', collapseKey: 'swissBank', keywords: ['swiss', 'bank', 'balance', 'hidden', 'money', 'wipe'] },
   { label: 'Points purchases (store spends)', categoryId: 'admin-analytics', collapseKey: 'pointsStoreSpends', keywords: ['points', 'store', 'spend', 'bought', 'purchases', 'refund'] },
-  { label: 'User Analytics', categoryId: 'admin-analytics', collapseKey: 'analytics', keywords: ['analytics', 'stats', 'users'] },
-  { label: 'Analytics V2 workspace', categoryId: 'admin-analytics-monitoring', collapseKey: 'analyticsWorkspaceV2', keywords: ['analytics', 'v2', 'workspace', 'rollup', 'rollups'] },
-  { label: 'Economy overview', categoryId: 'admin-analytics-monitoring', collapseKey: 'economyOverview', keywords: ['economy', 'overview', 'gdp', 'money'] },
+  { label: 'Analytics V2 workspace', categoryId: 'admin-analytics-monitoring', collapseKey: 'analyticsWorkspaceV2', keywords: ['analytics', 'v2', 'workspace', 'rollup', 'rollups', 'stats', 'users', 'events'] },
+  { label: 'Economy overview', categoryId: 'admin-analytics-monitoring', collapseKey: 'economyOverview', keywords: ['economy', 'overview', 'gdp', 'money', 'circulation', 'cash', 'holders', 'wallet', 'distribution', 'drill', 'accounts'] },
   { label: 'Capital breakdown', categoryId: 'admin-analytics-monitoring', collapseKey: 'capitalBreakdown', keywords: ['capital', 'breakdown', 'wealth'] },
   { label: 'Player activity', categoryId: 'admin-analytics-monitoring', collapseKey: 'playerActivity', keywords: ['player', 'activity', 'dau', 'mau'] },
   { label: 'Attack analytics', categoryId: 'admin-analytics-monitoring', collapseKey: 'attackAnalytics', keywords: ['attack', 'analytics', 'pvp', 'kills'] },
@@ -308,8 +324,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Add Moderator', categoryId: 'admin-staff', collapseKey: 'staff', keywords: ['mod', 'moderator', 'add', 'promote'] },
   { label: 'Add Helper', categoryId: 'admin-staff', collapseKey: 'staff', keywords: ['helper', 'help desk', 'add', 'promote'] },
   // Mod Tools
-  { label: 'Mod Online Colour', categoryId: 'admin-mod-tools', collapseKey: 'modColour', keywords: ['mod', 'colour', 'color', 'online'] },
-  { label: 'Admin Credentials', categoryId: 'admin-mod-tools', collapseKey: 'adminCreds', keywords: ['admin', 'credentials', 'email', 'password'] },
+  { label: 'Mod Online Colour', categoryId: 'admin-mod-tools', collapseKey: 'modDisplay', keywords: ['mod', 'colour', 'color', 'online', 'palette'] },
   { label: 'Dupe check', categoryId: 'admin-mod-tools', collapseKey: 'dupeCheckMod', keywords: ['dupe', 'duplicate', 'multi', 'account'] },
   { label: 'Lock player', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['lock', 'player', 'investigation'] },
   { label: 'Modkill', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['modkill', 'kill', 'player'] },
@@ -370,12 +385,13 @@ const AdminSelect = ({ children, ...props }) => (
   </select>
 );
 
-function SectionHeader({ icon: Icon, title, badge, isCollapsed, onToggle, color = 'text-primary' }) {
+function SectionHeader({ icon: Icon, title, badge, isCollapsed, onToggle, color = 'text-primary', toolAnchor }) {
   return (
     <button
       type="button"
+      data-admin-tool={toolAnchor || undefined}
       onClick={onToggle}
-      className="admin-hud-bar w-full px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between hover:bg-primary/12 transition-colors"
+      className="admin-hud-bar w-full px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between hover:bg-primary/12 transition-colors scroll-mt-24"
     >
       <div className="flex items-center gap-2">
         <Icon size={14} className={color} />
@@ -558,35 +574,51 @@ export default function Admin() {
     const raw = toolSearch.toLowerCase().trim();
     const words = raw.split(/\s+/).filter(Boolean);
     const visibleIds = isAdmin ? null : new Set(modVisibleCategoryIds);
+    const matchesTool = (tool) => {
+      const label = tool.label.toLowerCase();
+      const kws = tool.keywords.map((k) => k.toLowerCase());
+      if (label.includes(raw) || kws.some((k) => k.includes(raw))) return true;
+      if (words.length === 0) return false;
+      const matchWord = (w) => label.includes(w) || kws.some((kw) => kw.includes(w));
+      return words.every(matchWord);
+    };
     return SEARCHABLE_TOOLS.filter((tool) => {
       const normalizedCategoryId = normalizeCategoryId(tool.categoryId);
-      if (['Hitlist NPCs', 'Jail NPCs', 'Reset Hitlist NPC Timers', 'Seed Families'].includes(tool.label)) return false;
       if (visibleIds && !visibleIds.has(normalizedCategoryId)) return false;
       if (!isAdmin && isModerator && tool.adminOnly) return false;
-      const label = tool.label.toLowerCase();
-      const matchWord = (w) => label.includes(w) || tool.keywords.some((kw) => kw.toLowerCase().includes(w));
-      return words.every(matchWord);
+      return matchesTool(tool);
     })
       .map((tool) => ({ ...tool, categoryId: normalizeCategoryId(tool.categoryId) }))
-      .slice(0, 14);
+      .slice(0, 28);
   }, [toolSearch, isAdmin, isModerator, modVisibleCategoryIds]);
 
   const handleToolSelect = (tool) => {
     const normalizedCategoryId = normalizeCategoryId(tool.categoryId);
     setActiveCategoryId(normalizedCategoryId);
     if (tool.collapseKey) {
-      setCollapsed(prev => ({ ...prev, [tool.collapseKey]: false }));
+      setCollapsed((prev) => ({ ...prev, [tool.collapseKey]: false }));
     }
     setToolSearch('');
     setToolSearchFocused(false);
     searchInputRef.current?.blur();
     if (typeof window !== 'undefined') window.location.hash = normalizedCategoryId;
-    if (typeof window !== 'undefined' && tool.scrollToId) {
-      window.requestAnimationFrame(() => {
-        setTimeout(() => {
-          document.getElementById(tool.scrollToId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 200);
-      });
+
+    const runScroll = () => {
+      if (tool.scrollToId) {
+        document.getElementById(tool.scrollToId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+      if (tool.collapseKey) {
+        document.querySelector(`[data-admin-tool="${tool.collapseKey}"]`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+      const sid = tool.scrollToSectionId || LEGACY_CATEGORY_SECTION_ID[tool.categoryId];
+      if (sid) {
+        document.getElementById(sid)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    };
+    if (typeof window !== 'undefined') {
+      window.requestAnimationFrame(() => setTimeout(runScroll, 280));
     }
   };
   const [resetOcTimersLoading, setResetOcTimersLoading] = useState(false);
@@ -967,6 +999,11 @@ export default function Admin() {
 
   const [economyOverview, setEconomyOverview] = useState(null);
   const [economyOverviewLoading, setEconomyOverviewLoading] = useState(false);
+  const [cashHolders, setCashHolders] = useState(null);
+  const [cashHoldersLoading, setCashHoldersLoading] = useState(false);
+  const [cashHoldersOffset, setCashHoldersOffset] = useState(0);
+  const [cashHoldersSearchInput, setCashHoldersSearchInput] = useState('');
+  const [cashHoldersSort, setCashHoldersSort] = useState('money_desc');
   const [capitalBreakdown, setCapitalBreakdown] = useState(null);
   const [capitalBreakdownLoading, setCapitalBreakdownLoading] = useState(false);
   const [playerActivity, setPlayerActivity] = useState(null);
@@ -5152,6 +5189,25 @@ export default function Admin() {
     finally { setEconomyOverviewLoading(false); }
   };
 
+  const CASH_HOLDERS_PAGE = 50;
+  const fetchCashHolders = async (pageOffset = 0, sort = cashHoldersSort) => {
+    setCashHoldersLoading(true);
+    try {
+      const params = new URLSearchParams({
+        offset: String(pageOffset),
+        limit: String(CASH_HOLDERS_PAGE),
+        sort: sort || 'money_desc',
+      });
+      const s = cashHoldersSearchInput.trim();
+      if (s) params.set('search', s);
+      const res = await api.get(`/admin/economy/cash-holders?${params}`);
+      setCashHolders(res.data ?? null);
+      setCashHoldersOffset(pageOffset);
+      setCashHoldersSort(sort || 'money_desc');
+    } catch (e) { toast.error(e.response?.data?.detail || 'Failed to load cash holders'); }
+    finally { setCashHoldersLoading(false); }
+  };
+
   const handleFetchCapitalBreakdown = async () => {
     setCapitalBreakdownLoading(true);
     try {
@@ -5328,9 +5384,15 @@ export default function Admin() {
                 type="text"
                 value={toolSearch}
                 onChange={(e) => setToolSearch(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && filteredTools.length > 0) {
+                    e.preventDefault();
+                    handleToolSelect(filteredTools[0]);
+                  }
+                }}
                 onFocus={() => setToolSearchFocused(true)}
                 onBlur={() => setTimeout(() => setToolSearchFocused(false), 150)}
-                placeholder="Search tools..."
+                placeholder="Search tools… (Enter = first match)"
                 className="w-full pl-8 pr-3 py-2 md:py-1.5 rounded-md border border-primary/30 bg-zinc-900/80 text-[11px] font-heading text-foreground placeholder:text-mutedForeground focus:border-primary/60 focus:outline-none"
               />
               {toolSearch && (
@@ -5429,7 +5491,7 @@ export default function Admin() {
 
         {/* Main: target username + scrollable tools (mobile); desktop unchanged scroll */}
         <main className="flex-1 min-w-0 min-h-0 flex flex-col overflow-visible md:block md:overflow-y-auto md:max-h-[min(100vh-10rem,100dvh-10rem)] md:overflow-x-hidden md:space-y-4">
-          <div className={`shrink-0 z-10 relative admin-module admin-focus-block ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bg-background/95 backdrop-blur mobile-panel md:sticky md:top-0`}>
+          <div id="admin-target-username" className={`shrink-0 z-10 relative admin-module admin-focus-block ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bg-background/95 backdrop-blur mobile-panel md:sticky md:top-0 scroll-mt-24`}>
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <button
               type="button"
@@ -5463,7 +5525,7 @@ export default function Admin() {
           {activeCategoryId === 'admin-operations' && (
           <>
       {/* Search users (username or email) */}
-      <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+      <div id="admin-search-users" data-admin-tool="searchUsers" className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel scroll-mt-24`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
           <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Search users (username or email)</span>
@@ -5532,6 +5594,7 @@ export default function Admin() {
               </span>
             ) : null
           }
+          toolAnchor="respectPointsLog"
           isCollapsed={collapsed.respectPointsLog}
           onToggle={() => toggleSection('respectPointsLog')}
         />
@@ -6031,6 +6094,7 @@ export default function Admin() {
           <SectionHeader
             icon={Trophy}
             title="User give / take & leaderboards"
+            toolAnchor="userAdjustHub"
             isCollapsed={collapsed.userAdjustHub}
             onToggle={() => toggleSection('userAdjustHub')}
           />
@@ -6178,6 +6242,7 @@ export default function Admin() {
                 <SectionHeader
                   icon={BarChart3}
                   title="Minigame leaderboards & records"
+                  toolAnchor="minigameLbAdmin"
                   isCollapsed={collapsed.minigameLbAdmin}
                   onToggle={() => toggleSection('minigameLbAdmin')}
                 />
@@ -6276,6 +6341,7 @@ export default function Admin() {
                 <SectionHeader
                   icon={Trophy}
                   title="Main game leaderboards (weekly / top boards)"
+                  toolAnchor="mainLbStrip"
                   isCollapsed={collapsed.mainLbStrip}
                   onToggle={() => toggleSection('mainLbStrip')}
                 />
@@ -6347,6 +6413,7 @@ export default function Admin() {
         <SectionHeader
           icon={Users}
           title="Referrals & prereg heal"
+          toolAnchor="referralsReport"
           isCollapsed={collapsed.referralsReport}
           onToggle={() => { toggleSection('referralsReport'); if (collapsed.referralsReport && !referralsReport) handleFetchReferralsReport(); }}
         />
@@ -6601,6 +6668,7 @@ export default function Admin() {
           icon={Activity}
           title="System Health"
           badge={systemHealth ? <span className={`text-[10px] font-heading ${systemHealth.status === 'healthy' ? 'text-emerald-400' : 'text-amber-400'}`}>{systemHealth.status}</span> : null}
+          toolAnchor="systemHealth"
           isCollapsed={collapsed.systemHealth}
           onToggle={() => { toggleSection('systemHealth'); if (collapsed.systemHealth && !systemHealth) handleFetchSystemHealth(); }}
         />
@@ -6646,6 +6714,7 @@ export default function Admin() {
         <SectionHeader
           icon={UserCog}
           title="Player Actions"
+          toolAnchor="player"
           isCollapsed={collapsed.player}
           onToggle={() => toggleSection('player')}
         />
@@ -7532,6 +7601,7 @@ export default function Admin() {
             icon={Lock}
             title="Player enforcement"
             badge={lockedAccounts.length > 0 ? <span className="text-[10px] font-heading text-amber-400">{lockedAccounts.length} locked</span> : null}
+            toolAnchor="moderationPlayer"
             isCollapsed={collapsed.moderationPlayer}
             onToggle={() => toggleSection('moderationPlayer')}
           />
@@ -7623,6 +7693,7 @@ export default function Admin() {
             icon={Lock}
             title="Page locks"
             badge={Object.keys(pageLocks).length > 0 ? <span className="text-[10px] font-heading text-amber-400">{Object.keys(pageLocks).length} locked</span> : null}
+            toolAnchor="moderationPageLocks"
             isCollapsed={collapsed.moderationPageLocks}
             onToggle={() => { toggleSection('moderationPageLocks'); if (collapsed.moderationPageLocks) fetchPageLocks(); }}
           />
@@ -7677,6 +7748,7 @@ export default function Admin() {
           <SectionHeader
             icon={AlertTriangle}
             title="Related shortcuts"
+            toolAnchor="moderationRelated"
             isCollapsed={collapsed.moderationRelated}
             onToggle={() => toggleSection('moderationRelated')}
           />
@@ -7712,6 +7784,7 @@ export default function Admin() {
             icon={DollarSign}
             title="Store Point Crediting & Preorder"
             color="text-sky-300"
+            toolAnchor="donationsStore"
             isCollapsed={collapsed.donationsStore}
             onToggle={() => toggleSection('donationsStore')}
           />
@@ -7821,6 +7894,7 @@ export default function Admin() {
           <SectionHeader
             icon={Layers}
             title="Points Provenance / Chargeback"
+            toolAnchor="donationsProvenance"
             isCollapsed={collapsed.donationsProvenance}
             onToggle={() => toggleSection('donationsProvenance')}
           />
@@ -7880,6 +7954,7 @@ export default function Admin() {
             icon={Zap}
             title="Donations / Payments (Stripe)"
             badge={donationsLogData ? <span className="text-[10px] font-heading text-primary">{donationsLogData.length} entries</span> : null}
+            toolAnchor="donationsPayments"
             isCollapsed={collapsed.donationsPayments}
             onToggle={() => toggleSection('donationsPayments')}
           />
@@ -8012,6 +8087,7 @@ export default function Admin() {
               ) : null}
             </span>
           }
+          toolAnchor="launchSettings"
           isCollapsed={collapsed.launchSettings}
           onToggle={() => toggleSection('launchSettings')}
         />
@@ -8116,6 +8192,7 @@ export default function Admin() {
               Max bet: ${(casinoGlobalMaxBet || 1000000000).toLocaleString()} · Buy-back: {(casinoBuybackMaxPoints || 15000).toLocaleString()} pts · MP poker blind: ${(mpPokerMaxBlind || 2500000).toLocaleString()}
             </span>
           }
+          toolAnchor="casinoLimits"
           isCollapsed={collapsed.casinoLimits}
           onToggle={() => toggleSection('casinoLimits')}
         />
@@ -8177,6 +8254,7 @@ export default function Admin() {
               {claimCostsLoading ? 'Loading…' : 'Casino · airport · armoury'}
             </span>
           }
+          toolAnchor="claimCosts"
           isCollapsed={collapsed.claimCosts}
           onToggle={() => toggleSection('claimCosts')}
         />
@@ -8248,6 +8326,7 @@ export default function Admin() {
               {todayEvent?.name && <span className="text-mutedForeground"> · {todayEvent.name}</span>}
             </span>
           }
+          toolAnchor="events"
           isCollapsed={collapsed.events}
           onToggle={() => toggleSection('events')}
         />
@@ -8342,6 +8421,7 @@ export default function Admin() {
               )}
             </span>
           }
+          toolAnchor="boozeRun"
           isCollapsed={collapsed.boozeRun}
           onToggle={() => {
             toggleSection('boozeRun');
@@ -8354,7 +8434,10 @@ export default function Admin() {
         />
         {!collapsed.boozeRun && (
           <div className="p-3 space-y-2">
-            <p className="text-[10px] text-mutedForeground">Set rotation to 15 seconds for testing; prices and best routes will update every 15s. Reset to use normal 3h.</p>
+            <p className="text-[10px] text-mutedForeground">
+              Set rotation to 15 seconds for testing; prices and best routes will update every 15s. Reset to use normal 3h. Persists in{' '}
+              <code className="text-[9px] bg-zinc-800/80 px-0.5 rounded">game_settings</code> until changed.
+            </p>
             <div className="flex flex-wrap gap-2">
               <BtnPrimary onClick={handleBoozeRotation15s}>Set rotation to 15s</BtnPrimary>
               <BtnSecondary onClick={handleBoozeRotationReset}>Reset to 3h</BtnSecondary>
@@ -8391,7 +8474,8 @@ export default function Admin() {
             <div className="border-t border-zinc-700/40 pt-3 mt-3 space-y-2">
               <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wide">Jail bust chance (buy &amp; sell)</div>
               <p className="text-[10px] text-mutedForeground">
-                Each leg rolls a uniform probability between min and max. Defaults in code: {(boozeJailChances?.default_jail_chance_min != null ? (Number(boozeJailChances.default_jail_chance_min) * 100).toFixed(1) : '5')}%–{(boozeJailChances?.default_jail_chance_max != null ? (Number(boozeJailChances.default_jail_chance_max) * 100).toFixed(1) : '15')}%. Overrides are in-memory (like rotation); restart server clears them.
+                Each leg rolls a uniform probability between min and max. Defaults in code: {(boozeJailChances?.default_jail_chance_min != null ? (Number(boozeJailChances.default_jail_chance_min) * 100).toFixed(1) : '5')}%–{(boozeJailChances?.default_jail_chance_max != null ? (Number(boozeJailChances.default_jail_chance_max) * 100).toFixed(1) : '15')}%. Overrides persist in{' '}
+                <code className="text-[9px] bg-zinc-800/80 px-0.5 rounded">game_settings</code> (same doc as listed price &amp; rotation) until reset or changed.
               </p>
               {boozeJailChances && (
                 <p className="text-[9px] text-mutedForeground font-heading">
@@ -8442,6 +8526,7 @@ export default function Admin() {
               <span className="text-[10px] text-mutedForeground font-heading">off</span>
             )
           }
+          toolAnchor="presenceSimulator"
           isCollapsed={collapsed.presenceSimulator}
           onToggle={() => {
             toggleSection('presenceSimulator');
@@ -8557,6 +8642,7 @@ export default function Admin() {
           icon={Coins}
           title="Slots draw (testing)"
           badge={<span className="text-[10px] text-mutedForeground font-heading">Next draw time</span>}
+          toolAnchor="slotsDraw"
           isCollapsed={collapsed.slotsDraw}
           onToggle={() => toggleSection('slotsDraw')}
         />
@@ -8584,6 +8670,7 @@ export default function Admin() {
               <span className="text-[10px] text-mutedForeground font-heading">Global pot</span>
             )
           }
+          toolAnchor="crackSafeJackpot"
           isCollapsed={collapsed.crackSafeJackpot}
           onToggle={() => {
             toggleSection('crackSafeJackpot');
@@ -8645,6 +8732,7 @@ export default function Admin() {
           icon={Building2}
           title="State Heads"
           badge={stateHeads?.has_duplicates ? <span className="text-[10px] font-heading text-red-400">Duplicates found!</span> : null}
+          toolAnchor="stateHeads"
           isCollapsed={collapsed.stateHeads}
           onToggle={() => { toggleSection('stateHeads'); if (collapsed.stateHeads && !stateHeads) fetchStateHeads(); }}
         />
@@ -8697,6 +8785,7 @@ export default function Admin() {
         <SectionHeader
           icon={Clock}
           title="Reset Racket Cooldown"
+          toolAnchor="racketReset"
           isCollapsed={collapsed.racketReset}
           onToggle={() => toggleSection('racketReset')}
         />
@@ -8747,6 +8836,7 @@ export default function Admin() {
           icon={Dice5}
           title="Casino Max Bets"
           badge={casinoMaxBets ? <span className="text-[10px] font-heading text-mutedForeground">{Object.keys(casinoMaxBets).length} types</span> : null}
+          toolAnchor="casinoMaxBets"
           isCollapsed={collapsed.casinoMaxBets}
           onToggle={() => { toggleSection('casinoMaxBets'); if (collapsed.casinoMaxBets && !casinoMaxBets) fetchCasinoMaxBets(); }}
         />
@@ -8835,6 +8925,7 @@ export default function Admin() {
           icon={Lock}
           title="Lock page"
           badge={Object.keys(pageLocks).length > 0 ? <span className="text-[10px] font-heading text-amber-400">{Object.keys(pageLocks).length} locked</span> : null}
+          toolAnchor="pageLocks"
           isCollapsed={collapsed.pageLocks}
           onToggle={() => toggleSection('pageLocks')}
         />
@@ -8964,6 +9055,7 @@ export default function Admin() {
               </span>
             </span>
           }
+          toolAnchor="adminDisplay"
           isCollapsed={collapsed.adminDisplay}
           onToggle={() => toggleSection('adminDisplay')}
         />
@@ -9200,6 +9292,7 @@ export default function Admin() {
           icon={Bell}
           title="Maintenance Banner"
           badge={maintenanceBanner?.enabled ? <span className="text-[10px] font-heading text-amber-400">Active</span> : null}
+          toolAnchor="maintenanceBanner"
           isCollapsed={collapsed.maintenanceBanner}
           onToggle={() => { toggleSection('maintenanceBanner'); if (collapsed.maintenanceBanner && !maintenanceBanner) handleFetchMaintenanceBanner(); }}
         />
@@ -9250,6 +9343,7 @@ export default function Admin() {
           icon={AlertTriangle}
           title="Release soft-launch"
           badge={releaseSoftLaunchAdmin?.release_soft_launch_enabled ? <span className="text-[10px] font-heading text-amber-400">Active</span> : null}
+          toolAnchor="releaseSoftLaunch"
           isCollapsed={collapsed.releaseSoftLaunch}
           onToggle={() => { toggleSection('releaseSoftLaunch'); if (collapsed.releaseSoftLaunch && !releaseSoftLaunchAdmin) handleFetchReleaseSoftLaunch(); }}
         />
@@ -9328,6 +9422,7 @@ export default function Admin() {
                 </span>
               )
             }
+            toolAnchor="gtaPool"
             isCollapsed={collapsed.gtaPool}
             onToggle={() => {
               toggleSection('gtaPool');
@@ -9480,6 +9575,7 @@ export default function Admin() {
               )}
             </span>
           }
+          toolAnchor="sessionStats"
           isCollapsed={collapsed.sessionStats}
           onToggle={() => toggleSection('sessionStats')}
         />
@@ -9528,6 +9624,7 @@ export default function Admin() {
               )}
             </span>
           }
+          toolAnchor="cfBotBlock"
           isCollapsed={collapsed.cfBotBlock}
           onToggle={() => toggleSection('cfBotBlock')}
         />
@@ -9573,6 +9670,7 @@ export default function Admin() {
               )}
             </span>
           }
+          toolAnchor="cfAutoBlock"
           isCollapsed={collapsed.cfAutoBlock}
           onToggle={() => toggleSection('cfAutoBlock')}
         />
@@ -9645,6 +9743,7 @@ export default function Admin() {
               </span>
             )
           }
+          toolAnchor="security"
           isCollapsed={collapsed.security}
           onToggle={() => toggleSection('security')}
         />
@@ -10101,6 +10200,7 @@ export default function Admin() {
             icon={Bot}
             title="Bot / script investigation"
             badge={botInvestProfile?.user?.username ? <span className="text-[10px] font-heading text-violet-400">{botInvestProfile.user.username}</span> : null}
+            toolAnchor="botInvestigation"
             isCollapsed={collapsed.botInvestigation}
             onToggle={() => toggleSection('botInvestigation')}
           />
@@ -10232,6 +10332,7 @@ export default function Admin() {
           icon={Users}
           title="Quick Player Comparison"
           badge={compareResult?.same_ip ? <span className="text-[10px] font-heading text-red-400">Same IP!</span> : compareResult?.same_device ? <span className="text-[10px] font-heading text-amber-400">Same device!</span> : null}
+          toolAnchor="playerCompare"
           isCollapsed={collapsed.playerCompare}
           onToggle={() => toggleSection('playerCompare')}
         />
@@ -10290,6 +10391,7 @@ export default function Admin() {
               <span className="text-[10px] font-heading text-amber-400">Review below</span>
             )
           }
+          toolAnchor="cheat"
           isCollapsed={collapsed.cheat}
           onToggle={() => toggleSection('cheat')}
         />
@@ -11087,6 +11189,7 @@ export default function Admin() {
           icon={User}
           title="Login page unique visitors"
           badge={loginPageVisitors != null ? <span className="text-[10px] font-heading text-primary">{loginPageVisitors.toLocaleString()} unique</span> : null}
+          toolAnchor="loginPageVisitors"
           isCollapsed={collapsed.loginPageVisitors}
           onToggle={() => { toggleSection('loginPageVisitors'); if (collapsed.loginPageVisitors && loginPageVisitors === null) handleFetchLoginPageVisitors(); }}
         />
@@ -11114,6 +11217,7 @@ export default function Admin() {
         <SectionHeader
           icon={Coins}
           title="Economy Overview"
+          toolAnchor="economyOverview"
           isCollapsed={collapsed.economyOverview}
           onToggle={() => { toggleSection('economyOverview'); if (collapsed.economyOverview && !economyOverview) handleFetchEconomyOverview(); }}
         />
@@ -11174,6 +11278,114 @@ export default function Admin() {
                     </div>
                   </div>
                 )}
+                <div className="border-t border-zinc-700/40 pt-3 mt-3 space-y-2">
+                  <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wide">Cash on hand — who holds it</div>
+                  <p className="text-[10px] text-mutedForeground leading-snug">
+                    Wallet cash (<span className="font-mono text-[9px]">users.money</span>) for the same segment as <strong className="text-foreground">Cash in circulation</strong> above: alive accounts, excluding moderators and admin-email accounts.
+                    Includes NPC wallet rows if any. Sum below should match the headline when not searching.
+                  </p>
+                  <div className="flex flex-wrap items-end gap-2">
+                    <label className="flex flex-col gap-0.5 text-[10px] font-heading min-w-[8rem]">
+                      <span className="text-mutedForeground">Search username</span>
+                      <input
+                        type="text"
+                        value={cashHoldersSearchInput}
+                        onChange={(e) => setCashHoldersSearchInput(e.target.value)}
+                        placeholder="Contains…"
+                        className="w-full max-w-[14rem] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                      />
+                    </label>
+                    <label className="flex flex-col gap-0.5 text-[10px] font-heading">
+                      <span className="text-mutedForeground">Sort</span>
+                      <AdminSelect
+                        value={cashHoldersSort}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setCashHoldersSort(v);
+                          if (cashHolders) fetchCashHolders(0, v);
+                        }}
+                      >
+                        <option value="money_desc">Cash (high → low)</option>
+                        <option value="money_asc">Cash (low → high)</option>
+                        <option value="username_asc">Username A–Z</option>
+                      </AdminSelect>
+                    </label>
+                    <BtnPrimary type="button" onClick={() => fetchCashHolders(0, cashHoldersSort)} disabled={cashHoldersLoading}>
+                      {cashHoldersLoading ? 'Loading…' : (cashHolders ? 'Refresh' : 'Load full list')}
+                    </BtnPrimary>
+                  </div>
+                  {cashHolders && (
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap gap-x-4 gap-y-1 text-[9px] text-mutedForeground font-heading">
+                        <span>
+                          Total wallet cash (segment): <strong className="text-foreground">${formatWholeCash(cashHolders.total_cash_on_hand)}</strong>
+                        </span>
+                        <span>
+                          Accounts: <strong className="text-foreground">{(cashHolders.total_accounts ?? 0).toLocaleString()}</strong>
+                        </span>
+                        {economyOverview?.total_money != null && !cashHoldersSearchInput.trim() && (
+                          <span className={Math.abs(Number(cashHolders.total_cash_on_hand) - Number(economyOverview.total_money)) > 1 ? 'text-amber-400' : ''}>
+                            Overview card: ${formatWholeCash(economyOverview.total_money)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="overflow-x-auto rounded border border-zinc-700/40">
+                        <table className="w-full text-[9px] font-heading text-left border-collapse">
+                          <thead>
+                            <tr className="border-b border-zinc-700/50 text-mutedForeground uppercase">
+                              <th className="py-1 px-2">User</th>
+                              <th className="py-1 px-2 text-right">Wallet</th>
+                              <th className="py-1 px-2 text-right hidden sm:table-cell">Bank</th>
+                              <th className="py-1 px-2 text-right hidden sm:table-cell">Swiss</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(cashHolders.rows || []).map((r) => (
+                              <tr key={r.id || r.username} className="border-b border-zinc-800/50 hover:bg-zinc-800/30">
+                                <td className="py-1 px-2 font-bold text-foreground">
+                                  {r.username}
+                                  {r.is_npc ? <span className="ml-1 text-[8px] text-amber-500/90 font-heading">NPC</span> : null}
+                                </td>
+                                <td className="py-1 px-2 text-right tabular-nums">${formatWholeCash(r.money)}</td>
+                                <td className="py-1 px-2 text-right tabular-nums hidden sm:table-cell">${formatWholeCash(r.bank_balance)}</td>
+                                <td className="py-1 px-2 text-right tabular-nums hidden sm:table-cell">${formatWholeCash(r.swiss_balance)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <BtnSecondary
+                          type="button"
+                          disabled={cashHoldersLoading || cashHoldersOffset <= 0}
+                          onClick={() => fetchCashHolders(Math.max(0, cashHoldersOffset - CASH_HOLDERS_PAGE), cashHoldersSort)}
+                        >
+                          Previous
+                        </BtnSecondary>
+                        <span className="text-[9px] text-mutedForeground font-heading">
+                          {cashHolders.total_accounts ? (
+                            <>
+                              Showing {cashHoldersOffset + 1}–{cashHoldersOffset + (cashHolders.rows?.length ?? 0)} of {(cashHolders.total_accounts ?? 0).toLocaleString()}
+                            </>
+                          ) : (
+                            'No rows'
+                          )}
+                        </span>
+                        <BtnSecondary
+                          type="button"
+                          disabled={
+                            cashHoldersLoading
+                            || !cashHolders.rows?.length
+                            || cashHoldersOffset + (cashHolders.rows?.length ?? 0) >= (cashHolders.total_accounts ?? 0)
+                          }
+                          onClick={() => fetchCashHolders(cashHoldersOffset + CASH_HOLDERS_PAGE, cashHoldersSort)}
+                        >
+                          Next
+                        </BtnSecondary>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -11186,6 +11398,7 @@ export default function Admin() {
           icon={Landmark}
           title="Capital breakdown"
           badge={capitalBreakdown?.totals ? <span className="text-[10px] font-heading text-mutedForeground">where cash sits</span> : null}
+          toolAnchor="capitalBreakdown"
           isCollapsed={collapsed.capitalBreakdown}
           onToggle={() => { toggleSection('capitalBreakdown'); if (collapsed.capitalBreakdown && !capitalBreakdown) handleFetchCapitalBreakdown(); }}
         />
@@ -11296,6 +11509,7 @@ export default function Admin() {
           icon={Activity}
           title="Online Player Activity"
           badge={playerActivity ? <span className="text-[10px] font-heading text-primary">{playerActivity.total_online} online</span> : null}
+          toolAnchor="playerActivity"
           isCollapsed={collapsed.playerActivity}
           onToggle={() => { toggleSection('playerActivity'); if (collapsed.playerActivity && !playerActivity) handleFetchPlayerActivity(); }}
         />
@@ -11328,6 +11542,7 @@ export default function Admin() {
           <SectionHeader
             icon={BarChart3}
             title="Attack Analytics"
+            toolAnchor="attackAnalytics"
             isCollapsed={collapsed.attackAnalytics}
             onToggle={() => toggleSection('attackAnalytics')}
           />
@@ -11532,6 +11747,7 @@ export default function Admin() {
                 ? <span className="text-[10px] font-heading text-mutedForeground">{crimeAnalytics.items.length} crimes</span>
                 : null
             }
+            toolAnchor="crimeAnalytics"
             isCollapsed={collapsed.crimeAnalytics}
             onToggle={() => toggleSection('crimeAnalytics')}
           />
@@ -11634,6 +11850,7 @@ export default function Admin() {
             icon={BarChart3}
             title="Casino Analytics"
             badge={casinoAnalytics?.items ? <span className="text-[10px] font-heading text-mutedForeground">{casinoAnalytics.items.length} games</span> : null}
+            toolAnchor="casinoAnalytics"
             isCollapsed={collapsed.casinoAnalytics}
             onToggle={() => toggleSection('casinoAnalytics')}
           />
@@ -11723,6 +11940,7 @@ export default function Admin() {
             icon={BarChart3}
             title="Casino Ownership Profits"
             badge={ownershipProfits?.items ? <span className="text-[10px] font-heading text-mutedForeground">{ownershipProfits.items.length} casinos</span> : null}
+            toolAnchor="ownershipProfits"
             isCollapsed={collapsed.ownershipProfits}
             onToggle={() => toggleSection('ownershipProfits')}
           />
@@ -11783,6 +12001,7 @@ export default function Admin() {
             icon={BarChart3}
             title="Trades (Quicktrade) Analytics"
             badge={tradesAnalytics?.items ? <span className="text-[10px] font-heading text-mutedForeground">{tradesAnalytics.items.length} types</span> : null}
+            toolAnchor="tradesAnalytics"
             isCollapsed={collapsed.tradesAnalytics}
             onToggle={() => toggleSection('tradesAnalytics')}
           />
@@ -11830,6 +12049,7 @@ export default function Admin() {
             icon={BarChart3}
             title="Hitlist & Bodyguards Analytics"
             badge={hitlistBodyguardsAnalytics?.items ? <span className="text-[10px] font-heading text-mutedForeground">{hitlistBodyguardsAnalytics.items.length} event types</span> : null}
+            toolAnchor="hitlistBodyguardsAnalytics"
             isCollapsed={collapsed.hitlistBodyguardsAnalytics}
             onToggle={() => toggleSection('hitlistBodyguardsAnalytics')}
           />
@@ -11877,6 +12097,7 @@ export default function Admin() {
             icon={BarChart3}
             title="Economy Analytics"
             badge={economyAnalytics?.items ? <span className="text-[10px] font-heading text-mutedForeground">{economyAnalytics.items.length} types</span> : null}
+            toolAnchor="economyAnalytics"
             isCollapsed={collapsed.economyAnalytics}
             onToggle={() => toggleSection('economyAnalytics')}
           />
@@ -11924,6 +12145,7 @@ export default function Admin() {
             icon={BarChart3}
             title="Analytics Workspace (V2)"
             badge={analyticsV2Overview?.items ? <span className="text-[10px] font-heading text-mutedForeground">{analyticsV2Overview.items.length} domains</span> : null}
+            toolAnchor="analyticsWorkspaceV2"
             isCollapsed={collapsed.analyticsWorkspaceV2}
             onToggle={() => toggleSection('analyticsWorkspaceV2')}
           />
@@ -11995,6 +12217,7 @@ export default function Admin() {
             icon={Wine}
             title="Booze-run analytics"
             badge={boozeRunOverview?.booze_run_sell ? <span className="text-[10px] font-heading text-mutedForeground">{boozeRunOverview.days}d window</span> : null}
+            toolAnchor="boozeRunAnalytics"
             isCollapsed={collapsed.boozeRunAnalytics}
             onToggle={() => toggleSection('boozeRunAnalytics')}
           />
@@ -12331,6 +12554,7 @@ export default function Admin() {
                 </span>
               ) : null
             }
+            toolAnchor="interestBankPlayers"
             isCollapsed={collapsed.interestBankPlayers}
             onToggle={() => toggleSection('interestBankPlayers')}
           />
@@ -12417,6 +12641,7 @@ export default function Admin() {
             icon={BarChart3}
             title="Swiss Bank Overview"
             badge={swissBankList?.users ? <span className="text-[10px] font-heading text-mutedForeground">{swissBankList.count} users — ${swissBankList.total_swiss?.toLocaleString()}</span> : null}
+            toolAnchor="swissBank"
             isCollapsed={collapsed.swissBank}
             onToggle={() => toggleSection('swissBank')}
           />
@@ -12483,6 +12708,7 @@ export default function Admin() {
             icon={Coins}
             title="Points purchases (store spends)"
             badge={pointsStoreSpends?.spends ? <span className="text-[10px] font-heading text-mutedForeground">{pointsStoreSpends.count} rows</span> : null}
+            toolAnchor="pointsStoreSpends"
             isCollapsed={collapsed.pointsStoreSpends}
             onToggle={() => toggleSection('pointsStoreSpends')}
           />
@@ -12570,6 +12796,7 @@ export default function Admin() {
             icon={ScrollText}
             title="Live Activity Feed"
             badge={activityFeed?.entries ? <span className="text-[10px] font-heading text-primary">{activityFeed.count} events</span> : null}
+            toolAnchor="activityFeed"
             isCollapsed={collapsed.activityFeed}
             onToggle={() => toggleSection('activityFeed')}
           />
@@ -12709,6 +12936,7 @@ export default function Admin() {
             icon={Trophy}
             title="Minigame Payouts"
             badge={minigamePayouts.entries?.length ? <span className="text-[10px] font-heading text-primary">{minigamePayouts.count} entries</span> : null}
+            toolAnchor="minigamePayouts"
             isCollapsed={collapsed.minigamePayouts}
             onToggle={() => toggleSection('minigamePayouts')}
           />
@@ -12793,6 +13021,7 @@ export default function Admin() {
             icon={Trophy}
             title="Weekly Leaderboard Payouts"
             badge={weeklyLeaderboardPayouts.entries?.length ? <span className="text-[10px] font-heading text-primary">{weeklyLeaderboardPayouts.count} entries</span> : null}
+            toolAnchor="weeklyLeaderboardPayouts"
             isCollapsed={collapsed.weeklyLeaderboardPayouts}
             onToggle={() => toggleSection('weeklyLeaderboardPayouts')}
           />
@@ -12888,6 +13117,7 @@ export default function Admin() {
             icon={Crosshair}
             title="Attack logs (post data)"
             badge={attackLogsData?.logs?.length != null ? <span className="text-[10px] font-heading text-primary">{attackLogsData.logs.length} entries</span> : null}
+            toolAnchor="attackLogs"
             isCollapsed={collapsed.attackLogs}
             onToggle={() => toggleSection('attackLogs')}
           />
@@ -13004,6 +13234,7 @@ export default function Admin() {
             icon={ScrollText}
             title="Activity Log"
           badge={activityLog.entries?.length != null && <span className="text-[10px] font-heading text-mutedForeground">{activityLog.entries.length} entries</span>}
+          toolAnchor="activityLog"
           isCollapsed={collapsed.activityLog}
           onToggle={() => toggleSection('activityLog')}
         />
@@ -13055,6 +13286,7 @@ export default function Admin() {
             icon={Dice5}
             title="Betting Log"
             badge={gamblingLog.entries?.length != null && <span className="text-[10px] font-heading text-mutedForeground">{gamblingLog.entries.length} entries</span>}
+            toolAnchor="gamblingLog"
             isCollapsed={collapsed.gamblingLog}
             onToggle={() => toggleSection('gamblingLog')}
           />
@@ -13136,6 +13368,7 @@ export default function Admin() {
             icon={Skull}
             title="Crime logs (post data)"
             badge={crimeLogsData?.logs?.length != null ? <span className="text-[10px] font-heading text-primary">{crimeLogsData.logs.length} entries</span> : null}
+            toolAnchor="crimeLogs"
             isCollapsed={collapsed.crimeLogs}
             onToggle={() => toggleSection('crimeLogs')}
           />
@@ -13208,6 +13441,7 @@ export default function Admin() {
             icon={Car}
             title="GTA logs (post data)"
             badge={gtaLogsData?.logs?.length != null ? <span className="text-[10px] font-heading text-primary">{gtaLogsData.logs.length} entries</span> : null}
+            toolAnchor="gtaLogs"
             isCollapsed={collapsed.gtaLogs}
             onToggle={() => {
               toggleSection('gtaLogs');
@@ -13318,6 +13552,7 @@ export default function Admin() {
             icon={Lock}
             title="Jail bust logs (post data)"
             badge={jailLogsData?.logs?.length != null ? <span className="text-[10px] font-heading text-primary">{jailLogsData.logs.length} entries</span> : null}
+            toolAnchor="jailLogs"
             isCollapsed={collapsed.jailLogs}
             onToggle={() => toggleSection('jailLogs')}
           />
@@ -13371,6 +13606,7 @@ export default function Admin() {
             icon={Coins}
             title="Bank logs (post data)"
             badge={bankLogsData ? <span className="text-[10px] font-heading text-primary">{(bankLogsData.transfers?.length ?? 0) + (bankLogsData.deposits?.length ?? 0)} entries</span> : null}
+            toolAnchor="bankLogs"
             isCollapsed={collapsed.bankLogs}
             onToggle={() => toggleSection('bankLogs')}
           />
@@ -13442,6 +13678,7 @@ export default function Admin() {
             icon={BarChart3}
             title="Stock market logs (post data)"
             badge={stockLogsData?.logs?.length != null ? <span className="text-[10px] font-heading text-primary">{stockLogsData.logs.length} entries</span> : null}
+            toolAnchor="stockLogs"
             isCollapsed={collapsed.stockLogs}
             onToggle={() => toggleSection('stockLogs')}
           />
@@ -13510,6 +13747,7 @@ export default function Admin() {
         <SectionHeader
           icon={Clock}
           title="Search & Attack Tools"
+          toolAnchor="search"
           isCollapsed={collapsed.search}
           onToggle={() => toggleSection('search')}
         />
@@ -13601,6 +13839,7 @@ export default function Admin() {
           <SectionHeader
             icon={Shield}
             title="Bodyguard Tools"
+            toolAnchor="bodyguards"
             isCollapsed={collapsed.bodyguards}
             onToggle={() => toggleSection('bodyguards')}
           />
@@ -13688,6 +13927,7 @@ export default function Admin() {
         <SectionHeader
           icon={Zap}
           title="Quick Actions"
+          toolAnchor="quick"
           isCollapsed={collapsed.quick}
           onToggle={() => toggleSection('quick')}
         />
@@ -13720,6 +13960,7 @@ export default function Admin() {
         <SectionHeader
           icon={Layers}
           title="Bulk User Action"
+          toolAnchor="bulkAction"
           isCollapsed={collapsed.bulkAction}
           onToggle={() => toggleSection('bulkAction')}
         />
@@ -13755,6 +13996,7 @@ export default function Admin() {
         <SectionHeader
           icon={KeyRound}
           title="Redeem Codes"
+          toolAnchor="redeemCodes"
           isCollapsed={collapsed.redeemCodes}
           onToggle={() => { toggleSection('redeemCodes'); if (collapsed.redeemCodes) fetchRedeemCodes(); }}
         />
@@ -13909,6 +14151,7 @@ export default function Admin() {
             icon={Image}
             title="Image host (user uploads)"
             badge={typeof imageHostAdminData.total === 'number' ? <span className="text-[10px] font-heading text-mutedForeground tabular-nums">{imageHostAdminData.total} active</span> : null}
+            toolAnchor="imageHostAdmin"
             isCollapsed={collapsed.imageHostAdmin}
             onToggle={() => toggleSection('imageHostAdmin')}
           />
@@ -14001,6 +14244,7 @@ export default function Admin() {
             icon={Skull}
             title="Database Management"
             color="text-red-400"
+            toolAnchor="database"
             isCollapsed={collapsed.database}
             onToggle={() => toggleSection('database')}
           />
@@ -14338,6 +14582,7 @@ export default function Admin() {
                 <span className="text-mutedForeground text-[10px] font-heading">Users Online</span>
               </span>
             }
+            toolAnchor="modDisplay"
             isCollapsed={collapsed.modDisplay}
             onToggle={() => toggleSection('modDisplay')}
           />
@@ -14377,6 +14622,7 @@ export default function Admin() {
             icon={Users}
             title="Dupe check"
             badge={searchResults?.duplicates?.length > 0 || searchResults?.users?.length > 0 ? <span className="text-[10px] font-heading text-amber-400">Found</span> : null}
+            toolAnchor="dupeCheckMod"
             isCollapsed={collapsed.dupeCheckMod}
             onToggle={() => toggleSection('dupeCheckMod')}
           />
@@ -14427,6 +14673,7 @@ export default function Admin() {
           <SectionHeader
             icon={AlertTriangle}
             title="Cheat detection"
+            toolAnchor="cheatDetectionMod"
             isCollapsed={collapsed.cheatDetectionMod}
             onToggle={() => toggleSection('cheatDetectionMod')}
           />

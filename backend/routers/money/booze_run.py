@@ -78,12 +78,12 @@ _CONFIG_MAX_ENTRIES = 5000
 _booze_top_profit_leader_cache_until: float = 0.0
 _booze_top_profit_leader_cache_ids: frozenset[str] = frozenset()
 
-# Admin overrides (None = use BOOZE_RUN_JAIL_CHANCE_MIN / MAX). In-memory like rotation override.
+# Admin overrides (None = use BOOZE_RUN_JAIL_CHANCE_MIN / MAX). Persisted in game_settings booze_run_globals.
 _booze_jail_min_override: Optional[float] = None
 _booze_jail_max_override: Optional[float] = None
 
 # Global listed-price multiplier (buy & sell use same listed price before booze token discount on buy).
-# Persisted in game_settings _id=booze_run_globals; loaded at server startup.
+# game_settings _id=booze_run_globals also stores rotation_seconds and jail_chance_min/max overrides.
 BOOZE_GLOBALS_DOC_ID = "booze_run_globals"
 BOOZE_LISTED_PRICE_MULT_MIN = 0.01  # up to 99% off vs full rotation prices
 # Above 1.0 = premium vs rotation baseline (e.g. 1.1 = +10%). Capped for safety.
@@ -109,15 +109,43 @@ def get_booze_listed_price_mult() -> float:
 
 
 async def load_booze_globals_from_db():
-    """Restore listed_price_mult after process restart."""
-    global _booze_listed_price_mult
+    """Restore listed_price_mult, rotation override, and jail overrides after process restart."""
+    global _booze_listed_price_mult, _booze_rotation_override_seconds, _booze_jail_min_override, _booze_jail_max_override
     try:
         doc = await db.game_settings.find_one(
             {"$or": [{"_id": BOOZE_GLOBALS_DOC_ID}, {"key": BOOZE_GLOBALS_DOC_ID}]},
-            {"_id": 0, "listed_price_mult": 1},
+            {
+                "_id": 0,
+                "listed_price_mult": 1,
+                "rotation_seconds": 1,
+                "jail_chance_min": 1,
+                "jail_chance_max": 1,
+            },
         )
-        if doc and doc.get("listed_price_mult") is not None:
-            _booze_listed_price_mult = float(doc["listed_price_mult"])
+        if doc:
+            if doc.get("listed_price_mult") is not None:
+                _booze_listed_price_mult = float(doc["listed_price_mult"])
+            else:
+                _booze_listed_price_mult = 1.0
+            rs = doc.get("rotation_seconds")
+            if rs is not None and int(rs) > 0:
+                _booze_rotation_override_seconds = int(rs)
+            else:
+                _booze_rotation_override_seconds = None
+            jm = doc.get("jail_chance_min")
+            jx = doc.get("jail_chance_max")
+            _booze_jail_min_override = float(jm) if jm is not None else None
+            _booze_jail_max_override = float(jx) if jx is not None else None
+            if _booze_jail_min_override is not None and not (0.0 <= _booze_jail_min_override <= 1.0):
+                _booze_jail_min_override = None
+            if _booze_jail_max_override is not None and not (0.0 <= _booze_jail_max_override <= 1.0):
+                _booze_jail_max_override = None
+            if (
+                _booze_jail_min_override is not None
+                and _booze_jail_max_override is not None
+                and _booze_jail_min_override > _booze_jail_max_override
+            ):
+                _booze_jail_min_override, _booze_jail_max_override = _booze_jail_max_override, _booze_jail_min_override
     except Exception:
         pass
     _booze_listed_price_mult = get_booze_listed_price_mult()
@@ -733,10 +761,36 @@ async def admin_set_booze_rotation(request: AdminBoozeRotationRequest, current_u
     sec = request.seconds
     if sec is None or sec <= 0:
         _booze_rotation_override_seconds = None
+        now_iso = datetime.now(timezone.utc).isoformat()
+        await db.game_settings.update_one(
+            {"_id": BOOZE_GLOBALS_DOC_ID},
+            {
+                "$set": {
+                    "rotation_seconds": None,
+                    "updated_at": now_iso,
+                    "key": BOOZE_GLOBALS_DOC_ID,
+                }
+            },
+            upsert=True,
+        )
+        _invalidate_all_booze_config_cache()
         return {"message": "Booze rotation reset to normal (3 hours)", "rotation_seconds": None}
     if sec < 5 or sec > 86400:
         raise HTTPException(status_code=400, detail="seconds must be between 5 and 86400 (1 day)")
     _booze_rotation_override_seconds = sec
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.game_settings.update_one(
+        {"_id": BOOZE_GLOBALS_DOC_ID},
+        {
+            "$set": {
+                "rotation_seconds": sec,
+                "updated_at": now_iso,
+                "key": BOOZE_GLOBALS_DOC_ID,
+            }
+        },
+        upsert=True,
+    )
+    _invalidate_all_booze_config_cache()
     return {"message": f"Booze rotation set to {sec} seconds", "rotation_seconds": sec}
 
 
@@ -840,9 +894,22 @@ async def admin_set_booze_jail_chances(request: AdminBoozeJailChanceRequest, cur
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin only")
     global _booze_jail_min_override, _booze_jail_max_override
+    now_iso = datetime.now(timezone.utc).isoformat()
     if request.reset:
         _booze_jail_min_override = None
         _booze_jail_max_override = None
+        await db.game_settings.update_one(
+            {"_id": BOOZE_GLOBALS_DOC_ID},
+            {
+                "$set": {
+                    "jail_chance_min": None,
+                    "jail_chance_max": None,
+                    "updated_at": now_iso,
+                    "key": BOOZE_GLOBALS_DOC_ID,
+                }
+            },
+            upsert=True,
+        )
         lo, hi = _effective_jail_chance_bounds()
         return {
             "message": "Booze jail chance overrides cleared (using code defaults).",
@@ -864,6 +931,18 @@ async def admin_set_booze_jail_chances(request: AdminBoozeJailChanceRequest, cur
     lo, hi = _effective_jail_chance_bounds()
     if lo > hi:
         raise HTTPException(status_code=400, detail="jail_chance_min must be <= jail_chance_max")
+    await db.game_settings.update_one(
+        {"_id": BOOZE_GLOBALS_DOC_ID},
+        {
+            "$set": {
+                "jail_chance_min": _booze_jail_min_override,
+                "jail_chance_max": _booze_jail_max_override,
+                "updated_at": now_iso,
+                "key": BOOZE_GLOBALS_DOC_ID,
+            }
+        },
+        upsert=True,
+    )
     return {
         "message": "Booze jail chances updated.",
         "effective_jail_chance_min": lo,

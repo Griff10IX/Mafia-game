@@ -57,6 +57,24 @@ function formatExtraPot(game) {
   return parts.join(' + ');
 }
 
+/** How the pot is rolled — shown so joiners know before paying the fee. */
+function formatRollMode(game) {
+  const maxP = Math.max(2, Math.min(100, Number(game.max_players ?? 10)));
+  const n = Array.isArray(game.entries) ? game.entries.length : 0;
+  const autoAt = game.auto_roll_at;
+  if (autoAt != null && autoAt !== '') {
+    const threshold = Math.max(2, Math.min(maxP, Number(autoAt)));
+    return {
+      label: 'Auto-roll',
+      detail: `Rolls automatically when ${threshold} spots are filled (${n}/${threshold} now). Max table: ${maxP}.`,
+    };
+  }
+  return {
+    label: 'Manual roll',
+    detail: `Host rolls when ready — or when the table fills (${n}/${maxP}).`,
+  };
+}
+
 export default function MDGPage() {
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -209,6 +227,7 @@ export default function MDGPage() {
                 const isStaff = isAdmin || isModerator;
                 const isIn = entries.some((e) => e.user_id === myUserId) || isCreator;
                 const canRoll = (isCreator || isStaff) && entries.length >= 1;
+                const rollMode = formatRollMode(g);
                 return (
                   <li key={g.id} className={`py-3 px-2 mdg-fade-in ${styles.raised}`} style={{ animationDelay: `${0.05 + idx * 0.02}s` }}>
                     <div className="flex flex-wrap items-start justify-between gap-2">
@@ -219,6 +238,12 @@ export default function MDGPage() {
                           <span className="text-mutedForeground mx-1.5">/</span>
                           <span className="text-mutedForeground">Potential Win: </span>
                           <span className="font-semibold text-primary">{formatPot(g)}</span>
+                        </p>
+                        <p className="text-[9px] font-heading text-foreground/90">
+                          <span className={rollMode.label === 'Auto-roll' ? 'text-amber-400/95 font-bold' : 'text-mutedForeground'}>
+                            {rollMode.label}:
+                          </span>{' '}
+                          <span className="text-mutedForeground">{rollMode.detail}</span>
                         </p>
                         <p className="text-[9px] font-heading text-mutedForeground break-words">
                           {playerNames || '—'} {entries.length > 0 && `– ${entries.length} Players`}
