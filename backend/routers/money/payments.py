@@ -16,7 +16,32 @@ from utils.release_soft_launch import game_pass_purchase_locked_detail, get_rele
 logger = logging.getLogger(__name__)
 
 RANK_XP_PASS_PACKAGE_ID = "rank_xp_pass_499"
-GAME_PASS_POINTS_PRICE = 10_000
+GAME_PASS_POINTS_PRICE = 8_000
+# No new Game Pass checkout while an active pass is within this many days of rank_xp_pass_token_expires_at.
+GAME_PASS_PURCHASE_CLOSE_WINDOW_DAYS = 14
+
+
+def game_pass_purchase_blocked_in_final_window(user: Optional[dict], now: datetime) -> Optional[str]:
+    """
+    Block purchasing another Game Pass when the current window (token and/or VIP) ends in <= N days.
+    Mirrors UX: avoid taking payment for a pass that cannot meaningfully run before renewal.
+    """
+    if not user:
+        return None
+    expires_dt = _parse_utc(user.get("rank_xp_pass_token_expires_at"))
+    if not expires_dt or expires_dt <= now:
+        return None
+    remaining = expires_dt - now
+    if remaining > timedelta(days=GAME_PASS_PURCHASE_CLOSE_WINDOW_DAYS):
+        return None
+    has_token = int(user.get("rank_xp_pass_tokens") or 0) > 0
+    vip = user.get("rank_xp_pass_rewards_granted") is True
+    if not has_token and not vip:
+        return None
+    return (
+        f"Game Pass is not available for purchase in the final {GAME_PASS_PURCHASE_CLOSE_WINDOW_DAYS} days before your "
+        "current pass ends. You can buy again after it expires."
+    )
 
 
 def _parse_utc(s: Optional[str]):
@@ -80,8 +105,51 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
     if is_rank_xp_pass:
         user = await db.users.find_one(
             {"id": user_id},
-            {"_id": 0, "points": 1, "rank_points": 1, "rank_xp_pass_tokens": 1},
+            {
+                "_id": 0,
+                "points": 1,
+                "rank_points": 1,
+                "rank_xp_pass_tokens": 1,
+                "rank_xp_pass_token_expires_at": 1,
+                "rank_xp_pass_rewards_granted": 1,
+            },
         )
+        block_msg = game_pass_purchase_blocked_in_final_window(user, now)
+        if block_msg:
+            blocked = await db.payment_transactions.update_one(
+                {"session_id": session_id, "payment_status": "pending"},
+                {
+                    "$set": {
+                        "payment_status": "fulfillment_blocked",
+                        "fulfillment_blocked_at": now.isoformat(),
+                        "fulfillment_blocked_detail": block_msg[:1000],
+                    }
+                },
+            )
+            if blocked.modified_count:
+                logger.error(
+                    "Game Pass Stripe payment will not be auto-fulfilled (final %s-day window): session_id=%s user_id=%s",
+                    GAME_PASS_PURCHASE_CLOSE_WINDOW_DAYS,
+                    session_id,
+                    user_id,
+                )
+                return {"credited": False, "preorder": False, "fulfillment_blocked": True, "detail": block_msg}
+            snap = await db.payment_transactions.find_one(
+                {"session_id": session_id},
+                {"payment_status": 1, "fulfillment_blocked_detail": 1},
+            )
+            ps = (snap or {}).get("payment_status")
+            if ps == "fulfillment_blocked":
+                return {
+                    "credited": False,
+                    "preorder": False,
+                    "fulfillment_blocked": True,
+                    "detail": (snap or {}).get("fulfillment_blocked_detail") or block_msg,
+                }
+            if ps != "completed":
+                return {"credited": False, "preorder": False, "fulfillment_blocked": True, "detail": block_msg}
+            # else: already completed — fall through to idempotent handling below
+
         points_before = int(user.get("points") or 0) if user else 0
         now_iso = now.isoformat()
         result = await db.payment_transactions.update_one(
@@ -488,6 +556,10 @@ def register(router):
         if rl.get("game_pass_purchase_locked"):
             raise HTTPException(status_code=403, detail=game_pass_purchase_locked_detail(rl))
 
+        block_msg = game_pass_purchase_blocked_in_final_window(current_user, now)
+        if block_msg:
+            raise HTTPException(status_code=403, detail=block_msg)
+
         points = int(current_user.get("points") or 0)
         if points < GAME_PASS_POINTS_PRICE:
             raise HTTPException(status_code=400, detail=f"Not enough points. Need {GAME_PASS_POINTS_PRICE:,} points.")
@@ -569,6 +641,9 @@ def register(router):
             rl = await get_release_soft_launch_public(db)
             if rl.get("game_pass_purchase_locked"):
                 raise HTTPException(status_code=403, detail=game_pass_purchase_locked_detail(rl))
+            block_msg = game_pass_purchase_blocked_in_final_window(current_user, now)
+            if block_msg:
+                raise HTTPException(status_code=403, detail=block_msg)
             existing_tokens = int(current_user.get("rank_xp_pass_tokens") or 0)
             if existing_tokens > 0:
                 expires_dt = _parse_utc(current_user.get("rank_xp_pass_token_expires_at"))
@@ -682,6 +757,15 @@ def register(router):
         if transaction and transaction["user_id"] != current_user["id"]:
             raise HTTPException(status_code=403, detail="Unauthorized")
 
+        if transaction and transaction.get("payment_status") == "fulfillment_blocked":
+            return {
+                "status": "fulfillment_blocked",
+                "payment_status": "fulfillment_blocked",
+                "points_added": 0,
+                "detail": transaction.get("fulfillment_blocked_detail")
+                or "This purchase could not be completed. If you were charged, contact support for a refund.",
+            }
+
         if transaction and transaction.get("payment_status") == "completed":
             return {"status": "completed", "payment_status": "paid", "points_added": transaction["points"]}
         
@@ -761,12 +845,33 @@ def register(router):
                             "preorder_release_date": credit_result.get("preorder_release_date"),
                         }
                     return {"status": "completed", "payment_status": "paid", "points_added": points}
+                if credit_result.get("fulfillment_blocked"):
+                    return {
+                        "status": "fulfillment_blocked",
+                        "payment_status": "fulfillment_blocked",
+                        "points_added": 0,
+                        "detail": credit_result.get("detail"),
+                    }
                 # Already completed or preorder pending (e.g. by webhook); return status with points
                 t2 = await db.payment_transactions.find_one(
                     {"session_id": session_id},
-                    {"_id": 0, "points": 1, "payment_status": 1, "preorder_release_date": 1, "preorder_points": 1},
+                    {
+                        "_id": 0,
+                        "points": 1,
+                        "payment_status": 1,
+                        "preorder_release_date": 1,
+                        "preorder_points": 1,
+                        "fulfillment_blocked_detail": 1,
+                    },
                 )
                 if t2:
+                    if t2.get("payment_status") == "fulfillment_blocked":
+                        return {
+                            "status": "fulfillment_blocked",
+                            "payment_status": "fulfillment_blocked",
+                            "points_added": 0,
+                            "detail": t2.get("fulfillment_blocked_detail"),
+                        }
                     if t2.get("payment_status") == "completed":
                         return {"status": "completed", "payment_status": "paid", "points_added": t2.get("points", points)}
                     if t2.get("payment_status") == "manual_credit_pending":

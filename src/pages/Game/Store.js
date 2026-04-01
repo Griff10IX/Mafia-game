@@ -280,7 +280,12 @@ export default function Store() {
     setCheckingPayment(true);
     try {
       const res = await api.get(`/payments/status/${sessionId}`);
-          if (res.data.payment_status === 'paid') {
+      if (res.data.status === 'fulfillment_blocked' || res.data.payment_status === 'fulfillment_blocked') {
+        toast.error(res.data.detail || 'This purchase could not be completed. If you were charged, contact support.');
+        refreshUser();
+        fetchData();
+        fetchPaymentTransactions();
+      } else if (res.data.payment_status === 'paid') {
         if (res.data.manual_credit_pending || res.data.status === 'manual_credit_pending') {
           const eta = res.data.manual_credit_eta
             ? new Date(res.data.manual_credit_eta).toLocaleString('en-GB', {

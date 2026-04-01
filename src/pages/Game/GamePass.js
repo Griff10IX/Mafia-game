@@ -14,14 +14,28 @@ import {
   GAME_PASS_PRICE_GBP,
   SILVER_PACK_POINTS,
   SILVER_PACK_PRICE_GBP,
+  gamePassPurchaseBlockedFinalWindowMessage,
 } from '../../constants/gamePassPricing';
 
-// Must stay in sync with backend `routers/kill/armoury.py` micro-tier reward scaling.
+// Must stay in sync with backend `utils/game_pass_micro_rewards.py` (used by armoury).
 // We only display; activation/entitlement is still handled by the existing rank_xp_pass flow.
-const MAX_THRESHOLD_RP = 400_000;
+const MAX_THRESHOLD_RP = 1_000_000;
 
 const MAX_MICRO_TIER = 100; // 1 micro tier = 1% of MAX_THRESHOLD_RP
-const MICRO_TIER_STEP_RP = MAX_THRESHOLD_RP / MAX_MICRO_TIER; // 4,000 RP
+const MICRO_TIER_STEP_RP = MAX_THRESHOLD_RP / MAX_MICRO_TIER; // 10,000 RP
+
+// Must match backend `utils/game_pass_micro_rewards.py` REWARD_TIER_PROGRESS_GAMMA.
+const REWARD_TIER_PROGRESS_GAMMA = 1.45;
+
+function tierProgressMultiplier(t) {
+  if (REWARD_TIER_PROGRESS_GAMMA <= 1) return 1;
+  const tt = Math.max(1, Math.min(MAX_MICRO_TIER, Math.floor(t)));
+  return (tt / MAX_MICRO_TIER) ** (REWARD_TIER_PROGRESS_GAMMA - 1);
+}
+
+function rewardWeight(t, baseTier) {
+  return (t / baseTier) * tierProgressMultiplier(t);
+}
 
 // UI compression: render 10 band cards, but the details panel lists every micro tier in the band.
 const BANDS = Array.from({ length: 10 }, (_, i) => {
@@ -94,7 +108,7 @@ const SELECTABLE_RANDOM_TOKEN_KEYS = ['melt_tokens', 'jailbust_tokens', 'travel_
 function normalizeBaseAmountToTotal(baseTier, targetTotal, initialBaseAmount) {
   let base = Number(initialBaseAmount) || 1;
   if (base <= 0) base = 1;
-  const weights = Array.from({ length: 100 }, (_, i) => (i + 1) / baseTier);
+  const weights = Array.from({ length: 100 }, (_, i) => rewardWeight(i + 1, baseTier));
   for (let i = 0; i < 8; i += 1) {
     let s = 0;
     for (const w of weights) s += Math.ceil(base * w);
@@ -107,7 +121,7 @@ function normalizeBaseAmountToTotal(baseTier, targetTotal, initialBaseAmount) {
 function normalizeBaseAmountToTotalForTiers(baseTier, targetTotal, tiers, initialBaseAmount) {
   let base = Number(initialBaseAmount) || 1;
   if (base <= 0) base = 1;
-  const weights = tiers.map((t) => t / baseTier);
+  const weights = tiers.map((tt) => rewardWeight(tt, baseTier));
   for (let i = 0; i < 8; i += 1) {
     let s = 0;
     for (const w of weights) s += Math.ceil(base * w);
@@ -252,7 +266,7 @@ for (let t = 1; t <= 100; t += 1) {
 }
 
 function initialBaseGuess(tiers, baseTier, targetTotal) {
-  const denom = tiers.reduce((acc, tt) => acc + tt / baseTier, 0);
+  const denom = tiers.reduce((acc, tt) => acc + rewardWeight(tt, baseTier), 0);
   if (!denom) return 1;
   return targetTotal / denom;
 }
@@ -274,7 +288,7 @@ for (let t = 1; t <= 100; t += 1) {
   for (const key of SELECTED_KEYS_BY_TIER[t]) {
     const baseTier = BASE_TIER_BY_KEY[key];
     const baseAmount = FIXED_BASE_AMOUNT_BY_KEY[key] ?? BASE_AMOUNT_BY_KEY[key] ?? 1;
-    rewards[key] = Math.ceil(baseAmount * (t / baseTier));
+    rewards[key] = Math.ceil(baseAmount * rewardWeight(t, baseTier));
   }
   PRECOMPUTED_REWARDS_BY_TIER[t] = rewards;
 }
@@ -473,6 +487,8 @@ export default function GamePass() {
   const passIsUnactivatedExpired = passTokensHeld > 0 && !!(passExpiryUntil && passExpiryUntil.getTime() <= nowTs);
   const passIsUnactivatedUnknownExpiry = passTokensHeld > 0 && !passExpiryUntil;
 
+  const gamePassPurchaseBlockedFinalFortnight = gamePassPurchaseBlockedFinalWindowMessage(user, nowTs);
+
   const vipGrantingActive = vipClaimed && (!passExpiryUntil || passExpiryUntil.getTime() > nowTs);
 
   const previewRankPointsRaw = vipGrantingActive
@@ -566,7 +582,11 @@ export default function GamePass() {
     setCheckingPayment(true);
     try {
       const res = await api.get(`/payments/status/${sessionId}`);
-      if (res.data.payment_status === 'paid') {
+      if (res.data.status === 'fulfillment_blocked' || res.data.payment_status === 'fulfillment_blocked') {
+        toast.error(res.data.detail || 'This purchase could not deliver Game Pass. If you were charged, contact support.');
+        refreshUser();
+        await fetchData();
+      } else if (res.data.payment_status === 'paid') {
         const pts = Number(res.data.points_added || 0);
         if (pts === 0) toast.success('Game Pass purchased — token delivered. Activate in My Inventory.');
         else toast.success(`${pts} points added.`);
@@ -674,14 +694,38 @@ export default function GamePass() {
                 </div>
               </div>
 
+              {gamePassPurchaseBlockedFinalFortnight && (
+                <p className="text-[10px] text-amber-400/95 font-heading leading-snug border border-amber-500/30 bg-amber-500/10 rounded px-2 py-2">
+                  {gamePassPurchaseBlockedFinalFortnight}
+                </p>
+              )}
+
               <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
                 <button
                   type="button"
                   onClick={handlePurchase}
-                  disabled={!user || loading || gamePassPurchaseLocked || vipClaimed || passIsUnactivatedValid || passIsUnactivatedUnknownExpiry}
+                  disabled={
+                    !user
+                    || loading
+                    || gamePassPurchaseLocked
+                    || vipClaimed
+                    || passIsUnactivatedValid
+                    || passIsUnactivatedUnknownExpiry
+                    || !!gamePassPurchaseBlockedFinalFortnight
+                  }
                   className="flex-1 w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
                 >
-                  {loading ? '...' : gamePassPurchaseLocked ? 'Unavailable until unlock' : vipClaimed ? 'VIP claimed' : passIsUnactivatedValid ? 'Token ready (activate to claim)' : `Buy for £${GAME_PASS_PRICE_GBP}`}
+                  {loading
+                    ? '...'
+                    : gamePassPurchaseBlockedFinalFortnight
+                      ? 'Too close to pass end'
+                      : gamePassPurchaseLocked
+                        ? 'Unavailable until unlock'
+                        : vipClaimed
+                          ? 'VIP claimed'
+                          : passIsUnactivatedValid
+                            ? 'Token ready (activate to claim)'
+                            : `Buy for £${GAME_PASS_PRICE_GBP}`}
                 </button>
                 <Link
                   to="/account/inventory"
@@ -696,10 +740,27 @@ export default function GamePass() {
                 <button
                   type="button"
                   onClick={handlePurchaseWithPoints}
-                  disabled={!user || loading || gamePassPurchaseLocked || vipClaimed || passIsUnactivatedValid || passIsUnactivatedUnknownExpiry || pointsBalance < GAME_PASS_POINTS_PRICE}
+                  disabled={
+                    !user
+                    || loading
+                    || gamePassPurchaseLocked
+                    || vipClaimed
+                    || passIsUnactivatedValid
+                    || passIsUnactivatedUnknownExpiry
+                    || !!gamePassPurchaseBlockedFinalFortnight
+                    || pointsBalance < GAME_PASS_POINTS_PRICE
+                  }
                   className="flex-1 w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/10 text-primary border border-primary/30 hover:bg-primary/20 disabled:opacity-50 touch-manipulation"
                 >
-                  {loading ? '...' : gamePassPurchaseLocked ? 'Unavailable until unlock' : pointsBalance < GAME_PASS_POINTS_PRICE ? `Need ${GAME_PASS_POINTS_PRICE.toLocaleString()} points` : `Buy for ${GAME_PASS_POINTS_PRICE.toLocaleString()} points`}
+                  {loading
+                    ? '...'
+                    : gamePassPurchaseBlockedFinalFortnight
+                      ? 'Too close to pass end'
+                      : gamePassPurchaseLocked
+                        ? 'Unavailable until unlock'
+                        : pointsBalance < GAME_PASS_POINTS_PRICE
+                          ? `Need ${GAME_PASS_POINTS_PRICE.toLocaleString()} points`
+                          : `Buy for ${GAME_PASS_POINTS_PRICE.toLocaleString()} points`}
                 </button>
                 <div className="text-[9px] text-zinc-400 font-heading italic sm:text-right sm:flex-1">
                   Deducts points to grant an unactivated Game Pass token.

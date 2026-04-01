@@ -990,7 +990,8 @@ async def get_current_user(
         # Never block user requests due to reward automation.
         pass
 
-    # Free Game Pass auto-grant: unlock exactly 1 reward bucket per completed micro tier.
+    # Free Game Pass auto-grant: unlock exactly 1 reward bucket at each completed 10-tier band
+    # (micro tiers 10, 20, … 100) — 10 free payouts total, matching the UI band cards.
     # Only runs for effectively Free users:
     #   - no VIP claim granted yet
     #   - no unactivated but ready Game Pass token

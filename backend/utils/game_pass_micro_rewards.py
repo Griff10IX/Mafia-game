@@ -6,7 +6,9 @@ Micro tiers:
   - Rewards are granted for an exact micro tier (not cumulative).
 
 Scaling:
-  - For each reward type: amount = ceil(baseAmount * (tier / baseTier))
+  - For each reward type: amount = ceil(baseAmount * w(tier, baseTier))
+  - w(t, b) = (t / b) * (t / 100)^(gamma - 1) so early tiers are lighter and late tiers carry more
+    of each key's budget (gamma=1 restores linear t/b scaling).
 """
 
 from __future__ import annotations
@@ -14,9 +16,24 @@ from __future__ import annotations
 import math
 from typing import Dict, Optional
 
-MAX_THRESHOLD_RP = 400_000
+MAX_THRESHOLD_RP = 1_000_000
 MAX_MICRO_TIER = 100
-MICRO_TIER_STEP_RP = MAX_THRESHOLD_RP / MAX_MICRO_TIER  # 4,000 RP
+MICRO_TIER_STEP_RP = MAX_THRESHOLD_RP / MAX_MICRO_TIER  # 10,000 RP
+
+# >1 shifts payout mass toward high micro tiers while preserving per-key totals (see _reward_weight).
+REWARD_TIER_PROGRESS_GAMMA = 1.45
+
+
+def _tier_progress_multiplier(t: int) -> float:
+    if REWARD_TIER_PROGRESS_GAMMA <= 1.0:
+        return 1.0
+    tt = max(1, min(MAX_MICRO_TIER, int(t)))
+    return (tt / float(MAX_MICRO_TIER)) ** (REWARD_TIER_PROGRESS_GAMMA - 1.0)
+
+
+def _reward_weight(t: int, base_tier: int) -> float:
+    return (int(t) / float(base_tier)) * _tier_progress_multiplier(int(t))
+
 
 # Reward key order and labels used for inbox summaries.
 REWARD_KEY_ORDER = [
@@ -60,7 +77,7 @@ _POINTS_BASE_TIER = 50
 def _normalize_base_amount_to_total(*, base_tier: int, target_total: int, initial_base_amount: float) -> float:
     """
     Find a baseAmount such that:
-      sum_{t=1..100} ceil(baseAmount * (t / base_tier)) ~= target_total
+      sum_{t=1..100} ceil(baseAmount * w(t, base_tier)) ~= target_total
 
     Uses a small iterative scaling to converge (since ceil makes it piecewise).
     """
@@ -68,7 +85,7 @@ def _normalize_base_amount_to_total(*, base_tier: int, target_total: int, initia
     if base <= 0:
         base = 1.0
 
-    weights = [(t / float(base_tier)) for t in range(1, MAX_MICRO_TIER + 1)]
+    weights = [_reward_weight(t, base_tier) for t in range(1, MAX_MICRO_TIER + 1)]
     for _ in range(8):
         s = sum(int(math.ceil(base * w)) for w in weights)
         if s <= 0:
@@ -80,7 +97,7 @@ def _normalize_base_amount_to_total(*, base_tier: int, target_total: int, initia
 def _normalize_base_amount_to_total_for_tiers(*, tiers: range, base_tier: int, target_total: int, initial_base_amount: float) -> float:
     """
     Find a baseAmount such that:
-      sum_{t in tiers} ceil(baseAmount * (t / base_tier)) ~= target_total
+      sum_{t in tiers} ceil(baseAmount * w(t, base_tier)) ~= target_total
     """
     base = float(initial_base_amount or 0.0)
     if base <= 0:
@@ -90,7 +107,7 @@ def _normalize_base_amount_to_total_for_tiers(*, tiers: range, base_tier: int, t
     if not tiers_list:
         return base
 
-    weights = [(t / float(base_tier)) for t in tiers_list]
+    weights = [_reward_weight(t, base_tier) for t in tiers_list]
     for _ in range(8):
         s = sum(int(math.ceil(base * w)) for w in weights)
         if s <= 0:
@@ -100,7 +117,7 @@ def _normalize_base_amount_to_total_for_tiers(*, tiers: range, base_tier: int, t
 
 
 def _initial_base_amount_for_total(*, tiers: range, base_tier: int, target_total: int) -> float:
-    denom = sum((t / float(base_tier)) for t in tiers) if tiers else 0.0
+    denom = sum(_reward_weight(int(t), base_tier) for t in tiers) if tiers else 0.0
     if denom <= 0:
         return 1.0
     return float(target_total) / denom
@@ -347,7 +364,7 @@ def rewards_for_micro_tier(micro_tier: int) -> Dict[str, int]:
     out: Dict[str, int] = {}
     for key in selected_keys:
         cfg = MICRO_TIER_REWARD_BASELINES[key]
-        out[key] = int(math.ceil(cfg["baseAmount"] * (t / cfg["baseTier"])))
+        out[key] = int(math.ceil(cfg["baseAmount"] * _reward_weight(t, cfg["baseTier"])))
     return out
 
 
@@ -393,6 +410,10 @@ def vip_rewards_after_free_dedupe(micro_tier: int, free_cash_last_micro_tier_gra
 
     r = dict(rewards_for_micro_tier(t))
     if int(free_cash_last_micro_tier_granted or 0) < t:
+        return r
+
+    # Free track only auto-grants at band ends (10, 20, … 100), not every micro tier.
+    if t % 10 != 0:
         return r
 
     fk = free_unlocked_key_for_micro_tier(t, r)
