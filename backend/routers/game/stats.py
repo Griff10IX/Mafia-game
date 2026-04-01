@@ -69,6 +69,64 @@ def _gambling_profit_from_details(game_type: str, details: dict) -> int:
     return payout - stake
 
 
+def _money_int(v) -> int:
+    try:
+        if v is None or v == "":
+            return 0
+        return int(float(v))
+    except (TypeError, ValueError):
+        return 0
+
+
+def _gambling_stake_payout_for_analytics(game_type: str, details: dict) -> tuple[int, int]:
+    """
+    (stake, payout) in cash terms for admin casino summary rows.
+    Must stay aligned with how each game logs in gambling_log.details.
+    """
+    d = details or {}
+    gt = (game_type or "").strip() or "unknown"
+
+    if gt == "mdg":
+        action = d.get("action")
+        if action in ("create", "join"):
+            fee = _money_int(d.get("fee_money"))
+            extra = _money_int(d.get("extra_pot_money")) if action == "create" else 0
+            return fee + extra, 0
+        if action == "payout":
+            return 0, _money_int(d.get("pot_money"))
+        return 0, 0
+
+    if gt == "mp_blackjack":
+        action = d.get("action")
+        if action == "create":
+            return _money_int(d.get("buy_in")) + _money_int(d.get("extra_prize")), 0
+        if action == "join":
+            return _money_int(d.get("buy_in")), 0
+        if action == "payout":
+            return 0, _money_int(d.get("winnings"))
+        return 0, 0
+
+    if gt == "mp_poker":
+        action = d.get("action")
+        if action in ("create", "join"):
+            return _money_int(d.get("buy_in")), 0
+        if action == "payout":
+            return 0, _money_int(d.get("winnings"))
+        return 0, 0
+
+    if gt == "mp_8ball":
+        action = d.get("action")
+        if action == "win":
+            return 0, _money_int(d.get("payout"))
+        if action == "loss":
+            return _money_int(d.get("stake")) or _money_int(d.get("pot")), 0
+        return 0, 0
+
+    stake = _money_int(d.get("stake") or d.get("bet") or d.get("total_stake"))
+    payout = _money_int(d.get("payout") or d.get("total_payout"))
+    return stake, payout
+
+
 def _gambling_analytics_bucket(game_type: str, details: dict) -> str:
     """Stable aggregation key for gambling_log (splits mp_poker vs dealer vs multiplayer)."""
     gt = (game_type or "").strip() or "unknown"

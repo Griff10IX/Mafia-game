@@ -64,6 +64,8 @@ class AdminAddCustomSportsEventRequest(BaseModel):
 
 
 # ----- Constants -----
+# Max total stake locked in open sports bets per user (split across any number of bets).
+SPORTS_BET_MAX_TOTAL_OPEN_STAKE = 25_000_000
 SPORTS_LIVE_CACHE_TTL = 30 * 60  # 30 min (was 6h) so "Check for events" gets fresher templates
 ODDS_API_BASE = "https://api.the-odds-api.com/v4"
 THESPORTSDB_LEAGUE_PREMIER = 4328
@@ -185,30 +187,65 @@ def _is_draw_outcome_name(n: str) -> bool:
     return "draw" in x or "tie" in x or "empate" in x or "remis" in x
 
 
+def _team_matches_option(team: str, opt_name: str) -> bool:
+    """Loose match for Odds API outcome names vs home_team / away_team (abbreviations, suffixes)."""
+    t = (team or "").strip().lower()
+    o = (opt_name or "").strip().lower()
+    if not t or not o:
+        return False
+    if t == o:
+        return True
+    if len(t) >= 4 and (t in o or o in t):
+        return True
+    for suf in (" fc", " sc", " afc", " cf", " united", " city"):
+        tb = t.replace(suf, "").strip()
+        ob = o.replace(suf, "").strip()
+        if len(tb) >= 4 and (tb in ob or ob in tb or tb == ob):
+            return True
+    return False
+
+
 def _extract_outcomes_from_bookmakers(bookmakers: list, three_way: bool) -> list:
     if not bookmakers:
         return []
-    if three_way:
+
+    def _outcomes_for_keys(keys: tuple) -> list:
+        keys_l = frozenset(str(k).lower() for k in keys)
         for b in bookmakers:
             for m in (b.get("markets") or []):
-                if (m.get("key") or "").lower() == "h2h_3_way":
+                if (m.get("key") or "").lower() in keys_l:
                     out = m.get("outcomes") or []
-                    if out:
-                        return out
-        for b in bookmakers:
-            for m in (b.get("markets") or []):
-                if (m.get("key") or "").lower() == "h2h":
-                    out = m.get("outcomes") or []
-                    if out:
+                    if isinstance(out, list) and out:
                         return out
         return []
-    for b in bookmakers:
-        for m in (b.get("markets") or []):
-            if (m.get("key") or "").lower() == "h2h":
-                out = m.get("outcomes") or []
-                if out:
-                    return out
-    return []
+
+    if three_way:
+        out = _outcomes_for_keys(("h2h_3_way",))
+        if out:
+            return out
+        h2h_two: list = []
+        for b in bookmakers:
+            for m in (b.get("markets") or []):
+                if (m.get("key") or "").lower() != "h2h":
+                    continue
+                raw = m.get("outcomes") or []
+                if not isinstance(raw, list) or not raw:
+                    continue
+                if len(raw) >= 3:
+                    return raw
+                if len(raw) == 2 and not h2h_two:
+                    h2h_two = raw
+        if h2h_two:
+            return h2h_two
+        out = _outcomes_for_keys(("draw_no_bet", "dnb"))
+        if out and len(out) >= 2:
+            return out
+        return []
+
+    out = _outcomes_for_keys(("h2h",))
+    if out:
+        return out
+    return _outcomes_for_keys(("draw_no_bet", "dnb"))
 
 
 def _odds_template_id(sport_key: str, event_id: str) -> str:
@@ -253,17 +290,37 @@ def _parse_odds_event(event: dict, category: str, three_way: bool, sport_key: st
                         ordered.append(o)
                         used.add(i)
                         break
-                    if n == candidate:
+                    if candidate != "Draw" and (n == candidate or _team_matches_option(candidate, n)):
                         ordered.append(o)
                         used.add(i)
                         break
             if len(ordered) == 3:
                 options = ordered
+            else:
+                draw_opts = [o for o in options if _is_draw_outcome_name((o.get("name") or ""))]
+                rest = [o for o in options if o not in draw_opts]
+                if len(draw_opts) == 1 and len(rest) == 2:
+                    draw_o = draw_opts[0]
+                    r0, r1 = rest[0], rest[1]
+                    n0, n1 = (r0.get("name") or ""), (r1.get("name") or "")
+                    if _team_matches_option(home, n0) and not _team_matches_option(away, n0):
+                        h_o, a_o = r0, r1
+                    elif _team_matches_option(home, n1) and not _team_matches_option(away, n1):
+                        h_o, a_o = r1, r0
+                    elif _team_matches_option(home, n0):
+                        h_o, a_o = r0, r1
+                    elif _team_matches_option(home, n1):
+                        h_o, a_o = r1, r0
+                    else:
+                        h_o, a_o = r0, r1
+                    options = [h_o, draw_o, a_o]
+                # else keep API order (books often list home, draw, away)
         elif len(options) == 2:
             ordered = []
             for candidate in [home, away]:
                 for o in options:
-                    if (o.get("name") or "").strip() == candidate:
+                    n = (o.get("name") or "").strip()
+                    if n == candidate or _team_matches_option(candidate, n):
                         ordered.append(o)
                         break
             if len(ordered) == 2:
@@ -300,11 +357,15 @@ SOCCER_LEAGUES = (
     "soccer_france_ligue_one",
     "soccer_uefa_champs_league",
     "soccer_uefa_europa_league",
+    "soccer_uefa_europa_conference_league",
     "soccer_netherlands_eredivisie",
     "soccer_portugal_primeira_liga",
     "soccer_usa_mls",
     "soccer_england_league_one",
     "soccer_england_efl",
+    "soccer_mexico_ligamx",
+    "soccer_brazil_serie_a",
+    "soccer_australia_aleague",
 )
 
 
@@ -336,7 +397,12 @@ async def _fetch_odds_api_soccer_league_raw(client: httpx.AsyncClient, sport_key
         try:
             r = await client.get(
                 "%s/sports/%s/odds" % (ODDS_API_BASE, sport_key),
-                params={"apiKey": api_key, "regions": "uk,us,eu", "markets": "h2h,h2h_3_way", "oddsFormat": "decimal"},
+                params={
+                    "apiKey": api_key,
+                    "regions": "uk,us,eu",
+                    "markets": "h2h,h2h_3_way,draw_no_bet",
+                    "oddsFormat": "decimal",
+                },
             )
         except Exception as ex:
             logger.warning("Odds API odds fetch failed %s: %s", sport_key, ex)
@@ -365,14 +431,14 @@ async def _fetch_odds_api_soccer() -> list:
             if not isinstance(events, list):
                 continue
             # Cap per league to control payload; parse fix above allows most fixtures through
-            for ev in events[:80]:
+            for ev in events[:100]:
                 eid = (ev.get("id") or "").strip()
                 if not eid:
                     continue
                 dedupe = (sport_key, eid)
                 if dedupe in seen_event:
                     continue
-                if not _is_future_event(ev, buffer_minutes=5):
+                if not _is_future_event(ev, buffer_minutes=1):
                     continue
                 parsed = _parse_odds_event(ev, "Football", three_way=True, sport_key=sport_key)
                 if parsed:
@@ -405,7 +471,7 @@ async def _fetch_odds_api_mma() -> list:
             if not isinstance(events, list):
                 events = []
             await _odds_cache_write_list(cache_key, 200, events)
-        for ev in events[:20]:
+        for ev in events[:35]:
             if not _is_future_event(ev, require_time=True):
                 continue
             parsed = _parse_odds_event(ev, "UFC", three_way=False, sport_key="mma_mixed_martial_arts")
@@ -438,7 +504,7 @@ async def _fetch_odds_api_boxing() -> list:
             if not isinstance(events, list):
                 events = []
             await _odds_cache_write_list(cache_key, 200, events)
-        for ev in events[:15]:
+        for ev in events[:25]:
             if not _is_future_event(ev, require_time=True):
                 continue
             parsed = _parse_odds_event(ev, "Boxing", three_way=False, sport_key="boxing_boxing")
@@ -1027,6 +1093,19 @@ async def _sports_ensure_seed_events():
     pass
 
 
+async def _sports_open_stake_total(user_id: str) -> int:
+    if not user_id:
+        return 0
+    pipeline = [
+        {"$match": {"user_id": user_id, "status": "open"}},
+        {"$group": {"_id": None, "t": {"$sum": "$stake"}}},
+    ]
+    rows = await db.sports_bets.aggregate(pipeline).to_list(1)
+    if not rows:
+        return 0
+    return int(rows[0].get("t") or 0)
+
+
 # ----- Public routes -----
 async def sports_betting_events(current_user: dict = Depends(get_current_user_verified)):
     await _sports_ensure_seed_events()
@@ -1086,6 +1165,17 @@ async def sports_betting_place(request: SportsBetPlaceRequest, current_user: dic
     opt = next((o for o in (ev.get("options") or []) if o.get("id") == option_id), None)
     if not opt:
         raise HTTPException(status_code=400, detail="Invalid option")
+    uid = current_user.get("id") or ""
+    open_total = await _sports_open_stake_total(uid)
+    if open_total + stake > SPORTS_BET_MAX_TOTAL_OPEN_STAKE:
+        remaining = max(0, SPORTS_BET_MAX_TOTAL_OPEN_STAKE - open_total)
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Total open sports stakes are capped at ${SPORTS_BET_MAX_TOTAL_OPEN_STAKE:,}. "
+                f"You have ${open_total:,} at risk; you can add at most ${remaining:,} more."
+            ),
+        )
     now = datetime.now(timezone.utc).isoformat()
     bet_id = str(uuid.uuid4())
     result = await db.users.update_one(
@@ -1111,17 +1201,23 @@ async def sports_betting_place(request: SportsBetPlaceRequest, current_user: dic
 
 
 async def sports_betting_my_bets(current_user: dict = Depends(get_current_user_verified)):
+    uid = current_user.get("id") or ""
     open_bets = await db.sports_bets.find(
-        {"user_id": current_user.get("id") or "", "status": "open"},
+        {"user_id": uid, "status": "open"},
         {"_id": 0},
     ).sort("created_at", -1).to_list(50)
     closed_bets = await db.sports_bets.find(
-        {"user_id": current_user.get("id") or "", "status": {"$in": ["won", "lost"]}},
+        {"user_id": uid, "status": {"$in": ["won", "lost"]}},
         {"_id": 0},
     ).sort("settled_at", -1).to_list(50)
+    open_stake_total = await _sports_open_stake_total(uid)
+    remaining = max(0, SPORTS_BET_MAX_TOTAL_OPEN_STAKE - open_stake_total)
     return {
         "open": [{"id": b["id"], "event_name": b.get("event_name"), "option_name": b.get("option_name"), "odds": b.get("odds"), "stake": b.get("stake"), "created_at": b.get("created_at")} for b in open_bets],
         "closed": [{"id": b["id"], "event_name": b.get("event_name"), "option_name": b.get("option_name"), "odds": b.get("odds"), "stake": b.get("stake"), "status": b.get("status"), "created_at": b.get("created_at"), "settled_at": b.get("settled_at")} for b in closed_bets],
+        "max_total_open_stake": SPORTS_BET_MAX_TOTAL_OPEN_STAKE,
+        "open_stake_total": open_stake_total,
+        "open_stake_remaining": remaining,
     }
 
 

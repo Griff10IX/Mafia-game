@@ -5662,7 +5662,11 @@ def register(router):
         Per-game casino analytics summary for the last N days.
         Admin or moderator only. Uses compact gambling_log documents.
         """
-        from routers.game.stats import _gambling_profit_from_details, _gambling_analytics_bucket
+        from routers.game.stats import (
+            _gambling_profit_from_details,
+            _gambling_analytics_bucket,
+            _gambling_stake_payout_for_analytics,
+        )
 
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
@@ -5679,8 +5683,7 @@ def register(router):
             gt = (row.get("game_type") or "").strip() or "unknown"
             details = row.get("details") or {}
             profit = _gambling_profit_from_details(gt, details)
-            stake = int(details.get("stake") or details.get("bet") or 0)
-            payout = int(details.get("payout") or 0)
+            stake, payout = _gambling_stake_payout_for_analytics(gt, details)
             bucket = _gambling_analytics_bucket(gt, details)
             s = stats.setdefault(
                 bucket,

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, useRef, useMemo } from 'react';
-import { Ticket, Clock, Trophy, Coins, ShoppingCart, Sparkles, TrendingUp } from 'lucide-react';
+import { Ticket, Clock, Trophy, Coins, ShoppingCart, Sparkles, TrendingUp, ChevronDown, ChevronUp, ListOrdered } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { refreshUser } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
@@ -170,10 +170,40 @@ const LOT_STYLES = `
     transition: width 0.6s ease-out;
   }
 
+  /* ── Tablet (portrait iPads, landscape phones) ── */
+  @media (max-width: 1024px) and (min-width: 640px) {
+    .lot-countdown-unit { min-width: 52px; padding: 8px 10px; }
+    .lot-countdown-num { font-size: 24px; }
+  }
+
+  /* ── Mobile phones ── */
   @media (max-width: 639px) {
     .lot-ball { width: 30px; height: 30px; font-size: 10px; }
-    .lot-countdown-unit { min-width: 40px; padding: 4px 6px; }
+    .lot-countdown-unit { min-width: 42px; padding: 5px 6px; }
     .lot-countdown-num { font-size: 18px; }
+    .lot-countdown-sep { font-size: 16px; padding-top: 5px; }
+    .lot-buy-btn {
+      width: 100%;
+      justify-content: center;
+      padding: 14px 16px;
+      font-size: 13px;
+      min-height: 48px;
+    }
+    .lot-quick-pick-btn {
+      min-width: 48px;
+      min-height: 44px;
+      font-size: 12px;
+      padding: 8px 10px;
+    }
+  }
+
+  /* ── Small phones (iPhone SE / narrow Android) ── */
+  @media (max-width: 374px) {
+    .lot-ball { width: 26px; height: 26px; font-size: 9px; }
+    .lot-countdown-unit { min-width: 36px; padding: 4px 4px; }
+    .lot-countdown-num { font-size: 15px; }
+    .lot-countdown-label { font-size: 6px; }
+    .lot-countdown-sep { font-size: 14px; }
   }
 `;
 
@@ -262,7 +292,7 @@ const CONFIRM_THRESHOLD = 10;
 function QuickPick({ onPick, ticketPrice }) {
   const presets = [1, 5, 10, 25, 50, 100];
   return (
-    <div className="flex flex-wrap gap-1.5">
+    <div className="grid grid-cols-6 sm:flex sm:flex-wrap gap-1.5">
       {presets.map((n) => {
         const cost = (ticketPrice || 500000) * n;
         return (
@@ -271,7 +301,7 @@ function QuickPick({ onPick, ticketPrice }) {
             type="button"
             onClick={() => onPick(n)}
             title={`${n} ticket${n !== 1 ? 's' : ''} — ${formatMoney(cost)}`}
-            className="px-2.5 py-1 rounded text-[10px] font-heading font-bold uppercase tracking-wider border transition-colors"
+            className="lot-quick-pick-btn rounded text-[10px] font-heading font-bold uppercase tracking-wider border transition-colors flex items-center justify-center px-2.5 py-2 sm:py-1 sm:min-h-0 min-h-[44px]"
             style={{
               background: 'rgba(var(--noir-primary-rgb), 0.08)',
               borderColor: 'rgba(var(--noir-primary-rgb), 0.2)',
@@ -284,6 +314,74 @@ function QuickPick({ onPick, ticketPrice }) {
           </button>
         );
       })}
+    </div>
+  );
+}
+
+function MyTicketsSection() {
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const toggle = async () => {
+    if (!open && !data) {
+      setLoading(true);
+      try {
+        const { data: d } = await api.get('/lottery/my-tickets');
+        setData(d);
+      } catch (e) {
+        toast.error(apiErrorDetail(e, 'Could not load tickets'));
+      } finally {
+        setLoading(false);
+      }
+    }
+    setOpen((o) => !o);
+  };
+
+  return (
+    <div className="lot-fade-in lot-delay-1">
+      <button
+        type="button"
+        onClick={toggle}
+        className="flex items-center gap-1.5 text-[10px] font-heading font-bold text-primary hover:text-primary/80 transition-colors py-1"
+      >
+        <ListOrdered size={12} />
+        My Tickets
+        {open ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+      </button>
+      {open && (
+        <div className={`${styles.panel} rounded-md overflow-hidden mt-1`}>
+          <div className="p-2.5">
+            {loading ? (
+              <div className="flex items-center gap-2 py-2">
+                <span className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                <span className="text-[10px] text-zinc-500 font-heading">Loading tickets...</span>
+              </div>
+            ) : !data || data.total === 0 ? (
+              <div className="text-[10px] text-zinc-500 font-heading py-1">No tickets purchased this round.</div>
+            ) : (
+              <div className="space-y-1.5">
+                <div className="text-[10px] text-zinc-400 font-heading">
+                  <span className="text-primary font-bold">{data.total}</span> ticket{data.total !== 1 ? 's' : ''} this round
+                </div>
+                <div className="space-y-0.5">
+                  {data.purchases.map((p, i) => (
+                    <div key={i} className="flex items-center justify-between text-[10px] font-heading py-0.5 border-b border-primary/5 last:border-0">
+                      <span className="text-zinc-500 tabular-nums">
+                        {p.purchased_at ? new Date(p.purchased_at + 'Z').toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                      </span>
+                      <span className="text-zinc-300 font-bold tabular-nums flex items-center gap-1">
+                        <Ticket size={9} className="text-primary/50" />
+                        {p.count} ticket{p.count !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -451,6 +549,9 @@ function Lottery() {
           </div>
         </div>
       )}
+
+      {/* ── MY TICKETS ── */}
+      {myTickets > 0 && <MyTicketsSection />}
 
       {/* ── BUY TICKETS ── */}
       <div className={`lot-ticket-stub ${styles.panel} rounded-md overflow-hidden lot-fade-in lot-delay-2`}>

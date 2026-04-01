@@ -175,6 +175,23 @@ async def get_flash_news(current_user: dict = Depends(get_current_user)):
     except Exception:
         pass
 
+    # Lottery winners (cap 3)
+    try:
+        lottery_docs = await db.lottery_events.find({"type": "lottery_winner"}).sort("drawn_at", -1).limit(3).to_list(3)
+        for doc in lottery_docs:
+            winner = doc.get("winner_username") or "Someone"
+            payout = doc.get("payout") or 0
+            drawn_at = doc.get("drawn_at") or ""
+            at_str = drawn_at if isinstance(drawn_at, str) else (drawn_at.isoformat() if hasattr(drawn_at, "isoformat") else str(drawn_at))
+            items.append({
+                "id": f"lottery_{str(doc.get('_id', ''))}",
+                "type": "lottery_winner",
+                "message": f"{winner} won the City Lottery — ${payout:,} payout!",
+                "at": at_str,
+            })
+    except Exception:
+        pass
+
     # Add multiple rotating tips so the ticker has more variety (not just 3 items)
     day_index = now.date().toordinal() % len(FLASH_NEWS_TIPS)
     for offset in range(min(5, len(FLASH_NEWS_TIPS))):

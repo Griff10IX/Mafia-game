@@ -40,6 +40,9 @@ function apiErrorDetail(e, fallback) {
   return fallback;
 }
 
+/** Max total $ locked across all open sports bets (matches backend SPORTS_BET_MAX_TOTAL_OPEN_STAKE). */
+const SPORTS_MAX_TOTAL_OPEN_STAKE = 25_000_000;
+
 const STAKE_CHIPS = [
   { label: '10K', value: 10_000, color: '#e4e4e7', ring: '#a1a1aa' },
   { label: '100K', value: 100_000, color: '#dc2626', ring: '#991b1b' },
@@ -153,7 +156,13 @@ function Chip({ label, color, ring, selected, onClick, size = 36 }) {
 export default function SportsBetting() {
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState([]);
-  const [myBets, setMyBets] = useState({ open: [], closed: [] });
+  const [myBets, setMyBets] = useState({
+    open: [],
+    closed: [],
+    max_total_open_stake: SPORTS_MAX_TOTAL_OPEN_STAKE,
+    open_stake_total: 0,
+    open_stake_remaining: SPORTS_MAX_TOTAL_OPEN_STAKE,
+  });
   const [stats, setStats] = useState(null);
   const [recentResults, setRecentResults] = useState([]);
   const [placing, setPlacing] = useState(null);
@@ -191,12 +200,27 @@ export default function SportsBetting() {
         api.get('/sports-betting/recent-results'),
       ]);
       setEvents(eventsRes.data?.events ?? []);
-      setMyBets({ open: betsRes.data?.open ?? [], closed: betsRes.data?.closed ?? [] });
+      setMyBets({
+        open: betsRes.data?.open ?? [],
+        closed: betsRes.data?.closed ?? [],
+        max_total_open_stake: betsRes.data?.max_total_open_stake ?? SPORTS_MAX_TOTAL_OPEN_STAKE,
+        open_stake_total: betsRes.data?.open_stake_total ?? 0,
+        open_stake_remaining: betsRes.data?.open_stake_remaining ?? SPORTS_MAX_TOTAL_OPEN_STAKE,
+      });
       setStats(statsRes.data ?? null);
       setRecentResults(resultsRes.data?.results ?? []);
     } catch (e) {
       toast.error(apiErrorDetail(e, 'Failed to load'));
-      setEvents([]); setMyBets({ open: [], closed: [] }); setStats(null); setRecentResults([]);
+      setEvents([]);
+      setMyBets({
+        open: [],
+        closed: [],
+        max_total_open_stake: SPORTS_MAX_TOTAL_OPEN_STAKE,
+        open_stake_total: 0,
+        open_stake_remaining: SPORTS_MAX_TOTAL_OPEN_STAKE,
+      });
+      setStats(null);
+      setRecentResults([]);
     } finally { setLoading(false); }
   }, []);
 
@@ -230,6 +254,18 @@ export default function SportsBetting() {
     if (!selectedEvent || !selectedOption) return;
     const amount = parseInt(String(stake || '').replace(/\D/g, ''), 10);
     if (!amount || amount <= 0) { toast.error('Enter a valid stake'); return; }
+    const cap = Number(myBets.max_total_open_stake ?? SPORTS_MAX_TOTAL_OPEN_STAKE);
+    const listed = (myBets.open || []).reduce((s, b) => s + Number(b.stake || 0), 0);
+    const atRisk = Number.isFinite(myBets.open_stake_total) ? Number(myBets.open_stake_total) : listed;
+    const left = Number.isFinite(myBets.open_stake_remaining)
+      ? Number(myBets.open_stake_remaining)
+      : Math.max(0, cap - atRisk);
+    if (amount > left) {
+      toast.error(
+        `Open stakes are capped at ${formatMoney(cap)} total across all bets. You can add at most ${formatMoney(left)} more.`,
+      );
+      return;
+    }
     setPlacing(true);
     try {
       await api.post('/sports-betting/bet', { event_id: selectedEvent.id, option_id: selectedOption.id, stake: amount });
@@ -345,8 +381,16 @@ export default function SportsBetting() {
     try { if (hide) localStorage.setItem('sports-betting-admin-hidden', '1'); else localStorage.removeItem('sports-betting-admin-hidden'); } catch {}
   };
 
-  const openBetsTotalStake = (myBets.open || []).reduce((s, b) => s + Number(b.stake || 0), 0);
+  const openBetsListedStake = (myBets.open || []).reduce((s, b) => s + Number(b.stake || 0), 0);
+  const openBetsTotalStake = Number.isFinite(myBets.open_stake_total) ? Number(myBets.open_stake_total) : openBetsListedStake;
+  const sportsOpenCap = Number(myBets.max_total_open_stake ?? SPORTS_MAX_TOTAL_OPEN_STAKE);
+  const openStakeRemaining = Number.isFinite(myBets.open_stake_remaining)
+    ? Number(myBets.open_stake_remaining)
+    : Math.max(0, sportsOpenCap - openBetsTotalStake);
   const openBetsPotentialReturn = (myBets.open || []).reduce((s, b) => s + Math.floor(Number(b.stake || 0) * Number(b.odds || 1)), 0);
+
+  const stakeInputAmount = parseInt(String(stake).replace(/\D/g, ''), 10);
+  const stakeExceedsOpenCap = !stakeInputAmount || stakeInputAmount > openStakeRemaining;
 
   const templateMap = templates.templates || {};
   const templateTotal = (templates.categories || []).reduce((s, c) => s + (templateMap[c]?.length || 0), 0);
@@ -375,7 +419,7 @@ export default function SportsBetting() {
 
       {/* Page header */}
       <div className="relative sb-fade-in">
-        <p className="text-[10px] text-zinc-500 font-heading italic">Underground — closes 10 min before start</p>
+        <p className="text-[10px] text-zinc-500 font-heading italic">Underground — closes 10 min before start. Max {formatMoney(SPORTS_MAX_TOTAL_OPEN_STAKE)} total staked across all your open bets.</p>
       </div>
 
       {/* ═══ Stats bar ═══ */}
@@ -573,7 +617,7 @@ export default function SportsBetting() {
                 <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Open Bets</span>
                 {myBets.open.length > 0 && (
                   <span className="text-[9px] font-heading text-zinc-500 ml-2">
-                    Risk: {formatMoney(openBetsTotalStake)} · Return: {formatMoney(openBetsPotentialReturn)}
+                    Risk: {formatMoney(openBetsTotalStake)} / cap {formatMoney(sportsOpenCap)} · {formatMoney(openStakeRemaining)} left · Return: {formatMoney(openBetsPotentialReturn)}
                   </span>
                 )}
               </div>
@@ -778,6 +822,9 @@ export default function SportsBetting() {
                     />
                   ))}
                 </div>
+                <p className="text-[9px] text-zinc-500 font-heading text-center mt-2">
+                  Open cap {formatMoney(sportsOpenCap)} total · up to {formatMoney(openStakeRemaining)} more on this slip
+                </p>
               </div>
 
               {/* Returns */}
@@ -799,7 +846,7 @@ export default function SportsBetting() {
               <div className="flex gap-2">
                 <button
                   onClick={placeBet}
-                  disabled={placing}
+                  disabled={placing || stakeExceedsOpenCap}
                   className="flex-1 rounded-lg py-3 text-sm font-heading font-bold uppercase tracking-wider bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-40 active:scale-[0.98] transition-all"
                 >
                   {placing ? '...' : 'Place Bet'}

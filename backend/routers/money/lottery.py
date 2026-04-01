@@ -10,7 +10,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, field_validator
 
-from server import db, get_current_user, log_activity
+from server import db, get_current_user, log_activity, send_notification
 
 logger = logging.getLogger(__name__)
 
@@ -150,6 +150,25 @@ async def buy_lottery_tickets(body: LotteryBuyBody, current_user: dict = Depends
     return {"message": f"Bought {count} ticket(s) for ${total_cost:,}.", "spent": total_cost, "count": count, "round_id": str(rid)}
 
 
+async def get_my_lottery_tickets(current_user: dict = Depends(get_current_user)):
+    """Return the current user's tickets for the open round (purchase timestamps)."""
+    rd = await _ensure_open_round()
+    rid = rd["_id"]
+    uid = current_user["id"]
+    cursor = db.lottery_tickets.find(
+        {"round_id": rid, "user_id": uid},
+        {"_id": 0, "created_at": 1},
+    ).sort("created_at", -1).limit(500)
+    docs = await cursor.to_list(500)
+    grouped: dict[str, int] = {}
+    for d in docs:
+        key = (d.get("created_at") or "unknown")[:19]
+        grouped[key] = grouped.get(key, 0) + 1
+    purchases = [{"purchased_at": k, "count": v} for k, v in grouped.items()]
+    purchases.sort(key=lambda x: x["purchased_at"], reverse=True)
+    return {"round_id": str(rid), "total": len(docs), "purchases": purchases}
+
+
 async def lottery_draw_cron(_: bool = Depends(_cron_verify())):
     now = datetime.now(timezone.utc)
     processed = 0
@@ -207,6 +226,28 @@ async def lottery_draw_cron(_: bool = Depends(_cron_verify())):
             logger.warning("economy_events lottery_draw: %s", e)
         if winner_uid:
             await log_activity(winner_uid, winner_name or "?", "lottery_win", {"round_id": str(rid), "payout": payout, "gross_pot": gross})
+            try:
+                await send_notification(
+                    winner_uid,
+                    "Lottery Winner!",
+                    f"Congratulations! You won the City Lottery and received ${payout:,}. "
+                    f"The gross pot was ${gross:,} ({n:,} tickets). {POT_TAX_PERCENT}% was removed as tax.",
+                    "system",
+                    category="lottery",
+                )
+            except Exception as e:
+                logger.warning("lottery winner notification: %s", e)
+            try:
+                await db.lottery_events.insert_one({
+                    "type": "lottery_winner",
+                    "winner_username": winner_name,
+                    "payout": payout,
+                    "gross_pot": gross,
+                    "ticket_count": n,
+                    "drawn_at": drawn_iso,
+                })
+            except Exception as e:
+                logger.warning("lottery_events insert: %s", e)
         processed += 1
         now2 = datetime.now(timezone.utc)
         nxt = _next_draw_utc(now2)
@@ -217,5 +258,6 @@ async def lottery_draw_cron(_: bool = Depends(_cron_verify())):
 
 def register(router: APIRouter) -> None:
     router.add_api_route("/lottery", get_lottery_state, methods=["GET"])
+    router.add_api_route("/lottery/my-tickets", get_my_lottery_tickets, methods=["GET"])
     router.add_api_route("/lottery/buy", buy_lottery_tickets, methods=["POST"])
     router.add_api_route("/lottery/draw-cron", lottery_draw_cron, methods=["POST"])
