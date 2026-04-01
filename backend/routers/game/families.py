@@ -76,18 +76,18 @@ def _family_melt_stats_reset_fields() -> dict:
     }
 
 
-# 75% reduction for beta on all racket base_income
+# Tuned so all 9 rackets at level 5 generate about $10M/day total (before event/war multipliers).
 RACKET_BASE_COOLDOWN_HOURS = 10 / 60  # 10 minutes
 FAMILY_RACKETS = [
-    {"id": "protection", "name": "Protection Racket", "cooldown_hours": RACKET_BASE_COOLDOWN_HOURS, "base_income": 100, "description": "Extortion from businesses"},
-    {"id": "gambling", "name": "Gambling Operation", "cooldown_hours": RACKET_BASE_COOLDOWN_HOURS, "base_income": 138, "description": "Numbers & bookmaking"},
-    {"id": "loansharking", "name": "Loan Sharking", "cooldown_hours": RACKET_BASE_COOLDOWN_HOURS, "base_income": 175, "description": "High-interest loans"},
-    {"id": "labour", "name": "Labour Racketeering", "cooldown_hours": RACKET_BASE_COOLDOWN_HOURS, "base_income": 213, "description": "Union kickbacks"},
-    {"id": "distillery", "name": "Distillery", "cooldown_hours": RACKET_BASE_COOLDOWN_HOURS, "base_income": 250, "description": "Bootleg liquor production"},
-    {"id": "warehouse", "name": "Warehouse", "cooldown_hours": RACKET_BASE_COOLDOWN_HOURS, "base_income": 288, "description": "Storage and distribution"},
-    {"id": "restaurant_bar", "name": "Restaurant & Bar", "cooldown_hours": RACKET_BASE_COOLDOWN_HOURS, "base_income": 325, "description": "Front and steady income"},
-    {"id": "funeral_home", "name": "Funeral Home", "cooldown_hours": RACKET_BASE_COOLDOWN_HOURS, "base_income": 363, "description": "Respectable front"},
-    {"id": "garment_shop", "name": "Garment Shop", "cooldown_hours": RACKET_BASE_COOLDOWN_HOURS, "base_income": 400, "description": "Garment district operations"},
+    {"id": "protection", "name": "Protection Racket", "cooldown_hours": RACKET_BASE_COOLDOWN_HOURS, "base_income": 620, "description": "Extortion from businesses"},
+    {"id": "gambling", "name": "Gambling Operation", "cooldown_hours": RACKET_BASE_COOLDOWN_HOURS, "base_income": 850, "description": "Numbers & bookmaking"},
+    {"id": "loansharking", "name": "Loan Sharking", "cooldown_hours": RACKET_BASE_COOLDOWN_HOURS, "base_income": 1080, "description": "High-interest loans"},
+    {"id": "labour", "name": "Labour Racketeering", "cooldown_hours": RACKET_BASE_COOLDOWN_HOURS, "base_income": 1310, "description": "Union kickbacks"},
+    {"id": "distillery", "name": "Distillery", "cooldown_hours": RACKET_BASE_COOLDOWN_HOURS, "base_income": 1540, "description": "Bootleg liquor production"},
+    {"id": "warehouse", "name": "Warehouse", "cooldown_hours": RACKET_BASE_COOLDOWN_HOURS, "base_income": 1780, "description": "Storage and distribution"},
+    {"id": "restaurant_bar", "name": "Restaurant & Bar", "cooldown_hours": RACKET_BASE_COOLDOWN_HOURS, "base_income": 2000, "description": "Front and steady income"},
+    {"id": "funeral_home", "name": "Funeral Home", "cooldown_hours": RACKET_BASE_COOLDOWN_HOURS, "base_income": 2240, "description": "Respectable front"},
+    {"id": "garment_shop", "name": "Garment Shop", "cooldown_hours": RACKET_BASE_COOLDOWN_HOURS, "base_income": 2470, "description": "Garment district operations"},
 ]
 RACKET_UPGRADE_COST = 12_500  # 75% reduction
 RACKET_UNLOCK_COST = 25_000  # 75% reduction
