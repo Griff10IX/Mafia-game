@@ -2674,6 +2674,15 @@ export default function Admin() {
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
   };
 
+  const handleAddRandomCars = async (count = 1000) => {
+    try {
+      const u = (formData.targetUsername || '').trim();
+      if (!u) { toast.error('Enter target username'); return; }
+      const response = await api.post(`/admin/add-random-cars?target_username=${encodeURIComponent(u)}&count=${encodeURIComponent(String(count))}`);
+      toast.success(response.data?.message || `Added ${Number(count).toLocaleString()} random car(s)`);
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
   const handleAddLootPieces = async () => {
     try {
       const response = await api.post(`/admin/add-loot-pieces?target_username=${encodeURIComponent(formData.targetUsername)}&pieces=${formData.lootPieces}`);
@@ -7520,6 +7529,9 @@ export default function Admin() {
                 {cars.length > 0 ? cars.map((c) => <option key={c.id} value={c.id}>{c.name}</option>) : Array.from({ length: 20 }, (_, i) => <option key={i} value={`car${i + 1}`}>Car {i + 1}</option>)}
               </Select>
               <BtnPrimary onClick={handleAddCar}>Add</BtnPrimary>
+              <BtnSecondary onClick={() => handleAddRandomCars(1000)} title="Adds 1000 random cars to the target user's garage (bulk insert).">
+                +1000 random
+              </BtnSecondary>
             </ActionRow>
 
             <ActionRow icon={Gift} label="Give Loot Box Pieces" description="Add pieces for Loot Box (100 = 1 open)">

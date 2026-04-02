@@ -2240,14 +2240,54 @@ def register(router):
         car = next((c for c in CARS if c["id"] == car_id), None)
         if not car:
             raise HTTPException(status_code=404, detail="Car not found")
-        await db.user_cars.insert_one({
-            "id": str(uuid.uuid4()),
-            "user_id": target["id"],
-            "car_id": car_id,
-            "car_name": car["name"],
-            "acquired_at": datetime.now(timezone.utc).isoformat()
-        })
+        now_iso = datetime.now(timezone.utc).isoformat()
+        await db.user_cars.insert_one(
+            {
+                "id": str(uuid.uuid4()),
+                "user_id": target["id"],
+                "car_id": car_id,
+                "car_name": car["name"],
+                "acquired_at": now_iso,
+            }
+        )
         return {"message": f"Added {car['name']} to {target_username}'s garage"}
+
+    @router.post("/admin/add-random-cars")
+    async def admin_add_random_cars(target_username: str, count: int = 1000, current_user: dict = Depends(get_current_user)):
+        """Give a user N random cars (default 1000). Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        try:
+            n = int(count)
+        except (TypeError, ValueError):
+            n = 1000
+        n = max(1, min(5000, n))
+        catalog = [c for c in (CARS or []) if c.get("id") and c.get("name")]
+        if not catalog:
+            raise HTTPException(status_code=500, detail="Car catalog is empty")
+
+        now_iso = datetime.now(timezone.utc).isoformat()
+        rng = uuid.uuid4  # fast unique ids; reuse stdlib
+        import random
+        docs = []
+        uid = target["id"]
+        for _ in range(n):
+            c = random.choice(catalog)
+            docs.append(
+                {
+                    "id": str(rng()),
+                    "user_id": uid,
+                    "car_id": c["id"],
+                    "car_name": c["name"],
+                    "acquired_at": now_iso,
+                }
+            )
+        await db.user_cars.insert_many(docs, ordered=False)
+        return {"message": f"Added {n:,} random car(s) to {target_username}'s garage", "count": n}
 
     GTA_EXCLUSIVE_POOL_CONFIG_ID = "gta_exclusive"
     GTA_EXCLUSIVE_DROP_WEIGHT_DEFAULT = 0.000006
