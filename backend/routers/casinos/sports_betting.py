@@ -66,6 +66,8 @@ class AdminAddCustomSportsEventRequest(BaseModel):
 # ----- Constants -----
 # Max total stake locked in open sports bets per user (split across any number of bets).
 SPORTS_BET_MAX_TOTAL_OPEN_STAKE = 25_000_000
+# Placing bets and cancelling open bets both end this many minutes before scheduled start.
+SPORTS_BETTING_CLOSE_BEFORE_START_MINUTES = 10
 SPORTS_LIVE_CACHE_TTL = 30 * 60  # 30 min (was 6h) so "Check for events" gets fresher templates
 ODDS_API_BASE = "https://api.the-odds-api.com/v4"
 THESPORTSDB_LEAGUE_PREMIER = 4328
@@ -726,7 +728,7 @@ async def _fetch_football_events_football_data_org() -> list:
                     if utc_str:
                         try:
                             md = datetime.fromisoformat(utc_str.replace("Z", "+00:00"))
-                            if datetime.now(timezone.utc) >= md - timedelta(minutes=10):
+                            if datetime.now(timezone.utc) >= md - timedelta(minutes=SPORTS_BETTING_CLOSE_BEFORE_START_MINUTES):
                                 continue
                         except Exception:
                             pass
@@ -1183,6 +1185,17 @@ async def _sports_open_stake_total(user_id: str) -> int:
     return int(rows[0].get("t") or 0)
 
 
+def _sports_betting_cancellation_allowed(start_time_iso: Optional[str]) -> bool:
+    """True if current UTC time is still before the same cutoff as placing bets (N min before start)."""
+    now = datetime.now(timezone.utc)
+    try:
+        start_dt = datetime.fromisoformat(start_time_iso.replace("Z", "+00:00")) if start_time_iso else now
+    except Exception:
+        start_dt = now
+    deadline = start_dt - timedelta(minutes=SPORTS_BETTING_CLOSE_BEFORE_START_MINUTES)
+    return now < deadline
+
+
 # ----- Public routes -----
 async def sports_betting_events(current_user: dict = Depends(get_current_user_verified)):
     await _sports_ensure_seed_events()
@@ -1193,7 +1206,7 @@ async def sports_betting_events(current_user: dict = Depends(get_current_user_ve
     ).sort("start_time", 1)
     events = await cursor.to_list(50)
     result = []
-    close_betting_minutes = 10
+    close_betting_minutes = SPORTS_BETTING_CLOSE_BEFORE_START_MINUTES
     for e in events:
         st = e.get("start_time")
         try:
@@ -1233,11 +1246,7 @@ async def sports_betting_place(request: SportsBetPlaceRequest, current_user: dic
     if not ev:
         raise HTTPException(status_code=404, detail="Event not found or closed")
     st = ev.get("start_time")
-    try:
-        start_dt = datetime.fromisoformat(st.replace("Z", "+00:00")) if st else datetime.now(timezone.utc)
-    except Exception:
-        start_dt = datetime.now(timezone.utc)
-    if datetime.now(timezone.utc) >= start_dt - timedelta(minutes=10):
+    if not _sports_betting_cancellation_allowed(st):
         raise HTTPException(status_code=400, detail="Betting closed (closes 10 min before start)")
     opt = next((o for o in (ev.get("options") or []) if o.get("id") == option_id), None)
     if not opt:
@@ -1302,9 +1311,16 @@ async def sports_betting_cancel_bet(request: SportsBetCancelRequest, current_use
     bet_id = (request.bet_id or "").strip()
     if not bet_id:
         raise HTTPException(status_code=400, detail="bet_id required")
+    uid = current_user.get("id") or ""
+    bet = await db.sports_bets.find_one({"id": bet_id, "user_id": uid, "status": "open"}, {"_id": 0})
+    if not bet:
+        raise HTTPException(status_code=400, detail="Bet not found or already cancelled")
+    ev = await db.sports_events.find_one({"id": bet.get("event_id") or ""}, {"_id": 0, "start_time": 1})
+    if ev is not None and not _sports_betting_cancellation_allowed(ev.get("start_time")):
+        raise HTTPException(status_code=400, detail="Cancellation closed (closes 10 min before start)")
     now = datetime.now(timezone.utc).isoformat()
     bet = await db.sports_bets.find_one_and_update(
-        {"id": bet_id, "user_id": current_user.get("id") or "", "status": "open"},
+        {"id": bet_id, "user_id": uid, "status": "open"},
         {"$set": {"status": "cancelled", "settled_at": now}},
     )
     if not bet:
@@ -1316,14 +1332,26 @@ async def sports_betting_cancel_bet(request: SportsBetCancelRequest, current_use
 
 
 async def sports_betting_cancel_all_bets(current_user: dict = Depends(get_current_user_verified)):
-    cursor = db.sports_bets.find({"user_id": current_user.get("id") or "", "status": "open"}, {"_id": 0, "id": 1, "stake": 1})
+    uid = current_user.get("id") or ""
+    cursor = db.sports_bets.find({"user_id": uid, "status": "open"}, {"_id": 0, "id": 1, "stake": 1, "event_id": 1})
     bets = await cursor.to_list(100)
     if not bets:
-        return {"message": "No open bets to cancel.", "refunded": 0, "cancelled_count": 0}
+        return {"message": "No open bets to cancel.", "refunded": 0, "cancelled_count": 0, "skipped_count": 0}
+    eids = list({(b.get("event_id") or "") for b in bets if b.get("event_id")})
+    events_by_id: dict = {}
+    if eids:
+        ev_cursor = db.sports_events.find({"id": {"$in": eids}}, {"_id": 0, "id": 1, "start_time": 1})
+        for doc in await ev_cursor.to_list(len(eids)):
+            events_by_id[doc["id"]] = doc
     total_refund = 0
     cancelled_count = 0
+    skipped_count = 0
     now = datetime.now(timezone.utc).isoformat()
     for b in bets:
+        ev = events_by_id.get(b.get("event_id") or "")
+        if ev is not None and not _sports_betting_cancellation_allowed(ev.get("start_time")):
+            skipped_count += 1
+            continue
         claimed = await db.sports_bets.find_one_and_update(
             {"id": b["id"], "status": "open"},
             {"$set": {"status": "cancelled", "settled_at": now}},
@@ -1333,8 +1361,17 @@ async def sports_betting_cancel_all_bets(current_user: dict = Depends(get_curren
         total_refund += int(claimed.get("stake") or 0)
         cancelled_count += 1
     if total_refund > 0:
-        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": total_refund}})
-    return {"message": f"All {cancelled_count} bet(s) cancelled. ${total_refund:,} refunded.", "refunded": total_refund, "cancelled_count": cancelled_count}
+        await db.users.update_one({"id": uid}, {"$inc": {"money": total_refund}})
+    if cancelled_count == 0 and skipped_count > 0:
+        msg = (
+            f"No bets cancelled — {skipped_count} open bet(s) past cancellation cutoff "
+            f"({SPORTS_BETTING_CLOSE_BEFORE_START_MINUTES} min before start)."
+        )
+    elif skipped_count:
+        msg = f"Cancelled {cancelled_count} bet(s). ${total_refund:,} refunded. {skipped_count} bet(s) past cutoff and still open."
+    else:
+        msg = f"All {cancelled_count} bet(s) cancelled. ${total_refund:,} refunded."
+    return {"message": msg, "refunded": total_refund, "cancelled_count": cancelled_count, "skipped_count": skipped_count}
 
 
 async def compute_sports_betting_stats(uid: str, settled_after_iso: Optional[str] = None) -> dict:
