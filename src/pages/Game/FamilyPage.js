@@ -2080,7 +2080,7 @@ const StateHeadTab = ({ headOfState, stateHeadIncome, stateHeadCasinoWeekStats =
 // ============================================================================
 
 const NoFamilyView = ({ families, config, createName, setCreateName, createTag, setCreateTag, onCreate, joinId, setJoinId, onJoin, joinModeForSelected, warHistory, onDetails }) => {
-  const maxFamilies = config?.max_families ?? 10;
+  const maxFamilies = config?.max_families ?? 6;
   const towardCap = config?.player_cap_families_count ?? 0;
   const atPlayerCap = towardCap >= maxFamilies;
   return (

@@ -176,7 +176,7 @@ TOKEN_CONFIG = {
     },
 }
 
-# My Inventory: exchange 1× Auto Rank (2h) token → many random distinct 1h tokens from pool (no cash/points).
+# My Inventory: exchange 1× Auto Rank (2h) token → 2–4 random distinct 1h tokens from pool (no cash/points).
 AUTO_RANK_EXCHANGE_POOL = (
     "xp_crimes",
     "xp_gta",
@@ -188,8 +188,8 @@ AUTO_RANK_EXCHANGE_POOL = (
     "properties",
     "jailbust_bonus",
 )
-# Distinct types granted per exchange (was 2–3 + cash/points; now token-only compensation).
-AUTO_RANK_EXCHANGE_TOKEN_COUNT_CHOICES = (5, 6, 7, 8)
+# Distinct types granted per exchange (max 4).
+AUTO_RANK_EXCHANGE_TOKEN_COUNT_CHOICES = (2, 3, 4)
 
 async def _try_grant_rank_xp_pass_micro_tier(
     db,
@@ -2555,7 +2555,7 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
 
 
 async def exchange_auto_rank_tokens(req: ExchangeAutoRankRequest, current_user: dict = Depends(get_current_user)):
-    """Burn 1× Auto Rank (2h) token for several random distinct other tokens (no cash/points)."""
+    """Burn 1× Auto Rank (2h) token for 2–4 random distinct other tokens (no cash/points)."""
     if int(req.count or 1) != 1:
         raise HTTPException(status_code=400, detail="Exchange exactly 1 Auto Rank (2h) token at a time.")
     pool = list(AUTO_RANK_EXCHANGE_POOL)
@@ -2588,10 +2588,9 @@ async def exchange_auto_rank_tokens(req: ExchangeAutoRankRequest, current_user: 
 
     fresh = await db.users.find_one({"id": uid}, {"_id": 0})
     tokens = _tokens_from_user(fresh or {})
-    labels = ", ".join(chosen)
     n = len(chosen)
     return {
-        "message": f"Exchanged 1 Auto Rank (2h) token for {n} random boosts: {labels}.",
+        "message": f"Traded 1 Auto Rank (2h) for {n} boost tokens.",
         "tokens": tokens,
         "exchange": {
             "consumed_auto_rank_2h": 1,

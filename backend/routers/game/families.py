@@ -51,7 +51,7 @@ from server import (
 )
 
 # ============ Constants ============
-MAX_FAMILIES = 10
+MAX_FAMILIES = 6
 # Admin-seeded / tool-created families set player_cap_exempt=True so they do not count toward this cap.
 FAMILY_LIST_QUERY_LIMIT = 500  # list view: player crews + exempt crews
 FAMILY_CREATE_COST = 75_000_000  # $75M to create a family

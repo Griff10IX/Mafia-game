@@ -531,7 +531,7 @@ class BodyguardResponse(BaseModel):
     hired_at: Optional[str]
 
 # ============ MAFIA FAMILIES (1920s-30s structure) ============
-MAX_FAMILIES = 10
+MAX_FAMILIES = 6
 FAMILY_ROLES = ["boss", "underboss", "consigliere", "capo", "soldier", "associate"]
 FAMILY_ROLE_LIMITS = {"boss": 1, "underboss": 1, "consigliere": 1, "capo": 4, "soldier": 15, "associate": 30}
 FAMILY_ROLE_ORDER = {"boss": 0, "underboss": 1, "consigliere": 2, "capo": 3, "soldier": 4, "associate": 5}
