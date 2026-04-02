@@ -1582,8 +1582,8 @@ async def buy_listed_car(
     }
 
 
-# Repair cost = (damage% / 100) * (car value * 0.2) — 100% damage = 20% of value
-REPAIR_COST_FRACTION = 0.2
+# Repair cost = (damage% / 100) * (car value * fraction) — 100% damage = fraction of value
+REPAIR_COST_FRACTION = 0.6
 
 
 async def repair_car(

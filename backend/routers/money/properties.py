@@ -81,6 +81,13 @@ class PropertiesListResponse(BaseModel):
     properties: List["PropertyResponse"]
     property_income_perk_until: Optional[str] = None  # When 10% property income loot perk expires (ISO)
     property_upkeep: Optional[PropertyUpkeepSummary] = None
+    property_portfolio_upgrades: Optional[dict] = None
+    properties_heat: Optional[dict] = None
+    properties_heat_bribe_quote: Optional[dict] = None
+
+
+class PropertiesHeatBribeRequest(BaseModel):
+    amount_cash: int
 
 
 # Upgrade cost to go from level L→L+1 is price * (L+1) (first buy = price). Each level adds +income_per_hour.
@@ -121,6 +128,154 @@ BUFF_INCOME_MULT = 0.10
 BUFF_DURATION_HOURS = 24
 BUFF_COST_POINTS = 100
 COLLECT_COOLDOWN_MINUTES = 10
+
+# --- Properties heat meter (portfolio-wide) ---
+PROPERTIES_HEAT_MAX = 100.0
+PROPERTIES_HEAT_BLOCK_THRESHOLD = 80.0
+# Net change = rise - decay. Keep both to make it easy to tune later.
+PROPERTIES_HEAT_RISE_PER_HOUR = 3.0
+PROPERTIES_HEAT_DECAY_PER_HOUR = 1.0
+# Bribe conversion: $ paid reduces heat by (amount / dollars_per_heat).
+# Kept below property-income scale so upkeep/bribes do not dominate ROI.
+PROPERTIES_HEAT_BRIBE_DOLLARS_PER_HEAT = 100_000
+PROPERTIES_HEAT_BRIBE_MIN_CASH = 100_000
+
+
+def _clamp_float(v: float, lo: float, hi: float) -> float:
+    try:
+        x = float(v)
+    except Exception:
+        x = lo
+    if x < lo:
+        return lo
+    if x > hi:
+        return hi
+    return x
+
+
+def _properties_heat_tick(heat: float, last_at_iso: Optional[str], now_utc: datetime) -> tuple[float, str]:
+    """Apply time-based heat rise/decay since last_at_iso. Returns (new_heat, new_last_at_iso)."""
+    last_dt = _parse_iso_datetime(last_at_iso)
+    if last_dt is None:
+        return _clamp_float(heat or 0.0, 0.0, PROPERTIES_HEAT_MAX), now_utc.isoformat()
+    if last_dt.tzinfo is None:
+        last_dt = last_dt.replace(tzinfo=timezone.utc)
+    elapsed_sec = max(0.0, (now_utc - last_dt).total_seconds())
+    if elapsed_sec <= 0.0:
+        return _clamp_float(heat or 0.0, 0.0, PROPERTIES_HEAT_MAX), now_utc.isoformat()
+    hours = elapsed_sec / 3600.0
+    net_per_hour = float(PROPERTIES_HEAT_RISE_PER_HOUR) - float(PROPERTIES_HEAT_DECAY_PER_HOUR)
+    new_heat = float(heat or 0.0) + net_per_hour * hours
+    return _clamp_float(new_heat, 0.0, PROPERTIES_HEAT_MAX), now_utc.isoformat()
+
+
+def _properties_heat_bribe_quote(heat: float) -> dict:
+    h = _clamp_float(heat or 0.0, 0.0, PROPERTIES_HEAT_MAX)
+    # Suggest enough to get 5 points below the block threshold (or minimum bribe if already low).
+    target_heat = max(0.0, float(PROPERTIES_HEAT_BLOCK_THRESHOLD) - 5.0)
+    need = max(0.0, h - target_heat)
+    suggested = int(max(PROPERTIES_HEAT_BRIBE_MIN_CASH, round(need * float(PROPERTIES_HEAT_BRIBE_DOLLARS_PER_HEAT))))
+    return {
+        "dollars_per_heat": int(PROPERTIES_HEAT_BRIBE_DOLLARS_PER_HEAT),
+        "min_bribe": int(PROPERTIES_HEAT_BRIBE_MIN_CASH),
+        "suggested_bribe": suggested,
+        "block_threshold": float(PROPERTIES_HEAT_BLOCK_THRESHOLD),
+        "heat_max": float(PROPERTIES_HEAT_MAX),
+    }
+# --- Property Portfolio Upgrades (permanent progression) ---
+# Multiplicative boosts applied to property income collections (and optionally to upkeep baseline).
+PROPERTY_PORTFOLIO_UPGRADE_TIERS = [
+    {
+        "tier": 1,
+        "name": "Bookkeeping",
+        "income_mult": 1.15,
+        "unlock": {"collect_all_sets": 5, "collect_total_cash": 10_000_000},
+        "cost_cash": 5_000_000,
+    },
+    {
+        "tier": 2,
+        "name": "Hiring Managers",
+        "income_mult": 1.15,
+        "unlock": {"collect_all_sets": 12, "collect_total_cash": 35_000_000},
+        "cost_cash": 15_000_000,
+    },
+    {
+        "tier": 3,
+        "name": "Supplier Contracts",
+        "income_mult": 1.20,
+        "unlock": {"collect_all_sets": 22, "collect_total_cash": 85_000_000, "collect_actions": 150},
+        "cost_cash": 40_000_000,
+    },
+    {
+        "tier": 4,
+        "name": "Expansion Team",
+        "income_mult": 1.20,
+        "unlock": {"collect_all_sets": 35, "collect_total_cash": 175_000_000, "collect_actions": 350},
+        "cost_cash": 90_000_000,
+    },
+    {
+        "tier": 5,
+        "name": "Corporate Structure",
+        "income_mult": 1.25,
+        "unlock": {"collect_all_sets": 55, "collect_total_cash": 350_000_000, "collect_actions": 700},
+        "cost_cash": 200_000_000,
+    },
+]
+
+
+def _portfolio_upgrade_tier_max() -> int:
+    try:
+        return int(max(t.get("tier", 0) for t in PROPERTY_PORTFOLIO_UPGRADE_TIERS))
+    except Exception:
+        return 0
+
+
+def _portfolio_upgrade_mult_from_tier(purchased_tier: int) -> float:
+    """Multiplicative income multiplier from purchased tier (tiers are applied in order)."""
+    t = max(0, int(purchased_tier or 0))
+    if t <= 0:
+        return 1.0
+    mult = 1.0
+    for row in PROPERTY_PORTFOLIO_UPGRADE_TIERS:
+        tier = int(row.get("tier") or 0)
+        if 1 <= tier <= t:
+            try:
+                mult *= float(row.get("income_mult") or 1.0)
+            except Exception:
+                pass
+    # Guard against nonsense values
+    return max(1.0, min(10.0, float(mult)))
+
+
+def _portfolio_progress_get(progress: dict, key: str) -> int:
+    try:
+        v = (progress or {}).get(key, 0)
+        return int(v) if v is not None else 0
+    except Exception:
+        return 0
+
+
+def _portfolio_unlocks_met(progress: dict, unlock_req: dict) -> bool:
+    req = unlock_req or {}
+    for k, target in req.items():
+        try:
+            tgt = int(target or 0)
+        except Exception:
+            tgt = 0
+        if _portfolio_progress_get(progress, k) < tgt:
+            return False
+    return True
+
+
+def _portfolio_unlocked_tier_from_progress(progress: dict) -> int:
+    unlocked = 0
+    for row in PROPERTY_PORTFOLIO_UPGRADE_TIERS:
+        tier = int(row.get("tier") or 0)
+        if tier <= 0:
+            continue
+        if _portfolio_unlocks_met(progress, row.get("unlock") or {}):
+            unlocked = max(unlocked, tier)
+    return unlocked
 
 # --- Weekly property upkeep (UTC; hybrid income + wealth — see docs/PROPERTY_UPKEEP.md) ---
 PROPERTY_UPKEEP_BILLING_DAYS = 7
@@ -184,6 +339,9 @@ def _property_order(properties: list) -> list:
 
 async def _compute_property_upkeep_details(user_id: str) -> dict:
     """Weekly upkeep from hybrid formula (no streak/perk/founding multipliers)."""
+    # Include permanent portfolio upgrades in baseline so upkeep scales with boosted income.
+    u = await db.users.find_one({"id": user_id}, {"_id": 0, "property_portfolio_upgrade_tier": 1})
+    portfolio_mult = _portfolio_upgrade_mult_from_tier(int((u or {}).get("property_portfolio_upgrade_tier") or 0))
     properties = await db.properties.find(
         {
             "price": {"$exists": True},
@@ -216,6 +374,8 @@ async def _compute_property_upkeep_details(user_id: str) -> dict:
             continue
         stack_mult = 1.0 + (owned_count - 1) * STACK_BONUS_PER_EXTRA if owned_count > 1 else 1.0
         eff_iph = float(prop["income_per_hour"]) * float(total_level) * stack_mult
+        if portfolio_mult > 1.0:
+            eff_iph *= float(portfolio_mult)
         weekly_baseline += eff_iph * float(PROPERTY_UPKEEP_HOURS_PER_WEEK)
         for up in user_props_list:
             lv = max(0, int(up.get("level") or 0))
@@ -266,9 +426,26 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
     # The properties page should only use canonical progression properties.
     user_id = current_user["id"]
     await _ensure_property_upkeep_paid_until(user_id)
-    user_row = await db.users.find_one({"id": user_id}, {"property_upkeep_paid_until": 1})
-    upkeep_details = await _compute_property_upkeep_details(user_id)
+    # Tick heat for UI display (and persist best-effort)
     now_utc = datetime.now(timezone.utc)
+    heat_row = await db.users.find_one(
+        {"id": user_id},
+        {"_id": 0, "property_upkeep_paid_until": 1, "properties_heat": 1, "properties_heat_last_at": 1},
+    )
+    ticked_heat, ticked_last = _properties_heat_tick(
+        float((heat_row or {}).get("properties_heat") or 0.0),
+        (heat_row or {}).get("properties_heat_last_at"),
+        now_utc,
+    )
+    try:
+        await db.users.update_one(
+            {"id": user_id},
+            {"$set": {"properties_heat": ticked_heat, "properties_heat_last_at": ticked_last}},
+        )
+    except Exception:
+        pass
+    user_row = heat_row or {"property_upkeep_paid_until": None}
+    upkeep_details = await _compute_property_upkeep_details(user_id)
     paid_until_dt = _parse_iso_datetime((user_row or {}).get("property_upkeep_paid_until"))
     weekly_amt = int(upkeep_details["weekly_amount"])
     overdue = bool(weekly_amt > 0 and paid_until_dt and now_utc > paid_until_dt)
@@ -295,6 +472,10 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
             properties_by_id[pid] = []
         properties_by_id[pid].append(up)
     result = []
+    purchased_tier = int(current_user.get("property_portfolio_upgrade_tier") or 0)
+    unlocked_tier = int(current_user.get("property_portfolio_upgrade_unlocked_tier") or 0)
+    progress = dict(current_user.get("property_portfolio_upgrade_progress") or {})
+    portfolio_mult = _portfolio_upgrade_mult_from_tier(purchased_tier)
     for prop in properties:
         # Defensive guard against malformed docs to avoid 500s in production.
         if not all(k in prop for k in ("id", "name", "property_type", "price", "income_per_hour", "max_level")):
@@ -350,6 +531,10 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
                 locked = True
         # Effective income/hr = base * total_level * stack_mult (so stacking shows increased rate)
         effective_income_per_hour = int(prop["income_per_hour"] * total_level * stack_mult) if owned and total_level >= 1 else prop["income_per_hour"]
+        # Apply purchased portfolio upgrades multiplier (display + collection should align).
+        if owned and portfolio_mult > 1.0:
+            available_income *= portfolio_mult
+            effective_income_per_hour = int(effective_income_per_hour * portfolio_mult)
         streak_bonus_mult = 1.0 + min(MAX_STREAK_DAYS, max(0, streak_days)) * STREAK_BONUS_PER_DAY if owned else 1.0
         cap_single = int(prop["max_level"])
         max_total_level = cap_single * max(1, owned_count)
@@ -400,10 +585,42 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
         pay_window_hours=PROPERTY_UPKEEP_PAY_WINDOW_HOURS,
         pay_eligible_at=pay_eligible_at,
     )
+    # Build upgrades block for UI
+    # Note: unlocked_tier might lag if user is mid-progress; we also compute a derived unlocked tier.
+    derived_unlocked = _portfolio_unlocked_tier_from_progress(progress)
+    if derived_unlocked > unlocked_tier:
+        unlocked_tier = derived_unlocked
+    next_tier = min(_portfolio_upgrade_tier_max(), max(0, purchased_tier) + 1)
+    next_row = next((t for t in PROPERTY_PORTFOLIO_UPGRADE_TIERS if int(t.get("tier") or 0) == next_tier), None) if next_tier else None
+    upgrades_block = {
+        "purchased_tier": purchased_tier,
+        "unlocked_tier": unlocked_tier,
+        "portfolio_mult": round(float(portfolio_mult), 6),
+        "tiers": PROPERTY_PORTFOLIO_UPGRADE_TIERS,
+        "progress": {
+            "collect_actions": _portfolio_progress_get(progress, "collect_actions"),
+            "collect_total_cash": _portfolio_progress_get(progress, "collect_total_cash"),
+            "collect_all_sets": _portfolio_progress_get(progress, "collect_all_sets"),
+        },
+        "next_tier": next_tier if next_row else None,
+        "next_unlock": (next_row or {}).get("unlock") if next_row else None,
+        "next_cost_cash": (next_row or {}).get("cost_cash") if next_row else None,
+        "next_income_mult": (next_row or {}).get("income_mult") if next_row else None,
+    }
+    heat_blocked = bool(ticked_heat >= float(PROPERTIES_HEAT_BLOCK_THRESHOLD))
+    heat_block = {
+        "heat": round(float(ticked_heat), 3),
+        "blocked": heat_blocked,
+        "threshold": float(PROPERTIES_HEAT_BLOCK_THRESHOLD),
+        "heat_max": float(PROPERTIES_HEAT_MAX),
+    }
     return PropertiesListResponse(
         properties=result,
         property_income_perk_until=current_user.get("property_income_perk_until"),
         property_upkeep=pu,
+        property_portfolio_upgrades=upgrades_block,
+        properties_heat=heat_block,
+        properties_heat_bribe_quote=_properties_heat_bribe_quote(ticked_heat),
     )
 
 
@@ -509,6 +726,28 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
     owned_count = len(user_props_list)
     now_utc = datetime.now(timezone.utc)
     user_id = current_user["id"]
+    # Tick heat and block collections when too high (police seize income)
+    heat_row = await db.users.find_one(
+        {"id": user_id},
+        {"_id": 0, "properties_heat": 1, "properties_heat_last_at": 1},
+    )
+    ticked_heat, ticked_last = _properties_heat_tick(
+        float((heat_row or {}).get("properties_heat") or 0.0),
+        (heat_row or {}).get("properties_heat_last_at"),
+        now_utc,
+    )
+    try:
+        await db.users.update_one(
+            {"id": user_id},
+            {"$set": {"properties_heat": ticked_heat, "properties_heat_last_at": ticked_last}},
+        )
+    except Exception:
+        pass
+    if float(ticked_heat) >= float(PROPERTIES_HEAT_BLOCK_THRESHOLD):
+        raise HTTPException(
+            status_code=400,
+            detail="Police heat is too high — your business income is being seized. Bribe the police on the Properties page to resume collections.",
+        )
     await _ensure_property_upkeep_paid_until(user_id)
     user_row = await db.users.find_one({"id": user_id}, {"property_upkeep_paid_until": 1})
     upkeep_det = await _compute_property_upkeep_details(user_id)
@@ -611,6 +850,11 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
                 "loss_amount": round(loss_amount, 2),
                 "message": f"A raid hit {prop['name']}. You lost ${loss_amount:,.0f} ({loss_pct*100:.1f}% of stored income).",
             }
+    # Apply permanent property portfolio upgrades
+    purchased_tier = int(current_user.get("property_portfolio_upgrade_tier") or 0)
+    portfolio_mult = _portfolio_upgrade_mult_from_tier(purchased_tier)
+    if portfolio_mult > 1.0:
+        income *= portfolio_mult
     income *= founding_member_income_mult(current_user)
     await db.users.update_one(
         {"id": current_user["id"]},
@@ -630,6 +874,51 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
     if risk_event and risk_event.get("message"):
         message += f" {risk_event['message']}"
     await log_activity(current_user.get("id", ""), current_user.get("username", ""), "property_collect", {"property": prop.get("name", property_id), "income": round(income, 2), "owned_count": owned_count})
+    # ---- Permanent property upgrade progression tracking ----
+    try:
+        # Fetch current counters from DB (avoid stale current_user)
+        uprog = await db.users.find_one(
+            {"id": user_id},
+            {
+                "_id": 0,
+                "property_portfolio_upgrade_progress": 1,
+                "property_portfolio_upgrade_unlocked_tier": 1,
+            },
+        )
+        progress = dict((uprog or {}).get("property_portfolio_upgrade_progress") or {})
+        collect_actions = _portfolio_progress_get(progress, "collect_actions") + 1
+        collect_total_cash = _portfolio_progress_get(progress, "collect_total_cash") + int(income or 0)
+        collect_all_sets = _portfolio_progress_get(progress, "collect_all_sets")
+        seen = set(progress.get("collect_all_seen_property_ids") or [])
+        seen.add(property_id)
+        # Owned property ids (distinct) for this user
+        owned_rows = await db.user_properties.find(
+            {"user_id": user_id},
+            {"_id": 0, "property_id": 1, "level": 1},
+        ).to_list(200)
+        owned_ids = {r.get("property_id") for r in owned_rows if r.get("property_id") and int(r.get("level") or 0) > 0}
+        if owned_ids and owned_ids.issubset(seen):
+            collect_all_sets += 1
+            seen = set()
+        progress["collect_actions"] = int(collect_actions)
+        progress["collect_total_cash"] = int(collect_total_cash)
+        progress["collect_all_sets"] = int(collect_all_sets)
+        progress["collect_all_seen_property_ids"] = sorted(list(seen))
+        derived_unlocked = _portfolio_unlocked_tier_from_progress(progress)
+        existing_unlocked = int((uprog or {}).get("property_portfolio_upgrade_unlocked_tier") or 0)
+        new_unlocked = max(existing_unlocked, derived_unlocked)
+        await db.users.update_one(
+            {"id": user_id},
+            {
+                "$set": {
+                    "property_portfolio_upgrade_progress": progress,
+                    "property_portfolio_upgrade_unlocked_tier": new_unlocked,
+                }
+            },
+        )
+    except Exception:
+        # Never break collections because objective tracking failed.
+        pass
     return {
         "message": message,
         "streak_days": streak_days,
@@ -747,8 +1036,105 @@ def register(router):
             "amount": amount,
         }
 
+    async def buy_property_portfolio_upgrade(
+        tier: int,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Buy the next Property Portfolio Upgrade tier (must be unlocked first)."""
+        uid = current_user["id"]
+        desired = max(1, int(tier or 0))
+        u = await db.users.find_one(
+            {"id": uid},
+            {
+                "_id": 0,
+                "money": 1,
+                "property_portfolio_upgrade_tier": 1,
+                "property_portfolio_upgrade_unlocked_tier": 1,
+            },
+        )
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        purchased = int(u.get("property_portfolio_upgrade_tier") or 0)
+        unlocked = int(u.get("property_portfolio_upgrade_unlocked_tier") or 0)
+        if desired != purchased + 1:
+            raise HTTPException(status_code=400, detail="You can only buy the next tier in order.")
+        row = next((t for t in PROPERTY_PORTFOLIO_UPGRADE_TIERS if int(t.get("tier") or 0) == desired), None)
+        if not row:
+            raise HTTPException(status_code=400, detail="Invalid upgrade tier")
+        if unlocked < desired:
+            raise HTTPException(status_code=400, detail="That upgrade tier is not unlocked yet.")
+        cost = int(row.get("cost_cash") or 0)
+        if cost <= 0:
+            raise HTTPException(status_code=400, detail="Invalid upgrade cost")
+        res = await db.users.update_one(
+            {"id": uid, "money": {"$gte": cost}, "property_portfolio_upgrade_tier": purchased},
+            {"$inc": {"money": -cost}, "$set": {"property_portfolio_upgrade_tier": desired}},
+        )
+        if res.modified_count == 0:
+            raise HTTPException(status_code=400, detail=f"Insufficient money. Upgrade costs ${cost:,}.")
+        await log_activity(
+            uid,
+            current_user.get("username") or "?",
+            "property_portfolio_upgrade_buy",
+            {"tier": desired, "name": row.get("name"), "cost": cost},
+        )
+        return {
+            "message": f"Purchased Property Portfolio Upgrade Tier {desired}: {row.get('name')} for ${cost:,}.",
+            "property_portfolio_upgrade_tier": desired,
+        }
+
+    async def bribe_properties_heat(
+        request: PropertiesHeatBribeRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Pay cash to reduce portfolio Heat for properties."""
+        uid = current_user["id"]
+        try:
+            amt = int(request.amount_cash or 0)
+        except Exception:
+            amt = 0
+        amt = max(0, amt)
+        if amt < PROPERTIES_HEAT_BRIBE_MIN_CASH:
+            raise HTTPException(status_code=400, detail=f"Minimum bribe is ${PROPERTIES_HEAT_BRIBE_MIN_CASH:,}.")
+        now_utc = datetime.now(timezone.utc)
+        u = await db.users.find_one(
+            {"id": uid},
+            {"_id": 0, "money": 1, "properties_heat": 1, "properties_heat_last_at": 1, "properties_heat_bribes_paid": 1},
+        )
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        ticked_heat, ticked_last = _properties_heat_tick(
+            float(u.get("properties_heat") or 0.0),
+            u.get("properties_heat_last_at"),
+            now_utc,
+        )
+        reduce_by = float(amt) / float(PROPERTIES_HEAT_BRIBE_DOLLARS_PER_HEAT)
+        new_heat = _clamp_float(float(ticked_heat) - float(reduce_by), 0.0, PROPERTIES_HEAT_MAX)
+        res = await db.users.update_one(
+            {"id": uid, "money": {"$gte": amt}},
+            {
+                "$inc": {"money": -amt, "properties_heat_bribes_paid": amt},
+                "$set": {"properties_heat": new_heat, "properties_heat_last_at": ticked_last},
+            },
+        )
+        if res.modified_count == 0:
+            raise HTTPException(status_code=400, detail=f"Insufficient money. Bribe costs ${amt:,}.")
+        blocked = bool(new_heat >= float(PROPERTIES_HEAT_BLOCK_THRESHOLD))
+        return {
+            "message": f"Bribed the police for ${amt:,}. Heat is now {new_heat:.1f}/{PROPERTIES_HEAT_MAX:.0f}.",
+            "properties_heat": {
+                "heat": round(float(new_heat), 3),
+                "blocked": blocked,
+                "threshold": float(PROPERTIES_HEAT_BLOCK_THRESHOLD),
+                "heat_max": float(PROPERTIES_HEAT_MAX),
+            },
+            "properties_heat_bribe_quote": _properties_heat_bribe_quote(new_heat),
+        }
+
     router.add_api_route("/properties", get_properties, methods=["GET"], response_model=PropertiesListResponse)
     router.add_api_route("/properties/upkeep/pay", pay_property_upkeep, methods=["POST"])
+    router.add_api_route("/properties/heat/bribe", bribe_properties_heat, methods=["POST"])
+    router.add_api_route("/properties/upgrades/buy", buy_property_portfolio_upgrade, methods=["POST"])
     router.add_api_route("/properties/{property_id}/buy", buy_property, methods=["POST"])
     router.add_api_route("/properties/{property_id}/collect", collect_property_income, methods=["POST"])
     router.add_api_route("/properties/{property_id}/reinvest", reinvest_property, methods=["POST"])
