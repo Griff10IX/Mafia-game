@@ -962,7 +962,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                     if rarity not in allowed_set:
                         continue
                     rows.append({"user_car_id": ucid, "value": int(car_info.get("value") or 0)})
-                rows.sort(key=lambda x: x["value"])
+                rows.sort(key=lambda x: x["value"], reverse=True)
                 return rows
 
             eligible = await _eligible_rows_for_rarities(allowed_melt_rarities)
@@ -1101,7 +1101,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                         continue
                     value = int(car_info.get("value") or 0)
                     eligible.append({"user_car_id": ucid, "value": value})
-                eligible.sort(key=lambda x: x["value"])
+                eligible.sort(key=lambda x: x["value"], reverse=True)
                 car_ids = [e["user_car_id"] for e in eligible[:remaining]]
                 if not car_ids:
                     next_scrap_dt = now + timedelta(seconds=SCRAP_INTERVAL_SECONDS)

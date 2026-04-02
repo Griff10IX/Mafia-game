@@ -1500,8 +1500,21 @@ export default function AutoRank() {
   const toggleMeltActionId = (id) => {
     setSelectedMeltActionIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
   };
+
+  const _AUTO_RANK_DANGEROUS_RARITIES = new Set(['custom', 'loot_exclusive', 'exclusive']);
+  const _confirmDangerousRarity = (rarityId, contextLabel) => {
+    const rid = String(rarityId || '').trim();
+    if (!_AUTO_RANK_DANGEROUS_RARITIES.has(rid)) return true;
+    return window.confirm(
+      `Confirm selection: "${rid.replace(/_/g, ' ')}" (${contextLabel}).\n\n` +
+      `Cars in this rarity can be very valuable. Are you sure you want Auto Rank to include them?`
+    );
+  };
+
   const toggleMeltRarityId = (id) => {
     setSelectedMeltRarityIds((prev) => {
+      const isAdding = !prev.includes(id);
+      if (isAdding && !_confirmDangerousRarity(id, 'Melt')) return prev;
       const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
       // Enforce: a rarity can't be selected in both Melt and Scrap.
       if (!prev.includes(id)) setSelectedScrapRarityIds((sPrev) => sPrev.filter((x) => x !== id));
@@ -1510,6 +1523,8 @@ export default function AutoRank() {
   };
   const toggleScrapRarityId = (id) => {
     setSelectedScrapRarityIds((prev) => {
+      const isAdding = !prev.includes(id);
+      if (isAdding && !_confirmDangerousRarity(id, 'Scrap')) return prev;
       const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
       // Enforce: a rarity can't be selected in both Melt and Scrap.
       if (!prev.includes(id)) setSelectedMeltRarityIds((mPrev) => mPrev.filter((x) => x !== id));
@@ -1528,12 +1543,28 @@ export default function AutoRank() {
   const selectAllMeltRarities = () => {
     const all = meltRarities.map((r) => r?.id).filter(Boolean);
     const filtered = all.filter((id) => !selectedScrapRarityIds.includes(id));
+    const willAddDangerous = filtered.some((id) => _AUTO_RANK_DANGEROUS_RARITIES.has(String(id || '').trim())) &&
+      filtered.some((id) => !selectedMeltRarityIds.includes(id));
+    if (willAddDangerous && !window.confirm(
+      'Confirm selection: Custom / Loot Exclusive / Exclusive (Melt).\n\n' +
+      'These cars can be very valuable. Are you sure you want Auto Rank to include them?'
+    )) {
+      return;
+    }
     setSelectedMeltRarityIds(filtered);
   };
   const deselectAllMeltRarities = () => setSelectedMeltRarityIds([]);
   const selectAllScrapRarities = () => {
     const all = scrapRarities.map((r) => r?.id).filter(Boolean);
     const filtered = all.filter((id) => !selectedMeltRarityIds.includes(id));
+    const willAddDangerous = filtered.some((id) => _AUTO_RANK_DANGEROUS_RARITIES.has(String(id || '').trim())) &&
+      filtered.some((id) => !selectedScrapRarityIds.includes(id));
+    if (willAddDangerous && !window.confirm(
+      'Confirm selection: Custom / Loot Exclusive / Exclusive (Scrap).\n\n' +
+      'These cars can be very valuable. Are you sure you want Auto Rank to include them?'
+    )) {
+      return;
+    }
     setSelectedScrapRarityIds(filtered);
   };
   const deselectAllScrapRarities = () => setSelectedScrapRarityIds([]);

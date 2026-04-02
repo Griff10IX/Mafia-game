@@ -269,11 +269,11 @@ async def _get_last_reward_winners(database) -> dict:
         ),
         _top_by_field_for_week(
             database, "crime_events", "user_id", "at", False,
-            last_week_start, this_week_start, 10, None,
+            last_week_start, this_week_start, 10, {"success": True},
         ),
         _top_by_field_for_week(
             database, "gta_events", "user_id", "at", False,
-            last_week_start, this_week_start, 10, None,
+            last_week_start, this_week_start, 10, {"success": True},
         ),
         _top_by_field_for_week(
             database, "bust_events", "user_id", "at", False,
@@ -371,11 +371,11 @@ async def run_weekly_leaderboard_payout(database, test_run: bool = False):
         ),
         _top_by_field_for_week(
             database, "crime_events", "user_id", "at", False,
-            last_week_start, this_week_start, 10, None,
+            last_week_start, this_week_start, 10, {"success": True},
         ),
         _top_by_field_for_week(
             database, "gta_events", "user_id", "at", False,
-            last_week_start, this_week_start, 10, None,
+            last_week_start, this_week_start, 10, {"success": True},
         ),
         _top_by_field_for_week(
             database, "bust_events", "user_id", "at", False,
@@ -538,8 +538,8 @@ async def _fetch_top_boards_raw(limit: int, dead: bool, period: str) -> dict:
     if (period or "").lower() == "weekly":
         kills, crimes, gta, jail_busts, stock_market_profit, booze_run_profit, respect_points, bullets_melted = await asyncio.gather(
             _top_by_field_weekly("attack_attempts", "attacker_id", "created_at", True, dummy_uid, limit, dead, {"outcome": "killed"}),
-            _top_by_field_weekly("crime_events", "user_id", "at", False, dummy_uid, limit, dead),
-            _top_by_field_weekly("gta_events", "user_id", "at", False, dummy_uid, limit, dead),
+            _top_by_field_weekly("crime_events", "user_id", "at", False, dummy_uid, limit, dead, {"success": True}),
+            _top_by_field_weekly("gta_events", "user_id", "at", False, dummy_uid, limit, dead, {"success": True}),
             _top_by_field_weekly("bust_events", "user_id", "at", False, dummy_uid, limit, dead, {"success": True}),
             _top_by_field_weekly_sum("stock_transactions", "user_id", "created_at", "profit_points", dummy_uid, limit, dead),
             _top_by_field_weekly_sum("economy_events", "user_id", "at", "profit", dummy_uid, limit, dead, {"type": "booze_run_sell"}),
