@@ -1440,9 +1440,39 @@ async def compute_sports_betting_stats(uid: str, settled_after_iso: Optional[str
     }
 
 
+async def compute_sports_betting_global_stats() -> dict:
+    """All-time book stats: every bet row, aggregate player P/L on settled won/lost (same formula as per-user stats)."""
+    total_bets_all_time = await db.sports_bets.count_documents({})
+    won_stake = await db.sports_bets.aggregate([
+        {"$match": {"status": "won"}},
+        {"$group": {"_id": None, "sum": {"$sum": {"$multiply": ["$stake", "$odds"]}}}},
+    ]).to_list(1)
+    lost_stake = await db.sports_bets.aggregate([
+        {"$match": {"status": "lost"}},
+        {"$group": {"_id": None, "sum": {"$sum": "$stake"}}},
+    ]).to_list(1)
+    winnings = int((won_stake[0].get("sum", 0) or 0)) if won_stake else 0
+    losses = int((lost_stake[0].get("sum", 0) or 0)) if lost_stake else 0
+    aggregate_player_profit_loss = winnings - losses
+    settled_bets_count = await db.sports_bets.count_documents({"status": {"$in": ["won", "lost"]}})
+    open_agg = await db.sports_bets.aggregate([
+        {"$match": {"status": "open"}},
+        {"$group": {"_id": None, "total": {"$sum": "$stake"}}},
+    ]).to_list(1)
+    open_stake_all_players = int((open_agg[0].get("total", 0) or 0)) if open_agg else 0
+    return {
+        "total_bets_all_time": total_bets_all_time,
+        "settled_bets_count": settled_bets_count,
+        "aggregate_player_profit_loss": aggregate_player_profit_loss,
+        "open_stake_all_players": open_stake_all_players,
+    }
+
+
 async def sports_betting_stats(current_user: dict = Depends(get_current_user_verified)):
     uid = current_user.get("id") or ""
-    return await compute_sports_betting_stats(uid, None)
+    personal = await compute_sports_betting_stats(uid, None)
+    personal["global_book"] = await compute_sports_betting_global_stats()
+    return personal
 
 
 async def sports_betting_recent_results(current_user: dict = Depends(get_current_user_verified)):

@@ -463,13 +463,26 @@ export default function SportsBetting() {
       {/* ═══ Stats bar ═══ */}
       <div className="relative flex flex-wrap items-center justify-between gap-3 px-4 py-2.5 rounded-lg border border-primary/20 bg-primary/5 overflow-hidden">
         <div className="h-0.5 absolute top-0 left-0 right-0 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="flex flex-wrap items-center gap-4 text-[10px] font-heading uppercase tracking-wider">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-[10px] font-heading uppercase tracking-wider">
           <span className="text-zinc-500">{events.length} <span className="text-zinc-600">events</span></span>
           <span className="text-zinc-500">{myBets.open.length} <span className="text-zinc-600">open bets</span></span>
           {stats && (
-            <span className={`font-bold ${(stats.profit_loss ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-              P/L {formatMoney(stats.profit_loss)}
+            <span className={`font-bold ${(stats.profit_loss ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`} title="Your net on settled bets">
+              You P/L {formatMoney(stats.profit_loss)}
             </span>
+          )}
+          {stats?.global_book && (
+            <>
+              <span className="text-zinc-500 border-l border-zinc-700/80 pl-4" title="Every sports bet ever placed (including open and cancelled)">
+                {(stats.global_book.total_bets_all_time ?? 0).toLocaleString()} <span className="text-zinc-600">book bets</span>
+              </span>
+              <span
+                className={`font-bold ${(stats.global_book.aggregate_player_profit_loss ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}
+                title="Combined net for all players on settled won/lost bets (payouts minus stakes)"
+              >
+                All players net {formatMoney(stats.global_book.aggregate_player_profit_loss)}
+              </span>
+            </>
           )}
         </div>
         <button
@@ -774,6 +787,33 @@ export default function SportsBetting() {
                   <span className={`text-[11px] font-heading font-bold ${r.cls || 'text-foreground'}`}>{r.value}</span>
                 </div>
               ))}
+              {stats?.global_book && (
+                <>
+                  <div className="px-3 py-2 bg-zinc-900/50 border-t border-zinc-800/60">
+                    <span className="text-[9px] font-heading font-bold text-zinc-500 uppercase tracking-wider">Whole game (all players)</span>
+                    <p className="text-[9px] text-zinc-600 font-heading mt-0.5">Net on settled bets = total payouts minus stakes lost (won/lost only).</p>
+                  </div>
+                  {[
+                    { label: 'Total bets placed (book)', value: (stats.global_book.total_bets_all_time ?? 0).toLocaleString() },
+                    { label: 'Settled bets (book)', value: (stats.global_book.settled_bets_count ?? 0).toLocaleString() },
+                    {
+                      label: 'Open stake (all players)',
+                      value: formatMoney(stats.global_book.open_stake_all_players),
+                      cls: 'text-amber-400/90',
+                    },
+                    {
+                      label: 'All players net P/L',
+                      value: formatMoney(stats.global_book.aggregate_player_profit_loss),
+                      cls: (stats.global_book.aggregate_player_profit_loss ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400',
+                    },
+                  ].map((r) => (
+                    <div key={r.label} className="flex items-center justify-between px-3 py-2.5">
+                      <span className="text-[11px] font-heading text-zinc-500">{r.label}</span>
+                      <span className={`text-[11px] font-heading font-bold ${r.cls || 'text-foreground'}`}>{r.value}</span>
+                    </div>
+                  ))}
+                </>
+              )}
             </div>
             <div className="sb-art-line text-primary mx-3" />
           </div>
