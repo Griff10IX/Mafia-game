@@ -2584,7 +2584,7 @@ def register(router):
         """Get rate limit violations log with detailed info about why users got rate limited."""
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin or moderator access required")
-        query = {"flag_type": "endpoint_rate_limit", "resolved": {"$ne": True}}
+        query = {"flag_type": {"$in": ["endpoint_rate_limit", "endpoint_rate_limit_hard"]}, "resolved": {"$ne": True}}
         if user_id and str(user_id).strip():
             query["user_id"] = str(user_id).strip()
         elif username:
@@ -2617,7 +2617,9 @@ def register(router):
         """Clear rate limit flags for a specific user."""
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin or moderator access required")
-        result = await db.security_flags.delete_many({"user_id": user_id, "flag_type": "endpoint_rate_limit"})
+        result = await db.security_flags.delete_many(
+            {"user_id": user_id, "flag_type": {"$in": ["endpoint_rate_limit", "endpoint_rate_limit_hard"]}}
+        )
         return {"message": f"Cleared {result.deleted_count} rate limit flag(s) for user", "deleted": result.deleted_count}
 
     @router.post("/admin/rate-limit-log/clear-all")
@@ -2625,7 +2627,7 @@ def register(router):
         """Clear all rate limit flags."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        result = await db.security_flags.delete_many({"flag_type": "endpoint_rate_limit"})
+        result = await db.security_flags.delete_many({"flag_type": {"$in": ["endpoint_rate_limit", "endpoint_rate_limit_hard"]}})
         return {"message": f"Cleared {result.deleted_count} rate limit flag(s)", "deleted": result.deleted_count}
 
     @router.get("/admin/security/rate-limits")
@@ -2644,7 +2646,18 @@ def register(router):
             "rate_limits": rl_ms,
             "global_enabled": getattr(security_module, "GLOBAL_RATE_LIMITS_ENABLED", False),
             "security_middleware_enabled": middleware_enabled,
-            "note": "Values are in milliseconds. All security middleware is OFF by default."
+            "note": "Values are in milliseconds. All security middleware is OFF by default.",
+            "endpoint_rl_policy": {
+                "burst_tokens": getattr(security_module, "ENDPOINT_RL_BURST_TOKENS", 3),
+                "sustain_window_sec": getattr(security_module, "ENDPOINT_RL_SUSTAIN_WINDOW_SEC", 30),
+                "sustain_min_span_sec": getattr(security_module, "ENDPOINT_RL_SUSTAIN_MIN_SPAN_SEC", 15),
+                "sustain_min_violations": getattr(security_module, "ENDPOINT_RL_SUSTAIN_MIN_COUNT", 3),
+                "hard_cooldown_sec_range": [
+                    getattr(security_module, "ENDPOINT_RL_HARD_COOLDOWN_MIN_SEC", 15),
+                    getattr(security_module, "ENDPOINT_RL_HARD_COOLDOWN_MAX_SEC", 30),
+                ],
+                "summary": "Normal 429 uses short wait from token bucket; 15–30s hard lockout only after sustained repeated limits (tracked in DB).",
+            },
         }
 
     @router.post("/admin/security/rate-limits/toggle")

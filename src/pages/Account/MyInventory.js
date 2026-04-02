@@ -198,8 +198,8 @@ export default function MyInventory() {
           Equip your armour and weapons. View your loot-exclusive items.
         </p>
 
-        {/* Weapons & Armour side by side — always 2 columns */}
-        <div className="grid grid-cols-2 gap-3 inv-fade-in" style={{ animationDelay: '0.1s' }}>
+        {/* Stack when .mobile-panel uses negative margins (≤1024px in noir.module.css); two columns only above that so panels do not overlap */}
+        <div className="grid grid-cols-1 min-[1025px]:grid-cols-2 gap-3 inv-fade-in" style={{ animationDelay: '0.1s' }}>
           {/* Weapons */}
           <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 min-w-0 mobile-panel`}>
             <div className="px-2 py-1.5 sm:px-2.5 sm:py-2 bg-primary/8 border-b border-primary/20 flex items-center gap-1.5">

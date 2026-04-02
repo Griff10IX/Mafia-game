@@ -11,6 +11,8 @@ import api from '../utils/api';
 /**
  * Cloudflare Turnstile before POST /gta/melt and /booze-run/sell when admin enables game_actions_turnstile.
  * Render `captchaModal` once. Call `getCaptchaToken()` before those requests.
+ *
+ * Uses appearance "interaction-only" so the checkbox is not shown unless Cloudflare needs it (default was always-visible).
  */
 export function useGameActionsTurnstile() {
   const [cfg, setCfg] = useState(null);
@@ -53,6 +55,13 @@ export function useGameActionsTurnstile() {
     setModalOpen(false);
   };
 
+  const failPending = useCallback((err) => {
+    const p = pendingRef.current;
+    pendingRef.current = null;
+    p?.reject(err);
+    setModalOpen(false);
+  }, []);
+
   const onOpenChange = (open) => {
     if (open) return;
     setModalOpen(false);
@@ -66,17 +75,23 @@ export function useGameActionsTurnstile() {
       <Dialog open={modalOpen} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-md border-primary/20">
           <DialogHeader>
-            <DialogTitle className="font-heading">Verify this action</DialogTitle>
+            <DialogTitle className="font-heading">Security check</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground font-heading">
-            Complete the check to continue (melt/scrap or booze sell).
+            Quick Cloudflare verification for melt, scrap, or booze sell. Often there is nothing to click; if a challenge appears,
+            complete it and this window will close.
           </p>
-          <div className="flex justify-center py-2">
+          <div className="flex min-h-[1px] justify-center py-2">
             <Turnstile
               key={widgetKey}
               siteKey={cfg.site_key}
               onSuccess={onSuccess}
-              options={{ theme: 'dark' }}
+              onExpire={() => failPending(new Error('captcha_expired'))}
+              onError={() => failPending(new Error('captcha_failed'))}
+              options={{
+                theme: 'dark',
+                appearance: 'interaction-only',
+              }}
             />
           </div>
         </DialogContent>

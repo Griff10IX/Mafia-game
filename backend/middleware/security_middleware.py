@@ -151,18 +151,35 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                                 "cooldown_seconds": cooldown,
                             }
                         )
-            # 3. Check endpoint-specific rate limits (if enabled for this endpoint)
-            if request.method not in ("GET", "HEAD", "OPTIONS") and await self.check_endpoint_rate_limit(path, user_id, username, self.db):
-                cooldown = _get_cooldown_seconds(user_id)
-                logger.warning(f"RATE LIMIT: {username} - {path} (cooldown {cooldown}s)")
-                return JSONResponse(
-                    status_code=429,
-                    content={
-                        "detail": f"Rate limit exceeded. Please wait {cooldown} seconds.",
-                        "is_cooldown": True,
-                        "cooldown_seconds": cooldown,
-                    }
-                )
+            # 3. Endpoint rate limits: soft block has no short punitive cooldown; only hard lockout uses long 15–30s
+            if request.method not in ("GET", "HEAD", "OPTIONS"):
+                rl_out = await self.check_endpoint_rate_limit(path, user_id, username, self.db)
+                if rl_out.blocked:
+                    cd = rl_out.cooldown_seconds
+                    hard = rl_out.is_hard_cooldown_response
+                    logger.warning(
+                        "RATE LIMIT: %s - %s (cooldown %ss%s)",
+                        username,
+                        path,
+                        cd,
+                        ", hard lockout" if hard else "",
+                    )
+                    if hard:
+                        msg = f"Too many repeated rate limits. Please wait {cd} seconds."
+                        content = {
+                            "detail": msg,
+                            "is_cooldown": True,
+                            "cooldown_seconds": cd,
+                            "endpoint_rate_limit_hard": True,
+                        }
+                    else:
+                        content = {
+                            "detail": "Rate limit exceeded. Please slow down.",
+                            "is_cooldown": False,
+                            "cooldown_seconds": 0,
+                            "endpoint_rate_limit_hard": False,
+                        }
+                    return JSONResponse(status_code=429, content=content)
 
         except Exception as e:
             logger.exception(f"Security middleware error: {e}")

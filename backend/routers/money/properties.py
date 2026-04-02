@@ -26,6 +26,14 @@ def _parse_iso_datetime(s):
         return None
 
 
+def _format_utc_datetime_friendly(dt: datetime) -> str:
+    """Human-readable UTC for player-facing messages (no raw ISO microseconds)."""
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    dt = dt.astimezone(timezone.utc)
+    return dt.strftime("%d %b %Y, %H:%M UTC")
+
+
 class PropertyResponse(BaseModel):
     id: str
     name: str
@@ -691,8 +699,9 @@ def register(router):
             "property_upkeep_pay",
             {"amount": amount, "paid_until": new_until.isoformat()},
         )
+        friendly_until = _format_utc_datetime_friendly(new_until)
         return {
-            "message": f"Paid ${amount:,} property upkeep. Coverage extends to {new_until.isoformat()}.",
+            "message": f"Paid ${amount:,} property upkeep. Coverage extends to {friendly_until}.",
             "paid_until": new_until.isoformat(),
             "amount": amount,
         }

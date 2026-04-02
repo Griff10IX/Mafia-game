@@ -9996,6 +9996,20 @@ export default function Admin() {
                 {rateLimits.note && (
                   <p className="text-[9px] text-mutedForeground italic mt-2">{rateLimits.note}</p>
                 )}
+                {rateLimits.endpoint_rl_policy?.summary && (
+                  <p className="text-[9px] text-zinc-400 mt-1.5 font-heading leading-relaxed">
+                    {rateLimits.endpoint_rl_policy.summary}
+                    {rateLimits.endpoint_rl_policy.burst_tokens != null && (
+                      <span className="block mt-0.5 text-mutedForeground">
+                        Burst {rateLimits.endpoint_rl_policy.burst_tokens} · sustain {rateLimits.endpoint_rl_policy.sustain_min_violations}+
+                        hits in {rateLimits.endpoint_rl_policy.sustain_window_sec}s spanning ≥{rateLimits.endpoint_rl_policy.sustain_min_span_sec}s → hard cooldown{' '}
+                        {Array.isArray(rateLimits.endpoint_rl_policy.hard_cooldown_sec_range)
+                          ? `${rateLimits.endpoint_rl_policy.hard_cooldown_sec_range[0]}–${rateLimits.endpoint_rl_policy.hard_cooldown_sec_range[1]}s`
+                          : ''}
+                      </span>
+                    )}
+                  </p>
+                )}
               </div>
             )}
 

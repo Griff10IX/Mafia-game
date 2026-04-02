@@ -1,8 +1,11 @@
 # Anti-cheat and security monitoring system
+from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, List, Tuple
 import logging
+import math
 import os
+import random
 import re
 import time
 from collections import defaultdict, Counter
@@ -30,6 +33,8 @@ try:
     HTTPX_AVAILABLE = True
 except ImportError:
     HTTPX_AVAILABLE = False
+
+from pymongo.errors import DuplicateKeyError
 
 logger = logging.getLogger(__name__)
 
@@ -616,6 +621,20 @@ async def flag_user_suspicious(db, user_id: str, username: str, flag_type: str, 
                 _mark_spam_telegram_sent(user_id)
                 msg = _format_spam_flag_message(username, user_id, flag_type, reason, details)
                 await send_telegram_alert(msg, "warning", use_markdown=False)
+        elif flag_type == "endpoint_rate_limit_hard":
+            if _spam_telegram_in_cooldown(user_id):
+                logger.info(
+                    "endpoint_rate_limit_hard for %s; Telegram suppressed (cooldown %.0fs)",
+                    username,
+                    _SPAM_TELEGRAM_COOLDOWN_SEC,
+                )
+            else:
+                _mark_spam_telegram_sent(user_id)
+                await send_telegram_alert(
+                    f"Sustained endpoint rate abuse\nUser: {username} (ID: {user_id[:12]}...)\n{reason}",
+                    "warning",
+                    use_markdown=False,
+                )
         else:
             msg = f"**User:** {username}\n**Type:** {flag_type}\n**Reason:** {reason}"
             await send_telegram_alert(msg, "warning")
@@ -805,6 +824,16 @@ def validate_positive_int(value: Any, field_name: str, max_value: int = None) ->
 # GLOBAL TOGGLE - When False, ALL rate limits are bypassed regardless of per-endpoint settings
 GLOBAL_RATE_LIMITS_ENABLED = False
 
+# Token bucket + strict inter-arrival sustain + hard cooldown (endpoint RL; see security_middleware).
+# docs/RATE_LIMITS.md
+ENDPOINT_RL_BURST_TOKENS = 3
+ENDPOINT_RL_SUSTAIN_WINDOW_SEC = 30
+ENDPOINT_RL_SUSTAIN_MIN_SPAN_SEC = 15
+ENDPOINT_RL_SUSTAIN_MIN_COUNT = 3
+ENDPOINT_RL_HARD_COOLDOWN_MIN_SEC = 15
+ENDPOINT_RL_HARD_COOLDOWN_MAX_SEC = 30
+ENDPOINT_RL_DB_ATTEMPTS = 5
+
 # Rate limit configuration: endpoint_pattern -> (min_interval_seconds, enabled)
 # Limit is "minimum seconds between clicks" - e.g. 1.0 = max 1 click/sec, 0.5 = max 2 clicks/sec
 RATE_LIMIT_CONFIG = {
@@ -910,8 +939,33 @@ RATE_LIMIT_CONFIG = {
     "/api/profile/": (2.0, False),
 }
 
-# Per-endpoint last request time: key -> user_id -> datetime (for min-interval-between-clicks)
-endpoint_user_last_request = defaultdict(dict)
+# In-memory token bucket when DB path fails: (user_id, endpoint_key) -> {"tokens": float, "last_refill": datetime}
+endpoint_rl_bucket_memory: Dict[tuple, dict] = {}
+
+
+@dataclass
+class EndpointRateLimitOutcome:
+    """Endpoint RL: blocked + cooldown_seconds. Hard lockout only uses long 15–30s; soft blocks use cooldown_seconds=0."""
+
+    blocked: bool = False
+    cooldown_seconds: int = 0
+    is_hard_cooldown_response: bool = False
+
+
+def _coerce_utc_dt(val: Any) -> Optional[datetime]:
+    if val is None:
+        return None
+    if isinstance(val, datetime):
+        if val.tzinfo is None:
+            return val.replace(tzinfo=timezone.utc)
+        return val.astimezone(timezone.utc)
+    try:
+        dt = datetime.fromisoformat(str(val).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    except Exception:
+        return None
 
 
 def get_rate_limit_for_path(path: str) -> tuple[float, bool, str]:
@@ -928,76 +982,222 @@ def get_rate_limit_for_path(path: str) -> tuple[float, bool, str]:
     return (1.0, False, path)
 
 
-async def check_endpoint_rate_limit(path: str, user_id: str, username: str, db) -> bool:
+async def _endpoint_rl_memory_consume(
+    db,
+    user_id: str,
+    username: str,
+    path: str,
+    key: str,
+    min_interval_sec: float,
+    now: datetime,
+) -> EndpointRateLimitOutcome:
+    """In-memory token bucket with strict inter-arrival metering. Soft blocks return cooldown_seconds=0 (no short punitive wait)."""
+    mem_key = (user_id, key)
+    cap = float(ENDPOINT_RL_BURST_TOKENS)
+    st = endpoint_rl_bucket_memory.get(mem_key)
+    if not st:
+        endpoint_rl_bucket_memory[mem_key] = {"tokens": cap - 1.0, "last_refill": now, "last_arrival_at": now}
+        return EndpointRateLimitOutcome()
+    prev = st.get("last_arrival_at")
+    if prev and getattr(prev, "tzinfo", None) is None:
+        prev = prev.replace(tzinfo=timezone.utc)
+    if prev and min_interval_sec > 0 and (now - prev).total_seconds() < min_interval_sec and db is not None:
+        armed = await _endpoint_rl_record_violation_and_maybe_arm_hard(db, user_id, username, path, key, now)
+        if armed:
+            st["last_arrival_at"] = now
+            urow = await db.users.find_one({"id": user_id}, {"rate_limit_hard_until": 1})
+            hu = _coerce_utc_dt((urow or {}).get("rate_limit_hard_until"))
+            if hu and now < hu:
+                cd = max(1, int(math.ceil((hu - now).total_seconds())))
+                return EndpointRateLimitOutcome(blocked=True, cooldown_seconds=cd, is_hard_cooldown_response=True)
+    last_refill = st["last_refill"]
+    if getattr(last_refill, "tzinfo", None) is None:
+        last_refill = last_refill.replace(tzinfo=timezone.utc)
+    tokens = float(st.get("tokens", cap))
+    elapsed = (now - last_refill).total_seconds()
+    if min_interval_sec > 0:
+        tokens = min(cap, tokens + elapsed / min_interval_sec)
+    else:
+        tokens = cap
+    if tokens >= 1.0:
+        st["tokens"] = tokens - 1.0
+        st["last_refill"] = now
+        st["last_arrival_at"] = now
+        return EndpointRateLimitOutcome()
+    st["last_arrival_at"] = now
+    if db is not None:
+        urow = await db.users.find_one({"id": user_id}, {"rate_limit_hard_until": 1})
+        hu = _coerce_utc_dt((urow or {}).get("rate_limit_hard_until"))
+        if hu and now < hu:
+            cd = max(1, int(math.ceil((hu - now).total_seconds())))
+            return EndpointRateLimitOutcome(blocked=True, cooldown_seconds=cd, is_hard_cooldown_response=True)
+    return EndpointRateLimitOutcome(blocked=True, cooldown_seconds=0, is_hard_cooldown_response=False)
+
+
+async def _endpoint_rl_record_violation_and_maybe_arm_hard(
+    db, user_id: str, username: str, path: str, key: str, now: datetime
+) -> bool:
+    """Record a sub-interval (too-fast) hit; return True if a new hard cooldown was applied."""
+    if db is None:
+        return False
+    try:
+        await db.endpoint_rl_violations.insert_one({"user_id": user_id, "at": now})
+    except Exception as e:
+        logger.warning("endpoint_rl_violations insert: %s", e)
+        return False
+    cutoff = now - timedelta(seconds=ENDPOINT_RL_SUSTAIN_WINDOW_SEC)
+    try:
+        docs = await db.endpoint_rl_violations.find({"user_id": user_id, "at": {"$gte": cutoff}}).sort("at", 1).to_list(200)
+    except Exception as e:
+        logger.warning("endpoint_rl_violations query: %s", e)
+        return False
+    if len(docs) < ENDPOINT_RL_SUSTAIN_MIN_COUNT:
+        return False
+    first_at = _coerce_utc_dt(docs[0].get("at")) or now
+    last_at = _coerce_utc_dt(docs[-1].get("at")) or now
+    span = (last_at - first_at).total_seconds()
+    if span < ENDPOINT_RL_SUSTAIN_MIN_SPAN_SEC:
+        return False
+    try:
+        u = await db.users.find_one({"id": user_id}, {"rate_limit_hard_until": 1})
+        hu = _coerce_utc_dt((u or {}).get("rate_limit_hard_until"))
+        if hu and now < hu:
+            return False
+    except Exception:
+        pass
+    secs = random.randint(ENDPOINT_RL_HARD_COOLDOWN_MIN_SEC, ENDPOINT_RL_HARD_COOLDOWN_MAX_SEC)
+    until = now + timedelta(seconds=secs)
+    try:
+        await db.users.update_one({"id": user_id}, {"$set": {"rate_limit_hard_until": until.isoformat()}})
+        await flag_user_suspicious(
+            db,
+            user_id,
+            username,
+            "endpoint_rate_limit_hard",
+            (
+                f"Sustained endpoint rate abuse ({len(docs)} hits in {ENDPOINT_RL_SUSTAIN_WINDOW_SEC}s, "
+                f"span {span:.0f}s): hard cooldown {secs}s on {path}"
+            ),
+            {"path": path, "endpoint_key": key, "cooldown_seconds": secs, "violation_count": len(docs)},
+        )
+    except Exception as e:
+        logger.warning("arm hard endpoint RL: %s", e)
+        return False
+    return True
+
+
+async def _endpoint_rl_consume_db(
+    db, user_id: str, username: str, path: str, key: str, min_interval_sec: float, now: datetime
+) -> EndpointRateLimitOutcome:
+    cap = float(ENDPOINT_RL_BURST_TOKENS)
+    for _attempt in range(ENDPOINT_RL_DB_ATTEMPTS):
+        doc = await db.rate_limit_clicks.find_one({"user_id": user_id, "endpoint_key": key})
+        if doc is None:
+            try:
+                await db.rate_limit_clicks.insert_one(
+                    {
+                        "user_id": user_id,
+                        "endpoint_key": key,
+                        "last_at": now,
+                        "last_refill": now,
+                        "last_arrival_at": now,
+                        "tokens": cap - 1.0,
+                    }
+                )
+                return EndpointRateLimitOutcome()
+            except DuplicateKeyError:
+                continue
+
+        prev = _coerce_utc_dt(doc.get("last_arrival_at")) or _coerce_utc_dt(doc.get("last_at"))
+        if prev and min_interval_sec > 0 and (now - prev).total_seconds() < min_interval_sec:
+            armed = await _endpoint_rl_record_violation_and_maybe_arm_hard(db, user_id, username, path, key, now)
+            if armed:
+                await db.rate_limit_clicks.update_one(
+                    {"_id": doc["_id"]},
+                    {"$set": {"last_arrival_at": now, "last_at": now, "user_id": user_id, "endpoint_key": key}},
+                )
+                urow = await db.users.find_one({"id": user_id}, {"rate_limit_hard_until": 1})
+                hu = _coerce_utc_dt((urow or {}).get("rate_limit_hard_until"))
+                if hu and now < hu:
+                    cd = max(1, int(math.ceil((hu - now).total_seconds())))
+                    return EndpointRateLimitOutcome(blocked=True, cooldown_seconds=cd, is_hard_cooldown_response=True)
+
+        last_refill = _coerce_utc_dt(doc.get("last_refill")) or _coerce_utc_dt(doc.get("last_at")) or now
+        if doc.get("tokens") is None:
+            tokens = cap
+        else:
+            tokens = float(doc["tokens"])
+        elapsed = (now - last_refill).total_seconds()
+        if min_interval_sec > 0:
+            tokens = min(cap, tokens + elapsed / min_interval_sec)
+        else:
+            tokens = cap
+        if tokens >= 1.0:
+            new_tokens = tokens - 1.0
+            res = await db.rate_limit_clicks.update_one(
+                {"_id": doc["_id"]},
+                {
+                    "$set": {
+                        "tokens": new_tokens,
+                        "last_refill": now,
+                        "last_at": now,
+                        "last_arrival_at": now,
+                        "user_id": user_id,
+                        "endpoint_key": key,
+                    }
+                },
+            )
+            if res.modified_count == 1:
+                return EndpointRateLimitOutcome()
+            continue
+
+        await db.rate_limit_clicks.update_one(
+            {"_id": doc["_id"]},
+            {"$set": {"last_arrival_at": now, "last_at": now, "user_id": user_id, "endpoint_key": key}},
+        )
+        urow = await db.users.find_one({"id": user_id}, {"rate_limit_hard_until": 1})
+        hu = _coerce_utc_dt((urow or {}).get("rate_limit_hard_until"))
+        if hu and now < hu:
+            cd = max(1, int(math.ceil((hu - now).total_seconds())))
+            return EndpointRateLimitOutcome(blocked=True, cooldown_seconds=cd, is_hard_cooldown_response=True)
+        return EndpointRateLimitOutcome(blocked=True, cooldown_seconds=0, is_hard_cooldown_response=False)
+
+    return await _endpoint_rl_memory_consume(db, user_id, username, path, key, min_interval_sec, now)
+
+
+async def check_endpoint_rate_limit(path: str, user_id: str, username: str, db) -> EndpointRateLimitOutcome:
     """
-    Check if user is clicking too fast (min interval between clicks).
-    Returns True if request should be blocked (clicked too soon).
-    Uses DB when available so rate limits apply across workers and restarts.
+    Per-endpoint token-bucket rate limit (DB-backed). Sub-interval arrivals feed sustain violations;
+    soft blocks use cooldown_seconds=0 (no short punitive wait); hard lockout is 15–30s only.
     """
     if not GLOBAL_RATE_LIMITS_ENABLED:
-        return False
+        return EndpointRateLimitOutcome()
 
     min_interval_sec, enabled, key = get_rate_limit_for_path(path)
-
     if not enabled or min_interval_sec <= 0:
-        return False
+        return EndpointRateLimitOutcome()
 
     now = datetime.now(timezone.utc)
 
-    # Database-backed rate limit: atomic check-and-set so it works across workers
     if db is not None:
         try:
-            cutoff = now - timedelta(seconds=min_interval_sec)
-            result = await db.rate_limit_clicks.update_one(
-                {
-                    "user_id": user_id,
-                    "endpoint_key": key,
-                    "$or": [
-                        {"last_at": {"$exists": False}},
-                        {"last_at": None},
-                        {"last_at": {"$lte": cutoff}},
-                    ],
-                },
-                {"$set": {"user_id": user_id, "endpoint_key": key, "last_at": now}},
-                upsert=True,
-            )
-            if result.modified_count == 1 or result.upserted_count == 1:
-                return False  # allowed
-            # Too soon: block and flag
-            await flag_user_suspicious(
-                db, user_id, username,
-                "endpoint_rate_limit",
-                f"Too many clicks on {path}: need {min_interval_sec}s between requests",
-                {"path": path, "min_interval_sec": min_interval_sec},
-            )
-            return True
+            urow = await db.users.find_one({"id": user_id}, {"rate_limit_hard_until": 1})
+            hu = _coerce_utc_dt((urow or {}).get("rate_limit_hard_until"))
+            if hu and now < hu:
+                cd = max(1, int(math.ceil((hu - now).total_seconds())))
+                return EndpointRateLimitOutcome(blocked=True, cooldown_seconds=cd, is_hard_cooldown_response=True)
+            if hu and now >= hu:
+                await db.users.update_one({"id": user_id}, {"$unset": {"rate_limit_hard_until": ""}})
         except Exception as e:
-            if getattr(e, "code", None) == 11000:
-                # Duplicate key: another worker just inserted; treat as too soon
-                await flag_user_suspicious(
-                    db, user_id, username,
-                    "endpoint_rate_limit",
-                    f"Too many clicks on {path}: need {min_interval_sec}s between requests",
-                    {"path": path, "min_interval_sec": min_interval_sec},
-                )
-                return True
+            logger.warning("rate_limit_hard_until check: %s", e)
+
+    if db is not None:
+        try:
+            return await _endpoint_rl_consume_db(db, user_id, username, path, key, min_interval_sec, now)
+        except Exception as e:
             logger.warning("Rate limit DB check failed, falling back to in-memory: %s", e)
 
-    # In-memory fallback (single worker only)
-    last = endpoint_user_last_request.get(key, {}).get(user_id)
-    if last is not None:
-        elapsed = (now - last).total_seconds()
-        if elapsed < min_interval_sec:
-            await flag_user_suspicious(
-                db, user_id, username,
-                "endpoint_rate_limit",
-                f"Too many clicks on {path}: need {min_interval_sec}s between requests (got {elapsed:.2f}s)",
-                {"path": path, "min_interval_sec": min_interval_sec, "elapsed_sec": round(elapsed, 2)},
-            )
-            return True
-
-    endpoint_user_last_request.setdefault(key, {})[user_id] = now
-    return False
+    return await _endpoint_rl_memory_consume(db, user_id, username, path, key, min_interval_sec, now)
 
 
 # Middleware helper for FastAPI
@@ -1015,7 +1215,8 @@ async def security_check_request(request, db, current_user: Dict = None):
     path = request.url.path
     
     # Check endpoint-specific rate limit
-    if await check_endpoint_rate_limit(path, user_id, username, db):
+    rl = await check_endpoint_rate_limit(path, user_id, username, db)
+    if rl.blocked:
         return True  # Block request
     
     return False  # Allow request
@@ -1041,12 +1242,15 @@ async def rate_limit_dependency(request, current_user: Dict, db):
     username = current_user.get("username", "Unknown")
     path = request.url.path
     
-    # Check if rate limit exceeded
-    if await check_endpoint_rate_limit(path, user_id, username, db):
-        raise FastAPIHTTPException(
-            status_code=429,
-            detail=f"Rate limit exceeded. Please slow down."
-        )
+    rl = await check_endpoint_rate_limit(path, user_id, username, db)
+    if rl.blocked:
+        if rl.is_hard_cooldown_response:
+            detail = f"Too many repeated rate limits. Please wait {rl.cooldown_seconds} seconds."
+        elif rl.cooldown_seconds > 0:
+            detail = f"Rate limit exceeded. Please wait {rl.cooldown_seconds} seconds."
+        else:
+            detail = "Rate limit exceeded. Please slow down."
+        raise FastAPIHTTPException(status_code=429, detail=detail)
 
 
 # ============================================================================
