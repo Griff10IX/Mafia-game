@@ -936,12 +936,15 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         melt_rarity_ids = user.get("auto_rank_melt_rarity_ids") or []
         if isinstance(melt_action_ids, list) and len(melt_action_ids) > 0:
             # No rarities selected = don't melt/scrap any cars (ids must match CARS[].rarity, same as garage)
-            allowed_rarities = set(melt_rarity_ids) if isinstance(melt_rarity_ids, list) and len(melt_rarity_ids) > 0 else set()
-            allowed_rarities = {r for r in allowed_rarities if r in MELT_RARITIES}
+            allowed_melt_rarities = set(melt_rarity_ids) if isinstance(melt_rarity_ids, list) and len(melt_rarity_ids) > 0 else set()
+            allowed_melt_rarities = {r for r in allowed_melt_rarities if r in MELT_RARITIES}
+            scrap_rarity_ids = user.get("auto_rank_scrap_rarity_ids") or []
+            allowed_scrap_rarities = set(scrap_rarity_ids) if isinstance(scrap_rarity_ids, list) and len(scrap_rarity_ids) > 0 else set()
+            allowed_scrap_rarities = {r for r in allowed_scrap_rarities if r in SCRAP_RARITIES}
             batch_limit = total_batch_limit
             booze_protected = await _get_booze_protected_car_ids(db, user_id) if user.get("auto_rank_booze") else set()
 
-            async def _melt_eligible_rows():
+            async def _eligible_rows_for_rarities(allowed_set: set):
                 cars_cursor = db.user_cars.find({"user_id": user_id})
                 user_cars = await cars_cursor.to_list(1000)
                 rows = []
@@ -956,23 +959,24 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                     if not car_info:
                         continue
                     rarity = car_info.get("rarity") or "common"
-                    if rarity not in allowed_rarities:
+                    if rarity not in allowed_set:
                         continue
                     rows.append({"user_car_id": ucid, "value": int(car_info.get("value") or 0)})
                 rows.sort(key=lambda x: x["value"])
                 return rows
 
-            eligible = await _melt_eligible_rows()
+            eligible = await _eligible_rows_for_rarities(allowed_melt_rarities)
             melted_this_cycle = 0  # cap total melted per single-action loop at batch_limit
             car_ids = [e["user_car_id"] for e in eligible[:max(0, batch_limit - melted_this_cycle)]]
             actions = [a for a in melt_action_ids if a in ("bullets", "cash")]
             if len(actions) == 2:
                 # Both bullets and cash: split one batch pool 50/50 (odd count → first half gets one extra)
-                pool = [e["user_car_id"] for e in eligible[:batch_limit]]
-                n = len(pool)
-                half = (n + 1) // 2
-                car_ids_bullets = pool[:half]
-                car_ids_cash = pool[half:]
+                bullets_eligible = await _eligible_rows_for_rarities(allowed_melt_rarities)
+                cash_eligible = await _eligible_rows_for_rarities(allowed_scrap_rarities) if allowed_scrap_rarities else []
+                n_bullets = max(0, (batch_limit + 1) // 2)
+                n_cash = max(0, batch_limit - n_bullets)
+                car_ids_bullets = [e["user_car_id"] for e in bullets_eligible[:n_bullets]]
+                car_ids_cash = [e["user_car_id"] for e in cash_eligible[:n_cash]]
                 melt_count = 0
                 melt_bullets_total = 0
                 scrap_count = 0
@@ -1051,7 +1055,9 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                                 lines.append(f"**Melt** — Scrapped {mc} car(s) for ${tv:,}.")
                                 await _update_auto_rank_stats_melt(db, user_id, scrapped_count=mc, total_cash=tv)
                             # Re-fetch eligible cars for next action (previous were deleted); cap by batch limit
-                            eligible = await _melt_eligible_rows()
+                            eligible = await _eligible_rows_for_rarities(
+                                allowed_melt_rarities if action == "bullets" else allowed_scrap_rarities
+                            )
                             car_ids = [e["user_car_id"] for e in eligible[:max(0, batch_limit - melted_this_cycle)]]
                     except Exception as e:
                         logger.exception("Auto rank melt for %s: %s", user_id, e)
