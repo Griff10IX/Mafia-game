@@ -2012,6 +2012,16 @@ def register(router):
             updates["auto_rank_melt_rarity_ids"] = [str(x) for x in body.auto_rank_melt_rarity_ids] if body.auto_rank_melt_rarity_ids else []
         if body.auto_rank_scrap_rarity_ids is not None:
             updates["auto_rank_scrap_rarity_ids"] = [str(x) for x in body.auto_rank_scrap_rarity_ids] if body.auto_rank_scrap_rarity_ids else []
+        # Enforce: same rarity cannot be selected in both lists.
+        if "auto_rank_melt_rarity_ids" in updates and "auto_rank_scrap_rarity_ids" in updates:
+            melt_ids = updates.get("auto_rank_melt_rarity_ids") or []
+            scrap_ids = updates.get("auto_rank_scrap_rarity_ids") or []
+            scrap_set = set(scrap_ids)
+            melt_ids = [x for x in melt_ids if x not in scrap_set]
+            melt_set = set(melt_ids)
+            scrap_ids = [x for x in scrap_ids if x not in melt_set]
+            updates["auto_rank_melt_rarity_ids"] = melt_ids
+            updates["auto_rank_scrap_rarity_ids"] = scrap_ids
         if body.auto_rank_trial_dismissed is not None:
             updates["auto_rank_trial_dismissed"] = bool(body.auto_rank_trial_dismissed)
         if not updates:

@@ -526,7 +526,7 @@ const CrimesGtaSettingsCard = ({
               id={r.id}
               label={r.name}
               checked={selectedMeltRarityIds.includes(r.id)}
-              disabled={meltDisabled}
+              disabled={meltDisabled || selectedScrapRarityIds.includes(r.id)}
               onChange={onToggleMeltRarity}
             />
           ))}
@@ -552,7 +552,7 @@ const CrimesGtaSettingsCard = ({
               id={r.id}
               label={r.name}
               checked={selectedScrapRarityIds.includes(r.id)}
-              disabled={scrapDisabled}
+              disabled={scrapDisabled || selectedMeltRarityIds.includes(r.id)}
               onChange={onToggleScrapRarity}
             />
           ))}
@@ -1501,10 +1501,20 @@ export default function AutoRank() {
     setSelectedMeltActionIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
   };
   const toggleMeltRarityId = (id) => {
-    setSelectedMeltRarityIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+    setSelectedMeltRarityIds((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      // Enforce: a rarity can't be selected in both Melt and Scrap.
+      if (!prev.includes(id)) setSelectedScrapRarityIds((sPrev) => sPrev.filter((x) => x !== id));
+      return next;
+    });
   };
   const toggleScrapRarityId = (id) => {
-    setSelectedScrapRarityIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]);
+    setSelectedScrapRarityIds((prev) => {
+      const next = prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      // Enforce: a rarity can't be selected in both Melt and Scrap.
+      if (!prev.includes(id)) setSelectedMeltRarityIds((mPrev) => mPrev.filter((x) => x !== id));
+      return next;
+    });
   };
   const selectAllCrimes = () => setSelectedCrimeIds((settingsData?.crimes ?? []).map((c) => c?.id).filter(Boolean));
   const deselectAllCrimes = () => setSelectedCrimeIds([]);
@@ -1515,9 +1525,17 @@ export default function AutoRank() {
   const scrapRarities = settingsData?.melt_options?.scrap_rarities ?? settingsData?.melt_options?.rarities ?? [];
   const selectAllMeltActions = () => setSelectedMeltActionIds(meltActions.map((a) => a?.id).filter(Boolean));
   const deselectAllMeltActions = () => setSelectedMeltActionIds([]);
-  const selectAllMeltRarities = () => setSelectedMeltRarityIds(meltRarities.map((r) => r?.id).filter(Boolean));
+  const selectAllMeltRarities = () => {
+    const all = meltRarities.map((r) => r?.id).filter(Boolean);
+    const filtered = all.filter((id) => !selectedScrapRarityIds.includes(id));
+    setSelectedMeltRarityIds(filtered);
+  };
   const deselectAllMeltRarities = () => setSelectedMeltRarityIds([]);
-  const selectAllScrapRarities = () => setSelectedScrapRarityIds(scrapRarities.map((r) => r?.id).filter(Boolean));
+  const selectAllScrapRarities = () => {
+    const all = scrapRarities.map((r) => r?.id).filter(Boolean);
+    const filtered = all.filter((id) => !selectedMeltRarityIds.includes(id));
+    setSelectedScrapRarityIds(filtered);
+  };
   const deselectAllScrapRarities = () => setSelectedScrapRarityIds([]);
   const handleSaveSettings = async () => {
     setSavingSettings(true);
@@ -1527,8 +1545,11 @@ export default function AutoRank() {
       const crimePayload = selectedCrimeIds.length === crimes.length ? [] : selectedCrimeIds;
       const gtaPayload = selectedGtaIds.length === gtaOptions.length ? [] : selectedGtaIds;
       const meltActionPayload = selectedMeltActionIds;
-      const meltRarityPayload = selectedMeltRarityIds;
-      const scrapRarityPayload = selectedScrapRarityIds;
+      // Enforce no overlap (UI should already prevent it, but keep payload clean).
+      const scrapSet = new Set(selectedScrapRarityIds);
+      const meltRarityPayload = selectedMeltRarityIds.filter((id) => !scrapSet.has(id));
+      const meltSet = new Set(meltRarityPayload);
+      const scrapRarityPayload = selectedScrapRarityIds.filter((id) => !meltSet.has(id));
       const res = await api.patch('/auto-rank/me', {
         auto_rank_crime_ids: crimePayload,
         auto_rank_gta_option_ids: gtaPayload,
