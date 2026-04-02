@@ -194,14 +194,7 @@ async def _get_booze_protected_car_ids(db, user_id: str) -> set:
     if not method:
         return set()
     if method == "custom":
-        custom = await db.user_cars.find_one(
-            {"user_id": user_id, "car_id": "car_custom"},
-            {"_id": 1, "id": 1},
-            sort=[("acquired_at", 1)],
-        )
-        if custom:
-            uid = custom.get("id") or str(custom.get("_id", ""))
-            return {uid} if uid else set()
+        # Fastest travel is car_custom — do not block melting/scrapping it; booze will use the next-fastest car.
         return set()
     return {method}
 
