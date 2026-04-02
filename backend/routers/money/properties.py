@@ -72,6 +72,9 @@ class PropertyUpkeepSummary(BaseModel):
     billing_days: int = 7
     income_share: float = 0.10
     wealth_share: float = 0.002
+    can_pay: bool = True
+    pay_window_hours: int = 48
+    pay_eligible_at: Optional[str] = None  # ISO UTC when pay unlocks if currently blocked (prepay)
 
 
 class PropertiesListResponse(BaseModel):
@@ -122,10 +125,32 @@ COLLECT_COOLDOWN_MINUTES = 10
 # --- Weekly property upkeep (UTC; hybrid income + wealth — see docs/PROPERTY_UPKEEP.md) ---
 PROPERTY_UPKEEP_BILLING_DAYS = 7
 PROPERTY_UPKEEP_HOURS_PER_WEEK = 168
+# Pay button only when overdue or within this many hours before coverage ends (blocks deep prepay).
+PROPERTY_UPKEEP_PAY_WINDOW_HOURS = 48
 # Baseline = sum of (effective $/hr × 168) with no streak/perk/founding/loot multipliers (matches UI effective income/hr).
 PROPERTY_UPKEEP_INCOME_SHARE = 0.10
 PROPERTY_UPKEEP_WEALTH_SHARE = 0.002
 PROPERTY_UPKEEP_MIN_WEEKLY = 250
+
+
+def _upkeep_pay_eligibility(
+    paid_until_dt: Optional[datetime],
+    now_utc: datetime,
+    overdue: bool,
+) -> tuple[bool, Optional[datetime]]:
+    """Allow pay if overdue, or no date, or within PROPERTY_UPKEEP_PAY_WINDOW_HOURS of coverage end. Else block prepay."""
+    if overdue:
+        return True, None
+    if not paid_until_dt:
+        return True, None
+    if now_utc > paid_until_dt:
+        return True, None
+    remaining_sec = (paid_until_dt - now_utc).total_seconds()
+    win_sec = PROPERTY_UPKEEP_PAY_WINDOW_HOURS * 3600
+    if remaining_sec > win_sec:
+        eligible = paid_until_dt - timedelta(hours=PROPERTY_UPKEEP_PAY_WINDOW_HOURS)
+        return False, eligible
+    return True, None
 
 
 def _property_order(properties: list) -> list:
@@ -248,6 +273,8 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
     weekly_amt = int(upkeep_details["weekly_amount"])
     overdue = bool(weekly_amt > 0 and paid_until_dt and now_utc > paid_until_dt)
     income_blocked = overdue
+    can_pay, pay_eligible_dt = _upkeep_pay_eligibility(paid_until_dt, now_utc, overdue)
+    pay_eligible_at = pay_eligible_dt.isoformat() if pay_eligible_dt else None
     properties = await db.properties.find(
         {
             "price": {"$exists": True},
@@ -369,6 +396,9 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
         billing_days=PROPERTY_UPKEEP_BILLING_DAYS,
         income_share=PROPERTY_UPKEEP_INCOME_SHARE,
         wealth_share=PROPERTY_UPKEEP_WEALTH_SHARE,
+        can_pay=can_pay,
+        pay_window_hours=PROPERTY_UPKEEP_PAY_WINDOW_HOURS,
+        pay_eligible_at=pay_eligible_at,
     )
     return PropertiesListResponse(
         properties=result,
@@ -670,7 +700,18 @@ def register(router):
         if not user_row:
             raise HTTPException(status_code=404, detail="User not found")
         now_utc = datetime.now(timezone.utc)
-        paid_until_dt = _parse_iso_datetime(user_row.get("property_upkeep_paid_until")) or now_utc
+        paid_until_dt = _parse_iso_datetime(user_row.get("property_upkeep_paid_until"))
+        overdue = bool(amount > 0 and paid_until_dt and now_utc > paid_until_dt)
+        can_pay, _eligible = _upkeep_pay_eligibility(paid_until_dt, now_utc, overdue)
+        if not can_pay:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Coverage is paid ahead. You can pay again within {PROPERTY_UPKEEP_PAY_WINDOW_HOURS} hours "
+                    "of when it expires."
+                ),
+            )
+        paid_until_dt = paid_until_dt or now_utc
         base = max(paid_until_dt, now_utc)
         new_until = base + timedelta(days=PROPERTY_UPKEEP_BILLING_DAYS)
         result = await db.users.update_one(

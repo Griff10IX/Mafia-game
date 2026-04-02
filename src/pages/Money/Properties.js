@@ -111,7 +111,7 @@ export default function Properties() {
   const collectibleProperties = properties.filter((p) => p.owned && !p.locked && !p.income_collection_blocked);
 
   const payPropertyUpkeep = async () => {
-    if (upkeepPayLoading) return;
+    if (upkeepPayLoading || propertyUpkeep?.can_pay === false) return;
     setUpkeepPayLoading(true);
     try {
       const res = await api.post('/properties/upkeep/pay');
@@ -211,15 +211,35 @@ export default function Properties() {
                     </span>
                   )}
                 </p>
+                {propertyUpkeep.can_pay === false && propertyUpkeep.pay_eligible_at && (
+                  <p className="text-[9px] text-zinc-500 font-heading mt-0.5">
+                    Next payment unlocks{' '}
+                    {(() => {
+                      try {
+                        return new Date(propertyUpkeep.pay_eligible_at).toLocaleString();
+                      } catch {
+                        return propertyUpkeep.pay_eligible_at;
+                      }
+                    })()}
+                    {propertyUpkeep.pay_window_hours != null ? (
+                      <span className="text-zinc-600"> ({propertyUpkeep.pay_window_hours}h before coverage ends)</span>
+                    ) : null}
+                  </p>
+                )}
               </div>
             </div>
             <button
               type="button"
               onClick={payPropertyUpkeep}
-              disabled={upkeepPayLoading}
+              disabled={upkeepPayLoading || propertyUpkeep.can_pay === false}
+              title={
+                propertyUpkeep.can_pay === false
+                  ? 'Pay is only available when overdue or within the window before coverage ends'
+                  : undefined
+              }
               className="shrink-0 text-[10px] font-heading font-bold uppercase tracking-wider rounded px-3 py-1.5 border border-primary/40 bg-primary/15 text-primary hover:bg-primary/25 disabled:opacity-50"
             >
-              {upkeepPayLoading ? 'Paying…' : `Pay ${formatMoney(propertyUpkeep.weekly_amount)}`}
+              {upkeepPayLoading ? 'Paying…' : propertyUpkeep.can_pay === false ? 'Not due yet' : `Pay ${formatMoney(propertyUpkeep.weekly_amount)}`}
             </button>
           </div>
         </div>

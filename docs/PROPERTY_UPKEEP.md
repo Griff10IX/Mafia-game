@@ -32,7 +32,7 @@ For each progression business the player owns (canonical `properties` with `pric
 
 - **Lazy init:** First time a player owns any qualifying business and has no `property_upkeep_paid_until`, the server sets paid-until to **now + 7 days** so existing owners are not immediately overdue.
 - **Overdue:** If `now > property_upkeep_paid_until` and `weekly_amount > 0`, **collecting income is blocked** until they pay. The Properties API shows `available_income` as 0 for display while blocked; the collect endpoint returns an error.
-- **Pay:** `POST /api/properties/upkeep/pay` — deducts `weekly_amount` if cash sufficient, extends coverage, logs `economy_events` type `property_upkeep_pay`.
+- **Pay:** `POST /api/properties/upkeep/pay` — deducts `weekly_amount` if cash sufficient, extends coverage, logs `economy_events` type `property_upkeep_pay`. **Prepay cap (UI + API):** pay is only allowed when **overdue** or within **`PROPERTY_UPKEEP_PAY_WINDOW_HOURS`** (default 48) of `property_upkeep_paid_until` so players cannot stack many weeks in one sitting from the button.
 
 ## Example personas (illustrative, using [`backend/data/properties.json`](../backend/data/properties.json) stats)
 
