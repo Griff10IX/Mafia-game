@@ -104,8 +104,8 @@ export default function StockMarket() {
         stop_loss_pct: buySide === 'long' && stopLossPct ? parseFloat(stopLossPct) : null,
         take_profit_pct: buySide === 'long' && takeProfitPct ? parseFloat(takeProfitPct) : null,
       });
-      refreshUser(buySide === 'long' ? { pointsDelta: -pts } : { pointsDelta: pts });
-      toast.success(buySide === 'short' ? `Short opened for ${pts} pts notional` : `Bought for ${pts} points`);
+      refreshUser({ pointsDelta: -pts });
+      toast.success(buySide === 'short' ? `Short opened — ${pts} pts margin locked` : `Bought for ${pts} points`);
       setBuyPoints('');
       fetchList();
       fetchPositions();
@@ -122,9 +122,14 @@ export default function StockMarket() {
     try {
       const res = await api.post('/stock-market/sell', { position_id: positionId });
       const pos = positions.find((p) => p.id === positionId);
-      const vp = Number(res.data?.value_points ?? 0);
       const isShort = pos?.side === 'short';
-      refreshUser({ pointsDelta: isShort ? -vp : vp });
+      const pd = res.data?.points_delta;
+      if (pd != null && pd !== '') {
+        refreshUser({ pointsDelta: Number(pd) });
+      } else {
+        const vp = Number(res.data?.value_points ?? 0);
+        refreshUser({ pointsDelta: isShort ? -vp : vp });
+      }
       const profit = res.data?.profit_points ?? 0;
       const name = pos?.stock_name ?? 'Stock';
       if (isShort) {
@@ -151,7 +156,7 @@ export default function StockMarket() {
       <style>{STOCK_STYLES}</style>
 
       <div className="relative stock-fade-in">
-        <p className="text-[10px] text-mutedForeground font-heading italic">Long: spend points to open. Short: your balance goes up by the notional when you open (proceeds); cover subtracts the buy-back cost when you close. Same cap and cooldowns.</p>
+        <p className="text-[10px] text-mutedForeground font-heading italic">Long and Short both lock the points you enter as margin. Close settles P/L (short profits when price drops). Same cap and cooldowns.</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -323,7 +328,7 @@ export default function StockMarket() {
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
               <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Purchase stocks</h2>
-              <p className="text-[9px] text-mutedForeground font-heading mt-0.5">Long: points are deducted when you open. Short: points are credited when you open; you pay to cover when you close. Profit if price falls before you cover.</p>
+              <p className="text-[9px] text-mutedForeground font-heading mt-0.5">Long: spend points to buy exposure. Short: the same amount is deducted as margin; you profit if price falls before you cover.</p>
             </div>
             <div className="p-3 space-y-3">
               <div className="flex gap-2">
@@ -343,7 +348,7 @@ export default function StockMarket() {
                 </button>
               </div>
               <div>
-                <label className="block text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1">Points {buySide === 'short' ? '(notional size)' : ''}</label>
+                <label className="block text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1">Points {buySide === 'short' ? '(margin)' : ''}</label>
                 <FormattedNumberInput
                   value={buyPoints}
                   onChange={setBuyPoints}

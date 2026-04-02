@@ -162,12 +162,20 @@ async def _process_auto_sell_expired(uid: str, now: datetime, live_list: list, c
             open_price = float(pos.get("open_price") or 0)
             cost_to_cover = round(units * current_price, 0)
             profit_points = round(units * (open_price - current_price), 0)
+            margin_raw = pos.get("margin_points")
+            if margin_raw is None:
+                points_delta = -cost_to_cover
+            else:
+                margin = int(margin_raw)
+                points_delta = margin + profit_points
+            user = await db.users.find_one({"id": uid}, {"_id": 0, "points": 1})
+            if int(user.get("points") or 0) + points_delta < 0:
+                continue
             deleted = await db.stock_positions.find_one_and_delete({"id": pos.get("id"), "user_id": uid})
             if not deleted:
                 continue
-            # Open short already credited notional (units * open_price). Close only pays cover cost.
-            await db.users.update_one({"id": uid}, {"$inc": {"points": -cost_to_cover, "stock_market_profit_total": profit_points}})
-            net_points = -cost_to_cover
+            await db.users.update_one({"id": uid}, {"$inc": {"points": points_delta, "stock_market_profit_total": profit_points}})
+            net_points = points_delta
             if net_points != 0:
                 await log_points_event(db, user_id=uid, points=int(net_points), event_type="stock_close", meta={"side": "short", "stock_id": pos.get("stock_id"), "stock_name": stock.get("name"), "units": units, "open_price": open_price, "close_price": current_price, "auto_sold": True})
             await db.stock_transactions.insert_one({
@@ -229,7 +237,7 @@ async def _get_stock_market_max_points() -> int:
 
 
 async def _user_points_in_market(uid: str) -> int:
-    """Sum of exposure: long = cost (points spent), short = notional at open (points lent)."""
+    """Sum of exposure: long = cost (points spent), short = margin locked at open (same as notional)."""
     cursor = db.stock_positions.find({"user_id": uid}, {"_id": 0, "units": 1, "buy_price": 1, "open_price": 1, "side": 1})
     positions = await cursor.to_list(100)
     total = 0
@@ -343,7 +351,7 @@ def register(router):
             if side == "short":
                 open_price = float(pos.get("open_price") or 0)
                 cost_to_cover_pts = round(units * current_price, 0)
-                cost_pts = round(units * open_price, 0)  # notional at open (points they received)
+                cost_pts = round(units * open_price, 0)  # margin locked at open (or legacy credit notional)
                 profit_pts = round(units * (open_price - current_price), 0)
                 out.append({
                     "id": pos.get("id"),
@@ -414,7 +422,7 @@ def register(router):
 
     @router.post("/stock-market/buy")
     async def stock_market_buy(request: StockBuyRequest, current_user: dict = Depends(get_current_user)):
-        """Long: spend points to buy. Short: receive points (short sell); profit if price drops. Optional stop_loss_pct and take_profit_pct (0-100)."""
+        """Long: spend points to buy. Short: same notional is deducted as margin; profit if price drops before cover. Optional stop_loss_pct and take_profit_pct (0-100)."""
         uid = current_user.get("id") or ""
         stock = next((s for s in STOCKS if s["id"] == request.stock_id), None)
         if not stock:
@@ -455,8 +463,13 @@ def register(router):
                 )
 
             if side == "short":
-                await db.users.update_one({"id": uid}, {"$inc": {"points": points}})
-                await log_points_event(db, user_id=uid, points=points, event_type="stock_open", meta={"side": "short", "stock_id": request.stock_id, "stock_name": stock.get("name"), "units": round(units, 6), "price": current_price, "position_id": position_id})
+                result = await db.users.update_one(
+                    {"id": uid, "points": {"$gte": points}},
+                    {"$inc": {"points": -points}},
+                )
+                if result.modified_count == 0:
+                    raise HTTPException(status_code=400, detail="Insufficient points")
+                await log_points_event(db, user_id=uid, points=-points, event_type="stock_open", meta={"side": "short", "stock_id": request.stock_id, "stock_name": stock.get("name"), "units": round(units, 6), "price": current_price, "position_id": position_id})
                 await db.stock_positions.insert_one({
                     "id": position_id,
                     "user_id": uid,
@@ -464,6 +477,7 @@ def register(router):
                     "side": "short",
                     "units": units,
                     "open_price": current_price,
+                    "margin_points": points,
                     "bought_at": now_iso,
                 })
                 await db.stock_transactions.insert_one({
@@ -475,13 +489,13 @@ def register(router):
                     "side": "short",
                     "units": units,
                     "price": current_price,
-                    "points_spent": 0,
-                    "points_received": points,
+                    "points_spent": points,
+                    "points_received": 0,
                     "profit_points": 0,
                     "created_at": now,
                 })
                 await log_activity(uid, current_user.get("username", "?"), "stock_buy", {"stock": stock.get("name"), "side": "short", "points": points})
-                return {"message": f"Opened short {stock.get('name')} for {points} points notional", "position_id": position_id, "units": round(units, 6), "price": current_price, "side": "short"}
+                return {"message": f"Opened short {stock.get('name')} for {points} points (margin)", "position_id": position_id, "units": round(units, 6), "price": current_price, "side": "short"}
 
             result = await db.users.update_one(
                 {"id": uid, "points": {"$gte": points}},
@@ -519,12 +533,12 @@ def register(router):
 
     @router.post("/stock-market/sell")
     async def stock_market_sell(request: StockSellRequest, current_user: dict = Depends(get_current_user)):
-        """Close a position: long = sell (receive value); short = cover (pay to close, profit if price dropped)."""
+        """Close a position: long = sell (receive value); short = return margin + P/L (or legacy: pay cover only)."""
         uid = current_user.get("id") or ""
-        pos_preview = await db.stock_positions.find_one({"id": request.position_id, "user_id": uid}, {"_id": 0, "bought_at": 1})
-        if not pos_preview:
+        pos = await db.stock_positions.find_one({"id": request.position_id, "user_id": uid}, {"_id": 0})
+        if not pos:
             raise HTTPException(status_code=404, detail="Position not found")
-        bought_at = _parse_bought_at(pos_preview.get("bought_at"))
+        bought_at = _parse_bought_at(pos.get("bought_at"))
         if bought_at:
             elapsed = (datetime.now(timezone.utc) - bought_at).total_seconds()
             if elapsed < SELL_COOLDOWN_SEC:
@@ -533,12 +547,6 @@ def register(router):
                     status_code=400,
                     detail=f"You must wait 3 minutes after opening before closing. You can close in {wait_sec} seconds.",
                 )
-        pos = await db.stock_positions.find_one_and_delete(
-            {"id": request.position_id, "user_id": uid},
-            projection={"_id": 0}
-        )
-        if not pos:
-            raise HTTPException(status_code=404, detail="Position not found or already sold")
         stock = next((s for s in STOCKS if s["id"] == pos.get("stock_id")), None)
         if not stock:
             raise HTTPException(status_code=400, detail="Stock not found")
@@ -550,18 +558,24 @@ def register(router):
             current_price = _fallback_price(stock, now_ts)
         units = float(pos.get("units") or 0)
         side = (pos.get("side") or "long").lower()
-        now_iso = now.isoformat()
 
         if side == "short":
             open_price = float(pos.get("open_price") or 0)
             cost_to_cover = round(units * current_price, 0)
             profit_points = round(units * (open_price - current_price), 0)
+            margin_points = pos.get("margin_points")
+            if margin_points is None:
+                points_delta = -cost_to_cover
+            else:
+                points_delta = int(margin_points) + profit_points
             user = await db.users.find_one({"id": uid}, {"_id": 0, "points": 1})
-            if int(user.get("points") or 0) < cost_to_cover:
-                raise HTTPException(status_code=400, detail=f"Insufficient points to cover. Need {cost_to_cover} points.")
-            # Open short already credited notional (units * open_price). Close only pays cover cost.
-            await db.users.update_one({"id": uid}, {"$inc": {"points": -cost_to_cover, "stock_market_profit_total": profit_points}})
-            net_points = -cost_to_cover
+            if int(user.get("points") or 0) + points_delta < 0:
+                raise HTTPException(status_code=400, detail="Insufficient points to settle this short.")
+            del_result = await db.stock_positions.delete_one({"id": request.position_id, "user_id": uid})
+            if del_result.deleted_count == 0:
+                raise HTTPException(status_code=404, detail="Position not found or already sold")
+            await db.users.update_one({"id": uid}, {"$inc": {"points": points_delta, "stock_market_profit_total": profit_points}})
+            net_points = points_delta
             if net_points != 0:
                 await log_points_event(db, user_id=uid, points=int(net_points), event_type="stock_close", meta={"side": "short", "stock_id": pos.get("stock_id"), "stock_name": stock.get("name"), "units": units, "open_price": open_price, "close_price": current_price})
             await db.stock_transactions.insert_one({
@@ -580,12 +594,15 @@ def register(router):
             })
             if profit_points > 0:
                 await send_notification(uid, "📉 Short closed", f"You covered {stock.get('name')} for a profit of {profit_points} points!", "reward")
-            return {"message": f"Covered {stock.get('name')} short", "value_points": cost_to_cover, "profit_points": profit_points}
+            return {"message": f"Covered {stock.get('name')} short", "value_points": cost_to_cover, "profit_points": profit_points, "points_delta": int(points_delta)}
 
         buy_price = float(pos.get("buy_price") or 0)
         value_points = round(units * current_price, 0)
         cost_points = round(units * buy_price, 0)
         profit_points = value_points - cost_points
+        del_result = await db.stock_positions.delete_one({"id": request.position_id, "user_id": uid})
+        if del_result.deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Position not found or already sold")
         await db.users.update_one({"id": uid}, {"$inc": {"points": value_points, "stock_market_profit_total": profit_points}})
         if value_points != 0:
             await log_points_event(db, user_id=uid, points=int(value_points), event_type="stock_close", meta={"side": "long", "stock_id": pos.get("stock_id"), "stock_name": stock.get("name"), "units": units, "buy_price": buy_price, "close_price": current_price})
@@ -606,4 +623,4 @@ def register(router):
         if profit_points > 0:
             await send_notification(uid, "📈 Stock sold", f"You sold {stock.get('name')} for a profit of {profit_points} points!", "reward")
         await log_activity(uid, current_user.get("username", "?"), "stock_sell", {"stock": stock.get("name"), "side": side, "value": value_points, "profit": profit_points})
-        return {"message": f"Sold {stock.get('name')} for {value_points} points", "value_points": value_points, "profit_points": profit_points}
+        return {"message": f"Sold {stock.get('name')} for {value_points} points", "value_points": value_points, "profit_points": profit_points, "points_delta": int(value_points)}
