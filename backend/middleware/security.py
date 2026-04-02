@@ -652,9 +652,11 @@ async def check_request_spam(
     path: str = "",
     referer: Optional[str] = None,
 ) -> bool:
-    """Detect spam: 10+ requests in 1 second OR burst clicking (10+ in 0.5s). Returns True if spam detected."""
+    """Detect spam: 10+ mutating requests in 1 second OR burst (10+ in 0.5s). GET/HEAD/OPTIONS are skipped so login hydration bursts do not false-positive."""
     now = datetime.now(timezone.utc)
     m = (method or "?").upper()[:16]
+    if m in ("GET", "HEAD", "OPTIONS"):
+        return False
     p = (path or "")[:400]
     ref = (referer or "").strip()[:500]
     entry: Tuple[datetime, str, str, str] = (now, m, p, ref)
@@ -835,108 +837,105 @@ ENDPOINT_RL_HARD_COOLDOWN_MAX_SEC = 30
 ENDPOINT_RL_DB_ATTEMPTS = 5
 
 # Rate limit configuration: endpoint_pattern -> (min_interval_seconds, enabled)
-# Limit is "minimum seconds between clicks" - e.g. 1.0 = max 1 click/sec, 0.5 = max 2 clicks/sec
+# Default interval 0.3s (300ms) for all patterns when enabled; toggles stay False until admin enables.
 RATE_LIMIT_CONFIG = {
     # Format: "endpoint_pattern": (min_interval_sec, enabled)
     # NOTE: Paths must include /api/ prefix to match actual request paths
-    
-    # All per-endpoint rate limits are OFF by default.
-    # Enable individually or flip GLOBAL_RATE_LIMITS_ENABLED when ready for production.
 
     # Money & economy
-    "/api/bank/transfer": (6.0, False),
-    "/api/bank/interest/deposit": (3.0, False),
-    "/api/bank/interest/claim": (3.0, False),
-    "/api/bank/swiss/deposit": (2.0, False),
-    "/api/bank/swiss/withdraw": (2.0, False),
-    
+    "/api/bank/transfer": (0.3, False),
+    "/api/bank/interest/deposit": (0.3, False),
+    "/api/bank/interest/claim": (0.3, False),
+    "/api/bank/swiss/deposit": (0.3, False),
+    "/api/bank/swiss/withdraw": (0.3, False),
+
     # Attack system
-    "/api/attack/": (1.5, False),
-    
+    "/api/attack/": (0.3, False),
+
     # Crimes
-    "/api/crimes/": (1.5, False),
-    
+    "/api/crimes/": (0.3, False),
+
     # Hitlist
-    "/api/hitlist/add": (4.0, False),
-    "/api/hitlist/buy-off": (3.0, False),
-    
+    "/api/hitlist/add": (0.3, False),
+    "/api/hitlist/buy-off": (0.3, False),
+
     # Store purchases
-    "/api/store/": (2.0, False),
-    "/api/weapons/": (1.5, False),
-    "/api/armour/": (1.5, False),
-    
+    "/api/store/": (0.3, False),
+    "/api/weapons/": (0.3, False),
+    "/api/armour/": (0.3, False),
+
     # Properties & racket
-    "/api/properties/": (1.5, False),
-    "/api/racket/": (1.5, False),
-    
+    "/api/properties/": (0.3, False),
+    "/api/racket/": (0.3, False),
+
     # Bodyguards
-    "/api/bodyguards/": (0, False),
-    
+    "/api/bodyguards/": (0.3, False),
+
     # Casino/gambling
-    "/api/casino/dice/": (1.2, False),
-    "/api/casino/roulette/": (1.2, False),
-    "/api/casino/blackjack/": (1.2, False),
-    "/api/casino/slots/": (1.2, False),
-    "/api/casino/videopoker/": (1.2, False),
-    "/api/casino/mdg/": (1.5, False),
-    "/api/casino/mp-poker/": (1.0, False),
-    "/api/casino/mp-blackjack/": (1.0, False),
-    "/api/sports-betting/": (1.2, False),
-    
+    "/api/casino/dice/": (0.3, False),
+    "/api/casino/roulette/": (0.3, False),
+    "/api/casino/blackjack/": (0.3, False),
+    "/api/casino/slots/": (0.3, False),
+    "/api/casino/videopoker/": (0.3, False),
+    "/api/casino/mdg/": (0.3, False),
+    "/api/casino/mp-poker/": (0.3, False),
+    "/api/casino/mp-blackjack/": (0.3, False),
+    "/api/sports-betting/": (0.3, False),
+
     # Minigames & activities
-    "/api/loot-box/": (1.5, False),
-    "/api/crack-safe/": (2.0, False),
-    "/api/jail/bust": (1.5, False),
-    "/api/jail/": (1.0, False),
-    "/api/gta/": (1.5, False),
-    "/api/entertainer/": (1.5, False),
-    "/api/gauntlet/": (1.0, False),
-    "/api/minigames/run-session/start": (2.0, False),
-    "/api/boxing/": (1.0, False),
-    "/api/snake/": (0.5, False),
-    "/api/shooting-range/train": (2.0, False),
-    "/api/shooting-range/score": (1.0, False),
-    "/api/whack-a-copper/": (1.0, False),
-    
+    "/api/loot-box/": (0.3, False),
+    "/api/crack-safe/": (0.3, False),
+    "/api/jail/bust": (0.3, False),
+    "/api/jail/": (0.3, False),
+    "/api/gta/": (0.3, False),
+    "/api/entertainer/": (0.3, False),
+    "/api/gauntlet/": (0.3, False),
+    "/api/minigames/run-session/start": (0.3, False),
+    "/api/boxing/": (0.3, False),
+    "/api/snake/": (0.3, False),
+    "/api/shooting-range/train": (0.3, False),
+    "/api/shooting-range/score": (0.3, False),
+    "/api/whack-a-copper/": (0.3, False),
+
     # Travel & Booze Run
-    "/api/travel": (3.0, False),
-    "/api/booze-run/": (2.0, False),
-    
+    "/api/travel": (0.3, False),
+    "/api/booze-run/": (0.3, False),
+
     # Families
-    "/api/families/attack-racket": (3.0, False),
-    "/api/families/": (1.5, False),
-    
+    "/api/families/attack-racket": (0.3, False),
+    "/api/families/": (0.3, False),
+
     # Notifications
-    "/api/notifications/send": (3.0, False),
-    
+    "/api/notifications/send": (0.3, False),
+
     # Admin endpoints
-    "/api/admin/": (0.0, False),
-    
+    "/api/admin/": (0.3, False),
+
     # Auth & profile
-    "/api/auth/login": (3.0, False),
-    "/api/auth/register": (6.0, False),
-    "/api/auth/me": (0.5, False),
-    
+    "/api/auth/login": (0.3, False),
+    "/api/auth/register": (0.3, False),
+    "/api/auth/me": (0.3, False),
+
     # Meta & read-only
-    "/api/meta/": (0.5, False),
-    "/api/users/": (0.75, False),
-    "/api/leaderboard/": (1.0, False),
-    
+    "/api/meta/": (0.3, False),
+    "/api/users/": (0.3, False),
+    "/api/leaderboard/": (0.3, False),
+
     # Daily rewards & misc
-    "/api/daily-rewards/": (5.0, False),
-    "/api/prestige/": (10.0, False),
-    
+    "/api/daily-rewards/": (0.3, False),
+    "/api/prestige/": (0.3, False),
+
     # Communication
-    "/api/game-chat/": (1.0, False),
-    "/api/help-desk/": (3.0, False),
-    
+    "/api/game-chat/": (0.3, False),
+    "/api/help-desk/": (0.3, False),
+
     # Economy
-    "/api/stock-market/": (2.0, False),
-    
+    "/api/stock-market/": (0.3, False),
+
     # Activities
-    "/api/oc/": (2.0, False),
-    "/api/inventory/": (1.5, False),
-    "/api/profile/": (2.0, False),
+    "/api/oc/": (0.3, False),
+    "/api/inventory/": (0.3, False),
+    "/api/profile/": (0.3, False),
 }
 
 # In-memory token bucket when DB path fails: (user_id, endpoint_key) -> {"tokens": float, "last_refill": datetime}

@@ -16,7 +16,8 @@
 
 ## Behavior
 
-- **Per-endpoint** spacing comes from [`RATE_LIMIT_CONFIG`](../backend/middleware/security.py). Each pattern shares one **token bucket** row in `rate_limit_clicks` (`user_id` + `endpoint_key`), with **`last_arrival_at`** for inter-arrival checks (legacy rows fall back to `last_at` until migrated).
+- **Defaults:** [`RATE_LIMIT_CONFIG`](../backend/middleware/security.py) uses **300 ms** (`0.3` s) between clicks for every pattern when an admin enables limits (per-endpoint toggles stay off in code until you turn them on).
+- **Per-endpoint** spacing comes from that config. Each pattern shares one **token bucket** row in `rate_limit_clicks` (`user_id` + `endpoint_key`), with **`last_arrival_at`** for inter-arrival checks (legacy rows fall back to `last_at` until migrated).
 - **Token bucket:** `ENDPOINT_RL_BURST_TOKENS` (default 3); refill rate `1 / min_interval_sec` per second, capped at burst size.
 - **Sub-interval:** gap under `min_interval_sec` → append `endpoint_rl_violations`; then bucket allow/deny as before.
 - **Soft block:** 429, no short **`cooldown_seconds`** (see above). **Hard block:** long **`cooldown_seconds`** until `rate_limit_hard_until` expires; **`endpoint_rate_limit_hard`** in response when that lockout applies.
@@ -24,7 +25,12 @@
 
 ## Spam / duplicate requests
 
-Unchanged: still use **`_get_cooldown_seconds`** in [`security_middleware.py`](../backend/middleware/security_middleware.py) for `check_request_spam` and `check_duplicate_request`.
+- **`check_request_spam`** (1 s and burst windows) counts **only mutating** methods: **POST**, **PUT**, **PATCH**, **DELETE**, etc. **GET**, **HEAD**, and **OPTIONS** are **not** counted, so normal post-login **GET** bursts do not trigger spam 429s.
+- **`check_duplicate_request`** and **`_get_cooldown_seconds`** in [`security_middleware.py`](../backend/middleware/security_middleware.py) behave as before when spam/duplicate detection fires.
+
+## Login
+
+- Successful **login** clears **`rate_limit_hard_until`** on the user so a new session is not blocked by an old endpoint RL hard lockout.
 
 ## Verification (manual)
 

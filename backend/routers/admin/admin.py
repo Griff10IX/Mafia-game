@@ -2656,7 +2656,7 @@ def register(router):
                     getattr(security_module, "ENDPOINT_RL_HARD_COOLDOWN_MIN_SEC", 15),
                     getattr(security_module, "ENDPOINT_RL_HARD_COOLDOWN_MAX_SEC", 30),
                 ],
-                "summary": "Normal 429 uses short wait from token bucket; 15–30s hard lockout only after sustained repeated limits (tracked in DB).",
+                "summary": "Sub-interval spacing feeds sustain; soft 429 has no short punitive cooldown; 15–30s hard lockout only after sustained abuse (DB). Spam/burst counts POST/PUT/PATCH/DELETE only.",
             },
         }
 

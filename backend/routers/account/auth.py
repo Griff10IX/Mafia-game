@@ -1259,6 +1259,8 @@ def register(router):
                 detail="Wrong password. Use Forgot password to reset it. After 3 failed attempts this account is locked for 5 minutes.",
             )
         await db.login_lockouts.delete_one({"email": email_clean})
+        # Fresh session: clear stale endpoint RL hard lockout so login is not stuck behind old rate_limit_hard_until
+        await db.users.update_one({"id": user_id}, {"$unset": {"rate_limit_hard_until": ""}})
         # One-time backfill: referred_by from preregistrations.referral_code if signup missed ?ref=
         if not staff_route:
             try:

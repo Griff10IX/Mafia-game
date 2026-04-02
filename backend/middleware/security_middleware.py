@@ -82,9 +82,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         # Exact matches for root/docs (avoid "/" matching everything via startswith)
         _skip_exact = {"/", "/docs", "/openapi.json"}
         _skip_prefix = [
-            "/api/auth/login",
-            "/api/auth/register",
-            "/api/auth/me",
+            "/api/auth/",
             "/api/admin/",
             "/admin/",
         ]
