@@ -176,6 +176,21 @@ TOKEN_CONFIG = {
     },
 }
 
+# My Inventory: exchange 1× Auto Rank (2h) token → many random distinct 1h tokens from pool (no cash/points).
+AUTO_RANK_EXCHANGE_POOL = (
+    "xp_crimes",
+    "xp_gta",
+    "melt",
+    "oc_reduced",
+    "booze",
+    "racket",
+    "travel",
+    "properties",
+    "jailbust_bonus",
+)
+# Distinct types granted per exchange (was 2–3 + cash/points; now token-only compensation).
+AUTO_RANK_EXCHANGE_TOKEN_COUNT_CHOICES = (5, 6, 7, 8)
+
 async def _try_grant_rank_xp_pass_micro_tier(
     db,
     user_id: str,
@@ -365,6 +380,10 @@ class StateOptionalBody(BaseModel):
 class UseTokenRequest(BaseModel):
     token_type: str  # one of TOKEN_TYPES (xp_crimes, xp_gta, melt, oc_reduced, booze, racket, travel, properties, jailbust_bonus)
     use_all: bool = False  # if True, use as many tokens as needed to reach max stack (or until count runs out)
+
+
+class ExchangeAutoRankRequest(BaseModel):
+    count: int = 1  # v1: must be 1 (one Auto Rank token consumed per exchange)
 
 
 class ShootingRangeTrainRequest(BaseModel):
@@ -2535,6 +2554,52 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
     }
 
 
+async def exchange_auto_rank_tokens(req: ExchangeAutoRankRequest, current_user: dict = Depends(get_current_user)):
+    """Burn 1× Auto Rank (2h) token for several random distinct other tokens (no cash/points)."""
+    if int(req.count or 1) != 1:
+        raise HTTPException(status_code=400, detail="Exchange exactly 1 Auto Rank (2h) token at a time.")
+    pool = list(AUTO_RANK_EXCHANGE_POOL)
+    for t in pool:
+        if t not in TOKEN_CONFIG:
+            raise HTTPException(status_code=500, detail="Exchange pool misconfigured.")
+    if len(pool) < 2:
+        raise HTTPException(status_code=500, detail="Exchange is unavailable.")
+    k = random.choice(AUTO_RANK_EXCHANGE_TOKEN_COUNT_CHOICES)
+    k = min(k, len(pool))
+    chosen = random.sample(pool, k)
+
+    inc: Dict[str, int] = {"auto_rank_2h_tokens": -1}
+    for t in chosen:
+        cf = TOKEN_CONFIG[t]["count_field"]
+        inc[cf] = inc.get(cf, 0) + 1
+
+    uid = current_user["id"]
+    result = await db.users.update_one({"id": uid, "auto_rank_2h_tokens": {"$gte": 1}}, {"$inc": inc})
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="No Auto Rank (2h) tokens available.")
+
+    uname = (current_user.get("username") or "").strip() or "?"
+    await log_activity(
+        uid,
+        uname,
+        "inventory_auto_rank_exchange",
+        {"granted_tokens": chosen, "granted_count": len(chosen)},
+    )
+
+    fresh = await db.users.find_one({"id": uid}, {"_id": 0})
+    tokens = _tokens_from_user(fresh or {})
+    labels = ", ".join(chosen)
+    n = len(chosen)
+    return {
+        "message": f"Exchanged 1 Auto Rank (2h) token for {n} random boosts: {labels}.",
+        "tokens": tokens,
+        "exchange": {
+            "consumed_auto_rank_2h": 1,
+            "granted_tokens": [{"type": t, "amount": 1} for t in chosen],
+        },
+    }
+
+
 async def get_inventory(request: Request, current_user: dict = Depends(get_current_user)):
     """Aggregate weapons, armour, loot exclusives, and consumable tokens for the My Inventory page."""
     weapons = await get_weapons(request, current_user)
@@ -2626,3 +2691,4 @@ def register(router):
     router.add_api_route("/shooting-range/leaderboard", get_shooting_range_leaderboard, methods=["GET"])
     router.add_api_route("/inventory", get_inventory, methods=["GET"])
     router.add_api_route("/inventory/tokens/use", use_consumable_token, methods=["POST"])
+    router.add_api_route("/inventory/tokens/exchange-auto-rank", exchange_auto_rank_tokens, methods=["POST"])

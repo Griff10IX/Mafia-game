@@ -41,7 +41,7 @@ function apiErrorDetail(e, fallback) {
 }
 
 /** Max total $ locked across all open sports bets (matches backend SPORTS_BET_MAX_TOTAL_OPEN_STAKE). */
-const SPORTS_MAX_TOTAL_OPEN_STAKE = 25_000_000;
+const SPORTS_MAX_TOTAL_OPEN_STAKE = 10_000_000;
 
 const STAKE_CHIPS = [
   { label: '10K', value: 10_000, color: '#e4e4e7', ring: '#a1a1aa' },

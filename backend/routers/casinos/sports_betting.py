@@ -65,7 +65,7 @@ class AdminAddCustomSportsEventRequest(BaseModel):
 
 # ----- Constants -----
 # Max total stake locked in open sports bets per user (split across any number of bets).
-SPORTS_BET_MAX_TOTAL_OPEN_STAKE = 25_000_000
+SPORTS_BET_MAX_TOTAL_OPEN_STAKE = 10_000_000
 # Placing bets and cancelling open bets both end this many minutes before scheduled start.
 SPORTS_BETTING_CLOSE_BEFORE_START_MINUTES = 10
 SPORTS_LIVE_CACHE_TTL = 30 * 60  # 30 min (was 6h) so "Check for events" gets fresher templates
@@ -372,6 +372,17 @@ SOCCER_LEAGUES = (
     "soccer_uefa_europa_league",
     "soccer_uefa_europa_conference_league",
     "soccer_uefa_nations_league",
+    # International / FIFA / confederations (national teams & major tournaments; keys from the-odds-api.com sports list)
+    "soccer_fifa_world_cup",
+    "soccer_fifa_world_cup_qualifiers_europe",
+    "soccer_fifa_world_cup_qualifiers_south_america",
+    "soccer_fifa_world_cup_womens",
+    "soccer_fifa_club_world_cup",
+    "soccer_uefa_european_championship",
+    "soccer_uefa_euro_qualification",
+    "soccer_africa_cup_of_nations",
+    "soccer_conmebol_copa_america",
+    "soccer_concacaf_gold_cup",
     "soccer_netherlands_eredivisie",
     "soccer_portugal_primeira_liga",
     "soccer_spl",
@@ -414,6 +425,16 @@ def _soccer_league_display_name(sport_key: str) -> str:
         "soccer_uefa_europa_league": "Europa League",
         "soccer_uefa_europa_conference_league": "Conference League",
         "soccer_uefa_nations_league": "UEFA Nations League",
+        "soccer_fifa_world_cup": "FIFA World Cup",
+        "soccer_fifa_world_cup_qualifiers_europe": "World Cup qualifiers (Europe)",
+        "soccer_fifa_world_cup_qualifiers_south_america": "World Cup qualifiers (South America)",
+        "soccer_fifa_world_cup_womens": "Women's World Cup",
+        "soccer_fifa_club_world_cup": "FIFA Club World Cup",
+        "soccer_uefa_european_championship": "UEFA European Championship (Euro)",
+        "soccer_uefa_euro_qualification": "UEFA Euro qualification",
+        "soccer_africa_cup_of_nations": "Africa Cup of Nations",
+        "soccer_conmebol_copa_america": "Copa América",
+        "soccer_concacaf_gold_cup": "CONCACAF Gold Cup",
         "soccer_netherlands_eredivisie": "Eredivisie",
         "soccer_portugal_primeira_liga": "Primeira Liga",
         "soccer_spl": "Scottish Premiership",

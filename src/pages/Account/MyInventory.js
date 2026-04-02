@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Package, Swords, Shield, Gift, Car, Building2, Zap, Target } from 'lucide-react';
+import { Package, Swords, Shield, Gift, Car, Building2, Zap, Target, ArrowLeftRight } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -32,6 +32,7 @@ export default function MyInventory() {
   const [equipping, setEquipping] = useState({ weapon: null, armour: null });
   const [usingToken, setUsingToken] = useState(null);
   const [collectingSpeakeasy, setCollectingSpeakeasy] = useState(false);
+  const [exchangingAutoRank, setExchangingAutoRank] = useState(false);
 
   const fetchInventory = (silent = false) => {
     if (!silent) setLoading(true);
@@ -190,6 +191,25 @@ export default function MyInventory() {
     rank_xp_pass: { name: 'Game Pass', icon: Package, desc: 'Activate in Armoury/My Inventory to claim one-time Game Pass rewards. Expires in 1 month if unused.' },
   };
 
+  const exchangeAutoRank = async () => {
+    setExchangingAutoRank(true);
+    try {
+      const res = await api.post('/inventory/tokens/exchange-auto-rank', { count: 1 });
+      if (res?.data?.tokens) setData((d) => (d ? { ...d, tokens: res.data.tokens } : d));
+      const ex = res?.data?.exchange;
+      const granted = (ex?.granted_tokens || [])
+        .map((g) => `${tokenLabels[g.type]?.name || g.type} ×${g.amount}`)
+        .join(', ');
+      toast.success(res?.data?.message || 'Exchange complete.', granted ? { description: granted } : undefined);
+      refreshUser();
+      fetchInventory();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to exchange');
+    } finally {
+      setExchangingAutoRank(false);
+    }
+  };
+
   return (
     <div className={`${styles.pageContent} p-3 sm:p-4 mobile-page-root`}>
       <style>{INV_STYLES}</style>
@@ -266,6 +286,29 @@ export default function MyInventory() {
             </div>
           </div>
         </div>
+
+        {/* Auto Rank (2h) token exchange */}
+        {(tokens.auto_rank_2h?.count ?? 0) > 0 && (
+          <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 inv-fade-in mobile-panel`} style={{ animationDelay: '0.16s' }}>
+            <div className="px-2.5 py-2 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
+              <ArrowLeftRight size={14} className="text-primary" />
+              <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Exchange Auto Rank</h2>
+            </div>
+            <div className="p-2.5 space-y-2">
+              <p className="text-[8px] text-mutedForeground font-heading leading-snug">
+                Store prices: <span className="text-foreground">1 Auto Rank (2h)</span> = <span className="text-foreground">625 pts</span>. Exchange gives <span className="text-foreground">5–8</span> random <span className="text-foreground">1h</span> boost tokens (<span className="text-foreground">42–55 pts</span> each in Store). No cash or rank points.
+              </p>
+              <button
+                type="button"
+                disabled={exchangingAutoRank || (tokens.auto_rank_2h?.count ?? 0) < 1}
+                onClick={exchangeAutoRank}
+                className="px-2.5 py-1.5 rounded text-[9px] font-heading font-bold border border-amber-500/50 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
+              >
+                {exchangingAutoRank ? '…' : 'Exchange 1 token'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Consumables / Tokens */}
         {TOKEN_TYPES.some((k) => (tokens[k]?.count ?? 0) > 0 || tokens[k]?.active_until) && (
