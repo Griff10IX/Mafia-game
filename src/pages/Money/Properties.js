@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Building, TrendingUp, DollarSign, Lock, Zap, Martini, Factory, Crown } from 'lucide-react';
+import { Building, TrendingUp, DollarSign, Lock, Zap, Martini, Factory, Crown, AlertTriangle, Wallet } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -29,6 +29,8 @@ export default function Properties() {
   const [attackLoading, setAttackLoading] = useState(null); // property_id+username
   const [collectAllLoading, setCollectAllLoading] = useState(false);
   const [user, setUser] = useState(null);
+  const [propertyUpkeep, setPropertyUpkeep] = useState(null);
+  const [upkeepPayLoading, setUpkeepPayLoading] = useState(false);
 
   useEffect(() => {
     fetchProperties();
@@ -42,11 +44,13 @@ export default function Properties() {
       const data = response.data;
       setProperties(Array.isArray(data) ? data : (data?.properties ?? []));
       setPropertyIncomePerkUntil(data?.property_income_perk_until ?? null);
+      setPropertyUpkeep(data?.property_upkeep ?? null);
     } catch (error) {
       const detail = error.response?.data?.detail || error.message || 'Unknown error';
       toast.error(`Failed to load properties: ${detail}`);
       setProperties([]);
       setPropertyIncomePerkUntil(null);
+      setPropertyUpkeep(null);
     } finally {
       setLoading(false);
     }
@@ -104,7 +108,22 @@ export default function Properties() {
     }
   };
 
-  const collectibleProperties = properties.filter((p) => p.owned && !p.locked);
+  const collectibleProperties = properties.filter((p) => p.owned && !p.locked && !p.income_collection_blocked);
+
+  const payPropertyUpkeep = async () => {
+    if (upkeepPayLoading) return;
+    setUpkeepPayLoading(true);
+    try {
+      const res = await api.post('/properties/upkeep/pay');
+      toast.success(res.data?.message || 'Upkeep paid');
+      refreshUser();
+      fetchProperties();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not pay upkeep');
+    } finally {
+      setUpkeepPayLoading(false);
+    }
+  };
   const collectAll = async () => {
     if (collectibleProperties.length === 0 || collectAllLoading) return;
     setCollectAllLoading(true);
@@ -145,6 +164,59 @@ export default function Properties() {
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="properties-page">
       <style>{PROP_STYLES}</style>
+
+      {propertyUpkeep && propertyUpkeep.weekly_amount > 0 && (
+        <div
+          className={`relative ${styles.panel} rounded-lg overflow-hidden border prop-fade-in mobile-panel ${
+            propertyUpkeep.overdue ? 'border-amber-500/50 bg-amber-500/5' : 'border-primary/20'
+          }`}
+        >
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-3 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div className="flex items-start gap-2 min-w-0">
+              {propertyUpkeep.overdue ? (
+                <AlertTriangle className="text-amber-400 shrink-0 mt-0.5" size={16} />
+              ) : (
+                <Wallet className="text-primary/80 shrink-0 mt-0.5" size={16} />
+              )}
+              <div className="min-w-0 space-y-0.5">
+                <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Weekly property upkeep</p>
+                <p className="text-[10px] text-mutedForeground font-heading">
+                  {propertyUpkeep.overdue ? (
+                    <span className="text-amber-400/95">Overdue — income collection is blocked until you pay.</span>
+                  ) : (
+                    <span>Pay each week to stay current. Uses baseline income + portfolio value (see game docs).</span>
+                  )}
+                </p>
+                <p className="text-[9px] text-zinc-500 font-heading tabular-nums">
+                  Bill {formatMoney(propertyUpkeep.weekly_amount)} · baseline /wk {formatMoney(propertyUpkeep.weekly_baseline_gross)} · portfolio{' '}
+                  {formatMoney(propertyUpkeep.portfolio_value)}
+                  {propertyUpkeep.paid_until && (
+                    <span className="block sm:inline sm:ml-1 mt-0.5 sm:mt-0">
+                      · Paid through{' '}
+                      {(() => {
+                        try {
+                          return new Date(propertyUpkeep.paid_until).toLocaleString();
+                        } catch {
+                          return propertyUpkeep.paid_until;
+                        }
+                      })()}
+                    </span>
+                  )}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={payPropertyUpkeep}
+              disabled={upkeepPayLoading}
+              className="shrink-0 text-[10px] font-heading font-bold uppercase tracking-wider rounded px-3 py-1.5 border border-primary/40 bg-primary/15 text-primary hover:bg-primary/25 disabled:opacity-50"
+            >
+              {upkeepPayLoading ? 'Paying…' : `Pay ${formatMoney(propertyUpkeep.weekly_amount)}`}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="relative prop-fade-in flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -270,9 +342,11 @@ export default function Properties() {
                     <button
                       onClick={() => collectIncome(property.id)}
                       data-testid={`collect-income-${property.id}`}
-                      className="w-full bg-primary/20 text-primary rounded font-heading font-bold uppercase tracking-wider py-1.5 text-[10px] border border-primary/40 hover:bg-primary/30 transition-all flex items-center justify-center gap-1.5"
+                      disabled={property.income_collection_blocked}
+                      className="w-full bg-primary/20 text-primary rounded font-heading font-bold uppercase tracking-wider py-1.5 text-[10px] border border-primary/40 hover:bg-primary/30 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                      <DollarSign size={12} /> Collect
+                      <DollarSign size={12} />{' '}
+                      {property.income_collection_blocked ? 'Pay upkeep to collect' : 'Collect'}
                     </button>
                     {property.can_upgrade && (
                       <button

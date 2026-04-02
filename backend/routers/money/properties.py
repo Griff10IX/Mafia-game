@@ -2,6 +2,7 @@
 # Progression: buy in order; first property pays least, last pays most. Must max previous to unlock next.
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
+import math
 from pydantic import BaseModel
 import secrets
 _rng = secrets.SystemRandom()
@@ -23,11 +24,6 @@ def _parse_iso_datetime(s):
         return dt
     except Exception:
         return None
-
-
-class PropertiesListResponse(BaseModel):
-    properties: List["PropertyResponse"]
-    property_income_perk_until: Optional[str] = None  # When 10% property income loot perk expires (ISO)
 
 
 class PropertyResponse(BaseModel):
@@ -55,6 +51,25 @@ class PropertyResponse(BaseModel):
     max_total_level: int = 10
     can_upgrade: bool = False
     next_upgrade_cost: Optional[int] = None
+    income_collection_blocked: bool = False
+
+
+class PropertyUpkeepSummary(BaseModel):
+    paid_until: Optional[str] = None
+    weekly_amount: int = 0
+    weekly_baseline_gross: int = 0
+    portfolio_value: int = 0
+    overdue: bool = False
+    income_collection_blocked: bool = False
+    billing_days: int = 7
+    income_share: float = 0.10
+    wealth_share: float = 0.002
+
+
+class PropertiesListResponse(BaseModel):
+    properties: List["PropertyResponse"]
+    property_income_perk_until: Optional[str] = None  # When 10% property income loot perk expires (ISO)
+    property_upkeep: Optional[PropertyUpkeepSummary] = None
 
 
 # Upgrade cost to go from level L→L+1 is price * (L+1) (first buy = price). Each level adds +income_per_hour.
@@ -96,6 +111,14 @@ BUFF_DURATION_HOURS = 24
 BUFF_COST_POINTS = 100
 COLLECT_COOLDOWN_MINUTES = 10
 
+# --- Weekly property upkeep (UTC; hybrid income + wealth — see docs/PROPERTY_UPKEEP.md) ---
+PROPERTY_UPKEEP_BILLING_DAYS = 7
+PROPERTY_UPKEEP_HOURS_PER_WEEK = 168
+# Baseline = sum of (effective $/hr × 168) with no streak/perk/founding/loot multipliers (matches UI effective income/hr).
+PROPERTY_UPKEEP_INCOME_SHARE = 0.10
+PROPERTY_UPKEEP_WEALTH_SHARE = 0.002
+PROPERTY_UPKEEP_MIN_WEEKLY = 250
+
 
 def _property_order(properties: list) -> list:
     """Return properties in progression order (first = worst pay, last = best)."""
@@ -126,9 +149,97 @@ def _property_order(properties: list) -> list:
     return ordered
 
 
+async def _compute_property_upkeep_details(user_id: str) -> dict:
+    """Weekly upkeep from hybrid formula (no streak/perk/founding multipliers)."""
+    properties = await db.properties.find(
+        {
+            "price": {"$exists": True},
+            "income_per_hour": {"$exists": True},
+            "max_level": {"$exists": True},
+            "property_type": {"$exists": True},
+            "for_sale": {"$ne": True},
+        },
+        {"_id": 0},
+    ).to_list(100)
+    properties = _property_order(properties)
+    user_properties = await db.user_properties.find({"user_id": user_id}, {"_id": 0}).to_list(100)
+    by_pid = {}
+    for up in user_properties:
+        pid = up["property_id"]
+        if pid not in by_pid:
+            by_pid[pid] = []
+        by_pid[pid].append(up)
+    weekly_baseline = 0.0
+    portfolio_value = 0
+    for prop in properties:
+        if not all(k in prop for k in ("id", "price", "income_per_hour", "max_level")):
+            continue
+        user_props_list = by_pid.get(prop["id"], [])
+        if not user_props_list:
+            continue
+        owned_count = len(user_props_list)
+        total_level = sum(max(0, int(up.get("level") or 0)) for up in user_props_list)
+        if total_level < 1:
+            continue
+        stack_mult = 1.0 + (owned_count - 1) * STACK_BONUS_PER_EXTRA if owned_count > 1 else 1.0
+        eff_iph = float(prop["income_per_hour"]) * float(total_level) * stack_mult
+        weekly_baseline += eff_iph * float(PROPERTY_UPKEEP_HOURS_PER_WEEK)
+        for up in user_props_list:
+            lv = max(0, int(up.get("level") or 0))
+            if lv < 1:
+                continue
+            portfolio_value += calculate_property_value(prop, lv)
+    raw = (
+        PROPERTY_UPKEEP_INCOME_SHARE * weekly_baseline
+        + PROPERTY_UPKEEP_WEALTH_SHARE * float(portfolio_value)
+    )
+    weekly_amount = 0
+    if weekly_baseline > 0 or portfolio_value > 0:
+        weekly_amount = max(PROPERTY_UPKEEP_MIN_WEEKLY, int(math.ceil(raw)))
+    return {
+        "weekly_amount": weekly_amount,
+        "weekly_baseline_gross": int(weekly_baseline),
+        "portfolio_value": portfolio_value,
+    }
+
+
+async def _ensure_property_upkeep_paid_until(user_id: str) -> None:
+    """First-time owners of progression properties get a paid window (lazy init)."""
+    props = await db.properties.find(
+        {
+            "price": {"$exists": True},
+            "income_per_hour": {"$exists": True},
+            "max_level": {"$exists": True},
+            "property_type": {"$exists": True},
+            "for_sale": {"$ne": True},
+        },
+        {"id": 1},
+    ).to_list(100)
+    ids = [p["id"] for p in props if p.get("id")]
+    if not ids:
+        return
+    n = await db.user_properties.count_documents({"user_id": user_id, "property_id": {"$in": ids}})
+    if n == 0:
+        return
+    user = await db.users.find_one({"id": user_id}, {"property_upkeep_paid_until": 1})
+    if user and user.get("property_upkeep_paid_until"):
+        return
+    until = datetime.now(timezone.utc) + timedelta(days=PROPERTY_UPKEEP_BILLING_DAYS)
+    await db.users.update_one({"id": user_id}, {"$set": {"property_upkeep_paid_until": until.isoformat()}})
+
+
 async def get_properties(current_user: dict = Depends(get_current_user)):
     # db.properties also stores sell-on-trade listings (casinos/airports/armouries).
     # The properties page should only use canonical progression properties.
+    user_id = current_user["id"]
+    await _ensure_property_upkeep_paid_until(user_id)
+    user_row = await db.users.find_one({"id": user_id}, {"property_upkeep_paid_until": 1})
+    upkeep_details = await _compute_property_upkeep_details(user_id)
+    now_utc = datetime.now(timezone.utc)
+    paid_until_dt = _parse_iso_datetime((user_row or {}).get("property_upkeep_paid_until"))
+    weekly_amt = int(upkeep_details["weekly_amount"])
+    overdue = bool(weekly_amt > 0 and paid_until_dt and now_utc > paid_until_dt)
+    income_blocked = overdue
     properties = await db.properties.find(
         {
             "price": {"$exists": True},
@@ -216,6 +327,7 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
                 lowest = min(upgradable, key=lambda u: max(0, int(u.get("level") or 0)))
                 lv = max(0, int(lowest.get("level") or 0))
                 next_cost = int(prop["price"]) * (lv + 1)
+        disp_income = 0.0 if (income_blocked and owned) else available_income
         result.append(PropertyResponse(
             id=prop["id"],
             name=prop["name"],
@@ -225,7 +337,7 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
             max_level=prop["max_level"],
             owned=owned,
             level=total_level,  # Sum of levels across copies (stacking)
-            available_income=available_income,
+            available_income=disp_income,
             locked=locked,
             required_property_name=required_property_name,
             collection_streak_days=streak_days,
@@ -237,10 +349,23 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
             max_total_level=max_total_level,
             can_upgrade=can_upgrade,
             next_upgrade_cost=next_cost,
+            income_collection_blocked=income_blocked and owned,
         ))
+    pu = PropertyUpkeepSummary(
+        paid_until=(user_row or {}).get("property_upkeep_paid_until"),
+        weekly_amount=weekly_amt,
+        weekly_baseline_gross=int(upkeep_details["weekly_baseline_gross"]),
+        portfolio_value=int(upkeep_details["portfolio_value"]),
+        overdue=overdue,
+        income_collection_blocked=income_blocked,
+        billing_days=PROPERTY_UPKEEP_BILLING_DAYS,
+        income_share=PROPERTY_UPKEEP_INCOME_SHARE,
+        wealth_share=PROPERTY_UPKEEP_WEALTH_SHARE,
+    )
     return PropertiesListResponse(
         properties=result,
         property_income_perk_until=current_user.get("property_income_perk_until"),
+        property_upkeep=pu,
     )
 
 
@@ -345,6 +470,17 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
         raise HTTPException(status_code=404, detail="You don't own this property")
     owned_count = len(user_props_list)
     now_utc = datetime.now(timezone.utc)
+    user_id = current_user["id"]
+    await _ensure_property_upkeep_paid_until(user_id)
+    user_row = await db.users.find_one({"id": user_id}, {"property_upkeep_paid_until": 1})
+    upkeep_det = await _compute_property_upkeep_details(user_id)
+    if upkeep_det["weekly_amount"] > 0:
+        pt = _parse_iso_datetime((user_row or {}).get("property_upkeep_paid_until"))
+        if pt and now_utc > pt:
+            raise HTTPException(
+                status_code=400,
+                detail="Property upkeep is overdue. Pay weekly upkeep on the Properties page to collect income.",
+            )
     # Calculate stack bonus: +25% per extra property
     stack_mult = 1.0 + (owned_count - 1) * STACK_BONUS_PER_EXTRA if owned_count > 1 else 1.0
     # Calculate total income from ALL copies
@@ -515,7 +651,54 @@ def register(router):
             "buff_until": buff_until.isoformat(),
         }
 
+    async def pay_property_upkeep(current_user: dict = Depends(get_current_user)):
+        uid = current_user["id"]
+        await _ensure_property_upkeep_paid_until(uid)
+        det = await _compute_property_upkeep_details(uid)
+        amount = int(det["weekly_amount"])
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="No property upkeep bill — you have no qualifying businesses.")
+        user_row = await db.users.find_one({"id": uid})
+        if not user_row:
+            raise HTTPException(status_code=404, detail="User not found")
+        now_utc = datetime.now(timezone.utc)
+        paid_until_dt = _parse_iso_datetime(user_row.get("property_upkeep_paid_until")) or now_utc
+        base = max(paid_until_dt, now_utc)
+        new_until = base + timedelta(days=PROPERTY_UPKEEP_BILLING_DAYS)
+        result = await db.users.update_one(
+            {"id": uid, "money": {"$gte": amount}},
+            {"$inc": {"money": -amount}, "$set": {"property_upkeep_paid_until": new_until.isoformat()}},
+        )
+        if result.modified_count == 0:
+            raise HTTPException(status_code=400, detail="Insufficient cash for property upkeep.")
+        now_iso = now_utc.isoformat()
+        try:
+            await db.economy_events.insert_one(
+                {
+                    "at": now_iso,
+                    "type": "property_upkeep_pay",
+                    "user_id": uid,
+                    "username": current_user.get("username") or "",
+                    "amount": amount,
+                    "paid_until": new_until.isoformat(),
+                }
+            )
+        except Exception:
+            pass
+        await log_activity(
+            uid,
+            current_user.get("username") or "?",
+            "property_upkeep_pay",
+            {"amount": amount, "paid_until": new_until.isoformat()},
+        )
+        return {
+            "message": f"Paid ${amount:,} property upkeep. Coverage extends to {new_until.isoformat()}.",
+            "paid_until": new_until.isoformat(),
+            "amount": amount,
+        }
+
     router.add_api_route("/properties", get_properties, methods=["GET"], response_model=PropertiesListResponse)
+    router.add_api_route("/properties/upkeep/pay", pay_property_upkeep, methods=["POST"])
     router.add_api_route("/properties/{property_id}/buy", buy_property, methods=["POST"])
     router.add_api_route("/properties/{property_id}/collect", collect_property_income, methods=["POST"])
     router.add_api_route("/properties/{property_id}/reinvest", reinvest_property, methods=["POST"])
