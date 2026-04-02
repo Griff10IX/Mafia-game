@@ -388,28 +388,38 @@ def _is_future_event(ev: dict, require_time: bool = False, buffer_minutes: int =
 
 
 async def _fetch_odds_api_soccer_league_raw(client: httpx.AsyncClient, sport_key: str, sem: asyncio.Semaphore, api_key: str) -> list:
-    cache_key = "v1:odds:%s" % sport_key
+    cache_key = "v2:odds:%s" % sport_key
     ttl = _sports_odds_cache_ttl_sec()
     cached = await _odds_cache_read_list_if_fresh(cache_key, ttl)
     if cached is not None:
         return cached
     async with sem:
-        try:
-            r = await client.get(
-                "%s/sports/%s/odds" % (ODDS_API_BASE, sport_key),
-                params={
-                    "apiKey": api_key,
-                    "regions": "uk,us,eu",
-                    "markets": "h2h,h2h_3_way,draw_no_bet",
-                    "oddsFormat": "decimal",
-                },
+        r = None
+        # Bulk /sports/{key}/odds only accepts featured markets. draw_no_bet and other
+        # "additional" markets cause INVALID_MARKET and fail the whole request — avoid them here.
+        for markets in ("h2h,h2h_3_way", "h2h"):
+            try:
+                r = await client.get(
+                    "%s/sports/%s/odds" % (ODDS_API_BASE, sport_key),
+                    params={
+                        "apiKey": api_key,
+                        "regions": "uk,us,eu,au",
+                        "markets": markets,
+                        "oddsFormat": "decimal",
+                    },
+                )
+            except Exception as ex:
+                logger.warning("Odds API odds fetch failed %s: %s", sport_key, ex)
+                return []
+            if r.status_code == 200:
+                break
+        if r is None or r.status_code != 200:
+            logger.warning(
+                "Odds API odds %s failed (last HTTP %s, tried h2h,h2h_3_way then h2h)",
+                sport_key,
+                getattr(r, "status_code", 0) if r is not None else 0,
             )
-        except Exception as ex:
-            logger.warning("Odds API odds fetch failed %s: %s", sport_key, ex)
             return []
-    if r.status_code != 200:
-        logger.warning("Odds API odds %s HTTP %s", sport_key, r.status_code)
-        return []
     events = r.json()
     if not isinstance(events, list):
         events = []
