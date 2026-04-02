@@ -183,9 +183,16 @@ export default function Properties() {
                 <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Weekly property upkeep</p>
                 <p className="text-[10px] text-mutedForeground font-heading">
                   {propertyUpkeep.overdue ? (
-                    <span className="text-amber-400/95">Overdue — income collection is blocked until you pay.</span>
+                    <span className="text-amber-400/95">
+                      Overdue — you cannot collect from any business until you pay this bill. Pay now to unlock collections again and extend coverage for
+                      another week.
+                    </span>
                   ) : (
-                    <span>Pay each week to stay current. Uses baseline income + portfolio value (see game docs).</span>
+                    <span>
+                      Pay before the date below to extend coverage for another week and keep collecting from your businesses. If that time passes without
+                      paying, all business income collection is blocked until you pay. Your bill is based on weekly baseline income and total portfolio
+                      value.
+                    </span>
                   )}
                 </p>
                 <p className="text-[9px] text-zinc-500 font-heading tabular-nums">
