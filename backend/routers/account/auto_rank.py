@@ -779,8 +779,8 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     # When bust-every-5-sec is on, only the separate bust loop runs crimes/GTA are skipped here
     run_crimes = user.get("auto_rank_crimes", True) and not bust_every_5
     run_gta = user.get("auto_rank_gta", True) and not bust_every_5
-    run_melt = user.get("auto_rank_melt", False) and not bust_every_5
-    run_scrap = user.get("auto_rank_scrap", False) and not bust_every_5
+    run_melt = bool(user.get("auto_rank_melt", False)) and not bust_every_5
+    run_scrap = bool(user.get("auto_rank_scrap", False)) and not bust_every_5
 
     # --- Crimes: only those off cooldown (same rules as manual play; _commit_crime_impl also enforces) ---
     if run_crimes:
@@ -929,6 +929,8 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         return
     if user.get("in_jail"):
         return
+    total_batch_limit = effective_garage_batch_limit(user)
+    used_in_melt = 0  # shared cap across melt + timed scrap
     if run_melt:
         melt_action_ids = user.get("auto_rank_melt_action_ids") or []
         melt_rarity_ids = user.get("auto_rank_melt_rarity_ids") or []
@@ -936,7 +938,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
             # No rarities selected = don't melt/scrap any cars (ids must match CARS[].rarity, same as garage)
             allowed_rarities = set(melt_rarity_ids) if isinstance(melt_rarity_ids, list) and len(melt_rarity_ids) > 0 else set()
             allowed_rarities = {r for r in allowed_rarities if r in MELT_RARITIES}
-            batch_limit = effective_garage_batch_limit(user)
+            batch_limit = total_batch_limit
             booze_protected = await _get_booze_protected_car_ids(db, user_id) if user.get("auto_rank_booze") else set()
 
             async def _melt_eligible_rows():
@@ -971,29 +973,42 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                 half = (n + 1) // 2
                 car_ids_bullets = pool[:half]
                 car_ids_cash = pool[half:]
+                melt_count = 0
+                melt_bullets_total = 0
+                scrap_count = 0
+                scrap_total_value = 0
                 try:
                     if car_ids_bullets:
                         result_b = await melt_cars_locked(user, car_ids_bullets, "bullets", manual_garage=False)
                         if not result_b.get("cooldown") and result_b.get("success"):
-                            mc = result_b.get("melted_count", 0)
+                            mc = result_b.get("melted_count", 0) or 0
                             melted_this_cycle += mc
+                            melt_count += mc
                             has_success = True
                             await _set_last_activity(db, user_id, "melt", now)
-                            tb = result_b.get("total_bullets", 0)
-                            lines.append(f"**Melt** — Melted {mc} car(s) for {tb} bullets.")
-                            await _update_auto_rank_stats_melt(db, user_id, melted_count=mc, total_bullets=tb)
+                            tb = result_b.get("total_bullets", 0) or 0
+                            melt_bullets_total = tb
+                            await _update_auto_rank_stats_melt(db, user_id, melted_count=mc, total_bullets=melt_bullets_total)
                     if car_ids_cash:
                         result_c = await melt_cars_locked(user, car_ids_cash, "cash", manual_garage=False)
                         if result_c.get("success"):
-                            mc = result_c.get("scrapped_count", 0)
+                            mc = result_c.get("scrapped_count", 0) or 0
                             melted_this_cycle += mc
+                            scrap_count += mc
                             has_success = True
                             await _set_last_activity(db, user_id, "melt", now)
-                            tv = result_c.get("total_value", 0)
-                            lines.append(f"**Melt** — Scrapped {mc} car(s) for ${tv:,}.")
-                            await _update_auto_rank_stats_melt(db, user_id, scrapped_count=mc, total_cash=tv)
+                            tv = result_c.get("total_value", 0) or 0
+                            scrap_total_value = tv
+                            await _update_auto_rank_stats_melt(db, user_id, scrapped_count=mc, total_cash=scrap_total_value)
                 except Exception as e:
                     logger.exception("Auto rank melt for %s: %s", user_id, e)
+                parts = []
+                if melt_count > 0:
+                    parts.append(f"Melted {melt_count} car(s) for {melt_bullets_total} bullets")
+                if scrap_count > 0:
+                    parts.append(f"Scrapped {scrap_count} car(s) for ${scrap_total_value:,}")
+                if parts:
+                    lines.append("**Melt/Scrap** — 50/50 melt/scrap selected: " + " · ".join(parts) + ".")
             else:
                 # Single action (or only one of bullets/cash): use full batch per action, re-fetch between
                 for action in melt_action_ids:
@@ -1026,6 +1041,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                             car_ids = [e["user_car_id"] for e in eligible[:max(0, batch_limit - melted_this_cycle)]]
                     except Exception as e:
                         logger.exception("Auto rank melt for %s: %s", user_id, e)
+            used_in_melt = melted_this_cycle
 
     # --- Scrap (separate from melt: runs every 2 min, uses scrap rarities) ---
     user = await db.users.find_one(
@@ -1046,7 +1062,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                 user = await db.users.find_one({"id": user_id}, {"_id": 0})
                 if not user or user.get("in_jail"):
                     return
-                batch_limit = effective_garage_batch_limit(user)
+                remaining = max(0, total_batch_limit - used_in_melt)
                 booze_protected = await _get_booze_protected_car_ids(db, user_id) if user.get("auto_rank_booze") else set()
                 cars_cursor = db.user_cars.find({"user_id": user_id})
                 user_cars = await cars_cursor.to_list(1000)
@@ -1066,8 +1082,14 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                     value = int(car_info.get("value") or 0)
                     eligible.append({"user_car_id": ucid, "value": value})
                 eligible.sort(key=lambda x: x["value"])
-                car_ids = [e["user_car_id"] for e in eligible[:batch_limit]]
-                if car_ids:
+                car_ids = [e["user_car_id"] for e in eligible[:remaining]]
+                if not car_ids:
+                    next_scrap_dt = now + timedelta(seconds=SCRAP_INTERVAL_SECONDS)
+                    await db.users.update_one(
+                        {"id": user_id},
+                        {"$set": {"auto_rank_next_scrap_at": next_scrap_dt.isoformat()}},
+                    )
+                else:
                     try:
                         result = await melt_cars_locked(user, car_ids, "cash", manual_garage=False)
                         if result.get("success"):
@@ -1075,7 +1097,9 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                             tv = result.get("total_value", 0)
                             has_success = True
                             await _set_last_activity(db, user_id, "melt", now)
-                            lines.append(f"**Scrap** — Scrapped {mc} car(s) for ${tv:,}.")
+                            lines.append(
+                                f"**Scrap** — Scrapped {mc} car(s) for ${tv:,}. (garage cap remaining: {remaining}/{total_batch_limit})"
+                            )
                             await _update_auto_rank_stats_melt(db, user_id, scrapped_count=mc, total_cash=tv)
                         next_scrap_dt = now + timedelta(seconds=SCRAP_INTERVAL_SECONDS)
                         await db.users.update_one(

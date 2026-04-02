@@ -366,7 +366,7 @@ export default function VideoPoker() {
       const handLabel = data.hand_name || (data.hand_key === 'nothing' ? 'Nothing' : 'Hand');
       if (data.hand_key && data.hand_key !== 'nothing') {
         if (data.multiplier > 1) {
-          toast.success(`${handLabel}. Won ${formatMoney(data.payout - data.bet)}`);
+          toast.success(`${handLabel}. Paid ${formatMoney(data.payout)}`);
           setShowWin(true);
           setTimeout(() => setShowWin(false), 3000);
           if (data.ownership_transferred) toast.success('You won the table! It is now yours.');
