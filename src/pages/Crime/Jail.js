@@ -279,7 +279,7 @@ const InfoSection = () => (
         </li>
         <li className="flex items-start gap-1">
           <span className="text-primary shrink-0">•</span>
-          <span>Failed bust = 30s in jail</span>
+          <span>Failed bust = 30s in jail (jailbust token can sometimes avoid the penalty)</span>
         </li>
         <li className="flex items-start gap-1">
           <span className="text-primary shrink-0">•</span>

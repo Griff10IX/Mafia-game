@@ -157,6 +157,15 @@ JAIL_BUST_FAIL_MESSAGES = [
     "Sloppy work. They threw you in. 30 seconds to think it over.",
 ]
 
+# Failure messages when bust fails but user avoids the 30s jail penalty (e.g. jailbust token effect).
+JAIL_BUST_FAIL_AVOID_JAIL_MESSAGES = [
+    "Bust failed — but you slipped away before they could cuff you.",
+    "Close call. Bust failed, but you avoided the 30-second jail penalty.",
+    "They spotted you, but you got away. No jail time this time.",
+    "Bust failed — you managed to escape the guards.",
+    "Bad timing. Bust failed, but you stayed out of jail.",
+]
+
 
 # Jail bust difficulty: raw rates multiplied by this (1.0 = no penalty; was 0.9, raised slightly to make busting easier)
 JAIL_BUST_DIFFICULTY_MULT = 0.95
@@ -483,7 +492,8 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
                 {"$set": {"jail_bust_attempts": next_attempts, "current_consecutive_busts": 0}},
             )
         await _record_bust_event(current_user["id"], False, 0, target_username=target_username, is_npc=True)
-        return {"success": False, "message": _rng.choice(JAIL_BUST_FAIL_MESSAGES), "jail_time": 30 if go_to_jail else 0}
+        msg = _rng.choice(JAIL_BUST_FAIL_MESSAGES if go_to_jail else JAIL_BUST_FAIL_AVOID_JAIL_MESSAGES)
+        return {"success": False, "message": msg, "jail_time": 30 if go_to_jail else 0}
 
     target = await db.users.find_one({"username": username_ci}, {"_id": 0})
     if not target:
@@ -593,7 +603,8 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
             {"$set": {"jail_bust_attempts": next_attempts, "current_consecutive_busts": 0}},
         )
     await _record_bust_event(current_user["id"], False, 0, target_username=target.get("username") or "", is_npc=False)
-    return {"success": False, "message": _rng.choice(JAIL_BUST_FAIL_MESSAGES), "jail_time": 30 if go_to_jail else 0}
+    msg = _rng.choice(JAIL_BUST_FAIL_MESSAGES if go_to_jail else JAIL_BUST_FAIL_AVOID_JAIL_MESSAGES)
+    return {"success": False, "message": msg, "jail_time": 30 if go_to_jail else 0}
 
 
 async def bust_out_of_jail(

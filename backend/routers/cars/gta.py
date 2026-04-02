@@ -919,6 +919,7 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
                     uncommon_count += 1
                 car_value = int(car_info.get("value", 0) or 0)
                 if action == "bullets":
+                    rarity = (car_info.get("rarity") or "").strip().lower()
                     melt_value = (car_value * MELT_BULLETS_VALUE_MULT_NUM) // MELT_BULLETS_VALUE_MULT_DEN
                     car_bullets = melt_value // MELT_VALUE_PER_BULLET
                     if car_info.get("rarity") == "common":
@@ -926,6 +927,9 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
                             car_bullets = 2
                         elif car_bullets > 3:
                             car_bullets = 3
+                    if rarity not in ("exclusive", "loot_exclusive"):
+                        # +25% bullets for all but exclusive / loot_exclusive (floor-rounded).
+                        car_bullets = (int(car_bullets) * 125) // 100
                     total_bullets += car_bullets
                 else:
                     total_value += int(car_value * 0.5)

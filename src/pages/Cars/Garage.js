@@ -38,6 +38,8 @@ function previewBulletsForCarValue(value, rarity) {
     if (bullets < 2) bullets = 2;
     else if (bullets > 3) bullets = 3;
   }
+  // +25% bullets for all but exclusive / loot_exclusive (floor-rounded), keep in sync with backend melt rewards.
+  if (rarity !== 'exclusive' && rarity !== 'loot_exclusive') bullets = Math.floor((bullets * 125) / 100);
   return bullets;
 }
 
