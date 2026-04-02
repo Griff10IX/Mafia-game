@@ -497,6 +497,7 @@ function Lottery() {
 
   const last = state?.last_draw;
   const grossPot = Number(state?.gross_pot ?? 0);
+  const rolloverIn = Number(state?.rollover_in ?? 0);
   const taxPct = Number(state?.pot_tax_percent ?? 10);
   const netIfWon = Math.floor((grossPot * (100 - taxPct)) / 100);
   const myTickets = state?.my_tickets ?? 0;
@@ -530,6 +531,11 @@ function Lottery() {
             <div className="text-[10px] text-zinc-500 font-heading">
               Gross pot {formatMoney(grossPot)} &mdash; {taxPct}% tax at draw
             </div>
+            {rolloverIn > 0 && (
+              <div className="text-[9px] text-amber-400/90 font-heading">
+                Includes {formatMoney(rolloverIn)} carried over from the last draw (no exact match).
+              </div>
+            )}
           </div>
 
           <div style={{ marginTop: 4 }}>
@@ -661,6 +667,21 @@ function Lottery() {
             <span className="text-[9px] font-heading font-bold text-amber-400 uppercase tracking-wider">Previous Draw</span>
           </div>
           <div className="p-3 space-y-2">
+            {Array.isArray(last.winning_numbers) && last.winning_numbers.length > 0 && (
+              <div className="space-y-1 pb-2 border-b border-primary/10">
+                <div className="text-[8px] text-zinc-500 uppercase tracking-wider font-heading">Winning numbers</div>
+                <TicketNumbersMini numbers={last.winning_numbers} />
+                {Number(last.rollover_to_next) > 0 ? (
+                  <p className="text-[9px] text-amber-400/90 font-heading leading-snug">
+                    No exact match — {formatMoney(last.rollover_to_next)} net rolled into the next round&apos;s jackpot.
+                  </p>
+                ) : Number(last.exact_match_count) > 0 ? (
+                  <p className="text-[9px] text-zinc-500 font-heading leading-snug">
+                    {last.exact_match_count} winning ticket{Number(last.exact_match_count) !== 1 ? 's' : ''} matched this line (net pot split).
+                  </p>
+                ) : null}
+              </div>
+            )}
             <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-6">
               <div className="flex items-center gap-2">
                 <div className="lot-ball lot-ball-gold" style={{ width: 28, height: 28, fontSize: 10, flexShrink: 0 }}>
@@ -703,7 +724,7 @@ function Lottery() {
           {[
             { step: '1', title: 'Buy Tickets', desc: `Each ticket costs ${formatMoney(state?.ticket_price)}. Buy up to 500 per transaction.` },
             { step: '2', title: 'Wait for the Draw', desc: 'Draws happen Wednesday & Sunday at 00:00 UTC. The pot grows with every ticket sold.' },
-            { step: '3', title: 'Win the Jackpot', desc: `One random ticket wins ${100 - taxPct}% of the gross pot. The other ${taxPct}% is removed from the economy.` },
+            { step: '3', title: 'Win the Jackpot', desc: `Six winning numbers are drawn. Tickets that match all six split ${100 - taxPct}% of the gross pot (including any rolled amount). If no one matches, that net pot rolls to the next draw. ${taxPct}% is removed as tax.` },
           ].map(({ step, title, desc }) => (
             <div key={step} className="flex gap-2.5">
               <div

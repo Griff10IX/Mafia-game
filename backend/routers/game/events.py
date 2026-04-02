@@ -183,10 +183,38 @@ async def get_flash_news(current_user: dict = Depends(get_current_user)):
             payout = doc.get("payout") or 0
             drawn_at = doc.get("drawn_at") or ""
             at_str = drawn_at if isinstance(drawn_at, str) else (drawn_at.isoformat() if hasattr(drawn_at, "isoformat") else str(drawn_at))
+            wn = doc.get("winning_numbers")
+            if isinstance(wn, list) and wn:
+                nums = ", ".join(str(x) for x in wn)
+                lot_msg = f"{winner} won the City Lottery — numbers {nums} — ${payout:,}!"
+            else:
+                lot_msg = f"{winner} won the City Lottery — ${payout:,} payout!"
             items.append({
                 "id": f"lottery_{str(doc.get('_id', ''))}",
                 "type": "lottery_winner",
-                "message": f"{winner} won the City Lottery — ${payout:,} payout!",
+                "message": lot_msg,
+                "at": at_str,
+            })
+    except Exception:
+        pass
+
+    # Lottery rollover (no jackpot winner — pot carries forward)
+    try:
+        ro_docs = await db.lottery_events.find({"type": "lottery_rollover"}).sort("drawn_at", -1).limit(2).to_list(2)
+        for doc in ro_docs:
+            amt = int(doc.get("rollover_amount") or 0)
+            drawn_at = doc.get("drawn_at") or ""
+            at_str = drawn_at if isinstance(drawn_at, str) else (drawn_at.isoformat() if hasattr(drawn_at, "isoformat") else str(drawn_at))
+            wn = doc.get("winning_numbers")
+            if isinstance(wn, list) and wn:
+                nums = ", ".join(str(x) for x in wn)
+                ro_msg = f"No jackpot winner — numbers were {nums}. ${amt:,} rolls to the next draw."
+            else:
+                ro_msg = f"No jackpot winner — ${amt:,} rolls to the next draw."
+            items.append({
+                "id": f"lottery_ro_{str(doc.get('_id', ''))}",
+                "type": "lottery_rollover",
+                "message": ro_msg,
                 "at": at_str,
             })
     except Exception:

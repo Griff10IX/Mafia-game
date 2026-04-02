@@ -1,11 +1,13 @@
-# Twice-weekly lottery (Wed & Sun 00:00 UTC): $500k/ticket, 10% of gross pot removed at draw, 90% to one random winner.
+# Twice-weekly lottery (Wed & Sun 00:00 UTC): $500k/ticket, 10% of gross pot removed at draw, 90% net to winner(s).
+# Each draw publishes six winning numbers; tickets that match exactly split the net pot. If no ticket matches,
+# the net pot rolls into the next round (no random fallback).
 from __future__ import annotations
 
 import logging
 import os
 import random
-import secrets
 import uuid
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -25,8 +27,29 @@ _lottery_rng = random.SystemRandom()
 
 
 def _random_lottery_numbers() -> list[int]:
-    """Six distinct lucky numbers 1..50 (display only; draw still picks a random ticket doc)."""
+    """Six distinct numbers 1..50, sorted — same rules for ticket lines and the official draw."""
     return sorted(_lottery_rng.sample(range(1, _LOTTERY_NUMBER_MAX + 1), _LOTTERY_PICK_COUNT))
+
+
+def _normalize_ticket_numbers(raw: Any) -> Optional[list[int]]:
+    """Return sorted valid line or None if ticket cannot participate in exact-match."""
+    if raw is None or not isinstance(raw, list):
+        return None
+    if len(raw) != _LOTTERY_PICK_COUNT:
+        return None
+    try:
+        nums = sorted(int(x) for x in raw)
+    except (TypeError, ValueError):
+        return None
+    if len(set(nums)) != _LOTTERY_PICK_COUNT:
+        return None
+    if any(n < 1 or n > _LOTTERY_NUMBER_MAX for n in nums):
+        return None
+    return nums
+
+
+def _format_numbers_line(nums: list[int]) -> str:
+    return ", ".join(str(n) for n in nums)
 
 
 def _next_draw_utc(after: datetime) -> datetime:
@@ -53,7 +76,7 @@ async def _ensure_open_round() -> dict[str, Any]:
     if r:
         return r
     closes = _next_draw_utc(now)
-    doc = {"closes_at": closes.isoformat(), "status": "open", "created_at": now.isoformat()}
+    doc = {"closes_at": closes.isoformat(), "status": "open", "created_at": now.isoformat(), "rollover_in": 0}
     ins = await db.lottery_rounds.insert_one(doc)
     doc["_id"] = ins.inserted_id
     return doc
@@ -102,10 +125,24 @@ async def get_lottery_state(current_user: dict = Depends(get_current_user)):
     closes_at = _parse_iso(rd["closes_at"]) or now
     total = await db.lottery_tickets.count_documents({"round_id": rid})
     mine = await db.lottery_tickets.count_documents({"round_id": rid, "user_id": current_user["id"]})
-    gross = total * TICKET_PRICE
+    rollover_in = int(rd.get("rollover_in") or 0)
+    gross = total * TICKET_PRICE + rollover_in
     last = await db.lottery_rounds.find_one(
         {"status": "closed"},
-        {"_id": 0, "drawn_at": 1, "gross_pot": 1, "payout": 1, "sink_amount": 1, "ticket_count": 1, "winner_username": 1, "winner_user_id": 1},
+        {
+            "_id": 0,
+            "drawn_at": 1,
+            "gross_pot": 1,
+            "payout": 1,
+            "sink_amount": 1,
+            "ticket_count": 1,
+            "winner_username": 1,
+            "winner_user_id": 1,
+            "winning_numbers": 1,
+            "draw_fallback": 1,
+            "exact_match_count": 1,
+            "rollover_to_next": 1,
+        },
         sort=[("drawn_at", -1)],
     )
     return {
@@ -116,6 +153,7 @@ async def get_lottery_state(current_user: dict = Depends(get_current_user)):
         "pot_tax_percent": POT_TAX_PERCENT,
         "ticket_count": total,
         "gross_pot": gross,
+        "rollover_in": rollover_in,
         "my_tickets": mine,
         "last_draw": last,
     }
@@ -206,34 +244,72 @@ async def lottery_draw_cron(_: bool = Depends(_cron_verify())):
         lock = await db.lottery_rounds.update_one({"_id": rid, "status": "open"}, {"$set": {"status": "drawing"}})
         if lock.modified_count == 0:
             break
-        tickets = await db.lottery_tickets.find({"round_id": rid}, {"_id": 0, "user_id": 1, "username": 1}).to_list(500_000)
+        tickets = await db.lottery_tickets.find(
+            {"round_id": rid},
+            {"_id": 0, "user_id": 1, "username": 1, "numbers": 1},
+        ).to_list(500_000)
         n = len(tickets)
-        gross = n * TICKET_PRICE
+        rollover_start = int(rd.get("rollover_in") or 0)
+        ticket_revenue = n * TICKET_PRICE
+        gross = ticket_revenue + rollover_start
         sink = (gross * POT_TAX_PERCENT) // 100 if gross > 0 else 0
         payout = gross - sink
-        winner_uid = None
-        winner_name = None
-        if n > 0:
-            w = secrets.choice(tickets)
-            winner_uid = w["user_id"]
-            winner_name = (w.get("username") or "?").strip()
-            await db.users.update_one({"id": winner_uid}, {"$inc": {"money": payout}})
+        winning_numbers = _random_lottery_numbers()
         drawn_iso = datetime.now(timezone.utc).isoformat()
-        await db.lottery_rounds.update_one(
-            {"_id": rid},
-            {
-                "$set": {
-                    "status": "closed",
-                    "drawn_at": drawn_iso,
-                    "ticket_count": n,
-                    "gross_pot": gross,
-                    "sink_amount": sink,
-                    "payout": payout if n else 0,
-                    "winner_user_id": winner_uid,
-                    "winner_username": winner_name,
-                }
-            },
-        )
+
+        amounts_by_user: dict[str, int] = defaultdict(int)
+        names_by_user: dict[str, str] = {}
+        exact_match_count = 0
+        matches: list = []
+
+        if gross > 0 and payout > 0:
+            for t in tickets:
+                norm = _normalize_ticket_numbers(t.get("numbers"))
+                if norm is not None and norm == winning_numbers:
+                    matches.append(t)
+            exact_match_count = len(matches)
+
+            if matches:
+                mcount = len(matches)
+                share = payout // mcount
+                rem = payout % mcount
+                for i, t in enumerate(matches):
+                    amt = share + (1 if i < rem else 0)
+                    uid = t["user_id"]
+                    amounts_by_user[uid] += amt
+                    names_by_user[uid] = (t.get("username") or "?").strip()
+                for uid, amt in amounts_by_user.items():
+                    if amt > 0:
+                        await db.users.update_one({"id": uid}, {"$inc": {"money": amt}})
+
+        rollover_next = payout if payout > 0 and not amounts_by_user else 0
+        nums_txt = _format_numbers_line(winning_numbers)
+        display_winner_user_id = None
+        display_winner_username = None
+        if amounts_by_user:
+            if len(amounts_by_user) == 1:
+                only = next(iter(amounts_by_user))
+                display_winner_user_id = only
+                display_winner_username = names_by_user.get(only, "?")
+            else:
+                display_winner_username = ", ".join(sorted(names_by_user[u] for u in amounts_by_user))
+
+        round_set = {
+            "status": "closed",
+            "drawn_at": drawn_iso,
+            "ticket_count": n,
+            "gross_pot": gross,
+            "sink_amount": sink,
+            "payout": payout if gross > 0 else 0,
+            "winner_user_id": display_winner_user_id,
+            "winner_username": display_winner_username,
+            "winning_numbers": winning_numbers,
+            "draw_fallback": False,
+            "exact_match_count": exact_match_count,
+            "rollover_to_next": rollover_next,
+        }
+        await db.lottery_rounds.update_one({"_id": rid}, {"$set": round_set})
+
         try:
             await db.economy_events.insert_one(
                 {
@@ -244,40 +320,89 @@ async def lottery_draw_cron(_: bool = Depends(_cron_verify())):
                     "gross_pot": gross,
                     "sink_amount": sink,
                     "payout": payout,
-                    "winner_user_id": winner_uid,
-                    "winner_username": winner_name,
+                    "winner_user_id": display_winner_user_id,
+                    "winner_username": display_winner_username,
+                    "winning_numbers": winning_numbers,
+                    "draw_fallback": False,
+                    "exact_match_count": exact_match_count,
+                    "rollover_to_next": rollover_next,
+                    "rollover_in": rollover_start,
                 }
             )
         except Exception as e:
             logger.warning("economy_events lottery_draw: %s", e)
-        if winner_uid:
-            await log_activity(winner_uid, winner_name or "?", "lottery_win", {"round_id": str(rid), "payout": payout, "gross_pot": gross})
+
+        if amounts_by_user:
+            for uid, amt in amounts_by_user.items():
+                uname = names_by_user.get(uid, "?")
+                await log_activity(
+                    uid,
+                    uname,
+                    "lottery_win",
+                    {
+                        "round_id": str(rid),
+                        "payout": amt,
+                        "gross_pot": gross,
+                        "winning_numbers": winning_numbers,
+                    },
+                )
+                try:
+                    body = (
+                        f"Winning numbers: {nums_txt}. Your ticket matched! You received ${amt:,} "
+                        f"(share of the net pot). Gross pot ${gross:,} ({n:,} tickets); {POT_TAX_PERCENT}% tax removed."
+                    )
+                    await send_notification(
+                        uid,
+                        "Lottery Winner!",
+                        body,
+                        "system",
+                        category="lottery",
+                    )
+                except Exception as e:
+                    logger.warning("lottery winner notification: %s", e)
             try:
-                await send_notification(
-                    winner_uid,
-                    "Lottery Winner!",
-                    f"Congratulations! You won the City Lottery and received ${payout:,}. "
-                    f"The gross pot was ${gross:,} ({n:,} tickets). {POT_TAX_PERCENT}% was removed as tax.",
-                    "system",
-                    category="lottery",
+                await db.lottery_events.insert_one(
+                    {
+                        "type": "lottery_winner",
+                        "winner_username": display_winner_username,
+                        "winner_user_id": display_winner_user_id,
+                        "payout": payout,
+                        "gross_pot": gross,
+                        "ticket_count": n,
+                        "drawn_at": drawn_iso,
+                        "winning_numbers": winning_numbers,
+                        "draw_fallback": False,
+                        "exact_match_count": exact_match_count,
+                    }
                 )
             except Exception as e:
-                logger.warning("lottery winner notification: %s", e)
-            try:
-                await db.lottery_events.insert_one({
-                    "type": "lottery_winner",
-                    "winner_username": winner_name,
-                    "payout": payout,
-                    "gross_pot": gross,
-                    "ticket_count": n,
-                    "drawn_at": drawn_iso,
-                })
-            except Exception as e:
                 logger.warning("lottery_events insert: %s", e)
+        elif rollover_next > 0:
+            try:
+                await db.lottery_events.insert_one(
+                    {
+                        "type": "lottery_rollover",
+                        "rollover_amount": rollover_next,
+                        "winning_numbers": winning_numbers,
+                        "drawn_at": drawn_iso,
+                        "ticket_count": n,
+                        "gross_pot": gross,
+                    }
+                )
+            except Exception as e:
+                logger.warning("lottery_events rollover insert: %s", e)
+
         processed += 1
         now2 = datetime.now(timezone.utc)
         nxt = _next_draw_utc(now2)
-        await db.lottery_rounds.insert_one({"closes_at": nxt.isoformat(), "status": "open", "created_at": now2.isoformat()})
+        await db.lottery_rounds.insert_one(
+            {
+                "closes_at": nxt.isoformat(),
+                "status": "open",
+                "created_at": now2.isoformat(),
+                "rollover_in": rollover_next,
+            }
+        )
     await _ensure_open_round()
     return {"ok": True, "rounds_drawn": processed}
 
