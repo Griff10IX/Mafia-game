@@ -1090,11 +1090,31 @@ def register(router):
         cost = int(row.get("cost_cash") or 0)
         if cost <= 0:
             raise HTTPException(status_code=400, detail="Invalid upgrade cost")
+        # Tier 0 must match missing field, null, or 0 — equality to 0 alone does not match absent fields in MongoDB.
+        match_q: dict = {"id": uid, "money": {"$gte": cost}}
+        if purchased == 0:
+            match_q["$or"] = [
+                {"property_portfolio_upgrade_tier": 0},
+                {"property_portfolio_upgrade_tier": None},
+                {"property_portfolio_upgrade_tier": {"$exists": False}},
+            ]
+        else:
+            match_q["property_portfolio_upgrade_tier"] = purchased
         res = await db.users.update_one(
-            {"id": uid, "money": {"$gte": cost}, "property_portfolio_upgrade_tier": purchased},
+            match_q,
             {"$inc": {"money": -cost}, "$set": {"property_portfolio_upgrade_tier": desired}},
         )
         if res.modified_count == 0:
+            u2 = await db.users.find_one({"id": uid}, {"_id": 0, "money": 1, "property_portfolio_upgrade_tier": 1})
+            bal = float((u2 or {}).get("money") or 0)
+            cur_tier = int((u2 or {}).get("property_portfolio_upgrade_tier") or 0)
+            if bal < cost:
+                raise HTTPException(status_code=400, detail=f"Insufficient money. Upgrade costs ${cost:,}.")
+            if cur_tier != purchased:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Could not apply upgrade (portfolio tier changed). Refresh and try again.",
+                )
             raise HTTPException(status_code=400, detail=f"Insufficient money. Upgrade costs ${cost:,}.")
         await log_activity(
             uid,

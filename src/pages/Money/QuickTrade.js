@@ -303,9 +303,7 @@ export default function QuickTrade() {
 
   const formatCurrency = (num) => {
     if (!num) return '0';
-    const parsed = parseFloat(num);
-    if (parsed % 1 === 0) return parsed.toLocaleString('en-US');
-    return parsed.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return Math.round(parseFloat(num)).toLocaleString('en-US');
   };
   
   const formatNumber = (num) => {
