@@ -127,7 +127,6 @@ export default function StockMarket() {
       refreshUser({ pointsDelta: isShort ? -vp : vp });
       const profit = res.data?.profit_points ?? 0;
       const name = pos?.stock_name ?? 'Stock';
-      const isShort = pos?.side === 'short';
       if (isShort) {
         if (profit > 0) toast.success(`Covered ${name} for a profit of ${profit} points!`);
         else toast.success(`Covered ${name}. ${profit < 0 ? `Loss: ${profit} points` : 'No change.'}`);
