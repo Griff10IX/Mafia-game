@@ -176,7 +176,7 @@ TOKEN_CONFIG = {
     },
 }
 
-# My Inventory: exchange 1× Auto Rank (2h) token → 2–4 random distinct 1h tokens from pool (no cash/points).
+# My Inventory: exchange 1× Auto Rank (2h) token → 2 random distinct 1h tokens from pool (no cash/points).
 AUTO_RANK_EXCHANGE_POOL = (
     "xp_crimes",
     "xp_gta",
@@ -188,8 +188,7 @@ AUTO_RANK_EXCHANGE_POOL = (
     "properties",
     "jailbust_bonus",
 )
-# Distinct types granted per exchange (max 4).
-AUTO_RANK_EXCHANGE_TOKEN_COUNT_CHOICES = (2, 3, 4)
+AUTO_RANK_EXCHANGE_TOKEN_COUNT = 2
 
 async def _try_grant_rank_xp_pass_micro_tier(
     db,
@@ -2555,7 +2554,7 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
 
 
 async def exchange_auto_rank_tokens(req: ExchangeAutoRankRequest, current_user: dict = Depends(get_current_user)):
-    """Burn 1× Auto Rank (2h) token for 2–4 random distinct other tokens (no cash/points)."""
+    """Burn 1× Auto Rank (2h) token for 2 random distinct other tokens (no cash/points)."""
     if int(req.count or 1) != 1:
         raise HTTPException(status_code=400, detail="Exchange exactly 1 Auto Rank (2h) token at a time.")
     pool = list(AUTO_RANK_EXCHANGE_POOL)
@@ -2564,8 +2563,7 @@ async def exchange_auto_rank_tokens(req: ExchangeAutoRankRequest, current_user: 
             raise HTTPException(status_code=500, detail="Exchange pool misconfigured.")
     if len(pool) < 2:
         raise HTTPException(status_code=500, detail="Exchange is unavailable.")
-    k = random.choice(AUTO_RANK_EXCHANGE_TOKEN_COUNT_CHOICES)
-    k = min(k, len(pool))
+    k = min(AUTO_RANK_EXCHANGE_TOKEN_COUNT, len(pool))
     chosen = random.sample(pool, k)
 
     inc: Dict[str, int] = {"auto_rank_2h_tokens": -1}

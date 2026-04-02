@@ -300,7 +300,7 @@ export default function MyInventory() {
             </div>
             <div className="p-2.5 space-y-2">
               <p className="text-[8px] text-mutedForeground font-heading leading-snug">
-                Store prices: <span className="text-foreground">1 Auto Rank (2h)</span> = <span className="text-foreground">625 pts</span>. Exchange gives <span className="text-foreground">2–4</span> random <span className="text-foreground">1h</span> boost tokens (<span className="text-foreground">42–55 pts</span> each in Store). No cash or rank points.
+                Trade <span className="text-foreground">1× Auto Rank (2h)</span> for <span className="text-foreground">2 random</span> other boost tokens. No cash or rank points.
               </p>
               <button
                 type="button"
