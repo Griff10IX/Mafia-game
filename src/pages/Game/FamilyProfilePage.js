@@ -749,7 +749,7 @@ export default function FamilyProfilePage() {
         >
           {/* Display profile text */}
           {((family.profile_text || '').trim() || '').length > 0 ? (
-            <div className="rounded-lg overflow-hidden px-1 -mx-1 py-1 -my-0.5">
+            <div className="rounded-lg px-1 -mx-1 py-1 -my-0.5">
               <div
                 className="fp-profile-content font-heading text-sm text-foreground prose prose-invert prose-sm max-w-none prose-p:my-1 prose-img:my-2 prose-div:my-1"
                 dangerouslySetInnerHTML={{ __html: parseForumContent((family.profile_text || '').trim()) }}

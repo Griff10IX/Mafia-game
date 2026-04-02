@@ -1279,7 +1279,6 @@ async def _ensure_dealer_stock_seeded():
 
 async def get_cars_for_sale(current_user: dict = Depends(get_current_user)):
     """List dealer cars: one row per model with in_stock count. Excludes custom and exclusive. Any rank can buy."""
-    await _ensure_dealer_stock_seeded()
     pipeline = [{"$group": {"_id": "$car_id", "count": {"$sum": 1}}}]
     counts = await db.dealer_stock.aggregate(pipeline).to_list(100)
     stock_by_car = {d["_id"]: d["count"] for d in counts}
@@ -1318,7 +1317,7 @@ async def buy_car(
     result = await db.dealer_stock.delete_one({"car_id": request.car_id})
     if result.deleted_count == 0:
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": price}})
-        raise HTTPException(status_code=400, detail="That car is out of stock. Dealer restocks in 1–2 hours.")
+        raise HTTPException(status_code=400, detail="That car is out of stock. Dealer restocks in 1–4 hours.")
     now = datetime.now(timezone.utc)
     doc = {
         "id": str(uuid.uuid4()),
@@ -1762,7 +1761,6 @@ async def run_dealer_replenish_loop():
     while True:
         try:
             db = srv.db
-            await _ensure_dealer_stock_seeded()
             now = datetime.now(timezone.utc).isoformat()
             for c in CARS:
                 if c.get("id") in DEALER_EXCLUDED_IDS or c.get("rarity") == "loot_exclusive":
