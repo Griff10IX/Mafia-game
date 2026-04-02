@@ -977,6 +977,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                 melt_bullets_total = 0
                 scrap_count = 0
                 scrap_total_value = 0
+                bullets_cooldown_detail = None
                 try:
                     if car_ids_bullets:
                         result_b = await melt_cars_locked(user, car_ids_bullets, "bullets", manual_garage=False)
@@ -989,6 +990,8 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                             tb = result_b.get("total_bullets", 0) or 0
                             melt_bullets_total = tb
                             await _update_auto_rank_stats_melt(db, user_id, melted_count=mc, total_bullets=melt_bullets_total)
+                        elif result_b.get("cooldown"):
+                            bullets_cooldown_detail = result_b.get("detail") or "Melt for bullets is on cooldown."
                     if car_ids_cash:
                         result_c = await melt_cars_locked(user, car_ids_cash, "cash", manual_garage=False)
                         if result_c.get("success"):
@@ -1006,7 +1009,10 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                 if melt_count > 0:
                     parts.append(f"Melted {melt_count} car(s) for {melt_bullets_total} bullets")
                 elif car_ids_bullets:
-                    parts.append("Melted 0 car(s) (no eligible cars in your selected Melt rarities)")
+                    if bullets_cooldown_detail:
+                        parts.append(f"Melted 0 car(s) ({bullets_cooldown_detail})")
+                    else:
+                        parts.append("Melted 0 car(s) (no eligible cars in your selected Melt rarities)")
                 if scrap_count > 0:
                     parts.append(f"Scrapped {scrap_count} car(s) for ${scrap_total_value:,}")
                 elif car_ids_cash:
