@@ -21,10 +21,10 @@ except Exception:
     pass
 
 from pydantic import BaseModel
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends, Header, HTTPException, Query
 import httpx
 
-from server import db, get_current_user, get_current_user_verified, log_gambling, _is_admin
+from server import db, get_current_user, get_current_user_verified, log_gambling, _is_admin, _is_moderator
 
 logger = logging.getLogger(__name__)
 
@@ -1690,6 +1690,63 @@ async def admin_sports_cancel_event(request: AdminCancelEventRequest, current_us
     }
 
 
+async def admin_sports_bets_list(
+    limit: int = Query(200, ge=1, le=500),
+    username: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
+    event_id: Optional[str] = Query(None),
+    current_user: dict = Depends(get_current_user_verified),
+):
+    """Admin or moderator: ledger of sports bets (who bet what, from sports_bets)."""
+    if not _is_admin(current_user) and not _is_moderator(current_user):
+        raise HTTPException(status_code=403, detail="Admin or moderator access required")
+    limit = min(max(1, int(limit)), 500)
+    query: dict = {}
+    if status and status.strip():
+        s = status.strip().lower()
+        if s not in ("open", "won", "lost", "cancelled"):
+            raise HTTPException(status_code=400, detail="status must be open, won, lost, or cancelled")
+        query["status"] = s
+    if event_id and event_id.strip():
+        query["event_id"] = event_id.strip()
+    if username and username.strip():
+        uname_pattern = re.compile("^" + re.escape(username.strip()) + "$", re.IGNORECASE)
+        urow = await db.users.find_one({"username": uname_pattern}, {"_id": 0, "id": 1})
+        if not urow:
+            return {"bets": [], "count": 0}
+        query["user_id"] = urow["id"]
+    cursor = db.sports_bets.find(query, {"_id": 0}).sort("created_at", -1).limit(limit)
+    bets = await cursor.to_list(limit)
+    uids = list({b.get("user_id") for b in bets if b.get("user_id")})
+    users_by_id: dict = {}
+    if uids:
+        udocs = await db.users.find({"id": {"$in": uids}}, {"_id": 0, "id": 1, "username": 1}).to_list(len(uids))
+        for doc in udocs:
+            users_by_id[doc["id"]] = doc.get("username") or "?"
+    out = []
+    for b in bets:
+        stake = int(b.get("stake") or 0)
+        odds = float(b.get("odds") or 1)
+        st = b.get("status")
+        payout = int(stake * odds) if st == "won" else None
+        out.append({
+            "id": b.get("id"),
+            "user_id": b.get("user_id"),
+            "username": users_by_id.get(b.get("user_id"), "?"),
+            "event_id": b.get("event_id"),
+            "event_name": b.get("event_name"),
+            "option_id": b.get("option_id"),
+            "option_name": b.get("option_name"),
+            "odds": odds,
+            "stake": stake,
+            "status": st,
+            "payout_if_won": payout,
+            "created_at": b.get("created_at"),
+            "settled_at": b.get("settled_at"),
+        })
+    return {"bets": out, "count": len(out)}
+
+
 def register(router):
     if _odds_api_key():
         logger.info("Sports betting: THE_ODDS_API_KEY is set — using The Odds API for Football/UFC/Boxing and for auto-settle.")
@@ -1710,6 +1767,7 @@ def register(router):
     router.add_api_route("/admin/sports-betting/custom-event", admin_sports_add_custom_event, methods=["POST"])
     router.add_api_route("/admin/sports-betting/settle", admin_sports_settle, methods=["POST"])
     router.add_api_route("/admin/sports-betting/cancel-event", admin_sports_cancel_event, methods=["POST"])
+    router.add_api_route("/admin/sports-betting/bets", admin_sports_bets_list, methods=["GET"])
 
     # Cron: auto-settle from Odds API scores (call every 15-30 min)
     cron_secret = (os.environ.get("CRON_SECRET") or "").strip()

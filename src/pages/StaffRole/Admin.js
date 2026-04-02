@@ -219,6 +219,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Referrals & prereg heal', categoryId: 'admin-players', collapseKey: 'referralsReport', keywords: ['referral', 'referrer', 'referee', 'invite', 'earnings', 'ref', 'heal', 'prereg', 'backfill', 'manual', 'assign', 'link', 'remove', 'unlink', 'clear'] },
   { label: 'Respect points log', categoryId: 'admin-players', collapseKey: 'respectPointsLog', keywords: ['respect', 'points', 'log', 'earned', 'audit', 'player'] },
   { label: 'Gambling Log', categoryId: 'admin-logs', collapseKey: 'gamblingLog', keywords: ['gambling', 'log', 'casino', 'bet'] },
+  { label: 'Sports bets ledger', categoryId: 'admin-logs', collapseKey: 'sportsBetsLedger', keywords: ['sports', 'betting', 'bets', 'football', 'ledger'] },
   { label: 'Activity Log', categoryId: 'admin-logs', collapseKey: 'activityLog', keywords: ['activity', 'log', 'history'] },
   // Donations
   { label: 'Donations Payments Log', categoryId: 'admin-donations', collapseKey: 'donationsPayments', keywords: ['donations', 'payments', 'stripe', 'credit'], adminOnly: true },
@@ -344,8 +345,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, ...parsed };
-  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false }; }
+    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true }; }
 }
 
 function saveCollapsed(state) {
@@ -883,6 +884,12 @@ export default function Admin() {
   const [gamblingLogLoading, setGamblingLogLoading] = useState(false);
   const [gamblingLogUsername, setGamblingLogUsername] = useState('');
   const [gamblingLogGameType, setGamblingLogGameType] = useState('');
+  const [sportsBetsLedger, setSportsBetsLedger] = useState({ bets: [] });
+  const [sportsBetsLedgerLoading, setSportsBetsLedgerLoading] = useState(false);
+  const [sportsBetsUsername, setSportsBetsUsername] = useState('');
+  const [sportsBetsStatus, setSportsBetsStatus] = useState('');
+  const [sportsBetsEventId, setSportsBetsEventId] = useState('');
+  const [sportsBetsLimit, setSportsBetsLimit] = useState(200);
   const [respectLogUserId, setRespectLogUserId] = useState('');
   const [respectLogLimit, setRespectLogLimit] = useState(200);
   const [respectLogData, setRespectLogData] = useState(null);
@@ -4991,6 +4998,24 @@ export default function Admin() {
       setGamblingLog({ entries: [] });
     } finally {
       setGamblingLogLoading(false);
+    }
+  };
+
+  const fetchSportsBetsLedger = async () => {
+    setSportsBetsLedgerLoading(true);
+    try {
+      const lim = Math.max(1, Math.min(500, parseInt(String(sportsBetsLimit), 10) || 200));
+      const params = { limit: lim };
+      if (sportsBetsUsername.trim()) params.username = sportsBetsUsername.trim();
+      if (sportsBetsStatus.trim()) params.status = sportsBetsStatus.trim();
+      if (sportsBetsEventId.trim()) params.event_id = sportsBetsEventId.trim();
+      const res = await api.get('/admin/sports-betting/bets', { params });
+      setSportsBetsLedger(res.data || { bets: [] });
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load sports bets');
+      setSportsBetsLedger({ bets: [] });
+    } finally {
+      setSportsBetsLedgerLoading(false);
     }
   };
 
@@ -13418,6 +13443,104 @@ export default function Admin() {
                 </BtnDanger>
               </div>
               {(gamblingLog.entries || []).length === 0 && !gamblingLogLoading && <p className="text-xs text-mutedForeground">Load to see all casino activity (dice, roulette, blackjack, slots, video poker, horseracing, sports, MDG).</p>}
+            </div>
+          )}
+        </div>
+
+        {/* Sports bets — full ledger (who, event, pick, stake) */}
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Trophy}
+            title="Sports bets ledger"
+            badge={sportsBetsLedger.bets?.length != null && <span className="text-[10px] font-heading text-mutedForeground">{sportsBetsLedger.bets.length} bets</span>}
+            toolAnchor="sportsBetsLedger"
+            isCollapsed={collapsed.sportsBetsLedger}
+            onToggle={() => toggleSection('sportsBetsLedger')}
+          />
+          {!collapsed.sportsBetsLedger && (
+            <div className="p-3 space-y-2">
+              <p className="text-[10px] text-mutedForeground font-heading">Live data from <span className="font-mono text-foreground">sports_bets</span> — who staked on which event and outcome.</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={sportsBetsUsername}
+                  onChange={(e) => setSportsBetsUsername(e.target.value)}
+                  placeholder="Username (optional)"
+                  className="min-w-[100px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                <select
+                  value={sportsBetsStatus}
+                  onChange={(e) => setSportsBetsStatus(e.target.value)}
+                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                >
+                  <option value="">All statuses</option>
+                  <option value="open">Open</option>
+                  <option value="won">Won</option>
+                  <option value="lost">Lost</option>
+                  <option value="cancelled">Cancelled</option>
+                </select>
+                <input
+                  type="text"
+                  value={sportsBetsEventId}
+                  onChange={(e) => setSportsBetsEventId(e.target.value)}
+                  placeholder="Event ID (optional)"
+                  className="min-w-[120px] flex-1 max-w-[220px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs font-mono text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                <span className="text-[10px] text-mutedForeground">Limit</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={500}
+                  value={sportsBetsLimit}
+                  onChange={(e) => setSportsBetsLimit(Math.max(1, Math.min(500, parseInt(e.target.value, 10) || 200)))}
+                  className="w-16 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs"
+                />
+                <BtnPrimary onClick={fetchSportsBetsLedger} disabled={sportsBetsLedgerLoading}>
+                  {sportsBetsLedgerLoading ? '...' : 'Load'}
+                </BtnPrimary>
+              </div>
+              <div className="max-h-96 overflow-x-auto overflow-y-auto rounded border border-zinc-700/50">
+                <table className="w-full text-[10px] font-heading min-w-[720px]">
+                  <thead className="bg-zinc-800/50 sticky top-0">
+                    <tr>
+                      <th className="text-left p-2 text-mutedForeground uppercase whitespace-nowrap">Placed</th>
+                      <th className="text-left p-2 text-mutedForeground uppercase whitespace-nowrap">User</th>
+                      <th className="text-left p-2 text-mutedForeground uppercase">Event</th>
+                      <th className="text-left p-2 text-mutedForeground uppercase">Pick</th>
+                      <th className="text-right p-2 text-mutedForeground uppercase whitespace-nowrap">Odds</th>
+                      <th className="text-right p-2 text-mutedForeground uppercase whitespace-nowrap">Stake</th>
+                      <th className="text-left p-2 text-mutedForeground uppercase whitespace-nowrap">Status</th>
+                      <th className="text-right p-2 text-mutedForeground uppercase whitespace-nowrap">Payout</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(sportsBetsLedger.bets || []).map((b) => (
+                      <tr key={b.id} className="border-t border-zinc-700/30 hover:bg-zinc-800/30">
+                        <td className="p-2 text-mutedForeground whitespace-nowrap align-top">{b.created_at ? new Date(b.created_at).toLocaleString() : '—'}</td>
+                        <td className="p-2 text-primary font-bold align-top whitespace-nowrap">{b.username || '—'}</td>
+                        <td className="p-2 align-top max-w-[200px]">
+                          <span className="text-foreground">{b.event_name || '—'}</span>
+                          {b.event_id && <span className="block text-[9px] font-mono text-mutedForeground truncate" title={b.event_id}>{b.event_id}</span>}
+                        </td>
+                        <td className="p-2 align-top max-w-[140px]">
+                          <span className="text-foreground">{b.option_name || '—'}</span>
+                          {b.option_id && <span className="block text-[9px] font-mono text-mutedForeground truncate" title={b.option_id}>{b.option_id}</span>}
+                        </td>
+                        <td className="p-2 text-right align-top whitespace-nowrap">{b.odds != null ? Number(b.odds).toFixed(2) : '—'}</td>
+                        <td className="p-2 text-right align-top whitespace-nowrap">{b.stake != null ? `$${Number(b.stake).toLocaleString()}` : '—'}</td>
+                        <td className="p-2 align-top whitespace-nowrap capitalize">{b.status || '—'}</td>
+                        <td className="p-2 text-right align-top whitespace-nowrap text-emerald-400/90">
+                          {b.payout_if_won != null ? `$${Number(b.payout_if_won).toLocaleString()}` : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {(sportsBetsLedger.bets || []).length === 0 && !sportsBetsLedgerLoading && (
+                <p className="text-xs text-mutedForeground">Load to see sports bets. Filter by user, status, or event ID.</p>
+              )}
             </div>
           )}
         </div>
