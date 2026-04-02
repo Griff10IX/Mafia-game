@@ -236,13 +236,23 @@ export function imageHostPublicUrl(publicId) {
   return path;
 }
 
-/** Dispatch to refresh top bar / user data in Layout (money, points, rank, etc.). Pass newMoney to update cash immediately. */
-export function refreshUser(newMoney) {
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('app:refresh-user', {
-      detail: newMoney != null && newMoney !== undefined ? { money: Number(newMoney) } : {}
-    }));
+/**
+ * Dispatch to refresh top bar / user data in Layout (money, points, rank, etc.).
+ * - Pass a number to set cash immediately (same as { money }).
+ * - Pass { money } for absolute cash, { points } for absolute points, { pointsDelta } to adjust points (e.g. stock long −pts).
+ */
+export function refreshUser(newMoneyOrDetail) {
+  if (typeof window === 'undefined') return;
+  let detail = {};
+  if (newMoneyOrDetail != null && typeof newMoneyOrDetail === 'object' && !Array.isArray(newMoneyOrDetail)) {
+    detail = { ...newMoneyOrDetail };
+    if (detail.money != null) detail.money = Number(detail.money);
+    if (detail.points != null) detail.points = Number(detail.points);
+    if (detail.pointsDelta != null) detail.pointsDelta = Number(detail.pointsDelta);
+  } else if (newMoneyOrDetail != null && newMoneyOrDetail !== undefined) {
+    detail = { money: Number(newMoneyOrDetail) };
   }
+  window.dispatchEvent(new CustomEvent('app:refresh-user', { detail }));
 }
 
 export default api;

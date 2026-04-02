@@ -1151,6 +1151,11 @@ async def _merged_sports_templates_for_admin() -> list:
     return list(by_id.values())
 
 
+def _football_league_filter_options() -> list:
+    """Every soccer league we fetch from Odds API — admin filter lists all, not only leagues with templates today."""
+    return [{"key": k, "label": _soccer_league_display_name(k)} for k in SOCCER_LEAGUES]
+
+
 def _admin_templates_json_from_list(templates: list, *, template_source: str) -> dict:
     categories = ["Football", "UFC", "Boxing", "Formula 1"]
     by_category = {c: [] for c in categories}
@@ -1165,6 +1170,7 @@ def _admin_templates_json_from_list(templates: list, *, template_source: str) ->
         "odds_api_configured": bool(_odds_api_key()),
         "templates_total": len(templates),
         "template_source": template_source,
+        "football_league_filter_options": _football_league_filter_options(),
     }
 
 
@@ -1223,7 +1229,7 @@ async def sports_betting_events(current_user: dict = Depends(get_current_user_ve
     now = datetime.now(timezone.utc)
     cursor = db.sports_events.find(
         {"status": "open"},
-        {"_id": 0, "id": 1, "name": 1, "category": 1, "start_time": 1, "options": 1, "is_special": 1},
+        {"_id": 0, "id": 1, "name": 1, "category": 1, "start_time": 1, "options": 1, "is_special": 1, "external_sport_key": 1},
     ).sort("start_time", 1)
     events = await cursor.to_list(50)
     result = []
@@ -1242,7 +1248,11 @@ async def sports_betting_events(current_user: dict = Depends(get_current_user_ve
             status = "in_play"
         else:
             status = "finished"
-        result.append({
+        exk = (e.get("external_sport_key") or "").strip()
+        league_label = None
+        if (e.get("category") or "") == "Football" and exk:
+            league_label = _soccer_league_display_name(exk)
+        row = {
             "id": e["id"],
             "name": e.get("name", "?"),
             "category": e.get("category", "—"),
@@ -1251,7 +1261,10 @@ async def sports_betting_events(current_user: dict = Depends(get_current_user_ve
             "is_special": bool(e.get("is_special")),
             "betting_open": betting_open,
             "status": status,
-        })
+        }
+        if league_label:
+            row["league_label"] = league_label
+        result.append(row)
     return {"events": result}
 
 

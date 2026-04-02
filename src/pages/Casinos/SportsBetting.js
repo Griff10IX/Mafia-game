@@ -82,6 +82,9 @@ function EventCard({ event, onPlaceBet, isAdmin, onSettle, onCancelEvent, cancel
       {/* Event name */}
       <div className="px-3 pt-2.5 pb-1.5">
         <p className="text-sm font-heading font-bold text-foreground leading-snug">{event.name}</p>
+        {event.league_label ? (
+          <p className="text-[9px] font-heading text-primary/80 mt-0.5 truncate" title={event.league_label}>{event.league_label}</p>
+        ) : null}
       </div>
 
       {/* Odds buttons */}
@@ -170,7 +173,14 @@ export default function SportsBetting() {
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [selectedOption, setSelectedOption] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
-  const [templates, setTemplates] = useState({ categories: [], templates: {}, odds_api_configured: null, templates_total: null, template_source: null });
+  const [templates, setTemplates] = useState({
+    categories: [],
+    templates: {},
+    odds_api_configured: null,
+    templates_total: null,
+    template_source: null,
+    football_league_filter_options: null,
+  });
   const [loadingDbTemplates, setLoadingDbTemplates] = useState(false);
   const [adminCategory, setAdminCategory] = useState('Football');
   const [addingTemplateId, setAddingTemplateId] = useState(null);
@@ -248,6 +258,7 @@ export default function SportsBetting() {
               odds_api_configured: tRes.data?.odds_api_configured ?? null,
               templates_total: tRes.data?.templates_total ?? null,
               template_source: tRes.data?.template_source ?? null,
+              football_league_filter_options: tRes.data?.football_league_filter_options ?? null,
             });
           }
         }
@@ -294,6 +305,7 @@ export default function SportsBetting() {
         odds_api_configured: res.data?.odds_api_configured ?? null,
         templates_total: res.data?.templates_total ?? null,
         template_source: res.data?.template_source ?? 'merged',
+        football_league_filter_options: res.data?.football_league_filter_options ?? null,
       });
       const n = res.data?.templates_persisted;
       toast.success(typeof n === 'number' ? `Events loaded — ${n} saved to template library` : 'Events loaded');
@@ -311,6 +323,7 @@ export default function SportsBetting() {
         odds_api_configured: res.data?.odds_api_configured ?? null,
         templates_total: res.data?.templates_total ?? null,
         template_source: res.data?.template_source ?? 'database',
+        football_league_filter_options: res.data?.football_league_filter_options ?? null,
       });
       const n = res.data?.templates_total;
       toast.success(typeof n === 'number' ? `Loaded ${n} saved template(s) from database` : 'Saved templates loaded');
@@ -403,6 +416,10 @@ export default function SportsBetting() {
   const templatesInAdminTab = templateMap[adminCategory]?.length || 0;
 
   const footballLeagueOptions = useMemo(() => {
+    const staticOpts = templates.football_league_filter_options;
+    if (Array.isArray(staticOpts) && staticOpts.length > 0) {
+      return staticOpts.map((o) => [o.key, o.label]).sort((a, b) => a[1].localeCompare(b[1]));
+    }
     const list = templateMap.Football || [];
     const m = new Map();
     list.forEach((t) => {
@@ -412,7 +429,7 @@ export default function SportsBetting() {
       if (!m.has(k)) m.set(k, lab);
     });
     return Array.from(m.entries()).sort((a, b) => a[1].localeCompare(b[1]));
-  }, [templateMap]);
+  }, [templates.football_league_filter_options, templateMap]);
 
   const filteredAdminTemplates = useMemo(() => {
     let list = templateMap[adminCategory] || [];

@@ -165,8 +165,9 @@ async def _process_auto_sell_expired(uid: str, now: datetime, live_list: list, c
             deleted = await db.stock_positions.find_one_and_delete({"id": pos.get("id"), "user_id": uid})
             if not deleted:
                 continue
-            await db.users.update_one({"id": uid}, {"$inc": {"points": profit_points - cost_to_cover, "stock_market_profit_total": profit_points}})
-            net_points = profit_points - cost_to_cover
+            # Open short already credited notional (units * open_price). Close only pays cover cost.
+            await db.users.update_one({"id": uid}, {"$inc": {"points": -cost_to_cover, "stock_market_profit_total": profit_points}})
+            net_points = -cost_to_cover
             if net_points != 0:
                 await log_points_event(db, user_id=uid, points=int(net_points), event_type="stock_close", meta={"side": "short", "stock_id": pos.get("stock_id"), "stock_name": stock.get("name"), "units": units, "open_price": open_price, "close_price": current_price, "auto_sold": True})
             await db.stock_transactions.insert_one({
@@ -558,8 +559,9 @@ def register(router):
             user = await db.users.find_one({"id": uid}, {"_id": 0, "points": 1})
             if int(user.get("points") or 0) < cost_to_cover:
                 raise HTTPException(status_code=400, detail=f"Insufficient points to cover. Need {cost_to_cover} points.")
-            await db.users.update_one({"id": uid}, {"$inc": {"points": profit_points - cost_to_cover, "stock_market_profit_total": profit_points}})
-            net_points = profit_points - cost_to_cover
+            # Open short already credited notional (units * open_price). Close only pays cover cost.
+            await db.users.update_one({"id": uid}, {"$inc": {"points": -cost_to_cover, "stock_market_profit_total": profit_points}})
+            net_points = -cost_to_cover
             if net_points != 0:
                 await log_points_event(db, user_id=uid, points=int(net_points), event_type="stock_close", meta={"side": "short", "stock_id": pos.get("stock_id"), "stock_name": stock.get("name"), "units": units, "open_price": open_price, "close_price": current_price})
             await db.stock_transactions.insert_one({

@@ -579,9 +579,8 @@ export default function Layout({ children }) {
 
   const refreshUserDebounceRef = useRef(null);
   useEffect(() => {
-    const runRefresh = async (detail) => {
+    const runRefresh = async () => {
       invalidateApiCache();
-      if (detail && detail.money != null) setUser((prev) => (prev ? { ...prev, money: Number(detail.money) } : null));
       fetchData(); fetchUnreadCount(); fetchHelpDeskOpenCount(); fetchWarStatus(); fetchRankingCounts();
       api.get('/oc/status').then((r) => setOcStatus(r.data)).catch(() => setOcStatus(null));
       if (notificationPanelOpenRef.current) {
@@ -590,8 +589,17 @@ export default function Layout({ children }) {
     };
     const handler = (event) => {
       const detail = event.detail || {};
+      if (detail.money != null) {
+        setUser((prev) => (prev ? { ...prev, money: Number(detail.money) } : null));
+      }
+      if (detail.points != null) {
+        setUser((prev) => (prev ? { ...prev, points: Number(detail.points) } : null));
+      }
+      if (detail.pointsDelta != null) {
+        setUser((prev) => (prev ? { ...prev, points: Number(prev.points || 0) + Number(detail.pointsDelta) } : null));
+      }
       if (refreshUserDebounceRef.current) clearTimeout(refreshUserDebounceRef.current);
-      refreshUserDebounceRef.current = setTimeout(() => runRefresh(detail), 150);
+      refreshUserDebounceRef.current = setTimeout(() => runRefresh(), 150);
     };
     window.addEventListener('app:refresh-user', handler);
     return () => { window.removeEventListener('app:refresh-user', handler); if (refreshUserDebounceRef.current) clearTimeout(refreshUserDebounceRef.current); };
