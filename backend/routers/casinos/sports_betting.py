@@ -349,24 +349,82 @@ def _parse_odds_event(event: dict, category: str, three_way: bool, sport_key: st
     return out
 
 
+# Keys from https://the-odds-api.com/sports-odds-data/sports-apis.html (invalid keys → empty odds for that league).
 SOCCER_LEAGUES = (
     "soccer_epl",
+    "soccer_fa_cup",
+    "soccer_england_efl_cup",
+    "soccer_efl_champ",
+    "soccer_england_league1",
+    "soccer_england_league2",
     "soccer_spain_la_liga",
+    "soccer_spain_segunda_division",
     "soccer_germany_bundesliga",
+    "soccer_germany_bundesliga2",
     "soccer_italy_serie_a",
+    "soccer_italy_serie_b",
     "soccer_france_ligue_one",
     "soccer_uefa_champs_league",
+    "soccer_uefa_champs_league_qualification",
+    "soccer_uefa_champs_league_women",
     "soccer_uefa_europa_league",
     "soccer_uefa_europa_conference_league",
+    "soccer_uefa_nations_league",
     "soccer_netherlands_eredivisie",
     "soccer_portugal_primeira_liga",
+    "soccer_spl",
+    "soccer_belgium_first_div",
+    "soccer_turkey_super_league",
     "soccer_usa_mls",
-    "soccer_england_league_one",
-    "soccer_england_efl",
     "soccer_mexico_ligamx",
-    "soccer_brazil_serie_a",
+    "soccer_brazil_campeonato",
     "soccer_australia_aleague",
 )
+
+# Bookmaker regions (Odds API): try narrow sets first, then add fr/se/au so one bad region does not block the rest.
+SOCCER_ODDS_REGION_ATTEMPTS = (
+    "uk,us,eu",
+    "uk,us,eu,fr,se",
+    "uk,us,eu,fr,se,au",
+)
+
+
+def _soccer_league_display_name(sport_key: str) -> str:
+    if not sport_key:
+        return ""
+    labels = {
+        "soccer_epl": "Premier League",
+        "soccer_fa_cup": "FA Cup",
+        "soccer_england_efl_cup": "EFL Cup (Carabao)",
+        "soccer_efl_champ": "Championship",
+        "soccer_england_league1": "League One",
+        "soccer_england_league2": "League Two",
+        "soccer_spain_la_liga": "La Liga",
+        "soccer_spain_segunda_division": "La Liga 2",
+        "soccer_germany_bundesliga": "Bundesliga",
+        "soccer_germany_bundesliga2": "Bundesliga 2",
+        "soccer_italy_serie_a": "Serie A",
+        "soccer_italy_serie_b": "Serie B",
+        "soccer_france_ligue_one": "Ligue 1",
+        "soccer_uefa_champs_league": "Champions League",
+        "soccer_uefa_champs_league_qualification": "Champions League (qualifying)",
+        "soccer_uefa_champs_league_women": "Women's Champions League",
+        "soccer_uefa_europa_league": "Europa League",
+        "soccer_uefa_europa_conference_league": "Conference League",
+        "soccer_uefa_nations_league": "UEFA Nations League",
+        "soccer_netherlands_eredivisie": "Eredivisie",
+        "soccer_portugal_primeira_liga": "Primeira Liga",
+        "soccer_spl": "Scottish Premiership",
+        "soccer_belgium_first_div": "Belgium First Division",
+        "soccer_turkey_super_league": "Turkey Super League",
+        "soccer_usa_mls": "MLS",
+        "soccer_mexico_ligamx": "Liga MX",
+        "soccer_brazil_campeonato": "Brazil Série A",
+        "soccer_australia_aleague": "A-League",
+    }
+    if sport_key in labels:
+        return labels[sport_key]
+    return sport_key.replace("soccer_", "").replace("_", " ").title()
 
 
 def _is_future_event(ev: dict, require_time: bool = False, buffer_minutes: int = 10) -> bool:
@@ -388,7 +446,7 @@ def _is_future_event(ev: dict, require_time: bool = False, buffer_minutes: int =
 
 
 async def _fetch_odds_api_soccer_league_raw(client: httpx.AsyncClient, sport_key: str, sem: asyncio.Semaphore, api_key: str) -> list:
-    cache_key = "v2:odds:%s" % sport_key
+    cache_key = "v4:odds:%s" % sport_key
     ttl = _sports_odds_cache_ttl_sec()
     cached = await _odds_cache_read_list_if_fresh(cache_key, ttl)
     if cached is not None:
@@ -397,27 +455,31 @@ async def _fetch_odds_api_soccer_league_raw(client: httpx.AsyncClient, sport_key
         r = None
         # Bulk /sports/{key}/odds only accepts featured markets. draw_no_bet and other
         # "additional" markets cause INVALID_MARKET and fail the whole request — avoid them here.
-        for markets in ("h2h,h2h_3_way", "h2h"):
-            try:
-                r = await client.get(
-                    "%s/sports/%s/odds" % (ODDS_API_BASE, sport_key),
-                    params={
-                        "apiKey": api_key,
-                        "regions": "uk,us,eu,au",
-                        "markets": markets,
-                        "oddsFormat": "decimal",
-                    },
-                )
-            except Exception as ex:
-                logger.warning("Odds API odds fetch failed %s: %s", sport_key, ex)
-                return []
-            if r.status_code == 200:
+        for regions in SOCCER_ODDS_REGION_ATTEMPTS:
+            for markets in ("h2h,h2h_3_way", "h2h"):
+                try:
+                    r = await client.get(
+                        "%s/sports/%s/odds" % (ODDS_API_BASE, sport_key),
+                        params={
+                            "apiKey": api_key,
+                            "regions": regions,
+                            "markets": markets,
+                            "oddsFormat": "decimal",
+                        },
+                    )
+                except Exception as ex:
+                    logger.warning("Odds API odds fetch failed %s: %s", sport_key, ex)
+                    return []
+                if r.status_code == 200:
+                    break
+            if r is not None and r.status_code == 200:
                 break
         if r is None or r.status_code != 200:
             logger.warning(
-                "Odds API odds %s failed (last HTTP %s, tried h2h,h2h_3_way then h2h)",
+                "Odds API odds %s failed (last HTTP %s); tried regions: %s",
                 sport_key,
                 getattr(r, "status_code", 0) if r is not None else 0,
+                ", ".join(SOCCER_ODDS_REGION_ATTEMPTS),
             )
             return []
     events = r.json()
@@ -1096,6 +1158,11 @@ def _sports_template_to_response(t):
     st = t.get("start_time")
     if st:
         row["start_time"] = st
+    exk = t.get("external_sport_key")
+    if exk:
+        row["external_sport_key"] = exk
+        if (t.get("category") or "") == "Football":
+            row["league_label"] = _soccer_league_display_name(exk)
     return row
 
 

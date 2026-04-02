@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import logging
 import os
+import random
 import secrets
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -17,6 +19,14 @@ logger = logging.getLogger(__name__)
 TICKET_PRICE = 500_000
 POT_TAX_PERCENT = 10
 _DRAW_WEEKDAYS = (2, 6)  # Wed, Sun — 00:00 UTC
+_LOTTERY_PICK_COUNT = 6
+_LOTTERY_NUMBER_MAX = 50
+_lottery_rng = random.SystemRandom()
+
+
+def _random_lottery_numbers() -> list[int]:
+    """Six distinct lucky numbers 1..50 (display only; draw still picks a random ticket doc)."""
+    return sorted(_lottery_rng.sample(range(1, _LOTTERY_NUMBER_MAX + 1), _LOTTERY_PICK_COUNT))
 
 
 def _next_draw_utc(after: datetime) -> datetime:
@@ -129,7 +139,17 @@ async def buy_lottery_tickets(body: LotteryBuyBody, current_user: dict = Depends
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient cash")
     now_iso = now.isoformat()
-    docs = [{"round_id": rid, "user_id": uid, "username": uname, "created_at": now_iso} for _ in range(count)]
+    docs = [
+        {
+            "round_id": rid,
+            "user_id": uid,
+            "username": uname,
+            "created_at": now_iso,
+            "ticket_id": str(uuid.uuid4()),
+            "numbers": _random_lottery_numbers(),
+        }
+        for _ in range(count)
+    ]
     if docs:
         await db.lottery_tickets.insert_many(docs)
     await log_activity(uid, uname, "lottery_buy", {"round_id": str(rid), "count": count, "spent": total_cost})
@@ -151,22 +171,28 @@ async def buy_lottery_tickets(body: LotteryBuyBody, current_user: dict = Depends
 
 
 async def get_my_lottery_tickets(current_user: dict = Depends(get_current_user)):
-    """Return the current user's tickets for the open round (purchase timestamps)."""
+    """Return the current user's tickets for the open round (numbers + purchase time)."""
     rd = await _ensure_open_round()
     rid = rd["_id"]
     uid = current_user["id"]
     cursor = db.lottery_tickets.find(
         {"round_id": rid, "user_id": uid},
-        {"_id": 0, "created_at": 1},
+        {"_id": 0, "created_at": 1, "numbers": 1, "ticket_id": 1},
     ).sort("created_at", -1).limit(500)
     docs = await cursor.to_list(500)
-    grouped: dict[str, int] = {}
+    tickets = []
     for d in docs:
-        key = (d.get("created_at") or "unknown")[:19]
-        grouped[key] = grouped.get(key, 0) + 1
-    purchases = [{"purchased_at": k, "count": v} for k, v in grouped.items()]
-    purchases.sort(key=lambda x: x["purchased_at"], reverse=True)
-    return {"round_id": str(rid), "total": len(docs), "purchases": purchases}
+        nums = d.get("numbers")
+        if nums is not None and not isinstance(nums, list):
+            nums = None
+        tickets.append(
+            {
+                "ticket_id": (d.get("ticket_id") or "").strip(),
+                "purchased_at": d.get("created_at") or "",
+                "numbers": nums,
+            }
+        )
+    return {"round_id": str(rid), "total": len(tickets), "tickets": tickets}
 
 
 async def lottery_draw_cron(_: bool = Depends(_cron_verify())):

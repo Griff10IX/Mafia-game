@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Trophy, Target, TrendingUp, Clock, Shield, Plus, ChevronDown, ChevronUp, RefreshCw, X } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
@@ -189,6 +189,12 @@ export default function SportsBetting() {
   const [customEventOptions, setCustomEventOptions] = useState([{ name: '', odds: 2 }, { name: '', odds: 2 }]);
   const [addingCustom, setAddingCustom] = useState(false);
   const [activeTab, setActiveTab] = useState('events');
+  const [templateLeagueFilter, setTemplateLeagueFilter] = useState('');
+  const [templateSearchQuery, setTemplateSearchQuery] = useState('');
+
+  useEffect(() => {
+    setTemplateLeagueFilter('');
+  }, [adminCategory]);
 
   const fetchAll = useCallback(async () => {
     setLoading(true);
@@ -396,6 +402,38 @@ export default function SportsBetting() {
   const templateTotal = (templates.categories || []).reduce((s, c) => s + (templateMap[c]?.length || 0), 0);
   const templatesInAdminTab = templateMap[adminCategory]?.length || 0;
 
+  const footballLeagueOptions = useMemo(() => {
+    const list = templateMap.Football || [];
+    const m = new Map();
+    list.forEach((t) => {
+      const k = t.external_sport_key;
+      if (!k) return;
+      const lab = t.league_label || k;
+      if (!m.has(k)) m.set(k, lab);
+    });
+    return Array.from(m.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  }, [templateMap]);
+
+  const filteredAdminTemplates = useMemo(() => {
+    let list = templateMap[adminCategory] || [];
+    if (adminCategory === 'Football' && templateLeagueFilter) {
+      list = list.filter((t) => t.external_sport_key === templateLeagueFilter);
+    }
+    const q = (templateSearchQuery || '').trim().toLowerCase();
+    if (q) {
+      list = list.filter(
+        (t) =>
+          (t.name || '').toLowerCase().includes(q) ||
+          (t.id || '').toLowerCase().includes(q) ||
+          (t.external_sport_key || '').toLowerCase().includes(q) ||
+          (t.league_label || '').toLowerCase().includes(q),
+      );
+    }
+    return list;
+  }, [templateMap, adminCategory, templateLeagueFilter, templateSearchQuery]);
+
+  const shownInCategory = filteredAdminTemplates.length;
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
@@ -503,7 +541,10 @@ export default function SportsBetting() {
                     className="text-[10px] text-zinc-500 font-heading"
                     title={templates.template_source === 'database' ? 'Showing database snapshot only.' : 'Merged: last API refresh + database.'}
                   >
-                    {templateTotal} templates total · {templatesInAdminTab} in {adminCategory}
+                    {templateTotal} templates total ·{' '}
+                    {shownInCategory === templatesInAdminTab
+                      ? `${shownInCategory} in ${adminCategory}`
+                      : `${shownInCategory} of ${templatesInAdminTab} in ${adminCategory}`}
                     {templates.template_source === 'database' ? (
                       <span className="text-zinc-600"> · DB</span>
                     ) : null}
@@ -533,21 +574,50 @@ export default function SportsBetting() {
                 })}
               </div>
 
+              <div className="flex flex-col gap-2">
+                <input
+                  type="search"
+                  value={templateSearchQuery}
+                  onChange={(e) => setTemplateSearchQuery(e.target.value)}
+                  placeholder="Filter by match name, league, or id…"
+                  className="w-full bg-zinc-900/50 border border-zinc-700/30 rounded px-2 py-1.5 text-[11px] text-foreground font-heading focus:border-primary/50 focus:outline-none placeholder:text-zinc-600"
+                />
+                {adminCategory === 'Football' && footballLeagueOptions.length > 0 ? (
+                  <select
+                    value={templateLeagueFilter}
+                    onChange={(e) => setTemplateLeagueFilter(e.target.value)}
+                    className="w-full bg-zinc-900/50 border border-zinc-700/30 rounded px-2 py-1.5 text-[11px] text-foreground font-heading focus:border-primary/50 focus:outline-none"
+                  >
+                    <option value="">All leagues</option>
+                    {footballLeagueOptions.map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                ) : null}
+              </div>
+
               {/* Template list */}
-              <div className="space-y-1 max-h-48 overflow-y-auto">
-                {(templates.templates?.[adminCategory] || []).length === 0 ? (
+              <div className="space-y-1 max-h-72 overflow-y-auto">
+                {(templateMap[adminCategory] || []).length === 0 ? (
                   <p className="text-[10px] text-zinc-600 font-heading py-4 text-center">No events — click Check for events</p>
-                ) : (templates.templates[adminCategory] || []).map((t) => (
+                ) : shownInCategory === 0 ? (
+                  <p className="text-[10px] text-zinc-600 font-heading py-4 text-center">No matches — try another filter</p>
+                ) : (
+                  filteredAdminTemplates.map((t) => (
                   <div key={t.id} className="flex items-center justify-between gap-2 py-1.5 border-b border-zinc-800/50 last:border-0">
                     <div className="min-w-0 flex-1">
                       <span className="text-[11px] font-heading text-foreground truncate block">{t.name}</span>
+                      {t.league_label ? (
+                        <span className="text-[9px] font-heading text-primary/80 truncate block">{t.league_label}</span>
+                      ) : null}
                       {(t.start_time_display || t.start_time) && <span className="text-[9px] text-zinc-600 font-heading">{t.start_time_display || formatDateTime(t.start_time)}</span>}
                     </div>
-                    <button onClick={() => addEventFromTemplate(t.id)} disabled={addingTemplateId !== null} className="bg-primary/20 text-primary rounded px-2 py-1 text-[9px] font-heading font-bold border border-primary/40 hover:bg-primary/30 disabled:opacity-50 flex items-center gap-1">
+                    <button onClick={() => addEventFromTemplate(t.id)} disabled={addingTemplateId !== null} className="bg-primary/20 text-primary rounded px-2 py-1 text-[9px] font-heading font-bold border border-primary/40 hover:bg-primary/30 disabled:opacity-50 flex items-center gap-1 shrink-0">
                       <Plus size={10} /> {addingTemplateId === t.id ? '...' : 'Add'}
                     </button>
                   </div>
-                ))}
+                  ))
+                )}
               </div>
 
               {/* Custom event */}

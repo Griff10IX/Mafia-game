@@ -222,6 +222,33 @@ function apiErrorDetail(e, fallback) {
   return fallback;
 }
 
+function formatLotteryPurchasedAt(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
+function TicketNumbersMini({ numbers }) {
+  const list = Array.isArray(numbers) ? numbers.filter((n) => Number.isFinite(Number(n))) : [];
+  if (list.length === 0) {
+    return <span className="text-[9px] text-zinc-600 font-heading italic">No numbers on file</span>;
+  }
+  return (
+    <div className="flex flex-wrap items-center gap-1 justify-end">
+      {list.map((n, i) => (
+        <span
+          key={`${n}-${i}`}
+          className={`lot-ball ${BALL_COLORS[i % BALL_COLORS.length]}`}
+          style={{ width: 22, height: 22, fontSize: 9, flexShrink: 0 }}
+        >
+          {n}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function DecorationBalls() {
   const balls = useMemo(() => {
     const nums = [];
@@ -324,18 +351,20 @@ function MyTicketsSection() {
   const [loading, setLoading] = useState(false);
 
   const toggle = async () => {
-    if (!open && !data) {
-      setLoading(true);
-      try {
-        const { data: d } = await api.get('/lottery/my-tickets');
-        setData(d);
-      } catch (e) {
-        toast.error(apiErrorDetail(e, 'Could not load tickets'));
-      } finally {
-        setLoading(false);
-      }
+    if (open) {
+      setOpen(false);
+      return;
     }
-    setOpen((o) => !o);
+    setOpen(true);
+    setLoading(true);
+    try {
+      const { data: d } = await api.get('/lottery/my-tickets');
+      setData(d);
+    } catch (e) {
+      toast.error(apiErrorDetail(e, 'Could not load tickets'));
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -364,16 +393,17 @@ function MyTicketsSection() {
                 <div className="text-[10px] text-zinc-400 font-heading">
                   <span className="text-primary font-bold">{data.total}</span> ticket{data.total !== 1 ? 's' : ''} this round
                 </div>
-                <div className="space-y-0.5">
-                  {data.purchases.map((p, i) => (
-                    <div key={i} className="flex items-center justify-between text-[10px] font-heading py-0.5 border-b border-primary/5 last:border-0">
-                      <span className="text-zinc-500 tabular-nums">
-                        {p.purchased_at ? new Date(p.purchased_at + 'Z').toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—'}
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-0.5">
+                  {(data.tickets || []).map((t, i) => (
+                    <div
+                      key={t.ticket_id || `t-${i}`}
+                      className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between text-[10px] font-heading py-1.5 border-b border-primary/5 last:border-0"
+                    >
+                      <span className="text-zinc-500 tabular-nums shrink-0 flex items-center gap-1">
+                        <Ticket size={10} className="text-primary/40" />
+                        {formatLotteryPurchasedAt(t.purchased_at)}
                       </span>
-                      <span className="text-zinc-300 font-bold tabular-nums flex items-center gap-1">
-                        <Ticket size={9} className="text-primary/50" />
-                        {p.count} ticket{p.count !== 1 ? 's' : ''}
-                      </span>
+                      <TicketNumbersMini numbers={t.numbers} />
                     </div>
                   ))}
                 </div>
