@@ -1013,10 +1013,14 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                         parts.append(f"Melted 0 car(s) ({bullets_cooldown_detail})")
                     else:
                         parts.append("Melted 0 car(s) (no eligible cars in your selected Melt rarities)")
+                else:
+                    parts.append("Melted 0 car(s) (no available cars matched your selected Melt rarities)")
                 if scrap_count > 0:
                     parts.append(f"Scrapped {scrap_count} car(s) for ${scrap_total_value:,}")
                 elif car_ids_cash:
                     parts.append("Scrapped 0 car(s) (no eligible cars in your selected Scrap rarities)")
+                else:
+                    parts.append("Scrapped 0 car(s) (no available cars matched your selected Scrap rarities)")
                 if parts:
                     lines.append("**Melt/Scrap** — You have Melt/Scrap selected (50/50): " + " · ".join(parts) + ".")
             else:
