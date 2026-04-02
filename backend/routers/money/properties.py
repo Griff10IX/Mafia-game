@@ -153,6 +153,14 @@ def _clamp_float(v: float, lo: float, hi: float) -> float:
     return x
 
 
+def _heat_max_dollars_to_clear(heat: float) -> int:
+    """Whole dollars required to reduce heat to 0 at the current rate (never overcharge past this)."""
+    h = _clamp_float(heat or 0.0, 0.0, PROPERTIES_HEAT_MAX)
+    if h <= 0.0:
+        return 0
+    return int(math.ceil(h * float(PROPERTIES_HEAT_BRIBE_DOLLARS_PER_HEAT) - 1e-9))
+
+
 def _properties_heat_tick(heat: float, last_at_iso: Optional[str], now_utc: datetime) -> tuple[float, str]:
     """Apply time-based heat rise/decay since last_at_iso. Returns (new_heat, new_last_at_iso)."""
     last_dt = _parse_iso_datetime(last_at_iso)
@@ -171,14 +179,30 @@ def _properties_heat_tick(heat: float, last_at_iso: Optional[str], now_utc: date
 
 def _properties_heat_bribe_quote(heat: float) -> dict:
     h = _clamp_float(heat or 0.0, 0.0, PROPERTIES_HEAT_MAX)
-    # Suggest enough to get 5 points below the block threshold (or minimum bribe if already low).
+    rate = float(PROPERTIES_HEAT_BRIBE_DOLLARS_PER_HEAT)
     target_heat = max(0.0, float(PROPERTIES_HEAT_BLOCK_THRESHOLD) - 5.0)
-    need = max(0.0, h - target_heat)
-    suggested = int(max(PROPERTIES_HEAT_BRIBE_MIN_CASH, round(need * float(PROPERTIES_HEAT_BRIBE_DOLLARS_PER_HEAT))))
+    need_above_target = max(0.0, h - target_heat)
+    clear_all = _heat_max_dollars_to_clear(h)
+    to_safe_only = int(math.ceil(need_above_target * rate - 1e-9)) if need_above_target > 0.0 else 0
+    if h <= 0.0:
+        suggested = 0
+    elif need_above_target > 0.0 and to_safe_only > 0:
+        suggested = min(clear_all, to_safe_only)
+    else:
+        # Already below "safe" line — only pay to clear residual heat (not a flat $100k floor).
+        suggested = clear_all
+    # Minimum request: $100k rule only when clearing would cost that much; tiny heat = tiny minimum.
+    if clear_all <= 0:
+        min_bribe = 0
+    elif clear_all < PROPERTIES_HEAT_BRIBE_MIN_CASH:
+        min_bribe = max(1, clear_all)
+    else:
+        min_bribe = int(PROPERTIES_HEAT_BRIBE_MIN_CASH)
     return {
         "dollars_per_heat": int(PROPERTIES_HEAT_BRIBE_DOLLARS_PER_HEAT),
-        "min_bribe": int(PROPERTIES_HEAT_BRIBE_MIN_CASH),
+        "min_bribe": min_bribe,
         "suggested_bribe": suggested,
+        "max_charge_to_clear": clear_all,
         "block_threshold": float(PROPERTIES_HEAT_BLOCK_THRESHOLD),
         "heat_max": float(PROPERTIES_HEAT_MAX),
     }
@@ -1094,8 +1118,6 @@ def register(router):
         except Exception:
             amt = 0
         amt = max(0, amt)
-        if amt < PROPERTIES_HEAT_BRIBE_MIN_CASH:
-            raise HTTPException(status_code=400, detail=f"Minimum bribe is ${PROPERTIES_HEAT_BRIBE_MIN_CASH:,}.")
         now_utc = datetime.now(timezone.utc)
         u = await db.users.find_one(
             {"id": uid},
@@ -1108,20 +1130,37 @@ def register(router):
             u.get("properties_heat_last_at"),
             now_utc,
         )
-        reduce_by = float(amt) / float(PROPERTIES_HEAT_BRIBE_DOLLARS_PER_HEAT)
+        max_charge = _heat_max_dollars_to_clear(ticked_heat)
+        if max_charge <= 0:
+            raise HTTPException(status_code=400, detail="Heat is already at 0 — nothing to bribe.")
+        if amt < PROPERTIES_HEAT_BRIBE_MIN_CASH and max_charge >= PROPERTIES_HEAT_BRIBE_MIN_CASH:
+            raise HTTPException(status_code=400, detail=f"Minimum bribe is ${PROPERTIES_HEAT_BRIBE_MIN_CASH:,}.")
+        if amt < 1:
+            raise HTTPException(status_code=400, detail="Invalid bribe amount.")
+        effective_charge = min(int(amt), max_charge)
+        if effective_charge < 1:
+            raise HTTPException(status_code=400, detail="Invalid bribe amount.")
+        reduce_by = float(effective_charge) / float(PROPERTIES_HEAT_BRIBE_DOLLARS_PER_HEAT)
         new_heat = _clamp_float(float(ticked_heat) - float(reduce_by), 0.0, PROPERTIES_HEAT_MAX)
         res = await db.users.update_one(
-            {"id": uid, "money": {"$gte": amt}},
+            {"id": uid, "money": {"$gte": effective_charge}},
             {
-                "$inc": {"money": -amt, "properties_heat_bribes_paid": amt},
+                "$inc": {"money": -effective_charge, "properties_heat_bribes_paid": effective_charge},
                 "$set": {"properties_heat": new_heat, "properties_heat_last_at": ticked_last},
             },
         )
         if res.modified_count == 0:
-            raise HTTPException(status_code=400, detail=f"Insufficient money. Bribe costs ${amt:,}.")
+            raise HTTPException(status_code=400, detail=f"Insufficient money. Bribe costs ${effective_charge:,}.")
         blocked = bool(new_heat >= float(PROPERTIES_HEAT_BLOCK_THRESHOLD))
+        if effective_charge < int(amt):
+            msg = (
+                f"Bribed the police for ${effective_charge:,}. Heat is now {new_heat:.1f}/{PROPERTIES_HEAT_MAX:.0f}. "
+                f"(Only ${effective_charge:,} was needed to clear current heat — extra was not charged.)"
+            )
+        else:
+            msg = f"Bribed the police for ${effective_charge:,}. Heat is now {new_heat:.1f}/{PROPERTIES_HEAT_MAX:.0f}."
         return {
-            "message": f"Bribed the police for ${amt:,}. Heat is now {new_heat:.1f}/{PROPERTIES_HEAT_MAX:.0f}.",
+            "message": msg,
             "properties_heat": {
                 "heat": round(float(new_heat), 3),
                 "blocked": blocked,

@@ -294,178 +294,6 @@ export default function Properties() {
         </div>
       )}
 
-      {propertiesHeat && (
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border prop-fade-in mobile-panel ${
-          propertiesHeat.blocked ? 'border-red-500/50 bg-red-500/5' : 'border-primary/20'
-        }`}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <div className="px-3 py-2 border-b border-primary/20 bg-primary/8 flex items-start justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Heat (properties)</p>
-              <p className="text-[10px] text-mutedForeground font-heading">
-                Heat rises over time. If it gets too high, police seize your business income until you bribe them.
-              </p>
-            </div>
-            <div className="shrink-0 text-right">
-              <p className="text-[9px] text-zinc-500 font-heading tabular-nums">
-                {Number(propertiesHeat.heat ?? 0).toFixed(1)}/{Number(propertiesHeat.heat_max ?? 100).toFixed(0)}
-              </p>
-              <p className="text-[9px] text-zinc-600 font-heading">
-                Blocked at {Number(propertiesHeat.threshold ?? 80).toFixed(0)}+
-              </p>
-            </div>
-          </div>
-
-          <div className="p-3 space-y-2">
-            <div className="h-2 rounded bg-zinc-800/60 overflow-hidden">
-              <div
-                className={`h-full ${propertiesHeat.blocked ? 'bg-red-500/60' : 'bg-primary/50'}`}
-                style={{
-                  width: `${Math.min(100, Math.max(0, (Number(propertiesHeat.heat ?? 0) / Number(propertiesHeat.heat_max ?? 100)) * 100))}%`,
-                }}
-              />
-            </div>
-
-            {propertiesHeat.blocked && (
-              <div className="text-[10px] font-heading text-red-400 border border-red-500/30 bg-red-500/10 rounded px-2 py-1">
-                Police seized your income. Bribe the police to resume property collections.
-              </div>
-            )}
-
-            <div className="flex flex-wrap items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => bribePolice(100_000)}
-                disabled={bribing}
-                className="text-[9px] font-heading font-bold uppercase tracking-wider rounded px-2 py-1 border border-primary/30 bg-black/20 text-primary hover:bg-primary/10 disabled:opacity-50"
-              >
-                $100k
-              </button>
-              <button
-                type="button"
-                onClick={() => bribePolice(500_000)}
-                disabled={bribing}
-                className="text-[9px] font-heading font-bold uppercase tracking-wider rounded px-2 py-1 border border-primary/30 bg-black/20 text-primary hover:bg-primary/10 disabled:opacity-50"
-              >
-                $500k
-              </button>
-              <button
-                type="button"
-                onClick={() => bribePolice(2_500_000)}
-                disabled={bribing}
-                className="text-[9px] font-heading font-bold uppercase tracking-wider rounded px-2 py-1 border border-primary/30 bg-black/20 text-primary hover:bg-primary/10 disabled:opacity-50"
-              >
-                $2.5M
-              </button>
-              {propertiesHeatQuote?.suggested_bribe ? (
-                <button
-                  type="button"
-                  onClick={() => bribePolice(propertiesHeatQuote.suggested_bribe)}
-                  disabled={bribing}
-                  className="text-[9px] font-heading font-bold uppercase tracking-wider rounded px-2 py-1 border border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/15 disabled:opacity-50"
-                  title="Suggested bribe to get below the block threshold"
-                >
-                  Suggested {formatMoney(propertiesHeatQuote.suggested_bribe)}
-                </button>
-              ) : null}
-            </div>
-
-            <div className="flex gap-1.5 items-center">
-              <input
-                value={bribeInput}
-                onChange={(e) => setBribeInput(e.target.value)}
-                placeholder={propertiesHeatQuote?.min_bribe ? `Min ${formatMoney(propertiesHeatQuote.min_bribe)}` : 'Bribe amount'}
-                className="flex-1 h-7 px-2 rounded border border-primary/20 bg-black/30 text-foreground text-[10px] font-heading placeholder:text-zinc-600 focus:border-primary/40 focus:outline-none"
-                disabled={bribing}
-              />
-              <button
-                type="button"
-                onClick={() => bribePolice()}
-                disabled={bribing}
-                className="h-7 px-3 rounded bg-primary/20 text-primary font-heading text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
-              >
-                {bribing ? 'Paying…' : 'Bribe'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {portfolioUpgrades && (
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 prop-fade-in mobile-panel`}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <div className="px-3 py-2 border-b border-primary/20 bg-primary/8 flex items-center justify-between gap-2">
-            <div className="min-w-0">
-              <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Property portfolio upgrades</p>
-              <p className="text-[9px] text-mutedForeground font-heading">
-                Permanent boosts to your property collections. Complete objectives to unlock tiers, then pay to buy them.
-              </p>
-            </div>
-            <div className="shrink-0 text-right">
-              <p className="text-[9px] text-zinc-500 font-heading tabular-nums">
-                Tier {portfolioUpgrades.purchased_tier ?? 0} · x{Number(portfolioUpgrades.portfolio_mult ?? 1).toFixed(2)}
-              </p>
-            </div>
-          </div>
-
-          {portfolioUpgrades.next_tier ? (
-            <div className="p-3 space-y-2">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-[10px] font-heading font-bold text-foreground">
-                    Next: Tier {portfolioUpgrades.next_tier} ({portfolioUpgrades.tiers?.find((t) => t.tier === portfolioUpgrades.next_tier)?.name || 'Upgrade'})
-                  </p>
-                  <p className="text-[9px] text-zinc-500 font-heading">
-                    Unlock requirements (permanent):
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={buyPortfolioUpgrade}
-                  disabled={buyUpgradeLoading || (portfolioUpgrades.unlocked_tier ?? 0) < (portfolioUpgrades.next_tier ?? 0)}
-                  className="shrink-0 text-[10px] font-heading font-bold uppercase tracking-wider rounded px-3 py-1.5 border border-primary/40 bg-primary/15 text-primary hover:bg-primary/25 disabled:opacity-50"
-                  title={(portfolioUpgrades.unlocked_tier ?? 0) < (portfolioUpgrades.next_tier ?? 0) ? 'Complete the unlock objectives first' : undefined}
-                >
-                  {buyUpgradeLoading ? 'Buying…' : `Buy ${formatMoney(portfolioUpgrades.next_cost_cash ?? 0)}`}
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                {(() => {
-                  const p = portfolioUpgrades.progress || {};
-                  const req = portfolioUpgrades.next_unlock || {};
-                  const rows = [
-                    { k: 'collect_all_sets', label: 'Collect all properties', cur: p.collect_all_sets ?? 0, tgt: req.collect_all_sets ?? 0 },
-                    { k: 'collect_total_cash', label: 'Collect total cash', cur: p.collect_total_cash ?? 0, tgt: req.collect_total_cash ?? 0, money: true },
-                    { k: 'collect_actions', label: 'Collect actions', cur: p.collect_actions ?? 0, tgt: req.collect_actions ?? 0 },
-                  ].filter((r) => (r.tgt ?? 0) > 0);
-                  return rows.map((r) => {
-                    const cur = Number(r.cur ?? 0);
-                    const tgt = Number(r.tgt ?? 0);
-                    const pct = tgt > 0 ? Math.min(100, Math.floor((cur / tgt) * 100)) : 0;
-                    return (
-                      <div key={r.k} className="rounded border border-primary/15 bg-black/20 p-2">
-                        <p className="text-[9px] font-heading text-zinc-400">{r.label}</p>
-                        <p className="text-[10px] font-heading font-bold text-foreground tabular-nums">
-                          {r.money ? formatMoney(cur) : cur.toLocaleString()} / {r.money ? formatMoney(tgt) : tgt.toLocaleString()}
-                        </p>
-                        <div className="mt-1 h-1.5 rounded bg-zinc-800/60 overflow-hidden">
-                          <div className="h-full bg-primary/50" style={{ width: `${pct}%` }} />
-                        </div>
-                      </div>
-                    );
-                  });
-                })()}
-              </div>
-            </div>
-          ) : (
-            <div className="p-3">
-              <p className="text-[10px] text-mutedForeground font-heading">Max tier reached.</p>
-            </div>
-          )}
-        </div>
-      )}
-
       <div className="relative prop-fade-in flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="text-[9px] text-primary/50 font-heading uppercase tracking-[0.25em]">Investments</p>
@@ -635,6 +463,203 @@ export default function Properties() {
           </div>
         ))}
       </div>
+
+      {propertiesHeat && (
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border prop-fade-in mobile-panel ${
+          propertiesHeat.blocked ? 'border-red-500/50 bg-red-500/5' : 'border-primary/20'
+        }`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-3 py-2 border-b border-primary/20 bg-primary/8 flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Heat (properties)</p>
+              <p className="text-[10px] text-mutedForeground font-heading">
+                Heat rises over time. If it gets too high, police seize your business income until you bribe them.
+              </p>
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="text-[9px] text-zinc-500 font-heading tabular-nums">
+                {Number(propertiesHeat.heat ?? 0).toFixed(1)}/{Number(propertiesHeat.heat_max ?? 100).toFixed(0)}
+              </p>
+              <p className="text-[9px] text-zinc-600 font-heading">
+                Blocked at {Number(propertiesHeat.threshold ?? 80).toFixed(0)}+
+              </p>
+            </div>
+          </div>
+
+          <div className="p-3 space-y-2">
+            <div className="h-2 rounded bg-zinc-800/60 overflow-hidden">
+              <div
+                className={`h-full ${propertiesHeat.blocked ? 'bg-red-500/60' : 'bg-primary/50'}`}
+                style={{
+                  width: `${Math.min(100, Math.max(0, (Number(propertiesHeat.heat ?? 0) / Number(propertiesHeat.heat_max ?? 100)) * 100))}%`,
+                }}
+              />
+            </div>
+
+            {propertiesHeat.blocked && (
+              <div className="text-[10px] font-heading text-red-400 border border-red-500/30 bg-red-500/10 rounded px-2 py-1">
+                Police seized your income. Bribe the police to resume property collections.
+              </div>
+            )}
+
+            {propertiesHeatQuote?.max_charge_to_clear > 0 && (
+              <p className="text-[9px] text-zinc-500 font-heading leading-snug">
+                Max to clear all heat: <span className="text-zinc-400 tabular-nums">{formatMoney(propertiesHeatQuote.max_charge_to_clear)}</span>
+                <span className="text-zinc-600"> — if you pay more, only this much is charged.</span>
+              </p>
+            )}
+
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => bribePolice(100_000)}
+                disabled={bribing}
+                className="text-[9px] font-heading font-bold uppercase tracking-wider rounded px-2 py-1 border border-primary/30 bg-black/20 text-primary hover:bg-primary/10 disabled:opacity-50"
+              >
+                $100k
+              </button>
+              <button
+                type="button"
+                onClick={() => bribePolice(500_000)}
+                disabled={bribing}
+                className="text-[9px] font-heading font-bold uppercase tracking-wider rounded px-2 py-1 border border-primary/30 bg-black/20 text-primary hover:bg-primary/10 disabled:opacity-50"
+              >
+                $500k
+              </button>
+              <button
+                type="button"
+                onClick={() => bribePolice(2_500_000)}
+                disabled={bribing}
+                className="text-[9px] font-heading font-bold uppercase tracking-wider rounded px-2 py-1 border border-primary/30 bg-black/20 text-primary hover:bg-primary/10 disabled:opacity-50"
+              >
+                $2.5M
+              </button>
+              {propertiesHeatQuote?.suggested_bribe ? (
+                <button
+                  type="button"
+                  onClick={() => bribePolice(propertiesHeatQuote.suggested_bribe)}
+                  disabled={bribing}
+                  className="text-[9px] font-heading font-bold uppercase tracking-wider rounded px-2 py-1 border border-amber-500/40 bg-amber-500/10 text-amber-400 hover:bg-amber-500/15 disabled:opacity-50"
+                  title="Suggested: enough to get safe or clear residual heat (see max line above)"
+                >
+                  Suggested {formatMoney(propertiesHeatQuote.suggested_bribe)}
+                </button>
+              ) : null}
+            </div>
+
+            <div className="flex gap-1.5 items-center">
+              <input
+                value={bribeInput}
+                onChange={(e) => setBribeInput(e.target.value)}
+                placeholder={propertiesHeatQuote?.min_bribe ? `Min ${formatMoney(propertiesHeatQuote.min_bribe)}` : 'Bribe amount'}
+                className="flex-1 h-7 px-2 rounded border border-primary/20 bg-black/30 text-foreground text-[10px] font-heading placeholder:text-zinc-600 focus:border-primary/40 focus:outline-none"
+                disabled={bribing}
+              />
+              <button
+                type="button"
+                onClick={() => bribePolice()}
+                disabled={bribing}
+                className="h-7 px-3 rounded bg-primary/20 text-primary font-heading text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
+              >
+                {bribing ? 'Paying…' : 'Bribe'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {portfolioUpgrades && (
+        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 prop-fade-in mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-3 py-2 border-b border-primary/20 bg-primary/8 flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Property portfolio upgrades</p>
+              <p className="text-[9px] text-mutedForeground font-heading">
+                Permanent boosts to your property collections. Complete objectives to unlock tiers, then pay to buy them.
+              </p>
+            </div>
+            <div className="shrink-0 text-right">
+              <p className="text-[9px] text-zinc-500 font-heading tabular-nums">
+                Tier {portfolioUpgrades.purchased_tier ?? 0} · x{Number(portfolioUpgrades.portfolio_mult ?? 1).toFixed(2)}
+              </p>
+            </div>
+          </div>
+
+          {portfolioUpgrades.next_tier ? (
+            <div className="p-3 space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-heading font-bold text-foreground">
+                    Next: Tier {portfolioUpgrades.next_tier} ({portfolioUpgrades.tiers?.find((t) => t.tier === portfolioUpgrades.next_tier)?.name || 'Upgrade'})
+                  </p>
+                  {(() => {
+                    const nextRow = portfolioUpgrades.tiers?.find((t) => t.tier === portfolioUpgrades.next_tier);
+                    const tierMult = Number(nextRow?.income_mult ?? 1);
+                    const pct = Math.round((tierMult - 1) * 100);
+                    const curMult = Number(portfolioUpgrades.portfolio_mult ?? 1);
+                    const afterMult = curMult * tierMult;
+                    return (
+                      <p className="text-[9px] text-zinc-400 font-heading mt-0.5 leading-snug">
+                        <span className="text-zinc-300">What you get:</span>{' '}
+                        +{pct}% property income from this tier (×{tierMult.toFixed(2)} stacks with earlier tiers).{' '}
+                        Total multiplier after buying:{' '}
+                        <span className="text-primary font-bold tabular-nums">
+                          ×{curMult.toFixed(2)} → ×{afterMult.toFixed(2)}
+                        </span>
+                        . Weekly upkeep uses the same multiplier.
+                      </p>
+                    );
+                  })()}
+                  <p className="text-[9px] text-zinc-500 font-heading mt-1">
+                    Unlock requirements (permanent):
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={buyPortfolioUpgrade}
+                  disabled={buyUpgradeLoading || (portfolioUpgrades.unlocked_tier ?? 0) < (portfolioUpgrades.next_tier ?? 0)}
+                  className="shrink-0 text-[10px] font-heading font-bold uppercase tracking-wider rounded px-3 py-1.5 border border-primary/40 bg-primary/15 text-primary hover:bg-primary/25 disabled:opacity-50"
+                  title={(portfolioUpgrades.unlocked_tier ?? 0) < (portfolioUpgrades.next_tier ?? 0) ? 'Complete the unlock objectives first' : undefined}
+                >
+                  {buyUpgradeLoading ? 'Buying…' : `Buy ${formatMoney(portfolioUpgrades.next_cost_cash ?? 0)}`}
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                {(() => {
+                  const p = portfolioUpgrades.progress || {};
+                  const req = portfolioUpgrades.next_unlock || {};
+                  const rows = [
+                    { k: 'collect_all_sets', label: 'Collect all properties', cur: p.collect_all_sets ?? 0, tgt: req.collect_all_sets ?? 0 },
+                    { k: 'collect_total_cash', label: 'Collect total cash', cur: p.collect_total_cash ?? 0, tgt: req.collect_total_cash ?? 0, money: true },
+                    { k: 'collect_actions', label: 'Collect actions', cur: p.collect_actions ?? 0, tgt: req.collect_actions ?? 0 },
+                  ].filter((r) => (r.tgt ?? 0) > 0);
+                  return rows.map((r) => {
+                    const cur = Number(r.cur ?? 0);
+                    const tgt = Number(r.tgt ?? 0);
+                    const pct = tgt > 0 ? Math.min(100, Math.floor((cur / tgt) * 100)) : 0;
+                    return (
+                      <div key={r.k} className="rounded border border-primary/15 bg-black/20 p-2">
+                        <p className="text-[9px] font-heading text-zinc-400">{r.label}</p>
+                        <p className="text-[10px] font-heading font-bold text-foreground tabular-nums">
+                          {r.money ? formatMoney(cur) : cur.toLocaleString()} / {r.money ? formatMoney(tgt) : tgt.toLocaleString()}
+                        </p>
+                        <div className="mt-1 h-1.5 rounded bg-zinc-800/60 overflow-hidden">
+                          <div className="h-full bg-primary/50" style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            </div>
+          ) : (
+            <div className="p-3">
+              <p className="text-[10px] text-mutedForeground font-heading">Max tier reached.</p>
+            </div>
+          )}
+        </div>
+      )}
 
       <details className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 prop-fade-in mobile-panel`} style={{ animationDelay: `${0.02 + properties.length * 0.04}s` }}>
         <summary className="list-none cursor-pointer">
