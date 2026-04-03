@@ -296,13 +296,26 @@ async def bank_transfer(request: MoneyTransferRequest, req: Request, current_use
     if recent_dup:
         raise HTTPException(status_code=400, detail="Duplicate transfer detected. Please wait a few seconds before sending again.")
 
-    # Atomically debit sender first — if they don't have enough, nothing happens.
+    sender_row = await db.users.find_one({"id": sender_id}, {"_id": 0, "money": 1})
+    if not sender_row:
+        raise HTTPException(status_code=401, detail="Invalid session")
+    sender_balance = int(sender_row.get("money") or 0)
+    if sender_balance < amount:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient cash on hand (you have ${sender_balance:,}, tried to send ${amount:,}).",
+        )
+
+    # Atomically debit sender — still required for races (balance can change between read and write).
     debit_result = await db.users.update_one(
         {"id": sender_id, "money": {"$gte": amount}},
         {"$inc": {"money": -amount}},
     )
     if debit_result.modified_count == 0:
-        raise HTTPException(status_code=400, detail="Insufficient cash on hand")
+        raise HTTPException(
+            status_code=400,
+            detail="Insufficient cash on hand (your balance changed — try again with a lower amount).",
+        )
 
     # Sender was debited. Now credit recipient.
     credit_result = await db.users.update_one(

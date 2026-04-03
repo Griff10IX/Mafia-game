@@ -294,10 +294,14 @@ const SendMoneyCard = ({
   transferAmount,
   onTransferAmountChange,
   transferNum,
+  cashOnHand = 0,
   onSend,
   sending = false,
   hideHeader = false
-}) => (
+}) => {
+  const cash = Math.trunc(Number(cashOnHand ?? 0));
+  const insufficient = transferNum > 0 && transferNum > cash;
+  return (
   <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 bank-card bank-fade-in ${!hideHeader ? 'mobile-panel' : ''}`}>
     {!hideHeader && (
       <>
@@ -335,13 +339,18 @@ const SendMoneyCard = ({
           className="w-full bg-input border border-border rounded h-8 px-2 text-[11px] text-foreground focus:border-primary/50 focus:outline-none"
         />
         <div className="mt-1 text-[9px] text-mutedForeground">
+          Available: <span className="font-bold text-foreground">{formatMoney(cash)}</span>
+          {' · '}
           You will send: <span className="font-bold text-foreground">{formatMoney(transferNum)}</span>
         </div>
+        {insufficient && (
+          <p className="text-[9px] text-amber-500 font-heading">Not enough cash on hand for this amount.</p>
+        )}
       </div>
       <button
         type="button"
         onClick={onSend}
-        disabled={sending}
+        disabled={sending || insufficient}
         className="w-full bg-primary/20 text-primary rounded font-heading font-bold uppercase tracking-wide py-2 text-[10px] border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {sending ? 'Sending...' : '📤 Send'}
@@ -349,7 +358,8 @@ const SendMoneyCard = ({
     </div>
     <div className="bank-art-line text-primary mx-2" />
   </div>
-);
+  );
+};
 
 const TransferCard = ({ transfer, delay = 0 }) => {
   const isCar = !!transfer.car_name;
@@ -543,6 +553,10 @@ export default function Bank() {
     const to = (transferTo || '').trim();
     if (!to) return toast.error('Enter a username');
     if (!transferNum || transferNum <= 0) return toast.error('Enter an amount');
+    const cash = Math.trunc(Number(overview?.cash_on_hand ?? 0));
+    if (transferNum > cash) {
+      return toast.error(`Not enough cash (you have ${formatMoney(cash)}, tried to send ${formatMoney(transferNum)}).`);
+    }
     setSending(true);
     try {
       const res = await api.post('/bank/transfer', { to_username: to, amount: transferNum });
@@ -682,6 +696,7 @@ export default function Bank() {
                 transferAmount={transferAmount}
                 onTransferAmountChange={setTransferAmount}
                 transferNum={transferNum}
+                cashOnHand={overview?.cash_on_hand}
                 onSend={sendMoney}
                 sending={sending}
                 hideHeader

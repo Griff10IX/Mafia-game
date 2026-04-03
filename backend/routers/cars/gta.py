@@ -1264,11 +1264,8 @@ def _dealer_price_multiplier(car_info: dict) -> float:
     return DEALER_PRICE_MULTIPLIER_BY_RARITY.get(r, 1.35)
 
 
-async def _ensure_dealer_stock_seeded():
-    """If dealer_stock is empty, seed stock per car by rarity (except excluded)."""
-    n = await db.dealer_stock.count_documents({})
-    if n > 0:
-        return
+async def _fill_dealer_stock_full() -> None:
+    """Insert max stock per sellable model (full dealer inventory). Caller must only run when collection is empty."""
     now = datetime.now(timezone.utc).isoformat()
     to_insert = []
     for c in CARS:
@@ -1279,6 +1276,21 @@ async def _ensure_dealer_stock_seeded():
             to_insert.append({"car_id": c["id"], "added_at": now})
     if to_insert:
         await db.dealer_stock.insert_many(to_insert)
+
+
+async def _ensure_dealer_stock_seeded():
+    """If dealer_stock is empty, seed stock per car by rarity (except excluded)."""
+    n = await db.dealer_stock.count_documents({})
+    if n > 0:
+        return
+    await _fill_dealer_stock_full()
+
+
+async def _dealer_full_restock_if_dealer_empty() -> None:
+    """After a sale: only when the dealer has zero cars left in total, refill the full lot (all models to max)."""
+    if await db.dealer_stock.count_documents({}) > 0:
+        return
+    await _fill_dealer_stock_full()
 
 
 async def get_cars_for_sale(current_user: dict = Depends(get_current_user)):
@@ -1321,7 +1333,8 @@ async def buy_car(
     result = await db.dealer_stock.delete_one({"car_id": request.car_id})
     if result.deleted_count == 0:
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": price}})
-        raise HTTPException(status_code=400, detail="That car is out of stock. Dealer restocks in 1–4 hours.")
+        raise HTTPException(status_code=400, detail="That car is out of stock. Try again in a moment.")
+    await _dealer_full_restock_if_dealer_empty()
     now = datetime.now(timezone.utc)
     doc = {
         "id": str(uuid.uuid4()),
