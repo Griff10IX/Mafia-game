@@ -87,7 +87,7 @@ _access_expire = os.environ.get("JWT_EXPIRE_MINUTES", "").strip()
 ACCESS_TOKEN_EXPIRE_MINUTES = int(_access_expire) if _access_expire.isdigit() else 60 * 24
 # Inactivity timeout: session ends after this many minutes with no requests. 0 = disabled (only JWT expiry applies). Override with SESSION_INACTIVITY_MINUTES in .env.
 _inactivity = os.environ.get("SESSION_INACTIVITY_MINUTES", "").strip()
-SESSION_INACTIVITY_MINUTES = int(_inactivity) if _inactivity.isdigit() else 30
+SESSION_INACTIVITY_MINUTES = int(_inactivity) if _inactivity.isdigit() else 60 * 24  # default 24h; matches JWT default so idle timeout is not stricter than token
 
 security = HTTPBearer()
 
