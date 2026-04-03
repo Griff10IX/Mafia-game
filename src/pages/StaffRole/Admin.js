@@ -510,7 +510,9 @@ export default function Admin() {
   });
 
   const [eventsEnabled, setEventsEnabled] = useState(true);
-  const [allEventsForTesting, setAllEventsForTesting] = useState(false);
+  const [randomMultiEventBundleEnabled, setRandomMultiEventBundleEnabled] = useState(false);
+  const [randomMultiEventBundleIds, setRandomMultiEventBundleIds] = useState([]);
+  const [randomBundleLoading, setRandomBundleLoading] = useState(false);
   const [todayEvent, setTodayEvent] = useState(null);
   const [eventList, setEventList] = useState([]);
   const [eventToggleLoadingId, setEventToggleLoadingId] = useState(null);
@@ -1282,13 +1284,15 @@ export default function Admin() {
     try {
       const res = await api.get('/admin/events');
       setEventsEnabled(!!res.data?.events_enabled);
-      setAllEventsForTesting(!!res.data?.all_events_for_testing);
+      setRandomMultiEventBundleEnabled(!!res.data?.random_multi_event_bundle_enabled);
+      setRandomMultiEventBundleIds(res.data?.random_multi_event_bundle_ids ?? []);
       setTodayEvent(res.data?.today_event ?? null);
       setEventList(res.data?.events ?? []);
       setOverrideEventId(res.data?.override_event_id ?? null);
     } catch {
       setEventsEnabled(true);
-      setAllEventsForTesting(false);
+      setRandomMultiEventBundleEnabled(false);
+      setRandomMultiEventBundleIds([]);
       setTodayEvent(null);
       setEventList([]);
       setOverrideEventId(null);
@@ -2075,13 +2079,34 @@ export default function Admin() {
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
   };
 
-  const handleToggleAllEventsForTesting = async () => {
+  const handleRollRandomMultiBundle = async () => {
+    setRandomBundleLoading(true);
     try {
-      const res = await api.post('/admin/events/all-for-testing', { enabled: !allEventsForTesting });
-      setAllEventsForTesting(!!res.data?.all_events_for_testing);
-      toast.success(res.data?.message || 'Toggled');
+      const res = await api.post('/admin/events/random-multi-bundle', { enabled: true });
+      setRandomMultiEventBundleEnabled(!!res.data?.random_multi_event_bundle_enabled);
+      setRandomMultiEventBundleIds(res.data?.random_multi_event_bundle_ids ?? []);
+      toast.success(res.data?.message || 'Bundle rolled');
       fetchEventsStatus();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setRandomBundleLoading(false);
+    }
+  };
+
+  const handleDisableRandomMultiBundle = async () => {
+    setRandomBundleLoading(true);
+    try {
+      const res = await api.post('/admin/events/random-multi-bundle', { enabled: false });
+      setRandomMultiEventBundleEnabled(!!res.data?.random_multi_event_bundle_enabled);
+      setRandomMultiEventBundleIds(res.data?.random_multi_event_bundle_ids ?? []);
+      toast.success(res.data?.message || 'Bundle disabled');
+      fetchEventsStatus();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setRandomBundleLoading(false);
+    }
   };
 
   const handleToggleEvent = async (eventId, enabled) => {
@@ -8383,11 +8408,21 @@ export default function Admin() {
           <div className="p-3 space-y-2">
             <div className="flex flex-wrap gap-2">
               <BtnPrimary onClick={handleToggleEvents}>{eventsEnabled ? 'Disable' : 'Enable'} Events</BtnPrimary>
-              <BtnSecondary onClick={handleToggleAllEventsForTesting}>
-                {allEventsForTesting ? 'Disable' : 'Enable'} All (Testing)
+              <BtnSecondary onClick={handleRollRandomMultiBundle} disabled={randomBundleLoading}>
+                {randomBundleLoading ? '…' : 'Roll random bundle'}
+              </BtnSecondary>
+              <BtnSecondary onClick={handleDisableRandomMultiBundle} disabled={randomBundleLoading || !randomMultiEventBundleEnabled}>
+                Disable bundle
               </BtnSecondary>
             </div>
-            <p className="text-[10px] text-mutedForeground">All events (testing): applies every multiplier at once.</p>
+            <p className="text-[10px] text-mutedForeground">
+              Random bundle: picks 1, 2, or all modifier groups at once (one random event per group — no conflicting multipliers). Roll again anytime.
+            </p>
+            {randomMultiEventBundleEnabled && randomMultiEventBundleIds?.length > 0 && (
+              <p className="text-[10px] text-foreground/90">
+                Active event ids: {randomMultiEventBundleIds.join(', ')}
+              </p>
+            )}
             <div className="pt-2 border-t border-primary/20 space-y-2">
               <p className="text-xs font-medium text-foreground">Choose random event</p>
               <div className="flex flex-wrap gap-2 items-center">

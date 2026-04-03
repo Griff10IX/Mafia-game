@@ -97,7 +97,9 @@ class EventsToggleRequest(BaseModel):
     enabled: bool
 
 
-class AllEventsForTestingRequest(BaseModel):
+class RandomMultiEventBundleRequest(BaseModel):
+    """enabled=true: roll 1–6 non-conflicting events and save; enabled=false: turn off bundle."""
+
     enabled: bool
 
 
@@ -367,7 +369,10 @@ def register(router):
     SWISS_BANK_LIMIT_START = srv.SWISS_BANK_LIMIT_START
     DEFAULT_HEALTH = srv.DEFAULT_HEALTH
     get_events_enabled = srv.get_events_enabled
-    get_all_events_for_testing = srv.get_all_events_for_testing
+    get_random_multi_event_bundle_enabled = srv.get_random_multi_event_bundle_enabled
+    get_random_multi_event_bundle_ids = srv.get_random_multi_event_bundle_ids
+    build_resolved_event_from_event_ids = srv.build_resolved_event_from_event_ids
+    roll_random_multi_event_bundle = srv.roll_random_multi_event_bundle
     get_combined_event = srv.get_combined_event
     get_active_game_event = srv.get_active_game_event
     get_disabled_event_ids = srv.get_disabled_event_ids
@@ -8952,15 +8957,26 @@ def register(router):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         enabled = await get_events_enabled()
-        all_for_testing = await get_all_events_for_testing()
-        today_event = get_combined_event() if all_for_testing else (await get_active_game_event_async() if enabled else None)
+        rand_bundle_on = await get_random_multi_event_bundle_enabled()
+        bundle_ids = await get_random_multi_event_bundle_ids()
+        if rand_bundle_on and bundle_ids:
+            today_event = build_resolved_event_from_event_ids(bundle_ids)
+        else:
+            today_event = await get_active_game_event_async() if enabled else None
         disabled_ids = await get_disabled_event_ids()
         override_event_id = await get_override_event_id()
         events = [
             {"id": ev["id"], "name": ev["name"], "message": ev.get("message", ""), "enabled": ev["id"] not in disabled_ids}
             for ev in GAME_EVENTS
         ]
-        return {"events_enabled": enabled, "all_events_for_testing": all_for_testing, "today_event": today_event, "events": events, "override_event_id": override_event_id}
+        return {
+            "events_enabled": enabled,
+            "random_multi_event_bundle_enabled": rand_bundle_on,
+            "random_multi_event_bundle_ids": bundle_ids,
+            "today_event": today_event,
+            "events": events,
+            "override_event_id": override_event_id,
+        }
 
     @router.post("/admin/events/toggle")
     async def admin_toggle_events(request: EventsToggleRequest, current_user: dict = Depends(get_current_user)):
@@ -8974,17 +8990,41 @@ def register(router):
         )
         return {"message": "Daily events " + ("enabled" if enabled else "disabled"), "events_enabled": bool(enabled)}
 
-    @router.post("/admin/events/all-for-testing")
-    async def admin_all_events_for_testing(request: AllEventsForTestingRequest, current_user: dict = Depends(get_current_user)):
+    @router.post("/admin/events/random-multi-bundle")
+    async def admin_random_multi_event_bundle(request: RandomMultiEventBundleRequest, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        enabled = request.enabled
+        if request.enabled:
+            ids = roll_random_multi_event_bundle()
+            await db.game_config.update_one(
+                {"id": "main"},
+                {
+                    "$set": {
+                        "random_multi_event_bundle_enabled": True,
+                        "random_multi_event_bundle_ids": ids,
+                    },
+                    "$unset": {"all_events_for_testing": ""},
+                },
+                upsert=True,
+            )
+            return {
+                "message": "Random multi-event bundle rolled (1, 2, or all groups — one event per group, no conflicts).",
+                "random_multi_event_bundle_enabled": True,
+                "random_multi_event_bundle_ids": ids,
+            }
         await db.game_config.update_one(
             {"id": "main"},
-            {"$set": {"all_events_for_testing": bool(enabled)}},
+            {
+                "$set": {"random_multi_event_bundle_enabled": False, "random_multi_event_bundle_ids": []},
+                "$unset": {"all_events_for_testing": ""},
+            },
             upsert=True,
         )
-        return {"message": "All events for testing " + ("enabled" if enabled else "disabled"), "all_events_for_testing": bool(enabled)}
+        return {
+            "message": "Random multi-event bundle disabled.",
+            "random_multi_event_bundle_enabled": False,
+            "random_multi_event_bundle_ids": [],
+        }
 
     @router.post("/admin/events/toggle-event")
     async def admin_toggle_event(request: ToggleEventRequest, current_user: dict = Depends(get_current_user)):

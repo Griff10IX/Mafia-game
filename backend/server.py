@@ -34,6 +34,7 @@ from utils.family_vault_log import log_family_vault_tx
 from passlib.context import CryptContext
 from jose import JWTError, jwt
 import random
+import secrets
 import math
 import time
 from urllib.parse import unquote
@@ -354,7 +355,8 @@ MULTIPLIER_KEYS = ["rank_points", "kill_cash", "gta_success", "bodyguard_cost", 
 
 GAME_EVENTS_BY_ID = {ev["id"]: ev for ev in GAME_EVENTS}
 
-# When all_events_for_testing: pick one event per group (deterministic by UTC day), then multiply those only.
+# Admin random multi-bundle: pick k groups in {1,2,all}, one random event per group (no conflicts).
+# get_combined_event (tests): one event per group (deterministic by UTC day), then multiply those only.
 # no_event_day is neutral and omitted. Every other GAME_EVENTS id must appear exactly once.
 GAME_EVENT_CONFLICT_GROUPS = [
     ["double_rank", "rank_points_boost", "rank_points_penalty"],
@@ -401,6 +403,62 @@ def _validate_game_event_conflict_groups() -> None:
 _validate_game_event_conflict_groups()
 
 
+def _event_id_to_group_index(eid: str) -> Optional[int]:
+    for gi, group in enumerate(GAME_EVENT_CONFLICT_GROUPS):
+        if eid in group:
+            return gi
+    return None
+
+
+def _validate_bundle_event_ids(event_ids: List[str]) -> List[str]:
+    """Keep ids that are valid GAME_EVENTS and at most one per conflict group; drop invalid, dedupe groups."""
+    seen_groups: set = set()
+    out: List[str] = []
+    for raw in event_ids:
+        eid = str(raw).strip()
+        if not eid or eid not in GAME_EVENTS_BY_ID:
+            continue
+        gi = _event_id_to_group_index(eid)
+        if gi is None:
+            continue
+        if gi in seen_groups:
+            continue
+        seen_groups.add(gi)
+        out.append(eid)
+    return out
+
+
+def build_resolved_event_from_event_ids(event_ids: List[str]) -> dict:
+    """Multiply multipliers from the given events (one per conflict group expected)."""
+    combined = {k: NO_EVENT[k] for k in NO_EVENT}
+    combined["id"] = "random_multi_bundle"
+    combined["name"] = "Random multi-event bundle"
+    picked_labels: List[str] = []
+    for eid in event_ids:
+        ev = GAME_EVENTS_BY_ID.get(eid)
+        if not ev:
+            continue
+        picked_labels.append(ev.get("name") or eid)
+        for key in MULTIPLIER_KEYS:
+            combined[key] = float(combined.get(key, 1.0)) * float(ev.get(key, 1.0))
+    combined["message"] = (
+        "One modifier per category (mutually exclusive). Active: " + "; ".join(picked_labels) + "."
+    )
+    return combined
+
+
+def roll_random_multi_event_bundle() -> List[str]:
+    """Random k in {1, 2, all groups}; pick k distinct groups and one random event from each."""
+    n_groups = len(GAME_EVENT_CONFLICT_GROUPS)
+    k = secrets.choice([1, 2, n_groups])
+    group_indices = random.sample(range(n_groups), k)
+    picked: List[str] = []
+    for gi in group_indices:
+        group = GAME_EVENT_CONFLICT_GROUPS[gi]
+        picked.append(secrets.choice(group))
+    return picked
+
+
 def _utc_days_since_game_events_epoch() -> int:
     """Same day index as get_active_game_event (UTC)."""
     today = datetime.now(timezone.utc).date()
@@ -444,10 +502,28 @@ async def get_events_enabled() -> bool:
         return True  # no doc = enabled; admin toggle will create doc
     return bool(doc.get("events_enabled", True))
 
-async def get_all_events_for_testing() -> bool:
-    """Whether all events are combined for testing (admin). Default False."""
-    doc = await db.game_config.find_one({"id": "main"}, {"_id": 0, "all_events_for_testing": 1})
-    return bool(doc.get("all_events_for_testing", False))
+async def get_random_multi_event_bundle_enabled() -> bool:
+    """Admin: random bundle mode on (stored ids may still be empty if invalid)."""
+    doc = await db.game_config.find_one({"id": "main"}, {"_id": 0, "random_multi_event_bundle_enabled": 1})
+    if doc is None:
+        return False
+    return bool(doc.get("random_multi_event_bundle_enabled", False))
+
+
+async def get_random_multi_event_bundle_ids() -> List[str]:
+    """Resolved, validated event ids for the random bundle; empty if disabled or invalid."""
+    doc = await db.game_config.find_one(
+        {"id": "main"},
+        {"_id": 0, "random_multi_event_bundle_enabled": 1, "random_multi_event_bundle_ids": 1},
+    )
+    if not doc or not doc.get("random_multi_event_bundle_enabled"):
+        return []
+    raw = doc.get("random_multi_event_bundle_ids")
+    if not isinstance(raw, list):
+        return []
+    ids = [str(x).strip() for x in raw if x]
+    return _validate_bundle_event_ids(ids)
+
 
 async def get_disabled_event_ids() -> list:
     """Event ids that are disabled by admin. When today's rotated event is in this list, effective event is NO_EVENT."""
@@ -480,12 +556,13 @@ async def get_active_game_event_async():
     return event
 
 async def get_effective_event():
-    """Current event multipliers if events enabled, else NO_EVENT. When all_events_for_testing, returns resolved combined event (one pick per conflict group). Never raises."""
+    """Current event multipliers if events enabled, else NO_EVENT. When random multi-bundle is on, multiply that bundle only (no conflicting events). Never raises."""
     try:
         if not await get_events_enabled():
             return NO_EVENT.copy()
-        if await get_all_events_for_testing():
-            return get_combined_event()
+        bundle_ids = await get_random_multi_event_bundle_ids()
+        if bundle_ids:
+            return build_resolved_event_from_event_ids(bundle_ids)
         return await get_active_game_event_async()
     except Exception:
         return NO_EVENT.copy()
@@ -800,7 +877,7 @@ class HitlistAttemptNpcRequest(BaseModel):
     bullets_to_use: int
 
 
-# EventsToggleRequest, AllEventsForTestingRequest -> routers/admin.py
+# EventsToggleRequest, RandomMultiEventBundleRequest -> routers/admin.py
 # CheckoutRequest -> routers/payments.py
 
 class CustomCarImageUpdate(BaseModel):
