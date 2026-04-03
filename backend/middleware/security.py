@@ -31,8 +31,11 @@ def is_valid_telegram_bot_token(token: str) -> bool:
 try:
     import httpx
     HTTPX_AVAILABLE = True
+    # api.telegram.org can be slow; short defaults caused noisy ReadTimeout spam in logs.
+    TELEGRAM_BOT_API_TIMEOUT = httpx.Timeout(45.0, connect=20.0, read=45.0, write=20.0)
 except ImportError:
     HTTPX_AVAILABLE = False
+    TELEGRAM_BOT_API_TIMEOUT = None  # unused
 
 from pymongo.errors import DuplicateKeyError
 
@@ -182,7 +185,7 @@ async def flush_telegram_alerts():
     combined_message = "\n\n────────\n\n".join(texts)
     use_markdown = all(use_md_flags)
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=TELEGRAM_BOT_API_TIMEOUT) as client:
             url = "https://api.telegram.org/bot{}/sendMessage".format(TELEGRAM_BOT_TOKEN)
             payload = {"chat_id": TELEGRAM_CHAT_ID, "text": combined_message[:4000]}
             if use_markdown:
@@ -204,6 +207,9 @@ async def flush_telegram_alerts():
             if r.status_code != 200:
                 logger.warning("Telegram alert send failed: %s %s", r.status_code, err_body[:200])
     except Exception as e:
+        if HTTPX_AVAILABLE and isinstance(e, httpx.TimeoutException):
+            logger.warning("Telegram alert batch timed out (%s)", type(e).__name__)
+            return
         logger.exception("Failed to send Telegram alert: %s", e)
 
 
@@ -219,7 +225,7 @@ async def send_telegram_to_chat(chat_id: str, message: str, bot_token: Optional[
         logger.warning("httpx not installed - cannot send Telegram to user")
         return False
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=TELEGRAM_BOT_API_TIMEOUT) as client:
             payload = {"chat_id": chat_id, "text": message[:4000], "parse_mode": "Markdown"}
             r = await client.post(
                 "https://api.telegram.org/bot{}/sendMessage".format(token),
@@ -242,6 +248,10 @@ async def send_telegram_to_chat(chat_id: str, message: str, bot_token: Optional[
                 return False
         return True
     except Exception as e:
+        if HTTPX_AVAILABLE and isinstance(e, httpx.TimeoutException):
+            user_part = f" user={username}" if username else ""
+            logger.warning("Telegram API timeout sending to chat %s%s (%s)", chat_id, user_part, type(e).__name__)
+            return False
         logger.exception("Failed to send Telegram to chat %s: %s", chat_id, e)
         return False
 
@@ -271,7 +281,7 @@ async def set_telegram_webhook(webhook_url: str, secret_token: Optional[str] = N
         payload = {"url": url}
         if secret_token:
             payload["secret_token"] = (secret_token or "").strip()[:256]
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=TELEGRAM_BOT_API_TIMEOUT) as client:
             r = await client.post(
                 "https://api.telegram.org/bot{}/setWebhook".format(token),
                 json=payload,
@@ -282,6 +292,9 @@ async def set_telegram_webhook(webhook_url: str, secret_token: Optional[str] = N
         logger.info("Telegram webhook set to %s", url)
         return True
     except Exception as e:
+        if HTTPX_AVAILABLE and isinstance(e, httpx.TimeoutException):
+            logger.warning("Telegram setWebhook timed out (%s)", type(e).__name__)
+            return False
         logger.exception("Failed to set Telegram webhook: %s", e)
         return False
 
@@ -292,7 +305,7 @@ async def get_telegram_webhook_info(bot_token: Optional[str] = None) -> Optional
     if not token or not is_valid_telegram_bot_token(token) or not HTTPX_AVAILABLE:
         return None
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=TELEGRAM_BOT_API_TIMEOUT) as client:
             r = await client.get("https://api.telegram.org/bot{}/getWebhookInfo".format(token))
         if r.status_code != 200:
             return {"error": r.text, "status_code": r.status_code}
@@ -305,6 +318,9 @@ async def get_telegram_webhook_info(bot_token: Optional[str] = None) -> Optional
             "has_custom_certificate": data.get("result", {}).get("has_custom_certificate", False),
         }
     except Exception as e:
+        if HTTPX_AVAILABLE and isinstance(e, httpx.TimeoutException):
+            logger.warning("Telegram getWebhookInfo timed out (%s)", type(e).__name__)
+            return None
         logger.exception("Failed to get Telegram webhook info: %s", e)
         return None
 
@@ -318,7 +334,7 @@ async def set_telegram_bot_commands(bot_token: Optional[str] = None) -> bool:
         logger.warning("httpx not installed - cannot set Telegram bot commands")
         return False
     try:
-        async with httpx.AsyncClient(timeout=10.0) as client:
+        async with httpx.AsyncClient(timeout=TELEGRAM_BOT_API_TIMEOUT) as client:
             r = await client.post(
                 "https://api.telegram.org/bot{}/setMyCommands".format(token),
                 json={"commands": TELEGRAM_BOT_COMMANDS},
@@ -329,6 +345,9 @@ async def set_telegram_bot_commands(bot_token: Optional[str] = None) -> bool:
         logger.info("Telegram bot commands menu set successfully")
         return True
     except Exception as e:
+        if HTTPX_AVAILABLE and isinstance(e, httpx.TimeoutException):
+            logger.warning("Telegram setMyCommands timed out (%s)", type(e).__name__)
+            return False
         logger.exception("Failed to set Telegram bot commands: %s", e)
         return False
 

@@ -483,7 +483,12 @@ async def open_loot_box(
             elif chosen == "cars":
                 pool = [c for c in CARS if c.get("rarity") in STANDARD_CAR_RARITIES]
                 if not pool:
-                    pool = [c for c in CARS if c.get("id") != LOOT_EXCLUSIVE_CAR_ID and c.get("rarity") != "loot_exclusive"]
+                    pool = [
+                        c
+                        for c in CARS
+                        if c.get("id") not in (LOOT_EXCLUSIVE_CAR_ID, "car_custom")
+                        and c.get("rarity") != "loot_exclusive"
+                    ]
                 if not pool:
                     # No cars available (e.g. CARS empty); give cash instead
                     amount = _rng.randint(25_000, 6_250_000)  # 75% reduction for beta

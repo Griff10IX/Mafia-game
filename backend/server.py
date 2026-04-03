@@ -352,6 +352,62 @@ NO_EVENT = {"id": "none", "name": "No event", "message": "", "rank_points": 1.0,
 
 MULTIPLIER_KEYS = ["rank_points", "kill_cash", "gta_success", "bodyguard_cost", "racket_cooldown", "racket_payout", "armour_weapon_cost"]
 
+GAME_EVENTS_BY_ID = {ev["id"]: ev for ev in GAME_EVENTS}
+
+# When all_events_for_testing: pick one event per group (deterministic by UTC day), then multiply those only.
+# no_event_day is neutral and omitted. Every other GAME_EVENTS id must appear exactly once.
+GAME_EVENT_CONFLICT_GROUPS = [
+    ["double_rank", "rank_points_boost", "rank_points_penalty"],
+    ["double_cash", "gta_cash_boost"],
+    ["gta_double_chance", "gta_success_boost", "gta_success_penalty"],
+    ["bodyguard_half_price", "bodyguard_premium", "bodyguard_quarter_off", "bodyguard_premium_day"],
+    [
+        "racket_extra_payout",
+        "racket_reduced_payout",
+        "racket_faster_cooldown",
+        "racket_bonus_day",
+        "racket_cooldown_faster",
+        "racket_payout_boost",
+        "racket_payout_penalty",
+        "oc_payout_boost",
+    ],
+    [
+        "armour_weapon_half_price",
+        "armour_weapon_premium",
+        "armour_weapon_quarter_off",
+        "armour_weapon_premium_day",
+        "bullets_store_25_off",
+        "bullets_store_25_more",
+    ],
+]
+
+
+def _validate_game_event_conflict_groups() -> None:
+    covered: set = set()
+    for g in GAME_EVENT_CONFLICT_GROUPS:
+        for eid in g:
+            if eid in covered:
+                raise RuntimeError(f"Duplicate event id in GAME_EVENT_CONFLICT_GROUPS: {eid}")
+            covered.add(eid)
+    all_ids = {ev["id"] for ev in GAME_EVENTS}
+    expected = all_ids - {"no_event_day"}
+    if covered != expected:
+        raise RuntimeError(
+            "GAME_EVENT_CONFLICT_GROUPS must list every GAME_EVENTS id except no_event_day exactly once. "
+            f"extra={sorted(covered - expected)} missing={sorted(expected - covered)}"
+        )
+
+
+_validate_game_event_conflict_groups()
+
+
+def _utc_days_since_game_events_epoch() -> int:
+    """Same day index as get_active_game_event (UTC)."""
+    today = datetime.now(timezone.utc).date()
+    epoch = datetime(2025, 1, 1, tzinfo=timezone.utc).date()
+    return (today - epoch).days
+
+
 def get_active_game_event():
     """Current game-wide event for today (UTC). Returns dict with id, name, message, and multiplier keys."""
     today = datetime.now(timezone.utc).date()
@@ -361,13 +417,24 @@ def get_active_game_event():
     return GAME_EVENTS[idx].copy()
 
 def get_combined_event():
-    """Combine all GAME_EVENTS multipliers (product) for testing. Returns single event dict."""
-    combined = {"id": "all_testing", "name": "All events (testing)", "message": "All event multipliers active for testing."}
-    for key in MULTIPLIER_KEYS:
-        prod = 1.0
-        for ev in GAME_EVENTS:
-            prod *= ev.get(key, 1.0)
-        combined[key] = prod
+    """Admin all-events testing: one winner per GAME_EVENT_CONFLICT_GROUPS row (deterministic by UTC day), multiply those only."""
+    days = _utc_days_since_game_events_epoch()
+    combined = {k: NO_EVENT[k] for k in NO_EVENT}
+    combined["id"] = "all_testing_resolved"
+    combined["name"] = "All events (testing, resolved)"
+    picked_labels: List[str] = []
+    for gi, group in enumerate(GAME_EVENT_CONFLICT_GROUPS):
+        if not group:
+            continue
+        idx = (days + gi * 31) % len(group)
+        eid = group[idx]
+        ev = GAME_EVENTS_BY_ID[eid]
+        picked_labels.append(ev.get("name") or eid)
+        for key in MULTIPLIER_KEYS:
+            combined[key] = float(combined.get(key, 1.0)) * float(ev.get(key, 1.0))
+    combined["message"] = (
+        "One modifier per category (mutually exclusive). Active: " + "; ".join(picked_labels) + "."
+    )
     return combined
 
 async def get_events_enabled() -> bool:
@@ -413,7 +480,7 @@ async def get_active_game_event_async():
     return event
 
 async def get_effective_event():
-    """Current event multipliers if events enabled, else NO_EVENT. When all_events_for_testing, returns combined event. Never raises."""
+    """Current event multipliers if events enabled, else NO_EVENT. When all_events_for_testing, returns resolved combined event (one pick per conflict group). Never raises."""
     try:
         if not await get_events_enabled():
             return NO_EVENT.copy()
