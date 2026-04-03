@@ -236,6 +236,9 @@ class CommitCrimeResponse(BaseModel):
 MOLOTOV_GLOBAL_DROP_CHANCE = 0.001
 MOLOTOV_GLOBAL_DROP_AMOUNT = 1
 
+# Successful crime cash (main roll + prestige bonus cash) scaled after all other multipliers
+CRIME_CASH_PAYOUT_MULT = 1.10
+
 # Extremely rare loot box piece drops from crimes
 # Normal crimes: ~0.05% (1 in 2,000) per successful crime
 # Prestige crimes: ~0.15% (1 in 667) per successful crime
@@ -449,6 +452,8 @@ async def get_crimes(current_user: dict = Depends(get_current_user)):
         # Do not expose prestige-exclusive crimes until rank + prestige requirements are met (reduces ID scraping).
         if crime_type == "prestige" and not unlocked:
             continue
+        rmin = int(crime.get("reward_min", 0) or 0)
+        rmax = int(crime.get("reward_max", 0) or 0)
         result.append(
             CrimeResponse(
                 id=crime["id"],
@@ -456,8 +461,8 @@ async def get_crimes(current_user: dict = Depends(get_current_user)):
                 description=crime["description"],
                 min_rank=crime["min_rank"],
                 min_rank_name=min_rank_name,
-                reward_min=crime["reward_min"],
-                reward_max=crime["reward_max"],
+                reward_min=int(rmin * CRIME_CASH_PAYOUT_MULT),
+                reward_max=int(rmax * CRIME_CASH_PAYOUT_MULT),
                 cooldown_minutes=float(cooldown_minutes),
                 crime_type=crime_type,
                 can_commit=can_commit,
@@ -687,6 +692,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
         pass_mult = float(rank_xp_pass_multiplier(current_user))
         reward = int(reward * pass_mult)
         rank_points = int(rank_points * pass_mult)
+        reward = int(reward * CRIME_CASH_PAYOUT_MULT)
         rp_before = int(current_user.get("rank_points") or 0)
         # Racket / illegal-business missions: crimes in the business's state (doc.state set at start)
         ib_crimes_in_state_inc = 0
@@ -782,7 +788,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
             if prestige_bonus_from_prestige:
                 bonus_inc = {}
                 if "cash" in prestige_bonus_from_prestige:
-                    bonus_inc["money"] = prestige_bonus_from_prestige["cash"]
+                    bonus_inc["money"] = int(prestige_bonus_from_prestige["cash"] * CRIME_CASH_PAYOUT_MULT)
                 if "respect_points" in prestige_bonus_from_prestige:
                     bonus_inc["respect_points"] = prestige_bonus_from_prestige["respect_points"]
                 if "bullets" in prestige_bonus_from_prestige:

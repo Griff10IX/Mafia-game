@@ -21,6 +21,33 @@ function formatMoney(n) {
   return `$${Math.trunc(num).toLocaleString()}`;
 }
 
+function formatApiDetail(detail) {
+  if (detail == null) return '';
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail)) {
+    return detail
+      .map((x) => (typeof x === 'string' ? x : x?.msg || ''))
+      .filter(Boolean)
+      .join(' ');
+  }
+  return String(detail);
+}
+
+/** Matches backend property collect cooldown / race messages (properties.py). */
+function isCollectCooldownOrWaitMessage(msg) {
+  if (!msg || typeof msg !== 'string') return false;
+  const m = msg.toLowerCase();
+  return (
+    m.includes('try again') ||
+    m.includes('try again shortly') ||
+    (m.includes('minute') && (m.includes('collect') || m.includes('every')))
+  );
+}
+
+function isNoIncomeCollectMessage(msg) {
+  return typeof msg === 'string' && msg.toLowerCase().includes('no income to collect');
+}
+
 export default function Properties() {
   const [properties, setProperties] = useState([]);
   const [propertyIncomePerkUntil, setPropertyIncomePerkUntil] = useState(null);
@@ -153,11 +180,21 @@ export default function Properties() {
       refreshUser();
       fetchProperties();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to collect income');
+      const detail = formatApiDetail(error.response?.data?.detail);
+      if (isCollectCooldownOrWaitMessage(detail) || isNoIncomeCollectMessage(detail)) {
+        toast.warning(detail || 'Not ready to collect yet');
+      } else if (detail) {
+        toast.error(detail);
+      } else {
+        toast.error('Failed to collect income');
+      }
     }
   };
 
-  const collectibleProperties = properties.filter((p) => p.owned && !p.locked && !p.income_collection_blocked);
+  const heatBlocksPropertyCollect = Boolean(propertiesHeat?.blocked);
+  const collectibleProperties = properties.filter(
+    (p) => p.owned && !p.locked && !p.income_collection_blocked && !heatBlocksPropertyCollect,
+  );
 
   const payPropertyUpkeep = async () => {
     if (upkeepPayLoading || propertyUpkeep?.can_pay === false) return;
@@ -178,6 +215,8 @@ export default function Properties() {
     setCollectAllLoading(true);
     let collected = 0;
     let total = 0;
+    const softFailures = [];
+    const hardFailures = [];
     for (const prop of collectibleProperties) {
       try {
         const res = await api.post(`/properties/${prop.id}/collect`);
@@ -185,15 +224,26 @@ export default function Properties() {
         const msg = res.data?.message || '';
         const match = msg.match(/\$([\d,]+(?:\.\d+)?)/);
         if (match) total += parseFloat(match[1].replace(/,/g, '')) || 0;
-      } catch {
-        toast.error(`Failed to collect from ${prop.name}`);
+      } catch (e) {
+        const detail = formatApiDetail(e.response?.data?.detail);
+        const line = detail ? `${prop.name}: ${detail}` : `Failed to collect from ${prop.name}`;
+        if (isCollectCooldownOrWaitMessage(detail) || isNoIncomeCollectMessage(detail)) softFailures.push(line);
+        else hardFailures.push(line);
       }
     }
     if (collected > 0) {
       refreshUser();
-      fetchProperties();
       toast.success(total > 0 ? `Collected $${Math.trunc(total).toLocaleString()} from ${collected} propert${collected === 1 ? 'y' : 'ies'}` : `Collected from ${collected} propert${collected === 1 ? 'y' : 'ies'}`);
     }
+    if (softFailures.length === 1) {
+      toast.warning(softFailures[0]);
+    } else if (softFailures.length > 1) {
+      toast.warning(
+        `${softFailures.length} businesses not ready yet. ${softFailures[0]} (+${softFailures.length - 1} more — open each card for details or wait for the timer).`,
+      );
+    }
+    hardFailures.forEach((line) => toast.error(line));
+    if (collected > 0 || softFailures.length || hardFailures.length) fetchProperties();
     setCollectAllLoading(false);
   };
 
@@ -418,11 +468,15 @@ export default function Properties() {
                     <button
                       onClick={() => collectIncome(property.id)}
                       data-testid={`collect-income-${property.id}`}
-                      disabled={property.income_collection_blocked}
+                      disabled={property.income_collection_blocked || heatBlocksPropertyCollect}
                       className="w-full bg-primary/20 text-primary rounded font-heading font-bold uppercase tracking-wider py-1.5 text-[10px] border border-primary/40 hover:bg-primary/30 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <DollarSign size={12} />{' '}
-                      {property.income_collection_blocked ? 'Pay upkeep to collect' : 'Collect'}
+                      {property.income_collection_blocked
+                        ? 'Pay upkeep to collect'
+                        : heatBlocksPropertyCollect
+                          ? 'Bribe police to collect'
+                          : 'Collect'}
                     </button>
                     {property.can_upgrade && (
                       <button
