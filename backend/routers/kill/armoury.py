@@ -1921,7 +1921,14 @@ async def get_shooting_range_mastery(current_user: dict = Depends(get_current_us
                 can_train = False
                 break
         result[wid] = {**info, "can_train": can_train, "next_train_at": next_train_at}
-    return {"mastery": result, "weapons": [{"id": w["id"], "name": w.get("name", w["id"])} for w in gun_weapons]}
+    # Include owned per weapon so UI does not depend on GET /weapons (cached / one-shot); loot weapons only appear there when owned.
+    return {
+        "mastery": result,
+        "weapons": [
+            {"id": w["id"], "name": w.get("name", w["id"]), "owned": w["id"] in owned_ids}
+            for w in gun_weapons
+        ],
+    }
 
 
 async def train_shooting_range(

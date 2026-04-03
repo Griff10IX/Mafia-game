@@ -984,7 +984,7 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
                           const info = masteryData.mastery?.[w.id] || { mastery_pct: 0 };
                           const pct = Number(info.mastery_pct) || 0;
                           const canTrain = info.can_train !== false;
-                          const owned = weaponsList.some((x) => x.id === w.id && x.owned);
+                          const owned = typeof w.owned === 'boolean' ? w.owned : weaponsList.some((x) => x.id === w.id && x.owned);
                           const training = trainingWeaponId === w.id;
                           const cooldownLabel = formatMasteryTrainCooldownLabel(info.next_train_at);
                           const onCooldown = Boolean(cooldownLabel);

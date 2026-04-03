@@ -379,9 +379,11 @@ export default function ShootingRange3D() {
     if (routeWeaponId && !weaponId) setWeaponId(routeWeaponId);
   }, [routeWeaponId, weaponId]);
 
-  const ownedGuns = masteryData?.weapons?.filter(w =>
-    w.id !== "weapon1" && weaponsList.some(x => x.id === w.id && x.owned) && (masteryData.mastery?.[w.id]?.can_train !== false)
-  ) || [];
+  const ownedGuns = masteryData?.weapons?.filter((w) => {
+    if (w.id === 'weapon1') return false;
+    const owned = typeof w.owned === 'boolean' ? w.owned : weaponsList.some((x) => x.id === w.id && x.owned);
+    return owned && masteryData.mastery?.[w.id]?.can_train !== false;
+  }) || [];
   const canPlay = ownedGuns.some(w => w.id === weaponId);
 
   // ── SCORE POP ────────────────────────────────────────────────────────────────
