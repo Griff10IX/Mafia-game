@@ -1017,7 +1017,7 @@ export default function ShootingRange3D() {
         <p className="text-[10px] text-mutedForeground font-heading italic mt-1">
           Moving targets vanish after {isTouchDevice ? TARGET_LIFETIME_TOUCH : TARGET_LIFETIME}s — aim fast. Bullseye pays <strong className="text-primary">10 pts</strong>, outer ring pays 1.
           {isTouchDevice && " Extra time & bigger hit area on touch."}
-          Max <strong className="text-primary">+{MAX_HITS_FOR_MASTERY}%</strong> mastery per round.
+          Max <strong className="text-primary">+{MAX_HITS_FOR_MASTERY}%</strong> mastery per round. The Colt Monitor appears here only if you own it from a loot box.
         </p>
         {playsLeft != null && (
           <p className={`text-[10px] font-heading mt-1 ${hasPlaysLeft ? 'text-mutedForeground' : 'text-red-500 font-bold'}`}>

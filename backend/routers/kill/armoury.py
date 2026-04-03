@@ -318,6 +318,7 @@ MASTERY_MAX_BULLET_REDUCTION_PCT = 10
 MASTERY_AUTO_SIM_PCT_PER_CHUNK = 5  # +5% per "Train 5 min" chunk
 MASTERY_COOLDOWN_MINUTES = 5  # min time between trains per weapon (auto_sim + 3D live submit)
 BRASS_KNUCKLES_WEAPON_ID = "weapon1"  # exclude from shooting range (no bullets)
+LOOT_EXCLUSIVE_WEAPON_ID = "weapon_loot"  # Colt Monitor — only from loot box; omit from mastery list until owned
 # Playing the 3D range: grant more mastery per hit than auto_sim (quicker mastery when you play)
 MASTERY_PCT_PER_LIVE_HIT = 1  # 1% per hit when playing the 3D game (max 30 hits per submit)
 MASTERY_LIVE_HITS_MAX_PER_REQUEST = 30
@@ -1882,7 +1883,7 @@ async def _get_weapon_mastery_pct(user_id: str, weapon_id: str | None) -> int:
 
 
 async def get_shooting_range_mastery(current_user: dict = Depends(get_current_user)):
-    """Return mastery for all gun weapons (exclude Brass Knuckles). Sorted by damage (low→high). can_train if every *earlier* weapon the user *owns* is at 100% (unowned guns never block)."""
+    """Return mastery for all gun weapons (exclude Brass Knuckles). Sorted by damage (low→high). can_train if every *earlier* weapon the user *owns* is at 100% (unowned guns never block). Loot-exclusive Colt Monitor is omitted until owned."""
     now = datetime.now(timezone.utc)
     weapons_list = await db.weapons.find({}, {"_id": 0, "id": 1, "name": 1, "bullets_needed": 1, "damage": 1}).to_list(200)
     gun_weapons = [w for w in weapons_list if w.get("id") != BRASS_KNUCKLES_WEAPON_ID]
@@ -1921,14 +1922,17 @@ async def get_shooting_range_mastery(current_user: dict = Depends(get_current_us
                 can_train = False
                 break
         result[wid] = {**info, "can_train": can_train, "next_train_at": next_train_at}
-    # Include owned per weapon so UI does not depend on GET /weapons (cached / one-shot); loot weapons only appear there when owned.
-    return {
-        "mastery": result,
-        "weapons": [
-            {"id": w["id"], "name": w.get("name", w["id"]), "owned": w["id"] in owned_ids}
-            for w in gun_weapons
-        ],
-    }
+    # Include owned per weapon so UI does not depend on GET /weapons (cached / one-shot).
+    weapons_out: List[Dict] = []
+    for w in gun_weapons:
+        wid = w.get("id")
+        if wid == LOOT_EXCLUSIVE_WEAPON_ID and wid not in owned_ids:
+            continue
+        row: Dict = {"id": w["id"], "name": w.get("name", w["id"]), "owned": wid in owned_ids}
+        if wid == LOOT_EXCLUSIVE_WEAPON_ID:
+            row["loot_box_exclusive"] = True
+        weapons_out.append(row)
+    return {"mastery": result, "weapons": weapons_out}
 
 
 async def train_shooting_range(

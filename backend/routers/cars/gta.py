@@ -1759,7 +1759,7 @@ async def get_view_car(
 
 
 async def run_dealer_replenish_loop():
-    """Replenish dealer stock at random intervals; rarer cars sometimes skip a cycle (don't restock)."""
+    """Replenish dealer stock every 1-4h. Sold-out models always refill; partial stock may skip (rarer = less often)."""
     import server as srv
     await asyncio.sleep(60)  # delay first run after startup
     while True:
@@ -1769,16 +1769,19 @@ async def run_dealer_replenish_loop():
             for c in CARS:
                 if c.get("id") in DEALER_EXCLUDED_IDS or c.get("rarity") == "loot_exclusive":
                     continue
-                r = c.get("rarity") or "common"
-                restock_chance = DEALER_RESTOCK_CHANCE_BY_RARITY.get(r, 0.8)
-                if _rng.random() > restock_chance:
-                    continue  # skip this car this cycle (high rarities often don't stock)
                 car_id = c["id"]
                 max_stock = _dealer_max_stock(c)
                 count = await db.dealer_stock.count_documents({"car_id": car_id})
                 need = max(0, max_stock - count)
-                if need > 0:
-                    await db.dealer_stock.insert_many([{"car_id": car_id, "added_at": now} for _ in range(need)])
+                if need <= 0:
+                    continue
+                # Sold out: always restock next cycle (no RNG skip). Partial stock: rarer models may skip topping up.
+                r = c.get("rarity") or "common"
+                if count > 0:
+                    restock_chance = DEALER_RESTOCK_CHANCE_BY_RARITY.get(r, 0.8)
+                    if _rng.random() > restock_chance:
+                        continue
+                await db.dealer_stock.insert_many([{"car_id": car_id, "added_at": now} for _ in range(need)])
         except Exception as e:
             logger.exception("Dealer replenish loop: %s", e)
         delay = _rng.uniform(DEALER_REPLENISH_MIN_SEC, DEALER_REPLENISH_MAX_SEC)

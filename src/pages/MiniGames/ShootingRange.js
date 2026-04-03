@@ -61,7 +61,7 @@ export default function ShootingRange() {
         </h1>
       </div>
       <p className="text-[11px] text-zinc-400 font-heading mb-4">
-        Master a weapon here to reduce bullets needed when attacking with it (up to 10% at full mastery). Guns are ordered weakest → strongest. Train guns you own; each must reach 100% before the next stronger gun you own. Weapons you don&apos;t own never block progress.
+        Master a weapon here to reduce bullets needed when attacking with it (up to 10% at full mastery). Guns are ordered weakest → strongest. Train guns you own; each must reach 100% before the next stronger gun you own. Weapons you don&apos;t own never block progress. The Colt Monitor only appears after you get it from a loot box—it is not sold at the armoury.
       </p>
       <div className="flex gap-2 mb-4">
         <Link
@@ -95,6 +95,14 @@ export default function ShootingRange() {
                       <span className="text-[10px] sm:text-[11px] font-heading text-foreground min-w-[100px] sm:min-w-[120px]">
                         {w.name}
                         {owned && <span className="text-emerald-500 ml-0.5">(owned)</span>}
+                        {w.loot_box_exclusive && (
+                          <span
+                            className="text-amber-400/90 ml-1 text-[8px] sm:text-[9px] font-heading"
+                            title="Only obtainable from loot box openings — not sold in the armoury"
+                          >
+                            (Loot box only)
+                          </span>
+                        )}
                       </span>
                       <div className="flex-1 min-w-[80px] h-2 sm:h-2.5 rounded-full bg-zinc-800 overflow-hidden border border-zinc-700/50">
                         <div
