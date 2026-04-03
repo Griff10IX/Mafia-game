@@ -1297,6 +1297,32 @@ async def send_notification_to_all(title: str, message: str, notification_type: 
         await send_notification(uid, title, message, notification_type, category=category, **extra)
 
 
+async def maybe_daily_event_inbox_reminder() -> None:
+    """Once per UTC calendar day: send inbox summary to all users when daily events are on and effective event is not NO_EVENT."""
+    today = datetime.now(timezone.utc).date().isoformat()
+    result = await db.game_config.update_one(
+        {
+            "id": "main",
+            "$or": [
+                {"last_daily_event_inbox_processed_utc_date": {"$exists": False}},
+                {"last_daily_event_inbox_processed_utc_date": {"$lt": today}},
+            ],
+        },
+        {"$set": {"last_daily_event_inbox_processed_utc_date": today}},
+        upsert=True,
+    )
+    if result.modified_count == 0 and getattr(result, "upserted_id", None) is None:
+        return  # another worker claimed this UTC day, or already processed today
+    if not await get_events_enabled():
+        return
+    ev = await get_effective_event()
+    if (ev or {}).get("id") == "none":
+        return
+    title = "Daily event"
+    message = ((ev or {}).get("message") or "").strip() or f"Today: {(ev or {}).get('name', 'Event')}"
+    await send_notification_to_all(title, message, notification_type="system", category="system")
+
+
 async def _family_war_start(family_a_id: str, family_b_id: str):
     """Start or ensure an active war between two families. Idempotent."""
     if not family_a_id or not family_b_id or family_a_id == family_b_id:
@@ -2526,6 +2552,14 @@ async def startup_db():
                 logging.exception("Daily tribute deposit ticker: %s", e)
             await asyncio.sleep(60)
     asyncio.create_task(tribute_deposit_ticker())
+    async def daily_event_inbox_ticker():
+        while True:
+            try:
+                await maybe_daily_event_inbox_reminder()
+            except Exception as e:
+                logging.exception("Daily event inbox ticker: %s", e)
+            await asyncio.sleep(60)
+    asyncio.create_task(daily_event_inbox_ticker())
     # Bodyguard weekly payout: run once per day (check every 60s), pay human bodyguards on their payout_weekday
     from routers.kill import bodyguards as bodyguards_router
     async def bodyguard_payout_ticker():

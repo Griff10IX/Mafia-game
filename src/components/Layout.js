@@ -10,6 +10,7 @@ import ThemePicker from './ThemePicker';
 import FirstTimeThemeModal from './FirstTimeThemeModal';
 import { getThemePreset } from '../constants/themes';
 import ErrorBoundary from './ErrorBoundary';
+import ActiveEventBanner from './ActiveEventBanner';
 import { NotificationMessage } from './NotificationMessage';
 import GameChat from './GameChat';
 import DeathScreen from './DeathScreen';
@@ -1766,6 +1767,7 @@ export default function Layout({ children }) {
 
       {/* ── MAIN CONTENT ─────────────────────────────────────────────────────── */}
       <main data-layout="main" className={`${!isLandscapeCompactLayout ? (themeVariant === 'modern' ? 'md:ml-40' : 'md:ml-48') : ''} mt-main-below-topbar min-h-screen p-4 md:p-6 overflow-x-hidden ${mobileNavStyle === 'bottom' ? 'pb-safe-bottom-nav md:pb-6' : ''} ${(isMobileViewport || isLandscapeCompactLayout) && mobileStatsDisplay === 'top_bar' && (flashNews.length > 0 || (user && hasCasinoOrProperty)) && mobileNavStyle !== 'bottom' ? 'pb-16 md:pb-6' : ''} ${mobileStatsDisplay === 'right_sidebar' && !isLandscapeCompactLayout ? (themeVariant === 'modern' ? 'md:mr-60' : 'md:mr-52') : ''}`}>
+        <ActiveEventBanner fetchEnabled={!!user} />
         {needsEmailVerification && (
           <div className="mb-3 px-3 py-2 rounded-sm flex items-center gap-2 flex-wrap" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.15)', border: '1px solid rgba(var(--noir-primary-rgb), 0.4)' }}>
             <Mail size={16} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
