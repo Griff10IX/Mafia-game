@@ -1295,6 +1295,7 @@ async def _dealer_full_restock_if_dealer_empty() -> None:
 
 async def get_cars_for_sale(current_user: dict = Depends(get_current_user)):
     """List dealer cars: one row per model with in_stock count. Excludes custom and exclusive. Any rank can buy."""
+    await _ensure_dealer_stock_seeded()
     pipeline = [{"$group": {"_id": "$car_id", "count": {"$sum": 1}}}]
     counts = await db.dealer_stock.aggregate(pipeline).to_list(100)
     stock_by_car = {d["_id"]: d["count"] for d in counts}
@@ -1323,6 +1324,7 @@ async def buy_car(
         raise HTTPException(status_code=400, detail="Car not found")
     if car_info.get("id") in DEALER_EXCLUDED_IDS or car_info.get("rarity") == "loot_exclusive":
         raise HTTPException(status_code=400, detail="That car is not for sale")
+    await _ensure_dealer_stock_seeded()
     price = int(car_info.get("value", 0) * _dealer_price_multiplier(car_info))
     result = await db.users.update_one(
         {"id": current_user.get("id") or "", "money": {"$gte": price}},
