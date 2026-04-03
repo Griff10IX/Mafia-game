@@ -46,6 +46,13 @@ async def _notify_quicktrade_seller(seller_id: Optional[str], title: str, messag
         pass
 
 
+def _same_user_id(a, b) -> bool:
+    """Compare user ids from JWT vs Mongo (string vs ObjectId safe)."""
+    if a is None or b is None:
+        return False
+    return str(a) == str(b)
+
+
 def _invalidate_trade_caches():
     global _sell_offers_cache, _sell_offers_ts, _buy_offers_cache, _buy_offers_ts, _token_offers_cache, _token_offers_ts, _properties_cache, _properties_ts
     _sell_offers_cache = None
@@ -139,7 +146,7 @@ async def get_sell_offers(current_user: dict = Depends(get_current_user)):
             "money": offer["cost"],
             "hide_name": offer.get("hide_name", False),
             "created_at": offer.get("created_at"),
-            "is_own": uid == current_user["id"],
+            "is_own": _same_user_id(uid, current_user.get("id")),
         })
     return result
 
@@ -366,7 +373,7 @@ async def get_token_offers(current_user: dict = Depends(get_current_user)):
             "price_points": int(offer.get("price_points") or 0),
             "price_money": int(offer.get("price_money") or 0),
             "created_at": offer.get("created_at"),
-            "is_own": offer.get("user_id") == current_user["id"],
+            "is_own": _same_user_id(offer.get("user_id"), current_user.get("id")),
         })
     return result
 
@@ -661,7 +668,7 @@ async def get_buy_offers(current_user: dict = Depends(get_current_user)):
             "cost": offer["offer"],
             "hide_name": offer.get("hide_name", False),
             "created_at": offer.get("created_at"),
-            "is_own": uid == current_user["id"],
+            "is_own": _same_user_id(uid, current_user.get("id")),
         })
     return result
 
@@ -860,29 +867,42 @@ async def cancel_buy_offer_post(offer_id: str, current_user: dict = Depends(get_
 
 # ----- Properties -----
 async def get_properties_for_sale(current_user: dict = Depends(get_current_user)):
+    """List properties for sale. Cache is per-listing data only; is_own is computed per viewer (never cache is_own)."""
     global _properties_cache, _properties_ts
     now = time.monotonic()
-    if _properties_cache is not None and now <= _properties_ts + _LIST_TTL_SEC:
-        return _properties_cache
-    try:
-        properties = await db.properties.find({"for_sale": True, "type": {"$ne": "casino_slots"}}).sort("created_at", -1).to_list(length=100)
-        result = []
-        for prop in properties:
-            result.append({
-                "id": str(prop["_id"]),
-                "location": prop.get("location", "Unknown"),
-                "property_name": prop.get("name", "Property"),
-                "owner": prop.get("owner_username", "Unknown"),
-                "is_own": prop.get("owner_id") == current_user["id"],
-                "points": prop.get("sale_price", 0),
-                "created_at": prop.get("created_at")
-            })
-        _properties_cache = result
-        _properties_ts = now
-        return result
-    except Exception as e:
-        print(f"Error fetching properties: {e}")
-        return []
+    me = current_user.get("id")
+    if _properties_cache is None or now > _properties_ts + _LIST_TTL_SEC:
+        try:
+            properties = await db.properties.find({"for_sale": True, "type": {"$ne": "casino_slots"}}).sort("created_at", -1).to_list(length=100)
+            cached = []
+            for prop in properties:
+                cached.append({
+                    "id": str(prop["_id"]),
+                    "location": prop.get("location", "Unknown"),
+                    "property_name": prop.get("name", "Property"),
+                    "owner": prop.get("owner_username", "Unknown"),
+                    "_owner_id": prop.get("owner_id"),
+                    "points": prop.get("sale_price", 0),
+                    "created_at": prop.get("created_at"),
+                })
+            _properties_cache = cached
+            _properties_ts = now
+        except Exception as e:
+            print(f"Error fetching properties: {e}")
+            return []
+    out = []
+    for row in _properties_cache or []:
+        oid = row.get("_owner_id")
+        out.append({
+            "id": row["id"],
+            "location": row["location"],
+            "property_name": row["property_name"],
+            "owner": row["owner"],
+            "is_own": _same_user_id(oid, me),
+            "points": row["points"],
+            "created_at": row.get("created_at"),
+        })
+    return out
 
 
 async def buy_property(property_id: str, current_user: dict = Depends(get_current_user)):

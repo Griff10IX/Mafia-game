@@ -12,6 +12,9 @@ const QT_STYLES = `
   .qt-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 `;
 
+/** Scroll regions can steal taps on mobile; keep actions above row hit targets. */
+const qtActionBtn = 'relative z-[2] touch-manipulation';
+
 export default function QuickTrade() {
   const [loading, setLoading] = useState(true);
   const [sellOffers, setSellOffers] = useState([]);
@@ -662,15 +665,17 @@ export default function QuickTrade() {
                   <div className="shrink-0">
                     {offer.is_own ? (
                       <button
+                        type="button"
                         onClick={() => handleCancelTokenOffer(offer.id)}
-                        className="px-2.5 py-1 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30"
+                        className={`px-2.5 py-1 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30 min-h-[36px] sm:min-h-0 ${qtActionBtn}`}
                       >
                         Cancel
                       </button>
                     ) : (
                       <button
+                        type="button"
                         onClick={() => handleAcceptTokenOffer(offer.id)}
-                        className="px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30"
+                        className={`px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 min-h-[36px] sm:min-h-0 ${qtActionBtn}`}
                       >
                         Accept
                       </button>
@@ -747,18 +752,19 @@ export default function QuickTrade() {
                             <div className="flex flex-col gap-1 shrink-0 items-stretch">
                               {isMyOffer ? (
                                 <button
+                                  type="button"
                                   onClick={() => offer.ids.length === 1 ? handleCancelOffer(offer.ids[0], 'sell') : handleCancelAllOffers('sell', offer.ids)}
-                                  className="px-2.5 py-1 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30 whitespace-nowrap"
+                                  className={`px-2.5 py-1 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30 whitespace-nowrap min-h-[36px] sm:min-h-0 ${qtActionBtn}`}
                                 >
                                   Cancel{offer.ids.length > 1 ? ` (${offer.ids.length})` : ''}
                                 </button>
                               ) : (
                                 <>
-                                  <button onClick={() => handleAcceptOffer(offer.ids[0], 'sell')} className="px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 whitespace-nowrap">
+                                  <button type="button" onClick={() => handleAcceptOffer(offer.ids[0], 'sell')} className={`px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 whitespace-nowrap min-h-[36px] sm:min-h-0 ${qtActionBtn}`}>
                                     Accept
                                   </button>
                                   {offer.ids.length > 1 && (
-                                    <button onClick={() => handleAcceptBatch(offer.ids, 'sell')} className="px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 whitespace-nowrap">
+                                    <button type="button" onClick={() => handleAcceptBatch(offer.ids, 'sell')} className={`px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 whitespace-nowrap min-h-[36px] sm:min-h-0 ${qtActionBtn}`}>
                                       Accept all ({offer.ids.length})
                                     </button>
                                   )}
@@ -770,7 +776,7 @@ export default function QuickTrade() {
                       </div>
                       {isMyOffer && mySellIds.length > 1 && (
                         <div className="mt-2 pt-2 border-t border-zinc-700/30">
-                          <button type="button" onClick={() => handleCancelAllOffers('sell', mySellIds)} className="text-[10px] font-heading text-red-400/90 hover:text-red-400 border border-red-700/30 hover:border-red-700/50 px-2 py-1 rounded">
+                          <button type="button" onClick={() => handleCancelAllOffers('sell', mySellIds)} className={`text-[10px] font-heading text-red-400/90 hover:text-red-400 border border-red-700/30 hover:border-red-700/50 px-2 py-2 sm:py-1 rounded min-h-[40px] sm:min-h-0 ${qtActionBtn}`}>
                             Cancel all
                           </button>
                         </div>
@@ -845,18 +851,19 @@ export default function QuickTrade() {
                             <div className="flex flex-col gap-1 shrink-0 items-stretch">
                               {isMyOffer ? (
                                 <button
+                                  type="button"
                                   onClick={() => offer.ids.length === 1 ? handleCancelOffer(offer.ids[0], 'buy') : handleCancelAllOffers('buy', offer.ids)}
-                                  className="px-2.5 py-1 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30 whitespace-nowrap"
+                                  className={`px-2.5 py-1 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30 whitespace-nowrap min-h-[36px] sm:min-h-0 ${qtActionBtn}`}
                                 >
                                   Cancel{offer.ids.length > 1 ? ` (${offer.ids.length})` : ''}
                                 </button>
                               ) : (
                                 <>
-                                  <button onClick={() => handleAcceptOffer(offer.ids[0], 'buy')} className="px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 whitespace-nowrap">
+                                  <button type="button" onClick={() => handleAcceptOffer(offer.ids[0], 'buy')} className={`px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 whitespace-nowrap min-h-[36px] sm:min-h-0 ${qtActionBtn}`}>
                                     Accept
                                   </button>
                                   {offer.ids.length > 1 && (
-                                    <button onClick={() => handleAcceptBatch(offer.ids, 'buy')} className="px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 whitespace-nowrap">
+                                    <button type="button" onClick={() => handleAcceptBatch(offer.ids, 'buy')} className={`px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 whitespace-nowrap min-h-[36px] sm:min-h-0 ${qtActionBtn}`}>
                                       Accept all ({offer.ids.length})
                                     </button>
                                   )}
@@ -868,7 +875,7 @@ export default function QuickTrade() {
                       </div>
                       {isMyOffer && myBuyIds.length > 1 && (
                         <div className="mt-2 pt-2 border-t border-zinc-700/30">
-                          <button type="button" onClick={() => handleCancelAllOffers('buy', myBuyIds)} className="text-[10px] font-heading text-red-400/90 hover:text-red-400 border border-red-700/30 hover:border-red-700/50 px-2 py-1 rounded">
+                          <button type="button" onClick={() => handleCancelAllOffers('buy', myBuyIds)} className={`text-[10px] font-heading text-red-400/90 hover:text-red-400 border border-red-700/30 hover:border-red-700/50 px-2 py-2 sm:py-1 rounded min-h-[40px] sm:min-h-0 ${qtActionBtn}`}>
                             Cancel all
                           </button>
                         </div>
@@ -920,11 +927,11 @@ export default function QuickTrade() {
                     <td className="px-4 py-2 text-right font-heading text-xs text-primary font-bold">{formatNumber(prop.points)}</td>
                     <td className="px-4 py-2 text-center">
                       {prop.is_own ? (
-                        <button onClick={() => handleCancelPropertyListing(prop.id)} className="px-2.5 py-1 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30">
+                        <button type="button" onClick={() => handleCancelPropertyListing(prop.id)} className={`px-2.5 py-1 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30 min-h-[36px] sm:min-h-0 ${qtActionBtn}`}>
                           Cancel
                         </button>
                       ) : (
-                        <button onClick={() => handleAcceptOffer(prop.id, 'property')} className="px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30">
+                        <button type="button" onClick={() => handleAcceptOffer(prop.id, 'property')} className={`px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 min-h-[36px] sm:min-h-0 ${qtActionBtn}`}>
                           Buy
                         </button>
                       )}
@@ -954,11 +961,11 @@ export default function QuickTrade() {
                     <div>Owner: <span className="text-foreground">{prop.owner}</span></div>
                   </div>
                   {prop.is_own ? (
-                    <button onClick={() => handleCancelPropertyListing(prop.id)} className="w-full mt-2 px-3 py-1.5 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30">
+                    <button type="button" onClick={() => handleCancelPropertyListing(prop.id)} className={`w-full mt-2 px-3 py-2.5 sm:py-1.5 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30 min-h-[44px] sm:min-h-0 ${qtActionBtn}`}>
                       Cancel Listing
                     </button>
                   ) : (
-                    <button onClick={() => handleAcceptOffer(prop.id, 'property')} className="w-full mt-2 px-3 py-1.5 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30">
+                    <button type="button" onClick={() => handleAcceptOffer(prop.id, 'property')} className={`w-full mt-2 px-3 py-2.5 sm:py-1.5 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 min-h-[44px] sm:min-h-0 ${qtActionBtn}`}>
                       Buy Property
                     </button>
                   )}
