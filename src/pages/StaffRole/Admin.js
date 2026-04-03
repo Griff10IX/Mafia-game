@@ -227,7 +227,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Pre-order Settings', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['preorder', 'points', 'release', 'manual', 'store', 'credit'], adminOnly: true },
   { label: 'Release Preorder Points', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['release', 'preorder', 'points', 'credit'], adminOnly: true },
   // Game World
-  { label: 'Events Toggle', categoryId: 'admin-gameworld', collapseKey: 'events', keywords: ['events', 'toggle', 'enable', 'disable'], adminOnly: true },
+  { label: 'Game Events', categoryId: 'admin-gameworld', collapseKey: 'events', keywords: ['events', 'toggle', 'enable', 'disable', 'random', 'bundle', 'daily', 'modifiers', 'roll'], adminOnly: true },
   { label: 'Booze Run rotation & global discount', categoryId: 'admin-gameworld', collapseKey: 'boozeRun', keywords: ['booze', 'run', 'rotation', 'prices', 'discount', 'listed', 'nudge', 'global', 'jail', 'bust', 'prohibition'], adminOnly: true },
   { label: 'Booze Run analytics', categoryId: 'admin-analytics-monitoring', collapseKey: 'boozeRunAnalytics', keywords: ['booze', 'analytics', 'economy', 'events', 'profit', 'revenue', 'jail', 'leaderboard'] },
   { label: 'Presence simulator', categoryId: 'admin-gameworld', collapseKey: 'presenceSimulator', keywords: ['presence', 'simulator', 'online', 'active', 'fake', 'last_seen'], adminOnly: true },
@@ -8142,6 +8142,98 @@ export default function Admin() {
           Game World
         </h2>
 
+        {isAdmin && (
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Zap}
+          title="Game Events"
+          badge={
+            <span className="text-[10px] font-heading">
+              <span className={eventsEnabled ? 'text-emerald-400' : 'text-red-400'}>{eventsEnabled ? 'On' : 'Off'}</span>
+              {todayEvent?.name && <span className="text-mutedForeground"> · {todayEvent.name}</span>}
+            </span>
+          }
+          toolAnchor="events"
+          isCollapsed={collapsed.events}
+          onToggle={() => toggleSection('events')}
+        />
+        {!collapsed.events && (
+          <div className="p-3 space-y-2">
+            <div className="flex flex-wrap gap-2">
+              <BtnPrimary onClick={handleToggleEvents}>{eventsEnabled ? 'Disable' : 'Enable'} Events</BtnPrimary>
+              <BtnPrimary onClick={handleRollRandomMultiBundle} disabled={randomBundleLoading}>
+                {randomBundleLoading ? '…' : 'Roll random bundle'}
+              </BtnPrimary>
+              <BtnSecondary onClick={handleDisableRandomMultiBundle} disabled={randomBundleLoading || !randomMultiEventBundleEnabled}>
+                Disable bundle
+              </BtnSecondary>
+            </div>
+            <p className="text-[10px] text-mutedForeground">
+              Random bundle: picks 1, 2, or all modifier groups at once (one random event per group — no conflicting multipliers). Roll again anytime.
+            </p>
+            {randomMultiEventBundleEnabled && randomMultiEventBundleIds?.length > 0 && (
+              <p className="text-[10px] text-foreground/90">
+                Active event ids: {randomMultiEventBundleIds.join(', ')}
+              </p>
+            )}
+            <div className="pt-2 border-t border-primary/20 space-y-2">
+              <p className="text-xs font-medium text-foreground">Choose random event</p>
+              <div className="flex flex-wrap gap-2 items-center">
+                <BtnSecondary onClick={() => handleRandomEvent(false)} disabled={eventRandomLoading}>
+                  {eventRandomLoading ? '...' : 'Random (from all)'}
+                </BtnSecondary>
+                <BtnSecondary onClick={() => handleRandomEvent(true)} disabled={eventRandomLoading}>
+                  {eventRandomLoading ? '...' : 'Random (from selected)'}
+                </BtnSecondary>
+                <span className="text-[10px] text-mutedForeground">Tick &quot;In pool&quot; below to choose from specific events only.</span>
+              </div>
+              {overrideEventId && (
+                <div className="flex flex-wrap gap-2 items-center py-1.5 px-2 rounded bg-primary/10 border border-primary/30">
+                  <span className="text-xs text-foreground">Overridden: {eventList.find((e) => e.id === overrideEventId)?.name ?? overrideEventId}</span>
+                  <BtnSecondary onClick={handleClearEventOverride} disabled={eventClearOverrideLoading}>
+                    {eventClearOverrideLoading ? '...' : 'Clear override'}
+                  </BtnSecondary>
+                </div>
+              )}
+            </div>
+            <div className="pt-2 border-t border-primary/20">
+              <p className="text-xs font-medium text-foreground mb-1">Global events</p>
+              <p className="text-[10px] text-mutedForeground mb-2">Enable or disable each event type. Disabled events are skipped on their day (no event that day). Event types are defined in code (GAME_EVENTS).</p>
+              <div className="flex flex-wrap gap-2 items-center mb-2">
+                <span className="text-[10px] text-mutedForeground">In pool for Random (from selected):</span>
+                <BtnSecondary onClick={() => setSelectedForRandomPool(Object.fromEntries((eventList || []).map((ev) => [ev.id, true])))}>
+                  Select all
+                </BtnSecondary>
+                <BtnSecondary onClick={() => setSelectedForRandomPool({})}>
+                  Deselect all
+                </BtnSecondary>
+              </div>
+              <div className="space-y-1.5 max-h-64 overflow-y-auto">
+                {eventList.map((ev) => (
+                  <div key={ev.id} className="flex flex-wrap items-center gap-2 py-1.5 px-2 rounded bg-black/20">
+                    <label className="flex items-center gap-1 shrink-0 cursor-pointer" title="Include in random pool (when using Random from selected)">
+                      <input type="checkbox" checked={!!selectedForRandomPool[ev.id]} onChange={() => toggleRandomPoolSelection(ev.id)} className="rounded border-primary/50" />
+                      <span className="text-[10px] text-mutedForeground">In pool</span>
+                    </label>
+                    <span className="text-xs font-medium text-foreground min-w-0 truncate flex-1">{ev.name}</span>
+                    {todayEvent?.id === ev.id && <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/30 text-primary font-medium shrink-0">Today</span>}
+                    <span className="text-[10px] text-mutedForeground truncate max-w-[200px]" title={ev.message}>{ev.message || ev.id}</span>
+                    <BtnSecondary
+                      onClick={() => handleToggleEvent(ev.id, !ev.enabled)}
+                      disabled={eventToggleLoadingId !== null}
+                    >
+                      {eventToggleLoadingId === ev.id ? '...' : ev.enabled ? 'Disable' : 'Enable'}
+                    </BtnSecondary>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+        </div>
+        )}
+
         {/* Launch Settings — admin only */}
         {isAdmin && (
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-amber-500/30 mobile-panel`}>
@@ -8382,98 +8474,6 @@ export default function Admin() {
               >
                 {claimCostsSaving ? 'Saving…' : 'Save claim costs'}
               </button>
-            </div>
-          </div>
-        )}
-        </div>
-        )}
-
-        {isAdmin && (
-        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
-        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <SectionHeader
-          icon={Zap}
-          title="Game Events"
-          badge={
-            <span className="text-[10px] font-heading">
-              <span className={eventsEnabled ? 'text-emerald-400' : 'text-red-400'}>{eventsEnabled ? 'On' : 'Off'}</span>
-              {todayEvent?.name && <span className="text-mutedForeground"> · {todayEvent.name}</span>}
-            </span>
-          }
-          toolAnchor="events"
-          isCollapsed={collapsed.events}
-          onToggle={() => toggleSection('events')}
-        />
-        {!collapsed.events && (
-          <div className="p-3 space-y-2">
-            <div className="flex flex-wrap gap-2">
-              <BtnPrimary onClick={handleToggleEvents}>{eventsEnabled ? 'Disable' : 'Enable'} Events</BtnPrimary>
-              <BtnSecondary onClick={handleRollRandomMultiBundle} disabled={randomBundleLoading}>
-                {randomBundleLoading ? '…' : 'Roll random bundle'}
-              </BtnSecondary>
-              <BtnSecondary onClick={handleDisableRandomMultiBundle} disabled={randomBundleLoading || !randomMultiEventBundleEnabled}>
-                Disable bundle
-              </BtnSecondary>
-            </div>
-            <p className="text-[10px] text-mutedForeground">
-              Random bundle: picks 1, 2, or all modifier groups at once (one random event per group — no conflicting multipliers). Roll again anytime.
-            </p>
-            {randomMultiEventBundleEnabled && randomMultiEventBundleIds?.length > 0 && (
-              <p className="text-[10px] text-foreground/90">
-                Active event ids: {randomMultiEventBundleIds.join(', ')}
-              </p>
-            )}
-            <div className="pt-2 border-t border-primary/20 space-y-2">
-              <p className="text-xs font-medium text-foreground">Choose random event</p>
-              <div className="flex flex-wrap gap-2 items-center">
-                <BtnSecondary onClick={() => handleRandomEvent(false)} disabled={eventRandomLoading}>
-                  {eventRandomLoading ? '...' : 'Random (from all)'}
-                </BtnSecondary>
-                <BtnSecondary onClick={() => handleRandomEvent(true)} disabled={eventRandomLoading}>
-                  {eventRandomLoading ? '...' : 'Random (from selected)'}
-                </BtnSecondary>
-                <span className="text-[10px] text-mutedForeground">Tick &quot;In pool&quot; below to choose from specific events only.</span>
-              </div>
-              {overrideEventId && (
-                <div className="flex flex-wrap gap-2 items-center py-1.5 px-2 rounded bg-primary/10 border border-primary/30">
-                  <span className="text-xs text-foreground">Overridden: {eventList.find((e) => e.id === overrideEventId)?.name ?? overrideEventId}</span>
-                  <BtnSecondary onClick={handleClearEventOverride} disabled={eventClearOverrideLoading}>
-                    {eventClearOverrideLoading ? '...' : 'Clear override'}
-                  </BtnSecondary>
-                </div>
-              )}
-            </div>
-            <div className="pt-2 border-t border-primary/20">
-              <p className="text-xs font-medium text-foreground mb-1">Global events</p>
-              <p className="text-[10px] text-mutedForeground mb-2">Enable or disable each event type. Disabled events are skipped on their day (no event that day). Event types are defined in code (GAME_EVENTS).</p>
-              <div className="flex flex-wrap gap-2 items-center mb-2">
-                <span className="text-[10px] text-mutedForeground">In pool for Random (from selected):</span>
-                <BtnSecondary onClick={() => setSelectedForRandomPool(Object.fromEntries((eventList || []).map((ev) => [ev.id, true])))}>
-                  Select all
-                </BtnSecondary>
-                <BtnSecondary onClick={() => setSelectedForRandomPool({})}>
-                  Deselect all
-                </BtnSecondary>
-              </div>
-              <div className="space-y-1.5 max-h-64 overflow-y-auto">
-                {eventList.map((ev) => (
-                  <div key={ev.id} className="flex flex-wrap items-center gap-2 py-1.5 px-2 rounded bg-black/20">
-                    <label className="flex items-center gap-1 shrink-0 cursor-pointer" title="Include in random pool (when using Random from selected)">
-                      <input type="checkbox" checked={!!selectedForRandomPool[ev.id]} onChange={() => toggleRandomPoolSelection(ev.id)} className="rounded border-primary/50" />
-                      <span className="text-[10px] text-mutedForeground">In pool</span>
-                    </label>
-                    <span className="text-xs font-medium text-foreground min-w-0 truncate flex-1">{ev.name}</span>
-                    {todayEvent?.id === ev.id && <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/30 text-primary font-medium shrink-0">Today</span>}
-                    <span className="text-[10px] text-mutedForeground truncate max-w-[200px]" title={ev.message}>{ev.message || ev.id}</span>
-                    <BtnSecondary
-                      onClick={() => handleToggleEvent(ev.id, !ev.enabled)}
-                      disabled={eventToggleLoadingId !== null}
-                    >
-                      {eventToggleLoadingId === ev.id ? '...' : ev.enabled ? 'Disable' : 'Enable'}
-                    </BtnSecondary>
-                  </div>
-                ))}
-              </div>
             </div>
           </div>
         )}
