@@ -24,7 +24,16 @@ from pydantic import BaseModel
 from fastapi import Depends, Header, HTTPException, Query
 import httpx
 
-from server import db, get_current_user, get_current_user_verified, log_gambling, send_notification, _is_admin, _is_moderator
+from server import (
+    db,
+    get_current_user,
+    get_current_user_verified,
+    log_gambling,
+    send_notification,
+    _is_admin,
+    _is_moderator,
+    _get_staff_user_ids,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -77,6 +86,19 @@ class AdminAddCustomSportsEventRequest(BaseModel):
     options: List[AdminCustomEventOption]
 
 
+class SportsRequestEventBody(BaseModel):
+    template_id: str
+
+
+class AdminSportsEventRequestApprove(BaseModel):
+    request_id: str
+
+
+class AdminSportsEventRequestDeny(BaseModel):
+    request_id: str
+    reason: Optional[str] = None
+
+
 # ----- Constants -----
 # Max total stake locked in open sports bets per user (split across any number of bets).
 SPORTS_BET_MAX_TOTAL_OPEN_STAKE = 10_000_000
@@ -84,6 +106,8 @@ SPORTS_BET_MAX_TOTAL_OPEN_STAKE = 10_000_000
 SPORTS_BETTING_CLOSE_BEFORE_START_MINUTES = 10
 # Public board: return enough open events that high-volume Football does not crowd out UFC/Boxing/F1.
 SPORTS_BETTING_PUBLIC_EVENTS_LIMIT = 500
+# Player-submitted requests to add a template to the board (UTC calendar day).
+SPORTS_EVENT_REQUESTS_PER_DAY = 3
 SPORTS_LIVE_CACHE_TTL = 30 * 60  # 30 min (was 6h) so "Check for events" gets fresher templates
 ODDS_API_BASE = "https://api.the-odds-api.com/v4"
 THESPORTSDB_LEAGUE_PREMIER = 4328
@@ -1277,6 +1301,104 @@ def _sports_betting_cancellation_allowed(start_time_iso: Optional[str]) -> bool:
     return now < deadline
 
 
+def _utc_day_start(now: Optional[datetime] = None) -> datetime:
+    n = now or datetime.now(timezone.utc)
+    if n.tzinfo is None:
+        n = n.replace(tzinfo=timezone.utc)
+    return n.astimezone(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+async def _count_sports_event_requests_today(user_id: str) -> int:
+    if not user_id:
+        return 0
+    day0 = _utc_day_start()
+    day1 = day0 + timedelta(days=1)
+    lo = day0.isoformat()
+    hi = day1.isoformat()
+    return await db.sports_event_requests.count_documents(
+        {"user_id": user_id, "created_at": {"$gte": lo, "$lt": hi}},
+    )
+
+
+async def _open_board_template_ids() -> set:
+    ids: set = set()
+    cursor = db.sports_events.find(
+        {"status": "open"},
+        {"_id": 0, "source_template_id": 1, "external_event_id": 1, "external_sport_key": 1},
+    )
+    async for doc in cursor:
+        stid = (doc.get("source_template_id") or "").strip()
+        if stid:
+            ids.add(stid)
+            continue
+        ex = (doc.get("external_event_id") or "").strip()
+        sk = (doc.get("external_sport_key") or "").strip()
+        if ex and sk:
+            ids.add(_odds_template_id(sk, ex))
+    return ids
+
+
+async def _create_sports_board_event_from_template(template: dict) -> dict:
+    """Insert sports_events from template; sets source_template_id. Returns inserted event doc."""
+    now = datetime.now(timezone.utc)
+    template_id_key = (template.get("id") or "").strip()
+    if not template_id_key:
+        raise HTTPException(status_code=400, detail="Template has no id")
+    nm = (template.get("name") or "").strip()
+    cat = (template.get("category") or "").strip()
+    if not nm or not cat:
+        raise HTTPException(status_code=400, detail="Template missing name or category")
+    opts = template.get("options") or []
+    if len(opts) < 2:
+        raise HTTPException(status_code=400, detail="Template needs at least two options")
+    start_time = template.get("start_time") or _parse_commence_time(template.get("commence_time"))
+    if not start_time:
+        start_time = (now + timedelta(hours=2)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    ev = {
+        "id": str(uuid.uuid4()),
+        "name": nm,
+        "category": cat,
+        "start_time": start_time,
+        "options": [dict(o) for o in opts],
+        "is_special": False,
+        "status": "open",
+        "source_template_id": template_id_key,
+    }
+    if template.get("external_event_id") and template.get("external_sport_key"):
+        ev["external_event_id"] = template["external_event_id"]
+        ev["external_sport_key"] = template["external_sport_key"]
+    await db.sports_events.insert_one(ev)
+    return ev
+
+
+async def _notify_staff_sports_event_request(
+    *,
+    request_id: str,
+    requester_username: str,
+    template_id: str,
+    template_name: str,
+    template_category: str,
+) -> None:
+    title = "Sports book — event request"
+    msg = (
+        f"{requester_username or 'A player'} requested a game be added to the sports book.\n\n"
+        f"Game: {template_name}\n"
+        f"Category: {template_category}\n"
+        f"Template id: {template_id}\n"
+        f"Request id: {request_id}\n\n"
+        "Open Casino → Sports betting → pending requests (admin) to approve or deny."
+    )
+    try:
+        staff_ids = await _get_staff_user_ids()
+        for staff_uid in staff_ids:
+            try:
+                await send_notification(staff_uid, title, msg, "staff_sports_event_request")
+            except Exception as ex:
+                logger.warning("sports event request staff notify %s: %s", staff_uid, ex)
+    except Exception:
+        logger.exception("notify_staff_sports_event_request failed")
+
+
 # ----- Public routes -----
 async def sports_betting_events(current_user: dict = Depends(get_current_user_verified)):
     await _sports_ensure_seed_events()
@@ -1577,6 +1699,91 @@ async def sports_betting_recent_results(current_user: dict = Depends(get_current
     }
 
 
+async def sports_template_library(current_user: dict = Depends(get_current_user_verified)):
+    """Public: DB-backed template list (same shape as admin templates) + which template ids are already on the open board."""
+    db_list = await _load_sports_templates_from_db()
+    on_board = await _open_board_template_ids()
+    payload = _admin_templates_json_from_list(db_list, template_source="database")
+    payload["on_board_template_ids"] = sorted(on_board)
+    payload["requests_per_day_limit"] = SPORTS_EVENT_REQUESTS_PER_DAY
+    return payload
+
+
+async def sports_my_event_requests(current_user: dict = Depends(get_current_user_verified)):
+    uid = current_user.get("id") or ""
+    used = await _count_sports_event_requests_today(uid)
+    limit_n = SPORTS_EVENT_REQUESTS_PER_DAY
+    req_cur = db.sports_event_requests.find(
+        {"user_id": uid},
+        {"_id": 0, "id": 1, "template_id": 1, "template_name": 1, "template_category": 1, "status": 1, "created_at": 1, "deny_reason": 1},
+    ).sort("created_at", -1).limit(25)
+    recent = await req_cur.to_list(25)
+    return {
+        "used_today": used,
+        "limit": limit_n,
+        "remaining": max(0, limit_n - used),
+        "recent_requests": recent,
+    }
+
+
+async def sports_request_event(body: SportsRequestEventBody, current_user: dict = Depends(get_current_user_verified)):
+    template_id = (body.template_id or "").strip()
+    if not template_id:
+        raise HTTPException(status_code=400, detail="template_id required")
+    uid = current_user.get("id") or ""
+    if not uid:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    db_list = await _load_sports_templates_from_db()
+    template = next((t for t in db_list if (t.get("id") or "").strip() == template_id), None)
+    if not template:
+        raise HTTPException(status_code=404, detail="Game not found in the saved library — it may have expired from the list")
+    on_board = await _open_board_template_ids()
+    if template_id in on_board:
+        raise HTTPException(status_code=400, detail="This game is already on the board")
+    used = await _count_sports_event_requests_today(uid)
+    if used >= SPORTS_EVENT_REQUESTS_PER_DAY:
+        raise HTTPException(
+            status_code=400,
+            detail=f"You can submit up to {SPORTS_EVENT_REQUESTS_PER_DAY} game requests per UTC day. Try again after midnight UTC.",
+        )
+    dup = await db.sports_event_requests.find_one(
+        {"user_id": uid, "template_id": template_id, "status": "pending"},
+        {"_id": 0, "id": 1},
+    )
+    if dup:
+        raise HTTPException(status_code=400, detail="You already have a pending request for this game")
+    now = datetime.now(timezone.utc).isoformat()
+    rid = str(uuid.uuid4())
+    uname = (current_user.get("username") or "").strip() or "?"
+    tname = (template.get("name") or "?").strip()
+    tcat = (template.get("category") or "?").strip()
+    doc = {
+        "id": rid,
+        "user_id": uid,
+        "username": uname,
+        "template_id": template_id,
+        "template_name": tname,
+        "template_category": tcat,
+        "status": "pending",
+        "created_at": now,
+    }
+    await db.sports_event_requests.insert_one(doc)
+    await _notify_staff_sports_event_request(
+        request_id=rid,
+        requester_username=uname,
+        template_id=template_id,
+        template_name=tname,
+        template_category=tcat,
+    )
+    new_used = used + 1
+    return {
+        "message": "Request submitted — staff will review it.",
+        "request_id": rid,
+        "used_today": new_used,
+        "remaining": max(0, SPORTS_EVENT_REQUESTS_PER_DAY - new_used),
+    }
+
+
 # ----- Admin routes -----
 async def admin_sports_templates(current_user: dict = Depends(get_current_user_verified)):
     if not _is_admin(current_user):
@@ -1622,23 +1829,7 @@ async def admin_sports_add_event(request: AdminAddSportsEventRequest, current_us
     template = next((t for t in merged if t.get("id") == template_id), None)
     if not template:
         raise HTTPException(status_code=404, detail="Template not found")
-    now = datetime.now(timezone.utc)
-    start_time = template.get("start_time") or _parse_commence_time(template.get("commence_time"))
-    if not start_time:
-        start_time = (now + timedelta(hours=2)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
-    ev = {
-        "id": str(uuid.uuid4()),
-        "name": template["name"],
-        "category": template["category"],
-        "start_time": start_time,
-        "options": [dict(o) for o in template["options"]],
-        "is_special": False,
-        "status": "open",
-    }
-    if template.get("external_event_id") and template.get("external_sport_key"):
-        ev["external_event_id"] = template["external_event_id"]
-        ev["external_sport_key"] = template["external_sport_key"]
-    await db.sports_events.insert_one(ev)
+    ev = await _create_sports_board_event_from_template(template)
     return {"message": f"Added event: {template['name']}", "event_id": ev["id"]}
 
 
@@ -1857,6 +2048,96 @@ async def admin_sports_bets_list(
     return {"bets": out, "count": len(out)}
 
 
+async def admin_sports_event_requests_list(current_user: dict = Depends(get_current_user_verified)):
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    cur = db.sports_event_requests.find({"status": "pending"}, {"_id": 0}).sort("created_at", 1).limit(200)
+    rows = await cur.to_list(200)
+    return {"requests": rows, "count": len(rows)}
+
+
+async def admin_sports_event_request_approve(
+    body: AdminSportsEventRequestApprove,
+    current_user: dict = Depends(get_current_user_verified),
+):
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    rid = (body.request_id or "").strip()
+    if not rid:
+        raise HTTPException(status_code=400, detail="request_id required")
+    req = await db.sports_event_requests.find_one({"id": rid, "status": "pending"}, {"_id": 0})
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found or already resolved")
+    tid = (req.get("template_id") or "").strip()
+    merged = await _merged_sports_templates_for_admin()
+    template = next((t for t in merged if (t.get("id") or "").strip() == tid), None)
+    if not template:
+        raise HTTPException(
+            status_code=400,
+            detail="Template is no longer available — refresh Odds data or deny this request",
+        )
+    on_board = await _open_board_template_ids()
+    now_iso = datetime.now(timezone.utc).isoformat()
+    admin_id = current_user.get("id") or ""
+    if tid in on_board:
+        await db.sports_event_requests.update_one(
+            {"id": rid},
+            {"$set": {"status": "approved", "resolved_at": now_iso, "resolved_by": admin_id, "board_event_id": None}},
+        )
+        uid = req.get("user_id") or ""
+        if uid:
+            await send_notification(
+                uid,
+                "Sports book request",
+                f"Your request for \"{req.get('template_name') or 'a game'}\" was marked approved — it was already on the board.",
+                "system",
+            )
+        return {"message": "Request closed — game was already on the board", "event_id": None}
+    ev = await _create_sports_board_event_from_template(template)
+    await db.sports_event_requests.update_one(
+        {"id": rid},
+        {"$set": {"status": "approved", "resolved_at": now_iso, "resolved_by": admin_id, "board_event_id": ev["id"]}},
+    )
+    uid = req.get("user_id") or ""
+    if uid:
+        await send_notification(
+            uid,
+            "Sports book request approved",
+            f"Your requested game \"{template.get('name')}\" was added to the board. You can place bets under Events.",
+            "system",
+        )
+    return {"message": "Event added from request", "event_id": ev["id"]}
+
+
+async def admin_sports_event_request_deny(
+    body: AdminSportsEventRequestDeny,
+    current_user: dict = Depends(get_current_user_verified),
+):
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    rid = (body.request_id or "").strip()
+    if not rid:
+        raise HTTPException(status_code=400, detail="request_id required")
+    reason = (body.reason or "").strip()[:500]
+    req = await db.sports_event_requests.find_one({"id": rid, "status": "pending"}, {"_id": 0})
+    if not req:
+        raise HTTPException(status_code=404, detail="Request not found or already resolved")
+    now_iso = datetime.now(timezone.utc).isoformat()
+    admin_id = current_user.get("id") or ""
+    await db.sports_event_requests.update_one(
+        {"id": rid},
+        {"$set": {"status": "denied", "resolved_at": now_iso, "resolved_by": admin_id, "deny_reason": reason or None}},
+    )
+    uid = req.get("user_id") or ""
+    if uid:
+        nm = req.get("template_name") or "the game"
+        msg = f"Your request to add \"{nm}\" to the sports book was denied."
+        if reason:
+            msg += f"\n\nReason: {reason}"
+        await send_notification(uid, "Sports book request denied", msg, "system")
+    return {"message": "Request denied"}
+
+
 # ----- In-process auto-settle ticker (time-gated; optional via SPORTS_AUTO_SETTLE_TICKER) -----
 def _sports_auto_settle_minutes_after_start() -> int:
     try:
@@ -2017,6 +2298,9 @@ def register(router):
     router.add_api_route("/sports-betting/cancel-all-bets", sports_betting_cancel_all_bets, methods=["POST"])
     router.add_api_route("/sports-betting/stats", sports_betting_stats, methods=["GET"])
     router.add_api_route("/sports-betting/recent-results", sports_betting_recent_results, methods=["GET"])
+    router.add_api_route("/sports-betting/template-library", sports_template_library, methods=["GET"])
+    router.add_api_route("/sports-betting/my-event-requests", sports_my_event_requests, methods=["GET"])
+    router.add_api_route("/sports-betting/request-event", sports_request_event, methods=["POST"])
     router.add_api_route("/admin/sports-betting/templates", admin_sports_templates, methods=["GET"])
     router.add_api_route("/admin/sports-betting/templates/load-db", admin_sports_templates_load_db, methods=["POST"])
     router.add_api_route("/admin/sports-betting/refresh", admin_sports_refresh, methods=["POST"])
@@ -2026,6 +2310,9 @@ def register(router):
     router.add_api_route("/admin/sports-betting/settle", admin_sports_settle, methods=["POST"])
     router.add_api_route("/admin/sports-betting/cancel-event", admin_sports_cancel_event, methods=["POST"])
     router.add_api_route("/admin/sports-betting/bets", admin_sports_bets_list, methods=["GET"])
+    router.add_api_route("/admin/sports-betting/event-requests", admin_sports_event_requests_list, methods=["GET"])
+    router.add_api_route("/admin/sports-betting/event-requests/approve", admin_sports_event_request_approve, methods=["POST"])
+    router.add_api_route("/admin/sports-betting/event-requests/deny", admin_sports_event_request_deny, methods=["POST"])
 
     # Cron: auto-settle from Odds API scores (call every 15-30 min)
     cron_secret = (os.environ.get("CRON_SECRET") or "").strip()

@@ -347,6 +347,7 @@ async def ensure_all_indexes(db):
         await db.sports_events.create_index("id", unique=True)
         await db.sports_events.create_index([("id", 1), ("status", 1)])
         await db.sports_events.create_index([("status", 1), ("start_time", 1)])
+        await db.sports_events.create_index([("status", 1), ("source_template_id", 1)])
         await db.sports_bets.create_index([("user_id", 1), ("status", 1)])
         await db.sports_bets.create_index([("user_id", 1), ("status", 1), ("created_at", -1)])
         await db.sports_bets.create_index([("user_id", 1), ("status", 1), ("settled_at", -1)])
@@ -359,6 +360,12 @@ async def ensure_all_indexes(db):
         # --- Sports betting: admin template library (persisted after "Check for events") ---
         await db.sports_betting_templates.create_index("id", unique=True)
         await db.sports_betting_templates.create_index([("category", 1), ("saved_at", -1)])
+
+        # --- Sports betting: player requests to add template to board ---
+        await db.sports_event_requests.create_index("id", unique=True)
+        await db.sports_event_requests.create_index([("user_id", 1), ("created_at", -1)])
+        await db.sports_event_requests.create_index([("status", 1), ("created_at", 1)])
+        await db.sports_event_requests.create_index([("user_id", 1), ("template_id", 1), ("status", 1)])
 
         # --- Flappy Gangster (Gauntlet) ---
         await db.minigame_run_sessions.create_index("id", unique=True)

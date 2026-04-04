@@ -239,6 +239,27 @@ export default function SportsBetting() {
   const [customEventOptions, setCustomEventOptions] = useState([{ name: '', odds: 2 }, { name: '', odds: 2 }]);
   const [addingCustom, setAddingCustom] = useState(false);
   const [activeTab, setActiveTab] = useState('events');
+  const [publicLibrary, setPublicLibrary] = useState({
+    categories: [],
+    templates: {},
+    on_board_template_ids: [],
+    requests_per_day_limit: 3,
+    football_league_filter_options: null,
+  });
+  const [requestInfo, setRequestInfo] = useState({
+    used_today: 0,
+    limit: 3,
+    remaining: 3,
+    recent_requests: [],
+  });
+  const [pendingPlayerRequests, setPendingPlayerRequests] = useState([]);
+  const [browseCategory, setBrowseCategory] = useState('Football');
+  const [browseLeagueFilter, setBrowseLeagueFilter] = useState('');
+  const [browseSearchQuery, setBrowseSearchQuery] = useState('');
+  const [browseDatePreset, setBrowseDatePreset] = useState('');
+  const [browseDateSpecific, setBrowseDateSpecific] = useState('');
+  const [requestingTemplateId, setRequestingTemplateId] = useState(null);
+  const [processingPlayerRequestId, setProcessingPlayerRequestId] = useState(null);
   const [templateLeagueFilter, setTemplateLeagueFilter] = useState('');
   const [templateSearchQuery, setTemplateSearchQuery] = useState('');
   const [templateDatePreset, setTemplateDatePreset] = useState('');
@@ -248,14 +269,29 @@ export default function SportsBetting() {
     setTemplateLeagueFilter('');
   }, [adminCategory]);
 
+  useEffect(() => {
+    setBrowseLeagueFilter('');
+  }, [browseCategory]);
+
+  const fetchPendingPlayerRequests = useCallback(async () => {
+    try {
+      const pr = await api.get('/admin/sports-betting/event-requests');
+      setPendingPlayerRequests(pr.data?.requests ?? []);
+    } catch {
+      setPendingPlayerRequests([]);
+    }
+  }, []);
+
   const fetchAll = useCallback(async () => {
     setLoading(true);
     try {
-      const [eventsRes, betsRes, statsRes, resultsRes] = await Promise.all([
+      const [eventsRes, betsRes, statsRes, resultsRes, libRes, reqRes] = await Promise.all([
         api.get('/sports-betting/events'),
         api.get('/sports-betting/my-bets'),
         api.get('/sports-betting/stats'),
         api.get('/sports-betting/recent-results'),
+        api.get('/sports-betting/template-library').catch(() => ({ data: null })),
+        api.get('/sports-betting/my-event-requests').catch(() => ({ data: null })),
       ]);
       setEvents(eventsRes.data?.events ?? []);
       setMyBets({
@@ -267,6 +303,23 @@ export default function SportsBetting() {
       });
       setStats(statsRes.data ?? null);
       setRecentResults(resultsRes.data?.results ?? []);
+      if (libRes?.data) {
+        setPublicLibrary({
+          categories: libRes.data.categories ?? [],
+          templates: libRes.data.templates ?? {},
+          on_board_template_ids: libRes.data.on_board_template_ids ?? [],
+          requests_per_day_limit: libRes.data.requests_per_day_limit ?? 3,
+          football_league_filter_options: libRes.data.football_league_filter_options ?? null,
+        });
+      }
+      if (reqRes?.data) {
+        setRequestInfo({
+          used_today: reqRes.data.used_today ?? 0,
+          limit: reqRes.data.limit ?? 3,
+          remaining: reqRes.data.remaining ?? 0,
+          recent_requests: reqRes.data.recent_requests ?? [],
+        });
+      }
     } catch (e) {
       toast.error(apiErrorDetail(e, 'Failed to load'));
       setEvents([]);
@@ -302,6 +355,12 @@ export default function SportsBetting() {
               template_source: tRes.data?.template_source ?? null,
               football_league_filter_options: tRes.data?.football_league_filter_options ?? null,
             });
+          }
+          try {
+            const pr = await api.get('/admin/sports-betting/event-requests');
+            if (!cancelled) setPendingPlayerRequests(pr.data?.requests ?? []);
+          } catch {
+            if (!cancelled) setPendingPlayerRequests([]);
           }
         }
       } catch { if (!cancelled) setIsAdmin(false); }
@@ -351,6 +410,7 @@ export default function SportsBetting() {
       });
       const n = res.data?.templates_persisted;
       toast.success(typeof n === 'number' ? `Events loaded — ${n} saved to template library` : 'Events loaded');
+      await fetchPendingPlayerRequests();
       const as = res.data?.auto_settle;
       if (as && typeof as === 'object') {
         if (as.error) {
@@ -446,9 +506,72 @@ export default function SportsBetting() {
 
   const addEventFromTemplate = async (templateId) => {
     setAddingTemplateId(templateId);
-    try { await api.post('/admin/sports-betting/events', { template_id: templateId }); toast.success('Event added'); await fetchAll(); }
-    catch (e) { toast.error(apiErrorDetail(e, 'Failed')); }
+    try {
+      await api.post('/admin/sports-betting/events', { template_id: templateId });
+      toast.success('Event added');
+      await fetchAll();
+      await fetchPendingPlayerRequests();
+    } catch (e) { toast.error(apiErrorDetail(e, 'Failed')); }
     finally { setAddingTemplateId(null); }
+  };
+
+  const requestGameFromLibrary = async (templateId) => {
+    setRequestingTemplateId(templateId);
+    try {
+      const res = await api.post('/sports-betting/request-event', { template_id: templateId });
+      toast.success(res.data?.message || 'Request sent');
+      setRequestInfo((prev) => ({
+        ...prev,
+        used_today: res.data?.used_today ?? prev.used_today,
+        remaining: res.data?.remaining ?? prev.remaining,
+      }));
+      const r2 = await api.get('/sports-betting/my-event-requests').catch(() => ({ data: null }));
+      if (r2?.data) {
+        setRequestInfo({
+          used_today: r2.data.used_today ?? 0,
+          limit: r2.data.limit ?? 3,
+          remaining: r2.data.remaining ?? 0,
+          recent_requests: r2.data.recent_requests ?? [],
+        });
+      }
+      const lib = await api.get('/sports-betting/template-library').catch(() => ({ data: null }));
+      if (lib?.data) {
+        setPublicLibrary({
+          categories: lib.data.categories ?? [],
+          templates: lib.data.templates ?? {},
+          on_board_template_ids: lib.data.on_board_template_ids ?? [],
+          requests_per_day_limit: lib.data.requests_per_day_limit ?? 3,
+          football_league_filter_options: lib.data.football_league_filter_options ?? null,
+        });
+      }
+    } catch (e) { toast.error(apiErrorDetail(e, 'Request failed')); }
+    finally { setRequestingTemplateId(null); }
+  };
+
+  const approvePlayerRequest = async (requestId) => {
+    setProcessingPlayerRequestId(requestId);
+    try {
+      await api.post('/admin/sports-betting/event-requests/approve', { request_id: requestId });
+      toast.success('Approved — event added');
+      await fetchAll();
+      await fetchPendingPlayerRequests();
+    } catch (e) { toast.error(apiErrorDetail(e, 'Failed')); }
+    finally { setProcessingPlayerRequestId(null); }
+  };
+
+  const denyPlayerRequest = async (requestId) => {
+    const reason = window.prompt('Deny reason (optional — shown to the player):');
+    if (reason === null) return;
+    setProcessingPlayerRequestId(requestId);
+    try {
+      await api.post('/admin/sports-betting/event-requests/deny', {
+        request_id: requestId,
+        reason: (reason || '').trim() || undefined,
+      });
+      toast.success('Request denied');
+      await fetchPendingPlayerRequests();
+    } catch (e) { toast.error(apiErrorDetail(e, 'Failed')); }
+    finally { setProcessingPlayerRequestId(null); }
   };
 
   const addCustomEvent = async () => {
@@ -527,6 +650,62 @@ export default function SportsBetting() {
 
   const shownInCategory = filteredAdminTemplates.length;
 
+  const publicBrowseMap = publicLibrary.templates || {};
+  const onBoardTemplateSet = useMemo(
+    () => new Set(publicLibrary.on_board_template_ids || []),
+    [publicLibrary.on_board_template_ids],
+  );
+  const browseLibraryTotal = (publicLibrary.categories || []).reduce(
+    (s, c) => s + (publicBrowseMap[c]?.length || 0),
+    0,
+  );
+
+  const footballLeagueBrowseOptions = useMemo(() => {
+    const staticOpts = publicLibrary.football_league_filter_options;
+    if (Array.isArray(staticOpts) && staticOpts.length > 0) {
+      return staticOpts.map((o) => [o.key, o.label]).sort((a, b) => a[1].localeCompare(b[1]));
+    }
+    const list = publicBrowseMap.Football || [];
+    const m = new Map();
+    list.forEach((t) => {
+      const k = t.external_sport_key;
+      if (!k) return;
+      const lab = t.league_label || k;
+      if (!m.has(k)) m.set(k, lab);
+    });
+    return Array.from(m.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  }, [publicLibrary.football_league_filter_options, publicBrowseMap]);
+
+  const filteredBrowseTemplates = useMemo(() => {
+    let list = publicBrowseMap[browseCategory] || [];
+    if (browseCategory === 'Football' && browseLeagueFilter) {
+      list = list.filter((t) => t.external_sport_key === browseLeagueFilter);
+    }
+    const q = (browseSearchQuery || '').trim().toLowerCase();
+    if (q) {
+      list = list.filter(
+        (t) =>
+          (t.name || '').toLowerCase().includes(q) ||
+          (t.id || '').toLowerCase().includes(q) ||
+          (t.external_sport_key || '').toLowerCase().includes(q) ||
+          (t.league_label || '').toLowerCase().includes(q),
+      );
+    }
+    if (browseDateSpecific || browseDatePreset) {
+      list = list.filter((t) => templateMatchesDateFilter(t, browseDatePreset, browseDateSpecific));
+    }
+    return list;
+  }, [
+    publicBrowseMap,
+    browseCategory,
+    browseLeagueFilter,
+    browseSearchQuery,
+    browseDatePreset,
+    browseDateSpecific,
+  ]);
+
+  const shownBrowseCount = filteredBrowseTemplates.length;
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
@@ -594,6 +773,7 @@ export default function SportsBetting() {
         <div className="h-0.5 absolute top-0 left-0 right-0 bg-gradient-to-r from-transparent via-primary/40 to-transparent rounded-t-lg pointer-events-none" aria-hidden />
         {[
           { id: 'events', label: 'Events', count: events.length },
+          { id: 'browse', label: 'Browse / Request', count: browseLibraryTotal },
           { id: 'bets', label: 'My Bets', count: myBets.open.length },
           { id: 'stats', label: 'Record' },
         ].map((tab) => (
@@ -630,6 +810,44 @@ export default function SportsBetting() {
               <button onClick={() => toggleAdminPanel(true)} className="text-[10px] font-heading text-zinc-500 hover:text-primary flex items-center gap-1"><ChevronUp size={12} /> Hide</button>
             </div>
             <div className="p-3 space-y-3">
+              {pendingPlayerRequests.length > 0 ? (
+                <div className="rounded-lg border border-amber-500/35 bg-amber-500/10 p-2.5 space-y-2">
+                  <div className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-wider">
+                    Pending player requests ({pendingPlayerRequests.length})
+                  </div>
+                  <div className="space-y-2 max-h-56 overflow-y-auto">
+                    {pendingPlayerRequests.map((r) => (
+                      <div
+                        key={r.id}
+                        className="flex flex-wrap items-center gap-2 py-2 border-b border-zinc-800/60 last:border-0 text-[10px] font-heading"
+                      >
+                        <div className="flex-1 min-w-[140px]">
+                          <div className="text-foreground font-bold truncate">{r.template_name || '—'}</div>
+                          <div className="text-zinc-500">
+                            {(r.template_category || '—')} · requested by {r.username || '?'}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => approvePlayerRequest(r.id)}
+                          disabled={processingPlayerRequestId === r.id}
+                          className="bg-emerald-500/20 text-emerald-400 rounded px-2 py-1 text-[9px] font-bold uppercase border border-emerald-500/40 hover:bg-emerald-500/30 disabled:opacity-50"
+                        >
+                          {processingPlayerRequestId === r.id ? '…' : 'Approve'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => denyPlayerRequest(r.id)}
+                          disabled={processingPlayerRequestId === r.id}
+                          className="bg-red-500/15 text-red-400 rounded px-2 py-1 text-[9px] font-bold uppercase border border-red-500/35 hover:bg-red-500/25 disabled:opacity-50"
+                        >
+                          Deny
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               <div className="flex flex-wrap items-center gap-2">
                 <button onClick={checkForEvents} disabled={checkingEvents || loadingDbTemplates || autoSettling} className="bg-primary/20 text-primary rounded px-3 py-1.5 text-[10px] font-heading font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50">
                   {checkingEvents ? 'Checking...' : 'Check for events'}
@@ -789,6 +1007,159 @@ export default function SportsBetting() {
             <div className="sb-art-line text-primary mx-3" />
           </div>
         )
+      )}
+
+      {/* ═══ BROWSE / REQUEST TAB ═══ */}
+      {activeTab === 'browse' && (
+        <div className="space-y-3">
+          <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20`}>
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 space-y-1">
+              <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Browse saved games</p>
+              <p className="text-[9px] text-zinc-500 font-heading leading-relaxed">
+                This list is the house database (same source as after staff runs &quot;Check for events&quot;). If a game is not on the board yet, you can request it — staff are notified in their inbox.
+                {' '}
+                <span className="text-zinc-400">
+                  {requestInfo.remaining ?? 0} of {requestInfo.limit ?? 3} request{requestInfo.limit === 1 ? '' : 's'} left today (resets midnight UTC).
+                </span>
+              </p>
+            </div>
+            <div className="p-3 space-y-3">
+              <div className="flex flex-wrap gap-1">
+                {(publicLibrary.categories || []).map((c) => {
+                  const n = publicBrowseMap[c]?.length || 0;
+                  return (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setBrowseCategory(c)}
+                      className={`px-2 py-1 rounded text-[10px] font-heading font-bold transition-all ${
+                        browseCategory === c
+                          ? 'bg-primary/20 text-primary border border-primary/40'
+                          : 'bg-zinc-800/50 text-zinc-500 border border-zinc-700/30 hover:text-zinc-300'
+                      }`}
+                    >
+                      {c} ({n})
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="flex flex-col gap-2">
+                <input
+                  type="search"
+                  value={browseSearchQuery}
+                  onChange={(e) => setBrowseSearchQuery(e.target.value)}
+                  placeholder="Filter by match name, league, or id…"
+                  className="w-full bg-zinc-900/50 border border-zinc-700/30 rounded px-2 py-1.5 text-[11px] text-foreground font-heading focus:border-primary/50 focus:outline-none placeholder:text-zinc-600"
+                />
+                <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                  <select
+                    value={browseDatePreset}
+                    onChange={(e) => {
+                      setBrowseDatePreset(e.target.value);
+                      if (e.target.value) setBrowseDateSpecific('');
+                    }}
+                    className="w-full sm:flex-1 bg-zinc-900/50 border border-zinc-700/30 rounded px-2 py-1.5 text-[11px] text-foreground font-heading focus:border-primary/50 focus:outline-none"
+                  >
+                    <option value="">All dates</option>
+                    <option value="today">Today (local)</option>
+                    <option value="tomorrow">Tomorrow</option>
+                    <option value="7d">Next 7 days</option>
+                  </select>
+                  <label className="flex items-center gap-1.5 w-full sm:w-auto sm:min-w-[11rem] text-[10px] text-zinc-500 font-heading shrink-0">
+                    <span className="whitespace-nowrap">On date</span>
+                    <input
+                      type="date"
+                      value={browseDateSpecific}
+                      onChange={(e) => {
+                        setBrowseDateSpecific(e.target.value);
+                        if (e.target.value) setBrowseDatePreset('');
+                      }}
+                      className="flex-1 min-w-0 bg-zinc-900/50 border border-zinc-700/30 rounded px-2 py-1 text-[11px] text-foreground font-heading focus:border-primary/50 focus:outline-none [color-scheme:dark]"
+                    />
+                  </label>
+                </div>
+                {browseCategory === 'Football' && footballLeagueBrowseOptions.length > 0 ? (
+                  <select
+                    value={browseLeagueFilter}
+                    onChange={(e) => setBrowseLeagueFilter(e.target.value)}
+                    className="w-full bg-zinc-900/50 border border-zinc-700/30 rounded px-2 py-1.5 text-[11px] text-foreground font-heading focus:border-primary/50 focus:outline-none"
+                  >
+                    <option value="">All leagues</option>
+                    {footballLeagueBrowseOptions.map(([key, label]) => (
+                      <option key={key} value={key}>{label}</option>
+                    ))}
+                  </select>
+                ) : null}
+              </div>
+              <div className="space-y-1 max-h-80 overflow-y-auto">
+                {browseLibraryTotal === 0 ? (
+                  <p className="text-[10px] text-zinc-600 font-heading py-6 text-center">
+                    No saved games in the database yet. Ask staff to run &quot;Check for events&quot; or &quot;Load saved (DB)&quot; in the admin panel.
+                  </p>
+                ) : shownBrowseCount === 0 ? (
+                  <p className="text-[10px] text-zinc-600 font-heading py-6 text-center">No matches — try another filter or category.</p>
+                ) : (
+                  filteredBrowseTemplates.map((t) => {
+                    const onBoard = onBoardTemplateSet.has(t.id);
+                    const canRequest = !onBoard && (requestInfo.remaining ?? 0) > 0;
+                    return (
+                      <div
+                        key={t.id}
+                        className="flex flex-wrap items-center justify-between gap-2 py-2 border-b border-zinc-800/50 last:border-0"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <span className="text-[11px] font-heading text-foreground block truncate">{t.name}</span>
+                          {t.league_label ? (
+                            <span className="text-[9px] font-heading text-primary/80 truncate block">{t.league_label}</span>
+                          ) : null}
+                          {t.start_time ? (
+                            <span className="text-[9px] text-zinc-600 font-heading">{formatDateTime(t.start_time)}</span>
+                          ) : null}
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {onBoard ? (
+                            <span className="text-[9px] font-heading font-bold text-emerald-400/90 uppercase border border-emerald-500/30 rounded px-2 py-1">
+                              On board
+                            </span>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => requestGameFromLibrary(t.id)}
+                              disabled={!canRequest || requestingTemplateId === t.id}
+                              title={
+                                (requestInfo.remaining ?? 0) <= 0
+                                  ? 'Daily request limit reached (UTC midnight reset)'
+                                  : 'Ask staff to add this game'
+                              }
+                              className="bg-primary/20 text-primary rounded px-2 py-1 text-[9px] font-heading font-bold border border-primary/40 hover:bg-primary/30 disabled:opacity-40 disabled:cursor-not-allowed"
+                            >
+                              {requestingTemplateId === t.id ? '…' : 'Request'}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+              {(requestInfo.recent_requests || []).length > 0 ? (
+                <div className="pt-2 border-t border-zinc-800/50 space-y-1">
+                  <p className="text-[9px] font-heading font-bold text-zinc-500 uppercase tracking-wider">Your recent requests</p>
+                  <ul className="space-y-1 max-h-32 overflow-y-auto">
+                    {(requestInfo.recent_requests || []).map((r) => (
+                      <li key={r.id} className="text-[10px] font-heading text-zinc-400 flex justify-between gap-2">
+                        <span className="truncate">{r.template_name}</span>
+                        <span className="shrink-0 text-zinc-500 capitalize">{r.status}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+            <div className="sb-art-line text-primary mx-3" />
+          </div>
+        </div>
       )}
 
       {/* ═══ EVENTS TAB ═══ */}
