@@ -254,6 +254,41 @@ export default function MPPokerPage() {
     }
   };
 
+  const handleAdminFixTournament = async (gameId) => {
+    const draft = getAdminDraft(gameId);
+    setAdminActionLoading(`fix-${gameId}`);
+    try {
+      const res = await api.post(`/admin/mp-poker/tournaments/${gameId}/fix`, {
+        reason: draft.reason || null,
+      });
+      toast.success(res?.data?.message || 'Tournament fix applied');
+      fetchGames();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || 'Could not fix tournament');
+    } finally {
+      setAdminActionLoading(null);
+    }
+  };
+
+  const handleAdminRefundTournament = async (gameId) => {
+    const draft = getAdminDraft(gameId);
+    const ok = window.confirm('Refund and close this tournament for all joined players?');
+    if (!ok) return;
+    setAdminActionLoading(`refund-${gameId}`);
+    try {
+      const res = await api.post(`/admin/mp-poker/tournaments/${gameId}/refund`, {
+        reason: draft.reason || null,
+      });
+      const refundedCount = Number(res?.data?.refunded_count || 0);
+      toast.success(`Tournament refunded (${refundedCount} player${refundedCount === 1 ? '' : 's'})`);
+      fetchGames();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || 'Could not refund tournament');
+    } finally {
+      setAdminActionLoading(null);
+    }
+  };
+
   const handleAdminSendBonusTournament = async (gameId) => {
     const draft = getAdminDraft(gameId);
     const money = parseInt(String(draft.bonus_money).replace(/\D/g, ''), 10) || 0;
@@ -716,15 +751,39 @@ export default function MPPokerPage() {
                         </>
                       )}
                       {canManageTournaments && t.approval_status === 'approved' && (
-                        <button
-                          type="button"
-                          onClick={() => handleAdminSendBonusTournament(t.id)}
-                          disabled={adminActionLoading !== null}
-                          className="rounded-lg border px-2.5 py-1.5 font-heading font-bold text-[9px] uppercase disabled:opacity-50"
-                          style={{ borderColor: 'rgba(251,191,36,0.5)', color: '#fbbf24', background: 'rgba(251,191,36,0.08)' }}
-                        >
-                          {adminActionLoading === `bonus-${t.id}` ? '…' : 'Send Bonus'}
-                        </button>
+                        <>
+                          {(t.tournament_status === 'running' || t.tournament_status === 'registration') && (
+                            <button
+                              type="button"
+                              onClick={() => handleAdminFixTournament(t.id)}
+                              disabled={adminActionLoading !== null}
+                              className="rounded-lg border px-2.5 py-1.5 font-heading font-bold text-[9px] uppercase disabled:opacity-50"
+                              style={{ borderColor: 'rgba(96,165,250,0.5)', color: '#60a5fa', background: 'rgba(96,165,250,0.08)' }}
+                            >
+                              {adminActionLoading === `fix-${t.id}` ? '…' : 'Fix'}
+                            </button>
+                          )}
+                          {t.tournament_status !== 'completed' && t.tournament_status !== 'denied' && (
+                            <button
+                              type="button"
+                              onClick={() => handleAdminRefundTournament(t.id)}
+                              disabled={adminActionLoading !== null}
+                              className="rounded-lg border px-2.5 py-1.5 font-heading font-bold text-[9px] uppercase disabled:opacity-50"
+                              style={{ borderColor: 'rgba(248,113,113,0.5)', color: '#f87171', background: 'rgba(248,113,113,0.08)' }}
+                            >
+                              {adminActionLoading === `refund-${t.id}` ? '…' : 'Refund'}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleAdminSendBonusTournament(t.id)}
+                            disabled={adminActionLoading !== null}
+                            className="rounded-lg border px-2.5 py-1.5 font-heading font-bold text-[9px] uppercase disabled:opacity-50"
+                            style={{ borderColor: 'rgba(251,191,36,0.5)', color: '#fbbf24', background: 'rgba(251,191,36,0.08)' }}
+                          >
+                            {adminActionLoading === `bonus-${t.id}` ? '…' : 'Send Bonus'}
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>

@@ -15,7 +15,7 @@ from server import db, get_current_user, get_current_user_verified, log_gambling
 # ----- Constants -----
 MP_POKER_SUITS = ["H", "D", "C", "S"]
 MP_POKER_VALUES = ["2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"]
-MP_POKER_TURN_SECONDS = 60
+MP_POKER_TURN_SECONDS = 30
 MP_POKER_CHAT_MAX = 100
 MP_POKER_START_COUNTDOWN = 5
 MP_POKER_MIN_PLAYERS = 2
@@ -306,6 +306,10 @@ class PokerTournamentBonusRequest(BaseModel):
 class PokerTournamentSettingsPatchRequest(BaseModel):
     require_approval: Optional[bool] = None
     tournament_limit_per_day: Optional[int] = None
+
+
+class PokerTournamentAdminFixRequest(BaseModel):
+    reason: Optional[str] = None
 
 
 def _parse_iso_utc(value: Any) -> Optional[datetime]:
@@ -1349,6 +1353,161 @@ def register(router):
             "granted": granted,
         }
 
+    @router.post("/admin/mp-poker/tournaments/{game_id}/fix")
+    async def admin_fix_tournament(
+        game_id: str,
+        body: PokerTournamentAdminFixRequest,
+        current_user: dict = Depends(get_current_user_verified),
+    ):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        g = await db.mp_poker_games.find_one({"id": game_id})
+        if not g or not _is_tournament_game(g):
+            raise HTTPException(status_code=404, detail="Tournament not found")
+        if g.get("tournament_status") in ("completed", "denied") or g.get("status") in ("completed", "cancelled"):
+            raise HTTPException(status_code=400, detail="Tournament is already closed")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        reason = (body.reason or "").strip() or "Manual admin fix"
+        admin_name = current_user.get("username") or current_user.get("id") or "admin"
+        if g.get("status") == "playing" and g.get("street") == "showdown":
+            await _mp_poker_run_showdown(game_id)
+            g = await db.mp_poker_games.find_one({"id": game_id})
+            _enrich_players_current_hand(g)
+            return {
+                "message": "Tournament fixed: showdown completed",
+                "fix": "showdown_completed",
+                "game": {k: v for k, v in (g or {}).items() if k != "_id"},
+            }
+        fixed = False
+        fix_type = "no_change"
+        if g.get("status") == "playing":
+            players = list(g.get("players") or [])
+            turn_idx = int(g.get("current_turn_index") or 0)
+            if players:
+                if turn_idx < 0 or turn_idx >= len(players) or players[turn_idx].get("status") in ("folded", "all_in", "busted"):
+                    next_idx = turn_idx % len(players) if len(players) else 0
+                    found = False
+                    for _ in range(len(players)):
+                        if players[next_idx].get("status") not in ("folded", "all_in", "busted"):
+                            found = True
+                            break
+                        next_idx = (next_idx + 1) % len(players)
+                    if found:
+                        await db.mp_poker_games.update_one(
+                            {"id": game_id},
+                            {
+                                "$set": {
+                                    "current_turn_index": next_idx,
+                                    "turn_started_at": now_iso,
+                                }
+                            },
+                        )
+                        fixed = True
+                        fix_type = "turn_reassigned"
+            # Try to advance if no one can act or game is otherwise stalled.
+            g_latest = await db.mp_poker_games.find_one({"id": game_id})
+            players_latest = list((g_latest or {}).get("players") or [])
+            actionable = [p for p in players_latest if p.get("status") not in ("folded", "all_in", "busted")]
+            if len(actionable) <= 1 and (g_latest or {}).get("street") in ("preflop", "flop", "turn", "river"):
+                await _mp_poker_advance_street(game_id)
+                fixed = True
+                fix_type = "street_advanced"
+            if not fixed:
+                await db.mp_poker_games.update_one(
+                    {"id": game_id},
+                    {
+                        "$set": {
+                            "turn_started_at": now_iso,
+                        }
+                    },
+                )
+                fixed = True
+                fix_type = "turn_timer_reset"
+        else:
+            # Open/ready states: normalize status for registration if already approved.
+            if g.get("approval_status") == "approved" and g.get("tournament_status") in ("pending_approval", None):
+                await db.mp_poker_games.update_one(
+                    {"id": game_id},
+                    {
+                        "$set": {
+                            "tournament_status": "registration",
+                            "status": "open",
+                            "phase": "lobby",
+                        }
+                    },
+                )
+                fixed = True
+                fix_type = "registration_reopened"
+        await db.mp_poker_games.update_one(
+            {"id": game_id},
+            {
+                "$set": {
+                    "admin_last_fix_at": now_iso,
+                    "admin_last_fix_by": admin_name,
+                    "admin_last_fix_reason": reason,
+                }
+            },
+        )
+        g = await db.mp_poker_games.find_one({"id": game_id})
+        _enrich_players_current_hand(g)
+        return {
+            "message": "Tournament fix applied" if fixed else "No fix needed",
+            "fix": fix_type,
+            "game": {k: v for k, v in (g or {}).items() if k != "_id"},
+        }
+
+    @router.post("/admin/mp-poker/tournaments/{game_id}/refund")
+    async def admin_refund_tournament(
+        game_id: str,
+        body: PokerTournamentAdminFixRequest,
+        current_user: dict = Depends(get_current_user_verified),
+    ):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        g = await db.mp_poker_games.find_one({"id": game_id})
+        if not g or not _is_tournament_game(g):
+            raise HTTPException(status_code=404, detail="Tournament not found")
+        if g.get("admin_refunded_at"):
+            raise HTTPException(status_code=400, detail="Tournament has already been refunded")
+        if g.get("tournament_status") in ("completed", "denied") or g.get("status") in ("completed", "cancelled"):
+            raise HTTPException(status_code=400, detail="Tournament is already closed")
+        players = list(g.get("players") or [])
+        buy_in = int(g.get("buy_in") or 0)
+        refunded_users = []
+        seen = set()
+        if buy_in > 0:
+            for p in players:
+                uid = (p.get("user_id") or "").strip()
+                if not uid or uid in seen:
+                    continue
+                seen.add(uid)
+                await db.users.update_one({"id": uid}, {"$inc": {"money": buy_in}})
+                refunded_users.append(uid)
+        now_iso = datetime.now(timezone.utc).isoformat()
+        await db.mp_poker_games.update_one(
+            {"id": game_id},
+            {
+                "$set": {
+                    "approval_status": "denied",
+                    "approval_reason": (body.reason or "").strip() or "Refunded by admin due to stuck tournament",
+                    "tournament_status": "denied",
+                    "status": "cancelled",
+                    "phase": "cancelled",
+                    "completed_at": now_iso,
+                    "admin_refunded_at": now_iso,
+                    "admin_refunded_by": current_user.get("username") or current_user.get("id") or "admin",
+                    "admin_refund_count": len(refunded_users),
+                }
+            },
+        )
+        g = await db.mp_poker_games.find_one({"id": game_id})
+        return {
+            "message": "Tournament refunded and closed",
+            "refunded_count": len(refunded_users),
+            "buy_in_refund_each": buy_in,
+            "game": {k: v for k, v in (g or {}).items() if k != "_id"},
+        }
+
     @router.post("/casino/mp-poker/games")
     async def create_game(
         request: PokerCreateRequest,
@@ -1422,6 +1581,14 @@ def register(router):
         g = await db.mp_poker_games.find_one({"id": game_id})
         if not g:
             raise HTTPException(status_code=404, detail="Game not found")
+        # Server-driven timeout: if turn is expired, allow any seated player poll to advance the hand.
+        if g.get("mode") in ("vs_players", "tournament") and g.get("status") == "playing":
+            turn_started = _parse_iso_utc(g.get("turn_started_at"))
+            if turn_started:
+                elapsed = (datetime.now(timezone.utc) - turn_started).total_seconds()
+                if elapsed >= MP_POKER_TURN_SECONDS:
+                    await game_timeout(game_id, current_user)
+                    g = await db.mp_poker_games.find_one({"id": game_id})
         if g.get("mode") == "vs_dealer" and g.get("status") == "playing":
             if g.get("current_turn_index") == 1:
                 g = await _run_vs_dealer_bot_turn(game_id)
@@ -1989,7 +2156,17 @@ def register(router):
             raise HTTPException(status_code=404, detail="Game not found")
         turn_idx = int(g.get("current_turn_index") or 0)
         players = list(g.get("players") or [])
-        if turn_idx < 0 or turn_idx >= len(players) or players[turn_idx].get("user_id") != current_user.get("id") or "":
+        if turn_idx < 0 or turn_idx >= len(players):
+            return {k: v for k, v in g.items() if k != "_id"}
+        turn_user_id = players[turn_idx].get("user_id")
+        requester_id = current_user.get("id")
+        turn_started = _parse_iso_utc(g.get("turn_started_at"))
+        elapsed = (datetime.now(timezone.utc) - turn_started).total_seconds() if turn_started else 0
+        timed_out = elapsed >= MP_POKER_TURN_SECONDS
+        is_participant = any((p.get("user_id") or "") == requester_id for p in players)
+        if not timed_out and turn_user_id != requester_id:
+            return {k: v for k, v in g.items() if k != "_id"}
+        if timed_out and not (is_participant or _is_admin(current_user)):
             return {k: v for k, v in g.items() if k != "_id"}
         # Vs dealer: if human is all-in, run out the board instead of folding (fixes stuck all-in hand)
         if g.get("mode") == "vs_dealer" and players[turn_idx].get("status") == "all_in":

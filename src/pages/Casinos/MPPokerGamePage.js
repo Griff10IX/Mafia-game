@@ -5,7 +5,7 @@ import { ArrowLeft, MessageSquare, CheckCircle2, XCircle } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
 
-const TURN_SECONDS = 60;
+const TURN_SECONDS = 30;
 const START_COUNTDOWN = 5;
 
 const SUITS = {
