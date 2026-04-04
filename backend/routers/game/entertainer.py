@@ -86,7 +86,17 @@ E_GAME_CAR_IDS = [c["id"] for c in CARS if c.get("id") not in ("car_custom", "ca
 MAX_HANGMAN_WRONG = 6  # parts of the hangman drawing
 
 # Hidden "find the word" hunt (one global winner per round; collection: entertainer_find_word_rounds)
-FIND_WORD_PLACEMENTS = ("crimes", "gta", "forum_topic")
+# Vague hints only — never name specific pages (Crimes/GTA/forum etc.).
+FIND_WORD_HINTS = [
+    "It’s styled to blend in with normal UI — nothing flashy or obvious.",
+    "You might scroll past it a few times before your eye catches it.",
+    "Look for a single word sitting on the page like it belongs there.",
+    "Check the main content area — margins and corners are fair game.",
+    "It won’t be inside a modal or popup; it lives on the page itself.",
+    "Same font vibe as the rest of the screen — patience beats speed-clicking.",
+    "Could be high, could be low on the page; there’s no fixed hiding spot.",
+    "Treat it like a typo that isn’t — one word, waiting to be noticed.",
+]
 
 HANGMAN_WORD_DATA = [
     # Crime
@@ -1422,19 +1432,11 @@ async def run_auto_create_if_enabled():
 
 
 # ---------- Find the word (hidden hunt) ----------
-async def _pick_forum_topic_id_for_find_word() -> Optional[str]:
-    topics = await db.forum_topics.find(
-        {"category": "entertainer", "is_locked": {"$ne": True}},
-        {"_id": 0, "id": 1},
-    ).limit(80).to_list(80)
-    if not topics:
-        topics = await db.forum_topics.find(
-            {"is_locked": {"$ne": True}},
-            {"_id": 0, "id": 1},
-        ).sort("updated_at", -1).limit(40).to_list(40)
-    if not topics:
-        return None
-    return str(_rng.choice(topics)["id"])
+def _find_word_hint_for_round(doc: dict) -> str:
+    raw = (doc.get("hint") or "").strip()
+    if raw:
+        return raw
+    return "Somewhere in the game UI while you’re logged in — look for one unobtrusive word."
 
 
 async def insert_find_word_round(*, created_by: str, created_by_label: str, notify_all: bool) -> Optional[dict]:
@@ -1444,20 +1446,16 @@ async def insert_find_word_round(*, created_by: str, created_by_label: str, noti
     if existing:
         return None
     word = str(_rng.choice(words))
-    kind = str(_rng.choice(FIND_WORD_PLACEMENTS))
-    topic_id = None
-    if kind == "forum_topic":
-        topic_id = await _pick_forum_topic_id_for_find_word()
-        if not topic_id:
-            kind = str(_rng.choice(("crimes", "gta")))
+    hint = str(_rng.choice(FIND_WORD_HINTS)) if FIND_WORD_HINTS else _find_word_hint_for_round({})
     round_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     doc = {
         "id": round_id,
         "word": word.upper(),
+        "hint": hint,
         "status": "open",
-        "placement_kind": kind,
-        "placement_topic_id": topic_id,
+        "placement_kind": "anywhere",
+        "placement_topic_id": None,
         "winner_user_id": None,
         "winner_username": None,
         "reward": None,
@@ -1471,7 +1469,7 @@ async def insert_find_word_round(*, created_by: str, created_by_label: str, noti
         try:
             await send_notification_to_all(
                 "🔎 Word hunt",
-                "A hidden word is somewhere on the site (Crimes, GTA, or an Entertainer forum topic). First to find and click it wins an E-Game style prize!",
+                f"{hint} First to find and tap the hidden word wins an E-Game style prize. Extra context: Entertainer Forum tab.",
                 "system",
                 category="ent_games",
                 message_link_to="/social/forum?tab=entertainer",
@@ -1486,12 +1484,14 @@ async def find_word_active(current_user: dict = Depends(get_current_user)):
     r = await db.entertainer_find_word_rounds.find_one({"status": "open"}, {"_id": 0})
     if not r:
         return {"active": False}
+    hint = _find_word_hint_for_round(r)
     return {
         "active": True,
         "round_id": r["id"],
         "word": r.get("word") or "",
+        "hint": hint,
         "placement": {
-            "kind": r.get("placement_kind"),
+            "kind": r.get("placement_kind") or "anywhere",
             "topic_id": r.get("placement_topic_id"),
         },
     }
@@ -1606,7 +1606,12 @@ async def find_word_admin_start(current_user: dict = Depends(get_current_user)):
     )
     if not doc:
         raise HTTPException(status_code=400, detail="A word hunt round is already open")
-    return {"message": "Word hunt started", "round_id": doc["id"], "placement": {"kind": doc["placement_kind"], "topic_id": doc.get("placement_topic_id")}}
+    return {
+        "message": "Word hunt started",
+        "round_id": doc["id"],
+        "hint": doc.get("hint"),
+        "placement": {"kind": doc.get("placement_kind"), "topic_id": doc.get("placement_topic_id")},
+    }
 
 
 async def _try_auto_create_find_word_round():

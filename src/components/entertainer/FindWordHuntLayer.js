@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useLocation, useParams } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 
-function hashToPos(roundId) {
+function hashToPos(roundId, pathname) {
+  const s = `${roundId}:${pathname || ''}`;
   let h = 0;
-  for (let i = 0; i < roundId.length; i += 1) {
-    h = Math.imul(31, h) + roundId.charCodeAt(i) | 0;
+  for (let i = 0; i < s.length; i += 1) {
+    h = Math.imul(31, h) + s.charCodeAt(i) | 0;
   }
   const u = Math.abs(h);
   const top = 10 + (u % 5800) / 100;
@@ -15,13 +16,11 @@ function hashToPos(roundId) {
 }
 
 /**
- * Shows the current find-word hunt token only on the server-chosen page (Crimes, GTA, or one forum topic).
+ * Shows the find-word token on any authenticated page (position varies by route).
  * Mounted inside Layout main content (relative parent).
  */
 export default function FindWordHuntLayer() {
   const { pathname } = useLocation();
-  const params = useParams();
-  const topicId = params.topicId;
   const [state, setState] = useState(null);
   const [claiming, setClaiming] = useState(false);
 
@@ -41,23 +40,9 @@ export default function FindWordHuntLayer() {
     return () => clearInterval(t);
   }, [fetchActive]);
 
-  const placementMatch = useMemo(() => {
-    if (!state?.active || !state.placement) return false;
-    const p = (pathname || '').replace(/\/$/, '') || '/';
-    const k = state.placement.kind;
-    if (k === 'crimes') return p === '/crime/crimes';
-    if (k === 'gta') return p === '/crime/gta';
-    if (k === 'forum_topic') {
-      const tid = state.placement.topic_id;
-      if (!tid || !topicId) return false;
-      return String(topicId) === String(tid);
-    }
-    return false;
-  }, [state, pathname, topicId]);
-
   const pos = useMemo(
-    () => (state?.round_id ? hashToPos(state.round_id) : { top: 24, left: 12 }),
-    [state?.round_id],
+    () => (state?.round_id ? hashToPos(state.round_id, pathname) : { top: 24, left: 12 }),
+    [state?.round_id, pathname],
   );
 
   const onClaim = async () => {
@@ -77,7 +62,7 @@ export default function FindWordHuntLayer() {
     }
   };
 
-  if (!placementMatch || !state?.active || !state.word) return null;
+  if (!state?.active || !state.word) return null;
 
   return (
     <div className="pointer-events-none absolute inset-0 z-[5] overflow-hidden">

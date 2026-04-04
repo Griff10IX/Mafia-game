@@ -2014,25 +2014,19 @@ export default function Forum() {
                 <>
                   <p className="text-foreground">
                     <span className="text-emerald-400 font-bold uppercase text-[10px]">Live</span>
-                    {' — '}A hidden word is on{' '}
-                    {findWordActive.placement?.kind === 'crimes' && (
-                      <Link to="/crime/crimes" className="text-primary font-bold hover:underline">Crimes</Link>
-                    )}
-                    {findWordActive.placement?.kind === 'gta' && (
-                      <Link to="/crime/gta" className="text-primary font-bold hover:underline">GTA</Link>
-                    )}
-                    {findWordActive.placement?.kind === 'forum_topic' && findWordActive.placement?.topic_id ? (
-                      <Link
-                        to={`/social/forum/${encodeURIComponent(findWordActive.placement.topic_id)}`}
-                        className="text-primary font-bold hover:underline"
-                      >
-                        this forum topic
-                      </Link>
-                    ) : findWordActive.placement?.kind === 'forum_topic' ? (
-                      <span className="text-foreground font-bold">an Entertainer forum topic</span>
-                    ) : null}
-                    . First player to find and click it wins an E-Game style prize (then the round closes).
+                    {' — '}A hidden word can appear on <strong className="text-foreground">any page</strong> while you&apos;re
+                    logged in (position shifts as you move around). First click wins an E-Game style prize, then the round
+                    closes.
                   </p>
+                  {findWordActive.hint && (
+                    <p className="text-[11px] text-mutedForeground italic border-l-2 border-primary/30 pl-2 mt-2">
+                      <span className="text-primary not-italic font-heading font-bold uppercase text-[9px] tracking-wider">
+                        Hint
+                      </span>
+                      {' — '}
+                      {findWordActive.hint}
+                    </p>
+                  )}
                 </>
               ) : (
                 <p className="text-mutedForeground">No word hunt right now. Watch notifications — or ask staff to start one.</p>
