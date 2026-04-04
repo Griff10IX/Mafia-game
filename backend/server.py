@@ -2581,6 +2581,20 @@ async def startup_db():
         logging.getLogger(__name__).info(
             "Racing: using cron only (RACING_USE_CRON=1). Call POST /api/racing/cron/automated-races every minute. Header: X-Cron-Secret: <CRON_SECRET>"
         )
+    # Sports betting auto-settle: in-process ticker (kickoff + delay) vs external cron only
+    sports_settle_use_cron = (os.environ.get("SPORTS_AUTO_SETTLE_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
+    sports_settle_ticker = (os.environ.get("SPORTS_AUTO_SETTLE_TICKER") or "").strip().lower() in ("1", "true", "yes")
+    if sports_settle_use_cron:
+        logging.getLogger(__name__).info(
+            "Sports auto-settle: ticker disabled (SPORTS_AUTO_SETTLE_USE_CRON=1). Use POST /api/sports-betting/cron/auto-settle on a schedule."
+        )
+    elif sports_settle_ticker:
+        from routers.casinos import sports_betting as sports_betting_mod
+
+        asyncio.create_task(sports_betting_mod.run_sports_auto_settle_ticker())
+        logging.getLogger(__name__).info(
+            "Sports auto-settle: in-process ticker enabled (SPORTS_AUTO_SETTLE_TICKER=1). Multi-worker: each worker runs a ticker — use one worker or cron-only mode."
+        )
     from routers.cars import gta as gta_router
     asyncio.create_task(gta_router.run_dealer_replenish_loop())
     # Slots: run lottery draw on schedule (every 5s check) so draws happen at next_draw_at even if no one is on the page

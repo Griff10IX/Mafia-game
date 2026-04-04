@@ -224,6 +224,7 @@ export default function SportsBetting() {
   const [adminCategory, setAdminCategory] = useState('Football');
   const [addingTemplateId, setAddingTemplateId] = useState(null);
   const [checkingEvents, setCheckingEvents] = useState(false);
+  const [autoSettling, setAutoSettling] = useState(false);
   const [settleEvent, setSettleEvent] = useState(null);
   const [settleWinningId, setSettleWinningId] = useState('');
   const [settling, setSettling] = useState(false);
@@ -350,8 +351,39 @@ export default function SportsBetting() {
       });
       const n = res.data?.templates_persisted;
       toast.success(typeof n === 'number' ? `Events loaded — ${n} saved to template library` : 'Events loaded');
+      const as = res.data?.auto_settle;
+      if (as && typeof as === 'object') {
+        if (as.error) {
+          toast.error(`Auto-settle after refresh failed: ${as.error}`);
+        } else if (typeof as.settled === 'number') {
+          toast.info(
+            `Auto-settle: ${as.settled} event(s) settled (skipped match ${as.skipped_no_match ?? 0}, no winner ${as.skipped_no_winner ?? 0})`,
+          );
+        }
+      }
     } catch (e) { toast.error(apiErrorDetail(e, 'Failed')); }
     finally { setCheckingEvents(false); }
+  };
+
+  const runAutoSettle = async () => {
+    setAutoSettling(true);
+    try {
+      const res = await api.post('/admin/sports-betting/auto-settle-run');
+      const d = res.data || {};
+      if (d.message && typeof d.message === 'string') {
+        toast.error(d.message);
+        return;
+      }
+      const settled = Number(d.settled ?? 0);
+      toast.success(
+        `Auto-settle done: ${settled} settled · skipped (no board match) ${d.skipped_no_match ?? 0} · skipped (no winner) ${d.skipped_no_winner ?? 0}`,
+      );
+      await fetchAll();
+    } catch (e) {
+      toast.error(apiErrorDetail(e, 'Auto-settle failed'));
+    } finally {
+      setAutoSettling(false);
+    }
   };
 
   const loadTemplatesFromDb = async () => {
@@ -598,13 +630,22 @@ export default function SportsBetting() {
             </div>
             <div className="p-3 space-y-3">
               <div className="flex flex-wrap items-center gap-2">
-                <button onClick={checkForEvents} disabled={checkingEvents || loadingDbTemplates} className="bg-primary/20 text-primary rounded px-3 py-1.5 text-[10px] font-heading font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50">
+                <button onClick={checkForEvents} disabled={checkingEvents || loadingDbTemplates || autoSettling} className="bg-primary/20 text-primary rounded px-3 py-1.5 text-[10px] font-heading font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50">
                   {checkingEvents ? 'Checking...' : 'Check for events'}
                 </button>
                 <button
                   type="button"
+                  onClick={runAutoSettle}
+                  disabled={autoSettling || checkingEvents || loadingDbTemplates}
+                  className="bg-emerald-500/15 text-emerald-400 rounded px-3 py-1.5 text-[10px] font-heading font-bold uppercase border border-emerald-500/40 hover:bg-emerald-500/25 disabled:opacity-50"
+                  title="Poll Odds API scores and settle matching board events (same as cron)"
+                >
+                  {autoSettling ? 'Settling...' : 'Auto-settle now'}
+                </button>
+                <button
+                  type="button"
                   onClick={loadTemplatesFromDb}
-                  disabled={loadingDbTemplates || checkingEvents}
+                  disabled={loadingDbTemplates || checkingEvents || autoSettling}
                   className="bg-zinc-800/80 text-zinc-200 rounded px-3 py-1.5 text-[10px] font-heading font-bold uppercase border border-zinc-600/50 hover:bg-zinc-700/80 hover:border-zinc-500/50 disabled:opacity-50"
                   title="No API quota — lists templates last saved from Check for events"
                 >

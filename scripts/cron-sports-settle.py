@@ -1,16 +1,20 @@
 #!/usr/bin/env python3
 """
-Call POST /api/sports-betting/cron/auto-settle to auto-settle sports bets from Odds API scores. Runs every 30 min.
+Call POST .../sports-betting/cron/auto-settle to auto-settle sports bets from Odds API scores.
+
+Production checklist (see backend/.env.example "Sports betting auto-settle"):
+  - THE_ODDS_API_KEY on the API server (not in this script).
+  - CRON_SECRET in env; must match the API server's CRON_SECRET.
+  - BASE_URL must reach your FastAPI app. If routes are mounted at /api, use e.g.
+    BASE_URL=https://your-host.com/api  so this script hits .../api/sports-betting/cron/auto-settle.
 
 Usage:
-  Set CRON_SECRET and BASE_URL in backend/.env (or env). THE_ODDS_API_KEY must be set on the API server
-  (backend/.env) so auto-settle can call The Odds API. Then run from project root:
-    python scripts/cron-sports-settle.py
+    python scripts/cron-sports-settle.py --once
 
-  Or add to crontab (every 30 min):
-    */30 * * * * cd /path/to/project && python scripts/cron-sports-settle.py
+Crontab (every 30 min):
+    */30 * * * * cd /path/to/project && python scripts/cron-sports-settle.py --once
 
-Env: CRON_SECRET (required), BASE_URL. Optional: SPORTS_SETTLE_INTERVAL (seconds, default 1800).
+Env: CRON_SECRET (required), BASE_URL. Optional: SPORTS_SETTLE_INTERVAL (seconds, default 1800) for loop mode.
 """
 import json
 import os

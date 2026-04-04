@@ -28,6 +28,12 @@ from server import db, get_current_user, get_current_user_verified, log_gambling
 
 logger = logging.getLogger(__name__)
 
+
+def _env_flag(name: str) -> bool:
+    v = (os.environ.get(name) or "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
+
 # ----- Models -----
 class SportsBetPlaceRequest(BaseModel):
     event_id: str
@@ -610,11 +616,46 @@ async def _fetch_odds_api_boxing() -> list:
     return out
 
 
+async def _fetch_odds_api_f1() -> list:
+    """Head-to-head / two-outcome markets from The Odds API (linkable for auto-settle)."""
+    key = _odds_api_key()
+    if not key:
+        return []
+    cache_key = "v1:odds:motor_racing_f1"
+    ttl = _sports_odds_cache_ttl_sec()
+    out = []
+    try:
+        events = await _odds_cache_read_list_if_fresh(cache_key, ttl)
+        if events is None:
+            async with httpx.AsyncClient(timeout=14.0) as client:
+                r = await client.get(
+                    "%s/sports/motor_racing_f1/odds" % ODDS_API_BASE,
+                    params={"apiKey": key, "regions": "uk,us", "markets": "h2h", "oddsFormat": "decimal"},
+                )
+            if r.status_code != 200:
+                logger.warning("Odds API odds motor_racing_f1 HTTP %s", r.status_code)
+                return []
+            events = r.json()
+            if not isinstance(events, list):
+                events = []
+            await _odds_cache_write_list(cache_key, 200, events)
+        for ev in events[:25]:
+            if not _is_future_event(ev, require_time=True):
+                continue
+            parsed = _parse_odds_event(ev, "Formula 1", three_way=False, sport_key="motor_racing_f1")
+            if parsed:
+                out.append(parsed)
+    except Exception as ex:
+        logger.warning("Odds API F1: %s", ex)
+    return out
+
+
 # ----- Odds API Scores (for auto-settle) -----
 ODDS_API_SPORT_KEYS = {
     "Football": list(SOCCER_LEAGUES),
     "UFC": ["mma_mixed_martial_arts"],
     "Boxing": ["boxing_boxing"],
+    "Formula 1": ["motor_racing_f1"],
 }
 
 
@@ -1015,11 +1056,12 @@ async def _refresh_sports_live_cache(force: bool = False):
     now = time.time()
     if not force and now - _sports_live_cache["updated_at"] < SPORTS_LIVE_CACHE_TTL:
         return
-    football, ufc, boxing, f1_drivers = await asyncio.gather(
+    football, ufc, boxing, f1_drivers, f1_odds_events = await asyncio.gather(
         _fetch_football_events(),
         _fetch_ufc_events(),
         _fetch_boxing_events(),
         _fetch_f1_drivers(),
+        _fetch_odds_api_f1(),
     )
     _sports_live_cache["football"] = football
     _sports_live_cache["ufc"] = ufc
@@ -1030,6 +1072,8 @@ async def _refresh_sports_live_cache(force: bool = False):
     else:
         _sports_live_cache["updated_at"] = now
     f1_templates = []
+    if f1_odds_events:
+        f1_templates.extend(f1_odds_events)
     if f1_drivers:
         opts_race = [d["option"] for d in f1_drivers[:4]]
         if len(opts_race) < 4:
@@ -1535,7 +1579,21 @@ async def admin_sports_refresh(current_user: dict = Depends(get_current_user_ver
         raise HTTPException(status_code=403, detail="Admin only")
     await _refresh_sports_live_cache(force=True)
     n = len(_get_all_sports_templates())
-    return await _admin_sports_templates_payload(templates_persisted=n)
+    payload = await _admin_sports_templates_payload(templates_persisted=n)
+    if _env_flag("SPORTS_AUTO_SETTLE_ON_REFRESH"):
+        try:
+            payload["auto_settle"] = await _auto_settle_from_scores()
+        except Exception as ex:
+            logger.warning("SPORTS_AUTO_SETTLE_ON_REFRESH: auto-settle failed: %s", ex)
+            payload["auto_settle"] = {"settled": 0, "error": str(ex)}
+    return payload
+
+
+async def admin_sports_auto_settle_run(current_user: dict = Depends(get_current_user_verified)):
+    """Admin: run the same Odds API score poll as cron; returns settled / skipped counts."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    return await _auto_settle_from_scores()
 
 
 async def admin_sports_templates_load_db(current_user: dict = Depends(get_current_user_verified)):
@@ -1760,9 +1818,156 @@ async def admin_sports_bets_list(
     return {"bets": out, "count": len(out)}
 
 
+# ----- In-process auto-settle ticker (time-gated; optional via SPORTS_AUTO_SETTLE_TICKER) -----
+def _sports_auto_settle_minutes_after_start() -> int:
+    try:
+        v = int(os.environ.get("SPORTS_AUTO_SETTLE_MINUTES_AFTER_START", "100"))
+        return max(1, min(v, 600))
+    except ValueError:
+        return 100
+
+
+def _sports_auto_settle_ticker_idle_sec() -> int:
+    try:
+        return max(60, int(os.environ.get("SPORTS_AUTO_SETTLE_TICKER_IDLE_SEC", "600")))
+    except ValueError:
+        return 600
+
+
+def _sports_auto_settle_ticker_poll_interval_sec() -> int:
+    try:
+        return max(30, int(os.environ.get("SPORTS_AUTO_SETTLE_TICKER_POLL_INTERVAL_SEC", "180")))
+    except ValueError:
+        return 180
+
+
+def _sports_auto_settle_ticker_wait_cap_sec() -> int:
+    try:
+        return max(60, int(os.environ.get("SPORTS_AUTO_SETTLE_TICKER_WAIT_CAP_SEC", "900")))
+    except ValueError:
+        return 900
+
+
+def _parse_start_time_utc(iso_s) -> Optional[datetime]:
+    if not iso_s:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(iso_s).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return None
+
+
+_LINKABLE_OPEN_EVENT_FILTER = {
+    "status": "open",
+    "external_event_id": {"$exists": True, "$nin": [None, ""]},
+    "external_sport_key": {"$exists": True, "$nin": [None, ""]},
+}
+
+
+async def any_linkable_open_event_past_settle_delay() -> bool:
+    """True if any open Odds-linked event is past kickoff + configured delay."""
+    now = datetime.now(timezone.utc)
+    delay = timedelta(minutes=_sports_auto_settle_minutes_after_start())
+    cursor = db.sports_events.find(_LINKABLE_OPEN_EVENT_FILTER, {"_id": 0, "start_time": 1}).limit(500)
+    async for doc in cursor:
+        st = _parse_start_time_utc(doc.get("start_time"))
+        if st is None:
+            return True
+        if now >= st + delay:
+            return True
+    return False
+
+
+async def _seconds_until_next_linkable_eligible_or_cap() -> float:
+    """
+    Seconds to sleep before at least one linkable event is past kickoff + delay.
+    0.0 if already eligible. Capped (default 15m) so we re-query periodically for long waits.
+    """
+    now = datetime.now(timezone.utc)
+    delay = timedelta(minutes=_sports_auto_settle_minutes_after_start())
+    cap = float(_sports_auto_settle_ticker_wait_cap_sec())
+    min_positive: Optional[float] = None
+    cursor = db.sports_events.find(_LINKABLE_OPEN_EVENT_FILTER, {"_id": 0, "start_time": 1}).limit(500)
+    async for doc in cursor:
+        st = _parse_start_time_utc(doc.get("start_time"))
+        if st is None:
+            return 0.0
+        eligible_at = st + delay
+        w = (eligible_at - now).total_seconds()
+        if w <= 0:
+            return 0.0
+        if min_positive is None or w < min_positive:
+            min_positive = w
+    if min_positive is None:
+        return 0.0
+    return min(cap, min_positive)
+
+
+async def run_sports_auto_settle_ticker() -> None:
+    """
+    Background loop: call Odds API auto-settle only after kickoff + delay for linkable open events.
+    Enable with SPORTS_AUTO_SETTLE_TICKER=1; disable when using SPORTS_AUTO_SETTLE_USE_CRON=1.
+    """
+    log = logging.getLogger(__name__)
+    warned_no_key = False
+    while True:
+        try:
+            if not _odds_api_key():
+                if not warned_no_key:
+                    log.info("Sports auto-settle ticker: THE_ODDS_API_KEY unset — sleeping 1h.")
+                    warned_no_key = True
+                await asyncio.sleep(3600)
+                continue
+            warned_no_key = False
+
+            try:
+                n_linkable = await db.sports_events.count_documents(_LINKABLE_OPEN_EVENT_FILTER)
+            except Exception as ex:
+                log.warning("Sports auto-settle ticker: count linkable events failed: %s", ex)
+                await asyncio.sleep(300)
+                continue
+
+            if n_linkable == 0:
+                await asyncio.sleep(_sports_auto_settle_ticker_idle_sec())
+                continue
+
+            wait_sec = await _seconds_until_next_linkable_eligible_or_cap()
+            if wait_sec > 0:
+                await asyncio.sleep(wait_sec)
+                if not await any_linkable_open_event_past_settle_delay():
+                    continue
+
+            try:
+                out = await _auto_settle_from_scores()
+                settled = int(out.get("settled") or 0)
+                if settled > 0:
+                    log.info(
+                        "Sports auto-settle ticker: settled=%s skipped_no_match=%s skipped_no_winner=%s",
+                        settled,
+                        out.get("skipped_no_match"),
+                        out.get("skipped_no_winner"),
+                    )
+                elif out.get("message"):
+                    log.debug("Sports auto-settle ticker: %s", out.get("message"))
+            except Exception as ex:
+                log.exception("Sports auto-settle ticker: _auto_settle_from_scores failed: %s", ex)
+
+            await asyncio.sleep(_sports_auto_settle_ticker_poll_interval_sec())
+        except asyncio.CancelledError:
+            raise
+        except Exception as ex:
+            log.exception("Sports auto-settle ticker: loop error: %s", ex)
+            await asyncio.sleep(300)
+
+
 def register(router):
     if _odds_api_key():
-        logger.info("Sports betting: THE_ODDS_API_KEY is set — using The Odds API for Football/UFC/Boxing and for auto-settle.")
+        logger.info(
+            "Sports betting: THE_ODDS_API_KEY is set — using The Odds API for Football/UFC/Boxing/F1 (where available) and for auto-settle.",
+        )
     else:
         logger.warning("Sports betting: THE_ODDS_API_KEY is not set — Football/UFC/Boxing use fallback sources; auto-settle will not run.")
 
@@ -1776,6 +1981,7 @@ def register(router):
     router.add_api_route("/admin/sports-betting/templates", admin_sports_templates, methods=["GET"])
     router.add_api_route("/admin/sports-betting/templates/load-db", admin_sports_templates_load_db, methods=["POST"])
     router.add_api_route("/admin/sports-betting/refresh", admin_sports_refresh, methods=["POST"])
+    router.add_api_route("/admin/sports-betting/auto-settle-run", admin_sports_auto_settle_run, methods=["POST"])
     router.add_api_route("/admin/sports-betting/events", admin_sports_add_event, methods=["POST"])
     router.add_api_route("/admin/sports-betting/custom-event", admin_sports_add_custom_event, methods=["POST"])
     router.add_api_route("/admin/sports-betting/settle", admin_sports_settle, methods=["POST"])
