@@ -37,7 +37,7 @@ export default function MPPokerPage() {
   const [vsDealerStarting, setVsDealerStarting] = useState(false);
   const [cancellingId, setCancellingId] = useState(null);
   const [myUserId, setMyUserId] = useState(null);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [staffFlags, setStaffFlags] = useState({ is_admin: false, is_moderator: false, has_admin_email: false });
   const [adminTournamentSettings, setAdminTournamentSettings] = useState({
     require_approval: true,
     tournament_limit_per_day: 10,
@@ -50,9 +50,15 @@ export default function MPPokerPage() {
   useEffect(() => {
     api.get('/auth/me').then((r) => setMyUserId(r.data?.id ?? null)).catch(() => {});
     api.get('/admin/whoami')
-      .then((r) => setIsAdmin(Boolean(r.data?.is_admin)))
-      .catch(() => setIsAdmin(false));
+      .then((r) => setStaffFlags({
+        is_admin: Boolean(r.data?.is_admin),
+        is_moderator: Boolean(r.data?.is_moderator),
+        has_admin_email: Boolean(r.data?.has_admin_email),
+      }))
+      .catch(() => setStaffFlags({ is_admin: false, is_moderator: false, has_admin_email: false }));
   }, []);
+
+  const canManageTournaments = Boolean(staffFlags.is_admin || staffFlags.has_admin_email || staffFlags.is_moderator);
 
   const fetchGames = useCallback(() => {
     api.get('/casino/mp-poker/games').then((r) => setGames(r.data?.games ?? [])).catch(() => setGames([])).finally(() => setLoading(false));
@@ -63,7 +69,7 @@ export default function MPPokerPage() {
   }, []);
 
   const fetchTournamentAdminSettings = useCallback(() => {
-    if (!isAdmin) return;
+    if (!canManageTournaments) return;
     api.get('/casino/mp-poker/tournaments/admin-settings')
       .then((r) => setAdminTournamentSettings({
         require_approval: r.data?.require_approval !== false,
@@ -71,7 +77,7 @@ export default function MPPokerPage() {
         tournaments_created_today: Number(r.data?.tournaments_created_today || 0),
       }))
       .catch(() => {});
-  }, [isAdmin]);
+  }, [canManageTournaments]);
 
   useEffect(() => {
     fetchGames();
@@ -191,7 +197,7 @@ export default function MPPokerPage() {
   };
 
   const handleAdminSaveTournamentSettings = async () => {
-    if (!isAdmin) return;
+    if (!canManageTournaments) return;
     setAdminSettingsSaving(true);
     try {
       const res = await api.patch('/casino/mp-poker/tournaments/admin-settings', {
@@ -537,7 +543,7 @@ export default function MPPokerPage() {
             </button>
           </div>
         )}
-        {isAdmin && (
+        {canManageTournaments && (
           <div className="p-3 border-b border-primary/10 space-y-2">
             <div className="text-[9px] text-primary/80 font-heading font-bold uppercase tracking-wider">Admin Tournament Controls</div>
             <div className="flex flex-wrap items-center gap-2">
@@ -573,6 +579,13 @@ export default function MPPokerPage() {
             <div className="text-[9px] text-mutedForeground font-heading">
               Today {Number(adminTournamentSettings.tournaments_created_today || 0).toLocaleString()}/
               {Number(adminTournamentSettings.tournament_limit_per_day || 0).toLocaleString()} tournaments used
+            </div>
+          </div>
+        )}
+        {!canManageTournaments && (
+          <div className="p-3 border-b border-primary/10">
+            <div className="text-[9px] text-mutedForeground font-heading">
+              Admin tournament controls are visible only on a staff account.
             </div>
           </div>
         )}
@@ -613,7 +626,7 @@ export default function MPPokerPage() {
                         <span>Blinds <span className="text-primary/80">{formatMoney(t.small_blind)}/{formatMoney(t.big_blind)}</span></span>
                         <span>{t.player_count}/{t.max_players}</span>
                       </div>
-                      {isAdmin && t.approval_status !== 'denied' && (
+                      {canManageTournaments && t.approval_status !== 'denied' && (
                         <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-w-[520px]">
                           <input
                             type="text"
@@ -680,7 +693,7 @@ export default function MPPokerPage() {
                           <ShieldCheck size={11} /> Open
                         </button>
                       )}
-                      {isAdmin && t.approval_status === 'pending' && (
+                      {canManageTournaments && t.approval_status === 'pending' && (
                         <>
                           <button
                             type="button"
@@ -702,7 +715,7 @@ export default function MPPokerPage() {
                           </button>
                         </>
                       )}
-                      {isAdmin && t.approval_status === 'approved' && (
+                      {canManageTournaments && t.approval_status === 'approved' && (
                         <button
                           type="button"
                           onClick={() => handleAdminSendBonusTournament(t.id)}

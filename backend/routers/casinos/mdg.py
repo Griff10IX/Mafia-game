@@ -39,6 +39,31 @@ class MDGRollRequest(BaseModel):
 
 
 def register(router):
+    async def _notify_mdg_losers(
+        entries: list,
+        winner_id: str,
+        winner_username: str,
+        pot_points: int,
+        pot_money: float,
+    ) -> None:
+        """Notify all unique non-winner entrants that they lost and who won."""
+        sent_to = set()
+        for e in entries or []:
+            uid = (e.get("user_id") or "").strip()
+            if not uid or uid == winner_id or uid in sent_to:
+                continue
+            sent_to.add(uid)
+            try:
+                await send_notification(
+                    uid,
+                    "🎲 MDG Result",
+                    f"You lost this MDG. Winner: {winner_username}. Final pot: {pot_points} pts, ${pot_money:,.0f}.",
+                    "system",
+                )
+            except Exception:
+                # Do not block roll settlement on notification failures.
+                continue
+
     @router.get("/casino/mdg/games")
     async def mdg_list_games(current_user: dict = Depends(get_current_user_verified)):
         """List open MDG games (joinable)."""
@@ -221,6 +246,7 @@ def register(router):
                 {"action": "payout", "game_id": request.game_id, "pot_points": new_pot_pts, "pot_money": new_pot_money, "trigger": "auto_roll"},
             )
             await send_notification(winner_id, "🎲 MDG Won", f"You won the pot: {new_pot_pts} pts, ${new_pot_money:,.0f}", "reward")
+            await _notify_mdg_losers(new_entries, winner_id, winner_username, new_pot_pts, new_pot_money)
             return {"message": "Joined; game rolled. One winner takes the pot.", "roll": roll, "winner_id": winner_id, "winner_username": winner_username, "pot_points": new_pot_pts, "pot_money": new_pot_money}
 
         return {"message": "Joined", "players": len(new_entries), "pot_points": new_pot_pts, "pot_money": new_pot_money}
@@ -271,4 +297,5 @@ def register(router):
             {"action": "payout", "game_id": request.game_id, "pot_points": pot_pts, "pot_money": pot_money, "trigger": "manual_roll"},
         )
         await send_notification(winner_id, "🎲 MDG Won", f"You won the pot: {pot_pts} pts, ${pot_money:,.0f}", "reward")
+        await _notify_mdg_losers(entries, winner_id, winner_username, pot_pts, pot_money)
         return {"message": "Roll complete. One winner takes the pot.", "roll": roll, "winner_id": winner_id, "winner_username": winner_username, "pot_points": pot_pts, "pot_money": pot_money}
