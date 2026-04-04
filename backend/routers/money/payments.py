@@ -159,6 +159,99 @@ async def _notify_staff_game_pass_fulfillment_blocked(
         logger.exception("notify_staff_game_pass_fulfillment_blocked failed")
 
 
+async def _notify_staff_preorder_points_held(
+    db,
+    *,
+    session_id: str,
+    user_id: str,
+    package_id: str,
+    points: int,
+    release_date_str: str,
+) -> None:
+    """Inbox staff when a points purchase is paid but held until pre-order release (no balance credit yet)."""
+    username = ""
+    try:
+        u = await db.users.find_one({"id": user_id}, {"_id": 0, "username": 1})
+        if u:
+            username = (u.get("username") or "").strip()[:64]
+    except Exception:
+        pass
+    title = "Store points — pre-order (not credited yet)"
+    msg = (
+        "A player completed payment for points that are held until the configured pre-order release date "
+        "(balance not credited until then).\n\n"
+        f"User: {username or '(unknown)'} ({user_id})\n"
+        f"Points: {points:,}\n"
+        f"Package: {package_id}\n"
+        f"Stripe session: {session_id}\n"
+        f"Release date (settings): {release_date_str or '—'}"
+    )
+    try:
+        staff_ids = await _get_staff_user_ids()
+        for staff_uid in staff_ids:
+            try:
+                await send_notification(staff_uid, title, msg, "staff_store_preorder_held")
+            except Exception as e:
+                logger.warning("staff preorder held inbox notify %s: %s", staff_uid, e)
+    except Exception:
+        logger.exception("notify_staff_preorder_points_held failed")
+
+
+async def _notify_staff_paid_stuck_pending(
+    db,
+    *,
+    session_id: str,
+    user_id: str,
+    package_id: str,
+    points: int,
+    context: str,
+) -> None:
+    """
+    Inbox staff once per session when Stripe is paid but the transaction row is still `pending`
+    after a credit attempt (unexpected — needs investigation / manual credit).
+    """
+    now_iso = datetime.now(timezone.utc).isoformat()
+    marked = await db.payment_transactions.update_one(
+        {
+            "session_id": session_id,
+            "payment_status": "pending",
+            "$or": [
+                {"payment_issue_staff_notified_at": {"$exists": False}},
+                {"payment_issue_staff_notified_at": None},
+            ],
+        },
+        {"$set": {"payment_issue_staff_notified_at": now_iso}},
+    )
+    if marked.modified_count == 0:
+        return
+    username = ""
+    try:
+        u = await db.users.find_one({"id": user_id}, {"_id": 0, "username": 1})
+        if u:
+            username = (u.get("username") or "").strip()[:64]
+    except Exception:
+        pass
+    title = "Store payment — points not credited (investigate)"
+    msg = (
+        "Stripe reports this checkout as paid, but the payment row is still pending after the server tried to credit. "
+        "Check Admin → Payments and Stripe; credit manually if needed.\n\n"
+        f"User: {username or '(unknown)'} ({user_id})\n"
+        f"Points (package): {points:,}\n"
+        f"Package: {package_id}\n"
+        f"Stripe session: {session_id}\n"
+        f"Detected from: {context}"
+    )
+    try:
+        staff_ids = await _get_staff_user_ids()
+        for staff_uid in staff_ids:
+            try:
+                await send_notification(staff_uid, title, msg, "staff_store_paid_stuck_pending")
+            except Exception as e:
+                logger.warning("staff stuck pending inbox notify %s: %s", staff_uid, e)
+    except Exception:
+        logger.exception("notify_staff_paid_stuck_pending failed")
+
+
 async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_id: str, points: int) -> dict:
     """
     Credit points only once per session (idempotent). Returns dict with status info.
@@ -387,6 +480,17 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
             "Payment preorder pending: session_id=%s user_id=%s package_id=%s points=%s release_date=%s",
             session_id, user_id, package_id, points, preorder_release_str,
         )
+        try:
+            await _notify_staff_preorder_points_held(
+                db,
+                session_id=session_id,
+                user_id=user_id,
+                package_id=package_id,
+                points=points,
+                release_date_str=preorder_release_str or "",
+            )
+        except Exception:
+            logger.exception("staff inbox notify preorder held failed")
         return {"credited": True, "preorder": True, "preorder_release_date": preorder_release_str}
     
     # Normal mode: credit immediately
@@ -986,6 +1090,25 @@ def register(router):
                         "created_at": datetime.now(timezone.utc).isoformat(),
                     })
                 credit_result = await _credit_payment_if_pending(db, session_id, user_id, package_id or "", points)
+                if (
+                    session.payment_status == "paid"
+                    and points > 0
+                    and not credit_result.get("credited")
+                    and not credit_result.get("fulfillment_blocked")
+                ):
+                    t_chk = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0, "payment_status": 1})
+                    if (t_chk or {}).get("payment_status") == "pending":
+                        try:
+                            await _notify_staff_paid_stuck_pending(
+                                db,
+                                session_id=session_id,
+                                user_id=user_id,
+                                package_id=package_id or "",
+                                points=points,
+                                context="GET /payments/status (paid, credit attempt did not complete row)",
+                            )
+                        except Exception:
+                            logger.exception("staff stuck pending notify from status failed")
                 if credit_result.get("credited"):
                     if credit_result.get("manual_credit_pending"):
                         return {
@@ -1107,7 +1230,26 @@ def register(router):
                             "payment_status": "pending",
                             "created_at": datetime.now(timezone.utc).isoformat(),
                         })
-                    await _credit_payment_if_pending(db, session.id, user_id, package_id or "", points)
+                    credit_result = await _credit_payment_if_pending(db, session.id, user_id, package_id or "", points)
+                    if (
+                        session.payment_status == "paid"
+                        and points > 0
+                        and not credit_result.get("credited")
+                        and not credit_result.get("fulfillment_blocked")
+                    ):
+                        t_chk = await db.payment_transactions.find_one({"session_id": session.id}, {"_id": 0, "payment_status": 1})
+                        if (t_chk or {}).get("payment_status") == "pending":
+                            try:
+                                await _notify_staff_paid_stuck_pending(
+                                    db,
+                                    session_id=session.id,
+                                    user_id=user_id,
+                                    package_id=package_id or "",
+                                    points=points,
+                                    context="Stripe webhook checkout.session.completed",
+                                )
+                            except Exception:
+                                logger.exception("staff stuck pending notify from webhook failed")
 
         return {"received": True}
 
@@ -1213,6 +1355,24 @@ def register(router):
                             if result.get("credited"):
                                 processed_stuck += 1
                                 logger.info("Processed stuck pending transaction: session_id=%s user_id=%s points=%s", session_id, user_id, points)
+                            elif (
+                                points > 0
+                                and not result.get("fulfillment_blocked")
+                                and session.payment_status == "paid"
+                            ):
+                                t_chk = await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0, "payment_status": 1})
+                                if (t_chk or {}).get("payment_status") == "pending":
+                                    try:
+                                        await _notify_staff_paid_stuck_pending(
+                                            db,
+                                            session_id=session_id,
+                                            user_id=user_id,
+                                            package_id=package_id,
+                                            points=points,
+                                            context="POST /payments/check-release (paid, still pending)",
+                                        )
+                                    except Exception:
+                                        logger.exception("staff stuck pending notify from check-release failed")
                 except Exception as e:
                     logger.warning("Failed to check stuck transaction %s: %s", txn.get("session_id"), e)
         

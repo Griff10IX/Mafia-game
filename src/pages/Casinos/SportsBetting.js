@@ -32,6 +32,45 @@ function formatDateTime(iso) {
   });
 }
 
+/** Parse template kickoff; null if missing/invalid. */
+function parseTemplateStart(t) {
+  const iso = t?.start_time;
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function startOfLocalDay(d) {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+/** True if template start matches admin date filter (local calendar). */
+function templateMatchesDateFilter(t, preset, specificYmd) {
+  const kickoff = parseTemplateStart(t);
+  if (!kickoff) return false;
+  if (specificYmd && /^\d{4}-\d{2}-\d{2}$/.test(specificYmd)) {
+    const [yy, mm, dd] = specificYmd.split('-').map(Number);
+    const picked = startOfLocalDay(new Date(yy, mm - 1, dd));
+    return startOfLocalDay(kickoff).getTime() === picked.getTime();
+  }
+  if (!preset) return true;
+  const now = new Date();
+  const today0 = startOfLocalDay(now);
+  const kick0 = startOfLocalDay(kickoff).getTime();
+  if (preset === 'today') return kick0 === today0.getTime();
+  if (preset === 'tomorrow') {
+    const tom = new Date(today0);
+    tom.setDate(tom.getDate() + 1);
+    return kick0 === tom.getTime();
+  }
+  if (preset === '7d') {
+    const end = new Date(today0);
+    end.setDate(end.getDate() + 7);
+    return kickoff >= today0 && kickoff < end;
+  }
+  return true;
+}
+
 function apiErrorDetail(e, fallback) {
   const d = e.response?.data?.detail;
   if (d == null) return fallback;
@@ -201,6 +240,8 @@ export default function SportsBetting() {
   const [activeTab, setActiveTab] = useState('events');
   const [templateLeagueFilter, setTemplateLeagueFilter] = useState('');
   const [templateSearchQuery, setTemplateSearchQuery] = useState('');
+  const [templateDatePreset, setTemplateDatePreset] = useState('');
+  const [templateDateSpecific, setTemplateDateSpecific] = useState('');
 
   useEffect(() => {
     setTemplateLeagueFilter('');
@@ -446,8 +487,11 @@ export default function SportsBetting() {
           (t.league_label || '').toLowerCase().includes(q),
       );
     }
+    if (templateDateSpecific || templateDatePreset) {
+      list = list.filter((t) => templateMatchesDateFilter(t, templateDatePreset, templateDateSpecific));
+    }
     return list;
-  }, [templateMap, adminCategory, templateLeagueFilter, templateSearchQuery]);
+  }, [templateMap, adminCategory, templateLeagueFilter, templateSearchQuery, templateDatePreset, templateDateSpecific]);
 
   const shownInCategory = filteredAdminTemplates.length;
 
@@ -612,6 +656,33 @@ export default function SportsBetting() {
                   placeholder="Filter by match name, league, or id…"
                   className="w-full bg-zinc-900/50 border border-zinc-700/30 rounded px-2 py-1.5 text-[11px] text-foreground font-heading focus:border-primary/50 focus:outline-none placeholder:text-zinc-600"
                 />
+                <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                  <select
+                    value={templateDatePreset}
+                    onChange={(e) => {
+                      setTemplateDatePreset(e.target.value);
+                      if (e.target.value) setTemplateDateSpecific('');
+                    }}
+                    className="w-full sm:flex-1 bg-zinc-900/50 border border-zinc-700/30 rounded px-2 py-1.5 text-[11px] text-foreground font-heading focus:border-primary/50 focus:outline-none"
+                  >
+                    <option value="">All dates</option>
+                    <option value="today">Today (local)</option>
+                    <option value="tomorrow">Tomorrow</option>
+                    <option value="7d">Next 7 days</option>
+                  </select>
+                  <label className="flex items-center gap-1.5 w-full sm:w-auto sm:min-w-[11rem] text-[10px] text-zinc-500 font-heading shrink-0">
+                    <span className="whitespace-nowrap">On date</span>
+                    <input
+                      type="date"
+                      value={templateDateSpecific}
+                      onChange={(e) => {
+                        setTemplateDateSpecific(e.target.value);
+                        if (e.target.value) setTemplateDatePreset('');
+                      }}
+                      className="flex-1 min-w-0 bg-zinc-900/50 border border-zinc-700/30 rounded px-2 py-1 text-[11px] text-foreground font-heading focus:border-primary/50 focus:outline-none [color-scheme:dark]"
+                    />
+                  </label>
+                </div>
                 {adminCategory === 'Football' && footballLeagueOptions.length > 0 ? (
                   <select
                     value={templateLeagueFilter}
