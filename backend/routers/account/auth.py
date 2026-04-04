@@ -705,6 +705,9 @@ def register(router):
                 "mission_completions": [],
                 "unlocked_maps_up_to": "Chicago",
                 "theme_preferences": {
+                    "colourId": "sky",
+                    "textureId": "modern-soft",
+                    "themeVariant": "modern",
                     "sidebarLayout": "categorized_classic",
                     "mobileNavStyle": "bottom",
                     "mobileStatsDisplay": "touch_ball",

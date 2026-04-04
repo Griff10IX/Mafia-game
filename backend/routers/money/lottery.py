@@ -127,24 +127,27 @@ async def get_lottery_state(current_user: dict = Depends(get_current_user)):
     mine = await db.lottery_tickets.count_documents({"round_id": rid, "user_id": current_user["id"]})
     rollover_in = int(rd.get("rollover_in") or 0)
     gross = total * TICKET_PRICE + rollover_in
-    last = await db.lottery_rounds.find_one(
-        {"status": "closed"},
-        {
-            "_id": 0,
-            "drawn_at": 1,
-            "gross_pot": 1,
-            "payout": 1,
-            "sink_amount": 1,
-            "ticket_count": 1,
-            "winner_username": 1,
-            "winner_user_id": 1,
-            "winning_numbers": 1,
-            "draw_fallback": 1,
-            "exact_match_count": 1,
-            "rollover_to_next": 1,
-        },
-        sort=[("drawn_at", -1)],
+    closed_projection = {
+        "_id": 0,
+        "drawn_at": 1,
+        "gross_pot": 1,
+        "payout": 1,
+        "sink_amount": 1,
+        "ticket_count": 1,
+        "winner_username": 1,
+        "winner_user_id": 1,
+        "winning_numbers": 1,
+        "draw_fallback": 1,
+        "exact_match_count": 1,
+        "rollover_to_next": 1,
+    }
+    recent_draws = await (
+        db.lottery_rounds.find({"status": "closed"}, closed_projection)
+        .sort("drawn_at", -1)
+        .limit(5)
+        .to_list(5)
     )
+    last = recent_draws[0] if recent_draws else None
     return {
         "round_id": str(rid),
         "closes_at": rd["closes_at"],
@@ -156,6 +159,7 @@ async def get_lottery_state(current_user: dict = Depends(get_current_user)):
         "rollover_in": rollover_in,
         "my_tickets": mine,
         "last_draw": last,
+        "recent_draws": recent_draws,
     }
 
 

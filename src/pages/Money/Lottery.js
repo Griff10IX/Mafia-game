@@ -229,6 +229,13 @@ function formatLotteryPurchasedAt(iso) {
   return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+function formatLotteryDrawAt(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+
 function TicketNumbersMini({ numbers }) {
   const list = Array.isArray(numbers) ? numbers.filter((n) => Number.isFinite(Number(n))) : [];
   if (list.length === 0) {
@@ -507,6 +514,7 @@ function Lottery() {
   const ticketPrice = Number(state?.ticket_price) || 500000;
   const totalCost = ticketPrice * parsedCount;
   const needsConfirm = parsedCount >= CONFIRM_THRESHOLD;
+  const recentDraws = Array.isArray(state?.recent_draws) ? state.recent_draws.slice(0, 5) : [];
 
   return (
     <div className={`space-y-3 ${styles.pageContent} mobile-page-root`}>
@@ -710,6 +718,41 @@ function Lottery() {
                 Drawn {new Date(last.drawn_at).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── LAST 5 WINNERS / REWARDS ── */}
+      {recentDraws.length > 0 && (
+        <div className={`${styles.panel} rounded-md overflow-hidden lot-fade-in lot-delay-3`}>
+          <div className="px-3 py-1.5 flex items-center gap-1.5" style={{ background: 'rgba(var(--noir-primary-rgb), 0.05)', borderBottom: '1px solid rgba(var(--noir-primary-rgb), 0.1)' }}>
+            <Trophy size={12} className="text-primary/70" />
+            <span className="text-[8px] font-heading font-bold text-primary/80 uppercase tracking-wider">Last 5 Winners / Rewards</span>
+          </div>
+          <div className="p-3 space-y-1.5">
+            {recentDraws.map((draw, idx) => {
+              const winner = (draw?.winner_username || '').trim();
+              const hasWinner = winner.length > 0;
+              const payout = Number(draw?.payout || 0);
+              return (
+                <div
+                  key={`${draw?.drawn_at || 'draw'}-${idx}`}
+                  className="flex items-center justify-between gap-2 py-1 border-b border-primary/5 last:border-0"
+                >
+                  <div className="min-w-0">
+                    <div className={`text-[10px] font-heading font-bold truncate ${hasWinner ? 'text-primary' : 'text-zinc-400'}`}>
+                      {hasWinner ? winner : 'No winner (rollover)'}
+                    </div>
+                    <div className="text-[8px] text-zinc-600 font-heading">
+                      {formatLotteryDrawAt(draw?.drawn_at)}
+                    </div>
+                  </div>
+                  <div className={`text-[10px] font-heading font-bold tabular-nums shrink-0 ${hasWinner && payout > 0 ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                    {hasWinner && payout > 0 ? formatMoney(payout) : '—'}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
