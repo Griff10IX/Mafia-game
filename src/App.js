@@ -19,6 +19,7 @@ import Layout from "./components/Layout";
 import ErrorBoundary from "./components/ErrorBoundary";
 import ServerUnavailableOverlay from "./components/ServerUnavailableOverlay";
 import { ThemeProvider } from "./context/ThemeContext";
+import { initToastObservability } from "./components/ui/sonner";
 import "@/App.css";
 
 // Lazy-load authenticated pages to shrink initial bundle
@@ -95,6 +96,7 @@ const Bank = lazy(() => import("./pages/Money/Bank"));
 const BoozeRun = lazy(() => import("./pages/Money/BoozeRun"));
 const CrackSafe = lazy(() => import("./pages/Money/CrackSafe"));
 const IllegalBusiness = lazy(() => import("./pages/Money/IllegalBusiness"));
+const Distillery = lazy(() => import("./pages/Money/Distillery"));
 const LootBox = lazy(() => import("./pages/Money/LootBox"));
 const MyProperties = lazy(() => import("./pages/Money/MyProperties"));
 const Properties = lazy(() => import("./pages/Money/Properties"));
@@ -111,7 +113,7 @@ const InboxChat = lazy(() => import("./pages/Social/InboxChat"));
 const ImageHost = lazy(() => import("./pages/Social/ImageHost"));
 
 // StaffRole pages
-const Admin = lazy(() => import("./pages/StaffRole/Admin"));
+const AdminShell = lazy(() => import("./pages/StaffRole/AdminShell"));
 const AdminLocked = lazy(() => import("./pages/StaffRole/AdminLocked"));
 const AdminUsersOnline = lazy(() => import("./pages/StaffRole/AdminUsersOnline"));
 
@@ -187,6 +189,10 @@ function App() {
       return false;
     }
   });
+
+  useEffect(() => {
+    initToastObservability();
+  }, []);
 
   useEffect(() => {
     const token = localStorage.getItem("token");
@@ -573,11 +579,11 @@ function App() {
           <Route path="/gta/car/:carId" element={<CarProfileRedirect />} />
           {/* ═══ STAFF ROLE GROUP ═══ */}
           <Route
-            path="/staffrole/admin"
+            path="/staffrole/admin/:section?"
             element={
               isAuthenticated ? (
                 <Layout>
-                  <Admin />
+                  <AdminShell />
                 </Layout>
               ) : (
                 <Navigate to="/" replace />
@@ -610,7 +616,7 @@ function App() {
             }
           />
           {/* Staff redirects */}
-          <Route path="/admin" element={<Navigate to="/staffrole/admin" replace />} />
+          <Route path="/admin" element={<Navigate to="/staffrole/admin/overview" replace />} />
           <Route path="/admin/locked" element={<Navigate to="/staffrole/locked" replace />} />
           <Route path="/admin/users-online" element={<Navigate to="/staffrole/users-online" replace />} />
           <Route
@@ -1236,7 +1242,20 @@ function App() {
               )
             }
           />
+          <Route
+            path="/money/distillery"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <Distillery />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
           <Route path="/racket" element={<Navigate to="/money/racket" replace />} />
+          <Route path="/distillery" element={<Navigate to="/money/distillery" replace />} />
           <Route
             path="/money/lottery"
             element={

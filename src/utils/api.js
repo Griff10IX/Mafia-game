@@ -255,4 +255,30 @@ export function refreshUser(newMoneyOrDetail) {
   window.dispatchEvent(new CustomEvent('app:refresh-user', { detail }));
 }
 
+/**
+ * Fire-and-forget toast event logger for admin observability.
+ * Uses sendBeacon when possible, then fetch keepalive fallback.
+ */
+export function sendToastEvent(payload) {
+  try {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+    const endpoint = `${API}/admin/toast-events/ingest`;
+    const body = JSON.stringify(payload || {});
+
+    fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body,
+      credentials: 'same-origin',
+      keepalive: true,
+    }).catch(() => {});
+  } catch (_) {
+    // Intentionally silent: logging must never break UX.
+  }
+}
+
 export default api;

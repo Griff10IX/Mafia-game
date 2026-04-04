@@ -5,6 +5,13 @@ import api, { imageHostPublicUrl } from '../../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
+import {
+  ADMIN_CATEGORIES,
+  ADMIN_CATEGORY_MOBILE_SHORT,
+  LEGACY_CATEGORY_MAP,
+  LEGACY_CATEGORY_SECTION_ID,
+  MOD_ONLY_CATEGORY_IDS,
+} from './adminToolMap';
 
 /** Match backend INACTIVITY_REMINDER_MIN_DAYS default (UI hint / disable). */
 const INACTIVITY_REMINDER_MIN_DAYS = 3;
@@ -133,55 +140,6 @@ const ADMIN_STYLES = `
   }
 `;
 
-const ADMIN_CATEGORIES = [
-  { id: 'admin-operations', label: 'Operations', icon: UserCog },
-  { id: 'admin-economy-progression', label: 'Economy & Progression', icon: Coins },
-  { id: 'admin-world-systems', label: 'World & Systems', icon: Zap },
-  { id: 'admin-analytics-monitoring', label: 'Analytics & Monitoring', icon: BarChart3 },
-];
-const MOD_ONLY_CATEGORY_IDS = ['admin-operations', 'admin-analytics-monitoring', 'admin-world-systems'];
-
-/** Short labels for horizontal category chips on mobile */
-const ADMIN_CATEGORY_MOBILE_SHORT = {
-  'admin-operations': 'Ops',
-  'admin-economy-progression': 'Economy',
-  'admin-world-systems': 'World',
-  'admin-analytics-monitoring': 'Stats',
-};
-
-const LEGACY_CATEGORY_MAP = {
-  'admin-players': 'admin-operations',
-  'admin-moderation': 'admin-operations',
-  'admin-security': 'admin-operations',
-  'admin-cheat': 'admin-operations',
-  'admin-staff': 'admin-operations',
-  'admin-mod-tools': 'admin-operations',
-  'admin-donations': 'admin-economy-progression',
-  'admin-quick': 'admin-economy-progression',
-  'admin-gameworld': 'admin-world-systems',
-  'admin-testing': 'admin-world-systems',
-  'admin-database': 'admin-world-systems',
-  'admin-analytics': 'admin-analytics-monitoring',
-  'admin-logs': 'admin-analytics-monitoring',
-};
-
-/** Section id inside the page for tools without a collapsible header (scroll target). */
-const LEGACY_CATEGORY_SECTION_ID = {
-  'admin-players': 'admin-players',
-  'admin-moderation': 'admin-moderation',
-  'admin-donations': 'admin-donations',
-  'admin-security': 'admin-security',
-  'admin-cheat': 'admin-cheat',
-  'admin-staff': 'admin-staff',
-  'admin-mod-tools': 'admin-mod-tools',
-  'admin-gameworld': 'admin-gameworld',
-  'admin-testing': 'admin-testing',
-  'admin-database': 'admin-database',
-  'admin-quick': 'admin-quick',
-  'admin-analytics': 'admin-analytics',
-  'admin-logs': 'admin-logs',
-};
-
 const normalizeCategoryId = (id) => LEGACY_CATEGORY_MAP[id] || id;
 
 const ADMIN_MOBILE_TARGET_OPEN_KEY = 'admin_mobile_target_open';
@@ -292,6 +250,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Economy analytics', categoryId: 'admin-analytics-monitoring', collapseKey: 'economyAnalytics', keywords: ['economy', 'analytics', 'sink', 'faucet'] },
   { label: 'Player compare', categoryId: 'admin-analytics-monitoring', collapseKey: 'playerCompare', keywords: ['compare', 'players', 'side by side'] },
   // Logs
+  { label: 'Toast notifications', categoryId: 'admin-logs', collapseKey: 'toastNotifications', keywords: ['toast', 'notifications', 'popup', 'message', 'error', 'success'] },
   { label: 'Live Activity Feed', categoryId: 'admin-logs', collapseKey: 'activityFeed', keywords: ['activity', 'feed', 'live', 'real-time', 'actions', 'gambling', 'bank', 'transfer'] },
   { label: 'Minigame Payouts', categoryId: 'admin-logs', collapseKey: 'minigamePayouts', keywords: ['minigame', 'payout', 'reward', 'cash', 'mini', 'game'] },
   { label: 'Weekly Leaderboard Payouts', categoryId: 'admin-logs', collapseKey: 'weeklyLeaderboardPayouts', keywords: ['leaderboard', 'weekly', 'payout', 'respect', 'points', 'top 10'] },
@@ -349,7 +308,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Dupe check', categoryId: 'admin-mod-tools', collapseKey: 'dupeCheckMod', keywords: ['dupe', 'duplicate', 'multi', 'account'] },
   { label: 'Lock player', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['lock', 'player', 'investigation'] },
   { label: 'Modkill', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['modkill', 'kill', 'player'] },
-  { label: 'Lock page', categoryId: 'admin-moderation', collapseKey: 'moderationPageLocks', keywords: ['lock', 'page', 'maintenance'] },
+  { label: 'Lock page', categoryId: 'admin-operations', collapseKey: 'pageLocks', keywords: ['lock', 'page', 'maintenance'] },
 ];
 
 /** Display names for /admin/casinos/analytics/summary game_type keys */
@@ -365,8 +324,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, quicktradeTool: true, ...parsed };
-  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, quicktradeTool: true }; }
+    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, quicktradeTool: true, toastNotifications: true, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, quicktradeTool: true, toastNotifications: true }; }
 }
 
 function saveCollapsed(state) {
@@ -879,6 +838,14 @@ export default function Admin() {
   const [activityLog, setActivityLog] = useState({ entries: [] });
   const [activityLogLoading, setActivityLogLoading] = useState(false);
   const [activityLogUsername, setActivityLogUsername] = useState('');
+  const [toastEvents, setToastEvents] = useState({ entries: [] });
+  const [toastEventsLoading, setToastEventsLoading] = useState(false);
+  const [toastEventsUsername, setToastEventsUsername] = useState('');
+  const [toastEventsType, setToastEventsType] = useState('');
+  const [toastEventsContains, setToastEventsContains] = useState('');
+  const [toastEventsLimit, setToastEventsLimit] = useState(200);
+  const [toastEventsLive, setToastEventsLive] = useState(false);
+  const [toastEventsSinceMinutes, setToastEventsSinceMinutes] = useState(15);
   const [activityFeed, setActivityFeed] = useState(null);
   const [activityFeedLoading, setActivityFeedLoading] = useState(false);
   const [activityFeedMinutes, setActivityFeedMinutes] = useState(60);
@@ -1315,6 +1282,14 @@ export default function Admin() {
         .finally(() => setRespectLogLoading(false));
     }
   }, [location.state]);
+
+  // Shared shell context: /staffrole/admin/*?target=username
+  useEffect(() => {
+    const params = new URLSearchParams(location.search || '');
+    const target = (params.get('target') || '').trim();
+    if (!target) return;
+    setFormData((prev) => ({ ...prev, targetUsername: target }));
+  }, [location.search]);
 
   const fetchEventsStatus = async () => {
     try {
@@ -5068,6 +5043,35 @@ export default function Admin() {
     }
   };
 
+  const fetchToastEvents = async (silent = false) => {
+    if (!silent) setToastEventsLoading(true);
+    try {
+      const params = {
+        limit: Math.max(1, Math.min(1000, parseInt(String(toastEventsLimit), 10) || 200)),
+      };
+      if (toastEventsUsername.trim()) params.username = toastEventsUsername.trim();
+      if (toastEventsType.trim()) params.toast_type = toastEventsType.trim();
+      if (toastEventsContains.trim()) params.contains = toastEventsContains.trim();
+      const mins = Math.max(1, Math.min(1440, parseInt(String(toastEventsSinceMinutes), 10) || 15));
+      params.since = new Date(Date.now() - mins * 60 * 1000).toISOString();
+      const res = await api.get('/admin/toast-events', { params });
+      setToastEvents(res.data || { entries: [] });
+    } catch (e) {
+      if (!silent) toast.error(e.response?.data?.detail || 'Failed to load toast notifications');
+      if (!silent) setToastEvents({ entries: [] });
+    } finally {
+      if (!silent) setToastEventsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!toastEventsLive) return undefined;
+    fetchToastEvents(true);
+    const t = setInterval(() => fetchToastEvents(true), 5000);
+    return () => clearInterval(t);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toastEventsLive, toastEventsUsername, toastEventsType, toastEventsContains, toastEventsLimit, toastEventsSinceMinutes]);
+
   const fetchMinigamePayouts = async () => {
     setMinigamePayoutsLoading(true);
     try {
@@ -8043,53 +8047,27 @@ export default function Admin() {
           <SectionHeader
             icon={Lock}
             title="Page locks"
-            badge={Object.keys(pageLocks).length > 0 ? <span className="text-[10px] font-heading text-amber-400">{Object.keys(pageLocks).length} locked</span> : null}
             toolAnchor="moderationPageLocks"
             isCollapsed={collapsed.moderationPageLocks}
-            onToggle={() => { toggleSection('moderationPageLocks'); if (collapsed.moderationPageLocks) fetchPageLocks(); }}
+            onToggle={() => toggleSection('moderationPageLocks')}
           />
           {!collapsed.moderationPageLocks && (
-            <div className="p-3 space-y-3">
-              <p className="text-[10px] text-mutedForeground">When a page is locked, users see &quot;Down for maintenance&quot; (or your message) and cannot access it. Admins can still access.</p>
-              <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-2.5 space-y-2">
-                <p className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-wider">Lock buying points (Points tab only) until</p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <input type="datetime-local" value={pageLockUnlockAt} onChange={(e) => setPageLockUnlockAt(e.target.value)} className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs font-mono" />
-                  <BtnPrimary onClick={() => handlePageLockToggle('/store/points', true, pageLockUnlockAt ? `Points purchase closed until ${new Date(pageLockUnlockAt).toLocaleString()}` : 'Points purchase temporarily unavailable', pageLockUnlockAt ? new Date(pageLockUnlockAt).toISOString() : null)} disabled={pageLockSaving || !pageLockUnlockAt}>Lock until date</BtnPrimary>
-                  {pageLocks['/store/points'] && (
-                    <BtnSecondary onClick={() => handlePageLockToggle('/store/points', false)} disabled={pageLockSaving}>Unlock now</BtnSecondary>
-                  )}
-                </div>
-              </div>
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {['/dashboard', '/game/users-online', '/bank', '/stock-market', '/stats', '/jail', '/organised-crime', '/crimes', '/gta', '/attack', '/hitlist', '/families', '/casino', '/store', '/store/points', '/forum', '/inbox', '/help-desk', '/profile'].map((path) => {
-                  const entry = pageLocks[path];
-                  const isLocked = !!entry;
-                  const msg = typeof entry === 'object' ? (entry?.message ?? '') : (entry || '');
-                  return (
-                    <div key={path} className="flex flex-wrap items-center gap-2 px-2 py-1.5 rounded bg-zinc-800/30 border border-transparent hover:border-primary/20">
-                      <span className="text-[11px] font-heading font-mono min-w-[120px]">{path}</span>
-                      {isLocked && <span className="text-[10px] text-mutedForeground truncate max-w-[180px]" title={msg}>{msg || 'Down for maintenance'}</span>}
-                      <div className="flex gap-1 ml-auto">
-                        {isLocked ? (
-                          <BtnSecondary onClick={() => handlePageLockToggle(path, false)} disabled={pageLockSaving}>Unlock</BtnSecondary>
-                        ) : (
-                          <BtnPrimary onClick={() => handlePageLockToggle(path, true, pageLockMessage)} disabled={pageLockSaving}>Lock</BtnPrimary>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="pt-2 border-t border-white/10">
-                <p className="text-[10px] font-heading font-bold text-primary mb-2">Custom path</p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <input type="text" value={pageLockPath} onChange={(e) => setPageLockPath(e.target.value)} placeholder="/any/path" className="w-40 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs font-mono" />
-                  <input type="text" value={pageLockMessage} onChange={(e) => setPageLockMessage(e.target.value)} placeholder="Down for maintenance" className="w-48 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs" />
-                  <BtnPrimary onClick={() => handlePageLockToggle((pageLockPath || '').trim() || '/', true, pageLockMessage)} disabled={pageLockSaving || !(pageLockPath || '').trim()}>Lock</BtnPrimary>
-                  <BtnSecondary onClick={() => handlePageLockToggle((pageLockPath || '').trim() || '/', false)} disabled={pageLockSaving || !(pageLockPath || '').trim()}>Unlock</BtnSecondary>
-                </div>
-              </div>
+            <div className="p-3 space-y-2">
+              <p className="text-[10px] text-mutedForeground">
+                Page lock controls were consolidated into the canonical Operations panel to remove duplicate entry points.
+              </p>
+              <BtnSecondary
+                onClick={() => {
+                  setActiveCategoryId('admin-operations');
+                  setCollapsed((prev) => ({ ...prev, pageLocks: false }));
+                  if (typeof window !== 'undefined') {
+                    window.location.hash = 'admin-operations';
+                    setTimeout(() => document.getElementById('admin-page-locks')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
+                  }
+                }}
+              >
+                Open canonical page lock panel
+              </BtnSecondary>
             </div>
           )}
         </div>
@@ -9384,7 +9362,7 @@ export default function Admin() {
         )}
         </div>
 
-        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+        <div id="admin-page-locks" className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Lock}
@@ -13553,6 +13531,117 @@ export default function Admin() {
           <ScrollText size={12} />
           Logs
         </h2>
+        {/* Toast Notifications */}
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Bell}
+            title="Toast Notifications"
+            badge={toastEvents?.entries ? <span className="text-[10px] font-heading text-primary">{toastEvents.count} entries</span> : null}
+            toolAnchor="toastNotifications"
+            isCollapsed={collapsed.toastNotifications}
+            onToggle={() => toggleSection('toastNotifications')}
+          />
+          {!collapsed.toastNotifications && (
+            <div className="p-3 space-y-2">
+              <p className="text-[10px] text-mutedForeground font-heading">
+                Full-text toasts users see in-app, with filters for username, type, text match, and recent window.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={toastEventsUsername}
+                  onChange={(e) => setToastEventsUsername(e.target.value)}
+                  placeholder="Username"
+                  className="w-40 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                <select
+                  value={toastEventsType}
+                  onChange={(e) => setToastEventsType(e.target.value)}
+                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                >
+                  <option value="">All types</option>
+                  <option value="error">error</option>
+                  <option value="success">success</option>
+                  <option value="info">info</option>
+                  <option value="warning">warning</option>
+                  <option value="loading">loading</option>
+                  <option value="message">message</option>
+                  <option value="default">default</option>
+                </select>
+                <input
+                  type="text"
+                  value={toastEventsContains}
+                  onChange={(e) => setToastEventsContains(e.target.value)}
+                  placeholder="Contains text"
+                  className="flex-1 min-w-[140px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                <select
+                  value={String(toastEventsSinceMinutes)}
+                  onChange={(e) => setToastEventsSinceMinutes(Math.max(1, Math.min(1440, parseInt(e.target.value, 10) || 15)))}
+                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                >
+                  <option value="15">Last 15m</option>
+                  <option value="60">Last 1h</option>
+                  <option value="360">Last 6h</option>
+                  <option value="1440">Last 24h</option>
+                </select>
+                <input
+                  type="number"
+                  min={1}
+                  max={1000}
+                  value={toastEventsLimit}
+                  onChange={(e) => setToastEventsLimit(Math.max(1, Math.min(1000, parseInt(e.target.value, 10) || 200)))}
+                  className="w-20 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs font-mono text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                <BtnPrimary onClick={() => fetchToastEvents(false)} disabled={toastEventsLoading}>
+                  {toastEventsLoading ? 'Loading…' : 'Load'}
+                </BtnPrimary>
+                <button
+                  type="button"
+                  onClick={() => setToastEventsLive((prev) => !prev)}
+                  className={`px-2 py-1 rounded border text-[10px] font-heading flex items-center gap-1 ${toastEventsLive ? 'bg-green-900/50 border-green-500/60 text-green-400' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'}`}
+                >
+                  {toastEventsLive && <span className="inline-block w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />}
+                  {toastEventsLive ? 'Live' : 'Auto-refresh'}
+                </button>
+              </div>
+
+              {toastEvents?.entries?.length > 0 ? (
+                <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+                  <table className="w-full text-[10px] font-heading">
+                    <thead className="sticky top-0 bg-zinc-900/90">
+                      <tr className="text-left text-mutedForeground">
+                        <th className="p-2">Time</th>
+                        <th className="p-2">User</th>
+                        <th className="p-2">Type</th>
+                        <th className="p-2">Message</th>
+                        <th className="p-2">Description</th>
+                        <th className="p-2">Route</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {toastEvents.entries.map((e) => (
+                        <tr key={e.id || `${e.user_id || ''}-${e.created_at || ''}-${e.message || ''}`} className="border-t border-zinc-700/30 hover:bg-zinc-800/30">
+                          <td className="p-2 whitespace-nowrap text-mutedForeground">{e.created_at ? new Date(e.created_at).toLocaleString() : '—'}</td>
+                          <td className="p-2">{e.username || '—'}</td>
+                          <td className="p-2">
+                            <span className="px-1.5 py-0.5 rounded bg-zinc-800/70 border border-zinc-600/60 uppercase text-[9px]">{e.toast_type || 'default'}</span>
+                          </td>
+                          <td className="p-2 break-words max-w-[260px]">{e.message || '—'}</td>
+                          <td className="p-2 break-words max-w-[260px] text-mutedForeground">{e.description || '—'}</td>
+                          <td className="p-2 break-all text-mutedForeground">{e.route_path || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-[10px] text-mutedForeground font-heading">No toast notifications found for current filters.</p>
+              )}
+            </div>
+          )}
+        </div>
         {/* Live Activity Feed */}
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />

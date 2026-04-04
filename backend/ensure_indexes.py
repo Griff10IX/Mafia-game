@@ -10,6 +10,7 @@ EVENT_LOG_TTL_DAYS = 14
 CRIME_EVENTS_TTL_DAYS = EVENT_LOG_TTL_DAYS  # backwards compat
 # Activity / gambling / analytics raw rows — longer retention than gameplay event logs.
 AUDIT_LOG_TTL_DAYS = 90
+TOAST_EVENTS_TTL_DAYS = 30
 
 
 async def _ensure_event_log_ttl(
@@ -636,6 +637,17 @@ async def ensure_all_indexes(db):
             "created_at",
             ttl_days=AUDIT_LOG_TTL_DAYS,
             compound_indexes=[[("user_id", 1), ("created_at", -1)]],
+        )
+        await _ensure_event_log_ttl(
+            db,
+            "toast_events",
+            "created_at",
+            ttl_days=TOAST_EVENTS_TTL_DAYS,
+            compound_indexes=[
+                [("username", 1), ("created_at", -1)],
+                [("toast_type", 1), ("created_at", -1)],
+                [("user_id", 1), ("created_at", -1)],
+            ],
         )
         await _prune_mixed_date_string_field(
             db, "analytics_events", "created_at", ttl_days=AUDIT_LOG_TTL_DAYS

@@ -1436,7 +1436,7 @@ async def buy_armour(request: ArmourBuyRequest, current_user: dict = Depends(get
     if owner_id and owner_id != current_user["id"]:
         pay_result = await db.users.update_one(
             {"id": current_user["id"], currency_field: {"$gte": price}},
-            {"$inc": {currency_field: -price}, "$set": {"armour_level": level, "armour_owned_level_max": max(owned_max, level)}},
+            {"$inc": {currency_field: -price}},
         )
         if pay_result.modified_count == 0:
             raise HTTPException(status_code=400, detail=insufficient_msg)
@@ -1449,6 +1449,10 @@ async def buy_armour(request: ArmourBuyRequest, current_user: dict = Depends(get
                 await db.bullet_factory.update_one({"state": state_key}, {"$inc": {"owner_pending_profit": price}})
             else:
                 await db.bullet_factory.update_one({"state": state_key}, {"$inc": {"owner_pending_profit_points": price}})
+            await db.users.update_one(
+                {"id": current_user["id"]},
+                {"$set": {"armour_level": level, "armour_owned_level_max": max(owned_max, level)}},
+            )
             await log_activity(current_user["id"], current_user.get("username", "?"), "armoury_buy_armour", {"item": armour["name"], "level": level, "cost": price, "source": "armoury"})
             return {"message": f"Purchased {armour['name']} (Armour Lv.{level}) from armoury", "new_level": level}
         await db.users.update_one(

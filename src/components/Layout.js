@@ -25,6 +25,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
     { path: '/my-properties', label: 'My Properties' },
     { path: '/money/property', label: 'Properties' },
     { path: '/money/booze-run', label: 'Booze Run' },
+    { path: '/money/distillery', label: 'Distillery' },
     { path: '/cars/garage', label: 'Garage' },
     { path: '/cars/sell', label: 'Sell Cars' },
     { path: '/cars/buy', label: 'Buy Cars' },
@@ -126,8 +127,8 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
         { action: 'theme', label: 'Theme' },
         { action: 'logout', label: 'Logout' },
         { path: '/account/autorank', label: 'Auto Rank' },
-        ...(isAdmin ? [{ path: '/staffrole/admin', label: 'Admin Tools' }, { path: '/staffrole/locked', label: 'Locked accounts' }] : []),
-        ...(isModerator && !isAdmin ? [{ path: '/staffrole/admin', label: 'Moderator tools' }] : []),
+        ...(isAdmin ? [{ path: '/staffrole/admin/overview', label: 'Admin Tools' }, { path: '/staffrole/locked', label: 'Locked accounts' }] : []),
+        ...(isModerator && !isAdmin ? [{ path: '/staffrole/admin/overview', label: 'Moderator tools' }] : []),
       ],
     },
     {
@@ -902,7 +903,7 @@ export default function Layout({ children }) {
         '__combat__': 'combat', '/kill/attack': 'combat', '/kill/attempts': 'combat', '/kill/hitlist': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
         '/game/travel': 'travel', '/game/states': 'travel', '/my-properties': 'travel', '/money/booze-run': 'travel',
         '/social/forum': 'messaging', '/social/inbox': 'messaging', '/social/image-host': 'messaging',
-        '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game-pass': 'money', '/game/daily-rewards': 'money',
+        '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game-pass': 'money', '/game/daily-rewards': 'money', '/money/distillery': 'money',
         '/cars/garage': 'money', '/cars/sell': 'money', '/cars/buy': 'money', '/money/crack-safe': 'money', '/money/lottery': 'money', '/casino': 'money', '/money/loot-box': 'money',
         '/game/family/list': 'other', '/game/dead-alive': 'other', '/account/autorank': 'other',
         '/mini-games': 'minigames',
@@ -915,7 +916,7 @@ export default function Layout({ children }) {
         '__combat__': 'combat', '/kill/attack': 'combat', '/kill/attempts': 'combat', '/kill/hitlist': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
         '/game/travel': 'travel', '/game/states': 'travel', '/my-properties': 'travel', '/money/booze-run': 'travel',
         '/social/forum': 'messaging', '/social/inbox': 'messaging', '/social/image-host': 'messaging',
-        '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game-pass': 'money', '/game/daily-rewards': 'money', '/casino/mini-games/flappy': 'money',
+        '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game-pass': 'money', '/game/daily-rewards': 'money', '/casino/mini-games/flappy': 'money', '/money/distillery': 'money',
         '/cars/garage': 'money', '/cars/sell': 'money', '/cars/buy': 'money', '/money/crack-safe': 'money', '/money/lottery': 'money', '/casino': 'money', '/game/leaderboard': 'money',
         '/game/family/list': 'other', '/game/dead-alive': 'other', '/account/autorank': 'other',
         '/mini-games': 'minigames',
@@ -952,6 +953,7 @@ export default function Layout({ children }) {
     { path: '/game/states', icon: MapPin, label: 'States' },
     { path: '/my-properties', icon: Building2, label: 'My Properties' },
     { path: '/money/booze-run', icon: Wine, label: 'Booze Run' },
+    { path: '/money/distillery', icon: Wine, label: 'Distillery' },
     { path: '/money/racket', icon: Building2, label: 'Racket' },
     { path: '/game/users-online', icon: Users, label: 'Users Online', countBadge: usersOnlineCount },
     { path: '/social/forum', icon: MessageSquare, label: 'Forum' },
@@ -977,12 +979,12 @@ export default function Layout({ children }) {
   ];
 
   const adminNavItems = isAdmin ? [
-    { path: '/staffrole/admin', icon: Settings, label: 'Admin Tools' },
+    { path: '/staffrole/admin/overview', icon: Settings, label: 'Admin Tools' },
     { path: '/staffrole/locked', icon: Lock, label: 'Locked accounts' },
     { path: '/staffrole/users-online', icon: Users, label: 'Users online (live)' },
   ] : [];
   const moderatorNavItems = isModerator && !isAdmin ? [
-    { path: '/staffrole/admin', icon: Shield, label: 'Moderator tools' },
+    { path: '/staffrole/admin/overview', icon: Shield, label: 'Moderator tools' },
     { path: '/staffrole/users-online', icon: Users, label: 'Users online (live)' },
   ] : [];
 

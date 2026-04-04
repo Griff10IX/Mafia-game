@@ -276,7 +276,7 @@ export default function MPBlackjackGamePage() {
               const elimNames = (g?.players || [])
                 .filter((p) => roundElim.includes(p.user_id))
                 .map((p) => p.username);
-              toast(`Round ${prevRoundRef.current} over — eliminated: ${elimNames.join(', ')}`, { icon: '💀' });
+              toast.message(`Round ${prevRoundRef.current} over — eliminated: ${elimNames.join(', ')}`, { icon: '💀' });
             }
           }
           prevRoundRef.current = newRound;

@@ -310,6 +310,16 @@ class ChargebackRequest(BaseModel):
     payment_session_id: str
 
 
+class ToastEventIngestRequest(BaseModel):
+    toast_type: str = Field(default="default", max_length=32)
+    message: str = Field(default="", max_length=500)
+    description: Optional[str] = Field(default=None, max_length=1000)
+    route_path: Optional[str] = Field(default=None, max_length=500)
+    duration_ms: Optional[int] = Field(default=None, ge=0, le=120000)
+    client_created_at: Optional[str] = Field(default=None, max_length=64)
+    metadata: Optional[Dict[str, Any]] = None
+
+
 # Seed configs (all may be created; families get player_cap_exempt and do not count toward player crew cap).
 SEED_FAMILIES_CONFIG = [
     {"name": "Corleone", "tag": "CORL"},
@@ -3096,16 +3106,24 @@ def register(router):
         }
 
     @router.post("/admin/security/test-telegram")
-    async def admin_test_telegram(current_user: dict = Depends(get_current_user)):
+    async def admin_test_telegram(payload: dict = Body(default={}), current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
+        custom_message = ""
+        if isinstance(payload, dict):
+            custom_message = str(payload.get("message") or "").strip()
         if not security_module.TELEGRAM_ENABLED:
             return {
                 "success": False,
                 "message": "Telegram not configured. Set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env file."
             }
+        rendered_message = (
+            f"Test from {current_user.get('username', 'Unknown')}: {custom_message}"
+            if custom_message
+            else f"🧪 Test alert from Mafia Game\n\nAdmin: {current_user.get('username', 'Unknown')}\n\nIf you see this, Telegram integration is working!"
+        )
         await security_module.send_telegram_alert(
-            f"🧪 Test alert from Mafia Game\n\nAdmin: {current_user.get('username', 'Unknown')}\n\nIf you see this, Telegram integration is working!",
+            rendered_message,
             "info"
         )
         await security_module.flush_telegram_alerts()
@@ -5438,6 +5456,102 @@ def register(router):
         cursor = db.activity_log.find(query, {"_id": 0}).sort("created_at", -1).limit(limit)
         entries = await cursor.to_list(limit)
         return {"entries": entries, "count": len(entries)}
+
+    @router.post("/admin/toast-events/ingest")
+    async def admin_ingest_toast_event(
+        body: ToastEventIngestRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Ingest frontend toast notifications shown to authenticated users."""
+        user_id = str(current_user.get("id") or "").strip()
+        username = str(current_user.get("username") or "").strip()
+        if not user_id or not username:
+            raise HTTPException(status_code=400, detail="User context unavailable")
+
+        toast_type = str(body.toast_type or "default").strip().lower()[:32] or "default"
+        if toast_type not in {"default", "success", "error", "info", "warning", "loading", "message"}:
+            toast_type = "default"
+        message = str(body.message or "").strip()[:500]
+        description = (str(body.description).strip()[:1000] if body.description is not None else None) or None
+        route_path = (str(body.route_path).strip()[:500] if body.route_path is not None else None) or None
+        duration_ms = int(body.duration_ms) if body.duration_ms is not None else None
+        client_created_at = (str(body.client_created_at).strip()[:64] if body.client_created_at is not None else None) or None
+        metadata = body.metadata if isinstance(body.metadata, dict) else None
+        if metadata is not None:
+            safe_meta = {}
+            for k, v in metadata.items():
+                ks = str(k)[:80]
+                if not ks:
+                    continue
+                if isinstance(v, (str, int, float, bool)) or v is None:
+                    safe_meta[ks] = v if not isinstance(v, str) else v[:300]
+                else:
+                    safe_meta[ks] = str(v)[:300]
+            metadata = safe_meta or None
+
+        await db.toast_events.insert_one(
+            {
+                "id": uuid.uuid4().hex,
+                "user_id": user_id,
+                "username": username,
+                "toast_type": toast_type,
+                "message": message,
+                "description": description,
+                "route_path": route_path,
+                "duration_ms": duration_ms,
+                "client_created_at": client_created_at,
+                "metadata": metadata,
+                "created_at": datetime.now(timezone.utc),
+            }
+        )
+        return {"ok": True}
+
+    @router.get("/admin/toast-events")
+    async def admin_toast_events(
+        limit: int = Query(200, ge=1, le=1000),
+        username: Optional[str] = None,
+        toast_type: Optional[str] = None,
+        contains: Optional[str] = None,
+        since: Optional[str] = None,
+        current_user: dict = Depends(get_current_user),
+    ):
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        query: Dict[str, Any] = {}
+        uname = (username or "").strip()
+        if uname:
+            query["username"] = re.compile("^" + re.escape(uname) + "$", re.IGNORECASE)
+
+        tt = (toast_type or "").strip().lower()
+        if tt:
+            query["toast_type"] = tt
+
+        needle = (contains or "").strip()
+        if needle:
+            pat = re.compile(re.escape(needle), re.IGNORECASE)
+            query["$or"] = [{"message": pat}, {"description": pat}, {"route_path": pat}]
+
+        since_raw = (since or "").strip()
+        if since_raw:
+            try:
+                since_dt = datetime.fromisoformat(since_raw.replace("Z", "+00:00"))
+                if since_dt.tzinfo is None:
+                    since_dt = since_dt.replace(tzinfo=timezone.utc)
+                query["created_at"] = {"$gte": since_dt}
+            except Exception:
+                pass
+
+        rows = (
+            await db.toast_events.find(query, {"_id": 0})
+            .sort("created_at", -1)
+            .limit(int(limit))
+            .to_list(int(limit))
+        )
+        for r in rows:
+            if isinstance(r.get("created_at"), datetime):
+                r["created_at"] = r["created_at"].isoformat()
+        return {"entries": rows, "count": len(rows)}
 
     @router.get("/admin/activity-feed")
     async def admin_activity_feed(

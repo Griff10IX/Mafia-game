@@ -35,10 +35,6 @@ class UnbanIPRequest(BaseModel):
     username: Optional[str] = None
 
 
-class TestTelegramRequest(BaseModel):
-    message: str
-
-
 async def _ban_user_impl(db, user_id: str, username: str, reason: str, duration_hours: Optional[int], banned_by: str):
     """Write ban to db.bans. security module has no ban_user; this implements it for the admin router."""
     now = datetime.now(timezone.utc).isoformat()
@@ -67,7 +63,7 @@ async def _deactivate_prior_bans(db, user_id: str) -> None:
 def register(router):
     """Register security admin routes. Dependencies injected here to avoid circular imports."""
     import server as srv
-    from middleware.security import send_telegram_alert as _send_telegram, get_security_summary
+    from middleware.security import get_security_summary
 
     db = srv.db
     get_current_user = srv.get_current_user
@@ -316,12 +312,6 @@ def register(router):
         result = await db.security_logs.delete_many({})
         return {"message": f"Cleared {result.deleted_count} security log(s)"}
 
-    async def test_telegram(request: TestTelegramRequest, current_user: dict = Depends(get_current_user)):
-        if current_user.get("email") not in ADMIN_EMAILS:
-            raise HTTPException(status_code=403, detail="Admin access required")
-        await _send_telegram(f"Test from {current_user.get('username')}: {request.message}", "info")
-        return {"message": "Test message sent to Telegram"}
-
     router.add_api_route("/admin/security/dashboard", get_security_dashboard, methods=["GET"])
     router.add_api_route("/admin/security/logs", get_security_logs, methods=["GET"])
     router.add_api_route("/admin/security/bans", get_active_bans, methods=["GET"])
@@ -332,4 +322,3 @@ def register(router):
     router.add_api_route("/admin/security/unban-ip", unban_ip_admin, methods=["POST"])
     router.add_api_route("/admin/security/test-ip-ban", test_ip_ban, methods=["POST"])
     router.add_api_route("/admin/security/clear-logs", clear_security_logs, methods=["POST"])
-    router.add_api_route("/admin/security/test-telegram", test_telegram, methods=["POST"])
