@@ -20,6 +20,7 @@ from server import (
 )
 from routers.kill.armoury import TOKEN_CONFIG, TOKEN_TYPES
 from utils.point_provenance import log_points_event
+from utils.civilian_protection import maybe_revoke_civilian_protection
 
 # Cache for list endpoints (short TTL; invalidate on any mutation)
 _sell_offers_cache: Optional[tuple] = None
@@ -1037,6 +1038,7 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
             )
     await db.properties.delete_one({"_id": ObjectId(property_id)})
     _invalidate_trade_caches()
+    await maybe_revoke_civilian_protection(db, buyer_id, "received_property_transfer")
     return {"message": "Property purchased successfully", "property_name": prop.get("name", "Property"), "points_spent": sale_price}
 
 

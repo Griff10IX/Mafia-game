@@ -82,6 +82,8 @@ class AdminAddCustomSportsEventRequest(BaseModel):
 SPORTS_BET_MAX_TOTAL_OPEN_STAKE = 10_000_000
 # Placing bets and cancelling open bets both end this many minutes before scheduled start.
 SPORTS_BETTING_CLOSE_BEFORE_START_MINUTES = 10
+# Public board: return enough open events that high-volume Football does not crowd out UFC/Boxing/F1.
+SPORTS_BETTING_PUBLIC_EVENTS_LIMIT = 500
 SPORTS_LIVE_CACHE_TTL = 30 * 60  # 30 min (was 6h) so "Check for events" gets fresher templates
 ODDS_API_BASE = "https://api.the-odds-api.com/v4"
 THESPORTSDB_LEAGUE_PREMIER = 4328
@@ -613,7 +615,7 @@ async def _fetch_odds_api_boxing() -> list:
             if not isinstance(events, list):
                 events = []
             await _odds_cache_write_list(cache_key, 200, events)
-        for ev in events[:25]:
+        for ev in events:
             if not _is_future_event(ev, require_time=True):
                 continue
             parsed = _parse_odds_event(ev, "Boxing", three_way=False, sport_key="boxing_boxing")
@@ -1283,7 +1285,7 @@ async def sports_betting_events(current_user: dict = Depends(get_current_user_ve
         {"status": "open"},
         {"_id": 0, "id": 1, "name": 1, "category": 1, "start_time": 1, "options": 1, "is_special": 1, "external_sport_key": 1},
     ).sort("start_time", 1)
-    events = await cursor.to_list(50)
+    events = await cursor.to_list(SPORTS_BETTING_PUBLIC_EVENTS_LIMIT)
     result = []
     close_betting_minutes = SPORTS_BETTING_CLOSE_BEFORE_START_MINUTES
     for e in events:

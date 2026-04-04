@@ -11,6 +11,7 @@ from fastapi import Depends, HTTPException
 
 from utils.kill_search_duration import KILL_SEARCH_RANDOM_MAX_MINUTES, KILL_SEARCH_RANDOM_MIN_MINUTES
 from utils.point_provenance import log_points_event
+from utils.civilian_protection import maybe_revoke_civilian_protection
 from server import (
     db,
     get_current_user,
@@ -236,6 +237,7 @@ async def hitlist_add(request: HitlistAddRequest, current_user: dict = Depends(g
             "reward_amount": int(request.reward_amount or 0),
             "hidden": hidden,
         })
+    await maybe_revoke_civilian_protection(db, current_user["id"], "hitlist_add")
     return {"message": msg}
 
 

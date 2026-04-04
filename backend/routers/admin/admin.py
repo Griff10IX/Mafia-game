@@ -2388,6 +2388,10 @@ def register(router):
                 "acquired_at": now_iso,
             }
         )
+        if car.get("rarity") in ("exclusive", "loot_exclusive"):
+            from utils.civilian_protection import maybe_revoke_civilian_protection
+
+            await maybe_revoke_civilian_protection(db, target["id"], "exclusive_car")
         return {"message": f"Added {car['name']} to {target_username}'s garage"}
 
     @router.post("/admin/add-random-cars")

@@ -55,6 +55,11 @@ from server import (
 )
 from utils.kill_search_duration import KILL_SEARCH_RANDOM_MAX_MINUTES, KILL_SEARCH_RANDOM_MIN_MINUTES
 from utils.release_soft_launch import PVP_KILLS_DISABLED_DETAIL, soft_launch_blocks_pvp_kill_on_target
+from utils.civilian_protection import (
+    CIVILIAN_PROTECTION_KILL_BLOCKED_DETAIL,
+    is_civilian_protected,
+    maybe_revoke_civilian_protection,
+)
 from routers.money.booze_run import BOOZE_TYPES
 from routers.account.objectives import update_objectives_progress
 from routers.kill.armoury import _best_weapon_for_user, _get_weapon_mastery_pct, MASTERY_MAX_BULLET_REDUCTION_PCT
@@ -480,6 +485,10 @@ async def search_target(request: AttackSearchRequest, current_user: dict = Depen
         )
         if not hitlist_npc:
             raise HTTPException(status_code=400, detail="You can only attack NPCs you added to your hitlist")
+    # Protected new accounts lose protection when searching a real player or bodyguard (not hitlist NPC).
+    allowed_hitlist_npc_only = target.get("is_npc") and not target.get("is_bodyguard")
+    if is_civilian_protected(current_user) and not allowed_hitlist_npc_only:
+        await maybe_revoke_civilian_protection(db, current_user["id"], "search_player")
     now = datetime.now(timezone.utc)
     override_minutes = current_user.get("search_minutes_override")
     if override_minutes is not None:
@@ -804,6 +813,8 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
         return _soft_err("Target user not found", 404)
     if await soft_launch_blocks_pvp_kill_on_target(db, target):
         return _soft_err(PVP_KILLS_DISABLED_DETAIL, 403)
+    if not target.get("is_npc") and is_civilian_protected(target):
+        return _soft_err(CIVILIAN_PROTECTION_KILL_BLOCKED_DETAIL, 403)
     if not target.get("is_npc"):
         await apply_passive_health_regen(target["id"], target)
     if target.get("is_dead"):
@@ -896,6 +907,9 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     if await soft_launch_blocks_pvp_kill_on_target(db, target):
         await _log_attack_error(current_user["id"], current_user.get("username"), "Release soft-launch PvP block", req)
         raise HTTPException(status_code=403, detail=PVP_KILLS_DISABLED_DETAIL)
+    if not target.get("is_npc") and is_civilian_protected(target):
+        await _log_attack_error(current_user["id"], current_user.get("username"), "Target under civilian protection", req)
+        raise HTTPException(status_code=403, detail=CIVILIAN_PROTECTION_KILL_BLOCKED_DETAIL)
     if target.get("is_dead"):
         await db.attacks.delete_one({"id": request.attack_id, "attacker_id": current_user["id"]})
         await _log_attack_error(current_user["id"], current_user.get("username"), "Target is already dead", req)

@@ -14,6 +14,7 @@ from fastapi import Depends, HTTPException
 
 from utils.claim_costs import load_claim_costs
 from utils.point_provenance import log_points_event
+from utils.civilian_protection import cleanup_expired_buyback_offers_for_user, maybe_revoke_civilian_protection
 
 from server import (
     db,
@@ -245,11 +246,7 @@ def register(router):
         if entry and (now_ts - entry["ts"]) < _OWNERSHIP_TTL_SEC:
             return entry["data"]
         now = datetime.now(timezone.utc)
-        # Clean up expired buyback offers for this user
-        await db.videopoker_buy_back_offers.delete_many({
-            "to_user_id": user_id,
-            "expires_at": {"$lt": now.isoformat()},
-        })
+        await cleanup_expired_buyback_offers_for_user(db, "videopoker_buy_back_offers", user_id, now.isoformat())
         raw = (current_user.get("current_state") or "").strip()
         city = _normalize_city(raw) if raw else (STATES[0] if STATES else "Chicago")
         display_city = city or raw or "Chicago"
@@ -343,6 +340,7 @@ def register(router):
         if not res.modified_count and not res.upserted_id:
             raise HTTPException(status_code=400, detail="This table already has an owner")
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -claim_cost}})
+        await maybe_revoke_civilian_protection(db, current_user.get("id") or "", "casino_claim")
         return {"message": f"You now own the video poker table in {city}!"}
 
     @router.post("/casino/videopoker/relinquish")
@@ -448,6 +446,7 @@ def register(router):
         await db.videopoker_buy_back_offers.delete_one({"id": request.offer_id})
         _invalidate_ownership_cache(current_user.get("id") or "")
         await resolve_gambling_log_buy_back(request.offer_id, "rejected", 0)
+        await maybe_revoke_civilian_protection(db, current_user.get("id") or "", "casino_buyback_reject")
         return {"message": "Rejected. You keep the table."}
 
     @router.post("/casino/videopoker/send-to-user")
@@ -468,6 +467,7 @@ def register(router):
             send_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
         await db.videopoker_ownership.update_one({"city": stored_city or city}, {"$set": send_set})
         _invalidate_ownership_cache(target.get("id") or "")
+        await maybe_revoke_civilian_protection(db, target.get("id") or "", "received_casino_transfer")
         return {"message": "Ownership transferred."}
 
     @router.post("/casino/videopoker/sell-on-trade")

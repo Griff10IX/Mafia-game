@@ -28,6 +28,7 @@ from pydantic import BaseModel
 from utils.notepad_color import notepad_color_for_api_response, normalize_notepad_color_for_set
 from utils.point_provenance import log_points_event
 from utils.family_vault_log import log_family_vault_tx
+from utils.civilian_protection import maybe_revoke_civilian_protection
 
 from server import (
     db,
@@ -1734,6 +1735,7 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
         )
     _invalidate_list_cache()
     _invalidate_my_cache(current_user["id"])
+    await maybe_revoke_civilian_protection(db, current_user["id"], "crew_create")
     return {"message": "Family created", "family_id": family_id}
 
 
@@ -1748,6 +1750,7 @@ async def _add_member_to_family(family_id: str, user_id: str) -> None:
         _user_id_filter_for_users_collection(user_id),
         {"$set": {"family_id": family_id, "family_role": "associate", **_family_melt_stats_reset_fields()}},
     )
+    await maybe_revoke_civilian_protection(db, user_id, "crew_join")
 
 
 async def _resolve_family_id(identifier: str):
@@ -1822,6 +1825,7 @@ async def families_apply(request: FamilyApplyRequest, current_user: dict = Depen
         "rank": applicant_rank,
         "applied_at": now, "status": "pending",
     })
+    await maybe_revoke_civilian_protection(db, current_user["id"], "crew_apply")
     return {"message": "Application submitted", "application_id": app_id}
 
 

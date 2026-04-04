@@ -12,6 +12,7 @@ from pydantic import BaseModel, field_validator
 from fastapi import Depends, HTTPException
 
 from utils.point_provenance import log_points_event
+from utils.civilian_protection import maybe_revoke_civilian_protection
 
 from server import (
     db,
@@ -219,6 +220,7 @@ async def _run_slots_draw_if_needed(state: str):
                 "Slots draw winner state=%s winner=%s (%s) matched=%s modified=%s",
                 state, winner_id, winner_name, res.matched_count, res.modified_count,
             )
+            await maybe_revoke_civilian_protection(db, winner_id, "received_casino_transfer")
             entries_state_key = (entries_doc or {}).get("state") or st
             await db.slots_entries.update_one({"state": entries_state_key}, {"$set": {"user_ids": []}}, upsert=True)
             for uid in set(user_ids):
@@ -553,6 +555,7 @@ def register(router):
         await db.slots_buy_back_offers.delete_one({"id": request.offer_id})
         _invalidate_slots_ownership_cache(current_user.get("id") or "")
         await resolve_gambling_log_buy_back(request.offer_id, "rejected", 0)
+        await maybe_revoke_civilian_protection(db, current_user.get("id") or "", "casino_buyback_reject")
         return {"message": "Rejected. You keep the slots."}
 
     @router.post("/casino/slots/spin")
@@ -760,6 +763,9 @@ def register(router):
                 {"$inc": {"profit": (bet - actual_payout) - (edge if head_family_id else 0)}},
             )
             _invalidate_slots_ownership_cache(owner_id)
+
+        if ownership_transferred:
+            await maybe_revoke_civilian_protection(db, current_user.get("id") or "", "received_casino_transfer")
 
         history_entry = {
             "bet": bet,

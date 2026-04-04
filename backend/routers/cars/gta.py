@@ -125,6 +125,7 @@ from routers.admin.airport import _invalidate_travel_info_cache
 from routers.game.families import resolve_family_id
 from utils.family_vault_log import log_family_vault_tx
 from utils.minigame_captcha_gate import require_turnstile_for_game_action
+from utils.civilian_protection import maybe_revoke_civilian_protection
 
 
 def effective_garage_batch_limit(user: dict) -> int:
@@ -535,6 +536,8 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
                 "damage_percent": damage_percent,
             }
         )
+        if (car.get("rarity") or "") in ("exclusive", "loot_exclusive"):
+            await maybe_revoke_civilian_protection(db, current_user.get("id") or "", "exclusive_car")
         _invalidate_travel_info_cache(current_user.get("id") or "")
         rp_before = int(current_user.get("rank_points") or 0)
         rp_granted = int(rank_points * _fm_gta)

@@ -23,6 +23,7 @@ from server import (
 )
 from routers.kill.armoury import _invalidate_weapons_cache, TOKEN_CONFIG, TOKEN_TYPES
 from utils.point_provenance import log_points_event
+from utils.civilian_protection import maybe_revoke_civilian_protection
 
 logger = logging.getLogger(__name__)
 
@@ -426,6 +427,7 @@ async def open_loot_box(
                             "id": LOOT_EXCLUSIVE_CAR_ID,
                             "rarity": "loot_exclusive",
                         })
+                        await maybe_revoke_civilian_protection(db, user_id, "exclusive_car")
                         continue
                     if typ == "armour":
                         await db.users.update_one(
@@ -450,6 +452,7 @@ async def open_loot_box(
                         if new_claimed["property"] >= EXCLUSIVE_CAP_PER_TYPE:
                             await send_notification(user_id, "Loot box", "The last Speakeasy has been claimed!", "system")
                         rewards.append({"type": "property", "name": "Speakeasy", "rarity": "loot_exclusive"})
+                        await maybe_revoke_civilian_protection(db, user_id, "received_property_transfer")
                         continue
 
             # Standard reward — diversify: prefer types not yet chosen this open

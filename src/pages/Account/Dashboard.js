@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
   DollarSign,
@@ -21,6 +21,7 @@ import api, { getApiErrorMessage } from '../../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../../components/ui/sheet';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '../../components/ui/collapsible';
 import styles from '../../styles/noir.module.css';
 import DailyRewardsWidget from '../../components/dashboard/DailyRewardsWidget';
 import ObjectivesWidget from '../../components/dashboard/ObjectivesWidget';
@@ -168,6 +169,19 @@ const StatCard = ({ stat, delay = 0 }) => {
   );
 };
 
+function formatProtectionCountdown(endsAtIso) {
+  if (!endsAtIso) return '—';
+  const end = new Date(endsAtIso).getTime();
+  const ms = end - Date.now();
+  if (Number.isNaN(end)) return '—';
+  if (ms <= 0) return '0:00:00';
+  const s = Math.floor(ms / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+}
+
 const QUICK_LINKS = [
   { to: '/account/profile', icon: User, label: 'Profile' },
   { to: '/crime/crimes', icon: Target, label: 'Crimes' },
@@ -214,16 +228,23 @@ export default function Dashboard() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editPrefs, setEditPrefs] = useState(null);
+  const [civilianProtection, setCivilianProtection] = useState(null);
+  const [cpPanelOpen, setCpPanelOpen] = useState(true);
+  const [cpTick, setCpTick] = useState(0);
+  const [cpTerminating, setCpTerminating] = useState(false);
+  const cpExpiredHandled = useRef(false);
 
   const fetchData = useCallback(async () => {
     try {
-      const [userRes, progressRes, dashRes] = await Promise.all([
+      const [userRes, progressRes, dashRes, civRes] = await Promise.all([
         api.get('/auth/me'),
         api.get('/user/rank-progress'),
         api.get('/profile/dashboard').catch(() => ({ data: null })),
+        api.get('/account/civilian-protection').catch(() => ({ data: null })),
       ]);
       setUser(userRes.data);
       setRankProgress(progressRes.data);
+      setCivilianProtection(civRes?.data ?? null);
       if (dashRes?.data) {
         setPreferences({
           section_order: dashRes.data.section_order || DEFAULT_SECTION_ORDER,
@@ -243,8 +264,44 @@ export default function Dashboard() {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    if (!civilianProtection?.active || !civilianProtection?.ends_at) return undefined;
+    const id = setInterval(() => setCpTick((t) => t + 1), 1000);
+    return () => clearInterval(id);
+  }, [civilianProtection?.active, civilianProtection?.ends_at]);
+
+  useEffect(() => {
+    if (!civilianProtection?.active || !civilianProtection?.ends_at) {
+      cpExpiredHandled.current = false;
+      return;
+    }
+    const end = new Date(civilianProtection.ends_at).getTime();
+    if (Number.isNaN(end) || Date.now() < end) {
+      cpExpiredHandled.current = false;
+      return;
+    }
+    if (cpExpiredHandled.current) return;
+    cpExpiredHandled.current = true;
+    api.get('/account/civilian-protection').then((r) => setCivilianProtection(r.data)).catch(() => {});
+  }, [civilianProtection, cpTick]);
+
+  const handleTerminateProtection = useCallback(async () => {
+    if (!window.confirm('Terminate new account protection? Other players will be able to attack you.')) return;
+    setCpTerminating(true);
+    try {
+      const r = await api.post('/account/civilian-protection/terminate');
+      setCivilianProtection(r.data);
+      toast.success('Protection terminated');
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || 'Failed to terminate protection');
+    } finally {
+      setCpTerminating(false);
+    }
+  }, []);
+
   const handleWidgetRefresh = useCallback(() => {
     api.get('/auth/me').then((r) => setUser(r.data)).catch(() => {});
+    api.get('/account/civilian-protection').then((r) => setCivilianProtection(r.data)).catch(() => {});
   }, []);
 
   const openSettings = useCallback(() => {
@@ -418,6 +475,51 @@ export default function Dashboard() {
           <Settings size={14} className="text-primary" />
         </button>
       </div>
+
+      {civilianProtection?.active && (
+        <Collapsible open={cpPanelOpen} onOpenChange={setCpPanelOpen} className="dash-scale-in">
+          <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-emerald-500/30`}>
+            <div className="h-px bg-gradient-to-r from-transparent via-emerald-500/40 to-transparent" />
+            <CollapsibleTrigger className="w-full px-2.5 py-1.5 bg-emerald-500/10 border-b border-emerald-500/20 flex items-center justify-between gap-2 text-left hover:bg-emerald-500/15 transition-colors">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <Shield size={14} className="text-emerald-400 shrink-0" />
+                <h2 className="text-[10px] font-heading font-bold text-emerald-400 uppercase tracking-[0.12em] truncate">
+                  Current protection
+                </h2>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-[10px] font-heading tabular-nums text-foreground" title="Time remaining">
+                  {formatProtectionCountdown(civilianProtection.ends_at)}
+                </span>
+                {cpPanelOpen ? <ChevronUp size={14} className="text-emerald-400" /> : <ChevronDown size={14} className="text-emerald-400" />}
+              </div>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <div className="px-2.5 py-2 space-y-2">
+                <p className="text-[10px] font-heading text-mutedForeground leading-relaxed">
+                  New accounts are protected from player attacks for {civilianProtection.protection_hours ?? 48} hours. Protection ends automatically when the timer runs out, or immediately if you perform certain actions.
+                </p>
+                <div>
+                  <p className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.1em] mb-1">Ends protection</p>
+                  <ul className="list-disc pl-4 space-y-0.5 text-[10px] font-heading text-foreground/90">
+                    {(civilianProtection.rules_bullets || []).map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleTerminateProtection}
+                  disabled={cpTerminating}
+                  className="w-full py-1.5 rounded border border-red-500/50 bg-red-950/40 text-red-400 text-[10px] font-heading font-bold hover:bg-red-950/60 hover:border-red-400/60 disabled:opacity-50 transition-colors"
+                >
+                  {cpTerminating ? 'Terminating…' : 'Terminate protection'}
+                </button>
+              </div>
+            </CollapsibleContent>
+          </div>
+        </Collapsible>
+      )}
 
       {preferences.section_order.map((id) => renderSection(id)).filter(Boolean)}
 

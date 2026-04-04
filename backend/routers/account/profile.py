@@ -21,6 +21,7 @@ import httpx
 from fastapi import Body, Depends, HTTPException
 from pydantic import BaseModel, Field
 
+from utils.civilian_protection import civilian_protection_status_payload, maybe_revoke_civilian_protection
 from utils.bbcode_normalize import normalize_bbcode_media_typos
 from utils.imgbb_resolve import rewrite_imgbb_urls_in_banner_text
 from utils.notepad_color import (
@@ -70,6 +71,7 @@ def register(router):
 
     db = srv.db
     get_current_user = srv.get_current_user
+    get_current_user_verified = srv.get_current_user_verified
     _username_pattern = srv._username_pattern
     get_rank_info = srv.get_rank_info
     get_wealth_rank = srv.get_wealth_rank
@@ -1653,3 +1655,38 @@ def register(router):
             })
         out.sort(key=lambda x: (-x["value"], x["name"], x["id"]))
         return {"cars": out}
+
+    @router.get("/account/civilian-protection")
+    async def get_civilian_protection_status(current_user: dict = Depends(get_current_user)):
+        u = await db.users.find_one(
+            {"id": current_user["id"]},
+            {
+                "_id": 0,
+                "created_at": 1,
+                "civilian_protection_revoked_at": 1,
+                "civilian_protection_revoke_reason": 1,
+                "is_moderator": 1,
+                "email": 1,
+            },
+        )
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        merged = {**current_user, **u}
+        return civilian_protection_status_payload(merged)
+
+    @router.post("/account/civilian-protection/terminate")
+    async def terminate_civilian_protection(current_user: dict = Depends(get_current_user_verified)):
+        await maybe_revoke_civilian_protection(db, current_user["id"], "manual")
+        u = await db.users.find_one(
+            {"id": current_user["id"]},
+            {
+                "_id": 0,
+                "created_at": 1,
+                "civilian_protection_revoked_at": 1,
+                "civilian_protection_revoke_reason": 1,
+                "is_moderator": 1,
+                "email": 1,
+            },
+        )
+        merged = {**current_user, **(u or {})}
+        return civilian_protection_status_payload(merged)
