@@ -1993,14 +1993,25 @@ def register(router):
             p["status"] = "active"
         sb_seat = (button_index + 1) % n
         bb_seat = (button_index + 2) % n
-        players[sb_seat]["stack"] = int(players[sb_seat].get("stack") or 0) - sb
-        players[sb_seat]["current_bet"] = sb
-        players[sb_seat]["total_bet_this_hand"] = sb
-        players[bb_seat]["stack"] = int(players[bb_seat].get("stack") or 0) - bb
-        players[bb_seat]["current_bet"] = bb
-        players[bb_seat]["total_bet_this_hand"] = bb
-        pot = int(g.get("pot") or 0) + sb + bb
-        first_act = (button_index + 3) % n
+        sb_stack = max(0, int(players[sb_seat].get("stack") or 0))
+        sb_post = min(sb, sb_stack)
+        players[sb_seat]["stack"] = sb_stack - sb_post
+        players[sb_seat]["current_bet"] = sb_post
+        players[sb_seat]["total_bet_this_hand"] = sb_post
+        if players[sb_seat]["stack"] <= 0:
+            players[sb_seat]["stack"] = 0
+            players[sb_seat]["status"] = "all_in"
+        bb_stack = max(0, int(players[bb_seat].get("stack") or 0))
+        bb_post = min(bb, bb_stack)
+        players[bb_seat]["stack"] = bb_stack - bb_post
+        players[bb_seat]["current_bet"] = bb_post
+        players[bb_seat]["total_bet_this_hand"] = bb_post
+        if players[bb_seat]["stack"] <= 0:
+            players[bb_seat]["stack"] = 0
+            players[bb_seat]["status"] = "all_in"
+        pot = int(g.get("pot") or 0) + sb_post + bb_post
+        first_act = _first_actor_after_advance(players, (button_index + 3) % n)
+        preflop_to_call = max(int(x.get("current_bet") or 0) for x in players)
         now_iso = datetime.now(timezone.utc).isoformat()
         await db.mp_poker_games.update_one(
             {"id": game_id},
@@ -2016,12 +2027,14 @@ def register(router):
                 "current_turn_index": first_act,
                 "first_turn_index_this_street": first_act,
                 "turn_started_at": now_iso,
-                "to_call": bb - sb,
+                "to_call": preflop_to_call,
                 "min_raise": bb,
                 "hand_number": int(g.get("hand_number") or 0) + 1,
                 "blind_level_started_at": g.get("blind_level_started_at") or now_iso if is_tournament else g.get("blind_level_started_at"),
             }},
         )
+        if players[first_act].get("status") in ("folded", "all_in"):
+            await _mp_poker_advance_street(game_id)
         g = await db.mp_poker_games.find_one({"id": game_id})
         return {k: v for k, v in g.items() if k != "_id"}
 

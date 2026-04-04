@@ -396,6 +396,18 @@ def register(router):
         n = normalize_ip_string(raw)
         return n or None
 
+    @router.get("/admin/whoami")
+    async def admin_whoami(current_user: dict = Depends(get_current_user)):
+        """Lightweight staff flags for UI gating."""
+        email = (current_user.get("email") or "").strip()
+        return {
+            "is_admin": bool(_is_admin(current_user)),
+            "is_moderator": bool(_is_moderator(current_user)),
+            "has_admin_email": bool(email in ADMIN_EMAILS),
+            "is_help_desk_operator": bool(_is_hdo(current_user)),
+            "admin_acting_as_normal": bool(current_user.get("admin_acting_as_normal", False)),
+        }
+
     @router.post("/admin/ip-normalize-mapped-v6")
     async def admin_ip_normalize_mapped_v6(
         dry_run: bool = Query(True, description="Preview only; no writes when true"),
