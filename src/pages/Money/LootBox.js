@@ -363,7 +363,7 @@ export default function LootBox() {
   const [result, setResult] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [rarityConfig, setRarityConfig] = useState(null);
-  const [rarityForm, setRarityForm] = useState({ exclusive_chance_pct: 2, common_pct: 55, uncommon_pct: 32, rare_pct: 13 });
+  const [rarityForm, setRarityForm] = useState({ exclusive_chance_pct: 10, common_pct: 55, uncommon_pct: 32, rare_pct: 13 });
   const [raritySaving, setRaritySaving] = useState(false);
 
   const loadStatus = async (silent = false) => {
@@ -397,7 +397,7 @@ export default function LootBox() {
           const rRes = await api.get('/loot-box/admin/rarity');
           if (!cancelled && rRes.data) {
             setRarityConfig(rRes.data);
-            const excl = Math.max(0, Math.min(100, Number(rRes.data.exclusive_chance_pct) ?? 2));
+            const excl = Math.max(0, Math.min(100, Number(rRes.data.exclusive_chance_pct) ?? 10));
             const c = rRes.data.common_pct ?? 0;
             const u = rRes.data.uncommon_pct ?? 0;
             const r = rRes.data.rare_pct ?? 0;
@@ -577,6 +577,9 @@ export default function LootBox() {
               </div>
               <div className="p-1.5">
                 <p className="text-[9px] text-mutedForeground font-heading italic text-center mb-1">Each exclusive may only be claimed by {CAP} made {CAP === 1 ? 'man' : 'men'} across the family.</p>
+                <p className="text-[9px] text-amber-200/90 font-heading italic text-center mb-1.5 leading-snug">
+                  Loot exclusives are not guaranteed—each vault opening is chance-based, and exclusives still depend on availability and global caps.
+                </p>
                 <ul className="list-none p-0 m-0 flex flex-col gap-0.5">
                   <ScarcityRow icon={Swords} label="Exclusive Weapon" claimed={claimed.weapon} cap={CAP} />
                   <ScarcityRow icon={Car} label="Exclusive Vehicle" claimed={claimed.car} cap={CAP} />
@@ -650,7 +653,7 @@ export default function LootBox() {
                       />
                     </label>
                   </div>
-                  <p className="text-[8px] text-mutedForeground italic leading-tight">Exclusive % = chance per prize. Box quality: set one, other two auto-fill to 100.</p>
+                  <p className="text-[8px] text-mutedForeground italic leading-tight">Exclusive % = chance per prize for a loot exclusive on that roll. Box quality: set one, other two auto-fill to 100.</p>
                   <button
                     type="button"
                     onClick={saveRarity}

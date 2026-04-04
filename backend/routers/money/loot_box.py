@@ -27,7 +27,7 @@ from utils.point_provenance import log_points_event
 logger = logging.getLogger(__name__)
 
 LOOT_BOX_PIECES_PER_OPEN = 100
-EXCLUSIVE_CHANCE = 0.02
+EXCLUSIVE_CHANCE = 0.1
 EXCLUSIVE_CAP_PER_TYPE = 1
 LOOT_EXCLUSIVE_WEAPON_ID = "weapon_loot"
 LOOT_EXCLUSIVE_CAR_ID = "car21"
@@ -39,7 +39,7 @@ PERK_DURATION_HOURS = 24
 
 # Default rarity config (admin can override via game_settings)
 DEFAULT_RARITY_CONFIG = {
-    "exclusive_chance": 0.02,
+    "exclusive_chance": 0.1,
     "common_pct": 55,
     "uncommon_pct": 32,
     "rare_pct": 13,
@@ -184,7 +184,7 @@ class LootBoxOpenRequest(BaseModel):
 
 
 class LootBoxRarityAdminUpdate(BaseModel):
-    """Admin-only: set loot box rarity (percent 0–100). exclusive_chance_pct = chance per prize for exclusive (e.g. 2 = 2%)."""
+    """Admin-only: set loot box rarity (percent 0–100). exclusive_chance_pct = chance per prize for exclusive (e.g. 10 = 10%)."""
     exclusive_chance_pct: Optional[float] = None
     common_pct: Optional[int] = None
     uncommon_pct: Optional[int] = None
@@ -255,7 +255,7 @@ async def set_loot_box_rarity_admin(
     body: LootBoxRarityAdminUpdate,
     current_user: dict = Depends(get_current_user),
 ):
-    """Admin only: update loot box rarity (percent 0–100). exclusive_chance_pct = chance per prize for exclusive (e.g. 2 = 2%)."""
+    """Admin only: update loot box rarity (percent 0–100). exclusive_chance_pct = chance per prize for exclusive (e.g. 10 = 10%)."""
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin only")
     config = await _get_loot_rarity_config()
@@ -367,7 +367,8 @@ async def open_loot_box(
         merged_set: Dict[str, Any] = {}
         now = datetime.now(timezone.utc)
 
-        exclusive_chance = rarity_config.get("exclusive_chance") or EXCLUSIVE_CHANCE
+        exclusive_chance = float(rarity_config.get("exclusive_chance") or EXCLUSIVE_CHANCE)
+        exclusive_chance = min(1.0, max(0.0, exclusive_chance))
         chosen_standard_types: set = set()  # diversify: avoid same type twice in one open
         for _ in range(num_prizes):
             claimed = await _get_claimed_counts()
