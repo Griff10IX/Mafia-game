@@ -1,5 +1,12 @@
 from typing import List
 
+VALID_PLAYER_ACTIONS = {"fold", "check", "call", "bet", "raise", "all_in"}
+
+
+def classify_player_action(action: str) -> str:
+    a = (action or "").strip().lower()
+    return a if a in VALID_PLAYER_ACTIONS else "invalid"
+
 
 def player_can_act(p: dict) -> bool:
     return (p or {}).get("status") not in ("folded", "all_in", "busted")

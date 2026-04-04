@@ -587,6 +587,7 @@ export default function MPPokerGamePage() {
   const myIndex = players.findIndex((p) => p.user_id === myUserId);
   const myPlayer = players[myIndex];
   const isMyTurn = currentTurnIndex >= 0 && currentTurnIndex < players.length &&
+    myPlayer?.status !== 'folded' && myPlayer?.status !== 'all_in' &&
     (isVsDealer
       ? !players[currentTurnIndex]?.is_bot
       : players[currentTurnIndex]?.user_id === myUserId);

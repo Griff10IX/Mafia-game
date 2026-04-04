@@ -12,6 +12,7 @@ from fastapi import Depends, HTTPException, Body
 
 from server import db, get_current_user, get_current_user_verified, log_gambling, _is_admin
 from routers.casinos.mp_poker_flow import (
+    classify_player_action as _classify_player_action,
     is_betting_round_complete as _is_betting_round_complete,
     next_actionable_index as _next_actionable_index,
     player_can_act as _player_can_act,
@@ -760,7 +761,7 @@ def register(router):
     ):
         """Act in vs-dealer game: fold, check, call, bet, raise, all_in. amount required for bet/raise. Optional game_id to target specific game."""
         uid = current_user.get("id") or ""
-        action = (action or "").strip().lower()
+        action = _classify_player_action(action)
         amount = amount or 0
         game_id = (game_id or "").strip() or None
         if game_id:
@@ -1596,6 +1597,22 @@ def register(router):
                 if elapsed >= MP_POKER_TURN_SECONDS:
                     await game_timeout(game_id, current_user)
                     g = await db.mp_poker_games.find_one({"id": game_id})
+            # Safety heal: if current turn points to folded/all-in/busted player, advance to next actionable seat.
+            players_now = list(g.get("players") or [])
+            turn_idx_now = int(g.get("current_turn_index") or 0)
+            in_live_street = g.get("street") in ("preflop", "flop", "turn", "river")
+            if in_live_street and players_now:
+                bad_turn_idx = turn_idx_now < 0 or turn_idx_now >= len(players_now) or not _player_can_act(players_now[turn_idx_now])
+                if bad_turn_idx:
+                    next_idx = _next_actionable_index(players_now, max(0, turn_idx_now))
+                    if next_idx < 0 or not _player_can_act(players_now[next_idx]):
+                        await _mp_poker_advance_street(game_id)
+                    else:
+                        await db.mp_poker_games.update_one(
+                            {"id": game_id},
+                            {"$set": {"current_turn_index": next_idx, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
+                        )
+                    g = await db.mp_poker_games.find_one({"id": game_id})
         if g.get("mode") == "vs_dealer" and g.get("status") == "playing":
             if g.get("current_turn_index") == 1:
                 g = await _run_vs_dealer_bot_turn(game_id)
@@ -2083,7 +2100,7 @@ def register(router):
                 await _mp_poker_run_showdown(game_id)
                 g = await db.mp_poker_games.find_one({"id": game_id})
                 return {k: v for k, v in (g or {}).items() if k != "_id"}
-        if action == "check":
+        elif action == "check":
             if need_to_call > 0:
                 raise HTTPException(status_code=400, detail="Cannot check")
             p["last_action"] = {"action": "check"}
@@ -2189,6 +2206,12 @@ def register(router):
             return {k: v for k, v in g.items() if k != "_id"}
         if timed_out and not (is_participant or _is_admin(current_user)):
             return {k: v for k, v in g.items() if k != "_id"}
+        # If current player is all-in they cannot fold by timeout; run out/advance street instead.
+        if players[turn_idx].get("status") == "all_in" and g.get("street") in ("preflop", "flop", "turn", "river"):
+            await _mp_poker_advance_street(game_id)
+            g = await db.mp_poker_games.find_one({"id": game_id})
+            _enrich_players_current_hand(g)
+            return {k: v for k, v in (g or {}).items() if k != "_id"}
         # Vs dealer: if human is all-in, run out the board instead of folding (fixes stuck all-in hand)
         if g.get("mode") == "vs_dealer" and players[turn_idx].get("status") == "all_in":
             human = next((p for p in players if not p.get("is_bot")), None)

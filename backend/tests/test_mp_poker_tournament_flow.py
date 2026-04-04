@@ -5,6 +5,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from routers.casinos.mp_poker_flow import (
+    classify_player_action,
     is_betting_round_complete,
     next_actionable_index,
     reset_acted_this_street_for_raise,
@@ -13,6 +14,11 @@ from routers.casinos.mp_poker_flow import (
 
 
 class TestMPPokerTournamentFlowHelpers(unittest.TestCase):
+    def test_classify_player_action_includes_fold(self):
+        self.assertEqual(classify_player_action("fold"), "fold")
+        self.assertEqual(classify_player_action(" FOLD "), "fold")
+        self.assertEqual(classify_player_action("bad_action"), "invalid")
+
     def test_next_actionable_index_skips_folded_and_all_in(self):
         players = [
             {"status": "folded"},
