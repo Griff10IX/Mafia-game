@@ -248,6 +248,39 @@ export default function MPPokerPage() {
     }
   };
 
+  const handleAdminSendBonusTournament = async (gameId) => {
+    const draft = getAdminDraft(gameId);
+    const money = parseInt(String(draft.bonus_money).replace(/\D/g, ''), 10) || 0;
+    const points = parseInt(String(draft.bonus_points).replace(/\D/g, ''), 10) || 0;
+    const tokenAmount = parseInt(String(draft.bonus_token_amount).replace(/\D/g, ''), 10) || 0;
+    const tokenType = (draft.bonus_token_type || '').trim();
+    const carId = (draft.bonus_car_id || '').trim();
+    if (!money && !points && !tokenAmount && !carId) {
+      toast.error('Set at least one bonus reward value first');
+      return;
+    }
+    if (tokenType && tokenAmount < 1) {
+      toast.error('Token amount must be at least 1');
+      return;
+    }
+    setAdminActionLoading(`bonus-${gameId}`);
+    try {
+      await api.post(`/admin/mp-poker/tournaments/${gameId}/bonus-rewards`, {
+        money,
+        points,
+        token_type: tokenType || null,
+        token_amount: tokenAmount,
+        car_id: carId || null,
+      });
+      toast.success('Bonus rewards sent');
+      fetchGames();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || 'Could not send bonus rewards');
+    } finally {
+      setAdminActionLoading(null);
+    }
+  };
+
   const inputStyle = { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(212,175,55,0.2)', color: 'inherit' };
   const selectStyle = { ...inputStyle, background: '#27272a', color: '#e4e4e7', colorScheme: 'dark' };
 
@@ -580,7 +613,7 @@ export default function MPPokerPage() {
                         <span>Blinds <span className="text-primary/80">{formatMoney(t.small_blind)}/{formatMoney(t.big_blind)}</span></span>
                         <span>{t.player_count}/{t.max_players}</span>
                       </div>
-                      {isAdmin && t.approval_status === 'pending' && (
+                      {isAdmin && t.approval_status !== 'denied' && (
                         <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-w-[520px]">
                           <input
                             type="text"
@@ -594,7 +627,7 @@ export default function MPPokerPage() {
                             type="text"
                             value={getAdminDraft(t.id).bonus_money}
                             onChange={(e) => setAdminDraft(t.id, { bonus_money: e.target.value })}
-                            placeholder="Winner bonus money"
+                            placeholder="Bonus money"
                             className="px-2 py-1 rounded border text-[10px] font-heading"
                             style={inputStyle}
                           />
@@ -602,7 +635,7 @@ export default function MPPokerPage() {
                             type="text"
                             value={getAdminDraft(t.id).bonus_points}
                             onChange={(e) => setAdminDraft(t.id, { bonus_points: e.target.value })}
-                            placeholder="Winner bonus points"
+                            placeholder="Bonus points"
                             className="px-2 py-1 rounded border text-[10px] font-heading"
                             style={inputStyle}
                           />
@@ -668,6 +701,17 @@ export default function MPPokerPage() {
                             {adminActionLoading === `deny-${t.id}` ? '…' : 'Deny'}
                           </button>
                         </>
+                      )}
+                      {isAdmin && t.approval_status === 'approved' && (
+                        <button
+                          type="button"
+                          onClick={() => handleAdminSendBonusTournament(t.id)}
+                          disabled={adminActionLoading !== null}
+                          className="rounded-lg border px-2.5 py-1.5 font-heading font-bold text-[9px] uppercase disabled:opacity-50"
+                          style={{ borderColor: 'rgba(251,191,36,0.5)', color: '#fbbf24', background: 'rgba(251,191,36,0.08)' }}
+                        >
+                          {adminActionLoading === `bonus-${t.id}` ? '…' : 'Send Bonus'}
+                        </button>
                       )}
                     </div>
                   </div>
