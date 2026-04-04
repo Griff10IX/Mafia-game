@@ -503,6 +503,9 @@ async def ensure_all_indexes(db):
         await db.entertainer_games.create_index([("status", 1)])
         await db.entertainer_games.create_index([("status", 1), ("completed_at", -1)])
         await db.entertainer_games.create_index([("created_at", -1)])
+        await db.entertainer_find_word_rounds.create_index("id", unique=True)
+        await db.entertainer_find_word_rounds.create_index([("status", 1), ("created_at", -1)])
+        await db.entertainer_find_word_rounds.create_index([("completed_at", -1)])
 
         # --- Designer competitions ---
         await db.designer_competitions.create_index("id", unique=True)

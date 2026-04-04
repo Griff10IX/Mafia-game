@@ -982,7 +982,17 @@ export default function Forum() {
   const [entertainerHistory, setEntertainerHistory] = useState([]);
   const [entertainerPrizes, setEntertainerPrizes] = useState(null);
   const [gamesLoading, setGamesLoading] = useState(false);
-  const [entertainerConfig, setEntertainerConfig] = useState({ auto_create_enabled: false, last_auto_create_at: null, next_auto_create_at: null });
+  const [entertainerConfig, setEntertainerConfig] = useState({
+    auto_create_enabled: false,
+    find_word_auto_enabled: false,
+    last_auto_create_at: null,
+    next_auto_create_at: null,
+    last_find_word_auto_at: null,
+  });
+  const [findWordActive, setFindWordActive] = useState({ active: false });
+  const [findWordHistory, setFindWordHistory] = useState([]);
+  const [findWordLoading, setFindWordLoading] = useState(false);
+  const [startingWordHunt, setStartingWordHunt] = useState(false);
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
@@ -1120,12 +1130,41 @@ export default function Forum() {
     }
   }, []);
 
+  const fetchFindWordPublic = useCallback(async (silent = false) => {
+    if (!silent) setFindWordLoading(true);
+    try {
+      const [a, h] = await Promise.all([
+        api.get('/forum/entertainer/find-word/active'),
+        api.get('/forum/entertainer/find-word/history?limit=8'),
+      ]);
+      setFindWordActive(a.data ?? { active: false });
+      setFindWordHistory(h.data?.rounds ?? []);
+    } catch {
+      setFindWordActive({ active: false });
+      setFindWordHistory([]);
+    } finally {
+      if (!silent) setFindWordLoading(false);
+    }
+  }, []);
+
   const fetchEntertainerConfig = useCallback(async () => {
     try {
       const res = await api.get('/forum/entertainer/admin/config');
-      setEntertainerConfig(res.data ?? { auto_create_enabled: false, last_auto_create_at: null, next_auto_create_at: null });
+      setEntertainerConfig(res.data ?? {
+        auto_create_enabled: false,
+        find_word_auto_enabled: false,
+        last_auto_create_at: null,
+        next_auto_create_at: null,
+        last_find_word_auto_at: null,
+      });
     } catch {
-      setEntertainerConfig({ auto_create_enabled: false, last_auto_create_at: null, next_auto_create_at: null });
+      setEntertainerConfig({
+        auto_create_enabled: false,
+        find_word_auto_enabled: false,
+        last_auto_create_at: null,
+        next_auto_create_at: null,
+        last_find_word_auto_at: null,
+      });
     }
   }, []);
 
@@ -1144,18 +1183,20 @@ export default function Forum() {
       fetchEntertainerHistory();
       fetchEntertainerPrizes();
       fetchEntertainerConfig();
+      fetchFindWordPublic();
       api.get('/auth/me').then((r) => setUser(r.data)).catch(() => setUser(null));
     }
-  }, [activeTab, fetchEntertainerGames, fetchEntertainerHistory, fetchEntertainerPrizes, fetchEntertainerConfig]);
+  }, [activeTab, fetchEntertainerGames, fetchEntertainerHistory, fetchEntertainerPrizes, fetchEntertainerConfig, fetchFindWordPublic]);
   useEffect(() => {
     if (activeTab === 'entertainer') {
       const id = setInterval(() => {
         fetchEntertainerGames();
         fetchEntertainerConfig();
+        fetchFindWordPublic(true);
       }, 10000);
       return () => clearInterval(id);
     }
-  }, [activeTab, fetchEntertainerGames, fetchEntertainerConfig]);
+  }, [activeTab, fetchEntertainerGames, fetchEntertainerConfig, fetchFindWordPublic]);
 
   const fetchActiveDesignerComp = useCallback(async () => {
     try {
@@ -1216,14 +1257,46 @@ export default function Forum() {
   const handleToggleAutoCreate = async () => {
     if (!isAdmin) return;
     setConfigSaving(true);
+    const next = !entertainerConfig.auto_create_enabled;
     try {
-      await api.patch('/forum/entertainer/admin/config', { auto_create_enabled: !entertainerConfig.auto_create_enabled });
-      setEntertainerConfig((c) => ({ ...c, auto_create_enabled: !c.auto_create_enabled }));
-      toast.success(entertainerConfig.auto_create_enabled ? 'Auto-create disabled' : 'Auto-create enabled');
+      const res = await api.patch('/forum/entertainer/admin/config', { auto_create_enabled: next });
+      if (res.data) setEntertainerConfig(res.data);
+      else setEntertainerConfig((c) => ({ ...c, auto_create_enabled: next }));
+      toast.success(next ? 'Auto-create enabled' : 'Auto-create disabled');
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed');
     } finally {
       setConfigSaving(false);
+    }
+  };
+
+  const handleToggleFindWordAuto = async () => {
+    if (!isAdmin) return;
+    setConfigSaving(true);
+    const next = !entertainerConfig.find_word_auto_enabled;
+    try {
+      const res = await api.patch('/forum/entertainer/admin/config', { find_word_auto_enabled: next });
+      if (res.data) setEntertainerConfig(res.data);
+      else setEntertainerConfig((c) => ({ ...c, find_word_auto_enabled: next }));
+      toast.success(next ? 'Word hunt auto enabled (every 3h with E-Games cycle)' : 'Word hunt auto disabled');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed');
+    } finally {
+      setConfigSaving(false);
+    }
+  };
+
+  const handleStartWordHuntNow = async () => {
+    if (!isAdmin) return;
+    setStartingWordHunt(true);
+    try {
+      const res = await api.post('/forum/entertainer/find-word/admin/start', {});
+      toast.success(res.data?.message || 'Word hunt started');
+      fetchFindWordPublic();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to start');
+    } finally {
+      setStartingWordHunt(false);
     }
   };
 
@@ -1831,6 +1904,29 @@ export default function Forum() {
                 >
                   {creatingGames ? '...' : 'Create games now'}
                 </button>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={!!entertainerConfig.find_word_auto_enabled}
+                    onChange={handleToggleFindWordAuto}
+                    disabled={configSaving}
+                    className="rounded border-primary/50"
+                  />
+                  <span className="text-xs font-heading">Auto word hunt (with 3h cycle)</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={handleStartWordHuntNow}
+                  disabled={startingWordHunt || configSaving}
+                  className="px-2 py-1 bg-emerald-500/15 border border-emerald-500/40 text-emerald-400 text-[10px] font-heading font-bold uppercase rounded hover:bg-emerald-500/25 disabled:opacity-50"
+                >
+                  {startingWordHunt ? '...' : 'Start word hunt'}
+                </button>
+                {entertainerConfig.last_find_word_auto_at && (
+                  <span className="text-[10px] text-mutedForeground">
+                    Last word hunt auto: {getTimeAgo(entertainerConfig.last_find_word_auto_at)}
+                  </span>
+                )}
                 {entertainerConfig.last_auto_create_at && (
                   <span className="text-[10px] text-mutedForeground">
                     Last run: {getTimeAgo(entertainerConfig.last_auto_create_at)}
@@ -1904,6 +2000,62 @@ export default function Forum() {
               </div>
             </div>
           )}
+
+          {/* Find the word hunt */}
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-card f-fade-in mobile-panel`}>
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">🔎 Find the word</span>
+            </div>
+            <div className="p-3 text-[11px] font-heading space-y-2">
+              {findWordLoading ? (
+                <p className="text-mutedForeground">Loading…</p>
+              ) : findWordActive?.active ? (
+                <>
+                  <p className="text-foreground">
+                    <span className="text-emerald-400 font-bold uppercase text-[10px]">Live</span>
+                    {' — '}A hidden word is on{' '}
+                    {findWordActive.placement?.kind === 'crimes' && (
+                      <Link to="/crime/crimes" className="text-primary font-bold hover:underline">Crimes</Link>
+                    )}
+                    {findWordActive.placement?.kind === 'gta' && (
+                      <Link to="/crime/gta" className="text-primary font-bold hover:underline">GTA</Link>
+                    )}
+                    {findWordActive.placement?.kind === 'forum_topic' && findWordActive.placement?.topic_id ? (
+                      <Link
+                        to={`/social/forum/${encodeURIComponent(findWordActive.placement.topic_id)}`}
+                        className="text-primary font-bold hover:underline"
+                      >
+                        this forum topic
+                      </Link>
+                    ) : findWordActive.placement?.kind === 'forum_topic' ? (
+                      <span className="text-foreground font-bold">an Entertainer forum topic</span>
+                    ) : null}
+                    . First player to find and click it wins an E-Game style prize (then the round closes).
+                  </p>
+                </>
+              ) : (
+                <p className="text-mutedForeground">No word hunt right now. Watch notifications — or ask staff to start one.</p>
+              )}
+              {findWordHistory.length > 0 && (
+                <div className="pt-2 border-t border-border/60">
+                  <p className="text-[9px] uppercase tracking-wider text-mutedForeground mb-1.5">Recent rounds</p>
+                  <ul className="space-y-1 text-[10px] text-mutedForeground">
+                    {findWordHistory.map((r) => (
+                      <li key={r.id} className="flex flex-wrap gap-x-2 gap-y-0.5">
+                        <span className="text-foreground/90 font-mono">{r.word}</span>
+                        <span>—</span>
+                        <span>{r.winner_username || '—'}</span>
+                        {r.reward_text && <span className="text-primary">({r.reward_text})</span>}
+                        <span className="opacity-70">{r.completed_at ? new Date(r.completed_at).toLocaleString() : ''}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+            <div className="f-art-line text-primary mx-3" />
+          </div>
 
           {/* What you can win */}
           <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-card f-fade-in mobile-panel`}>

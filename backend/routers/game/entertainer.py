@@ -5,7 +5,8 @@ import uuid
 import secrets
 _rng = secrets.SystemRandom()
 from fastapi import Depends, HTTPException, Query
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
+from pymongo import ReturnDocument
 
 import os
 import sys
@@ -83,6 +84,9 @@ async def _gbox_total_cash_pot(game: dict) -> tuple[int, int]:
 E_GAME_CAR_IDS = [c["id"] for c in CARS if c.get("id") not in ("car_custom", "car20") and c.get("rarity") in ("common", "uncommon", "rare")]
 
 MAX_HANGMAN_WRONG = 6  # parts of the hangman drawing
+
+# Hidden "find the word" hunt (one global winner per round; collection: entertainer_find_word_rounds)
+FIND_WORD_PLACEMENTS = ("crimes", "gta", "forum_topic")
 
 HANGMAN_WORD_DATA = [
     # Crime
@@ -249,6 +253,12 @@ _seen = {}
 for _e in HANGMAN_WORD_DATA:
     _seen[_e["word"]] = _e
 HANGMAN_WORD_DATA = list(_seen.values())
+
+FIND_WORD_WORDS = [
+    e["word"]
+    for e in HANGMAN_WORD_DATA
+    if e.get("word") and len(str(e["word"])) <= 14 and " " not in str(e["word"])
+]
 
 DEFAULT_REWARD_TYPE_WEIGHTS = {
     "cash": 36,
@@ -1247,7 +1257,13 @@ async def get_entertainer_config(current_user: dict = Depends(get_current_user))
     """Get entertainer config (auto_create_enabled, last/next run). Anyone can read."""
     doc = await db.game_config.find_one(_game_config_doc_filter(ENTERTAINER_CONFIG_KEY), {"_id": 0, "key": 0})
     if not doc:
-        return {"auto_create_enabled": False, "last_auto_create_at": None, "next_auto_create_at": None}
+        return {
+            "auto_create_enabled": False,
+            "find_word_auto_enabled": False,
+            "last_auto_create_at": None,
+            "next_auto_create_at": None,
+            "last_find_word_auto_at": None,
+        }
     last_at = doc.get("last_auto_create_at")
     next_at = None
     if last_at:
@@ -1257,28 +1273,38 @@ async def get_entertainer_config(current_user: dict = Depends(get_current_user))
             next_at = next_dt.isoformat()
     return {
         "auto_create_enabled": doc.get("auto_create_enabled", False),
+        "find_word_auto_enabled": doc.get("find_word_auto_enabled", False),
         "last_auto_create_at": last_at,
         "next_auto_create_at": next_at,
+        "last_find_word_auto_at": doc.get("last_find_word_auto_at"),
     }
 
 
 class EntertainerConfigUpdate(BaseModel):
-    auto_create_enabled: bool
+    auto_create_enabled: Optional[bool] = None
+    find_word_auto_enabled: Optional[bool] = None
 
 
 async def update_entertainer_config(
     body: EntertainerConfigUpdate,
     current_user: dict = Depends(get_current_user),
 ):
-    """Admin only: enable/disable auto-create games every 3 hours."""
+    """Admin only: enable/disable auto-create games every 3 hours and optional word-hunt auto."""
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin only")
+    if body.auto_create_enabled is None and body.find_word_auto_enabled is None:
+        raise HTTPException(status_code=400, detail="No changes provided")
+    set_doc: dict = {"key": ENTERTAINER_CONFIG_KEY, "id": ENTERTAINER_CONFIG_KEY}
+    if body.auto_create_enabled is not None:
+        set_doc["auto_create_enabled"] = body.auto_create_enabled
+    if body.find_word_auto_enabled is not None:
+        set_doc["find_word_auto_enabled"] = body.find_word_auto_enabled
     await db.game_config.update_one(
-        {"key": ENTERTAINER_CONFIG_KEY},
-        {"$set": {"key": ENTERTAINER_CONFIG_KEY, "auto_create_enabled": body.auto_create_enabled}},
+        _game_config_doc_filter(ENTERTAINER_CONFIG_KEY),
+        {"$set": set_doc},
         upsert=True,
     )
-    return {"auto_create_enabled": body.auto_create_enabled}
+    return await get_entertainer_config(current_user)
 
 
 # ---------- Admin: create 3–5 system games now and notify all ----------
@@ -1356,51 +1382,263 @@ async def _count_open_entertainer_games() -> int:
 
 
 async def run_auto_create_if_enabled():
-    """Called by scheduled task every 3h: if auto_create_enabled, create 3–5 games and notify. DB guards prevent spam."""
+    """Called by scheduled task every 3h: if auto_create_enabled, create 3–5 games and notify.
+    Always runs find-word auto (if enabled in config) at the end of the cycle."""
     doc = await db.game_config.find_one(_game_config_doc_filter(ENTERTAINER_CONFIG_KEY), {"_id": 0})
-    if not doc or not doc.get("auto_create_enabled"):
+    now = datetime.now(timezone.utc)
+    if doc and doc.get("auto_create_enabled"):
+        last_at = _parse_iso(doc.get("last_auto_create_at"))
+        if not (last_at and (now - last_at).total_seconds() < AUTO_CREATE_INTERVAL_SECONDS - 60):
+            open_count = await _count_open_entertainer_games()
+            if open_count < MAX_OPEN_ENTERTAINER_GAMES:
+                n = _rng.randint(3, 5)
+                n = min(n, MAX_OPEN_ENTERTAINER_GAMES - open_count)
+                if n > 0:
+                    for _ in range(n):
+                        game_type = _rng.choice(["dice", "gbox", "hangman"])
+                        max_players = _rng.randint(2, 10)
+                        await _create_system_game(game_type, max_players)
+                    now_iso = now.isoformat()
+                    await db.game_config.update_one(
+                        _game_config_doc_filter(ENTERTAINER_CONFIG_KEY),
+                        {
+                            "$set": {
+                                "id": ENTERTAINER_CONFIG_KEY,
+                                "key": ENTERTAINER_CONFIG_KEY,
+                                "last_auto_create_at": now_iso,
+                            }
+                        },
+                        upsert=True,
+                    )
+                    await send_notification_to_all(
+                        "🎲 New E-Games",
+                        f"{n} new dice, gbox & hangman games are open in the Entertainer Forum! Join now.",
+                        "system",
+                        category="ent_games",
+                        message_link_to="/social/forum?tab=entertainer",
+                        message_link_label="Entertainer Forum",
+                    )
+    await _try_auto_create_find_word_round()
+
+
+# ---------- Find the word (hidden hunt) ----------
+async def _pick_forum_topic_id_for_find_word() -> Optional[str]:
+    topics = await db.forum_topics.find(
+        {"category": "entertainer", "is_locked": {"$ne": True}},
+        {"_id": 0, "id": 1},
+    ).limit(80).to_list(80)
+    if not topics:
+        topics = await db.forum_topics.find(
+            {"is_locked": {"$ne": True}},
+            {"_id": 0, "id": 1},
+        ).sort("updated_at", -1).limit(40).to_list(40)
+    if not topics:
+        return None
+    return str(_rng.choice(topics)["id"])
+
+
+async def insert_find_word_round(*, created_by: str, created_by_label: str, notify_all: bool) -> Optional[dict]:
+    """Create one open round if none open. Returns inserted doc or None."""
+    words = FIND_WORD_WORDS or ["MAFIA", "HEIST", "RACKET"]
+    existing = await db.entertainer_find_word_rounds.find_one({"status": "open"}, {"_id": 0, "id": 1})
+    if existing:
+        return None
+    word = str(_rng.choice(words))
+    kind = str(_rng.choice(FIND_WORD_PLACEMENTS))
+    topic_id = None
+    if kind == "forum_topic":
+        topic_id = await _pick_forum_topic_id_for_find_word()
+        if not topic_id:
+            kind = str(_rng.choice(("crimes", "gta")))
+    round_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    doc = {
+        "id": round_id,
+        "word": word.upper(),
+        "status": "open",
+        "placement_kind": kind,
+        "placement_topic_id": topic_id,
+        "winner_user_id": None,
+        "winner_username": None,
+        "reward": None,
+        "created_at": now,
+        "completed_at": None,
+        "created_by": created_by,
+        "created_by_label": created_by_label,
+    }
+    await db.entertainer_find_word_rounds.insert_one(doc)
+    if notify_all:
+        try:
+            await send_notification_to_all(
+                "🔎 Word hunt",
+                "A hidden word is somewhere on the site (Crimes, GTA, or an Entertainer forum topic). First to find and click it wins an E-Game style prize!",
+                "system",
+                category="ent_games",
+                message_link_to="/social/forum?tab=entertainer",
+                message_link_label="Entertainer Forum",
+            )
+        except Exception:
+            pass
+    return doc
+
+
+async def find_word_active(current_user: dict = Depends(get_current_user)):
+    r = await db.entertainer_find_word_rounds.find_one({"status": "open"}, {"_id": 0})
+    if not r:
+        return {"active": False}
+    return {
+        "active": True,
+        "round_id": r["id"],
+        "word": r.get("word") or "",
+        "placement": {
+            "kind": r.get("placement_kind"),
+            "topic_id": r.get("placement_topic_id"),
+        },
+    }
+
+
+async def find_word_history(
+    limit: int = Query(10, ge=1, le=30),
+    current_user: dict = Depends(get_current_user),
+):
+    rows = await db.entertainer_find_word_rounds.find(
+        {"status": "completed"},
+        {
+            "_id": 0,
+            "id": 1,
+            "word": 1,
+            "winner_username": 1,
+            "reward": 1,
+            "completed_at": 1,
+            "placement_kind": 1,
+        },
+    ).sort("completed_at", -1).limit(limit).to_list(limit)
+    out = []
+    for row in rows:
+        rw = row.get("reward") or {}
+        out.append(
+            {
+                "id": row.get("id"),
+                "word": row.get("word"),
+                "winner_username": row.get("winner_username"),
+                "placement_kind": row.get("placement_kind"),
+                "completed_at": row.get("completed_at"),
+                "reward_text": _format_reward_desc(rw) if rw else None,
+            }
+        )
+    return {"rounds": out}
+
+
+class FindWordClaimBody(BaseModel):
+    round_id: str = Field(..., min_length=8, max_length=80)
+
+
+async def find_word_claim(body: FindWordClaimBody, current_user: dict = Depends(get_current_user)):
+    rid = (body.round_id or "").strip()
+    if not rid:
+        raise HTTPException(status_code=400, detail="round_id required")
+    u = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "is_dead": 1, "username": 1})
+    if not u:
+        raise HTTPException(status_code=400, detail="Account not found")
+    if u.get("is_dead"):
+        raise HTTPException(status_code=400, detail="Dead accounts cannot claim")
+    uname = (u.get("username") or current_user.get("username") or "?").strip() or "?"
+    now = datetime.now(timezone.utc).isoformat()
+    updated = await db.entertainer_find_word_rounds.find_one_and_update(
+        {"id": rid, "status": "open"},
+        {
+            "$set": {
+                "status": "completed",
+                "winner_user_id": current_user["id"],
+                "winner_username": uname,
+                "completed_at": now,
+            }
+        },
+        return_document=ReturnDocument.AFTER,
+    )
+    if not updated:
+        still = await db.entertainer_find_word_rounds.find_one({"id": rid}, {"_id": 0, "status": 1, "winner_username": 1})
+        if not still:
+            raise HTTPException(status_code=404, detail="Round not found")
+        raise HTTPException(
+            status_code=409,
+            detail=f"Already found — won by {still.get('winner_username') or 'someone else'}",
+        )
+    reward = None
+    try:
+        reward = await _give_random_reward(current_user["id"])
+        await db.entertainer_find_word_rounds.update_one({"id": rid}, {"$set": {"reward": reward}})
+        await send_notification(
+            current_user["id"],
+            "Word hunt winner",
+            f"You found the hidden word! {_format_reward_desc(reward)}",
+            "reward",
+            category="ent_games",
+        )
+    except Exception:
+        logging.exception("find_word_claim reward failed round_id=%s user=%s", rid, current_user.get("id"))
+        await db.entertainer_find_word_rounds.update_one(
+            {"id": rid},
+            {
+                "$set": {
+                    "status": "open",
+                    "winner_user_id": None,
+                    "winner_username": None,
+                    "completed_at": None,
+                }
+            },
+        )
+        raise HTTPException(status_code=500, detail="Could not apply reward; try again or contact staff")
+    return {
+        "ok": True,
+        "message": f"You won! {_format_reward_desc(reward)}",
+        "reward": reward,
+    }
+
+
+async def find_word_admin_start(current_user: dict = Depends(get_current_user)):
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    doc = await insert_find_word_round(
+        created_by=current_user["id"],
+        created_by_label="admin",
+        notify_all=True,
+    )
+    if not doc:
+        raise HTTPException(status_code=400, detail="A word hunt round is already open")
+    return {"message": "Word hunt started", "round_id": doc["id"], "placement": {"kind": doc["placement_kind"], "topic_id": doc.get("placement_topic_id")}}
+
+
+async def _try_auto_create_find_word_round():
+    doc = await db.game_config.find_one(_game_config_doc_filter(ENTERTAINER_CONFIG_KEY), {"_id": 0})
+    if not doc or not doc.get("find_word_auto_enabled"):
         return
-    # Time guard: don't create if we already ran recently (e.g. server restarts within same interval)
-    last_at = _parse_iso(doc.get("last_auto_create_at"))
+    if await db.entertainer_find_word_rounds.find_one({"status": "open"}, {"_id": 0, "id": 1}):
+        return
+    last_at = _parse_iso(doc.get("last_find_word_auto_at"))
     now = datetime.now(timezone.utc)
     if last_at and (now - last_at).total_seconds() < AUTO_CREATE_INTERVAL_SECONDS - 60:
         return
-    # Cap: don't add more open games if we're at or over the limit
-    open_count = await _count_open_entertainer_games()
-    if open_count >= MAX_OPEN_ENTERTAINER_GAMES:
-        return
-    n = _rng.randint(3, 5)
-    # Don't create more than would exceed the cap
-    n = min(n, MAX_OPEN_ENTERTAINER_GAMES - open_count)
-    if n <= 0:
-        return
-    for _ in range(n):
-        game_type = _rng.choice(["dice", "gbox", "hangman"])
-        max_players = _rng.randint(2, 10)
-        await _create_system_game(game_type, max_players)
-    now_iso = now.isoformat()
-    await db.game_config.update_one(
-        _game_config_doc_filter(ENTERTAINER_CONFIG_KEY),
-        {
-            "$set": {
-                "id": ENTERTAINER_CONFIG_KEY,
-                "key": ENTERTAINER_CONFIG_KEY,
-                "last_auto_create_at": now_iso,
-            }
-        },
-        upsert=True,
-    )
-    await send_notification_to_all(
-        "🎲 New E-Games",
-        f"{n} new dice, gbox & hangman games are open in the Entertainer Forum! Join now.",
-        "system",
-        category="ent_games",
-        message_link_to="/social/forum?tab=entertainer",
-        message_link_label="Entertainer Forum",
-    )
+    ins = await insert_find_word_round(created_by="system", created_by_label="System", notify_all=True)
+    if ins:
+        await db.game_config.update_one(
+            _game_config_doc_filter(ENTERTAINER_CONFIG_KEY),
+            {
+                "$set": {
+                    "id": ENTERTAINER_CONFIG_KEY,
+                    "key": ENTERTAINER_CONFIG_KEY,
+                    "last_find_word_auto_at": now.isoformat(),
+                }
+            },
+            upsert=True,
+        )
 
 
 def register(router):
+    router.add_api_route("/forum/entertainer/find-word/active", find_word_active, methods=["GET"])
+    router.add_api_route("/forum/entertainer/find-word/history", find_word_history, methods=["GET"])
+    router.add_api_route("/forum/entertainer/find-word/claim", find_word_claim, methods=["POST"])
+    router.add_api_route("/forum/entertainer/find-word/admin/start", find_word_admin_start, methods=["POST"])
     router.add_api_route("/forum/entertainer/prizes", get_prizes, methods=["GET"])
     router.add_api_route("/forum/entertainer/games", list_games, methods=["GET"])
     router.add_api_route("/forum/entertainer/games", create_game, methods=["POST"])

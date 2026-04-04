@@ -33,8 +33,8 @@ const VAULT_TX_KIND_LABELS = {
   withdraw: 'Withdraw',
   give_bullets: 'Give bullets',
   split_bullets: 'Split all bullets',
-  give_loot: 'Give loot pieces',
-  split_loot: 'Split all loot',
+  give_loot: 'Give loot box pieces',
+  split_loot: 'Split all loot box pieces',
   compound_to_vault: 'Compound → vault',
   crew_oc_join_fee: 'Crew OC join fee',
   crew_oc_refund: 'Crew OC refund',
@@ -58,7 +58,7 @@ const formatVaultTxDeltas = (tx) => {
   if (c !== 0) parts.push(c > 0 ? `+$${Math.abs(c).toLocaleString()} cash` : `-$${Math.abs(c).toLocaleString()} cash`);
   if (b !== 0) parts.push(b > 0 ? `+${b.toLocaleString()} bullets` : `-${Math.abs(b).toLocaleString()} bullets`);
   if (p !== 0) parts.push(p > 0 ? `+${p.toLocaleString()} pts` : `-${Math.abs(p).toLocaleString()} pts`);
-  if (l !== 0) parts.push(l > 0 ? `+${l.toLocaleString()} loot` : `-${Math.abs(l).toLocaleString()} loot`);
+  if (l !== 0) parts.push(l > 0 ? `+${l.toLocaleString()} loot box pcs` : `-${Math.abs(l).toLocaleString()} loot box pcs`);
   return parts.length ? parts.join(' · ') : '—';
 };
 
@@ -419,7 +419,7 @@ const TreasuryTab = ({
         <p className="text-[10px] font-heading text-zinc-500 mt-2">
           {(treasuryPoints ?? 0) > 0 && <span>{(treasuryPoints ?? 0).toLocaleString()} pts</span>}
           {(treasuryPoints ?? 0) > 0 && (treasuryLootPieces ?? 0) > 0 && ' · '}
-          {(treasuryLootPieces ?? 0) > 0 && <span>{(treasuryLootPieces ?? 0).toLocaleString()} loot pieces</span>}
+          {(treasuryLootPieces ?? 0) > 0 && <span title="Loot box pieces (100 = 1 Loot Box open)">{(treasuryLootPieces ?? 0).toLocaleString()} loot box pieces</span>}
         </p>
       )}
       <p className="text-[10px] font-heading text-amber-300 mt-2">
@@ -560,7 +560,7 @@ const TreasuryTab = ({
             onChange={(e) => setGiveLootUserId(e.target.value)}
             className="flex-1 min-w-[140px] bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-2 py-2 text-xs font-heading focus:border-primary/50 focus:outline-none"
           >
-            <option value="">Give loot pieces to member...</option>
+            <option value="">Give loot box pieces to member...</option>
             {(members || []).map((m) => (
               <option key={m.user_id} value={m.user_id}>{m.username}</option>
             ))}
@@ -568,7 +568,7 @@ const TreasuryTab = ({
           <FormattedNumberInput
             value={giveLootAmount}
             onChange={setGiveLootAmount}
-            placeholder="Loot pieces"
+            placeholder="Loot box pieces"
             className="w-28 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-xs text-foreground font-heading focus:border-primary/50 focus:outline-none transition-colors"
           />
           <button type="submit" className="px-3 py-2 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border bg-cyan-500/15 border-cyan-500/35 text-cyan-300 hover:bg-cyan-500/25 transition-all shrink-0 touch-manipulation">
@@ -579,9 +579,9 @@ const TreasuryTab = ({
             onClick={onSplitAllLoot}
             disabled={splitAllLootLoading}
             className="px-3 py-2 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border bg-cyan-500/10 border-cyan-500/30 text-cyan-200/90 hover:bg-cyan-500/20 transition-all shrink-0 touch-manipulation disabled:opacity-50"
-            title="Split all vault loot pieces across living members (requires at least one piece per member)"
+            title="Split all vault loot box pieces across living members (requires at least one piece per member)"
           >
-            {splitAllLootLoading ? '...' : 'Split all loot'}
+            {splitAllLootLoading ? '...' : 'Split loot box pieces'}
           </button>
         </form>
       </div>
@@ -603,16 +603,16 @@ const TreasuryTab = ({
           <span className="text-sm font-heading font-bold">{(compoundPoints ?? 0).toLocaleString()}</span>
         </div>
         <div className="bg-zinc-800/50 rounded border border-zinc-700/40 px-2 py-1.5">
-          <span className="text-[9px] text-zinc-500 block">Loot pieces</span>
+          <span className="text-[9px] text-zinc-500 block" title="Loot box pieces — 100 opens one Loot Box">Loot box pieces</span>
           <span className="text-sm font-heading font-bold">{(compoundLootPieces ?? 0).toLocaleString()}</span>
         </div>
       </div>
-      <p className="text-[9px] text-zinc-500 mb-2">Your share: {formatMoney(myCompoundCash ?? 0)} · {(myCompoundPoints ?? 0).toLocaleString()} pts · {(myCompoundLootPieces ?? 0).toLocaleString()} pieces{(myCompoundCars ? ` · ${myCompoundCars} car(s)` : '')}</p>
+      <p className="text-[9px] text-zinc-500 mb-2">Your share: {formatMoney(myCompoundCash ?? 0)} · {(myCompoundPoints ?? 0).toLocaleString()} pts · {(myCompoundLootPieces ?? 0).toLocaleString()} loot box pcs{(myCompoundCars ? ` · ${myCompoundCars} car(s)` : '')}</p>
 
       <form onSubmit={onCompoundDeposit} className="flex flex-wrap gap-2 mb-2">
         <input type="number" min="0" placeholder="Cash" value={compoundDepositCash} onChange={(e) => setCompoundDepositCash(e.target.value)} className="w-24 px-2 py-1 bg-zinc-900/80 border border-zinc-600/40 rounded text-xs font-heading" />
         <input type="number" min="0" placeholder="Points" value={compoundDepositPoints} onChange={(e) => setCompoundDepositPoints(e.target.value)} className="w-20 px-2 py-1 bg-zinc-900/80 border border-zinc-600/40 rounded text-xs font-heading" />
-        <input type="number" min="0" placeholder="Loot" value={compoundDepositLootPieces} onChange={(e) => setCompoundDepositLootPieces(e.target.value)} className="w-20 px-2 py-1 bg-zinc-900/80 border border-zinc-600/40 rounded text-xs font-heading" />
+        <input type="number" min="0" placeholder="Box pcs" title="Loot box pieces" value={compoundDepositLootPieces} onChange={(e) => setCompoundDepositLootPieces(e.target.value)} className="w-20 px-2 py-1 bg-zinc-900/80 border border-zinc-600/40 rounded text-xs font-heading" />
         <button type="submit" className="px-3 py-1 rounded text-[10px] font-heading font-bold uppercase border bg-primary/20 border-primary/50 text-primary hover:bg-primary/30">Deposit to compound</button>
       </form>
 
@@ -620,7 +620,7 @@ const TreasuryTab = ({
         <form onSubmit={onCompoundWithdraw} className="flex flex-wrap gap-2 mb-3">
           <input type="number" min="0" placeholder="Cash" value={compoundWithdrawCash} onChange={(e) => setCompoundWithdrawCash(e.target.value)} className="w-24 px-2 py-1 bg-zinc-900/80 border border-zinc-600/40 rounded text-xs font-heading" />
           <input type="number" min="0" placeholder="Points" value={compoundWithdrawPoints} onChange={(e) => setCompoundWithdrawPoints(e.target.value)} className="w-20 px-2 py-1 bg-zinc-900/80 border border-zinc-600/40 rounded text-xs font-heading" />
-          <input type="number" min="0" placeholder="Loot" value={compoundWithdrawLootPieces} onChange={(e) => setCompoundWithdrawLootPieces(e.target.value)} className="w-20 px-2 py-1 bg-zinc-900/80 border border-zinc-600/40 rounded text-xs font-heading" />
+          <input type="number" min="0" placeholder="Box pcs" title="Loot box pieces" value={compoundWithdrawLootPieces} onChange={(e) => setCompoundWithdrawLootPieces(e.target.value)} className="w-20 px-2 py-1 bg-zinc-900/80 border border-zinc-600/40 rounded text-xs font-heading" />
           <button type="submit" className="px-3 py-1 rounded text-[10px] font-heading font-bold uppercase border bg-zinc-700/50 border-zinc-600/50 text-zinc-300 hover:bg-zinc-700/70">Withdraw from compound</button>
         </form>
       )}
@@ -632,7 +632,7 @@ const TreasuryTab = ({
             {returningMembersWithBalance.map((m) => (
               <div key={m.user_id} className="flex flex-wrap items-center justify-between gap-2 bg-zinc-800/40 rounded px-2 py-1.5 border border-zinc-700/30">
                 <span className="text-xs font-heading text-foreground">{m.username}</span>
-                <span className="text-[10px] text-zinc-500">{formatMoney(m.compound_cash)} · {m.compound_points} pts · {m.compound_loot_pieces} pieces</span>
+                <span className="text-[10px] text-zinc-500">{formatMoney(m.compound_cash)} · {m.compound_points} pts · {m.compound_loot_pieces} loot box pcs</span>
                 <div className="flex gap-1">
                   <button type="button" onClick={() => onCompoundReturnToMember(m.user_id)} className="px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-emerald-600/50 text-emerald-400 hover:bg-emerald-500/10">Return</button>
                   <button type="button" onClick={() => onCompoundClaimForFamily(m.user_id)} className="px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-amber-600/50 text-amber-400 hover:bg-amber-500/10">Keep for family</button>
@@ -2400,7 +2400,7 @@ export default function FamilyPage() {
     if (!user_id || loot_pieces <= 0) return;
     try {
       await api.post('/families/loot/give', { user_id, loot_pieces });
-      toast.success('Loot pieces sent');
+      toast.success('Loot box pieces sent');
       setGiveLootAmount('');
       setGiveLootUserId('');
       refreshUser();
@@ -2409,7 +2409,7 @@ export default function FamilyPage() {
   };
   const handleSplitAllLoot = async () => {
     if (splitAllLootLoading) return;
-    if (!window.confirm('Split ALL vault loot pieces across all living members? Everyone must get at least one piece, or the split will be rejected.')) return;
+    if (!window.confirm('Split ALL vault loot box pieces across all living members? Everyone must get at least one piece, or the split will be rejected.')) return;
     setSplitAllLootLoading(true);
     try {
       const res = await api.post('/families/loot/split-all');

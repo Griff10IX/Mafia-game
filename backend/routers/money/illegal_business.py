@@ -826,7 +826,7 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
         if respect_earned: extras.append(f"{respect_earned} respect")
         if bullets_earned: extras.append(f"{bullets_earned} bullets")
         if points_earned: extras.append(f"{points_earned} points")
-        if loot_pieces_earned: extras.append(f"{loot_pieces_earned} loot piece(s)")
+        if loot_pieces_earned: extras.append(f"{loot_pieces_earned} loot box piece(s)")
         for t in TOKEN_TYPES:
             n = token_earned.get(t, 0)
             if n:

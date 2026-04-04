@@ -29,6 +29,10 @@ const MISSIONS_STYLES = `
 
 const fmt = (n) => `$${Number(n ?? 0).toLocaleString()}`;
 
+// Must match backend `LOOT_BOX_PIECES_PER_OPEN` (routers/money/loot_box.py)
+const LOOT_BOX_PIECES_PER_OPEN = 100;
+const LOOT_BOX_PIECES_TOOLTIP = `Loot box pieces. Collect ${LOOT_BOX_PIECES_PER_OPEN} on the Loot Box page to open a box for random rewards (cash, points, bullets, respect, XP tokens, and more).`;
+
 // Display name for city (avoid showing raw "Start")
 function cityDisplayName(city) {
   return city === 'Start' ? 'Starting City' : (city || '—');
@@ -630,10 +634,13 @@ function formatTimeUntil(isoString) {
   return 'in <1m';
 }
 
-function RewardBadge({ icon: Icon, value, label, color, bgColor }) {
+function RewardBadge({ icon: Icon, value, label, color, bgColor, title }) {
   if (!value || value <= 0) return null;
   return (
-    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${bgColor} border ${color}`}>
+    <span
+      title={title || undefined}
+      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded ${bgColor} border ${color} ${title ? 'cursor-help' : ''}`}
+    >
       <Icon size={10} className={color.replace('border-', 'text-').replace('/30', '')} />
       <span className={`text-[10px] font-heading font-bold ${color.replace('border-', 'text-').replace('/30', '')}`}>
         {typeof value === 'number' ? value.toLocaleString() : value}
@@ -743,10 +750,15 @@ function TributeBanner({
               </span>
             )}
             {hasLootPieces && (
-              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-violet-500/15 border border-violet-500/30">
+              <span
+                title={LOOT_BOX_PIECES_TOOLTIP}
+                className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-violet-500/15 border border-violet-500/30 cursor-help"
+              >
                 <Star size={14} className="text-violet-400" />
                 <span className="text-base font-heading font-bold text-violet-400">{tributeLootBoxPieces}</span>
-                <span className="text-[10px] text-violet-400/80">loot</span>
+                <span className="text-[10px] text-violet-400/80 max-w-[7.5rem] leading-tight">
+                  loot box pieces
+                </span>
               </span>
             )}
             {hasTokens && (
@@ -783,7 +795,14 @@ function TributeBanner({
               <RewardBadge icon={Crown} value={dailyTotalRespect} label="respect" color="border-fuchsia-500/30" bgColor="bg-fuchsia-500/10" />
             )}
             {dailyTotalLoot > 0 && (
-              <RewardBadge icon={Star} value={dailyTotalLoot} label="loot" color="border-violet-500/30" bgColor="bg-violet-500/10" />
+              <RewardBadge
+                icon={Star}
+                value={dailyTotalLoot}
+                label="loot box pcs"
+                title={LOOT_BOX_PIECES_TOOLTIP}
+                color="border-violet-500/30"
+                bgColor="bg-violet-500/10"
+              />
             )}
             <RewardBadge icon={Zap} value={dailyTokensTotal} label="tokens" color="border-amber-500/30" bgColor="bg-amber-500/10" />
           </div>
@@ -792,6 +811,15 @@ function TributeBanner({
             <AlertCircle size={8} />
             All rewards stack daily until you collect.
           </div>
+          {dailyTotalLoot > 0 && (
+            <p className="text-[8px] text-violet-400/90 mt-1 leading-snug" title={LOOT_BOX_PIECES_TOOLTIP}>
+              Loot box pieces stack here; spend {LOOT_BOX_PIECES_PER_OPEN} on the{' '}
+              <Link to="/loot-box" className="text-violet-300 underline underline-offset-2 hover:text-violet-200">
+                Loot Box
+              </Link>{' '}
+              page for a random drop.
+            </p>
+          )}
         </div>
 
         {/* Mission Unlock Hints */}
@@ -819,8 +847,12 @@ function TributeBanner({
                     </span>
                   )}
                   {(m.loot || 0) > 0 && (
-                    <span className="inline-flex items-center gap-0.5 text-[9px] text-violet-400">
-                      <Star size={9} />+{m.loot}
+                    <span
+                      className="inline-flex items-center gap-0.5 text-[9px] text-violet-400 cursor-help"
+                      title={LOOT_BOX_PIECES_TOOLTIP}
+                    >
+                      <Star size={9} />+{m.loot}{' '}
+                      <span className="text-violet-400/85">loot box pcs</span>
                     </span>
                   )}
                   <span className="text-[8px] text-zinc-500">/day</span>
@@ -934,7 +966,7 @@ export default function Missions() {
         const parts = [];
         if (collectedCash > 0) parts.push(`${fmt(collectedCash)} cash`);
         if (collectedBullets > 0) parts.push(`${collectedBullets.toLocaleString()} bullets`);
-        if (collectedLoot > 0) parts.push(`${collectedLoot} loot piece(s)`);
+        if (collectedLoot > 0) parts.push(`${collectedLoot} loot box piece(s)`);
         if (collectedRespect > 0) parts.push(`${collectedRespect} respect`);
         if (collectedTokens > 0) {
           const tokenParts = Object.entries(tokensAwarded)

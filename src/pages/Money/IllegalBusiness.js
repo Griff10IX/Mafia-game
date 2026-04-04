@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { Shield, ListChecks, Crosshair, TrendingUp, Lock, UserPlus, Star, AlertTriangle, ChevronRight, ChevronDown, Award } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
@@ -9,6 +10,10 @@ import ActiveTokenBadge from '../../components/ActiveTokenBadge';
 
 const BIZ_CACHE_KEY = 'mafia_illegal_biz_v1';
 const BIZ_REFRESH = 30_000;
+
+/** Matches backend LOOT_BOX_PIECES_PER_OPEN (routers/money/loot_box.py) */
+const LOOT_BOX_PIECES_PER_OPEN = 100;
+const LOOT_BOX_PIECES_HINT = `Loot box pieces stack in your account; ${LOOT_BOX_PIECES_PER_OPEN} pieces opens one box on the Loot Box page for random rewards.`;
 
 const IBM_REQUIREMENT_LABELS = {
   crimes: 'Total crimes',
@@ -514,6 +519,14 @@ export default function IllegalBusiness() {
                 Collect unlocks at {formatMoney(minIbmCash)} in the till (currently {formatTillDollars(pendingTake)}).
               </p>
             )}
+            <p className="text-[9px] text-zinc-500 font-heading leading-snug pt-1 border-t border-primary/10" title={LOOT_BOX_PIECES_HINT}>
+              Big collects can also roll random extras (respect, bullets, points, armoury tokens, or{' '}
+              <span className="text-violet-400/90">loot box pieces</span>).{' '}
+              <Link to="/loot-box" className="text-primary underline underline-offset-2 hover:text-primary/90">
+                Loot Box
+              </Link>
+              : {LOOT_BOX_PIECES_PER_OPEN} pieces = 1 open.
+            </p>
             {vault > 0 && !canWithdrawFromVault && (
               <p className="text-[10px] text-mutedForeground font-heading pt-2 border-t border-primary/10">
                 Pocket withdrawals unlock at {formatMoney(minIbmCash)} in the vault (stops spam). Collect more into the vault first.

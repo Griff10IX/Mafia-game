@@ -1,5 +1,5 @@
 # Attack endpoints: search, status, list, delete, travel, bullets/calc, inflation, execute, attempts
-from typing import List, Optional, Dict
+from typing import Any, List, Optional, Dict
 from datetime import datetime, timezone, timedelta
 import math
 import random
@@ -411,6 +411,222 @@ def _first_bodyguard_client_payload(
     }
 
 
+# Strip from attack_attempts when returning to players (timeline / future APIs).
+_PLAYER_ATTACK_ATTEMPT_META_KEYS = frozenset(
+    {"client_ip", "user_agent", "attacker_is_bot", "attacker_bot_label"}
+)
+
+
+def _strip_attack_attempt_for_player(doc: Dict[str, Any]) -> Dict[str, Any]:
+    out = {k: v for k, v in doc.items() if k not in _PLAYER_ATTACK_ATTEMPT_META_KEYS}
+    return out
+
+
+def _json_safe_value(val: Any) -> Any:
+    """Recursively convert BSON/datetime for JSON response."""
+    if val is None or isinstance(val, (bool, int, float, str)):
+        return val
+    if hasattr(val, "isoformat"):
+        dt = val
+        if getattr(dt, "tzinfo", None) is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.isoformat()
+    if isinstance(val, dict):
+        return {str(k): _json_safe_value(v) for k, v in val.items()}
+    if isinstance(val, list):
+        return [_json_safe_value(x) for x in val]
+    return str(val)
+
+
+def _iso_or_none(val) -> Optional[str]:
+    if val is None:
+        return None
+    if hasattr(val, "isoformat"):
+        dt = val
+        if getattr(dt, "tzinfo", None) is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.isoformat()
+    return str(val) if val else None
+
+
+def _parse_event_sort_key(val) -> datetime:
+    if val is None:
+        return datetime.min.replace(tzinfo=timezone.utc)
+    if hasattr(val, "year"):
+        dt = val
+        return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+    try:
+        s = str(val).strip().replace("Z", "+00:00")
+        dt = datetime.fromisoformat(s)
+        return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt
+    except (ValueError, TypeError):
+        return datetime.min.replace(tzinfo=timezone.utc)
+
+
+async def _build_active_attacks_list(attacker_id: str, attacker_current_state: str) -> List[dict]:
+    """
+    Load active searches/found attacks for attacker; apply same expiry, promotions, and cleanup as GET /attack/list.
+    Mutates DB (deletes expired, bulk_write status). Returns client item list.
+    """
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(hours=24)
+    attacks = await db.attacks.find(
+        {"attacker_id": attacker_id, "status": {"$in": ["searching", "found"]}},
+        {"_id": 0},
+    ).sort("search_started", -1).to_list(50)
+    if not attacks:
+        return []
+
+    target_ids = list({a["target_id"] for a in attacks if a.get("target_id")})
+    users_map: Dict[str, dict] = {}
+    if target_ids:
+        async for u in db.users.find(
+            {"id": {"$in": target_ids}},
+            {"_id": 0, "id": 1, "is_dead": 1, "is_bodyguard": 1, "is_npc": 1, "current_state": 1},
+        ):
+            users_map[u["id"]] = u
+
+    bg_target_ids = [tid for tid in target_ids if (users_map.get(tid) or {}).get("is_bodyguard")]
+    still_bg_tids = set()
+    if bg_target_ids:
+        async for b in db.bodyguards.find(
+            {"bodyguard_user_id": {"$in": bg_target_ids}},
+            {"_id": 0, "bodyguard_user_id": 1},
+        ):
+            still_bg_tids.add(b["bodyguard_user_id"])
+
+    bgs_by_owner: Dict[str, List[dict]] = {}
+    if target_ids:
+        for b in await db.bodyguards.find({"user_id": {"$in": target_ids}}, {"_id": 0}).to_list(500):
+            uid = b.get("user_id")
+            if uid:
+                bgs_by_owner.setdefault(uid, []).append(b)
+    guard_ids = list(
+        {
+            b["bodyguard_user_id"]
+            for rows in bgs_by_owner.values()
+            for b in rows
+            if b.get("bodyguard_user_id")
+        }
+    )
+    guard_users: Dict[str, dict] = {}
+    if guard_ids:
+        async for u in db.users.find(
+            {"id": {"$in": guard_ids}},
+            {"_id": 0, "id": 1, "username": 1},
+        ):
+            guard_users[u["id"]] = u
+
+    delete_ids: List[str] = []
+    bulk_ops: List[UpdateOne] = []
+
+    items = []
+    ac_state = attacker_current_state or ""
+    for attack in attacks:
+        exp_dt = _parse_iso_datetime(attack.get("expires_at"))
+        if exp_dt is not None and exp_dt <= now:
+            delete_ids.append(attack["id"])
+            continue
+        tid = attack.get("target_id")
+        if tid:
+            target_user = users_map.get(tid)
+            if target_user:
+                if target_user.get("is_dead"):
+                    delete_ids.append(attack["id"])
+                    continue
+                if (
+                    target_user.get("is_bodyguard")
+                    and tid not in still_bg_tids
+                    and target_user.get("is_npc")
+                ):
+                    delete_ids.append(attack["id"])
+                    continue
+        if not attack.get("expires_at"):
+            started_iso = attack.get("search_started") or attack.get("found_at")
+            try:
+                started = datetime.fromisoformat(started_iso) if started_iso else None
+                if started and started.tzinfo is None:
+                    started = started.replace(tzinfo=timezone.utc)
+            except Exception:
+                started = None
+            if started and started <= cutoff:
+                delete_ids.append(attack["id"])
+                continue
+            if started:
+                exp_iso = (started + timedelta(hours=24)).isoformat()
+                bulk_ops.append(
+                    UpdateOne(
+                        {"id": attack["id"], "attacker_id": attacker_id},
+                        {"$set": {"expires_at": exp_iso}},
+                    )
+                )
+                attack["expires_at"] = exp_iso
+        if attack["status"] == "searching":
+            found_time = _parse_iso_datetime(attack.get("found_at"))
+            if found_time is None:
+                found_time = now
+            if now >= found_time:
+                tu = users_map.get(attack.get("target_id") or "")
+                new_location = (
+                    (tu.get("current_state") if tu and tu.get("current_state") in STATES else None)
+                    or attack.get("planned_location_state")
+                    or random.choice(STATES)
+                )
+                bulk_ops.append(
+                    UpdateOne(
+                        {"id": attack["id"]},
+                        {"$set": {"status": "found", "location_state": new_location}},
+                    )
+                )
+                attack["status"] = "found"
+                attack["location_state"] = new_location
+        can_travel = attack["status"] == "found" and attack.get("location_state") and ac_state != attack["location_state"]
+        can_attack = attack["status"] == "found" and attack.get("location_state") and ac_state == attack["location_state"]
+        msg = "Searching..." if attack["status"] == "searching" else (
+            f"Target found in {attack['location_state']}! You are in the same location. Ready to attack!" if can_attack
+            else f"Target found in {attack['location_state']}! Travel there to attack."
+        )
+        item = {
+            "attack_id": attack["id"],
+            "status": attack["status"],
+            "target_username": attack.get("target_username") or "?",
+            "note": attack.get("note"),
+            "location_state": attack.get("location_state") if attack["status"] == "found" else None,
+            "search_started": attack.get("search_started"),
+            "found_at": attack.get("found_at"),
+            "expires_at": attack.get("expires_at"),
+            "can_travel": can_travel,
+            "can_attack": can_attack,
+            "message": msg,
+            "target_is_npc": bool((users_map.get(tid or "") or {}).get("is_npc")) if tid else False,
+        }
+        if attack["status"] == "found" and tid:
+            target_bgs = bgs_by_owner.get(tid) or []
+            if target_bgs:
+                first_bg = max(target_bgs, key=lambda b: b.get("slot_number", 0))
+                search_username = None
+                display_name = first_bg.get("robot_name") or "bodyguard"
+                if first_bg.get("bodyguard_user_id"):
+                    bg_user = guard_users.get(first_bg["bodyguard_user_id"])
+                    if bg_user:
+                        search_username = bg_user.get("username")
+                        if not first_bg.get("robot_name"):
+                            display_name = search_username
+                item["first_bodyguard"] = _first_bodyguard_client_payload(
+                    display_name=display_name,
+                    search_username=search_username,
+                    target_username=attack.get("target_username") or "?",
+                )
+                item["bodyguard_count"] = len(target_bgs)
+        items.append(item)
+
+    if delete_ids:
+        await db.attacks.delete_many({"attacker_id": attacker_id, "id": {"$in": delete_ids}})
+    if bulk_ops:
+        await db.attacks.bulk_write(bulk_ops, ordered=False)
+    return items
+
+
 def _bullets_to_kill(
     target_armour_level: int,
     target_rank_id: int,
@@ -626,167 +842,9 @@ async def get_attack_status(
     )
 
 async def list_attacks(current_user: dict = Depends(get_current_user)):
-    now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(hours=24)
     attacker_id = current_user["id"]
-    # Do not delete by expires_at via Mongo $lte on mixed types (BSON date vs ISO string) — that can
-    # incorrectly wipe rows. Expiry is handled per-document below using parsed datetimes.
-    attacks = await db.attacks.find(
-        {"attacker_id": attacker_id, "status": {"$in": ["searching", "found"]}},
-        {"_id": 0}
-    ).sort("search_started", -1).to_list(50)
-    if not attacks:
-        return {"attacks": []}
-
-    target_ids = list({a["target_id"] for a in attacks if a.get("target_id")})
-    users_map: Dict[str, dict] = {}
-    if target_ids:
-        async for u in db.users.find(
-            {"id": {"$in": target_ids}},
-            {"_id": 0, "id": 1, "is_dead": 1, "is_bodyguard": 1, "is_npc": 1, "current_state": 1},
-        ):
-            users_map[u["id"]] = u
-
-    bg_target_ids = [tid for tid in target_ids if (users_map.get(tid) or {}).get("is_bodyguard")]
-    still_bg_tids = set()
-    if bg_target_ids:
-        async for b in db.bodyguards.find(
-            {"bodyguard_user_id": {"$in": bg_target_ids}},
-            {"_id": 0, "bodyguard_user_id": 1},
-        ):
-            still_bg_tids.add(b["bodyguard_user_id"])
-
-    bgs_by_owner: Dict[str, List[dict]] = {}
-    if target_ids:
-        for b in await db.bodyguards.find({"user_id": {"$in": target_ids}}, {"_id": 0}).to_list(500):
-            uid = b.get("user_id")
-            if uid:
-                bgs_by_owner.setdefault(uid, []).append(b)
-    guard_ids = list(
-        {
-            b["bodyguard_user_id"]
-            for rows in bgs_by_owner.values()
-            for b in rows
-            if b.get("bodyguard_user_id")
-        }
-    )
-    guard_users: Dict[str, dict] = {}
-    if guard_ids:
-        async for u in db.users.find(
-            {"id": {"$in": guard_ids}},
-            {"_id": 0, "id": 1, "username": 1},
-        ):
-            guard_users[u["id"]] = u
-
-    delete_ids: List[str] = []
-    bulk_ops: List[UpdateOne] = []
-
-    items = []
-    for attack in attacks:
-        exp_dt = _parse_iso_datetime(attack.get("expires_at"))
-        if exp_dt is not None and exp_dt <= now:
-            delete_ids.append(attack["id"])
-            continue
-        # Remove searches for dead targets (players or bodyguards; e.g. someone else killed them)
-        tid = attack.get("target_id")
-        if tid:
-            target_user = users_map.get(tid)
-            if target_user:
-                if target_user.get("is_dead"):
-                    delete_ids.append(attack["id"])
-                    continue
-                # Only drop "orphan bodyguard" searches for robot NPC bodyguards. A normal user with a stale
-                # is_bodyguard flag (no bodyguards row) would otherwise wipe every search on list fetch.
-                if (
-                    target_user.get("is_bodyguard")
-                    and tid not in still_bg_tids
-                    and target_user.get("is_npc")
-                ):
-                    delete_ids.append(attack["id"])
-                    continue
-        if not attack.get("expires_at"):
-            started_iso = attack.get("search_started") or attack.get("found_at")
-            try:
-                started = datetime.fromisoformat(started_iso) if started_iso else None
-                if started and started.tzinfo is None:
-                    started = started.replace(tzinfo=timezone.utc)
-            except Exception:
-                started = None
-            if started and started <= cutoff:
-                delete_ids.append(attack["id"])
-                continue
-            if started:
-                exp_iso = (started + timedelta(hours=24)).isoformat()
-                bulk_ops.append(
-                    UpdateOne(
-                        {"id": attack["id"], "attacker_id": attacker_id},
-                        {"$set": {"expires_at": exp_iso}},
-                    )
-                )
-                attack["expires_at"] = exp_iso
-        if attack["status"] == "searching":
-            found_time = _parse_iso_datetime(attack.get("found_at"))
-            if found_time is None:
-                found_time = now
-            if now >= found_time:
-                tu = users_map.get(attack.get("target_id") or "")
-                new_location = (
-                    (tu.get("current_state") if tu and tu.get("current_state") in STATES else None)
-                    or attack.get("planned_location_state")
-                    or random.choice(STATES)
-                )
-                bulk_ops.append(
-                    UpdateOne(
-                        {"id": attack["id"]},
-                        {"$set": {"status": "found", "location_state": new_location}},
-                    )
-                )
-                attack["status"] = "found"
-                attack["location_state"] = new_location
-        can_travel = attack["status"] == "found" and attack.get("location_state") and current_user["current_state"] != attack["location_state"]
-        can_attack = attack["status"] == "found" and attack.get("location_state") and current_user["current_state"] == attack["location_state"]
-        msg = "Searching..." if attack["status"] == "searching" else (
-            f"Target found in {attack['location_state']}! You are in the same location. Ready to attack!" if can_attack
-            else f"Target found in {attack['location_state']}! Travel there to attack."
-        )
-        item = {
-            "attack_id": attack["id"],
-            "status": attack["status"],
-            "target_username": attack.get("target_username") or "?",
-            "note": attack.get("note"),
-            "location_state": attack.get("location_state") if attack["status"] == "found" else None,
-            "search_started": attack.get("search_started"),
-            "found_at": attack.get("found_at"),
-            "expires_at": attack.get("expires_at"),
-            "can_travel": can_travel,
-            "can_attack": can_attack,
-            "message": msg,
-            "target_is_npc": bool((users_map.get(tid or "") or {}).get("is_npc")) if tid else False,
-        }
-        if attack["status"] == "found" and tid:
-            target_bgs = bgs_by_owner.get(tid) or []
-            if target_bgs:
-                first_bg = max(target_bgs, key=lambda b: b.get("slot_number", 0))
-                search_username = None
-                display_name = first_bg.get("robot_name") or "bodyguard"
-                if first_bg.get("bodyguard_user_id"):
-                    bg_user = guard_users.get(first_bg["bodyguard_user_id"])
-                    if bg_user:
-                        search_username = bg_user.get("username")
-                        if not first_bg.get("robot_name"):
-                            display_name = search_username
-                item["first_bodyguard"] = _first_bodyguard_client_payload(
-                    display_name=display_name,
-                    search_username=search_username,
-                    target_username=attack.get("target_username") or "?",
-                )
-                item["bodyguard_count"] = len(target_bgs)
-        items.append(item)
-
-    if delete_ids:
-        await db.attacks.delete_many({"attacker_id": attacker_id, "id": {"$in": delete_ids}})
-    if bulk_ops:
-        await db.attacks.bulk_write(bulk_ops, ordered=False)
+    ac_state = (current_user.get("current_state") or "")
+    items = await _build_active_attacks_list(attacker_id, ac_state)
     return {"attacks": items}
 
 async def delete_attacks(request: AttackDeleteRequest, current_user: dict = Depends(get_current_user_verified)):
@@ -1840,6 +1898,123 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         detail="Attack failed due to a server error. Please report this.",
     )
 
+TIMELINE_ATTEMPT_LIMIT = 280
+TIMELINE_ACTIVITY_LIMIT = 55
+TIMELINE_ACTIVE_ATTACK_CAP = 20
+TIMELINE_KILL_DEDUP_SECONDS = 180
+
+
+async def get_attack_timeline(current_user: dict = Depends(get_current_user)):
+    """
+    Player-only merged log: full attack_attempts (sanitized), active searches/found rows,
+    and activity_log attack_travel / attack_kill. IP and User-Agent are stripped.
+    """
+    uid = current_user["id"]
+    attacker_row = await db.users.find_one({"id": uid}, {"_id": 0, "current_state": 1})
+    ac_state = (attacker_row or {}).get("current_state") or current_user.get("current_state") or ""
+    active_items = await _build_active_attacks_list(uid, ac_state)
+
+    raw_attempts = await db.attack_attempts.find(
+        {"$or": [{"attacker_id": uid}, {"target_id": uid}]},
+        {"_id": 0},
+    ).sort("created_at", -1).to_list(TIMELINE_ATTEMPT_LIMIT)
+
+    killed_signatures: List[tuple] = []
+    for d in raw_attempts:
+        direction = "outgoing" if d.get("attacker_id") == uid else "incoming"
+        if d.get("outcome") == "killed" and direction == "outgoing":
+            vn = (d.get("target_username") or "").strip().lower()
+            if vn:
+                killed_signatures.append((vn, _parse_event_sort_key(d.get("created_at"))))
+
+    events: List[Dict[str, Any]] = []
+
+    for d in raw_attempts:
+        doc = dict(d)
+        if not doc.get("id"):
+            doc["id"] = str(uuid.uuid4())
+        direction = "outgoing" if doc.get("attacker_id") == uid else "incoming"
+        other = (doc.get("target_username") if direction == "outgoing" else doc.get("attacker_username")) or "?"
+        outcome = doc.get("outcome") or "unknown"
+        summary = (doc.get("player_message") or outcome or "")[:800]
+        stripped = _strip_attack_attempt_for_player(doc)
+        events.append(
+            {
+                "id": f"attempt-{doc['id']}",
+                "source": "attack_attempt",
+                "event_type": outcome,
+                "occurred_at": _iso_or_none(doc.get("created_at")),
+                "direction": direction,
+                "summary": summary,
+                "other_username": other,
+                "payload": _json_safe_value(stripped),
+            }
+        )
+
+    for it in active_items[:TIMELINE_ACTIVE_ATTACK_CAP]:
+        et = "active_found" if it.get("status") == "found" else "active_search"
+        ts = it.get("search_started") or it.get("found_at")
+        events.append(
+            {
+                "id": f"active-{it.get('attack_id')}",
+                "source": "active_attack",
+                "event_type": et,
+                "occurred_at": _iso_or_none(ts) or datetime.now(timezone.utc).isoformat(),
+                "direction": "outgoing",
+                "summary": it.get("message") or (et.replace("_", " ")),
+                "other_username": it.get("target_username") or "?",
+                "payload": _json_safe_value(dict(it)),
+            }
+        )
+
+    act_docs = await db.activity_log.find(
+        {"user_id": uid, "action": {"$in": ["attack_travel", "attack_kill"]}},
+        {"_id": 0},
+    ).sort("created_at", -1).to_list(TIMELINE_ACTIVITY_LIMIT)
+
+    for a in act_docs:
+        action = a.get("action") or ""
+        det = a.get("details") or {}
+        cat = _parse_event_sort_key(a.get("created_at"))
+        if action == "attack_kill":
+            victim = (det.get("victim") or "").strip().lower()
+            dup = False
+            if victim:
+                for kv, kt in killed_signatures:
+                    if kv == victim and abs((cat - kt).total_seconds()) < TIMELINE_KILL_DEDUP_SECONDS:
+                        dup = True
+                        break
+            if dup:
+                continue
+            cash = det.get("cash_loot")
+            bu = det.get("bullets_used")
+            summary = f"Kill logged: {det.get('victim', '?')}"
+            if cash is not None:
+                summary += f" · ${int(cash):,} loot"
+            if bu is not None:
+                summary += f" · {int(bu):,} bullets"
+        elif action == "attack_travel":
+            city = det.get("target_city") or "?"
+            summary = f"Traveled to {city}"
+        else:
+            continue
+        events.append(
+            {
+                "id": f"activity-{a.get('id') or uuid.uuid4().hex}",
+                "source": "activity_log",
+                "event_type": action,
+                "occurred_at": _iso_or_none(a.get("created_at")),
+                "direction": "outgoing",
+                "summary": summary,
+                "other_username": (det.get("victim") if action == "attack_kill" else None) or "—",
+                "payload": _json_safe_value({"action": action, "details": det}),
+            }
+        )
+
+    events.sort(key=lambda e: _parse_event_sort_key(e.get("occurred_at")), reverse=True)
+    return {"events": events, "generated_at": datetime.now(timezone.utc).isoformat()}
+
+
 async def get_attack_attempts(current_user: dict = Depends(get_current_user)):
     docs = await db.attack_attempts.find(
         {"$or": [{"attacker_id": current_user["id"]}, {"target_id": current_user["id"]}]},
@@ -1876,3 +2051,4 @@ def register(router):
     router.add_api_route("/attack/inflation", get_attack_inflation, methods=["GET"])
     router.add_api_route("/attack/execute", execute_attack, methods=["POST"], response_model=AttackExecuteResponse)
     router.add_api_route("/attack/attempts", get_attack_attempts, methods=["GET"])
+    router.add_api_route("/attack/timeline", get_attack_timeline, methods=["GET"])

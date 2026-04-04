@@ -11,6 +11,7 @@ import FirstTimeThemeModal from './FirstTimeThemeModal';
 import { getThemePreset } from '../constants/themes';
 import ErrorBoundary from './ErrorBoundary';
 import ActiveEventBanner from './ActiveEventBanner';
+import FindWordHuntLayer from './entertainer/FindWordHuntLayer';
 import { NotificationMessage } from './NotificationMessage';
 import GameChat from './GameChat';
 import DeathScreen from './DeathScreen';
@@ -1831,7 +1832,10 @@ export default function Layout({ children }) {
           }
           return (
             <ErrorBoundary>
-              {children}
+              <div className="relative">
+                {children}
+                {user ? <FindWordHuntLayer /> : null}
+              </div>
             </ErrorBoundary>
           );
         })()}
