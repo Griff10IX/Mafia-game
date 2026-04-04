@@ -497,10 +497,10 @@ export default function Dashboard() {
             <CollapsibleContent>
               <div className="px-2.5 py-2 space-y-2">
                 <p className="text-[10px] font-heading text-mutedForeground leading-relaxed">
-                  New accounts are protected from player attacks for {civilianProtection.protection_hours ?? 48} hours. Protection ends automatically when the timer runs out, or immediately if you perform certain actions.
+                  For your first {civilianProtection.protection_hours ?? 48} hours, other players can't attack you in normal PvP. When the countdown hits zero, protection ends on its own — or it ends immediately if you do any of the following.
                 </p>
                 <div>
-                  <p className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.1em] mb-1">Ends protection</p>
+                  <p className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.1em] mb-1">These actions remove protection</p>
                   <ul className="list-disc pl-4 space-y-0.5 text-[10px] font-heading text-foreground/90">
                     {(civilianProtection.rules_bullets || []).map((line) => (
                       <li key={line}>{line}</li>

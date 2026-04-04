@@ -7,16 +7,16 @@ from typing import Any, Dict, List, Optional
 PROTECTION_HOURS = 48
 
 CIVILIAN_PROTECTION_KILL_BLOCKED_DETAIL = (
-    "That player is under new account protection and cannot be attacked yet."
+    "That player still has new-account protection and can't be attacked in normal PvP yet."
 )
 
 RULES_BULLETS: List[str] = [
-    "Winning a casino and declining or ignoring buyback.",
-    "Searching another user or bodyguard (assassination / hitlist NPC targets are allowed).",
-    "Adding another user to the hitlist.",
-    "Applying to or creating a crew.",
-    "Buying an exclusive car.",
-    "Purchasing or allowing casinos or properties to be sent to your account.",
+    "Take a casino from someone and reject their buyback, or ignore buyback until it expires.",
+    "Run a search on another player or a bodyguard (searching only a hitlist NPC does not remove protection).",
+    "Put a real player on the hitlist.",
+    "Apply to a crew, join one, or start your own.",
+    "Buy an exclusive car.",
+    "Claim a casino, or accept a casino or property someone sends to you.",
 ]
 
 
