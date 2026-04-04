@@ -229,6 +229,49 @@ def _is_draw_outcome_name(n: str) -> bool:
     return "draw" in x or "tie" in x or "empate" in x or "remis" in x
 
 
+def _merge_odds_api_events_by_id(raw_lists: list) -> list:
+    """Union Odds API event payloads by id; merge bookmakers so h2h markets from any region are available."""
+    merged: dict = {}
+    for events in raw_lists:
+        if not isinstance(events, list):
+            continue
+        for ev in events:
+            if not isinstance(ev, dict):
+                continue
+            eid = (ev.get("id") or "").strip()
+            if not eid:
+                continue
+            if eid not in merged:
+                merged[eid] = dict(ev)
+                continue
+            cur = merged[eid]
+            cur_b = list(cur.get("bookmakers") or [])
+            seen = {(b.get("key"), b.get("title")) for b in cur_b}
+            for b in ev.get("bookmakers") or []:
+                if not isinstance(b, dict):
+                    continue
+                t = (b.get("key"), b.get("title"))
+                if t not in seen:
+                    cur_b.append(b)
+                    seen.add(t)
+            cur["bookmakers"] = cur_b
+    return list(merged.values())
+
+
+def _kickoff_still_upcoming_for_template_list(start_time_iso: Optional[str], *, now: Optional[datetime] = None) -> bool:
+    """False if kickoff is in the past (UTC). True if missing or unparseable (keep legacy rows)."""
+    if not start_time_iso or not str(start_time_iso).strip():
+        return True
+    now = now or datetime.now(timezone.utc)
+    try:
+        dt = datetime.fromisoformat(str(start_time_iso).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt > now
+    except Exception:
+        return True
+
+
 def _team_matches_option(team: str, opt_name: str) -> bool:
     """Loose match for Odds API outcome names vs home_team / away_team (abbreviations, suffixes)."""
     t = (team or "").strip().lower()
@@ -284,6 +327,10 @@ def _extract_outcomes_from_bookmakers(bookmakers: list, three_way: bool) -> list
             return out
         return []
 
+    # Boxing/MMA often list fighter + draw under h2h_3_way only; two-way parse strips draw later.
+    tw = _outcomes_for_keys(("h2h_3_way",))
+    if tw:
+        return tw
     out = _outcomes_for_keys(("h2h",))
     if out:
         return out
@@ -372,6 +419,10 @@ def _parse_odds_event(event: dict, category: str, three_way: bool, sport_key: st
         else:
             return None
     else:
+        if len(options) == 3:
+            no_draw = [o for o in options if not _is_draw_outcome_name((o.get("name") or ""))]
+            if len(no_draw) == 2:
+                options = no_draw
         if len(options) != 2:
             return None
     name = "%s vs %s" % (home, away)
@@ -438,6 +489,13 @@ SOCCER_LEAGUES = (
 SOCCER_ODDS_REGION_ATTEMPTS = (
     "uk,us,eu",
     "uk,us,eu,fr,se",
+    "uk,us,eu,fr,se,au",
+)
+
+# Boxing/MMA: merge across regions so fights with only EU/UK books (e.g. PPV cards) still appear.
+FIGHT_SPORTS_ODDS_REGION_ATTEMPTS = (
+    "uk,us,eu",
+    "uk,us",
     "uk,us,eu,fr,se,au",
 )
 
@@ -588,26 +646,32 @@ async def _fetch_odds_api_mma() -> list:
     key = _odds_api_key()
     if not key:
         return []
-    cache_key = "v1:odds:mma_mixed_martial_arts"
+    cache_key = "v2:odds:mma_mixed_martial_arts:merged"
     ttl = _sports_odds_cache_ttl_sec()
     out = []
     try:
         events = await _odds_cache_read_list_if_fresh(cache_key, ttl)
         if events is None:
-            async with httpx.AsyncClient(timeout=14.0) as client:
-                r = await client.get(
-                    "%s/sports/mma_mixed_martial_arts/odds" % ODDS_API_BASE,
-                    params={"apiKey": key, "regions": "uk,us", "markets": "h2h", "oddsFormat": "decimal"},
-                )
-            if r.status_code != 200:
-                logger.warning("Odds API odds mma HTTP %s", r.status_code)
-                return []
-            events = r.json()
-            if not isinstance(events, list):
-                events = []
+            raw_lists: list = []
+            async with httpx.AsyncClient(timeout=18.0) as client:
+                for regions in FIGHT_SPORTS_ODDS_REGION_ATTEMPTS:
+                    try:
+                        r = await client.get(
+                            "%s/sports/mma_mixed_martial_arts/odds" % ODDS_API_BASE,
+                            params={"apiKey": key, "regions": regions, "markets": "h2h", "oddsFormat": "decimal"},
+                        )
+                        if r.status_code != 200:
+                            logger.warning("Odds API odds mma HTTP %s regions=%s", r.status_code, regions)
+                            continue
+                        chunk = r.json()
+                        if isinstance(chunk, list):
+                            raw_lists.append(chunk)
+                    except Exception as ex:
+                        logger.warning("Odds API mma fetch regions=%s: %s", regions, ex)
+            events = _merge_odds_api_events_by_id(raw_lists)
             await _odds_cache_write_list(cache_key, 200, events)
-        for ev in events[:35]:
-            if not _is_future_event(ev, require_time=True):
+        for ev in events:
+            if not _is_future_event(ev, require_time=True, buffer_minutes=0):
                 continue
             parsed = _parse_odds_event(ev, "UFC", three_way=False, sport_key="mma_mixed_martial_arts")
             if parsed:
@@ -621,26 +685,32 @@ async def _fetch_odds_api_boxing() -> list:
     key = _odds_api_key()
     if not key:
         return []
-    cache_key = "v1:odds:boxing_boxing"
+    cache_key = "v2:odds:boxing_boxing:merged"
     ttl = _sports_odds_cache_ttl_sec()
     out = []
     try:
         events = await _odds_cache_read_list_if_fresh(cache_key, ttl)
         if events is None:
-            async with httpx.AsyncClient(timeout=14.0) as client:
-                r = await client.get(
-                    "%s/sports/boxing_boxing/odds" % ODDS_API_BASE,
-                    params={"apiKey": key, "regions": "uk,us", "markets": "h2h", "oddsFormat": "decimal"},
-                )
-            if r.status_code != 200:
-                logger.warning("Odds API odds boxing HTTP %s", r.status_code)
-                return []
-            events = r.json()
-            if not isinstance(events, list):
-                events = []
+            raw_lists: list = []
+            async with httpx.AsyncClient(timeout=18.0) as client:
+                for regions in FIGHT_SPORTS_ODDS_REGION_ATTEMPTS:
+                    try:
+                        r = await client.get(
+                            "%s/sports/boxing_boxing/odds" % ODDS_API_BASE,
+                            params={"apiKey": key, "regions": regions, "markets": "h2h", "oddsFormat": "decimal"},
+                        )
+                        if r.status_code != 200:
+                            logger.warning("Odds API odds boxing HTTP %s regions=%s", r.status_code, regions)
+                            continue
+                        chunk = r.json()
+                        if isinstance(chunk, list):
+                            raw_lists.append(chunk)
+                    except Exception as ex:
+                        logger.warning("Odds API boxing fetch regions=%s: %s", regions, ex)
+            events = _merge_odds_api_events_by_id(raw_lists)
             await _odds_cache_write_list(cache_key, 200, events)
         for ev in events:
-            if not _is_future_event(ev, require_time=True):
+            if not _is_future_event(ev, require_time=True, buffer_minutes=0):
                 continue
             parsed = _parse_odds_event(ev, "Boxing", three_way=False, sport_key="boxing_boxing")
             if parsed:
@@ -1190,19 +1260,11 @@ async def _load_sports_templates_from_db() -> list:
     """Templates saved from previous refreshes. Drops entries whose start_time is long past."""
     cursor = db.sports_betting_templates.find({}, {"_id": 0}).sort("saved_at", -1).limit(5000)
     docs = await cursor.to_list(5000)
-    now = datetime.now(timezone.utc)
     out: list = []
     for d in docs:
         st = d.get("start_time")
-        if st:
-            try:
-                dt = datetime.fromisoformat(str(st).replace("Z", "+00:00"))
-                if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=timezone.utc)
-                if dt < now - timedelta(hours=48):
-                    continue
-            except Exception:
-                pass
+        if st and not _kickoff_still_upcoming_for_template_list(str(st)):
+            continue
         t = {k: v for k, v in d.items() if k != "saved_at"}
         if t.get("id") and t.get("name") and t.get("category"):
             out.append(t)
@@ -1240,6 +1302,9 @@ def _admin_templates_json_from_list(templates: list, *, template_source: str) ->
     for t in templates:
         cat = t.get("category")
         if not cat:
+            continue
+        st = t.get("start_time")
+        if st and not _kickoff_still_upcoming_for_template_list(str(st)):
             continue
         by_category.setdefault(cat, []).append(_sports_template_to_response(t))
     return {
@@ -1416,6 +1481,8 @@ async def sports_betting_events(current_user: dict = Depends(get_current_user_ve
             start_dt = datetime.fromisoformat(st.replace("Z", "+00:00")) if st else now
         except Exception:
             start_dt = now
+        if st and start_dt + timedelta(hours=3) < now:
+            continue
         betting_closes_at = start_dt - timedelta(minutes=close_betting_minutes)
         betting_open = now < betting_closes_at
         if now < start_dt:
