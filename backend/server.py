@@ -1300,6 +1300,8 @@ async def send_notification_to_all(title: str, message: str, notification_type: 
 async def maybe_daily_event_inbox_reminder() -> None:
     """Once per UTC calendar day: send inbox summary to all users when daily events are on and effective event is not NO_EVENT."""
     today = datetime.now(timezone.utc).date().isoformat()
+    # Do not use upsert: if "main" exists but was already processed today, the filter
+    # matches zero docs; upsert would try to insert another {id: "main"} → E11000 duplicate key.
     result = await db.game_config.update_one(
         {
             "id": "main",
@@ -1309,10 +1311,9 @@ async def maybe_daily_event_inbox_reminder() -> None:
             ],
         },
         {"$set": {"last_daily_event_inbox_processed_utc_date": today}},
-        upsert=True,
     )
-    if result.modified_count == 0 and getattr(result, "upserted_id", None) is None:
-        return  # another worker claimed this UTC day, or already processed today
+    if result.modified_count == 0:
+        return  # already processed today, another worker won the race, or no main config doc
     if not await get_events_enabled():
         return
     ev = await get_effective_event()
