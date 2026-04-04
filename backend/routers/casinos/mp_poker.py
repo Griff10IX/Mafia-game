@@ -11,6 +11,13 @@ from pydantic import BaseModel, field_validator
 from fastapi import Depends, HTTPException, Body
 
 from server import db, get_current_user, get_current_user_verified, log_gambling, _is_admin
+from routers.casinos.mp_poker_flow import (
+    is_betting_round_complete as _is_betting_round_complete,
+    next_actionable_index as _next_actionable_index,
+    player_can_act as _player_can_act,
+    reset_acted_this_street_for_raise as _reset_acted_this_street_for_raise,
+    tournament_survivors as _tournament_survivors,
+)
 
 # ----- Constants -----
 MP_POKER_SUITS = ["H", "D", "C", "S"]
@@ -27,7 +34,7 @@ MP_POKER_VS_DEALER_MAX_SMALL_BLIND = 25_000  # Hard cap for vs-dealer small blin
 MP_POKER_VS_DEALER_MAX_BLIND_DEFAULT = 2_500_000
 MP_POKER_TOURNAMENT_MIN_PLAYERS = 4
 MP_POKER_TOURNAMENT_MAX_PLAYERS = 9
-MP_POKER_TOURNAMENT_STARTING_STACK = 10_000
+MP_POKER_TOURNAMENT_STARTING_STACK = 7_500
 MP_POKER_TOURNAMENT_LEVEL_SECONDS = 300
 MP_POKER_TOURNAMENT_BLINDS = [
     (50, 100),
@@ -1824,7 +1831,7 @@ def register(router):
                 p["total_bet_this_hand"] = 0
                 p["ready"] = True
                 p["hole_cards"] = []
-            players = [p for p in players if int(p.get("stack") or 0) > 0 and p.get("status") != "busted"]
+            players = _tournament_survivors(players)
             if len(players) <= 1:
                 await db.mp_poker_games.update_one({"id": game_id}, {"$set": {"players": players, "pot": 0, "results": results}})
                 await _tournament_finalize_if_done(game_id)
@@ -1883,13 +1890,7 @@ def register(router):
 
     def _first_actor_after_advance(players: list, start_idx: int) -> int:
         """First seat index that can act (not folded, not all_in). If none, return start_idx."""
-        n = len(players)
-        idx = start_idx % n
-        for _ in range(n):
-            if players[idx].get("status") not in ("folded", "all_in"):
-                return idx
-            idx = (idx + 1) % n
-        return start_idx % n
+        return _next_actionable_index(players, start_idx)
 
     async def _mp_poker_advance_street(game_id: str) -> bool:
         """Advance to next street or showdown. Returns True if advanced. Skips folded/all_in for first to act."""
@@ -1903,6 +1904,7 @@ def register(router):
         n = len(players)
         for p in players:
             p["current_bet"] = 0
+            p["acted_this_street"] = False
         button = int(g.get("button_index") or 0)
         if street == "preflop":
             for _ in range(3):
@@ -1976,7 +1978,7 @@ def register(router):
         if not all(p.get("ready") for p in players) or len(players) < min_players:
             raise HTTPException(status_code=400, detail="Not all ready")
         if is_tournament:
-            players = [p for p in players if int(p.get("stack") or 0) > 0 and p.get("status") != "busted"]
+            players = _tournament_survivors(players)
             if len(players) < 2:
                 g = await _tournament_finalize_if_done(game_id)
                 return {k: v for k, v in (g or {}).items() if k != "_id"}
@@ -1990,6 +1992,7 @@ def register(router):
             p["hole_cards"] = [deck.pop(), deck.pop()] if deck else []
             p["current_bet"] = 0
             p["total_bet_this_hand"] = 0
+            p["acted_this_street"] = False
             p["status"] = "active"
         sb_seat = (button_index + 1) % n
         bb_seat = (button_index + 2) % n
@@ -2059,33 +2062,32 @@ def register(router):
         p = players[turn_idx]
         if p.get("status") in ("folded", "all_in"):
             raise HTTPException(status_code=400, detail="Cannot act")
+        for x in players:
+            if "acted_this_street" not in x:
+                x["acted_this_street"] = False
         to_call = int(g.get("to_call") or 0)
         min_raise = int(g.get("min_raise") or g.get("big_blind", 1))
         pot = int(g.get("pot") or 0)
         stack = int(p.get("stack") or 0)
         current_bet = int(p.get("current_bet") or 0)
         need_to_call = to_call - current_bet
+        prev_max_bet = max(int(x.get("current_bet") or 0) for x in players)
+        min_raise_updated = min_raise
         if action == "fold":
             p["status"] = "folded"
             p["last_action"] = {"action": "fold"}
+            p["acted_this_street"] = True
             active = [x for x in players if x.get("status") not in ("folded",)]
             if len(active) == 1:
                 await db.mp_poker_games.update_one({"id": game_id}, {"$set": {"players": players, "street": "showdown"}})
                 await _mp_poker_run_showdown(game_id)
-            else:
-                next_idx = (turn_idx + 1) % len(players)
-                while next_idx != turn_idx and (players[next_idx].get("status") in ("folded", "all_in")):
-                    next_idx = (next_idx + 1) % len(players)
-                await db.mp_poker_games.update_one(
-                    {"id": game_id},
-                    {"$set": {"players": players, "current_turn_index": next_idx, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
-                )
-            g = await db.mp_poker_games.find_one({"id": game_id})
-            return {k: v for k, v in (g or {}).items() if k != "_id"}
+                g = await db.mp_poker_games.find_one({"id": game_id})
+                return {k: v for k, v in (g or {}).items() if k != "_id"}
         if action == "check":
             if need_to_call > 0:
                 raise HTTPException(status_code=400, detail="Cannot check")
             p["last_action"] = {"action": "check"}
+            p["acted_this_street"] = True
         elif action == "call":
             amt = min(need_to_call, stack)
             p["stack"] = stack - amt
@@ -2093,6 +2095,10 @@ def register(router):
             p["total_bet_this_hand"] = int(p.get("total_bet_this_hand") or 0) + amt
             pot += amt
             p["last_action"] = {"action": "call", "amount": amt}
+            p["acted_this_street"] = True
+            if p["stack"] <= 0:
+                p["stack"] = 0
+                p["status"] = "all_in"
         elif action in ("bet", "raise"):
             amt = max(amount, min_raise) if to_call > 0 else amount
             if action == "bet" and amt < min_raise:
@@ -2108,9 +2114,12 @@ def register(router):
             if amt >= stack:
                 p["status"] = "all_in"
             p["last_action"] = {"action": action, "amount": amt}
+            p["acted_this_street"] = True
             max_bet_amt = max(int(x.get("current_bet") or 0) for x in players)
-            g["to_call"] = max_bet_amt
-            g["min_raise"] = amt
+            if max_bet_amt > prev_max_bet:
+                _reset_acted_this_street_for_raise(players, turn_idx)
+                p["acted_this_street"] = True
+                min_raise_updated = amt
         elif action == "all_in":
             amt = stack
             p["stack"] = 0
@@ -2119,44 +2128,43 @@ def register(router):
             p["status"] = "all_in"
             pot += amt
             p["last_action"] = {"action": "all_in", "amount": amt}
+            p["acted_this_street"] = True
             max_bet_amt = max(int(x.get("current_bet") or 0) for x in players)
-            g["to_call"] = max_bet_amt
+            if max_bet_amt > prev_max_bet:
+                _reset_acted_this_street_for_raise(players, turn_idx)
+                p["acted_this_street"] = True
         else:
             raise HTTPException(status_code=400, detail="Invalid action")
         max_bet = max(int(x.get("current_bet") or 0) for x in players)
-        all_in_or_folded = all(
-            int(x.get("current_bet") or 0) == max_bet or x.get("status") in ("folded", "all_in")
-            for x in players if x.get("status") not in ("folded",)
-        )
-        next_idx = (turn_idx + 1) % len(players)
-        while next_idx != turn_idx and (players[next_idx].get("status") in ("folded", "all_in")):
-            next_idx = (next_idx + 1) % len(players)
-        updates = {"players": players, "pot": pot, "current_turn_index": next_idx, "turn_started_at": datetime.now(timezone.utc).isoformat()}
-        if action in ("call", "check"):
-            first_this_street = int(g.get("first_turn_index_this_street") or 0)
-            # Advance when everyone has matched; if no one bet this street (max_bet==0) require turn to return to first actor
-            betting_round_complete = all_in_or_folded and (max_bet > 0 or next_idx == first_this_street or next_idx == turn_idx)
-            if betting_round_complete:
-                updates["to_call"] = 0
-                await db.mp_poker_games.update_one({"id": game_id}, {"$set": updates})
+        round_complete = _is_betting_round_complete(players)
+        if round_complete:
+            await db.mp_poker_games.update_one(
+                {"id": game_id},
+                {"$set": {"players": players, "pot": pot, "to_call": 0}},
+            )
+            await _mp_poker_advance_street(game_id)
+        else:
+            next_idx = _next_actionable_index(players, turn_idx + 1)
+            if next_idx < 0 or not _player_can_act(players[next_idx]):
+                await db.mp_poker_games.update_one(
+                    {"id": game_id},
+                    {"$set": {"players": players, "pot": pot, "to_call": max_bet, "min_raise": min_raise_updated}},
+                )
                 await _mp_poker_advance_street(game_id)
             else:
-                updates["to_call"] = max_bet
-                await db.mp_poker_games.update_one({"id": game_id}, {"$set": updates})
-        else:
-            # If turn wraps back to the same seat and everyone else is folded/all-in,
-            # there is no actionable player left on this street: auto-advance/run out board.
-            if all_in_or_folded and next_idx == turn_idx:
-                updates["to_call"] = max_bet
-                updates["min_raise"] = g.get("min_raise", min_raise)
-                await db.mp_poker_games.update_one({"id": game_id}, {"$set": updates})
-                await _mp_poker_advance_street(game_id)
-                g = await db.mp_poker_games.find_one({"id": game_id})
-                _enrich_players_current_hand(g)
-                return {k: v for k, v in (g or {}).items() if k != "_id"}
-            updates["to_call"] = g.get("to_call", max_bet)
-            updates["min_raise"] = g.get("min_raise", min_raise)
-            await db.mp_poker_games.update_one({"id": game_id}, {"$set": updates})
+                await db.mp_poker_games.update_one(
+                    {"id": game_id},
+                    {
+                        "$set": {
+                            "players": players,
+                            "pot": pot,
+                            "to_call": max_bet,
+                            "min_raise": min_raise_updated,
+                            "current_turn_index": next_idx,
+                            "turn_started_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                    },
+                )
         g = await db.mp_poker_games.find_one({"id": game_id})
         _enrich_players_current_hand(g)
         return {k: v for k, v in (g or {}).items() if k != "_id"}
