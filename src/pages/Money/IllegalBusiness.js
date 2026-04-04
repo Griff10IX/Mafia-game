@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Shield, ListChecks, Crosshair, TrendingUp, Lock, UserPlus, Star, AlertTriangle, ChevronRight, ChevronDown } from 'lucide-react';
+import { Shield, ListChecks, Crosshair, TrendingUp, Lock, UserPlus, Star, AlertTriangle, ChevronRight, ChevronDown, Award } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
@@ -9,6 +9,55 @@ import ActiveTokenBadge from '../../components/ActiveTokenBadge';
 
 const BIZ_CACHE_KEY = 'mafia_illegal_biz_v1';
 const BIZ_REFRESH = 30_000;
+
+const IBM_REQUIREMENT_LABELS = {
+  crimes: 'Total crimes',
+  rank_id: 'Rank',
+  security_level: 'Security upgrades',
+  crimes_in_state: 'Crimes in business state',
+  collections: 'Collections',
+  raids_won: 'Raids won',
+  raids_attempted: 'Raid attempts',
+  guards_hired: 'Guards hired',
+  guard_slots_bought: 'Guard slots bought',
+  vault_withdrawals: 'Vault withdrawals',
+  kill_rewards_claimed: 'Kill rewards claimed',
+};
+
+/** Matches backend server.RANKS (illegal business rank gates). */
+const IBM_RANK_NAMES = {
+  1: 'Rat',
+  2: 'Street Thug',
+  3: 'Hustler',
+  4: 'Goon',
+  5: 'Made Man',
+  6: 'Capo',
+  7: 'Underboss',
+  8: 'Consigliere',
+  9: 'Boss',
+  10: 'Don',
+  11: 'Capo di tutti capi',
+  12: 'Boss of Bosses',
+  13: 'Godfather',
+};
+
+const IBM_SEGMENTED_KEYS = new Set([
+  'crimes_in_state',
+  'collections',
+  'raids_won',
+  'raids_attempted',
+  'guards_hired',
+  'guard_slots_bought',
+  'vault_withdrawals',
+  'kill_rewards_claimed',
+]);
+
+function ibmRankLabel(rankId) {
+  const n = Number(rankId);
+  if (Number.isNaN(n)) return String(rankId);
+  const name = IBM_RANK_NAMES[n];
+  return name ? `${name} (${n})` : String(n);
+}
 
 function formatMoney(n) {
   const num = Number(n ?? 0);
@@ -22,8 +71,8 @@ function formatTillDollars(n) {
   return `$${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function formatMissionRewards(rewards) {
-  if (!rewards || typeof rewards !== 'object') return null;
+function getMissionRewardParts(rewards) {
+  if (!rewards || typeof rewards !== 'object') return [];
   const parts = [];
   if (rewards.vault_cash) parts.push(`${formatMoney(rewards.vault_cash)} to vault`);
   if (rewards.guard_slots) parts.push(`+${rewards.guard_slots} guard slot${rewards.guard_slots > 1 ? 's' : ''}`);
@@ -31,9 +80,24 @@ function formatMissionRewards(rewards) {
     const pct = Math.round((Number(rewards.income_mult) - 1) * 100);
     if (pct) parts.push(`+${pct}% income`);
   }
+  if (rewards.income_per_hour_add) parts.push(`+${formatMoney(rewards.income_per_hour_add)}/h passive`);
   if (rewards.guard_weapon_max) parts.push('Weapon tier +1');
-  if (rewards.jailbust_tokens) parts.push(`${rewards.jailbust_tokens} Jailbust token`);
-  if (rewards.xp_crimes_tokens) parts.push(`${rewards.xp_crimes_tokens} XP Crimes token`);
+  if (rewards.jailbust_tokens) parts.push(`${rewards.jailbust_tokens} Jailbust token${Number(rewards.jailbust_tokens) > 1 ? 's' : ''}`);
+  if (rewards.xp_crimes_tokens) parts.push(`${rewards.xp_crimes_tokens} XP Crimes token${Number(rewards.xp_crimes_tokens) > 1 ? 's' : ''}`);
+  if (rewards.xp_gta_tokens) parts.push(`${rewards.xp_gta_tokens} XP GTA token${Number(rewards.xp_gta_tokens) > 1 ? 's' : ''}`);
+  if (rewards.racket_tokens) parts.push(`${rewards.racket_tokens} Racket token${Number(rewards.racket_tokens) > 1 ? 's' : ''}`);
+  if (rewards.melt_tokens) parts.push(`${rewards.melt_tokens} Melt token${Number(rewards.melt_tokens) > 1 ? 's' : ''}`);
+  if (rewards.oc_reduced_tokens) parts.push(`${rewards.oc_reduced_tokens} OC Reduced token${Number(rewards.oc_reduced_tokens) > 1 ? 's' : ''}`);
+  if (rewards.booze_tokens) parts.push(`${rewards.booze_tokens} Booze token${Number(rewards.booze_tokens) > 1 ? 's' : ''}`);
+  if (rewards.travel_tokens) parts.push(`${rewards.travel_tokens} Travel token${Number(rewards.travel_tokens) > 1 ? 's' : ''}`);
+  if (rewards.properties_tokens) parts.push(`${rewards.properties_tokens} Properties token${Number(rewards.properties_tokens) > 1 ? 's' : ''}`);
+  if (rewards.auto_rank_2h_tokens) parts.push(`${rewards.auto_rank_2h_tokens} Auto Rank (2h) token${Number(rewards.auto_rank_2h_tokens) > 1 ? 's' : ''}`);
+  if (rewards.rank_xp_pass_tokens) parts.push(`${rewards.rank_xp_pass_tokens} Rank XP pass token${Number(rewards.rank_xp_pass_tokens) > 1 ? 's' : ''}`);
+  return parts;
+}
+
+function formatMissionRewards(rewards) {
+  const parts = getMissionRewardParts(rewards);
   return parts.length ? parts.join(' · ') : null;
 }
 
@@ -348,6 +412,10 @@ export default function IllegalBusiness() {
   const missions = Array.isArray(data?.missions) ? data.missions : [];
   const completedMissions = missions.filter(m => m.completed);
   const activeMission = missions.find(m => !m.completed);
+  const incomeCapHours = Number(business?.income_cap_hours) || 24;
+  const incomePerHourNum = Number(business?.income_per_hour) || 0;
+  const maxTillAtCap = Math.round(incomePerHourNum * incomeCapHours);
+  const weekTillCeiling = maxTillAtCap * 7;
 
   return (
     <div className={`${styles.pageContent} racket-page mobile-page-root`}>
@@ -370,13 +438,19 @@ export default function IllegalBusiness() {
               Level {business?.level ?? 1} · Security {nextUpgradeIdx}/{totalUpgrades} · {guards.length}/{guardSlots} guards
             </div>
           </div>
-          <div className="income-glow border border-primary/25 rounded-md px-4 py-2.5 text-right bg-primary/5 shrink-0">
+          <div className="income-glow border border-primary/25 rounded-md px-4 py-2.5 text-right bg-primary/5 shrink-0 max-w-[200px]">
             <div className="text-[9px] font-heading tracking-[.2em] text-mutedForeground uppercase">Per Hour</div>
             <div className="text-2xl font-heading font-bold text-primary leading-none mt-0.5">
               {formatMoney(business?.income_per_hour)}
             </div>
+            <div className="text-[9px] text-zinc-500 font-heading mt-1 leading-snug">
+              Max till {formatMoney(maxTillAtCap)} ({incomeCapHours}h cap)
+            </div>
+            <div className="text-[8px] text-zinc-600 font-heading mt-0.5 leading-snug">
+              ~{formatMoney(weekTillCeiling)}/wk if you max the till daily — events &amp; boosts change real collects.
+            </div>
             {business?.type_id === 'booze_making' && business?.booze_per_hour != null && (
-              <div className="text-[10px] text-mutedForeground mt-0.5">{business.booze_per_hour} booze/hr</div>
+              <div className="text-[10px] text-mutedForeground mt-1">{business.booze_per_hour} booze/hr</div>
             )}
           </div>
         </div>
@@ -470,11 +544,30 @@ export default function IllegalBusiness() {
         {activeMission && (() => {
           const { mission, current, target } = activeMission;
           const requirementsMet = target && Object.keys(target).every((k) => (Number(current?.[k]) ?? 0) >= (Number(target[k]) ?? 0));
+          const reqKeys = target && typeof target === 'object' ? Object.keys(target) : [];
+          const reqPcts = reqKeys.map((k) => {
+            const cur = Number(current?.[k]) ?? 0;
+            const n = Number(target[k]) ?? 1;
+            if (n <= 0) return 100;
+            return Math.min(100, Math.round((cur / n) * 100));
+          });
+          const bottleneckPct = reqPcts.length ? Math.min(...reqPcts) : 0;
+          const rewardParts = mission.rewards ? getMissionRewardParts(mission.rewards) : [];
+          const hasSegmented = reqKeys.some((k) => IBM_SEGMENTED_KEYS.has(k));
           return (
             <div className={`${styles.panel} r-card border border-primary/20 rounded-md overflow-hidden mobile-panel`}>
               <CardHead icon={ListChecks} title={`Mission ${mission.order ?? ''}/${missions.length}`}
-                right={completedMissions.length > 0 && (
-                  <span className="text-[9px] font-heading text-zinc-500">{completedMissions.length} completed</span>
+                right={(
+                  <div className="flex items-center gap-2 shrink-0">
+                    {reqKeys.length > 0 && (
+                      <span className="text-[9px] font-heading text-primary tabular-nums" title="Slowest requirement">
+                        {bottleneckPct}%
+                      </span>
+                    )}
+                    {completedMissions.length > 0 && (
+                      <span className="text-[9px] font-heading text-zinc-500">{completedMissions.length} done</span>
+                    )}
+                  </div>
                 )}
               />
               <div className="p-4">
@@ -495,31 +588,46 @@ export default function IllegalBusiness() {
                           const n = Number(need) ?? 1;
                           const pct = Math.min(100, Math.round((cur / n) * 100));
                           const fmt = (x) => Number(x).toLocaleString();
-                          const label = key.replace(/_/g, ' ');
+                          const label = IBM_REQUIREMENT_LABELS[key] || key.replace(/_/g, ' ');
+                          const valueStr = key === 'rank_id'
+                            ? `${ibmRankLabel(cur)} / ${ibmRankLabel(n)}`
+                            : `${fmt(cur)} / ${fmt(n)}`;
                           return (
                             <div key={key}>
-                              <div className="flex items-baseline justify-between mb-0.5">
-                                <span className="text-[9px] font-heading uppercase tracking-wider text-zinc-500 capitalize">{label}</span>
-                                <span className="text-[10px] font-heading text-primary">{fmt(cur)} / {fmt(n)}</span>
+                              <div className="flex items-baseline justify-between mb-0.5 gap-2">
+                                <span className="text-[9px] font-heading uppercase tracking-wider text-zinc-500">{label}</span>
+                                <span className="text-[10px] font-heading text-primary text-right tabular-nums">{valueStr}</span>
                               </div>
-                              <div className="h-1 rounded-full bg-zinc-800">
+                              <div className="h-1.5 rounded-full bg-zinc-800">
                                 <div className={`r-bar-fill h-full rounded-full ${pct >= 100 ? 'bg-emerald-500' : 'bg-gradient-to-r from-primary/55 to-primary'}`} style={{ width: `${pct}%` }} />
                               </div>
                             </div>
                           );
                         })}
+                        {hasSegmented && (
+                          <p className="text-[9px] text-zinc-600 font-heading leading-snug pt-0.5">
+                            Counts for collections, state crimes, raids, hires, slots, withdrawals, and kill claims start from when you began this mission.
+                          </p>
+                        )}
                       </div>
                     )}
 
-                    {mission.rewards && formatMissionRewards(mission.rewards) && (
-                      <p className="text-[10px] text-primary/80 font-heading mt-2">
-                        Rewards: {formatMissionRewards(mission.rewards)}
-                      </p>
+                    {rewardParts.length > 0 && (
+                      <div className="mt-3 rounded-md border border-primary/10 bg-primary/5 px-3 py-2">
+                        <div className="text-[8px] font-heading uppercase tracking-widest text-primary/70 mb-1.5">Rewards</div>
+                        <div className="flex flex-wrap gap-1">
+                          {rewardParts.map((line, i) => (
+                            <span key={`rw-${i}-${line.slice(0, 24)}`} className="text-[9px] font-heading text-primary/90 px-2 py-0.5 rounded bg-primary/10 border border-primary/15">
+                              {line}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
                     )}
                   </div>
                   {requirementsMet && (
                     <button onClick={() => handleCompleteMission(mission.id)} disabled={saving}
-                      className="flex items-center gap-0.5 shrink-0 text-[9px] font-heading font-bold uppercase tracking-wider text-primary border border-primary/30 px-2.5 py-1.5 rounded hover:bg-primary/10 disabled:opacity-40 transition-all">
+                      className="flex items-center gap-0.5 shrink-0 text-[9px] font-heading font-bold uppercase tracking-wider text-primary bg-primary/15 border border-primary/40 px-2.5 py-1.5 rounded-md hover:bg-primary/25 disabled:opacity-40 transition-all shadow-sm">
                       <ChevronRight size={9} /> Complete
                     </button>
                   )}
@@ -528,6 +636,20 @@ export default function IllegalBusiness() {
             </div>
           );
         })()}
+
+        {/* ── Ladder complete ── */}
+        {!activeMission && missions.length > 0 && (
+          <div className={`${styles.panel} r-card border border-emerald-500/25 rounded-md overflow-hidden mobile-panel`}>
+            <CardHead icon={Award} title="Mission ladder complete"
+              right={<span className="text-[9px] font-heading text-emerald-400/90">{missions.length} / {missions.length}</span>}
+            />
+            <div className="p-4">
+              <p className="text-[11px] text-mutedForeground font-body">
+                Every racket mission is in the books. Your till, vault, guards, and raids keep running — keep collecting and defending the joint.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* ── Security & Guards ── */}
         <div className={`${styles.panel} r-card border border-primary/20 rounded-md overflow-hidden mobile-panel`}>

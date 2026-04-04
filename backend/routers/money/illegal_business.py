@@ -173,61 +173,160 @@ ILLEGAL_BUSINESS_MISSIONS = [
      "story": "Five locks on the door. They'll think twice.",
      "how_to_complete": "Install 5 security upgrades.",
      "requirements": {"security_level": 5},
-     "rewards": {"vault_cash": 15_000, "income_mult": 1.53, "guard_slots": 1}},
+     "rewards": {"vault_cash": 15_000, "income_mult": 1.53, "guard_slots": 1, "xp_gta_tokens": 1}},
     {"id": "ibm_6", "order": 6, "title": "Crime wave",
      "story": "Five hundred jobs and counting. The family notices.",
      "how_to_complete": "Complete 500 crimes in total.",
      "requirements": {"crimes": 500},
-     "rewards": {"vault_cash": 15_000, "income_mult": 1.50, "guard_weapon_max": 1}},
+     "rewards": {"vault_cash": 15_000, "income_mult": 1.50, "guard_weapon_max": 1, "melt_tokens": 1}},
     # Tier 3 — Established
     {"id": "ibm_7", "order": 7, "title": "Cash flow",
      "story": "The books look good. Real good.",
      "how_to_complete": "Collect from your business 15 times.",
      "requirements": {"collections": 15},
-     "rewards": {"vault_cash": 20_000, "income_mult": 1.53, "xp_crimes_tokens": 1}},
+     "rewards": {"vault_cash": 20_000, "income_mult": 1.53, "xp_crimes_tokens": 1, "travel_tokens": 1}},
     {"id": "ibm_8", "order": 8, "title": "Iron curtain",
      "story": "Ten upgrades deep. Fort Knox would be jealous.",
      "how_to_complete": "Install 10 security upgrades.",
      "requirements": {"security_level": 10},
-     "rewards": {"vault_cash": 25_000, "income_mult": 1.58, "guard_weapon_max": 1}},
+     "rewards": {"vault_cash": 25_000, "income_mult": 1.58, "guard_weapon_max": 1, "oc_reduced_tokens": 1}},
     {"id": "ibm_9", "order": 9, "title": "Territory boss",
      "story": "Seven-fifty in your state. They know your name.",
      "how_to_complete": "Complete 750 crimes in your business state.",
      "requirements": {"crimes_in_state": 750},
-     "rewards": {"vault_cash": 30_000, "income_mult": 1.63}},
+     "rewards": {"vault_cash": 30_000, "income_mult": 1.63, "booze_tokens": 1}},
     # Tier 4 — Major Player
     {"id": "ibm_10", "order": 10, "title": "The machine",
      "story": "Thirty collections, fifteen upgrades. Like clockwork.",
      "how_to_complete": "Collect 30 times and install 15 security upgrades.",
      "requirements": {"collections": 30, "security_level": 15},
-     "rewards": {"vault_cash": 40_000, "income_mult": 1.63}},
+     "rewards": {"vault_cash": 40_000, "income_mult": 1.63, "properties_tokens": 1}},
     {"id": "ibm_11", "order": 11, "title": "Crime lord",
      "story": "A thousand jobs. You're in the history books.",
      "how_to_complete": "Complete 1,000 crimes in total.",
      "requirements": {"crimes": 1000},
-     "rewards": {"vault_cash": 40_000, "income_mult": 1.53, "jailbust_tokens": 1}},
+     "rewards": {"vault_cash": 40_000, "income_mult": 1.53, "jailbust_tokens": 1, "xp_gta_tokens": 1}},
     {"id": "ibm_12", "order": 12, "title": "State kingpin",
      "story": "Fifteen hundred crimes in your state. You ARE the law.",
      "how_to_complete": "Complete 1,500 crimes in your business state.",
      "requirements": {"crimes_in_state": 1500},
-     "rewards": {"vault_cash": 50_000, "income_mult": 1.73, "xp_crimes_tokens": 1}},
+     "rewards": {"vault_cash": 50_000, "income_mult": 1.73, "xp_crimes_tokens": 1, "melt_tokens": 1}},
     # Tier 5 — Empire
     {"id": "ibm_13", "order": 13, "title": "Maximum security",
      "story": "Twenty-five upgrades. Nobody gets in unless you say so.",
      "how_to_complete": "Install 25 security upgrades.",
      "requirements": {"security_level": 25},
-     "rewards": {"vault_cash": 50_000, "guard_weapon_max": 1, "income_mult": 1.53}},
+     "rewards": {"vault_cash": 50_000, "guard_weapon_max": 1, "income_mult": 1.53, "booze_tokens": 1}},
     {"id": "ibm_14", "order": 14, "title": "Veteran operator",
      "story": "Fifty collections, two thousand crimes on your turf.",
      "how_to_complete": "Collect 50 times and complete 2,000 crimes in your business state.",
      "requirements": {"collections": 50, "crimes_in_state": 2000},
-     "rewards": {"vault_cash": 75_000, "income_mult": 1.73, "jailbust_tokens": 1}},
+     "rewards": {"vault_cash": 75_000, "income_mult": 1.73, "jailbust_tokens": 1, "travel_tokens": 1}},
     {"id": "ibm_15", "order": 15, "title": "Empire",
      "story": "You built it from nothing. Now it runs the city.",
      "how_to_complete": "Collect 100 times, complete 5,000 crimes, and install 35 security upgrades.",
      "requirements": {"collections": 100, "crimes": 5000, "security_level": 35},
-     "rewards": {"vault_cash": 100_000, "income_mult": 1.85}},
+     "rewards": {"vault_cash": 100_000, "income_mult": 1.85, "auto_rank_2h_tokens": 1, "racket_tokens": 1}},
+    # Tier 6–10 — Long haul (segmented activity; IPH bumps via income_per_hour_add toward ~$100M/week passive)
+    {"id": "ibm_16", "order": 16, "title": "Street pressure",
+     "story": "Word travels. You need boots on the ground and the till ringing.",
+     "how_to_complete": "Run 25 collections, 15 raid attempts, and 900 crimes in your business state since your last mission.",
+     "requirements": {"collections": 25, "raids_attempted": 15, "crimes_in_state": 900},
+     "rewards": {"vault_cash": 125_000, "racket_tokens": 1, "xp_gta_tokens": 1, "melt_tokens": 1, "booze_tokens": 1}},
+    {"id": "ibm_17", "order": 17, "title": "Crew and cash out",
+     "story": "Hire muscle. Move money out clean. Let them see you're serious.",
+     "how_to_complete": "Hire 12 guards, withdraw from the vault 12 times, and reach security level 38.",
+     "requirements": {"guards_hired": 12, "vault_withdrawals": 12, "security_level": 38},
+     "rewards": {"vault_cash": 140_000, "guard_slots": 1, "oc_reduced_tokens": 1, "travel_tokens": 1, "properties_tokens": 1}},
+    {"id": "ibm_18", "order": 18, "title": "Raid captain",
+     "story": "Winning hits matter. So does body count on the books.",
+     "how_to_complete": "Win 12 raids, commit 9,000 total crimes, and reach Consigliere rank.",
+     "requirements": {"raids_won": 12, "crimes": 9000, "rank_id": 8},
+     "rewards": {"vault_cash": 155_000, "income_per_hour_add": 3_000, "xp_crimes_tokens": 1, "xp_gta_tokens": 1, "auto_rank_2h_tokens": 1}},
+    {"id": "ibm_19", "order": 19, "title": "Expand the roster",
+     "story": "More slots, more collections. Own the block one slot at a time.",
+     "how_to_complete": "Buy 4 extra guard slots, collect 45 times, and log 1,400 crimes in your state.",
+     "requirements": {"guard_slots_bought": 4, "collections": 45, "crimes_in_state": 1400},
+     "rewards": {"vault_cash": 170_000, "guard_weapon_max": 1, "jailbust_tokens": 1, "melt_tokens": 1, "racket_tokens": 1}},
+    {"id": "ibm_20", "order": 20, "title": "Fortress and favors",
+     "story": "Steel, raids, and the occasional inheritance from a dead rival.",
+     "how_to_complete": "Security level 42, 50 raid attempts, claim 3 kill rewards from fallen owners.",
+     "requirements": {"security_level": 42, "raids_attempted": 50, "kill_rewards_claimed": 3},
+     "rewards": {"vault_cash": 190_000, "income_per_hour_add": 3_000, "jailbust_tokens": 1, "booze_tokens": 1, "properties_tokens": 1}},
+    {"id": "ibm_21", "order": 21, "title": "War economy",
+     "story": "The ledger never sleeps. Neither do your crews.",
+     "how_to_complete": "12,000 total crimes, 25 vault withdrawals, hire 30 guards.",
+     "requirements": {"crimes": 12000, "vault_withdrawals": 25, "guards_hired": 30},
+     "rewards": {"vault_cash": 210_000, "racket_tokens": 1, "xp_crimes_tokens": 1, "oc_reduced_tokens": 1, "travel_tokens": 1}},
+    {"id": "ibm_22", "order": 22, "title": "Boss moves",
+     "story": "Underboss was practice. Boss is the show.",
+     "how_to_complete": "Reach Boss rank, collect 70 times, win 28 raids.",
+     "requirements": {"rank_id": 9, "collections": 70, "raids_won": 28},
+     "rewards": {"vault_cash": 235_000, "guard_slots": 1, "income_per_hour_add": 3_000, "xp_gta_tokens": 1, "auto_rank_2h_tokens": 1}},
+    {"id": "ibm_23", "order": 23, "title": "Iron and ink",
+     "story": "Every upgrade, every score in-state — documented in blood and receipts.",
+     "how_to_complete": "Security level 45, 3,000 crimes in your state, 55 collections.",
+     "requirements": {"security_level": 45, "crimes_in_state": 3000, "collections": 55},
+     "rewards": {"vault_cash": 260_000, "xp_crimes_tokens": 1, "melt_tokens": 1, "booze_tokens": 1, "jailbust_tokens": 1}},
+    {"id": "ibm_24", "order": 24, "title": "Siege rhythm",
+     "story": "Keep hitting. Keep buying doors. Claim what the dead left behind.",
+     "how_to_complete": "90 raid attempts, buy 10 guard slots total (this tier), 6 kill rewards claimed.",
+     "requirements": {"raids_attempted": 90, "guard_slots_bought": 10, "kill_rewards_claimed": 6},
+     "rewards": {"vault_cash": 290_000, "income_per_hour_add": 3_000, "jailbust_tokens": 1, "racket_tokens": 1, "properties_tokens": 1}},
+    {"id": "ibm_25", "order": 25, "title": "Maximum lockdown",
+     "story": "Every inch hardened. Every dollar counted twice.",
+     "how_to_complete": "20,000 total crimes, full security (49 upgrades), 50 vault withdrawals.",
+     "requirements": {"crimes": 20000, "security_level": 49, "vault_withdrawals": 50},
+     "rewards": {"vault_cash": 325_000, "guard_weapon_max": 1, "xp_gta_tokens": 1, "oc_reduced_tokens": 1, "travel_tokens": 1}},
+    {"id": "ibm_26", "order": 26, "title": "Don's ledger",
+     "story": "You don't ask permission anymore. You set terms.",
+     "how_to_complete": "Reach Don rank, 4,500 crimes in your state, win 55 raids.",
+     "requirements": {"rank_id": 10, "crimes_in_state": 4500, "raids_won": 55},
+     "rewards": {"vault_cash": 375_000, "racket_tokens": 2, "income_per_hour_add": 3_000, "xp_crimes_tokens": 1, "auto_rank_2h_tokens": 1}},
+    {"id": "ibm_27", "order": 27, "title": "Perpetual motion",
+     "story": "Collect, raid, hire — until the city forgets there was ever a rival.",
+     "how_to_complete": "100 collections, 45 guards hired, 120 raid attempts.",
+     "requirements": {"collections": 100, "guards_hired": 45, "raids_attempted": 120},
+     "rewards": {"vault_cash": 425_000, "melt_tokens": 1, "booze_tokens": 1, "properties_tokens": 1, "jailbust_tokens": 1}},
+    {"id": "ibm_28", "order": 28, "title": "Scorched ledgers",
+     "story": "Thirty-five thousand crimes. Eight inheritance claims. A dozen new slots.",
+     "how_to_complete": "35,000 total crimes, 8 kill rewards, buy 14 guard slots this tier.",
+     "requirements": {"crimes": 35000, "kill_rewards_claimed": 8, "guard_slots_bought": 14},
+     "rewards": {"vault_cash": 500_000, "income_per_hour_add": 3_000, "xp_crimes_tokens": 2, "racket_tokens": 1, "xp_gta_tokens": 1}},
+    {"id": "ibm_29", "order": 29, "title": "Capo di tutti capi",
+     "story": "Almost nobody gets here. Prove you earned the chair.",
+     "how_to_complete": "Reach Capo di tutti capi rank, 110 collections, win 90 raids.",
+     "requirements": {"rank_id": 11, "collections": 110, "raids_won": 90},
+     "rewards": {"vault_cash": 600_000, "guard_slots": 2, "jailbust_tokens": 1, "income_per_hour_add": 5_000, "travel_tokens": 1, "oc_reduced_tokens": 1}},
+    {"id": "ibm_30", "order": 30, "title": "Godfather's racket",
+     "story": "The final grind — every lever of the business, pulled until they break or bend.",
+     "how_to_complete": "Godfather rank; 55k crimes; 6k in-state; 140 collections; 160 raid attempts; 110 raid wins; 70 hires; 10 kill claims.",
+     "requirements": {
+         "rank_id": 13,
+         "crimes": 55000,
+         "crimes_in_state": 6000,
+         "collections": 140,
+         "raids_attempted": 160,
+         "raids_won": 110,
+         "guards_hired": 70,
+         "kill_rewards_claimed": 10,
+     },
+     "rewards": {"vault_cash": 1_000_000, "racket_tokens": 5, "xp_crimes_tokens": 2, "jailbust_tokens": 2, "income_per_hour_add": 6_200,
+                 "melt_tokens": 1, "booze_tokens": 1, "properties_tokens": 1, "auto_rank_2h_tokens": 1}},
 ]
+
+# Mission requirements that count only since baselines were set for this mission id (user.illegal_business_mission_baselines).
+IBM_REQUIREMENT_USER_FIELDS = {
+    "crimes_in_state": "illegal_business_crimes_in_state",
+    "collections": "illegal_business_collections",
+    "raids_won": "illegal_business_raids_won",
+    "raids_attempted": "illegal_business_raids_attempted",
+    "guards_hired": "illegal_business_guards_hired",
+    "guard_slots_bought": "illegal_business_guard_slots_bought",
+    "vault_withdrawals": "illegal_business_vault_withdrawals",
+    "kill_rewards_claimed": "illegal_business_kill_rewards_claimed",
+}
+IBM_SEGMENT_KEYS = frozenset(IBM_REQUIREMENT_USER_FIELDS.keys())
 
 # Default booze type for booze_making passive output (first BOOZE_TYPES id)
 def _default_booze_type_id():
@@ -322,8 +421,25 @@ def _ibm_baseline_int(user: dict, mission_id: str, key: str) -> int:
     return int(block.get(key) or 0)
 
 
+def _ibm_user_counter_raw(user: dict, req_key: str) -> int:
+    field = IBM_REQUIREMENT_USER_FIELDS.get(req_key)
+    if not field:
+        return 0
+    return int(user.get(field) or 0)
+
+
+def _ibm_mission_user_projection() -> Dict[str, int]:
+    proj = {"_id": 0, "illegal_business_mission_completions": 1, "illegal_business_mission_baselines": 1}
+    for f in IBM_REQUIREMENT_USER_FIELDS.values():
+        proj[f] = 1
+    proj["total_crimes"] = 1
+    proj["rank_points"] = 1
+    proj["prestige_rank_multiplier"] = 1
+    return proj
+
+
 def _ibm_requirement_current(user: dict, business: Optional[dict], mission: dict, key: str) -> int:
-    """Progress for one requirement. crimes_in_state / collections count only since baselines set when the prior mission completed."""
+    """Progress for one requirement. Segmented keys use illegal_business_mission_baselines for this mission id."""
     if key == "crimes":
         return int(user.get("total_crimes") or 0)
     if key == "rank_id":
@@ -332,13 +448,9 @@ def _ibm_requirement_current(user: dict, business: Optional[dict], mission: dict
         if not business:
             return 0
         return len(business.get("security_upgrades") or [])
-    if key == "crimes_in_state":
-        raw = int(user.get("illegal_business_crimes_in_state") or 0)
-        base = _ibm_baseline_int(user, mission["id"], "crimes_in_state")
-        return max(0, raw - base)
-    if key == "collections":
-        raw = int(user.get("illegal_business_collections") or 0)
-        base = _ibm_baseline_int(user, mission["id"], "collections")
+    if key in IBM_SEGMENT_KEYS:
+        raw = _ibm_user_counter_raw(user, key)
+        base = _ibm_baseline_int(user, mission["id"], key)
         return max(0, raw - base)
     return 0
 
@@ -349,28 +461,78 @@ def _ibm_mission_progress_row(user: dict, business: Optional[dict], mission: dic
     return {"mission": mission, "completed": mission["id"] in completed_ids, "current": cur, "target": req}
 
 
+def _ibm_baseline_snapshot_for_requirements(user: dict, req: Dict[str, Any]) -> Dict[str, int]:
+    snap: Dict[str, int] = {}
+    for k in req:
+        if k in IBM_SEGMENT_KEYS:
+            snap[k] = _ibm_user_counter_raw(user, k)
+    return snap
+
+
 async def _ibm_set_baselines_for_next_mission(user_id: str, completed_mission_id: str):
     nxt = _ibm_mission_after(completed_mission_id)
     if not nxt:
         return
-    u = await db.users.find_one(
-        {"id": user_id},
-        {"illegal_business_crimes_in_state": 1, "illegal_business_collections": 1},
-    )
+    proj = {f: 1 for f in IBM_REQUIREMENT_USER_FIELDS.values()}
+    u = await db.users.find_one({"id": user_id}, proj)
     if not u:
         return
     req = nxt.get("requirements") or {}
-    snap: Dict[str, int] = {}
-    if "crimes_in_state" in req:
-        snap["crimes_in_state"] = int(u.get("illegal_business_crimes_in_state") or 0)
-    if "collections" in req:
-        snap["collections"] = int(u.get("illegal_business_collections") or 0)
+    snap = _ibm_baseline_snapshot_for_requirements(u, req)
     if not snap:
         return
     await db.users.update_one(
         {"id": user_id},
         {"$set": {f"illegal_business_mission_baselines.{nxt['id']}": snap}},
     )
+
+
+async def _ibm_ensure_mission_baselines(user_id: str, u: dict) -> None:
+    """Backfill baselines for incomplete missions when prior mission is done (e.g. new missions after ibm_15)."""
+    baselines = dict(u.get("illegal_business_mission_baselines") or {})
+    completions = u.get("illegal_business_mission_completions") or []
+    completed_ids = {c.get("mission_id") for c in completions if c.get("mission_id")}
+    ordered = _ordered_ibm_missions()
+    set_ops: Dict[str, Any] = {}
+    for m in ordered:
+        mid = m["id"]
+        if mid in completed_ids:
+            continue
+        prev = next((x for x in ordered if x["order"] == m["order"] - 1), None)
+        if prev is not None and prev["id"] not in completed_ids:
+            continue
+        req = m.get("requirements") or {}
+        seg_keys = [k for k in req if k in IBM_SEGMENT_KEYS]
+        if not seg_keys:
+            continue
+        block = baselines.get(mid) or {}
+        if block and all(k in block for k in seg_keys):
+            continue
+        if not block:
+            new_snap = {k: _ibm_user_counter_raw(u, k) for k in seg_keys}
+        else:
+            new_snap = {**block}
+            for k in seg_keys:
+                if k not in new_snap:
+                    new_snap[k] = _ibm_user_counter_raw(u, k)
+        baselines[mid] = new_snap
+        u.setdefault("illegal_business_mission_baselines", {})[mid] = new_snap
+        set_ops[f"illegal_business_mission_baselines.{mid}"] = new_snap
+    if set_ops:
+        await db.users.update_one({"id": user_id}, {"$set": set_ops})
+
+
+async def _ibm_load_user_with_mission_baselines(user_id: str, base_user: dict) -> dict:
+    u = await db.users.find_one({"id": user_id}, _ibm_mission_user_projection())
+    if not u:
+        return base_user
+    await _ibm_ensure_mission_baselines(user_id, u)
+    out = dict(base_user)
+    for k, v in u.items():
+        if k == "_id":
+            continue
+        out[k] = v
+    return out
 
 
 # ---------------------------------------------------------------------------
@@ -418,12 +580,13 @@ async def get_illegal_business(current_user: dict = Depends(get_current_user)):
     if not business:
         raise HTTPException(status_code=404, detail="You don't have an illegal business.")
     guards = await db.illegal_business_guards.find({"business_id": business["id"]}, {"_id": 0}).sort("slot_number", 1).to_list(20)
-    completions = current_user.get("illegal_business_mission_completions") or []
+    progress_user = await _ibm_load_user_with_mission_baselines(current_user["id"], current_user)
+    completions = progress_user.get("illegal_business_mission_completions") or []
     completed_ids = {c.get("mission_id") for c in completions if c.get("mission_id")}
     pending_rewards = current_user.get("pending_illegal_business_rewards") or []
     type_info = next((t for t in ILLEGAL_BUSINESS_TYPES if t["id"] == business.get("type_id")), {})
     missions_progress = [
-        _ibm_mission_progress_row(current_user, business, m, completed_ids)
+        _ibm_mission_progress_row(progress_user, business, m, completed_ids)
         for m in _ordered_ibm_missions()
     ]
     # Build security upgrades list (no mission locks; cost computed by index)
@@ -684,10 +847,11 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
 
 async def get_illegal_business_missions(current_user: dict = Depends(get_current_user)):
     business = await db.illegal_businesses.find_one({"user_id": current_user["id"]}, {"_id": 0})
-    completions = current_user.get("illegal_business_mission_completions") or []
+    progress_user = await _ibm_load_user_with_mission_baselines(current_user["id"], current_user)
+    completions = progress_user.get("illegal_business_mission_completions") or []
     completed_ids = {c.get("mission_id") for c in completions if c.get("mission_id")}
     progress = [
-        _ibm_mission_progress_row(current_user, business, m, completed_ids)
+        _ibm_mission_progress_row(progress_user, business, m, completed_ids)
         for m in _ordered_ibm_missions()
     ]
     return {"missions": progress}
@@ -697,16 +861,22 @@ async def complete_illegal_business_mission(mission_id: str, current_user: dict 
     mission = next((m for m in ILLEGAL_BUSINESS_MISSIONS if m["id"] == mission_id), None)
     if not mission:
         raise HTTPException(status_code=404, detail="Mission not found.")
-    completions = current_user.get("illegal_business_mission_completions") or []
-    if any(c.get("mission_id") == mission_id for c in completions):
+    progress_user = await _ibm_load_user_with_mission_baselines(current_user["id"], current_user)
+    completions = progress_user.get("illegal_business_mission_completions") or []
+    completed_ids = {c.get("mission_id") for c in completions if c.get("mission_id")}
+    if mission_id in completed_ids:
         raise HTTPException(status_code=400, detail="Mission already completed.")
+    ordered = _ordered_ibm_missions()
+    prev_m = next((x for x in ordered if x["order"] == mission["order"] - 1), None)
+    if prev_m is not None and prev_m["id"] not in completed_ids:
+        raise HTTPException(status_code=400, detail="Complete the previous mission first.")
     business = await db.illegal_businesses.find_one({"user_id": current_user["id"]}, {"_id": 0})
     if not business:
         raise HTTPException(status_code=404, detail="You need an illegal business.")
     req = mission.get("requirements") or {}
     met = True
     for key, target in req.items():
-        cur = _ibm_requirement_current(current_user, business, mission, key)
+        cur = _ibm_requirement_current(progress_user, business, mission, key)
         if cur < target:
             met = False
             break
@@ -729,10 +899,13 @@ async def complete_illegal_business_mission(mission_id: str, current_user: dict 
     await _ibm_set_baselines_for_next_mission(current_user["id"], mission_id)
     update_business_set = {}
     update_business_inc = {}
-    if "income_mult" in rewards:
-        mult = float(rewards["income_mult"])
+    if "income_mult" in rewards or "income_per_hour_add" in rewards:
         iph = int(business.get("income_per_hour") or INCOME_PER_HOUR_BASE)
-        update_business_set["income_per_hour"] = int(iph * mult)
+        if "income_mult" in rewards:
+            iph = int(iph * float(rewards["income_mult"]))
+        if "income_per_hour_add" in rewards:
+            iph += int(rewards["income_per_hour_add"])
+        update_business_set["income_per_hour"] = max(0, iph)
     if "guard_weapon_max" in rewards:
         update_business_set["guard_weapon_max_unlock"] = int(business.get("guard_weapon_max_unlock") or 0) + 1
     if rewards.get("guard_slots"):
@@ -779,6 +952,7 @@ async def buy_guard_slot(current_user: dict = Depends(get_current_user)):
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient vault funds")
+    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"illegal_business_guard_slots_bought": 1}})
     return {"message": "Another slot on the door.", "guard_slots": slots + 1}
 
 
@@ -823,6 +997,7 @@ async def hire_illegal_business_guard(req: HireGuardRequest, current_user: dict 
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient vault funds")
     await db.illegal_business_guards.insert_one(guard_doc)
+    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"illegal_business_guards_hired": 1}})
     return {"message": "Another pair of hands on the door.", "guard_id": guard_id}
 
 
@@ -878,7 +1053,10 @@ async def withdraw_illegal_business(req: WithdrawRequest, current_user: dict = D
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient vault funds")
-    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": amount}})
+    await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$inc": {"money": amount, "illegal_business_vault_withdrawals": 1}},
+    )
     return {"message": f"Pocketed ${amount:,} from the vault.", "withdrawn": amount, "vault_remaining": vault - amount}
 
 
@@ -943,6 +1121,7 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
     )
     if not claim_result:
         raise HTTPException(status_code=400, detail=f"Daily raid limit ({RAID_DAILY_LIMIT}) reached.")
+    await db.users.update_one({"id": current_user["id"]}, {"$inc": {"illegal_business_raids_attempted": 1}})
     guards = await db.illegal_business_guards.find({"business_id": business["id"]}, {"_id": 0}).to_list(2000)
     defender_str = _business_defender_strength(business, guards)
     attacker_str = _attacker_strength(current_user)
@@ -1104,12 +1283,21 @@ async def claim_kill_reward(req: ClaimKillRewardRequest, current_user: dict = De
         raise HTTPException(status_code=404, detail="No pending reward for this victim.")
     total_spent = int(reward_entry.get("total_spent") or 0)
     if choice == "cash":
-        await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": total_spent}})
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$inc": {"money": total_spent, "illegal_business_kill_rewards_claimed": 1}},
+        )
         return {"message": f"Took ${total_spent:,} from the late owner's operation.", "cash": total_spent, "income_boost": None}
     else:
         current_boost = int(current_user.get("illegal_business_income_boost_percent") or 0)
         new_boost = min(MAX_INCOME_BOOST_PERCENT, current_boost + INCOME_BOOST_PER_KILL_PERCENT)
-        await db.users.update_one({"id": current_user["id"]}, {"$set": {"illegal_business_income_boost_percent": new_boost}})
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {
+                "$set": {"illegal_business_income_boost_percent": new_boost},
+                "$inc": {"illegal_business_kill_rewards_claimed": 1},
+            },
+        )
         return {"message": f"Income boost +{INCOME_BOOST_PER_KILL_PERCENT}%. Total: {new_boost}%.", "cash": 0, "income_boost": new_boost}
 
 
