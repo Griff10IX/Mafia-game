@@ -266,7 +266,7 @@ export default function VideoPoker() {
     const city = ownership?.current_city;
     if (!city) return;
     const val = parseInt(String(newMaxBet).replace(/\D/g, ''), 10);
-    if (!val || val < 1_000_000) { toast.error('Min $1,000,000'); return; }
+    if (!val || val < 50_000) { toast.error('Min $50,000'); return; }
     setOwnerLoading(true);
     try { await api.post('/casino/videopoker/set-max-bet', { city, max_bet: val }); toast.success('Max bet updated'); setNewMaxBet(''); fetchConfigAndOwnership(); }
     catch (e) { toast.error(apiErrorDetail(e, 'Failed')); }
@@ -564,7 +564,7 @@ export default function VideoPoker() {
                   <FormattedNumberInput
                     value={bet}
                     onChange={(raw) => setBet(raw)}
-                    placeholder="1,000,000"
+                    placeholder="50,000"
                     className="w-32 sm:w-36 bg-black/30 border border-emerald-700/30 rounded-lg h-11 px-4 text-white text-base font-heading font-bold text-center focus:border-primary/60 focus:outline-none"
                   />
                 </div>

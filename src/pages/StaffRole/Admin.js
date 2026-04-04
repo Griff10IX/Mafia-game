@@ -1803,7 +1803,7 @@ export default function Admin() {
     setCasinoCapsSaving(true);
     try {
       await api.patch('/admin/settings', {
-        casino_global_max_bet: Math.max(1000000, parseInt(String(casinoGlobalMaxBet).replace(/\D/g, ''), 10) || 1000000000),
+        casino_global_max_bet: Math.max(50000, parseInt(String(casinoGlobalMaxBet).replace(/\D/g, ''), 10) || 1000000000),
         casino_buyback_max_points: Math.max(0, parseInt(String(casinoBuybackMaxPoints).replace(/\D/g, ''), 10) || 15000),
         mp_poker_max_blind: Math.max(1000, parseInt(String(mpPokerMaxBlind).replace(/\D/g, ''), 10) || 2500000),
       });

@@ -323,7 +323,7 @@ def register(router):
         if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this track")
         global_cap, _ = await get_casino_caps()
-        new_max = max(1_000_000, min(request.max_bet, global_cap))
+        new_max = max(50_000, min(request.max_bet, global_cap))
         await db.horseracing_ownership.update_one({"city": stored_city or city}, {"$set": {"max_bet": new_max}})
         return {"message": f"Max bet set to ${new_max:,}"}
 

@@ -5170,7 +5170,7 @@ def register(router):
         if body.casino_global_max_bet is not None:
             await db.game_settings.update_one(
                 {"_id": "main"},
-                {"$set": {"casino_global_max_bet": max(1_000_000, int(body.casino_global_max_bet))}},
+                {"$set": {"casino_global_max_bet": max(50_000, int(body.casino_global_max_bet))}},
                 upsert=True,
             )
         if body.casino_buyback_max_points is not None:

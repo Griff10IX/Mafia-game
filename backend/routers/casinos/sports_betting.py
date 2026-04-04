@@ -34,6 +34,14 @@ def _env_flag(name: str) -> bool:
     return v in ("1", "true", "yes", "on")
 
 
+def _sports_payout_to_swiss() -> bool:
+    """Win payouts go to swiss_balance (bypasses deposit limit). Set SPORTS_PAYOUT_TO_SWISS=0 to pay cash instead."""
+    v = (os.environ.get("SPORTS_PAYOUT_TO_SWISS") or "").strip().lower()
+    if v in ("0", "false", "no", "off"):
+        return False
+    return True
+
+
 # ----- Models -----
 class SportsBetPlaceRequest(BaseModel):
     event_id: str
@@ -1695,16 +1703,30 @@ async def _settle_event_internal(event_id: str, winning_option_id: str) -> bool:
         if not bet_claim:
             continue
         u = await db.users.find_one({"id": bet_claim["user_id"]}, {"_id": 0, "username": 1, "sports_current_win_streak": 1, "sports_best_win_streak": 1})
-        await log_gambling(bet_claim["user_id"], u.get("username") if u else "?", "sports_bet", {"bet_id": bet_claim["id"], "event_name": bet_claim.get("event_name"), "option_name": bet_claim.get("option_name"), "stake": bet_claim.get("stake"), "odds": bet_claim.get("odds"), "status": new_status, "settled_at": now})
+        stake = int(bet_claim.get("stake") or 0)
+        odds = float(bet_claim.get("odds") or 1)
+        payout = int(stake * odds) if won else 0
+        to_swiss = _sports_payout_to_swiss()
+        log_payload = {
+            "bet_id": bet_claim["id"],
+            "event_name": bet_claim.get("event_name"),
+            "option_name": bet_claim.get("option_name"),
+            "stake": stake,
+            "odds": odds,
+            "status": new_status,
+            "settled_at": now,
+        }
         if won:
-            stake = int(bet_claim.get("stake") or 0)
-            odds = float(bet_claim.get("odds") or 1)
-            payout = int(stake * odds)
+            log_payload["payout"] = payout
+            log_payload["payout_destination"] = "swiss" if to_swiss else "money"
+        await log_gambling(bet_claim["user_id"], u.get("username") if u else "?", "sports_bet", log_payload)
+        if won:
             current_streak = int((u or {}).get("sports_current_win_streak", 0)) + 1
             best_streak = max(current_streak, int((u or {}).get("sports_best_win_streak", 0)))
             update_fields = {"sports_current_win_streak": current_streak, "sports_best_win_streak": best_streak}
             if payout > 0:
-                await db.users.update_one({"id": bet_claim["user_id"]}, {"$inc": {"money": payout}, "$set": update_fields})
+                inc_field = "swiss_balance" if to_swiss else "money"
+                await db.users.update_one({"id": bet_claim["user_id"]}, {"$inc": {inc_field: payout}, "$set": update_fields})
             else:
                 await db.users.update_one({"id": bet_claim["user_id"]}, {"$set": update_fields})
         else:

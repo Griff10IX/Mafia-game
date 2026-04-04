@@ -500,7 +500,7 @@ export default function Rlt() {
   const handleSetMaxBet = async () => {
     if (!ownership?.current_city) { toast.error('No city found'); return; }
     const val = parseInt(String(newMaxBet).replace(/\D/g, ''), 10);
-    if (!val || val < 1000000) { toast.error('Min $1,000,000'); return; }
+    if (!val || val < 50_000) { toast.error('Min $50,000'); return; }
     setOwnerLoading(true);
     try {
       const res = await api.post('/casino/roulette/set-max-bet', { city: ownership.current_city, max_bet: val });

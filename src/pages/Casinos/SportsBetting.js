@@ -549,8 +549,9 @@ export default function SportsBetting() {
       `}</style>
 
       {/* Page header */}
-      <div className="relative sb-fade-in">
+      <div className="relative sb-fade-in space-y-0.5">
         <p className="text-[10px] text-zinc-500 font-heading italic">Underground — closes 10 min before start. Max {formatMoney(SPORTS_MAX_TOTAL_OPEN_STAKE)} total staked across all your open bets.</p>
+        <p className="text-[10px] text-zinc-600 font-heading italic">Winnings are paid to your Swiss bank (can exceed your normal Swiss deposit limit). Stakes come from cash on hand.</p>
       </div>
 
       {/* ═══ Stats bar ═══ */}

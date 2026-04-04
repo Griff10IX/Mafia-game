@@ -438,7 +438,7 @@ def register(router):
         if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this table")
         global_cap, _ = await get_casino_caps()
-        max_bet = max(1_000_000, min(int(request.max_bet), global_cap))
+        max_bet = max(50_000, min(int(request.max_bet), global_cap))
         await db.dice_ownership.update_one({"city": stored_city or city}, {"$set": {"max_bet": max_bet}})
         return {"message": f"Max bet set to ${max_bet:,}"}
 

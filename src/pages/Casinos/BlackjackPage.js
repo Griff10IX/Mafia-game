@@ -312,7 +312,7 @@ export default function Blackjack() {
     const city = ownership?.current_city;
     if (!city) return;
     const val = parseInt(String(newMaxBet).replace(/\D/g, ''), 10);
-    if (!val || val < 1_000_000) { toast.error('Min $1,000,000'); return; }
+    if (!val || val < 50_000) { toast.error('Min $50,000'); return; }
     setOwnerLoading(true);
     try { await api.post('/casino/blackjack/set-max-bet', { city, max_bet: val }); toast.success('Max bet updated'); setNewMaxBet(''); fetchConfigAndOwnership(); }
     catch (e) { toast.error(apiErrorDetail(e, 'Failed')); }

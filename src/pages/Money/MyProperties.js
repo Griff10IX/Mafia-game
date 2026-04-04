@@ -90,7 +90,7 @@ export default function MyProperties() {
     const c = data.casino;
     if (!c || saving) return;
     const val = parseInt(String(casinoMaxBet).replace(/\D/g, ''), 10);
-    if (!val || val < 1_000_000) { toast.error('Min $1,000,000'); return; }
+    if (!val || val < 50_000) { toast.error('Min $50,000'); return; }
     setSaving(true);
     try {
       await api.post(`/casino/${c.type}/set-max-bet`, { city: c.city, max_bet: val });
