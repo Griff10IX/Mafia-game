@@ -37,9 +37,21 @@ export default function MPPokerPage() {
   const [vsDealerStarting, setVsDealerStarting] = useState(false);
   const [cancellingId, setCancellingId] = useState(null);
   const [myUserId, setMyUserId] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [adminTournamentSettings, setAdminTournamentSettings] = useState({
+    require_approval: true,
+    tournament_limit_per_day: 10,
+    tournaments_created_today: 0,
+  });
+  const [adminSettingsSaving, setAdminSettingsSaving] = useState(false);
+  const [adminActionLoading, setAdminActionLoading] = useState(null);
+  const [adminDrafts, setAdminDrafts] = useState({});
 
   useEffect(() => {
     api.get('/auth/me').then((r) => setMyUserId(r.data?.id ?? null)).catch(() => {});
+    api.get('/admin/whoami')
+      .then((r) => setIsAdmin(Boolean(r.data?.is_admin)))
+      .catch(() => setIsAdmin(false));
   }, []);
 
   const fetchGames = useCallback(() => {
@@ -50,11 +62,26 @@ export default function MPPokerPage() {
     api.get('/casino/mp-poker/tournaments').then((r) => setTournaments(r.data?.tournaments ?? [])).catch(() => setTournaments([]));
   }, []);
 
+  const fetchTournamentAdminSettings = useCallback(() => {
+    if (!isAdmin) return;
+    api.get('/casino/mp-poker/tournaments/admin-settings')
+      .then((r) => setAdminTournamentSettings({
+        require_approval: r.data?.require_approval !== false,
+        tournament_limit_per_day: Number(r.data?.tournament_limit_per_day || 10),
+        tournaments_created_today: Number(r.data?.tournaments_created_today || 0),
+      }))
+      .catch(() => {});
+  }, [isAdmin]);
+
   useEffect(() => {
     fetchGames();
     const t = setInterval(fetchGames, 8000);
     return () => clearInterval(t);
   }, [fetchGames]);
+
+  useEffect(() => {
+    fetchTournamentAdminSettings();
+  }, [fetchTournamentAdminSettings]);
 
   const handlePlayVsDealer = async () => {
     const parsed = parseInt(String(vsDealerBlind).replace(/\D/g, ''), 10) || 5000;
@@ -126,7 +153,8 @@ export default function MPPokerPage() {
         buy_in: buyIn,
       });
       await refreshUser();
-      toast.success('Tournament submitted for admin approval');
+      const approvalStatus = res.data?.game?.approval_status;
+      toast.success(approvalStatus === 'approved' ? 'Tournament created and open for registration' : 'Tournament submitted for admin approval');
       setTournamentCreateOpen(false);
       fetchGames();
       if (res.data?.game_id) {
@@ -147,6 +175,77 @@ export default function MPPokerPage() {
       }
     } catch (e) { toast.error(getApiErrorMessage(e) || 'Could not join tournament'); }
     finally { setJoiningTournamentId(null); }
+  };
+
+  const getAdminDraft = (gameId) => adminDrafts[gameId] || {
+    reason: '',
+    bonus_money: '',
+    bonus_points: '',
+    bonus_token_type: '',
+    bonus_token_amount: '',
+    bonus_car_id: '',
+  };
+
+  const setAdminDraft = (gameId, patch) => {
+    setAdminDrafts((prev) => ({ ...prev, [gameId]: { ...getAdminDraft(gameId), ...patch } }));
+  };
+
+  const handleAdminSaveTournamentSettings = async () => {
+    if (!isAdmin) return;
+    setAdminSettingsSaving(true);
+    try {
+      const res = await api.patch('/casino/mp-poker/tournaments/admin-settings', {
+        require_approval: Boolean(adminTournamentSettings.require_approval),
+        tournament_limit_per_day: Math.max(1, parseInt(String(adminTournamentSettings.tournament_limit_per_day), 10) || 1),
+      });
+      setAdminTournamentSettings({
+        require_approval: res.data?.require_approval !== false,
+        tournament_limit_per_day: Number(res.data?.tournament_limit_per_day || 10),
+        tournaments_created_today: Number(res.data?.tournaments_created_today || 0),
+      });
+      toast.success('Tournament settings saved');
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || 'Could not save tournament settings');
+    } finally {
+      setAdminSettingsSaving(false);
+    }
+  };
+
+  const handleAdminApproveTournament = async (gameId) => {
+    const draft = getAdminDraft(gameId);
+    setAdminActionLoading(`approve-${gameId}`);
+    try {
+      await api.post(`/admin/mp-poker/tournaments/${gameId}/approve`, {
+        reason: draft.reason || null,
+        bonus_money: parseInt(String(draft.bonus_money).replace(/\D/g, ''), 10) || 0,
+        bonus_points: parseInt(String(draft.bonus_points).replace(/\D/g, ''), 10) || 0,
+        bonus_token_type: (draft.bonus_token_type || '').trim() || null,
+        bonus_token_amount: parseInt(String(draft.bonus_token_amount).replace(/\D/g, ''), 10) || 0,
+        bonus_car_id: (draft.bonus_car_id || '').trim() || null,
+      });
+      toast.success('Tournament approved');
+      fetchGames();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || 'Could not approve tournament');
+    } finally {
+      setAdminActionLoading(null);
+    }
+  };
+
+  const handleAdminDenyTournament = async (gameId) => {
+    const draft = getAdminDraft(gameId);
+    setAdminActionLoading(`deny-${gameId}`);
+    try {
+      await api.post(`/admin/mp-poker/tournaments/${gameId}/deny`, {
+        reason: draft.reason || null,
+      });
+      toast.success('Tournament denied and refunded');
+      fetchGames();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || 'Could not deny tournament');
+    } finally {
+      setAdminActionLoading(null);
+    }
   };
 
   const inputStyle = { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(212,175,55,0.2)', color: 'inherit' };
@@ -405,6 +504,45 @@ export default function MPPokerPage() {
             </button>
           </div>
         )}
+        {isAdmin && (
+          <div className="p-3 border-b border-primary/10 space-y-2">
+            <div className="text-[9px] text-primary/80 font-heading font-bold uppercase tracking-wider">Admin Tournament Controls</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <label className="text-[9px] text-mutedForeground font-heading">Require approval</label>
+              <button
+                type="button"
+                onClick={() => setAdminTournamentSettings((s) => ({ ...s, require_approval: !s.require_approval }))}
+                className="px-2 py-1 rounded border text-[9px] font-heading"
+                style={{ borderColor: 'rgba(212,175,55,0.35)', color: 'var(--noir-primary)', background: 'rgba(212,175,55,0.08)' }}
+              >
+                {adminTournamentSettings.require_approval ? 'On' : 'Off'}
+              </button>
+              <label className="text-[9px] text-mutedForeground font-heading ml-2">Daily limit</label>
+              <input
+                type="number"
+                min={1}
+                max={500}
+                value={adminTournamentSettings.tournament_limit_per_day}
+                onChange={(e) => setAdminTournamentSettings((s) => ({ ...s, tournament_limit_per_day: e.target.value }))}
+                className="w-20 px-2 py-1 rounded border text-[10px] font-heading"
+                style={inputStyle}
+              />
+              <button
+                type="button"
+                onClick={handleAdminSaveTournamentSettings}
+                disabled={adminSettingsSaving}
+                className="px-2.5 py-1 rounded border text-[9px] font-heading font-bold uppercase disabled:opacity-50"
+                style={{ borderColor: 'rgba(212,175,55,0.35)', color: 'var(--noir-primary)', background: 'rgba(212,175,55,0.12)' }}
+              >
+                {adminSettingsSaving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+            <div className="text-[9px] text-mutedForeground font-heading">
+              Today {Number(adminTournamentSettings.tournaments_created_today || 0).toLocaleString()}/
+              {Number(adminTournamentSettings.tournament_limit_per_day || 0).toLocaleString()} tournaments used
+            </div>
+          </div>
+        )}
         <div className="divide-y divide-primary/10">
           {tournaments.length === 0 ? (
             <div className="py-5 text-center text-[10px] text-mutedForeground font-heading">
@@ -442,6 +580,58 @@ export default function MPPokerPage() {
                         <span>Blinds <span className="text-primary/80">{formatMoney(t.small_blind)}/{formatMoney(t.big_blind)}</span></span>
                         <span>{t.player_count}/{t.max_players}</span>
                       </div>
+                      {isAdmin && t.approval_status === 'pending' && (
+                        <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-w-[520px]">
+                          <input
+                            type="text"
+                            value={getAdminDraft(t.id).reason}
+                            onChange={(e) => setAdminDraft(t.id, { reason: e.target.value })}
+                            placeholder="Reason (optional)"
+                            className="sm:col-span-2 px-2 py-1 rounded border text-[10px] font-heading"
+                            style={inputStyle}
+                          />
+                          <input
+                            type="text"
+                            value={getAdminDraft(t.id).bonus_money}
+                            onChange={(e) => setAdminDraft(t.id, { bonus_money: e.target.value })}
+                            placeholder="Winner bonus money"
+                            className="px-2 py-1 rounded border text-[10px] font-heading"
+                            style={inputStyle}
+                          />
+                          <input
+                            type="text"
+                            value={getAdminDraft(t.id).bonus_points}
+                            onChange={(e) => setAdminDraft(t.id, { bonus_points: e.target.value })}
+                            placeholder="Winner bonus points"
+                            className="px-2 py-1 rounded border text-[10px] font-heading"
+                            style={inputStyle}
+                          />
+                          <input
+                            type="text"
+                            value={getAdminDraft(t.id).bonus_token_type}
+                            onChange={(e) => setAdminDraft(t.id, { bonus_token_type: e.target.value })}
+                            placeholder="Token type (e.g. racket)"
+                            className="px-2 py-1 rounded border text-[10px] font-heading"
+                            style={inputStyle}
+                          />
+                          <input
+                            type="text"
+                            value={getAdminDraft(t.id).bonus_token_amount}
+                            onChange={(e) => setAdminDraft(t.id, { bonus_token_amount: e.target.value })}
+                            placeholder="Token amount"
+                            className="px-2 py-1 rounded border text-[10px] font-heading"
+                            style={inputStyle}
+                          />
+                          <input
+                            type="text"
+                            value={getAdminDraft(t.id).bonus_car_id}
+                            onChange={(e) => setAdminDraft(t.id, { bonus_car_id: e.target.value })}
+                            placeholder="Bonus car ID (optional)"
+                            className="sm:col-span-2 px-2 py-1 rounded border text-[10px] font-heading"
+                            style={inputStyle}
+                          />
+                        </div>
+                      )}
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">
                       {canJoin && (
@@ -456,6 +646,28 @@ export default function MPPokerPage() {
                           className="inline-flex items-center gap-1 rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-1.5 font-heading font-bold text-[9px] uppercase tracking-wider hover:bg-primary/20 active:scale-[0.97] transition-all text-primary">
                           <ShieldCheck size={11} /> Open
                         </button>
+                      )}
+                      {isAdmin && t.approval_status === 'pending' && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleAdminApproveTournament(t.id)}
+                            disabled={adminActionLoading !== null}
+                            className="rounded-lg border px-2.5 py-1.5 font-heading font-bold text-[9px] uppercase disabled:opacity-50"
+                            style={{ borderColor: 'rgba(52,211,153,0.5)', color: '#34d399', background: 'rgba(52,211,153,0.08)' }}
+                          >
+                            {adminActionLoading === `approve-${t.id}` ? '…' : 'Approve'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleAdminDenyTournament(t.id)}
+                            disabled={adminActionLoading !== null}
+                            className="rounded-lg border px-2.5 py-1.5 font-heading font-bold text-[9px] uppercase disabled:opacity-50"
+                            style={{ borderColor: 'rgba(248,113,113,0.5)', color: '#f87171', background: 'rgba(248,113,113,0.08)' }}
+                          >
+                            {adminActionLoading === `deny-${t.id}` ? '…' : 'Deny'}
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>

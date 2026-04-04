@@ -285,6 +285,12 @@ class PokerTournamentCreateRequest(BaseModel):
 
 class PokerTournamentDecisionRequest(BaseModel):
     reason: Optional[str] = None
+    bonus_money: int = 0
+    bonus_points: int = 0
+    bonus_respect_points: int = 0
+    bonus_token_type: Optional[str] = None
+    bonus_token_amount: int = 0
+    bonus_car_id: Optional[str] = None
 
 
 class PokerTournamentBonusRequest(BaseModel):
@@ -295,6 +301,11 @@ class PokerTournamentBonusRequest(BaseModel):
     token_type: Optional[str] = None
     token_amount: int = 0
     car_id: Optional[str] = None
+
+
+class PokerTournamentSettingsPatchRequest(BaseModel):
+    require_approval: Optional[bool] = None
+    tournament_limit_per_day: Optional[int] = None
 
 
 def _parse_iso_utc(value: Any) -> Optional[datetime]:
@@ -318,7 +329,109 @@ def _safe_tournament_blind(level_idx: int) -> Tuple[int, int]:
     return MP_POKER_TOURNAMENT_BLINDS[i]
 
 
+def _today_utc_iso_bounds() -> Tuple[str, str]:
+    now = datetime.now(timezone.utc)
+    start = datetime(now.year, now.month, now.day, tzinfo=timezone.utc)
+    end = datetime.fromtimestamp(start.timestamp() + 86400, tz=timezone.utc)
+    return start.isoformat(), end.isoformat()
+
+
 def register(router):
+    async def _get_tournament_settings() -> Dict[str, Any]:
+        main_doc = await db.game_settings.find_one({"_id": "main"}, {"_id": 0, "mp_poker_tournament_require_approval": 1, "mp_poker_tournament_limit_per_day": 1})
+        require_approval = bool((main_doc or {}).get("mp_poker_tournament_require_approval", True))
+        try:
+            limit_per_day = int((main_doc or {}).get("mp_poker_tournament_limit_per_day") or 10)
+        except (TypeError, ValueError):
+            limit_per_day = 10
+        limit_per_day = max(1, min(500, limit_per_day))
+        start_iso, end_iso = _today_utc_iso_bounds()
+        created_today = await db.mp_poker_games.count_documents(
+            {"mode": "tournament", "created_at": {"$gte": start_iso, "$lt": end_iso}}
+        )
+        return {
+            "require_approval": require_approval,
+            "tournament_limit_per_day": limit_per_day,
+            "tournaments_created_today": int(created_today or 0),
+        }
+
+    async def _apply_tournament_bonus_rewards(
+        target_user_id: str,
+        *,
+        money: int = 0,
+        points: int = 0,
+        respect_points: int = 0,
+        token_type: Optional[str] = None,
+        token_amount: int = 0,
+        car_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        money = max(0, int(money or 0))
+        points = max(0, int(points or 0))
+        respect_points = max(0, int(respect_points or 0))
+        token_amount = max(0, int(token_amount or 0))
+        update_inc: Dict[str, int] = {}
+        if money:
+            update_inc["money"] = money
+        if points:
+            update_inc["points"] = points
+        if respect_points:
+            update_inc["respect_points"] = respect_points
+        token_field_map = {
+            "xp_crimes": "xp_crimes_tokens",
+            "xp_gta": "xp_gta_tokens",
+            "auto_rank_2h": "auto_rank_2h_tokens",
+            "melt": "melt_tokens",
+            "oc_reduced": "oc_reduced_tokens",
+            "booze": "booze_tokens",
+            "racket": "racket_tokens",
+            "travel": "travel_tokens",
+            "properties": "properties_tokens",
+            "jailbust_bonus": "jailbust_tokens",
+            "rank_xp_pass": "rank_xp_pass_tokens",
+        }
+        token_type_clean = (token_type or "").strip() or None
+        if token_type_clean:
+            if token_type_clean not in token_field_map:
+                raise HTTPException(status_code=400, detail="Invalid token type")
+            if token_amount < 1:
+                raise HTTPException(status_code=400, detail="token_amount must be at least 1")
+            update_inc[token_field_map[token_type_clean]] = token_amount
+        if update_inc:
+            await db.users.update_one({"id": target_user_id}, {"$inc": update_inc})
+
+        given_car = None
+        if car_id:
+            import server as srv
+            car_id_clean = str(car_id).strip()
+            car_info = next((c for c in (srv.CARS or []) if c.get("id") == car_id_clean), None)
+            if not car_info:
+                raise HTTPException(status_code=404, detail="Car not found")
+            now_iso = datetime.now(timezone.utc).isoformat()
+            await db.user_cars.insert_one(
+                {
+                    "id": str(uuid.uuid4()),
+                    "user_id": target_user_id,
+                    "car_id": car_id_clean,
+                    "car_name": car_info.get("name", car_id_clean),
+                    "value": int(car_info.get("value") or 0),
+                    "condition": 100,
+                    "created_at": now_iso,
+                    "acquired_at": now_iso,
+                    "listed_for_sale": False,
+                    "listed_at": None,
+                }
+            )
+            given_car = car_id_clean
+
+        return {
+            "money": money,
+            "points": points,
+            "respect_points": respect_points,
+            "token_type": token_type_clean,
+            "token_amount": token_amount if token_type_clean else 0,
+            "car_id": given_car,
+        }
+
     # ── Vs Dealer helpers ─────────────────────────────────────────────────────
     async def _vs_dealer_showdown(game_id: str):
         claim = await db.mp_poker_games.update_one(
@@ -795,6 +908,23 @@ def register(router):
                     "winnings": prize_pool,
                 },
             )
+            bonus_cfg = g.get("admin_bonus_reward") if isinstance(g.get("admin_bonus_reward"), dict) else {}
+            bonus_granted = {}
+            if bonus_cfg:
+                bonus_granted = await _apply_tournament_bonus_rewards(
+                    winner_uid,
+                    money=int(bonus_cfg.get("money") or 0),
+                    points=int(bonus_cfg.get("points") or 0),
+                    respect_points=int(bonus_cfg.get("respect_points") or 0),
+                    token_type=bonus_cfg.get("token_type"),
+                    token_amount=int(bonus_cfg.get("token_amount") or 0),
+                    car_id=bonus_cfg.get("car_id"),
+                )
+            if bonus_granted:
+                await db.mp_poker_games.update_one(
+                    {"id": game_id},
+                    {"$set": {"admin_bonus_reward_granted": bonus_granted, "admin_bonus_reward_granted_at": now_iso}},
+                )
         results = []
         for p in players:
             uid = p.get("user_id")
@@ -887,6 +1017,7 @@ def register(router):
                 "blind_level_index": 1,
                 "prize_pool": 1,
                 "winner_username": 1,
+                "admin_bonus_reward": 1,
                 "created_at": 1,
             },
         ).sort("created_at", -1).limit(50)
@@ -913,10 +1044,38 @@ def register(router):
                     "blind_level_index": int(g.get("blind_level_index") or 0),
                     "prize_pool": int(g.get("prize_pool") or 0),
                     "winner_username": g.get("winner_username"),
+                    "admin_bonus_reward": g.get("admin_bonus_reward") if isinstance(g.get("admin_bonus_reward"), dict) else None,
                     "created_at": g.get("created_at"),
                 }
             )
         return {"tournaments": out}
+
+    @router.get("/casino/mp-poker/tournaments/admin-settings")
+    async def get_tournament_admin_settings(current_user: dict = Depends(get_current_user_verified)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        return await _get_tournament_settings()
+
+    @router.patch("/casino/mp-poker/tournaments/admin-settings")
+    async def patch_tournament_admin_settings(
+        body: PokerTournamentSettingsPatchRequest,
+        current_user: dict = Depends(get_current_user_verified),
+    ):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        set_doc: Dict[str, Any] = {}
+        if body.require_approval is not None:
+            set_doc["mp_poker_tournament_require_approval"] = bool(body.require_approval)
+        if body.tournament_limit_per_day is not None:
+            try:
+                limit = int(body.tournament_limit_per_day)
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="Invalid tournament_limit_per_day")
+            set_doc["mp_poker_tournament_limit_per_day"] = max(1, min(500, limit))
+        if not set_doc:
+            return await _get_tournament_settings()
+        await db.game_settings.update_one({"_id": "main"}, {"$set": set_doc}, upsert=True)
+        return await _get_tournament_settings()
 
     @router.post("/casino/mp-poker/tournaments")
     async def create_tournament(
@@ -927,6 +1086,13 @@ def register(router):
         username = current_user.get("username") or "Player"
         buy_in = int(request.buy_in)
         max_players = int(request.max_players)
+        settings = await _get_tournament_settings()
+        start_iso, end_iso = _today_utc_iso_bounds()
+        created_today = await db.mp_poker_games.count_documents(
+            {"mode": "tournament", "created_at": {"$gte": start_iso, "$lt": end_iso}}
+        )
+        if created_today >= int(settings.get("tournament_limit_per_day") or 10):
+            raise HTTPException(status_code=400, detail="Daily tournament limit reached")
         deduct = await db.users.update_one(
             {"id": uid, "money": {"$gte": buy_in}},
             {"$inc": {"money": -buy_in}},
@@ -936,6 +1102,7 @@ def register(router):
         game_id = str(uuid.uuid4())
         now_iso = datetime.now(timezone.utc).isoformat()
         sb, bb = _safe_tournament_blind(0)
+        require_approval = bool(settings.get("require_approval", True))
         doc = {
             "id": game_id,
             "mode": "tournament",
@@ -950,11 +1117,11 @@ def register(router):
             "big_blind": bb,
             "blind_level_index": 0,
             "blind_level_started_at": None,
-            "approval_status": "pending",
+            "approval_status": "pending" if require_approval else "approved",
             "approval_reason": None,
             "approved_by": None,
-            "approved_at": None,
-            "tournament_status": "pending_approval",
+            "approved_at": None if require_approval else now_iso,
+            "tournament_status": "pending_approval" if require_approval else "registration",
             "status": "open",
             "phase": "lobby",
             "players": [
@@ -981,6 +1148,7 @@ def register(router):
             "hand_number": 0,
             "created_at": now_iso,
             "chat": [],
+            "admin_bonus_reward": None,
         }
         await log_gambling(uid, username, "mp_poker", {"action": "create", "game_id": game_id, "buy_in": buy_in, "mode": "tournament"})
         await db.mp_poker_games.insert_one(doc)
@@ -1075,6 +1243,26 @@ def register(router):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         now_iso = datetime.now(timezone.utc).isoformat()
+        bonus_cfg = {
+            "money": max(0, int(body.bonus_money or 0)),
+            "points": max(0, int(body.bonus_points or 0)),
+            "respect_points": max(0, int(body.bonus_respect_points or 0)),
+            "token_type": (body.bonus_token_type or "").strip() or None,
+            "token_amount": max(0, int(body.bonus_token_amount or 0)),
+            "car_id": (body.bonus_car_id or "").strip() or None,
+        }
+        if bonus_cfg["token_type"] and bonus_cfg["token_amount"] < 1:
+            raise HTTPException(status_code=400, detail="bonus_token_amount must be at least 1 when token type is set")
+        if not any(
+            [
+                bonus_cfg["money"] > 0,
+                bonus_cfg["points"] > 0,
+                bonus_cfg["respect_points"] > 0,
+                bonus_cfg["token_type"],
+                bonus_cfg["car_id"],
+            ]
+        ):
+            bonus_cfg = None
         res = await db.mp_poker_games.update_one(
             {"id": game_id, "mode": "tournament", "approval_status": "pending"},
             {
@@ -1084,6 +1272,7 @@ def register(router):
                     "approved_by": current_user.get("username") or current_user.get("id") or "admin",
                     "approved_at": now_iso,
                     "tournament_status": "registration",
+                    "admin_bonus_reward": bonus_cfg,
                 }
             },
         )
@@ -1144,74 +1333,20 @@ def register(router):
         target = await db.users.find_one({"id": target_user_id}, {"_id": 0, "id": 1, "username": 1})
         if not target:
             raise HTTPException(status_code=404, detail="Target user not found")
-        money = max(0, int(body.money or 0))
-        points = max(0, int(body.points or 0))
-        respect_points = max(0, int(body.respect_points or 0))
-        update_inc: Dict[str, int] = {}
-        if money:
-            update_inc["money"] = money
-        if points:
-            update_inc["points"] = points
-        if respect_points:
-            update_inc["respect_points"] = respect_points
-        token_field_map = {
-            "xp_crimes": "xp_crimes_tokens",
-            "xp_gta": "xp_gta_tokens",
-            "auto_rank_2h": "auto_rank_2h_tokens",
-            "melt": "melt_tokens",
-            "oc_reduced": "oc_reduced_tokens",
-            "booze": "booze_tokens",
-            "racket": "racket_tokens",
-            "travel": "travel_tokens",
-            "properties": "properties_tokens",
-            "jailbust_bonus": "jailbust_tokens",
-            "rank_xp_pass": "rank_xp_pass_tokens",
-        }
-        if body.token_type:
-            token_key = str(body.token_type).strip()
-            token_amt = max(0, int(body.token_amount or 0))
-            if token_key not in token_field_map:
-                raise HTTPException(status_code=400, detail="Invalid token type")
-            if token_amt < 1:
-                raise HTTPException(status_code=400, detail="token_amount must be at least 1")
-            update_inc[token_field_map[token_key]] = token_amt
-        if update_inc:
-            await db.users.update_one({"id": target_user_id}, {"$inc": update_inc})
-        given_car = None
-        if body.car_id:
-            import server as srv
-            car_id = str(body.car_id).strip()
-            car_info = next((c for c in (srv.CARS or []) if c.get("id") == car_id), None)
-            if not car_info:
-                raise HTTPException(status_code=404, detail="Car not found")
-            now_iso = datetime.now(timezone.utc).isoformat()
-            await db.user_cars.insert_one(
-                {
-                    "id": str(uuid.uuid4()),
-                    "user_id": target_user_id,
-                    "car_id": car_id,
-                    "car_name": car_info.get("name", car_id),
-                    "value": int(car_info.get("value") or 0),
-                    "condition": 100,
-                    "created_at": now_iso,
-                    "acquired_at": now_iso,
-                    "listed_for_sale": False,
-                    "listed_at": None,
-                }
-            )
-            given_car = car_id
+        granted = await _apply_tournament_bonus_rewards(
+            target_user_id,
+            money=int(body.money or 0),
+            points=int(body.points or 0),
+            respect_points=int(body.respect_points or 0),
+            token_type=body.token_type,
+            token_amount=int(body.token_amount or 0),
+            car_id=body.car_id,
+        )
         return {
             "message": "Tournament bonus rewards granted",
             "target_user_id": target_user_id,
             "target_username": target.get("username"),
-            "granted": {
-                "money": money,
-                "points": points,
-                "respect_points": respect_points,
-                "token_type": body.token_type,
-                "token_amount": int(body.token_amount or 0),
-                "car_id": given_car,
-            },
+            "granted": granted,
         }
 
     @router.post("/casino/mp-poker/games")
