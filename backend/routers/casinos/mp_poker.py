@@ -1743,8 +1743,12 @@ def register(router):
                     board.append(deck.pop())
             first = _first_actor_after_advance(players, (button + 3) % n)
             if players[first].get("status") in ("folded", "all_in"):
-                await db.mp_poker_games.update_one({"id": game_id}, {"$set": {"street": "showdown", "board": board, "players": players}})
-                await _mp_poker_run_showdown(game_id)
+                # Nobody can act on this street (all remaining players are all-in/folded) -> run out board.
+                await db.mp_poker_games.update_one(
+                    {"id": game_id},
+                    {"$set": {"street": "flop", "board": board, "deck": deck, "players": players, "to_call": 0}},
+                )
+                await _mp_poker_advance_street(game_id)
             else:
                 await db.mp_poker_games.update_one(
                     {"id": game_id},
@@ -1755,10 +1759,11 @@ def register(router):
                 board.append(deck.pop())
             first = _first_actor_after_advance(players, (button + 1) % n)
             if players[first].get("status") in ("folded", "all_in"):
-                if deck:
-                    board.append(deck.pop())
-                await db.mp_poker_games.update_one({"id": game_id}, {"$set": {"street": "showdown", "board": board, "deck": deck, "players": players}})
-                await _mp_poker_run_showdown(game_id)
+                await db.mp_poker_games.update_one(
+                    {"id": game_id},
+                    {"$set": {"street": "turn", "board": board, "deck": deck, "players": players, "to_call": 0}},
+                )
+                await _mp_poker_advance_street(game_id)
             else:
                 await db.mp_poker_games.update_one(
                     {"id": game_id},
@@ -1769,8 +1774,11 @@ def register(router):
                 board.append(deck.pop())
             first = _first_actor_after_advance(players, (button + 1) % n)
             if players[first].get("status") in ("folded", "all_in"):
-                await db.mp_poker_games.update_one({"id": game_id}, {"$set": {"street": "showdown", "board": board, "deck": deck, "players": players}})
-                await _mp_poker_run_showdown(game_id)
+                await db.mp_poker_games.update_one(
+                    {"id": game_id},
+                    {"$set": {"street": "river", "board": board, "deck": deck, "players": players, "to_call": 0}},
+                )
+                await _mp_poker_advance_street(game_id)
             else:
                 await db.mp_poker_games.update_one(
                     {"id": game_id},
@@ -1956,6 +1964,16 @@ def register(router):
                 updates["to_call"] = max_bet
                 await db.mp_poker_games.update_one({"id": game_id}, {"$set": updates})
         else:
+            # If turn wraps back to the same seat and everyone else is folded/all-in,
+            # there is no actionable player left on this street: auto-advance/run out board.
+            if all_in_or_folded and next_idx == turn_idx:
+                updates["to_call"] = max_bet
+                updates["min_raise"] = g.get("min_raise", min_raise)
+                await db.mp_poker_games.update_one({"id": game_id}, {"$set": updates})
+                await _mp_poker_advance_street(game_id)
+                g = await db.mp_poker_games.find_one({"id": game_id})
+                _enrich_players_current_hand(g)
+                return {k: v for k, v in (g or {}).items() if k != "_id"}
             updates["to_call"] = g.get("to_call", max_bet)
             updates["min_raise"] = g.get("min_raise", min_raise)
             await db.mp_poker_games.update_one({"id": game_id}, {"$set": updates})
