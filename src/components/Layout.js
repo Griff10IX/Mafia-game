@@ -278,6 +278,8 @@ export default function Layout({ children }) {
   const [rankProgress, setRankProgress] = useState(null);
   const [unreadCount, setUnreadCount] = useState(0);
   const [helpDeskOpenCount, setHelpDeskOpenCount] = useState(0);
+  /** Sidebar: total from GET /users/online (null = unknown / failed). */
+  const [usersOnlineCount, setUsersOnlineCount] = useState(null);
   const [statOrder, setStatOrder] = useState(loadStatOrder);
   const [topBarGap, setTopBarGap] = useState(loadTopBarGap);
   const [topBarSize, setTopBarSize] = useState(loadTopBarSize);
@@ -416,6 +418,7 @@ export default function Layout({ children }) {
         return { ...i, items: i.items.map((sub) => {
           if (sub.path === '/game/help-desk') return { ...sub, badge: helpDeskOpenCount };
           if (sub.path === '/social/inbox') return { ...sub, badge: unreadCount };
+          if (sub.path === '/game/users-online') return { ...sub, onlineCountBadge: usersOnlineCount };
           return sub;
         }) };
       }
@@ -432,7 +435,7 @@ export default function Layout({ children }) {
       }
       return i;
     });
-  }, [isAdmin, isModerator, hasAdminEmail, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail]);
+  }, [isAdmin, isModerator, hasAdminEmail, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail]);
 
   useEffect(() => onCooldownChange(setCooldownSeconds), []);
 
@@ -685,6 +688,12 @@ export default function Layout({ children }) {
     return () => { clearTimeout(deferred); if (intervalId) clearInterval(intervalId); };
   }, []); // eslint-disable-line
 
+  useEffect(() => {
+    let intervalId;
+    const deferred = setTimeout(() => { fetchUsersOnlineCount(); intervalId = setInterval(fetchUsersOnlineCount, 30000); }, 500);
+    return () => { clearTimeout(deferred); if (intervalId) clearInterval(intervalId); };
+  }, []); // eslint-disable-line
+
   // Periodic refresh of user data (bullets, cash, etc.) every 60 seconds for Auto Rank updates
   useEffect(() => {
     let intervalId;
@@ -752,6 +761,15 @@ export default function Layout({ children }) {
   };
   const fetchHelpDeskOpenCount = async () => {
     try { const res = await api.get('/help-desk/open-count'); setHelpDeskOpenCount(res.data?.open_tickets_count ?? 0); } catch { setHelpDeskOpenCount(0); }
+  };
+  const fetchUsersOnlineCount = async () => {
+    try {
+      const res = await api.get('/users/online');
+      const n = res.data?.total_online;
+      setUsersOnlineCount(typeof n === 'number' ? n : 0);
+    } catch {
+      setUsersOnlineCount(null);
+    }
   };
   const fetchCasinoProperty = async () => {
     try { const res = await api.get('/user/casino-property'); if (res.data) setUser((prev) => (prev ? { ...prev, ...res.data } : prev)); } catch { }
@@ -931,7 +949,7 @@ export default function Layout({ children }) {
     { path: '/my-properties', icon: Building2, label: 'My Properties' },
     { path: '/money/booze-run', icon: Wine, label: 'Booze Run' },
     { path: '/money/racket', icon: Building2, label: 'Racket' },
-    { path: '/game/users-online', icon: Users, label: 'Users Online' },
+    { path: '/game/users-online', icon: Users, label: 'Users Online', countBadge: usersOnlineCount },
     { path: '/social/forum', icon: MessageSquare, label: 'Forum' },
     { path: '/social/inbox', icon: Mail, label: 'Inbox', badge: unreadCount },
     { path: '/social/image-host', icon: Image, label: 'Image host' },
@@ -1188,6 +1206,14 @@ export default function Layout({ children }) {
           <Icon size={13} className="shrink-0" style={isFamiliesAtWar ? { color: '#f87171' } : { color: 'var(--noir-primary)' }} />
           <span className="uppercase tracking-widest text-[10px] font-heading flex-1 truncate">{item.label}</span>
           {isFamiliesAtWar && <AlertTriangle size={14} className="shrink-0" style={{ color: '#f87171' }} aria-hidden />}
+          {typeof item.countBadge === 'number' && (
+            <span
+              className="bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30 tabular-nums shrink-0"
+              title="Players online"
+            >
+              {item.countBadge.toLocaleString()}
+            </span>
+          )}
           {item.badge > 0 && <span className="bg-red-600/20 text-red-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-red-500/30">{item.badge > 9 ? '9+' : item.badge}</span>}
         </Link>
       </Fragment>
@@ -2082,6 +2108,11 @@ export default function Layout({ children }) {
                         title={isGtaExclusive ? 'Exclusive car in GTA pool!' : undefined}>
                         {isGtaExclusive && <span className="text-violet-400 font-bold shrink-0" aria-hidden>★</span>}
                         <span className="leading-tight">{sub.label}</span>
+                        {typeof sub.onlineCountBadge === 'number' && (
+                          <span className="shrink-0 min-w-[16px] h-[16px] rounded px-0.5 bg-emerald-600/25 text-emerald-400 text-[9px] font-bold border border-emerald-500/40 flex items-center justify-center tabular-nums">
+                            {sub.onlineCountBadge.toLocaleString()}
+                          </span>
+                        )}
                         {sub.badge > 0 && (
                           <span className="shrink-0 min-w-[16px] h-[16px] rounded-full bg-red-600 text-[9px] font-bold text-white flex items-center justify-center px-0.5">{sub.badge > 9 ? '9+' : sub.badge}</span>
                         )}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, User, Target, Building2, Plane, Factory, Mail } from 'lucide-react';
+import { Users, User, Target, Building2, Plane, Factory, Mail, Radio, Clock, CalendarDays, CalendarRange } from 'lucide-react';
 import api from '../../utils/api';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
@@ -48,27 +48,44 @@ const LoadingSpinner = () => (
   </div>
 );
 
-const OnlineCountCard = ({ totalOnline }) => (
+const snapshotTile = (Icon, label, value, caption, accentClass) => (
+  <div
+    className={`rounded-md border border-primary/15 bg-black/20 px-2 py-1.5 flex flex-col gap-0.5 min-h-[4.5rem] ${accentClass || ''}`}
+  >
+    <div className="flex items-center gap-1.5 text-mutedForeground">
+      <Icon size={14} className="shrink-0 text-primary/85" aria-hidden />
+      <span className="text-[9px] font-heading uppercase tracking-wide leading-tight">{label}</span>
+    </div>
+    <div className="text-lg md:text-xl font-heading font-bold text-foreground tabular-nums leading-none mt-0.5">
+      {value}
+    </div>
+    <div className="text-[9px] text-mutedForeground font-heading mt-auto">{caption}</div>
+  </div>
+);
+
+const ActivitySnapshotCard = ({ totalOnline, activeHour, activeDay, activeWeek }) => (
   <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-card uo-fade-in mobile-panel`}>
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
       <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
-        👥 Activity Status
+        Who&apos;s around
       </h2>
     </div>
     <div className="p-2">
-      <div className="flex items-center gap-2">
-        <div className="p-1.5 rounded-md bg-primary/10 border border-primary/20">
-          <Users className="text-primary" size={20} />
-        </div>
-        <div>
-          <div className="text-xl md:text-2xl font-heading font-bold text-primary tabular-nums">
-            {totalOnline}
-          </div>
-          <p className="text-[10px] text-mutedForeground font-heading">
-            {totalOnline === 1 ? 'user' : 'users'} online now
-          </p>
-        </div>
+      <p className="text-[9px] text-mutedForeground font-heading mb-2 leading-snug">
+        Live list below; these counts use <span className="text-foreground/90">last seen</span> (staff in ghost mode are excluded from the totals).
+      </p>
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {snapshotTile(
+          Radio,
+          'Right now',
+          totalOnline,
+          'On live roster',
+          'ring-1 ring-emerald-500/20 bg-emerald-500/5'
+        )}
+        {snapshotTile(Clock, 'Past hour', activeHour, 'Accounts')}
+        {snapshotTile(CalendarDays, 'Past day', activeDay, 'Accounts')}
+        {snapshotTile(CalendarRange, 'Past week', activeWeek, 'Accounts')}
       </div>
     </div>
     <div className="uo-art-line text-primary mx-2.5" />
@@ -299,6 +316,12 @@ const InfoCard = () => (
         <p className="flex items-start gap-1">
           <span className="text-primary shrink-0">•</span>
           <span>
+            Snapshot tiles count accounts with a recent <strong className="text-foreground">last seen</strong> (not the same as the live list).
+          </span>
+        </p>
+        <p className="flex items-start gap-1">
+          <span className="text-primary shrink-0">•</span>
+          <span>
             Search any user (including offline or dead) from the top bar.
           </span>
         </p>
@@ -320,12 +343,15 @@ const InfoCard = () => (
   </div>
 );
 
-const UO_CACHE_KEY = 'mafia_users_online_v1';
+const UO_CACHE_KEY = 'mafia_users_online_v2';
 
 // Main component
 export default function UsersOnline() {
   const [bootCache] = useState(() => readSessionJson(UO_CACHE_KEY));
   const [totalOnline, setTotalOnline] = useState(() => bootCache?.total_online ?? 0);
+  const [activeHour, setActiveHour] = useState(() => bootCache?.active_last_hour ?? 0);
+  const [activeDay, setActiveDay] = useState(() => bootCache?.active_last_day ?? 0);
+  const [activeWeek, setActiveWeek] = useState(() => bootCache?.active_last_week ?? 0);
   const [users, setUsers] = useState(() => (Array.isArray(bootCache?.users) ? bootCache.users : []));
   const [adminOnlineColor, setAdminOnlineColor] = useState(() => bootCache?.admin_online_color ?? '#a78bfa');
   const [modDefaultOnlineColor, setModDefaultOnlineColor] = useState(() => bootCache?.mod_default_online_color ?? DEFAULT_MOD_COLOR);
@@ -339,12 +365,18 @@ export default function UsersOnline() {
     try {
       const response = await api.get('/users/online');
       setTotalOnline(response.data.total_online);
+      setActiveHour(response.data.active_last_hour ?? 0);
+      setActiveDay(response.data.active_last_day ?? 0);
+      setActiveWeek(response.data.active_last_week ?? 0);
       setUsers(response.data.users || []);
       if (response.data.admin_online_color != null) setAdminOnlineColor(response.data.admin_online_color);
       if (response.data.mod_default_online_color != null) setModDefaultOnlineColor(response.data.mod_default_online_color);
       if (response.data.hdo_online_color != null) setHdoOnlineColor(response.data.hdo_online_color);
       writeSessionJson(UO_CACHE_KEY, {
         total_online: response.data.total_online,
+        active_last_hour: response.data.active_last_hour ?? 0,
+        active_last_day: response.data.active_last_day ?? 0,
+        active_last_week: response.data.active_last_week ?? 0,
         users: response.data.users || [],
         admin_online_color: response.data.admin_online_color,
         mod_default_online_color: response.data.mod_default_online_color,
@@ -411,7 +443,12 @@ export default function UsersOnline() {
         </AutoRefreshNote>
       </div>
 
-      <OnlineCountCard totalOnline={totalOnline} />
+      <ActivitySnapshotCard
+        totalOnline={totalOnline}
+        activeHour={activeHour}
+        activeDay={activeDay}
+        activeWeek={activeWeek}
+      />
 
       {users.length === 0 ? (
         <div className={`relative ${styles.panel} rounded-md border border-primary/20 py-8 text-center uo-fade-in mobile-panel`} style={{ animationDelay: '0.03s' }} data-testid="no-users">

@@ -1,5 +1,6 @@
 # Users: online list, search (all users incl. offline/dead)
 from datetime import datetime, timezone, timedelta
+import asyncio
 import re
 
 from fastapi import Depends, Query
@@ -169,12 +170,47 @@ def register(router):
             elif u.get("is_moderator") and u.get("online_color") is None:
                 u["online_color"] = mod_default_online_color
 
+        admin_emails = list(ADMIN_EMAILS or [])
+
+        def _seen_activity_match(cutoff_iso: str):
+            return {
+                "is_dead": {"$ne": True},
+                "is_bodyguard": {"$ne": True},
+                "last_seen": {"$gte": cutoff_iso},
+                "username": {"$regex": r"\S"},
+                "$nor": [
+                    {
+                        "$and": [
+                            {
+                                "$or": [
+                                    {"email": {"$in": admin_emails}},
+                                    {"is_moderator": True},
+                                ]
+                            },
+                            {"admin_ghost_mode": True},
+                        ]
+                    }
+                ],
+            }
+
+        hour_ago = (now - timedelta(hours=1)).isoformat()
+        day_ago = (now - timedelta(days=1)).isoformat()
+        week_ago = (now - timedelta(days=7)).isoformat()
+        active_hour, active_day, active_week = await asyncio.gather(
+            db.users.count_documents(_seen_activity_match(hour_ago)),
+            db.users.count_documents(_seen_activity_match(day_ago)),
+            db.users.count_documents(_seen_activity_match(week_ago)),
+        )
+
         return OnlineUsersResponse(
             total_online=len(users_data),
             users=users_data,
             admin_online_color=admin_online_color,
             mod_default_online_color=mod_default_online_color,
             hdo_online_color=HDO_ONLINE_COLOR,
+            active_last_hour=active_hour,
+            active_last_day=active_day,
+            active_last_week=active_week,
         )
 
     @router.get("/users/search")
