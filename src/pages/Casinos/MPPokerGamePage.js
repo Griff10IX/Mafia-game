@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { ArrowLeft, MessageSquare, CheckCircle2, XCircle } from 'lucide-react';
@@ -613,6 +613,13 @@ export default function MPPokerGamePage() {
   const buttonIndex = game?.button_index ?? 0;
   const isCreator = game?.creator_id === myUserId;
   const canLeaveGame = amIPlayer && !isCreator && status === 'open';
+  const seatOrder = useMemo(() => {
+    const total = players.length;
+    if (total <= 0) return [];
+    const inPlay = status === 'playing' && phase === 'playing';
+    if (!inPlay || myIndex < 0) return Array.from({ length: total }, (_, i) => i);
+    return Array.from({ length: total }, (_, i) => (myIndex + i) % total);
+  }, [players, status, phase, myIndex]);
 
   // Seat positions on oval table
   const maxSeats = game?.max_players || players.length || 6;
@@ -969,15 +976,16 @@ export default function MPPokerGamePage() {
             </div>
 
             {/* Player seats positioned around oval */}
-            {players.map((p, idx) => {
-              const pos = tablePositions[idx] || { x: 50, y: 50 };
+            {seatOrder.map((playerIdx, displayIdx) => {
+              const p = players[playerIdx];
+              const pos = tablePositions[displayIdx] || { x: 50, y: 50 };
               // Cards face-up rule: show your own cards; show all at showdown/completed; bots always hidden until then
               const isMyOwnSeat = myUserId && p.user_id === myUserId;
               const showHole = showAllCards || (isMyOwnSeat && !p.is_bot);
-              const isDealer = !isVsDealer && idx === buttonIndex;
-              const isCurrent = idx === currentTurnIndex;
+              const isDealer = !isVsDealer && playerIdx === buttonIndex;
+              const isCurrent = playerIdx === currentTurnIndex;
               return (
-                <div key={p.user_id || idx}
+                <div key={p.user_id || playerIdx}
                   className="absolute"
                   style={{
                     left: `${pos.x}%`, top: `${pos.y}%`,
