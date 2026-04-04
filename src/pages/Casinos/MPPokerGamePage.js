@@ -30,6 +30,13 @@ function formatMoneyFull(n) {
   return `$${Math.trunc(num).toLocaleString()}`;
 }
 
+function formatDurationShort(totalSeconds) {
+  const s = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+  const m = Math.floor(s / 60);
+  const sec = s % 60;
+  return `${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+}
+
 function formatLastAction(la) {
   if (!la || !la.action) return null;
   const a = la.action;
@@ -592,8 +599,17 @@ export default function MPPokerGamePage() {
   const amIPlayer = myIndex >= 0;
   const amIReady = myPlayer?.ready || false;
   const activePlayers = players.filter((p) => p.status !== 'folded');
-  const allReady = players.length >= 2 && players.every((p) => p.ready);
+  const minPlayersRequired = game?.mode === 'tournament' ? 4 : 2;
+  const allReady = players.length >= minPlayersRequired && players.every((p) => p.ready);
   const allReadyAt = game?.all_ready_at;
+  const isTournament = game?.mode === 'tournament';
+  const blindLevelIndex = Number(game?.blind_level_index || 0);
+  const blindLevelStartedAt = game?.blind_level_started_at ? new Date(game.blind_level_started_at).getTime() : null;
+  const blindLevelSecondsLeft = blindLevelStartedAt
+    ? Math.max(0, 300 - Math.floor((Date.now() - blindLevelStartedAt) / 1000))
+    : null;
+  const tournamentStatus = game?.tournament_status || null;
+  const prizePool = Number(game?.prize_pool || 0);
   const buttonIndex = game?.button_index ?? 0;
   const isCreator = game?.creator_id === myUserId;
   const canLeaveGame = amIPlayer && !isCreator && status === 'open';
@@ -731,6 +747,17 @@ export default function MPPokerGamePage() {
               {' · '}Pot <span className="text-primary font-bold">{formatMoneyFull(pot)}</span>
               {game?.hand_number > 0 && ` · Hand #${game.hand_number}`}
             </p>
+            {isTournament && (
+              <p className="text-[9px] text-mutedForeground font-heading mt-0.5">
+                Tournament · {tournamentStatus || 'registration'}
+                {' · '}Prize <span className="text-emerald-400 font-bold">{formatMoneyFull(prizePool)}</span>
+                {' · '}Blinds <span className="text-primary/80 font-bold">{formatMoneyFull(game?.small_blind || 0)}/{formatMoneyFull(game?.big_blind || 0)}</span>
+                {' · '}Level {blindLevelIndex + 1}
+                {blindLevelSecondsLeft !== null && tournamentStatus === 'running' && (
+                  <> · Next level in <span className="text-amber-300 font-bold">{formatDurationShort(blindLevelSecondsLeft)}</span></>
+                )}
+              </p>
+            )}
           </div>
         </div>
         {/* My hole cards condensed in header when game is active */}

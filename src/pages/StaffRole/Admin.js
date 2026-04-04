@@ -998,6 +998,15 @@ export default function Admin() {
   const [casinoBuybackMaxPoints, setCasinoBuybackMaxPoints] = useState(15000);
   const [mpPokerMaxBlind, setMpPokerMaxBlind] = useState(2500000);
   const [casinoCapsSaving, setCasinoCapsSaving] = useState(false);
+  const [pendingPokerTournaments, setPendingPokerTournaments] = useState([]);
+  const [pendingPokerTournamentsLoading, setPendingPokerTournamentsLoading] = useState(false);
+  const [pokerTournamentDecisionReason, setPokerTournamentDecisionReason] = useState('');
+  const [pokerTournamentRewardMoney, setPokerTournamentRewardMoney] = useState('');
+  const [pokerTournamentRewardPoints, setPokerTournamentRewardPoints] = useState('');
+  const [pokerTournamentRewardTokenType, setPokerTournamentRewardTokenType] = useState('');
+  const [pokerTournamentRewardTokenAmount, setPokerTournamentRewardTokenAmount] = useState('');
+  const [pokerTournamentRewardCarId, setPokerTournamentRewardCarId] = useState('');
+  const [pokerTournamentActionLoading, setPokerTournamentActionLoading] = useState(null);
   const [claimCosts, setClaimCosts] = useState({
     dice_cash: 0,
     dice_points: 0,
@@ -1831,6 +1840,62 @@ export default function Admin() {
       toast.error(e.response?.data?.detail ?? 'Failed to save casino caps');
     } finally {
       setCasinoCapsSaving(false);
+    }
+  };
+
+  const fetchPendingPokerTournaments = async () => {
+    setPendingPokerTournamentsLoading(true);
+    try {
+      const res = await api.get('/admin/mp-poker/tournaments/pending');
+      setPendingPokerTournaments(res.data?.tournaments || []);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to fetch pending tournaments');
+    } finally {
+      setPendingPokerTournamentsLoading(false);
+    }
+  };
+
+  const handleApprovePokerTournament = async (gameId) => {
+    setPokerTournamentActionLoading(`approve-${gameId}`);
+    try {
+      await api.post(`/admin/mp-poker/tournaments/${gameId}/approve`, { reason: pokerTournamentDecisionReason || null });
+      toast.success('Tournament approved');
+      fetchPendingPokerTournaments();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to approve');
+    } finally {
+      setPokerTournamentActionLoading(null);
+    }
+  };
+
+  const handleDenyPokerTournament = async (gameId) => {
+    setPokerTournamentActionLoading(`deny-${gameId}`);
+    try {
+      await api.post(`/admin/mp-poker/tournaments/${gameId}/deny`, { reason: pokerTournamentDecisionReason || null });
+      toast.success('Tournament denied and refunded');
+      fetchPendingPokerTournaments();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to deny');
+    } finally {
+      setPokerTournamentActionLoading(null);
+    }
+  };
+
+  const handlePokerTournamentBonusRewards = async (gameId) => {
+    setPokerTournamentActionLoading(`bonus-${gameId}`);
+    try {
+      await api.post(`/admin/mp-poker/tournaments/${gameId}/bonus-rewards`, {
+        money: parseInt(String(pokerTournamentRewardMoney).replace(/\D/g, ''), 10) || 0,
+        points: parseInt(String(pokerTournamentRewardPoints).replace(/\D/g, ''), 10) || 0,
+        token_type: pokerTournamentRewardTokenType || null,
+        token_amount: parseInt(String(pokerTournamentRewardTokenAmount).replace(/\D/g, ''), 10) || 0,
+        car_id: (pokerTournamentRewardCarId || '').trim() || null,
+      });
+      toast.success('Tournament bonus rewards sent');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to send rewards');
+    } finally {
+      setPokerTournamentActionLoading(null);
     }
   };
 
@@ -8886,6 +8951,102 @@ export default function Admin() {
             >
               {casinoCapsSaving ? 'Saving...' : 'Save Casino Limits'}
             </button>
+            <div className="mt-2 pt-3 border-t border-primary/10 space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Poker Tournament Approvals</span>
+                <button
+                  type="button"
+                  onClick={fetchPendingPokerTournaments}
+                  disabled={pendingPokerTournamentsLoading}
+                  className="px-2.5 py-1 text-[10px] font-heading font-bold uppercase rounded border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50"
+                >
+                  {pendingPokerTournamentsLoading ? 'Loading…' : 'Refresh'}
+                </button>
+              </div>
+              <input
+                type="text"
+                value={pokerTournamentDecisionReason}
+                onChange={(e) => setPokerTournamentDecisionReason(e.target.value)}
+                placeholder="Approval/Deny reason (optional)"
+                className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+              />
+              {(pendingPokerTournaments || []).length === 0 ? (
+                <div className="text-[10px] text-mutedForeground">No pending tournament approvals.</div>
+              ) : (
+                <div className="space-y-2">
+                  {pendingPokerTournaments.map((t) => (
+                    <div key={t.id} className="rounded border border-primary/15 p-2 bg-black/10 space-y-2">
+                      <div className="text-[10px] text-mutedForeground">
+                        <span className="text-primary font-bold">{t.creator_username}</span> · {t.player_count}/{t.max_players} · Buy-in ${Number(t.buy_in || 0).toLocaleString()}
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        <button
+                          type="button"
+                          onClick={() => handleApprovePokerTournament(t.id)}
+                          disabled={pokerTournamentActionLoading !== null}
+                          className="px-2.5 py-1 text-[10px] font-heading font-bold uppercase rounded border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 disabled:opacity-50"
+                        >
+                          {pokerTournamentActionLoading === `approve-${t.id}` ? 'Approving…' : 'Approve'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDenyPokerTournament(t.id)}
+                          disabled={pokerTournamentActionLoading !== null}
+                          className="px-2.5 py-1 text-[10px] font-heading font-bold uppercase rounded border border-red-500/40 bg-red-500/10 text-red-400 hover:bg-red-500/20 disabled:opacity-50"
+                        >
+                          {pokerTournamentActionLoading === `deny-${t.id}` ? 'Denying…' : 'Deny'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handlePokerTournamentBonusRewards(t.id)}
+                          disabled={pokerTournamentActionLoading !== null}
+                          className="px-2.5 py-1 text-[10px] font-heading font-bold uppercase rounded border border-amber-500/40 bg-amber-500/10 text-amber-300 hover:bg-amber-500/20 disabled:opacity-50"
+                        >
+                          {pokerTournamentActionLoading === `bonus-${t.id}` ? 'Sending…' : 'Send Bonus'}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1">
+                <input
+                  type="text"
+                  value={pokerTournamentRewardMoney}
+                  onChange={(e) => setPokerTournamentRewardMoney(e.target.value)}
+                  placeholder="Bonus money"
+                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                <input
+                  type="text"
+                  value={pokerTournamentRewardPoints}
+                  onChange={(e) => setPokerTournamentRewardPoints(e.target.value)}
+                  placeholder="Bonus points"
+                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                <input
+                  type="text"
+                  value={pokerTournamentRewardTokenType}
+                  onChange={(e) => setPokerTournamentRewardTokenType(e.target.value)}
+                  placeholder="Token type (e.g. racket)"
+                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                <input
+                  type="text"
+                  value={pokerTournamentRewardTokenAmount}
+                  onChange={(e) => setPokerTournamentRewardTokenAmount(e.target.value)}
+                  placeholder="Token amount"
+                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                <input
+                  type="text"
+                  value={pokerTournamentRewardCarId}
+                  onChange={(e) => setPokerTournamentRewardCarId(e.target.value)}
+                  placeholder="Bonus car ID (optional)"
+                  className="md:col-span-2 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+              </div>
+            </div>
           </div>
         )}
         </div>

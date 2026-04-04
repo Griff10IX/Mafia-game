@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { PlusCircle, User, Users, Clock, DollarSign } from 'lucide-react';
+import { PlusCircle, User, Users, Clock, DollarSign, Trophy, ShieldCheck } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
@@ -26,6 +26,12 @@ export default function MPPokerPage() {
   const [createSmallBlind, setCreateSmallBlind] = useState('');
   const [createExtraPrize, setCreateExtraPrize] = useState('');
   const [creating, setCreating] = useState(false);
+  const [tournaments, setTournaments] = useState([]);
+  const [tournamentCreateOpen, setTournamentCreateOpen] = useState(false);
+  const [tournamentMaxPlayers, setTournamentMaxPlayers] = useState(6);
+  const [tournamentBuyIn, setTournamentBuyIn] = useState('100000');
+  const [tournamentCreating, setTournamentCreating] = useState(false);
+  const [joiningTournamentId, setJoiningTournamentId] = useState(null);
   const [vsDealerOpen, setVsDealerOpen] = useState(false);
   const [vsDealerBlind, setVsDealerBlind] = useState('5000');
   const [vsDealerStarting, setVsDealerStarting] = useState(false);
@@ -41,6 +47,7 @@ export default function MPPokerPage() {
     api.get('/casino/mp-poker/recent-games').then((r) => setRecentGames(r.data?.games ?? [])).catch(() => {
       setRecentGames([]);
     });
+    api.get('/casino/mp-poker/tournaments').then((r) => setTournaments(r.data?.tournaments ?? [])).catch(() => setTournaments([]));
   }, []);
 
   useEffect(() => {
@@ -107,6 +114,39 @@ export default function MPPokerPage() {
       fetchGames();
     } catch (e) { toast.error(getApiErrorMessage(e) || 'Could not cancel'); }
     finally { setCancellingId(null); }
+  };
+
+  const handleCreateTournament = async () => {
+    const buyIn = parseInt(String(tournamentBuyIn).replace(/\D/g, ''), 10) || 0;
+    if (buyIn <= 0) { toast.error('Tournament buy-in must be positive'); return; }
+    setTournamentCreating(true);
+    try {
+      const res = await api.post('/casino/mp-poker/tournaments', {
+        max_players: Math.max(4, Math.min(9, tournamentMaxPlayers)),
+        buy_in: buyIn,
+      });
+      await refreshUser();
+      toast.success('Tournament submitted for admin approval');
+      setTournamentCreateOpen(false);
+      fetchGames();
+      if (res.data?.game_id) {
+        navigate(`/casino/mp-poker/game/${res.data.game_id}`, { state: { game: res.data.game } });
+      }
+    } catch (e) { toast.error(getApiErrorMessage(e) || 'Could not create tournament'); }
+    finally { setTournamentCreating(false); }
+  };
+
+  const handleJoinTournament = async (gameId) => {
+    setJoiningTournamentId(gameId);
+    try {
+      const res = await api.post(`/casino/mp-poker/tournaments/${gameId}/join`);
+      await refreshUser();
+      fetchGames();
+      if (res.data?.id) {
+        navigate(`/casino/mp-poker/game/${res.data.id}`, { state: { game: res.data } });
+      }
+    } catch (e) { toast.error(getApiErrorMessage(e) || 'Could not join tournament'); }
+    finally { setJoiningTournamentId(null); }
   };
 
   const inputStyle = { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(212,175,55,0.2)', color: 'inherit' };
@@ -315,6 +355,106 @@ export default function MPPokerPage() {
                         <button type="button" onClick={() => navigate(`/casino/mp-poker/game/${g.id}`)}
                           className="inline-flex items-center gap-1 rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-1.5 font-heading font-bold text-[9px] uppercase tracking-wider hover:bg-primary/20 active:scale-[0.97] transition-all text-primary">
                           Open
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* ── Tournaments ── */}
+      <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20 pkr-lobby-fade`} style={{ animationDelay: '0.1s' }}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
+          <div>
+            <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center gap-1.5">
+              <Trophy size={12} /> Poker Tournaments
+            </h2>
+            <p className="text-[9px] text-mutedForeground font-heading mt-0.5">4–9 players · freezeout · escalating blinds</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setTournamentCreateOpen((o) => !o)}
+            className="rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-1.5 font-heading font-bold text-[9px] uppercase tracking-wider hover:bg-primary/20 transition-all"
+          >
+            {tournamentCreateOpen ? 'Close' : 'Create'}
+          </button>
+        </div>
+        {tournamentCreateOpen && (
+          <div className="p-3 space-y-2 border-b border-primary/10">
+            <div className="flex items-center gap-2">
+              <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-20 shrink-0">Players</label>
+              <select value={tournamentMaxPlayers} onChange={(e) => setTournamentMaxPlayers(Number(e.target.value))}
+                className="mp-poker-select flex-1 px-2 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={selectStyle}>
+                {[4,5,6,7,8,9].map((n) => <option key={n} value={n}>{n} players</option>)}
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-20 shrink-0">Buy-in ($)</label>
+              <FormattedNumberInput value={tournamentBuyIn} onChange={setTournamentBuyIn} placeholder="100,000"
+                className="flex-1 px-2 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={inputStyle} />
+            </div>
+            <button type="button" onClick={handleCreateTournament} disabled={tournamentCreating}
+              className="w-full py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase disabled:opacity-50 active:scale-[0.97] transition-all mt-1"
+              style={{ background: 'linear-gradient(180deg,var(--noir-primary),#a08020)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200' }}>
+              {tournamentCreating ? 'Submitting…' : 'Submit Tournament'}
+            </button>
+          </div>
+        )}
+        <div className="divide-y divide-primary/10">
+          {tournaments.length === 0 ? (
+            <div className="py-5 text-center text-[10px] text-mutedForeground font-heading">
+              No tournaments yet.
+            </div>
+          ) : (
+            tournaments.map((t, idx) => {
+              const isIn = (t.player_ids || []).includes(myUserId);
+              const isCreator = t.creator_id === myUserId;
+              const full = (t.player_count || 0) >= (t.max_players || 9);
+              const canJoin = t.approval_status === 'approved' && t.tournament_status === 'registration' && !isIn && !full;
+              const statusText = t.approval_status === 'pending'
+                ? 'Pending Approval'
+                : t.approval_status === 'denied'
+                ? 'Denied'
+                : t.tournament_status === 'running'
+                ? 'Running'
+                : t.tournament_status === 'completed'
+                ? 'Completed'
+                : 'Registration Open';
+              return (
+                <div key={t.id} className="pkr-row px-3 py-2.5 hover:bg-primary/5 transition-colors" style={{ animationDelay: `${0.04 + idx * 0.03}s` }}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-[10px] font-heading font-bold text-foreground truncate">{t.creator_username || '—'}</span>
+                        <span className="text-[8px] font-heading font-bold px-1.5 py-0.5 rounded-full uppercase"
+                          style={{ background: 'rgba(212,175,55,0.12)', color: 'var(--noir-primary)', border: '1px solid rgba(212,175,55,0.3)' }}>
+                          {statusText}
+                        </span>
+                      </div>
+                      <div className="text-[9px] text-mutedForeground font-heading mt-0.5 flex items-center gap-3 flex-wrap">
+                        <span>Buy-in <span className="text-primary font-bold">{formatMoney(t.buy_in)}</span></span>
+                        <span>Prize <span className="text-primary font-bold">{formatMoney(t.prize_pool)}</span></span>
+                        <span>Blinds <span className="text-primary/80">{formatMoney(t.small_blind)}/{formatMoney(t.big_blind)}</span></span>
+                        <span>{t.player_count}/{t.max_players}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {canJoin && (
+                        <button type="button" disabled={joiningTournamentId !== null} onClick={() => handleJoinTournament(t.id)}
+                          className="rounded-lg border-2 px-3 py-1.5 font-heading font-bold text-[9px] uppercase tracking-wider active:scale-[0.97] transition-all disabled:opacity-50"
+                          style={{ background: 'linear-gradient(180deg,var(--noir-primary),#a08020)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200' }}>
+                          {joiningTournamentId === t.id ? '…' : 'Join'}
+                        </button>
+                      )}
+                      {(isIn || isCreator) && (
+                        <button type="button" onClick={() => navigate(`/casino/mp-poker/game/${t.id}`)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-1.5 font-heading font-bold text-[9px] uppercase tracking-wider hover:bg-primary/20 active:scale-[0.97] transition-all text-primary">
+                          <ShieldCheck size={11} /> Open
                         </button>
                       )}
                     </div>

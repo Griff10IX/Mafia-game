@@ -366,6 +366,9 @@ export default function Layout({ children }) {
     setMobileNavStyle,
     setThemeVariant,
   } = useTheme();
+  const closeRightSidebar = useCallback(() => {
+    setRightSidebarOpen(false);
+  }, []);
 
   useEffect(() => {
     if (!user || typeof localStorage === 'undefined') return;
@@ -1846,17 +1849,17 @@ export default function Layout({ children }) {
         <>
           {isMobileViewport && rightSidebarOpen && (
             <div className="fixed inset-0 bg-black/50 z-40 md:hidden cursor-pointer touch-manipulation" aria-label="Close stats" role="button" tabIndex={-1}
-              onClick={() => setRightSidebarOpen(false)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') setRightSidebarOpen(false); }} />
+              onClick={closeRightSidebar} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === 'Escape') closeRightSidebar(); }} />
           )}
           {isMobileViewport && (
             <button type="button" onClick={() => setRightSidebarOpen(true)}
-              className="fixed right-0 top-1/2 -translate-y-1/2 z-50 w-8 h-14 flex items-center justify-center rounded-l-lg border border-l-0 shadow-lg md:hidden"
+              className={`fixed right-0 top-1/2 -translate-y-1/2 z-50 w-8 h-14 flex items-center justify-center rounded-l-lg border border-l-0 shadow-lg md:hidden transition-opacity ${rightSidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
               style={{ backgroundColor: 'var(--noir-content)', borderColor: 'var(--noir-primary)' }}
               aria-label="Open stats sidebar">
               <PanelRight size={18} style={{ color: 'var(--noir-primary)' }} />
             </button>
           )}
-          <div data-layout="right-sidebar" className={`fixed right-0 w-52 flex flex-col z-40 overflow-y-auto border-l ${styles.sidebar} transition-transform duration-300 ${isMobileViewport ? (rightSidebarOpen ? 'translate-x-0' : 'translate-x-full') : 'translate-x-0'} ${isMobileViewport ? 'top-0 h-full' : 'md:top-0 md:h-full'}`} style={sidebarBgStyle}>
+          <div data-layout="right-sidebar" className={`fixed right-0 w-52 flex flex-col z-40 overflow-y-auto border-l ${styles.sidebar} transition-transform duration-300 ${isMobileViewport ? (rightSidebarOpen ? 'translate-x-0 pointer-events-auto' : 'translate-x-full pointer-events-none') : 'translate-x-0'} ${isMobileViewport ? 'top-0 h-full' : 'md:top-0 md:h-full'}`} style={sidebarBgStyle}>
 
             {/* IMPROVEMENT 4: username + rank in header; page + user for logs */}
             <div className={`flex flex-col px-2.5 py-1.5 border-b ${styles.borderGoldLight} shrink-0 gap-0.5`}>
@@ -1867,7 +1870,9 @@ export default function Layout({ children }) {
                 </div>
                 <span className="text-[9px] font-heading uppercase tracking-wider shrink-0" style={{ color: 'var(--noir-muted)' }}>{user.rank_name || rankProgress?.current_rank_name || ''}</span>
                 {isMobileViewport && (
-                  <button type="button" onClick={() => setRightSidebarOpen(false)}
+                  <button type="button" onClick={closeRightSidebar}
+                    onPointerUp={(e) => { e.preventDefault(); closeRightSidebar(); }}
+                    onTouchEnd={(e) => { e.preventDefault(); closeRightSidebar(); }}
                     className="min-w-[44px] min-h-[44px] -m-1 flex items-center justify-center rounded touch-manipulation active:scale-95 transition-transform"
                     style={{ color: 'var(--noir-primary)' }} aria-label="Close stats panel"><X size={22} /></button>
                 )}
@@ -2005,7 +2010,9 @@ export default function Layout({ children }) {
 
             {isMobileViewport && (
               <div className={`px-2 py-3 border-t ${styles.borderGoldLight} shrink-0`}>
-                <button type="button" onClick={() => setRightSidebarOpen(false)}
+                <button type="button" onClick={closeRightSidebar}
+                  onPointerUp={(e) => { e.preventDefault(); closeRightSidebar(); }}
+                  onTouchEnd={(e) => { e.preventDefault(); closeRightSidebar(); }}
                   className="w-full flex items-center justify-center gap-2 min-h-[44px] py-3 px-4 rounded-sm border border-primary/40 bg-primary/10 text-primary font-heading font-bold uppercase tracking-wider text-[11px] hover:bg-primary/20 active:scale-[0.98] transition-all touch-manipulation"
                   aria-label="Close stats panel">
                   <X size={18} /> Close
