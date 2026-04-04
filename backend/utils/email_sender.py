@@ -2,6 +2,7 @@
 # Option 1 – SMTP: set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, MAIL_FROM (e.g. IONOS: smtp.ionos.co.uk, 587).
 # Option 2 – Resend: set RESEND_API_KEY and MAIL_FROM (works from DigitalOcean; DO blocks port 25, sometimes 587).
 # If neither is set, emails are skipped (dev).
+import html
 import logging
 import os
 import smtplib
@@ -109,3 +110,17 @@ def send_password_reset_email(to: str, username: str, token: str) -> bool:
     <p>— Mafia Wars</p>
     """
     return send_email(to, "Reset your password – Mafia Wars", html)
+
+
+def send_inactivity_reminder_email(to: str, username: str) -> bool:
+    """Send a friendly nudge that the player's account is still here (admin-triggered, inactive users)."""
+    safe_name = html.escape(username or "there")
+    home_url = html.escape(FRONTEND_URL)
+    html_body = f"""
+    <p>Hi {safe_name},</p>
+    <p>We noticed you have not logged in for a little while. Your <strong>Mafia Wars</strong> account is still here whenever you want to play again.</p>
+    <p><a href="{home_url}">Open Mafia Wars</a></p>
+    <p>If you did not expect this message, you can ignore it—your password has not been changed.</p>
+    <p>— Mafia Wars</p>
+    """
+    return send_email(to, "Your Mafia Wars account is still here", html_body)

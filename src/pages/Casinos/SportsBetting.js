@@ -32,6 +32,15 @@ function formatDateTime(iso) {
   });
 }
 
+/** For `<input type="datetime-local" />` in the user's local timezone. */
+function isoToDatetimeLocal(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
 /** Parse template kickoff; null if missing/invalid. */
 function parseTemplateStart(t) {
   const iso = t?.start_time;
@@ -101,10 +110,13 @@ function StatusDot({ status }) {
 /* ═══════════════════════════════════════════════════════
    Event Card — themed panel
    ═══════════════════════════════════════════════════════ */
-function EventCard({ event, onPlaceBet, isAdmin, onSettle, onCancelEvent, cancellingEventId }) {
+function EventCard({ event, onPlaceBet, isAdmin, onSettle, onCancelEvent, onEditBetWindow, cancellingEventId }) {
   const options = event.options || [];
   const bettingOpen = event.betting_open !== false;
   const icon = CATEGORY_ICONS[event.category] || '🎲';
+  const opensAt = event.betting_opens_at ? new Date(event.betting_opens_at).getTime() : null;
+  const nowTs = Date.now();
+  const beforeScheduledOpen = opensAt != null && !Number.isNaN(opensAt) && nowTs < opensAt;
 
   return (
     <div className="relative rounded-lg border border-primary/20 overflow-hidden transition-all hover:border-primary/40 group bg-zinc-900/50">
@@ -126,6 +138,21 @@ function EventCard({ event, onPlaceBet, isAdmin, onSettle, onCancelEvent, cancel
         ) : null}
       </div>
 
+      {bettingOpen && event.betting_deadline_at ? (
+        <p className="text-[9px] text-zinc-500 font-heading px-3 -mt-1 pb-1">
+          Betting closes {formatDateTime(event.betting_deadline_at)}
+        </p>
+      ) : null}
+      {!bettingOpen ? (
+        <p className="text-[9px] text-amber-500/90 font-heading px-3 -mt-1 pb-1">
+          {beforeScheduledOpen
+            ? `Betting opens ${formatDateTime(event.betting_opens_at)}`
+            : event.betting_deadline_at
+              ? `Betting closed (closed ${formatDateTime(event.betting_deadline_at)})`
+              : 'Betting closed'}
+        </p>
+      ) : null}
+
       {/* Odds buttons */}
       <div className="px-3 pb-3 flex flex-wrap gap-1.5">
         {options.map((opt) => (
@@ -146,7 +173,10 @@ function EventCard({ event, onPlaceBet, isAdmin, onSettle, onCancelEvent, cancel
 
       {/* Admin row */}
       {isAdmin && (
-        <div className="px-3 pb-2 pt-1 flex gap-1.5 justify-end border-t border-primary/10">
+        <div className="px-3 pb-2 pt-1 flex flex-wrap gap-1.5 justify-end border-t border-primary/10">
+          <button type="button" onClick={() => onEditBetWindow?.(event)} className="text-[9px] font-heading font-bold text-sky-400 border border-sky-500/30 hover:bg-sky-500/10 px-2 py-1 rounded transition-all">
+            Betting window
+          </button>
           <button type="button" onClick={() => onSettle(event)} className="text-[9px] font-heading font-bold text-amber-400 border border-amber-500/30 hover:bg-amber-500/10 px-2 py-1 rounded transition-all">
             Settle
           </button>
@@ -237,7 +267,14 @@ export default function SportsBetting() {
   const [customEventName, setCustomEventName] = useState('');
   const [customEventCategory, setCustomEventCategory] = useState('Football');
   const [customEventOptions, setCustomEventOptions] = useState([{ name: '', odds: 2 }, { name: '', odds: 2 }]);
+  const [customEventStartTime, setCustomEventStartTime] = useState('');
+  const [customBettingOpensAt, setCustomBettingOpensAt] = useState('');
+  const [customBettingClosesAt, setCustomBettingClosesAt] = useState('');
   const [addingCustom, setAddingCustom] = useState(false);
+  const [betWindowEvent, setBetWindowEvent] = useState(null);
+  const [betWindowOpensLocal, setBetWindowOpensLocal] = useState('');
+  const [betWindowClosesLocal, setBetWindowClosesLocal] = useState('');
+  const [savingBetWindow, setSavingBetWindow] = useState(false);
   const [activeTab, setActiveTab] = useState('events');
   const [publicLibrary, setPublicLibrary] = useState({
     categories: [],
@@ -581,8 +618,18 @@ export default function SportsBetting() {
     if (opts.length < 2) { toast.error('Need at least 2 options'); return; }
     setAddingCustom(true);
     try {
-      await api.post('/admin/sports-betting/custom-event', { name, category: customEventCategory, options: opts });
-      toast.success('Custom event added'); setCustomEventName(''); setCustomEventOptions([{ name: '', odds: 2 }, { name: '', odds: 2 }]); await fetchAll();
+      const body = { name, category: customEventCategory, options: opts };
+      if (customEventStartTime.trim()) body.start_time = new Date(customEventStartTime).toISOString();
+      if (customBettingOpensAt.trim()) body.betting_opens_at = new Date(customBettingOpensAt).toISOString();
+      if (customBettingClosesAt.trim()) body.betting_closes_at = new Date(customBettingClosesAt).toISOString();
+      await api.post('/admin/sports-betting/custom-event', body);
+      toast.success('Custom event added');
+      setCustomEventName('');
+      setCustomEventOptions([{ name: '', odds: 2 }, { name: '', odds: 2 }]);
+      setCustomEventStartTime('');
+      setCustomBettingOpensAt('');
+      setCustomBettingClosesAt('');
+      await fetchAll();
     } catch (e) { toast.error(apiErrorDetail(e, 'Failed')); }
     finally { setAddingCustom(false); }
   };
@@ -988,6 +1035,23 @@ export default function SportsBetting() {
                 <select value={customEventCategory} onChange={(e) => setCustomEventCategory(e.target.value)} className="w-full bg-zinc-900/50 border border-zinc-700/30 rounded px-2 py-1.5 text-[11px] text-foreground font-heading focus:border-primary/50 focus:outline-none">
                   {['Football', 'UFC', 'Boxing', 'Formula 1'].map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <label className="flex flex-col gap-0.5 min-w-0">
+                    <span className="text-[9px] text-zinc-500 font-heading">Event start</span>
+                    <input type="datetime-local" value={customEventStartTime} onChange={(e) => setCustomEventStartTime(e.target.value)} className="w-full min-w-0 bg-zinc-900/50 border border-zinc-700/30 rounded px-2 py-1 text-[11px] text-foreground font-heading focus:border-primary/50 focus:outline-none [color-scheme:dark]" />
+                    <span className="text-[8px] text-zinc-600 font-heading leading-tight">Default: 2h from now</span>
+                  </label>
+                  <label className="flex flex-col gap-0.5 min-w-0">
+                    <span className="text-[9px] text-zinc-500 font-heading">Betting opens</span>
+                    <input type="datetime-local" value={customBettingOpensAt} onChange={(e) => setCustomBettingOpensAt(e.target.value)} className="w-full min-w-0 bg-zinc-900/50 border border-zinc-700/30 rounded px-2 py-1 text-[11px] text-foreground font-heading focus:border-primary/50 focus:outline-none [color-scheme:dark]" />
+                    <span className="text-[8px] text-zinc-600 font-heading leading-tight">Default: immediately</span>
+                  </label>
+                  <label className="flex flex-col gap-0.5 min-w-0">
+                    <span className="text-[9px] text-zinc-500 font-heading">Betting closes</span>
+                    <input type="datetime-local" value={customBettingClosesAt} onChange={(e) => setCustomBettingClosesAt(e.target.value)} className="w-full min-w-0 bg-zinc-900/50 border border-zinc-700/30 rounded px-2 py-1 text-[11px] text-foreground font-heading focus:border-primary/50 focus:outline-none [color-scheme:dark]" />
+                    <span className="text-[8px] text-zinc-600 font-heading leading-tight">Default: 10 min before start</span>
+                  </label>
+                </div>
                 {customEventOptions.map((opt, idx) => (
                   <div key={idx} className="flex gap-1.5">
                     <input type="text" value={opt.name} onChange={(e) => setCustomOption(idx, 'name', e.target.value)} placeholder="Option name" className="flex-1 bg-zinc-900/50 border border-zinc-700/30 rounded px-2 py-1 text-[11px] text-foreground font-heading focus:border-primary/50 focus:outline-none" />
@@ -1181,6 +1245,11 @@ export default function SportsBetting() {
                     isAdmin={isAdmin}
                     onSettle={(e) => { setSettleEvent(e); setSettleWinningId((e.options?.[0])?.id || ''); }}
                     onCancelEvent={cancelEvent}
+                    onEditBetWindow={(e) => {
+                      setBetWindowEvent(e);
+                      setBetWindowOpensLocal(isoToDatetimeLocal(e.betting_opens_at));
+                      setBetWindowClosesLocal(isoToDatetimeLocal(e.betting_closes_at));
+                    }}
                     cancellingEventId={cancellingEventId}
                   />
                 </div>
@@ -1349,6 +1418,79 @@ export default function SportsBetting() {
               ))}
             </div>
             <div className="sb-art-line text-primary mx-3" />
+          </div>
+        </div>
+      )}
+
+      {/* ═══ Betting window (admin) ═══ */}
+      {betWindowEvent && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
+          onClick={() => { if (!savingBetWindow) { setBetWindowEvent(null); setBetWindowOpensLocal(''); setBetWindowClosesLocal(''); } }}
+        >
+          <div className={`${styles.panel} rounded-lg p-5 w-full max-w-md shadow-2xl border border-primary/30 animate-sb-slide-up`} onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Betting window</h3>
+            <p className="text-sm text-foreground font-heading mt-2 font-bold">{betWindowEvent.name}</p>
+            <p className="text-[10px] text-zinc-500 font-heading mt-1 leading-relaxed">
+              Leave a field empty to use the default (opens: immediately; closes: 10 minutes before event start). Times use your device timezone and are stored in UTC.
+            </p>
+            <div className="mt-3 space-y-3">
+              <label className="flex flex-col gap-1">
+                <span className="text-[9px] text-zinc-500 font-heading">Betting opens</span>
+                <input
+                  type="datetime-local"
+                  value={betWindowOpensLocal}
+                  onChange={(e) => setBetWindowOpensLocal(e.target.value)}
+                  className="w-full bg-zinc-900/50 border border-zinc-700/30 rounded px-2 py-1.5 text-[11px] text-foreground font-heading focus:border-primary/50 focus:outline-none [color-scheme:dark]"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-[9px] text-zinc-500 font-heading">Betting closes</span>
+                <input
+                  type="datetime-local"
+                  value={betWindowClosesLocal}
+                  onChange={(e) => setBetWindowClosesLocal(e.target.value)}
+                  className="w-full bg-zinc-900/50 border border-zinc-700/30 rounded px-2 py-1.5 text-[11px] text-foreground font-heading focus:border-primary/50 focus:outline-none [color-scheme:dark]"
+                />
+              </label>
+            </div>
+            <div className="mt-4 flex gap-2">
+              <button
+                type="button"
+                onClick={async () => {
+                  if (!betWindowEvent) return;
+                  setSavingBetWindow(true);
+                  try {
+                    await api.patch('/admin/sports-betting/events/betting-window', {
+                      event_id: betWindowEvent.id,
+                      betting_opens_at: betWindowOpensLocal.trim() ? new Date(betWindowOpensLocal).toISOString() : null,
+                      betting_closes_at: betWindowClosesLocal.trim() ? new Date(betWindowClosesLocal).toISOString() : null,
+                    });
+                    toast.success('Betting window updated');
+                    setBetWindowEvent(null);
+                    setBetWindowOpensLocal('');
+                    setBetWindowClosesLocal('');
+                    await fetchAll();
+                  } catch (e) {
+                    toast.error(apiErrorDetail(e, 'Failed'));
+                  } finally {
+                    setSavingBetWindow(false);
+                  }
+                }}
+                disabled={savingBetWindow}
+                className="flex-1 bg-primary/20 text-primary py-2.5 rounded font-heading font-bold text-sm uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-40"
+              >
+                {savingBetWindow ? '...' : 'Save'}
+              </button>
+              <button
+                type="button"
+                disabled={savingBetWindow}
+                onClick={() => { setBetWindowEvent(null); setBetWindowOpensLocal(''); setBetWindowClosesLocal(''); }}
+                className="px-4 py-2.5 bg-zinc-800 border border-zinc-700 rounded text-foreground font-heading text-sm hover:bg-zinc-700 disabled:opacity-40"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

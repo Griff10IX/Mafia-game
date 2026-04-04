@@ -84,6 +84,16 @@ class AdminAddCustomSportsEventRequest(BaseModel):
     name: str
     category: str
     options: List[AdminCustomEventOption]
+    # Optional ISO-8601 times (UTC or offset). Omitted = defaults (start = now+2h; close = 10 min before start; open = immediately).
+    start_time: Optional[str] = None
+    betting_opens_at: Optional[str] = None
+    betting_closes_at: Optional[str] = None
+
+
+class AdminPatchSportsEventBettingWindow(BaseModel):
+    event_id: str
+    betting_opens_at: Optional[str] = None
+    betting_closes_at: Optional[str] = None
 
 
 class SportsRequestEventBody(BaseModel):
@@ -1355,15 +1365,47 @@ async def _sports_open_stake_total(user_id: str) -> int:
     return int(rows[0].get("t") or 0)
 
 
-def _sports_betting_cancellation_allowed(start_time_iso: Optional[str]) -> bool:
-    """True if current UTC time is still before the same cutoff as placing bets (N min before start)."""
-    now = datetime.now(timezone.utc)
-    try:
-        start_dt = datetime.fromisoformat(start_time_iso.replace("Z", "+00:00")) if start_time_iso else now
-    except Exception:
-        start_dt = now
-    deadline = start_dt - timedelta(minutes=SPORTS_BETTING_CLOSE_BEFORE_START_MINUTES)
+def _sports_iso_z(dt: datetime) -> str:
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _sports_event_effective_start_dt(ev: dict, now: Optional[datetime] = None) -> datetime:
+    now = now or datetime.now(timezone.utc)
+    parsed = _parse_start_time_utc(ev.get("start_time"))
+    return parsed if parsed is not None else now
+
+
+def _sports_event_effective_betting_deadline(ev: dict, start_dt: datetime) -> datetime:
+    custom_close = _parse_start_time_utc(ev.get("betting_closes_at"))
+    if custom_close is not None:
+        return custom_close
+    return start_dt - timedelta(minutes=SPORTS_BETTING_CLOSE_BEFORE_START_MINUTES)
+
+
+def _sports_event_betting_is_open(ev: dict, now: Optional[datetime] = None) -> bool:
+    """True if players may place or cancel bets on this event (same window for both)."""
+    now = now or datetime.now(timezone.utc)
+    start_dt = _sports_event_effective_start_dt(ev, now)
+    opens = _parse_start_time_utc(ev.get("betting_opens_at"))
+    if opens is not None and now < opens:
+        return False
+    deadline = _sports_event_effective_betting_deadline(ev, start_dt)
     return now < deadline
+
+
+def _sports_event_betting_block_reason(ev: dict) -> Optional[str]:
+    """Human-readable reason when betting/cancellation is not allowed."""
+    now = datetime.now(timezone.utc)
+    start_dt = _sports_event_effective_start_dt(ev, now)
+    opens = _parse_start_time_utc(ev.get("betting_opens_at"))
+    if opens is not None and now < opens:
+        return "Betting is not open yet for this event"
+    deadline = _sports_event_effective_betting_deadline(ev, start_dt)
+    if now >= deadline:
+        return "Betting is closed for this event"
+    return None
 
 
 def _utc_day_start(now: Optional[datetime] = None) -> datetime:
@@ -1470,11 +1512,21 @@ async def sports_betting_events(current_user: dict = Depends(get_current_user_ve
     now = datetime.now(timezone.utc)
     cursor = db.sports_events.find(
         {"status": "open"},
-        {"_id": 0, "id": 1, "name": 1, "category": 1, "start_time": 1, "options": 1, "is_special": 1, "external_sport_key": 1},
+        {
+            "_id": 0,
+            "id": 1,
+            "name": 1,
+            "category": 1,
+            "start_time": 1,
+            "options": 1,
+            "is_special": 1,
+            "external_sport_key": 1,
+            "betting_opens_at": 1,
+            "betting_closes_at": 1,
+        },
     ).sort("start_time", 1)
     events = await cursor.to_list(SPORTS_BETTING_PUBLIC_EVENTS_LIMIT)
     result = []
-    close_betting_minutes = SPORTS_BETTING_CLOSE_BEFORE_START_MINUTES
     for e in events:
         st = e.get("start_time")
         try:
@@ -1483,8 +1535,8 @@ async def sports_betting_events(current_user: dict = Depends(get_current_user_ve
             start_dt = now
         if st and start_dt + timedelta(hours=3) < now:
             continue
-        betting_closes_at = start_dt - timedelta(minutes=close_betting_minutes)
-        betting_open = now < betting_closes_at
+        deadline_dt = _sports_event_effective_betting_deadline(e, start_dt)
+        betting_open = _sports_event_betting_is_open(e, now)
         if now < start_dt:
             status = "upcoming"
         elif now < start_dt + timedelta(hours=3):
@@ -1504,6 +1556,9 @@ async def sports_betting_events(current_user: dict = Depends(get_current_user_ve
             "is_special": bool(e.get("is_special")),
             "betting_open": betting_open,
             "status": status,
+            "betting_deadline_at": _sports_iso_z(deadline_dt),
+            "betting_opens_at": e.get("betting_opens_at") or None,
+            "betting_closes_at": e.get("betting_closes_at") or None,
         }
         if league_label:
             row["league_label"] = league_label
@@ -1522,9 +1577,9 @@ async def sports_betting_place(request: SportsBetPlaceRequest, current_user: dic
     ev = await db.sports_events.find_one({"id": event_id, "status": "open"}, {"_id": 0})
     if not ev:
         raise HTTPException(status_code=404, detail="Event not found or closed")
-    st = ev.get("start_time")
-    if not _sports_betting_cancellation_allowed(st):
-        raise HTTPException(status_code=400, detail="Betting closed (closes 10 min before start)")
+    reason = _sports_event_betting_block_reason(ev)
+    if reason:
+        raise HTTPException(status_code=400, detail=reason)
     opt = next((o for o in (ev.get("options") or []) if o.get("id") == option_id), None)
     if not opt:
         raise HTTPException(status_code=400, detail="Invalid option")
@@ -1592,9 +1647,14 @@ async def sports_betting_cancel_bet(request: SportsBetCancelRequest, current_use
     bet = await db.sports_bets.find_one({"id": bet_id, "user_id": uid, "status": "open"}, {"_id": 0})
     if not bet:
         raise HTTPException(status_code=400, detail="Bet not found or already cancelled")
-    ev = await db.sports_events.find_one({"id": bet.get("event_id") or ""}, {"_id": 0, "start_time": 1})
-    if ev is not None and not _sports_betting_cancellation_allowed(ev.get("start_time")):
-        raise HTTPException(status_code=400, detail="Cancellation closed (closes 10 min before start)")
+    ev = await db.sports_events.find_one(
+        {"id": bet.get("event_id") or ""},
+        {"_id": 0, "start_time": 1, "betting_opens_at": 1, "betting_closes_at": 1},
+    )
+    if ev is not None:
+        r = _sports_event_betting_block_reason(ev)
+        if r:
+            raise HTTPException(status_code=400, detail=r)
     now = datetime.now(timezone.utc).isoformat()
     bet = await db.sports_bets.find_one_and_update(
         {"id": bet_id, "user_id": uid, "status": "open"},
@@ -1617,7 +1677,10 @@ async def sports_betting_cancel_all_bets(current_user: dict = Depends(get_curren
     eids = list({(b.get("event_id") or "") for b in bets if b.get("event_id")})
     events_by_id: dict = {}
     if eids:
-        ev_cursor = db.sports_events.find({"id": {"$in": eids}}, {"_id": 0, "id": 1, "start_time": 1})
+        ev_cursor = db.sports_events.find(
+            {"id": {"$in": eids}},
+            {"_id": 0, "id": 1, "start_time": 1, "betting_opens_at": 1, "betting_closes_at": 1},
+        )
         for doc in await ev_cursor.to_list(len(eids)):
             events_by_id[doc["id"]] = doc
     total_refund = 0
@@ -1626,7 +1689,7 @@ async def sports_betting_cancel_all_bets(current_user: dict = Depends(get_curren
     now = datetime.now(timezone.utc).isoformat()
     for b in bets:
         ev = events_by_id.get(b.get("event_id") or "")
-        if ev is not None and not _sports_betting_cancellation_allowed(ev.get("start_time")):
+        if ev is not None and _sports_event_betting_block_reason(ev):
             skipped_count += 1
             continue
         claimed = await db.sports_bets.find_one_and_update(
@@ -1640,10 +1703,7 @@ async def sports_betting_cancel_all_bets(current_user: dict = Depends(get_curren
     if total_refund > 0:
         await db.users.update_one({"id": uid}, {"$inc": {"money": total_refund}})
     if cancelled_count == 0 and skipped_count > 0:
-        msg = (
-            f"No bets cancelled — {skipped_count} open bet(s) past cancellation cutoff "
-            f"({SPORTS_BETTING_CLOSE_BEFORE_START_MINUTES} min before start)."
-        )
+        msg = f"No bets cancelled — {skipped_count} open bet(s) past the betting window for their event(s)."
     elif skipped_count:
         msg = f"Cancelled {cancelled_count} bet(s). ${total_refund:,} refunded. {skipped_count} bet(s) past cutoff and still open."
     else:
@@ -1914,7 +1974,33 @@ async def admin_sports_add_custom_event(request: AdminAddCustomSportsEventReques
     if len(opts) < 2:
         raise HTTPException(status_code=400, detail="At least 2 options required")
     now = datetime.now(timezone.utc)
-    start_time = (now + timedelta(hours=2)).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    start_raw = (request.start_time or "").strip()
+    if start_raw:
+        start_dt = _parse_start_time_utc(start_raw)
+        if start_dt is None:
+            raise HTTPException(status_code=400, detail="Invalid start_time (use ISO-8601)")
+        start_time = _sports_iso_z(start_dt)
+    else:
+        start_time = _sports_iso_z(now + timedelta(hours=2))
+
+    betting_opens_raw = (request.betting_opens_at or "").strip()
+    betting_closes_raw = (request.betting_closes_at or "").strip()
+    betting_opens_at = None
+    betting_closes_at = None
+    if betting_opens_raw:
+        bo = _parse_start_time_utc(betting_opens_raw)
+        if bo is None:
+            raise HTTPException(status_code=400, detail="Invalid betting_opens_at (use ISO-8601)")
+        betting_opens_at = _sports_iso_z(bo)
+    if betting_closes_raw:
+        bc = _parse_start_time_utc(betting_closes_raw)
+        if bc is None:
+            raise HTTPException(status_code=400, detail="Invalid betting_closes_at (use ISO-8601)")
+        betting_closes_at = _sports_iso_z(bc)
+    if betting_opens_at and betting_closes_at:
+        if _parse_start_time_utc(betting_opens_at) >= _parse_start_time_utc(betting_closes_at):
+            raise HTTPException(status_code=400, detail="betting_opens_at must be before betting_closes_at")
+
     options = []
     for i, o in enumerate(opts):
         opt_name = (o.name or "").strip()
@@ -1936,8 +2022,70 @@ async def admin_sports_add_custom_event(request: AdminAddCustomSportsEventReques
         "is_special": False,
         "status": "open",
     }
+    if betting_opens_at:
+        ev["betting_opens_at"] = betting_opens_at
+    if betting_closes_at:
+        ev["betting_closes_at"] = betting_closes_at
     await db.sports_events.insert_one(ev)
     return {"message": f"Added custom event: {name}", "event_id": ev["id"]}
+
+
+async def admin_sports_patch_event_betting_window(
+    request: AdminPatchSportsEventBettingWindow,
+    current_user: dict = Depends(get_current_user_verified),
+):
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    event_id = (request.event_id or "").strip()
+    if not event_id:
+        raise HTTPException(status_code=400, detail="event_id required")
+    ev = await db.sports_events.find_one({"id": event_id, "status": "open"}, {"_id": 0})
+    if not ev:
+        raise HTTPException(status_code=404, detail="Event not found or not open")
+
+    payload = request.model_dump(exclude_unset=True)
+    set_doc: dict = {}
+    unset_doc: dict = {}
+
+    if "betting_opens_at" in payload:
+        v = payload["betting_opens_at"]
+        if v is None or (isinstance(v, str) and not v.strip()):
+            unset_doc["betting_opens_at"] = ""
+        else:
+            bo = _parse_start_time_utc(str(v).strip())
+            if bo is None:
+                raise HTTPException(status_code=400, detail="Invalid betting_opens_at")
+            set_doc["betting_opens_at"] = _sports_iso_z(bo)
+
+    if "betting_closes_at" in payload:
+        v = payload["betting_closes_at"]
+        if v is None or (isinstance(v, str) and not v.strip()):
+            unset_doc["betting_closes_at"] = ""
+        else:
+            bc = _parse_start_time_utc(str(v).strip())
+            if bc is None:
+                raise HTTPException(status_code=400, detail="Invalid betting_closes_at")
+            set_doc["betting_closes_at"] = _sports_iso_z(bc)
+
+    merged = {**ev, **set_doc}
+    for k in unset_doc:
+        merged.pop(k, None)
+
+    bo_m = _parse_start_time_utc(merged.get("betting_opens_at"))
+    bc_m = _parse_start_time_utc(merged.get("betting_closes_at"))
+    if bo_m is not None and bc_m is not None and bo_m >= bc_m:
+        raise HTTPException(status_code=400, detail="betting_opens_at must be before betting_closes_at")
+
+    if not set_doc and not unset_doc:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    upd: dict = {}
+    if set_doc:
+        upd["$set"] = set_doc
+    if unset_doc:
+        upd["$unset"] = unset_doc
+    await db.sports_events.update_one({"id": event_id}, upd)
+    return {"message": "Betting window updated", "event_id": event_id}
 
 
 async def _settle_event_internal(event_id: str, winning_option_id: str) -> bool:
@@ -2374,6 +2522,7 @@ def register(router):
     router.add_api_route("/admin/sports-betting/auto-settle-run", admin_sports_auto_settle_run, methods=["POST"])
     router.add_api_route("/admin/sports-betting/events", admin_sports_add_event, methods=["POST"])
     router.add_api_route("/admin/sports-betting/custom-event", admin_sports_add_custom_event, methods=["POST"])
+    router.add_api_route("/admin/sports-betting/events/betting-window", admin_sports_patch_event_betting_window, methods=["PATCH"])
     router.add_api_route("/admin/sports-betting/settle", admin_sports_settle, methods=["POST"])
     router.add_api_route("/admin/sports-betting/cancel-event", admin_sports_cancel_event, methods=["POST"])
     router.add_api_route("/admin/sports-betting/bets", admin_sports_bets_list, methods=["GET"])

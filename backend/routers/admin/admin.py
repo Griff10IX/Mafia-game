@@ -53,6 +53,7 @@ from utils.claim_costs import (
     load_claim_costs,
     merge_claim_costs,
 )
+from utils.email_sender import is_email_configured, send_inactivity_reminder_email
 
 # Cloudflare API config for bot blocking toggle
 CF_ZONE_ID = os.environ.get("CF_ZONE_ID", "")
@@ -255,6 +256,10 @@ class DropUserCasinosPropertiesRequest(BaseModel):
 
 
 class ClearUserJailBustRewardRequest(BaseModel):
+    user_id: str
+
+
+class InactivityReminderEmailRequest(BaseModel):
     user_id: str
 
 
@@ -8671,6 +8676,118 @@ def register(router):
         for d in slots_owned:
             casinos_owned.append({"game_type": "slots", "location": d.get("state") or "?"})
         return {"user": user, "dice_owned": dice_owned, "casinos_owned": casinos_owned}
+
+    @router.post("/admin/users/inactivity-reminder-email")
+    async def admin_send_inactivity_reminder_email(
+        body: InactivityReminderEmailRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Send a comeback email to a player who has been inactive (last_seen older than configured days). Admin or moderator."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        if not is_email_configured():
+            raise HTTPException(
+                status_code=503,
+                detail="Email is not configured on this server (set SMTP_* or RESEND_API_KEY and MAIL_FROM).",
+            )
+        try:
+            min_days = max(1, int(os.environ.get("INACTIVITY_REMINDER_MIN_DAYS", "3")))
+        except ValueError:
+            min_days = 3
+        try:
+            cooldown_days = max(1, int(os.environ.get("INACTIVITY_REMINDER_COOLDOWN_DAYS", "7")))
+        except ValueError:
+            cooldown_days = 7
+
+        user_id = (body.user_id or "").strip()
+        if not user_id:
+            raise HTTPException(status_code=400, detail="user_id is required")
+
+        user = await db.users.find_one(
+            {"id": user_id},
+            {"_id": 0, "id": 1, "username": 1, "email": 1, "last_seen": 1, "is_npc": 1, "is_dead": 1, "inactivity_reminder_sent_at": 1},
+        )
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        if user.get("is_npc"):
+            raise HTTPException(status_code=400, detail="Cannot send to NPC accounts")
+        if user.get("is_dead"):
+            raise HTTPException(status_code=400, detail="Cannot send to dead accounts")
+
+        to_email = (user.get("email") or "").strip()
+        if not to_email:
+            raise HTTPException(status_code=400, detail="User has no email address")
+
+        now = datetime.now(timezone.utc)
+        sent_raw = user.get("inactivity_reminder_sent_at")
+        if sent_raw:
+            try:
+                sent_dt = datetime.fromisoformat(str(sent_raw).replace("Z", "+00:00"))
+                if sent_dt.tzinfo is None:
+                    sent_dt = sent_dt.replace(tzinfo=timezone.utc)
+                else:
+                    sent_dt = sent_dt.astimezone(timezone.utc)
+                if (now - sent_dt).total_seconds() < cooldown_days * 86400:
+                    raise HTTPException(
+                        status_code=429,
+                        detail=f"A reminder was already sent within the last {cooldown_days} day(s).",
+                    )
+            except HTTPException:
+                raise
+            except Exception:
+                pass
+
+        ls_raw = user.get("last_seen")
+        ls_dt = None
+        if ls_raw:
+            try:
+                ls_dt = datetime.fromisoformat(str(ls_raw).replace("Z", "+00:00"))
+                if ls_dt.tzinfo is None:
+                    ls_dt = ls_dt.replace(tzinfo=timezone.utc)
+                else:
+                    ls_dt = ls_dt.astimezone(timezone.utc)
+            except Exception:
+                logging.warning(
+                    "inactivity reminder: invalid last_seen for user_id=%s raw=%r",
+                    user_id,
+                    ls_raw,
+                )
+        if ls_dt is not None:
+            if ls_dt > now - timedelta(days=min_days):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"User was active within the last {min_days} day(s) (last_seen).",
+                )
+        else:
+            logging.warning(
+                "inactivity reminder: user_id=%s has missing or unparseable last_seen; allowing send (admin discretion)",
+                user_id,
+            )
+
+        username = (user.get("username") or "Player").strip() or "Player"
+        ok = send_inactivity_reminder_email(to_email, username)
+        if not ok:
+            raise HTTPException(
+                status_code=502,
+                detail="Email could not be sent (check server logs / mail provider).",
+            )
+
+        await db.users.update_one(
+            {"id": user_id},
+            {"$set": {"inactivity_reminder_sent_at": now.replace(microsecond=0).isoformat().replace("+00:00", "Z")}},
+        )
+        logging.info(
+            "Admin inactivity reminder email: target_user_id=%s username=%s to=%s by %s",
+            user_id,
+            username,
+            to_email,
+            current_user.get("email") or current_user.get("username") or "?",
+        )
+        return {
+            "message": f"Inactive reminder email sent to {to_email}",
+            "user_id": user_id,
+            "username": username,
+        }
 
     @router.post("/admin/clear-user-jail-bust-reward")
     async def admin_clear_user_jail_bust_reward(

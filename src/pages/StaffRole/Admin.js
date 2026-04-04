@@ -6,6 +6,25 @@ import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
 
+/** Match backend INACTIVITY_REMINDER_MIN_DAYS default (UI hint / disable). */
+const INACTIVITY_REMINDER_MIN_DAYS = 3;
+const INACTIVITY_REMINDER_COOLDOWN_DAYS = 7;
+
+function lastSeenEligibleForInactiveReminder(lastSeenIso) {
+  if (!lastSeenIso) return true;
+  const d = new Date(lastSeenIso);
+  if (Number.isNaN(d.getTime())) return true;
+  const cutoff = Date.now() - INACTIVITY_REMINDER_MIN_DAYS * 86400000;
+  return d.getTime() <= cutoff;
+}
+
+function inactiveReminderOnCooldown(sentAtIso) {
+  if (!sentAtIso) return false;
+  const d = new Date(sentAtIso);
+  if (Number.isNaN(d.getTime())) return false;
+  return Date.now() - d.getTime() < INACTIVITY_REMINDER_COOLDOWN_DAYS * 86400000;
+}
+
 const ADMIN_STYLES = `
   .admin-fade-in { animation: admin-fade-in 0.4s ease-out both; }
   @keyframes admin-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -6020,12 +6039,60 @@ export default function Admin() {
             </div>
           );
         };
+
+        const handleInactiveReminderClick = async () => {
+          const em = (u.email || '').trim();
+          if (!em) {
+            toast.error('User has no email on file');
+            return;
+          }
+          if (!window.confirm(`Send inactive reminder email to ${em} (${u.username})?`)) return;
+          try {
+            await api.post('/admin/users/inactivity-reminder-email', { user_id: u.id });
+            toast.success('Inactive reminder email sent');
+            if (userDetailData?.user?.id) openUserDetail({ id: userDetailData.user.id });
+          } catch (e) {
+            const d = e.response?.data?.detail;
+            toast.error(typeof d === 'string' ? d : 'Failed to send email');
+          }
+        };
+
+        const inactiveReminderTitle =
+          !(u.email || '').trim()
+            ? 'User has no email on file — add or fix email first'
+            : !lastSeenEligibleForInactiveReminder(u.last_seen)
+              ? `Only if last activity was at least ${INACTIVITY_REMINDER_MIN_DAYS} day(s) ago`
+              : inactiveReminderOnCooldown(u.inactivity_reminder_sent_at)
+                ? `Already sent within the last ${INACTIVITY_REMINDER_COOLDOWN_DAYS} day(s)`
+                : 'Send comeback email (inactive players)';
+
+        const inactiveReminderDisabled =
+          !(u.email || '').trim() ||
+          !lastSeenEligibleForInactiveReminder(u.last_seen) ||
+          inactiveReminderOnCooldown(u.inactivity_reminder_sent_at);
+
+        const InactiveReminderButton = ({ className }) => {
+          if (!u.id || u.is_npc || u.is_dead) return null;
+          return (
+            <button
+              type="button"
+              title={inactiveReminderTitle}
+              disabled={inactiveReminderDisabled}
+              onClick={handleInactiveReminderClick}
+              className={className}
+            >
+              Send inactive reminder
+            </button>
+          );
+        };
+
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => setUserDetailData(null)}>
             <div className="bg-zinc-900 border border-primary/30 rounded-lg shadow-xl max-w-3xl w-full max-h-[92vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-              <div className="px-4 py-3 border-b border-zinc-700/50 flex items-center justify-between shrink-0">
-                <h3 className="text-sm font-heading font-bold text-primary">User details: {u.username ?? '—'}</h3>
-                <div className="flex items-center gap-2">
+              <div className="px-4 py-3 border-b border-zinc-700/50 flex items-center justify-between shrink-0 gap-2 flex-wrap">
+                <h3 className="text-sm font-heading font-bold text-primary min-w-0">User details: {u.username ?? '—'}</h3>
+                <div className="flex items-center gap-2 flex-wrap shrink-0">
+                  <InactiveReminderButton className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border border-sky-500/50 text-sky-400 hover:bg-sky-500/10 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap" />
                   <button type="button" onClick={() => setTargetFromSearch(u.username)} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30">Set target</button>
                   <button type="button" onClick={() => setUserDetailData(null)} className="p-1 rounded border border-zinc-600 text-zinc-400 hover:bg-zinc-700 hover:text-foreground"><X size={14} /></button>
                 </div>
@@ -6127,7 +6194,16 @@ export default function Admin() {
                       }
                       fullWidth
                     />
-                    <Row label="Last seen" value={fmtDate(u.last_seen)} />
+                    <Row
+                      label="Last seen"
+                      value={
+                        <span className="inline-flex items-center gap-2 flex-wrap">
+                          {fmtDate(u.last_seen)}
+                          <InactiveReminderButton className="px-2 py-0.5 text-[10px] font-heading uppercase border border-sky-500/50 text-sky-400 hover:bg-sky-500/10 rounded disabled:opacity-40 disabled:cursor-not-allowed shrink-0" />
+                        </span>
+                      }
+                      fullWidth
+                    />
                     <Row label="Forced online until" value={fmtDate(u.forced_online_until)} />
                     <Row label="Travels this hour" value={fmtNum(u.travels_this_hour)} />
                     <Row label="Extra airmiles" value={fmtNum(u.extra_airmiles)} />
