@@ -53,6 +53,12 @@ function formatCountdown(expiresAtIso) {
 const BOOZE_CAUGHT_IMAGE = 'https://historicipswich.net/wp-content/uploads/2021/12/0a79f-boston-rum-prohibition1.jpg';
 const MOLOTOV_BULLET_EQUIV = 5000;
 
+/** Strip legacy server copy like " in slot 2" so kill toasts never show slot numbers. */
+function stripBodyguardSlotFromToastMessage(msg) {
+  if (typeof msg !== 'string') return msg;
+  return msg.replace(/\s+in slot\s+\d+/gi, '').trim();
+}
+
 // Subcomponents
 const LoadingSpinner = () => (
   <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
@@ -1259,25 +1265,29 @@ export default function Attack() {
             });
           } else if (execRes.data?.first_bodyguard) {
             const bg = execRes.data.first_bodyguard;
-            showKillResult(execRes.data?.message || 'Target has a bodyguard.', 'warning', {
-              action: {
-                label: 'Search',
-                onClick: async () => {
-                  setKillBannerMessage(null);
-                  setLoading(true);
-                  try {
-                    const note = bg.target_username ? `Bodyguard for: ${bg.target_username}` : '';
-                    const res = await api.post('/attack/search', { target_username: bg.search_username, note });
-                    toast.success(res.data?.message || 'Search started', { duration: 10000 });
-                    await refreshAttacks();
-                  } catch (err) {
-                    toast.error(err.response?.data?.detail || 'Failed to search', { duration: 10000 });
-                  } finally {
-                    setLoading(false);
-                  }
+            showKillResult(
+              stripBodyguardSlotFromToastMessage(execRes.data?.message) || 'Target has a bodyguard.',
+              'warning',
+              {
+                action: {
+                  label: 'Search',
+                  onClick: async () => {
+                    setKillBannerMessage(null);
+                    setLoading(true);
+                    try {
+                      const note = bg.target_username ? `Bodyguard for: ${bg.target_username}` : '';
+                      const res = await api.post('/attack/search', { target_username: bg.search_username, note });
+                      toast.success(res.data?.message || 'Search started', { duration: 10000 });
+                      await refreshAttacks();
+                    } catch (err) {
+                      toast.error(err.response?.data?.detail || 'Failed to search', { duration: 10000 });
+                    } finally {
+                      setLoading(false);
+                    }
+                  },
                 },
               },
-            });
+            );
           } else {
             showKillResult(execRes.data?.message || 'Kill failed.', 'error');
           }
@@ -1386,7 +1396,7 @@ export default function Attack() {
         });
       } else if (response.data.first_bodyguard) {
         const bg = response.data.first_bodyguard;
-        showKillResult(response.data.message, 'warning', {
+        showKillResult(stripBodyguardSlotFromToastMessage(response.data.message) || 'Target has a bodyguard.', 'warning', {
           action: {
             label: 'Search',
             onClick: async () => {

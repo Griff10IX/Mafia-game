@@ -397,6 +397,20 @@ class BulletCalcRequest(BaseModel):
 # Pure helpers (no db)
 # ---------------------------------------------------------------------------
 
+def _first_bodyguard_client_payload(
+    *,
+    display_name: str,
+    search_username: Optional[str],
+    target_username: str,
+) -> Dict:
+    """Client-visible bodyguard hint (no slot_number — avoids slot text in toasts/UI). Audit DB rows still store slot."""
+    return {
+        "display_name": display_name or "bodyguard",
+        "search_username": search_username,
+        "target_username": target_username,
+    }
+
+
 def _bullets_to_kill(
     target_armour_level: int,
     target_rank_id: int,
@@ -761,8 +775,11 @@ async def list_attacks(current_user: dict = Depends(get_current_user)):
                         search_username = bg_user.get("username")
                         if not first_bg.get("robot_name"):
                             display_name = search_username
-                slot_n = first_bg.get("slot_number")
-                item["first_bodyguard"] = {"display_name": display_name, "search_username": search_username, "slot_number": slot_n, "target_username": attack.get("target_username")}
+                item["first_bodyguard"] = _first_bodyguard_client_payload(
+                    display_name=display_name,
+                    search_username=search_username,
+                    target_username=attack.get("target_username") or "?",
+                )
                 item["bodyguard_count"] = len(target_bgs)
         items.append(item)
 
@@ -995,9 +1012,8 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     display_name = search_username
         slot_n = first_bg.get("slot_number")
         target_name = target["username"]
-        slot_msg = f" in slot {slot_n}" if slot_n else ""
         if search_username:
-            msg = f"{target_name} has a bodyguard{slot_msg} called {display_name}. You need to kill them first."
+            msg = f"{target_name} has a bodyguard called {display_name}. You need to kill them first."
             try:
                 meta = _request_meta(req)
                 await db.attack_attempts.insert_one({
@@ -1028,9 +1044,13 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 success=False,
                 message=msg,
                 rewards=None,
-                first_bodyguard={"display_name": display_name, "search_username": search_username, "slot_number": slot_n, "target_username": target_name},
+                first_bodyguard=_first_bodyguard_client_payload(
+                    display_name=display_name,
+                    search_username=search_username,
+                    target_username=target_name,
+                ),
             )
-        msg = f"{target_name} has a bodyguard{slot_msg}. You need to kill them first."
+        msg = f"{target_name} has a bodyguard. You need to kill them first."
         try:
             meta = _request_meta(req)
             await db.attack_attempts.insert_one({
@@ -1061,7 +1081,11 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             success=False,
             message=msg,
             rewards=None,
-            first_bodyguard={"display_name": display_name or "bodyguard", "search_username": None, "slot_number": slot_n, "target_username": target_name},
+            first_bodyguard=_first_bodyguard_client_payload(
+                display_name=display_name or "bodyguard",
+                search_username=None,
+                target_username=target_name,
+            ),
         )
     target_name = target["username"]
     target_health = float(target.get("health", DEFAULT_HEALTH))
