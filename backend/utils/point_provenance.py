@@ -126,13 +126,23 @@ async def consume_points_fifo(
     event_type: str,
     event_ref: Optional[str] = None,
     meta: Optional[Dict] = None,
+    assume_balance_already_decremented_by: int = 0,
 ) -> List[Dict]:
-    """Consume points from oldest lots. Returns slices with ancestry for downstream transfer/clawback."""
+    """Consume points from oldest lots. Returns slices with ancestry for downstream transfer/clawback.
+
+    If ``users.points`` was already decreased by this same ``points`` amount before this call
+    (e.g. atomic transfer/store deduct), pass ``assume_balance_already_decremented_by=points`` so
+    legacy lot seeding uses the pre-deduct ledger total. Otherwise seeding sees only the reduced
+    balance and can leave lots under-covered, causing partial FIFO consumption and integrity failures.
+    """
     amount = int(points or 0)
     if amount <= 0 or not user_id:
         return []
     user = await db.users.find_one({"id": user_id}, {"_id": 0, "points": 1})
-    await ensure_user_legacy_seed_lot(db, user_id, int((user or {}).get("points") or 0))
+    db_bal = int((user or {}).get("points") or 0)
+    extra = max(0, int(assume_balance_already_decremented_by or 0))
+    seed_balance = db_bal + extra
+    await ensure_user_legacy_seed_lot(db, user_id, seed_balance)
     cursor = db.point_lots.find(
         {"owner_user_id": user_id, "remaining_points": {"$gt": 0}},
         {"_id": 0, "id": 1, "remaining_points": 1, "root_purchase_ref": 1, "origin_ref": 1},
@@ -294,6 +304,7 @@ async def execute_chargeback_best_effort(
             event_type="clawback",
             event_ref=payment_session_id,
             meta={"admin_user_id": admin_user_id, "admin_username": admin_username},
+            assume_balance_already_decremented_by=reclaim,
         )
         actual = sum(int(s.get("amount") or 0) for s in slices)
         reclaimed += actual

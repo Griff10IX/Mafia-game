@@ -127,6 +127,7 @@ async def _record_store_points_spend(user_id: str, inc: dict, event_ref: str):
                 event_type="spend_store",
                 event_ref=event_ref,
                 meta={"source": "store"},
+                assume_balance_already_decremented_by=spend_points,
             )
         except Exception:
             logger.exception("point provenance spend failed user_id=%s event_ref=%s", user_id, event_ref)
@@ -515,6 +516,7 @@ async def send_points(request: SendPointsRequest, current_user: dict = Depends(g
             event_type="transfer_out",
             event_ref=transfer_id,
             meta={"to_user_id": recipient["id"], "to_username": recipient_username},
+            assume_balance_already_decremented_by=amount,
         )
     except Exception:
         logger.exception("point provenance transfer_out failed transfer_id=%s", transfer_id)
