@@ -29,6 +29,7 @@ from server import (
     _username_pattern,
     get_head_family_id_for_state,
     get_casino_caps,
+    assert_casino_buy_back_within_points_balance,
     _ownership_display_profit,
     bump_user_biggest_casino_payout,
 )
@@ -431,6 +432,7 @@ def register(router):
             raise HTTPException(status_code=403, detail="You do not own this table")
         _, buyback_cap = await get_casino_caps()
         amount = max(0, min(int(request.amount), buyback_cap))
+        await assert_casino_buy_back_within_points_balance(current_user["id"], amount)
         await db.dice_ownership.update_one({"city": stored_city or city}, {"$set": {"buy_back_reward": amount}})
         return {"message": "Buy-back reward updated."}
 

@@ -30,7 +30,7 @@ function casinoResetProfitPayload(casino) {
 }
 
 export default function MyProperties() {
-  const [data, setData] = useState({ casino: null, property: null });
+  const [data, setData] = useState({ casino: null, property: null, points: 0 });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [casinoMaxBet, setCasinoMaxBet] = useState('');
@@ -54,7 +54,8 @@ export default function MyProperties() {
       const props = res.data;
       const casino = props?.casino ?? null;
       const property = props?.property ?? null;
-      setData({ casino, property });
+      const points = Number(props?.points ?? 0) || 0;
+      setData({ casino, property, points });
       if (casino?.max_bet != null) setCasinoMaxBet(String(casino.max_bet));
       if (casino?.buy_back_reward != null) setCasinoBuyBack(String(casino.buy_back_reward));
       if (property?.type === 'airport' && property?.price_per_travel != null)
@@ -71,7 +72,7 @@ export default function MyProperties() {
     } catch (error) {
       const detail = error.response?.data?.detail || error.message || 'Unknown error';
       toast.error(`Failed to load properties: ${detail}`);
-      setData({ casino: null, property: null });
+      setData({ casino: null, property: null, points: 0 });
     } finally {
       setLoading(false);
     }
@@ -107,6 +108,11 @@ export default function MyProperties() {
     if (!c || saving || (c.type !== 'dice' && c.type !== 'blackjack' && c.type !== 'roulette')) return;
     const amount = parseInt(String(casinoBuyBack).replace(/\D/g, ''), 10);
     if (Number.isNaN(amount) || amount < 0) { toast.error('Enter 0 or more points'); return; }
+    const bal = Number(data.points ?? 0) || 0;
+    if (amount > bal) {
+      toast.error(`Buy-back cannot exceed your points balance (${bal.toLocaleString()}).`);
+      return;
+    }
     setSaving(true);
     try {
       await api.post(`/casino/${c.type}/set-buy-back-reward`, (c.type === 'dice' || c.type === 'blackjack' || c.type === 'roulette') ? { city: c.city, amount } : { amount });
@@ -393,19 +399,24 @@ export default function MyProperties() {
                   </button>
                 </div>
                 {(data.casino.type === 'dice' || data.casino.type === 'blackjack' || data.casino.type === 'roulette') && (
-                  <div className="flex flex-wrap gap-2 items-center mb-2">
-                    <span className="text-[11px] text-mutedForeground w-16 shrink-0">Buy-back (pts)</span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={casinoBuyBack}
-                      onChange={(e) => setCasinoBuyBack(e.target.value)}
-                      placeholder="0"
-                      className="flex-1 min-w-20 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm"
-                    />
-                    <button type="button" onClick={handleCasinoSetBuyBack} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading uppercase disabled:opacity-50">
-                      {saving ? '...' : 'Set'}
-                    </button>
+                  <div className="mb-2">
+                    <div className="flex flex-wrap gap-2 items-center">
+                      <span className="text-[11px] text-mutedForeground w-16 shrink-0">Buy-back (pts)</span>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={casinoBuyBack}
+                        onChange={(e) => setCasinoBuyBack(e.target.value)}
+                        placeholder="0"
+                        className="flex-1 min-w-20 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm"
+                      />
+                      <button type="button" onClick={handleCasinoSetBuyBack} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading uppercase disabled:opacity-50">
+                        {saving ? '...' : 'Set'}
+                      </button>
+                    </div>
+                    <p className="text-[10px] text-zinc-500 mt-1 ml-[4.5rem]">
+                      Your points: {(Number(data.points) || 0).toLocaleString()} — buy-back cannot exceed balance.
+                    </p>
                   </div>
                 )}
                 <div className="flex flex-wrap gap-2 items-center mb-2">

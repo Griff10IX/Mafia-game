@@ -964,7 +964,9 @@ def register(router):
         user_id = current_user["id"]
         casino = await _user_owns_any_casino(user_id)
         property_ = await _user_owns_any_property(user_id)
-        return {"casino": casino, "property": property_}
+        urow = await db.users.find_one({"id": user_id}, {"points": 1})
+        points = int((urow or {}).get("points") or 0)
+        return {"casino": casino, "property": property_, "points": points}
 
     async def reinvest_property(property_id: str, current_user: dict = Depends(get_current_user)):
         """Spend points to boost a property's income for 24 hours."""

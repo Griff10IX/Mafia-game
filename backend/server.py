@@ -2195,6 +2195,19 @@ async def get_casino_caps():
     )
 
 
+async def assert_casino_buy_back_within_points_balance(user_id: str, amount: int) -> None:
+    """Buy-back offers deduct points from the owner when accepted; amount cannot exceed current balance."""
+    if amount <= 0:
+        return
+    row = await db.users.find_one({"id": user_id}, {"points": 1})
+    balance = int((row or {}).get("points") or 0)
+    if amount > balance:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Buy-back reward cannot exceed your points balance ({balance:,}).",
+        )
+
+
 async def _user_owns_any_casino(user_id: str):
     """Return first casino owned by user: {type, city, max_bet, buy_back_reward?, profit?} or None. Rule: 1 casino only. profit is $ (total_earnings or profit field)."""
     for game_type, coll in [
