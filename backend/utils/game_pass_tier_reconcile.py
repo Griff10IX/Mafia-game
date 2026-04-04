@@ -14,7 +14,7 @@ from utils.game_pass_micro_rewards import (
     REWARD_KEY_LABELS,
     REWARD_KEY_ORDER,
     format_rewards_summary,
-    micro_tier_from_rank_points,
+    micro_tier_for_vip_game_pass,
     rewards_for_micro_tier,
     vip_rewards_after_free_dedupe,
 )
@@ -56,7 +56,7 @@ async def grant_missing_vip_micro_tier_rewards(
     if not ignore_token_expiry and not vip_active:
         return {"ok": False, "reason": "vip_token_expired_or_inactive", "tiers_granted": []}
 
-    current_micro = micro_tier_from_rank_points(user.get("rank_points"))
+    current_micro = micro_tier_for_vip_game_pass(user)
     last_granted = int(user.get("rank_xp_pass_last_granted_micro_tier") or 0)
 
     cursor_repaired = False

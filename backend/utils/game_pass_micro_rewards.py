@@ -14,6 +14,7 @@ Scaling:
 from __future__ import annotations
 
 import math
+from datetime import datetime, timezone
 from typing import Dict, Optional
 
 MAX_THRESHOLD_RP = 1_000_000
@@ -347,6 +348,40 @@ def micro_tier_from_rank_points(rank_points: Optional[int | float]) -> int:
 
     tier = int(math.floor((rp / MAX_THRESHOLD_RP) * 100))
     return max(0, min(MAX_MICRO_TIER, tier))
+
+
+def vip_game_pass_entitlement_active(user: dict, *, now_utc: Optional[datetime] = None) -> bool:
+    """True if user claimed VIP Game Pass and token is not expired (missing/invalid expiry treated as active)."""
+    if user.get("rank_xp_pass_rewards_granted") is not True:
+        return False
+    now = now_utc or datetime.now(timezone.utc)
+    expires_raw = user.get("rank_xp_pass_token_expires_at")
+    if not expires_raw:
+        return True
+    try:
+        dt = datetime.fromisoformat(str(expires_raw).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        return True
+    return bool(dt > now)
+
+
+def rank_points_for_vip_game_pass(user: dict) -> int:
+    """Rank points that count toward VIP Game Pass micro tiers (live RP + prestige carry)."""
+    try:
+        rp = int(user.get("rank_points") or 0)
+    except Exception:
+        rp = 0
+    try:
+        carry = int(user.get("rank_xp_pass_prestige_carry_rp") or 0)
+    except Exception:
+        carry = 0
+    return max(0, rp + carry)
+
+
+def micro_tier_for_vip_game_pass(user: dict) -> int:
+    return micro_tier_from_rank_points(rank_points_for_vip_game_pass(user))
 
 
 def micro_tier_min_rank_points(micro_tier: int) -> int:

@@ -786,6 +786,8 @@ class UserResponse(BaseModel):
     rank_xp_pass_tier_snapshot: Optional[int] = None
     # Cursor: highest micro tier rewards already granted (1..100, 0 = none).
     rank_xp_pass_last_granted_micro_tier: int = 0
+    # RP banked on prestige while VIP pass active; added to rank_points for pass tier math only.
+    rank_xp_pass_prestige_carry_rp: int = 0
     # Idempotency guard for tiered one-time rewards.
     rank_xp_pass_rewards_granted: bool = False
     shooting_range_bonus_plays: int = 0  # store upgrade: added to base 10 plays/hour in shooting range

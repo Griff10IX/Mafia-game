@@ -242,10 +242,14 @@ async def _activate_rank_xp_pass_and_grant_cumulative_micro_tiers(
     Uses max(purchase-time snapshot, live rank_points) so players who buy/activate after
     earning XP still get all tiers they have already reached (snapshot alone can be 0 or stale).
     """
-    u0 = await db.users.find_one({"id": user_id}, {"_id": 0, "rank_points": 1})
+    u0 = await db.users.find_one(
+        {"id": user_id},
+        {"_id": 0, "rank_points": 1, "rank_xp_pass_prestige_carry_rp": 1},
+    )
     rp_live = int((u0 or {}).get("rank_points") or 0)
+    carry = int((u0 or {}).get("rank_xp_pass_prestige_carry_rp") or 0)
     snap = int(tier_snapshot or 0)
-    effective_rp = max(snap, rp_live)
+    effective_rp = max(snap, rp_live + carry)
     activation_micro = micro_tier_from_rank_points(effective_rp)
 
     # Flip rewards_granted atomically so concurrent activations don't double-grant.

@@ -24,7 +24,7 @@ from pydantic import BaseModel
 from fastapi import Depends, Header, HTTPException, Query
 import httpx
 
-from server import db, get_current_user, get_current_user_verified, log_gambling, _is_admin, _is_moderator
+from server import db, get_current_user, get_current_user_verified, log_gambling, send_notification, _is_admin, _is_moderator
 
 logger = logging.getLogger(__name__)
 
@@ -1731,6 +1731,21 @@ async def _settle_event_internal(event_id: str, winning_option_id: str) -> bool:
                 await db.users.update_one({"id": bet_claim["user_id"]}, {"$set": update_fields})
         else:
             await db.users.update_one({"id": bet_claim["user_id"]}, {"$set": {"sports_current_win_streak": 0}})
+
+        ev_nm = (bet_claim.get("event_name") or "Sports event").strip() or "Sports event"
+        pick_nm = (bet_claim.get("option_name") or "your pick").strip() or "your pick"
+        uid = bet_claim["user_id"]
+        if won:
+            dest = "your Swiss bank" if to_swiss else "cash on hand"
+            win_msg = (
+                f"Your pick ({pick_nm}) won on \"{ev_nm}\". "
+                f"Payout ${payout:,} added to {dest} (stake ${stake:,} at {odds:g}×)."
+            )
+            await send_notification(uid, "Sports bet won", win_msg, "reward")
+        else:
+            lose_msg = f"Your pick ({pick_nm}) lost on \"{ev_nm}\". Stake ${stake:,} was not returned."
+            await send_notification(uid, "Sports bet lost", lose_msg, "system")
+
     return True
 
 

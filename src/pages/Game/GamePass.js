@@ -469,7 +469,7 @@ export default function GamePass() {
   const vipGrantingActive = vipClaimed && (!passExpiryUntil || passExpiryUntil.getTime() > nowTs);
 
   const previewRankPointsRaw = vipGrantingActive
-    ? Number(user?.rank_points ?? 0) // when VIP is active, keep preview moving with live rank_points
+    ? Number(user?.rank_points ?? 0) + Number(user?.rank_xp_pass_prestige_carry_rp ?? 0) // live RP + prestige carry (matches server VIP tier math)
     : passIsUnactivatedValid
       ? Number(user?.rank_xp_pass_pending_tier_snapshot ?? 0) // pending snapshot before activation
       : vipClaimed

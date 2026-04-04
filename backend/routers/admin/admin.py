@@ -2137,7 +2137,7 @@ def register(router):
             raise HTTPException(status_code=403, detail="Admin access required")
 
         from utils.game_pass_micro_rewards import (
-            micro_tier_from_rank_points,
+            micro_tier_for_vip_game_pass,
             vip_rewards_after_free_dedupe,
         )
 
@@ -2149,12 +2149,15 @@ def register(router):
         uid = target["id"]
         un = target.get("username", target_username)
         rank_points = int(target.get("rank_points") or 0)
-        current_micro = micro_tier_from_rank_points(rank_points)
+        current_micro = micro_tier_for_vip_game_pass(target)
         free_last = int(target.get("rank_xp_pass_free_last_micro_tier_granted") or 0)
         old_last_granted = int(target.get("rank_xp_pass_last_granted_micro_tier") or 0)
 
         if current_micro <= 0:
-            raise HTTPException(status_code=400, detail=f"{un} has 0 completed micro tiers (rank_points={rank_points})")
+            raise HTTPException(
+                status_code=400,
+                detail=f"{un} has 0 completed micro tiers (rank_points={rank_points}, carry={int(target.get('rank_xp_pass_prestige_carry_rp') or 0)})",
+            )
 
         total_inc: Dict[str, int] = {}
         tier_detail = []
@@ -2225,11 +2228,12 @@ def register(router):
         fix=true: force-grants rewards directly to each stuck user's account."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        from utils.game_pass_micro_rewards import micro_tier_from_rank_points, vip_rewards_after_free_dedupe
+        from utils.game_pass_micro_rewards import micro_tier_for_vip_game_pass, vip_rewards_after_free_dedupe
 
         cursor = db.users.find(
             {"rank_xp_pass_rewards_granted": True, "rank_xp_pass_last_granted_micro_tier": {"$gt": 0}},
-            {"_id": 0, "id": 1, "username": 1, "rank_points": 1, "rank_xp_pass_last_granted_micro_tier": 1,
+            {"_id": 0, "id": 1, "username": 1, "rank_points": 1, "rank_xp_pass_prestige_carry_rp": 1,
+             "rank_xp_pass_last_granted_micro_tier": 1,
              "rank_xp_pass_token_expires_at": 1, "rank_xp_pass_free_last_micro_tier_granted": 1,
              "rank_xp_pass_rewards_granted": 1},
         )
@@ -2238,13 +2242,14 @@ def register(router):
         stuck: List[Dict[str, Any]] = []
         fixed: List[str] = []
         for row in rows:
-            current_micro = micro_tier_from_rank_points(row.get("rank_points"))
+            current_micro = micro_tier_for_vip_game_pass(row)
             last_granted = int(row.get("rank_xp_pass_last_granted_micro_tier") or 0)
             if last_granted <= current_micro:
                 continue
             entry = {
                 "username": row.get("username"),
                 "rank_points": int(row.get("rank_points") or 0),
+                "rank_xp_pass_prestige_carry_rp": int(row.get("rank_xp_pass_prestige_carry_rp") or 0),
                 "current_micro": current_micro,
                 "last_granted": last_granted,
                 "gap": last_granted - current_micro,

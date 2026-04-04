@@ -1,6 +1,8 @@
 # Prestige system: 5 levels unlocked after reaching Godfather, each harder than the last.
 from fastapi import Depends, HTTPException
 
+from utils.game_pass_micro_rewards import vip_game_pass_entitlement_active
+
 
 def _fmt_mult(x: float) -> str:
     """Short string for multipliers (drops trailing .0)."""
@@ -145,20 +147,35 @@ def register(router):
             "first_mission_notification_sent": "",
         }
 
-        await db.users.update_one(
+        fresh_gp = await db.users.find_one(
             {"id": current_user["id"]},
             {
-                "$set": {
-                    "prestige_level": new_level,
-                    "prestige_rank_multiplier": new_mult,
-                    "rank_points": 0,
-                    "rank": 1,
-                    "mission_completions": [],
-                    "rank_xp_pass_last_granted_micro_tier": 0,
-                    "rank_xp_pass_free_last_micro_tier_granted": 0,
-                },
-                "$unset": mission_reset_unset,
+                "_id": 0,
+                "rank_xp_pass_rewards_granted": 1,
+                "rank_xp_pass_token_expires_at": 1,
+                "rank_xp_pass_prestige_carry_rp": 1,
             },
+        )
+        vip_pass_active = vip_game_pass_entitlement_active(fresh_gp or current_user)
+
+        prestige_set = {
+            "prestige_level": new_level,
+            "prestige_rank_multiplier": new_mult,
+            "rank_points": 0,
+            "rank": 1,
+            "mission_completions": [],
+        }
+        if vip_pass_active:
+            prev_carry = int((fresh_gp or {}).get("rank_xp_pass_prestige_carry_rp") or 0)
+            prestige_set["rank_xp_pass_prestige_carry_rp"] = prev_carry + rank_points
+        else:
+            prestige_set["rank_xp_pass_last_granted_micro_tier"] = 0
+            prestige_set["rank_xp_pass_free_last_micro_tier_granted"] = 0
+            prestige_set["rank_xp_pass_prestige_carry_rp"] = 0
+
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": prestige_set, "$unset": mission_reset_unset},
         )
 
         benefits_line = _format_prestige_unlock_benefits(new_cfg)

@@ -183,6 +183,7 @@ async def wipe_user_for_account_ban(db, user_id: str) -> Dict[str, Any]:
         "shooting_range_bonus_plays": 0,
         "rank_xp_pass_rewards_granted": False,
         "rank_xp_pass_last_granted_micro_tier": 0,
+        "rank_xp_pass_prestige_carry_rp": 0,
     }
     unset_fields = [
         "xp_crimes_until",

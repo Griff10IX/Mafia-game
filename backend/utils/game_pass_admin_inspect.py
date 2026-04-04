@@ -9,7 +9,7 @@ import re
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from utils.game_pass_micro_rewards import micro_tier_from_rank_points
+from utils.game_pass_micro_rewards import micro_tier_for_vip_game_pass, micro_tier_from_rank_points
 
 RANK_XP_PASS_PACKAGE_ID = "rank_xp_pass_499"
 
@@ -27,6 +27,7 @@ GAME_PASS_USER_PROJECTION = {
     "rank_xp_pass_pending_tier_snapshot": 1,
     "rank_xp_pass_free_last_micro_tier_granted": 1,
     "rank_xp_pass_bonus_until": 1,
+    "rank_xp_pass_prestige_carry_rp": 1,
 }
 
 
@@ -78,9 +79,9 @@ def game_pass_mongo_filter() -> Dict[str, Any]:
 
 def game_pass_derived_fields(user_row: Dict[str, Any], *, now_utc: datetime) -> Dict[str, Any]:
     rp = int(user_row.get("rank_points") or 0)
-    current_micro = micro_tier_from_rank_points(rp)
-    tokens = int(user_row.get("rank_xp_pass_tokens") or 0)
     vip_claimed = user_row.get("rank_xp_pass_rewards_granted") is True
+    current_micro = micro_tier_for_vip_game_pass(user_row) if vip_claimed else micro_tier_from_rank_points(rp)
+    tokens = int(user_row.get("rank_xp_pass_tokens") or 0)
     last_granted = int(user_row.get("rank_xp_pass_last_granted_micro_tier") or 0)
     free_last = int(user_row.get("rank_xp_pass_free_last_micro_tier_granted") or 0)
 
