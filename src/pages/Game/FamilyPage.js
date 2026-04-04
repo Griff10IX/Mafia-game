@@ -33,6 +33,8 @@ const VAULT_TX_KIND_LABELS = {
   withdraw: 'Withdraw',
   give_bullets: 'Give bullets',
   split_bullets: 'Split all bullets',
+  give_loot: 'Give loot pieces',
+  split_loot: 'Split all loot',
   compound_to_vault: 'Compound → vault',
   crew_oc_join_fee: 'Crew OC join fee',
   crew_oc_refund: 'Crew OC refund',
@@ -388,6 +390,7 @@ const TreasuryTab = ({
   depositAmount, setDepositAmount, depositBullets, setDepositBullets,
   withdrawAmount, setWithdrawAmount, withdrawBullets, setWithdrawBullets, onDeposit, onWithdraw,
   giveBulletsUserId, setGiveBulletsUserId, giveBulletsAmount, setGiveBulletsAmount, onGiveBullets, onSplitAllBullets, splitAllBulletsLoading,
+  giveLootUserId, setGiveLootUserId, giveLootAmount, setGiveLootAmount, onGiveLoot, onSplitAllLoot, splitAllLootLoading,
   compoundCash, compoundPoints, compoundLootPieces, myCompoundCash, myCompoundPoints, myCompoundLootPieces, myCompoundCars,
   compoundDepositCash, setCompoundDepositCash, compoundDepositPoints, setCompoundDepositPoints, compoundDepositLootPieces, setCompoundDepositLootPieces,
   compoundWithdrawCash, setCompoundWithdrawCash, compoundWithdrawPoints, setCompoundWithdrawPoints, compoundWithdrawLootPieces, setCompoundWithdrawLootPieces,
@@ -545,9 +548,40 @@ const TreasuryTab = ({
             onClick={onSplitAllBullets}
             disabled={splitAllBulletsLoading}
             className="px-3 py-2 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border bg-primary/20 border-primary/50 text-primary hover:bg-primary/30 transition-all shrink-0 touch-manipulation disabled:opacity-50"
-            title="Split all vault bullets across all living family members"
+            title="Split all vault bullets across living members (requires at least one bullet per member)"
           >
             {splitAllBulletsLoading ? '...' : 'Split all bullets'}
+          </button>
+        </form>
+
+        <form onSubmit={onGiveLoot} className="flex flex-wrap gap-2 mt-2">
+          <select
+            value={giveLootUserId}
+            onChange={(e) => setGiveLootUserId(e.target.value)}
+            className="flex-1 min-w-[140px] bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-2 py-2 text-xs font-heading focus:border-primary/50 focus:outline-none"
+          >
+            <option value="">Give loot pieces to member...</option>
+            {(members || []).map((m) => (
+              <option key={m.user_id} value={m.user_id}>{m.username}</option>
+            ))}
+          </select>
+          <FormattedNumberInput
+            value={giveLootAmount}
+            onChange={setGiveLootAmount}
+            placeholder="Loot pieces"
+            className="w-28 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-xs text-foreground font-heading focus:border-primary/50 focus:outline-none transition-colors"
+          />
+          <button type="submit" className="px-3 py-2 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border bg-cyan-500/15 border-cyan-500/35 text-cyan-300 hover:bg-cyan-500/25 transition-all shrink-0 touch-manipulation">
+            Give
+          </button>
+          <button
+            type="button"
+            onClick={onSplitAllLoot}
+            disabled={splitAllLootLoading}
+            className="px-3 py-2 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border bg-cyan-500/10 border-cyan-500/30 text-cyan-200/90 hover:bg-cyan-500/20 transition-all shrink-0 touch-manipulation disabled:opacity-50"
+            title="Split all vault loot pieces across living members (requires at least one piece per member)"
+          >
+            {splitAllLootLoading ? '...' : 'Split all loot'}
           </button>
         </form>
       </div>
@@ -2180,6 +2214,9 @@ export default function FamilyPage() {
   const [giveBulletsUserId, setGiveBulletsUserId] = useState('');
   const [giveBulletsAmount, setGiveBulletsAmount] = useState('');
   const [splitAllBulletsLoading, setSplitAllBulletsLoading] = useState(false);
+  const [giveLootUserId, setGiveLootUserId] = useState('');
+  const [giveLootAmount, setGiveLootAmount] = useState('');
+  const [splitAllLootLoading, setSplitAllLootLoading] = useState(false);
   const [compoundDepositCash, setCompoundDepositCash] = useState('');
   const [compoundDepositPoints, setCompoundDepositPoints] = useState('');
   const [compoundDepositLootPieces, setCompoundDepositLootPieces] = useState('');
@@ -2346,7 +2383,7 @@ export default function FamilyPage() {
   };
   const handleSplitAllBullets = async () => {
     if (splitAllBulletsLoading) return;
-    if (!window.confirm('Split ALL vault bullets across all living family members?')) return;
+    if (!window.confirm('Split ALL vault bullets across all living members? Everyone must get at least one bullet, or the split will be rejected.')) return;
     setSplitAllBulletsLoading(true);
     try {
       const res = await api.post('/families/bullets/split-all');
@@ -2355,6 +2392,32 @@ export default function FamilyPage() {
       fetchData();
     } catch (e) { toast.error(apiDetail(e)); }
     finally { setSplitAllBulletsLoading(false); }
+  };
+  const handleGiveLoot = async (e) => {
+    e.preventDefault();
+    const user_id = String(giveLootUserId || '').trim();
+    const loot_pieces = parseInt(String(giveLootAmount).replace(/\D/g, ''), 10) || 0;
+    if (!user_id || loot_pieces <= 0) return;
+    try {
+      await api.post('/families/loot/give', { user_id, loot_pieces });
+      toast.success('Loot pieces sent');
+      setGiveLootAmount('');
+      setGiveLootUserId('');
+      refreshUser();
+      fetchData();
+    } catch (e) { toast.error(apiDetail(e)); }
+  };
+  const handleSplitAllLoot = async () => {
+    if (splitAllLootLoading) return;
+    if (!window.confirm('Split ALL vault loot pieces across all living members? Everyone must get at least one piece, or the split will be rejected.')) return;
+    setSplitAllLootLoading(true);
+    try {
+      const res = await api.post('/families/loot/split-all');
+      toast.success(res?.data?.message || 'Split complete');
+      refreshUser();
+      fetchData();
+    } catch (e) { toast.error(apiDetail(e)); }
+    finally { setSplitAllLootLoading(false); }
   };
   const handleCompoundDeposit = async (e) => {
     e.preventDefault();
@@ -2614,7 +2677,7 @@ export default function FamilyPage() {
                   {n > 0 && <span className="text-zinc-500 font-normal normal-case ml-auto">{n} crew holding{n !== 1 ? 's' : ''}</span>}
                 </div>
                 <p className="text-[8px] text-zinc-600 leading-snug border-b border-primary/5 pb-2">
-                  Each member: one airport <span className="text-zinc-500">or</span> one armoury (not both). The crew may only have <span className="text-zinc-400 font-heading font-bold">one</span> of those two family-wide — one vault bonus from whichever high command holds. Casinos are separate.
+                  Each member may hold <span className="text-zinc-400 font-heading font-bold">one</span> airport and <span className="text-zinc-400 font-heading font-bold">one</span> armoury (both allowed). If high command owns both, hourly vault bullets stack (airport + armoury). Casinos are separate.
                 </p>
                 {n > 0 ? (
                   <ul className="text-[10px] text-zinc-400 space-y-0.5 max-h-28 overflow-y-auto">
@@ -2642,7 +2705,7 @@ export default function FamilyPage() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-[9px] text-zinc-600 pt-1 border-t border-primary/10 flex items-start gap-1 leading-snug"><Plane size={10} className="shrink-0 mt-0.5 opacity-50" /> No active vault or airport crew bonuses right now. Hourly vault bullets apply when high command owns the crew&apos;s airport or armoury (only one type per family). The Don can pick an airport crew perk when the family holds an airport.</p>
+                  <p className="text-[9px] text-zinc-600 pt-1 border-t border-primary/10 flex items-start gap-1 leading-snug"><Plane size={10} className="shrink-0 mt-0.5 opacity-50" /> No active vault or airport crew bonuses right now. Hourly vault bullets apply per source when high command owns the crew&apos;s airport and/or armoury (both stack). The Don can pick an airport crew perk when high command holds an airport.</p>
                 )}
               </div>
             );
@@ -2771,6 +2834,13 @@ export default function FamilyPage() {
                 onGiveBullets={handleGiveBullets}
                 onSplitAllBullets={handleSplitAllBullets}
                 splitAllBulletsLoading={splitAllBulletsLoading}
+                giveLootUserId={giveLootUserId}
+                setGiveLootUserId={setGiveLootUserId}
+                giveLootAmount={giveLootAmount}
+                setGiveLootAmount={setGiveLootAmount}
+                onGiveLoot={handleGiveLoot}
+                onSplitAllLoot={handleSplitAllLoot}
+                splitAllLootLoading={splitAllLootLoading}
                 compoundCash={family.compound_cash}
                 compoundPoints={family.compound_points}
                 compoundLootPieces={family.compound_loot_pieces}

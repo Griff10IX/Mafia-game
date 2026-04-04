@@ -41,8 +41,9 @@ export default function MyPropertiesWidget() {
   }
 
   const casino = data?.casino ?? null;
-  const property = data?.property ?? null;
-  const hasAny = casino || property;
+  const airport = data?.airport ?? (data?.property?.type === 'airport' ? data.property : null);
+  const armoury = data?.armoury ?? (data?.property?.type === 'bullet_factory' ? data.property : null);
+  const hasAny = casino || airport || armoury;
 
   return (
     <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
@@ -78,27 +79,32 @@ export default function MyPropertiesWidget() {
                 <span className="text-[10px] font-heading text-mutedForeground">No casino</span>
               </div>
             )}
-            {property ? (
+            {airport ? (
               <div className="flex items-center gap-1.5 px-2 py-1 rounded border bg-primary/5 border-primary/30">
-                {property.type === 'airport' ? (
-                  <Plane size={12} className="text-primary shrink-0" />
-                ) : (
-                  <Factory size={12} className="text-primary shrink-0" />
-                )}
+                <Plane size={12} className="text-primary shrink-0" />
                 <span className="text-[10px] font-heading text-foreground">
-                  {property.type === 'airport' ? 'Airport' : 'Armoury'} in {property.state || '?'}
+                  Airport in {airport.state || '?'}
                 </span>
-                {property.type === 'airport' && property.total_earnings != null && (
+                {airport.total_earnings != null && (
                   <span className="text-[9px] text-mutedForeground ml-auto">
-                    {Number(property.total_earnings).toLocaleString()} pts
+                    {Number(airport.total_earnings).toLocaleString()} pts
                   </span>
                 )}
               </div>
-            ) : (
-              <div className="flex items-center gap-1.5 px-2 py-1 rounded border bg-zinc-800/20 border-zinc-700/30">
-                <span className="text-[10px] font-heading text-mutedForeground">No property</span>
+            ) : null}
+            {armoury ? (
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded border bg-primary/5 border-primary/30">
+                <Factory size={12} className="text-primary shrink-0" />
+                <span className="text-[10px] font-heading text-foreground">
+                  Armoury in {armoury.state || '?'}
+                </span>
               </div>
-            )}
+            ) : null}
+            {!airport && !armoury ? (
+              <div className="flex items-center gap-1.5 px-2 py-1 rounded border bg-zinc-800/20 border-zinc-700/30">
+                <span className="text-[10px] font-heading text-mutedForeground">No airport or armoury</span>
+              </div>
+            ) : null}
           </>
         )}
       </div>

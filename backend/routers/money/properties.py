@@ -957,16 +957,25 @@ def register(router):
     import server as srv
     get_current_user = srv.get_current_user
     _user_owns_any_casino = srv._user_owns_any_casino
-    _user_owns_any_property = srv._user_owns_any_property
+    _user_owns_airport = srv._user_owns_airport
+    _user_owns_bullet_factory = srv._user_owns_bullet_factory
 
     async def get_my_properties(current_user: dict = Depends(get_current_user)):
-        """Return current user's one casino (if any) and one property (if any). Rule: max 1 casino, max 1 property."""
+        """Return current user's casino (if any), airport and/or armoury. Rule: max 1 casino; max 1 airport and max 1 armoury (may hold both)."""
         user_id = current_user["id"]
         casino = await _user_owns_any_casino(user_id)
-        property_ = await _user_owns_any_property(user_id)
+        airport = await _user_owns_airport(user_id)
+        armoury = await _user_owns_bullet_factory(user_id)
+        property_ = airport or armoury
         urow = await db.users.find_one({"id": user_id}, {"points": 1})
         points = int((urow or {}).get("points") or 0)
-        return {"casino": casino, "property": property_, "points": points}
+        return {
+            "casino": casino,
+            "property": property_,
+            "airport": airport,
+            "armoury": armoury,
+            "points": points,
+        }
 
     async def reinvest_property(property_id: str, current_user: dict = Depends(get_current_user)):
         """Spend points to boost a property's income for 24 hours."""

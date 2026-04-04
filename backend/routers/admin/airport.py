@@ -563,7 +563,7 @@ async def list_airports(current_user: dict = Depends(get_current_user)):
 
 
 async def claim_airport(req: AirportClaimRequest, current_user: dict = Depends(get_current_user)):
-    from server import _user_owns_any_property, maybe_auto_relinquish_below_capo  # lazy import to avoid circular dependency
+    from server import _user_owns_airport, maybe_auto_relinquish_below_capo  # lazy import to avoid circular dependency
     rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
     prestige_level = int(current_user.get("prestige_level") or 0)
     if rank_id < CAPO_RANK_ID and prestige_level < 1:
@@ -572,9 +572,12 @@ async def claim_airport(req: AirportClaimRequest, current_user: dict = Depends(g
         raise HTTPException(status_code=400, detail="Invalid state")
     if req.slot < 1 or req.slot > AIRPORT_SLOTS_PER_STATE:
         raise HTTPException(status_code=400, detail=f"Slot must be 1–{AIRPORT_SLOTS_PER_STATE}")
-    owned_prop = await _user_owns_any_property(current_user["id"])
-    if owned_prop and (owned_prop.get("type") != "airport" or owned_prop.get("state") != req.state):
-        raise HTTPException(status_code=400, detail="You may only own 1 property (airport or bullet factory). Relinquish it first (My Properties or States).")
+    existing_air = await _user_owns_airport(current_user["id"])
+    if existing_air and existing_air.get("state") != req.state:
+        raise HTTPException(
+            status_code=400,
+            detail="You already hold an airport in another state. Relinquish it first, or claim another slot in that same state.",
+        )
     user_location = (current_user.get("current_state") or "").strip()
     if user_location != req.state:
         raise HTTPException(status_code=400, detail=f"You must be in {req.state} to claim this airport. Travel there first.")
@@ -621,7 +624,7 @@ async def set_airport_price(req: AirportSetPriceRequest, current_user: dict = De
 
 
 async def airport_transfer(req: AirportTransferRequest, current_user: dict = Depends(get_current_user)):
-    from server import maybe_auto_relinquish_below_capo, _user_owns_any_property, _username_pattern  # lazy import to avoid circular dependency
+    from server import maybe_auto_relinquish_below_capo, _user_owns_airport, _username_pattern  # lazy import to avoid circular dependency
     if req.state not in STATES:
         raise HTTPException(status_code=400, detail="Invalid state")
     if req.slot < 1 or req.slot > AIRPORT_SLOTS_PER_STATE:
@@ -641,9 +644,8 @@ async def airport_transfer(req: AirportTransferRequest, current_user: dict = Dep
         raise HTTPException(status_code=404, detail="User not found")
     if target["id"] == current_user["id"]:
         raise HTTPException(status_code=400, detail="Cannot transfer to yourself")
-    owned = await _user_owns_any_property(target["id"])
-    if owned:
-        raise HTTPException(status_code=400, detail="That user already owns a property")
+    if await _user_owns_airport(target["id"]):
+        raise HTTPException(status_code=400, detail="That user already owns an airport")
     airport_set = {"owner_id": target["id"], "owner_username": target.get("username", target_username), "total_earnings": 0}
     if get_rank_info(target.get("rank_points", 0))[0] < CAPO_RANK_ID:
         airport_set["below_capo_acquired_at"] = datetime.now(timezone.utc)

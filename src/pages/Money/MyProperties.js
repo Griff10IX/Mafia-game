@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Building2, Dice5, CircleDot, Spade, Trophy, Plane, Factory, Shield, Link as LinkIcon } from 'lucide-react';
+import { Building2, Dice5, CircleDot, Spade, Trophy, Plane, Factory, Link as LinkIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api from '../../utils/api';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
@@ -30,7 +30,7 @@ function casinoResetProfitPayload(casino) {
 }
 
 export default function MyProperties() {
-  const [data, setData] = useState({ casino: null, property: null, points: 0 });
+  const [data, setData] = useState({ casino: null, airport: null, armoury: null, points: 0 });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [casinoMaxBet, setCasinoMaxBet] = useState('');
@@ -53,18 +53,18 @@ export default function MyProperties() {
       ]);
       const props = res.data;
       const casino = props?.casino ?? null;
-      const property = props?.property ?? null;
+      const airport = props?.airport ?? (props?.property?.type === 'airport' ? props.property : null);
+      const armoury = props?.armoury ?? (props?.property?.type === 'bullet_factory' ? props.property : null);
       const points = Number(props?.points ?? 0) || 0;
-      setData({ casino, property, points });
+      setData({ casino, airport, armoury, points });
       if (casino?.max_bet != null) setCasinoMaxBet(String(casino.max_bet));
       if (casino?.buy_back_reward != null) setCasinoBuyBack(String(casino.buy_back_reward));
-      if (property?.type === 'airport' && property?.price_per_travel != null)
-        setAirportPrice(String(property.price_per_travel));
-      if (property?.type === 'bullet_factory') {
+      if (airport?.price_per_travel != null) setAirportPrice(String(airport.price_per_travel));
+      if (armoury?.state) {
         const list = bulletListRes.data?.factories ?? [];
-        const f = list.find((x) => x.state === property.state);
+        const f = list.find((x) => x.state === armoury.state);
         if (f?.price_per_bullet != null) setBulletPrice(String(f.price_per_bullet));
-        const detailRes = await api.get('/bullet-factory', { params: { state: property.state } }).catch(() => ({ data: null }));
+        const detailRes = await api.get('/bullet-factory', { params: { state: armoury.state } }).catch(() => ({ data: null }));
         setArmouryDetail(detailRes.data || null);
       } else {
         setArmouryDetail(null);
@@ -72,7 +72,7 @@ export default function MyProperties() {
     } catch (error) {
       const detail = error.response?.data?.detail || error.message || 'Unknown error';
       toast.error(`Failed to load properties: ${detail}`);
-      setData({ casino: null, property: null, points: 0 });
+      setData({ casino: null, airport: null, armoury: null, points: 0 });
     } finally {
       setLoading(false);
     }
@@ -198,8 +198,8 @@ export default function MyProperties() {
   };
 
   const handleAirportSetPrice = async () => {
-    const p = data.property;
-    if (!p || p.type !== 'airport' || saving) return;
+    const p = data.airport;
+    if (!p || saving) return;
     const val = parseInt(String(airportPrice).replace(/\D/g, ''), 10);
     if (Number.isNaN(val) || val < 10 || val > 30) { toast.error('Price 10–30 points'); return; }
     setSaving(true);
@@ -215,8 +215,8 @@ export default function MyProperties() {
   };
 
   const handleAirportTransfer = async () => {
-    const p = data.property;
-    if (!p || p.type !== 'airport' || saving) return;
+    const p = data.airport;
+    if (!p || saving) return;
     const username = (airportTransferUsername || '').trim();
     if (!username) { toast.error('Enter a username'); return; }
     setSaving(true);
@@ -233,8 +233,8 @@ export default function MyProperties() {
   };
 
   const handleAirportSell = async () => {
-    const p = data.property;
-    if (!p || p.type !== 'airport' || saving) return;
+    const p = data.airport;
+    if (!p || saving) return;
     const pts = parseInt(String(airportSellPoints).replace(/,/g, '').replace(/\D/g, ''), 10);
     if (Number.isNaN(pts) || pts < 0) { toast.error('Enter 0 or more points'); return; }
     setSaving(true);
@@ -251,12 +251,12 @@ export default function MyProperties() {
   };
 
   const handleBulletSetPrice = async () => {
-    if (!data.property || data.property.type !== 'bullet_factory' || saving) return;
+    if (!data.armoury || saving) return;
     const val = parseInt(String(bulletPrice).replace(/\D/g, ''), 10);
     if (Number.isNaN(val) || val < 1) { toast.error('Enter valid price'); return; }
     setSaving(true);
     try {
-      await api.post('/bullet-factory/set-price', { price_per_bullet: val, state: data.property.state });
+      await api.post('/bullet-factory/set-price', { price_per_bullet: val, state: data.armoury.state });
       toast.success('Price updated');
       fetchMyProperties();
     } catch (e) {
@@ -267,10 +267,10 @@ export default function MyProperties() {
   };
 
   const handleBulletCollect = async () => {
-    if (!data.property || data.property.type !== 'bullet_factory' || saving) return;
+    if (!data.armoury || saving) return;
     setSaving(true);
     try {
-      const res = await api.post('/bullet-factory/collect', { state: data.property.state });
+      const res = await api.post('/bullet-factory/collect', { state: data.armoury.state });
       toast.success(res.data?.message || 'Refreshed');
       fetchMyProperties();
       window.dispatchEvent(new CustomEvent('app:refresh-user'));
@@ -282,11 +282,11 @@ export default function MyProperties() {
   };
 
   const handleArmouryRelinquish = async () => {
-    if (!data.property || data.property.type !== 'bullet_factory' || saving) return;
+    if (!data.armoury || saving) return;
     if (!window.confirm('Relinquish the armoury? It will become unclaimed.')) return;
     setSaving(true);
     try {
-      await api.post('/bullet-factory/relinquish', { state: data.property.state });
+      await api.post('/bullet-factory/relinquish', { state: data.armoury.state });
       toast.success('Armoury relinquished');
       fetchMyProperties();
       window.dispatchEvent(new CustomEvent('app:refresh-user'));
@@ -298,8 +298,8 @@ export default function MyProperties() {
   };
 
   const handleArmourySell = async () => {
-    const p = data.property;
-    if (!p || p.type !== 'bullet_factory' || saving) return;
+    const p = data.armoury;
+    if (!p || saving) return;
     const pts = parseInt(String(armourySellPoints).replace(/,/g, '').replace(/\D/g, ''), 10);
     if (Number.isNaN(pts) || pts < 0) { toast.error('Enter 0 or more points'); return; }
     setSaving(true);
@@ -321,8 +321,8 @@ export default function MyProperties() {
   };
 
   const handleArmouryTransfer = async () => {
-    const p = data.property;
-    if (!p || p.type !== 'bullet_factory' || saving) return;
+    const p = data.armoury;
+    if (!p || saving) return;
     const username = (armouryTransferUsername || '').trim();
     if (!username) { toast.error('Enter a username'); return; }
     setSaving(true);
@@ -358,7 +358,7 @@ export default function MyProperties() {
 
       <div className="relative mp-fade-in">
         <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Your Holdings</p>
-        <p className="text-[10px] text-zinc-500 font-heading italic">One casino and one property. Dice + Airport, Blackjack + Armoury, or Roulette + Armory.</p>
+        <p className="text-[10px] text-zinc-500 font-heading italic">One casino. Up to one airport and one armoury (you may hold both). Casinos are separate from airport/armoury.</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -469,21 +469,26 @@ export default function MyProperties() {
         <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mp-card mp-fade-in mobile-panel`} style={{ animationDelay: '0.05s' }}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
-            <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">🏭 Property</span>
+            <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">🏭 Airport &amp; armoury</span>
           </div>
           <div className="p-3">
-            {data.property?.type === 'airport' ? (
+            {!data.airport && !data.armoury ? (
+              <p className="text-sm text-mutedForeground">
+                None. Claim an <Link to="/states" className="text-primary underline">Airport</Link> or <Link to="/armour-weapons" className="text-primary underline">Armoury</Link> from States.
+              </p>
+            ) : null}
+            {data.airport ? (
               <>
                 <div className="flex items-center gap-2 mb-2">
                   <Plane size={18} className="text-primary" />
                   <span className="font-heading font-bold text-foreground">Airport</span>
-                  <span className="text-mutedForeground text-sm">· {data.property.state}</span>
+                  <span className="text-mutedForeground text-sm">· {data.airport.state}</span>
                 </div>
-                <p className="text-[11px] text-mutedForeground mb-1">Price per travel: {data.property.price_per_travel ?? 10} pts</p>
+                <p className="text-[11px] text-mutedForeground mb-1">Price per travel: {data.airport.price_per_travel ?? 10} pts</p>
                 <p className="text-[11px] mb-2">
                   <span style={{ color: '#303030' }} className="font-heading">Profit: </span>
-                  <span className={`font-heading font-bold ${(data.property.total_earnings ?? 0) >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
-                    {(data.property.total_earnings ?? 0).toLocaleString()} pts
+                  <span className={`font-heading font-bold ${(data.airport.total_earnings ?? 0) >= 0 ? 'text-emerald-500' : 'text-red-400'}`}>
+                    {(data.airport.total_earnings ?? 0).toLocaleString()} pts
                   </span>
                 </p>
                 <div className="flex flex-wrap gap-2 items-center mb-2">
@@ -533,12 +538,14 @@ export default function MyProperties() {
                 </div>
                 <div className="mp-art-line text-primary mx-3 mt-3" />
               </>
-            ) : data.property?.type === 'bullet_factory' ? (
+            ) : null}
+            {data.armoury ? (
               <>
+                {data.airport ? <div className="border-t border-zinc-700/40 my-4 pt-2" /> : null}
                 <div className="flex items-center gap-2 mb-2">
                   <Factory size={18} className="text-primary" />
                   <span className="font-heading font-bold text-foreground">Armoury</span>
-                  <span className="text-mutedForeground text-sm">· {data.property.state}</span>
+                  <span className="text-mutedForeground text-sm">· {data.armoury.state}</span>
                 </div>
                 <p className="text-[11px] text-mutedForeground mb-1">Set price per bullet and collect from the armoury.</p>
                 {armouryDetail && (
@@ -621,21 +628,7 @@ export default function MyProperties() {
                 </div>
                 <div className="mp-art-line text-primary mx-3 mt-3" />
               </>
-            ) : data.property?.type === 'armory' ? (
-              <>
-                <div className="flex items-center gap-2 mb-2">
-                  <Shield size={18} className="text-primary" />
-                  <span className="font-heading font-bold text-foreground">Armory</span>
-                  {data.property.state && <span className="text-mutedForeground text-sm">· {data.property.state}</span>}
-                </div>
-                <p className="text-[11px] text-mutedForeground">Manage in Armory page (coming soon).</p>
-                <div className="mp-art-line text-primary mx-3 mt-3" />
-              </>
-            ) : (
-              <p className="text-sm text-mutedForeground">
-                None. Claim an <Link to="/states" className="text-primary underline">Airport</Link> or <Link to="/armour-weapons" className="text-primary underline">Armoury</Link> from States.
-              </p>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
@@ -647,7 +640,7 @@ export default function MyProperties() {
         </div>
         <div className="p-3">
           <p className="text-[11px] text-mutedForeground">
-            <strong className="text-foreground">Rule:</strong> You may own at most <strong>1 casino</strong> (one of: Dice, Blackjack, Roulette, Horse Racing) and <strong>1 property</strong> (one of: Airport, Armoury). Not two casinos or two properties.
+            <strong className="text-foreground">Rule:</strong> You may own at most <strong>1 casino</strong> (one of: Dice, Blackjack, Roulette, Horse Racing, etc.) and up to <strong>1 airport</strong> plus <strong>1 armoury</strong> (both allowed). Not two casinos, not two airports, and not two armouries.
           </p>
         </div>
         <div className="mp-art-line text-primary mx-3" />

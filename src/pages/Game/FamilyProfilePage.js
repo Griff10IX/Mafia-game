@@ -660,7 +660,7 @@ export default function FamilyProfilePage() {
         </div>
         <div className="px-4 py-3 space-y-4 text-[10px] text-zinc-400">
           <p className="text-[9px] text-zinc-600 leading-relaxed border-b border-primary/5 pb-3">
-            Each member may only own <span className="text-zinc-400 font-heading font-bold">one</span> major property: an airport <span className="text-zinc-500">or</span> an armoury (never both on the same account). The crew may only hold <span className="text-zinc-400 font-heading font-bold">one</span> of those two across the whole family — not both an airport and an armoury. You get <span className="text-zinc-400 font-heading font-bold">one</span> vault bonus from whichever type high command holds. Casinos are separate.
+            Each member may own <span className="text-zinc-400 font-heading font-bold">one</span> airport and <span className="text-zinc-400 font-heading font-bold">one</span> armoury (both on the same account is allowed). If the family holds both through high command, hourly vault bullet bonuses stack. Casinos are separate.
           </p>
           <div>
             <p className="text-[9px] font-heading uppercase tracking-wider text-zinc-500 mb-2 flex items-center gap-1">
@@ -715,7 +715,7 @@ export default function FamilyProfilePage() {
               </ul>
             ) : (
               <p className="text-zinc-600 leading-relaxed">
-                No active vault or airport crew bonuses right now. Hourly vault bullets apply when Don, Underboss, or Consigliere owns the crew&apos;s airport <span className="text-zinc-500">or</span> armoury (only one type allowed per family). The Don can pick an airport crew perk (travel or points) when the family holds an airport.
+                No active vault or airport crew bonuses right now. Hourly vault bullets apply per source when Don, Underboss, or Consigliere owns the crew&apos;s airport and/or armoury (both stack). The Don can pick an airport crew perk (travel or points) when high command holds an airport.
               </p>
             )}
             {cb.treasury_bullets_hourly?.active && (

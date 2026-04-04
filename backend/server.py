@@ -2246,11 +2246,22 @@ from routers.casinos.slots import SLOTS_MAX_BET  # CASINO_GAMES
 from routers.casinos.video_poker import VIDEO_POKER_MAX_BET  # CASINO_GAMES
 
 
-async def _user_owns_any_property(user_id: str):
-    """Return first property owned by user: {type, state, ...} or None. Rule: 1 property only (airport or armoury). Armoury = bullet factory + armour + weapons (single ownership in db.bullet_factory)."""
+async def _user_owns_airport(user_id: str):
+    """Return airport slot owned by user or None. Max one airport (any state) per account for claim rules."""
     doc = await db.airport_ownership.find_one({"owner_id": user_id}, {"_id": 0, "state": 1, "slot": 1, "price_per_travel": 1, "total_earnings": 1})
     if doc:
-        return {"type": "airport", "state": doc.get("state"), "slot": doc.get("slot", 1), "price_per_travel": doc.get("price_per_travel"), "total_earnings": doc.get("total_earnings", 0)}
+        return {
+            "type": "airport",
+            "state": doc.get("state"),
+            "slot": doc.get("slot", 1),
+            "price_per_travel": doc.get("price_per_travel"),
+            "total_earnings": doc.get("total_earnings", 0),
+        }
+    return None
+
+
+async def _user_owns_bullet_factory(user_id: str):
+    """Return bullet factory (armoury) owned by user or None. Max one armoury per account."""
     doc = await db.bullet_factory.find_one({"owner_id": user_id}, {"_id": 0, "state": 1, "price_per_bullet": 1})
     if doc:
         state = doc.get("state")
@@ -2259,8 +2270,15 @@ async def _user_owns_any_property(user_id: str):
         doc = await db.bullet_factory.find_one({"owner_id": user_id}, {"_id": 0, "state": 1, "price_per_bullet": 1})
         if doc:
             return {"type": "bullet_factory", "state": doc.get("state"), "price_per_bullet": doc.get("price_per_bullet")}
-    # TODO: when armory ownership exists, check db.armory_ownership (or similar) and return {"type": "armory", "state": ...}
     return None
+
+
+async def _user_owns_any_property(user_id: str):
+    """Return one owned major property for legacy callers: airport first, else armoury. Users may hold both."""
+    air = await _user_owns_airport(user_id)
+    if air:
+        return air
+    return await _user_owns_bullet_factory(user_id)
 
 
 # Crime endpoints -> see routers/crime/crimes.py

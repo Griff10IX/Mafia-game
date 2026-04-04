@@ -7,7 +7,16 @@ from pydantic import BaseModel
 from fastapi import Depends, HTTPException
 from bson.objectid import ObjectId
 
-from server import db, get_current_user, get_rank_info, log_activity, CAPO_RANK_ID, _user_owns_any_property, send_notification
+from server import (
+    db,
+    get_current_user,
+    get_rank_info,
+    log_activity,
+    CAPO_RANK_ID,
+    _user_owns_airport,
+    _user_owns_bullet_factory,
+    send_notification,
+)
 from routers.kill.armoury import TOKEN_CONFIG, TOKEN_TYPES
 from utils.point_provenance import log_points_event
 
@@ -931,15 +940,13 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
         raise HTTPException(status_code=404, detail="User not found")
     sale_price = prop.get("sale_price", 0)
     if prop.get("type") == "airport":
-        owned = await _user_owns_any_property(buyer_id)
-        if owned:
+        if await _user_owns_airport(buyer_id):
             await _restore()
-            raise HTTPException(status_code=400, detail="You may only own one property. Relinquish it first.")
+            raise HTTPException(status_code=400, detail="You already own an airport. Relinquish it first.")
     if prop.get("type") == "bullet_factory":
-        owned = await _user_owns_any_property(buyer_id)
-        if owned:
+        if await _user_owns_bullet_factory(buyer_id):
             await _restore()
-            raise HTTPException(status_code=400, detail="You may only own one property. Relinquish it first.")
+            raise HTTPException(status_code=400, detail="You already own an armoury. Relinquish it first.")
     result = await db.users.update_one(
         {"id": buyer_id, "points": {"$gte": sale_price}},
         {"$inc": {"points": -sale_price}}

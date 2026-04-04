@@ -718,17 +718,6 @@ async def get_bullet_factory_list(current_user: dict = Depends(get_current_user)
     return {"factories": result}
 
 
-async def _user_owns_any_property(user_id: str):
-    """Check if user owns any property (airport or armoury). Max 1 per player. Armoury = bullet factory + armour + weapons (single ownership)."""
-    doc = await db.airport_ownership.find_one({"owner_id": user_id}, {"_id": 0, "state": 1})
-    if doc:
-        return {"type": "airport", "state": doc.get("state")}
-    doc = await db.bullet_factory.find_one({"owner_id": user_id}, {"_id": 0, "state": 1})
-    if doc:
-        return {"type": "bullet_factory", "state": doc.get("state")}
-    return None
-
-
 async def claim_bullet_factory(
     body: StateOptionalRequest = Body(default=StateOptionalRequest()),
     current_user: dict = Depends(get_current_user),
@@ -738,9 +727,8 @@ async def claim_bullet_factory(
     prestige_level = int(current_user.get("prestige_level") or 0)
     if rank_id < CAPO_RANK_ID and prestige_level < 1:
         raise HTTPException(status_code=403, detail="You must be rank Capo or higher to claim the armoury. Reach Capo to hold one.")
-    owned_prop = await _user_owns_any_property(current_user["id"])
-    if owned_prop:
-        raise HTTPException(status_code=400, detail="You may only own 1 property (airport or armoury). Relinquish it first (My Properties or States).")
+    if await db.bullet_factory.find_one({"owner_id": current_user["id"]}, {"_id": 1}):
+        raise HTTPException(status_code=400, detail="You already own an armoury. Relinquish it first (My Properties or States).")
     state = _normalize_state(body.state or current_user.get("current_state"))
     factory = await _get_or_create_factory(state)
     if factory.get("owner_id"):
@@ -1115,7 +1103,7 @@ async def bullet_factory_send_to_user(
     current_user: dict = Depends(get_current_user),
 ):
     """Transfer armoury ownership to another user."""
-    from server import _user_owns_any_property
+    from server import _user_owns_bullet_factory
     target_username = (request.target_username or "").strip()
     if not target_username:
         raise HTTPException(status_code=400, detail="Enter a username")
@@ -1135,9 +1123,8 @@ async def bullet_factory_send_to_user(
         raise HTTPException(status_code=404, detail="User not found")
     if target["id"] == current_user["id"]:
         raise HTTPException(status_code=400, detail="Cannot transfer to yourself")
-    owned_prop = await _user_owns_any_property(target["id"])
-    if owned_prop:
-        raise HTTPException(status_code=400, detail="That user already owns a property (airport or armoury)")
+    if await _user_owns_bullet_factory(target["id"]):
+        raise HTTPException(status_code=400, detail="That user already owns an armoury")
     transfer_set = {"owner_id": target["id"], "owner_username": target.get("username", target_username), "total_earnings": 0}
     if get_rank_info(target.get("rank_points", 0))[0] < CAPO_RANK_ID:
         transfer_set["below_capo_acquired_at"] = datetime.now(timezone.utc)

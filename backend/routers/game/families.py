@@ -267,6 +267,11 @@ class FamilyGiveBulletsRequest(BaseModel):
     bullets: int
 
 
+class FamilyGiveLootRequest(BaseModel):
+    user_id: str
+    loot_pieces: int
+
+
 class CompoundDepositRequest(BaseModel):
     cash: int = 0
     points: int = 0
@@ -833,17 +838,6 @@ async def any_top3_owns_bullet_factory(family_id: str) -> bool:
     return doc is not None
 
 
-async def family_has_major_property_conflict(family_id: str, fam_doc: Optional[dict] = None) -> bool:
-    """True if any crew members own both an airport and an armoury (only one type allowed per family for bonuses)."""
-    uids = await all_family_member_uids(family_id, fam_doc)
-    oc = _owner_id_or_clauses_for_uids(uids)
-    if not oc:
-        return False
-    air = await db.airport_ownership.find_one({"$or": oc}, {"_id": 1})
-    bf = await db.bullet_factory.find_one({"$or": oc}, {"_id": 1})
-    return bool(air and bf)
-
-
 # Casinos: collection name -> display label (ownership docs use owner_id, city, state)
 CASINO_OWNERSHIP_COLLECTIONS = (
     ("Dice", "dice_ownership"),
@@ -947,13 +941,9 @@ async def family_crew_bonuses_summary(family_id: str, fam_doc: dict) -> dict:
     perk = (fam_doc.get("airport_crew_perk") or AIRPORT_CREW_PERK_NONE)
     top3_air = await any_top3_owns_airport(family_id)
     top3_bf = await any_top3_owns_bullet_factory(family_id)
-    conflict = await family_has_major_property_conflict(family_id, fam_doc)
-    treasury_hourly_active = bool(not conflict and (top3_air or top3_bf))
-    perk_active = (
-        not conflict
-        and perk in (AIRPORT_CREW_PERK_TRAVEL_TIME, AIRPORT_CREW_PERK_POINTS_DISCOUNT)
-        and top3_air
-    )
+    n_hourly_sources = int(bool(top3_air)) + int(bool(top3_bf))
+    treasury_hourly_active = n_hourly_sources > 0
+    perk_active = perk in (AIRPORT_CREW_PERK_TRAVEL_TIME, AIRPORT_CREW_PERK_POINTS_DISCOUNT) and top3_air
     pts_pct = 0
     travel_red_s = 0
     if perk_active:
@@ -963,33 +953,32 @@ async def family_crew_bonuses_summary(family_id: str, fam_doc: dict) -> dict:
             travel_red_s = 1
     bonus_warnings: List[str] = []
     lines: List[str] = []
-    if conflict:
-        bonus_warnings.append(
-            "Family holds both an airport and an armoury — only one is allowed for the crew. Bonuses are paused until only one property type remains."
-        )
-    elif treasury_hourly_active:
-        if top3_air:
+    if treasury_hourly_active:
+        if top3_air and top3_bf:
             lines.append(
-                "Family vault earns 100-200 random bullets per hour while Don, Underboss, or Consigliere owns the crew airport "
-                "(only one of airport or armoury per family — one bonus from whichever you hold)."
+                "Family vault earns 100–200 random bullets per hour from the crew airport and another 100–200 per hour from the crew armoury "
+                "when Don, Underboss, or Consigliere owns each (both bonuses stack)."
+            )
+        elif top3_air:
+            lines.append(
+                "Family vault earns 100–200 random bullets per hour while Don, Underboss, or Consigliere owns the crew airport."
             )
         else:
             lines.append(
-                "Family vault earns 100-200 random bullets per hour while Don, Underboss, or Consigliere owns the crew armoury "
-                "(only one of airport or armoury per family — one bonus from whichever you hold)."
+                "Family vault earns 100–200 random bullets per hour while Don, Underboss, or Consigliere owns the crew armoury."
             )
     if perk_active:
         if pts_pct:
             lines.append("Airport crew: 10% off airport points for all members (Don's perk, high command owns the airport).")
         else:
             lines.append("Airport crew: -1 second airport travel time for all members when flights use a timer (Don's perk).")
-    elif perk != AIRPORT_CREW_PERK_NONE and not top3_air and not conflict:
+    elif perk != AIRPORT_CREW_PERK_NONE and not top3_air:
         lines.append("Airport crew perk is selected but inactive until Don, Underboss, or Consigliere owns an airport.")
     return {
         "treasury_bullets_hourly": {
             "active": treasury_hourly_active,
-            "min": 100,
-            "max": 200,
+            "min": 100 * n_hourly_sources,
+            "max": 200 * n_hourly_sources,
             "label": "Hourly vault bullets",
         },
         "airport_crew_perk": {
@@ -998,7 +987,7 @@ async def family_crew_bonuses_summary(family_id: str, fam_doc: dict) -> dict:
             "points_discount_percent": pts_pct,
             "travel_time_reduction_seconds": travel_red_s,
         },
-        "major_property_conflict": conflict,
+        "major_property_conflict": False,
         "bonus_warnings": bonus_warnings,
         "summary_lines": lines,
     }
@@ -1007,7 +996,7 @@ async def family_crew_bonuses_summary(family_id: str, fam_doc: dict) -> dict:
 async def family_airport_crew_perk_context(current_user: dict) -> dict:
     """
     Airport crew perk for travel UI/charges: −1s travel OR 10% points off for all members when
-    high command owns an airport and family has chosen a perk. Mutually exclusive perk types.
+    high command owns an airport and family has chosen a perk (exclusive perk modes).
     Returns: family_airport_points_discount (bool), family_airport_travel_reduction_seconds (int).
     """
     uid = current_user.get("id")
@@ -1019,8 +1008,6 @@ async def family_airport_crew_perk_context(current_user: dict) -> dict:
     fam = await db.families.find_one({"id": fid}, {"_id": 0, "airport_crew_perk": 1, "boss_id": 1})
     perk = (fam or {}).get("airport_crew_perk") or AIRPORT_CREW_PERK_NONE
     if perk not in (AIRPORT_CREW_PERK_TRAVEL_TIME, AIRPORT_CREW_PERK_POINTS_DISCOUNT):
-        return {"family_airport_points_discount": False, "family_airport_travel_reduction_seconds": 0}
-    if await family_has_major_property_conflict(fid, fam):
         return {"family_airport_points_discount": False, "family_airport_travel_reduction_seconds": 0}
     if not await any_top3_owns_airport(fid):
         return {"family_airport_points_discount": False, "family_airport_travel_reduction_seconds": 0}
@@ -1048,7 +1035,7 @@ async def verify_cron_secret_families(x_cron_secret: Optional[str] = Header(None
 
 
 async def families_cron_treasury_bullets_hourly(_: None = Depends(verify_cron_secret_families)):
-    """Hourly: families with no airport+armoury conflict where high command owns the crew airport or armoury get 100–200 treasury bullets."""
+    """Hourly: high command airport and/or armoury each grant 100–200 treasury bullets (stacked when both)."""
     now = datetime.now(timezone.utc)
     hour_bucket = now.strftime("%Y-%m-%dT%H")
     families = await db.families.find(
@@ -1060,11 +1047,17 @@ async def families_cron_treasury_bullets_hourly(_: None = Depends(verify_cron_se
         fid = fam.get("id")
         if not fid:
             continue
-        if await family_has_major_property_conflict(fid, None):
+        top3_air = await any_top3_owns_airport(fid)
+        top3_bf = await any_top3_owns_bullet_factory(fid)
+        if not top3_air and not top3_bf:
             continue
-        if not (await any_top3_owns_airport(fid) or await any_top3_owns_bullet_factory(fid)):
+        amount = 0
+        if top3_air:
+            amount += _rng.randint(100, 200)
+        if top3_bf:
+            amount += _rng.randint(100, 200)
+        if amount <= 0:
             continue
-        amount = _rng.randint(100, 200)
         res = await db.families.update_one(
             {
                 "id": fid,
@@ -1086,7 +1079,7 @@ async def families_cron_treasury_bullets_hourly(_: None = Depends(verify_cron_se
                 "",
                 "System",
                 bullets_delta=amount,
-                meta={"hour_utc": hour_bucket},
+                meta={"hour_utc": hour_bucket, "airport": top3_air, "armoury": top3_bf},
             )
     return {"ok": True, "hour_utc": hour_bucket, "families_credited": credited}
 
@@ -2233,10 +2226,14 @@ async def families_split_all_bullets(current_user: dict = Depends(get_current_us
     living_ids = sorted({str(u.get("id") or "").strip() for u in living if (u.get("id") or "").strip()})
     if not living_ids:
         raise HTTPException(status_code=400, detail="No living family members")
-    each = total_bullets // len(living_ids)
-    remainder = total_bullets % len(living_ids)
-    if each <= 0 and remainder <= 0:
-        raise HTTPException(status_code=400, detail="Not enough bullets to split")
+    n_live = len(living_ids)
+    if total_bullets < n_live:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Need at least {n_live:,} bullets to split among {n_live} living members (at least one each)",
+        )
+    each = total_bullets // n_live
+    remainder = total_bullets % n_live
     distribution = {}
     for idx, uid in enumerate(living_ids):
         give = each + (1 if idx < remainder else 0)
@@ -2264,6 +2261,116 @@ async def families_split_all_bullets(current_user: dict = Depends(get_current_us
     _invalidate_my_cache(current_user["id"])
     return {
         "message": f"Split {to_distribute:,} bullets across {len(distribution)} living members",
+        "total_split": to_distribute,
+        "member_count": len(distribution),
+        "each_base": each,
+        "remainder_distributed": remainder,
+    }
+
+
+async def families_give_loot(request: FamilyGiveLootRequest, current_user: dict = Depends(get_current_user)):
+    if current_user.get("family_role") not in ("boss", "underboss", "consigliere"):
+        raise HTTPException(status_code=403, detail="Insufficient role")
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    if await _family_in_active_war(family_id):
+        raise HTTPException(status_code=403, detail="Vault is locked until the family war is over")
+    target_id = str(request.user_id or "").strip()
+    loot = int(request.loot_pieces or 0)
+    if not target_id:
+        raise HTTPException(status_code=400, detail="Target member is required")
+    if loot <= 0:
+        raise HTTPException(status_code=400, detail="Invalid loot amount")
+    member = await db.family_members.find_one({"family_id": family_id, "user_id": target_id}, {"_id": 0, "user_id": 1})
+    if not member:
+        raise HTTPException(status_code=404, detail="Target is not in your family")
+    target_user = await db.users.find_one({"id": target_id}, {"_id": 0, "is_dead": 1})
+    if not target_user or target_user.get("is_dead"):
+        raise HTTPException(status_code=400, detail="Target member must be alive")
+    debited = await db.families.update_one(
+        {"id": family_id, "treasury_loot_pieces": {"$gte": loot}},
+        {"$inc": {"treasury_loot_pieces": -loot}},
+    )
+    if debited.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Not enough loot pieces in family vault")
+    await db.users.update_one({"id": target_id}, {"$inc": {"loot_box_pieces": loot}})
+    tu = await db.users.find_one({"id": target_id}, {"_id": 0, "username": 1})
+    await log_family_vault_tx(
+        db,
+        family_id,
+        "give_loot",
+        current_user["id"],
+        current_user.get("username") or "?",
+        loot_delta=-loot,
+        target_user_id=target_id,
+        target_username=(tu or {}).get("username") or "?",
+    )
+    _invalidate_my_cache(current_user["id"])
+    _invalidate_my_cache(target_id)
+    return {"message": f"Gave {loot:,} loot pieces to family member"}
+
+
+async def families_split_all_loot(current_user: dict = Depends(get_current_user)):
+    if current_user.get("family_role") not in ("boss", "underboss", "consigliere"):
+        raise HTTPException(status_code=403, detail="Insufficient role")
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="Not in a family")
+    if await _family_in_active_war(family_id):
+        raise HTTPException(status_code=403, detail="Vault is locked until the family war is over")
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "treasury_loot_pieces": 1})
+    if not fam:
+        raise HTTPException(status_code=404, detail="Family not found")
+    total_loot = int(fam.get("treasury_loot_pieces") or 0)
+    if total_loot <= 0:
+        raise HTTPException(status_code=400, detail="No loot pieces in family vault")
+    members = await db.family_members.find({"family_id": family_id}, {"_id": 0, "user_id": 1}).to_list(200)
+    member_ids = [str(m.get("user_id") or "").strip() for m in members if (m.get("user_id") or "").strip()]
+    if not member_ids:
+        raise HTTPException(status_code=400, detail="No family members found")
+    living = await db.users.find(
+        {"id": {"$in": member_ids}, "is_dead": {"$ne": True}},
+        {"_id": 0, "id": 1},
+    ).to_list(200)
+    living_ids = sorted({str(u.get("id") or "").strip() for u in living if (u.get("id") or "").strip()})
+    if not living_ids:
+        raise HTTPException(status_code=400, detail="No living family members")
+    n_live = len(living_ids)
+    if total_loot < n_live:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Need at least {n_live:,} loot pieces to split among {n_live} living members (at least one each)",
+        )
+    each = total_loot // n_live
+    remainder = total_loot % n_live
+    distribution = {}
+    for idx, uid in enumerate(living_ids):
+        give = each + (1 if idx < remainder else 0)
+        if give > 0:
+            distribution[uid] = give
+    to_distribute = sum(distribution.values())
+    debited = await db.families.update_one(
+        {"id": family_id, "treasury_loot_pieces": {"$gte": to_distribute}},
+        {"$inc": {"treasury_loot_pieces": -to_distribute}},
+    )
+    if debited.modified_count == 0:
+        raise HTTPException(status_code=409, detail="Vault changed, please try again")
+    for uid, amt in distribution.items():
+        await db.users.update_one({"id": uid}, {"$inc": {"loot_box_pieces": amt}})
+        _invalidate_my_cache(uid)
+    await log_family_vault_tx(
+        db,
+        family_id,
+        "split_loot",
+        current_user["id"],
+        current_user.get("username") or "?",
+        loot_delta=-to_distribute,
+        meta={"member_count": len(distribution), "total_split": to_distribute},
+    )
+    _invalidate_my_cache(current_user["id"])
+    return {
+        "message": f"Split {to_distribute:,} loot pieces across {len(distribution)} living members",
         "total_split": to_distribute,
         "member_count": len(distribution),
         "each_base": each,
@@ -3817,6 +3924,8 @@ def register(router):
     router.add_api_route("/families/vault-transactions", families_vault_transactions, methods=["GET"])
     router.add_api_route("/families/bullets/give", families_give_bullets, methods=["POST"])
     router.add_api_route("/families/bullets/split-all", families_split_all_bullets, methods=["POST"])
+    router.add_api_route("/families/loot/give", families_give_loot, methods=["POST"])
+    router.add_api_route("/families/loot/split-all", families_split_all_loot, methods=["POST"])
     router.add_api_route("/families/compound/deposit", families_compound_deposit, methods=["POST"])
     router.add_api_route("/families/compound/withdraw", families_compound_withdraw, methods=["POST"])
     router.add_api_route("/families/compound/return-to-member", families_compound_return_to_member, methods=["POST"])
