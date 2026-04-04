@@ -1429,52 +1429,45 @@ async def buy_armour(request: ArmourBuyRequest, current_user: dict = Depends(get
     currency_field = "money" if armour.get("cost_money") is not None else "points"
     insufficient_msg = "Insufficient cash" if currency_field == "money" else "Insufficient points"
 
-    # Fulfill from armoury in same state if stock available (stock always decrements; owner gets 35% margin when buyer is not owner)
+    # Armour purchases are armoury-stock-only: no direct fallback when stock is empty.
     state_key = factory.get("state") or _normalize_state(state) if factory else None
-    if factory and state_key:
-        if owner_id and owner_id != current_user["id"]:
-            pay_result = await db.users.update_one(
-                {"id": current_user["id"], currency_field: {"$gte": price}},
-                {"$inc": {currency_field: -price}, "$set": {"armour_level": level, "armour_owned_level_max": max(owned_max, level)}},
-            )
-            if pay_result.modified_count == 0:
-                raise HTTPException(status_code=400, detail=insufficient_msg)
-            stock_result = await db.bullet_factory.update_one(
-                {"state": state_key, f"armour_stock.{level}": {"$gt": 0}},
-                {"$inc": {f"armour_stock.{level}": -1}},
-            )
-            if stock_result.modified_count == 1:
-                if currency_field == "money":
-                    await db.bullet_factory.update_one({"state": state_key}, {"$inc": {"owner_pending_profit": price}})
-                else:
-                    await db.bullet_factory.update_one({"state": state_key}, {"$inc": {"owner_pending_profit_points": price}})
-                await log_activity(current_user["id"], current_user.get("username", "?"), "armoury_buy_armour", {"item": armour["name"], "level": level, "cost": price, "source": "armoury"})
-                return {"message": f"Purchased {armour['name']} (Armour Lv.{level}) from armoury", "new_level": level}
+    if not (factory and state_key):
+        raise HTTPException(status_code=400, detail="Armoury stock is unavailable in this state")
+    if owner_id and owner_id != current_user["id"]:
+        pay_result = await db.users.update_one(
+            {"id": current_user["id"], currency_field: {"$gte": price}},
+            {"$inc": {currency_field: -price}, "$set": {"armour_level": level, "armour_owned_level_max": max(owned_max, level)}},
+        )
+        if pay_result.modified_count == 0:
+            raise HTTPException(status_code=400, detail=insufficient_msg)
+        stock_result = await db.bullet_factory.update_one(
+            {"state": state_key, f"armour_stock.{level}": {"$gt": 0}},
+            {"$inc": {f"armour_stock.{level}": -1}},
+        )
+        if stock_result.modified_count == 1:
+            if currency_field == "money":
+                await db.bullet_factory.update_one({"state": state_key}, {"$inc": {"owner_pending_profit": price}})
             else:
-                await db.users.update_one(
-                    {"id": current_user["id"]},
-                    {"$inc": {currency_field: price}},
-                )
-        else:
-            stock_result = await db.bullet_factory.update_one(
-                {"state": state_key, f"armour_stock.{level}": {"$gt": 0}},
-                {"$inc": {f"armour_stock.{level}": -1}},
-            )
-            if stock_result.modified_count == 1:
-                await db.users.update_one(
-                    {"id": current_user["id"]},
-                    {"$set": {"armour_level": level, "armour_owned_level_max": max(owned_max, level)}},
-                )
-                await log_activity(current_user["id"], current_user.get("username", "?"), "armoury_buy_armour", {"item": armour["name"], "level": level, "cost": price, "source": "armoury"})
-                return {"message": f"Purchased {armour['name']} (Armour Lv.{level}) from armoury", "new_level": level}
-
-    updates = {"$set": {"armour_level": level, "armour_owned_level_max": max(owned_max, level)}}
-    updates["$inc"] = {currency_field: -price}
-    result = await db.users.update_one({"id": current_user["id"], currency_field: {"$gte": price}}, updates)
-    if result.modified_count == 0:
-        raise HTTPException(status_code=400, detail=insufficient_msg)
-    await log_activity(current_user["id"], current_user.get("username", "?"), "armoury_buy_armour", {"item": armour["name"], "level": level, "cost": price})
-    return {"message": f"Purchased {armour['name']} (Armour Lv.{level})", "new_level": level}
+                await db.bullet_factory.update_one({"state": state_key}, {"$inc": {"owner_pending_profit_points": price}})
+            await log_activity(current_user["id"], current_user.get("username", "?"), "armoury_buy_armour", {"item": armour["name"], "level": level, "cost": price, "source": "armoury"})
+            return {"message": f"Purchased {armour['name']} (Armour Lv.{level}) from armoury", "new_level": level}
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$inc": {currency_field: price}},
+        )
+        raise HTTPException(status_code=400, detail=f"{armour['name']} is out of stock in this armoury")
+    stock_result = await db.bullet_factory.update_one(
+        {"state": state_key, f"armour_stock.{level}": {"$gt": 0}},
+        {"$inc": {f"armour_stock.{level}": -1}},
+    )
+    if stock_result.modified_count == 1:
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": {"armour_level": level, "armour_owned_level_max": max(owned_max, level)}},
+        )
+        await log_activity(current_user["id"], current_user.get("username", "?"), "armoury_buy_armour", {"item": armour["name"], "level": level, "cost": price, "source": "armoury"})
+        return {"message": f"Purchased {armour['name']} (Armour Lv.{level}) from armoury", "new_level": level}
+    raise HTTPException(status_code=400, detail=f"{armour['name']} is out of stock in this armoury")
 
 
 async def equip_armour(request: ArmourBuyRequest, current_user: dict = Depends(get_current_user)):
@@ -1742,62 +1735,45 @@ async def buy_weapon(weapon_id: str, request: WeaponBuyRequest, current_user: di
         price = int(weapon["price_points"] * ARMOUR_WEAPON_MARGIN * mult)
         insufficient_msg = "Insufficient points"
 
-    # Fulfill from armoury in same state if stock available (stock always decrements; owner gets 35% margin when buyer is not owner)
+    # Weapon purchases are armoury-stock-only: no direct fallback when stock is empty.
     state_key = factory.get("state") or _normalize_state(state) if factory else None
-    if factory and state_key:
-        needs_payment = owner_id and owner_id != current_user["id"]
-        paid = False
-        if needs_payment:
-            pay_result = await db.users.update_one(
-                {"id": current_user["id"], currency: {"$gte": price}},
-                {"$inc": {currency: -price}},
-            )
-            if pay_result.modified_count == 0:
-                raise HTTPException(status_code=400, detail=insufficient_msg)
-            paid = True
-        stock_result = await db.bullet_factory.update_one(
-            {"state": state_key, f"weapon_stock.{weapon_id}": {"$gt": 0}},
-            {"$inc": {f"weapon_stock.{weapon_id}": -1}},
+    if not (factory and state_key):
+        raise HTTPException(status_code=400, detail="Armoury stock is unavailable in this state")
+    needs_payment = owner_id and owner_id != current_user["id"]
+    paid = False
+    if needs_payment:
+        pay_result = await db.users.update_one(
+            {"id": current_user["id"], currency: {"$gte": price}},
+            {"$inc": {currency: -price}},
         )
-        if stock_result.modified_count == 1:
-            if paid:
-                if currency == "money":
-                    await db.bullet_factory.update_one({"state": state_key}, {"$inc": {"owner_pending_profit": price}})
-                else:
-                    await db.bullet_factory.update_one({"state": state_key}, {"$inc": {"owner_pending_profit_points": price}})
-            await db.user_weapons.update_one(
-                {"user_id": current_user["id"], "weapon_id": weapon_id},
-                {"$inc": {"quantity": 1}, "$set": {"acquired_at": datetime.now(timezone.utc).isoformat()}},
-                upsert=True,
-            )
-            await db.users.update_one(
-                {"id": current_user["id"]},
-                {"$set": {"equipped_weapon_id": weapon_id}},
-            )
-            _invalidate_weapons_cache(current_user["id"])
-            await log_activity(current_user["id"], current_user.get("username", "?"), "armoury_buy_weapon", {"weapon": weapon["name"], "cost": price, "source": "armoury"})
-            return {"message": f"Successfully purchased {weapon['name']} from armoury"}
-        elif paid:
-            await db.users.update_one({"id": current_user["id"]}, {"$inc": {currency: price}})
-
-    result = await db.users.update_one(
-        {"id": current_user["id"], currency: {"$gte": price}},
-        {"$inc": {currency: -price}},
+        if pay_result.modified_count == 0:
+            raise HTTPException(status_code=400, detail=insufficient_msg)
+        paid = True
+    stock_result = await db.bullet_factory.update_one(
+        {"state": state_key, f"weapon_stock.{weapon_id}": {"$gt": 0}},
+        {"$inc": {f"weapon_stock.{weapon_id}": -1}},
     )
-    if result.modified_count == 0:
-        raise HTTPException(status_code=400, detail=insufficient_msg)
-    await db.user_weapons.update_one(
-        {"user_id": current_user["id"], "weapon_id": weapon_id},
-        {"$inc": {"quantity": 1}, "$set": {"acquired_at": datetime.now(timezone.utc).isoformat()}},
-        upsert=True
-    )
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$set": {"equipped_weapon_id": weapon_id}},
-    )
-    _invalidate_weapons_cache(current_user["id"])
-    await log_activity(current_user["id"], current_user.get("username", "?"), "armoury_buy_weapon", {"weapon": weapon["name"], "cost": price})
-    return {"message": f"Successfully purchased {weapon['name']}"}
+    if stock_result.modified_count == 1:
+        if paid:
+            if currency == "money":
+                await db.bullet_factory.update_one({"state": state_key}, {"$inc": {"owner_pending_profit": price}})
+            else:
+                await db.bullet_factory.update_one({"state": state_key}, {"$inc": {"owner_pending_profit_points": price}})
+        await db.user_weapons.update_one(
+            {"user_id": current_user["id"], "weapon_id": weapon_id},
+            {"$inc": {"quantity": 1}, "$set": {"acquired_at": datetime.now(timezone.utc).isoformat()}},
+            upsert=True,
+        )
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": {"equipped_weapon_id": weapon_id}},
+        )
+        _invalidate_weapons_cache(current_user["id"])
+        await log_activity(current_user["id"], current_user.get("username", "?"), "armoury_buy_weapon", {"weapon": weapon["name"], "cost": price, "source": "armoury"})
+        return {"message": f"Successfully purchased {weapon['name']} from armoury"}
+    if paid:
+        await db.users.update_one({"id": current_user["id"]}, {"$inc": {currency: price}})
+    raise HTTPException(status_code=400, detail=f"{weapon['name']} is out of stock in this armoury")
 
 
 async def sell_weapon(weapon_id: str, current_user: dict = Depends(get_current_user)):
