@@ -22,6 +22,7 @@ from server import (
     CAPO_RANK_ID,
     maybe_auto_relinquish_below_capo,
     log_gambling,
+    resolve_gambling_log_buy_back,
     get_head_family_id_for_state,
     get_casino_caps,
     assert_casino_buy_back_within_points_balance,
@@ -540,6 +541,7 @@ def register(router):
         )
         _invalidate_slots_ownership_cache(current_user.get("id") or "")
         _invalidate_slots_ownership_cache(from_owner_id)
+        await resolve_gambling_log_buy_back(request.offer_id, "accepted", points_offered)
         return {"message": "Accepted. You received the points and the slots were returned to the previous owner."}
 
     @router.post("/casino/slots/buy-back/reject")
@@ -550,6 +552,7 @@ def register(router):
             raise HTTPException(status_code=404, detail="Offer not found")
         await db.slots_buy_back_offers.delete_one({"id": request.offer_id})
         _invalidate_slots_ownership_cache(current_user.get("id") or "")
+        await resolve_gambling_log_buy_back(request.offer_id, "rejected", 0)
         return {"message": "Rejected. You keep the slots."}
 
     @router.post("/casino/slots/spin")
@@ -770,11 +773,28 @@ def register(router):
             {"id": current_user.get("id") or ""},
             {"$push": {"slots_history": {"$each": [history_entry], "$position": 0, "$slice": SLOTS_HISTORY_MAX}}},
         )
+        slots_details = {
+            "state": state,
+            "bet": bet,
+            "reels": [r["id"] for r in reels],
+            "payout": payout_full,
+            "actual_payout": actual_payout,
+            "shortfall": shortfall,
+            "ownership_transferred": ownership_transferred,
+        }
+        if ownership_transferred:
+            if buy_back_offer and buy_back_offer.get("offer_id"):
+                slots_details["buy_back_offer_id"] = buy_back_offer["offer_id"]
+                slots_details["buy_back_points_offered"] = points_offered
+                slots_details["buy_back_outcome"] = "pending"
+            else:
+                slots_details["buy_back_points_offered"] = 0
+                slots_details["buy_back_outcome"] = "not_offered"
         await log_gambling(
             current_user.get("id") or "",
             current_user.get("username") or "?",
             "slots",
-            {"state": state, "bet": bet, "reels": [r["id"] for r in reels], "payout": payout_full, "actual_payout": actual_payout, "shortfall": shortfall},
+            slots_details,
         )
         new_balance = user_money - bet + actual_payout
         return {

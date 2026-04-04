@@ -89,6 +89,10 @@ class WipeConfirmation(BaseModel):
     confirmation_text: str  # Must be exactly "WIPE ALL DATA"
 
 
+class AdminQuicktradeReason(BaseModel):
+    reason: Optional[str] = Field(default=None, max_length=500)
+
+
 class NewReleaseConfirmation(BaseModel):
     confirmation_text: str  # Must be exactly "NEW RELEASE"
 
@@ -1558,6 +1562,130 @@ def register(router):
             "message": f"{verb} ${display:,} {'to' if amount > 0 else 'from'} {target['username']}. New balance: ${new_balance:,}",
             "new_balance": new_balance,
         }
+
+    @router.get("/admin/quicktrade/overview")
+    async def admin_quicktrade_overview_route(
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Global Quick Trade counts and escrow (excludes staff listings, same as economy capital breakdown). Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from routers.money import quicktrade as qt_mod
+
+        staff_ids = await srv._get_staff_user_ids()
+        excl = list(staff_ids) if staff_ids else None
+        overview = await qt_mod.admin_quicktrade_overview(exclude_user_ids=excl, top_users_limit=10)
+        return overview
+
+    @router.get("/admin/quicktrade/user/{identifier}")
+    async def admin_quicktrade_user_route(identifier: str, current_user: dict = Depends(get_current_user)):
+        """Active sell/buy/token offers and property listings for a user (id or username). Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        raw = (identifier or "").strip()
+        if not raw:
+            raise HTTPException(status_code=400, detail="user id or username required")
+        u = await db.users.find_one({"id": raw}, {"_id": 0, "id": 1, "username": 1, "points": 1, "money": 1})
+        if not u:
+            pat = _username_pattern(raw)
+            if pat:
+                u = await db.users.find_one({"username": pat}, {"_id": 0, "id": 1, "username": 1, "points": 1, "money": 1})
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = u["id"]
+        from routers.money import quicktrade as qt_mod
+
+        detail = await qt_mod.admin_quicktrade_user_detail(uid)
+        detail["user"] = u
+        return detail
+
+    @router.post("/admin/quicktrade/cancel-sell/{offer_id}")
+    async def admin_quicktrade_cancel_sell(
+        offer_id: str,
+        body: AdminQuicktradeReason = Body(default=AdminQuicktradeReason()),
+        current_user: dict = Depends(get_current_user),
+    ):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from routers.money import quicktrade as qt_mod
+
+        actor = str(current_user.get("id") or "")
+        try:
+            return await qt_mod.force_cancel_sell_offer_by_id(offer_id, actor_user_id=actor, reason=body.reason)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+
+    @router.post("/admin/quicktrade/cancel-buy/{offer_id}")
+    async def admin_quicktrade_cancel_buy(
+        offer_id: str,
+        body: AdminQuicktradeReason = Body(default=AdminQuicktradeReason()),
+        current_user: dict = Depends(get_current_user),
+    ):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from routers.money import quicktrade as qt_mod
+
+        actor = str(current_user.get("id") or "")
+        try:
+            return await qt_mod.force_cancel_buy_offer_by_id(offer_id, actor_user_id=actor, reason=body.reason)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+
+    @router.post("/admin/quicktrade/cancel-token/{offer_id}")
+    async def admin_quicktrade_cancel_token(
+        offer_id: str,
+        body: AdminQuicktradeReason = Body(default=AdminQuicktradeReason()),
+        current_user: dict = Depends(get_current_user),
+    ):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from routers.money import quicktrade as qt_mod
+
+        actor = str(current_user.get("id") or "")
+        try:
+            return await qt_mod.force_cancel_token_offer_by_id(offer_id, actor_user_id=actor, reason=body.reason)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+
+    @router.post("/admin/quicktrade/cancel-property/{property_id}")
+    async def admin_quicktrade_cancel_property(
+        property_id: str,
+        body: AdminQuicktradeReason = Body(default=AdminQuicktradeReason()),
+        current_user: dict = Depends(get_current_user),
+    ):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from routers.money import quicktrade as qt_mod
+
+        actor = str(current_user.get("id") or "")
+        try:
+            return await qt_mod.force_cancel_property_listing_by_id(property_id, actor_user_id=actor, reason=body.reason)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+
+    @router.post("/admin/quicktrade/user/{identifier}/cancel-all")
+    async def admin_quicktrade_cancel_all(
+        identifier: str,
+        body: AdminQuicktradeReason = Body(default=AdminQuicktradeReason()),
+        current_user: dict = Depends(get_current_user),
+    ):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        raw = (identifier or "").strip()
+        if not raw:
+            raise HTTPException(status_code=400, detail="user id or username required")
+        u = await db.users.find_one({"id": raw}, {"_id": 0, "id": 1})
+        if not u:
+            pat = _username_pattern(raw)
+            if pat:
+                u = await db.users.find_one({"username": pat}, {"_id": 0, "id": 1})
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = u["id"]
+        from routers.money import quicktrade as qt_mod
+
+        actor = str(current_user.get("id") or "")
+        return await qt_mod.admin_quicktrade_cancel_all_for_user(uid, actor_user_id=actor, reason=body.reason)
 
     @router.get("/admin/swiss-bank/list")
     async def admin_swiss_bank_list(
@@ -10009,6 +10137,7 @@ def register(router):
             interest_rows,
             family_rows,
             qt_rows,
+            qt_sell_rows,
             top_wallets,
             top_liquid,
         ) = await asyncio.gather(
@@ -10032,6 +10161,18 @@ def register(router):
             db.families.aggregate([{"$group": {"_id": None, "treasury": {"$sum": {"$ifNull": ["$treasury", 0]}}}}]).to_list(1),
             db.trade_buy_offers.aggregate(
                 [{"$match": qt_match}, {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$offer", 0]}}, "offers": {"$sum": 1}}}]
+            ).to_list(1),
+            db.trade_sell_offers.aggregate(
+                [
+                    {"$match": qt_match},
+                    {
+                        "$group": {
+                            "_id": None,
+                            "total_points": {"$sum": {"$ifNull": ["$original_points", "$points"]}},
+                            "offers": {"$sum": 1},
+                        }
+                    },
+                ]
             ).to_list(1),
             db.users.find(alive_real_match, {"_id": 0, "username": 1, "money": 1, "bank_balance": 1, "swiss_balance": 1})
             .sort("money", -1)
@@ -10079,6 +10220,10 @@ def register(router):
         qt_doc = qt_rows[0] if qt_rows else {}
         quicktrade_escrow = int(qt_doc.get("total") or 0)
         quicktrade_offers = int(qt_doc.get("offers") or 0)
+
+        qt_sell_doc = qt_sell_rows[0] if qt_sell_rows else {}
+        quicktrade_sell_points_escrow = int(qt_sell_doc.get("total_points") or 0)
+        quicktrade_sell_offers = int(qt_sell_doc.get("offers") or 0)
 
         # Same definitions as GET /stats/overview game_capital
         public_total_cash = alive_sums["money"]
@@ -10167,6 +10312,12 @@ def register(router):
                 "label": "Quick trade — active buy offers (escrow)",
                 "amount": quicktrade_escrow,
                 "note": f"{quicktrade_offers} offers. Cash locked out of wallets while active.",
+            },
+            {
+                "id": "trade_sell_escrow_points",
+                "label": "Quick trade — active sell offers (points escrow)",
+                "amount": quicktrade_sell_points_escrow,
+                "note": f"{quicktrade_sell_offers} offers. Points deducted from balances while listed (not USD; do not add to dollar totals).",
             },
         ]
 

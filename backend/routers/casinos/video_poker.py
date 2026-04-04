@@ -26,6 +26,7 @@ from server import (
     _user_owns_any_casino,
     _username_pattern,
     log_gambling,
+    resolve_gambling_log_buy_back,
     get_head_family_id_for_state,
     get_casino_caps,
     assert_casino_buy_back_within_points_balance,
@@ -189,7 +190,17 @@ def _evaluate_hand(hand):
     return key, HAND_NAMES.get(key, key), multiplier
 
 
-async def _settle_and_save_history(user_id: str, username: str, city: str, bet: int, hand_key: str, hand_name: str, payout: int, hand: list):
+async def _settle_and_save_history(
+    user_id: str,
+    username: str,
+    city: str,
+    bet: int,
+    hand_key: str,
+    hand_name: str,
+    payout: int,
+    hand: list,
+    gambling_extra: dict | None = None,
+):
     await db.videopoker_games.delete_many({"user_id": user_id})
     history_entry = {
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -203,7 +214,10 @@ async def _settle_and_save_history(user_id: str, username: str, city: str, bet: 
         {"id": user_id},
         {"$push": {"videopoker_history": {"$each": [history_entry], "$position": 0, "$slice": VIDEO_POKER_HISTORY_MAX}}}
     )
-    await log_gambling(user_id, username or "?", "videopoker", {"city": city, "bet": bet, "hand_key": hand_key, "hand_name": hand_name, "payout": payout})
+    log_details = {"city": city, "bet": bet, "hand_key": hand_key, "hand_name": hand_name, "payout": payout}
+    if gambling_extra:
+        log_details = {**log_details, **gambling_extra}
+    await log_gambling(user_id, username or "?", "videopoker", log_details)
 
 
 def register(router):
@@ -422,6 +436,7 @@ def register(router):
         await db.videopoker_ownership.update_one({"city": city}, {"$set": {"owner_id": from_owner_id, "owner_username": from_user.get("username"), "max_bet": 0}})
         _invalidate_ownership_cache(current_user.get("id") or "")
         _invalidate_ownership_cache(from_owner_id)
+        await resolve_gambling_log_buy_back(request.offer_id, "accepted", points_offered)
         return {"message": "Accepted. You received the points and the table was returned to the previous owner."}
 
     @router.post("/casino/videopoker/buy-back/reject")
@@ -432,6 +447,7 @@ def register(router):
             raise HTTPException(status_code=404, detail="Offer not found")
         await db.videopoker_buy_back_offers.delete_one({"id": request.offer_id})
         _invalidate_ownership_cache(current_user.get("id") or "")
+        await resolve_gambling_log_buy_back(request.offer_id, "rejected", 0)
         return {"message": "Rejected. You keep the table."}
 
     @router.post("/casino/videopoker/send-to-user")
@@ -559,10 +575,15 @@ def register(router):
 
         hand_key, hand_name, multiplier = _evaluate_hand(hand)
         payout = bet * multiplier
+        payout_full_vp = 0
+        gambling_extra = None
+        ownership_transferred = False
+        buy_back_offer = None
+        actual_payout = 0
+        shortfall = 0
+        points_offered = 0
 
         user = await db.users.find_one({"id": current_user.get("id") or ""})
-        shortfall = 0
-
         if payout == 0:
             head_family_id = await get_head_family_id_for_state(city) if city else None
             if owner_id:
@@ -586,8 +607,7 @@ def register(router):
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": payout}})
         else:
             profit_portion = payout - bet
-            ownership_transferred = False
-            buy_back_offer = None
+            payout_full_vp = payout
             if owner_id:
                 owner_doc = await db.videopoker_ownership.find_one({"city": city}, {"_id": 0, "buy_back_reward": 1})
                 points_offered = int((owner_doc or {}).get("buy_back_reward") or 0)
@@ -649,8 +669,24 @@ def register(router):
         updated_user = await db.users.find_one({"id": current_user.get("id") or ""})
         new_balance = (updated_user.get("money", 0) or 0)
 
+        if payout_full_vp > bet and owner_id:
+            gambling_extra = {
+                "payout": payout_full_vp,
+                "actual_payout": actual_payout,
+                "shortfall": shortfall,
+                "ownership_transferred": ownership_transferred,
+            }
+            if ownership_transferred:
+                if buy_back_offer and buy_back_offer.get("offer_id"):
+                    gambling_extra["buy_back_offer_id"] = buy_back_offer["offer_id"]
+                    gambling_extra["buy_back_points_offered"] = points_offered
+                    gambling_extra["buy_back_outcome"] = "pending"
+                else:
+                    gambling_extra["buy_back_points_offered"] = 0
+                    gambling_extra["buy_back_outcome"] = "not_offered"
+
         await _settle_and_save_history(
-            current_user.get("id") or "", current_user.get("username"), city, bet, hand_key, hand_name, payout, hand
+            current_user.get("id") or "", current_user.get("username"), city, bet, hand_key, hand_name, payout, hand, gambling_extra
         )
 
         result = {

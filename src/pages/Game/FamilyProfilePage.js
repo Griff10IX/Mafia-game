@@ -660,7 +660,7 @@ export default function FamilyProfilePage() {
         </div>
         <div className="px-4 py-3 space-y-4 text-[10px] text-zinc-400">
           <p className="text-[9px] text-zinc-600 leading-relaxed border-b border-primary/5 pb-3">
-            Each member may own <span className="text-zinc-400 font-heading font-bold">one</span> airport and <span className="text-zinc-400 font-heading font-bold">one</span> armoury (both on the same account is allowed). If the family holds both through high command, hourly vault bullet bonuses stack. Casinos are separate.
+            Each member may own <span className="text-zinc-400 font-heading font-bold">one</span> airport and <span className="text-zinc-400 font-heading font-bold">one</span> armoury. Hourly vault bullets stack when high command holds both an airport and an armoury <span className="text-zinc-500">for the same family</span>—no separate accounts needed. Casinos are separate.
           </p>
           <div>
             <p className="text-[9px] font-heading uppercase tracking-wider text-zinc-500 mb-2 flex items-center gap-1">
@@ -715,7 +715,7 @@ export default function FamilyProfilePage() {
               </ul>
             ) : (
               <p className="text-zinc-600 leading-relaxed">
-                No active vault or airport crew bonuses right now. Hourly vault bullets apply per source when Don, Underboss, or Consigliere owns the crew&apos;s airport and/or armoury (both stack). The Don can pick an airport crew perk (travel or points) when high command holds an airport.
+                No active vault or airport crew bonuses right now. Hourly vault bullets apply per source when Don, Underboss, or Consigliere owns this family&apos;s airport and/or armoury (both stack for the crew). The Don can pick an airport crew perk (travel or points) when high command holds an airport.
               </p>
             )}
             {cb.treasury_bullets_hourly?.active && (

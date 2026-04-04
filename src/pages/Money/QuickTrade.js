@@ -49,6 +49,30 @@ export default function QuickTrade() {
     fetchTrades();
   }, []);
 
+  /** Server masks anon listings as "[Anonymous]" for normal players; admins get the real username in `username`. */
+  const isMaskedQtUsername = (u) => !u || u === 'Anonymous' || u === '[Anonymous]';
+
+  const renderQtTraderLabel = (offer, isOwn) => {
+    if (isOwn) return 'You';
+    const u = offer.username;
+    const hidePublic = offer.hide_name && isMaskedQtUsername(u);
+    if (hidePublic) return '[Anon]';
+    const isPlaceholder = isMaskedQtUsername(u);
+    if (!isPlaceholder) {
+      return (
+        <span className="inline-flex items-center flex-wrap gap-x-1">
+          <Link to={`/profile/${encodeURIComponent(u)}`} className="text-primary hover:underline">
+            {u}
+          </Link>
+          {offer.hide_name ? (
+            <span className="text-[9px] font-normal text-mutedForeground normal-case tracking-normal">(listed anon)</span>
+          ) : null}
+        </span>
+      );
+    }
+    return u || '[Unknown]';
+  };
+
   const fetchTrades = async () => {
     setLoading(true);
     try {
@@ -646,7 +670,7 @@ export default function QuickTrade() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <span className="text-xs font-heading font-bold text-foreground">
-                        {offer.is_own ? 'You' : (offer.username && offer.username !== 'Anonymous' ? <Link to={`/profile/${encodeURIComponent(offer.username)}`} className="text-primary hover:underline">{offer.username}</Link> : offer.username || '[Anonymous]')}
+                        {renderQtTraderLabel(offer, offer.is_own)}
                       </span>
                     </div>
                     <div className="text-[10px] text-mutedForeground mt-0.5">
@@ -734,7 +758,7 @@ export default function QuickTrade() {
                         <div className="flex items-center gap-1.5">
                           <Users size={12} className="text-primary" />
                           <span className="text-xs font-heading font-bold text-foreground">
-                            {isMyOffer ? 'You' : (firstOffer.hide_name ? '[Anon]' : firstOffer.username ? <Link to={`/profile/${encodeURIComponent(firstOffer.username)}`} className="text-primary hover:underline">{firstOffer.username}</Link> : '[Unknown]')}
+                            {renderQtTraderLabel(firstOffer, isMyOffer)}
                           </span>
                           {totalOffers > 1 && (
                             <span className="text-[9px] bg-primary/20 text-primary px-1 py-0.5 rounded font-heading font-bold">{totalOffers}</span>
@@ -833,7 +857,7 @@ export default function QuickTrade() {
                         <div className="flex items-center gap-1.5">
                           <Users size={12} className="text-primary" />
                           <span className="text-xs font-heading font-bold text-foreground">
-                            {isMyOffer ? 'You' : (firstOffer.hide_name ? '[Anon]' : firstOffer.username ? <Link to={`/profile/${encodeURIComponent(firstOffer.username)}`} className="text-primary hover:underline">{firstOffer.username}</Link> : '[Unknown]')}
+                            {renderQtTraderLabel(firstOffer, isMyOffer)}
                           </span>
                           {totalOffers > 1 && (
                             <span className="text-[9px] bg-primary/20 text-primary px-1 py-0.5 rounded font-heading font-bold">{totalOffers}</span>

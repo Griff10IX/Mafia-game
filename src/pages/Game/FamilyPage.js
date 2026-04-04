@@ -2677,7 +2677,7 @@ export default function FamilyPage() {
                   {n > 0 && <span className="text-zinc-500 font-normal normal-case ml-auto">{n} crew holding{n !== 1 ? 's' : ''}</span>}
                 </div>
                 <p className="text-[8px] text-zinc-600 leading-snug border-b border-primary/5 pb-2">
-                  Each member may hold <span className="text-zinc-400 font-heading font-bold">one</span> airport and <span className="text-zinc-400 font-heading font-bold">one</span> armoury (both allowed). If high command owns both, hourly vault bullets stack (airport + armoury). Casinos are separate.
+                  Each member may hold <span className="text-zinc-400 font-heading font-bold">one</span> airport and <span className="text-zinc-400 font-heading font-bold">one</span> armoury. Hourly vault bullets stack when high command holds both for <span className="text-zinc-500">this family</span> (airport + armoury)—no alt accounts required. Casinos are separate.
                 </p>
                 {n > 0 ? (
                   <ul className="text-[10px] text-zinc-400 space-y-0.5 max-h-28 overflow-y-auto">
@@ -2705,7 +2705,7 @@ export default function FamilyPage() {
                     ))}
                   </div>
                 ) : (
-                  <p className="text-[9px] text-zinc-600 pt-1 border-t border-primary/10 flex items-start gap-1 leading-snug"><Plane size={10} className="shrink-0 mt-0.5 opacity-50" /> No active vault or airport crew bonuses right now. Hourly vault bullets apply per source when high command owns the crew&apos;s airport and/or armoury (both stack). The Don can pick an airport crew perk when high command holds an airport.</p>
+                  <p className="text-[9px] text-zinc-600 pt-1 border-t border-primary/10 flex items-start gap-1 leading-snug"><Plane size={10} className="shrink-0 mt-0.5 opacity-50" /> No active vault or airport crew bonuses right now. Hourly vault bullets apply per source when high command owns this family&apos;s airport and/or armoury (both stack for the crew). The Don can pick an airport crew perk when high command holds an airport.</p>
                 )}
               </div>
             );

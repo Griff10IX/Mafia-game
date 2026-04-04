@@ -21,6 +21,7 @@ from server import (
     get_current_user_verified,
     STATES,
     log_gambling,
+    resolve_gambling_log_buy_back,
     get_wealth_rank,
     get_rank_info,
     CAPO_RANK_ID,
@@ -340,7 +341,28 @@ def register(router):
                 {"$inc": {"profit": (stake - actual_payout) - (edge if head_family_id else 0)}},
             )
             _invalidate_ownership_cache(owner_id)
-        await log_gambling(current_user.get("id") or "", current_user.get("username") or "?", "dice", {"city": city, "stake": stake, "sides": sides, "actual_sides": actual_sides, "chosen": chosen, "roll": roll, "win": True, "payout": payout_full, "actual_payout": actual_payout, "shortfall": shortfall})
+        dice_details = {
+            "city": city,
+            "stake": stake,
+            "sides": sides,
+            "actual_sides": actual_sides,
+            "chosen": chosen,
+            "roll": roll,
+            "win": True,
+            "payout": payout_full,
+            "actual_payout": actual_payout,
+            "shortfall": shortfall,
+            "ownership_transferred": ownership_transferred,
+        }
+        if ownership_transferred:
+            if buy_back_offer and buy_back_offer.get("offer_id"):
+                dice_details["buy_back_offer_id"] = buy_back_offer["offer_id"]
+                dice_details["buy_back_points_offered"] = points_offered
+                dice_details["buy_back_outcome"] = "pending"
+            else:
+                dice_details["buy_back_points_offered"] = 0
+                dice_details["buy_back_outcome"] = "not_offered"
+        await log_gambling(current_user.get("id") or "", current_user.get("username") or "?", "dice", dice_details)
         return {"roll": roll, "win": True, "payout": payout_full, "actual_payout": actual_payout, "owner_paid": actual_payout, "shortfall": shortfall, "ownership_transferred": ownership_transferred, "buy_back_offer": buy_back_offer, "nominal_sides": sides, "actual_sides": actual_sides}
 
     @router.post("/casino/dice/claim")
@@ -512,6 +534,7 @@ def register(router):
         await db.dice_ownership.update_one({"city": city}, {"$set": {"owner_id": from_owner_id, "owner_username": from_user.get("username"), "max_bet": 0}})
         _invalidate_ownership_cache(current_user.get("id") or "")
         _invalidate_ownership_cache(from_owner_id)
+        await resolve_gambling_log_buy_back(request.offer_id, "accepted", points_offered)
         return {"message": "Accepted. You received the points and the table was returned to the previous owner."}
 
     @router.post("/casino/dice/buy-back/reject")
@@ -522,6 +545,7 @@ def register(router):
             raise HTTPException(status_code=404, detail="Offer not found")
         await db.dice_buy_back_offers.delete_one({"id": request.offer_id})
         _invalidate_ownership_cache(current_user.get("id") or "")
+        await resolve_gambling_log_buy_back(request.offer_id, "rejected", 0)
         return {"message": "Rejected. You keep the casino."}
 
     @router.post("/casino/dice/send-to-user")

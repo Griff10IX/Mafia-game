@@ -1,6 +1,6 @@
 # Quick Trade: sell/buy points (with fee, hide_name limits), property listings and purchase
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Dict, List, Optional
 import time
 from pydantic import BaseModel
 
@@ -16,6 +16,7 @@ from server import (
     _user_owns_airport,
     _user_owns_bullet_factory,
     send_notification,
+    _is_admin,
 )
 from routers.kill.armoury import TOKEN_CONFIG, TOKEN_TYPES
 from utils.point_provenance import log_points_event
@@ -60,6 +61,15 @@ def _same_user_id(a, b) -> bool:
     if a is None or b is None:
         return False
     return str(a) == str(b)
+
+
+def _qt_list_username(offer: dict, viewer: dict) -> str:
+    """Public list label: hide_name masks username unless viewer is admin (not acting as normal)."""
+    hide = bool(offer.get("hide_name"))
+    real = offer.get("username") or "Anonymous"
+    if hide and not _is_admin(viewer):
+        return "[Anonymous]"
+    return real
 
 
 def _invalidate_trade_caches():
@@ -149,7 +159,7 @@ async def get_sell_offers(current_user: dict = Depends(get_current_user)):
         group_key = uid_to_key[group_key_tuple]
         result.append({
             "id": str(offer["_id"]),
-            "username": offer.get("username", "Anonymous") if not offer.get("hide_name") else "[Anonymous]",
+            "username": _qt_list_username(offer, current_user),
             "group_key": group_key,
             "points": offer["points"],
             "money": offer["cost"],
@@ -671,7 +681,7 @@ async def get_buy_offers(current_user: dict = Depends(get_current_user)):
         group_key = uid_to_key[group_key_tuple]
         result.append({
             "id": str(offer["_id"]),
-            "username": offer.get("username", "Anonymous") if not offer.get("hide_name") else "[Anonymous]",
+            "username": _qt_list_username(offer, current_user),
             "group_key": group_key,
             "points": offer["points"],
             "cost": offer["offer"],
@@ -1040,6 +1050,375 @@ async def cancel_property_listing(property_id: str, current_user: dict = Depends
         raise HTTPException(status_code=404, detail="Property listing not found or already cancelled")
     _invalidate_trade_caches()
     return {"message": "Property listing cancelled", "property_name": prop.get("name", "Property")}
+
+
+def _admin_cancel_reason_meta(actor_user_id: str, reason: Optional[str]) -> Dict[str, Any]:
+    meta: Dict[str, Any] = {"admin_cancel": True, "actor_user_id": str(actor_user_id or "")}
+    if reason and str(reason).strip():
+        meta["reason"] = str(reason).strip()[:500]
+    return meta
+
+
+async def force_cancel_sell_offer_by_id(
+    offer_id: str,
+    *,
+    actor_user_id: str,
+    reason: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Cancel any active sell offer; refund full deducted points to lister. Raises ValueError on bad id / not found."""
+    try:
+        oid = ObjectId(offer_id)
+    except Exception as exc:
+        raise ValueError("Invalid offer id") from exc
+    now = datetime.now(timezone.utc)
+    offer = await db.trade_sell_offers.find_one_and_update(
+        {"_id": oid, "status": "active"},
+        {"$set": {"status": "cancelled", "cancelled_at": now}},
+    )
+    if not offer:
+        raise ValueError("Sell offer not found or already cancelled")
+    user_id = offer["user_id"]
+    original_points = int(offer.get("original_points", offer["points"]) or 0)
+    await db.users.update_one({"id": user_id}, {"$inc": {"points": original_points}})
+    if original_points != 0:
+        am = _admin_cancel_reason_meta(actor_user_id, reason)
+        am.update({"offer_id": offer_id, "direction": "sell_cancel"})
+        await log_points_event(db, user_id=user_id, points=original_points, event_type="quicktrade_cancel", meta=am)
+    _invalidate_trade_caches()
+    try:
+        await db.trade_events.insert_one(
+            {
+                "id": str(offer_id),
+                "type": "sell_offer_cancelled",
+                "user_id": user_id,
+                "points": original_points,
+                "fee": offer.get("fee", 0),
+                "direction": "sell",
+                "at": now,
+                **_admin_cancel_reason_meta(actor_user_id, reason),
+            }
+        )
+    except Exception:
+        pass
+    return {
+        "ok": True,
+        "kind": "sell",
+        "offer_id": offer_id,
+        "user_id": user_id,
+        "refunded_points": original_points,
+    }
+
+
+async def force_cancel_buy_offer_by_id(
+    offer_id: str,
+    *,
+    actor_user_id: str,
+    reason: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Cancel any active buy offer; refund escrowed cash. Raises ValueError on bad id / not found."""
+    try:
+        oid = ObjectId(offer_id)
+    except Exception as exc:
+        raise ValueError("Invalid offer id") from exc
+    now = datetime.now(timezone.utc)
+    offer = await db.trade_buy_offers.find_one_and_update(
+        {"_id": oid, "status": "active"},
+        {"$set": {"status": "cancelled", "cancelled_at": now}},
+    )
+    if not offer:
+        raise ValueError("Buy offer not found or already cancelled")
+    user_id = offer["user_id"]
+    cash = int(offer.get("offer") or 0)
+    await db.users.update_one({"id": user_id}, {"$inc": {"money": cash}})
+    _invalidate_trade_caches()
+    try:
+        await db.trade_events.insert_one(
+            {
+                "id": str(offer_id),
+                "type": "buy_offer_cancelled",
+                "user_id": user_id,
+                "points": offer.get("points"),
+                "fee": offer.get("fee", 0),
+                "direction": "buy",
+                "cash_refunded": cash,
+                "at": now,
+                **_admin_cancel_reason_meta(actor_user_id, reason),
+            }
+        )
+    except Exception:
+        pass
+    return {"ok": True, "kind": "buy", "offer_id": offer_id, "user_id": user_id, "refunded_cash": cash}
+
+
+async def force_cancel_token_offer_by_id(
+    offer_id: str,
+    *,
+    actor_user_id: str,
+    reason: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Cancel any active token offer; return tokens to seller. Raises ValueError on bad id / not found / bad type."""
+    try:
+        oid = ObjectId(offer_id)
+    except Exception as exc:
+        raise ValueError("Invalid offer id") from exc
+    now = datetime.now(timezone.utc)
+    offer = await db.trade_token_offers.find_one_and_update(
+        {"_id": oid, "status": "active"},
+        {"$set": {"status": "cancelled", "cancelled_at": now}},
+    )
+    if not offer:
+        raise ValueError("Token offer not found or already cancelled")
+    token_type = offer.get("token_type")
+    cfg = TOKEN_CONFIG.get(token_type) or {}
+    field = cfg.get("count_field")
+    if not field:
+        raise ValueError("Unknown token type on offer")
+    user_id = offer["user_id"]
+    qty = int(offer.get("quantity") or 0)
+    await db.users.update_one({"id": user_id}, {"$inc": {field: qty}})
+    _invalidate_trade_caches()
+    try:
+        await db.trade_events.insert_one(
+            {
+                "id": str(offer_id),
+                "type": "token_offer_cancelled",
+                "user_id": user_id,
+                "token_type": token_type,
+                "quantity": qty,
+                "at": now,
+                **_admin_cancel_reason_meta(actor_user_id, reason),
+            }
+        )
+    except Exception:
+        pass
+    return {
+        "ok": True,
+        "kind": "token",
+        "offer_id": offer_id,
+        "user_id": user_id,
+        "token_type": token_type,
+        "quantity_returned": qty,
+    }
+
+
+async def force_cancel_property_listing_by_id(
+    property_id: str,
+    *,
+    actor_user_id: str,
+    reason: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Unlist any active Quick Trade property row (admin). Raises ValueError if invalid id or not listed."""
+    try:
+        oid = ObjectId(property_id)
+    except Exception as exc:
+        raise ValueError("Invalid property id") from exc
+    now = datetime.now(timezone.utc)
+    prop = await db.properties.find_one_and_update(
+        {"_id": oid, "for_sale": True},
+        {"$set": {"for_sale": False, "cancelled_at": now}, "$unset": {"sale_price": 1}},
+    )
+    if not prop:
+        raise ValueError("Property listing not found or already cancelled")
+    _invalidate_trade_caches()
+    try:
+        await db.trade_events.insert_one(
+            {
+                "id": str(property_id),
+                "type": "property_listing_cancelled",
+                "user_id": prop.get("owner_id"),
+                "property_name": prop.get("name"),
+                "at": now,
+                **_admin_cancel_reason_meta(actor_user_id, reason),
+            }
+        )
+    except Exception:
+        pass
+    return {
+        "ok": True,
+        "kind": "property",
+        "property_id": property_id,
+        "owner_id": prop.get("owner_id"),
+        "property_name": prop.get("name", "Property"),
+    }
+
+
+def _serialize_offer_doc(doc: Dict[str, Any]) -> Dict[str, Any]:
+    out = dict(doc)
+    oid = out.pop("_id", None)
+    if oid is not None:
+        out["id"] = str(oid)
+    for k, v in list(out.items()):
+        if hasattr(v, "isoformat"):
+            try:
+                out[k] = v.isoformat()
+            except Exception:
+                pass
+    return out
+
+
+async def admin_quicktrade_overview(
+    *,
+    exclude_user_ids: Optional[List[str]] = None,
+    top_users_limit: int = 10,
+) -> Dict[str, Any]:
+    """Global Quick Trade stats for admin dashboard."""
+    excl = exclude_user_ids or []
+    match_active: Dict[str, Any] = {"status": "active"}
+    match_active_excl = dict(match_active)
+    if excl:
+        match_active_excl["user_id"] = {"$nin": excl}
+
+    sell_agg = await db.trade_sell_offers.aggregate(
+        [
+            {"$match": match_active_excl},
+            {"$group": {"_id": None, "count": {"$sum": 1}, "points_escrow": {"$sum": {"$ifNull": ["$original_points", "$points"]}}}},
+        ]
+    ).to_list(1)
+    buy_agg = await db.trade_buy_offers.aggregate(
+        [
+            {"$match": match_active_excl},
+            {"$group": {"_id": None, "count": {"$sum": 1}, "cash_escrow": {"$sum": {"$ifNull": ["$offer", 0]}}}},
+        ]
+    ).to_list(1)
+    token_count = await db.trade_token_offers.count_documents(match_active_excl)
+    prop_match: Dict[str, Any] = {"for_sale": True, "type": {"$ne": "casino_slots"}}
+    if excl:
+        prop_match["owner_id"] = {"$nin": excl}
+    prop_count = await db.properties.count_documents(prop_match)
+
+    s0 = sell_agg[0] if sell_agg else {}
+    b0 = buy_agg[0] if buy_agg else {}
+
+    # Top users by approximate "locked" value: sell points + buy cash (scaled 1:1 for sort key only)
+    pipeline_top: List[Dict[str, Any]] = [
+        {"$match": {"status": "active"}},
+        {
+            "$group": {
+                "_id": "$user_id",
+                "sell_points": {"$sum": {"$ifNull": ["$original_points", "$points"]}},
+                "sell_n": {"$sum": 1},
+            }
+        },
+    ]
+    if excl:
+        pipeline_top[0]["$match"]["user_id"] = {"$nin": excl}
+    sell_by_user = await db.trade_sell_offers.aggregate(pipeline_top).to_list(200)
+    buy_by_user = await db.trade_buy_offers.aggregate(
+        [
+            {"$match": {"status": "active", **({"user_id": {"$nin": excl}} if excl else {})}},
+            {"$group": {"_id": "$user_id", "cash": {"$sum": {"$ifNull": ["$offer", 0]}}, "buy_n": {"$sum": 1}}},
+        ]
+    ).to_list(200)
+    token_by_user = await db.trade_token_offers.aggregate(
+        [
+            {"$match": {"status": "active", **({"user_id": {"$nin": excl}} if excl else {})}},
+            {"$group": {"_id": "$user_id", "token_n": {"$sum": 1}}},
+        ]
+    ).to_list(200)
+    uid_scores: Dict[str, Dict[str, Any]] = {}
+    for row in sell_by_user:
+        uid = str(row["_id"] or "")
+        if not uid:
+            continue
+        uid_scores.setdefault(uid, {"user_id": uid, "sell_offers": 0, "buy_offers": 0, "token_offers": 0, "sell_points_escrow": 0, "buy_cash_escrow": 0, "score": 0})
+        uid_scores[uid]["sell_offers"] = int(row.get("sell_n") or 0)
+        uid_scores[uid]["sell_points_escrow"] = int(row.get("sell_points") or 0)
+    for row in buy_by_user:
+        uid = str(row["_id"] or "")
+        if not uid:
+            continue
+        uid_scores.setdefault(uid, {"user_id": uid, "sell_offers": 0, "buy_offers": 0, "token_offers": 0, "sell_points_escrow": 0, "buy_cash_escrow": 0, "score": 0})
+        uid_scores[uid]["buy_offers"] = int(row.get("buy_n") or 0)
+        uid_scores[uid]["buy_cash_escrow"] = int(row.get("cash") or 0)
+    for row in token_by_user:
+        uid = str(row["_id"] or "")
+        if not uid:
+            continue
+        uid_scores.setdefault(uid, {"user_id": uid, "sell_offers": 0, "buy_offers": 0, "token_offers": 0, "sell_points_escrow": 0, "buy_cash_escrow": 0, "score": 0})
+        uid_scores[uid]["token_offers"] = int(row.get("token_n") or 0)
+    for u in uid_scores.values():
+        u["score"] = u["sell_points_escrow"] + u["buy_cash_escrow"] // 1_000_000
+    top_users = sorted(uid_scores.values(), key=lambda x: (-x["score"], -x["sell_points_escrow"], -x["buy_cash_escrow"]))[: max(0, top_users_limit)]
+
+    unames = {}
+    if top_users:
+        ids = [x["user_id"] for x in top_users]
+        async for u in db.users.find({"id": {"$in": ids}}, {"_id": 0, "id": 1, "username": 1}):
+            unames[str(u.get("id"))] = u.get("username") or "?"
+    for u in top_users:
+        u["username"] = unames.get(u["user_id"], "?")
+
+    return {
+        "sell_offers_active": int(s0.get("count") or 0),
+        "sell_points_escrow": int(s0.get("points_escrow") or 0),
+        "buy_offers_active": int(b0.get("count") or 0),
+        "buy_cash_escrow": int(b0.get("cash_escrow") or 0),
+        "token_offers_active": int(token_count),
+        "property_listings_active": int(prop_count),
+        "top_users": top_users,
+    }
+
+
+async def admin_quicktrade_user_detail(user_id: str) -> Dict[str, Any]:
+    """All active Quick Trade rows for one user (admin)."""
+    uid = (user_id or "").strip()
+    if not uid:
+        return {"user_id": "", "sell_offers": [], "buy_offers": [], "token_offers": [], "property_listings": []}
+    sell = await db.trade_sell_offers.find({"user_id": uid, "status": "active"}).sort("created_at", -1).to_list(100)
+    buy = await db.trade_buy_offers.find({"user_id": uid, "status": "active"}).sort("created_at", -1).to_list(100)
+    tok = await db.trade_token_offers.find({"user_id": uid, "status": "active"}).sort("created_at", -1).to_list(100)
+    props = await db.properties.find({"owner_id": uid, "for_sale": True, "type": {"$ne": "casino_slots"}}).sort("created_at", -1).to_list(50)
+    return {
+        "user_id": uid,
+        "sell_offers": [_serialize_offer_doc(x) for x in sell],
+        "buy_offers": [_serialize_offer_doc(x) for x in buy],
+        "token_offers": [_serialize_offer_doc(x) for x in tok],
+        "property_listings": [_serialize_offer_doc(x) for x in props],
+    }
+
+
+async def admin_quicktrade_cancel_all_for_user(
+    user_id: str,
+    *,
+    actor_user_id: str,
+    reason: Optional[str] = None,
+) -> Dict[str, Any]:
+    """Cancel every active Quick Trade listing for user_id with normal refunds."""
+    uid = (user_id or "").strip()
+    cancelled = {"sell": 0, "buy": 0, "token": 0, "property": 0}
+    errors: List[str] = []
+    sell_ids = await db.trade_sell_offers.distinct("_id", {"user_id": uid, "status": "active"})
+    for sid in sell_ids:
+        try:
+            await force_cancel_sell_offer_by_id(str(sid), actor_user_id=actor_user_id, reason=reason)
+            cancelled["sell"] += 1
+        except ValueError as e:
+            errors.append(f"sell {sid}: {e}")
+    buy_ids = await db.trade_buy_offers.distinct("_id", {"user_id": uid, "status": "active"})
+    for bid in buy_ids:
+        try:
+            await force_cancel_buy_offer_by_id(str(bid), actor_user_id=actor_user_id, reason=reason)
+            cancelled["buy"] += 1
+        except ValueError as e:
+            errors.append(f"buy {bid}: {e}")
+    tok_ids = await db.trade_token_offers.distinct("_id", {"user_id": uid, "status": "active"})
+    for tid in tok_ids:
+        try:
+            await force_cancel_token_offer_by_id(str(tid), actor_user_id=actor_user_id, reason=reason)
+            cancelled["token"] += 1
+        except ValueError as e:
+            errors.append(f"token {tid}: {e}")
+    prop_ids = await db.properties.distinct(
+        "_id",
+        {"owner_id": uid, "for_sale": True, "type": {"$ne": "casino_slots"}},
+    )
+    for pid in prop_ids:
+        try:
+            await force_cancel_property_listing_by_id(str(pid), actor_user_id=actor_user_id, reason=reason)
+            cancelled["property"] += 1
+        except ValueError as e:
+            errors.append(f"property {pid}: {e}")
+    return {"ok": len(errors) == 0, "user_id": uid, "cancelled": cancelled, "errors": errors}
 
 
 def register(router):

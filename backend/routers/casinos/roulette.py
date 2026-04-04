@@ -20,6 +20,7 @@ from server import (
     get_current_user_verified,
     STATES,
     log_gambling,
+    resolve_gambling_log_buy_back,
     get_rank_info,
     CAPO_RANK_ID,
     maybe_auto_relinquish_below_capo,
@@ -385,6 +386,7 @@ def register(router):
         await db.roulette_ownership.update_one({"city": city}, {"$set": {"owner_id": from_owner_id, "owner_username": from_username, "max_bet": 0}})
         _invalidate_ownership_cache(current_user.get("id") or "")
         _invalidate_ownership_cache(from_owner_id)
+        await resolve_gambling_log_buy_back(request.offer_id, "accepted", points_offered)
         return {"message": "Accepted. You received the points and the table was returned to the previous owner."}
 
     @router.post("/casino/roulette/buy-back/reject")
@@ -395,6 +397,7 @@ def register(router):
             raise HTTPException(status_code=404, detail="Offer not found")
         await db.roulette_buy_back_offers.delete_one({"id": request.offer_id})
         _invalidate_ownership_cache(current_user.get("id") or "")
+        await resolve_gambling_log_buy_back(request.offer_id, "rejected", 0)
         return {"message": "Rejected. You keep the casino."}
 
     @router.post("/casino/roulette/send-to-user")
@@ -499,6 +502,10 @@ def register(router):
         # Final payout actually credited to player for this spin.
         # Keep this defined across all branches so loss paths never crash.
         settled_payout = total_payout
+        shortfall = 0
+        ownership_transferred = False
+        buy_back_offer = None
+        actual_payout = total_payout if win else 0
         head_family_id = await get_head_family_id_for_state(stored_city or city)
         edge = int(total_stake * ROULETTE_HOUSE_EDGE)
         if not win:
@@ -515,7 +522,6 @@ def register(router):
                 _invalidate_ownership_cache(owner_id)
         elif not owner_id:
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": total_payout}})
-            ownership_transferred = False
         else:
             # Check if owner can afford to pay
             owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1, "username": 1})
@@ -541,8 +547,6 @@ def register(router):
                 {"$inc": {"total_earnings": -actual_net_cost, "profit": -(actual_net_cost + (edge if head_family_id else 0))}}
             )
             _invalidate_ownership_cache(owner_id)
-            ownership_transferred = False
-            buy_back_offer = None
             buy_back_reward = int((ownership_doc or {}).get("buy_back_reward") or 0)
             if shortfall > 0:
                 # Owner can't pay full amount - transfer ownership
@@ -574,18 +578,32 @@ def register(router):
                     buy_back_offer = {"offer_id": offer_id, "points_offered": buy_back_reward, "amount_shortfall": shortfall, "owner_paid": actual_payout, "expires_at": expires_at}
                 elif head_family_id and edge > 0:
                     await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.roulette": edge}})
+        r_details = {
+            "city": stored_city or city,
+            "total_stake": total_stake,
+            "result": result,
+            "total_payout": total_payout,
+            "win": win,
+            "bets": [{"type": b["type"], "selection": b["selection"], "amount": b["amount"]} for b in validated_bets],
+            "payout": total_payout,
+        }
+        if win and owner_id:
+            r_details["actual_payout"] = actual_payout
+            r_details["shortfall"] = shortfall
+            r_details["ownership_transferred"] = ownership_transferred
+            if ownership_transferred:
+                if buy_back_offer and buy_back_offer.get("offer_id"):
+                    r_details["buy_back_offer_id"] = buy_back_offer["offer_id"]
+                    r_details["buy_back_points_offered"] = int(buy_back_offer.get("points_offered") or 0)
+                    r_details["buy_back_outcome"] = "pending"
+                else:
+                    r_details["buy_back_points_offered"] = 0
+                    r_details["buy_back_outcome"] = "not_offered"
         await log_gambling(
             current_user.get("id") or "",
             current_user.get("username") or "?",
             "roulette",
-            {
-                "city": stored_city or city,
-                "total_stake": total_stake,
-                "result": result,
-                "total_payout": total_payout,
-                "win": win,
-                "bets": [{"type": b["type"], "selection": b["selection"], "amount": b["amount"]} for b in validated_bets],
-            },
+            r_details,
         )
         return {
             "result": result,

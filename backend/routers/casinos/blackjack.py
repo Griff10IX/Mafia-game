@@ -25,6 +25,7 @@ from server import (
     _user_owns_any_casino,
     _username_pattern,
     log_gambling,
+    resolve_gambling_log_buy_back,
     get_head_family_id_for_state,
     get_casino_caps,
     assert_casino_buy_back_within_points_balance,
@@ -144,7 +145,19 @@ def _blackjack_dealer_visible_total(hand):
     return int(v) if v else 0
 
 
-async def _blackjack_settle_and_save_history(user_id: str, username: str, city: str, bet: int, result: str, payout: int, player_hand: list, dealer_hand: list, player_total: int, dealer_total: int):
+async def _blackjack_settle_and_save_history(
+    user_id: str,
+    username: str,
+    city: str,
+    bet: int,
+    result: str,
+    payout: int,
+    player_hand: list,
+    dealer_hand: list,
+    player_total: int,
+    dealer_total: int,
+    gambling_extra: dict | None = None,
+):
     await db.blackjack_games.delete_many({"user_id": user_id})
     history_entry = {
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -160,7 +173,10 @@ async def _blackjack_settle_and_save_history(user_id: str, username: str, city: 
         {"id": user_id},
         {"$push": {"blackjack_history": {"$each": [history_entry], "$position": 0, "$slice": BLACKJACK_HISTORY_MAX}}}
     )
-    await log_gambling(user_id, username or "?", "blackjack", {"city": city, "bet": bet, "result": result, "payout": payout, "player_total": player_total, "dealer_total": dealer_total})
+    log_details = {"city": city, "bet": bet, "result": result, "payout": payout, "player_total": player_total, "dealer_total": dealer_total}
+    if gambling_extra:
+        log_details = {**log_details, **gambling_extra}
+    await log_gambling(user_id, username or "?", "blackjack", log_details)
 
 
 async def user_has_blocking_singleplayer_blackjack(user_id) -> bool:
@@ -240,12 +256,14 @@ async def _blackjack_auto_finish_game(game: dict, current_user: dict):
     else:
         result = "push"
         payout = bet
+    bj_auto_gambling_extra = None
     if payout > 0:
         if owner_id and result in ("win", "dealer_bust"):
             owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1, "username": 1})
             owner_money = int(((owner or {}).get("money") or 0) or 0)
             actual_owner_pay = min(bet, owner_money)
             shortfall = bet - actual_owner_pay
+            buy_back_offer_id_auto = None
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": bet + actual_owner_pay}})
             await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_owner_pay, "total_casino_payouts": actual_owner_pay}})
             await bump_user_biggest_casino_payout(owner_id, actual_owner_pay)
@@ -259,9 +277,9 @@ async def _blackjack_auto_finish_game(game: dict, current_user: dict):
                 if buy_back_reward > 0:
                     owner_username = (owner or {}).get("username")
                     expires_at = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()
-                    offer_id = str(uuid.uuid4())
+                    buy_back_offer_id_auto = str(uuid.uuid4())
                     await db.blackjack_buy_back_offers.insert_one({
-                        "id": offer_id,
+                        "id": buy_back_offer_id_auto,
                         "city": stored_city_bj or bj_city,
                         "from_owner_id": owner_id,
                         "to_user_id": current_user.get("id") or "",
@@ -286,6 +304,19 @@ async def _blackjack_auto_finish_game(game: dict, current_user: dict):
                     {"$inc": {"total_earnings": -actual_owner_pay, "profit": -actual_owner_pay}},
                 )
             _invalidate_ownership_cache(owner_id)
+            bj_auto_gambling_extra = {
+                "actual_payout": bet + actual_owner_pay,
+                "shortfall": shortfall,
+                "ownership_transferred": shortfall > 0,
+            }
+            if shortfall > 0:
+                if buy_back_offer_id_auto:
+                    bj_auto_gambling_extra["buy_back_offer_id"] = buy_back_offer_id_auto
+                    bj_auto_gambling_extra["buy_back_points_offered"] = buy_back_reward
+                    bj_auto_gambling_extra["buy_back_outcome"] = "pending"
+                else:
+                    bj_auto_gambling_extra["buy_back_points_offered"] = 0
+                    bj_auto_gambling_extra["buy_back_outcome"] = "not_offered"
         else:
             if not owner_id and result in ("win", "dealer_bust"):
                 head_family_id = await get_head_family_id_for_state(bj_city) if bj_city else None
@@ -296,7 +327,7 @@ async def _blackjack_auto_finish_game(game: dict, current_user: dict):
                     payout = bet * 2 - edge
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": payout}})
     await _blackjack_settle_and_save_history(
-        current_user.get("id") or "", current_user.get("username"), bj_city, bet, result, payout, player_hand, dealer_hand, player_total, dealer_total
+        current_user.get("id") or "", current_user.get("username"), bj_city, bet, result, payout, player_hand, dealer_hand, player_total, dealer_total, bj_auto_gambling_extra
     )
 
 
@@ -540,6 +571,7 @@ def register(router):
         await db.blackjack_ownership.update_one({"city": city}, {"$set": {"owner_id": from_owner_id, "owner_username": from_username, "max_bet": 0}})
         _invalidate_ownership_cache(current_user.get("id") or "")
         _invalidate_ownership_cache(from_owner_id)
+        await resolve_gambling_log_buy_back(request.offer_id, "accepted", points_offered)
         return {"message": "Accepted. You received the points and the table was returned to the previous owner."}
 
     @router.post("/casino/blackjack/buy-back/reject")
@@ -549,6 +581,7 @@ def register(router):
             raise HTTPException(status_code=404, detail="Offer not found")
         await db.blackjack_buy_back_offers.delete_one({"id": request.offer_id})
         _invalidate_ownership_cache(current_user.get("id") or "")
+        await resolve_gambling_log_buy_back(request.offer_id, "rejected", 0)
         return {"message": "Rejected. You keep the casino."}
 
     @router.post("/casino/blackjack/send-to-user")
@@ -725,8 +758,23 @@ def register(router):
                         await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.blackjack": edge}})
                     actual_payout = bet + owner_pay - edge
                 await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": actual_payout}})
+            bj_nat_extra = None
+            if owner_id:
+                bj_nat_extra = {
+                    "actual_payout": actual_payout,
+                    "shortfall": shortfall,
+                    "ownership_transferred": ownership_transferred,
+                }
+                if ownership_transferred:
+                    if buy_back_offer and buy_back_offer.get("offer_id"):
+                        bj_nat_extra["buy_back_offer_id"] = buy_back_offer["offer_id"]
+                        bj_nat_extra["buy_back_points_offered"] = buy_back_reward
+                        bj_nat_extra["buy_back_outcome"] = "pending"
+                    else:
+                        bj_nat_extra["buy_back_points_offered"] = 0
+                        bj_nat_extra["buy_back_outcome"] = "not_offered"
             await _blackjack_settle_and_save_history(
-                current_user.get("id") or "", current_user.get("username"), city, bet, "blackjack", actual_payout, player_hand, dealer_hand, player_total, dealer_total
+                current_user.get("id") or "", current_user.get("username"), city, bet, "blackjack", actual_payout, player_hand, dealer_hand, player_total, dealer_total, bj_nat_extra
             )
             new_balance = (user.get("money", 0) or 0) - bet + actual_payout
             return {
@@ -982,8 +1030,23 @@ def register(router):
                 await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": payout}})
         user = await db.users.find_one({"id": current_user.get("id") or ""})
         new_balance = (user.get("money", 0) or 0)
+        bj_stand_extra = None
+        if owner_id and result in ("win", "dealer_bust") and payout > 0:
+            bj_stand_extra = {
+                "actual_payout": payout,
+                "shortfall": shortfall,
+                "ownership_transferred": ownership_transferred,
+            }
+            if ownership_transferred:
+                if buy_back_offer and buy_back_offer.get("offer_id"):
+                    bj_stand_extra["buy_back_offer_id"] = buy_back_offer["offer_id"]
+                    bj_stand_extra["buy_back_points_offered"] = buy_back_reward
+                    bj_stand_extra["buy_back_outcome"] = "pending"
+                else:
+                    bj_stand_extra["buy_back_points_offered"] = 0
+                    bj_stand_extra["buy_back_outcome"] = "not_offered"
         await _blackjack_settle_and_save_history(
-            current_user.get("id") or "", current_user.get("username"), bj_city, bet, result, payout, player_hand, dealer_hand, player_total, dealer_total
+            current_user.get("id") or "", current_user.get("username"), bj_city, bet, result, payout, player_hand, dealer_hand, player_total, dealer_total, bj_stand_extra
         )
         return {
             "status": "done",

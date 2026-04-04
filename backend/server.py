@@ -1966,6 +1966,26 @@ async def log_gambling(user_id: str, username: str, game_type: str, details: dic
         pass
 
 
+async def resolve_gambling_log_buy_back(offer_id: str, outcome: str, points_credited: int) -> None:
+    """Patch gambling_log row created on casino seizure win (details.buy_back_offer_id) when player accepts/rejects buy-back."""
+    if not offer_id:
+        return
+    try:
+        now_iso = datetime.now(timezone.utc).isoformat()
+        await db.gambling_log.update_one(
+            {"details.buy_back_offer_id": offer_id},
+            {
+                "$set": {
+                    "details.buy_back_outcome": outcome,
+                    "details.buy_back_points_credited": int(points_credited or 0),
+                    "details.buy_back_resolved_at": now_iso,
+                }
+            },
+        )
+    except Exception:
+        pass
+
+
 def _is_admin(user: dict) -> bool:
     """True if user has admin email and is not currently acting as normal user."""
     return (user.get("email") or "") in ADMIN_EMAILS and not user.get("admin_acting_as_normal", False)

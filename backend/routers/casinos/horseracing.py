@@ -22,6 +22,7 @@ from server import (
     CAPO_RANK_ID,
     maybe_auto_relinquish_below_capo,
     log_gambling,
+    resolve_gambling_log_buy_back,
     _user_owns_any_casino,
     _username_pattern,
     get_head_family_id_for_state,
@@ -378,6 +379,7 @@ def register(router):
         await db.horseracing_ownership.update_one({"city": city}, {"$set": {"owner_id": from_owner_id, "owner_username": from_user.get("username"), "max_bet": 0}})
         _invalidate_ownership_cache(current_user.get("id") or "")
         _invalidate_ownership_cache(from_owner_id)
+        await resolve_gambling_log_buy_back(request.offer_id, "accepted", points_offered)
         return {"message": "Accepted. You received the points and the track was returned to the previous owner."}
 
     @router.post("/casino/horseracing/buy-back/reject")
@@ -388,6 +390,7 @@ def register(router):
             raise HTTPException(status_code=404, detail="Offer not found")
         await db.horseracing_buy_back_offers.delete_one({"id": request.offer_id})
         _invalidate_ownership_cache(current_user.get("id") or "")
+        await resolve_gambling_log_buy_back(request.offer_id, "rejected", 0)
         return {"message": "Rejected. You keep the track."}
 
     @router.post("/casino/horseracing/send-to-user")
@@ -465,6 +468,11 @@ def register(router):
         user_money = int((debit_res.get("money") or 0) or 0)
         winner = _horseracing_pick_winner()
         won = winner["id"] == horse_id
+        ownership_transferred = False
+        buy_back_offer = None
+        actual_payout = 0
+        shortfall = 0
+        points_offered = 0
         if won:
             payout = int(bet * (1 + horse["odds"]) * (1.0 - HORSERACING_HOUSE_EDGE))
             payout = max(payout, bet)
@@ -488,8 +496,6 @@ def register(router):
                 await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": payout}})
         else:
             head_family_id = await get_head_family_id_for_state(stored_city or city) if (stored_city or city) else None
-            ownership_transferred = False
-            buy_back_offer = None
             if won:
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
                 owner_after_bet = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1, "username": 1})
@@ -598,20 +604,36 @@ def register(router):
             {"id": current_user.get("id") or ""},
             {"$push": {"horseracing_history": {"$each": [history_entry], "$slice": -HORSERACING_HISTORY_MAX}}}
         )
+        hr_details = {
+            "city": city,
+            "bet": bet,
+            "horse_id": horse_id,
+            "horse_name": horse["name"],
+            "odds": horse.get("odds"),
+            "won": won,
+            "payout": payout if won else 0,
+            "winner_name": winner["name"],
+        }
+        if owner_id and won:
+            hr_details["payout"] = payout
+            hr_details["actual_payout"] = actual_payout
+            hr_details["shortfall"] = shortfall
+            hr_details["ownership_transferred"] = ownership_transferred
+            if ownership_transferred:
+                if buy_back_offer and buy_back_offer.get("offer_id"):
+                    hr_details["buy_back_offer_id"] = buy_back_offer["offer_id"]
+                    hr_details["buy_back_points_offered"] = points_offered
+                    hr_details["buy_back_outcome"] = "pending"
+                else:
+                    hr_details["buy_back_points_offered"] = 0
+                    hr_details["buy_back_outcome"] = "not_offered"
+        elif owner_id:
+            hr_details["ownership_transferred"] = False
         await log_gambling(
             current_user.get("id") or "",
             current_user.get("username") or "?",
             "horseracing",
-            {
-                "city": city,
-                "bet": bet,
-                "horse_id": horse_id,
-                "horse_name": horse["name"],
-                "odds": horse.get("odds"),
-                "won": won,
-                "payout": payout if won else 0,
-                "winner_name": winner["name"],
-            },
+            hr_details,
         )
         finish_pcts, finish_order_ids, photo_finish = _horseracing_finish_order(winner["id"])
         result = {

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useLocation, Navigate } from 'react-router-dom';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle, Eye, Receipt } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle, Eye, Receipt, ArrowLeftRight } from 'lucide-react';
 import api, { imageHostPublicUrl } from '../../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
@@ -226,6 +226,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Store Point Crediting', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['store', 'crediting', 'manual', 'eta', 'payments'], adminOnly: true },
   { label: 'Pre-order Settings', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['preorder', 'points', 'release', 'manual', 'store', 'credit'], adminOnly: true },
   { label: 'Release Preorder Points', categoryId: 'admin-donations', collapseKey: 'donationsStore', keywords: ['release', 'preorder', 'points', 'credit'], adminOnly: true },
+  { label: 'Quick Trade admin', categoryId: 'admin-economy-progression', collapseKey: 'quicktradeTool', keywords: ['quicktrade', 'trade', 'offers', 'escrow', 'cancel', 'listings', 'tokens', 'property'], adminOnly: true },
   // Game World
   { label: 'Game Events', categoryId: 'admin-gameworld', collapseKey: 'events', keywords: ['events', 'toggle', 'enable', 'disable', 'random', 'bundle', 'daily', 'modifiers', 'roll'], adminOnly: true },
   { label: 'Booze Run rotation & global discount', categoryId: 'admin-gameworld', collapseKey: 'boozeRun', keywords: ['booze', 'run', 'rotation', 'prices', 'discount', 'listed', 'nudge', 'global', 'jail', 'bust', 'prohibition'], adminOnly: true },
@@ -345,8 +346,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, ...parsed };
-  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true }; }
+    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, quicktradeTool: true, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, quicktradeTool: true }; }
 }
 
 function saveCollapsed(state) {
@@ -1010,6 +1011,13 @@ export default function Admin() {
 
   const [economyOverview, setEconomyOverview] = useState(null);
   const [economyOverviewLoading, setEconomyOverviewLoading] = useState(false);
+  const [quicktradeOverview, setQuicktradeOverview] = useState(null);
+  const [quicktradeOverviewLoading, setQuicktradeOverviewLoading] = useState(false);
+  const [quicktradeUserDetail, setQuicktradeUserDetail] = useState(null);
+  const [quicktradeUserLoading, setQuicktradeUserLoading] = useState(false);
+  const [qtLookupInput, setQtLookupInput] = useState('');
+  const [qtCancelReason, setQtCancelReason] = useState('');
+  const [qtActionKey, setQtActionKey] = useState(null);
   const [cashHolders, setCashHolders] = useState(null);
   const [cashHoldersLoading, setCashHoldersLoading] = useState(false);
   const [cashHoldersOffset, setCashHoldersOffset] = useState(0);
@@ -5251,6 +5259,134 @@ export default function Admin() {
     }
   };
 
+  const handleFetchQuicktradeOverview = useCallback(async () => {
+    setQuicktradeOverviewLoading(true);
+    try {
+      const res = await api.get('/admin/quicktrade/overview');
+      setQuicktradeOverview(res.data ?? null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load Quick Trade overview');
+    } finally {
+      setQuicktradeOverviewLoading(false);
+    }
+  }, []);
+
+  const handleFetchQuicktradeUser = useCallback(async () => {
+    const q = qtLookupInput.trim();
+    if (!q) {
+      toast.error('Enter user id or username');
+      return;
+    }
+    setQuicktradeUserLoading(true);
+    try {
+      const res = await api.get(`/admin/quicktrade/user/${encodeURIComponent(q)}`);
+      setQuicktradeUserDetail(res.data ?? null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load user Quick Trade');
+      setQuicktradeUserDetail(null);
+    } finally {
+      setQuicktradeUserLoading(false);
+    }
+  }, [qtLookupInput]);
+
+  const qtCancelBody = useCallback(() => {
+    const r = qtCancelReason.trim();
+    return r ? { reason: r } : {};
+  }, [qtCancelReason]);
+
+  const refreshQuicktradeUserIfAny = useCallback(async () => {
+    const q = qtLookupInput.trim();
+    if (!q) return;
+    setQuicktradeUserLoading(true);
+    try {
+      const res = await api.get(`/admin/quicktrade/user/${encodeURIComponent(q)}`);
+      setQuicktradeUserDetail(res.data ?? null);
+    } catch {
+      setQuicktradeUserDetail(null);
+    } finally {
+      setQuicktradeUserLoading(false);
+    }
+  }, [qtLookupInput]);
+
+  const handleQtCancelSell = async (offerId) => {
+    setQtActionKey(`sell-${offerId}`);
+    try {
+      await api.post(`/admin/quicktrade/cancel-sell/${encodeURIComponent(offerId)}`, qtCancelBody());
+      toast.success('Sell offer cancelled (points refunded)');
+      await handleFetchQuicktradeOverview();
+      await refreshQuicktradeUserIfAny();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Cancel failed');
+    } finally {
+      setQtActionKey(null);
+    }
+  };
+
+  const handleQtCancelBuy = async (offerId) => {
+    setQtActionKey(`buy-${offerId}`);
+    try {
+      await api.post(`/admin/quicktrade/cancel-buy/${encodeURIComponent(offerId)}`, qtCancelBody());
+      toast.success('Buy offer cancelled (cash refunded)');
+      await handleFetchQuicktradeOverview();
+      await refreshQuicktradeUserIfAny();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Cancel failed');
+    } finally {
+      setQtActionKey(null);
+    }
+  };
+
+  const handleQtCancelToken = async (offerId) => {
+    setQtActionKey(`tok-${offerId}`);
+    try {
+      await api.post(`/admin/quicktrade/cancel-token/${encodeURIComponent(offerId)}`, qtCancelBody());
+      toast.success('Token offer cancelled (tokens returned)');
+      await handleFetchQuicktradeOverview();
+      await refreshQuicktradeUserIfAny();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Cancel failed');
+    } finally {
+      setQtActionKey(null);
+    }
+  };
+
+  const handleQtCancelProperty = async (propertyId) => {
+    setQtActionKey(`prop-${propertyId}`);
+    try {
+      await api.post(`/admin/quicktrade/cancel-property/${encodeURIComponent(propertyId)}`, qtCancelBody());
+      toast.success('Property listing removed');
+      await handleFetchQuicktradeOverview();
+      await refreshQuicktradeUserIfAny();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Cancel failed');
+    } finally {
+      setQtActionKey(null);
+    }
+  };
+
+  const handleQtCancelAllForUser = async () => {
+    const q = qtLookupInput.trim();
+    if (!q) {
+      toast.error('Enter user id or username and load (or use loaded user)');
+      return;
+    }
+    if (!window.confirm('Cancel ALL Quick Trade listings for this user? Normal refunds apply (points, cash, tokens, unlist properties).')) return;
+    setQtActionKey('cancel-all');
+    try {
+      const res = await api.post(`/admin/quicktrade/user/${encodeURIComponent(q)}/cancel-all`, qtCancelBody());
+      const c = res.data?.cancelled || {};
+      toast.success(
+        `Cancelled: sell ${c.sell ?? 0}, buy ${c.buy ?? 0}, token ${c.token ?? 0}, property ${c.property ?? 0}`,
+      );
+      await handleFetchQuicktradeOverview();
+      await refreshQuicktradeUserIfAny();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Cancel-all failed');
+    } finally {
+      setQtActionKey(null);
+    }
+  };
+
   const handleFetchEconomyOverview = async () => {
     setEconomyOverviewLoading(true);
     try {
@@ -8128,6 +8264,275 @@ export default function Admin() {
               )}
               {donationsLogData && donationsLogData.length === 0 && (
                 <p className="text-[10px] text-mutedForeground font-heading">No payment transactions.</p>
+              )}
+            </div>
+          )}
+        </div>
+      </section>
+      )}
+
+      {activeCategoryId === 'admin-economy-progression' && isAdmin && (
+      <section id="admin-quicktrade" className="admin-category-nav space-y-4 scroll-mt-24">
+        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest flex items-center gap-2">
+          <ArrowLeftRight size={12} />
+          Quick Trade
+        </h2>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-violet-500/25 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-violet-500/40 to-transparent" />
+          <SectionHeader
+            icon={ArrowLeftRight}
+            title="Overview & cancel offers"
+            toolAnchor="quicktradeTool"
+            color="text-violet-300"
+            isCollapsed={collapsed.quicktradeTool}
+            onToggle={() => {
+              const wasCollapsed = collapsed.quicktradeTool;
+              toggleSection('quicktradeTool');
+              if (wasCollapsed) handleFetchQuicktradeOverview();
+            }}
+          />
+          {!collapsed.quicktradeTool && (
+            <div className="p-3 space-y-4 text-[10px] font-heading">
+              <p className="text-mutedForeground leading-relaxed">
+                Inspect global Quick Trade activity (staff listings excluded from overview totals). Admin cancel applies the same refunds as when a player cancels their own offer.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <BtnPrimary onClick={handleFetchQuicktradeOverview} disabled={quicktradeOverviewLoading}>
+                  {quicktradeOverviewLoading ? '...' : 'Refresh overview'}
+                </BtnPrimary>
+              </div>
+              {quicktradeOverview && (
+                <>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <div className="rounded border border-zinc-700/50 p-2 bg-zinc-900/40">
+                      <div className="text-mutedForeground uppercase text-[9px] tracking-wide">Sell offers</div>
+                      <div className="text-foreground font-bold text-sm">{quicktradeOverview.sell_offers_active}</div>
+                      <div className="text-violet-300/90">{(quicktradeOverview.sell_points_escrow ?? 0).toLocaleString()} pts escrow</div>
+                    </div>
+                    <div className="rounded border border-zinc-700/50 p-2 bg-zinc-900/40">
+                      <div className="text-mutedForeground uppercase text-[9px] tracking-wide">Buy offers</div>
+                      <div className="text-foreground font-bold text-sm">{quicktradeOverview.buy_offers_active}</div>
+                      <div className="text-emerald-400/90">${formatWholeCash(quicktradeOverview.buy_cash_escrow)} escrow</div>
+                    </div>
+                    <div className="rounded border border-zinc-700/50 p-2 bg-zinc-900/40">
+                      <div className="text-mutedForeground uppercase text-[9px] tracking-wide">Token offers</div>
+                      <div className="text-foreground font-bold text-sm">{quicktradeOverview.token_offers_active}</div>
+                    </div>
+                    <div className="rounded border border-zinc-700/50 p-2 bg-zinc-900/40">
+                      <div className="text-mutedForeground uppercase text-[9px] tracking-wide">Property listings</div>
+                      <div className="text-foreground font-bold text-sm">{quicktradeOverview.property_listings_active}</div>
+                    </div>
+                  </div>
+                  {Array.isArray(quicktradeOverview.top_users) && quicktradeOverview.top_users.length > 0 && (
+                    <div className="overflow-x-auto max-h-48 overflow-y-auto border border-zinc-700/40 rounded">
+                      <table className="w-full text-left border-collapse">
+                        <thead>
+                          <tr className="border-b border-zinc-700/50 text-[9px] uppercase text-mutedForeground">
+                            <th className="py-1 px-2">User</th>
+                            <th className="py-1 px-2">Sell #</th>
+                            <th className="py-1 px-2">Pts escrow</th>
+                            <th className="py-1 px-2">Buy #</th>
+                            <th className="py-1 px-2">$ escrow</th>
+                            <th className="py-1 px-2">Tok #</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {quicktradeOverview.top_users.map((row) => (
+                            <tr key={row.user_id} className="border-b border-zinc-800/80">
+                              <td className="py-1 px-2 text-foreground">{row.username || row.user_id}</td>
+                              <td className="py-1 px-2">{row.sell_offers}</td>
+                              <td className="py-1 px-2">{(row.sell_points_escrow ?? 0).toLocaleString()}</td>
+                              <td className="py-1 px-2">{row.buy_offers}</td>
+                              <td className="py-1 px-2">${formatWholeCash(row.buy_cash_escrow)}</td>
+                              <td className="py-1 px-2">{row.token_offers}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )}
+              <div className="h-px bg-zinc-700/40" />
+              <p className="text-[9px] font-bold uppercase tracking-wider text-violet-300">User listings</p>
+              <div className="flex flex-wrap gap-2 items-center">
+                <input
+                  type="text"
+                  value={qtLookupInput}
+                  onChange={(e) => setQtLookupInput(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleFetchQuicktradeUser()}
+                  placeholder="User id or username"
+                  className="flex-1 min-w-[200px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground"
+                />
+                <BtnPrimary onClick={handleFetchQuicktradeUser} disabled={quicktradeUserLoading}>
+                  {quicktradeUserLoading ? '...' : 'Load'}
+                </BtnPrimary>
+                <BtnSecondary
+                  type="button"
+                  onClick={() => setQtLookupInput((formData.targetUsername || '').trim())}
+                  disabled={!(formData.targetUsername || '').trim()}
+                >
+                  Use target username
+                </BtnSecondary>
+              </div>
+              <div>
+                <label className="text-[9px] text-mutedForeground uppercase block mb-0.5">Optional audit reason (logged)</label>
+                <input
+                  type="text"
+                  value={qtCancelReason}
+                  onChange={(e) => setQtCancelReason(e.target.value)}
+                  placeholder="e.g. support ticket #123"
+                  className="w-full max-w-md bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground"
+                  maxLength={500}
+                />
+              </div>
+              {quicktradeUserDetail?.user && (
+                <div className="space-y-3 border border-violet-500/20 rounded-lg p-2 bg-violet-500/5">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <span className="text-foreground font-bold">{quicktradeUserDetail.user.username}</span>
+                      <span className="text-mutedForeground ml-2 font-mono text-[9px]">{quicktradeUserDetail.user.id}</span>
+                      <span className="text-mutedForeground ml-2">{(quicktradeUserDetail.user.points ?? 0).toLocaleString()} pts</span>
+                      <span className="text-mutedForeground ml-2">${formatWholeCash(quicktradeUserDetail.user.money)}</span>
+                    </div>
+                    <BtnDanger
+                      type="button"
+                      onClick={handleQtCancelAllForUser}
+                      disabled={qtActionKey === 'cancel-all'}
+                    >
+                      {qtActionKey === 'cancel-all' ? '...' : 'Cancel ALL for user'}
+                    </BtnDanger>
+                  </div>
+                  {quicktradeUserDetail.sell_offers?.length > 0 && (
+                    <div>
+                      <p className="text-[9px] uppercase text-mutedForeground mb-1">Sell offers</p>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-[9px] border-collapse">
+                          <thead>
+                            <tr className="border-b border-zinc-700/50 text-mutedForeground">
+                              <th className="py-0.5 pr-2">Id</th>
+                              <th className="py-0.5 pr-2">Pts (list)</th>
+                              <th className="py-0.5 pr-2">$ ask</th>
+                              <th className="py-0.5 pr-2">Anon</th>
+                              <th className="py-0.5 pr-2" />
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {quicktradeUserDetail.sell_offers.map((o) => (
+                              <tr key={o.id} className="border-b border-zinc-800/60">
+                                <td className="py-0.5 pr-2 font-mono break-all max-w-[120px]">{o.id}</td>
+                                <td className="py-0.5 pr-2">{(o.points ?? 0).toLocaleString()}</td>
+                                <td className="py-0.5 pr-2">${formatWholeCash(o.cost)}</td>
+                                <td className="py-0.5 pr-2">{o.hide_name ? 'yes' : 'no'}</td>
+                                <td className="py-0.5 pr-2">
+                                  <BtnDanger type="button" className="!py-0.5 !px-1.5" disabled={qtActionKey === `sell-${o.id}`} onClick={() => handleQtCancelSell(o.id)}>Cancel</BtnDanger>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                  {quicktradeUserDetail.buy_offers?.length > 0 && (
+                    <div>
+                      <p className="text-[9px] uppercase text-mutedForeground mb-1">Buy offers</p>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-[9px] border-collapse">
+                          <thead>
+                            <tr className="border-b border-zinc-700/50 text-mutedForeground">
+                              <th className="py-0.5 pr-2">Id</th>
+                              <th className="py-0.5 pr-2">Pts want</th>
+                              <th className="py-0.5 pr-2">$ bid</th>
+                              <th className="py-0.5 pr-2" />
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {quicktradeUserDetail.buy_offers.map((o) => (
+                              <tr key={o.id} className="border-b border-zinc-800/60">
+                                <td className="py-0.5 pr-2 font-mono break-all max-w-[120px]">{o.id}</td>
+                                <td className="py-0.5 pr-2">{(o.points ?? 0).toLocaleString()}</td>
+                                <td className="py-0.5 pr-2">${formatWholeCash(o.offer)}</td>
+                                <td className="py-0.5 pr-2">
+                                  <BtnDanger type="button" className="!py-0.5 !px-1.5" disabled={qtActionKey === `buy-${o.id}`} onClick={() => handleQtCancelBuy(o.id)}>Cancel</BtnDanger>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                  {quicktradeUserDetail.token_offers?.length > 0 && (
+                    <div>
+                      <p className="text-[9px] uppercase text-mutedForeground mb-1">Token offers</p>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-[9px] border-collapse">
+                          <thead>
+                            <tr className="border-b border-zinc-700/50 text-mutedForeground">
+                              <th className="py-0.5 pr-2">Id</th>
+                              <th className="py-0.5 pr-2">Type</th>
+                              <th className="py-0.5 pr-2">Qty</th>
+                              <th className="py-0.5 pr-2">Price</th>
+                              <th className="py-0.5 pr-2" />
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {quicktradeUserDetail.token_offers.map((o) => (
+                              <tr key={o.id} className="border-b border-zinc-800/60">
+                                <td className="py-0.5 pr-2 font-mono break-all max-w-[120px]">{o.id}</td>
+                                <td className="py-0.5 pr-2">{o.token_type}</td>
+                                <td className="py-0.5 pr-2">{(o.quantity ?? 0).toLocaleString()}</td>
+                                <td className="py-0.5 pr-2">
+                                  {(o.price_currency || 'points') === 'money'
+                                    ? `$${formatWholeCash(o.price_money)}`
+                                    : `${(o.price_points ?? 0).toLocaleString()} pts`}
+                                </td>
+                                <td className="py-0.5 pr-2">
+                                  <BtnDanger type="button" className="!py-0.5 !px-1.5" disabled={qtActionKey === `tok-${o.id}`} onClick={() => handleQtCancelToken(o.id)}>Cancel</BtnDanger>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                  {quicktradeUserDetail.property_listings?.length > 0 && (
+                    <div>
+                      <p className="text-[9px] uppercase text-mutedForeground mb-1">Property listings</p>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-[9px] border-collapse">
+                          <thead>
+                            <tr className="border-b border-zinc-700/50 text-mutedForeground">
+                              <th className="py-0.5 pr-2">Id</th>
+                              <th className="py-0.5 pr-2">Type</th>
+                              <th className="py-0.5 pr-2">Name</th>
+                              <th className="py-0.5 pr-2">Pts</th>
+                              <th className="py-0.5 pr-2" />
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {quicktradeUserDetail.property_listings.map((o) => (
+                              <tr key={o.id} className="border-b border-zinc-800/60">
+                                <td className="py-0.5 pr-2 font-mono break-all max-w-[120px]">{o.id}</td>
+                                <td className="py-0.5 pr-2">{o.type}</td>
+                                <td className="py-0.5 pr-2">{o.name || o.location || '—'}</td>
+                                <td className="py-0.5 pr-2">{(o.sale_price ?? 0).toLocaleString()}</td>
+                                <td className="py-0.5 pr-2">
+                                  <BtnDanger type="button" className="!py-0.5 !px-1.5" disabled={qtActionKey === `prop-${o.id}`} onClick={() => handleQtCancelProperty(o.id)}>Unlist</BtnDanger>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                  {(!quicktradeUserDetail.sell_offers?.length && !quicktradeUserDetail.buy_offers?.length && !quicktradeUserDetail.token_offers?.length && !quicktradeUserDetail.property_listings?.length) && (
+                    <p className="text-mutedForeground italic">No active listings for this user.</p>
+                  )}
+                </div>
               )}
             </div>
           )}
