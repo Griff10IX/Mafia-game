@@ -968,12 +968,24 @@ def _distillery_public_payload(distillery: dict, business: dict) -> dict:
     roi = _distillery_roi_snapshot(distillery, business)
     heat = float(distillery.get("heat") or 0.0)
     queue = distillery.get("aging_queue") or []
+    equipment = distillery.get("equipment") or {}
+    next_upgrade_costs: Dict[str, Optional[int]] = {}
+    for lane in DISTILLERY_EQUIPMENT_ORDER:
+        cur = int(equipment.get(lane) or 0)
+        next_upgrade_costs[lane] = None if cur >= DISTILLERY_EQUIPMENT_MAX_LEVEL else _distillery_upgrade_cost(lane, cur + 1)
     return {
         "distillery": distillery,
         "heat_level": _distillery_heat_label(heat),
         "roi": roi,
         "active_batches": len(queue),
         "best_next_upgrade": roi.get("next_upgrade_lane"),
+        "vault_balance": int(business.get("vault") or 0),
+        "pricing": {
+            "equipment_next_costs": next_upgrade_costs,
+            "worker_hire_cost": DISTILLERY_WORKER_HIRE_COST,
+            "maintenance_recover_cost_per_point": DISTILLERY_MAINTENANCE_RECOVER_COST_PER_POINT,
+            "worker_max_hires_per_action": DISTILLERY_WORKER_MAX_PER_ACTION,
+        },
     }
 
 

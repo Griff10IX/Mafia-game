@@ -58,12 +58,21 @@ export default function Distillery() {
 
   const dist = state?.distillery || {};
   const roi = state?.roi || {};
+  const pricing = state?.pricing || {};
+  const vaultBalance = Number(state?.vault_balance ?? business?.vault ?? 0);
   const heat = Number(dist?.heat || 0);
   const workers = dist?.workers || {};
   const workerCap = Number(dist?.worker_capacity || 0);
   const workerTotal = Number(workers.production || 0) + Number(workers.quality || 0) + Number(workers.security || 0) + Number(workers.sales || 0);
   const equipment = dist?.equipment || {};
   const queue = Array.isArray(dist?.aging_queue) ? dist.aging_queue : [];
+  const equipmentCosts = pricing?.equipment_next_costs || {};
+  const workerHireCost = Number(pricing?.worker_hire_cost || 0);
+  const maintenanceCostPerPoint = Number(pricing?.maintenance_recover_cost_per_point || 0);
+  const draftWorkerTotal = Number(workerDraft.production || 0) + Number(workerDraft.quality || 0) + Number(workerDraft.security || 0) + Number(workerDraft.sales || 0);
+  const hiresNeeded = Math.max(0, draftWorkerTotal - workerTotal);
+  const workerPlanCost = hiresNeeded * workerHireCost;
+  const maintenanceCost = Math.max(1, Number(maintenancePoints || 1)) * maintenanceCostPerPoint;
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -165,6 +174,14 @@ export default function Distillery() {
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+          <div className={`${styles.panel} border border-primary/20 rounded-md p-3`}>
+            <div className="flex items-center gap-2 mb-2">
+              <Coins size={14} className="text-primary" />
+              <h2 className="text-xs font-heading uppercase tracking-widest text-primary">Vault Balance</h2>
+            </div>
+            <div className="text-2xl font-heading font-bold text-primary">{money(vaultBalance)}</div>
+            <div className="text-[10px] text-mutedForeground mt-1">All distillery upgrades and services spend from vault.</div>
+          </div>
           <div className={`${styles.panel} border border-primary/20 rounded-md p-3 lg:col-span-2`}>
             <div className="flex items-center gap-2 mb-2">
               <Flame size={14} className="text-primary" />
@@ -214,6 +231,9 @@ export default function Distillery() {
                 >
                   <div className="text-xs font-heading text-foreground">{prettyKey(lane)}</div>
                   <div className="text-[10px] text-mutedForeground">Level {Number(equipment[lane] || 0)} / 10</div>
+                  <div className="text-[10px] text-primary/90 mt-0.5">
+                    {equipmentCosts[lane] == null ? 'Maxed' : `Upgrade cost: ${money(equipmentCosts[lane])}`}
+                  </div>
                 </button>
               ))}
             </div>
@@ -250,6 +270,11 @@ export default function Distillery() {
               >
                 Save Worker Plan
               </button>
+              <div className="mt-1 text-[10px] text-mutedForeground">
+                {hiresNeeded > 0
+                  ? `Hiring ${hiresNeeded} new worker${hiresNeeded > 1 ? 's' : ''}: ${money(workerPlanCost)}`
+                  : 'No hire cost (reassigning existing workers).'}
+              </div>
             </div>
 
             <div className="pt-2 border-t border-primary/10">
@@ -277,6 +302,7 @@ export default function Distillery() {
                   Repair
                 </button>
               </div>
+              <div className="mt-1 text-[10px] text-mutedForeground">Repair cost: {money(maintenanceCost)}</div>
             </div>
           </div>
         </div>
