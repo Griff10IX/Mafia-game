@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Skull, Crosshair, ArrowUpRight, Clock, Shield, DollarSign, History, List, ChevronDown, ChevronRight } from 'lucide-react';
+import { Skull, Crosshair, ArrowUpRight, ArrowDownLeft, Clock, Shield, DollarSign, History, List, ChevronDown, ChevronRight } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -312,6 +312,7 @@ export default function Attempts() {
   }, [tab, fetchAttempts, fetchTimeline]);
 
   const outgoing = useMemo(() => (attempts || []).filter((a) => a.direction === 'outgoing'), [attempts]);
+  const incoming = useMemo(() => (attempts || []).filter((a) => a.direction === 'incoming'), [attempts]);
 
   const toggleTimelineRow = (id) => {
     setTimelineExpanded((m) => ({ ...m, [id]: !m[id] }));
@@ -444,13 +445,20 @@ export default function Attempts() {
       )}
 
       {tab === 'summary' && (
-        <div className="grid grid-cols-1 gap-2 md:gap-3">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 md:gap-3">
           <AttemptsCard
             title="My Attempts"
             attempts={outgoing}
             icon={ArrowUpRight}
             emptyMessage="No attacks made yet"
             delay={0}
+          />
+          <AttemptsCard
+            title="Against Me (health loss only)"
+            attempts={incoming}
+            icon={ArrowDownLeft}
+            emptyMessage="No damaging attacks against you"
+            delay={0.05}
           />
         </div>
       )}

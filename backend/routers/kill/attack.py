@@ -2049,14 +2049,23 @@ async def get_attack_timeline(
 
 async def get_attack_attempts(current_user: dict = Depends(get_current_user)):
     docs = await db.attack_attempts.find(
-        {"attacker_id": current_user["id"]},
+        {"$or": [{"attacker_id": current_user["id"]}, {"target_id": current_user["id"]}]},
         {"_id": 0}
     ).sort("created_at", -1).to_list(500)
     filtered = []
     for d in docs:
         if not d.get("id"):
             d["id"] = str(uuid.uuid4())
-        d["direction"] = "outgoing"
+        d["direction"] = "outgoing" if d.get("attacker_id") == current_user["id"] else "incoming"
+        if d["direction"] == "incoming":
+            outcome = d.get("outcome")
+            if outcome in {"bodyguard", "error"}:
+                continue
+            if outcome != "killed":
+                health_dealt_pct = float(d.get("health_dealt_pct") or 0)
+                damage_done = float(d.get("damage_done") or 0)
+                if health_dealt_pct <= 0 and damage_done <= 0:
+                    continue
         # No real combat spend — hide validation/error spam and bodyguard blocks (0 bullets) from history UI
         if int(d.get("bullets_used") or 0) <= 0:
             continue

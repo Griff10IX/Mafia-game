@@ -6,30 +6,6 @@
 
 [hr]
 
-[size=1.5][b][color=#1ABC9C]How to post updates[/color][/b][/size]
-[quote]
-[list]
-[*][color=#888888]Add a new entry at the [b]top[/b] of this file[/color]
-[*][color=#888888]Include [b]UTC timestamp[/b], [b]what changed[/b], and [b]what players should do[/b][/color]
-[*][color=#888888]Keep lines short and clear (bullet points preferred)[/color]
-[*][color=#888888]After editing, run the update-log topic sync script to publish in forum[/color]
-[/list]
-[/quote]
-
-[hr]
-
-[size=1.5][b][color=#9B59B6]Entry template[/color][/b][/size]
-[quote]
-[b][color=#F1C40F]YYYY-MM-DD HH:MM UTC[/color][/b] — [b]Title[/b]
-[list]
-[*][color=#888888][b]Changed:[/b] ...[/color]
-[*][color=#888888][b]Player action:[/b] ...[/color]
-[*][color=#888888][b]Impact:[/b] ...[/color]
-[/list]
-[/quote]
-
-[hr]
-
 [size=1.5][b][color=#2ECC71]2026-04-04 16:00 UTC[/color][/b] — [b]Distillery added + progression, risk, and ROI updates[/b][/size]
 [quote]
 [list]
