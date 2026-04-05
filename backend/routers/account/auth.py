@@ -12,7 +12,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import Depends, HTTPException, Request
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, field_validator, model_validator
 
 from utils.ban_user_wipe import user_has_active_account_ban
 from utils.disposable_email import is_disposable_email
@@ -30,6 +30,13 @@ class UserRegister(BaseModel):
     password: str
     referral_code: Optional[str] = None
 
+    @field_validator("username", mode="before")
+    @classmethod
+    def strip_username(cls, v):
+        if v is None:
+            return ""
+        return str(v).strip()
+
     @field_validator("password")
     @classmethod
     def password_min_alphanumeric(cls, v: str) -> str:
@@ -40,6 +47,21 @@ class UserRegister(BaseModel):
         if alnum_count < 4:
             raise ValueError("Password must contain at least 4 letters or numbers")
         return v
+
+    @model_validator(mode="after")
+    def username_not_an_email(self):
+        """Avoid logins / UI treating display name as email; blocks pasted addresses as username."""
+        u = self.username or ""
+        e = str(self.email).strip().lower()
+        if not u:
+            raise ValueError("Username is required")
+        if "@" in u:
+            raise ValueError(
+                "Usernames cannot contain '@'. Use a character name — not your email address."
+            )
+        if u.lower() == e:
+            raise ValueError("Username must be different from your email address.")
+        return self
 
 
 class UserLogin(BaseModel):
@@ -541,6 +563,11 @@ def register(router):
         raw = (username or "").strip()
         if not raw:
             raise HTTPException(status_code=400, detail="Username is required.")
+        if "@" in raw:
+            raise HTTPException(
+                status_code=400,
+                detail="Usernames cannot contain '@'. Choose a display name, not an email address.",
+            )
         username_pattern = re.compile("^" + re.escape(raw) + "$", re.IGNORECASE)
         existing_username = await db.users.find_one(
             {"username": username_pattern},

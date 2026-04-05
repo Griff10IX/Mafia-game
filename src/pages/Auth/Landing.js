@@ -120,8 +120,25 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
     }
 
     const u = (formData.username || '').trim();
+    const em = (formData.email || '').trim().toLowerCase();
     if (!u || u.length < 1) {
       setUsernameCheck({ status: 'idle', isTaken: null, message: '' });
+      return;
+    }
+    if (u.includes('@')) {
+      setUsernameCheck({
+        status: 'error',
+        isTaken: null,
+        message: "Don't use an email here — pick a character name (no @).",
+      });
+      return;
+    }
+    if (em && u.toLowerCase() === em) {
+      setUsernameCheck({
+        status: 'error',
+        isTaken: null,
+        message: 'Username must be different from your email.',
+      });
       return;
     }
 
@@ -140,9 +157,11 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
             message: isTaken ? 'Username is taken' : 'Username is available',
           });
         })
-        .catch(() => {
+        .catch((err) => {
           if (cancelled) return;
-          setUsernameCheck({ status: 'error', isTaken: null, message: 'Could not check username' });
+          const d = err.response?.data?.detail;
+          const msg = typeof d === 'string' ? d : 'Could not check username';
+          setUsernameCheck({ status: 'error', isTaken: null, message: msg });
         });
     }, 450);
 
@@ -150,7 +169,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
       cancelled = true;
       clearTimeout(t);
     };
-  }, [formData.username, isLogin]);
+  }, [formData.username, formData.email, isLogin]);
 
   // Fetch launch status on mount
   useEffect(() => {
@@ -277,6 +296,21 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
       toast.error('Passwords do not match.');
       setLoading(false);
       return;
+    }
+
+    if (!isLogin) {
+      const u = (formData.username || '').trim();
+      const em = (formData.email || '').trim().toLowerCase();
+      if (u.includes('@')) {
+        toast.error('Username cannot be an email address. Choose a character name without @.');
+        setLoading(false);
+        return;
+      }
+      if (em && u.toLowerCase() === em) {
+        toast.error('Username must be different from your email.');
+        setLoading(false);
+        return;
+      }
     }
 
     if (isLogin && needsLoginCaptcha && !(loginCaptchaToken || '').trim()) {
@@ -844,9 +878,12 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
                     value={formData.username}
                     onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                     className={`w-full ${styles.input} h-12 px-4 font-heading transition-smooth`}
-                    placeholder="Choose a username"
+                    placeholder="Choose a character name (not your email)"
                     required
                   />
+                  <p className="mt-1 text-[8px] font-heading leading-snug" style={{ color: 'var(--noir-muted)' }}>
+                    Shown in-game; must not be your email or contain @.
+                  </p>
                   {usernameCheck.status !== 'idle' && (
                     <p
                       className="mt-1 text-[9px] font-heading"

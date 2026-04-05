@@ -52,6 +52,81 @@ def _format_numbers_line(nums: list[int]) -> str:
     return ", ".join(str(n) for n in nums)
 
 
+def recompute_winner_payouts_from_round(round_doc: dict, tickets: list) -> dict[str, Any]:
+    """
+    Recompute exact-match winner shares from a closed round document + ticket rows.
+    Same split rules as lottery_draw_cron (for admin audit / disputes).
+    """
+    if (round_doc.get("status") or "") != "closed":
+        return {
+            "status": "not_closed",
+            "match_ticket_count": 0,
+            "recomputed_payouts": [],
+            "recomputed_total": 0,
+            "expected_payout_pool": int(round_doc.get("payout") or 0),
+            "payout_split_ok": True,
+        }
+    wn_raw = round_doc.get("winning_numbers")
+    if not wn_raw or not isinstance(wn_raw, list):
+        return {
+            "status": "no_winning_numbers",
+            "match_ticket_count": 0,
+            "recomputed_payouts": [],
+            "recomputed_total": 0,
+            "expected_payout_pool": int(round_doc.get("payout") or 0),
+            "payout_split_ok": False,
+        }
+    try:
+        wn = sorted(int(x) for x in wn_raw)
+    except (TypeError, ValueError):
+        return {
+            "status": "bad_winning_numbers",
+            "match_ticket_count": 0,
+            "recomputed_payouts": [],
+            "recomputed_total": 0,
+            "expected_payout_pool": int(round_doc.get("payout") or 0),
+            "payout_split_ok": False,
+        }
+
+    payout = int(round_doc.get("payout") or 0)
+    matches: list = []
+    for t in tickets:
+        norm = _normalize_ticket_numbers(t.get("numbers"))
+        if norm is not None and norm == wn:
+            matches.append(t)
+
+    amounts_by_user: dict[str, int] = defaultdict(int)
+    names_by_user: dict[str, str] = {}
+    mcount = len(matches)
+    if mcount > 0 and payout > 0:
+        share = payout // mcount
+        rem = payout % mcount
+        for i, t in enumerate(matches):
+            amt = share + (1 if i < rem else 0)
+            uid = str(t.get("user_id") or "")
+            amounts_by_user[uid] += amt
+            names_by_user[uid] = (t.get("username") or "?").strip()
+
+    rows = [
+        {"user_id": uid, "username": names_by_user.get(uid, "?"), "amount": amt}
+        for uid, amt in sorted(amounts_by_user.items(), key=lambda x: (-x[1], x[0]))
+    ]
+    total = sum(amounts_by_user.values())
+    if mcount > 0:
+        split_ok = total == payout
+    else:
+        split_ok = total == 0
+    return {
+        "status": "ok",
+        "match_ticket_count": mcount,
+        "distinct_winners": len(amounts_by_user),
+        "recomputed_payouts": rows,
+        "recomputed_total": total,
+        "expected_payout_pool": payout,
+        "payout_split_ok": split_ok,
+    }
+
+
 def _next_draw_utc(after: datetime) -> datetime:
     if after.tzinfo is None:
         after = after.replace(tzinfo=timezone.utc)
@@ -308,6 +383,15 @@ async def lottery_draw_cron(_: bool = Depends(_cron_verify())):
             else:
                 display_winner_username = ", ".join(sorted(names_by_user[u] for u in amounts_by_user))
 
+        winner_payouts = (
+            [
+                {"user_id": uid, "username": names_by_user.get(uid, "?"), "amount": int(amt)}
+                for uid, amt in sorted(amounts_by_user.items(), key=lambda x: (-x[1], x[0]))
+            ]
+            if amounts_by_user
+            else []
+        )
+
         round_set = {
             "status": "closed",
             "drawn_at": drawn_iso,
@@ -321,6 +405,7 @@ async def lottery_draw_cron(_: bool = Depends(_cron_verify())):
             "draw_fallback": False,
             "exact_match_count": exact_match_count,
             "rollover_to_next": rollover_next,
+            "winner_payouts": winner_payouts,
         }
         await db.lottery_rounds.update_one({"_id": rid}, {"$set": round_set})
 

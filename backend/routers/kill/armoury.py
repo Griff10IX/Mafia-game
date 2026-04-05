@@ -55,6 +55,7 @@ BULLET_FACTORY_UNOWNED_PRICE_MAX = 1000
 ARMOURY_ARMOUR_RATE_PER_HOUR = 5
 ARMOURY_WEAPON_RATE_PER_HOUR = 5
 ARMOURY_MAX_STOCK_PER_ITEM = 15
+# Fractional units carried between ticks so rate is steady (e.g. 1 unit / 12 min), not batched at int(elapsed*5).
 
 # Unclaimed armoury: only basic stock sold to players (tier 1 armour, weapon1)
 ARMOURY_UNOWNED_ONLY_WEAPON_ID = "weapon1"
@@ -457,6 +458,8 @@ def _parse_utc(s: Optional[str]):
 async def _tick_armoury_production(state: str, factory: dict) -> dict:
     """Advance armour/weapon stock by elapsed time; update DB. Returns updated factory.
     Supports multi-production: armour_production_hours {level: hours}, weapon_production_hours {weapon_id: hours}.
+    Fractional progress is stored in armour_production_accum / weapon_production_accum so 5/hour is steady
+    (~1 unit every 12 minutes), not truncated to whole units per poll.
     Migrates old single-production fields into the new structure on first tick.
     """
     now = datetime.now(timezone.utc)
@@ -498,23 +501,32 @@ async def _tick_armoury_production(state: str, factory: dict) -> dict:
     elapsed_armour = (now - last_armour).total_seconds() / 3600
     if elapsed_armour > 0 and armour_hours:
         armour_stock = dict(factory.get("armour_stock") or {})
+        accum = dict(factory.get("armour_production_accum") or {})
         any_armour_change = False
         for level_key, hours_remaining in list(armour_hours.items()):
             if hours_remaining <= 0:
                 continue
             use_hours = min(elapsed_armour, hours_remaining)
-            current = armour_stock.get(level_key, 0)
-            room = ARMOURY_MAX_STOCK_PER_ITEM - current
-            raw_units = int(use_hours * ARMOURY_ARMOUR_RATE_PER_HOUR)
-            add_units = min(raw_units, room) if room > 0 else 0
+            current = int(armour_stock.get(level_key, 0) or 0)
+            room = max(0, ARMOURY_MAX_STOCK_PER_ITEM - current)
+            prev_frac = float(accum.get(level_key) or 0)
+            virtual = use_hours * ARMOURY_ARMOUR_RATE_PER_HOUR + prev_frac
+            raw_whole = int(virtual)
+            add_units = min(raw_whole, room) if room > 0 else 0
+            accum[level_key] = max(0.0, virtual - add_units)
             if add_units > 0:
                 armour_stock[level_key] = current + add_units
                 any_armour_change = True
-            hours_used = add_units / ARMOURY_ARMOUR_RATE_PER_HOUR
+            rate = ARMOURY_ARMOUR_RATE_PER_HOUR
+            hours_used = (add_units / rate) if rate else 0
             armour_hours[level_key] = max(0, hours_remaining - hours_used)
         armour_hours = {k: v for k, v in armour_hours.items() if v > 0}
+        for k in list(accum.keys()):
+            if k not in armour_hours:
+                del accum[k]
         updates["armour_production_hours"] = armour_hours
         updates["armour_production_last_tick"] = now.isoformat()
+        updates["armour_production_accum"] = {k: round(float(v), 8) for k, v in accum.items()}
         if any_armour_change:
             updates["armour_stock"] = armour_stock
         factory = {**factory, **updates}
@@ -525,23 +537,32 @@ async def _tick_armoury_production(state: str, factory: dict) -> dict:
     elapsed_weapon = (now - last_weapon).total_seconds() / 3600
     if elapsed_weapon > 0 and weapon_hours:
         weapon_stock = dict(factory.get("weapon_stock") or {})
+        waccum = dict(factory.get("weapon_production_accum") or {})
         any_weapon_change = False
         for wid, hours_remaining in list(weapon_hours.items()):
             if hours_remaining <= 0:
                 continue
             use_hours = min(elapsed_weapon, hours_remaining)
-            current = weapon_stock.get(wid, 0)
-            room = ARMOURY_MAX_STOCK_PER_ITEM - current
-            raw_units = int(use_hours * ARMOURY_WEAPON_RATE_PER_HOUR)
-            add_units = min(raw_units, room) if room > 0 else 0
+            current = int(weapon_stock.get(wid, 0) or 0)
+            room = max(0, ARMOURY_MAX_STOCK_PER_ITEM - current)
+            prev_frac = float(waccum.get(wid) or 0)
+            virtual = use_hours * ARMOURY_WEAPON_RATE_PER_HOUR + prev_frac
+            raw_whole = int(virtual)
+            add_units = min(raw_whole, room) if room > 0 else 0
+            waccum[wid] = max(0.0, virtual - add_units)
             if add_units > 0:
                 weapon_stock[wid] = current + add_units
                 any_weapon_change = True
-            hours_used = add_units / ARMOURY_WEAPON_RATE_PER_HOUR
+            rate = ARMOURY_WEAPON_RATE_PER_HOUR
+            hours_used = (add_units / rate) if rate else 0
             weapon_hours[wid] = max(0, hours_remaining - hours_used)
         weapon_hours = {k: v for k, v in weapon_hours.items() if v > 0}
+        for k in list(waccum.keys()):
+            if k not in weapon_hours:
+                del waccum[k]
         updates["weapon_production_hours"] = weapon_hours
         updates["weapon_production_last_tick"] = now.isoformat()
+        updates["weapon_production_accum"] = {k: round(float(v), 8) for k, v in waccum.items()}
         if any_weapon_change:
             updates["weapon_stock"] = weapon_stock
         factory = {**factory, **updates}

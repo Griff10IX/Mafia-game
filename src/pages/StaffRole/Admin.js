@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useLocation, Navigate } from 'react-router-dom';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle, Eye, Receipt, ArrowLeftRight } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle, Eye, Receipt, ArrowLeftRight, Ticket } from 'lucide-react';
 import api, { imageHostPublicUrl } from '../../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
@@ -210,6 +210,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Booze Run analytics', categoryId: 'admin-analytics-monitoring', collapseKey: 'boozeRunAnalytics', keywords: ['booze', 'analytics', 'economy', 'events', 'profit', 'revenue', 'jail', 'leaderboard'] },
   { label: 'Presence simulator', categoryId: 'admin-gameworld', collapseKey: 'presenceSimulator', keywords: ['presence', 'simulator', 'online', 'active', 'fake', 'last_seen'], adminOnly: true },
   { label: 'Slots Draw', categoryId: 'admin-gameworld', collapseKey: 'slotsDraw', keywords: ['slots', 'draw', 'lottery'] },
+  { label: 'Lottery money trail', categoryId: 'admin-gameworld', collapseKey: 'lotteryMoneyTrail', keywords: ['lottery', 'money', 'payout', 'winner', 'pot', 'audit', 'trail', 'twice', 'wed', 'sun'], adminOnly: true },
   { label: 'Crack the Safe jackpot', categoryId: 'admin-gameworld', collapseKey: 'crackSafeJackpot', keywords: ['crack', 'safe', 'jackpot', 'pot', 'lower'] },
   { label: 'State Heads', categoryId: 'admin-gameworld', collapseKey: 'stateHeads', keywords: ['state', 'heads', 'family', 'territory'] },
   { label: 'Release soft-launch', categoryId: 'admin-gameworld', collapseKey: 'releaseSoftLaunch', keywords: ['release', 'soft', 'launch', 'pvp', 'kill', 'game pass'], adminOnly: true },
@@ -454,6 +455,11 @@ export default function Admin() {
   const [crackSafeJackpotInput, setCrackSafeJackpotInput] = useState('');
   const [crackSafeJackpotLoading, setCrackSafeJackpotLoading] = useState(false);
   const [crackSafeJackpotSaving, setCrackSafeJackpotSaving] = useState(false);
+  const [lotteryMoneyTrailRounds, setLotteryMoneyTrailRounds] = useState([]);
+  const [lotteryMoneyTrailRoundId, setLotteryMoneyTrailRoundId] = useState('');
+  const [lotteryMoneyTrailData, setLotteryMoneyTrailData] = useState(null);
+  const [lotteryMoneyTrailLoading, setLotteryMoneyTrailLoading] = useState(false);
+  const [lotteryMoneyTrailRoundsLoading, setLotteryMoneyTrailRoundsLoading] = useState(false);
   const [ranks, setRanks] = useState([]);
   const [cars, setCars] = useState([]);
   const [bgTestCount, setBgTestCount] = useState(2);
@@ -2022,6 +2028,36 @@ export default function Admin() {
       toast.success(res.data?.message || 'Slots cooldowns cleared');
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to clear cooldowns');
+    }
+  };
+
+  const fetchLotteryMoneyTrailRounds = async () => {
+    setLotteryMoneyTrailRoundsLoading(true);
+    try {
+      const res = await api.get('/admin/lottery/rounds', { params: { limit: 60 } });
+      setLotteryMoneyTrailRounds(res.data?.rounds || []);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load lottery rounds');
+    } finally {
+      setLotteryMoneyTrailRoundsLoading(false);
+    }
+  };
+
+  const fetchLotteryMoneyTrail = async (rid) => {
+    const id = String(rid != null ? rid : lotteryMoneyTrailRoundId || '').trim();
+    if (!id) {
+      toast.error('Select a round');
+      return;
+    }
+    setLotteryMoneyTrailLoading(true);
+    try {
+      const res = await api.get(`/admin/lottery/round/${encodeURIComponent(id)}/money-trail`);
+      setLotteryMoneyTrailData(res.data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load money trail');
+      setLotteryMoneyTrailData(null);
+    } finally {
+      setLotteryMoneyTrailLoading(false);
     }
   };
 
@@ -9361,6 +9397,150 @@ export default function Admin() {
           </div>
         )}
         </div>
+
+        {isAdmin && (
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Ticket}
+          title="Twice-weekly lottery — money trail"
+          badge={<span className="text-[10px] text-mutedForeground font-heading">Audit</span>}
+          toolAnchor="lotteryMoneyTrail"
+          isCollapsed={collapsed.lotteryMoneyTrail}
+          onToggle={() => {
+            toggleSection('lotteryMoneyTrail');
+            if (collapsed.lotteryMoneyTrail) fetchLotteryMoneyTrailRounds();
+          }}
+        />
+        {!collapsed.lotteryMoneyTrail && (
+          <div className="p-3 space-y-3">
+            <p className="text-[10px] text-mutedForeground font-heading">
+              Gross pot, tax removed (sink), net payout, rollover to the next round, and each winner&apos;s share — recomputed from{' '}
+              <code className="text-[9px] bg-zinc-800/80 px-0.5 rounded">lottery_tickets</code> so you can verify who should have been credited. Cross-check{' '}
+              <code className="text-[9px] bg-zinc-800/80 px-0.5 rounded">activity_log</code> (lottery_win) and{' '}
+              <code className="text-[9px] bg-zinc-800/80 px-0.5 rounded">economy_events</code>.
+            </p>
+            <div className="flex flex-wrap items-end gap-2">
+              <label className="flex flex-col gap-0.5 min-w-[220px] flex-1">
+                <span className="text-[9px] text-mutedForeground uppercase font-heading">Round</span>
+                <AdminSelect
+                  value={lotteryMoneyTrailRoundId}
+                  onChange={(e) => setLotteryMoneyTrailRoundId(e.target.value)}
+                  disabled={lotteryMoneyTrailRoundsLoading}
+                >
+                  <option value="">Select round…</option>
+                  {lotteryMoneyTrailRounds.map((r) => (
+                    <option key={r.round_id} value={r.round_id}>
+                      {(r.drawn_at && new Date(r.drawn_at).toLocaleString()) || r.closes_at || r.round_id}
+                      {' · '}
+                      {r.status}
+                      {r.payout != null ? ` · net $${Number(r.payout).toLocaleString()}` : ''}
+                    </option>
+                  ))}
+                </AdminSelect>
+              </label>
+              <BtnSecondary type="button" onClick={fetchLotteryMoneyTrailRounds} disabled={lotteryMoneyTrailRoundsLoading}>
+                {lotteryMoneyTrailRoundsLoading ? 'Loading…' : 'Refresh list'}
+              </BtnSecondary>
+              <BtnPrimary type="button" onClick={() => fetchLotteryMoneyTrail()} disabled={lotteryMoneyTrailLoading}>
+                {lotteryMoneyTrailLoading ? 'Loading…' : 'Load money trail'}
+              </BtnPrimary>
+            </div>
+            {lotteryMoneyTrailData && (() => {
+              const tr = lotteryMoneyTrailData.round || {};
+              const rc = lotteryMoneyTrailData.recompute || {};
+              const payouts = rc.recomputed_payouts || [];
+              const buys = lotteryMoneyTrailData.economy_lottery_buy || {};
+              const drawEv = lotteryMoneyTrailData.economy_lottery_draw;
+              const wins = lotteryMoneyTrailData.activity_lottery_wins || [];
+              const matchStored = lotteryMoneyTrailData.stored_winner_payouts_match_recompute;
+              return (
+                <div className="space-y-3 text-[10px] border border-zinc-700/50 rounded p-2 bg-zinc-950/50">
+                  <div className="grid sm:grid-cols-2 gap-2 font-mono text-[9px]">
+                    <div>
+                      <span className="text-mutedForeground font-heading uppercase">Stored round</span>
+                      <ul className="mt-1 space-y-0.5 text-foreground/90">
+                        <li>Status: {String(tr.status || '—')}</li>
+                        <li>Gross pot: ${Number(tr.gross_pot || 0).toLocaleString()}</li>
+                        <li>Sink (tax): ${Number(tr.sink_amount || 0).toLocaleString()}</li>
+                        <li>Net payout pool: ${Number(tr.payout || 0).toLocaleString()}</li>
+                        <li>Rollover → next: ${Number(tr.rollover_to_next || 0).toLocaleString()}</li>
+                        <li>Tickets (stored / rows): {tr.ticket_count_stored ?? '—'} / {tr.ticket_rows_in_db ?? '—'} {tr.ticket_count_match === false ? <span className="text-amber-400">(mismatch)</span> : null}</li>
+                        <li>Winning numbers: {Array.isArray(tr.winning_numbers) ? tr.winning_numbers.join(', ') : '—'}</li>
+                        <li>Exact matches (stored): {tr.exact_match_count_stored ?? '—'}</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <span className="text-mutedForeground font-heading uppercase">Recompute from DB tickets</span>
+                      <ul className="mt-1 space-y-0.5 text-foreground/90">
+                        <li>Match tickets: {rc.match_ticket_count ?? '—'}</li>
+                        <li>Distinct winners: {rc.distinct_winners ?? '—'}</li>
+                        <li>Sum credited (should equal net pool if winners): ${Number(rc.recomputed_total || 0).toLocaleString()}</li>
+                        <li>Split OK: {rc.payout_split_ok ? <span className="text-emerald-400">yes</span> : <span className="text-red-400">no</span>}</li>
+                        <li>Stored breakdown matches recompute: {matchStored ? <span className="text-emerald-400">yes</span> : <span className="text-amber-400">no / N/A (legacy round)</span>}</li>
+                      </ul>
+                    </div>
+                  </div>
+                  {payouts.length > 0 && (
+                    <div>
+                      <span className="text-mutedForeground font-heading uppercase text-[9px]">Winner shares (recomputed)</span>
+                      <table className="w-full mt-1 text-[9px] font-mono border-collapse">
+                        <thead>
+                          <tr className="text-left text-mutedForeground border-b border-zinc-700/50">
+                            <th className="py-0.5 pr-2">User</th>
+                            <th className="py-0.5 pr-2">ID</th>
+                            <th className="py-0.5">Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {payouts.map((p) => (
+                            <tr key={p.user_id} className="border-b border-zinc-800/80">
+                              <td className="py-0.5 pr-2">{p.username || '?'}</td>
+                              <td className="py-0.5 pr-2 truncate max-w-[8rem]">{p.user_id}</td>
+                              <td className="py-0.5 text-emerald-400">${Number(p.amount || 0).toLocaleString()}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  <div className="grid sm:grid-cols-2 gap-2 text-[9px] font-mono">
+                    <div>
+                      <span className="text-mutedForeground font-heading uppercase">economy_events lottery_buy</span>
+                      <ul className="mt-1 space-y-0.5">
+                        <li>Rows: {buys.event_rows ?? 0}</li>
+                        <li>Σ count: {buys.sum_count ?? 0} · Σ spent: ${Number(buys.sum_spent || 0).toLocaleString()}</li>
+                        <li>Expected if all buys logged: ${Number(buys.expected_revenue_if_all_recorded || 0).toLocaleString()}</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <span className="text-mutedForeground font-heading uppercase">activity lottery_win</span>
+                      <p className="mt-1 text-foreground/80">{wins.length} row(s)</p>
+                      <ul className="mt-1 max-h-24 overflow-y-auto space-y-0.5">
+                        {wins.slice(0, 20).map((w, i) => (
+                          <li key={i}>
+                            {(w.username || '?')} · ${Number((w.details || {}).payout || 0).toLocaleString()}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                  {drawEv && (
+                    <div className="text-[9px] font-mono text-foreground/70">
+                      <span className="text-mutedForeground font-heading uppercase">Latest lottery_draw event</span>
+                      <pre className="mt-1 whitespace-pre-wrap break-all max-h-32 overflow-y-auto bg-zinc-900/50 p-1 rounded">{JSON.stringify(drawEv, null, 2)}</pre>
+                    </div>
+                  )}
+                  {lotteryMoneyTrailData.notes && (
+                    <p className="text-[9px] text-mutedForeground font-heading">{lotteryMoneyTrailData.notes}</p>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
+        )}
+        </div>
+        )}
 
         <div id="admin-page-locks" className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />

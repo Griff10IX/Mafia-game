@@ -356,6 +356,9 @@ def register(router):
     from routers.game.families import FAMILY_RACKETS
     from routers.kill.bodyguards import _create_robot_bodyguard_user
     from routers.social.forum import create_redeem_code_forum_topic, remove_redeem_code_forum_topic
+    from bson import ObjectId
+    from bson.errors import InvalidId
+    from routers.money import lottery as lottery_audit_mod
 
     db = srv.db
     log_respect_delta = srv.log_respect_delta
@@ -2687,6 +2690,138 @@ def register(router):
         return {
             "message": f"Crack the Safe jackpot set to ${new_j:,}.",
             "jackpot": new_j,
+        }
+
+    @router.get("/admin/lottery/rounds")
+    async def admin_lottery_rounds_list(limit: int = 50, current_user: dict = Depends(get_current_user)):
+        """Admin: recent lottery rounds (ids + summary) for money-trail audit."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        lim = max(1, min(int(limit or 50), 100))
+        cursor = db.lottery_rounds.find(
+            {},
+            {
+                "_id": 1,
+                "status": 1,
+                "closes_at": 1,
+                "drawn_at": 1,
+                "created_at": 1,
+                "ticket_count": 1,
+                "gross_pot": 1,
+                "sink_amount": 1,
+                "payout": 1,
+                "exact_match_count": 1,
+                "winner_username": 1,
+                "rollover_to_next": 1,
+            },
+        ).sort("_id", -1).limit(lim)
+        rows = await cursor.to_list(lim)
+        out = []
+        for r in rows:
+            rid = r.get("_id")
+            out.append(
+                {
+                    "round_id": str(rid),
+                    "status": r.get("status"),
+                    "closes_at": r.get("closes_at"),
+                    "drawn_at": r.get("drawn_at"),
+                    "created_at": r.get("created_at"),
+                    "ticket_count": r.get("ticket_count"),
+                    "gross_pot": r.get("gross_pot"),
+                    "sink_amount": r.get("sink_amount"),
+                    "payout": r.get("payout"),
+                    "exact_match_count": r.get("exact_match_count"),
+                    "winner_username": r.get("winner_username"),
+                    "rollover_to_next": r.get("rollover_to_next"),
+                }
+            )
+        return {"rounds": out, "ticket_price": lottery_audit_mod.TICKET_PRICE, "pot_tax_percent": lottery_audit_mod.POT_TAX_PERCENT}
+
+    @router.get("/admin/lottery/round/{round_id}/money-trail")
+    async def admin_lottery_round_money_trail(round_id: str, current_user: dict = Depends(get_current_user)):
+        """Admin: where pot / tax / payouts went for one round; recompute from tickets vs stored doc."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        try:
+            oid = ObjectId(round_id.strip())
+        except InvalidId:
+            raise HTTPException(status_code=404, detail="Invalid round id")
+        rd = await db.lottery_rounds.find_one({"_id": oid})
+        if not rd:
+            raise HTTPException(status_code=404, detail="Round not found")
+        rid_str = str(oid)
+        tickets = await db.lottery_tickets.find(
+            {"round_id": oid},
+            {"_id": 0, "user_id": 1, "username": 1, "numbers": 1, "ticket_id": 1, "created_at": 1},
+        ).to_list(500_000)
+        recomp = lottery_audit_mod.recompute_winner_payouts_from_round(rd, tickets)
+
+        stored_payouts = rd.get("winner_payouts")
+        if not isinstance(stored_payouts, list):
+            stored_payouts = []
+
+        stored_map = {str(x.get("user_id")): int(x.get("amount") or 0) for x in stored_payouts if isinstance(x, dict)}
+        recomp_map = {str(x.get("user_id")): int(x.get("amount") or 0) for x in recomp.get("recomputed_payouts") or []}
+        stored_vs_recompute_ok = stored_map == recomp_map if stored_map or recomp_map else True
+
+        buy_events = await db.economy_events.find(
+            {"type": "lottery_buy", "round_id": rid_str},
+            {"_id": 0, "at": 1, "user_id": 1, "username": 1, "count": 1, "spent": 1},
+        ).to_list(200_000)
+        buy_ticket_sum = sum(int(e.get("count") or 0) for e in buy_events)
+        buy_cash_sum = sum(int(e.get("spent") or 0) for e in buy_events)
+
+        draw_ev = await db.economy_events.find_one(
+            {"type": "lottery_draw", "round_id": rid_str},
+            {"_id": 0},
+            sort=[("at", -1)],
+        )
+
+        act_wins = await db.activity_log.find(
+            {"action": "lottery_win", "details.round_id": rid_str},
+            {"_id": 0, "user_id": 1, "username": 1, "details": 1, "created_at": 1},
+        ).sort("created_at", -1).to_list(500)
+
+        ticket_row_count = len(tickets)
+        stored_ticket_count = rd.get("ticket_count")
+        ticket_count_match = stored_ticket_count == ticket_row_count if stored_ticket_count is not None else None
+
+        round_summary = {
+            "round_id": rid_str,
+            "status": rd.get("status"),
+            "closes_at": rd.get("closes_at"),
+            "drawn_at": rd.get("drawn_at"),
+            "ticket_count_stored": stored_ticket_count,
+            "ticket_rows_in_db": ticket_row_count,
+            "ticket_count_match": ticket_count_match,
+            "gross_pot": rd.get("gross_pot"),
+            "sink_amount": rd.get("sink_amount"),
+            "payout": rd.get("payout"),
+            "rollover_to_next": rd.get("rollover_to_next"),
+            "winning_numbers": rd.get("winning_numbers"),
+            "exact_match_count_stored": rd.get("exact_match_count"),
+            "winner_user_id": rd.get("winner_user_id"),
+            "winner_username": rd.get("winner_username"),
+            "winner_payouts_stored": stored_payouts,
+        }
+
+        return {
+            "round": round_summary,
+            "recompute": recomp,
+            "stored_winner_payouts_match_recompute": stored_vs_recompute_ok,
+            "economy_lottery_buy": {
+                "event_rows": len(buy_events),
+                "sum_count": buy_ticket_sum,
+                "sum_spent": buy_cash_sum,
+                "expected_revenue_if_all_recorded": buy_ticket_sum * lottery_audit_mod.TICKET_PRICE,
+            },
+            "economy_lottery_draw": draw_ev,
+            "activity_lottery_wins": act_wins,
+            "notes": (
+                "Sink (tax) is removed from gross; net payout either goes to exact-match ticket holders in equal shares, "
+                "or rolls into rollover_to_next when there are no matches. "
+                "Compare economy lottery_buy sums to ticket_rows when diagnosing missing purchases."
+            ),
         }
 
     @router.post("/admin/gauntlet/wipe-user-scores")
