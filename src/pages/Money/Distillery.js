@@ -57,10 +57,10 @@ function HeatBar({ heat }) {
   const litCount = Math.round((heat / 100) * segs);
   const getSegColor = (i) => {
     const ratio = i / segs;
-    if (ratio < 0.4) return '#4a8a3a';
-    if (ratio < 0.65) return '#c49030';
-    if (ratio < 0.82) return '#c46020';
-    return '#c42020';
+    if (ratio < 0.4) return 'var(--heat-safe)';
+    if (ratio < 0.65) return 'var(--heat-warm)';
+    if (ratio < 0.82) return 'var(--heat-hot)';
+    return 'var(--heat-critical)';
   };
   return (
     <div className="dist-heat-seg-wrap">
@@ -98,15 +98,15 @@ function Barrel({ ready, label }) {
     <div className="dist-barrel-cell">
       <svg width="32" height="44" viewBox="0 0 32 44" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect x="2" y="2" width="28" height="40" rx="5"
-          fill={ready ? '#2a4020' : '#2a1e0a'}
-          stroke={ready ? '#6aaa3a' : '#6a4c1c'}
+          fill={ready ? 'var(--barrel-ready-fill)' : 'var(--barrel-idle-fill)'}
+          stroke={ready ? 'var(--barrel-ready-stroke)' : 'var(--barrel-idle-stroke)'}
           strokeWidth="1.5" />
-        <line x1="2" y1="14" x2="30" y2="14" stroke={ready ? '#6aaa3a' : '#5a3e14'} strokeWidth="1" />
-        <line x1="2" y1="30" x2="30" y2="30" stroke={ready ? '#6aaa3a' : '#5a3e14'} strokeWidth="1" />
-        <ellipse cx="16" cy="2" rx="14" ry="3" fill={ready ? '#3a5030' : '#3a2810'} stroke={ready ? '#6aaa3a' : '#6a4c1c'} strokeWidth="1" />
-        <ellipse cx="16" cy="42" rx="14" ry="3" fill={ready ? '#3a5030' : '#3a2810'} stroke={ready ? '#6aaa3a' : '#6a4c1c'} strokeWidth="1" />
+        <line x1="2" y1="14" x2="30" y2="14" stroke={ready ? 'var(--barrel-ready-stroke)' : 'var(--barrel-idle-line)'} strokeWidth="1" />
+        <line x1="2" y1="30" x2="30" y2="30" stroke={ready ? 'var(--barrel-ready-stroke)' : 'var(--barrel-idle-line)'} strokeWidth="1" />
+        <ellipse cx="16" cy="2" rx="14" ry="3" fill={ready ? 'var(--barrel-ready-cap)' : 'var(--barrel-idle-cap)'} stroke={ready ? 'var(--barrel-ready-stroke)' : 'var(--barrel-idle-stroke)'} strokeWidth="1" />
+        <ellipse cx="16" cy="42" rx="14" ry="3" fill={ready ? 'var(--barrel-ready-cap)' : 'var(--barrel-idle-cap)'} stroke={ready ? 'var(--barrel-ready-stroke)' : 'var(--barrel-idle-stroke)'} strokeWidth="1" />
         {ready && (
-          <text x="16" y="24" textAnchor="middle" fill="#8add6a" fontSize="10" fontFamily="sans-serif">✓</text>
+          <text x="16" y="24" textAnchor="middle" fill="var(--barrel-ready-check)" fontSize="10">✓</text>
         )}
       </svg>
       <div className={`dist-barrel-label ${ready ? 'dist-barrel-ready' : ''}`}>{label}</div>
@@ -125,24 +125,28 @@ function StatCard({ label, value, sub, accent }) {
   );
 }
 
-// ── Section header ────────────────────────────────────────────────────────────
+// ── Section header (matches Racket CardHead strip) ───────────────────────────
 function SectionHead({ icon: Icon, title }) {
   return (
-    <div className="dist-section-head">
-      <div className="dist-section-head-icon"><Icon size={13} /></div>
-      <span className="dist-section-head-title">{title}</span>
-      <div className="dist-section-head-rule" />
+    <div className="mb-3 flex items-center gap-2 border-b border-primary/15 pb-2.5">
+      <div className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded border border-primary/25 bg-primary/10">
+        <Icon size={13} className="text-primary shrink-0" />
+      </div>
+      <span className="font-heading text-[10px] font-bold uppercase tracking-[.13em] text-primary">{title}</span>
     </div>
   );
 }
 
-// ── Gold button ───────────────────────────────────────────────────────────────
+// ── Primary / secondary actions (IllegalBusiness.js parity) ─────────────────
 function GoldBtn({ children, onClick, disabled, small }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`dist-gold-btn ${small ? 'dist-gold-btn-sm' : ''}`}
+      className={`inline-flex items-center justify-center rounded border border-primary/40 bg-primary/20 font-heading font-bold uppercase text-primary transition-all hover:bg-primary/30 disabled:cursor-not-allowed disabled:opacity-40 ${
+        small ? 'px-2.5 py-1.5 text-[8px] tracking-wider' : 'px-4 py-2 text-[10px] tracking-wider'
+      }`}
     >
       {children}
     </button>
@@ -152,9 +156,12 @@ function GoldBtn({ children, onClick, disabled, small }) {
 function GhostBtn({ children, onClick, disabled, small }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`dist-ghost-btn ${small ? 'dist-ghost-btn-sm' : ''}`}
+      className={`inline-flex items-center justify-center rounded border border-primary/30 bg-primary/10 font-heading font-bold uppercase text-primary transition-all hover:bg-primary/20 disabled:cursor-not-allowed disabled:opacity-40 ${
+        small ? 'px-2 py-1 text-[8px] tracking-wider' : 'px-3 py-2 text-[10px] tracking-wider'
+      }`}
     >
       {children}
     </button>
@@ -325,7 +332,12 @@ export default function Distillery() {
           <div className="dist-empty-icon">⚗</div>
           <h1 className="dist-empty-title">No Still Running</h1>
           <p className="dist-empty-sub">You need an illegal business first. Start one from your racket page.</p>
-          <Link to="/money/racket" className="dist-empty-link">Go to Racket →</Link>
+          <Link
+            to="/money/racket"
+            className="inline-block border border-primary/35 bg-primary/10 px-5 py-2 text-[11px] font-heading font-bold uppercase tracking-wider text-primary transition-all hover:bg-primary/20"
+          >
+            Go to Racket →
+          </Link>
         </div>
       </div>
     );
@@ -352,36 +364,61 @@ export default function Distillery() {
           --text-faint: rgba(245, 245, 245, 0.5);
           --red: #c44020;
           --green: #4a8a3a;
+          --danger: #ff6b6b;
+          --danger-soft: rgba(255, 107, 107, 0.2);
+          --heat-safe: #4a8a3a;
+          --heat-warm: #c4b030;
+          --heat-hot: var(--amber);
+          --heat-critical: #e06020;
+          --heat-meltdown: #ff4444;
+          --heat-safe-border: rgba(74, 138, 58, 0.4);
+          --heat-warm-border: rgba(196, 176, 48, 0.4);
+          --heat-hot-border: rgba(var(--noir-primary-rgb), 0.4);
+          --heat-critical-border: rgba(224, 96, 32, 0.4);
+          --heat-meltdown-border: rgba(255, 68, 68, 0.4);
+          --barrel-idle-fill: rgba(140, 100, 40, 0.22);
+          --barrel-idle-cap: rgba(140, 100, 40, 0.3);
+          --barrel-idle-stroke: rgba(var(--noir-primary-rgb), 0.45);
+          --barrel-idle-line: rgba(var(--noir-primary-rgb), 0.35);
+          --barrel-ready-fill: rgba(74, 138, 58, 0.25);
+          --barrel-ready-cap: rgba(74, 138, 58, 0.32);
+          --barrel-ready-stroke: #6aaa3a;
+          --barrel-ready-check: #8add6a;
         }
 
         .dist-root { background: var(--noir-content); color: var(--noir-foreground); font-family: inherit; min-height: 100vh; }
+        .dist-root * { font-family: inherit; }
+        body[data-theme-variant="modern"] .dist-root {
+          --bg: var(--modern-surface-2, #1f1f24);
+          --bg2: rgba(45, 45, 50, 0.95);
+          --bg3: rgba(55, 55, 60, 0.95);
+          --bg4: rgba(24, 24, 27, 0.95);
+          --border: var(--modern-border-soft, rgba(161, 161, 170, 0.22));
+          --border-dim: var(--modern-divider, rgba(161, 161, 170, 0.14));
+          --text-faint: rgba(228, 228, 231, 0.62);
+        }
 
         /* Loading */
         .dist-loading { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 300px; gap: 16px; }
         .dist-loading-still { font-size: 48px; animation: dist-spin 3s linear infinite; }
         @keyframes dist-spin { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
-        .dist-loading-text { font-family: 'Cinzel', serif; font-size: 13px; letter-spacing: 4px; text-transform: uppercase; color: var(--gold-dim); }
+        .dist-loading-text { font-size: 13px; letter-spacing: 4px; text-transform: uppercase; color: var(--gold-dim); }
 
         /* Empty */
         .dist-empty-panel { background: var(--bg2); border: 1px solid var(--border); padding: 40px; text-align: center; margin: 20px; }
         .dist-empty-icon { font-size: 48px; margin-bottom: 16px; }
-        .dist-empty-title { font-family: 'Cinzel', serif; font-size: 20px; color: var(--gold); margin-bottom: 8px; }
+        .dist-empty-title { font-size: 20px; color: var(--gold); margin-bottom: 8px; }
         .dist-empty-sub { font-size: 14px; color: var(--text-dim); margin-bottom: 16px; }
-        .dist-empty-link { font-family: 'Cinzel', serif; font-size: 11px; letter-spacing: 2px; color: var(--gold); text-decoration: none; border: 1px solid var(--border); padding: 8px 20px; transition: all .2s; display: inline-block; }
-        .dist-empty-link:hover { background: var(--border); }
-
         /* Hero banner */
         .dist-hero { background: var(--bg2); border-bottom: 2px solid var(--border); padding: 20px 20px 0; position: relative; overflow: hidden; }
-        .dist-hero-bg-text { position: absolute; right: -10px; top: -10px; font-family: 'Cinzel', serif; font-size: 90px; font-weight: 900; color: rgba(200,160,60,0.04); pointer-events: none; user-select: none; line-height: 1; }
-        .dist-hero-eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 9px; letter-spacing: 5px; text-transform: uppercase; color: var(--text-faint); margin-bottom: 6px; }
-        .dist-hero-title { font-family: 'Cinzel', serif; font-size: 32px; font-weight: 900; color: var(--gold); letter-spacing: 4px; margin: 0 0 4px; line-height: 1.1; }
-        .dist-hero-tagline { font-family: 'Crimson Pro', serif; font-style: italic; font-size: 14px; color: var(--text-dim); margin-bottom: 16px; }
-        .dist-hero-back { font-family: 'Cinzel', serif; font-size: 9px; letter-spacing: 2px; color: var(--text-dim); text-decoration: none; border: 1px solid var(--border-dim); padding: 5px 10px; transition: all .2s; }
-        .dist-hero-back:hover { color: var(--noir-foreground); border-color: var(--border); }
+        .dist-hero-bg-text { position: absolute; right: -10px; top: -10px; font-size: 90px; font-weight: 900; color: rgba(var(--noir-primary-rgb), 0.07); pointer-events: none; user-select: none; line-height: 1; }
+        .dist-hero-eyebrow { font-size: 9px; letter-spacing: 5px; text-transform: uppercase; color: var(--text-faint); margin-bottom: 6px; }
+        .dist-hero-title { font-size: 32px; font-weight: 900; color: var(--gold); letter-spacing: 4px; margin: 0 0 4px; line-height: 1.1; }
+        .dist-hero-tagline { font-style: italic; font-size: 14px; color: var(--text-dim); margin-bottom: 16px; }
         .dist-hero-top-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
         .dist-hero-status-strip { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 1px; background: var(--border-dim); border-top: 1px solid var(--border); margin: 0 -20px; }
         .dist-hero-status-cell { background: var(--bg2); padding: 10px 16px; }
-        .dist-hero-status-l { font-family: 'IBM Plex Mono', monospace; font-size: 8px; letter-spacing: 3px; text-transform: uppercase; color: var(--text-faint); margin-bottom: 4px; }
+        .dist-hero-status-l { font-size: 8px; letter-spacing: 3px; text-transform: uppercase; color: var(--text-faint); margin-bottom: 4px; }
         .dist-hero-status-v { font-size: 12px; color: var(--text); }
 
         /* Steam wisps */
@@ -392,24 +429,18 @@ export default function Distillery() {
         /* Stat strip */
         .dist-stat-strip { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 1px; background: var(--border); border-bottom: 1px solid var(--border); }
         .dist-stat-card { background: var(--bg); padding: 14px 16px; }
-        .dist-stat-label { font-family: 'IBM Plex Mono', monospace; font-size: 8px; letter-spacing: 3px; text-transform: uppercase; color: var(--text-faint); margin-bottom: 6px; }
-        .dist-stat-value { font-family: 'Cinzel', serif; font-size: 20px; color: var(--gold); }
-        .dist-stat-accent { color: var(--gold-pale); }
-        .dist-stat-sub { font-size: 10px; color: var(--text-faint); margin-top: 2px; font-family: 'IBM Plex Mono', monospace; }
+        .dist-stat-label { font-size: 8px; letter-spacing: 3px; text-transform: uppercase; color: var(--text-faint); margin-bottom: 6px; }
+        .dist-stat-value { font-size: 20px; color: var(--text); font-weight: 700; }
+        .dist-stat-accent { color: var(--gold); }
+        .dist-stat-sub { font-size: 10px; color: var(--text-faint); margin-top: 2px; }
 
         /* Main body */
         .dist-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
 
         /* Panel */
-        .dist-panel { background: var(--bg2); border: 1px solid var(--border); padding: 16px 18px; position: relative; overflow: hidden; }
-        .dist-panel::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(232,192,96,0.3), transparent); }
+        .dist-panel { background: var(--bg2); border: 1px solid var(--border); border-radius: var(--app-surface-radius, 8px); box-shadow: var(--app-card-shadow, none); padding: 16px 18px; position: relative; overflow: hidden; }
+        .dist-panel::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(var(--noir-primary-rgb), 0.24), transparent); }
         .dist-panel-danger { background: rgba(196,64,32,0.06); border-color: rgba(196,64,32,0.4); }
-
-        /* Section head */
-        .dist-section-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
-        .dist-section-head-icon { width: 26px; height: 26px; background: var(--border); border: 1px solid rgba(232,192,96,0.2); display: flex; align-items: center; justify-content: center; color: var(--gold); flex-shrink: 0; }
-        .dist-section-head-title { font-family: 'Cinzel', serif; font-size: 11px; font-weight: 600; letter-spacing: 3px; text-transform: uppercase; color: var(--gold); white-space: nowrap; }
-        .dist-section-head-rule { flex: 1; height: 1px; background: linear-gradient(90deg, var(--border), transparent); }
 
         /* Heat */
         .dist-heat-seg-wrap { display: flex; gap: 2px; height: 14px; align-items: center; position: relative; }
@@ -419,27 +450,18 @@ export default function Distillery() {
         .dist-heat-scanner { position: absolute; top: 0; bottom: 0; width: 3px; background: rgba(232,192,96,0.6); transform: translateX(-50%); animation: dist-scanner-pulse 1.2s ease-in-out infinite; transition: left 1s ease; }
         @keyframes dist-scanner-pulse { 0%,100%{opacity:.4} 50%{opacity:1} }
         .dist-heat-readout { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
-        .dist-heat-temp { font-family: 'Cinzel', serif; font-size: 28px; font-weight: 700; transition: color 0.5s; }
-        .heat-meltdown .dist-heat-temp, .heat-meltdown .dist-heat-badge { color: #ff4444; border-color: rgba(255,68,68,0.4); }
-        .heat-critical .dist-heat-temp, .heat-critical .dist-heat-badge { color: #e06020; border-color: rgba(224,96,32,0.4); }
-        .heat-hot .dist-heat-temp, .heat-hot .dist-heat-badge { color: var(--amber); border-color: rgba(196,144,48,0.4); }
-        .heat-warm .dist-heat-temp, .heat-warm .dist-heat-badge { color: #c4b030; border-color: rgba(196,176,48,0.4); }
-        .heat-low .dist-heat-temp, .heat-low .dist-heat-badge { color: #6aaa4a; border-color: rgba(106,170,74,0.4); }
-        .dist-heat-badge { font-family: 'Cinzel', serif; font-size: 10px; font-weight: 700; letter-spacing: 3px; padding: 4px 12px; border: 1px solid; color: var(--gold); }
+        .dist-heat-temp { font-size: 28px; font-weight: 700; transition: color 0.5s; }
+        .heat-meltdown .dist-heat-temp, .heat-meltdown .dist-heat-badge { color: var(--heat-meltdown); border-color: var(--heat-meltdown-border); }
+        .heat-critical .dist-heat-temp, .heat-critical .dist-heat-badge { color: var(--heat-critical); border-color: var(--heat-critical-border); }
+        .heat-hot .dist-heat-temp, .heat-hot .dist-heat-badge { color: var(--heat-hot); border-color: var(--heat-hot-border); }
+        .heat-warm .dist-heat-temp, .heat-warm .dist-heat-badge { color: var(--heat-warm); border-color: var(--heat-warm-border); }
+        .heat-low .dist-heat-temp, .heat-low .dist-heat-badge { color: var(--heat-safe); border-color: var(--heat-safe-border); }
+        .dist-heat-badge { font-size: 10px; font-weight: 700; letter-spacing: 3px; padding: 4px 12px; border: 1px solid; color: var(--gold); }
         .dist-heat-flavor { font-style: italic; font-size: 12px; color: var(--text-dim); margin-top: 6px; }
-        .dist-heat-shutdown { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #ff6666; margin-top: 8px; background: rgba(196,64,32,0.1); border: 1px solid rgba(196,64,32,0.3); padding: 6px 10px; }
-        .dist-heat-cooldown { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: #c4b030; margin-top: 8px; }
+        .dist-heat-shutdown { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--danger); margin-top: 8px; background: rgba(255, 107, 107, 0.1); border: 1px solid var(--danger-soft); padding: 6px 10px; }
+        .dist-heat-cooldown { font-size: 10px; color: var(--heat-warm); margin-top: 8px; }
 
-        /* Buttons */
         .dist-btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
-        .dist-gold-btn { font-family: 'Cinzel', serif; font-size: 9px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; padding: 9px 16px; border: 1px solid var(--amber-dim); color: var(--gold); background: rgba(196,144,48,0.1); cursor: pointer; transition: all 0.2s; }
-        .dist-gold-btn:hover:not(:disabled) { background: rgba(196,144,48,0.25); border-color: var(--gold); color: var(--gold-pale); }
-        .dist-gold-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-        .dist-gold-btn-sm { font-size: 8px; padding: 6px 10px; }
-        .dist-ghost-btn { font-family: 'Cinzel', serif; font-size: 9px; letter-spacing: 2px; text-transform: uppercase; padding: 9px 16px; border: 1px solid var(--border); color: var(--text-dim); background: transparent; cursor: pointer; transition: all 0.2s; }
-        .dist-ghost-btn:hover:not(:disabled) { border-color: var(--amber-dim); color: var(--text); }
-        .dist-ghost-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-        .dist-ghost-btn-sm { font-size: 8px; padding: 6px 10px; }
 
         /* Two cols */
         .dist-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
@@ -448,15 +470,14 @@ export default function Distillery() {
         /* Equipment */
         .dist-equip-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
         @media (max-width: 500px) { .dist-equip-grid { grid-template-columns: 1fr 1fr; } }
-        .dist-equip-card { background: var(--bg); border: 1px solid var(--border); padding: 12px; cursor: pointer; transition: border-color 0.2s, background 0.2s; position: relative; overflow: hidden; }
-        .dist-equip-card::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, var(--amber-dim), transparent); opacity: 0; transition: opacity 0.2s; }
-        .dist-equip-card:hover:not(:disabled) { border-color: var(--amber-dim); background: var(--bg3); }
+        .dist-equip-card { background: var(--bg); padding: 12px; cursor: pointer; transition: border-color 0.2s, background 0.2s; position: relative; overflow: hidden; }
+        .dist-equip-card::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, rgba(var(--noir-primary-rgb), 0.45), transparent); opacity: 0; transition: opacity 0.2s; }
         .dist-equip-card:hover:not(:disabled)::after { opacity: 1; }
         .dist-equip-card:disabled { opacity: 0.5; cursor: not-allowed; }
         .dist-equip-icon { font-size: 18px; margin-bottom: 6px; }
-        .dist-equip-name { font-family: 'Cinzel', serif; font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 8px; }
-        .dist-equip-cost { font-size: 10px; color: var(--amber); margin-top: 5px; font-family: 'IBM Plex Mono', monospace; }
-        .dist-equip-maxed { font-size: 10px; color: var(--green); margin-top: 5px; font-family: 'IBM Plex Mono', monospace; }
+        .dist-equip-name { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 8px; }
+        .dist-equip-cost { font-size: 10px; color: var(--amber); margin-top: 5px; }
+        .dist-equip-maxed { font-size: 10px; color: var(--green); margin-top: 5px; }
 
         /* Pip row */
         .dist-pip-row { display: flex; gap: 2px; flex-wrap: wrap; margin-bottom: 3px; }
@@ -468,95 +489,86 @@ export default function Distillery() {
         .dist-best-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border-dim); }
         .dist-best-row:last-child { border-bottom: none; }
         .dist-best-name { font-size: 13px; color: var(--text); }
-        .dist-best-meta { font-size: 10px; color: var(--text-faint); font-family: 'IBM Plex Mono', monospace; margin-top: 2px; }
+        .dist-best-meta { font-size: 10px; color: var(--text-faint); margin-top: 2px; }
 
         /* Workers */
         .dist-worker-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
         .dist-worker-card { background: var(--bg); border: 1px solid var(--border-dim); padding: 12px; }
-        .dist-worker-role { font-family: 'IBM Plex Mono', monospace; font-size: 8px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-faint); margin-bottom: 6px; }
-        .dist-worker-num { font-family: 'Cinzel', serif; font-size: 22px; color: var(--gold); margin-bottom: 6px; }
+        .dist-worker-role { font-size: 8px; letter-spacing: 2px; text-transform: uppercase; color: var(--text-faint); margin-bottom: 6px; }
+        .dist-worker-num { font-size: 22px; color: var(--gold); margin-bottom: 6px; }
         .dist-worker-bar { height: 3px; background: var(--bg4); }
         .dist-worker-fill { height: 100%; background: var(--amber); transition: width 0.5s; }
-        .dist-worker-input { width: 100%; padding: 6px 8px; background: var(--noir-content); border: 1px solid var(--border); color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 13px; margin-top: 4px; }
+        .dist-worker-input { width: 100%; padding: 6px 8px; background: var(--noir-content); border: 1px solid var(--border); color: var(--text); font-size: 13px; margin-top: 4px; }
         .dist-worker-input:focus { outline: none; border-color: var(--amber-dim); }
-        .dist-worker-cap { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--text-faint); margin-bottom: 10px; }
+        .dist-worker-cap { font-size: 10px; color: var(--text-faint); margin-bottom: 10px; }
 
         /* Maintenance */
         .dist-maint-bar-wrap { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-dim); }
         .dist-maint-label-row { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 5px; }
-        .dist-maint-key { color: var(--text-dim); font-family: 'IBM Plex Mono', monospace; font-size: 9px; text-transform: uppercase; letter-spacing: 2px; }
-        .dist-maint-val { font-family: 'Cinzel', serif; }
+        .dist-maint-key { color: var(--text-dim); font-size: 9px; text-transform: uppercase; letter-spacing: 2px; }
+        .dist-maint-val { font-weight: 700; }
         .dist-maint-track { height: 8px; background: var(--bg4); border: 1px solid var(--border-dim); }
         .dist-maint-fill { height: 100%; transition: width 0.6s; }
-        .dist-maint-warn { font-size: 11px; color: #ff8866; margin-top: 8px; font-style: italic; background: rgba(196,64,32,0.08); padding: 6px 10px; border-left: 2px solid rgba(196,64,32,0.5); }
+        .dist-maint-warn { font-size: 11px; color: var(--danger); margin-top: 8px; font-style: italic; background: rgba(255, 107, 107, 0.1); padding: 6px 10px; border-left: 2px solid var(--danger-soft); }
         .dist-maint-input-row { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
-        .dist-maint-input { width: 70px; padding: 6px 8px; background: var(--noir-content); border: 1px solid var(--border); color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 13px; }
+        .dist-maint-input { width: 70px; padding: 6px 8px; background: var(--noir-content); border: 1px solid var(--border); color: var(--text); font-size: 13px; }
         .dist-maint-input:focus { outline: none; border-color: var(--amber-dim); }
 
         /* ROI */
         .dist-roi-row { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 0; border-bottom: 1px solid var(--border-dim); }
         .dist-roi-row:last-child { border-bottom: none; }
-        .dist-roi-key { font-family: 'IBM Plex Mono', monospace; font-size: 9px; letter-spacing: 1px; color: var(--text-faint); text-transform: uppercase; }
-        .dist-roi-val { font-family: 'Cinzel', serif; font-size: 14px; color: var(--gold); }
+        .dist-roi-key { font-size: 9px; letter-spacing: 1px; color: var(--text-faint); text-transform: uppercase; }
+        .dist-roi-val { font-size: 14px; color: var(--gold); font-weight: 700; }
 
         /* Tracks */
-        .dist-track-scroll { display: flex; gap: 1px; overflow-x: auto; background: var(--border-dim); border-bottom: 1px solid var(--border); margin: 0 -18px; padding: 0; }
+        .dist-track-scroll { display: flex; gap: 0; overflow-x: auto; background: rgba(var(--noir-primary-rgb), 0.06); border-bottom: 1px solid rgba(var(--noir-primary-rgb), 0.18); margin: 0 -18px; padding: 0; }
         .dist-track-scroll::-webkit-scrollbar { height: 2px; }
         .dist-track-scroll::-webkit-scrollbar-thumb { background: var(--border); }
-        .dist-track-tab { font-family: 'Cinzel', serif; font-size: 8px; letter-spacing: 2px; text-transform: uppercase; padding: 10px 14px; cursor: pointer; white-space: nowrap; border: none; transition: all 0.15s; }
-        .dist-track-tab-on { background: var(--bg2); color: var(--gold); border-bottom: 2px solid var(--amber); }
-        .dist-track-tab-off { background: var(--bg); color: var(--text-faint); border-bottom: 2px solid transparent; }
-        .dist-track-tab-off:hover { color: var(--text-dim); background: var(--bg3); }
         .dist-track-flavor { font-style: italic; font-size: 13px; color: var(--text-dim); margin: 12px 0 14px; }
         .dist-track-nav { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-        .dist-track-nav-meta { font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: var(--text-faint); }
+        .dist-track-nav-meta { font-size: 9px; color: var(--text-faint); }
         .dist-track-nav-btns { display: flex; gap: 6px; }
-        .dist-upgrade-showcase { background: var(--bg); border: 1px solid var(--border); padding: 16px; display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
-        .dist-upgrade-name { font-family: 'Cinzel', serif; font-size: 16px; color: var(--gold-pale); margin-bottom: 4px; }
-        .dist-upgrade-tier { font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: var(--text-faint); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px; }
-        .dist-upgrade-price { font-family: 'Cinzel', serif; font-size: 22px; color: var(--amber); }
+        .dist-upgrade-showcase { background: var(--bg); padding: 16px; display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+        .dist-upgrade-name { font-size: 16px; color: var(--gold-pale); margin-bottom: 4px; font-weight: 700; }
+        .dist-upgrade-tier { font-size: 9px; color: var(--text-faint); letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px; }
+        .dist-upgrade-price { font-size: 22px; color: var(--amber); font-weight: 700; }
         .dist-upgrade-status-owned { font-size: 11px; color: var(--green); font-style: italic; margin-top: 4px; }
         .dist-upgrade-status-avail { font-size: 11px; color: var(--text-dim); font-style: italic; margin-top: 4px; }
         .dist-upgrade-status-locked { font-size: 11px; color: var(--text-faint); font-style: italic; margin-top: 4px; }
         .dist-no-upgrade { font-size: 13px; color: var(--text-faint); font-style: italic; }
 
         /* Aging */
-        .dist-aging-tiers { display: flex; gap: 1px; background: var(--border-dim); margin-bottom: 14px; }
-        .dist-aging-tier { flex: 1; text-align: center; font-family: 'Cinzel', serif; font-size: 9px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; padding: 8px 4px; cursor: pointer; border: none; transition: all 0.15s; }
-        .dist-aging-tier-on { background: var(--border); color: var(--gold); }
-        .dist-aging-tier-off { background: var(--bg2); color: var(--text-faint); }
-        .dist-aging-tier-off:hover { color: var(--text-dim); }
         .dist-barrel-row { display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0; align-items: flex-end; }
         .dist-barrel-cell { display: flex; flex-direction: column; align-items: center; gap: 3px; }
-        .dist-barrel-label { font-family: 'IBM Plex Mono', monospace; font-size: 8px; color: var(--text-faint); }
+        .dist-barrel-label { font-size: 8px; color: var(--text-faint); }
         .dist-barrel-ready { color: var(--green); font-weight: 600; }
         .dist-aging-start-row { display: flex; gap: 8px; align-items: center; }
-        .dist-aging-qty-input { width: 70px; padding: 6px 8px; background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 13px; }
+        .dist-aging-qty-input { width: 70px; padding: 6px 8px; background: var(--bg); border: 1px solid var(--border); color: var(--text); font-size: 13px; }
         .dist-aging-qty-input:focus { outline: none; border-color: var(--amber-dim); }
         .dist-queue-list { display: flex; flex-direction: column; gap: 6px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border-dim); }
         .dist-queue-item { background: var(--bg); border: 1px solid var(--border-dim); padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-        .dist-queue-tier { font-family: 'Cinzel', serif; font-size: 12px; color: var(--text); }
-        .dist-queue-time { font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: var(--text-faint); margin-top: 2px; }
+        .dist-queue-tier { font-size: 12px; color: var(--text); font-weight: 700; }
+        .dist-queue-time { font-size: 9px; color: var(--text-faint); margin-top: 2px; }
 
         /* Auto-sell */
         .dist-autosell-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
         .dist-autosell-check { width: 16px; height: 16px; accent-color: var(--amber); }
         .dist-autosell-label { font-size: 13px; color: var(--text-dim); }
         .dist-autosell-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
-        .dist-input { width: 100%; padding: 7px 10px; background: var(--noir-content); border: 1px solid var(--border); color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 13px; box-sizing: border-box; }
+        .dist-input { width: 100%; padding: 7px 10px; background: var(--noir-content); border: 1px solid var(--border); color: var(--text); font-size: 13px; box-sizing: border-box; }
         .dist-input:focus { outline: none; border-color: var(--amber-dim); }
-        .dist-input-label { font-family: 'IBM Plex Mono', monospace; font-size: 8px; text-transform: uppercase; letter-spacing: 2px; color: var(--text-faint); margin-bottom: 4px; }
+        .dist-input-label { font-size: 8px; text-transform: uppercase; letter-spacing: 2px; color: var(--text-faint); margin-bottom: 4px; }
 
         /* Failures */
-        .dist-failure-item { font-size: 12px; color: #ff9988; padding: 4px 0; border-bottom: 1px solid rgba(196,64,32,0.15); }
+        .dist-failure-item { font-size: 12px; color: var(--danger); padding: 4px 0; border-bottom: 1px solid rgba(255, 107, 107, 0.25); }
         .dist-failure-item:last-child { border-bottom: none; }
-        .dist-failure-desc { font-family: 'IBM Plex Mono', monospace; font-size: 9px; color: rgba(255,153,136,0.6); margin-top: 2px; }
+        .dist-failure-desc { font-size: 9px; color: rgba(255, 107, 107, 0.72); margin-top: 2px; }
 
         /* Gold ornament divider */
         .dist-ornament { text-align: center; color: var(--border); letter-spacing: 8px; font-size: 10px; margin: 2px 0; }
 
         /* AutoRefreshNote override area */
-        .dist-refresh-note { font-family: 'IBM Plex Mono', monospace; font-size: 8px; color: var(--text-faint); letter-spacing: 2px; padding: 6px 20px; background: var(--bg2); border-bottom: 1px solid var(--border-dim); }
+        .dist-refresh-note { font-size: 8px; color: var(--text-faint); letter-spacing: 2px; padding: 6px 20px; background: var(--bg2); border-bottom: 1px solid var(--border-dim); }
       `}</style>
 
       <div className={`${styles.pageContent} mobile-page-root dist-root`}>
@@ -586,7 +598,12 @@ export default function Distillery() {
               >
                 Collect now {pendingTake > 0 ? `(${money(pendingTake)})` : ''}
               </GoldBtn>
-              <Link to="/money/racket" className="dist-hero-back">← Back</Link>
+              <Link
+                to="/money/racket"
+                className="rounded border border-zinc-700/50 px-2.5 py-1 text-[9px] font-heading text-mutedForeground transition-all hover:border-primary/30 hover:text-foreground"
+              >
+                ← Back
+              </Link>
             </div>
           </div>
           <div className="dist-hero-status-strip">
@@ -619,7 +636,7 @@ export default function Distillery() {
           {recentFailures.length > 0 && (
             <div className="dist-panel dist-panel-danger">
               <SectionHead icon={AlertTriangle} title="Maintenance Failures" />
-              <p style={{ fontSize: 12, color: '#ff9988', fontStyle: 'italic', marginBottom: 10 }}>
+              <p style={{ fontSize: 12, color: 'var(--danger)', fontStyle: 'italic', marginBottom: 10 }}>
                 Low maintenance can break upgrade tiers. Broken tiers must be repurchased.
               </p>
               <div>
@@ -644,8 +661,8 @@ export default function Distillery() {
                   <div className="dist-heat-badge">{heatInfo.label}</div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 9, color: 'var(--text-faint)', marginBottom: 4 }}>HEAT INDEX</div>
-                  <div style={{ fontFamily: "'Cinzel', serif", fontSize: 13, color: 'var(--text-dim)' }}>{heat.toFixed(1)} / 100</div>
+                  <div style={{ fontSize: 9, color: 'var(--text-faint)', marginBottom: 4 }}>HEAT INDEX</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-dim)', fontWeight: 700 }}>{heat.toFixed(1)} / 100</div>
                 </div>
               </div>
               <div className="dist-heat-flavor">{heatInfo.flavor}</div>
@@ -699,14 +716,15 @@ export default function Distillery() {
                 return (
                   <button
                     key={lane}
+                    type="button"
                     disabled={saving}
                     onClick={() => run(async () => { const res = await api.post('/illegal-business/distillery/upgrade-equipment', { lane }); toast.success(res.data?.message || 'Upgraded.'); })}
-                    className="dist-equip-card"
+                    className="dist-equip-card rounded-md border border-primary/25 transition-all hover:border-primary/40 hover:bg-primary/5"
                   >
                     <div className="dist-equip-icon">{EQUIPMENT_ICONS[lane] || '⚙'}</div>
                     <div className="dist-equip-name">{prettyKey(lane)}</div>
                     <LevelPips level={lv} max={20} />
-                    <div style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 8, color: 'var(--text-faint)', marginBottom: 3 }}>Lv {lv} / 20</div>
+                    <div style={{ fontSize: 8, color: 'var(--text-faint)', marginBottom: 3 }}>Lv {lv} / 20</div>
                     {cost == null
                       ? <div className="dist-equip-maxed">✓ Maxed</div>
                       : <div className="dist-equip-cost">↑ {money(cost)}</div>
@@ -747,8 +765,13 @@ export default function Distillery() {
               {TRACKS.map((track) => (
                 <button
                   key={track}
+                  type="button"
                   onClick={() => setActiveTrack(track)}
-                  className={`dist-track-tab ${activeTrack === track ? 'dist-track-tab-on' : 'dist-track-tab-off'}`}
+                  className={`shrink-0 whitespace-nowrap border-b-2 px-3 py-2.5 font-heading text-[8px] font-bold uppercase tracking-wider transition-all ${
+                    activeTrack === track
+                      ? 'border-primary bg-primary/15 text-primary'
+                      : 'border-transparent bg-transparent text-mutedForeground hover:border-primary/30 hover:bg-primary/5 hover:text-foreground'
+                  }`}
                 >
                   {prettyKey(track)}
                 </button>
@@ -769,7 +792,7 @@ export default function Distillery() {
               </div>
             </div>
             {activeSpecial ? (
-              <div className="dist-upgrade-showcase">
+              <div className="dist-upgrade-showcase rounded-md border border-primary/25">
                 <div>
                   <div className="dist-upgrade-name">{activeSpecial.name}</div>
                   <div className="dist-upgrade-tier">Tier {activeSpecial.tier} · {prettyKey(activeSpecial.track)}</div>
@@ -835,11 +858,11 @@ export default function Distillery() {
               >
                 Save Worker Plan
               </GoldBtn>
-              <div style={{ marginTop: 6, fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: 'var(--text-faint)' }}>
+              <div style={{ marginTop: 6, fontSize: 10, color: 'var(--text-faint)' }}>
                 {hiresNeeded > 0 ? `Hiring ${hiresNeeded} new · ${money(workerPlanCost)}` : 'No hire cost — reassign only.'}
               </div>
               {workerMaxHiresPerAction > 0 && (
-                <div style={{ marginTop: 4, fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: 'var(--text-faint)' }}>
+                <div style={{ marginTop: 4, fontSize: 10, color: 'var(--text-faint)' }}>
                   Max new hires per action: {workerMaxHiresPerAction}
                 </div>
               )}
@@ -849,7 +872,7 @@ export default function Distillery() {
                 <SectionHead icon={Wrench} title="Maintenance" />
                 <div className="dist-maint-label-row">
                   <span className="dist-maint-key">Current upkeep</span>
-                  <span className="dist-maint-val" style={{ color: maintenancePct < 35 ? '#ff8866' : maintenancePct < 60 ? 'var(--amber)' : 'var(--green)' }}>
+                  <span className="dist-maint-val" style={{ color: maintenancePct < 35 ? 'var(--danger)' : maintenancePct < 60 ? 'var(--amber)' : 'var(--green)' }}>
                     {maintenancePct.toFixed(1)}%
                   </span>
                 </div>
@@ -858,7 +881,7 @@ export default function Distillery() {
                     className="dist-maint-fill"
                     style={{
                       width: `${maintenancePct}%`,
-                      background: maintenancePct < 35 ? '#c44020' : maintenancePct < 60 ? 'var(--amber)' : 'var(--green)',
+                      background: maintenancePct < 35 ? 'var(--red)' : maintenancePct < 60 ? 'var(--amber)' : 'var(--green)',
                     }}
                   />
                 </div>
@@ -885,7 +908,7 @@ export default function Distillery() {
                   >
                     Repair
                   </GhostBtn>
-                  <span style={{ fontFamily: "'IBM Plex Mono', monospace", fontSize: 10, color: 'var(--text-faint)' }}>{money(maintenanceCost)}</span>
+                  <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>{money(maintenanceCost)}</span>
                 </div>
               </div>
             </div>
@@ -893,12 +916,17 @@ export default function Distillery() {
             {/* Auto-sell & Aging */}
             <div className="dist-panel">
               <SectionHead icon={Clock3} title="Aging Cellar" />
-              <div className="dist-aging-tiers">
+              <div className="mb-3.5 flex gap-1">
                 {['quick', 'standard', 'reserve', 'premium'].map((tier) => (
                   <button
                     key={tier}
+                    type="button"
                     onClick={() => setAgingTier(tier)}
-                    className={`dist-aging-tier ${agingTier === tier ? 'dist-aging-tier-on' : 'dist-aging-tier-off'}`}
+                    className={`flex-1 rounded border py-2 px-1 text-center font-heading text-[9px] font-bold uppercase tracking-wider transition-all ${
+                      agingTier === tier
+                        ? 'border-primary/50 bg-primary/15 text-primary'
+                        : 'border-zinc-700/50 bg-primary/5 text-mutedForeground hover:border-primary/30 hover:text-foreground'
+                    }`}
                   >
                     {tier}
                   </button>
