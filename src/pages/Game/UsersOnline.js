@@ -136,13 +136,160 @@ const RoleKey = ({ adminOnlineColor, modDefaultOnlineColor, hdoOnlineColor }) =>
   );
 };
 
-const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, adminOnlineColor, modDefaultOnlineColor }) => {
+const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, adminOnlineColor, modDefaultOnlineColor, profileHoverEnabled }) => {
   const preview = profileCache[user.username];
   const isLoading = !!profileLoading[user.username];
   const adminColor = (adminOnlineColor && adminOnlineColor.trim()) || '#a78bfa';
   const modColor = (modDefaultOnlineColor && modDefaultOnlineColor.trim()) || DEFAULT_MOD_COLOR;
   const displayColor = user.online_color || (user.is_admin ? adminColor : user.is_moderator ? modColor : undefined);
   const userStatus = user.status || 'online';
+  const profileTo = `/profile/${encodeURIComponent(user.username)}`;
+  const linkClass = `relative z-10 text-[11px] font-heading font-bold transition-colors ${displayColor ? '' : 'text-foreground hover:text-primary'}`;
+
+  const profileLink = (extra = {}) => (
+    <Link
+      to={profileTo}
+      className={linkClass}
+      style={displayColor ? { color: displayColor } : undefined}
+      data-testid={`user-profile-link-${user.username}`}
+      {...extra}
+    >
+      {user.username}
+    </Link>
+  );
+
+  const hoverPreview = profileHoverEnabled ? (
+    <HoverCard
+      openDelay={0}
+      closeDelay={100}
+      onOpenChange={(open) => {
+        if (open) ensureProfilePreview(user.username);
+      }}
+    >
+      <HoverCardTrigger asChild>
+        {profileLink({
+          onPointerEnter: () => ensureProfilePreview(user.username),
+        })}
+      </HoverCardTrigger>
+      {user.prestige_level > 0 && (
+        <span className="relative z-10">
+          <PrestigeBadge level={user.prestige_level} size="sm" />
+        </span>
+      )}
+      <HoverCardPortal>
+        <HoverCardContent
+          align="start"
+          sideOffset={8}
+          className={`z-[9999] w-72 max-w-[90vw] ${styles.panel} border-2 border-primary/30 rounded-md shadow-2xl p-0 overflow-hidden`}
+        >
+          {preview?.error ? (
+            <div className="p-2 text-[10px] text-mutedForeground font-heading">
+              Failed to load preview
+            </div>
+          ) : isLoading && !preview ? (
+            <div className="p-2 text-[10px] text-mutedForeground font-heading">
+              Loading preview...
+            </div>
+          ) : preview ? (
+            <>
+              <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+                <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
+                  Profile Preview
+                </h3>
+              </div>
+              {preview.on_hitlist && (
+                <div className="px-2.5 py-1 bg-red-500/20 border-b border-red-500/30 flex items-center gap-1.5">
+                  <Target size={12} className="text-red-400 shrink-0" aria-hidden />
+                  <span className="text-[10px] font-heading font-bold text-red-400 uppercase">On the hitlist</span>
+                </div>
+              )}
+              <div className="p-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-11 h-11 rounded-md overflow-hidden border border-primary/25 bg-secondary flex items-center justify-center shrink-0">
+                    {preview.avatar_url ? (
+                      <img src={preview.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      <User size={18} className="text-mutedForeground" />
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="font-heading font-bold text-foreground text-[12px] truncate leading-tight">
+                      {preview.username}
+                    </div>
+                    <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] font-heading">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-mutedForeground">Kills</span>
+                        <span className="text-foreground font-bold tabular-nums">{preview.kills}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-mutedForeground">Jail</span>
+                        <span className="text-foreground font-bold tabular-nums">{preview.jail_busts}</span>
+                      </div>
+                      <div className="col-span-2 flex items-center justify-between gap-2">
+                        <span className="text-mutedForeground inline-flex items-center gap-1">
+                          <Mail size={12} className="opacity-70" aria-hidden />
+                          Msgs
+                        </span>
+                        <span className="text-foreground font-bold tabular-nums">
+                          {(preview.messages_sent ?? 0)} / {(preview.messages_received ?? 0)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                {(preview.family || preview.owns_casino || preview.property_type) && (
+                  <div className="mt-2 pt-2 border-t border-border/70 space-y-1 text-[10px] font-heading">
+                    {preview.family && (
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-mutedForeground">Family</span>
+                        <span className="text-foreground truncate">{preview.family}</span>
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {preview.owns_casino ? (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm bg-primary/10 border border-primary/20 text-foreground">
+                          <Building2 size={12} className="text-primary/80" aria-hidden />
+                          Casino
+                        </span>
+                      ) : null}
+                      {preview.property_type === 'airport' ? (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm bg-primary/10 border border-primary/20 text-foreground">
+                          <Plane size={12} className="text-primary/80" aria-hidden />
+                          Airport
+                        </span>
+                      ) : null}
+                      {preview.property_type === 'armoury' ? (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm bg-primary/10 border border-primary/20 text-foreground">
+                          <Factory size={12} className="text-primary/80" aria-hidden />
+                          Armoury
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                )}
+                <div className="mt-2 pt-2 border-t border-border/70 text-[9px] text-mutedForeground font-heading italic text-center">
+                  Click username to open full profile
+                </div>
+              </div>
+            </>
+          ) : (
+            <div className="p-2 text-[10px] text-mutedForeground font-heading">
+              Hover to preview profile
+            </div>
+          )}
+        </HoverCardContent>
+      </HoverCardPortal>
+    </HoverCard>
+  ) : (
+    <>
+      {profileLink()}
+      {user.prestige_level > 0 && (
+        <span className="relative z-10">
+          <PrestigeBadge level={user.prestige_level} size="sm" />
+        </span>
+      )}
+    </>
+  );
 
   return (
     <div
@@ -155,126 +302,7 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, ad
           title={userStatus === 'idle' ? 'Idle' : 'Online'}
           aria-hidden
         />
-        <HoverCard onOpenChange={(open) => open && ensureProfilePreview(user.username)}>
-          <HoverCardTrigger asChild>
-            <Link
-              to={`/profile/${encodeURIComponent(user.username)}`}
-              className={`relative z-10 text-[11px] font-heading font-bold transition-colors ${displayColor ? '' : 'text-foreground hover:text-primary'}`}
-              style={displayColor ? { color: displayColor } : undefined}
-              data-testid={`user-profile-link-${user.username}`}
-            >
-              {user.username}
-            </Link>
-          </HoverCardTrigger>
-          {user.prestige_level > 0 && (
-            <span className="relative z-10">
-              <PrestigeBadge level={user.prestige_level} size="sm" />
-            </span>
-          )}
-          <HoverCardPortal>
-            <HoverCardContent
-              align="start"
-              sideOffset={8}
-              className={`z-[9999] w-72 max-w-[90vw] ${styles.panel} border-2 border-primary/30 rounded-md shadow-2xl p-0 overflow-hidden`}
-            >
-            {preview?.error ? (
-              <div className="p-2 text-[10px] text-mutedForeground font-heading">
-                Failed to load preview
-              </div>
-            ) : isLoading && !preview ? (
-              <div className="p-2 text-[10px] text-mutedForeground font-heading">
-                Loading preview...
-              </div>
-            ) : preview ? (
-              <>
-                <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
-                  <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
-                    Profile Preview
-                  </h3>
-                </div>
-                {preview.on_hitlist && (
-                  <div className="px-2.5 py-1 bg-red-500/20 border-b border-red-500/30 flex items-center gap-1.5">
-                    <Target size={12} className="text-red-400 shrink-0" aria-hidden />
-                    <span className="text-[10px] font-heading font-bold text-red-400 uppercase">On the hitlist</span>
-                  </div>
-                )}
-                <div className="p-2">
-                  <div className="flex items-center gap-2">
-                    <div className="w-11 h-11 rounded-md overflow-hidden border border-primary/25 bg-secondary flex items-center justify-center shrink-0">
-                      {preview.avatar_url ? (
-                        <img src={preview.avatar_url} alt="avatar" className="w-full h-full object-cover" />
-                      ) : (
-                        <User size={18} className="text-mutedForeground" />
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="font-heading font-bold text-foreground text-[12px] truncate leading-tight">
-                        {preview.username}
-                      </div>
-                      <div className="mt-1 grid grid-cols-2 gap-x-2 gap-y-1 text-[10px] font-heading">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-mutedForeground">Kills</span>
-                          <span className="text-foreground font-bold tabular-nums">{preview.kills}</span>
-                        </div>
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-mutedForeground">Jail</span>
-                          <span className="text-foreground font-bold tabular-nums">{preview.jail_busts}</span>
-                        </div>
-                        <div className="col-span-2 flex items-center justify-between gap-2">
-                          <span className="text-mutedForeground inline-flex items-center gap-1">
-                            <Mail size={12} className="opacity-70" aria-hidden />
-                            Msgs
-                          </span>
-                          <span className="text-foreground font-bold tabular-nums">
-                            {(preview.messages_sent ?? 0)} / {(preview.messages_received ?? 0)}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  {(preview.family || preview.owns_casino || preview.property_type) && (
-                    <div className="mt-2 pt-2 border-t border-border/70 space-y-1 text-[10px] font-heading">
-                      {preview.family && (
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="text-mutedForeground">Family</span>
-                          <span className="text-foreground truncate">{preview.family}</span>
-                        </div>
-                      )}
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {preview.owns_casino ? (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm bg-primary/10 border border-primary/20 text-foreground">
-                            <Building2 size={12} className="text-primary/80" aria-hidden />
-                            Casino
-                          </span>
-                        ) : null}
-                        {preview.property_type === 'airport' ? (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm bg-primary/10 border border-primary/20 text-foreground">
-                            <Plane size={12} className="text-primary/80" aria-hidden />
-                            Airport
-                          </span>
-                        ) : null}
-                        {preview.property_type === 'armoury' ? (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-sm bg-primary/10 border border-primary/20 text-foreground">
-                            <Factory size={12} className="text-primary/80" aria-hidden />
-                            Armoury
-                          </span>
-                        ) : null}
-                      </div>
-                    </div>
-                  )}
-                  <div className="mt-2 pt-2 border-t border-border/70 text-[9px] text-mutedForeground font-heading italic text-center">
-                    Click username to open full profile
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="p-2 text-[10px] text-mutedForeground font-heading">
-                Hover to preview profile
-              </div>
-            )}
-            </HoverCardContent>
-          </HoverCardPortal>
-        </HoverCard>
+        {hoverPreview}
         
         {user.in_jail && (
           <span className="shrink-0 inline-flex items-center px-1 py-0.5 rounded text-[9px] font-heading font-bold uppercase bg-red-500/20 text-red-400 border border-red-500/30">
@@ -291,7 +319,7 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, ad
   );
 };
 
-const InfoCard = () => (
+const InfoCard = ({ profileHoverEnabled = true }) => (
   <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-fade-in mobile-panel`} style={{ animationDelay: '0.08s' }}>
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
@@ -328,7 +356,15 @@ const InfoCard = () => (
         <p className="flex items-start gap-1">
           <span className="text-primary shrink-0">•</span>
           <span>
-            <strong className="text-foreground">Hover</strong> over usernames to see quick stats
+            {profileHoverEnabled ? (
+              <>
+                <strong className="text-foreground">Hover</strong> over usernames for a quick profile preview
+              </>
+            ) : (
+              <>
+                <strong className="text-foreground">Tap</strong> a username to open their profile (hover preview is desktop only)
+              </>
+            )}
           </span>
         </p>
         <p className="flex items-start gap-1">
@@ -359,6 +395,17 @@ export default function UsersOnline() {
   const [loading, setLoading] = useState(() => !bootCache);
   const [profileCache, setProfileCache] = useState({});
   const [profileLoading, setProfileLoading] = useState({});
+  const [profileHoverEnabled, setProfileHoverEnabled] = useState(() =>
+    typeof window !== 'undefined' ? !window.matchMedia('(max-width: 767px)').matches : true,
+  );
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 767px)');
+    const sync = () => setProfileHoverEnabled(!mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
 
   const fetchOnlineUsers = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -437,7 +484,11 @@ export default function UsersOnline() {
       <style>{UO_STYLES}</style>
 
       <div className="relative uo-fade-in">
-        <p className="text-[9px] text-zinc-500 font-heading italic">Who&apos;s active now. Hover for quick stats.</p>
+        <p className="text-[9px] text-zinc-500 font-heading italic">
+          {profileHoverEnabled
+            ? "Who's active now — hover a name for an instant profile preview."
+            : "Who's active now — tap a name to open their profile."}
+        </p>
         <AutoRefreshNote seconds={30}>
           Automatically refreshes every 30 seconds, when you focus this window, and in the background.
         </AutoRefreshNote>
@@ -480,6 +531,7 @@ export default function UsersOnline() {
                     ensureProfilePreview={ensureProfilePreview}
                     adminOnlineColor={adminOnlineColor}
                     modDefaultOnlineColor={modDefaultOnlineColor}
+                    profileHoverEnabled={profileHoverEnabled}
                   />
                 ))}
               </div>
@@ -488,7 +540,7 @@ export default function UsersOnline() {
         </div>
       )}
 
-      <InfoCard />
+      <InfoCard profileHoverEnabled={profileHoverEnabled} />
 
       <RoleKey adminOnlineColor={adminOnlineColor} modDefaultOnlineColor={modDefaultOnlineColor} hdoOnlineColor={hdoOnlineColor} />
     </div>

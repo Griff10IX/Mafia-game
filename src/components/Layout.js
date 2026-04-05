@@ -309,6 +309,7 @@ export default function Layout({ children }) {
   const [casinoOpen, setCasinoOpen] = useState(() => getNavSectionOpen('casino'));
   const [miniGamesOpen, setMiniGamesOpen] = useState(() => getNavSectionOpen('minigames'));
   const [combatOpen, setCombatOpen] = useState(() => getNavSectionOpen('combat'));
+  const [messagingMenuOpen, setMessagingMenuOpen] = useState(() => getNavSectionOpen('messaging-menu'));
   const [categoryOpen, setCategoryOpen] = useState(() => ({ information: true, travel: true, messaging: true, money: true, other: true }));
   const [mobileBottomMenuOpen, setMobileBottomMenuOpen] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -936,7 +937,7 @@ export default function Layout({ children }) {
         '/game/ranking': 'ranking', '/account/prestige': 'ranking',
         '__combat__': 'combat', '/kill/attack': 'combat', '/kill/attempts': 'combat', '/kill/hitlist': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
         '/game/travel': 'travel', '/game/states': 'travel', '/my-properties': 'travel', '/money/booze-run': 'travel',
-        '/social/forum': 'messaging', '/social/inbox': 'messaging', '/social/image-host': 'messaging',
+        '__messaging__': 'messaging',
         '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game-pass': 'money', '/game/daily-rewards': 'money', '/money/distillery': 'money',
         '/cars/garage': 'money', '/cars/sell': 'money', '/cars/buy': 'money', '/money/crack-safe': 'money', '/money/lottery': 'money', '/casino': 'money', '/money/loot-box': 'money',
         '/game/family/list': 'other', '/game/dead-alive': 'other', '/account/autorank': 'other',
@@ -949,7 +950,7 @@ export default function Layout({ children }) {
         '/game/ranking': 'ranking', '/account/prestige': 'ranking',
         '__combat__': 'combat', '/kill/attack': 'combat', '/kill/attempts': 'combat', '/kill/hitlist': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
         '/game/travel': 'travel', '/game/states': 'travel', '/my-properties': 'travel', '/money/booze-run': 'travel',
-        '/social/forum': 'messaging', '/social/inbox': 'messaging', '/social/image-host': 'messaging',
+        '__messaging__': 'messaging',
         '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game-pass': 'money', '/game/daily-rewards': 'money', '/casino/mini-games/flappy': 'money', '/money/distillery': 'money',
         '/cars/garage': 'money', '/cars/sell': 'money', '/cars/buy': 'money', '/money/crack-safe': 'money', '/money/lottery': 'money', '/casino': 'money', '/game/leaderboard': 'money',
         '/game/family/list': 'other', '/game/dead-alive': 'other', '/account/autorank': 'other',
@@ -990,13 +991,7 @@ export default function Layout({ children }) {
     { path: '/money/distillery', icon: Wine, label: 'Distillery' },
     { path: '/money/racket', icon: Building2, label: 'Racket' },
     { path: '/game/users-online', icon: Users, label: 'Users Online', countBadge: usersOnlineCount },
-    { path: '/social/forum', icon: MessageSquare, label: 'Forum', navKey: 'forum-general' },
-    { path: '/social/forum', icon: Mic2, label: 'Entertainer Forum', search: '?tab=entertainer', navKey: 'forum-entertainer' },
-    { path: '/social/forum', icon: Palette, label: 'Designer forum', search: '?tab=designer', navKey: 'forum-designer' },
-    { path: '/social/forum', icon: Lightbulb, label: 'Game Ideas', search: '?tab=game_ideas', navKey: 'forum-game-ideas' },
-    { path: '/social/forum', icon: Users, label: 'Crew OC', search: '?tab=crew_oc', navKey: 'forum-crew-oc' },
-    { path: '/social/inbox', icon: Mail, label: 'Inbox', badge: unreadCount },
-    { path: '/social/image-host', icon: Image, label: 'Image host' },
+    { path: '__messaging__', icon: MessageSquare, label: 'Forum & inbox' },
     { path: '/game/help-desk', icon: HelpCircle, label: 'Help Desk', badge: helpDeskOpenCount },
     { path: '/game/ranking', icon: Target, label: 'Ranking' },
     { path: '/cars/garage', icon: Car, label: 'Garage' },
@@ -1143,6 +1138,90 @@ export default function Layout({ children }) {
     </div>
   );
 
+  const isMessagingPath = (p) => p === '/social/forum' || p === '/social/inbox' || p === '/social/image-host';
+  const messagingNavBlock = (() => {
+    const forumTab = new URLSearchParams(location.search || '').get('tab') || '';
+    const SUB_FORUM_TABS = ['entertainer', 'designer', 'crew_oc', 'game_ideas'];
+    const rows = [
+      { key: 'forum-general', kind: 'forum', forumTab: null, to: '/social/forum', label: 'Forum', testId: 'nav-forum-general', Icon: MessageSquare },
+      { key: 'forum-entertainer', kind: 'forum', forumTab: 'entertainer', to: { pathname: '/social/forum', search: '?tab=entertainer' }, label: 'Entertainer Forum', testId: 'nav-forum-entertainer', Icon: Mic2 },
+      { key: 'forum-designer', kind: 'forum', forumTab: 'designer', to: { pathname: '/social/forum', search: '?tab=designer' }, label: 'Designer forum', testId: 'nav-forum-designer', Icon: Palette },
+      { key: 'forum-game-ideas', kind: 'forum', forumTab: 'game_ideas', to: { pathname: '/social/forum', search: '?tab=game_ideas' }, label: 'Game Ideas', testId: 'nav-forum-game-ideas', Icon: Lightbulb },
+      { key: 'forum-crew-oc', kind: 'forum', forumTab: 'crew_oc', to: { pathname: '/social/forum', search: '?tab=crew_oc' }, label: 'Crew OC', testId: 'nav-forum-crew-oc', Icon: Users },
+      { key: 'inbox', kind: 'inbox', to: '/social/inbox', label: 'Inbox', testId: 'nav-inbox', Icon: Mail },
+      { key: 'image-host', kind: 'image', to: '/social/image-host', label: 'Image host', testId: 'nav-image-host', Icon: Image },
+    ];
+    return (
+      <div className="space-y-0.5">
+        <button
+          type="button"
+          data-testid="nav-messaging-menu-group"
+          onClick={() => setMessagingMenuOpen((v) => { const next = !v; setNavSectionOpen('messaging-menu', next); return next; })}
+          className={`w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isMessagingPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
+          style={{ padding: '5px 8px 3px 10px', marginTop: 3 }}
+        >
+          <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
+          <span
+            style={{
+              fontFamily: 'var(--font-heading, "Cinzel", serif)',
+              fontSize: 8,
+              letterSpacing: '0.22em',
+              textTransform: 'uppercase',
+              color: isMessagingPath(location.pathname) ? 'var(--noir-primary)' : 'var(--noir-muted)',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Forum & inbox
+          </span>
+          {!messagingMenuOpen && unreadCount > 0 && (
+            <span className="shrink-0 rounded border border-red-500/30 bg-red-600/20 px-1.5 py-0.5 font-heading text-[10px] font-bold text-red-400">
+              {unreadCount > 9 ? '9+' : unreadCount}
+            </span>
+          )}
+          {messagingMenuOpen ? <ChevronDown size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" /> : <ChevronRight size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" />}
+          <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
+        </button>
+        {messagingMenuOpen && (
+          <div className={`space-y-0 ${styles.sidebarSubmenuBorder}`}>
+            {rows.map((row, idx) => {
+              let isActive = false;
+              if (row.kind === 'forum') {
+                if (row.forumTab == null) {
+                  isActive = location.pathname === '/social/forum' && !SUB_FORUM_TABS.includes(forumTab);
+                } else {
+                  isActive = location.pathname === '/social/forum' && forumTab === row.forumTab;
+                }
+              } else if (row.kind === 'inbox') {
+                isActive = location.pathname === '/social/inbox';
+              } else {
+                isActive = location.pathname === '/social/image-host';
+              }
+              const IconComp = row.Icon;
+              return (
+                <Fragment key={row.key}>
+                  {showSidebarDividers && idx > 0 && navDividerEl(`msg${idx}`)}
+                  <Link
+                    to={row.to}
+                    onClick={() => setSidebarOpen(false)}
+                    className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${isActive ? styles.navItemActivePage : styles.sidebarNavLink}`}
+                    style={isActive ? sidebarActiveStyle : undefined}
+                    data-testid={row.testId}
+                  >
+                    <IconComp size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
+                    <span className="uppercase tracking-widest font-heading flex-1">{row.label}</span>
+                    {row.kind === 'inbox' && unreadCount > 0 && (
+                      <span className="shrink-0 rounded border border-red-500/30 bg-red-600/20 px-1.5 py-0.5 font-heading text-[10px] font-bold text-red-400">{unreadCount > 9 ? '9+' : unreadCount}</span>
+                    )}
+                  </Link>
+                </Fragment>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  })();
+
   const isCasinoPath = (p) => p === '/casino' || (p && (p.startsWith('/casino/') || p === '/sports-betting' || p === '/my-properties'));
   const casinoNavBlock = (
     <div className="space-y-0.5">
@@ -1243,28 +1322,16 @@ export default function Layout({ children }) {
     const navDivider = showDivider ? navDividerEl(`div-${itemKey}`) : null;
     if (item.path === '/game/ranking') return <Fragment key="nav-ranking-group">{navDivider}{rankingNavBlock}</Fragment>;
     if (item.path === '__combat__') return <Fragment key="nav-combat-group">{navDivider}{combatNavBlock}</Fragment>;
+    if (item.path === '__messaging__') return <Fragment key="nav-messaging-group">{navDivider}{messagingNavBlock}</Fragment>;
     if (item.path === '/casino') return <Fragment key="nav-casino-group">{navDivider}{casinoNavBlock}</Fragment>;
     if (item.path === '/mini-games') return <Fragment key="nav-minigames-group">{navDivider}{miniGamesNavBlock}</Fragment>;
     const Icon = item.icon;
-    const forumTabParam = new URLSearchParams(location.search || '').get('tab') || '';
-    const isNavForumGeneral = item.path === '/social/forum' && !item.search;
-    const isNavForumSub = item.path === '/social/forum' && item.search;
-    const isActive =
-      isNavForumGeneral
-        ? location.pathname === '/social/forum' && !['entertainer', 'designer', 'crew_oc', 'game_ideas'].includes(forumTabParam)
-        : isNavForumSub
-          ? (() => {
-              const q = (item.search || '').replace(/^\?/, '');
-              const want = new URLSearchParams(q).get('tab');
-              return location.pathname === '/social/forum' && forumTabParam === want;
-            })()
-          : location.pathname === item.path;
-    const linkTo = item.search ? { pathname: item.path, search: item.search.startsWith('?') ? item.search : `?${item.search}` } : item.path;
+    const isActive = location.pathname === item.path;
     const isFamiliesAtWar = item.path === '/game/family/list' && atWar;
     return (
       <Fragment key={itemKey}>
         {navDivider}
-        <Link to={linkTo} data-testid={`nav-${(item.navKey || item.label).toLowerCase().replace(/\s+/g, '-')}`} data-at-war={atWar && item.path === '/game/family/list' ? 'true' : undefined}
+        <Link to={item.path} data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`} data-at-war={atWar && item.path === '/game/family/list' ? 'true' : undefined}
           className={`flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${isFamiliesAtWar ? (isActive ? 'bg-red-500/20 text-red-400 border-l-2 border-red-500' : 'text-red-400 hover:bg-red-500/10') : (isActive ? styles.navItemActivePage : styles.sidebarNavLink)}`}
           style={isFamiliesAtWar ? { color: '#f87171' } : isActive ? sidebarActiveStyle : undefined}
           onClick={() => setSidebarOpen(false)}

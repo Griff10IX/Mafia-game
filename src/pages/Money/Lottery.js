@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, useRef, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { Ticket, Clock, Trophy, Coins, ShoppingCart, Sparkles, TrendingUp, ChevronDown, ChevronUp, ListOrdered } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { refreshUser } from '../../utils/api';
@@ -514,7 +515,7 @@ function Lottery() {
   const ticketPrice = Number(state?.ticket_price) || 500000;
   const totalCost = ticketPrice * parsedCount;
   const needsConfirm = parsedCount >= CONFIRM_THRESHOLD;
-  const recentDraws = Array.isArray(state?.recent_draws) ? state.recent_draws.slice(0, 5) : [];
+  const recentWinners = Array.isArray(state?.recent_winners) ? state.recent_winners : [];
 
   return (
     <div className={`space-y-3 ${styles.pageContent} mobile-page-root`}>
@@ -722,40 +723,59 @@ function Lottery() {
         </div>
       )}
 
-      {/* ── LAST 5 WINNERS / REWARDS ── */}
-      {recentDraws.length > 0 && (
-        <div className={`${styles.panel} rounded-md overflow-hidden lot-fade-in lot-delay-3`}>
-          <div className="px-3 py-1.5 flex items-center gap-1.5" style={{ background: 'rgba(var(--noir-primary-rgb), 0.05)', borderBottom: '1px solid rgba(var(--noir-primary-rgb), 0.1)' }}>
-            <Trophy size={12} className="text-primary/70" />
-            <span className="text-[8px] font-heading font-bold text-primary/80 uppercase tracking-wider">Last 5 Winners / Rewards</span>
-          </div>
-          <div className="p-3 space-y-1.5">
-            {recentDraws.map((draw, idx) => {
+      {/* ── LAST 10 WINNERS (draws with at least one exact match) ── */}
+      <div className={`${styles.panel} rounded-md overflow-hidden lot-fade-in lot-delay-3`}>
+        <div className="px-3 py-1.5 flex items-center gap-1.5" style={{ background: 'rgba(var(--noir-primary-rgb), 0.05)', borderBottom: '1px solid rgba(var(--noir-primary-rgb), 0.1)' }}>
+          <Trophy size={12} className="text-primary/70" />
+          <span className="text-[8px] font-heading font-bold text-primary/80 uppercase tracking-wider">Last 10 winners</span>
+        </div>
+        <div className="p-3 space-y-2">
+          {recentWinners.length === 0 ? (
+            <p className="text-[10px] text-zinc-500 font-heading leading-relaxed">
+              No jackpot wins recorded yet. When someone matches all six numbers, they&apos;ll appear here.
+            </p>
+          ) : (
+            recentWinners.map((draw, idx) => {
               const winner = (draw?.winner_username || '').trim();
-              const hasWinner = winner.length > 0;
               const payout = Number(draw?.payout || 0);
+              const matches = Number(draw?.exact_match_count || 0);
+              const singleName = winner && !winner.includes(',');
               return (
                 <div
                   key={`${draw?.drawn_at || 'draw'}-${idx}`}
-                  className="flex items-center justify-between gap-2 py-1 border-b border-primary/5 last:border-0"
+                  className="flex flex-col gap-1.5 py-2 border-b border-primary/5 last:border-0 sm:flex-row sm:items-start sm:justify-between sm:gap-3"
                 >
-                  <div className="min-w-0">
-                    <div className={`text-[10px] font-heading font-bold truncate ${hasWinner ? 'text-primary' : 'text-zinc-400'}`}>
-                      {hasWinner ? winner : 'No winner (rollover)'}
+                  <div className="min-w-0 flex-1 space-y-1">
+                    <div className="text-[10px] font-heading font-bold text-primary">
+                      {singleName ? (
+                        <Link to={`/profile/${encodeURIComponent(winner)}`} className="hover:underline">
+                          {winner}
+                        </Link>
+                      ) : (
+                        <span>{winner || '—'}</span>
+                      )}
+                      {matches > 1 && (
+                        <span className="ml-1 text-[8px] font-heading font-normal text-zinc-500">
+                          ({matches} tickets split net pot)
+                        </span>
+                      )}
                     </div>
-                    <div className="text-[8px] text-zinc-600 font-heading">
-                      {formatLotteryDrawAt(draw?.drawn_at)}
-                    </div>
+                    <div className="text-[8px] text-zinc-600 font-heading">{formatLotteryDrawAt(draw?.drawn_at)}</div>
+                    {Array.isArray(draw?.winning_numbers) && draw.winning_numbers.length > 0 && (
+                      <div className="pt-0.5">
+                        <TicketNumbersMini numbers={draw.winning_numbers} />
+                      </div>
+                    )}
                   </div>
-                  <div className={`text-[10px] font-heading font-bold tabular-nums shrink-0 ${hasWinner && payout > 0 ? 'text-emerald-400' : 'text-zinc-500'}`}>
-                    {hasWinner && payout > 0 ? formatMoney(payout) : '—'}
+                  <div className="text-[11px] font-heading font-bold tabular-nums text-emerald-400 shrink-0 sm:text-right">
+                    {payout > 0 ? formatMoney(payout) : '—'}
                   </div>
                 </div>
               );
-            })}
-          </div>
+            })
+          )}
         </div>
-      )}
+      </div>
 
       {/* ── HOW IT WORKS ── */}
       <div className={`${styles.panel} rounded-md overflow-hidden lot-fade-in lot-delay-4`}>

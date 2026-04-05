@@ -148,6 +148,15 @@ async def get_lottery_state(current_user: dict = Depends(get_current_user)):
         .to_list(5)
     )
     last = recent_draws[0] if recent_draws else None
+    recent_winners = await (
+        db.lottery_rounds.find(
+            {"status": "closed", "exact_match_count": {"$gt": 0}},
+            closed_projection,
+        )
+        .sort("drawn_at", -1)
+        .limit(10)
+        .to_list(10)
+    )
     return {
         "round_id": str(rid),
         "closes_at": rd["closes_at"],
@@ -160,6 +169,7 @@ async def get_lottery_state(current_user: dict = Depends(get_current_user)):
         "my_tickets": mine,
         "last_draw": last,
         "recent_draws": recent_draws,
+        "recent_winners": recent_winners,
     }
 
 
