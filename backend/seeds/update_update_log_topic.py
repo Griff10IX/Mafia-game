@@ -55,10 +55,20 @@ def main():
 
     body = _load_update_log_content()
     now = datetime.now(timezone.utc).isoformat()
-    result = db.forum_topics.update_one(
-        {"title": TOPIC_TITLE},
-        {"$set": {"content": body, "updated_at": now, "category": "general"}},
+    existing = db.forum_topics.find_one(
+        {"title": {"$regex": r"^update\s*log$", "$options": "i"}},
+        {"_id": 1},
     )
+    if existing:
+        result = db.forum_topics.update_one(
+            {"_id": existing["_id"]},
+            {"$set": {"title": TOPIC_TITLE, "content": body, "updated_at": now, "category": "general", "is_locked": True}},
+        )
+    else:
+        result = db.forum_topics.update_one(
+            {"title": TOPIC_TITLE},
+            {"$set": {"content": body, "updated_at": now, "category": "general", "is_locked": True}},
+        )
     if result.matched_count == 0:
         author_id, author_username = resolve_faq_topic_author_sync(db)
         topic_id = str(uuid.uuid4())
@@ -74,7 +84,7 @@ def main():
             "views": 0,
             "is_sticky": True,
             "is_important": True,
-            "is_locked": False,
+            "is_locked": True,
         }
         db.forum_topics.insert_one(doc)
         print(f"Created '{TOPIC_TITLE}' (was missing) from docs/UPDATE_LOG.md at {now}")

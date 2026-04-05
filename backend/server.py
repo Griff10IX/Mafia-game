@@ -2539,6 +2539,12 @@ async def startup_db():
         await ensure_faq_forum_topic(db)
     except Exception as e:
         logging.exception("FAQ forum topic sync: %s", e)
+    try:
+        from utils.ensure_update_log_topic import ensure_update_log_forum_topic
+
+        await ensure_update_log_forum_topic(db)
+    except Exception as e:
+        logging.exception("Update Log forum topic sync: %s", e)
     from routers.crime.jail import spawn_jail_npcs
     asyncio.create_task(spawn_jail_npcs())
     # Start security monitoring background task

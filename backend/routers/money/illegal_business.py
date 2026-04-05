@@ -99,10 +99,13 @@ DISTILLERY_AUTO_SELL_MARGIN_CAP = 1.70
 DISTILLERY_BASE_BOOZE_UNIT_VALUE = 900
 DISTILLERY_COLLECT_ROI_SAFETY_FLOOR = 1.0
 DISTILLERY_MAX_ACTIVE_BATCHES = 8
-DISTILLERY_TARGET_12D_TOP_END = 200_000_000
+DISTILLERY_TARGET_12D_TOP_END = 50_000_000
 DISTILLERY_TARGET_DAILY_TOP_END = DISTILLERY_TARGET_12D_TOP_END / 12.0
 DISTILLERY_TOP_END_HOURS = 12 * 24
 DISTILLERY_RISK_ACTION_COOLDOWN_HOURS = 4
+DISTILLERY_PRICE_SCALE = 0.72
+DISTILLERY_MAX_SINGLE_UPGRADE_COST = 120_000_000
+DISTILLERY_RISK_ACTION_COSTS = {"cool_off": 900_000, "bribe_crackdown": 3_500_000}
 DISTILLERY_AGING_TIERS = {
     "quick": {"hours_min": 0.25, "hours_max": 0.75, "quality_mult": 1.02, "cash_mult": 1.02},
     "standard": {"hours_min": 2.0, "hours_max": 6.0, "quality_mult": 1.05, "cash_mult": 1.08},
@@ -438,7 +441,8 @@ def _clamp(num: float, lo: float, hi: float) -> float:
 
 def _distillery_special_upgrade_cost(track: str, tier: int) -> int:
     base = int(DISTILLERY_SPECIAL_TRACK_BASE_COST.get(track, 1_200_000))
-    return int(base * ((1 + 0.18 * max(1, tier)) ** 2.6))
+    cost = int(base * ((1 + 0.18 * max(1, tier)) ** 2.6) * DISTILLERY_PRICE_SCALE)
+    return int(_clamp(cost, 10_000, DISTILLERY_MAX_SINGLE_UPGRADE_COST))
 
 
 def _distillery_special_catalog() -> List[Dict[str, Any]]:
@@ -593,6 +597,71 @@ def _distillery_apply_maintenance_degradation(distillery: dict, elapsed_hours: f
     }
 
 
+def _distillery_projected_24h_loss_forecast(distillery: dict) -> Dict[str, Any]:
+    maintenance_now = float(distillery.get("maintenance") or 0.0)
+    specials = distillery.get("special_upgrades") or {}
+    equipment = distillery.get("equipment") or {}
+    effects = _distillery_special_effect_totals(distillery)
+    decay_rate = max(0.05, DISTILLERY_MAINTENANCE_DECAY_PER_HOUR * (1.0 - min(0.65, float(effects.get("maintenance_bonus", 0.0)))))
+    check_hours = DISTILLERY_MAINTENANCE_DEGRADE_CHECK_HOURS
+    checks = max(1, int(24.0 // check_hours))
+
+    expected_losses = 0.0
+    for i in range(checks):
+        projected_maintenance = _clamp(maintenance_now - (decay_rate * (i * check_hours)), 0.0, 100.0)
+        if projected_maintenance > DISTILLERY_MAINTENANCE_DEGRADE_THRESHOLD:
+            continue
+        chance = DISTILLERY_MAINTENANCE_DEGRADE_BASE_CHANCE + (
+            (DISTILLERY_MAINTENANCE_DEGRADE_THRESHOLD - projected_maintenance) / DISTILLERY_MAINTENANCE_DEGRADE_THRESHOLD
+        ) * 0.35
+        if projected_maintenance <= DISTILLERY_MAINTENANCE_MELTDOWN_THRESHOLD:
+            chance += DISTILLERY_MAINTENANCE_DEGRADE_MELTDOWN_BONUS
+        chance = _clamp(chance, 0.08, 0.88)
+        expected_losses += chance
+
+    expected_losses = min(float(DISTILLERY_MAINTENANCE_DEGRADE_MAX_PER_TICK), expected_losses)
+    expected_equipment_losses = expected_losses * 0.72
+    expected_special_losses = expected_losses * 0.28
+
+    equipment_rebuy_samples = []
+    for lane in DISTILLERY_EQUIPMENT_ORDER:
+        lvl = int(equipment.get(lane) or 0)
+        if lvl > 0:
+            equipment_rebuy_samples.append(_distillery_upgrade_cost(lane, lvl))
+    avg_equipment_rebuy = (
+        (sum(equipment_rebuy_samples) / len(equipment_rebuy_samples)) if equipment_rebuy_samples else 0.0
+    )
+
+    special_rebuy_samples = []
+    for uid, enabled in specials.items():
+        if enabled and uid in DISTILLERY_SPECIAL_MAP:
+            special_rebuy_samples.append(int(DISTILLERY_SPECIAL_MAP[uid].get("cost") or 0))
+    avg_special_rebuy = (
+        (sum(special_rebuy_samples) / len(special_rebuy_samples)) if special_rebuy_samples else 0.0
+    )
+
+    expected_rebuy_cost = int(
+        (expected_equipment_losses * avg_equipment_rebuy) + (expected_special_losses * avg_special_rebuy)
+    )
+
+    risk_band = "low"
+    if expected_losses >= 0.8:
+        risk_band = "moderate"
+    if expected_losses >= 1.6:
+        risk_band = "high"
+    if expected_losses >= 2.4:
+        risk_band = "critical"
+
+    return {
+        "hours": 24,
+        "expected_downgrade_events": round(expected_losses, 2),
+        "expected_equipment_losses": round(expected_equipment_losses, 2),
+        "expected_special_losses": round(expected_special_losses, 2),
+        "expected_rebuy_cost": max(0, expected_rebuy_cost),
+        "risk_band": risk_band,
+    }
+
+
 def _distillery_default(now: datetime) -> Dict[str, Any]:
     return {
         "equipment": {lane: 0 for lane in DISTILLERY_EQUIPMENT_ORDER},
@@ -638,7 +707,8 @@ def _distillery_upgrade_cost(lane: str, next_level: int) -> int:
     core = (1 + (0.22 * lvl)) ** 4.5
     high_end_track = lane in {"quality_lab", "bribe_office", "fake_labels"}
     premium = 1.12 if high_end_track else 1.0
-    return int(base * core * premium)
+    cost = int(base * core * premium * DISTILLERY_PRICE_SCALE)
+    return int(_clamp(cost, 5_000, DISTILLERY_MAX_SINGLE_UPGRADE_COST))
 
 
 def _distillery_worker_capacity(equipment: Dict[str, Any]) -> int:
@@ -1246,8 +1316,15 @@ def _distillery_public_payload(distillery: dict, business: dict) -> dict:
     roi = _distillery_roi_snapshot(distillery, business)
     progression = _distillery_progression_state(distillery)
     effects = _distillery_special_effect_totals(distillery)
+    loss_forecast_24h = _distillery_projected_24h_loss_forecast(distillery)
     heat = float(distillery.get("heat") or 0.0)
     queue = distillery.get("aging_queue") or []
+    now = _utc_now()
+    last_risk_at = _parse_iso_utc(distillery.get("last_risk_action_at"), now)
+    cooldown_remaining_seconds = 0
+    if distillery.get("last_risk_action_at"):
+        remaining = (last_risk_at + timedelta(hours=DISTILLERY_RISK_ACTION_COOLDOWN_HOURS) - now).total_seconds()
+        cooldown_remaining_seconds = max(0, int(remaining))
     equipment = distillery.get("equipment") or {}
     next_upgrade_costs: Dict[str, Optional[int]] = {}
     for lane in DISTILLERY_EQUIPMENT_ORDER:
@@ -1257,10 +1334,16 @@ def _distillery_public_payload(distillery: dict, business: dict) -> dict:
         "distillery": distillery,
         "heat_level": _distillery_heat_label(heat),
         "roi": roi,
+        "loss_forecast_24h": loss_forecast_24h,
         "active_batches": len(queue),
         "best_next_upgrade": roi.get("next_upgrade_lane"),
         "progression": progression,
         "special_effects": effects,
+        "risk_cooldown": {
+            "last_risk_action_at": distillery.get("last_risk_action_at"),
+            "cooldown_hours": DISTILLERY_RISK_ACTION_COOLDOWN_HOURS,
+            "cooldown_remaining_seconds": cooldown_remaining_seconds,
+        },
         "vault_balance": int(business.get("vault") or 0),
         "pricing": {
             "equipment_next_costs": next_upgrade_costs,
@@ -1268,8 +1351,8 @@ def _distillery_public_payload(distillery: dict, business: dict) -> dict:
             "maintenance_recover_cost_per_point": DISTILLERY_MAINTENANCE_RECOVER_COST_PER_POINT,
             "worker_max_hires_per_action": DISTILLERY_WORKER_MAX_PER_ACTION,
             "risk_action_costs": {
-                "cool_off": 1_500_000,
-                "bribe_crackdown": 6_500_000,
+                "cool_off": int(DISTILLERY_RISK_ACTION_COSTS["cool_off"]),
+                "bribe_crackdown": int(DISTILLERY_RISK_ACTION_COSTS["bribe_crackdown"]),
             },
         },
     }
@@ -1751,11 +1834,9 @@ async def distillery_upgrade_equipment(req: DistilleryUpgradeEquipmentRequest, c
     distillery["worker_capacity"] = _distillery_worker_capacity(equipment)
     progression = _distillery_progression_state(distillery)
     distillery["mastery_tier"] = int(progression["total_steps"] // 30)
-    total_spent = int(business.get("total_spent") or 0) + cost
-
     result = await db.illegal_businesses.update_one(
         {"id": business["id"], "vault": {"$gte": cost}},
-        {"$set": {"distillery": distillery, "total_spent": total_spent}, "$inc": {"vault": -cost}},
+        {"$set": {"distillery": distillery}, "$inc": {"vault": -cost, "total_spent": cost}},
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Upgrade failed. Try again.")
@@ -1793,8 +1874,16 @@ async def distillery_assign_workers(req: DistilleryAssignWorkersRequest, current
     updates = {"$set": {"distillery": distillery}}
     if hire_cost > 0:
         updates["$inc"] = {"vault": -hire_cost}
-    result = await db.illegal_businesses.update_one({"id": business["id"]}, updates)
+    query = {"id": business["id"]}
+    if hire_cost > 0:
+        query["vault"] = {"$gte": hire_cost}
+    result = await db.illegal_businesses.update_one(query, updates)
     if result.modified_count == 0:
+        if hire_cost > 0:
+            latest = await db.illegal_businesses.find_one({"id": business["id"]}, {"_id": 0, "vault": 1})
+            latest_vault = int((latest or {}).get("vault") or 0)
+            if latest_vault < hire_cost:
+                raise HTTPException(status_code=400, detail=f"Need ${hire_cost:,} in vault to hire workers.")
         raise HTTPException(status_code=400, detail="Unable to assign workers right now.")
     return {
         "message": "Crew assignments updated.",
@@ -1882,7 +1971,7 @@ async def distillery_risk_action(req: DistilleryRiskActionRequest, current_user:
     action = (req.action or "").strip().lower()
     if action not in {"cool_off", "bribe_crackdown"}:
         raise HTTPException(status_code=400, detail="Invalid risk action.")
-    action_costs = {"cool_off": 1_500_000, "bribe_crackdown": 6_500_000}
+    action_costs = DISTILLERY_RISK_ACTION_COSTS
     business, distillery = await _distillery_business_for_user(current_user)
     now = _utc_now()
     last = _parse_iso_utc(distillery.get("last_risk_action_at"), now)
@@ -1903,11 +1992,28 @@ async def distillery_risk_action(req: DistilleryRiskActionRequest, current_user:
     risk_actions = distillery.get("risk_actions") or {}
     risk_actions[action] = int(risk_actions.get(action) or 0) + 1
     distillery["risk_actions"] = risk_actions
+    cutoff = (now - timedelta(hours=DISTILLERY_RISK_ACTION_COOLDOWN_HOURS)).isoformat()
     result = await db.illegal_businesses.update_one(
-        {"id": business["id"], "vault": {"$gte": cost}},
+        {
+            "id": business["id"],
+            "vault": {"$gte": cost},
+            "$or": [
+                {"distillery.last_risk_action_at": {"$exists": False}},
+                {"distillery.last_risk_action_at": None},
+                {"distillery.last_risk_action_at": {"$lte": cutoff}},
+            ],
+        },
         {"$set": {"distillery": distillery}, "$inc": {"vault": -cost}},
     )
     if result.modified_count == 0:
+        latest = await db.illegal_businesses.find_one({"id": business["id"]}, {"_id": 0, "vault": 1, "distillery.last_risk_action_at": 1})
+        latest_vault = int((latest or {}).get("vault") or 0)
+        latest_last = ((latest or {}).get("distillery") or {}).get("last_risk_action_at")
+        if latest_vault < cost:
+            raise HTTPException(status_code=400, detail=f"Need ${cost:,} in vault. You have ${latest_vault:,}.")
+        last_dt = _parse_iso_utc(latest_last, now)
+        if latest_last and (now - last_dt).total_seconds() < DISTILLERY_RISK_ACTION_COOLDOWN_HOURS * 3600:
+            raise HTTPException(status_code=400, detail=f"Risk actions are on cooldown ({DISTILLERY_RISK_ACTION_COOLDOWN_HOURS}h).")
         raise HTTPException(status_code=400, detail="Risk action failed.")
     return {
         "message": "Risk action completed.",

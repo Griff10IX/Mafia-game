@@ -37,6 +37,7 @@ export default function Distillery() {
   const [state, setState] = useState(null);
   const [catalog, setCatalog] = useState({ tracks: {} });
   const [activeTrack, setActiveTrack] = useState('production');
+  const [specialCursor, setSpecialCursor] = useState(0);
   const [workerDraft, setWorkerDraft] = useState({ production: 0, quality: 0, security: 0, sales: 0 });
   const [maintenancePoints, setMaintenancePoints] = useState(10);
   const [autoSell, setAutoSell] = useState({ enabled: false, min_inventory: 50, batch_size: 30 });
@@ -97,6 +98,7 @@ export default function Distillery() {
 
   const dist = state?.distillery || {};
   const roi = state?.roi || {};
+  const lossForecast24h = state?.loss_forecast_24h || {};
   const progression = state?.progression || {};
   const pricing = state?.pricing || {};
   const heat = Number(dist?.heat || 0);
@@ -108,6 +110,10 @@ export default function Distillery() {
   const workerHireCost = Number(pricing?.worker_hire_cost || 0);
   const maintenanceCostPerPoint = Number(pricing?.maintenance_recover_cost_per_point || 0);
   const riskActionCosts = pricing?.risk_action_costs || {};
+  const riskCooldown = state?.risk_cooldown || {};
+  const riskCooldownRemaining = Number(riskCooldown?.cooldown_remaining_seconds || 0);
+  const riskCooldownActive = riskCooldownRemaining > 0;
+  const riskCooldownMinutes = Math.ceil(riskCooldownRemaining / 60);
   const workerCap = Number(dist?.worker_capacity || 0);
   const workerTotal = Number(workers.production || 0) + Number(workers.quality || 0) + Number(workers.security || 0) + Number(workers.sales || 0);
   const draftWorkerTotal = Number(workerDraft.production || 0) + Number(workerDraft.quality || 0) + Number(workerDraft.security || 0) + Number(workerDraft.sales || 0);
@@ -117,8 +123,28 @@ export default function Distillery() {
   const projected24hCash = Number(roi.risk_adjusted_cash_per_hour_estimate || roi.cash_per_hour_estimate || 0) * 24;
   const projected12dCash = Number(roi.projected_12d_income || 0);
   const hardCapProgress = Number(roi.hard_cap_progress || 0);
+  const projectedLossEvents24h = Number(lossForecast24h.expected_downgrade_events || 0);
+  const projectedRebuyCost24h = Number(lossForecast24h.expected_rebuy_cost || 0);
 
   const trackRows = catalog?.tracks?.[activeTrack] || [];
+  const visibleTrackRows = useMemo(() => {
+    const out = [];
+    for (const row of trackRows) {
+      if (row.purchased) {
+        out.push(row);
+        continue;
+      }
+      if (row.available) {
+        out.push(row);
+      }
+      break;
+    }
+    return out;
+  }, [trackRows]);
+  const maxSpecialIndex = Math.max(0, visibleTrackRows.length - 1);
+  const clampedSpecialCursor = Math.min(Math.max(0, specialCursor), maxSpecialIndex);
+  const activeSpecial = visibleTrackRows[clampedSpecialCursor] || null;
+  const purchasedInTrack = trackRows.filter((r) => r.purchased).length;
   const bestNextUpgrades = useMemo(() => {
     const out = [];
     for (const track of TRACKS) {
@@ -128,6 +154,11 @@ export default function Distillery() {
     }
     return out.sort((a, b) => Number(a.cost || 0) - Number(b.cost || 0)).slice(0, 6);
   }, [catalog]);
+
+  useEffect(() => {
+    const nextIndex = Math.max(0, visibleTrackRows.length - 1);
+    setSpecialCursor(nextIndex);
+  }, [activeTrack, visibleTrackRows.length]);
 
   const heatBar = useMemo(() => {
     const val = Math.max(0, Math.min(100, heat));
@@ -177,7 +208,7 @@ export default function Distillery() {
         <div className={`${styles.panel} border border-primary/25 rounded-md px-4 py-3 bg-primary/5`}>
           <div className="flex flex-wrap items-end justify-between gap-3 pb-2 border-b border-primary/20">
             <div>
-              <div className="text-[10px] uppercase tracking-[.24em] text-mutedForeground font-heading">1920s Distillery Endgame</div>
+              <div className="text-[10px] uppercase tracking-[.24em] text-mutedForeground font-heading">1920s Distillery</div>
               <h1 className="text-2xl font-heading text-primary font-bold tracking-wide">{business?.name || 'Distillery'}</h1>
               <p className="text-xs text-mutedForeground italic">Long grind. Massive upside. Risk is real.</p>
             </div>
@@ -217,9 +248,9 @@ export default function Distillery() {
             <div className="text-[10px] text-mutedForeground">Target {money(roi.target_12d_top_end)}</div>
           </div>
           <div className={`${styles.panel} border border-primary/25 rounded-md p-3 bg-primary/5`}>
-            <div className="text-[10px] uppercase tracking-widest text-mutedForeground font-heading">Hard-Cap Progress</div>
+            <div className="text-[10px] uppercase tracking-widest text-mutedForeground font-heading">Target Progress</div>
             <div className="text-lg font-heading text-primary">{pct(hardCapProgress, 1)}</div>
-            <div className="text-[10px] text-mutedForeground">Top-end only by design</div>
+            <div className="text-[10px] text-mutedForeground">Progress toward your 12-day target</div>
           </div>
         </div>
 
@@ -232,20 +263,25 @@ export default function Distillery() {
             {dist?.shutdown_until && <div className="mt-2 text-xs text-red-400 flex items-center gap-1"><ShieldAlert size={12} /> Shutdown until {new Date(dist.shutdown_until).toLocaleString()}</div>}
             <div className="mt-2 flex gap-2 flex-wrap">
               <button
-                disabled={saving}
+                disabled={saving || riskCooldownActive}
                 onClick={() => run(async () => { const res = await api.post('/illegal-business/distillery/risk-action', { action: 'cool_off' }); toast.success(res.data?.message || 'Heat cooled.'); })}
                 className="px-2.5 py-1.5 text-[10px] border border-primary/35 text-primary rounded hover:bg-primary/10 disabled:opacity-50"
               >
                 Cool Off ({money(riskActionCosts.cool_off)})
               </button>
               <button
-                disabled={saving}
+                disabled={saving || riskCooldownActive}
                 onClick={() => run(async () => { const res = await api.post('/illegal-business/distillery/risk-action', { action: 'bribe_crackdown' }); toast.success(res.data?.message || 'Crackdown eased.'); })}
                 className="px-2.5 py-1.5 text-[10px] border border-primary/35 text-primary rounded hover:bg-primary/10 disabled:opacity-50"
               >
                 Bribe Crackdown ({money(riskActionCosts.bribe_crackdown)})
               </button>
             </div>
+            {riskCooldownActive && (
+              <div className="text-[10px] text-amber-300 mt-1">
+                Bribe cooldown active: {riskCooldownMinutes} min remaining.
+              </div>
+            )}
           </div>
 
           <div className={`${styles.panel} border border-primary/25 rounded-md p-3`}>
@@ -255,6 +291,7 @@ export default function Distillery() {
               <div>Risk-adjusted cash/h: <span className="text-primary">{money(roi.risk_adjusted_cash_per_hour_estimate)}</span></div>
               <div>Projected 24h: <span className="text-primary">{money(projected24hCash)}</span></div>
               <div>Downside exposure: <span className="text-primary">{pct(roi.downside_exposure)}</span></div>
+              <div>Projected losses if ignored (next 24h): <span className="text-primary">{projectedLossEvents24h.toFixed(2)} downgrade events (~{money(projectedRebuyCost24h)} rebuy)</span></div>
               <div>Booze/h: <span className="text-primary">{Number(roi.booze_per_hour_estimate || 0).toFixed(2)}</span></div>
               <div>Next lane payback: <span className="text-primary">{roi.next_upgrade_payback_hours ?? 'n/a'}h</span></div>
             </div>
@@ -335,23 +372,46 @@ export default function Distillery() {
             ))}
           </div>
           <div className="text-[10px] text-mutedForeground mb-2 italic">{TRACK_FLAVOR[activeTrack]}</div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-2">
-            {trackRows.map((u) => (
-              <div key={u.id} className="rounded border border-zinc-700/50 p-2">
-                <div className="text-xs text-foreground">{u.name}</div>
-                <div className="text-[10px] text-mutedForeground">Tier {u.tier}</div>
-                <div className="text-[10px] text-primary">{money(u.cost)}</div>
-                <div className="text-[10px] text-mutedForeground mt-1">{u.purchased ? 'Purchased' : u.available ? 'Available' : 'Locked by tier path'}</div>
-                <button
-                  disabled={saving || !u.available || u.purchased}
-                  onClick={() => run(async () => { const res = await api.post('/illegal-business/distillery/buy-special-upgrade', { upgrade_id: u.id }); toast.success(res.data?.message || 'Upgrade bought.'); })}
-                  className="mt-1 px-2 py-1 text-[10px] border border-primary/35 text-primary rounded hover:bg-primary/10 disabled:opacity-50"
-                >
-                  {u.purchased ? 'Owned' : `Buy ${money(u.cost)}`}
-                </button>
-              </div>
-            ))}
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <div className="text-[10px] text-mutedForeground font-heading">
+              {activeSpecial ? `${clampedSpecialCursor + 1}/${Math.max(1, visibleTrackRows.length)}` : '0/0'} · Purchased {purchasedInTrack}/{trackRows.length}
+            </div>
+            <div className="flex gap-1">
+              <button
+                disabled={clampedSpecialCursor <= 0}
+                onClick={() => setSpecialCursor((v) => Math.max(0, v - 1))}
+                className="px-2 py-1 text-[10px] border border-zinc-700/60 rounded text-mutedForeground disabled:opacity-40"
+              >
+                Prev
+              </button>
+              <button
+                disabled={clampedSpecialCursor >= maxSpecialIndex}
+                onClick={() => setSpecialCursor((v) => Math.min(maxSpecialIndex, v + 1))}
+                className="px-2 py-1 text-[10px] border border-zinc-700/60 rounded text-mutedForeground disabled:opacity-40"
+              >
+                Next
+              </button>
+            </div>
           </div>
+          {activeSpecial ? (
+            <div className="rounded border border-zinc-700/50 p-3 max-w-xl">
+              <div className="text-sm text-foreground">{activeSpecial.name}</div>
+              <div className="text-[10px] text-mutedForeground">Tier {activeSpecial.tier}</div>
+              <div className="text-xs text-primary mt-1">{money(activeSpecial.cost)}</div>
+              <div className="text-[10px] text-mutedForeground mt-1">
+                {activeSpecial.purchased ? 'Purchased' : activeSpecial.available ? 'Available' : 'Locked by tier path'}
+              </div>
+              <button
+                disabled={saving || !activeSpecial.available || activeSpecial.purchased}
+                onClick={() => run(async () => { const res = await api.post('/illegal-business/distillery/buy-special-upgrade', { upgrade_id: activeSpecial.id }); toast.success(res.data?.message || 'Upgrade bought.'); })}
+                className="mt-2 px-2.5 py-1 text-[10px] border border-primary/35 text-primary rounded hover:bg-primary/10 disabled:opacity-50"
+              >
+                {activeSpecial.purchased ? 'Owned' : `Buy ${money(activeSpecial.cost)}`}
+              </button>
+            </div>
+          ) : (
+            <div className="text-xs text-mutedForeground">No upgrades visible in this track yet.</div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">

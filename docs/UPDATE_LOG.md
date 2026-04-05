@@ -30,6 +30,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-04 16:00 UTC[/color][/b] — [b]Distillery added + progression, risk, and ROI updates[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Added a dedicated [b]Distillery[/b] page with upgrade tracks, worker controls, auto-sell, aging batches, risk actions, and projected income/ROI. Distillery now uses progression with many upgrade tiers, heat/enforcement pressure, maintenance impact, and possible booze/upgrade losses if neglected.[/color]
+[*][color=#888888][b]Player action:[/b] Open [b]Money → Distillery[/b], upgrade in order, keep maintenance healthy, and watch heat/cooldown before using bribes. Use the projected-risk line to avoid avoidable downgrade costs.[/color]
+[*][color=#888888][b]Impact:[/b] New long-form business loop with clearer costs and stronger risk-reward decisions. Passive profit is no longer guaranteed if heat/maintenance are ignored.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-01 23:45 UTC[/color][/b] — [b]Multiplayer Blackjack: fair play, stuck games, admin refund[/b][/size]
 [quote]
 [list]
