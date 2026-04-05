@@ -909,15 +909,22 @@ export default function ForumTopic() {
   if (!topic) return null;
 
   const commentCount = comments.length;
-  const isFaqHtml = topic.content && (topic.content.includes('<details') || topic.content.includes('class="faq-box"') || topic.content.includes('class=\'faq-box\''));
+  const topicTitlePlain = (topic.title || '').replace(/<[^>]+>/g, '').trim();
+  const isHowToTopic = /^how\s*to$/i.test(topicTitlePlain);
+  const isLegacyFaqHtml =
+    topic.content &&
+    (topic.content.includes('<details') ||
+      topic.content.includes('class="faq-box"') ||
+      topic.content.includes('class=\'faq-box\''));
   // Convert Markdown **bold** to <strong> and strip embedded FAQ styles so noir theme applies
   let topicContentRaw = topic.content || '—';
-  if (isFaqHtml) {
+  if (isLegacyFaqHtml || isHowToTopic) {
     topicContentRaw = topicContentRaw.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
     topicContentRaw = topicContentRaw.replace(/<style>[\s\S]*?<\/style>/gi, '');
     topicContentRaw = topicContentRaw.replace(/<div\s+style="[^"]*"[^>]*>/, '<div class="forum-faq-outer">');
   }
   const topicContent = topicContentRaw;
+  const forumParseOpts = { censorProfanity: user?.censor_profanity };
 
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="forum-topic-page">
@@ -1229,7 +1236,7 @@ export default function ForumTopic() {
               <img src={topic.gif_url} alt="GIF" className="rounded max-h-64 object-contain forum-content-gif" loading="lazy" />
             </div>
           )}
-          {isFaqHtml ? (
+          {isLegacyFaqHtml ? (
             <>
               <style>{FORUM_FAQ_STYLES}</style>
               <div
@@ -1237,10 +1244,18 @@ export default function ForumTopic() {
                 dangerouslySetInnerHTML={{ __html: topicContent }}
               />
             </>
+          ) : isHowToTopic ? (
+            <>
+              <style>{FORUM_FAQ_STYLES}</style>
+              <div
+                className="forum-faq-content text-sm leading-relaxed"
+                dangerouslySetInnerHTML={{ __html: parseForumContent(topicContent, forumParseOpts) }}
+              />
+            </>
           ) : (
             <div
               className="forum-content text-sm text-foreground leading-relaxed break-words"
-              dangerouslySetInnerHTML={{ __html: parseForumContent(topicContent, { censorProfanity: user?.censor_profanity }) }}
+              dangerouslySetInnerHTML={{ __html: parseForumContent(topicContent, forumParseOpts) }}
             />
           )}
           <ForumEmojiReactionBar

@@ -12,6 +12,7 @@ Crosswalk of major authenticated areas ([src/App.js](../src/App.js) routes and s
 | `/game/travel`, `/game/states` | TRAVEL (+ States overview) |
 | `/game/family/*` | FAMILIES |
 | `/casino`, `/casino/dice`, `/rlt`, `/blackjack`, `/slots`, `/horseracing`, `/videopoker`, `/mdg`, `/mp-*` | CASINOS |
+| `/sports-betting` | CASINOS (+ [FORUM_HOW_TO.md](FORUM_HOW_TO.md) Sports betting) |
 | `/casino/mini-games/*` | MINI-GAMES (+ Famiglia) |
 | `/game/leaderboard` | PROGRESSION → Game Leaderboard |
 | `/casino/mini-games/leaderboard` | MINI-GAMES → Mini-Games Leaderboard |
@@ -27,3 +28,5 @@ Crosswalk of major authenticated areas ([src/App.js](../src/App.js) routes and s
 | `/game/dead-alive` | COMBAT → Dead > Alive; MONEY (banks) cross-links |
 
 Routes without a dedicated FAQ paragraph are usually covered by a parent section (e.g. all casinos under CASINOS). If you add a **new** top-level game mode, add a short FAQ subsection and a row here.
+
+**How To guide:** Step-by-step player copy for the same areas (no backend detail) lives in [FORUM_HOW_TO.md](FORUM_HOW_TO.md) → forum topic **How To**. Update that file when you add major menu-visible flows; keep [FORUM_FAQ.md](FORUM_FAQ.md) as the rules source of truth.

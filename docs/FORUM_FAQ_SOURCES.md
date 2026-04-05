@@ -4,6 +4,8 @@ Use this when updating [FORUM_FAQ.md](FORUM_FAQ.md) so numbers stay aligned with
 
 **Route / feature coverage:** see [FORUM_FAQ_ROUTE_COVERAGE.md](FORUM_FAQ_ROUTE_COVERAGE.md) (major `App.js` routes vs FAQ sections).
 
+**Player how-to (no rules dump):** [FORUM_HOW_TO.md](FORUM_HOW_TO.md) → pinned forum topic **How To**. Refresh: `python backend/seeds/update_how_to_topic.py` or [`scripts/push-how-to-topic.bat`](../scripts/push-how-to-topic.bat). Startup sync: `utils/ensure_how_to_topic.py` (disable with `HOW_TO_TOPIC_SYNC=0`).
+
 **Live forum topic:** `seed_faq_topic.py` only *creates* the "FAQs" topic if missing. To refresh an existing topic from disk:
 
 - **Local (dev DB):** `python backend/seeds/update_faq_topic.py` from the repo root (needs `MONGO_URL` / `MONGO_DB` in `backend/.env`).

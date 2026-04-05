@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Flame, Users, Wrench, BarChart3, Clock3, ShieldAlert, TrendingUp, Layers, AlertTriangle, ChevronLeft, ChevronRight, Zap } from 'lucide-react';
+import { Flame, Users, Wrench, BarChart3, Clock3, ShieldAlert, TrendingUp, Layers, AlertTriangle, ChevronLeft, ChevronRight, Zap, CircleHelp } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
 
 const REFRESH_MS = 30_000;
 const EQUIPMENT_ORDER = ['stills', 'condensers', 'mash_tun', 'barrels', 'bottling', 'tunnel', 'bribe_office', 'fake_labels', 'quality_lab'];
@@ -126,13 +127,16 @@ function StatCard({ label, value, sub, accent }) {
 }
 
 // ── Section header (matches Racket CardHead strip) ───────────────────────────
-function SectionHead({ icon: Icon, title }) {
+function SectionHead({ icon: Icon, title, children }) {
   return (
-    <div className="mb-3 flex items-center gap-2 border-b border-primary/15 pb-2.5">
-      <div className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded border border-primary/25 bg-primary/10">
-        <Icon size={13} className="text-primary shrink-0" />
+    <div className="mb-3 flex items-center justify-between gap-2 border-b border-primary/15 pb-2.5">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <div className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded border border-primary/25 bg-primary/10">
+          <Icon size={13} className="text-primary shrink-0" />
+        </div>
+        <span className="font-heading text-[10px] font-bold uppercase tracking-[.13em] text-primary">{title}</span>
       </div>
-      <span className="font-heading text-[10px] font-bold uppercase tracking-[.13em] text-primary">{title}</span>
+      {children ? <div className="shrink-0">{children}</div> : null}
     </div>
   );
 }
@@ -1014,7 +1018,31 @@ export default function Distillery() {
 
               {/* Auto-sell */}
               <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border-dim)' }}>
-                <SectionHead icon={TrendingUp} title="Auto-Sell Rules" />
+                <SectionHead icon={TrendingUp} title="Auto-Sell Rules">
+                  <TooltipProvider>
+                    <Tooltip delayDuration={200}>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          className="inline-flex rounded border border-primary/30 p-1 text-primary/75 transition-colors hover:border-primary/50 hover:bg-primary/10 hover:text-primary"
+                          aria-label="How auto-sell works"
+                        >
+                          <CircleHelp size={14} aria-hidden />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="left" className="max-w-[min(320px,calc(100vw-2rem))] space-y-2 p-3 text-left text-[11px] leading-snug text-primary-foreground">
+                        <p className="font-heading text-[10px] font-bold uppercase tracking-wide text-primary-foreground">How auto-sell works</p>
+                        <ul className="list-disc space-y-1.5 pl-3.5 normal-case">
+                          <li>It runs when you <strong className="font-semibold">Collect</strong> — not on its own in the background.</li>
+                          <li>You need <strong className="font-semibold">Sales</strong> workers hired. More sales workers move more bottles per collect.</li>
+                          <li><strong className="font-semibold">Min inventory</strong> is the stash you try to keep; the crew avoids selling below that (using what you already have plus this collect).</li>
+                          <li><strong className="font-semibold">Batch size</strong> is the max each sales worker can sell in one collect (you still cannot sell more than you earned that collect).</li>
+                          <li>Money from sales goes to your <strong className="font-semibold">vault</strong> with the collect. Heat and raids can still hurt outcomes.</li>
+                        </ul>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                </SectionHead>
                 <div className="dist-autosell-row">
                   <input
                     type="checkbox"

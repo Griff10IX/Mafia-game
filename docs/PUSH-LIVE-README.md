@@ -7,6 +7,7 @@
 
 **Forum FAQ only (update pinned `FAQs` topic from `docs/FORUM_FAQ.md` in Mongo):** double-click **`scripts\push-faq-topic.bat`** after you’ve pushed FAQ edits (details in the section *Refresh the forum “FAQs” topic* below).
 **Update Log only (update pinned `Update Log` topic from `docs/UPDATE_LOG.md` in Mongo):** double-click **`scripts\push-update-log-topic.bat`** after you’ve pushed update-log edits (details in the section *Refresh the forum “Update Log” topic* below).
+**How To only (update pinned `How To` topic from `docs/FORUM_HOW_TO.md` in Mongo):** double-click **`scripts\push-how-to-topic.bat`** after you’ve pushed How To edits (details in the section *Refresh the forum “How To” topic* below).
 
 **With a custom commit message:** in terminal:
 ```powershell
@@ -61,6 +62,18 @@ After your update-log markdown is **committed and pushed** to `origin/MAfiaGame2
 - **Windows:** double-click **`scripts/push-update-log-topic.bat`**  
   - Default: `git fetch` + `reset --hard origin/MAfiaGame2` on the server, then `python backend/seeds/update_update_log_topic.py` (uses `backend/venv` if present).  
   - **`push-update-log-topic.bat python`** — only runs the updater (no git sync).
+
+Requires **PuTTY `plink`** in your PATH (same as `push-live.bat`). Keeps the server’s `backend/.env` across the git reset (same pattern as push-live).
+
+---
+
+## Refresh the forum “How To” topic from `docs/FORUM_HOW_TO.md` (Mongo)
+
+After your How To markdown is **committed and pushed** to `origin/MAfiaGame2`, run:
+
+- **Windows:** double-click **`scripts/push-how-to-topic.bat`**  
+  - Default: `git fetch` + `reset --hard origin/MAfiaGame2` on the server, then `python backend/seeds/update_how_to_topic.py` (uses `backend/venv` if present).  
+  - **`push-how-to-topic.bat python`** — only runs the updater (no git sync).
 
 Requires **PuTTY `plink`** in your PATH (same as `push-live.bat`). Keeps the server’s `backend/.env` across the git reset (same pattern as push-live).
 
