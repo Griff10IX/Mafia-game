@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb } from 'lucide-react';
 import api, { getApiErrorMessage, onCooldownChange, invalidateApiCache } from '../utils/api';
 import { setCrimesPrefetch, getCrimesPrefetch } from '../utils/prefetchCache';
 import { toast } from 'sonner';
@@ -45,6 +45,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
       label: 'Combat',
       items: [
         { path: '/kill/attack', label: 'Attack' },
+        { path: '/kill/witness-statements', label: 'Witness statements' },
         { path: '/kill/attempts', label: 'Attempts' },
         { path: '/kill/hitlist', label: 'Hitlist' },
         { path: '/kill/bodyguards', label: 'Bodyguards' },
@@ -935,7 +936,7 @@ export default function Layout({ children }) {
         '/account/profile': 'information', '/account/referral': 'information', '/account/settings': 'information', '/game/stats': 'information', '/account/stats': 'information',
         '/game/users-online': 'information', '/money/property': 'information', '/game/help-desk': 'information', '/game/leaderboard': 'information',
         '/game/ranking': 'ranking', '/account/prestige': 'ranking',
-        '__combat__': 'combat', '/kill/attack': 'combat', '/kill/attempts': 'combat', '/kill/hitlist': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
+        '__combat__': 'combat', '/kill/attack': 'combat', '/kill/witness-statements': 'combat', '/kill/attempts': 'combat', '/kill/hitlist': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
         '/game/travel': 'travel', '/game/states': 'travel', '/my-properties': 'travel', '/money/booze-run': 'travel',
         '__messaging__': 'messaging',
         '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game-pass': 'money', '/game/daily-rewards': 'money', '/money/distillery': 'money',
@@ -948,7 +949,7 @@ export default function Layout({ children }) {
         '/account/inventory': 'information', '/money/loot-box': 'information',         '/account/profile': 'information', '/account/referral': 'information', '/account/settings': 'information', '/game/stats': 'information', '/account/stats': 'information',
         '/game/users-online': 'information', '/money/property': 'information', '/game/help-desk': 'information',
         '/game/ranking': 'ranking', '/account/prestige': 'ranking',
-        '__combat__': 'combat', '/kill/attack': 'combat', '/kill/attempts': 'combat', '/kill/hitlist': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
+        '__combat__': 'combat', '/kill/attack': 'combat', '/kill/witness-statements': 'combat', '/kill/attempts': 'combat', '/kill/hitlist': 'combat', '/kill/bodyguards': 'combat', '/kill/armour-weapons': 'combat', '/casino/mini-games/shooting-range': 'combat',
         '/game/travel': 'travel', '/game/states': 'travel', '/my-properties': 'travel', '/money/booze-run': 'travel',
         '__messaging__': 'messaging',
         '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game-pass': 'money', '/game/daily-rewards': 'money', '/casino/mini-games/flappy': 'money', '/money/distillery': 'money',
@@ -1116,6 +1117,7 @@ export default function Layout({ children }) {
         <div className={`space-y-0 ${styles.sidebarSubmenuBorder}`}>
           {[
             { to: '/kill/attack', label: 'Attack', testId: 'nav-attack', Icon: Sword },
+            { to: '/kill/witness-statements', label: 'Witness statements', testId: 'nav-witness-statements', Icon: FileText },
             { to: '/kill/attempts', label: 'Attempts', testId: 'nav-attempts', Icon: Crosshair },
             { to: '/kill/hitlist', label: 'Hitlist', testId: 'nav-hitlist', Icon: ScrollText },
             { to: '/kill/bodyguards', label: 'Bodyguards', testId: 'nav-bodyguards', Icon: Shield },

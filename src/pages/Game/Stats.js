@@ -118,7 +118,14 @@ const RankStatsCard = ({ rankStats }) => (
   </div>
 );
 
-const KillsListView = ({ kills, usersOnly, onToggleUsersOnly }) => (
+function isNpcVictimKill(k) {
+  if (k?.victim_is_npc === true) return true;
+  return typeof k?.victim_username === 'string' && k.victim_username.includes('(NPC)');
+}
+
+const KillsListView = ({ kills, usersOnly, onToggleUsersOnly, hideNpcKills, onToggleHideNpcKills }) => {
+  const displayKills = hideNpcKills ? kills.filter((k) => !isNpcVictimKill(k)) : kills;
+  return (
   <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 stat-card stat-fade-in mobile-panel`} style={{ animationDelay: '0.1s' }}>
     <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none stat-glow" />
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -126,15 +133,26 @@ const KillsListView = ({ kills, usersOnly, onToggleUsersOnly }) => (
       <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">
         Last 15 Kills
       </h2>
-      <label className="inline-flex items-center gap-1 text-[9px] text-mutedForeground font-heading select-none cursor-pointer">
-        <input
-          type="checkbox"
-          className="h-3 w-3 accent-primary rounded border-primary/30 cursor-pointer"
-          checked={usersOnly}
-          onChange={(e) => onToggleUsersOnly(e.target.checked)}
-        />
-        show users only
-      </label>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 justify-end">
+        <label className="inline-flex items-center gap-1 text-[9px] text-mutedForeground font-heading select-none cursor-pointer">
+          <input
+            type="checkbox"
+            className="h-3 w-3 accent-primary rounded border-primary/30 cursor-pointer"
+            checked={hideNpcKills}
+            onChange={(e) => onToggleHideNpcKills(e.target.checked)}
+          />
+          hide NPC kills
+        </label>
+        <label className="inline-flex items-center gap-1 text-[9px] text-mutedForeground font-heading select-none cursor-pointer">
+          <input
+            type="checkbox"
+            className="h-3 w-3 accent-primary rounded border-primary/30 cursor-pointer"
+            checked={usersOnly}
+            onChange={(e) => onToggleUsersOnly(e.target.checked)}
+          />
+          show users only
+        </label>
+      </div>
     </div>
 
     {/* Desktop view */}
@@ -145,13 +163,13 @@ const KillsListView = ({ kills, usersOnly, onToggleUsersOnly }) => (
         <div className="col-span-3">Killer</div>
         <div className="col-span-2 text-right">Time</div>
       </div>
-      {kills.length === 0 ? (
+      {displayKills.length === 0 ? (
         <div className="px-2 py-4 text-[10px] text-mutedForeground font-heading text-center">
           No kills yet.
         </div>
       ) : (
         <div className="divide-y divide-zinc-700/30">
-          {kills.map((k) => (
+          {displayKills.map((k) => (
             <div
               key={k.id}
               className="stat-row grid grid-cols-12 gap-1 px-2 py-1.5 text-[10px] font-heading"
@@ -178,12 +196,12 @@ const KillsListView = ({ kills, usersOnly, onToggleUsersOnly }) => (
 
     {/* Mobile view */}
     <div className="md:hidden divide-y divide-zinc-700/30">
-      {kills.length === 0 ? (
+      {displayKills.length === 0 ? (
         <div className="px-2 py-4 text-[10px] text-mutedForeground font-heading text-center">
           No kills yet.
         </div>
       ) : (
-        kills.map((k) => (
+        displayKills.map((k) => (
           <div key={k.id} className="stat-row p-2 space-y-1">
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0">
@@ -211,7 +229,8 @@ const KillsListView = ({ kills, usersOnly, onToggleUsersOnly }) => (
     </div>
     <div className="stat-art-line text-primary mx-2" />
   </div>
-);
+  );
+};
 
 const WipedFamiliesListView = ({ families }) => (
   <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 stat-card stat-fade-in mobile-panel`} style={{ animationDelay: '0.1s' }}>
@@ -364,6 +383,7 @@ function buildVehicleRows(data) {
 // Main component
 export default function Stats() {
   const [usersOnlyKills, setUsersOnlyKills] = useState(false);
+  const [hideNpcKills, setHideNpcKills] = useState(true);
   const [data, setData] = useState(() => getStatsOverview(false));
   const [statsListTab, setStatsListTab] = useState('kills'); // 'kills' | 'wiped'
 
@@ -479,6 +499,8 @@ export default function Stats() {
           kills={recentKills}
           usersOnly={usersOnlyKills}
           onToggleUsersOnly={setUsersOnlyKills}
+          hideNpcKills={hideNpcKills}
+          onToggleHideNpcKills={setHideNpcKills}
         />
       )}
 

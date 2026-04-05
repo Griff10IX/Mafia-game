@@ -402,6 +402,7 @@ def register(router):
                 "id": a.get("id") or a.get("attack_id") or str(uuid.uuid4()),
                 "victim_username": victim_username,
                 "victim_rank_name": victim_rank_name,
+                "victim_is_npc": victim_is_npc,
                 "killer_username": killer_username,
                 "is_public": is_public,
                 "created_at": a.get("created_at"),

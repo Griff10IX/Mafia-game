@@ -1753,10 +1753,12 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         max_statements = max(0, min(6, 7 - (best_damage // 20)))
         if current_user.get("has_silencer"):
             max_statements = max(0, max_statements - 2)
-        number_to_send = random.randint(0, max_statements)
+        # At least one witness notification whenever the cap allows (still 0 when cap is 0, e.g. very high weapon damage).
+        number_to_send = random.randint(1, max_statements) if max_statements >= 1 else 0
         if number_to_send > 0:
             location = attack.get("location_state") or "Unknown"
             time_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+            # Human and robot bodyguards both use is_bodyguard on the victim user doc; label clarifies it was a guard.
             victim_label = f"bodyguard {target_name}" if target.get("is_bodyguard") else target_name
             witness_msg = f"{current_user.get('username') or 'Someone'} killed {victim_label}. Weapon: {best_weapon_name}. Bullets used: {bullets_used:,}. Location: {location}. Time: {time_str}."
             all_user_ids = await db.users.find(
@@ -1768,6 +1770,10 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 to_send = min(number_to_send, len(recipient_ids))
                 for uid in random.sample(recipient_ids, to_send):
                     await send_notification(uid, "Witness statement", witness_msg, "attack", category="attacks")
+                    try:
+                        await db.users.update_one({"id": uid}, {"$inc": {"witness_statements": 1}})
+                    except Exception:
+                        pass
         killer_family_id = await resolve_family_id(killer_id) or current_user.get("family_id")
         killer_family_id = str(killer_family_id).strip() if killer_family_id else None
         victim_family_id = await resolve_family_id(victim_id) or target.get("family_id")

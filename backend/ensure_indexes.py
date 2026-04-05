@@ -141,6 +141,8 @@ async def ensure_all_indexes(db):
         await db.attack_attempts.create_index([("attacker_id", 1), ("created_at", -1)])
         await db.attack_attempts.create_index([("target_id", 1), ("created_at", -1)])
         await db.attack_attempts.create_index([("outcome", 1), ("created_at", -1)])
+        await db.witness_statement_listings.create_index("id", unique=True)
+        await db.witness_statement_listings.create_index([("seller_id", 1), ("status", 1)])
 
         # --- User cars / GTA ---
         await db.user_cars.create_index("user_id")

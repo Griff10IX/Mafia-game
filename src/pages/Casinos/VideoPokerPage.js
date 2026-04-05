@@ -276,10 +276,17 @@ export default function VideoPoker() {
   const handleSetBuyBack = async () => {
     if (!ownership?.current_city) return;
     const val = parseInt(String(ownerBuyBack).replace(/\D/g, ''), 10) || 0;
+    const effMax = ownership.buy_back_effective_max;
+    if (effMax != null && val > effMax) {
+      toast.error(
+        `Buy-back is in points, not cash. Max you can set right now is ${effMax.toLocaleString()} (your points balance, capped by server limit). Earn more points or lower the amount.`,
+      );
+      return;
+    }
     setOwnerLoading(true);
     try {
-      await api.post('/casino/videopoker/set-buy-back-reward', { city: ownership.current_city, amount: val });
-      toast.success('Buy-back reward updated');
+      const res = await api.post('/casino/videopoker/set-buy-back-reward', { city: ownership.current_city, amount: val });
+      toast.success(res.data?.message || 'Buy-back reward updated');
       fetchConfigAndOwnership();
     } catch (e) { toast.error(apiErrorDetail(e, 'Failed')); }
     finally { setOwnerLoading(false); }
@@ -330,6 +337,9 @@ export default function VideoPoker() {
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
     finally { setBuyBackActionLoading(false); }
   };
+
+  const buyBackEffMax = ownership?.buy_back_effective_max;
+  const buyBackSrvCap = ownership?.buy_back_server_cap;
 
   const betNum = parseInt(String(bet || '').replace(/\D/g, ''), 10) || 0;
   const maxBet = ownership?.max_bet ?? config.max_bet ?? 50_000_000;
@@ -452,10 +462,24 @@ export default function VideoPoker() {
               <FormattedNumberInput placeholder="e.g. 100,000,000" value={newMaxBet} onChange={setNewMaxBet} className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none" />
               <button onClick={handleSetMaxBet} disabled={ownerLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 font-heading">Set</button>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] text-mutedForeground w-20 shrink-0">Buy-back</span>
-              <FormattedNumberInput placeholder="Points offered if taken" value={ownerBuyBack} onChange={setOwnerBuyBack} className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none" />
-              <button onClick={handleSetBuyBack} disabled={ownerLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 font-heading">Set</button>
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+              <div className="flex items-center gap-2 w-full">
+                <span className="text-[10px] text-mutedForeground w-20 shrink-0">Buy-back</span>
+                <FormattedNumberInput
+                  placeholder="Points if table is taken"
+                  value={ownerBuyBack}
+                  onChange={setOwnerBuyBack}
+                  max={buyBackEffMax != null && buyBackEffMax > 0 ? buyBackEffMax : undefined}
+                  className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                <button type="button" onClick={handleSetBuyBack} disabled={ownerLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 font-heading shrink-0">Set</button>
+              </div>
+              {(buyBackEffMax != null || buyBackSrvCap != null) && (
+                <p className="text-[9px] text-mutedForeground leading-snug sm:pl-20 sm:ml-0 pl-0">
+                  In <span className="text-foreground font-semibold">points</span>, not dollars. If someone accepts a buy-back, that many points leave your balance — so the value cannot exceed your current points (server cap {buyBackSrvCap != null ? `${buyBackSrvCap.toLocaleString()} pts` : '—'}). You can set up to{' '}
+                  <span className="text-primary font-heading font-bold tabular-nums">{buyBackEffMax != null ? buyBackEffMax.toLocaleString() : '—'}</span> right now.
+                </p>
+              )}
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-mutedForeground w-20 shrink-0">Transfer</span>

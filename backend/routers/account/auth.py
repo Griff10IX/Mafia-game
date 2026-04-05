@@ -1788,6 +1788,7 @@ def register(router):
                 bodyguard_count=bodyguard_count,
                 bullets=_safe_int(u.get("bullets"), 0),
                 molotovs=_safe_int(u.get("molotovs"), 0),
+                witness_statements=_safe_int(u.get("witness_statements"), 0),
                 health=_safe_int(u.get("health"), DEFAULT_HEALTH),
                 armour_level=_safe_int(u.get("armour_level"), 0),
                 current_state=str(u.get("current_state") or ""),

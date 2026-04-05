@@ -72,6 +72,7 @@ const UsersOnline = lazy(() => import("./pages/Game/UsersOnline"));
 const ArmourWeapons = lazy(() => import("./pages/Kill/ArmourWeapons"));
 const Attack = lazy(() => import("./pages/Kill/Attack"));
 const Attemps = lazy(() => import("./pages/Kill/Attemps"));
+const WitnessStatements = lazy(() => import("./pages/Kill/WitnessStatements"));
 const Bodyguards = lazy(() => import("./pages/Kill/Bodyguards"));
 const HitlistPage = lazy(() => import("./pages/Kill/HitlistPage"));
 
@@ -700,6 +701,7 @@ function App() {
           <Route path="/bodyguards" element={<Navigate to="/kill/bodyguards" replace />} />
           <Route path="/hitlist" element={<Navigate to="/kill/hitlist" replace />} />
           <Route path="/attempts" element={<Navigate to="/kill/attempts" replace />} />
+          <Route path="/witness-statements" element={<Navigate to="/kill/witness-statements" replace />} />
           <Route path="/armour-weapons" element={<Navigate to="/kill/armour-weapons" replace />} />
           <Route path="/weapons" element={<Navigate to="/kill/armour-weapons" replace />} />
           <Route path="/armour" element={<Navigate to="/kill/armour-weapons" replace />} />

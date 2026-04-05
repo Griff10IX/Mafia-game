@@ -700,6 +700,7 @@ class UserResponse(BaseModel):
     bodyguard_count: int = 0  # current number of hired bodyguards (filled slots)
     bullets: int
     molotovs: int = 0
+    witness_statements: int = 0  # tradable; minted when receiving kill witness notifications
     health: int
     armour_level: int
     current_state: str
@@ -2316,7 +2317,7 @@ from routers.cars import gta
 from routers.casinos import dice, roulette, blackjack, mp_blackjack, mp_poker, mp_8ball, horseracing, slots, video_poker, mdg, sports_betting
 from routers.crime import crimes, jail, organised_crime, oc
 from routers.game import families, leaderboard, states, stats, store, dead_alive, events, notifications, meta, entertainer, achievements
-from routers.kill import attack, armoury, bodyguards, hitlist
+from routers.kill import attack, armoury, bodyguards, hitlist, witness_statements
 from routers.minigames import gauntlet, boxing, racing, snake
 from routers.money import bank, stock_market, properties, quicktrade, crack_safe, illegal_business, booze_run, racket, payments, lottery
 from routers.social import forum, game_chat, giphy, image_host, designer_auctions
@@ -2352,6 +2353,7 @@ missions.register(api_router)
 from routers.money import loot_box
 loot_box.register(api_router)
 attack.register(api_router)
+witness_statements.register(api_router)
 bank.register(api_router)
 families.register(api_router)
 bodyguards.register(api_router)

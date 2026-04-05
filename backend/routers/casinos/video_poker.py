@@ -309,6 +309,12 @@ def register(router):
             "profit": profit if is_owner else None,
             "buy_back_offer": buy_back_offer,
         }
+        if is_owner:
+            _, buyback_cap = await get_casino_caps()
+            row_pts = await db.users.find_one({"id": user_id}, {"points": 1})
+            pts = int((row_pts or {}).get("points") or 0)
+            out["buy_back_server_cap"] = buyback_cap
+            out["buy_back_effective_max"] = max(0, min(buyback_cap, pts))
         if len(_ownership_cache) < _OWNERSHIP_MAX_ENTRIES:
             _ownership_cache[user_id] = {"ts": now_ts, "data": out}
         return out
@@ -393,10 +399,14 @@ def register(router):
         if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this table")
         _, buyback_cap = await get_casino_caps()
-        amount = max(0, min(int(request.amount), buyback_cap))
+        requested = int(request.amount)
+        amount = max(0, min(requested, buyback_cap))
         await assert_casino_buy_back_within_points_balance(current_user["id"], amount)
         await db.videopoker_ownership.update_one({"city": stored_city or city}, {"$set": {"buy_back_reward": amount}})
-        return {"message": "Buy-back reward updated."}
+        msg = "Buy-back reward updated."
+        if requested > buyback_cap:
+            msg = f"Saved {amount:,} points (server max buy-back is {buyback_cap:,})."
+        return {"message": msg, "buy_back_reward": amount}
 
     @router.post("/casino/videopoker/buy-back/accept")
     async def casino_videopoker_buy_back_accept(request: VideoPokerBuyBackAcceptRequest, current_user: dict = Depends(get_current_user_verified)):
