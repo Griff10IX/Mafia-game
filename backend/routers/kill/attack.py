@@ -30,6 +30,8 @@ from server import (
     DEFAULT_HEALTH,
     KILL_CASH_PERCENT,
     ADMIN_EMAILS,
+    _is_admin,
+    _is_hdo,
     _is_moderator,
     CAPO_RANK_ID,
     GODFATHER_RANK_ID,
@@ -1904,19 +1906,44 @@ TIMELINE_ACTIVE_ATTACK_CAP = 20
 TIMELINE_KILL_DEDUP_SECONDS = 180
 
 
-async def get_attack_timeline(current_user: dict = Depends(get_current_user)):
+async def get_attack_timeline(
+    target_username: Optional[str] = Query(None, description="Staff only: view a specific user's timeline by username"),
+    current_user: dict = Depends(get_current_user),
+):
     """
     Player-only merged log: full attack_attempts (sanitized), active searches/found rows,
     and activity_log attack_travel / attack_kill. IP and User-Agent are stripped.
     """
-    uid = current_user["id"]
-    can_view_debug_payload = bool(_is_moderator(current_user) or (current_user.get("email") in ADMIN_EMAILS))
+    viewer_is_staff = bool(
+        _is_admin(current_user)
+        or _is_moderator(current_user)
+        or _is_hdo(current_user)
+        or (current_user.get("email") in ADMIN_EMAILS)
+    )
+    timeline_user = current_user
+    if target_username and str(target_username).strip():
+        if not viewer_is_staff:
+            raise HTTPException(status_code=403, detail="Staff access required")
+        tf = _find_user_by_username_case_insensitive(target_username)
+        tu = await db.users.find_one(tf, {"_id": 0, "id": 1, "username": 1, "current_state": 1, "email": 1})
+        if not tu:
+            raise HTTPException(status_code=404, detail="User not found")
+        timeline_user = tu
+
+    uid = timeline_user["id"]
+    can_view_debug_payload = viewer_is_staff
+    can_view_incoming_timeline = can_view_debug_payload
     attacker_row = await db.users.find_one({"id": uid}, {"_id": 0, "current_state": 1})
     ac_state = (attacker_row or {}).get("current_state") or current_user.get("current_state") or ""
     active_items = await _build_active_attacks_list(uid, ac_state)
 
+    attempts_query = (
+        {"$or": [{"attacker_id": uid}, {"target_id": uid}]}
+        if can_view_incoming_timeline
+        else {"attacker_id": uid}
+    )
     raw_attempts = await db.attack_attempts.find(
-        {"$or": [{"attacker_id": uid}, {"target_id": uid}]},
+        attempts_query,
         {"_id": 0},
     ).sort("created_at", -1).to_list(TIMELINE_ATTEMPT_LIMIT)
 
@@ -2013,28 +2040,23 @@ async def get_attack_timeline(current_user: dict = Depends(get_current_user)):
         )
 
     events.sort(key=lambda e: _parse_event_sort_key(e.get("occurred_at")), reverse=True)
-    return {"events": events, "generated_at": datetime.now(timezone.utc).isoformat()}
+    return {
+        "events": events,
+        "subject_username": (timeline_user.get("username") or "").strip() or None,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+    }
 
 
 async def get_attack_attempts(current_user: dict = Depends(get_current_user)):
     docs = await db.attack_attempts.find(
-        {"$or": [{"attacker_id": current_user["id"]}, {"target_id": current_user["id"]}]},
+        {"attacker_id": current_user["id"]},
         {"_id": 0}
     ).sort("created_at", -1).to_list(500)
     filtered = []
     for d in docs:
         if not d.get("id"):
             d["id"] = str(uuid.uuid4())
-        d["direction"] = "outgoing" if d.get("attacker_id") == current_user["id"] else "incoming"
-        if d["direction"] == "incoming":
-            outcome = d.get("outcome")
-            if outcome == "bodyguard":
-                continue
-            if outcome == "failed":
-                if (d.get("damage_done") or 0) <= 0:
-                    continue
-            if outcome == "error":
-                continue
+        d["direction"] = "outgoing"
         # No real combat spend — hide validation/error spam and bodyguard blocks (0 bullets) from history UI
         if int(d.get("bullets_used") or 0) <= 0:
             continue

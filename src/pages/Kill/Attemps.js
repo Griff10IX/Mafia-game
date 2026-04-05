@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Skull, Crosshair, ArrowUpRight, ArrowDownLeft, Clock, Shield, DollarSign, History, List, ChevronDown, ChevronRight } from 'lucide-react';
+import { Skull, Crosshair, ArrowUpRight, Clock, Shield, DollarSign, History, List, ChevronDown, ChevronRight } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -252,6 +252,9 @@ export default function Attempts() {
   const [timelineErr, setTimelineErr] = useState(null);
   const [timelineExpanded, setTimelineExpanded] = useState({});
   const [canViewPayload, setCanViewPayload] = useState(false);
+  const [timelineSubjectUsername, setTimelineSubjectUsername] = useState(null);
+  const [adminTargetInput, setAdminTargetInput] = useState('');
+  const [adminTargetApplied, setAdminTargetApplied] = useState('');
 
   const fetchAttempts = useCallback(async () => {
     setSummaryLoading(true);
@@ -271,15 +274,20 @@ export default function Attempts() {
     setTimelineLoading(true);
     setTimelineErr(null);
     try {
-      const res = await api.get('/attack/timeline');
+      const target = (adminTargetApplied || '').trim();
+      const res = await api.get('/attack/timeline', {
+        params: target ? { target_username: target } : undefined,
+      });
       setTimelineEvents(res.data?.events || []);
+      setTimelineSubjectUsername(res.data?.subject_username || null);
     } catch (e) {
       setTimelineErr(getApiErrorMessage(e));
       setTimelineEvents([]);
+      setTimelineSubjectUsername(null);
     } finally {
       setTimelineLoading(false);
     }
-  }, []);
+  }, [adminTargetApplied]);
 
   const fetchViewerRole = useCallback(async () => {
     try {
@@ -304,7 +312,6 @@ export default function Attempts() {
   }, [tab, fetchAttempts, fetchTimeline]);
 
   const outgoing = useMemo(() => (attempts || []).filter((a) => a.direction === 'outgoing'), [attempts]);
-  const incoming = useMemo(() => (attempts || []).filter((a) => a.direction === 'incoming'), [attempts]);
 
   const toggleTimelineRow = (id) => {
     setTimelineExpanded((m) => ({ ...m, [id]: !m[id] }));
@@ -326,6 +333,34 @@ export default function Attempts() {
         <p className="text-[9px] text-zinc-500 font-heading italic">
           Full combat history or a short summary of kills and damage only.
         </p>
+        {canViewPayload && tab === 'everything' && (
+          <div className="flex flex-wrap items-center gap-1 p-1 rounded-md border border-primary/20 bg-primary/5">
+            <input
+              type="text"
+              value={adminTargetInput}
+              onChange={(e) => setAdminTargetInput(e.target.value)}
+              placeholder="Admin: search username for timeline"
+              className="min-w-[180px] flex-1 px-2 py-1 rounded border border-zinc-700/60 bg-black/30 text-[10px] text-foreground font-heading"
+            />
+            <button
+              type="button"
+              onClick={() => setAdminTargetApplied((adminTargetInput || '').trim())}
+              className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border border-primary/40 text-primary hover:bg-primary/15"
+            >
+              Load User
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setAdminTargetInput('');
+                setAdminTargetApplied('');
+              }}
+              className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border border-zinc-700/60 text-mutedForeground hover:text-foreground"
+            >
+              Clear
+            </button>
+          </div>
+        )}
         <div className="flex flex-wrap gap-1 p-0.5 rounded-md border border-primary/20 bg-primary/5">
           <button
             type="button"
@@ -375,6 +410,11 @@ export default function Attempts() {
           <p className="px-2.5 pt-2 text-[9px] text-mutedForeground font-heading">
             Bodyguard blocks, errors, travel, active searches, and kill logs — merged newest first.
           </p>
+          {canViewPayload && timelineSubjectUsername && (
+            <p className="px-2.5 text-[9px] text-primary font-heading">
+              Viewing timeline for: {timelineSubjectUsername}
+            </p>
+          )}
           {timelineErr && <p className="px-2.5 text-[10px] text-destructive font-heading">{timelineErr}</p>}
           {timelineLoading && timelineEvents.length === 0 && !timelineErr ? (
             <div className="flex items-center gap-2 py-8 justify-center text-mutedForeground">
@@ -404,21 +444,13 @@ export default function Attempts() {
       )}
 
       {tab === 'summary' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 md:gap-3">
+        <div className="grid grid-cols-1 gap-2 md:gap-3">
           <AttemptsCard
             title="My Attempts"
             attempts={outgoing}
             icon={ArrowUpRight}
             emptyMessage="No attacks made yet"
             delay={0}
-          />
-
-          <AttemptsCard
-            title="Against Me"
-            attempts={incoming}
-            icon={ArrowDownLeft}
-            emptyMessage="No attacks against you"
-            delay={0.05}
           />
         </div>
       )}
