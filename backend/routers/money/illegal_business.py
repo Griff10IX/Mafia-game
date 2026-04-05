@@ -1771,7 +1771,13 @@ async def get_distillery(current_user: dict = Depends(get_current_user)):
     business, distillery = await _distillery_business_for_user(current_user)
     _distillery_decay_and_status(distillery, _utc_now())
     await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": {"distillery": distillery}})
-    return _distillery_public_payload(distillery, business)
+    payload = _distillery_public_payload(distillery, business)
+    # Units in inventory usable for aging (same bucket as start-aging-batch).
+    booze_id = _default_booze_type_id()
+    udoc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "booze_carrying": 1})
+    carrying = (udoc or {}).get("booze_carrying") or {}
+    payload["booze_units_carrying"] = int(carrying.get(booze_id) or 0)
+    return payload
 
 
 async def get_distillery_progression_catalog(current_user: dict = Depends(get_current_user)):

@@ -252,6 +252,25 @@ async def _get_author_display_colors(author_ids) -> dict:
                 result[uid] = mod_default
     return result
 
+
+def _pick_author_online_color(
+    colors: dict,
+    username_to_id: dict,
+    stored_author_id,
+    author_username: str,
+) -> Optional[str]:
+    """Staff accent for forum author links. Prefer stored author_id; if it has no staff color (stale/wrong id), fall back to id resolved from author_username."""
+    if stored_author_id and colors.get(stored_author_id):
+        return colors[stored_author_id]
+    key = (author_username or "").strip().lower()
+    if not key:
+        return None
+    resolved = username_to_id.get(key)
+    if resolved and colors.get(resolved):
+        return colors[resolved]
+    return None
+
+
 FORUM_CATEGORIES = ["general", "entertainer", "crew_oc", "designer", "game_ideas"]  # game_ideas = Game Ideas hub + submissions
 FORUM_TOPICS_PER_PAGE = 20
 FORUM_TOPICS_MAX_TOTAL = 40  # page 1 = 20, page 2 = 20; beyond that topics are deleted (mods/admins only see page 2). Topics with prune_exempt=True are never auto-deleted.
@@ -329,12 +348,12 @@ async def get_topics(
     skip = (page - 1) * FORUM_TOPICS_PER_PAGE
     topics = await db.forum_topics.find(query, {"_id": 0}).sort(sort).skip(skip).limit(FORUM_TOPICS_PER_PAGE).to_list(FORUM_TOPICS_PER_PAGE)
     author_ids = [t.get("author_id") for t in topics if t.get("author_id")]
-    # Resolve authors by username for topics missing author_id (e.g. older topics)
+    # Resolve every displayed author_username so staff colors work even when author_id is stale (wrong id, legacy import).
     username_to_id = {}
     usernames_to_resolve = list(set(
         (t.get("author_username") or "").strip()
         for t in topics
-        if not t.get("author_id") and (t.get("author_username") or "").strip()
+        if (t.get("author_username") or "").strip()
     ))
     if usernames_to_resolve:
         or_clauses = [{"username": re.compile("^" + re.escape(u) + "$", re.IGNORECASE)} for u in usernames_to_resolve if u]
@@ -417,9 +436,14 @@ async def get_topics(
             "created_at": t.get("created_at"),
             "updated_at": t.get("updated_at"),
         }
-        author_id = t.get("author_id") or (username_to_id.get((t.get("author_username") or "").strip().lower()) if t.get("author_username") else None)
-        if author_id and colors.get(author_id):
-            item["author_online_color"] = colors[author_id]
+        col = _pick_author_online_color(
+            colors,
+            username_to_id,
+            t.get("author_id"),
+            t.get("author_username") or "",
+        )
+        if col:
+            item["author_online_color"] = col
         if t.get("crew_oc_family_id"):
             item["crew_oc_family_id"] = t["crew_oc_family_id"]
             fam = crew_oc_fam_map.get(t["crew_oc_family_id"])
@@ -460,12 +484,12 @@ async def get_topic(topic_id: str, current_user: dict = Depends(get_current_user
     topic["views"] = topic.get("views", 0) + 1
     comments = await db.forum_comments.find({"topic_id": topic_id}, {"_id": 0}).sort("created_at", -1).to_list(200)
     author_ids = [topic.get("author_id")] + [c.get("author_id") for c in comments if c.get("author_id")]
-    # Resolve by username when author_id missing (e.g. older data)
+    # Resolve every displayed username so staff colors match author_username when author_id is stale.
     usernames_to_resolve = []
-    if not topic.get("author_id") and (topic.get("author_username") or "").strip():
+    if (topic.get("author_username") or "").strip():
         usernames_to_resolve.append((topic.get("author_username") or "").strip())
     for c in comments:
-        if not c.get("author_id") and (c.get("author_username") or "").strip():
+        if (c.get("author_username") or "").strip():
             usernames_to_resolve.append((c.get("author_username") or "").strip())
     username_to_id = {}
     unique_names = [u for u in set(usernames_to_resolve) if u]
@@ -480,13 +504,23 @@ async def get_topic(topic_id: str, current_user: dict = Depends(get_current_user
                 username_to_id[key] = uid
                 author_ids.append(uid)
     colors = await _get_author_display_colors(author_ids)
-    topic_author_id = topic.get("author_id") or username_to_id.get((topic.get("author_username") or "").strip().lower())
-    if topic_author_id and colors.get(topic_author_id):
-        topic["author_online_color"] = colors[topic_author_id]
+    tcol = _pick_author_online_color(
+        colors,
+        username_to_id,
+        topic.get("author_id"),
+        topic.get("author_username") or "",
+    )
+    if tcol:
+        topic["author_online_color"] = tcol
     for c in comments:
-        c_author_id = c.get("author_id") or username_to_id.get((c.get("author_username") or "").strip().lower())
-        if c_author_id and colors.get(c_author_id):
-            c["author_online_color"] = colors[c_author_id]
+        ccol = _pick_author_online_color(
+            colors,
+            username_to_id,
+            c.get("author_id"),
+            c.get("author_username") or "",
+        )
+        if ccol:
+            c["author_online_color"] = ccol
     # Attach like/dislike status for current user (batched)
     uid = current_user.get("id") or ""
     comment_ids = [c["id"] for c in comments if c.get("id")]

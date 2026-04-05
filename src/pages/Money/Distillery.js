@@ -250,6 +250,7 @@ export default function Distillery() {
   const workers = dist?.workers || {};
   const equipment = dist?.equipment || {};
   const queue = Array.isArray(dist?.aging_queue) ? dist.aging_queue : [];
+  const boozeUnitsCarrying = Number(state?.booze_units_carrying ?? 0);
   const vaultBalance = Number(state?.vault_balance ?? business?.vault ?? 0);
   const equipmentCosts = pricing?.equipment_next_costs || {};
   const workerHireCost = Number(pricing?.worker_hire_cost || 0);
@@ -916,6 +917,23 @@ export default function Distillery() {
             {/* Auto-sell & Aging */}
             <div className="dist-panel">
               <SectionHead icon={Clock3} title="Aging Cellar" />
+              <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2 text-[11px] font-heading text-mutedForeground">
+                <span>
+                  On hand:{' '}
+                  <span className="font-bold tabular-nums text-primary">{boozeUnitsCarrying}</span>
+                  {' '}booze — used when you start a batch
+                </span>
+                {boozeUnitsCarrying > 0 && (
+                  <button
+                    type="button"
+                    className="shrink-0 rounded border border-primary/30 bg-primary/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wider text-primary transition-all hover:bg-primary/20 disabled:opacity-40"
+                    disabled={saving}
+                    onClick={() => setAgingQty(Math.max(1, boozeUnitsCarrying))}
+                  >
+                    Set qty to max
+                  </button>
+                )}
+              </div>
               <div className="mb-3.5 flex gap-1">
                 {['quick', 'standard', 'reserve', 'premium'].map((tier) => (
                   <button
