@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb } from 'lucide-react';
 import api, { getApiErrorMessage, onCooldownChange, invalidateApiCache } from '../utils/api';
 import { setCrimesPrefetch, getCrimesPrefetch } from '../utils/prefetchCache';
 import { toast } from 'sonner';
@@ -139,7 +139,9 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
       items: [
         { path: '/social/forum', label: 'Forum' },
         { path: '/social/forum', label: 'Entertainer Forum', search: '?tab=entertainer' },
-        { path: '/social/forum', label: 'Designer Forum', search: '?tab=designer' },
+        { path: '/social/forum', label: 'Designer forum', search: '?tab=designer' },
+        { path: '/social/forum', label: 'Game Ideas', search: '?tab=game_ideas' },
+        { path: '/social/forum', label: 'Crew OC', search: '?tab=crew_oc' },
         { path: '/social/inbox', label: 'Inbox' },
         { path: '/social/image-host', label: 'Image host' },
         { path: '/game/help-desk', label: 'Help Desk' },
@@ -313,6 +315,7 @@ export default function Layout({ children }) {
   const [isModerator, setIsModerator] = useState(false);
   const [hasAdminEmail, setHasAdminEmail] = useState(false);
   const [rankingCounts, setRankingCounts] = useState({ crimes: 0, gta: 0, jail: 0 });
+  const [sportsBettingEventCount, setSportsBettingEventCount] = useState(0);
   const [gtaExclusiveInPool, setGtaExclusiveInPool] = useState(false);
   const [ocStatus, setOcStatus] = useState(null);
   const [atWar, setAtWar] = useState(false);
@@ -438,9 +441,19 @@ export default function Layout({ children }) {
           }),
         };
       }
+      if (i.type === 'group' && i.id === 'casinos') {
+        return {
+          ...i,
+          items: i.items.map((sub) => (
+            sub.path === '/sports-betting'
+              ? { ...sub, badge: sportsBettingEventCount, badgeTone: 'emerald' }
+              : sub
+          )),
+        };
+      }
       return i;
     });
-  }, [isAdmin, isModerator, hasAdminEmail, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail]);
+  }, [isAdmin, isModerator, hasAdminEmail, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount]);
 
   useEffect(() => onCooldownChange(setCooldownSeconds), []);
 
@@ -657,6 +670,7 @@ export default function Layout({ children }) {
       path.startsWith('/crime/') ||
       path.startsWith('/game/ranking') ||
       path === '/ranking' ||
+      path === '/sports-betting' ||
       (userId && mobileStatsDisplay === 'right_sidebar');
     if (rankingDebounceRef.current) clearTimeout(rankingDebounceRef.current);
     rankingDebounceRef.current = setTimeout(() => {
@@ -821,6 +835,7 @@ export default function Layout({ children }) {
         api.get('/gta/options'),
         api.get('/jail/players'),
         api.get('/gta/exclusive-pool-status'),
+        api.get('/sports-betting/events'),
       ]);
       const crimesRes = settled[0].status === 'fulfilled' ? settled[0].value : null;
       const gtaRes = settled[1].status === 'fulfilled' ? settled[1].value : null;
@@ -830,6 +845,12 @@ export default function Layout({ children }) {
       const gtaAvailable = gtaRes && Array.isArray(gtaRes.data) ? gtaRes.data.filter((o) => { if (!o?.unlocked) return false; if (!o?.cooldown_until) return true; const t = new Date(o.cooldown_until); return !Number.isNaN(t.getTime()) && t <= now; }).length : 0;
       const jailCount = jailPlayersRes && Array.isArray(jailPlayersRes.data?.players) ? jailPlayersRes.data.players.length : 0;
       setRankingCounts({ crimes: crimesAvailable, gta: gtaAvailable, jail: jailCount });
+      if (settled[4].status === 'fulfilled') {
+        const ev = settled[4].value?.data?.events;
+        setSportsBettingEventCount(Array.isArray(ev) ? ev.length : 0);
+      } else {
+        setSportsBettingEventCount(0);
+      }
       // Only update when the request succeeds; failed requests used to clear the ★ intermittently
       if (settled[3].status === 'fulfilled') {
         const d = settled[3].value?.data;
@@ -843,10 +864,23 @@ export default function Layout({ children }) {
   useEffect(() => {
     if (!userId) {
       setGtaExclusiveInPool(false);
+      setSportsBettingEventCount(0);
       return;
     }
     fetchRankingCounts();
   }, [userId]); // eslint-disable-line
+
+  useEffect(() => {
+    if (!userId) return;
+    const id = setInterval(async () => {
+      try {
+        const res = await api.get('/sports-betting/events');
+        const ev = res.data?.events;
+        if (Array.isArray(ev)) setSportsBettingEventCount(ev.length);
+      } catch { /* keep last count */ }
+    }, 120000);
+    return () => clearInterval(id);
+  }, [userId]);
 
   const fetchTravelStatus = useCallback(async () => {
     try {
@@ -956,7 +990,11 @@ export default function Layout({ children }) {
     { path: '/money/distillery', icon: Wine, label: 'Distillery' },
     { path: '/money/racket', icon: Building2, label: 'Racket' },
     { path: '/game/users-online', icon: Users, label: 'Users Online', countBadge: usersOnlineCount },
-    { path: '/social/forum', icon: MessageSquare, label: 'Forum' },
+    { path: '/social/forum', icon: MessageSquare, label: 'Forum', navKey: 'forum-general' },
+    { path: '/social/forum', icon: Mic2, label: 'Entertainer Forum', search: '?tab=entertainer', navKey: 'forum-entertainer' },
+    { path: '/social/forum', icon: Palette, label: 'Designer forum', search: '?tab=designer', navKey: 'forum-designer' },
+    { path: '/social/forum', icon: Lightbulb, label: 'Game Ideas', search: '?tab=game_ideas', navKey: 'forum-game-ideas' },
+    { path: '/social/forum', icon: Users, label: 'Crew OC', search: '?tab=crew_oc', navKey: 'forum-crew-oc' },
     { path: '/social/inbox', icon: Mail, label: 'Inbox', badge: unreadCount },
     { path: '/social/image-host', icon: Image, label: 'Image host' },
     { path: '/game/help-desk', icon: HelpCircle, label: 'Help Desk', badge: helpDeskOpenCount },
@@ -1139,6 +1177,14 @@ export default function Layout({ children }) {
                 <Link to={item.to} onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${isActive ? styles.navItemActivePage : styles.sidebarNavLink}`} style={isActive ? sidebarActiveStyle : undefined} data-testid={item.testId}>
                   {IconComp && <IconComp size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />}
                   <span className="uppercase tracking-widest font-heading flex-1">{item.label}</span>
+                  {item.to === '/sports-betting' && sportsBettingEventCount > 0 && (
+                    <span
+                      className="shrink-0 rounded border border-emerald-500/30 bg-emerald-600/20 px-1.5 py-0.5 font-heading text-[10px] font-bold tabular-nums text-emerald-400"
+                      title="Listed sports book events"
+                    >
+                      {sportsBettingEventCount > 99 ? '99+' : sportsBettingEventCount}
+                    </span>
+                  )}
                 </Link>
               </Fragment>
             );
@@ -1193,18 +1239,32 @@ export default function Layout({ children }) {
   );
 
   const renderNavItem = (item, showDivider) => {
-    const navDivider = showDivider ? navDividerEl(`div-${item.path}`) : null;
+    const itemKey = item.navKey || item.path;
+    const navDivider = showDivider ? navDividerEl(`div-${itemKey}`) : null;
     if (item.path === '/game/ranking') return <Fragment key="nav-ranking-group">{navDivider}{rankingNavBlock}</Fragment>;
     if (item.path === '__combat__') return <Fragment key="nav-combat-group">{navDivider}{combatNavBlock}</Fragment>;
     if (item.path === '/casino') return <Fragment key="nav-casino-group">{navDivider}{casinoNavBlock}</Fragment>;
     if (item.path === '/mini-games') return <Fragment key="nav-minigames-group">{navDivider}{miniGamesNavBlock}</Fragment>;
     const Icon = item.icon;
-    const isActive = location.pathname === item.path;
+    const forumTabParam = new URLSearchParams(location.search || '').get('tab') || '';
+    const isNavForumGeneral = item.path === '/social/forum' && !item.search;
+    const isNavForumSub = item.path === '/social/forum' && item.search;
+    const isActive =
+      isNavForumGeneral
+        ? location.pathname === '/social/forum' && !['entertainer', 'designer', 'crew_oc', 'game_ideas'].includes(forumTabParam)
+        : isNavForumSub
+          ? (() => {
+              const q = (item.search || '').replace(/^\?/, '');
+              const want = new URLSearchParams(q).get('tab');
+              return location.pathname === '/social/forum' && forumTabParam === want;
+            })()
+          : location.pathname === item.path;
+    const linkTo = item.search ? { pathname: item.path, search: item.search.startsWith('?') ? item.search : `?${item.search}` } : item.path;
     const isFamiliesAtWar = item.path === '/game/family/list' && atWar;
     return (
-      <Fragment key={item.path}>
+      <Fragment key={itemKey}>
         {navDivider}
-        <Link to={item.path} data-testid={`nav-${item.label.toLowerCase()}`} data-at-war={atWar && item.path === '/game/family/list' ? 'true' : undefined}
+        <Link to={linkTo} data-testid={`nav-${(item.navKey || item.label).toLowerCase().replace(/\s+/g, '-')}`} data-at-war={atWar && item.path === '/game/family/list' ? 'true' : undefined}
           className={`flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${isFamiliesAtWar ? (isActive ? 'bg-red-500/20 text-red-400 border-l-2 border-red-500' : 'text-red-400 hover:bg-red-500/10') : (isActive ? styles.navItemActivePage : styles.sidebarNavLink)}`}
           style={isFamiliesAtWar ? { color: '#f87171' } : isActive ? sidebarActiveStyle : undefined}
           onClick={() => setSidebarOpen(false)}
@@ -2105,7 +2165,14 @@ export default function Layout({ children }) {
                     const isActive = sub.search
                       ? location.pathname === sub.path && location.search === sub.search
                       : sub.state ? location.pathname === sub.path && location.state?.category === sub.state?.category
-                      : sub.path === '/social/forum' ? location.pathname === '/social/forum' && !location.search?.includes('tab=entertainer') && !location.search?.includes('tab=designer')
+                      : sub.path === '/social/forum'
+                        ? (sub.search
+                          ? location.pathname === '/social/forum' && location.search === sub.search
+                          : location.pathname === '/social/forum'
+                            && !location.search?.includes('tab=entertainer')
+                            && !location.search?.includes('tab=designer')
+                            && !location.search?.includes('tab=game_ideas')
+                            && !location.search?.includes('tab=crew_oc'))
                       : location.pathname === sub.path || location.pathname.startsWith(sub.path + '/');
                     const prefetchCrimes = sub.path === '/crime/crimes' ? () => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); } : undefined;
                     const isGtaExclusive = sub.path === '/crime/gta' && gtaExclusiveInPool;
@@ -2127,7 +2194,13 @@ export default function Layout({ children }) {
                           </span>
                         )}
                         {sub.badge > 0 && (
-                          <span className="shrink-0 min-w-[16px] h-[16px] rounded-full bg-red-600 text-[9px] font-bold text-white flex items-center justify-center px-0.5">{sub.badge > 9 ? '9+' : sub.badge}</span>
+                          sub.badgeTone === 'emerald' ? (
+                            <span className="shrink-0 min-w-[16px] h-[16px] rounded-full border border-emerald-500/40 bg-emerald-600/30 text-[9px] font-bold text-emerald-200 flex items-center justify-center px-0.5 tabular-nums">
+                              {sub.badge > 99 ? '99+' : sub.badge}
+                            </span>
+                          ) : (
+                            <span className="shrink-0 min-w-[16px] h-[16px] rounded-full bg-red-600 text-[9px] font-bold text-white flex items-center justify-center px-0.5">{sub.badge > 9 ? '9+' : sub.badge}</span>
+                          )
                         )}
                       </Link>
                     );
