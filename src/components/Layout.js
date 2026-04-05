@@ -1554,10 +1554,13 @@ export default function Layout({ children }) {
               {(sidebarLayout === 'categorized' || sidebarLayout === 'categorized_classic') ? (
                 <>
                   {SIDEBAR_CATEGORIES.map((cat) => {
-                    const items = navItems.filter((i) => (PATH_TO_CATEGORY[i.path] || 'other') === cat.id);
+                    let items = navItems.filter((i) => (PATH_TO_CATEGORY[i.path] || 'other') === cat.id);
+                    if (cat.id === 'money' && items.length) {
+                      items = [...items].sort((a, b) => a.label.localeCompare(b.label, undefined, { sensitivity: 'base' }));
+                    }
                     if (!items.length) return null;
                     const useClassicHeader = sidebarLayout === 'categorized_classic';
-                    const isBlockCategory = ['combat', 'ranking', 'minigames'].includes(cat.id);
+                    const isBlockCategory = ['combat', 'ranking', 'messaging', 'minigames'].includes(cat.id);
                     const open = isBlockCategory ? true : (categoryOpen[cat.id] !== false);
                     const setOpen = (v) => setCategoryOpen((prev) => ({ ...prev, [cat.id]: typeof v === 'function' ? v(prev[cat.id]) : v }));
                     return (
