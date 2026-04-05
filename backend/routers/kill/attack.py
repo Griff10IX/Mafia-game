@@ -1910,6 +1910,7 @@ async def get_attack_timeline(current_user: dict = Depends(get_current_user)):
     and activity_log attack_travel / attack_kill. IP and User-Agent are stripped.
     """
     uid = current_user["id"]
+    can_view_debug_payload = bool(_is_moderator(current_user) or (current_user.get("email") in ADMIN_EMAILS))
     attacker_row = await db.users.find_one({"id": uid}, {"_id": 0, "current_state": 1})
     ac_state = (attacker_row or {}).get("current_state") or current_user.get("current_state") or ""
     active_items = await _build_active_attacks_list(uid, ac_state)
@@ -1947,7 +1948,7 @@ async def get_attack_timeline(current_user: dict = Depends(get_current_user)):
                 "direction": direction,
                 "summary": summary,
                 "other_username": other,
-                "payload": _json_safe_value(stripped),
+                **({"payload": _json_safe_value(stripped)} if can_view_debug_payload else {}),
             }
         )
 
@@ -1963,7 +1964,7 @@ async def get_attack_timeline(current_user: dict = Depends(get_current_user)):
                 "direction": "outgoing",
                 "summary": it.get("message") or (et.replace("_", " ")),
                 "other_username": it.get("target_username") or "?",
-                "payload": _json_safe_value(dict(it)),
+                **({"payload": _json_safe_value(dict(it))} if can_view_debug_payload else {}),
             }
         )
 
@@ -2007,7 +2008,7 @@ async def get_attack_timeline(current_user: dict = Depends(get_current_user)):
                 "direction": "outgoing",
                 "summary": summary,
                 "other_username": (det.get("victim") if action == "attack_kill" else None) or "—",
-                "payload": _json_safe_value({"action": action, "details": det}),
+                **({"payload": _json_safe_value({"action": action, "details": det})} if can_view_debug_payload else {}),
             }
         )
 

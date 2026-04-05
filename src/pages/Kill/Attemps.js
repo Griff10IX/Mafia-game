@@ -160,7 +160,7 @@ function timelineBadgeClass(et) {
   return 'bg-secondary text-mutedForeground border-border';
 }
 
-const TimelineEventRow = ({ ev, expanded, onToggle }) => {
+const TimelineEventRow = ({ ev, expanded, onToggle, canViewPayload }) => {
   const et = ev.event_type || '';
   const badgeClass = timelineBadgeClass(et);
   return (
@@ -198,7 +198,7 @@ const TimelineEventRow = ({ ev, expanded, onToggle }) => {
           <p className="text-[10px] text-mutedForeground font-heading leading-snug line-clamp-3">{ev.summary}</p>
         </div>
       </div>
-      {expanded && ev.payload && (
+      {expanded && canViewPayload && ev.payload && (
         <pre className="mx-2 mb-2 p-2 rounded bg-black/30 border border-border/50 text-[9px] text-zinc-400 overflow-x-auto font-mono whitespace-pre-wrap break-words">
           {JSON.stringify(ev.payload, null, 2)}
         </pre>
@@ -251,6 +251,7 @@ export default function Attempts() {
   const [timelineEvents, setTimelineEvents] = useState([]);
   const [timelineErr, setTimelineErr] = useState(null);
   const [timelineExpanded, setTimelineExpanded] = useState({});
+  const [canViewPayload, setCanViewPayload] = useState(false);
 
   const fetchAttempts = useCallback(async () => {
     setSummaryLoading(true);
@@ -279,6 +280,20 @@ export default function Attempts() {
       setTimelineLoading(false);
     }
   }, []);
+
+  const fetchViewerRole = useCallback(async () => {
+    try {
+      const res = await api.get('/admin/whoami');
+      const d = res?.data || {};
+      setCanViewPayload(Boolean(d.is_admin || d.is_moderator || d.is_help_desk_operator));
+    } catch {
+      setCanViewPayload(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchViewerRole();
+  }, [fetchViewerRole]);
 
   useEffect(() => {
     if (tab === 'summary') {
@@ -374,7 +389,13 @@ export default function Attempts() {
           ) : (
             <div className="max-h-[min(70vh,520px)] overflow-y-auto mt-2">
               {timelineEvents.map((ev) => (
-                <TimelineEventRow key={ev.id} ev={ev} expanded={!!timelineExpanded[ev.id]} onToggle={toggleTimelineRow} />
+                <TimelineEventRow
+                  key={ev.id}
+                  ev={ev}
+                  expanded={!!timelineExpanded[ev.id]}
+                  onToggle={toggleTimelineRow}
+                  canViewPayload={canViewPayload}
+                />
               ))}
             </div>
           )}
