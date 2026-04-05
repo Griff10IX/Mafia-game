@@ -133,13 +133,13 @@ export default function Distillery() {
     );
   }
 
-  if (!state || !business || business?.type_id !== 'booze_making') {
+  if (!state || !business) {
     return (
       <div className={`${styles.pageContent} mobile-page-root`}>
         <div className={`${styles.panel} border border-primary/20 rounded-md p-4`}>
-          <h1 className="text-lg font-heading text-primary">Distillery Locked</h1>
+          <h1 className="text-lg font-heading text-primary">Distillery Unavailable</h1>
           <p className="text-sm text-mutedForeground mt-2">
-            This page is for Booze Making operations only. Start one from your racket page.
+            You need an illegal business first. Start one from your racket page.
           </p>
           <div className="mt-3">
             <Link to="/money/racket" className="text-primary underline underline-offset-2">

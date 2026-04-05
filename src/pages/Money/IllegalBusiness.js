@@ -438,11 +438,9 @@ export default function IllegalBusiness() {
             <div className="flex flex-wrap items-center gap-2 mt-1.5">
               <span className="text-xs font-body italic text-mutedForeground">{typeInfo?.name}</span>
               {business?.state && <span className="text-[10px] text-zinc-600">· {business.state}</span>}
-              {business?.type_id === 'booze_making' && (
-                <Link to="/money/distillery" className="text-[10px] font-heading text-primary underline underline-offset-2">
-                  Open Distillery
-                </Link>
-              )}
+              <Link to="/money/distillery" className="text-[10px] font-heading text-primary underline underline-offset-2">
+                Open Distillery
+              </Link>
             </div>
             <div className="text-[10px] text-zinc-500 mt-1 font-heading">
               Level {business?.level ?? 1} · Security {nextUpgradeIdx}/{totalUpgrades} · {guards.length}/{guardSlots} guards
@@ -459,7 +457,7 @@ export default function IllegalBusiness() {
             <div className="text-[8px] text-zinc-600 font-heading mt-0.5 leading-snug">
               ~{formatMoney(weekTillCeiling)}/wk if you max the till daily — events &amp; boosts change real collects.
             </div>
-            {business?.type_id === 'booze_making' && business?.booze_per_hour != null && (
+            {business?.booze_per_hour != null && (
               <div className="text-[10px] text-mutedForeground mt-1">{business.booze_per_hour} booze/hr</div>
             )}
           </div>

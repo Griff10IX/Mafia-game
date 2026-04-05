@@ -456,8 +456,6 @@ def _distillery_worker_capacity(equipment: Dict[str, Any]) -> int:
 
 
 def _distillery_ensure_state(business: dict, now: Optional[datetime] = None) -> tuple[Optional[dict], bool]:
-    if business.get("type_id") != "booze_making":
-        return None, False
     ts = now or _utc_now()
     changed = False
     dist = business.get("distillery")
@@ -946,12 +944,23 @@ async def _distillery_business_for_user(current_user: dict) -> tuple[dict, dict]
     business = await db.illegal_businesses.find_one({"user_id": current_user["id"]}, {"_id": 0})
     if not business:
         raise HTTPException(status_code=404, detail="You don't have an illegal business.")
-    if business.get("type_id") != "booze_making":
-        raise HTTPException(status_code=400, detail="Your business is not a distillery.")
     now = _utc_now()
     dist, changed = _distillery_ensure_state(business, now)
+    set_updates = {}
+    # Distillery gameplay is available to any business type; bootstrap booze production fields if missing.
+    if business.get("booze_per_hour") is None:
+        business["booze_per_hour"] = BOOZE_PER_HOUR_BASE
+        set_updates["booze_per_hour"] = BOOZE_PER_HOUR_BASE
+    if business.get("booze_cap_hours") is None:
+        business["booze_cap_hours"] = BOOZE_CAP_HOURS_BASE
+        set_updates["booze_cap_hours"] = BOOZE_CAP_HOURS_BASE
+    if not business.get("last_collected_booze_at"):
+        business["last_collected_booze_at"] = now.isoformat()
+        set_updates["last_collected_booze_at"] = business["last_collected_booze_at"]
     if changed:
-        await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": {"distillery": dist}})
+        set_updates["distillery"] = dist
+    if set_updates:
+        await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": set_updates})
     return business, dist
 
 
@@ -1189,7 +1198,7 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
     auto_sell_cash = 0
     distillery_breakdown = None
     vault_penalty = 0
-    if business.get("type_id") == "booze_making" and business.get("booze_per_hour"):
+    if business.get("booze_per_hour"):
         last_booze = business.get("last_collected_booze_at")
         try:
             last_collect_dt = datetime.fromisoformat(prev_last.replace("Z", "+00:00")) if prev_last else now
