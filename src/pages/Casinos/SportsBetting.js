@@ -458,6 +458,18 @@ export default function SportsBetting() {
           );
         }
       }
+      try {
+        const libRef = await api.get('/sports-betting/template-library');
+        if (libRef?.data) {
+          setPublicLibrary({
+            categories: libRef.data.categories ?? [],
+            templates: libRef.data.templates ?? {},
+            on_board_template_ids: libRef.data.on_board_template_ids ?? [],
+            requests_per_day_limit: libRef.data.requests_per_day_limit ?? 3,
+            football_league_filter_options: libRef.data.football_league_filter_options ?? null,
+          });
+        }
+      } catch { /* ignore */ }
     } catch (e) { toast.error(apiErrorDetail(e, 'Failed')); }
     finally { setCheckingEvents(false); }
   };
@@ -497,6 +509,18 @@ export default function SportsBetting() {
       });
       const n = res.data?.templates_total;
       toast.success(typeof n === 'number' ? `Loaded ${n} saved template(s) from database` : 'Saved templates loaded');
+      try {
+        const libRef = await api.get('/sports-betting/template-library');
+        if (libRef?.data) {
+          setPublicLibrary({
+            categories: libRef.data.categories ?? [],
+            templates: libRef.data.templates ?? {},
+            on_board_template_ids: libRef.data.on_board_template_ids ?? [],
+            requests_per_day_limit: libRef.data.requests_per_day_limit ?? 3,
+            football_league_filter_options: libRef.data.football_league_filter_options ?? null,
+          });
+        }
+      } catch { /* ignore */ }
     } catch (e) { toast.error(apiErrorDetail(e, 'Failed')); }
     finally { setLoadingDbTemplates(false); }
   };
@@ -656,7 +680,18 @@ export default function SportsBetting() {
 
   const templateMap = templates.templates || {};
   const templateTotal = (templates.categories || []).reduce((s, c) => s + (templateMap[c]?.length || 0), 0);
-  const templatesInAdminTab = templateMap[adminCategory]?.length || 0;
+  const onBoardTemplateSet = useMemo(
+    () => new Set((publicLibrary.on_board_template_ids || []).map((id) => String(id))),
+    [publicLibrary.on_board_template_ids],
+  );
+
+  const templatesInAdminTabEligible = useMemo(() => {
+    let list = templateMap[adminCategory] || [];
+    if (adminCategory === 'Football' && templateLeagueFilter) {
+      list = list.filter((t) => t.external_sport_key === templateLeagueFilter);
+    }
+    return list.filter((t) => !onBoardTemplateSet.has(String(t.id ?? ''))).length;
+  }, [templateMap, adminCategory, templateLeagueFilter, onBoardTemplateSet]);
 
   const footballLeagueOptions = useMemo(() => {
     const staticOpts = templates.football_league_filter_options;
@@ -679,6 +714,7 @@ export default function SportsBetting() {
     if (adminCategory === 'Football' && templateLeagueFilter) {
       list = list.filter((t) => t.external_sport_key === templateLeagueFilter);
     }
+    list = list.filter((t) => !onBoardTemplateSet.has(String(t.id ?? '')));
     const q = (templateSearchQuery || '').trim().toLowerCase();
     if (q) {
       list = list.filter(
@@ -693,15 +729,11 @@ export default function SportsBetting() {
       list = list.filter((t) => templateMatchesDateFilter(t, templateDatePreset, templateDateSpecific));
     }
     return list;
-  }, [templateMap, adminCategory, templateLeagueFilter, templateSearchQuery, templateDatePreset, templateDateSpecific]);
+  }, [templateMap, adminCategory, templateLeagueFilter, templateSearchQuery, templateDatePreset, templateDateSpecific, onBoardTemplateSet]);
 
   const shownInCategory = filteredAdminTemplates.length;
 
   const publicBrowseMap = publicLibrary.templates || {};
-  const onBoardTemplateSet = useMemo(
-    () => new Set(publicLibrary.on_board_template_ids || []),
-    [publicLibrary.on_board_template_ids],
-  );
   const browseLibraryTotal = (publicLibrary.categories || []).reduce(
     (s, c) => s + (publicBrowseMap[c]?.length || 0),
     0,
@@ -923,9 +955,9 @@ export default function SportsBetting() {
                     title={templates.template_source === 'database' ? 'Showing database snapshot only.' : 'Merged: last API refresh + database.'}
                   >
                     {templateTotal} templates total ·{' '}
-                    {shownInCategory === templatesInAdminTab
+                    {shownInCategory === templatesInAdminTabEligible
                       ? `${shownInCategory} in ${adminCategory}`
-                      : `${shownInCategory} of ${templatesInAdminTab} in ${adminCategory}`}
+                      : `${shownInCategory} of ${templatesInAdminTabEligible} in ${adminCategory}`}
                     {templates.template_source === 'database' ? (
                       <span className="text-zinc-600"> · DB</span>
                     ) : null}
@@ -934,7 +966,8 @@ export default function SportsBetting() {
               </div>
               <p className="text-[9px] text-zinc-600 font-heading leading-snug">
                 <span className="font-bold text-zinc-500">Check for events</span> — fetch from the API, save to DB, show list (uses quota).{' '}
-                <span className="font-bold text-zinc-500">Load saved (DB)</span> — reload the list from the database only (no API).
+                <span className="font-bold text-zinc-500">Load saved (DB)</span> — reload the list from the database only (no API).{' '}
+                Games already on the open board are hidden here.
               </p>
 
               {templates.odds_api_configured === false ? (
@@ -946,7 +979,7 @@ export default function SportsBetting() {
               {/* Category tabs */}
               <div className="flex flex-wrap gap-1">
                 {(templates.categories || []).map((c) => {
-                  const n = templateMap[c]?.length || 0;
+                  const n = (templateMap[c] || []).filter((t) => !onBoardTemplateSet.has(String(t.id ?? ''))).length;
                   return (
                     <button key={c} onClick={() => setAdminCategory(c)} className={`px-2 py-1 rounded text-[10px] font-heading font-bold transition-all ${adminCategory === c ? 'bg-primary/20 text-primary border border-primary/40' : 'bg-zinc-800/50 text-zinc-500 border border-zinc-700/30 hover:text-zinc-300'}`}>
                       {c} ({n})
@@ -1009,7 +1042,11 @@ export default function SportsBetting() {
                 {(templateMap[adminCategory] || []).length === 0 ? (
                   <p className="text-[10px] text-zinc-600 font-heading py-4 text-center">No events — click Check for events</p>
                 ) : shownInCategory === 0 ? (
-                  <p className="text-[10px] text-zinc-600 font-heading py-4 text-center">No matches — try another filter</p>
+                  <p className="text-[10px] text-zinc-600 font-heading py-4 text-center">
+                    {(templateMap[adminCategory] || []).length > 0 && templatesInAdminTabEligible === 0
+                      ? 'Every game in this list is already on the board — open Events to manage them.'
+                      : 'No matches — try another filter'}
+                  </p>
                 ) : (
                   filteredAdminTemplates.map((t) => (
                   <div key={t.id} className="flex items-center justify-between gap-2 py-1.5 border-b border-zinc-800/50 last:border-0">
@@ -1165,7 +1202,7 @@ export default function SportsBetting() {
                   <p className="text-[10px] text-zinc-600 font-heading py-6 text-center">No matches — try another filter or category.</p>
                 ) : (
                   filteredBrowseTemplates.map((t) => {
-                    const onBoard = onBoardTemplateSet.has(t.id);
+                    const onBoard = onBoardTemplateSet.has(String(t.id ?? ''));
                     const canRequest = !onBoard && (requestInfo.remaining ?? 0) > 0;
                     return (
                       <div
