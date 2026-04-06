@@ -5972,6 +5972,75 @@ def register(router):
         entries = await cursor.to_list(limit)
         return {"entries": entries, "count": len(entries)}
 
+    @router.get("/admin/casino-seizures")
+    async def admin_casino_seizures(
+        limit: int = Query(100, ge=1, le=500),
+        game_type: Optional[str] = None,
+        username: Optional[str] = None,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Gambling rows where ownership transferred to the winner (insufficient owner bankroll). Winner is log user_id/username."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        cap = min(max(1, int(limit)), 500)
+        query: Dict[str, Any] = {"details.ownership_transferred": True}
+        if game_type and game_type.strip():
+            query["game_type"] = game_type.strip().lower()
+        if username and username.strip():
+            query["username"] = re.compile("^" + re.escape(username.strip()) + "$", re.IGNORECASE)
+        cursor = db.gambling_log.find(query, {"_id": 0}).sort("created_at", -1).limit(cap)
+        raw = await cursor.to_list(cap)
+
+        def _i(v: Any) -> Optional[int]:
+            if v is None:
+                return None
+            try:
+                return int(v)
+            except (TypeError, ValueError):
+                return None
+
+        def _ca_iso(v: Any) -> Optional[str]:
+            if v is None:
+                return None
+            if hasattr(v, "isoformat"):
+                return v.isoformat()
+            return str(v)
+
+        out: List[Dict[str, Any]] = []
+        for row in raw:
+            d = row.get("details") or {}
+            gt = (row.get("game_type") or "") or ""
+            gt_l = gt.lower()
+            loc = (str(d.get("city") or d.get("state") or "").strip() or "—")
+            ap = _i(d.get("actual_payout"))
+            sh = _i(d.get("shortfall"))
+            full = _i(d.get("total_payout"))
+            if full is None:
+                full = _i(d.get("payout"))
+            if gt_l == "blackjack" and ap is not None and sh is not None:
+                full = ap + sh
+            if sh is None and full is not None and ap is not None:
+                sh = max(0, full - ap)
+            if ap is None and full is not None:
+                ap = full if sh is None else max(0, full - sh)
+            bb = _i(d.get("buy_back_points_offered")) or 0
+            out.append(
+                {
+                    "id": row.get("id"),
+                    "created_at": _ca_iso(row.get("created_at")),
+                    "winner_user_id": row.get("user_id"),
+                    "winner_username": row.get("username"),
+                    "game_type": gt,
+                    "location": loc,
+                    "full_payout": full,
+                    "actual_payout": ap,
+                    "shortfall": sh,
+                    "buy_back_points_offered": bb,
+                    "buy_back_outcome": d.get("buy_back_outcome"),
+                }
+            )
+        return {"entries": out, "count": len(out)}
+
     @router.get("/admin/respect-points-log")
     async def admin_respect_points_log(
         user_id: str = Query(..., min_length=1),

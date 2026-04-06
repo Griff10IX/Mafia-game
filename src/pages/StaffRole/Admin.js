@@ -196,6 +196,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Referrals & prereg heal', categoryId: 'admin-players', collapseKey: 'referralsReport', keywords: ['referral', 'referrer', 'referee', 'invite', 'earnings', 'ref', 'heal', 'prereg', 'backfill', 'manual', 'assign', 'link', 'remove', 'unlink', 'clear'] },
   { label: 'Respect points log', categoryId: 'admin-players', collapseKey: 'respectPointsLog', keywords: ['respect', 'points', 'log', 'earned', 'audit', 'player'] },
   { label: 'Gambling Log', categoryId: 'admin-logs', collapseKey: 'gamblingLog', keywords: ['gambling', 'log', 'casino', 'bet'] },
+  { label: 'Casino seizures', categoryId: 'admin-logs', collapseKey: 'casinoSeizures', keywords: ['casino', 'seizure', 'won', 'ownership', 'transfer'] },
   { label: 'Sports bets ledger', categoryId: 'admin-logs', collapseKey: 'sportsBetsLedger', keywords: ['sports', 'betting', 'bets', 'football', 'ledger'] },
   { label: 'Activity Log', categoryId: 'admin-logs', collapseKey: 'activityLog', keywords: ['activity', 'log', 'history'] },
   // Donations
@@ -326,8 +327,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, quicktradeTool: true, toastNotifications: true, ...parsed };
-  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, quicktradeTool: true, toastNotifications: true }; }
+    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, quicktradeTool: true, toastNotifications: true, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, quicktradeTool: true, toastNotifications: true }; }
 }
 
 function saveCollapsed(state) {
@@ -339,6 +340,21 @@ function formatAttackLogTime(iso) {
   const d = new Date(iso);
   const ms = d.getMilliseconds();
   return d.toLocaleString() + '.' + String(ms).padStart(3, '0');
+}
+
+function formatAdminMoneyInt(n) {
+  if (n == null || n === '') return '—';
+  const x = Number(n);
+  if (Number.isNaN(x)) return '—';
+  return `$${x.toLocaleString()}`;
+}
+
+function casinoSeizureGameLabel(gt) {
+  const g = (gt || '').toLowerCase();
+  const map = { videopoker: 'Video poker', horseracing: 'Horse racing', sports_bet: 'Sports bet', mp_blackjack: 'MP blackjack', mp_poker: 'MP poker' };
+  if (map[g]) return map[g];
+  if (!g) return '—';
+  return g.replace(/_/g, ' ');
 }
 
 function parseAttackLogUA(ua) {
@@ -904,6 +920,11 @@ export default function Admin() {
   const [gamblingLogLoading, setGamblingLogLoading] = useState(false);
   const [gamblingLogUsername, setGamblingLogUsername] = useState('');
   const [gamblingLogGameType, setGamblingLogGameType] = useState('');
+  const [casinoSeizures, setCasinoSeizures] = useState({ entries: [] });
+  const [casinoSeizuresLoading, setCasinoSeizuresLoading] = useState(false);
+  const [casinoSeizuresUsername, setCasinoSeizuresUsername] = useState('');
+  const [casinoSeizuresGameType, setCasinoSeizuresGameType] = useState('');
+  const [casinoSeizuresLimit, setCasinoSeizuresLimit] = useState(100);
   const [sportsBetsLedger, setSportsBetsLedger] = useState({ bets: [] });
   const [sportsBetsLedgerLoading, setSportsBetsLedgerLoading] = useState(false);
   const [sportsBetsUsername, setSportsBetsUsername] = useState('');
@@ -5324,6 +5345,23 @@ export default function Admin() {
       setGamblingLog({ entries: [] });
     } finally {
       setGamblingLogLoading(false);
+    }
+  };
+
+  const fetchCasinoSeizures = async () => {
+    setCasinoSeizuresLoading(true);
+    try {
+      const lim = Math.max(1, Math.min(500, parseInt(String(casinoSeizuresLimit), 10) || 100));
+      const params = { limit: lim };
+      if (casinoSeizuresUsername.trim()) params.username = casinoSeizuresUsername.trim();
+      if (casinoSeizuresGameType.trim()) params.game_type = casinoSeizuresGameType.trim();
+      const res = await api.get('/admin/casino-seizures', { params });
+      setCasinoSeizures(res.data || { entries: [] });
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load casino seizures');
+      setCasinoSeizures({ entries: [] });
+    } finally {
+      setCasinoSeizuresLoading(false);
     }
   };
 
@@ -15070,6 +15108,102 @@ export default function Admin() {
                 </BtnDanger>
               </div>
               {(gamblingLog.entries || []).length === 0 && !gamblingLogLoading && <p className="text-xs text-mutedForeground">Load to see all casino activity (dice, roulette, blackjack, slots, video poker, horseracing, sports, MDG).</p>}
+            </div>
+          )}
+        </div>
+
+        {/* Casino seizures — winners who took ownership (bankroll shortfall) */}
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/30 to-transparent" />
+          <SectionHeader
+            icon={Building2}
+            title="Casino seizures"
+            badge={casinoSeizures.entries?.length != null && (
+              <span className="text-[10px] font-heading text-amber-400/90">{casinoSeizures.entries.length} rows</span>
+            )}
+            toolAnchor="casinoSeizures"
+            isCollapsed={collapsed.casinoSeizures}
+            onToggle={() => toggleSection('casinoSeizures')}
+            color="text-amber-400"
+          />
+          {!collapsed.casinoSeizures && (
+            <div className="p-3 space-y-2">
+              <p className="text-[10px] text-mutedForeground font-heading">
+                Players who seized a player-owned casino by winning more than the owner could pay. Data comes from the gambling log (<span className="text-amber-400/80">ownership_transferred</span>).
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={casinoSeizuresUsername}
+                  onChange={(e) => setCasinoSeizuresUsername(e.target.value)}
+                  placeholder="Winner username"
+                  className="min-w-[100px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                <select
+                  value={casinoSeizuresGameType}
+                  onChange={(e) => setCasinoSeizuresGameType(e.target.value)}
+                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                >
+                  <option value="">All games</option>
+                  <option value="dice">Dice</option>
+                  <option value="roulette">Roulette</option>
+                  <option value="blackjack">Blackjack</option>
+                  <option value="slots">Slots</option>
+                  <option value="videopoker">Video poker</option>
+                  <option value="horseracing">Horse racing</option>
+                </select>
+                <select
+                  value={String(casinoSeizuresLimit)}
+                  onChange={(e) => setCasinoSeizuresLimit(parseInt(e.target.value, 10) || 100)}
+                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                >
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                  <option value="200">200</option>
+                  <option value="500">500</option>
+                </select>
+                <BtnPrimary onClick={fetchCasinoSeizures} disabled={casinoSeizuresLoading}>
+                  {casinoSeizuresLoading ? '…' : 'Load seizures'}
+                </BtnPrimary>
+              </div>
+              <div className="max-h-72 overflow-y-auto rounded border border-zinc-700/50">
+                <table className="w-full text-[10px] font-heading">
+                  <thead className="bg-zinc-800/50 sticky top-0">
+                    <tr>
+                      <th className="text-left p-2 text-mutedForeground uppercase">Time</th>
+                      <th className="text-left p-2 text-mutedForeground uppercase">Winner</th>
+                      <th className="text-left p-2 text-mutedForeground uppercase">Game</th>
+                      <th className="text-left p-2 text-mutedForeground uppercase">Location</th>
+                      <th className="text-right p-2 text-mutedForeground uppercase">Full owed</th>
+                      <th className="text-right p-2 text-mutedForeground uppercase">Paid</th>
+                      <th className="text-right p-2 text-mutedForeground uppercase">Shortfall</th>
+                      <th className="text-left p-2 text-mutedForeground uppercase">Buy-back</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(casinoSeizures.entries || []).map((e) => (
+                      <tr key={e.id || `${e.created_at}-${e.winner_username}`} className="border-t border-zinc-700/30 hover:bg-zinc-800/30">
+                        <td className="p-2 text-mutedForeground whitespace-nowrap">{e.created_at ? new Date(e.created_at).toLocaleString() : '—'}</td>
+                        <td className="p-2 text-primary font-bold">{e.winner_username || '—'}</td>
+                        <td className="p-2">{casinoSeizureGameLabel(e.game_type)}</td>
+                        <td className="p-2 text-mutedForeground">{e.location || '—'}</td>
+                        <td className="p-2 text-right text-mutedForeground">{formatAdminMoneyInt(e.full_payout)}</td>
+                        <td className="p-2 text-right text-emerald-400/90">{formatAdminMoneyInt(e.actual_payout)}</td>
+                        <td className="p-2 text-right text-amber-400/90">{formatAdminMoneyInt(e.shortfall)}</td>
+                        <td className="p-2 text-mutedForeground">
+                          {e.buy_back_points_offered > 0 ? `${Number(e.buy_back_points_offered).toLocaleString()} pts` : '—'}
+                          {e.buy_back_outcome && e.buy_back_outcome !== 'not_offered' ? (
+                            <span className="block text-[9px] opacity-80">{e.buy_back_outcome}</span>
+                          ) : null}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {(casinoSeizures.entries || []).length === 0 && !casinoSeizuresLoading && (
+                <p className="text-xs text-mutedForeground">Click <span className="text-primary font-bold">Load seizures</span> to query the log.</p>
+              )}
             </div>
           )}
         </div>

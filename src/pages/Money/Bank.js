@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Landmark, ShieldCheck, ArrowRightLeft, Clock, Coins, ChevronDown, ChevronRight } from 'lucide-react';
+import { Landmark, ShieldCheck, ArrowRightLeft, Clock, Coins, ChevronDown, ChevronRight, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { refreshUser } from '../../utils/api';
+import { copyTextToClipboard } from '../../utils/copyToClipboard';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
@@ -369,6 +370,24 @@ const TransferCard = ({ transfer, delay = 0 }) => {
       ? (transfer.to_username === 'Dealer' ? `Car: ${transfer.car_name}` : `To: ${transfer.to_username} · ${transfer.car_name}`)
       : `From: ${transfer.from_username} · Sold: ${transfer.car_name}`)
     : (transfer.direction === 'sent' ? `To: ${transfer.to_username}` : `From: ${transfer.from_username}`);
+  const amountStr = formatMoney(transfer.amount);
+  const when = formatDateTime(transfer.created_at);
+  const copySummary = isCar
+    ? (transfer.direction === 'sent'
+      ? `Sent ${amountStr} (car: ${transfer.car_name}) to ${transfer.to_username} · ${when}`
+      : `Received ${amountStr} for car ${transfer.car_name} from ${transfer.from_username} · ${when}`)
+    : (transfer.direction === 'sent'
+      ? `Sent ${amountStr} to ${transfer.to_username} · ${when}`
+      : `Received ${amountStr} from ${transfer.from_username} · ${when}`);
+
+  const onCopy = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const ok = await copyTextToClipboard(copySummary);
+    if (ok) toast.success('Copied to clipboard');
+    else toast.error('Could not copy');
+  };
+
   return (
   <div className={`${styles.panel} border border-primary/20 rounded-md p-2 bank-row bank-fade-in`} style={{ animationDelay: `${delay}s` }}>
     <div className="flex items-center justify-between gap-2">
@@ -382,12 +401,23 @@ const TransferCard = ({ transfer, delay = 0 }) => {
           {line2}
         </div>
       </div>
-      <div className="text-right">
-        <div className="text-[11px] font-heading font-bold text-foreground">
-          {formatMoney(transfer.amount)}
-        </div>
-        <div className="text-[9px] text-mutedForeground">
-          {formatDateTime(transfer.created_at)}
+      <div className="flex items-start gap-1 shrink-0">
+        <button
+          type="button"
+          onClick={onCopy}
+          className="p-1 rounded-md border border-transparent text-mutedForeground hover:text-primary hover:bg-primary/15 hover:border-primary/25 transition-colors touch-manipulation"
+          title="Copy amount, user & date"
+          aria-label="Copy transfer details"
+        >
+          <Copy size={14} />
+        </button>
+        <div className="text-right min-w-0">
+          <div className="text-[11px] font-heading font-bold text-foreground">
+            {amountStr}
+          </div>
+          <div className="text-[9px] text-mutedForeground whitespace-nowrap">
+            {when}
+          </div>
         </div>
       </div>
     </div>

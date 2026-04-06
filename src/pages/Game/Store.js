@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { ShoppingBag, Zap, Shield, Star, Car, Crosshair, VolumeX, Clock, Bot, Heart, Send, ArrowRightLeft, ChevronDown, ChevronUp, Package } from 'lucide-react';
+import { ShoppingBag, Zap, Shield, Star, Car, Crosshair, VolumeX, Clock, Bot, Heart, Send, ArrowRightLeft, ChevronDown, ChevronUp, Package, Copy } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
+import { copyTextToClipboard } from '../../utils/copyToClipboard';
 import { toast } from 'sonner';
 import { containsProfanity } from '../../utils/profanityFilter';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
@@ -89,6 +90,49 @@ const UPGRADES = [
   { id: 'garage', title: 'Garage Batch', Icon: Zap, price: 75, path: '/store/upgrade-garage-batch', ownedKey: null, desc: '+10 melt/scrap at once', extra: (u) => ({ line: 'Limit', value: u?.garage_batch_limit ?? 6 }) },
   { id: 'booze', title: 'Booze Capacity', Icon: ShoppingBag, price: 100, path: '/store/buy-booze-capacity', ownedKey: null, desc: '+25 capacity (max 1000)', extra: (u, cfg) => cfg && ({ line: 'Capacity', value: cfg.capacity ?? '—' }) },
 ];
+
+function StorePointsTransferRow({ t, compact }) {
+  const amt = Number(t.amount).toLocaleString();
+  const when = t.created_at ? new Date(t.created_at).toLocaleString() : '';
+  const summary = `${amt} pts: ${t.from_username} → ${t.to_username}${when ? ` · ${when}` : ''}`;
+  const onCopy = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const ok = await copyTextToClipboard(summary);
+    if (ok) toast.success('Copied to clipboard');
+    else toast.error('Could not copy');
+  };
+  return (
+    <li
+      className={`text-[10px] font-heading border-b border-zinc-800/50 last:border-0 ${
+        compact ? 'flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 py-0.5' : 'py-1'
+      }`}
+    >
+      <div className={`flex items-center justify-between gap-2 min-w-0 ${compact ? 'w-full' : ''}`}>
+        <span className="text-mutedForeground truncate min-w-0 flex-1">
+          <Link to={`/profile/${encodeURIComponent(t.from_username)}`} className="text-primary hover:underline">{t.from_username}</Link>
+          {' → '}
+          <Link to={`/profile/${encodeURIComponent(t.to_username)}`} className="text-primary hover:underline">{t.to_username}</Link>
+        </span>
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={onCopy}
+            className="p-1 rounded-md border border-transparent text-zinc-500 hover:text-primary hover:bg-primary/15 hover:border-primary/25 transition-colors touch-manipulation"
+            title="Copy points, users & date"
+            aria-label="Copy transfer details"
+          >
+            <Copy size={compact ? 12 : 14} />
+          </button>
+          <span className="text-primary whitespace-nowrap">{amt} pts</span>
+        </div>
+      </div>
+      {when ? (
+        <span className={`text-[9px] text-zinc-600 w-full shrink-0 block ${compact ? '' : 'mt-0.5'}`}>{when}</span>
+      ) : null}
+    </li>
+  );
+}
 
 const Tab = ({ active, onClick, children, disabled, className = '' }) => (
   <button
@@ -663,19 +707,7 @@ export default function Store() {
               ) : (
                 <ul className="space-y-1.5">
                   {pointsTransfers.map((t) => (
-                    <li key={t.id} className="text-[10px] font-heading flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 py-1 border-b border-zinc-800/50 last:border-0">
-                      <span className="text-mutedForeground truncate min-w-0">
-                        <Link to={`/profile/${encodeURIComponent(t.from_username)}`} className="text-primary hover:underline">{t.from_username}</Link>
-                        {' → '}
-                        <Link to={`/profile/${encodeURIComponent(t.to_username)}`} className="text-primary hover:underline">{t.to_username}</Link>
-                      </span>
-                      <span className="text-primary shrink-0">{Number(t.amount).toLocaleString()} pts</span>
-                      {t.created_at && (
-                        <span className="text-[9px] text-zinc-600 w-full shrink-0">
-                          {new Date(t.created_at).toLocaleString()}
-                        </span>
-                      )}
-                    </li>
+                    <StorePointsTransferRow key={t.id} t={t} compact={false} />
                   ))}
                 </ul>
               )}
@@ -703,17 +735,7 @@ export default function Store() {
                   ) : (
                     <ul className="space-y-1">
                       {adminTransfers.map((t) => (
-                        <li key={t.id} className="text-[10px] font-heading flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5 py-0.5 border-b border-zinc-800/50 last:border-0">
-                          <span className="text-mutedForeground truncate min-w-0">
-                            <Link to={`/profile/${encodeURIComponent(t.from_username)}`} className="text-primary hover:underline">{t.from_username}</Link>
-                            {' → '}
-                            <Link to={`/profile/${encodeURIComponent(t.to_username)}`} className="text-primary hover:underline">{t.to_username}</Link>
-                          </span>
-                          <span className="text-primary shrink-0">{Number(t.amount).toLocaleString()} pts</span>
-                          {t.created_at && (
-                            <span className="text-[9px] text-zinc-600 w-full shrink-0">{new Date(t.created_at).toLocaleString()}</span>
-                          )}
-                        </li>
+                        <StorePointsTransferRow key={t.id} t={t} compact />
                       ))}
                     </ul>
                   )}
