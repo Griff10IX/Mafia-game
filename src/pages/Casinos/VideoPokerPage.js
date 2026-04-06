@@ -805,6 +805,33 @@ export default function VideoPoker() {
           <p className="text-xs text-mutedForeground">You cannot play at your own table. Travel to another city to play.</p>
         </div>
       )}
+      {isOwner && (
+        <div className={`${styles.panel} mobile-panel rounded-md overflow-hidden border border-primary/20`}>
+          <div className="px-3 py-2 bg-primary/10 border-b border-primary/30">
+            <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Pay Table</span>
+          </div>
+          <div className="p-2">
+            <div className="mb-2 text-[10px] text-mutedForeground font-heading uppercase tracking-wider">
+              Jacks or Better - {activePayLabel}
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-px p-1 rounded-md border border-primary/20 bg-black/25">
+              {payTableRows.map((row) => (
+                <div
+                  key={`owner-${row.key}`}
+                  className="flex items-center justify-between px-2 py-1 rounded-sm"
+                >
+                  <span className="text-[10px] font-heading truncate text-emerald-100/70">
+                    {row.name}
+                  </span>
+                  <span className="text-[10px] font-heading font-bold ml-2 text-primary/80">
+                    {formatPayMultiplier(row.multiplier)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* History */}
       {!isOwner && (
