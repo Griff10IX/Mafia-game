@@ -327,7 +327,14 @@ const ProfileInfoCard = ({
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in mobile-panel`}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="px-2.5 py-1.5 md:px-3 md:py-2 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-1.5">
-        <div className="flex items-center gap-1.5 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="w-9 h-9 md:w-11 md:h-11 rounded-md overflow-hidden border border-primary/30 bg-secondary flex items-center justify-center shrink-0">
+            {profile?.avatar_url ? (
+              <img src={profile.avatar_url} alt={`${profile.username} avatar`} className="w-full h-full object-cover" />
+            ) : (
+              <UserIcon size={18} className="text-mutedForeground" />
+            )}
+          </div>
           <h2 className="text-[10px] md:text-xs font-heading font-bold text-primary uppercase tracking-[0.12em] truncate">
             {profile.username}
           </h2>
