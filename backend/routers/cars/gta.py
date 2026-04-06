@@ -5,7 +5,7 @@ import secrets
 from datetime import datetime, timezone, timedelta
 _rng = secrets.SystemRandom()
 import uuid
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 from fastapi import Depends, HTTPException, Query, Request
 from bson.objectid import ObjectId
 from pydantic import BaseModel
@@ -752,41 +752,90 @@ async def get_gta_stats(current_user: dict = Depends(get_current_user)):
 
 MELT_BULLETS_COOLDOWN_SECONDS = 45  # Only 1 car can be melted for bullets every 45s. Scrap has no cooldown.
 
+GARAGE_FETCH_LIMIT = 10_000
+_VALID_GARAGE_RARITIES = frozenset(
+    {"common", "uncommon", "rare", "ultra_rare", "legendary", "custom", "loot_exclusive", "exclusive"}
+)
+
+
+def _normalize_garage_rarity_str(raw: object) -> str:
+    if raw is None:
+        return "common"
+    s = str(raw).strip().lower().replace(" ", "_").replace("-", "_")
+    if s == "lootexclusive":
+        s = "loot_exclusive"
+    if s == "ultrarare":
+        s = "ultra_rare"
+    return s if s in _VALID_GARAGE_RARITIES else "common"
+
+
+def _garage_entry_from_user_car(user_car: Dict[str, Any]) -> Optional[dict]:
+    """Build one garage row. Includes catalog miss fallback so owned cars still show (e.g. loot exclusives if CARS out of sync)."""
+    car_id = user_car.get("car_id")
+    if not car_id:
+        return None
+    user_car_id = user_car.get("id") or str(user_car.get("_id", ""))
+    car_info = next((c for c in CARS if c.get("id") == car_id), None)
+    if car_info:
+        display_name = (user_car.get("custom_name") or user_car.get("car_name")) if car_id == "car_custom" else (user_car.get("car_name") or car_info.get("name"))
+        damage = 0 if car_id == "car_custom" else min(100, max(0, float(user_car.get("damage_percent", 0))))
+        entry = {
+            "user_car_id": user_car_id,
+            "car_id": car_id,
+            "car_name": display_name,
+            "acquired_at": user_car.get("acquired_at"),
+            "damage_percent": damage,
+            **car_info,
+        }
+        if car_id == "car_custom":
+            entry["name"] = display_name or car_info.get("name")
+        if car_id == "car_custom" and user_car.get("custom_image_url"):
+            entry["image"] = user_car.get("custom_image_url")
+        if user_car.get("listed_for_sale"):
+            entry["listed_for_sale"] = True
+            entry["sale_price"] = user_car.get("sale_price")
+            entry["listed_at"] = user_car.get("listed_at")
+        return entry
+    display_name = user_car.get("car_name") or user_car.get("custom_name") or str(car_id)
+    damage = 0 if car_id == "car_custom" else min(100, max(0, float(user_car.get("damage_percent", 0))))
+    rarity = _normalize_garage_rarity_str(user_car.get("rarity"))
+    try:
+        value = int(user_car.get("value") or 0)
+    except (TypeError, ValueError):
+        value = 0
+    entry = {
+        "user_car_id": user_car_id,
+        "car_id": car_id,
+        "car_name": display_name,
+        "name": display_name,
+        "acquired_at": user_car.get("acquired_at"),
+        "damage_percent": damage,
+        "rarity": rarity,
+        "value": value,
+        "min_rank": int(user_car.get("min_rank") or 1),
+        "min_difficulty": int(user_car.get("min_difficulty") or 1),
+        "travel_bonus": int(user_car.get("travel_bonus") or 0),
+        "image": str(user_car.get("image") or ""),
+    }
+    if user_car.get("listed_for_sale"):
+        entry["listed_for_sale"] = True
+        entry["sale_price"] = user_car.get("sale_price")
+        entry["listed_at"] = user_car.get("listed_at")
+    return entry
+
 
 async def get_garage(current_user: dict = Depends(get_current_user)):
-    cars = await db.user_cars.find({"user_id": current_user.get("id") or ""}).to_list(1000)
+    uid = current_user.get("id") or ""
+    cars = await db.user_cars.find({"user_id": uid}).sort("acquired_at", -1).to_list(GARAGE_FETCH_LIMIT)
     user_doc = await db.users.find_one(
-        {"id": current_user.get("id") or ""},
+        {"id": uid},
         {"_id": 0, "melt_bullets_cooldown_until": 1},
     )
     melt_bullets_cooldown_until = user_doc.get("melt_bullets_cooldown_until") if user_doc else None
     car_details = []
     for user_car in cars:
-        car_id = user_car.get("car_id")
-        if not car_id:
-            continue
-        car_info = next((c for c in CARS if c["id"] == car_id), None)
-        if car_info:
-            user_car_id = user_car.get("id") or str(user_car.get("_id", ""))
-            display_name = (user_car.get("custom_name") or user_car.get("car_name")) if car_id == "car_custom" else (user_car.get("car_name") or car_info.get("name"))
-            # Custom cars never have damage
-            damage = 0 if car_id == "car_custom" else min(100, max(0, float(user_car.get("damage_percent", 0))))
-            entry = {
-                "user_car_id": user_car_id,
-                "car_id": car_id,
-                "car_name": display_name,
-                "acquired_at": user_car.get("acquired_at"),
-                "damage_percent": damage,
-                **car_info,
-            }
-            if car_id == "car_custom":
-                entry["name"] = display_name or car_info.get("name")
-            if car_id == "car_custom" and user_car.get("custom_image_url"):
-                entry["image"] = user_car.get("custom_image_url")
-            if user_car.get("listed_for_sale"):
-                entry["listed_for_sale"] = True
-                entry["sale_price"] = user_car.get("sale_price")
-                entry["listed_at"] = user_car.get("listed_at")
+        entry = _garage_entry_from_user_car(user_car)
+        if entry:
             car_details.append(entry)
     return {"cars": car_details, "melt_bullets_cooldown_until": melt_bullets_cooldown_until}
 
@@ -801,27 +850,8 @@ async def get_recent_stolen(current_user: dict = Depends(get_current_user)):
     cars = await cursor.to_list(10)
     car_details = []
     for user_car in cars:
-        car_id = user_car.get("car_id")
-        if not car_id:
-            continue
-        car_info = next((c for c in CARS if c["id"] == car_id), None)
-        if car_info:
-            user_car_id = user_car.get("id") or str(user_car.get("_id", ""))
-            display_name = (user_car.get("custom_name") or user_car.get("car_name") or car_info.get("name") or "Car") if car_id == "car_custom" else (user_car.get("car_name") or car_info.get("name") or "Car")
-            # Custom cars never have damage
-            damage = 0 if car_id == "car_custom" else min(100, max(0, float(user_car.get("damage_percent", 0))))
-            entry = {
-                "user_car_id": user_car_id,
-                "car_id": car_id,
-                "car_name": display_name,
-                "acquired_at": user_car.get("acquired_at"),
-                "damage_percent": damage,
-                **car_info,
-            }
-            if car_id == "car_custom":
-                entry["name"] = display_name
-            if car_id == "car_custom" and user_car.get("custom_image_url"):
-                entry["image"] = user_car.get("custom_image_url")
+        entry = _garage_entry_from_user_car(user_car)
+        if entry:
             car_details.append(entry)
     return {"cars": car_details}
 

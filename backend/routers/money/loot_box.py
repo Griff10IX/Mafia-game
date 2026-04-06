@@ -416,6 +416,12 @@ async def open_loot_box(
                             "car_name": car_name,
                             "acquired_at": now.isoformat(),
                             "damage_percent": 0,
+                            "rarity": "loot_exclusive",
+                            "value": int((car_info or {}).get("value") or 0),
+                            "min_rank": int((car_info or {}).get("min_rank") or 1),
+                            "min_difficulty": int((car_info or {}).get("min_difficulty") or 1),
+                            "travel_bonus": int((car_info or {}).get("travel_bonus") or 0),
+                            "image": str((car_info or {}).get("image") or ""),
                         })
                         await _increment_claimed_count("car")
                         new_claimed = await _get_claimed_counts()
@@ -510,6 +516,12 @@ async def open_loot_box(
                             "car_name": car.get("name", car["id"]),
                             "acquired_at": now.isoformat(),
                             "damage_percent": _rng.randint(0, 30),
+                            "rarity": car.get("rarity") or "common",
+                            "value": int(car.get("value") or 0),
+                            "min_rank": int(car.get("min_rank") or 1),
+                            "min_difficulty": int(car.get("min_difficulty") or 1),
+                            "travel_bonus": int(car.get("travel_bonus") or 0),
+                            "image": str(car.get("image") or ""),
                         })
                         items.append({"name": car.get("name", car["id"]), "rarity": car.get("rarity", "common")})
                     rewards.append({"type": "cars", "count": count, "items": items, "rarity": "standard"})
