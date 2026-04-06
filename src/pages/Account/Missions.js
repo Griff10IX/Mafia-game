@@ -32,6 +32,8 @@ const fmt = (n) => `$${Number(n ?? 0).toLocaleString()}`;
 // Must match backend `LOOT_BOX_PIECES_PER_OPEN` (routers/money/loot_box.py)
 const LOOT_BOX_PIECES_PER_OPEN = 100;
 const LOOT_BOX_PIECES_TOOLTIP = `Loot box pieces. Collect ${LOOT_BOX_PIECES_PER_OPEN} on the Loot Box page to open a box for random rewards (cash, points, bullets, respect, XP tokens, and more).`;
+const TRIBUTE_BANK_TOKEN_TOOLTIP =
+  'Tribute tokens stack here until you tap Collect. Each one becomes one random skill token (e.g. Crime XP, GTA XP, melt, travel — see token list in help).';
 
 // Display name for city (avoid showing raw "Start")
 function cityDisplayName(city) {
@@ -663,6 +665,12 @@ function TributeBanner({
   dailyCashBase = 500,
   dailyLootBase = 1,
   dailyTokensTotal = 0,
+  dailyTributeCashTotal,
+  dailyTributeBulletsTotal,
+  dailyTributeRespectTotal,
+  dailyTributeLootTotal,
+  dailyTributeAutoRank2hTokens = 0,
+  completedItDailyTokensPerk = false,
   hasMission1Bonus = false,
   dailyCashMission1 = 0,
   dailyBulletsMission1 = 0,
@@ -694,10 +702,17 @@ function TributeBanner({
   const hasTokens = (tributeTokens || 0) > 0;
   const hasAny = hasBank || hasBullets || hasLootPieces || hasRespect || hasTokens;
   const nextIn = nextTributeDepositAt ? formatTimeUntil(nextTributeDepositAt) : null;
-  const dailyTotalCash = dailyCashBase + (hasMission1Bonus ? dailyCashMission1 : 0) + (hasMission2Bonus ? dailyCashMission2 : 0) + (hasMission3Bonus ? dailyCashMission3 : 0) + (hasMission4Bonus ? dailyCashMission4 : 0);
-  const dailyTotalBullets = (hasMission1Bonus ? dailyBulletsMission1 : 0) + (hasMission2Bonus ? dailyBulletsMission2 : 0) + (hasMission3Bonus ? dailyBulletsMission3 : 0) + (hasMission4Bonus ? dailyBulletsMission4 : 0);
-  const dailyTotalRespect = (hasMission1Bonus ? dailyRespectMission1 : 0) + (hasMission2Bonus ? dailyRespectMission2 : 0) + (hasMission3Bonus ? dailyRespectMission3 : 0) + (hasMission4Bonus ? dailyRespectMission4 : 0);
-  const dailyTotalLoot = dailyLootBase + (hasMission2Bonus ? dailyLootMission2 : 0);
+  const legacyDailyCash =
+    dailyCashBase + (hasMission1Bonus ? dailyCashMission1 : 0) + (hasMission2Bonus ? dailyCashMission2 : 0) + (hasMission3Bonus ? dailyCashMission3 : 0) + (hasMission4Bonus ? dailyCashMission4 : 0);
+  const legacyDailyBullets =
+    (hasMission1Bonus ? dailyBulletsMission1 : 0) + (hasMission2Bonus ? dailyBulletsMission2 : 0) + (hasMission3Bonus ? dailyBulletsMission3 : 0) + (hasMission4Bonus ? dailyBulletsMission4 : 0);
+  const legacyDailyRespect =
+    (hasMission1Bonus ? dailyRespectMission1 : 0) + (hasMission2Bonus ? dailyRespectMission2 : 0) + (hasMission3Bonus ? dailyRespectMission3 : 0) + (hasMission4Bonus ? dailyRespectMission4 : 0);
+  const legacyDailyLoot = dailyLootBase + (hasMission2Bonus ? dailyLootMission2 : 0);
+  const dailyTotalCash = typeof dailyTributeCashTotal === 'number' ? dailyTributeCashTotal : legacyDailyCash;
+  const dailyTotalBullets = typeof dailyTributeBulletsTotal === 'number' ? dailyTributeBulletsTotal : legacyDailyBullets;
+  const dailyTotalRespect = typeof dailyTributeRespectTotal === 'number' ? dailyTributeRespectTotal : legacyDailyRespect;
+  const dailyTotalLoot = typeof dailyTributeLootTotal === 'number' ? dailyTributeLootTotal : legacyDailyLoot;
   const missionHints = [
     { n: 2, has: hasMission2Bonus, cash: dailyCashMission2, bullets: dailyBulletsMission2, respect: dailyRespectMission2, loot: dailyLootMission2 },
     { n: 3, has: hasMission3Bonus, cash: dailyCashMission3, bullets: dailyBulletsMission3, respect: dailyRespectMission3 },
@@ -729,9 +744,15 @@ function TributeBanner({
       <div className="p-2.5 space-y-3">
         {/* Current Balance */}
         <div className={`p-2 rounded-md border ${hasAny ? 'border-green-500/20 bg-green-500/5' : 'border-zinc-700/50 bg-zinc-800/30'}`}>
-          <div className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1.5">Available to Collect</div>
+          <div className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-0.5">Available to Collect</div>
+          <p className="text-[8px] text-mutedForeground/90 leading-snug mb-1.5">
+            Stacked in the bank until you tap Collect — not added to cash, bullets, or respect until then.
+          </p>
           <div className="flex flex-wrap items-center gap-2">
-            <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md ${hasBank ? 'bg-green-500/15 border border-green-500/30' : 'bg-zinc-800/50 border border-zinc-700/50'}`}>
+            <span
+              title="Goes to your cash balance when you Collect."
+              className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-md ${hasBank ? 'bg-green-500/15 border border-green-500/30' : 'bg-zinc-800/50 border border-zinc-700/50'} ${hasBank ? 'cursor-help' : ''}`}
+            >
               <Coins size={14} className={hasBank ? 'text-green-400' : 'text-zinc-500'} />
               <span className={`text-base font-heading font-bold ${hasBank ? 'text-green-400' : 'text-zinc-500'}`}>{fmt(bank)}</span>
             </span>
@@ -762,10 +783,13 @@ function TributeBanner({
               </span>
             )}
             {hasTokens && (
-              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/15 border border-amber-500/30">
+              <span
+                title={TRIBUTE_BANK_TOKEN_TOOLTIP}
+                className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/15 border border-amber-500/30 cursor-help"
+              >
                 <Zap size={14} className="text-amber-400" />
                 <span className="text-base font-heading font-bold text-amber-400">{tributeTokens}</span>
-                <span className="text-[10px] text-amber-400/80">tokens</span>
+                <span className="text-[10px] text-amber-400/80">random token rolls</span>
               </span>
             )}
             {!hasAny && (
@@ -776,23 +800,26 @@ function TributeBanner({
 
         {/* Daily Deposits Info */}
         <div className="p-2 rounded-md border border-primary/20 bg-primary/5">
-          <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="flex items-center justify-between gap-2 mb-1">
             <div className="text-[9px] font-heading text-primary uppercase tracking-wider flex items-center gap-1">
               <Clock size={10} />
-              Daily Deposits
+              Your Next Daily Deposit
             </div>
             {tributeDepositDailyAt && (
-              <span className="text-[9px] text-mutedForeground">at {tributeDepositDailyAt}</span>
+              <span className="text-[9px] text-mutedForeground shrink-0">at {tributeDepositDailyAt}</span>
             )}
           </div>
-          
+          <p className="text-[8px] text-mutedForeground leading-snug mb-2">
+            Totals below match every mission you&apos;ve completed — all of this is added into the tribute bank each day (same time UTC), then stacks until you Collect.
+          </p>
+
           <div className="flex flex-wrap items-center gap-1.5">
-            <RewardBadge icon={Coins} value={fmt(dailyTotalCash)} color="border-green-500/30" bgColor="bg-green-500/10" />
+            <RewardBadge icon={Coins} value={fmt(dailyTotalCash)} title="Cash into tribute bank daily" color="border-green-500/30" bgColor="bg-green-500/10" />
             {dailyTotalBullets > 0 && (
-              <RewardBadge icon={AlertCircle} value={dailyTotalBullets} label="bullets" color="border-red-500/30" bgColor="bg-red-500/10" />
+              <RewardBadge icon={AlertCircle} value={dailyTotalBullets} label="bullets" title="Bullets into tribute bank daily" color="border-red-500/30" bgColor="bg-red-500/10" />
             )}
             {dailyTotalRespect > 0 && (
-              <RewardBadge icon={Crown} value={dailyTotalRespect} label="respect" color="border-fuchsia-500/30" bgColor="bg-fuchsia-500/10" />
+              <RewardBadge icon={Crown} value={dailyTotalRespect} label="respect" title="Respect into tribute bank daily" color="border-fuchsia-500/30" bgColor="bg-fuchsia-500/10" />
             )}
             {dailyTotalLoot > 0 && (
               <RewardBadge
@@ -804,12 +831,31 @@ function TributeBanner({
                 bgColor="bg-violet-500/10"
               />
             )}
-            <RewardBadge icon={Zap} value={dailyTokensTotal} label="tokens" color="border-amber-500/30" bgColor="bg-amber-500/10" />
+            {dailyTokensTotal > 0 && (
+              <RewardBadge
+                icon={Zap}
+                value={dailyTokensTotal}
+                label="random token rolls"
+                title={TRIBUTE_BANK_TOKEN_TOOLTIP}
+                color="border-amber-500/30"
+                bgColor="bg-amber-500/10"
+              />
+            )}
           </div>
-          
+          {dailyTributeAutoRank2hTokens > 0 && (
+            <p className="text-[8px] text-sky-400/95 mt-1.5 leading-snug">
+              +{dailyTributeAutoRank2hTokens} auto-rank 2h token{dailyTributeAutoRank2hTokens === 1 ? '' : 's'}/day — credited straight to your Auto-rank 2h balance (not stored in tribute).
+            </p>
+          )}
+          {completedItDailyTokensPerk && (
+            <p className="text-[8px] text-emerald-400/90 mt-1 leading-snug">
+              Completed It perk: +5 of each skill token type daily — added straight to your token balances (not tribute).
+            </p>
+          )}
+
           <div className="text-[8px] text-mutedForeground mt-1.5 italic flex items-center gap-1">
             <AlertCircle size={8} />
-            All rewards stack daily until you collect.
+            Tribute bank rewards stack until you collect; direct perks bypass the bank.
           </div>
           {dailyTotalLoot > 0 && (
             <p className="text-[8px] text-violet-400/90 mt-1 leading-snug" title={LOOT_BOX_PIECES_TOOLTIP}>
@@ -1132,6 +1178,12 @@ export default function Missions() {
         dailyCashBase={data?.daily_tribute_cash_base ?? 500}
         dailyLootBase={data?.daily_tribute_loot_box_pieces_base ?? 1}
         dailyTokensTotal={data?.daily_tribute_tokens_total ?? 0}
+        dailyTributeCashTotal={data?.daily_tribute_cash_total}
+        dailyTributeBulletsTotal={data?.daily_tribute_bullets_total}
+        dailyTributeRespectTotal={data?.daily_tribute_respect_total}
+        dailyTributeLootTotal={data?.daily_tribute_loot_box_pieces_total}
+        dailyTributeAutoRank2hTokens={data?.daily_tribute_auto_rank_2h_tokens_total ?? 0}
+        completedItDailyTokensPerk={!!data?.completed_it_daily_tokens_perk}
         hasMission1Bonus={!!data?.has_mission_1_bonus}
         dailyCashMission1={data?.daily_tribute_cash_mission1 ?? 0}
         dailyBulletsMission1={data?.daily_tribute_bullets_mission1 ?? 0}

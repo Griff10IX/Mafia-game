@@ -8491,7 +8491,7 @@ export default function Admin() {
           />
           {!collapsed.donationsPayments && (
             <div className="p-3 space-y-3">
-              <p className="text-[10px] text-mutedForeground font-heading">Stripe point purchases. Status shows whether Stripe reports paid or unpaid. "Credit" only appears when the payment succeeded in Stripe but points are not credited yet. Use "Check &amp; Process" for a session id if a row looks stuck.</p>
+              <p className="text-[10px] text-mutedForeground font-heading">Stripe point purchases. Status shows whether Stripe reports paid or unpaid. "Paid — points not credited yet" means Stripe charged successfully but our DB row is still pending (often a missed/delayed webhook or the player never hit the store success page). Staff receive an inbox notification once per session when this is detected. "Credit" appears when Stripe is paid but points are not in-game yet. Use "Check &amp; Process" to reconcile a session id.</p>
               <div className="flex flex-wrap gap-2 items-center">
                 <BtnPrimary onClick={handleFetchDonationsLog} disabled={donationsLogLoading}>
                   {donationsLogLoading ? 'Loading…' : 'Load payments log'}

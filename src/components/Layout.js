@@ -1572,7 +1572,7 @@ export default function Layout({ children }) {
                     }
                     if (!items.length) return null;
                     const useClassicHeader = sidebarLayout === 'categorized_classic';
-                    const isBlockCategory = ['combat', 'ranking', 'messaging', 'minigames'].includes(cat.id);
+                    const isBlockCategory = ['combat', 'ranking', 'messaging', 'minigames', 'casino'].includes(cat.id);
                     const open = isBlockCategory ? true : (categoryOpen[cat.id] !== false);
                     const setOpen = (v) => setCategoryOpen((prev) => ({ ...prev, [cat.id]: typeof v === 'function' ? v(prev[cat.id]) : v }));
                     return (

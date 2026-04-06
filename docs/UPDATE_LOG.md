@@ -6,6 +6,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-06 20:00 UTC[/color][/b] — [b]MP Poker tournaments, Tribute Bank clarity[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Poker tournaments[/b]: after each hand the table now [b]deals the next hand automatically[/b] — you no longer get sent back to the ready-up screen between hands (first hand of the event still uses ready as before). [b]Betting[/b] is stricter: you must at least match the current bet (or go all-in) before raising; invalid “raises” that under-called no longer corrupt the pot or skip your cards. [b]Tribute Bank[/b] (Missions): the “daily deposit” totals now include [b]every completed mission[/b], not only the first four — the numbers match what the server actually credits. Copy explains that tribute stays in the bank until you [b]Collect[/b], that tribute “tokens” are [b]random token rolls[/b] on collect, and that [b]auto-rank 2h[/b] daily tokens and the [b]Completed It[/b] perk go straight to balances (not tribute).[/color]
+[*][color=#888888][b]Player action:[/b] Tournament poker: keep playing after showdowns without re-readying. If a raise is rejected, use [b]Call[/b] or a large enough raise. Missions: re-open the page to refresh tribute info; read the updated Tribute Bank labels if anything was confusing before.[/color]
+[*][color=#888888][b]Impact:[/b] Smoother tournament flow, fairer pot logic, and accurate expectations for daily tribute vs direct token perks.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-06 13:30 UTC[/color][/b] — [b]UI polish: casino owner links/ranks, profile avatar visibility, distillery clarity, and menu grouping[/b][/size]
 [quote]
 [list]

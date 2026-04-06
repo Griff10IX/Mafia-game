@@ -2246,7 +2246,7 @@ async def _user_owns_any_casino(user_id: str):
         ("videopoker", db.videopoker_ownership),
         ("slots", db.slots_ownership),
     ]:
-        doc = await coll.find_one({"owner_id": user_id}, {"_id": 0, "city": 1, "state": 1, "max_bet": 1, "buy_back_reward": 1, "total_earnings": 1, "profit": 1, "expires_at": 1})
+        doc = await coll.find_one({"owner_id": user_id}, {"_id": 0, "city": 1, "state": 1, "max_bet": 1, "buy_back_reward": 1, "total_earnings": 1, "profit": 1, "expires_at": 1, "odds_preset": 1})
         if doc:
             if game_type == "slots" and doc.get("expires_at"):
                 try:
@@ -2258,6 +2258,9 @@ async def _user_owns_any_casino(user_id: str):
                 except Exception:
                     continue
             out = {"type": game_type, "city": doc.get("city") or doc.get("state"), "max_bet": doc.get("max_bet")}
+            if game_type == "videopoker":
+                raw_odds = str((doc.get("odds_preset") or "normal")).strip().lower()
+                out["odds_preset"] = raw_odds if raw_odds in ("normal", "increased", "enhanced") else "normal"
             if doc.get("buy_back_reward") is not None:
                 out["buy_back_reward"] = doc.get("buy_back_reward")
             profit_val = doc.get("profit") if doc.get("profit") is not None else doc.get("total_earnings")

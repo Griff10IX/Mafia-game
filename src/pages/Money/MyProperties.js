@@ -22,6 +22,19 @@ function formatMoney(n) {
 
 const CASINO_NAMES = { dice: 'Dice', roulette: 'Roulette', blackjack: 'Blackjack', horseracing: 'Horse Racing', videopoker: 'Video Poker', slots: 'Slots' };
 const CASINO_PATHS = { dice: '/casino/dice', roulette: '/casino/roulette', blackjack: '/casino/blackjack', horseracing: '/casino/horseracing', videopoker: '/casino/videopoker', slots: '/casino/slots' };
+/** Casino types that support buy-back points (My Properties + game pages). */
+const CASINO_TYPES_WITH_BUY_BACK = ['dice', 'blackjack', 'roulette', 'horseracing', 'videopoker', 'slots'];
+
+const VIDEO_POKER_ODDS_OPTIONS = [
+  { id: 'normal', label: 'Normal' },
+  { id: 'increased', label: 'Increased' },
+  { id: 'enhanced', label: 'Enhanced' },
+];
+
+function normalizeVideoPokerOddsPreset(raw) {
+  const s = String(raw || 'normal').trim().toLowerCase();
+  return VIDEO_POKER_ODDS_OPTIONS.some((o) => o.id === s) ? s : 'normal';
+}
 
 function casinoResetProfitPayload(casino) {
   if (!casino) return null;
@@ -86,6 +99,23 @@ export default function MyProperties() {
     return () => window.removeEventListener('app:refresh-user', onRefresh);
   }, [fetchMyProperties]);
 
+  const handleVideoPokerSetOdds = async (preset) => {
+    const c = data.casino;
+    if (!c || c.type !== 'videopoker' || saving) return;
+    const next = normalizeVideoPokerOddsPreset(preset);
+    if (next === normalizeVideoPokerOddsPreset(c.odds_preset)) return;
+    setSaving(true);
+    try {
+      await api.post('/casino/videopoker/set-odds-preset', { city: c.city, odds_preset: next });
+      toast.success('Pay table updated');
+      fetchMyProperties();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleCasinoSetMaxBet = async () => {
     const c = data.casino;
     if (!c || saving) return;
@@ -105,7 +135,7 @@ export default function MyProperties() {
 
   const handleCasinoSetBuyBack = async () => {
     const c = data.casino;
-    if (!c || saving || (c.type !== 'dice' && c.type !== 'blackjack' && c.type !== 'roulette')) return;
+    if (!c || saving || !CASINO_TYPES_WITH_BUY_BACK.includes(c.type)) return;
     const amount = parseInt(String(casinoBuyBack).replace(/\D/g, ''), 10);
     if (Number.isNaN(amount) || amount < 0) { toast.error('Enter 0 or more points'); return; }
     const bal = Number(data.points ?? 0) || 0;
@@ -113,9 +143,10 @@ export default function MyProperties() {
       toast.error(`Buy-back cannot exceed your points balance (${bal.toLocaleString()}).`);
       return;
     }
+    const payload = c.type === 'slots' ? { state: c.city, amount } : { city: c.city, amount };
     setSaving(true);
     try {
-      await api.post(`/casino/${c.type}/set-buy-back-reward`, (c.type === 'dice' || c.type === 'blackjack' || c.type === 'roulette') ? { city: c.city, amount } : { amount });
+      await api.post(`/casino/${c.type}/set-buy-back-reward`, payload);
       toast.success('Buy-back reward updated');
       fetchMyProperties();
     } catch (e) {
@@ -363,7 +394,7 @@ export default function MyProperties() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Casino slot */}
-        <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mp-card mp-fade-in mobile-panel`}>
+        <div className={`relative ${styles.panel} rounded-lg overflow-visible md:overflow-hidden border border-primary/20 mp-card mp-fade-in mobile-panel`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
             <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">🎰 Casino</span>
@@ -386,6 +417,24 @@ export default function MyProperties() {
                     {(data.casino.profit ?? 0) >= 0 ? '' : '-'}{formatMoney(Math.abs(data.casino.profit ?? 0))}
                   </span>
                 </p>
+                {data.casino.type === 'videopoker' && (
+                  <div className="mb-2">
+                    <div className="flex flex-wrap gap-2 items-center">
+                      <span className="text-[11px] text-mutedForeground w-16 shrink-0">Pay table</span>
+                      <select
+                        value={normalizeVideoPokerOddsPreset(data.casino.odds_preset)}
+                        onChange={(e) => handleVideoPokerSetOdds(e.target.value)}
+                        disabled={saving}
+                        className="flex-1 min-w-[140px] px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm text-foreground"
+                      >
+                        {VIDEO_POKER_ODDS_OPTIONS.map((o) => (
+                          <option key={o.id} value={o.id}>{o.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <p className="text-[10px] text-zinc-500 mt-1 ml-[4.5rem]">Applies to new deals at your table.</p>
+                  </div>
+                )}
                 <div className="flex flex-wrap gap-2 items-center mb-2">
                   <span className="text-[11px] text-mutedForeground w-16 shrink-0">Max bet</span>
                   <FormattedNumberInput
@@ -398,7 +447,7 @@ export default function MyProperties() {
                     {saving ? '...' : 'Set'}
                   </button>
                 </div>
-                {(data.casino.type === 'dice' || data.casino.type === 'blackjack' || data.casino.type === 'roulette') && (
+                {CASINO_TYPES_WITH_BUY_BACK.includes(data.casino.type) && (
                   <div className="mb-2">
                     <div className="flex flex-wrap gap-2 items-center">
                       <span className="text-[11px] text-mutedForeground w-16 shrink-0">Buy-back (pts)</span>

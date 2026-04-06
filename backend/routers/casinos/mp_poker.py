@@ -1853,25 +1853,25 @@ def register(router):
                 await db.mp_poker_games.update_one({"id": game_id}, {"$set": {"players": players, "pot": 0, "results": results}})
                 await _tournament_finalize_if_done(game_id)
                 return
-            now_iso = datetime.now(timezone.utc).isoformat()
             next_button = (int(g.get("button_index") or 0) + 1) % len(players)
             await db.mp_poker_games.update_one(
                 {"id": game_id},
                 {
                     "$set": {
                         "status": "open",
-                        "phase": "ready",
+                        "phase": "settled",
                         "street": None,
                         "board": [],
                         "deck": [],
                         "pot": 0,
                         "results": results,
                         "players": players,
-                        "all_ready_at": now_iso,
+                        "all_ready_at": None,
                         "button_index": next_button,
                     }
                 },
             )
+            await _mp_poker_deal_new_hand(game_id)
             return
 
         # Single-hand table cashout: return remaining stack + any pot share to each player.
@@ -1908,6 +1908,82 @@ def register(router):
     def _first_actor_after_advance(players: list, start_idx: int) -> int:
         """First seat index that can act (not folded, not all_in). If none, return start_idx."""
         return _next_actionable_index(players, start_idx)
+
+    async def _mp_poker_deal_new_hand(game_id: str) -> Optional[dict]:
+        """Shuffle, post blinds, set preflop turn. Used after /start and after tournament showdown."""
+        g = await db.mp_poker_games.find_one({"id": game_id})
+        if not g or g.get("mode") not in ("vs_players", "tournament"):
+            return None
+        is_tournament = _is_tournament_game(g)
+        if is_tournament:
+            if g.get("approval_status") != "approved":
+                return None
+            g = await _maybe_progress_tournament_blinds(game_id) or g
+        players = list(g.get("players") or [])
+        if is_tournament:
+            players = _tournament_survivors(players)
+            if len(players) < 2:
+                return await _tournament_finalize_if_done(game_id)
+        elif len(players) < 2:
+            return None
+        deck = _make_deck()
+        _rng.shuffle(deck)
+        sb = int(g.get("small_blind") or 1)
+        bb = int(g.get("big_blind") or 2)
+        button_index = int(g.get("button_index") or 0)
+        n = len(players)
+        for p in players:
+            p["hole_cards"] = [deck.pop(), deck.pop()] if deck else []
+            p["current_bet"] = 0
+            p["total_bet_this_hand"] = 0
+            p["acted_this_street"] = False
+            p["status"] = "active"
+        sb_seat = (button_index + 1) % n
+        bb_seat = (button_index + 2) % n
+        sb_stack = max(0, int(players[sb_seat].get("stack") or 0))
+        sb_post = min(sb, sb_stack)
+        players[sb_seat]["stack"] = sb_stack - sb_post
+        players[sb_seat]["current_bet"] = sb_post
+        players[sb_seat]["total_bet_this_hand"] = sb_post
+        if players[sb_seat]["stack"] <= 0:
+            players[sb_seat]["stack"] = 0
+            players[sb_seat]["status"] = "all_in"
+        bb_stack = max(0, int(players[bb_seat].get("stack") or 0))
+        bb_post = min(bb, bb_stack)
+        players[bb_seat]["stack"] = bb_stack - bb_post
+        players[bb_seat]["current_bet"] = bb_post
+        players[bb_seat]["total_bet_this_hand"] = bb_post
+        if players[bb_seat]["stack"] <= 0:
+            players[bb_seat]["stack"] = 0
+            players[bb_seat]["status"] = "all_in"
+        pot = int(g.get("pot") or 0) + sb_post + bb_post
+        first_act = _first_actor_after_advance(players, (button_index + 3) % n)
+        preflop_to_call = max(int(x.get("current_bet") or 0) for x in players)
+        now_iso = datetime.now(timezone.utc).isoformat()
+        await db.mp_poker_games.update_one(
+            {"id": game_id},
+            {"$set": {
+                "status": "playing",
+                "phase": "playing",
+                "tournament_status": "running" if is_tournament else g.get("tournament_status"),
+                "street": "preflop",
+                "players": players,
+                "deck": deck,
+                "board": [],
+                "pot": pot,
+                "current_turn_index": first_act,
+                "first_turn_index_this_street": first_act,
+                "turn_started_at": now_iso,
+                "to_call": preflop_to_call,
+                "min_raise": bb,
+                "hand_number": int(g.get("hand_number") or 0) + 1,
+                "blind_level_started_at": g.get("blind_level_started_at") or now_iso if is_tournament else g.get("blind_level_started_at"),
+                "all_ready_at": None,
+            }},
+        )
+        if players[first_act].get("status") in ("folded", "all_in"):
+            await _mp_poker_advance_street(game_id)
+        return await db.mp_poker_games.find_one({"id": game_id})
 
     async def _mp_poker_advance_street(game_id: str) -> bool:
         """Advance to next street or showdown. Returns True if advanced. Skips folded/all_in for first to act."""
@@ -1999,63 +2075,9 @@ def register(router):
             if len(players) < 2:
                 g = await _tournament_finalize_if_done(game_id)
                 return {k: v for k, v in (g or {}).items() if k != "_id"}
-        deck = _make_deck()
-        _rng.shuffle(deck)
-        sb = int(g.get("small_blind") or 1)
-        bb = int(g.get("big_blind") or 2)
-        button_index = int(g.get("button_index") or 0)
-        n = len(players)
-        for p in players:
-            p["hole_cards"] = [deck.pop(), deck.pop()] if deck else []
-            p["current_bet"] = 0
-            p["total_bet_this_hand"] = 0
-            p["acted_this_street"] = False
-            p["status"] = "active"
-        sb_seat = (button_index + 1) % n
-        bb_seat = (button_index + 2) % n
-        sb_stack = max(0, int(players[sb_seat].get("stack") or 0))
-        sb_post = min(sb, sb_stack)
-        players[sb_seat]["stack"] = sb_stack - sb_post
-        players[sb_seat]["current_bet"] = sb_post
-        players[sb_seat]["total_bet_this_hand"] = sb_post
-        if players[sb_seat]["stack"] <= 0:
-            players[sb_seat]["stack"] = 0
-            players[sb_seat]["status"] = "all_in"
-        bb_stack = max(0, int(players[bb_seat].get("stack") or 0))
-        bb_post = min(bb, bb_stack)
-        players[bb_seat]["stack"] = bb_stack - bb_post
-        players[bb_seat]["current_bet"] = bb_post
-        players[bb_seat]["total_bet_this_hand"] = bb_post
-        if players[bb_seat]["stack"] <= 0:
-            players[bb_seat]["stack"] = 0
-            players[bb_seat]["status"] = "all_in"
-        pot = int(g.get("pot") or 0) + sb_post + bb_post
-        first_act = _first_actor_after_advance(players, (button_index + 3) % n)
-        preflop_to_call = max(int(x.get("current_bet") or 0) for x in players)
-        now_iso = datetime.now(timezone.utc).isoformat()
-        await db.mp_poker_games.update_one(
-            {"id": game_id},
-            {"$set": {
-                "status": "playing",
-                "phase": "playing",
-                "tournament_status": "running" if is_tournament else g.get("tournament_status"),
-                "street": "preflop",
-                "players": players,
-                "deck": deck,
-                "board": [],
-                "pot": pot,
-                "current_turn_index": first_act,
-                "first_turn_index_this_street": first_act,
-                "turn_started_at": now_iso,
-                "to_call": preflop_to_call,
-                "min_raise": bb,
-                "hand_number": int(g.get("hand_number") or 0) + 1,
-                "blind_level_started_at": g.get("blind_level_started_at") or now_iso if is_tournament else g.get("blind_level_started_at"),
-            }},
-        )
-        if players[first_act].get("status") in ("folded", "all_in"):
-            await _mp_poker_advance_street(game_id)
-        g = await db.mp_poker_games.find_one({"id": game_id})
+        g = await _mp_poker_deal_new_hand(game_id)
+        if not g:
+            raise HTTPException(status_code=400, detail="Could not start hand")
         return {k: v for k, v in g.items() if k != "_id"}
 
     @router.post("/casino/mp-poker/games/{game_id}/act")
@@ -2117,26 +2139,50 @@ def register(router):
                 p["stack"] = 0
                 p["status"] = "all_in"
         elif action in ("bet", "raise"):
-            amt = max(amount, min_raise) if to_call > 0 else amount
-            if action == "bet" and amt < min_raise:
-                raise HTTPException(status_code=400, detail=f"Bet must be at least {min_raise:,}")
+            effective = action
+            if effective == "raise" and to_call <= 0:
+                effective = "bet"
+            try:
+                amt = int(amount)
+            except (TypeError, ValueError):
+                amt = 0
             if amt > stack:
                 amt = stack
             if amt <= 0:
                 raise HTTPException(status_code=400, detail="Invalid amount")
+            if effective == "bet":
+                if to_call > 0:
+                    raise HTTPException(status_code=400, detail="Cannot open bet — call, raise, or fold")
+                if amt < stack and amt < min_raise:
+                    raise HTTPException(status_code=400, detail=f"Bet must be at least {min_raise:,}")
+            else:
+                new_bet = current_bet + amt
+                if new_bet < to_call:
+                    if amt < stack:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Must match the current bet ({to_call:,}) or go all-in",
+                        )
+                elif new_bet > to_call:
+                    if amt < stack and new_bet < to_call + min_raise:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=f"Minimum total bet to raise is {to_call + min_raise:,} (or go all-in)",
+                        )
             p["stack"] = stack - amt
             p["current_bet"] = current_bet + amt
             p["total_bet_this_hand"] = int(p.get("total_bet_this_hand") or 0) + amt
             pot += amt
-            if amt >= stack:
+            if p["stack"] <= 0:
+                p["stack"] = 0
                 p["status"] = "all_in"
-            p["last_action"] = {"action": action, "amount": amt}
+            p["last_action"] = {"action": effective, "amount": amt}
             p["acted_this_street"] = True
             max_bet_amt = max(int(x.get("current_bet") or 0) for x in players)
             if max_bet_amt > prev_max_bet:
                 _reset_acted_this_street_for_raise(players, turn_idx)
                 p["acted_this_street"] = True
-                min_raise_updated = amt
+                min_raise_updated = max(min_raise, max_bet_amt - prev_max_bet)
         elif action == "all_in":
             amt = stack
             p["stack"] = 0
@@ -2150,6 +2196,7 @@ def register(router):
             if max_bet_amt > prev_max_bet:
                 _reset_acted_this_street_for_raise(players, turn_idx)
                 p["acted_this_street"] = True
+                min_raise_updated = max(min_raise, max_bet_amt - prev_max_bet)
         else:
             raise HTTPException(status_code=400, detail="Invalid action")
         max_bet = max(int(x.get("current_bet") or 0) for x in players)

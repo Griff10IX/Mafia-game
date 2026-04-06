@@ -650,8 +650,9 @@ async def _attach_pending_ui_labels(items: list, api_key: Optional[str]) -> None
             t["ui_status"] = "Awaiting payment"
 
 
-async def _enrich_admin_payment_log_rows(items: list, api_key: Optional[str]) -> None:
-    """Admin table: paid vs unpaid for DB `pending` rows, and whether manual Credit is safe."""
+async def _enrich_admin_payment_log_rows(db, items: list, api_key: Optional[str]) -> None:
+    """Admin table: paid vs unpaid for DB `pending` rows, and whether manual Credit is safe.
+    If Stripe is paid but the row is still `pending`, notify staff once (deduped via payment_issue_staff_notified_at)."""
     pending_rows = [t for t in items if t.get("payment_status") == "pending" and t.get("session_id")]
 
     sessions_by_id = {}
@@ -724,6 +725,21 @@ async def _enrich_admin_payment_log_rows(items: list, api_key: Optional[str]) ->
         if session.payment_status == "paid":
             t["status_display"] = "Paid — points not credited yet"
             t["allow_manual_credit"] = True
+            pts = int(t.get("points") or 0)
+            uid = (t.get("user_id") or "").strip()
+            pkg = t.get("package_id") or ""
+            if uid and pts > 0:
+                try:
+                    await _notify_staff_paid_stuck_pending(
+                        db,
+                        session_id=sid,
+                        user_id=uid,
+                        package_id=pkg,
+                        points=pts,
+                        context="Admin payments log (Stripe paid, DB still pending — webhook or reconcile may have missed)",
+                    )
+                except Exception:
+                    logger.exception("staff stuck pending notify from admin payment log enrich failed")
         elif session.status == "expired":
             t["status_display"] = "Unpaid (checkout expired)"
             t["allow_manual_credit"] = False
@@ -1326,10 +1342,10 @@ def register(router):
             except (ValueError, TypeError):
                 pass
         
-        # First: check recent "pending" transactions with Stripe (only last 2 hours to avoid checking old abandoned ones)
-        two_hours_ago = (now - timedelta(hours=2)).isoformat()
+        # Pending + paid in Stripe: reconcile if checkout was created recently (webhook can be delayed/missed).
+        seven_days_ago = (now - timedelta(days=7)).isoformat()
         stuck_pending = await db.payment_transactions.find(
-            {"user_id": current_user["id"], "payment_status": "pending", "created_at": {"$gte": two_hours_ago}}
+            {"user_id": current_user["id"], "payment_status": "pending", "created_at": {"$gte": seven_days_ago}}
         ).to_list(100)
         
         processed_stuck = 0
@@ -1473,7 +1489,7 @@ def register(router):
         by_id = {u["id"]: u.get("username", "?") for u in users}
         for t in items:
             t["username"] = by_id.get(t.get("user_id"), "?")
-        await _enrich_admin_payment_log_rows(items, _get_stripe_key())
+        await _enrich_admin_payment_log_rows(db, items, _get_stripe_key())
         return {"transactions": items}
 
     class ManualCreditRequest(BaseModel):
@@ -1538,7 +1554,25 @@ def register(router):
                 credit_result = await _credit_payment_if_pending(db, body.session_id, user_id, package_id or "", points)
                 result["credit_attempted"] = True
                 result["credit_result"] = credit_result
-                
+                t_after = await db.payment_transactions.find_one({"session_id": body.session_id}, {"_id": 0, "payment_status": 1})
+                if (
+                    session.payment_status == "paid"
+                    and points > 0
+                    and (t_after or {}).get("payment_status") == "pending"
+                    and not credit_result.get("fulfillment_blocked")
+                ):
+                    try:
+                        await _notify_staff_paid_stuck_pending(
+                            db,
+                            session_id=body.session_id,
+                            user_id=user_id,
+                            package_id=package_id or "",
+                            points=points,
+                            context="Admin Check & Process Stripe session (paid, still pending after credit attempt)",
+                        )
+                    except Exception:
+                        logger.exception("staff stuck pending notify from admin check-stripe-session failed")
+
                 if credit_result.get("credited"):
                     if credit_result.get("manual_credit_pending"):
                         result["message"] = f"Successfully processed: {points} points held for manual staff credit"

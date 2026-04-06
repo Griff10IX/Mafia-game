@@ -552,7 +552,7 @@ export default function VideoPoker() {
 
       {/* Owner Controls */}
       {isOwner && (
-        <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20 cg-fade-in`}>
+        <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-visible md:overflow-hidden border border-primary/20 cg-fade-in`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
             <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Owner Controls</span>

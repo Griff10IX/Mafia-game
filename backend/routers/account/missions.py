@@ -696,14 +696,24 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
     has_mission_2 = SECOND_MISSION_ID in completed_ids
     has_mission_3 = THIRD_MISSION_ID in completed_ids
     has_mission_4 = FOURTH_MISSION_ID in completed_ids
-    # Calculate total daily tokens based on completed missions
+    # Totals mirror run_daily_tribute_deposit for this user (all completed missions, not just m1–m4).
     daily_tokens_total = 0
     daily_auto_rank_2h_tokens_total = 0
+    daily_cash_total = DAILY_TRIBUTE_AMOUNT
+    daily_bullets_total = 0
+    daily_respect_total = 0
+    daily_loot_total = DAILY_TRIBUTE_LOOT_BOX_PIECES
     for mid in completed_ids:
         m = next((x for x in MISSIONS if x["id"] == mid), None)
-        if m:
-            daily_tokens_total += int(m.get("reward_tribute_tokens_daily") or 0)
-            daily_auto_rank_2h_tokens_total += int(m.get("reward_tribute_auto_rank_2h_daily") or 0)
+        if not m:
+            continue
+        daily_tokens_total += int(m.get("reward_tribute_tokens_daily") or 0)
+        daily_auto_rank_2h_tokens_total += int(m.get("reward_tribute_auto_rank_2h_daily") or 0)
+        daily_cash_total += int(m.get("reward_tribute_daily") or 0)
+        daily_bullets_total += int(m.get("reward_tribute_bullets_daily") or 0)
+        daily_respect_total += int(m.get("reward_respect_daily") or 0)
+        if mid == SECOND_MISSION_ID:
+            daily_loot_total += MISSION_2_DAILY_LOOT_BOX_PIECES
     tribute_tokens = int(current_user.get("tribute_tokens") or 0)
     return {
         "current_city": current_city,
@@ -719,8 +729,13 @@ async def get_missions_map(current_user: dict = Depends(get_current_user)):
         "next_tribute_deposit_at": next_deposit_iso,
         "daily_tribute_cash_base": DAILY_TRIBUTE_AMOUNT,
         "daily_tribute_loot_box_pieces_base": DAILY_TRIBUTE_LOOT_BOX_PIECES,
+        "daily_tribute_cash_total": daily_cash_total,
+        "daily_tribute_bullets_total": daily_bullets_total,
+        "daily_tribute_respect_total": daily_respect_total,
+        "daily_tribute_loot_box_pieces_total": daily_loot_total,
         "daily_tribute_tokens_total": daily_tokens_total,
         "daily_tribute_auto_rank_2h_tokens_total": daily_auto_rank_2h_tokens_total,
+        "completed_it_daily_tokens_perk": bool(current_user.get("completed_it_daily_tokens")),
         "has_mission_1_bonus": has_mission_1,
         "daily_tribute_cash_mission1": MISSION_1_DAILY_CASH,
         "daily_tribute_bullets_mission1": MISSION_1_DAILY_BULLETS,
