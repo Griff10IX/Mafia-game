@@ -399,22 +399,40 @@ export default function MyInventory() {
                 </div>
               ))}
               {hasSpeakeasy && speakeasyInfo && (
-                <div className="inv-item p-3 rounded-md bg-amber-500/5 border border-amber-500/20">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Building2 size={14} className="text-amber-400 shrink-0" />
-                    <span className="text-[12px] font-heading font-bold text-foreground">Speakeasy</span>
-                    <span className="text-[9px] text-amber-400 bg-amber-500/15 px-1.5 py-0.5 rounded">Loot Exclusive</span>
+                <div className="inv-item relative overflow-hidden rounded-lg border-2 border-amber-500/40 bg-amber-950/20 ring-1 ring-amber-500/20 shadow-[0_0_24px_rgba(245,158,11,0.12)] p-3">
+                  <div className="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-amber-400/70 to-transparent pointer-events-none" aria-hidden />
+                  <div className="flex flex-wrap items-center gap-2 mb-3 pt-0.5">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-amber-500/30 bg-gradient-to-br from-amber-500/20 to-primary/10">
+                      <Building2 size={16} className="text-amber-400" />
+                    </div>
+                    <div className="min-w-0 flex-1 flex flex-wrap items-center gap-2">
+                      <span className="text-[12px] font-heading font-bold text-amber-400 tracking-wide">Speakeasy</span>
+                      <span className="text-[8px] font-heading font-bold uppercase tracking-wider text-amber-300 border border-amber-500/50 bg-amber-500/20 px-2 py-0.5 rounded-full">
+                        Loot exclusive
+                      </span>
+                    </div>
                   </div>
-                  <div className="text-[10px] text-mutedForeground mb-2">
-                    Daily payout: <span className="text-emerald-400 font-bold">${speakeasyInfo.daily_cash?.toLocaleString()}</span> + <span className="text-blue-400 font-bold">{speakeasyInfo.daily_bullets} bullets</span>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+                    <div className="rounded-md border border-emerald-500/25 bg-emerald-950/20 px-2.5 py-2">
+                      <div className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground mb-0.5">Daily cash</div>
+                      <div className="text-lg font-heading font-bold text-emerald-400 leading-tight">
+                        ${speakeasyInfo.daily_cash != null ? Number(speakeasyInfo.daily_cash).toLocaleString() : '—'}
+                      </div>
+                    </div>
+                    <div className="rounded-md border border-sky-500/25 bg-sky-950/15 px-2.5 py-2">
+                      <div className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground mb-0.5">Daily bullets</div>
+                      <div className="text-lg font-heading font-bold text-sky-400 leading-tight">
+                        {speakeasyInfo.daily_bullets != null ? speakeasyInfo.daily_bullets : '—'}
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {speakeasyInfo.can_collect ? (
                       <button
                         type="button"
                         onClick={collectSpeakeasy}
                         disabled={collectingSpeakeasy}
-                        className="px-3 py-1.5 rounded text-[10px] font-heading font-bold border border-emerald-500/40 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 disabled:opacity-50 transition-colors"
+                        className="px-4 py-2 rounded-md text-[9px] font-heading font-bold uppercase tracking-wider border-2 border-amber-500/50 bg-gradient-to-b from-amber-500/15 to-amber-950/30 text-amber-200 hover:border-amber-400/70 hover:shadow-[0_0_16px_rgba(245,158,11,0.25)] disabled:opacity-50 transition-all"
                       >
                         {collectingSpeakeasy ? 'Collecting...' : '$ Collect Daily'}
                       </button>
@@ -427,10 +445,14 @@ export default function MyInventory() {
                 </div>
               )}
               {hasSpeakeasy && !speakeasyInfo && (
-                <div className="inv-item flex items-center gap-2 py-2">
-                  <Building2 size={12} className="text-amber-400 shrink-0" />
-                  <span className="text-[11px] font-heading text-foreground">Speakeasy</span>
-                  <span className="text-[9px] text-amber-400">Loot Exclusive</span>
+                <div className="inv-item flex flex-wrap items-center gap-2 py-2.5 px-2 rounded-lg border border-amber-500/25 ring-1 ring-amber-500/10 bg-amber-950/10">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-amber-500/25 bg-amber-500/10">
+                    <Building2 size={12} className="text-amber-400" />
+                  </div>
+                  <span className="text-[11px] font-heading text-amber-400/90 tracking-wide">Speakeasy</span>
+                  <span className="text-[8px] font-heading font-bold uppercase tracking-wider text-amber-300/90 border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 rounded-full">
+                    Loot exclusive
+                  </span>
                 </div>
               )}
             </div>

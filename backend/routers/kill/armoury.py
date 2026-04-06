@@ -15,6 +15,11 @@ from bson.objectid import ObjectId
 
 from server import db, get_current_user, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, _family_in_active_war, CARS, _get_staff_user_ids, send_notification, log_activity, log_minigame_payout
 from utils.point_provenance import log_points_event
+from utils.speakeasy_rewards import (
+    SPEAKEASY_DAILY_BULLETS,
+    SPEAKEASY_DAILY_CASH,
+    SPEAKEASY_COOLDOWN_HOURS,
+)
 from utils.claim_costs import load_claim_costs
 from utils.game_pass_micro_rewards import (
     micro_tier_from_rank_points,
@@ -2616,9 +2621,7 @@ async def get_inventory(request: Request, current_user: dict = Depends(get_curre
     speakeasy_info = None
     if speakeasy is not None:
         from datetime import datetime, timezone
-        SPEAKEASY_DAILY_CASH = 25_000
-        SPEAKEASY_DAILY_BULLETS = 25
-        SPEAKEASY_COOLDOWN_HOURS = 24
+
         last_collected = speakeasy.get("last_speakeasy_collected_at")
         can_collect = True
         next_collect_at = None

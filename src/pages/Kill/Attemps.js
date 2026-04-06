@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Skull, Crosshair, ArrowUpRight, ArrowDownLeft, Clock, Shield, DollarSign, History, List, ChevronDown, ChevronRight } from 'lucide-react';
+import { Skull, Crosshair, ArrowUpRight, ArrowDownLeft, Clock, Shield, DollarSign, History, List, ChevronDown, ChevronRight, Copy } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../utils/api';
+import { copyTextToClipboard } from '../../utils/copyToClipboard';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 
@@ -36,6 +37,46 @@ function money(n) {
   return `$${Number(n).toLocaleString()}`;
 }
 
+function buildAttemptCopySummary(attempt) {
+  const outgoingRow = attempt.direction === 'outgoing';
+  const killed = attempt.outcome === 'killed';
+  const incomingKilled = !outgoingRow && killed;
+  const otherUser = (outgoingRow ? attempt.target_username : attempt.attacker_username) ?? '?';
+  const statusLabel = incomingKilled
+    ? `Killed by ${attempt.attacker_username ?? '?'}`
+    : killed
+      ? 'Killed'
+      : 'Failed';
+  const bu = Number(attempt.bullets_used || 0).toLocaleString();
+  const parts = [
+    outgoingRow ? `Outgoing vs ${otherUser}` : `Incoming from ${otherUser}`,
+    statusLabel,
+    `${bu} bullets`,
+  ];
+  if (!killed && attempt.bullets_required) {
+    parts.push(`required ${Number(attempt.bullets_required).toLocaleString()}`);
+  }
+  if (attempt.rewards?.money != null) parts.push(`reward ${money(attempt.rewards.money)}`);
+  if (attempt.is_bodyguard_kill && attempt.bodyguard_owner_username) {
+    parts.push(`bodyguard for ${attempt.bodyguard_owner_username}`);
+  }
+  if (attempt.death_message) parts.push(`"${String(attempt.death_message).slice(0, 200)}"`);
+  if (attempt.created_at) parts.push(new Date(attempt.created_at).toLocaleString());
+  return parts.join(' · ');
+}
+
+function buildTimelineEventCopySummary(ev) {
+  const when = ev.occurred_at ? new Date(ev.occurred_at).toLocaleString() : '';
+  const parts = [
+    when,
+    ev.event_type ? String(ev.event_type).replace(/_/g, ' ') : '',
+    ev.direction,
+    ev.other_username && ev.other_username !== '—' ? ev.other_username : '',
+    ev.summary ? String(ev.summary).slice(0, 500) : '',
+  ].filter(Boolean);
+  return parts.join(' · ');
+}
+
 // Subcomponents
 const LoadingSpinner = () => (
   <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
@@ -63,6 +104,14 @@ const AttemptRow = ({ attempt }) => {
     : killed
       ? 'Killed'
       : 'Failed';
+
+  const onCopyAttempt = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const ok = await copyTextToClipboard(buildAttemptCopySummary(attempt));
+    if (ok) toast.success('Copied to clipboard');
+    else toast.error('Could not copy');
+  };
 
   return (
     <div className="atmp-row px-2 py-1.5 border-b border-zinc-700/30">
@@ -131,19 +180,30 @@ const AttemptRow = ({ attempt }) => {
           </div>
         </div>
 
-        {/* Right side - Bullets */}
-        <div className="shrink-0 text-right">
-          <div className="text-sm font-heading font-bold text-primary tabular-nums">
-            {Number(attempt.bullets_used || 0).toLocaleString()}
-          </div>
-          <div className="text-[9px] text-mutedForeground font-heading">
-            bullets
-          </div>
-          {!killed && attempt.bullets_required && (
-            <div className="text-[9px] text-mutedForeground font-heading mt-0.5">
-              / {Number(attempt.bullets_required || 0).toLocaleString()}
+        {/* Right side - copy + bullets */}
+        <div className="shrink-0 flex items-start gap-1">
+          <button
+            type="button"
+            onClick={onCopyAttempt}
+            className="p-1 rounded-md border border-transparent text-mutedForeground hover:text-primary hover:bg-primary/15 hover:border-primary/25 transition-colors touch-manipulation mt-0.5"
+            title="Copy attempt details"
+            aria-label="Copy attempt details"
+          >
+            <Copy size={14} />
+          </button>
+          <div className="text-right">
+            <div className="text-sm font-heading font-bold text-primary tabular-nums">
+              {Number(attempt.bullets_used || 0).toLocaleString()}
             </div>
-          )}
+            <div className="text-[9px] text-mutedForeground font-heading">
+              bullets
+            </div>
+            {!killed && attempt.bullets_required && (
+              <div className="text-[9px] text-mutedForeground font-heading mt-0.5">
+                / {Number(attempt.bullets_required || 0).toLocaleString()}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>
@@ -163,6 +223,21 @@ function timelineBadgeClass(et) {
 const TimelineEventRow = ({ ev, expanded, onToggle, canViewPayload }) => {
   const et = ev.event_type || '';
   const badgeClass = timelineBadgeClass(et);
+  const onCopyTimeline = async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    let text = buildTimelineEventCopySummary(ev);
+    if (canViewPayload && ev.payload && expanded) {
+      try {
+        text += `\n\n${JSON.stringify(ev.payload, null, 2)}`;
+      } catch {
+        /* ignore */
+      }
+    }
+    const ok = await copyTextToClipboard(text);
+    if (ok) toast.success(expanded && canViewPayload && ev.payload ? 'Copied (including payload)' : 'Copied to clipboard');
+    else toast.error('Could not copy');
+  };
   return (
     <div className="atmp-row border-b border-zinc-700/30">
       <div
@@ -197,6 +272,15 @@ const TimelineEventRow = ({ ev, expanded, onToggle, canViewPayload }) => {
           </div>
           <p className="text-[10px] text-mutedForeground font-heading leading-snug line-clamp-3">{ev.summary}</p>
         </div>
+        <button
+          type="button"
+          onClick={onCopyTimeline}
+          className="shrink-0 p-1 rounded-md border border-transparent text-mutedForeground hover:text-primary hover:bg-primary/15 hover:border-primary/25 transition-colors touch-manipulation mt-0.5"
+          title={expanded && canViewPayload && ev.payload ? 'Copy summary + payload' : 'Copy event details'}
+          aria-label="Copy timeline event"
+        >
+          <Copy size={14} />
+        </button>
       </div>
       {expanded && canViewPayload && ev.payload && (
         <pre className="mx-2 mb-2 p-2 rounded bg-black/30 border border-border/50 text-[9px] text-zinc-400 overflow-x-auto font-mono whitespace-pre-wrap break-words">

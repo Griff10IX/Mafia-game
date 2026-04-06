@@ -24,6 +24,11 @@ from server import (
 from routers.kill.armoury import _invalidate_weapons_cache, TOKEN_CONFIG, TOKEN_TYPES
 from utils.point_provenance import log_points_event
 from utils.civilian_protection import maybe_revoke_civilian_protection
+from utils.speakeasy_rewards import (
+    SPEAKEASY_DAILY_BULLETS,
+    SPEAKEASY_DAILY_CASH,
+    SPEAKEASY_COOLDOWN_HOURS,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -602,12 +607,6 @@ async def open_loot_box(
             status_code=500,
             detail="Loot box open failed. Please try again.",
         )
-
-
-# 75% reduction for beta
-SPEAKEASY_DAILY_CASH = 25_000
-SPEAKEASY_DAILY_BULLETS = 25
-SPEAKEASY_COOLDOWN_HOURS = 24
 
 
 async def collect_speakeasy(current_user: dict = Depends(get_current_user)):
