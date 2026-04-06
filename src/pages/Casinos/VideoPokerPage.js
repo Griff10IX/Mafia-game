@@ -17,17 +17,49 @@ const SUITS = {
   S: { sym: '♠', color: '#1c1c1c' },
 };
 
-const PAY_TABLE = [
-  { key: 'royal_flush', name: 'Royal Flush', multiplier: 250 },
-  { key: 'straight_flush', name: 'Straight Flush', multiplier: 50 },
-  { key: 'four_of_a_kind', name: 'Four of a Kind', multiplier: 25 },
-  { key: 'full_house', name: 'Full House', multiplier: 9 },
-  { key: 'flush', name: 'Flush', multiplier: 6 },
-  { key: 'straight', name: 'Straight', multiplier: 4 },
-  { key: 'three_of_a_kind', name: 'Three of a Kind', multiplier: 3 },
-  { key: 'two_pair', name: 'Two Pair', multiplier: 2 },
-  { key: 'jacks_or_better', name: 'Jacks or Better', multiplier: 1 },
+/** Display order (high → low); must match backend hand keys */
+const PAY_TABLE_KEY_ORDER = [
+  'royal_flush',
+  'straight_flush',
+  'four_of_a_kind',
+  'full_house',
+  'flush',
+  'straight',
+  'three_of_a_kind',
+  'two_pair',
+  'jacks_or_better',
 ];
+
+const FALLBACK_HAND_NAMES = {
+  royal_flush: 'Royal Flush',
+  straight_flush: 'Straight Flush',
+  four_of_a_kind: 'Four of a Kind',
+  full_house: 'Full House',
+  flush: 'Flush',
+  straight: 'Straight',
+  three_of_a_kind: 'Three of a Kind',
+  two_pair: 'Two Pair',
+  jacks_or_better: 'Jacks or Better',
+};
+
+function formatPayMultiplier(m) {
+  const n = Number(m);
+  if (Number.isNaN(n)) return '—';
+  const s = Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100).replace(/\.?0+$/, '');
+  return `${s}x`;
+}
+
+function buildPayTableRows(config, presetId) {
+  const presets = config?.pay_table_presets || {};
+  const pid = presetId || config?.odds_preset || 'normal';
+  const t = presets[pid] || config?.pay_table || {};
+  const names = config?.hand_names || FALLBACK_HAND_NAMES;
+  return PAY_TABLE_KEY_ORDER.map((key) => ({
+    key,
+    name: names[key] || key,
+    multiplier: t[key] ?? 0,
+  }));
+}
 
 const QUICK_BETS = [
   { label: '100K', value: 100_000, color: '#e4e4e7', text: '#000' },
@@ -166,7 +198,14 @@ function WinParticles({ active }) {
    Main Page
    ═══════════════════════════════════════════════════════ */
 export default function VideoPoker() {
-  const [config, setConfig] = useState({ max_bet: 50_000_000, claim_cost: 750_000_000 });
+  const [config, setConfig] = useState({
+    max_bet: 50_000_000,
+    claim_cost: 750_000_000,
+    odds_preset: 'normal',
+    pay_table: {},
+    pay_table_presets: {},
+    hand_names: FALLBACK_HAND_NAMES,
+  });
   const [ownership, setOwnership] = useState(null);
   const [bet, setBet] = useState('1000000');
   const [game, setGame] = useState(null);
@@ -185,9 +224,14 @@ export default function VideoPoker() {
   const [buyBackActionLoading, setBuyBackActionLoading] = useState(false);
 
   const fetchConfigAndOwnership = () => {
-    api.get('/casino/videopoker/config').then((r) => setConfig(r.data ?? { max_bet: 50_000_000, claim_cost: 750_000_000 })).catch(() => {
-      setConfig({ max_bet: 50_000_000, claim_cost: 750_000_000 });
-    });
+    api.get('/casino/videopoker/config').then((r) =>
+      setConfig((prev) => ({
+        ...prev,
+        ...(r.data ?? {}),
+        hand_names: r.data?.hand_names || prev.hand_names || FALLBACK_HAND_NAMES,
+        pay_table_presets: r.data?.pay_table_presets || prev.pay_table_presets || {},
+      })),
+    ).catch(() => {});
     api.get('/casino/videopoker/ownership').then((r) => {
       const data = r.data ?? null;
       setOwnership(data);
@@ -211,7 +255,12 @@ export default function VideoPoker() {
     fetchHistory();
     api.get('/casino/videopoker/game').then((r) => {
       if (r.data?.active) {
-        setGame({ status: r.data.status, bet: r.data.bet, hand: r.data.hand });
+        setGame({
+          status: r.data.status,
+          bet: r.data.bet,
+          hand: r.data.hand,
+          odds_preset: r.data.odds_preset,
+        });
         setHolds([false, false, false, false, false]);
       }
     }).catch(() => {
@@ -260,6 +309,21 @@ export default function VideoPoker() {
     try { await api.post('/casino/videopoker/reset-profit', { city }); toast.success('Profit reset to zero'); fetchConfigAndOwnership(); }
     catch (e) { toast.error(apiErrorDetail(e, 'Failed')); }
     finally { setOwnerLoading(false); }
+  };
+
+  const handleSetOddsPreset = async (preset) => {
+    const city = ownership?.current_city;
+    if (!city || ownerLoading) return;
+    setOwnerLoading(true);
+    try {
+      await api.post('/casino/videopoker/set-odds-preset', { city, odds_preset: preset });
+      toast.success('Pay table updated');
+      fetchConfigAndOwnership();
+    } catch (e) {
+      toast.error(apiErrorDetail(e, 'Failed'));
+    } finally {
+      setOwnerLoading(false);
+    }
   };
 
   const handleSetMaxBet = async () => {
@@ -350,12 +414,19 @@ export default function VideoPoker() {
   const isDealPhase = game?.status === 'deal';
   const isDone = game?.status === 'done';
 
+  const activePayPreset = game?.odds_preset || config?.odds_preset || ownership?.odds_preset || 'normal';
+  const activePayLabel =
+    (config?.odds_preset_options || []).find((o) => o.id === activePayPreset)?.label
+    || ownership?.odds_preset_label
+    || (activePayPreset === 'enhanced' ? 'Enhanced' : activePayPreset === 'increased' ? 'Increased' : 'Normal');
+  const payTableRows = buildPayTableRows(config, activePayPreset);
+
   const deal = async () => {
     if (!canDeal) return;
     setLoading(true); setGame(null); setHolds([false, false, false, false, false]); setShowWin(false);
     try {
       const res = await api.post('/casino/videopoker/deal', { bet: betNum });
-      setGame(res.data);
+      setGame({ ...res.data, odds_preset: res.data?.odds_preset });
       setDealing(true);
       setTimeout(() => setDealing(false), 600);
       refreshUser();
@@ -375,7 +446,7 @@ export default function VideoPoker() {
       setGame(data);
       const handLabel = data.hand_name || (data.hand_key === 'nothing' ? 'Nothing' : 'Hand');
       if (data.hand_key && data.hand_key !== 'nothing') {
-        if (data.multiplier > 1) {
+        if (Number(data.multiplier) > 1 || (data.payout ?? 0) > (data.bet ?? 0)) {
           toast.success(`${handLabel}. Paid ${formatMoney(data.payout)}`);
           setShowWin(true);
           setTimeout(() => setShowWin(false), 3000);
@@ -457,6 +528,26 @@ export default function VideoPoker() {
             </span>
           </div>
           <div className="p-3 space-y-2">
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+              <span className="text-[10px] text-mutedForeground w-20 shrink-0 sm:pt-1">Pay table</span>
+              <div className="flex flex-1 flex-wrap items-center gap-2">
+                <select
+                  value={ownership?.odds_preset || 'normal'}
+                  onChange={(e) => handleSetOddsPreset(e.target.value)}
+                  disabled={ownerLoading}
+                  className="flex-1 min-w-[140px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none disabled:opacity-50"
+                >
+                  {(config?.odds_preset_options || [
+                    { id: 'normal', label: 'Normal' },
+                    { id: 'increased', label: 'Increased' },
+                    { id: 'enhanced', label: 'Enhanced' },
+                  ]).map((o) => (
+                    <option key={o.id} value={o.id}>{o.label}</option>
+                  ))}
+                </select>
+                <span className="text-[9px] text-mutedForeground leading-snug">Applies to new deals. Active hands keep the table they started on.</span>
+              </div>
+            </div>
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-mutedForeground w-20 shrink-0">Max Bet</span>
               <FormattedNumberInput placeholder="e.g. 100,000,000" value={newMaxBet} onChange={setNewMaxBet} className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none" />
@@ -550,10 +641,10 @@ export default function VideoPoker() {
             {/* Pay Table */}
             <div className="mb-4 rounded-lg overflow-hidden border border-primary/30" style={{ background: 'rgba(0,0,0,0.35)' }}>
               <div className="px-3 py-1.5 border-b border-primary/20" style={{ background: 'rgba(212,175,55,0.1)' }}>
-                <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-widest">Jacks or Better — Pay Table</span>
+                <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-widest">Jacks or Better — {activePayLabel}</span>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-px p-1">
-                {PAY_TABLE.map((row) => (
+                {payTableRows.map((row) => (
                   <div
                     key={row.key}
                     className={`flex items-center justify-between px-2 py-1 rounded-sm transition-all ${game?.hand_key === row.key ? 'ring-1 ring-primary' : ''}`}
@@ -563,7 +654,7 @@ export default function VideoPoker() {
                       {row.name}
                     </span>
                     <span className={`text-[10px] font-heading font-bold ml-2 ${game?.hand_key === row.key ? 'text-primary' : 'text-primary/60'}`}>
-                      {row.multiplier}x
+                      {formatPayMultiplier(row.multiplier)}
                     </span>
                   </div>
                 ))}
@@ -751,7 +842,7 @@ export default function VideoPoker() {
         </div>
         <div className="p-3">
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-[11px] text-mutedForeground font-heading">
-            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>9/6 Jacks or Better pay table</li>
+            <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Payouts are multiples of your bet (total return); the owner picks Normal, Increased, or Enhanced</li>
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>5 cards dealt, choose which to hold</li>
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Discards replaced on draw</li>
             <li className="flex items-start gap-1.5"><span className="text-primary shrink-0">•</span>Pair of Jacks or better to win</li>

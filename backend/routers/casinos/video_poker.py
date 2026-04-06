@@ -6,7 +6,7 @@ _rng = secrets.SystemRandom()
 import time
 import uuid
 from collections import Counter
-from typing import Optional
+from typing import Any, Optional
 from pydantic import BaseModel, field_validator
 from bson.objectid import ObjectId
 
@@ -50,18 +50,51 @@ SUITS = ["H", "D", "C", "S"]
 VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
 VALUE_RANK = {"2": 2, "3": 3, "4": 4, "5": 5, "6": 6, "7": 7, "8": 8, "9": 9, "10": 10, "J": 11, "Q": 12, "K": 13, "A": 14}
 
-# 9/6 Jacks or Better pay table (total return per unit bet)
-PAY_TABLE = {
-    "royal_flush": 250,
-    "straight_flush": 50,
-    "four_of_a_kind": 25,
-    "full_house": 9,
-    "flush": 6,
-    "straight": 4,
-    "three_of_a_kind": 3,
-    "two_pair": 2,
-    "jacks_or_better": 1,
+# Payout multipliers: total return = round(bet * multiplier). Owner picks preset in control panel.
+VIDEO_POKER_DEFAULT_ODDS_PRESET = "normal"
+VIDEO_POKER_ODDS_PRESET_LABELS = {
+    "normal": "Normal",
+    "increased": "Increased",
+    "enhanced": "Enhanced",
 }
+# Between normal and enhanced (rounded); not specified by players — middle tier.
+VIDEO_POKER_PAY_PRESETS: dict[str, dict[str, float]] = {
+    "normal": {
+        "royal_flush": 100,
+        "straight_flush": 50,
+        "four_of_a_kind": 25,
+        "full_house": 10,
+        "flush": 7,
+        "straight": 5,
+        "three_of_a_kind": 3,
+        "two_pair": 2,
+        "jacks_or_better": 1.5,
+    },
+    "increased": {
+        "royal_flush": 125,
+        "straight_flush": 63,
+        "four_of_a_kind": 28,
+        "full_house": 12.5,
+        "flush": 9,
+        "straight": 6,
+        "three_of_a_kind": 3.5,
+        "two_pair": 2.5,
+        "jacks_or_better": 1.75,
+    },
+    "enhanced": {
+        "royal_flush": 150,
+        "straight_flush": 75,
+        "four_of_a_kind": 30,
+        "full_house": 15,
+        "flush": 10,
+        "straight": 7,
+        "three_of_a_kind": 4,
+        "two_pair": 3,
+        "jacks_or_better": 2,
+    },
+}
+# Back-compat alias for imports / admin tooling
+PAY_TABLE = VIDEO_POKER_PAY_PRESETS[VIDEO_POKER_DEFAULT_ODDS_PRESET]
 
 HAND_NAMES = {
     "royal_flush": "Royal Flush",
@@ -75,6 +108,34 @@ HAND_NAMES = {
     "jacks_or_better": "Jacks or Better",
     "nothing": "Nothing",
 }
+
+def _normalize_odds_preset(raw: Any) -> str:
+    if raw is None:
+        return VIDEO_POKER_DEFAULT_ODDS_PRESET
+    s = str(raw).strip().lower()
+    if s in VIDEO_POKER_PAY_PRESETS:
+        return s
+    return VIDEO_POKER_DEFAULT_ODDS_PRESET
+
+
+def _pay_table_for_preset(preset: str) -> dict[str, float]:
+    return VIDEO_POKER_PAY_PRESETS.get(
+        _normalize_odds_preset(preset), VIDEO_POKER_PAY_PRESETS[VIDEO_POKER_DEFAULT_ODDS_PRESET]
+    )
+
+
+def _effective_odds_preset(doc: Optional[dict]) -> str:
+    if not doc:
+        return VIDEO_POKER_DEFAULT_ODDS_PRESET
+    return _normalize_odds_preset(doc.get("odds_preset"))
+
+
+def _payout_for_multiplier(bet: int, mult: float) -> int:
+    return max(0, int(round(int(bet) * float(mult))))
+
+
+def _pay_tables_for_api() -> dict[str, dict[str, float]]:
+    return {k: dict(v) for k, v in VIDEO_POKER_PAY_PRESETS.items()}
 
 
 # ----- Models -----
@@ -106,6 +167,11 @@ class VideoPokerBuyBackAcceptRequest(BaseModel):
 
 class VideoPokerBuyBackRejectRequest(BaseModel):
     offer_id: str
+
+
+class VideoPokerSetOddsPresetRequest(BaseModel):
+    city: str
+    odds_preset: str
 
 
 # ----- Per-user cache for GET /casino/videopoker/ownership -----
@@ -145,7 +211,7 @@ def _make_deck():
     return [{"suit": s, "value": v} for s in SUITS for v in VALUES]
 
 
-def _evaluate_hand(hand):
+def _evaluate_hand(hand, pay_table: dict[str, float]):
     """Evaluate a 5-card poker hand. Returns (hand_rank_key, display_name, multiplier)."""
     values = [c["value"] for c in hand]
     suits = [c["suit"] for c in hand]
@@ -188,7 +254,7 @@ def _evaluate_hand(hand):
     else:
         key = "nothing"
 
-    multiplier = PAY_TABLE.get(key, 0)
+    multiplier = float(pay_table.get(key, 0) or 0)
     return key, HAND_NAMES.get(key, key), multiplier
 
 
@@ -202,6 +268,7 @@ async def _settle_and_save_history(
     payout: int,
     hand: list,
     gambling_extra: dict | None = None,
+    odds_preset: str | None = None,
 ):
     await db.videopoker_games.delete_many({"user_id": user_id})
     history_entry = {
@@ -212,11 +279,15 @@ async def _settle_and_save_history(
         "payout": payout,
         "hand": hand,
     }
+    if odds_preset:
+        history_entry["odds_preset"] = odds_preset
     await db.users.update_one(
         {"id": user_id},
         {"$push": {"videopoker_history": {"$each": [history_entry], "$position": 0, "$slice": VIDEO_POKER_HISTORY_MAX}}}
     )
     log_details = {"city": city, "bet": bet, "hand_key": hand_key, "hand_name": hand_name, "payout": payout}
+    if odds_preset:
+        log_details["odds_preset"] = odds_preset
     if gambling_extra:
         log_details = {**log_details, **gambling_extra}
     await log_gambling(user_id, username or "?", "videopoker", log_details)
@@ -230,11 +301,16 @@ def register(router):
         _, doc = await _get_ownership_doc(city) if city else (None, None)
         max_bet = doc.get("max_bet", VIDEO_POKER_DEFAULT_MAX_BET) if doc else VIDEO_POKER_DEFAULT_MAX_BET
         cc = await load_claim_costs(db)
+        preset = _effective_odds_preset(doc)
         return {
             "max_bet": max_bet,
             "claim_cost": cc["video_poker"],
             "house_edge": VIDEO_POKER_HOUSE_EDGE,
-            "pay_table": PAY_TABLE,
+            "odds_preset": preset,
+            "odds_preset_label": VIDEO_POKER_ODDS_PRESET_LABELS.get(preset, preset.title()),
+            "odds_preset_options": [{"id": k, "label": v} for k, v in VIDEO_POKER_ODDS_PRESET_LABELS.items()],
+            "pay_table": _pay_table_for_preset(preset),
+            "pay_table_presets": _pay_tables_for_api(),
             "hand_names": HAND_NAMES,
         }
 
@@ -264,6 +340,8 @@ def register(router):
                 "max_bet": VIDEO_POKER_DEFAULT_MAX_BET,
                 "buy_back_reward": None,
                 "buy_back_offer": None,
+                "odds_preset": VIDEO_POKER_DEFAULT_ODDS_PRESET,
+                "odds_preset_label": VIDEO_POKER_ODDS_PRESET_LABELS[VIDEO_POKER_DEFAULT_ODDS_PRESET],
             }
             if len(_ownership_cache) < _OWNERSHIP_MAX_ENTRIES:
                 _ownership_cache[user_id] = {"ts": now_ts, "data": out}
@@ -297,6 +375,7 @@ def register(router):
                     }
             except Exception:
                 pass
+        eff_preset = _effective_odds_preset(doc)
         out = {
             "current_city": display_city,
             "owner_id": owner_id,
@@ -309,6 +388,8 @@ def register(router):
             "total_earnings": total_earnings if is_owner else None,
             "profit": profit if is_owner else None,
             "buy_back_offer": buy_back_offer,
+            "odds_preset": eff_preset,
+            "odds_preset_label": VIDEO_POKER_ODDS_PRESET_LABELS.get(eff_preset, eff_preset.title()),
         }
         if is_owner:
             _, buyback_cap = await get_casino_caps()
@@ -341,7 +422,15 @@ def register(router):
             raise HTTPException(status_code=400, detail=f"You need ${claim_cost:,} to claim")
         res = await db.videopoker_ownership.update_one(
             {"city": stored_city or city, "owner_id": None},
-            {"$set": {"owner_id": current_user.get("id") or "", "owner_username": current_user.get("username") or "", "max_bet": VIDEO_POKER_DEFAULT_MAX_BET, "buy_back_reward": 0}},
+            {
+                "$set": {
+                    "owner_id": current_user.get("id") or "",
+                    "owner_username": current_user.get("username") or "",
+                    "max_bet": VIDEO_POKER_DEFAULT_MAX_BET,
+                    "buy_back_reward": 0,
+                    "odds_preset": VIDEO_POKER_DEFAULT_ODDS_PRESET,
+                }
+            },
             upsert=True,
         )
         if not res.modified_count and not res.upserted_id:
@@ -390,6 +479,28 @@ def register(router):
         new_max = max(50_000, min(request.max_bet, global_cap))
         await db.videopoker_ownership.update_one({"city": stored_city or city}, {"$set": {"max_bet": new_max}})
         return {"message": f"Max bet set to ${new_max:,}"}
+
+    @router.post("/casino/videopoker/set-odds-preset")
+    async def casino_videopoker_set_odds_preset(
+        request: VideoPokerSetOddsPresetRequest, current_user: dict = Depends(get_current_user_verified)
+    ):
+        _invalidate_ownership_cache(current_user.get("id") or "")
+        city = _normalize_city((request.city or "").strip())
+        if not city or city not in STATES:
+            raise HTTPException(status_code=400, detail="Invalid city")
+        stored_city, doc = await _get_ownership_doc(city)
+        if not doc or doc.get("owner_id") != current_user.get("id") or "":
+            raise HTTPException(status_code=403, detail="You do not own this table")
+        raw = (request.odds_preset or "").strip().lower()
+        if raw not in VIDEO_POKER_PAY_PRESETS:
+            raise HTTPException(status_code=400, detail="Invalid odds preset. Use normal, increased, or enhanced.")
+        preset = raw
+        await db.videopoker_ownership.update_one({"city": stored_city or city}, {"$set": {"odds_preset": preset}})
+        return {
+            "message": f"Pay table set to {VIDEO_POKER_ODDS_PRESET_LABELS.get(preset, preset)}.",
+            "odds_preset": preset,
+            "odds_preset_label": VIDEO_POKER_ODDS_PRESET_LABELS.get(preset, preset.title()),
+        }
 
     @router.post("/casino/videopoker/set-buy-back-reward")
     async def casino_videopoker_set_buy_back_reward(request: VideoPokerSetBuyBackRequest, current_user: dict = Depends(get_current_user_verified)):
@@ -519,7 +630,13 @@ def register(router):
         game = await db.videopoker_games.find_one({"user_id": current_user.get("id") or ""}, {"_id": 0, "deck": 0})
         if not game:
             return {"active": False}
-        return {"active": True, "bet": game.get("bet"), "hand": game.get("hand"), "status": game.get("status", "deal")}
+        return {
+            "active": True,
+            "bet": game.get("bet"),
+            "hand": game.get("hand"),
+            "status": game.get("status", "deal"),
+            "odds_preset": game.get("odds_preset") or VIDEO_POKER_DEFAULT_ODDS_PRESET,
+        }
 
     @router.post("/casino/videopoker/deal")
     async def casino_videopoker_deal(request: VideoPokerDealRequest, current_user: dict = Depends(get_current_user_verified)):
@@ -553,6 +670,7 @@ def register(router):
         hand = [deck.pop() for _ in range(5)]
         if owner_id:
             await db.users.update_one({"id": owner_id}, {"$inc": {"money": bet}})
+        odds_preset = _effective_odds_preset(doc)
         await db.videopoker_games.insert_one({
             "user_id": current_user.get("id") or "",
             "city": stored_city or city,
@@ -561,9 +679,10 @@ def register(router):
             "deck": deck,
             "status": "deal",
             "owner_id": owner_id,
+            "odds_preset": odds_preset,
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
-        return {"status": "deal", "bet": bet, "hand": hand}
+        return {"status": "deal", "bet": bet, "hand": hand, "odds_preset": odds_preset}
 
     @router.post("/casino/videopoker/draw")
     async def casino_videopoker_draw(request: VideoPokerDrawRequest, current_user: dict = Depends(get_current_user_verified)):
@@ -578,6 +697,9 @@ def register(router):
         bet = game.get("bet", 0)
         owner_id = game.get("owner_id")
         city = game.get("city", "")
+        odds_preset = game.get("odds_preset") or VIDEO_POKER_DEFAULT_ODDS_PRESET
+        odds_preset = _normalize_odds_preset(odds_preset)
+        pay_table = _pay_table_for_preset(odds_preset)
 
         holds = set()
         for h in (request.holds or []):
@@ -589,8 +711,8 @@ def register(router):
             if i not in holds and deck:
                 hand[i] = deck.pop()
 
-        hand_key, hand_name, multiplier = _evaluate_hand(hand)
-        payout = bet * multiplier
+        hand_key, hand_name, multiplier = _evaluate_hand(hand, pay_table)
+        payout = _payout_for_multiplier(bet, multiplier)
         payout_full_vp = 0
         gambling_extra = None
         ownership_transferred = False
@@ -704,7 +826,16 @@ def register(router):
                     gambling_extra["buy_back_outcome"] = "not_offered"
 
         await _settle_and_save_history(
-            current_user.get("id") or "", current_user.get("username"), city, bet, hand_key, hand_name, payout, hand, gambling_extra
+            current_user.get("id") or "",
+            current_user.get("username"),
+            city,
+            bet,
+            hand_key,
+            hand_name,
+            payout,
+            hand,
+            gambling_extra,
+            odds_preset=odds_preset,
         )
 
         result = {
@@ -717,6 +848,7 @@ def register(router):
             "payout": payout,
             "new_balance": new_balance,
             "shortfall": shortfall,
+            "odds_preset": odds_preset,
         }
         # Add buyback info if ownership was transferred
         if owner_id and payout > bet and shortfall > 0:
