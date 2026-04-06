@@ -212,7 +212,7 @@ class TestUsersAutoRankRequest(BaseModel):
 
 
 class GTAExclusivePoolRequest(BaseModel):
-    """Release or retract the Al Capone exclusive (car20) into the GTA car pool. Only 1 in game at a time; when released, very rare drop."""
+    """Release or retract the Al Capone exclusive (car20) into the GTA car pool. Only 1 in game at a time. drop_weight w ⇒ P(exclusive | successful steal) = w/(1+w), same for every GTA tier."""
     released: bool
     drop_weight: Optional[float] = None
 
@@ -2529,7 +2529,7 @@ def register(router):
 
     @router.post("/admin/gta/exclusive-pool")
     async def admin_gta_exclusive_pool_set(body: GTAExclusivePoolRequest, current_user: dict = Depends(get_current_user)):
-        """Release or retract the Al Capone exclusive (car20) into the GTA car pool. When released, it can drop from GTA (very rare); only 1 in game at a time. Admin only."""
+        """Release or retract the Al Capone exclusive (car20) into the GTA car pool. When released, it can drop from any successful GTA tier (very rare); only 1 in game at a time. Admin only."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         updates = {"id": GTA_EXCLUSIVE_POOL_CONFIG_ID, "released": body.released}
@@ -2550,13 +2550,6 @@ def register(router):
         drop_weight = float((cfg or {}).get("drop_weight") or GTA_EXCLUSIVE_DROP_WEIGHT_DEFAULT)
         drop_weight = max(GTA_EXCLUSIVE_DROP_WEIGHT_MIN, min(GTA_EXCLUSIVE_DROP_WEIGHT_MAX, drop_weight))
         approx_one_in = int(round(1.0 / drop_weight)) if drop_weight > 0 else 0
-        if body.released:
-            await send_notification_to_all(
-                "GTA exclusive in pool",
-                "The Al Capone exclusive car is now in the GTA car pool. It can drop from GTAs (very rare); only one exists in the game at a time.",
-                "system",
-                category="gta_exclusive",
-            )
         return {
             "message": f"Al Capone exclusive {'released into' if body.released else 'retracted from'} GTA car pool",
             "released": body.released,

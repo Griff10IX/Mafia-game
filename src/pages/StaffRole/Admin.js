@@ -10587,7 +10587,7 @@ export default function Admin() {
                 </button>
                 <span className="text-[10px] text-mutedForeground">Range: 0.0000001 to 0.05</span>
               </div>
-              <p className="text-[10px] text-mutedForeground font-heading">When released, the Al Capone exclusive can drop from GTA (very rare). Only one in game at a time. GTA logs are in the &quot;GTA logs (post data)&quot; section further down.</p>
+              <p className="text-[10px] text-mutedForeground font-heading">When released, the Al Capone exclusive uses the same per-success probability on every GTA tier: w/(1+w) for drop weight w (≈w when w is small). Only one in game at a time. GTA logs are in the &quot;GTA logs (post data)&quot; section further down.</p>
 
               {/* Edit exclusive car values — inline */}
               <div className="pt-3 border-t border-zinc-700/50 space-y-2">
