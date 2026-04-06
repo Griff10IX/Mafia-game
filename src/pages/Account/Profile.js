@@ -322,6 +322,10 @@ const ProfileInfoCard = ({
   });
 
   const isRobotBodyguard = Boolean(profile.is_npc && profile.is_bodyguard);
+  const profileNotepadBg = profile.profile_notepad_color || null;
+  const profileNotepadStyle = profileNotepadBg
+    ? { backgroundColor: profileNotepadBg, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.04)' }
+    : undefined;
 
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-card prof-fade-in mobile-panel`}>
@@ -630,11 +634,10 @@ const ProfileInfoCard = ({
       {(() => {
         const displayText = (bannerText || '').trim() || null;
         const renderedHtml = displayText ? parseForumContent(displayText, { censorProfanity }) : '';
-        const notepadBg = profile.profile_notepad_color || null;
         return (
           <div
             className="border-t border-zinc-700/30"
-            style={notepadBg ? { backgroundColor: notepadBg } : undefined}
+            style={profileNotepadStyle}
           >
             <div className="relative min-h-[60px] flex flex-col justify-center py-4 px-3 md:px-4">
               <div className="w-full">
@@ -689,7 +692,7 @@ const ProfileInfoCard = ({
 
       {/* Account Created — inside same card, below notepad (API sends created_at for every profile) */}
       {profile.created_at != null && (
-        <div className="border-t border-zinc-700/30">
+        <div className="border-t border-zinc-700/30" style={profileNotepadStyle}>
           <div className="px-3 py-2 md:px-4 bg-primary/8 border-b border-primary/20 text-center">
             <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">
               Account Created
