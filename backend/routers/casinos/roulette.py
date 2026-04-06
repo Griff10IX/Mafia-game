@@ -34,7 +34,7 @@ from server import (
     bump_user_biggest_casino_payout,
 )
 from routers.casinos.dice import DiceSellOnTradeRequest
-from routers.money.quicktrade import cancel_quicktrade_casino_listings_by_locations
+from utils.quicktrade_casino_cleanup import cancel_quicktrade_casino_listings_by_locations
 
 # ----- Constants -----
 ROULETTE_RED = {1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36}

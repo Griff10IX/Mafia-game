@@ -35,7 +35,7 @@ from server import (
 )
 from routers.casinos.roulette import RouletteClaimRequest, RouletteSetMaxBetRequest, RouletteSendToUserRequest
 from routers.casinos.dice import DiceSellOnTradeRequest
-from routers.money.quicktrade import cancel_quicktrade_casino_listings_by_locations
+from utils.quicktrade_casino_cleanup import cancel_quicktrade_casino_listings_by_locations
 
 # ----- Constants -----
 BLACKJACK_MAX_BET = 50_000_000

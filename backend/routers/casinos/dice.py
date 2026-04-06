@@ -35,7 +35,7 @@ from server import (
     _ownership_display_profit,
     bump_user_biggest_casino_payout,
 )
-from routers.money.quicktrade import cancel_quicktrade_casino_listings_by_locations
+from utils.quicktrade_casino_cleanup import cancel_quicktrade_casino_listings_by_locations
 
 # ----- Constants -----
 DICE_SIDES_MIN = 2
