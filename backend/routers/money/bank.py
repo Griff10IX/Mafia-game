@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from fastapi import Depends, HTTPException, Request
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from server import db, get_current_user, get_current_user_verified, log_activity
+from server import db, get_current_user, get_current_user_verified, log_activity, send_notification
 
 # Set from server in register() (server keeps constants for UserProfile / new-user / auth/me)
 SWISS_BANK_LIMIT_START = None
@@ -337,6 +337,13 @@ async def bank_transfer(request: MoneyTransferRequest, req: Request, current_use
         "created_at": now_iso,
     }
     await db.money_transfers.insert_one(transfer_doc)
+    sender_display = (current_user.get("username") or "").strip() or "?"
+    await send_notification(
+        recipient_id,
+        "Cash received",
+        f"{sender_display} sent you ${amount:,}.",
+        "reward",
+    )
     if security_module and getattr(security_module, "check_negative_balance", None):
         try:
             await security_module.check_negative_balance(db, sender_id, current_user.get("username", ""))

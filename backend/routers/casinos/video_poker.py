@@ -36,6 +36,7 @@ from server import (
     bump_user_biggest_casino_payout,
     get_wealth_rank,
     get_wealth_rank_range,
+    send_notification,
 )
 from routers.casinos.roulette import RouletteClaimRequest, RouletteSetMaxBetRequest, RouletteSendToUserRequest
 from routers.casinos.dice import DiceSellOnTradeRequest
@@ -606,13 +607,25 @@ def register(router):
         target = await db.users.find_one({"username": target_username_pattern}, {"_id": 0, "id": 1, "username": 1, "rank_points": 1})
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
-        send_set = {"owner_id": target.get("id") or "", "owner_username": target.get("username")}
+        send_set = {
+            "owner_id": target.get("id") or "",
+            "owner_username": target.get("username"),
+            "max_bet": CASINO_MIN_OWNER_MAX_BET,
+        }
         if get_rank_info(target.get("rank_points", 0))[0] < CAPO_RANK_ID:
             send_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
         await db.videopoker_ownership.update_one({"city": stored_city or city}, {"$set": send_set})
         await cancel_quicktrade_casino_listings_by_locations("casino_videopoker", stored_city or city, city)
         _invalidate_ownership_cache(target.get("id") or "")
         await maybe_revoke_civilian_protection(db, target.get("id") or "", "received_casino_transfer")
+        loc = stored_city or city
+        sender_name = (current_user.get("username") or "").strip() or "?"
+        await send_notification(
+            target.get("id") or "",
+            "Casino transferred",
+            f"{sender_name} sent you the video poker table in {loc}.",
+            "reward",
+        )
         return {"message": "Ownership transferred."}
 
     @router.post("/casino/videopoker/sell-on-trade")

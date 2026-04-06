@@ -34,6 +34,7 @@ from server import (
     bump_user_biggest_casino_payout,
     get_wealth_rank,
     get_wealth_rank_range,
+    send_notification,
 )
 from routers.casinos.roulette import RouletteClaimRequest, RouletteSetMaxBetRequest, RouletteSendToUserRequest
 from routers.casinos.dice import DiceSellOnTradeRequest
@@ -428,13 +429,25 @@ def register(router):
         target = await db.users.find_one({"username": target_username_pattern}, {"_id": 0, "id": 1, "username": 1, "rank_points": 1})
         if not target or (target.get("id") or "") == (current_user.get("id") or ""):
             raise HTTPException(status_code=400, detail="Invalid target user")
-        send_set = {"owner_id": target.get("id") or "", "owner_username": target.get("username") or ""}
+        send_set = {
+            "owner_id": target.get("id") or "",
+            "owner_username": target.get("username") or "",
+            "max_bet": CASINO_MIN_OWNER_MAX_BET,
+        }
         if get_rank_info(target.get("rank_points", 0))[0] < CAPO_RANK_ID:
             send_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
         await db.horseracing_ownership.update_one({"city": stored_city or city}, {"$set": send_set})
         await cancel_quicktrade_casino_listings_by_locations("casino_horseracing", stored_city or city, city)
         _invalidate_ownership_cache(target.get("id") or "")
         await maybe_revoke_civilian_protection(db, target.get("id") or "", "received_casino_transfer")
+        loc = stored_city or city
+        sender_name = (current_user.get("username") or "").strip() or "?"
+        await send_notification(
+            target.get("id") or "",
+            "Casino transferred",
+            f"{sender_name} sent you the horse racing track in {loc}.",
+            "reward",
+        )
         return {"message": f"Track ownership transferred to {target.get('username', '?')}."}
 
     @router.post("/casino/horseracing/sell-on-trade")

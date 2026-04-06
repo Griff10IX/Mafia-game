@@ -6,12 +6,12 @@
 
 [hr]
 
-[size=1.5][b][color=#2ECC71]2026-04-06 21:30 UTC[/color][/b] — [b]Casinos: max bet resets when a table is relinquished[/b][/size]
+[size=1.5][b][color=#2ECC71]2026-04-06 21:30 UTC[/color][/b] — [b]Casinos: max bet resets on relinquish or send[/b][/size]
 [quote]
 [list]
-[*][color=#888888][b]Changed:[/b] When you [b]relinquish[/b] a casino (dice, roulette, blackjack, video poker, horse racing, or slots), or when a [b]below-Capo[/b] table [b]auto-relinquishes[/b] after the usual timer, the table’s [b]max bet[/b] is reset to the [b]minimum owner max bet[/b] ([b]$50,000[/b]) — the same floor used when owners set max bet. The next owner no longer inherits the previous owner’s high limit on an unclaimed table.[/color]
-[*][color=#888888][b]Player action:[/b] No action. New claimants still get normal claim defaults where those apply; anyone taking over an unowned table sees the updated limit in line with the rules above.[/color]
-[*][color=#888888][b]Impact:[/b] Unowned tables reflect a fair baseline max bet instead of carrying over an old owner’s settings.[/color]
+[*][color=#888888][b]Changed:[/b] When you [b]relinquish[/b] a casino (dice, roulette, blackjack, video poker, horse racing, or slots), when a [b]below-Capo[/b] table [b]auto-relinquishes[/b] after the usual timer, or when you [b]send[/b] a table to another player (same games except slots — no send there), the table’s [b]max bet[/b] is set to the [b]minimum owner max bet[/b] ([b]$50,000[/b]) — the same floor used when owners set max bet. Recipients and the next claimant no longer inherit the previous owner’s high limit.[/color]
+[*][color=#888888][b]Player action:[/b] No action. New claimants still get normal claim defaults where those apply; sent tables start at the minimum owner max bet until the new owner raises it.[/color]
+[*][color=#888888][b]Impact:[/b] Tables reflect a fair baseline max bet after relinquish, auto-relinquish, or send — not the old owner’s settings.[/color]
 [/list]
 [/quote]
 
