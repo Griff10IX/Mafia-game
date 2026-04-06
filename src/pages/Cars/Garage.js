@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { Car, Flame, DollarSign, CheckSquare, Square, Filter, ChevronDown, ChevronUp, Settings, Wrench } from 'lucide-react';
+import { Car, Flame, DollarSign, CheckSquare, Square, Filter, Settings, Wrench } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
@@ -164,8 +164,7 @@ const FiltersSortCard = ({ sortBy, setSortBy, filterRarity, setFilterRarity }) =
 
 const ActionsBar = ({
   displayedCount,
-  hiddenCount,
-  showAll,
+  pageSummary,
   selectedCount,
   selectedEligibleCount,
   allDisplayedSelected,
@@ -185,11 +184,11 @@ const ActionsBar = ({
       <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-2">
-          {!showAll && hiddenCount > 0 && (
+          {pageSummary ? (
             <span className="text-[10px] text-mutedForeground font-heading">
-              Showing {displayedCount}
+              {pageSummary}
             </span>
-          )}
+          ) : null}
           
           {selectedCount > 0 && (
             <span className="px-1.5 py-0.5 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/30">
@@ -450,9 +449,9 @@ export default function Garage() {
   const [cars, setCars] = useState(() => (bootGarage?.cars ?? []).map((c) => ({ ...c, rarity: normalizeCarRarity(c?.rarity) })));
   const [selectedCars, setSelectedCars] = useState([]);
   const [loading, setLoading] = useState(() => bootGarage == null);
-  const [sortBy, setSortBy] = useState('rarity');
+  const [sortBy, setSortBy] = useState('value-high');
   const [filterRarity, setFilterRarity] = useState('all');
-  const [showAll, setShowAll] = useState(false);
+  const [garagePage, setGaragePage] = useState(0);
   const [customCarModal, setCustomCarModal] = useState(null);
   const [customCarImageUrl, setCustomCarImageUrl] = useState('');
   const [savingCustomImage, setSavingCustomImage] = useState(false);
@@ -538,6 +537,55 @@ export default function Garage() {
     const t = setInterval(update, 1000);
     return () => clearInterval(t);
   }, [meltBulletsCooldownUntil]);
+
+  const allFilteredCars = useMemo(() => {
+    let filtered = [...cars];
+    if (filterRarity !== 'all') {
+      filtered = filtered.filter((car) => car.rarity === filterRarity);
+    }
+    filtered.sort((a, b) => {
+      const rarityCmp = () => (RARITY_ORDER[b.rarity] || 0) - (RARITY_ORDER[a.rarity] || 0);
+      const valueCmp = () => (Number(b.value) || 0) - (Number(a.value) || 0);
+      switch (sortBy) {
+        case 'newest':
+          return new Date(b.acquired_at) - new Date(a.acquired_at);
+        case 'oldest':
+          return new Date(a.acquired_at) - new Date(b.acquired_at);
+        case 'value-high': {
+          const v = valueCmp();
+          if (v !== 0) return v;
+          return rarityCmp();
+        }
+        case 'value-low': {
+          const v = (Number(a.value) || 0) - (Number(b.value) || 0);
+          if (v !== 0) return v;
+          return rarityCmp();
+        }
+        case 'rarity': {
+          const r = rarityCmp();
+          if (r !== 0) return r;
+          return valueCmp();
+        }
+        default:
+          return 0;
+      }
+    });
+    return filtered;
+  }, [cars, filterRarity, sortBy]);
+
+  const totalCount = allFilteredCars.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / DEFAULT_VISIBLE));
+  const safePage = Math.min(Math.max(0, garagePage), totalPages - 1);
+  const pageOffset = safePage * DEFAULT_VISIBLE;
+  const displayedCars = allFilteredCars.slice(pageOffset, pageOffset + DEFAULT_VISIBLE);
+
+  useEffect(() => {
+    setGaragePage(0);
+  }, [filterRarity, sortBy]);
+
+  useEffect(() => {
+    setGaragePage((p) => Math.min(p, totalPages - 1));
+  }, [totalPages]);
 
   const toggleSelect = (carId) => {
     setSelectedCars(prev =>
@@ -656,29 +704,13 @@ export default function Garage() {
 
   const getRarityColor = (rarity) => RARITY_COLORS[rarity] || 'text-foreground';
 
-  const getFilteredAndSortedCars = () => {
-    let filtered = [...cars];
-    if (filterRarity !== 'all') {
-      filtered = filtered.filter(car => car.rarity === filterRarity);
-    }
-    filtered.sort((a, b) => {
-      switch(sortBy) {
-        case 'newest': return new Date(b.acquired_at) - new Date(a.acquired_at);
-        case 'oldest': return new Date(a.acquired_at) - new Date(b.acquired_at);
-        case 'value-high': return b.value - a.value;
-        case 'value-low': return a.value - b.value;
-        case 'rarity': return (RARITY_ORDER[b.rarity] || 0) - (RARITY_ORDER[a.rarity] || 0);
-        default: return 0;
-      }
-    });
-    return filtered;
-  };
+  const pageSummary =
+    totalCount === 0
+      ? ''
+      : totalPages > 1
+        ? `Page ${safePage + 1} / ${totalPages} · ${pageOffset + 1}–${pageOffset + displayedCars.length} of ${totalCount}`
+        : `${totalCount} car${totalCount === 1 ? '' : 's'}`;
 
-  const allFilteredCars = getFilteredAndSortedCars();
-  const totalCount = allFilteredCars.length;
-  const displayedCars = showAll ? allFilteredCars : allFilteredCars.slice(0, DEFAULT_VISIBLE);
-  const hiddenCount = totalCount - displayedCars.length;
-  
   const displayedEligibleForMelt = displayedCars.filter(
     (c) => !c.listed_for_sale && meltScrapRarities.length > 0 && meltScrapRarities.includes(c.rarity)
   );
@@ -769,8 +801,7 @@ export default function Garage() {
 
           <ActionsBar
             displayedCount={displayedCars.length}
-            hiddenCount={hiddenCount}
-            showAll={showAll}
+            pageSummary={pageSummary}
             selectedCount={selectedCars.length}
             selectedEligibleCount={selectedCarsForMelt.length}
             allDisplayedSelected={allDisplayedSelected}
@@ -801,25 +832,59 @@ export default function Garage() {
             ))}
           </div>
 
-          {totalCount > DEFAULT_VISIBLE && (
-            <div className="flex justify-center">
-              <button
-                type="button"
-                onClick={() => setShowAll((v) => !v)}
-                className="bg-secondary text-foreground border border-border hover:bg-secondary/80 hover:border-primary/30 rounded px-4 py-2 text-xs font-heading font-bold uppercase tracking-wide transition-all active:scale-95 inline-flex items-center gap-1.5 touch-manipulation"
-              >
-                {showAll ? (
-                  <>
-                    <ChevronUp size={14} />
-                    Show Top {DEFAULT_VISIBLE}
-                  </>
+          {totalPages > 1 && (
+            <div className="flex flex-col items-center gap-2">
+              <div className="flex flex-wrap items-center justify-center gap-1.5">
+                <button
+                  type="button"
+                  disabled={safePage <= 0}
+                  onClick={() => setGaragePage((p) => Math.max(0, p - 1))}
+                  className="px-2 py-1.5 rounded border border-border text-[10px] font-heading font-bold uppercase text-mutedForeground hover:text-foreground hover:border-primary/30 disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation"
+                >
+                  Prev
+                </button>
+                {totalPages <= 15 ? (
+                  Array.from({ length: totalPages }, (_, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setGaragePage(i)}
+                      className={`min-w-[2rem] px-2 py-1.5 rounded border text-[10px] font-heading font-bold touch-manipulation ${
+                        i === safePage
+                          ? 'border-primary/60 bg-primary/20 text-primary'
+                          : 'border-border text-mutedForeground hover:text-foreground hover:border-primary/30'
+                      }`}
+                    >
+                      {i + 1}
+                    </button>
+                  ))
                 ) : (
-                  <>
-                    <ChevronDown size={14} />
-                    View All ({hiddenCount} more)
-                  </>
+                  <label className="flex items-center gap-1.5 text-[10px] font-heading text-mutedForeground">
+                    <span>Page</span>
+                    <select
+                      value={safePage}
+                      onChange={(e) => setGaragePage(Number(e.target.value))}
+                      className="bg-input border border-border rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                    >
+                      {Array.from({ length: totalPages }, (_, i) => (
+                        <option key={i} value={i}>
+                          {i + 1}
+                        </option>
+                      ))}
+                    </select>
+                    <span>of {totalPages}</span>
+                  </label>
                 )}
-              </button>
+                <button
+                  type="button"
+                  disabled={safePage >= totalPages - 1}
+                  onClick={() => setGaragePage((p) => Math.min(totalPages - 1, p + 1))}
+                  className="px-2 py-1.5 rounded border border-border text-[10px] font-heading font-bold uppercase text-mutedForeground hover:text-foreground hover:border-primary/30 disabled:opacity-40 disabled:cursor-not-allowed touch-manipulation"
+                >
+                  Next
+                </button>
+              </div>
+              <span className="text-[9px] text-mutedForeground font-heading">{DEFAULT_VISIBLE} per page</span>
             </div>
           )}
         </>
