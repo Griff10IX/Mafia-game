@@ -7,6 +7,15 @@ import styles from '../../styles/noir.module.css';
 
 const TURN_SECONDS = 30;
 const START_COUNTDOWN = 5;
+const TOURNAMENT_REMINDER_COOLDOWN_MS = 600 * 1000;
+
+function tournamentReminderCooldownRemainingMs(sentAtIso, _rerenderTick = 0) {
+  void _rerenderTick;
+  if (!sentAtIso) return 0;
+  const t = new Date(sentAtIso).getTime();
+  if (Number.isNaN(t)) return 0;
+  return Math.max(0, TOURNAMENT_REMINDER_COOLDOWN_MS - (Date.now() - t));
+}
 
 const SUITS = {
   H: { sym: '♥', color: '#dc2626' },
@@ -319,6 +328,9 @@ export default function MPPokerGamePage() {
   const [startSecondsLeft, setStartSecondsLeft] = useState(null);
   const [turnSecondsLeft, setTurnSecondsLeft] = useState(null);
   const [helpPanelOpen, setHelpPanelOpen] = useState(false);
+  const [remindLoading, setRemindLoading] = useState(false);
+  const [canStaffTournamentRemind, setCanStaffTournamentRemind] = useState(false);
+  const [remindCooldownTick, setRemindCooldownTick] = useState(0);
   const startTriggeredRef = useRef(false);
   const timeoutTriggeredRef = useRef(null);
   const chatEndRef = useRef(null);
@@ -336,6 +348,25 @@ export default function MPPokerGamePage() {
       myUserIdRef.current = id;
     }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (game?.mode !== 'tournament') {
+      setCanStaffTournamentRemind(false);
+      return;
+    }
+    api.get('/admin/whoami')
+      .then((r) => {
+        const d = r.data;
+        setCanStaffTournamentRemind(Boolean(d?.is_admin || d?.is_moderator || d?.has_admin_email));
+      })
+      .catch(() => setCanStaffTournamentRemind(false));
+  }, [game?.mode, gameId]);
+
+  useEffect(() => {
+    if (!game?.inactive_reminder_sent_at) return undefined;
+    const id = setInterval(() => setRemindCooldownTick((n) => n + 1), 20000);
+    return () => clearInterval(id);
+  }, [game?.inactive_reminder_sent_at]);
 
   const fetchGame = useCallback(() => {
     // Always start with the generic games endpoint; if vs-dealer use that endpoint
@@ -564,6 +595,20 @@ export default function MPPokerGamePage() {
     finally { setLeaveLoading(false); }
   };
 
+  const remindInactivePlayers = async () => {
+    if (remindLoading || !gameId) return;
+    setRemindLoading(true);
+    try {
+      const res = await api.post(`/casino/mp-poker/tournaments/${gameId}/remind-inactive`);
+      toast.success(res.data?.message || 'Reminders sent');
+      fetchGame();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || 'Could not send reminders');
+    } finally {
+      setRemindLoading(false);
+    }
+  };
+
   const sendChat = (e) => {
     e?.preventDefault();
     if (!gameId) return;
@@ -614,6 +659,26 @@ export default function MPPokerGamePage() {
   const buttonIndex = game?.button_index ?? 0;
   const isCreator = game?.creator_id === myUserId;
   const canLeaveGame = amIPlayer && !isCreator && status === 'open';
+  const seatedIds = useMemo(() => new Set(players.map((p) => p.user_id).filter(Boolean)), [players]);
+  const imSeated = Boolean(myUserId && seatedIds.has(myUserId));
+  const inactiveOthersCount = imSeated
+    ? players.filter((p) => p.user_id && !p.ready && p.user_id !== myUserId).length
+    : players.filter((p) => p.user_id && !p.ready).length;
+  const canRemindTournamentRole = Boolean(
+    isTournament && tournamentStatus === 'registration' && status === 'open'
+    && (phase === 'lobby' || phase === 'ready') && (isCreator || canStaffTournamentRemind),
+  );
+  const remindCooldownMs = tournamentReminderCooldownRemainingMs(game?.inactive_reminder_sent_at, remindCooldownTick);
+  const canClickRemindInactive = canRemindTournamentRole && inactiveOthersCount > 0 && remindCooldownMs <= 0;
+  const remindInactiveTitle = !canRemindTournamentRole
+    ? ''
+    : inactiveOthersCount <= 0
+      ? 'Everyone is ready or there is no one else to remind'
+      : remindCooldownMs > 0
+        ? (remindCooldownMs >= 60000
+          ? `Available in ${Math.ceil(remindCooldownMs / 60000)}m`
+          : `Available in ${Math.ceil(remindCooldownMs / 1000)}s`)
+        : 'Send inbox reminder to all players who have not tapped Ready';
   const seatOrder = useMemo(() => {
     const total = players.length;
     if (total <= 0) return [];
@@ -801,7 +866,19 @@ export default function MPPokerGamePage() {
                   </span>
                 ))}
               </div>
-              <div className="flex justify-center gap-2 mt-2">
+              <div className="flex flex-wrap justify-center gap-2 mt-2">
+                {canRemindTournamentRole && (isCreator || canStaffTournamentRemind) && (
+                  <button
+                    type="button"
+                    disabled={!canClickRemindInactive || remindLoading}
+                    title={remindInactiveTitle}
+                    onClick={remindInactivePlayers}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-heading font-bold uppercase disabled:opacity-45"
+                    style={{ borderColor: 'rgba(45,212,191,0.45)', background: 'rgba(15,23,42,0.5)', color: '#5eead4' }}
+                  >
+                    {remindLoading ? '…' : 'Send inactive reminder'}
+                  </button>
+                )}
                 {isCreator && (
                   <button type="button" disabled={cancelLoading} onClick={cancelGame}
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-heading font-bold uppercase"
@@ -904,7 +981,19 @@ export default function MPPokerGamePage() {
             </div>
 
             {(isCreator || status === 'open') && (
-              <div className="flex justify-center">
+              <div className="flex flex-wrap justify-center gap-2">
+                {canRemindTournamentRole && (isCreator || canStaffTournamentRemind) && (
+                  <button
+                    type="button"
+                    disabled={!canClickRemindInactive || remindLoading}
+                    title={remindInactiveTitle}
+                    onClick={remindInactivePlayers}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-heading font-bold uppercase disabled:opacity-45"
+                    style={{ borderColor: 'rgba(45,212,191,0.45)', background: 'rgba(15,23,42,0.5)', color: '#5eead4' }}
+                  >
+                    {remindLoading ? '…' : 'Send inactive reminder'}
+                  </button>
+                )}
                 <button type="button" disabled={cancelLoading} onClick={cancelGame}
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-[9px] font-heading font-bold uppercase"
                   style={{ borderColor: 'rgba(248,113,113,0.4)', background: 'rgba(248,113,113,0.08)', color: '#f87171' }}>

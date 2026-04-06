@@ -478,10 +478,10 @@ async def get_crimes(current_user: dict = Depends(get_current_user)):
     return result
 
 
-async def commit_crime_locked(crime_id: str, current_user: dict) -> CommitCrimeResponse:
+async def commit_crime_locked(crime_id: str, current_user: dict, *, via_auto_rank: bool = False) -> CommitCrimeResponse:
     lock = await _get_crime_commit_lock(current_user["id"])
     async with lock:
-        return await _commit_crime_impl(crime_id, current_user)
+        return await _commit_crime_impl(crime_id, current_user, via_auto_rank=via_auto_rank)
 
 
 async def commit_crime(crime_id: str, current_user: dict = Depends(get_current_user_verified)):
@@ -551,7 +551,7 @@ def _apply_prestige_bonus(crime: dict, user: dict) -> dict:
     return earned
 
 
-async def _commit_crime_impl(crime_id: str, current_user: dict):
+async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank: bool = False):
     crime = _get_crime_by_id(crime_id)
     if not crime:
         crime = await db.crimes.find_one({"id": crime_id}, {"_id": 0})
@@ -875,11 +875,14 @@ async def _commit_crime_impl(crime_id: str, current_user: dict):
             "city": city,
         }
     )
+    crime_details = {"crime_id": crime_id, "crime_name": crime.get("name"), "success": success, "reward": reward}
+    if via_auto_rank:
+        crime_details["via_auto_rank"] = True
     await log_activity(
         current_user["id"],
         current_user.get("username") or "?",
         "crime",
-        {"crime_id": crime_id, "crime_name": crime.get("name"), "success": success, "reward": reward},
+        crime_details,
     )
     return CommitCrimeResponse(
         success=success,

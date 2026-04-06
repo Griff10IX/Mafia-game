@@ -48,12 +48,15 @@ export default function AdminShell() {
     if (window.location.hash !== `#${targetHash}`) {
       window.location.hash = targetHash;
     }
-    if (routeGroup?.anchorId) {
+    const focusGp = new URLSearchParams(location.search).get('focus') === 'game_pass_inspector';
+    const scrollId = focusGp ? 'admin-game-pass-inspector' : routeGroup?.anchorId;
+    if (scrollId) {
+      const delay = focusGp ? 300 : 120;
       window.setTimeout(() => {
-        document.getElementById(routeGroup.anchorId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 120);
+        document.getElementById(scrollId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, delay);
     }
-  }, [routeGroup, location.pathname]);
+  }, [routeGroup, location.pathname, location.search]);
 
   const quickJumpToTarget = () => {
     if (typeof window === 'undefined') return;

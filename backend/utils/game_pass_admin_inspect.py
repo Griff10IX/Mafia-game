@@ -77,6 +77,136 @@ def game_pass_mongo_filter() -> Dict[str, Any]:
     }
 
 
+def game_pass_vip_or_token_mongo_filter() -> Dict[str, Any]:
+    """
+    Subset: looks like a real Game Pass entitlement (token, VIP, expiry, or tier snapshots).
+    Excludes free-track-only users (only rank_xp_pass_free_last_micro_tier_granted).
+    """
+    return {
+        "$or": [
+            {"rank_xp_pass_tokens": {"$gt": 0}},
+            {"rank_xp_pass_rewards_granted": True},
+            {
+                "rank_xp_pass_token_expires_at": {
+                    "$exists": True,
+                    "$nin": [None, ""],
+                }
+            },
+            {"rank_xp_pass_pending_tier_snapshot": {"$exists": True, "$ne": None}},
+            {"rank_xp_pass_tier_snapshot": {"$exists": True, "$ne": None}},
+        ]
+    }
+
+
+POINTS_GAME_PASS_EVENT_TYPE = "buy_game_pass_points"
+
+
+async def aggregate_game_pass_users_without_stripe_purchase(
+    db,
+    *,
+    skip: int,
+    limit: int,
+    username_regex: Optional[str],
+    now_utc: datetime,
+) -> Dict[str, Any]:
+    """
+    Users with VIP/token-style pass state and no completed Stripe rank_xp_pass_499 row.
+    Adds points-ledger timestamp (buy_game_pass_points) and an attribution hint for admin review.
+    """
+    base: Dict[str, Any] = game_pass_vip_or_token_mongo_filter()
+    if username_regex:
+        base = {"$and": [base, {"username": {"$regex": username_regex, "$options": "i"}}]}
+
+    stripe_lookup = {
+        "$lookup": {
+            "from": "payment_transactions",
+            "let": {"uid": "$id"},
+            "pipeline": [
+                {
+                    "$match": {
+                        "$expr": {
+                            "$and": [
+                                {"$eq": ["$user_id", "$$uid"]},
+                                {"$eq": ["$package_id", RANK_XP_PASS_PACKAGE_ID]},
+                                {"$eq": ["$payment_status", "completed"]},
+                            ]
+                        }
+                    }
+                },
+                {"$limit": 1},
+                {"$project": {"_id": 0}},
+            ],
+            "as": "_gp_stripe",
+        }
+    }
+    points_lookup = {
+        "$lookup": {
+            "from": "point_ledger_events",
+            "let": {"uid": "$id"},
+            "pipeline": [
+                {
+                    "$match": {
+                        "$expr": {
+                            "$and": [
+                                {"$eq": ["$user_id", "$$uid"]},
+                                {"$eq": ["$event_type", POINTS_GAME_PASS_EVENT_TYPE]},
+                            ]
+                        }
+                    }
+                },
+                {"$sort": {"created_at": -1}},
+                {"$limit": 1},
+                {"$project": {"_id": 0, "created_at": 1}},
+            ],
+            "as": "_gp_pts",
+        }
+    }
+
+    pipeline: List[Dict[str, Any]] = [
+        {"$match": base},
+        stripe_lookup,
+        {"$match": {"_gp_stripe": {"$eq": []}}},
+        points_lookup,
+        {"$sort": {"username": 1}},
+        {
+            "$facet": {
+                "meta": [{"$count": "total"}],
+                "data": [{"$skip": int(skip)}, {"$limit": int(limit)}],
+            }
+        },
+    ]
+
+    agg = await db.users.aggregate(pipeline).to_list(1)
+    bucket = (agg[0] if agg else {}) or {}
+    raw_rows = list(bucket.get("data") or [])
+    meta = bucket.get("meta") or []
+    total = int(meta[0]["total"]) if meta and isinstance(meta[0], dict) and "total" in meta[0] else 0
+
+    proj_keys = [k for k in GAME_PASS_USER_PROJECTION if k != "_id"]
+    items: List[Dict[str, Any]] = []
+    for doc in raw_rows:
+        row = {k: doc.get(k) for k in proj_keys}
+        pts_rows = doc.get("_gp_pts") or []
+        pts_at = (pts_rows[0] or {}).get("created_at") if pts_rows else None
+        derived = game_pass_derived_fields(row, now_utc=now_utc)
+        hint = "points_ledger" if pts_at else "unattributed"
+        items.append(
+            {
+                **row,
+                **derived,
+                "last_stripe_pass_entitled_at": None,
+                "points_game_pass_purchase_at": pts_at,
+                "pass_attribution_hint": hint,
+            }
+        )
+
+    return {
+        "items": items,
+        "total": total,
+        "list_mode": "without_stripe_purchase",
+    }
+
+
 def game_pass_derived_fields(user_row: Dict[str, Any], *, now_utc: datetime) -> Dict[str, Any]:
     rp = int(user_row.get("rank_points") or 0)
     vip_claimed = user_row.get("rank_xp_pass_rewards_granted") is True
@@ -195,6 +325,22 @@ async def aggregate_latest_game_pass_entitlement_iso(
     return out
 
 
+async def fetch_latest_points_game_pass_purchase(db, user_id: str) -> Optional[Dict[str, Any]]:
+    """Most recent points spend for Game Pass (no Stripe row)."""
+    if not user_id:
+        return None
+    cur = (
+        db.point_ledger_events.find(
+            {"user_id": str(user_id), "event_type": POINTS_GAME_PASS_EVENT_TYPE},
+            {"_id": 0, "created_at": 1, "points": 1, "meta": 1},
+        )
+        .sort("created_at", -1)
+        .limit(1)
+    )
+    rows = await cur.to_list(1)
+    return rows[0] if rows else None
+
+
 async def fetch_game_pass_payment_events(db, user_id: str, *, limit: int = 5) -> List[Dict[str, Any]]:
     cur = (
         db.payment_transactions.find(
@@ -221,9 +367,13 @@ async def fetch_game_pass_payment_events(db, user_id: str, *, limit: int = 5) ->
 def classify_purchase_source(
     stripe_events: List[Dict[str, Any]],
     user_row: Dict[str, Any],
+    *,
+    has_points_game_pass_ledger: bool = False,
 ) -> str:
     if stripe_events:
         return "stripe"
+    if has_points_game_pass_ledger:
+        return "points_purchase"
     if (
         int(user_row.get("rank_xp_pass_tokens") or 0) > 0
         or user_row.get("rank_xp_pass_rewards_granted") is True
@@ -231,5 +381,5 @@ def classify_purchase_source(
         or user_row.get("rank_xp_pass_tier_snapshot") is not None
         or user_row.get("rank_xp_pass_token_expires_at")
     ):
-        return "points_or_admin"
+        return "admin_inheritance_or_legacy"
     return "unknown"

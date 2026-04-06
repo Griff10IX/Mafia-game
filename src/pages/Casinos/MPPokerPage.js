@@ -7,6 +7,14 @@ import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
 
 const VS_DEALER_MAX_SMALL_BLIND = 25000;
+const TOURNAMENT_REMINDER_COOLDOWN_MS = 600 * 1000;
+
+function tournamentListReminderCooldownMs(sentAtIso) {
+  if (!sentAtIso) return 0;
+  const t = new Date(sentAtIso).getTime();
+  if (Number.isNaN(t)) return 0;
+  return Math.max(0, TOURNAMENT_REMINDER_COOLDOWN_MS - (Date.now() - t));
+}
 
 function formatMoney(n) {
   const num = Number(n ?? 0);
@@ -45,6 +53,7 @@ export default function MPPokerPage() {
   });
   const [adminSettingsSaving, setAdminSettingsSaving] = useState(false);
   const [adminActionLoading, setAdminActionLoading] = useState(null);
+  const [remindTournamentLoadingId, setRemindTournamentLoadingId] = useState(null);
   const [adminDrafts, setAdminDrafts] = useState({});
 
   useEffect(() => {
@@ -286,6 +295,20 @@ export default function MPPokerPage() {
       toast.error(getApiErrorMessage(e) || 'Could not refund tournament');
     } finally {
       setAdminActionLoading(null);
+    }
+  };
+
+  const handleRemindTournamentInactive = async (gameId) => {
+    if (remindTournamentLoadingId) return;
+    setRemindTournamentLoadingId(gameId);
+    try {
+      const res = await api.post(`/casino/mp-poker/tournaments/${gameId}/remind-inactive`);
+      toast.success(res.data?.message || 'Reminders sent');
+      fetchGames();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || 'Could not send reminders');
+    } finally {
+      setRemindTournamentLoadingId(null);
     }
   };
 
@@ -644,6 +667,7 @@ export default function MPPokerPage() {
                 : t.tournament_status === 'completed'
                 ? 'Completed'
                 : 'Registration Open';
+              const inactiveRemindCd = tournamentListReminderCooldownMs(t.inactive_reminder_sent_at);
               return (
                 <div key={t.id} className="pkr-row px-3 py-2.5 hover:bg-primary/5 transition-colors" style={{ animationDelay: `${0.04 + idx * 0.03}s` }}>
                   <div className="flex items-center justify-between gap-2">
@@ -691,7 +715,7 @@ export default function MPPokerPage() {
                             type="text"
                             value={getAdminDraft(t.id).bonus_token_type}
                             onChange={(e) => setAdminDraft(t.id, { bonus_token_type: e.target.value })}
-                            placeholder="Token type (e.g. racket)"
+                            placeholder="Token type (e.g. racket; not rank_xp_pass)"
                             className="px-2 py-1 rounded border text-[10px] font-heading"
                             style={inputStyle}
                           />
@@ -726,6 +750,29 @@ export default function MPPokerPage() {
                         <button type="button" onClick={() => navigate(`/casino/mp-poker/game/${t.id}`)}
                           className="inline-flex items-center gap-1 rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-1.5 font-heading font-bold text-[9px] uppercase tracking-wider hover:bg-primary/20 active:scale-[0.97] transition-all text-primary">
                           <ShieldCheck size={11} /> Open
+                        </button>
+                      )}
+                      {(isCreator || canManageTournaments)
+                        && t.approval_status === 'approved'
+                        && t.tournament_status === 'registration'
+                        && t.status === 'open'
+                        && ['lobby', 'ready'].includes(t.phase)
+                        && (t.not_ready_count ?? 0) > 0 && (
+                        <button
+                          type="button"
+                          disabled={remindTournamentLoadingId !== null || inactiveRemindCd > 0}
+                          title={
+                            inactiveRemindCd > 0
+                              ? (inactiveRemindCd >= 60000
+                                ? `Wait ${Math.ceil(inactiveRemindCd / 60000)}m between reminders`
+                                : `Wait ${Math.ceil(inactiveRemindCd / 1000)}s between reminders`)
+                              : 'Send inbox reminder to everyone who has not tapped Ready'
+                          }
+                          onClick={() => handleRemindTournamentInactive(t.id)}
+                          className="rounded-lg border px-2.5 py-1.5 font-heading font-bold text-[9px] uppercase disabled:opacity-45 active:scale-[0.97] transition-all"
+                          style={{ borderColor: 'rgba(45,212,191,0.45)', color: '#5eead4', background: 'rgba(15,23,42,0.45)' }}
+                        >
+                          {remindTournamentLoadingId === t.id ? '…' : 'Remind inactive'}
                         </button>
                       )}
                       {canManageTournaments && t.approval_status === 'pending' && (

@@ -870,6 +870,7 @@ export default function Admin() {
     gambling: true,
     minigame: true,
   });
+  const [activityFeedExcludeAutoRank, setActivityFeedExcludeAutoRank] = useState(true);
   const [activityFeedAutoRefresh, setActivityFeedAutoRefresh] = useState(false);
   const activityFeedIntervalRef = useRef(null);
   const [minigamePayouts, setMinigamePayouts] = useState({ entries: [] });
@@ -2794,12 +2795,13 @@ export default function Admin() {
     }
   };
 
-  const loadGamePassInspectList = async () => {
+  const loadGamePassInspectList = async (mode = 'all') => {
     setGamePassInspectLoading(true);
     try {
       const qs = new URLSearchParams({ skip: '0', limit: '100' });
       const q = (gamePassInspectQuery || '').trim();
       if (q) qs.set('q', q);
+      if (mode === 'without_stripe') qs.set('without_stripe_purchase', 'true');
       const res = await api.get(`/admin/game-pass/users?${qs.toString()}`);
       setGamePassInspectList(res.data);
     } catch (error) {
@@ -5092,6 +5094,7 @@ export default function Admin() {
       if (selectedSources.length > 0) {
         params.sources = selectedSources.join(',');
       }
+      params.exclude_auto_rank = activityFeedExcludeAutoRank;
       const res = await api.get('/admin/activity-feed', { params });
       setActivityFeed(res.data);
     } catch (e) {
@@ -5117,7 +5120,7 @@ export default function Admin() {
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activityFeedAutoRefresh, activityFeedUsername, activityFeedUsernameMode, activityFeedFilter, activityFeedMinAmount, activityFeedSources]);
+  }, [activityFeedAutoRefresh, activityFeedUsername, activityFeedUsernameMode, activityFeedFilter, activityFeedMinAmount, activityFeedSources, activityFeedExcludeAutoRank]);
 
   const fetchActivityLog = async () => {
     setActivityLogLoading(true);
@@ -7773,7 +7776,7 @@ export default function Admin() {
               <BtnDanger onClick={handleRemoveRespectPoints}>Remove</BtnDanger>
             </ActionRow>
 
-            <ActionRow icon={Zap} label="Add Tokens" description="Give consumable tokens (crime XP, GTA XP, melt, etc.)">
+            <ActionRow icon={Zap} label="Add Tokens" description="Give consumable tokens (crime XP, GTA XP, melt, etc.). Game Pass is not available here — use Grant Game Pass below.">
               <Select value={formData.tokenType} onChange={(e) => setFormData((prev) => ({ ...prev, tokenType: e.target.value }))}>
                 <option value="xp_crimes">Crime XP</option>
                 <option value="xp_gta">GTA XP</option>
@@ -7836,7 +7839,10 @@ export default function Admin() {
                 <span className="text-[10px] font-heading font-bold text-violet-300 uppercase tracking-wider">Game Pass inspector</span>
               </div>
               <p className="text-[9px] text-mutedForeground font-heading">
-                Lists users with any Game Pass–related DB state. Stripe purchase times come from completed <span className="font-mono">rank_xp_pass_499</span> transactions; points buys have no row—detail view shows <span className="font-mono">purchase_source</span> and an optional estimate from token expiry.
+                Lists users with any Game Pass–related DB state. Stripe purchase times come from completed <span className="font-mono">rank_xp_pass_499</span> transactions. Inspect detail includes <span className="font-mono">purchase_source</span> (<span className="font-mono">stripe</span> / <span className="font-mono">points_purchase</span> / <span className="font-mono">admin_inheritance_or_legacy</span>), latest <span className="font-mono">buy_game_pass_points</span> ledger row, and an optional estimate from token expiry.
+                <span className="block mt-1 text-amber-200/90">
+                  Without Stripe: token/VIP-style pass only, no completed Stripe Game Pass payment. Shows a points-ledger time when <span className="font-mono">buy_game_pass_points</span> exists; otherwise treat as admin grant, inheritance, or legacy data.
+                </span>
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <input
@@ -7846,9 +7852,12 @@ export default function Admin() {
                   placeholder="Filter username (substring)"
                   className="flex-1 min-w-[140px] max-w-xs px-2 py-1 rounded border border-input bg-transparent text-[11px]"
                 />
-                <BtnPrimary type="button" onClick={loadGamePassInspectList} disabled={gamePassInspectLoading}>
-                  {gamePassInspectLoading ? '…' : 'Load users with Game Pass state'}
+                <BtnPrimary type="button" onClick={() => loadGamePassInspectList('all')} disabled={gamePassInspectLoading}>
+                  {gamePassInspectLoading ? '…' : 'Load all Game Pass state'}
                 </BtnPrimary>
+                <BtnSecondary type="button" onClick={() => loadGamePassInspectList('without_stripe')} disabled={gamePassInspectLoading}>
+                  {gamePassInspectLoading ? '…' : 'Without Stripe purchase'}
+                </BtnSecondary>
                 <BtnSecondary type="button" onClick={() => loadGamePassInspectUser()} disabled={gamePassInspectDetailLoading}>
                   {gamePassInspectDetailLoading ? '…' : 'Inspect target'}
                 </BtnSecondary>
@@ -7856,10 +7865,12 @@ export default function Admin() {
               {gamePassInspectList && (
                 <div className="space-y-1">
                   <div className="text-[9px] text-mutedForeground font-heading">
+                    <span className="font-mono text-violet-300/90">{gamePassInspectList.list_mode === 'without_stripe_purchase' ? 'without_stripe_purchase' : 'all'}</span>
+                    {' — '}
                     {(gamePassInspectList.total ?? 0).toLocaleString()} match(es); showing {(gamePassInspectList.items || []).length} (limit {(gamePassInspectList.limit ?? 100)})
                   </div>
                   <div className="overflow-x-auto max-h-64 border border-violet-500/20 rounded">
-                    <table className="w-full text-left text-[9px] border-collapse min-w-[720px]">
+                    <table className="w-full text-left text-[9px] border-collapse min-w-[900px]">
                       <thead>
                         <tr className="text-mutedForeground border-b border-zinc-700/50 sticky top-0 bg-zinc-900/95">
                           <th className="p-1 font-heading">User</th>
@@ -7872,6 +7883,8 @@ export default function Admin() {
                           <th className="p-1 font-heading text-right">Free</th>
                           <th className="p-1 font-heading">Status</th>
                           <th className="p-1 font-heading">Stripe entitled</th>
+                          <th className="p-1 font-heading">Points buy (ledger)</th>
+                          <th className="p-1 font-heading">Hint</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -7897,6 +7910,14 @@ export default function Admin() {
                               {row.last_stripe_pass_entitled_at
                                 ? new Date(row.last_stripe_pass_entitled_at).toLocaleString()
                                 : '—'}
+                            </td>
+                            <td className="p-1 font-mono text-[8px] max-w-[120px] truncate" title={row.points_game_pass_purchase_at || ''}>
+                              {row.points_game_pass_purchase_at
+                                ? new Date(row.points_game_pass_purchase_at).toLocaleString()
+                                : '—'}
+                            </td>
+                            <td className="p-1 font-mono text-[8px] text-amber-200/90" title="points_ledger = matched points spend; unattributed = no Stripe row and no buy_game_pass_points ledger">
+                              {row.pass_attribution_hint ?? '—'}
                             </td>
                           </tr>
                         ))}
@@ -14061,6 +14082,14 @@ export default function Admin() {
                     {label}
                   </button>
                 ))}
+                <button
+                  type="button"
+                  onClick={() => setActivityFeedExcludeAutoRank((v) => !v)}
+                  title="When on, drops Auto Rank–tagged actions and internal garage melt/scrap from the Actions column"
+                  className={`px-2 py-1 rounded border text-[10px] font-heading ${activityFeedExcludeAutoRank ? 'bg-emerald-900/50 border-emerald-500/60 text-emerald-300' : 'bg-zinc-800/60 border-zinc-600 text-mutedForeground'}`}
+                >
+                  {activityFeedExcludeAutoRank ? 'Auto-rank hidden' : 'Auto-rank shown'}
+                </button>
                 {[15, 60, 360, 1440].map((m) => (
                   <button
                     key={m}

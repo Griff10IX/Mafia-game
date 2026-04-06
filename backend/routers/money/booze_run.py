@@ -378,7 +378,7 @@ class AdminBoozeListedPriceRequest(BaseModel):
 
 
 # ----- Internal impls (for auto-rank) -----
-async def _booze_buy_impl(user: dict, booze_id: str, amount: int) -> dict:
+async def _booze_buy_impl(user: dict, booze_id: str, amount: int, *, via_auto_rank: bool = False) -> dict:
     """Perform buy for given user (by id). Returns response dict or raises HTTPException. Updates DB."""
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
@@ -419,11 +419,14 @@ async def _booze_buy_impl(user: dict, booze_id: str, amount: int) -> dict:
             },
         )
         _invalidate_config_cache(user["id"])
+        _bj = {"phase": "buy", "inventory_loss_basis": loss_basis}
+        if via_auto_rank:
+            _bj["via_auto_rank"] = True
         await log_activity(
             user.get("id", ""),
             user.get("username", ""),
             "booze_jail",
-            {"phase": "buy", "inventory_loss_basis": loss_basis},
+            _bj,
         )
         jail_at = datetime.now(timezone.utc).isoformat()
         try:
@@ -473,7 +476,7 @@ async def _booze_buy_impl(user: dict, booze_id: str, amount: int) -> dict:
     return {"message": f"Purchased {amount} {booze_name}", "new_carrying": new_carrying, "spent": cost}
 
 
-async def _booze_sell_impl(user: dict, booze_id: str, amount: int) -> dict:
+async def _booze_sell_impl(user: dict, booze_id: str, amount: int, *, via_auto_rank: bool = False) -> dict:
     """Perform sell for given user. Returns response dict or raises HTTPException. Updates DB."""
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
@@ -509,11 +512,14 @@ async def _booze_sell_impl(user: dict, booze_id: str, amount: int) -> dict:
             },
         )
         _invalidate_config_cache(user["id"])
+        _bj = {"phase": "sell", "inventory_loss_basis": loss_basis}
+        if via_auto_rank:
+            _bj["via_auto_rank"] = True
         await log_activity(
             user.get("id", ""),
             user.get("username", ""),
             "booze_jail",
-            {"phase": "sell", "inventory_loss_basis": loss_basis},
+            _bj,
         )
         jail_at = datetime.now(timezone.utc).isoformat()
         try:
@@ -627,7 +633,10 @@ async def _booze_sell_impl(user: dict, booze_id: str, amount: int) -> dict:
                         db, rid, {"money": amt, "referral_earnings_booze": amt}, context="booze_run"
                     )
     _invalidate_config_cache(user["id"])
-    await log_activity(user.get("id", ""), user.get("username", ""), "booze_sell", {"booze": booze_name, "amount": amount, "revenue": revenue, "profit": profit})
+    _bs = {"booze": booze_name, "amount": amount, "revenue": revenue, "profit": profit}
+    if via_auto_rank:
+        _bs["via_auto_rank"] = True
+    await log_activity(user.get("id", ""), user.get("username", ""), "booze_sell", _bs)
     return {"message": f"Sold {amount} {booze_name}", "revenue": revenue, "profit": profit, "new_carrying": new_val, "is_run": is_run}
 
 

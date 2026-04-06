@@ -508,7 +508,7 @@ async def _booze_sell_at_city(db, user, user_id: str, username: str, telegram_ch
         if buy_locations.get(bid) == current:
             continue
         try:
-            out = await _booze_sell_impl(user, bid, amt)
+            out = await _booze_sell_impl(user, bid, amt, via_auto_rank=True)
             if out.get("caught"):
                 await _send_jail_notification(telegram_chat_id, username, "booze sell bust", 20, bot_token)
                 return False, None
@@ -569,7 +569,7 @@ async def _booze_buy_and_travel(db, user, user_id: str, username: str, telegram_
         return False
 
     try:
-        out = await _booze_buy_impl(user, best_booze_id, amount)
+        out = await _booze_buy_impl(user, best_booze_id, amount, via_auto_rank=True)
         if out.get("caught"):
             await _send_jail_notification(
                 telegram_chat_id, username, "booze buy bust", 20, bot_token, notify=_auto_rank_telegram_notify(user)
@@ -849,7 +849,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
             if not available:
                 break
             try:
-                out = await commit_crime_locked(available[0]["id"], user)
+                out = await commit_crime_locked(available[0]["id"], user, via_auto_rank=True)
                 if out.success:
                     crime_success_count += 1
                     crime_total_cash += out.reward if out.reward is not None else 0

@@ -1894,7 +1894,6 @@ def register(router):
         "travel": "travel_tokens",
         "properties": "properties_tokens",
         "jailbust_bonus": "jailbust_tokens",
-        "rank_xp_pass": "rank_xp_pass_tokens",
     }
 
     @router.get("/admin/token-types")
@@ -1911,7 +1910,7 @@ def register(router):
         amount: int,
         current_user: dict = Depends(get_current_user)
     ):
-        """Add tokens to a user. token_type: xp_crimes, xp_gta, auto_rank_2h, melt, oc_reduced, booze, racket, travel, properties, jailbust_bonus, rank_xp_pass"""
+        """Add tokens to a user. token_type: xp_crimes, xp_gta, auto_rank_2h, melt, oc_reduced, booze, racket, travel, properties, jailbust_bonus. Game Pass: use POST /admin/grant-game-pass."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         if token_type not in ADMIN_TOKEN_TYPES:
@@ -2337,6 +2336,10 @@ def register(router):
         skip: int = Query(0, ge=0),
         limit: int = Query(50, ge=1, le=100),
         q: Optional[str] = Query(None),
+        without_stripe_purchase: bool = Query(
+            False,
+            description="Only users with token/VIP-style pass and no completed Stripe rank_xp_pass_499 payment",
+        ),
         current_user: dict = Depends(get_current_user),
     ):
         """List users with any Game Pass–related state (admin only)."""
@@ -2344,6 +2347,7 @@ def register(router):
             raise HTTPException(status_code=403, detail="Admin access required")
         from utils.game_pass_admin_inspect import (
             GAME_PASS_USER_PROJECTION,
+            aggregate_game_pass_users_without_stripe_purchase,
             aggregate_latest_game_pass_entitlement_iso,
             escape_regex_fragment,
             game_pass_derived_fields,
@@ -2351,8 +2355,19 @@ def register(router):
         )
 
         now = datetime.now(timezone.utc)
+        esc = escape_regex_fragment(q or "") or None
+
+        if without_stripe_purchase:
+            out = await aggregate_game_pass_users_without_stripe_purchase(
+                db,
+                skip=skip,
+                limit=limit,
+                username_regex=esc,
+                now_utc=now,
+            )
+            return {**out, "skip": skip, "limit": limit}
+
         filt = game_pass_mongo_filter()
-        esc = escape_regex_fragment(q or "")
         if esc:
             filt = {"$and": [filt, {"username": {"$regex": esc, "$options": "i"}}]}
         cursor = db.users.find(filt, GAME_PASS_USER_PROJECTION).sort("username", 1).skip(skip).limit(limit)
@@ -2373,7 +2388,13 @@ def register(router):
                 }
             )
         total = await db.users.count_documents(filt)
-        return {"items": items, "total": total, "skip": skip, "limit": limit}
+        return {
+            "items": items,
+            "total": total,
+            "skip": skip,
+            "limit": limit,
+            "list_mode": "all",
+        }
 
     @router.get("/admin/game-pass/user")
     async def admin_game_pass_user_inspect(
@@ -2388,6 +2409,7 @@ def register(router):
             classify_purchase_source,
             estimate_entitlement_from_token_expiry,
             fetch_game_pass_payment_events,
+            fetch_latest_points_game_pass_purchase,
             game_pass_derived_fields,
         )
 
@@ -2399,7 +2421,12 @@ def register(router):
         derived = game_pass_derived_fields(u, now_utc=now)
         uid = str(u["id"])
         events = await fetch_game_pass_payment_events(db, uid)
-        purchase_source = classify_purchase_source(events, u)
+        points_gp_ledger = await fetch_latest_points_game_pass_purchase(db, uid)
+        purchase_source = classify_purchase_source(
+            events,
+            u,
+            has_points_game_pass_ledger=bool(points_gp_ledger),
+        )
         estimated = None
         if not events and u.get("rank_xp_pass_token_expires_at"):
             estimated = estimate_entitlement_from_token_expiry(u.get("rank_xp_pass_token_expires_at"))
@@ -2409,6 +2436,7 @@ def register(router):
             "user": user_out,
             "derived": derived,
             "stripe_game_pass_events": events,
+            "points_game_pass_ledger_latest": points_gp_ledger,
             "purchase_source": purchase_source,
             "estimated_entitlement": estimated,
         }
@@ -5737,6 +5765,7 @@ def register(router):
         sources: Optional[str] = None,
         min_amount: Optional[int] = Query(None, ge=0),
         since_minutes: int = Query(60, ge=1, le=1440),
+        exclude_auto_rank: bool = Query(True),
         current_user: dict = Depends(get_current_user),
     ):
         """Combined admin feed across recent activity sources with filters and normalized rows."""
@@ -5785,6 +5814,15 @@ def register(router):
         username_contains = username_mode == "contains"
         min_amt = int(min_amount or 0)
 
+        def _activity_row_is_auto_rank(action_raw: Any, details_raw: Any) -> bool:
+            d = details_raw if isinstance(details_raw, dict) else {}
+            if d.get("via_auto_rank") is True:
+                return True
+            a = str(action_raw or "").strip().lower()
+            if a in ("garage_melt", "garage_scrap") and d.get("source") == "auto_rank_or_internal":
+                return True
+            return False
+
         async def _read_activity_rows():
             query: dict = _ts_filter("created_at")
             if uname:
@@ -5825,6 +5863,8 @@ def register(router):
                 if created_dt is None or created_dt < since_dt:
                     continue
                 details = row.get("details") or {}
+                if exclude_auto_rank and _activity_row_is_auto_rank(row.get("action"), details):
+                    continue
                 amount = int(details.get("amount") or 0)
                 category = "bank_transfer" if (
                     "bank" in str(row.get("action") or "").lower()
@@ -5909,6 +5949,7 @@ def register(router):
                 "action": action_filter,
                 "sources": sorted(selected_sources),
                 "min_amount": min_amt if min_amount is not None else None,
+                "exclude_auto_rank": exclude_auto_rank,
             },
         }
 

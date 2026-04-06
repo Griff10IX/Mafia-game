@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Package, ShoppingBag, Clock } from 'lucide-react';
+import { Package, ShoppingBag, Clock, Settings } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
 
 import { toast } from 'sonner';
@@ -427,6 +427,7 @@ export default function GamePass() {
   const [loading, setLoading] = useState(false);
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [user, setUser] = useState(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const [selectedBandIndex, setSelectedBandIndex] = useState(null);
   const [selectedMicroTier, setSelectedMicroTier] = useState(null);
@@ -434,8 +435,12 @@ export default function GamePass() {
 
   const fetchData = useCallback(async () => {
     try {
-      const userRes = await api.get('/auth/me');
+      const [userRes, adminRes] = await Promise.all([
+        api.get('/auth/me'),
+        api.get('/admin/check').catch(() => ({ data: { is_admin: false } })),
+      ]);
       setUser(userRes.data);
+      setIsAdmin(!!adminRes.data?.is_admin);
     } catch {
       toast.error('Failed to load data');
     }
@@ -620,7 +625,19 @@ export default function GamePass() {
               <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] truncate">
                 Game Pass (£{GAME_PASS_PRICE_GBP})
               </span>
-              <Package className="text-primary shrink-0" size={14} />
+              <div className="flex items-center gap-2 shrink-0">
+                {isAdmin && (
+                  <Link
+                    to="/staffrole/admin/players?focus=game_pass_inspector"
+                    className="inline-flex items-center gap-1 rounded border border-violet-500/40 bg-violet-500/15 px-2 py-1 text-[9px] font-heading font-bold uppercase tracking-wider text-violet-200 hover:bg-violet-500/25"
+                    title="Open Game Pass inspector (admin)"
+                  >
+                    <Settings size={12} className="shrink-0" />
+                    Admin
+                  </Link>
+                )}
+                <Package className="text-primary shrink-0" size={14} />
+              </div>
             </div>
             <div className="p-3 space-y-3">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">

@@ -10,7 +10,7 @@ import itertools
 from pydantic import BaseModel, field_validator
 from fastapi import Depends, HTTPException, Body
 
-from server import db, get_current_user, get_current_user_verified, log_gambling, _is_admin
+from server import db, get_current_user, get_current_user_verified, log_gambling, _is_admin, _is_moderator, send_notification
 from routers.casinos.mp_poker_flow import (
     classify_player_action as _classify_player_action,
     is_betting_round_complete as _is_betting_round_complete,
@@ -37,6 +37,7 @@ MP_POKER_TOURNAMENT_MIN_PLAYERS = 4
 MP_POKER_TOURNAMENT_MAX_PLAYERS = 9
 MP_POKER_TOURNAMENT_STARTING_STACK = 7_500
 MP_POKER_TOURNAMENT_LEVEL_SECONDS = 300
+MP_POKER_TOURNAMENT_REMINDER_COOLDOWN_SECONDS = 600
 MP_POKER_TOURNAMENT_BLINDS = [
     (50, 100),
     (100, 200),
@@ -399,10 +400,14 @@ def register(router):
             "travel": "travel_tokens",
             "properties": "properties_tokens",
             "jailbust_bonus": "jailbust_tokens",
-            "rank_xp_pass": "rank_xp_pass_tokens",
         }
         token_type_clean = (token_type or "").strip() or None
         if token_type_clean:
+            if token_type_clean == "rank_xp_pass":
+                raise HTTPException(
+                    status_code=400,
+                    detail="Game Pass (rank_xp_pass) cannot be granted via tournament bonuses; use POST /admin/grant-game-pass.",
+                )
             if token_type_clean not in token_field_map:
                 raise HTTPException(status_code=400, detail="Invalid token type")
             if token_amount < 1:
@@ -1037,6 +1042,7 @@ def register(router):
         out = []
         for g in games:
             players = list(g.get("players") or [])
+            not_ready = sum(1 for p in players if p.get("user_id") and not p.get("ready"))
             out.append(
                 {
                     "id": g.get("id"),
@@ -1058,6 +1064,8 @@ def register(router):
                     "winner_username": g.get("winner_username"),
                     "admin_bonus_reward": g.get("admin_bonus_reward") if isinstance(g.get("admin_bonus_reward"), dict) else None,
                     "created_at": g.get("created_at"),
+                    "not_ready_count": not_ready,
+                    "inactive_reminder_sent_at": g.get("inactive_reminder_sent_at"),
                 }
             )
         return {"tournaments": out}
@@ -1221,6 +1229,59 @@ def register(router):
             g = await db.mp_poker_games.find_one({"id": game_id})
         _enrich_players_current_hand(g)
         return {k: v for k, v in (g or {}).items() if k != "_id"}
+
+    @router.post("/casino/mp-poker/tournaments/{game_id}/remind-inactive")
+    async def tournament_remind_inactive(game_id: str, current_user: dict = Depends(get_current_user_verified)):
+        """Notify seated players who are not Ready (inbox). Host, admin, or moderator only. Cooldown between sends."""
+        uid = (current_user.get("id") or "").strip()
+        g = await db.mp_poker_games.find_one({"id": game_id, "mode": "tournament"})
+        if not g:
+            raise HTTPException(status_code=404, detail="Tournament not found")
+        is_host = (g.get("creator_id") or "") == uid
+        is_staff = _is_admin(current_user) or _is_moderator(current_user)
+        if not is_host and not is_staff:
+            raise HTTPException(status_code=403, detail="Only the tournament host or staff can send reminders")
+        if g.get("tournament_status") != "registration":
+            raise HTTPException(status_code=400, detail="Reminders are only for tournaments still in registration")
+        if g.get("status") != "open" or g.get("phase") not in ("lobby", "ready"):
+            raise HTTPException(status_code=400, detail="Cannot send reminders in this phase")
+        last_raw = g.get("inactive_reminder_sent_at")
+        last_dt = _parse_iso_utc(last_raw) if last_raw else None
+        if last_dt:
+            elapsed = (datetime.now(timezone.utc) - last_dt).total_seconds()
+            if elapsed < MP_POKER_TOURNAMENT_REMINDER_COOLDOWN_SECONDS:
+                wait = int(MP_POKER_TOURNAMENT_REMINDER_COOLDOWN_SECONDS - elapsed)
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Wait {wait}s before sending another reminder",
+                )
+        players = list(g.get("players") or [])
+        targets = []
+        seen = set()
+        for p in players:
+            puid = (p.get("user_id") or "").strip()
+            if not puid or p.get("ready"):
+                continue
+            if puid == uid:
+                continue
+            if puid in seen:
+                continue
+            seen.add(puid)
+            targets.append(p)
+        if not targets:
+            raise HTTPException(status_code=400, detail="No inactive players to remind (everyone is ready, or only you are seated)")
+        host_name = (g.get("creator_username") or "The host").strip() or "The host"
+        buy_in = int(g.get("buy_in") or 0)
+        title = "Poker tournament — ready up"
+        msg = (
+            f"{host_name} is waiting: open Casinos → MP Poker → this tournament and tap I'm Ready so play can start. "
+            f"Buy-in ${buy_in:,}."
+        )
+        for p in targets:
+            await send_notification(p.get("user_id"), title, msg, "system", category="casino")
+        now_iso = datetime.now(timezone.utc).isoformat()
+        await db.mp_poker_games.update_one({"id": game_id}, {"$set": {"inactive_reminder_sent_at": now_iso}})
+        return {"message": f"Inbox reminder sent to {len(targets)} player(s)", "count": len(targets), "inactive_reminder_sent_at": now_iso}
 
     @router.get("/admin/mp-poker/tournaments/pending")
     async def admin_list_pending_tournaments(current_user: dict = Depends(get_current_user_verified)):
