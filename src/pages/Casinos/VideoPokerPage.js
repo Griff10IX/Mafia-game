@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { getVideoPokerHandKey, handNameForKey } from '../../utils/videoPokerHand';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import api, { refreshUser } from '../../utils/api';
@@ -224,6 +225,8 @@ export default function VideoPoker() {
   const [buyBackOffer, setBuyBackOffer] = useState(null);
   const [buyBackSecondsLeft, setBuyBackSecondsLeft] = useState(null);
   const [buyBackActionLoading, setBuyBackActionLoading] = useState(false);
+  /** Staggered flip of drawn cards; merged hand drives label + pay-table highlight */
+  const [pendingReveal, setPendingReveal] = useState(null);
 
   const fetchConfigAndOwnership = () => {
     api.get('/casino/videopoker/config').then((r) =>
@@ -262,8 +265,12 @@ export default function VideoPoker() {
           bet: r.data.bet,
           hand: r.data.hand,
           odds_preset: r.data.odds_preset,
+          hand_key: r.data.hand_key,
+          hand_name: r.data.hand_name,
+          multiplier: r.data.multiplier,
         });
         setHolds([false, false, false, false, false]);
+        setPendingReveal(null);
       }
     }).catch(() => {
       setGame(null);
@@ -423,9 +430,57 @@ export default function VideoPoker() {
     || (activePayPreset === 'enhanced' ? 'Enhanced' : activePayPreset === 'increased' ? 'Increased' : 'Normal');
   const payTableRows = buildPayTableRows(config, activePayPreset);
 
+  const handNamesResolved = config.hand_names || FALLBACK_HAND_NAMES;
+
+  const displayCards = useMemo(() => {
+    if (!pendingReveal) return game?.hand || [];
+    const { pre, final, order, step, held } = pendingReveal;
+    return [0, 1, 2, 3, 4].map((i) => {
+      if (held[i]) return final[i];
+      const idx = order.indexOf(i);
+      if (idx === -1) return final[i];
+      return idx < step ? final[i] : pre[i];
+    });
+  }, [pendingReveal, game?.hand]);
+
+  const cardRevealedForIndex = (i) => {
+    if (!pendingReveal) return true;
+    const { order, step, held } = pendingReveal;
+    if (held[i]) return true;
+    const idx = order.indexOf(i);
+    if (idx === -1) return true;
+    return idx < step;
+  };
+
+  const highlightHandKey = useMemo(() => {
+    if (pendingReveal) return getVideoPokerHandKey(displayCards);
+    if (game?.hand_key) return game.hand_key;
+    return getVideoPokerHandKey(game?.hand);
+  }, [pendingReveal, displayCards, game?.hand_key, game?.hand]);
+
+  const currentEvalName = handNameForKey(highlightHandKey, handNamesResolved);
+  const currentEvalMult = payTableRows.find((r) => r.key === highlightHandKey)?.multiplier ?? 0;
+
+  useEffect(() => {
+    if (!pendingReveal) return undefined;
+    const { order, step } = pendingReveal;
+    if (step >= order.length) {
+      setPendingReveal(null);
+      return undefined;
+    }
+    const id = setTimeout(() => {
+      setPendingReveal((p) => (p ? { ...p, step: p.step + 1 } : null));
+    }, 420);
+    return () => clearTimeout(id);
+  }, [pendingReveal]);
+
   const deal = async () => {
     if (!canDeal) return;
-    setLoading(true); setGame(null); setHolds([false, false, false, false, false]); setShowWin(false);
+    setLoading(true);
+    setGame(null);
+    setHolds([false, false, false, false, false]);
+    setShowWin(false);
+    setPendingReveal(null);
     try {
       const res = await api.post('/casino/videopoker/deal', { bet: betNum });
       setGame({ ...res.data, odds_preset: res.data?.odds_preset });
@@ -440,11 +495,19 @@ export default function VideoPoker() {
     if (!isDealPhase || loading) return;
     setLoading(true);
     const holdIndices = holds.map((h, i) => h ? i : -1).filter((i) => i >= 0);
+    const preHand = (game.hand || []).map((c) => ({ ...c }));
+    const heldSnapshot = [...holds];
     try {
       const res = await api.post('/casino/videopoker/draw', { holds: holdIndices });
       const data = res.data || {};
       setDealing(true);
       setTimeout(() => setDealing(false), 600);
+      const order = [0, 1, 2, 3, 4].filter((i) => !heldSnapshot[i]);
+      if (order.length > 0) {
+        setPendingReveal({ pre: preHand, final: data.hand, order, step: 0, held: heldSnapshot });
+      } else {
+        setPendingReveal(null);
+      }
       setGame(data);
       const handLabel = data.hand_name || (data.hand_key === 'nothing' ? 'Nothing' : 'Hand');
       if (data.hand_key && data.hand_key !== 'nothing') {
@@ -472,7 +535,12 @@ export default function VideoPoker() {
     setHolds((prev) => prev.map((h, i) => i === idx ? !h : h));
   };
 
-  const playAgain = () => { setGame(null); setHolds([false, false, false, false, false]); setShowWin(false); };
+  const playAgain = () => {
+    setGame(null);
+    setHolds([false, false, false, false, false]);
+    setShowWin(false);
+    setPendingReveal(null);
+  };
 
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="videopoker-page">
@@ -680,13 +748,13 @@ export default function VideoPoker() {
                 {payTableRows.map((row) => (
                   <div
                     key={row.key}
-                    className={`flex items-center justify-between px-2 py-1 rounded-sm transition-all ${game?.hand_key === row.key ? 'ring-1 ring-primary' : ''}`}
-                    style={{ background: game?.hand_key === row.key ? 'rgba(212,175,55,0.15)' : 'transparent' }}
+                    className={`flex items-center justify-between px-2 py-1 rounded-sm transition-all ${highlightHandKey === row.key ? 'ring-1 ring-primary' : ''}`}
+                    style={{ background: highlightHandKey === row.key ? 'rgba(212,175,55,0.15)' : 'transparent' }}
                   >
-                    <span className={`text-[10px] font-heading truncate ${game?.hand_key === row.key ? 'text-primary font-bold' : 'text-emerald-100/70'}`}>
+                    <span className={`text-[10px] font-heading truncate ${highlightHandKey === row.key ? 'text-primary font-bold' : 'text-emerald-100/70'}`}>
                       {row.name}
                     </span>
-                    <span className={`text-[10px] font-heading font-bold ml-2 ${game?.hand_key === row.key ? 'text-primary' : 'text-primary/60'}`}>
+                    <span className={`text-[10px] font-heading font-bold ml-2 ${highlightHandKey === row.key ? 'text-primary' : 'text-primary/60'}`}>
                       {formatPayMultiplier(row.multiplier)}
                     </span>
                   </div>
@@ -755,26 +823,52 @@ export default function VideoPoker() {
                   {isDealPhase && (
                     <span className="text-emerald-200/40 uppercase tracking-wider text-center">Select cards to hold, then draw</span>
                   )}
+                  {pendingReveal && (
+                    <span className="text-emerald-200/50 uppercase tracking-wider text-center text-[9px]">New cards</span>
+                  )}
                 </div>
+
+                {/* Current hand (deal + while draw reveals) */}
+                {(isDealPhase || pendingReveal) && highlightHandKey && (
+                  <div className="flex justify-center px-1">
+                    <div
+                      className="px-4 py-1.5 rounded-lg border-2 max-w-[95vw]"
+                      style={{
+                        background: `linear-gradient(180deg, ${outcomeColor(highlightHandKey)}18, ${outcomeColor(highlightHandKey)}0a)`,
+                        borderColor: `${outcomeColor(highlightHandKey)}55`,
+                      }}
+                    >
+                      <span className="text-[10px] text-emerald-200/50 font-heading uppercase tracking-wider mr-2">Current hand</span>
+                      <span className="text-sm sm:text-base font-heading font-black uppercase tracking-wide" style={{ color: outcomeColor(highlightHandKey) }}>
+                        {currentEvalName}
+                      </span>
+                      {currentEvalMult > 0 && (
+                        <span className="ml-2 text-[10px] sm:text-xs font-heading font-bold opacity-80" style={{ color: outcomeColor(highlightHandKey) }}>
+                          {formatPayMultiplier(currentEvalMult)} table
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 {/* Cards — grid on mobile (fit 5), centered flex on desktop (fixed card size) */}
                 <div className="grid grid-cols-5 gap-1 sm:flex sm:flex-nowrap sm:justify-center sm:gap-3 max-w-full w-full px-1 sm:px-0">
-                  {(game.hand || []).map((card, i) => (
+                  {displayCards.map((card, i) => (
                     <PokerCard
-                      key={`${card.suit}-${card.value}-${i}`}
+                      key={`${card.suit}-${card.value}-${i}-${pendingReveal?.step ?? 'x'}`}
                       card={card}
                       held={holds[i]}
                       onToggleHold={() => toggleHold(i)}
                       canHold={isDealPhase}
                       index={i}
                       dealing={dealing}
-                      revealed={true}
+                      revealed={!pendingReveal || cardRevealedForIndex(i)}
                     />
                   ))}
                 </div>
 
                 {/* Result Banner */}
-                {isDone && game.hand_key && (
+                {isDone && !pendingReveal && game.hand_key && (
                   <div className="flex justify-center animate-vp-result-banner">
                     <div
                       className="px-6 py-2 rounded-lg border-2"
@@ -801,7 +895,7 @@ export default function VideoPoker() {
                   {isDealPhase ? (
                     <button
                       onClick={draw}
-                      disabled={loading}
+                      disabled={loading || !!pendingReveal}
                       className="rounded-lg px-10 py-3 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 active:scale-[0.98] transition-all"
                       style={{
                         background: 'linear-gradient(180deg, var(--noir-primary), #a08020, #8a6e18)',
@@ -811,7 +905,7 @@ export default function VideoPoker() {
                     >
                       {loading ? '...' : 'Draw'}
                     </button>
-                  ) : isDone ? (
+                  ) : isDone && !pendingReveal ? (
                     <button
                       onClick={playAgain}
                       className="rounded-lg px-10 py-3 text-sm font-heading font-bold uppercase tracking-wider border-2 active:scale-[0.98] transition-all"
