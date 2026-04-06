@@ -661,8 +661,7 @@ def register(router):
         game = await db.videopoker_games.find_one({"user_id": current_user.get("id") or ""}, {"_id": 0, "deck": 0})
         if not game:
             return {"active": False}
-        odds_preset = game.get("odds_preset") or VIDEO_POKER_DEFAULT_ODDS_PRESET
-        odds_preset = _normalize_odds_preset(odds_preset)
+        odds_preset = _normalize_odds_preset(game.get("odds_preset") or VIDEO_POKER_DEFAULT_ODDS_PRESET)
         pay_table = _pay_table_for_preset(odds_preset)
         hand = game.get("hand") or []
         gk, gname, gmult = _evaluate_hand(hand, pay_table)
@@ -722,15 +721,15 @@ def register(router):
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
         pay_table = _pay_table_for_preset(odds_preset)
-        deal_key, deal_name, deal_mult = _evaluate_hand(hand, pay_table)
+        dk, dname, dmult = _evaluate_hand(hand, pay_table)
         return {
             "status": "deal",
             "bet": bet,
             "hand": hand,
             "odds_preset": odds_preset,
-            "hand_key": deal_key,
-            "hand_name": deal_name,
-            "multiplier": deal_mult,
+            "hand_key": dk,
+            "hand_name": dname,
+            "multiplier": dmult,
         }
 
     @router.post("/casino/videopoker/draw")
