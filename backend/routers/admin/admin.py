@@ -2818,6 +2818,7 @@ def register(router):
             "winner_user_id": rd.get("winner_user_id"),
             "winner_username": rd.get("winner_username"),
             "winner_payouts_stored": stored_payouts,
+            "payout_errors": rd.get("payout_errors") or [],
         }
 
         return {

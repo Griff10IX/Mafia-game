@@ -1,6 +1,7 @@
 # Twice-weekly lottery (Wed & Sun 00:00 UTC): $500k/ticket, 10% of gross pot removed at draw, 90% net to winner(s).
 # Each draw publishes six winning numbers; tickets that match exactly split the net pot. If no ticket matches,
 # the net pot rolls into the next round (no random fallback).
+# Jackpot inbox uses send_notification(..., category=None) so wins are not muted via notification_preferences.
 from __future__ import annotations
 
 import logging
@@ -50,6 +51,14 @@ def _normalize_ticket_numbers(raw: Any) -> Optional[list[int]]:
 
 def _format_numbers_line(nums: list[int]) -> str:
     return ", ".join(str(n) for n in nums)
+
+
+def _normalize_lottery_user_id(raw: Any) -> Optional[str]:
+    """Match `users.id` string form; skip missing/invalid ticket owner ids."""
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    return s or None
 
 
 def recompute_winner_payouts_from_round(round_doc: dict, tickets: list) -> dict[str, Any]:
@@ -225,7 +234,19 @@ async def get_lottery_state(current_user: dict = Depends(get_current_user)):
     last = recent_draws[0] if recent_draws else None
     recent_winners = await (
         db.lottery_rounds.find(
-            {"status": "closed", "exact_match_count": {"$gt": 0}},
+            {
+                "status": "closed",
+                "$or": [
+                    {"exact_match_count": {"$gt": 0}},
+                    {"winner_payouts.0": {"$exists": True}},
+                    {
+                        "$and": [
+                            {"winner_username": {"$nin": [None, ""]}},
+                            {"exact_match_count": {"$nin": [0]}},
+                        ]
+                    },
+                ],
+            },
             closed_projection,
         )
         .sort("drawn_at", -1)
@@ -350,6 +371,9 @@ async def lottery_draw_cron(_: bool = Depends(_cron_verify())):
         names_by_user: dict[str, str] = {}
         exact_match_count = 0
         matches: list = []
+        valid_matches: list[tuple[dict, str]] = []
+        payout_errors: list[dict[str, Any]] = []
+        paid_user_ids: set[str] = set()
 
         if gross > 0 and payout > 0:
             for t in tickets:
@@ -359,19 +383,80 @@ async def lottery_draw_cron(_: bool = Depends(_cron_verify())):
             exact_match_count = len(matches)
 
             if matches:
-                mcount = len(matches)
-                share = payout // mcount
-                rem = payout % mcount
-                for i, t in enumerate(matches):
-                    amt = share + (1 if i < rem else 0)
-                    uid = t["user_id"]
-                    amounts_by_user[uid] += amt
-                    names_by_user[uid] = (t.get("username") or "?").strip()
-                for uid, amt in amounts_by_user.items():
-                    if amt > 0:
-                        await db.users.update_one({"id": uid}, {"$inc": {"money": amt}})
+                for t in matches:
+                    uid = _normalize_lottery_user_id(t.get("user_id"))
+                    if uid:
+                        valid_matches.append((t, uid))
+                    else:
+                        logger.warning(
+                            "lottery draw: winning ticket missing user_id round_id=%s numbers=%s",
+                            rid,
+                            t.get("numbers"),
+                        )
+                if len(valid_matches) < len(matches):
+                    logger.error(
+                        "lottery draw: %s of %s winning tickets lack user_id (round_id=%s)",
+                        len(matches) - len(valid_matches),
+                        len(matches),
+                        rid,
+                    )
 
-        rollover_next = payout if payout > 0 and not amounts_by_user else 0
+                if valid_matches:
+                    mcount = len(valid_matches)
+                    share = payout // mcount
+                    rem = payout % mcount
+                    for i, (t, uid) in enumerate(valid_matches):
+                        amt = share + (1 if i < rem else 0)
+                        amounts_by_user[uid] += amt
+                        names_by_user[uid] = (t.get("username") or "?").strip()
+
+                for uid, amt in list(amounts_by_user.items()):
+                    if amt <= 0:
+                        continue
+                    pay_res = await db.users.update_one({"id": uid}, {"$inc": {"money": amt}})
+                    if pay_res.modified_count != 1:
+                        payout_errors.append(
+                            {
+                                "user_id": uid,
+                                "amount": int(amt),
+                                "detail": "user_update_modified_count=%s" % (pay_res.modified_count,),
+                            }
+                        )
+                        logger.error(
+                            "lottery payout failed round_id=%s user_id=%s amount=%s modified_count=%s",
+                            rid,
+                            uid,
+                            amt,
+                            pay_res.modified_count,
+                        )
+                    else:
+                        paid_user_ids.add(uid)
+
+                if valid_matches and payout > 0 and not paid_user_ids:
+                    logger.critical(
+                        "lottery draw: all winner payouts failed round_id=%s payout_pool=%s errors=%s",
+                        rid,
+                        payout,
+                        payout_errors,
+                    )
+                unpaid = sum(int(amounts_by_user[u]) for u in amounts_by_user if u not in paid_user_ids)
+                if unpaid > 0:
+                    logger.error(
+                        "lottery draw: unpaid winner share remains round_id=%s unpaid_total=%s paid_users=%s",
+                        rid,
+                        unpaid,
+                        len(paid_user_ids),
+                    )
+
+        if payout > 0:
+            if not amounts_by_user:
+                rollover_next = payout
+            elif not paid_user_ids and amounts_by_user:
+                rollover_next = payout
+            else:
+                rollover_next = 0
+        else:
+            rollover_next = 0
         nums_txt = _format_numbers_line(winning_numbers)
         display_winner_user_id = None
         display_winner_username = None
@@ -406,33 +491,39 @@ async def lottery_draw_cron(_: bool = Depends(_cron_verify())):
             "exact_match_count": exact_match_count,
             "rollover_to_next": rollover_next,
             "winner_payouts": winner_payouts,
+            "payout_errors": payout_errors,
         }
         await db.lottery_rounds.update_one({"_id": rid}, {"$set": round_set})
 
         try:
-            await db.economy_events.insert_one(
-                {
-                    "at": drawn_iso,
-                    "type": "lottery_draw",
-                    "round_id": str(rid),
-                    "ticket_count": n,
-                    "gross_pot": gross,
-                    "sink_amount": sink,
-                    "payout": payout,
-                    "winner_user_id": display_winner_user_id,
-                    "winner_username": display_winner_username,
-                    "winning_numbers": winning_numbers,
-                    "draw_fallback": False,
-                    "exact_match_count": exact_match_count,
-                    "rollover_to_next": rollover_next,
-                    "rollover_in": rollover_start,
-                }
-            )
+            ev_draw = {
+                "at": drawn_iso,
+                "type": "lottery_draw",
+                "round_id": str(rid),
+                "ticket_count": n,
+                "gross_pot": gross,
+                "sink_amount": sink,
+                "payout": payout,
+                "winner_user_id": display_winner_user_id,
+                "winner_username": display_winner_username,
+                "winning_numbers": winning_numbers,
+                "draw_fallback": False,
+                "exact_match_count": exact_match_count,
+                "rollover_to_next": rollover_next,
+                "rollover_in": rollover_start,
+                "winners_paid_count": len(paid_user_ids),
+            }
+            if payout_errors:
+                ev_draw["payout_errors"] = payout_errors
+            await db.economy_events.insert_one(ev_draw)
         except Exception as e:
             logger.warning("economy_events lottery_draw: %s", e)
 
-        if amounts_by_user:
-            for uid, amt in amounts_by_user.items():
+        if paid_user_ids:
+            for uid in paid_user_ids:
+                amt = int(amounts_by_user.get(uid) or 0)
+                if amt <= 0:
+                    continue
                 uname = names_by_user.get(uid, "?")
                 await log_activity(
                     uid,
@@ -450,12 +541,13 @@ async def lottery_draw_cron(_: bool = Depends(_cron_verify())):
                         f"Winning numbers: {nums_txt}. Your ticket matched! You received ${amt:,} "
                         f"(share of the net pot). Gross pot ${gross:,} ({n:,} tickets); {POT_TAX_PERCENT}% tax removed."
                     )
+                    # category=None so jackpot mail is not muted via notification_preferences
                     await send_notification(
                         uid,
                         "Lottery Winner!",
                         body,
                         "system",
-                        category="lottery",
+                        category=None,
                     )
                 except Exception as e:
                     logger.warning("lottery winner notification: %s", e)

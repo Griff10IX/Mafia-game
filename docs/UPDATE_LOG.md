@@ -6,6 +6,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-06 11:00 UTC[/color][/b] — [b]Quick Trade: casino listings clear when the table changes hands[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] If a [b]casino[/b] (dice, roulette, blackjack, horse racing, or video poker) changes owner [b]outside[/b] Quick Trade — for example someone [b]wins/seizes[/b] the table, you [b]relinquish[/b] or [b]send[/b] it to another player, you [b]claim[/b] an unowned table, or a [b]buy-back[/b] returns it to the previous owner — any [b]active Quick Trade listing[/b] for that table in that city is [b]removed automatically[/b].[/color]
+[*][color=#888888][b]Player action:[/b] No action. If you had a listing and lost the table another way, the listing disappears; buyers should no longer see offers from someone who no longer owns that slot.[/color]
+[*][color=#888888][b]Impact:[/b] Quick Trade stays in sync with who actually owns each casino; fewer confusing or impossible purchases.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-04 16:00 UTC[/color][/b] — [b]Distillery added + progression, risk, and ROI updates[/b][/size]
 [quote]
 [list]
