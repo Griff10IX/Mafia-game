@@ -685,6 +685,18 @@ function App() {
             }
           />
           <Route
+            path="/kill/witness-statements"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <WitnessStatements />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route
             path="/kill/armour-weapons"
             element={
               isAuthenticated ? (

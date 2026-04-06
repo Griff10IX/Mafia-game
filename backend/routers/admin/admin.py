@@ -342,6 +342,21 @@ SEED_RACKETS_BY_FAMILY = {
 SEED_TREASURY = 75_000
 SEED_TEST_PASSWORD = "test1234"
 
+# Bodyguard admin audit: hitlist_bodyguard_events types (excludes pure hitlist_* rows).
+BODYGUARD_AUDIT_HITLIST_TYPES = frozenset(
+    {
+        "bodyguard_hired",
+        "bodyguard_dropped",
+        "bodyguard_invite_sent",
+        "bodyguard_invite_accepted",
+        "bodyguard_invite_declined",
+        "bodyguard_invite_cancelled",
+        "bodyguard_armour_upgrade",
+        "bodyguard_slot_bought",
+        "bodyguard_killed",
+    }
+)
+
 
 def register(router):
     """Register admin routes. Dependencies from server to avoid circular imports."""
@@ -7358,6 +7373,253 @@ def register(router):
         )
         return {"username": user.get("username"), "logs": docs}
 
+    def _audit_iso(val: Any) -> str:
+        if val is None:
+            return ""
+        if isinstance(val, datetime):
+            return val.isoformat()
+        if hasattr(val, "isoformat") and callable(getattr(val, "isoformat", None)):
+            try:
+                return val.isoformat()
+            except Exception:
+                return str(val)
+        return str(val)
+
+    def _sanitize_audit_doc(doc: Optional[dict]) -> Optional[dict]:
+        if not doc:
+            return None
+        out: Dict[str, Any] = {}
+        for k, v in doc.items():
+            if k == "_id":
+                continue
+            if isinstance(v, dict):
+                out[k] = _sanitize_audit_doc(v)
+            elif isinstance(v, list):
+                out[k] = [
+                    _sanitize_audit_doc(x) if isinstance(x, dict) else _audit_iso(x) if hasattr(x, "isoformat") else x
+                    for x in v
+                ]
+            elif hasattr(v, "isoformat") and callable(getattr(v, "isoformat", None)):
+                out[k] = _audit_iso(v)
+            else:
+                out[k] = v
+        return out
+
+    @router.get("/admin/bodyguards/audit")
+    async def admin_bodyguards_audit(
+        username: str = Query(..., min_length=1),
+        limit: int = Query(500, ge=1, le=2000),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Admin or moderator only. Per-user bodyguard snapshot, payouts, point ledger slice,
+        activity_log slice, attack rows for bodyguard kills, war feed slice, hitlist_bodyguard_events,
+        and a merged timeline (newest first).
+        Hire inflation breakdown exists for hires after server deploy; older rows may omit those fields.
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin or moderator access required")
+        key = (username or "").strip()
+        user = await db.users.find_one(
+            {"id": key},
+            {
+                "_id": 0,
+                "id": 1,
+                "username": 1,
+                "bodyguard_slots": 1,
+                "bodyguard_inflation_level": 1,
+                "bodyguard_inflation_until": 1,
+                "is_bodyguard": 1,
+                "bodyguard_owner_id": 1,
+            },
+        )
+        if not user:
+            user = await db.users.find_one(
+                {"username": key},
+                {
+                    "_id": 0,
+                    "id": 1,
+                    "username": 1,
+                    "bodyguard_slots": 1,
+                    "bodyguard_inflation_level": 1,
+                    "bodyguard_inflation_until": 1,
+                    "is_bodyguard": 1,
+                    "bodyguard_owner_id": 1,
+                },
+            )
+        if not user:
+            pattern = re.compile("^" + re.escape(key) + "$", re.IGNORECASE)
+            user = await db.users.find_one(
+                {"username": pattern},
+                {
+                    "_id": 0,
+                    "id": 1,
+                    "username": 1,
+                    "bodyguard_slots": 1,
+                    "bodyguard_inflation_level": 1,
+                    "bodyguard_inflation_until": 1,
+                    "is_bodyguard": 1,
+                    "bodyguard_owner_id": 1,
+                },
+            )
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = user["id"]
+
+        owned_bodyguards = await db.bodyguards.find({"user_id": uid}, {"_id": 0}).sort("slot_number", 1).to_list(10)
+        employed_as_guard = await db.bodyguards.find_one({"bodyguard_user_id": uid}, {"_id": 0})
+
+        guard_user_ids: Set[str] = set()
+        for row in owned_bodyguards:
+            gid = row.get("bodyguard_user_id")
+            if gid:
+                guard_user_ids.add(str(gid))
+        async for r in db.users.find({"bodyguard_owner_id": uid, "is_npc": True}, {"_id": 0, "id": 1}):
+            guard_user_ids.add(r["id"])
+
+        dropped_rows = await db.hitlist_bodyguard_events.find(
+            {"owner_id": uid, "type": "bodyguard_dropped", "guard_id": {"$nin": [None, ""]}},
+            {"_id": 0, "guard_id": 1},
+        ).limit(500).to_list(500)
+        for r in dropped_rows:
+            if r.get("guard_id"):
+                guard_user_ids.add(str(r["guard_id"]))
+
+        accepted_rows = await db.hitlist_bodyguard_events.find(
+            {
+                "inviter_id": uid,
+                "type": "bodyguard_invite_accepted",
+                "invitee_id": {"$nin": [None, ""]},
+            },
+            {"_id": 0, "invitee_id": 1},
+        ).limit(500).to_list(500)
+        for r in accepted_rows:
+            if r.get("invitee_id"):
+                guard_user_ids.add(str(r["invitee_id"]))
+
+        hbe_q = {
+            "type": {"$in": list(BODYGUARD_AUDIT_HITLIST_TYPES)},
+            "$or": [
+                {"owner_id": uid},
+                {"user_id": uid},
+                {"guard_id": uid},
+                {"guard_user_id": uid},
+                {"inviter_id": uid},
+                {"invitee_id": uid},
+                {"killer_id": uid},
+            ],
+        }
+        hitlist_bodyguard_timeline = (
+            await db.hitlist_bodyguard_events.find(hbe_q, {"_id": 0}).sort("at", -1).limit(limit).to_list(limit)
+        )
+        hitlist_bodyguard_timeline = [_sanitize_audit_doc(d) for d in hitlist_bodyguard_timeline]
+
+        glist = list(guard_user_ids)
+        if glist:
+            ak_q = {
+                "is_bodyguard_kill": True,
+                "outcome": "killed",
+                "$or": [{"target_id": {"$in": glist}}, {"target_id": uid}],
+            }
+        else:
+            ak_q = {"is_bodyguard_kill": True, "outcome": "killed", "target_id": uid}
+        bodyguard_kills = (
+            await db.attack_attempts.find(ak_q, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
+        )
+        bodyguard_kills = [_sanitize_audit_doc(d) for d in bodyguard_kills]
+
+        point_ledger_bodyguard = (
+            await db.point_ledger_events.find({"user_id": uid, "event_type": {"$regex": r"^bodyguard_"}}, {"_id": 0})
+            .sort("created_at", -1)
+            .limit(limit)
+            .to_list(limit)
+        )
+        point_ledger_bodyguard = [_sanitize_audit_doc(d) for d in point_ledger_bodyguard]
+
+        activity_bodyguard = (
+            await db.activity_log.find(
+                {"user_id": uid, "action": {"$in": ["bodyguard_hire", "bodyguard_drop"]}},
+                {"_id": 0},
+            )
+            .sort("created_at", -1)
+            .limit(limit)
+            .to_list(limit)
+        )
+        activity_bodyguard = [_sanitize_audit_doc(d) for d in activity_bodyguard]
+
+        payouts = await db.bodyguard_payouts.find(
+            {"$or": [{"owner_id": uid}, {"guard_id": uid}]},
+            {"_id": 0},
+        ).sort("payout_date", -1).limit(limit).to_list(limit)
+        payouts = [_sanitize_audit_doc(d) for d in payouts]
+
+        war_bodyguard_kills = (
+            await db.war_kill_feed.find({"kill_type": "bodyguard", "victim_id": uid}, {"_id": 0})
+            .sort("created_at", -1)
+            .limit(limit)
+            .to_list(limit)
+        )
+        war_bodyguard_kills = [_sanitize_audit_doc(d) for d in war_bodyguard_kills]
+
+        merged: List[Dict[str, Any]] = []
+        for d in hitlist_bodyguard_timeline:
+            merged.append(
+                {
+                    "source": "hitlist_bodyguard_events",
+                    "at": _audit_iso(d.get("at") if isinstance(d, dict) else None),
+                    "kind": (d or {}).get("type") if isinstance(d, dict) else None,
+                    "data": d,
+                }
+            )
+        for d in bodyguard_kills:
+            merged.append(
+                {
+                    "source": "attack_attempts",
+                    "at": _audit_iso(d.get("created_at") if isinstance(d, dict) else None),
+                    "kind": "bodyguard_kill_attempt",
+                    "data": d,
+                }
+            )
+        for d in point_ledger_bodyguard:
+            merged.append(
+                {
+                    "source": "point_ledger_events",
+                    "at": _audit_iso(d.get("created_at") if isinstance(d, dict) else None),
+                    "kind": (d or {}).get("event_type") if isinstance(d, dict) else None,
+                    "data": d,
+                }
+            )
+        for d in activity_bodyguard:
+            merged.append(
+                {
+                    "source": "activity_log",
+                    "at": _audit_iso(d.get("created_at") if isinstance(d, dict) else None),
+                    "kind": (d or {}).get("action") if isinstance(d, dict) else None,
+                    "data": d,
+                }
+            )
+
+        def _merged_sort_key(item: dict) -> str:
+            return (item.get("at") or "")[:30]
+
+        merged.sort(key=_merged_sort_key, reverse=True)
+        merged = merged[:limit]
+
+        return {
+            "user": _sanitize_audit_doc(user),
+            "guard_user_ids_for_attacks": sorted(guard_user_ids),
+            "owned_bodyguards": [_sanitize_audit_doc(d) for d in owned_bodyguards],
+            "employed_as_guard": _sanitize_audit_doc(employed_as_guard),
+            "hitlist_bodyguard_timeline": hitlist_bodyguard_timeline,
+            "bodyguard_kills": bodyguard_kills,
+            "point_ledger_bodyguard": point_ledger_bodyguard,
+            "activity_bodyguard": activity_bodyguard,
+            "payouts": payouts,
+            "war_bodyguard_kills": war_bodyguard_kills,
+            "merged_timeline": merged,
+            "note": "Hire inflation fields (inflation_level_before, inflation_mult, event_bodyguard_cost_mult, base_slot_cost) are stored for new hires only. bodyguard_killed events and attack_attempts.bodyguard_owner_id apply to new kills only.",
+        }
+
     @router.get("/admin/crimes/logs")
     async def admin_crimes_logs(
         username: str = Query(..., min_length=1),
@@ -11161,6 +11423,124 @@ def register(router):
         )
         rows = await cursor.to_list(cap)
         return {"entries": rows, "count": len(rows)}
+
+    class WeeklyLbWrongPointsFixBody(BaseModel):
+        week_starts: List[str] = Field(
+            ...,
+            min_length=1,
+            description="week_start values matching leaderboard_weekly_payouts (YYYY-MM-DD, Monday UTC week key)",
+        )
+        dry_run: bool = Field(True, description="If true, only return preview (no DB writes)")
+        refund_points: bool = Field(True, description="Add back wrongly removed game points")
+        reverse_duplicate_respect: bool = Field(
+            True,
+            description="Subtract the same amount from respect_points (undoes duplicate from mistaken second pass)",
+        )
+        force_repeat: bool = Field(False, description="Apply even if a week is already listed in weekly_lb_points_fix_applied_weeks")
+
+    @router.post("/admin/leaderboard-weekly-payouts/fix-wrong-points-deduction")
+    async def admin_fix_weekly_lb_wrong_points_deduction(
+        body: WeeklyLbWrongPointsFixBody,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Reverses the bug where a follow-up weekly payout tick debited `users.points` (and duplicated `respect_points`)
+        after a correct respect-only payout. Uses audit rows in leaderboard_weekly_payouts to compute per-user amounts.
+
+        Run with dry_run=true first, then dry_run=false. Weeks are recorded in game_config.leaderboard_weekly_payout.weekly_lb_points_fix_applied_weeks to avoid double-apply.
+        """
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin only")
+
+        cfg = await db.game_config.find_one(
+            {"id": leaderboard_module.LEADERBOARD_PAYOUT_CONFIG_ID},
+            {"_id": 0, "weekly_lb_points_fix_applied_weeks": 1},
+        )
+        applied: Set[str] = set(cfg.get("weekly_lb_points_fix_applied_weeks") or [])
+
+        weeks_in = [str(w).strip() for w in body.week_starts if str(w).strip()]
+        if not weeks_in:
+            raise HTTPException(status_code=400, detail="No valid week_starts")
+
+        skipped_weeks: List[str] = []
+        to_process: List[str] = []
+        for w in weeks_in:
+            if w in applied and not body.force_repeat:
+                skipped_weeks.append(w)
+            else:
+                to_process.append(w)
+
+        preview: List[Dict[str, Any]] = []
+        total_users = 0
+        total_points_refund = 0
+
+        for week in to_process:
+            rows = await leaderboard_module.aggregate_weekly_payout_refund_amounts_by_user(db, week)
+            if not rows:
+                preview.append({"week_start": week, "error": "no_audit_rows", "users": []})
+                continue
+            for r in rows:
+                preview.append(
+                    {
+                        "week_start": week,
+                        "user_id": r["user_id"],
+                        "username": r.get("username") or "",
+                        "refund_points": r["refund_points"],
+                    }
+                )
+            total_users += len(rows)
+            total_points_refund += sum(int(r["refund_points"]) for r in rows)
+
+        out: Dict[str, Any] = {
+            "dry_run": body.dry_run,
+            "skipped_weeks": skipped_weeks,
+            "weeks_to_process": to_process,
+            "preview_rows": preview,
+            "distinct_users": total_users,
+            "sum_refund_points": total_points_refund,
+        }
+
+        if body.dry_run or not to_process:
+            return out
+
+        updated_users = 0
+        for week in to_process:
+            rows = await leaderboard_module.aggregate_weekly_payout_refund_amounts_by_user(db, week)
+            if not rows:
+                continue
+            for r in rows:
+                uid = r["user_id"]
+                amt = int(r["refund_points"])
+                if amt <= 0:
+                    continue
+                inc: Dict[str, int] = {}
+                if body.refund_points:
+                    inc["points"] = amt
+                if body.reverse_duplicate_respect:
+                    inc["respect_points"] = -amt
+                if not inc:
+                    continue
+                await db.users.update_one({"id": uid}, {"$inc": inc})
+                updated_users += 1
+                if body.refund_points:
+                    await log_points_event(
+                        db,
+                        user_id=uid,
+                        points=amt,
+                        event_type="leaderboard_payout_points_correction",
+                        meta={"week_start": week, "admin": current_user.get("username")},
+                    )
+                if body.reverse_duplicate_respect:
+                    await log_respect_delta(uid, -amt, "leaderboard_weekly_payout_correction")
+
+        await db.game_config.update_one(
+            {"id": leaderboard_module.LEADERBOARD_PAYOUT_CONFIG_ID},
+            {"$addToSet": {"weekly_lb_points_fix_applied_weeks": {"$each": to_process}}},
+        )
+        leaderboard_module.invalidate_leaderboard_cache()
+        out["applied"] = True
+        out["users_updated"] = updated_users
+        return out
 
     # ─────────────────────────────────────────────────────────────────────────────
     # Minigame Play Payouts Log (Admin Only)

@@ -62,7 +62,7 @@ export default function FindWordHuntLayer() {
     }
   };
 
-  if (!state?.active || !state.word) return null;
+  if (!state?.active || state.can_claim === false || !state.word) return null;
 
   return (
     <div className="pointer-events-none absolute inset-0 z-[5] overflow-hidden">

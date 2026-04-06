@@ -2011,26 +2011,51 @@ export default function Forum() {
               {findWordLoading ? (
                 <p className="text-mutedForeground">Loading…</p>
               ) : findWordActive?.active ? (
-                <>
-                  <p className="text-foreground">
-                    <span className="text-emerald-400 font-bold uppercase text-[10px]">Live</span>
-                    {' — '}A hidden word can appear on <strong className="text-foreground">any page</strong> while you&apos;re
-                    logged in (position shifts as you move around). First click wins an E-Game style prize, then the round
-                    closes.
-                  </p>
-                  {findWordActive.hint && (
-                    <p className="text-[11px] text-mutedForeground italic border-l-2 border-primary/30 pl-2 mt-2">
-                      <span className="text-primary not-italic font-heading font-bold uppercase text-[9px] tracking-wider">
-                        Hint
-                      </span>
-                      {' — '}
-                      {findWordActive.hint}
+                findWordActive.can_claim === false ? (
+                  <>
+                    <p className="text-foreground">
+                      <span className="text-amber-400 font-bold uppercase text-[10px]">Live</span>
+                      {' — '}A hunt is running, but{' '}
+                      <strong className="text-foreground">you won the last round</strong>, so you cannot claim this one.
                     </p>
-                  )}
-                </>
+                    {findWordActive.ineligible_reason && (
+                      <p className="text-[11px] text-amber-200/90 border-l-2 border-amber-500/40 pl-2 mt-2">{findWordActive.ineligible_reason}</p>
+                    )}
+                    {findWordActive.hint && (
+                      <p className="text-[11px] text-mutedForeground italic border-l-2 border-primary/30 pl-2 mt-2">
+                        <span className="text-primary not-italic font-heading font-bold uppercase text-[9px] tracking-wider">
+                          Hint
+                        </span>
+                        {' — '}
+                        {findWordActive.hint}
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p className="text-foreground">
+                      <span className="text-emerald-400 font-bold uppercase text-[10px]">Live</span>
+                      {' — '}A hidden word can appear on <strong className="text-foreground">any page</strong> while you&apos;re
+                      logged in (position shifts as you move around). First click wins an E-Game style prize, then the round
+                      closes.
+                    </p>
+                    {findWordActive.hint && (
+                      <p className="text-[11px] text-mutedForeground italic border-l-2 border-primary/30 pl-2 mt-2">
+                        <span className="text-primary not-italic font-heading font-bold uppercase text-[9px] tracking-wider">
+                          Hint
+                        </span>
+                        {' — '}
+                        {findWordActive.hint}
+                      </p>
+                    )}
+                  </>
+                )
               ) : (
                 <p className="text-mutedForeground">No word hunt right now. Watch notifications — or ask staff to start one.</p>
               )}
+              <p className="text-[9px] text-mutedForeground mt-2 leading-relaxed">
+                If you won the most recent round, you sit out the next hunt only — then you can win again.
+              </p>
               {findWordHistory.length > 0 && (
                 <div className="pt-2 border-t border-border/60">
                   <p className="text-[9px] uppercase tracking-wider text-mutedForeground mb-1.5">Recent rounds</p>

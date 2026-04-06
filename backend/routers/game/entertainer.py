@@ -1432,6 +1432,24 @@ async def run_auto_create_if_enabled():
 
 
 # ---------- Find the word (hidden hunt) ----------
+FIND_WORD_PREVIOUS_WINNER_EXCLUDE_MSG = (
+    "You won the last word hunt — you're excluded from this round only. You can win again starting with the next hunt."
+)
+
+
+async def _find_word_last_completed_winner_user_id() -> Optional[str]:
+    """Most recently completed round with a recorded winner (for sit-out-next-round rule)."""
+    doc = await db.entertainer_find_word_rounds.find_one(
+        {"status": "completed", "winner_user_id": {"$nin": [None, ""]}},
+        {"_id": 0, "winner_user_id": 1},
+        sort=[("completed_at", -1)],
+    )
+    if not doc:
+        return None
+    wid = doc.get("winner_user_id")
+    return str(wid).strip() if wid else None
+
+
 def _find_word_hint_for_round(doc: dict) -> str:
     raw = (doc.get("hint") or "").strip()
     if raw:
@@ -1485,16 +1503,25 @@ async def find_word_active(current_user: dict = Depends(get_current_user)):
     if not r:
         return {"active": False}
     hint = _find_word_hint_for_round(r)
-    return {
+    uid = str((current_user or {}).get("id") or "").strip()
+    last_winner = await _find_word_last_completed_winner_user_id()
+    can_claim = not (uid and last_winner and uid == last_winner)
+    out = {
         "active": True,
         "round_id": r["id"],
-        "word": r.get("word") or "",
         "hint": hint,
+        "can_claim": can_claim,
         "placement": {
             "kind": r.get("placement_kind") or "anywhere",
             "topic_id": r.get("placement_topic_id"),
         },
     }
+    if can_claim:
+        out["word"] = r.get("word") or ""
+    else:
+        out["word"] = ""
+        out["ineligible_reason"] = FIND_WORD_PREVIOUS_WINNER_EXCLUDE_MSG
+    return out
 
 
 async def find_word_history(
@@ -1543,6 +1570,10 @@ async def find_word_claim(body: FindWordClaimBody, current_user: dict = Depends(
     if u.get("is_dead"):
         raise HTTPException(status_code=400, detail="Dead accounts cannot claim")
     uname = (u.get("username") or current_user.get("username") or "?").strip() or "?"
+    uid = str(current_user.get("id") or "").strip()
+    last_winner = await _find_word_last_completed_winner_user_id()
+    if uid and last_winner and uid == last_winner:
+        raise HTTPException(status_code=403, detail=FIND_WORD_PREVIOUS_WINNER_EXCLUDE_MSG)
     now = datetime.now(timezone.utc).isoformat()
     updated = await db.entertainer_find_word_rounds.find_one_and_update(
         {"id": rid, "status": "open"},

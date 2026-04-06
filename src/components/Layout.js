@@ -1334,7 +1334,7 @@ export default function Layout({ children }) {
       <Fragment key={itemKey}>
         {navDivider}
         <Link to={item.path} data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`} data-at-war={atWar && item.path === '/game/family/list' ? 'true' : undefined}
-          className={`flex items-center gap-1 px-2 py-1 min-h-[26px] rounded-sm transition-smooth ${isFamiliesAtWar ? (isActive ? 'bg-red-500/20 text-red-400 border-l-2 border-red-500' : 'text-red-400 hover:bg-red-500/10') : (isActive ? styles.navItemActivePage : styles.sidebarNavLink)}`}
+          className={`flex items-center gap-1 px-2 py-2 md:py-1 min-h-[44px] md:min-h-[26px] rounded-sm transition-smooth touch-manipulation ${isFamiliesAtWar ? (isActive ? 'bg-red-500/20 text-red-400 border-l-2 border-red-500' : 'text-red-400 hover:bg-red-500/10') : (isActive ? styles.navItemActivePage : styles.sidebarNavLink)}`}
           style={isFamiliesAtWar ? { color: '#f87171' } : isActive ? sidebarActiveStyle : undefined}
           onClick={() => setSidebarOpen(false)}
         >
@@ -1987,7 +1987,7 @@ export default function Layout({ children }) {
           )}
           {isMobileViewport && (
             <button type="button" onClick={() => setRightSidebarOpen(true)}
-              className={`fixed right-0 top-1/2 -translate-y-1/2 z-50 w-8 h-14 flex items-center justify-center rounded-l-lg border border-l-0 shadow-lg md:hidden transition-opacity ${rightSidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
+              className={`fixed right-0 top-1/2 -translate-y-1/2 z-50 min-w-[44px] w-11 min-h-[56px] h-14 flex items-center justify-center rounded-l-lg border border-l-0 shadow-lg md:hidden transition-opacity touch-manipulation ${rightSidebarOpen ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}
               style={{ backgroundColor: 'var(--noir-content)', borderColor: 'var(--noir-primary)' }}
               aria-label="Open stats sidebar">
               <PanelRight size={18} style={{ color: 'var(--noir-primary)' }} />
@@ -2159,7 +2159,16 @@ export default function Layout({ children }) {
 
       {/* ── MOBILE BOTTOM AREA (nav + news/casino bar when top bar stats) ─────── */}
       {isMobileViewport && (mobileNavStyle === 'bottom' || (mobileStatsDisplay === 'top_bar' && (flashNews.length > 0 || (user && hasCasinoOrProperty)))) && (
-        <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex flex-col-reverse">
+        <>
+      {mobileNavStyle === 'bottom' && mobileBottomMenuOpen && (
+        <div
+          role="presentation"
+          aria-hidden
+          className="fixed inset-0 z-[49] bg-black/45 md:hidden touch-manipulation"
+          onClick={() => setMobileBottomMenuOpen(null)}
+        />
+      )}
+        <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 flex flex-col-reverse touch-manipulation">
           {/* News + casino bar — above nav when top bar stats selected */}
           {mobileStatsDisplay === 'top_bar' && (flashNews.length > 0 || (user && hasCasinoOrProperty)) && (
             <div data-layout="mobile-bottom-bar" className="flex items-stretch gap-2 px-3 py-2 safe-area-pb"
@@ -2188,15 +2197,16 @@ export default function Layout({ children }) {
           )}
           {/* Bottom nav */}
           {mobileNavStyle === 'bottom' && (
-        <div ref={mobileBottomNavRef} data-layout="bottom-nav">
+        <div ref={mobileBottomNavRef} data-layout="bottom-nav" className="relative z-[51]">
           {/* IMPROVEMENT 3: 3-column grid submenu */}
           {mobileBottomMenuOpen && (() => {
             const group = mobileBottomNavItems.find((i) => i.type === 'group' && i.id === mobileBottomMenuOpen);
             if (!group || group.type !== 'group') return null;
             return (
-              <div data-layout="bottom-nav-submenu" className="absolute bottom-full left-0 right-0 border-t border-primary/20 shadow-2xl max-h-[60vh] overflow-y-auto"
-                style={{ backgroundColor: 'var(--noir-content)', backdropFilter: 'blur(8px)', borderBottom: '1px solid var(--noir-border-mid)' }}
-                role="menu">
+              <div data-layout="bottom-nav-submenu" className="absolute bottom-full left-0 right-0 z-[52] border-t border-primary/20 shadow-2xl max-h-[60vh] overflow-y-auto"
+                style={{ backgroundColor: 'var(--noir-content)', backdropFilter: 'blur(8px)', borderBottom: '1px solid var(--noir-border-mid)', touchAction: 'manipulation' }}
+                role="menu"
+                onClick={(e) => e.stopPropagation()}>
                 {/* Group title */}
                 <div className="flex items-center justify-center gap-2 px-3 py-2 border-b" style={{ borderColor: 'rgba(var(--noir-primary-rgb), 0.15)' }}>
                   <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.2)' }} />
@@ -2282,12 +2292,12 @@ export default function Layout({ children }) {
             );
           })()}
 
-          <nav className="flex items-center justify-between gap-1 overflow-x-auto overflow-y-hidden py-1 px-1 safe-area-pb scrollbar-thin"
-            style={{ backgroundColor: 'var(--noir-content)', borderTop: '1px solid var(--noir-border-mid)' }}
+          <nav className="flex items-center justify-between gap-1 overflow-x-auto overflow-y-hidden py-1.5 px-1 safe-area-pb scrollbar-thin"
+            style={{ backgroundColor: 'var(--noir-content)', borderTop: '1px solid var(--noir-border-mid)', touchAction: 'manipulation' }}
             aria-label="Mobile navigation">
             {mobileBottomNavItems.map((item, index) => {
               const Icon = item.icon;
-              const boxBase = 'flex flex-1 flex-col items-center justify-center gap-0 min-w-0 min-h-[36px] rounded border transition-all touch-manipulation';
+              const boxBase = 'flex flex-1 flex-col items-center justify-center gap-0 min-w-0 min-h-[44px] rounded border transition-all touch-manipulation';
               const boxInactive = { borderColor: 'var(--noir-border-mid)', backgroundColor: 'var(--noir-surface)', color: 'var(--noir-foreground)' };
               const boxActive = { borderColor: 'rgba(var(--noir-primary-rgb), 0.5)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.14)', color: 'var(--noir-primary)' };
               const bottomNavDividerStyle = { width: 1, minWidth: 1, alignSelf: 'stretch', borderLeft: sidebarDividerStyle === 'solid' ? '1px solid rgba(var(--noir-primary-rgb), 0.35)' : `1px ${sidebarDividerStyle} rgba(var(--noir-primary-rgb), 0.35)` };
@@ -2337,6 +2347,7 @@ export default function Layout({ children }) {
         </div>
           )}
         </div>
+        </>
       )}
 
       {/* ── TOUCH BALL ───────────────────────────────────────────────────────── */}

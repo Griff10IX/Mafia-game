@@ -251,6 +251,12 @@ async def ensure_all_indexes(db):
         # --- Hitlist / bodyguard events (admin analytics) ---
         await db.hitlist_bodyguard_events.create_index([("at", -1)])
         await db.hitlist_bodyguard_events.create_index([("type", 1), ("at", -1)])
+        await db.hitlist_bodyguard_events.create_index([("owner_id", 1), ("at", -1)])
+        await db.hitlist_bodyguard_events.create_index([("guard_id", 1), ("at", -1)])
+        await db.hitlist_bodyguard_events.create_index([("guard_user_id", 1), ("at", -1)])
+        await db.hitlist_bodyguard_events.create_index([("inviter_id", 1), ("at", -1)])
+        await db.hitlist_bodyguard_events.create_index([("invitee_id", 1), ("at", -1)])
+        await db.hitlist_bodyguard_events.create_index([("killer_id", 1), ("at", -1)])
 
         # --- Economy events (car/property/loot/booze analytics) ---
         await db.economy_events.create_index([("at", -1)])

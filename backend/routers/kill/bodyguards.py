@@ -547,8 +547,19 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
     )
     if hire_result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Insufficient points")
-    await log_points_event(db, user_id=current_user["id"], points=-total_cost, event_type="bodyguard_hire",
-                           event_ref=f"slot:{slot}", meta={"slot": slot, "is_robot": is_robot, "cost": total_cost})
+    hire_meta = {
+        "slot": slot,
+        "is_robot": is_robot,
+        "cost": total_cost,
+        "inflation_level_before": inflation_level,
+        "inflation_mult": inflation_mult,
+        "event_bodyguard_cost_mult": event_cost_mult,
+        "base_slot_cost": base_cost,
+    }
+    await log_points_event(
+        db, user_id=current_user["id"], points=-total_cost, event_type="bodyguard_hire",
+        event_ref=f"slot:{slot}", meta=hire_meta,
+    )
     robot_name = None
     robot_user_id = None
     if is_robot:
@@ -576,6 +587,10 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
         "is_robot": is_robot,
         "hire_cost": total_cost,
         "bodyguard_username": robot_name if is_robot else None,
+        "inflation_level_before": inflation_level,
+        "inflation_mult": inflation_mult,
+        "event_bodyguard_cost_mult": event_cost_mult,
+        "base_slot_cost": base_cost,
     })
     name_part = robot_name if is_robot else "a human bodyguard"
     msg = f"You hired {name_part} for {total_cost} points (slot {slot}/4). Past hires show here — max 4 at once."
@@ -736,7 +751,8 @@ async def _do_accept_bodyguard_invite(invite_id: str, current_user: dict):
     inviter_for_cost = inviter_inflation or {}
     inflation_level = _bodyguard_inflation_level_now(inviter_for_cost)
     inflation_mult = 1.0 + _bodyguard_inflation_percent_for_level(inflation_level)
-    robot_cost = int(base_cost * ev.get("bodyguard_cost", 1.0) * inflation_mult)
+    event_bodyguard_cost_mult = float(ev.get("bodyguard_cost", 1.0))
+    robot_cost = int(base_cost * event_bodyguard_cost_mult * inflation_mult)
     human_hire_cost = max(1, int(robot_cost * BODYGUARD_HUMAN_HIRE_DISCOUNT))
     if (inviter_for_cost.get("points") or 0) < human_hire_cost:
         raise HTTPException(
@@ -766,8 +782,21 @@ async def _do_accept_bodyguard_invite(invite_id: str, current_user: dict):
             status_code=400,
             detail=f"Inviter does not have enough points for the hire cost ({human_hire_cost} pts, 25% off robot price)",
         )
-    await log_points_event(db, user_id=inviter["id"], points=-human_hire_cost, event_type="bodyguard_hire",
-                           event_ref=f"human:{current_user['id']}", meta={"guard_username": current_user.get("username"), "is_robot": False})
+    human_hire_meta = {
+        "guard_username": current_user.get("username"),
+        "is_robot": False,
+        "slot": empty_slot,
+        "inflation_level_before": inflation_level,
+        "inflation_mult": inflation_mult,
+        "event_bodyguard_cost_mult": event_bodyguard_cost_mult,
+        "base_slot_cost": base_cost,
+        "robot_equivalent_cost": robot_cost,
+        "human_discount_mult": BODYGUARD_HUMAN_HIRE_DISCOUNT,
+    }
+    await log_points_event(
+        db, user_id=inviter["id"], points=-human_hire_cost, event_type="bodyguard_hire",
+        event_ref=f"human:{current_user['id']}", meta=human_hire_meta,
+    )
     duration_hours = int(invite.get("duration_hours") or 168)
     end_time = now + timedelta(hours=duration_hours) if duration_hours > 0 else None
     pay_pts = int(invite.get("payment_points") or 0)
@@ -865,6 +894,10 @@ async def _do_accept_bodyguard_invite(invite_id: str, current_user: dict):
         "invitee_username": current_user.get("username") or "",
         "slot": empty_slot,
         "hire_cost": human_hire_cost,
+        "inflation_level_before": inflation_level,
+        "inflation_mult": inflation_mult,
+        "event_bodyguard_cost_mult": event_bodyguard_cost_mult,
+        "base_slot_cost": base_cost,
     })
     await send_notification(
         inviter["id"],

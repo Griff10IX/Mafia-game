@@ -254,8 +254,9 @@ const SEARCHABLE_TOOLS = [
   { label: 'Toast notifications', categoryId: 'admin-logs', collapseKey: 'toastNotifications', keywords: ['toast', 'notifications', 'popup', 'message', 'error', 'success'] },
   { label: 'Live Activity Feed', categoryId: 'admin-logs', collapseKey: 'activityFeed', keywords: ['activity', 'feed', 'live', 'real-time', 'actions', 'gambling', 'bank', 'transfer'] },
   { label: 'Minigame Payouts', categoryId: 'admin-logs', collapseKey: 'minigamePayouts', keywords: ['minigame', 'payout', 'reward', 'cash', 'mini', 'game'] },
-  { label: 'Weekly Leaderboard Payouts', categoryId: 'admin-logs', collapseKey: 'weeklyLeaderboardPayouts', keywords: ['leaderboard', 'weekly', 'payout', 'respect', 'points', 'top 10'] },
+  { label: 'Weekly Leaderboard Payouts', categoryId: 'admin-logs', collapseKey: 'weeklyLeaderboardPayouts', keywords: ['leaderboard', 'weekly', 'payout', 'respect', 'points', 'top 10', 'fix', 'deduction', 'negative points'] },
   { label: 'Attack Logs', categoryId: 'admin-logs', collapseKey: 'attackLogs', keywords: ['attack', 'log', 'kill'] },
+  { label: 'Bodyguard audit', categoryId: 'admin-logs', collapseKey: 'bodyguardAudit', keywords: ['bodyguard', 'guard', 'hire', 'drop', 'inflation'] },
   { label: 'Mod Action Logs', categoryId: 'admin-logs', collapseKey: 'modLogs', keywords: ['mod', 'action', 'log'] },
   { label: 'Crime logs', categoryId: 'admin-logs', collapseKey: 'crimeLogs', keywords: ['crime', 'log', 'heist'] },
   { label: 'GTA logs', categoryId: 'admin-logs', collapseKey: 'gtaLogs', keywords: ['gta', 'log', 'theft', 'car'] },
@@ -805,6 +806,11 @@ export default function Admin() {
   const attackLogsDataRef = useRef(null);
   attackLogsDataRef.current = attackLogsData;
   const [attackLogViewRow, setAttackLogViewRow] = useState(null);
+  const [bodyguardAuditUsername, setBodyguardAuditUsername] = useState('');
+  const [bodyguardAuditLimit, setBodyguardAuditLimit] = useState(500);
+  const [bodyguardAuditData, setBodyguardAuditData] = useState(null);
+  const [bodyguardAuditLoading, setBodyguardAuditLoading] = useState(false);
+  const [bodyguardAuditExpandKey, setBodyguardAuditExpandKey] = useState(null);
   const [crimeLogsUsername, setCrimeLogsUsername] = useState('');
   const [crimeLogsLimit, setCrimeLogsLimit] = useState(500);
   const [crimeLogsData, setCrimeLogsData] = useState(null);
@@ -875,6 +881,14 @@ export default function Admin() {
   const [weeklyLeaderboardPayoutsUsername, setWeeklyLeaderboardPayoutsUsername] = useState('');
   const [weeklyLeaderboardPayoutsCategory, setWeeklyLeaderboardPayoutsCategory] = useState('all');
   const [weeklyLeaderboardPayoutsLimit, setWeeklyLeaderboardPayoutsLimit] = useState(200);
+  const [lbPointsFixWeekOptions, setLbPointsFixWeekOptions] = useState([]);
+  const [lbPointsFixSelectedWeeks, setLbPointsFixSelectedWeeks] = useState([]);
+  const [lbPointsFixManualWeek, setLbPointsFixManualWeek] = useState('');
+  const [lbPointsFixRefundPoints, setLbPointsFixRefundPoints] = useState(true);
+  const [lbPointsFixReverseRespect, setLbPointsFixReverseRespect] = useState(true);
+  const [lbPointsFixForceRepeat, setLbPointsFixForceRepeat] = useState(false);
+  const [lbPointsFixLoading, setLbPointsFixLoading] = useState(false);
+  const [lbPointsFixResult, setLbPointsFixResult] = useState(null);
   const [gamblingLog, setGamblingLog] = useState({ entries: [] });
   const [gamblingLogLoading, setGamblingLogLoading] = useState(false);
   const [gamblingLogUsername, setGamblingLogUsername] = useState('');
@@ -4540,6 +4554,29 @@ export default function Admin() {
     if (found) setAttackLogViewRow(found);
   }, [attackLogsData, attackLogViewRow?.id]);
 
+  const handleFetchBodyguardAudit = async () => {
+    const un = (bodyguardAuditUsername || '').trim();
+    if (!un) {
+      toast.error('Enter a username');
+      return;
+    }
+    setBodyguardAuditLoading(true);
+    setBodyguardAuditData(null);
+    setBodyguardAuditExpandKey(null);
+    try {
+      const res = await api.get('/admin/bodyguards/audit', {
+        params: { username: un, limit: bodyguardAuditLimit },
+      });
+      setBodyguardAuditData(res.data || null);
+      const n = res.data?.merged_timeline?.length ?? 0;
+      toast.success(`Loaded bodyguard audit (${n} merged timeline rows)`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load bodyguard audit');
+    } finally {
+      setBodyguardAuditLoading(false);
+    }
+  };
+
   const handleFetchCrimeLogs = async () => {
     const un = (crimeLogsUsername || '').trim();
     if (!un) {
@@ -5134,11 +5171,75 @@ export default function Admin() {
       if (weeklyLeaderboardPayoutsCategory && weeklyLeaderboardPayoutsCategory !== 'all') params.category = weeklyLeaderboardPayoutsCategory;
       const res = await api.get('/admin/leaderboard-weekly-payouts', { params });
       setWeeklyLeaderboardPayouts(res.data);
+      const ws = [...new Set((res.data.entries || []).map((e) => e.week_start).filter(Boolean))];
+      if (ws.length) {
+        setLbPointsFixWeekOptions((prev) => [...new Set([...prev, ...ws])].sort().reverse());
+      }
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to load leaderboard weekly payouts');
       setWeeklyLeaderboardPayouts({ entries: [] });
     } finally {
       setWeeklyLeaderboardPayoutsLoading(false);
+    }
+  };
+
+  const fetchLbPointsFixWeekList = async () => {
+    setLbPointsFixLoading(true);
+    try {
+      const res = await api.get('/admin/leaderboard-weekly-payouts', { params: { limit: 1000 } });
+      const ws = [...new Set((res.data.entries || []).map((e) => e.week_start).filter(Boolean))].sort().reverse();
+      setLbPointsFixWeekOptions(ws);
+      toast.success(ws.length ? `Found ${ws.length} distinct week_start value(s)` : 'No week_start values in payout audit');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load weeks');
+    } finally {
+      setLbPointsFixLoading(false);
+    }
+  };
+
+  const addLbPointsFixManualWeek = () => {
+    const w = lbPointsFixManualWeek.trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(w)) {
+      toast.error('Use YYYY-MM-DD (Monday UTC week key, e.g. 2026-04-28)');
+      return;
+    }
+    setLbPointsFixWeekOptions((prev) => [...new Set([...prev, w])].sort().reverse());
+    setLbPointsFixSelectedWeeks((prev) => (prev.includes(w) ? prev : [...prev, w]));
+    setLbPointsFixManualWeek('');
+    toast.success(`Added ${w}`);
+  };
+
+  const runLbPointsFix = async (dryRun) => {
+    if (!lbPointsFixSelectedWeeks.length) {
+      toast.error('Select one or more weeks (Ctrl/Cmd+click in the list)');
+      return;
+    }
+    if (!dryRun) {
+      const ok = window.confirm(
+        `Apply correction for ${lbPointsFixSelectedWeeks.length} week(s)?\n\nThis updates user points (and optionally respect) using payout audit totals. Weeks already fixed are skipped unless "Allow re-apply" is checked.`,
+      );
+      if (!ok) return;
+    }
+    setLbPointsFixLoading(true);
+    setLbPointsFixResult(null);
+    try {
+      const res = await api.post('/admin/leaderboard-weekly-payouts/fix-wrong-points-deduction', {
+        week_starts: lbPointsFixSelectedWeeks,
+        dry_run: dryRun,
+        refund_points: lbPointsFixRefundPoints,
+        reverse_duplicate_respect: lbPointsFixReverseRespect,
+        force_repeat: lbPointsFixForceRepeat,
+      });
+      setLbPointsFixResult(res.data);
+      if (dryRun) {
+        toast.success(`Preview: ${res.data?.sum_refund_points?.toLocaleString?.() ?? '?'} total points across ${res.data?.preview_rows?.length ?? 0} row(s)`);
+      } else {
+        toast.success(res.data?.applied ? `Updated ${res.data.users_updated ?? 0} user row(s)` : 'Done');
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Fix request failed');
+    } finally {
+      setLbPointsFixLoading(false);
     }
   };
 
@@ -14095,6 +14196,99 @@ export default function Admin() {
                 </BtnPrimary>
               </div>
 
+              <div className="rounded-md border border-amber-500/35 bg-amber-500/5 p-3 space-y-2 mt-3">
+                <p className="text-[10px] font-heading font-bold text-amber-200/95 uppercase tracking-wider">
+                  Fix wrong game-points deduction
+                </p>
+                <p className="text-[9px] text-mutedForeground font-heading leading-relaxed">
+                  Reverses a bug where a second payout tick debited <span className="text-foreground">users.points</span> (and duplicated{' '}
+                  <span className="text-foreground">respect_points</span>). Amounts come from this audit table. Run{' '}
+                  <strong className="text-foreground">Preview</strong> first, then <strong className="text-foreground">Apply</strong>.
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <BtnPrimary type="button" onClick={fetchLbPointsFixWeekList} disabled={lbPointsFixLoading} className="!bg-amber-700/40 !border-amber-500/50 hover:!bg-amber-600/40">
+                    {lbPointsFixLoading ? '...' : 'Load week list'}
+                  </BtnPrimary>
+                  <span className="text-[9px] text-mutedForeground">(or use Load above — weeks merge into list)</span>
+                </div>
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="flex flex-col gap-0.5 min-w-[160px] flex-1">
+                    <label className="text-[9px] text-mutedForeground font-heading uppercase">Week start(s) — hold Ctrl/Cmd to multi-select</label>
+                    <select
+                      multiple
+                      size={Math.min(10, Math.max(4, lbPointsFixWeekOptions.length || 4))}
+                      value={lbPointsFixSelectedWeeks}
+                      onChange={(e) => setLbPointsFixSelectedWeeks(Array.from(e.target.selectedOptions).map((o) => o.value))}
+                      className="w-full min-h-[100px] bg-zinc-900/80 border border-zinc-600/50 rounded px-2 py-1 text-[11px] font-mono text-foreground focus:border-amber-500/50 focus:outline-none"
+                    >
+                      {lbPointsFixWeekOptions.length === 0 ? (
+                        <option value="" disabled>
+                          No weeks — Load week list or Load payouts
+                        </option>
+                      ) : (
+                        lbPointsFixWeekOptions.map((w) => (
+                          <option key={w} value={w}>
+                            {w}
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-0.5">
+                    <label className="text-[9px] text-mutedForeground font-heading uppercase">Add week manually</label>
+                    <div className="flex gap-1">
+                      <input
+                        type="text"
+                        value={lbPointsFixManualWeek}
+                        onChange={(e) => setLbPointsFixManualWeek(e.target.value)}
+                        placeholder="YYYY-MM-DD"
+                        className="w-28 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-[11px] font-mono text-foreground focus:border-primary/50 focus:outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={addLbPointsFixManualWeek}
+                        className="px-2 py-1.5 rounded border border-zinc-600/50 text-[10px] font-heading uppercase text-foreground hover:bg-zinc-800/60"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[10px] font-heading">
+                  <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                    <input type="checkbox" checked={lbPointsFixRefundPoints} onChange={(e) => setLbPointsFixRefundPoints(e.target.checked)} className="rounded border-zinc-600" />
+                    Refund game points
+                  </label>
+                  <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                    <input type="checkbox" checked={lbPointsFixReverseRespect} onChange={(e) => setLbPointsFixReverseRespect(e.target.checked)} className="rounded border-zinc-600" />
+                    Remove duplicate respect
+                  </label>
+                  <label className="inline-flex items-center gap-1.5 cursor-pointer text-amber-200/80">
+                    <input type="checkbox" checked={lbPointsFixForceRepeat} onChange={(e) => setLbPointsFixForceRepeat(e.target.checked)} className="rounded border-zinc-600" />
+                    Allow re-apply (ignore prior fix log)
+                  </label>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <BtnPrimary type="button" onClick={() => runLbPointsFix(true)} disabled={lbPointsFixLoading} className="!bg-zinc-700/50 !border-zinc-500/50">
+                    Preview (dry run)
+                  </BtnPrimary>
+                  <button
+                    type="button"
+                    onClick={() => runLbPointsFix(false)}
+                    disabled={lbPointsFixLoading}
+                    className="px-3 py-1.5 rounded border border-red-500/50 bg-red-900/30 text-red-200 text-[10px] font-heading font-bold uppercase hover:bg-red-900/45 disabled:opacity-50"
+                  >
+                    Apply fix
+                  </button>
+                </div>
+                {lbPointsFixResult && (
+                  <div className="mt-2 rounded border border-zinc-700/50 bg-zinc-950/60 p-2 max-h-56 overflow-auto">
+                    <p className="text-[9px] text-mutedForeground font-heading uppercase mb-1">Last response</p>
+                    <pre className="text-[9px] font-mono text-zinc-300 whitespace-pre-wrap break-all">{JSON.stringify(lbPointsFixResult, null, 2)}</pre>
+                  </div>
+                )}
+              </div>
+
               {weeklyLeaderboardPayouts.entries?.length > 0 && (
                 <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
                   <table className="w-full text-[10px] font-mono">
@@ -14255,6 +14449,143 @@ export default function Admin() {
                       </tbody>
                     </table>
                   )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Bodyguard full audit — admin and mod */}
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Shield}
+            title="Bodyguard audit (full log)"
+            badge={bodyguardAuditData?.merged_timeline?.length != null ? <span className="text-[10px] font-heading text-primary">{bodyguardAuditData.merged_timeline.length} merged</span> : null}
+            toolAnchor="bodyguardAudit"
+            isCollapsed={collapsed.bodyguardAudit}
+            onToggle={() => toggleSection('bodyguardAudit')}
+          />
+          {!collapsed.bodyguardAudit && (
+            <div className="p-3 space-y-3">
+              <p className="text-[10px] text-mutedForeground font-heading">
+                Per-user snapshot: current slots, hires/drops/kills, point ledger (bodyguard_*), payouts, war feed, and a merged timeline.
+                Hire inflation breakdown and <code className="text-[9px]">bodyguard_killed</code> events apply to new data after deploy; see server <code className="text-[9px]">note</code> in JSON.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={bodyguardAuditUsername}
+                  onChange={(e) => setBodyguardAuditUsername(e.target.value)}
+                  placeholder="Username or user id"
+                  className="w-44 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading"
+                />
+                <span className="text-[10px] text-mutedForeground">Limit</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={2000}
+                  value={bodyguardAuditLimit}
+                  onChange={(e) => setBodyguardAuditLimit(Math.max(1, Math.min(2000, parseInt(e.target.value, 10) || 500)))}
+                  className="w-20 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono"
+                />
+                <BtnPrimary onClick={handleFetchBodyguardAudit} disabled={bodyguardAuditLoading}>
+                  {bodyguardAuditLoading ? 'Loading…' : 'Load audit'}
+                </BtnPrimary>
+              </div>
+              {bodyguardAuditData && (
+                <div className="space-y-3 overflow-x-auto">
+                  <p className="text-[10px] font-heading text-primary">
+                    User: <strong>{bodyguardAuditData.user?.username ?? '—'}</strong>
+                    {' · '}
+                    slots <span className="font-mono">{bodyguardAuditData.user?.bodyguard_slots ?? '—'}</span>
+                    {bodyguardAuditData.user?.is_bodyguard ? (
+                      <span className="text-amber-400"> · employed as bodyguard</span>
+                    ) : null}
+                  </p>
+                  {bodyguardAuditData.note && (
+                    <p className="text-[9px] text-mutedForeground font-heading border border-zinc-700/40 rounded px-2 py-1">{bodyguardAuditData.note}</p>
+                  )}
+                  <div className="text-[10px] font-heading text-mutedForeground">
+                    Guard user ids (attack correlation):{' '}
+                    <span className="font-mono text-[9px] break-all">
+                      {(bodyguardAuditData.guard_user_ids_for_attacks || []).join(', ') || '—'}
+                    </span>
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold text-primary uppercase tracking-wide mb-1">Current owned bodyguards</div>
+                    {(bodyguardAuditData.owned_bodyguards || []).length === 0 ? (
+                      <p className="text-[10px] text-mutedForeground">No filled slots.</p>
+                    ) : (
+                      <pre className="text-[9px] font-mono bg-zinc-950/80 border border-zinc-700/40 rounded p-2 max-h-40 overflow-auto whitespace-pre-wrap">
+                        {JSON.stringify(bodyguardAuditData.owned_bodyguards, null, 2)}
+                      </pre>
+                    )}
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-bold text-primary uppercase tracking-wide mb-1">Merged timeline (newest first)</div>
+                    {(!bodyguardAuditData.merged_timeline || bodyguardAuditData.merged_timeline.length === 0) ? (
+                      <p className="text-[10px] text-mutedForeground">No rows.</p>
+                    ) : (
+                      <div className="max-h-[480px] overflow-y-auto rounded border border-zinc-700/50">
+                        <table className="w-full text-left border-collapse text-[9px] font-heading">
+                          <thead className="sticky top-0 bg-zinc-900/95 z-10">
+                            <tr className="border-b border-zinc-700/50">
+                              <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Time</th>
+                              <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Source</th>
+                              <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Kind</th>
+                              <th className="py-1 font-bold text-mutedForeground uppercase">Detail</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {bodyguardAuditData.merged_timeline.map((row, idx) => {
+                              const key = `${row.source}-${row.at}-${idx}`;
+                              const open = bodyguardAuditExpandKey === key;
+                              return (
+                                <tr key={key} className="border-b border-zinc-700/30 align-top">
+                                  <td className="py-1 pr-1 text-mutedForeground font-mono whitespace-nowrap">{row.at || '—'}</td>
+                                  <td className="py-1 pr-1 text-foreground">{row.source ?? '—'}</td>
+                                  <td className="py-1 pr-1 text-foreground">{row.kind ?? '—'}</td>
+                                  <td className="py-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => setBodyguardAuditExpandKey(open ? null : key)}
+                                      className="px-1.5 py-0.5 rounded border border-primary/40 bg-primary/10 text-primary text-[9px] font-heading hover:bg-primary/20"
+                                    >
+                                      {open ? 'Hide' : 'JSON'}
+                                    </button>
+                                    {open && (
+                                      <pre className="mt-1 text-[8px] font-mono bg-zinc-950/90 p-2 rounded border border-zinc-700/40 max-h-64 overflow-auto whitespace-pre-wrap">
+                                        {JSON.stringify(row.data, null, 2)}
+                                      </pre>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                  <details className="text-[10px] font-heading">
+                    <summary className="cursor-pointer text-primary">Raw sections (attack kills, ledger, payouts, war…)</summary>
+                    <pre className="mt-2 text-[8px] font-mono bg-zinc-950/80 border border-zinc-700/40 rounded p-2 max-h-96 overflow-auto whitespace-pre-wrap">
+                      {JSON.stringify(
+                        {
+                          bodyguard_kills: bodyguardAuditData.bodyguard_kills,
+                          point_ledger_bodyguard: bodyguardAuditData.point_ledger_bodyguard,
+                          activity_bodyguard: bodyguardAuditData.activity_bodyguard,
+                          payouts: bodyguardAuditData.payouts,
+                          war_bodyguard_kills: bodyguardAuditData.war_bodyguard_kills,
+                          hitlist_bodyguard_timeline: bodyguardAuditData.hitlist_bodyguard_timeline,
+                          employed_as_guard: bodyguardAuditData.employed_as_guard,
+                        },
+                        null,
+                        2,
+                      )}
+                    </pre>
+                  </details>
                 </div>
               )}
             </div>

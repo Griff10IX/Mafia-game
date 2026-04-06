@@ -1301,9 +1301,27 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 except Exception:
                     pass
                 _is_npc_bodyguard = bool(target.get("is_bodyguard"))
+                _npc_bg_owner_id = None
+                _npc_bg_owner_username = None
+                if _is_npc_bodyguard:
+                    _vas = await db.bodyguards.find(
+                        {"bodyguard_user_id": victim_id},
+                        {"_id": 0, "user_id": 1},
+                    ).to_list(10)
+                    if not _vas and target.get("bodyguard_owner_id"):
+                        _vas = [{"user_id": target["bodyguard_owner_id"]}]
+                    if _vas and _vas[0].get("user_id"):
+                        _npc_bg_owner_id = _vas[0]["user_id"]
+                        _ou = await db.users.find_one({"id": _npc_bg_owner_id}, {"_id": 0, "username": 1})
+                        _npc_bg_owner_username = (_ou or {}).get("username")
                 damage_done = float(target_health)
                 try:
                     meta = _request_meta(req)
+                    _npc_attempt_extra = {}
+                    if _is_npc_bodyguard and _npc_bg_owner_id:
+                        _npc_attempt_extra["bodyguard_owner_id"] = _npc_bg_owner_id
+                    if _is_npc_bodyguard and _npc_bg_owner_username:
+                        _npc_attempt_extra["bodyguard_owner_username"] = _npc_bg_owner_username
                     await db.attack_attempts.insert_one({
                         **attempt_base,
                         "outcome": "killed",
@@ -1316,6 +1334,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                         "is_npc_kill": True,
                         "is_bodyguard_kill": _is_npc_bodyguard,
                         "target_is_npc": True,
+                        **_npc_attempt_extra,
                         **meta,
                     })
                 except Exception:
@@ -1350,6 +1369,22 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                             killer_id, current_user.get("family_id"), owner_id, owner_doc,
                             bg_username=target_name, bullets_used=bullets_used, bg_hire_cost=bg_hire_cost,
                         )
+                        try:
+                            await db.hitlist_bodyguard_events.insert_one({
+                                "at": datetime.now(timezone.utc),
+                                "type": "bodyguard_killed",
+                                "owner_id": owner_id,
+                                "owner_username": (owner_doc or {}).get("username") or "",
+                                "guard_user_id": victim_id,
+                                "guard_username": target_name,
+                                "killer_id": killer_id,
+                                "killer_username": current_user.get("username") or "",
+                                "location_state": attack.get("location_state"),
+                                "hire_cost": bg_hire_cost,
+                                "bullets_used": int(bullets_used or 0),
+                            })
+                        except Exception:
+                            logging.exception("hitlist_bodyguard_events bodyguard_killed (npc bg)")
                         remaining = await db.bodyguards.find({"user_id": owner_id}, {"_id": 0, "id": 1, "slot_number": 1}).sort("slot_number", 1).to_list(10)
                         for i, b in enumerate(remaining, 1):
                             if b["slot_number"] != i:
@@ -1692,6 +1727,22 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 killer_id, current_user.get("family_id"), owner_id, owner_doc,
                 bg_username=target_name, bullets_used=bullets_used, bg_hire_cost=bg_hire_cost,
             )
+            try:
+                await db.hitlist_bodyguard_events.insert_one({
+                    "at": datetime.now(timezone.utc),
+                    "type": "bodyguard_killed",
+                    "owner_id": owner_id,
+                    "owner_username": (owner_doc or {}).get("username") or "",
+                    "guard_user_id": victim_id,
+                    "guard_username": target_name,
+                    "killer_id": killer_id,
+                    "killer_username": current_user.get("username") or "",
+                    "location_state": attack.get("location_state"),
+                    "hire_cost": bg_hire_cost,
+                    "bullets_used": int(bullets_used or 0),
+                })
+            except Exception:
+                logging.exception("hitlist_bodyguard_events bodyguard_killed (player bg)")
             remaining = await db.bodyguards.find({"user_id": owner_id}, {"_id": 0, "id": 1, "slot_number": 1}).sort("slot_number", 1).to_list(10)
             for i, b in enumerate(remaining, 1):
                 if b["slot_number"] != i:
@@ -1703,6 +1754,8 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         attempt_base["target_is_npc"] = is_victim_npc
         if is_victim_bodyguard and bodyguard_owner_username:
             attempt_base["bodyguard_owner_username"] = bodyguard_owner_username
+        if is_victim_bodyguard and bodyguard_owner_id:
+            attempt_base["bodyguard_owner_id"] = bodyguard_owner_id
         success_message = f"You killed {target_name}! You got ${cash_loot:,}"
         extras = []
         transferred_props_count = victim_props_count - len(auto_sold_props)

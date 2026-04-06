@@ -9,7 +9,6 @@ from fastapi import Depends, Query
 from pydantic import BaseModel
 
 from server import ADMIN_EMAILS, db, get_current_user, _staff_exclude_user_filter
-from utils.point_provenance import log_points_event
 
 _lb_cache: dict = {}
 _LB_CACHE_TTL = 30
@@ -326,11 +325,10 @@ async def run_weekly_leaderboard_payout(database, test_run: bool = False):
 
     cfg = await database.game_config.find_one(
         {"id": LEADERBOARD_PAYOUT_CONFIG_ID},
-        {"_id": 0, "last_run_week_start": 1, "last_respect_conversion_week_start": 1, "top1_points": 1, "top2_points": 1, "top3_points": 1, "top4_10_points": 1},
+        {"_id": 0, "last_run_week_start": 1, "top1_points": 1, "top2_points": 1, "top3_points": 1, "top4_10_points": 1},
     )
     already_paid = bool(cfg and cfg.get("last_run_week_start") == last_week_start_str and not test_run)
     should_award = not already_paid
-    conversion_done = bool(cfg and cfg.get("last_respect_conversion_week_start") == last_week_start_str)
 
     top1 = int(cfg.get("top1_points") or DEFAULT_TOP1_POINTS) if cfg else DEFAULT_TOP1_POINTS
     top2 = int(cfg.get("top2_points") or DEFAULT_TOP2_POINTS) if cfg else DEFAULT_TOP2_POINTS
@@ -405,23 +403,9 @@ async def run_weekly_leaderboard_payout(database, test_run: bool = False):
             # Weekly leaderboard awards are respect points.
             await database.users.update_one({"id": user_id}, {"$inc": {"respect_points": points}})
 
-    # If we already paid the week (older code), it likely credited `users.points` instead of `users.respect_points`.
-    # Convert once per week so admins don't have to manually fix balances.
-    if already_paid and not conversion_done and user_points:
-        for user_id, points in user_points.items():
-            if points <= 0:
-                continue
-            await database.users.update_one(
-                {"id": user_id},
-                {"$inc": {"respect_points": points, "points": -points}},
-            )
-            if points > 0:
-                await log_points_event(database, user_id=user_id, points=-points, event_type="leaderboard_tip", meta={"week": last_week_start_str})
-        await database.game_config.update_one(
-            {"id": LEADERBOARD_PAYOUT_CONFIG_ID},
-            {"$set": {"last_respect_conversion_week_start": last_week_start_str}},
-            upsert=True,
-        )
+    # NOTE: Do not debit `users.points` on a second pass (e.g. "migrate wrong wallet" logic). A follow-up ticker
+    # run after a correct `respect_points`-only payout would wrongly subtract game points and double-count respect.
+    # If old payouts once credited the wrong field, use POST /admin/leaderboard-weekly-payouts/fix-wrong-points-deduction.
 
     # Persist an audit trail so admins can inspect "who got what" each week.
     try:
@@ -619,6 +603,34 @@ async def get_top_leaderboards(
         _last_reward_winners_cache["data"] = lrw
         _last_reward_winners_cache["ts"] = time.monotonic()
     out["last_reward_winners"] = lrw
+    return out
+
+
+async def aggregate_weekly_payout_refund_amounts_by_user(database, week_start: str) -> List[dict]:
+    """
+    Per-user totals from payout audit for one week_start (sum of points_awarded across categories).
+    Matches the amount wrongly debited from `users.points` by the removed conversion pass.
+    """
+    ws = (week_start or "").strip()
+    if not ws:
+        return []
+    pipeline = [
+        {"$match": {"week_start": ws}},
+        {
+            "$group": {
+                "_id": "$user_id",
+                "refund_points": {"$sum": "$points_awarded"},
+                "username": {"$first": "$username"},
+            }
+        },
+    ]
+    rows = await database.leaderboard_weekly_payouts.aggregate(pipeline).to_list(500)
+    out: List[dict] = []
+    for r in rows:
+        uid = r.get("_id")
+        amt = int(r.get("refund_points") or 0)
+        if uid and amt > 0:
+            out.append({"user_id": uid, "username": (r.get("username") or "").strip(), "refund_points": amt})
     return out
 
 
