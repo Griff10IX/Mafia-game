@@ -64,7 +64,7 @@ const GAME_COLORS = {
 // CITY CARD
 // ============================================================================
 
-const GAMES_WITH_BUYBACK = ['dice', 'blackjack', 'slots'];
+const GAMES_WITH_BUYBACK = ['dice', 'blackjack', 'roulette', 'horseracing', 'videopoker', 'slots'];
 
 const CityCard = ({
   city,
@@ -186,7 +186,7 @@ const CityCard = ({
                     ) : (
                       <span className="text-[9px] text-zinc-500">Unclaimed</span>
                     )}
-                    {(game.id === 'dice' || game.id === 'blackjack' || game.id === 'slots' || game.id === 'roulette') && owner?.buy_back_reward != null && Number(owner.buy_back_reward) > 0 && (
+                    {GAMES_WITH_BUYBACK.includes(game.id) && owner?.buy_back_reward != null && Number(owner.buy_back_reward) > 0 && (
                       <span className="text-[8px] text-amber-400/90">Buy-back: {Number(owner.buy_back_reward).toLocaleString()} pts</span>
                     )}
                   </div>
