@@ -24,6 +24,7 @@ from server import (
     log_gambling,
     resolve_gambling_log_buy_back,
     get_wealth_rank,
+    get_wealth_rank_range,
     get_rank_info,
     CAPO_RANK_ID,
     maybe_auto_relinquish_below_capo,
@@ -182,8 +183,14 @@ def register(router):
             u = await db.users.find_one({"id": owner_id}, {"_id": 0, "username": 1, "money": 1})
             if u:
                 _, wealth_rank_name, wealth_rank_color = get_wealth_rank(int((u.get("money") or 0) or 0))
+                wealth_rank_range = get_wealth_rank_range(int((u.get("money") or 0) or 0))
                 # Public casino ownership view: expose owner username + wealth rank only, never raw user_id
-                owner = {"username": u.get("username") or "?", "wealth_rank_name": wealth_rank_name, "wealth_rank_color": wealth_rank_color}
+                owner = {
+                    "username": u.get("username") or "?",
+                    "wealth_rank_name": wealth_rank_name,
+                    "wealth_rank_color": wealth_rank_color,
+                    "wealth_rank_range": wealth_rank_range,
+                }
         profit = _ownership_display_profit(doc)
         active_offer = await db.dice_buy_back_offers.find_one(
             {"to_user_id": current_user.get("id") or ""},

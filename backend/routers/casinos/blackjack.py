@@ -33,6 +33,7 @@ from server import (
     _ownership_display_profit,
     bump_user_biggest_casino_payout,
     get_wealth_rank,
+    get_wealth_rank_range,
 )
 from routers.casinos.roulette import RouletteClaimRequest, RouletteSetMaxBetRequest, RouletteSendToUserRequest
 from routers.casinos.dice import DiceSellOnTradeRequest
@@ -398,6 +399,7 @@ def register(router):
                 "owner_name": None,
                 "owner_wealth_rank_name": None,
                 "owner_wealth_rank_color": None,
+                "owner_wealth_rank_range": None,
                 "is_owner": False,
                 "is_unclaimed": True,
                 "claim_cost": cc["blackjack"],
@@ -412,11 +414,13 @@ def register(router):
         owner_name = None
         owner_wealth_rank_name = None
         owner_wealth_rank_color = None
+        owner_wealth_rank_range = None
         if owner_id:
             u = await db.users.find_one({"id": owner_id}, {"username": 1, "money": 1})
             owner_name = u.get("username") if u else None
             if u:
                 _, owner_wealth_rank_name, owner_wealth_rank_color = get_wealth_rank(int((u.get("money") or 0) or 0))
+                owner_wealth_rank_range = get_wealth_rank_range(int((u.get("money") or 0) or 0))
         is_owner = owner_id == current_user.get("id") or ""
         max_bet = doc.get("max_bet", BLACKJACK_DEFAULT_MAX_BET)
         total_earnings = doc.get("total_earnings", 0)
@@ -446,13 +450,14 @@ def register(router):
             "owner_name": owner_name,
             "owner_wealth_rank_name": owner_wealth_rank_name,
             "owner_wealth_rank_color": owner_wealth_rank_color,
+            "owner_wealth_rank_range": owner_wealth_rank_range,
             "is_owner": is_owner,
             "is_unclaimed": owner_id is None,
             "claim_cost": cc["blackjack"],
             "max_bet": max_bet,
             "total_earnings": total_earnings if is_owner else None,
             "profit": profit if is_owner else None,
-            "buy_back_reward": buy_back_reward if is_owner else None,
+            "buy_back_reward": buy_back_reward,
             "buy_back_offer": buy_back_offer,
         }
         if len(_ownership_cache) < _OWNERSHIP_MAX_ENTRIES:

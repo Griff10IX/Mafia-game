@@ -948,7 +948,8 @@ export default function Layout({ children }) {
         '/game/travel': 'travel', '/game/states': 'travel', '/my-properties': 'travel', '/money/booze-run': 'travel',
         '__messaging__': 'messaging',
         '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game-pass': 'money', '/game/daily-rewards': 'money', '/money/distillery': 'money',
-        '/cars/garage': 'money', '/cars/sell': 'money', '/cars/buy': 'money', '/money/crack-safe': 'money', '/money/lottery': 'money', '/casino': 'money', '/money/loot-box': 'money',
+        '/cars/garage': 'money', '/cars/sell': 'money', '/cars/buy': 'money', '/money/crack-safe': 'money', '/money/lottery': 'money', '/money/loot-box': 'money',
+        '/casino': 'casino',
         '/game/family/list': 'other', '/game/dead-alive': 'other', '/account/autorank': 'other',
         '/mini-games': 'minigames',
       }
@@ -961,19 +962,20 @@ export default function Layout({ children }) {
         '/game/travel': 'travel', '/game/states': 'travel', '/my-properties': 'travel', '/money/booze-run': 'travel',
         '__messaging__': 'messaging',
         '/money/bank': 'money', '/money/stocks': 'money', '/money/quick-trade': 'money', '/game/store': 'money', '/game-pass': 'money', '/game/daily-rewards': 'money', '/casino/mini-games/flappy': 'money', '/money/distillery': 'money',
-        '/cars/garage': 'money', '/cars/sell': 'money', '/cars/buy': 'money', '/money/crack-safe': 'money', '/money/lottery': 'money', '/casino': 'money', '/game/leaderboard': 'money',
+        '/cars/garage': 'money', '/cars/sell': 'money', '/cars/buy': 'money', '/money/crack-safe': 'money', '/money/lottery': 'money', '/game/leaderboard': 'money',
+        '/casino': 'casino',
         '/game/family/list': 'other', '/game/dead-alive': 'other', '/account/autorank': 'other',
         '/mini-games': 'minigames',
       };
   const SIDEBAR_CATEGORIES = isCategorizedClassic
     ? [
         { id: 'information', label: 'INFORMATION' }, { id: 'combat', label: 'COMBAT' }, { id: 'travel', label: 'TRAVEL' },
-        { id: 'ranking', label: 'RANKING' }, { id: 'messaging', label: 'MESSAGING' }, { id: 'money', label: 'MONEY' },
+        { id: 'ranking', label: 'RANKING' }, { id: 'messaging', label: 'MESSAGING' }, { id: 'money', label: 'MONEY' }, { id: 'casino', label: 'CASINO' },
         { id: 'other', label: 'OTHER' }, { id: 'minigames', label: 'MINI GAMES' },
       ]
     : [
         { id: 'information', label: 'You' }, { id: 'combat', label: 'Combat' }, { id: 'travel', label: 'Travel' },
-        { id: 'ranking', label: 'Ranking' }, { id: 'messaging', label: 'Messages' }, { id: 'money', label: 'Money' },
+        { id: 'ranking', label: 'Ranking' }, { id: 'messaging', label: 'Messages' }, { id: 'money', label: 'Money' }, { id: 'casino', label: 'Casino' },
         { id: 'other', label: 'Other' }, { id: 'minigames', label: 'Mini Games' },
       ];
 

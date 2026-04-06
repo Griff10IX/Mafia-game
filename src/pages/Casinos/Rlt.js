@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import api, { refreshUser } from '../../utils/api';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
 import styles from '../../styles/noir.module.css';
 
 const CG_STYLES = `
@@ -617,12 +618,22 @@ export default function Rlt() {
                 {ownership?.owner_wealth_rank_name ? (
                   <>
                     {' '}·{' '}
-                    <span
-                      className="font-bold"
-                      style={ownership?.owner_wealth_rank_color ? { color: ownership.owner_wealth_rank_color } : undefined}
-                    >
-                      {ownership.owner_wealth_rank_name}
-                    </span>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            type="button"
+                            className="font-bold underline decoration-dotted underline-offset-2 cursor-help"
+                            style={ownership?.owner_wealth_rank_color ? { color: ownership.owner_wealth_rank_color } : undefined}
+                          >
+                            {ownership.owner_wealth_rank_name}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom" className="font-heading text-[11px]">
+                          {ownership?.owner_wealth_rank_range || 'Wealth tier'}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </>
                 ) : null}
               </span>
@@ -630,6 +641,9 @@ export default function Rlt() {
           </p>
         </div>
         <div className="flex items-center gap-3 text-xs font-heading">
+          {ownership?.owner_name ? (
+            <span className="text-mutedForeground">Buy-back: <span className="text-primary font-bold">{Number(ownership.buy_back_reward ?? 0).toLocaleString()} pts</span></span>
+          ) : null}
           <span className="text-mutedForeground">Max: <span className="text-primary font-bold">{formatMoney(config.max_bet)}</span></span>
           {canClaim && (
             <button onClick={handleClaim} disabled={ownerLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 font-heading">
