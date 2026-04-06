@@ -29,6 +29,15 @@ const MELT_VALUE_MULTIPLIER_NUM = 122;
 const MELT_VALUE_MULTIPLIER_DEN = 100;
 const ALL_RARITIES = ['common', 'uncommon', 'rare', 'ultra_rare', 'legendary', 'custom', 'loot_exclusive', 'exclusive'];
 
+function normalizeCarRarity(rarity) {
+  const raw = String(rarity || '').trim().toLowerCase();
+  if (!raw) return 'common';
+  const compact = raw.replace(/[\s-]+/g, '_');
+  if (compact === 'lootexclusive') return 'loot_exclusive';
+  if (compact === 'ultrarare') return 'ultra_rare';
+  return ALL_RARITIES.includes(compact) ? compact : 'common';
+}
+
 function previewBulletsForCarValue(value, rarity) {
   const carValue = Number(value || 0);
   if (!Number.isFinite(carValue) || carValue <= 0) return 0;
@@ -438,7 +447,7 @@ const SettingsModal = ({
 // Main component
 export default function Garage() {
   const [bootGarage] = useState(() => readSessionJson(GARAGE_CACHE_KEY));
-  const [cars, setCars] = useState(() => bootGarage?.cars ?? []);
+  const [cars, setCars] = useState(() => (bootGarage?.cars ?? []).map((c) => ({ ...c, rarity: normalizeCarRarity(c?.rarity) })));
   const [selectedCars, setSelectedCars] = useState([]);
   const [loading, setLoading] = useState(() => bootGarage == null);
   const [sortBy, setSortBy] = useState('rarity');
@@ -460,7 +469,7 @@ export default function Garage() {
     if (!silent) setLoading(true);
     try {
       const response = await api.get('/gta/garage');
-      const nextCars = response.data?.cars ?? [];
+      const nextCars = (response.data?.cars ?? []).map((c) => ({ ...c, rarity: normalizeCarRarity(c?.rarity) }));
       const cd = response.data?.melt_bullets_cooldown_until ?? null;
       setCars(nextCars);
       setMeltBulletsCooldownUntil(cd);

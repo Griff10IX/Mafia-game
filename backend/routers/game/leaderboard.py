@@ -8,7 +8,7 @@ from typing import List
 from fastapi import Depends, Query
 from pydantic import BaseModel
 
-from server import ADMIN_EMAILS, db, get_current_user, _staff_exclude_user_filter
+from server import ADMIN_EMAILS, db, get_current_user, _staff_exclude_user_filter, send_notification
 
 _lb_cache: dict = {}
 _LB_CACHE_TTL = 30
@@ -396,12 +396,34 @@ async def run_weekly_leaderboard_payout(database, test_run: bool = False):
         )
         return
 
+    users_map_for_notify: dict = {}
+    if should_award and user_points:
+        users = await database.users.find(
+            {"id": {"$in": list(user_points.keys())}},
+            {"_id": 0, "id": 1, "username": 1},
+        ).to_list(len(user_points) + 1)
+        users_map_for_notify = {u["id"]: (u.get("username") or "") for u in users}
+
     if should_award:
         for user_id, points in user_points.items():
             if points <= 0:
                 continue
             # Weekly leaderboard awards are respect points.
             await database.users.update_one({"id": user_id}, {"$inc": {"respect_points": points}})
+            uname = users_map_for_notify.get(user_id) or "there"
+            try:
+                await send_notification(
+                    user_id,
+                    "Weekly Leaderboard Reward",
+                    (
+                        f"You earned {int(points):,} respect points from last week's weekly leaderboard payout. "
+                        f"Nice work, {uname}."
+                    ),
+                    "leaderboard_weekly_payout",
+                    category="economic",
+                )
+            except Exception:
+                log.exception("Weekly leaderboard payout: failed to send inbox notification for user_id=%s", user_id)
 
     # NOTE: Do not debit `users.points` on a second pass (e.g. "migrate wrong wallet" logic). A follow-up ticker
     # run after a correct `respect_points`-only payout would wrongly subtract game points and double-count respect.

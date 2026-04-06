@@ -889,6 +889,16 @@ export default function Admin() {
   const [lbPointsFixForceRepeat, setLbPointsFixForceRepeat] = useState(false);
   const [lbPointsFixLoading, setLbPointsFixLoading] = useState(false);
   const [lbPointsFixResult, setLbPointsFixResult] = useState(null);
+  const [lbVerifyWeek, setLbVerifyWeek] = useState('');
+  const [lbVerifyLoading, setLbVerifyLoading] = useState(false);
+  const [lbVerifyResult, setLbVerifyResult] = useState(null);
+  const [lbVerifyShowMismatchesOnly, setLbVerifyShowMismatchesOnly] = useState(false);
+  const [lbVerifyCategoryFilter, setLbVerifyCategoryFilter] = useState('all');
+  const [lbVerifyUserFilter, setLbVerifyUserFilter] = useState('');
+  const [lbWeeksCompareWeekA, setLbWeeksCompareWeekA] = useState('');
+  const [lbWeeksCompareWeekB, setLbWeeksCompareWeekB] = useState('');
+  const [lbWeeksCompareLoading, setLbWeeksCompareLoading] = useState(false);
+  const [lbWeeksCompareResult, setLbWeeksCompareResult] = useState(null);
   const [gamblingLog, setGamblingLog] = useState({ entries: [] });
   const [gamblingLogLoading, setGamblingLogLoading] = useState(false);
   const [gamblingLogUsername, setGamblingLogUsername] = useState('');
@@ -5240,6 +5250,53 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Fix request failed');
     } finally {
       setLbPointsFixLoading(false);
+    }
+  };
+
+  const compareLbBugWeeks = async () => {
+    const weekA = (lbWeeksCompareWeekA || '').trim();
+    const weekB = (lbWeeksCompareWeekB || '').trim();
+    if (!weekA || !weekB) {
+      toast.error('Pick both Week A and Week B');
+      return;
+    }
+    if (weekA === weekB) {
+      toast.error('Choose two different weeks');
+      return;
+    }
+    setLbWeeksCompareLoading(true);
+    setLbWeeksCompareResult(null);
+    try {
+      const res = await api.get('/admin/leaderboard-weekly-payouts/compare-weeks', {
+        params: { week_a: weekA, week_b: weekB },
+      });
+      setLbWeeksCompareResult(res.data || null);
+      toast.success('Week comparison loaded');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to compare weeks');
+    } finally {
+      setLbWeeksCompareLoading(false);
+    }
+  };
+
+  const verifyWeeklyLeaderboardRewards = async () => {
+    const week = (lbVerifyWeek || '').trim();
+    if (!week) {
+      toast.error('Select a week to verify');
+      return;
+    }
+    setLbVerifyLoading(true);
+    setLbVerifyResult(null);
+    try {
+      const res = await api.get('/admin/leaderboard-weekly-payouts/verify-rewards', {
+        params: { week_start: week, include_entries: true },
+      });
+      setLbVerifyResult(res.data || null);
+      toast.success('Verification loaded');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to verify weekly rewards');
+    } finally {
+      setLbVerifyLoading(false);
     }
   };
 
@@ -14287,6 +14344,247 @@ export default function Admin() {
                     <pre className="text-[9px] font-mono text-zinc-300 whitespace-pre-wrap break-all">{JSON.stringify(lbPointsFixResult, null, 2)}</pre>
                   </div>
                 )}
+                <div className="mt-2 rounded border border-zinc-700/50 bg-zinc-950/60 p-2 space-y-2">
+                  <p className="text-[9px] text-mutedForeground font-heading uppercase">Compare weeks (bug impact vs refunded)</p>
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div className="flex flex-col gap-0.5">
+                      <label className="text-[9px] text-mutedForeground font-heading uppercase">Week A</label>
+                      <select
+                        value={lbWeeksCompareWeekA}
+                        onChange={(e) => setLbWeeksCompareWeekA(e.target.value)}
+                        className="w-36 bg-zinc-900/80 border border-zinc-600/50 rounded px-2 py-1 text-[11px] font-mono text-foreground focus:border-amber-500/50 focus:outline-none"
+                      >
+                        <option value="">Select week</option>
+                        {lbPointsFixWeekOptions.map((w) => (
+                          <option key={`wa-${w}`} value={w}>{w}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex flex-col gap-0.5">
+                      <label className="text-[9px] text-mutedForeground font-heading uppercase">Week B</label>
+                      <select
+                        value={lbWeeksCompareWeekB}
+                        onChange={(e) => setLbWeeksCompareWeekB(e.target.value)}
+                        className="w-36 bg-zinc-900/80 border border-zinc-600/50 rounded px-2 py-1 text-[11px] font-mono text-foreground focus:border-amber-500/50 focus:outline-none"
+                      >
+                        <option value="">Select week</option>
+                        {lbPointsFixWeekOptions.map((w) => (
+                          <option key={`wb-${w}`} value={w}>{w}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <BtnPrimary
+                      type="button"
+                      onClick={compareLbBugWeeks}
+                      disabled={lbWeeksCompareLoading}
+                      className="!bg-amber-700/40 !border-amber-500/50 hover:!bg-amber-600/40"
+                    >
+                      {lbWeeksCompareLoading ? '...' : 'Compare weeks'}
+                    </BtnPrimary>
+                  </div>
+                  {lbWeeksCompareResult && (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-[10px] font-heading">
+                        <div className="rounded border border-zinc-700/50 bg-zinc-900/50 p-2">
+                          <div className="text-mutedForeground uppercase">Week A taken/refunded</div>
+                          <div className="text-foreground">
+                            {(Number(lbWeeksCompareResult?.week_a?.points_taken_from_bug_total || 0)).toLocaleString()} / {(Number(lbWeeksCompareResult?.week_a?.points_refunded_from_bug_total || 0)).toLocaleString()}
+                          </div>
+                          <div className="text-zinc-500">{lbWeeksCompareResult?.week_a?.week_start || '—'}</div>
+                        </div>
+                        <div className="rounded border border-zinc-700/50 bg-zinc-900/50 p-2">
+                          <div className="text-mutedForeground uppercase">Week B taken/refunded</div>
+                          <div className="text-foreground">
+                            {(Number(lbWeeksCompareResult?.week_b?.points_taken_from_bug_total || 0)).toLocaleString()} / {(Number(lbWeeksCompareResult?.week_b?.points_refunded_from_bug_total || 0)).toLocaleString()}
+                          </div>
+                          <div className="text-zinc-500">{lbWeeksCompareResult?.week_b?.week_start || '—'}</div>
+                        </div>
+                        <div className="rounded border border-zinc-700/50 bg-zinc-900/50 p-2">
+                          <div className="text-mutedForeground uppercase">Delta (B - A)</div>
+                          <div className="text-foreground">
+                            Taken {Number(lbWeeksCompareResult?.delta_week_b_minus_week_a?.points_taken_from_bug_total || 0).toLocaleString()}
+                          </div>
+                          <div className="text-foreground">
+                            Refunded {Number(lbWeeksCompareResult?.delta_week_b_minus_week_a?.points_refunded_from_bug_total || 0).toLocaleString()}
+                          </div>
+                          <div className="text-zinc-500">
+                            Outstanding {Number(lbWeeksCompareResult?.delta_week_b_minus_week_a?.points_outstanding_total || 0).toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 xl:grid-cols-2 gap-2">
+                        {[lbWeeksCompareResult?.week_a, lbWeeksCompareResult?.week_b].map((wk, idx) => (
+                          <div key={`wk-${idx}`} className="rounded border border-zinc-700/50 bg-zinc-900/40 p-2">
+                            <p className="text-[9px] text-mutedForeground font-heading uppercase mb-1">
+                              {idx === 0 ? 'Week A' : 'Week B'} users ({Number(wk?.user_count || 0).toLocaleString()})
+                            </p>
+                            <div className="max-h-44 overflow-auto">
+                              <table className="w-full text-[9px] font-mono">
+                                <thead className="sticky top-0 bg-zinc-900/90">
+                                  <tr className="text-left text-mutedForeground">
+                                    <th className="p-1">User</th>
+                                    <th className="p-1 text-right">Taken</th>
+                                    <th className="p-1 text-right">Refunded</th>
+                                    <th className="p-1 text-right">Outstanding</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {(wk?.users || []).map((u) => (
+                                    <tr key={`${wk?.week_start || 'w'}:${u.user_id || u.username || 'u'}`} className="border-t border-zinc-700/30">
+                                      <td className="p-1 text-foreground">{u.username || u.user_id}</td>
+                                      <td className="p-1 text-right text-amber-200">{Number(u.points_taken_from_bug || 0).toLocaleString()}</td>
+                                      <td className="p-1 text-right text-emerald-300">{Number(u.points_refunded_from_bug || 0).toLocaleString()}</td>
+                                      <td className="p-1 text-right text-zinc-300">{Number(u.points_outstanding || 0).toLocaleString()}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+                <div className="mt-2 rounded border border-emerald-500/35 bg-emerald-500/5 p-3 space-y-2">
+                  <p className="text-[10px] font-heading font-bold text-emerald-200/95 uppercase tracking-wider">
+                    Verify weekly rewards
+                  </p>
+                  <p className="text-[9px] text-mutedForeground font-heading leading-relaxed">
+                    Confirms winners and reward totals for a week using payout audit rows. Also shows bug points taken/refunded status per user.
+                  </p>
+                  <div className="flex flex-wrap items-end gap-2">
+                    <div className="flex flex-col gap-0.5">
+                      <label className="text-[9px] text-mutedForeground font-heading uppercase">Week start</label>
+                      <select
+                        value={lbVerifyWeek}
+                        onChange={(e) => setLbVerifyWeek(e.target.value)}
+                        className="w-40 bg-zinc-900/80 border border-zinc-600/50 rounded px-2 py-1 text-[11px] font-mono text-foreground focus:border-emerald-500/50 focus:outline-none"
+                      >
+                        <option value="">Select week</option>
+                        {lbPointsFixWeekOptions.map((w) => (
+                          <option key={`verify-${w}`} value={w}>{w}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <BtnPrimary
+                      type="button"
+                      onClick={verifyWeeklyLeaderboardRewards}
+                      disabled={lbVerifyLoading}
+                      className="!bg-emerald-700/40 !border-emerald-500/50 hover:!bg-emerald-600/40"
+                    >
+                      {lbVerifyLoading ? '...' : 'Verify rewards'}
+                    </BtnPrimary>
+                  </div>
+
+                  {lbVerifyResult && (
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-[10px] font-heading">
+                        <div className="rounded border border-zinc-700/50 bg-zinc-900/50 p-2">
+                          <div className="text-mutedForeground uppercase">Winners</div>
+                          <div className="text-foreground">{Number(lbVerifyResult?.summary?.winners_count || 0).toLocaleString()}</div>
+                        </div>
+                        <div className="rounded border border-zinc-700/50 bg-zinc-900/50 p-2">
+                          <div className="text-mutedForeground uppercase">Expected respect</div>
+                          <div className="text-foreground">{Number(lbVerifyResult?.summary?.respect_expected_total || 0).toLocaleString()}</div>
+                        </div>
+                        <div className="rounded border border-zinc-700/50 bg-zinc-900/50 p-2">
+                          <div className="text-mutedForeground uppercase">Bug points refunded</div>
+                          <div className="text-emerald-300">{Number(lbVerifyResult?.summary?.points_refunded_from_bug_total || 0).toLocaleString()}</div>
+                        </div>
+                        <div className="rounded border border-zinc-700/50 bg-zinc-900/50 p-2">
+                          <div className="text-mutedForeground uppercase">Structure mismatches</div>
+                          <div className={`${Number(lbVerifyResult?.summary?.structure_mismatch_count || 0) > 0 ? 'text-red-300' : 'text-foreground'}`}>
+                            {Number(lbVerifyResult?.summary?.structure_mismatch_count || 0).toLocaleString()}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-2 text-[10px] font-heading">
+                        <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={lbVerifyShowMismatchesOnly}
+                            onChange={(e) => setLbVerifyShowMismatchesOnly(e.target.checked)}
+                            className="rounded border-zinc-600"
+                          />
+                          Show only mismatches / outstanding
+                        </label>
+                        <select
+                          value={lbVerifyCategoryFilter}
+                          onChange={(e) => setLbVerifyCategoryFilter(e.target.value)}
+                          className="bg-zinc-900/60 border border-zinc-700/50 rounded px-2 py-1 text-[10px]"
+                        >
+                          <option value="all">All categories</option>
+                          <option value="kills">Kills</option>
+                          <option value="crimes">Crimes</option>
+                          <option value="gta">GTA</option>
+                          <option value="jail_busts">Jail Busts</option>
+                        </select>
+                        <input
+                          type="text"
+                          value={lbVerifyUserFilter}
+                          onChange={(e) => setLbVerifyUserFilter(e.target.value)}
+                          placeholder="Filter username"
+                          className="min-w-[140px] bg-zinc-900/60 border border-zinc-700/50 rounded px-2 py-1 text-[10px]"
+                        />
+                      </div>
+
+                      <div className="max-h-64 overflow-auto rounded border border-zinc-700/50">
+                        <table className="w-full text-[9px] font-mono">
+                          <thead className="sticky top-0 bg-zinc-900/95">
+                            <tr className="text-left text-mutedForeground">
+                              <th className="p-1">User</th>
+                              <th className="p-1 text-right">Expected respect</th>
+                              <th className="p-1 text-right">Bug taken</th>
+                              <th className="p-1 text-right">Refunded</th>
+                              <th className="p-1 text-right">Outstanding</th>
+                              <th className="p-1">Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(lbVerifyResult?.users || [])
+                              .filter((u) => {
+                                const uname = String(u?.username || '').toLowerCase();
+                                const q = String(lbVerifyUserFilter || '').trim().toLowerCase();
+                                if (q && !uname.includes(q)) return false;
+                                if (lbVerifyCategoryFilter !== 'all') {
+                                  const hasCategory = (u?.entries || []).some((en) => en?.category === lbVerifyCategoryFilter);
+                                  if (!hasCategory) return false;
+                                }
+                                if (!lbVerifyShowMismatchesOnly) return true;
+                                return (
+                                  u?.structure_status !== 'match' ||
+                                  Number(u?.points_outstanding_from_bug || 0) !== 0 ||
+                                  String(u?.bug_refund_status || '') !== 'full'
+                                );
+                              })
+                              .map((u) => (
+                                <tr key={`verify-user-${u.user_id || u.username || 'u'}`} className="border-t border-zinc-700/30">
+                                  <td className="p-1 text-foreground">
+                                    {u.username || u.user_id}
+                                    {!!u.entries?.length && (
+                                      <span className="ml-1 text-zinc-500">({u.entries.map((en) => `${en.category}:${en.rank}`).join(', ')})</span>
+                                    )}
+                                  </td>
+                                  <td className="p-1 text-right text-foreground">{Number(u.respect_expected || 0).toLocaleString()}</td>
+                                  <td className="p-1 text-right text-amber-200">{Number(u.points_taken_from_bug || 0).toLocaleString()}</td>
+                                  <td className="p-1 text-right text-emerald-300">{Number(u.points_refunded_from_bug || 0).toLocaleString()}</td>
+                                  <td className={`p-1 text-right ${Number(u.points_outstanding_from_bug || 0) === 0 ? 'text-zinc-300' : 'text-red-300'}`}>
+                                    {Number(u.points_outstanding_from_bug || 0).toLocaleString()}
+                                  </td>
+                                  <td className="p-1">
+                                    <span className={`${u.structure_status === 'match' ? 'text-emerald-300' : 'text-red-300'}`}>{u.structure_status}</span>
+                                    <span className="text-zinc-500"> · {u.bug_refund_status || 'none'}</span>
+                                  </td>
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               {weeklyLeaderboardPayouts.entries?.length > 0 && (

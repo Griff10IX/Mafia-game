@@ -11542,6 +11542,324 @@ def register(router):
         out["users_updated"] = updated_users
         return out
 
+    @router.get("/admin/leaderboard-weekly-payouts/compare-weeks")
+    async def admin_compare_weekly_lb_bug_weeks(
+        week_a: str = Query(..., description="First week_start (YYYY-MM-DD)"),
+        week_b: str = Query(..., description="Second week_start (YYYY-MM-DD)"),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Compare two weeks for leaderboard points-bug impact and refunds."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin only")
+
+        wa = (week_a or "").strip()
+        wb = (week_b or "").strip()
+        if not wa or not wb:
+            raise HTTPException(status_code=400, detail="Both week_a and week_b are required")
+
+        async def _get_refunded_points_by_user(week_start: str) -> Dict[str, int]:
+            pipeline = [
+                {
+                    "$match": {
+                        "event_type": "leaderboard_payout_points_correction",
+                        "meta.week_start": week_start,
+                    }
+                },
+                {
+                    "$group": {
+                        "_id": "$user_id",
+                        "points_refunded": {
+                            "$sum": {
+                                "$cond": [
+                                    {"$gt": ["$points", 0]},
+                                    "$points",
+                                    0,
+                                ]
+                            }
+                        },
+                    }
+                },
+            ]
+            rows = await db.point_ledger_events.aggregate(pipeline).to_list(5000)
+            out: Dict[str, int] = {}
+            for row in rows:
+                uid = str(row.get("_id") or "").strip()
+                if not uid:
+                    continue
+                out[uid] = int(row.get("points_refunded") or 0)
+            return out
+
+        async def _build_week_summary(week_start: str) -> Dict[str, Any]:
+            taken_rows = await leaderboard_module.aggregate_weekly_payout_refund_amounts_by_user(db, week_start)
+            refunded_map = await _get_refunded_points_by_user(week_start)
+
+            taken_map: Dict[str, int] = {}
+            all_ids: Set[str] = set()
+            for row in taken_rows:
+                uid = str(row.get("user_id") or "").strip()
+                if not uid:
+                    continue
+                all_ids.add(uid)
+                taken_map[uid] = int(row.get("refund_points") or 0)
+            all_ids.update(refunded_map.keys())
+
+            users_map: Dict[str, str] = {}
+            if all_ids:
+                users = await db.users.find(
+                    {"id": {"$in": list(all_ids)}},
+                    {"_id": 0, "id": 1, "username": 1},
+                ).to_list(len(all_ids) + 1)
+                users_map = {str(u.get("id") or ""): (u.get("username") or "") for u in users}
+
+            user_rows: List[Dict[str, Any]] = []
+            for uid in sorted(all_ids):
+                taken_amt = int(taken_map.get(uid) or 0)
+                refunded_amt = int(refunded_map.get(uid) or 0)
+                if taken_amt <= 0 and refunded_amt <= 0:
+                    continue
+                user_rows.append(
+                    {
+                        "user_id": uid,
+                        "username": users_map.get(uid) or "",
+                        "points_taken_from_bug": taken_amt,
+                        "points_refunded_from_bug": refunded_amt,
+                        "points_outstanding": taken_amt - refunded_amt,
+                    }
+                )
+            user_rows.sort(
+                key=lambda x: (
+                    -(int(x.get("points_taken_from_bug") or 0)),
+                    -(int(x.get("points_refunded_from_bug") or 0)),
+                    str(x.get("username") or ""),
+                )
+            )
+
+            total_taken = sum(int(r.get("points_taken_from_bug") or 0) for r in user_rows)
+            total_refunded = sum(int(r.get("points_refunded_from_bug") or 0) for r in user_rows)
+            return {
+                "week_start": week_start,
+                "user_count": len(user_rows),
+                "points_taken_from_bug_total": total_taken,
+                "points_refunded_from_bug_total": total_refunded,
+                "points_outstanding_total": total_taken - total_refunded,
+                "users": user_rows,
+            }
+
+        summary_a, summary_b = await asyncio.gather(
+            _build_week_summary(wa),
+            _build_week_summary(wb),
+        )
+        return {
+            "week_a": summary_a,
+            "week_b": summary_b,
+            "delta_week_b_minus_week_a": {
+                "points_taken_from_bug_total": int(summary_b["points_taken_from_bug_total"]) - int(summary_a["points_taken_from_bug_total"]),
+                "points_refunded_from_bug_total": int(summary_b["points_refunded_from_bug_total"]) - int(summary_a["points_refunded_from_bug_total"]),
+                "points_outstanding_total": int(summary_b["points_outstanding_total"]) - int(summary_a["points_outstanding_total"]),
+            },
+        }
+
+    @router.get("/admin/leaderboard-weekly-payouts/verify-rewards")
+    async def admin_verify_weekly_lb_rewards(
+        week_start: str = Query(..., description="week_start (YYYY-MM-DD)"),
+        include_entries: bool = Query(True, description="Include category/rank entry list"),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Verify weekly leaderboard rewards using payout audit + correction ledger."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin only")
+
+        ws = (week_start or "").strip()
+        if not ws:
+            raise HTTPException(status_code=400, detail="week_start is required")
+
+        # Configured rewards (same source as weekly payout runner).
+        cfg = await db.game_config.find_one(
+            {"id": leaderboard_module.LEADERBOARD_PAYOUT_CONFIG_ID},
+            {
+                "_id": 0,
+                "top1_points": 1,
+                "top2_points": 1,
+                "top3_points": 1,
+                "top4_10_points": 1,
+            },
+        ) or {}
+        top1 = int(cfg.get("top1_points", leaderboard_module.DEFAULT_TOP1_POINTS) or leaderboard_module.DEFAULT_TOP1_POINTS)
+        top2 = int(cfg.get("top2_points", leaderboard_module.DEFAULT_TOP2_POINTS) or leaderboard_module.DEFAULT_TOP2_POINTS)
+        top3 = int(cfg.get("top3_points", leaderboard_module.DEFAULT_TOP3_POINTS) or leaderboard_module.DEFAULT_TOP3_POINTS)
+        top4_10 = int(cfg.get("top4_10_points", leaderboard_module.DEFAULT_TOP4_10_POINTS) or leaderboard_module.DEFAULT_TOP4_10_POINTS)
+
+        def _expected_for_rank(rank: int) -> int:
+            r = int(rank or 0)
+            if r <= 0:
+                return 0
+            if r == 1:
+                return top1
+            if r == 2:
+                return top2
+            if r == 3:
+                return top3
+            if 4 <= r <= 10:
+                return top4_10
+            return 0
+
+        payout_entries = await db.leaderboard_weekly_payouts.find(
+            {"week_start": ws},
+            {"_id": 0},
+        ).sort([("category", 1), ("rank", 1), ("user_id", 1)]).to_list(2000)
+
+        if not payout_entries:
+            return {
+                "week_start": ws,
+                "summary": {
+                    "winners_count": 0,
+                    "entries_count": 0,
+                    "respect_expected_total": 0,
+                    "points_taken_from_bug_total": 0,
+                    "points_refunded_from_bug_total": 0,
+                    "points_outstanding_total": 0,
+                    "structure_mismatch_count": 0,
+                },
+                "users": [],
+                "entries": [],
+            }
+
+        by_user: Dict[str, Dict[str, Any]] = {}
+        structure_mismatch_count = 0
+        for row in payout_entries:
+            uid = str(row.get("user_id") or "").strip()
+            if not uid:
+                continue
+            if uid not in by_user:
+                by_user[uid] = {
+                    "user_id": uid,
+                    "username": row.get("username") or "",
+                    "respect_expected": 0,
+                    "points_taken_from_bug": 0,
+                    "points_refunded_from_bug": 0,
+                    "points_outstanding_from_bug": 0,
+                    "user_week_total_points_reported": 0,
+                    "structure_status": "match",
+                    "structure_notes": [],
+                    "entries": [],
+                }
+
+            rank = int(row.get("rank") or 0)
+            points_awarded = int(row.get("points_awarded") or 0)
+            expected_for_rank = _expected_for_rank(rank)
+            if points_awarded != expected_for_rank:
+                structure_mismatch_count += 1
+                by_user[uid]["structure_status"] = "mismatch"
+                by_user[uid]["structure_notes"].append(
+                    f"{row.get('category') or '?'} rank {rank}: expected {expected_for_rank}, recorded {points_awarded}"
+                )
+
+            by_user[uid]["respect_expected"] += points_awarded
+            by_user[uid]["points_taken_from_bug"] += points_awarded
+            by_user[uid]["user_week_total_points_reported"] = int(
+                row.get("user_week_total_points") or by_user[uid]["user_week_total_points_reported"] or 0
+            )
+            by_user[uid]["entries"].append(
+                {
+                    "category": row.get("category") or "",
+                    "rank": rank,
+                    "event_value": int(row.get("event_value") or 0),
+                    "points_awarded": points_awarded,
+                    "expected_points_for_rank": expected_for_rank,
+                    "paid_at": row.get("paid_at"),
+                }
+            )
+
+        # Validate per-user total from row-level entries against stored `user_week_total_points`.
+        for u in by_user.values():
+            calc_total = sum(int(e.get("points_awarded") or 0) for e in u.get("entries") or [])
+            reported_total = int(u.get("user_week_total_points_reported") or 0)
+            if calc_total != reported_total:
+                u["structure_status"] = "mismatch"
+                u["structure_notes"].append(
+                    f"user_week_total_points mismatch: expected sum {calc_total}, recorded {reported_total}"
+                )
+                structure_mismatch_count += 1
+
+        refund_rows = await db.point_ledger_events.aggregate(
+            [
+                {
+                    "$match": {
+                        "event_type": "leaderboard_payout_points_correction",
+                        "meta.week_start": ws,
+                    }
+                },
+                {
+                    "$group": {
+                        "_id": "$user_id",
+                        "points_refunded": {
+                            "$sum": {
+                                "$cond": [
+                                    {"$gt": ["$points", 0]},
+                                    "$points",
+                                    0,
+                                ]
+                            }
+                        },
+                    }
+                },
+            ]
+        ).to_list(5000)
+        refunds_by_user = {str(r.get("_id") or ""): int(r.get("points_refunded") or 0) for r in refund_rows}
+
+        for uid, u in by_user.items():
+            refunded = int(refunds_by_user.get(uid) or 0)
+            taken = int(u.get("points_taken_from_bug") or 0)
+            outstanding = taken - refunded
+            u["points_refunded_from_bug"] = refunded
+            u["points_outstanding_from_bug"] = outstanding
+            if refunded == 0:
+                refund_status = "none"
+            elif refunded < taken:
+                refund_status = "partial"
+            elif refunded == taken:
+                refund_status = "full"
+            else:
+                refund_status = "over"
+            u["bug_refund_status"] = refund_status
+            if include_entries is not True:
+                u.pop("entries", None)
+
+        user_rows = list(by_user.values())
+        user_rows.sort(
+            key=lambda r: (
+                str(r.get("structure_status") or ""),
+                str(r.get("bug_refund_status") or ""),
+                -int(r.get("respect_expected") or 0),
+                str(r.get("username") or ""),
+            )
+        )
+
+        respect_expected_total = sum(int(r.get("respect_expected") or 0) for r in user_rows)
+        points_refunded_total = sum(int(r.get("points_refunded_from_bug") or 0) for r in user_rows)
+        points_taken_total = sum(int(r.get("points_taken_from_bug") or 0) for r in user_rows)
+
+        return {
+            "week_start": ws,
+            "reward_config": {
+                "top1_points": top1,
+                "top2_points": top2,
+                "top3_points": top3,
+                "top4_10_points": top4_10,
+            },
+            "summary": {
+                "winners_count": len(user_rows),
+                "entries_count": len(payout_entries),
+                "respect_expected_total": respect_expected_total,
+                "points_taken_from_bug_total": points_taken_total,
+                "points_refunded_from_bug_total": points_refunded_total,
+                "points_outstanding_total": points_taken_total - points_refunded_total,
+                "structure_mismatch_count": structure_mismatch_count,
+            },
+            "users": user_rows,
+            "entries": payout_entries if include_entries else [],
+        }
+
     # ─────────────────────────────────────────────────────────────────────────────
     # Minigame Play Payouts Log (Admin Only)
     # ─────────────────────────────────────────────────────────────────────────────

@@ -10,7 +10,7 @@ from typing import Any, Dict, Optional, List
 from fastapi import Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict
 
-from server import db, get_current_user, ADMIN_EMAILS, _get_staff_user_ids, _is_admin
+from server import db, get_current_user, ADMIN_EMAILS, _get_staff_user_ids, _is_admin, send_notification
 from utils.minigame_captcha_gate import require_turnstile_for_minigame_start
 from utils.minigame_run_session import start_minigame_run, get_plays_left, GAME_HOURLY_LIMITS
 
@@ -421,6 +421,28 @@ async def run_minigame_weekly_payout(database, test_run: bool = False):
 
         if inc:
             await database.users.update_one({"id": user_id}, {"$inc": inc})
+            reward_parts = []
+            if cash > 0:
+                reward_parts.append(f"${cash:,} cash")
+            if respect > 0:
+                reward_parts.append(f"{respect:,} respect")
+            if loot_pieces > 0:
+                reward_parts.append(f"{loot_pieces:,} loot pieces")
+            if bullets > 0:
+                reward_parts.append(f"{bullets:,} bullets")
+            reward_text = ", ".join(reward_parts) if reward_parts else "a reward"
+            try:
+                await send_notification(
+                    user_id,
+                    "Mini Games Weekly Reward",
+                    (
+                        f"You placed #{rank} on last week's mini games leaderboard and received {reward_text}."
+                    ),
+                    "minigame_weekly_payout",
+                    category="economic",
+                )
+            except Exception:
+                log.exception("Mini games weekly payout: failed to send inbox notification for user_id=%s", user_id)
 
         payout_log.append({
             "rank": rank,
