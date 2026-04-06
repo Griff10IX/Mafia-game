@@ -30,6 +30,7 @@ from server import (
     assert_casino_buy_back_within_points_balance,
     _ownership_display_profit,
     bump_user_biggest_casino_payout,
+    notify_casino_seizure,
 )
 
 # ----- Constants -----
@@ -754,6 +755,18 @@ def register(router):
                 buy_back_offer = {"offer_id": offer_id, "points_offered": points_offered, "amount_shortfall": shortfall, "owner_paid": actual_payout, "expires_at": expires_at}
                 cooldown_until = (datetime.now(timezone.utc) + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()
                 await db.users.update_one({"id": owner_id}, {"$set": {"slots_cooldown_until": cooldown_until}})
+            await notify_casino_seizure(
+                former_owner_id=owner_id,
+                former_owner_username=owner_username,
+                winner_user_id=current_user.get("id") or "",
+                winner_username=current_user.get("username") or "?",
+                venue_label="slots",
+                location_label=stored_state or state,
+                full_payout_to_winner=payout_full,
+                actual_payout_to_winner=actual_payout,
+                shortfall=shortfall,
+                buy_back_points=points_offered,
+            )
         else:
             edge = int(bet * SLOTS_HOUSE_EDGE)
             if head_family_id and edge > 0:

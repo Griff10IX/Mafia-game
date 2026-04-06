@@ -36,6 +36,7 @@ from server import (
     assert_casino_buy_back_within_points_balance,
     _ownership_display_profit,
     bump_user_biggest_casino_payout,
+    notify_casino_seizure,
     send_notification,
 )
 from utils.quicktrade_casino_cleanup import cancel_quicktrade_casino_listings_by_locations
@@ -308,6 +309,18 @@ def register(router):
             # Track casino seizure stats
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"casinos_seized": 1}})
             await db.users.update_one({"id": owner_id}, {"$inc": {"casinos_lost": 1}})
+            await notify_casino_seizure(
+                former_owner_id=owner_id,
+                former_owner_username=owner_username,
+                winner_user_id=current_user.get("id") or "",
+                winner_username=current_user.get("username") or "?",
+                venue_label="dice table",
+                location_label=city,
+                full_payout_to_winner=payout_full,
+                actual_payout_to_winner=actual_payout,
+                shortfall=shortfall,
+                buy_back_points=points_offered,
+            )
             if points_offered <= 0:
                 if head_family_id:
                     if edge_lose > 0:

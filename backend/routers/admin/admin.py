@@ -5881,15 +5881,21 @@ def register(router):
                 if created_dt is None or created_dt < since_dt:
                     continue
                 details = row.get("details") or {}
-                stake = int(details.get("stake") or details.get("bet") or 0)
-                payout = int(details.get("payout") or 0)
+                # Standard games use stake/bet + payout; MP blackjack/poker use buy_in + winnings.
+                stake = int(details.get("stake") or details.get("bet") or details.get("buy_in") or 0)
+                payout = int(details.get("payout") or details.get("winnings") or 0)
                 merged.append({
                     "source": "gambling",
                     "category": "casino",
                     "user_id": row.get("user_id"),
                     "username": row.get("username"),
                     "action": row.get("game_type"),
-                    "details": {"stake": stake, "payout": payout, "win": details.get("win"), **{k: v for k, v in details.items() if k not in ("stake", "bet", "payout", "win")}},
+                    "details": {
+                        "stake": stake,
+                        "payout": payout,
+                        "win": details.get("win"),
+                        **{k: v for k, v in details.items() if k not in ("stake", "bet", "payout", "win", "buy_in", "winnings")},
+                    },
                     "amount": max(stake, payout),
                     "created_at": _to_iso(row.get("created_at")),
                 })

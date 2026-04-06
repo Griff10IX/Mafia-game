@@ -36,6 +36,7 @@ from server import (
     bump_user_biggest_casino_payout,
     get_wealth_rank,
     get_wealth_rank_range,
+    notify_casino_seizure,
     send_notification,
 )
 from routers.casinos.roulette import RouletteClaimRequest, RouletteSetMaxBetRequest, RouletteSendToUserRequest
@@ -820,6 +821,18 @@ def register(router):
                     # Track casino won/lost stats
                     await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"casinos_seized": 1}})
                     await db.users.update_one({"id": owner_id}, {"$inc": {"casinos_lost": 1}})
+                    await notify_casino_seizure(
+                        former_owner_id=owner_id,
+                        former_owner_username=owner_username,
+                        winner_user_id=current_user.get("id") or "",
+                        winner_username=current_user.get("username") or "?",
+                        venue_label="video poker",
+                        location_label=city,
+                        full_payout_to_winner=payout_full_vp,
+                        actual_payout_to_winner=actual_payout,
+                        shortfall=shortfall,
+                        buy_back_points=points_offered,
+                    )
                     if points_offered <= 0:
                         head_family_id = await get_head_family_id_for_state(city) if city else None
                         if head_family_id:

@@ -35,6 +35,7 @@ from server import (
     bump_user_biggest_casino_payout,
     get_wealth_rank,
     get_wealth_rank_range,
+    notify_casino_seizure,
     send_notification,
 )
 from routers.casinos.roulette import RouletteClaimRequest, RouletteSetMaxBetRequest, RouletteSendToUserRequest
@@ -280,6 +281,18 @@ async def _blackjack_auto_finish_game(game: dict, current_user: dict):
                 if get_rank_info(current_user.get("rank_points", 0))[0] < CAPO_RANK_ID:
                     bj_owner_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
                 await db.blackjack_ownership.update_one({"city": stored_city_bj or bj_city}, {"$set": bj_owner_set})
+                await notify_casino_seizure(
+                    former_owner_id=owner_id,
+                    former_owner_username=(owner or {}).get("username"),
+                    winner_user_id=current_user.get("id") or "",
+                    winner_username=current_user.get("username") or "?",
+                    venue_label="blackjack",
+                    location_label=bj_city,
+                    full_payout_to_winner=payout,
+                    actual_payout_to_winner=bet + actual_owner_pay,
+                    shortfall=shortfall,
+                    buy_back_points=buy_back_reward,
+                )
                 if buy_back_reward > 0:
                     owner_username = (owner or {}).get("username")
                     expires_at = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()
@@ -739,8 +752,9 @@ def register(router):
             buy_back_offer = None
             ownership_transferred = False
             if owner_id:
-                owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1})
+                owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1, "username": 1})
                 owner_money = int(((owner or {}).get("money") or 0) or 0)
+                owner_username_bj = (owner or {}).get("username")
                 actual_owner_pay = min(owner_pay, owner_money)
                 actual_payout = bet + actual_owner_pay
                 shortfall = owner_pay - actual_owner_pay
@@ -758,6 +772,18 @@ def register(router):
                     # Track casino seizure stats
                     await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"casinos_seized": 1}})
                     await db.users.update_one({"id": owner_id}, {"$inc": {"casinos_lost": 1}})
+                    await notify_casino_seizure(
+                        former_owner_id=owner_id,
+                        former_owner_username=owner_username_bj,
+                        winner_user_id=current_user.get("id") or "",
+                        winner_username=current_user.get("username") or "?",
+                        venue_label="blackjack",
+                        location_label=city,
+                        full_payout_to_winner=payout_full,
+                        actual_payout_to_winner=actual_payout,
+                        shortfall=shortfall,
+                        buy_back_points=buy_back_reward,
+                    )
                     if buy_back_reward <= 0:
                         await db.blackjack_ownership.update_one(
                             {"city": stored_city or city},
@@ -1008,10 +1034,12 @@ def register(router):
         ownership_transferred = False
         if payout > 0:
             if owner_id and result in ("win", "dealer_bust"):
-                owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1})
+                owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "money": 1, "username": 1})
                 owner_money = int(((owner or {}).get("money") or 0) or 0)
+                owner_username_bj2 = (owner or {}).get("username")
                 actual_owner_pay = min(bet, owner_money)
                 shortfall = bet - actual_owner_pay
+                bj_full_payout = bet * 2
                 await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": bet + actual_owner_pay}})
                 await db.users.update_one({"id": owner_id}, {"$inc": {"money": -actual_owner_pay, "total_casino_payouts": actual_owner_pay}})
                 await bump_user_biggest_casino_payout(owner_id, actual_owner_pay)
@@ -1028,6 +1056,18 @@ def register(router):
                     # Track casino seizure stats
                     await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"casinos_seized": 1}})
                     await db.users.update_one({"id": owner_id}, {"$inc": {"casinos_lost": 1}})
+                    await notify_casino_seizure(
+                        former_owner_id=owner_id,
+                        former_owner_username=owner_username_bj2,
+                        winner_user_id=current_user.get("id") or "",
+                        winner_username=current_user.get("username") or "?",
+                        venue_label="blackjack",
+                        location_label=bj_city,
+                        full_payout_to_winner=bj_full_payout,
+                        actual_payout_to_winner=bet + actual_owner_pay,
+                        shortfall=shortfall,
+                        buy_back_points=buy_back_reward,
+                    )
                     if buy_back_reward <= 0:
                         await db.blackjack_ownership.update_one(
                             {"city": stored_city_bj or bj_city},

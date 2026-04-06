@@ -1266,6 +1266,71 @@ async def send_notification(user_id: str, title: str, message: str, notification
     return notification
 
 
+def _fmt_money_casino_seizure(n: int) -> str:
+    return f"${int(n):,}"
+
+
+async def notify_casino_seizure(
+    *,
+    former_owner_id: str,
+    former_owner_username: Optional[str],
+    winner_user_id: str,
+    winner_username: str,
+    venue_label: str,
+    location_label: str,
+    full_payout_to_winner: int,
+    actual_payout_to_winner: int,
+    shortfall: Optional[int] = None,
+    buy_back_points: int = 0,
+) -> None:
+    """
+    Inbox both parties when a casino changes hands because the owner could not cover the full win.
+    Inbox uses whitespace-pre-wrap; newlines render in the client.
+    """
+    oid = (former_owner_id or "").strip()
+    wid = (winner_user_id or "").strip()
+    v = (venue_label or "casino").strip()
+    loc = (location_label or "").strip() or "unknown"
+    win_name = (winner_username or "").strip() or "A player"
+    prev_name = (former_owner_username or "").strip() or "the previous owner"
+    full_amt = max(0, int(full_payout_to_winner))
+    paid_amt = max(0, int(actual_payout_to_winner))
+    sf = int(shortfall) if shortfall is not None else max(0, full_amt - paid_amt)
+    bb = max(0, int(buy_back_points or 0))
+
+    loser_body = (
+        f"You no longer own the {v} in {loc}.\n\n"
+        f"{win_name} won a payout your bankroll could not fully cover.\n\n"
+        f"• Full payout owed on that result: {_fmt_money_casino_seizure(full_amt)}\n"
+        f"• Amount the winner actually received: {_fmt_money_casino_seizure(paid_amt)}\n"
+        f"• Shortfall (uncovered): {_fmt_money_casino_seizure(sf)}\n\n"
+        f"Ownership has transferred to {win_name}."
+    )
+    if bb > 0:
+        loser_body += (
+            f"\n\nYou had set a buy-back reward of {bb:,} points. "
+            "The new owner may get a timed inbox offer to sell the casino back to you."
+        )
+
+    winner_body = (
+        f"You now own the {v} in {loc}.\n\n"
+        f"You seized it from {prev_name} by winning more than their bankroll could pay.\n\n"
+        f"• Full payout owed on that win: {_fmt_money_casino_seizure(full_amt)}\n"
+        f"• You were paid: {_fmt_money_casino_seizure(paid_amt)}\n"
+        f"• Uncovered shortfall (triggered the seizure): {_fmt_money_casino_seizure(sf)}\n\n"
+        "Fund the bankroll — the next big win you cannot cover can cost you the property."
+    )
+    if bb > 0:
+        winner_body += (
+            f"\n\n{prev_name} may try to buy it back with up to {bb:,} points — watch for a timed inbox offer."
+        )
+
+    if oid:
+        await send_notification(oid, "Casino seized — you lost ownership", loser_body, "system")
+    if wid and wid != oid:
+        await send_notification(wid, "Casino seized — you now own it", winner_body, "system")
+
+
 async def log_respect_earned(user_id: str, amount: int, source: str = ""):
     """Log respect points earned for weekly leaderboard aggregation. Call after awarding respect_points (positive amount only)."""
     if not amount or amount <= 0:
@@ -1964,8 +2029,13 @@ async def log_gambling(user_id: str, username: str, game_type: str, details: dic
             "details": details,
             "created_at": now,
         })
-        stake = float((details or {}).get("stake") or (details or {}).get("bet") or 0)
-        payout = float((details or {}).get("payout") or 0)
+        stake = float(
+            (details or {}).get("stake")
+            or (details or {}).get("bet")
+            or (details or {}).get("buy_in")
+            or 0
+        )
+        payout = float((details or {}).get("payout") or (details or {}).get("winnings") or 0)
         profit = payout - stake
         await log_analytics_event(
             db,
