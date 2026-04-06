@@ -35,6 +35,7 @@ from server import (
     _ownership_display_profit,
     bump_user_biggest_casino_payout,
 )
+from routers.money.quicktrade import cancel_quicktrade_casino_listings_by_locations
 
 # ----- Constants -----
 DICE_SIDES_MIN = 2
@@ -294,6 +295,7 @@ def register(router):
             if get_rank_info(current_user.get("rank_points", 0))[0] < CAPO_RANK_ID:
                 dice_owner_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
             await db.dice_ownership.update_one({"city": db_city}, {"$set": dice_owner_set})
+            await cancel_quicktrade_casino_listings_by_locations("casino_dice", db_city, city)
             # Track casino seizure stats
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"casinos_seized": 1}})
             await db.users.update_one({"id": owner_id}, {"$inc": {"casinos_lost": 1}})
@@ -411,6 +413,7 @@ def register(router):
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"points": -pts_cost}})
             await log_points_event(db, user_id=current_user.get("id") or "", points=-pts_cost, event_type="casino_dice", event_ref=f"claim:{city}", meta={"action": "claim_cost", "city": city})
         await maybe_revoke_civilian_protection(db, current_user.get("id") or "", "casino_claim")
+        await cancel_quicktrade_casino_listings_by_locations("casino_dice", db_city, city)
         return {"message": f"You now own the dice table in {city}!"}
 
     @router.post("/casino/dice/relinquish")
@@ -424,6 +427,7 @@ def register(router):
         if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this table")
         await db.dice_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": None, "owner_username": None}})
+        await cancel_quicktrade_casino_listings_by_locations("casino_dice", stored_city or city, city)
         return {"message": "You have relinquished the dice table."}
 
     @router.post("/casino/dice/set-max-bet")
@@ -531,6 +535,8 @@ def register(router):
         await log_points_event(db, user_id=current_user.get("id") or "", points=points_offered, event_type="casino_dice", event_ref=f"buyback:{request.offer_id}", meta={"action": "buyback_credit", "city": city, "offer_id": request.offer_id})
         # Reset max_bet to 0 when ownership returns - owner must set it again
         await db.dice_ownership.update_one({"city": city}, {"$set": {"owner_id": from_owner_id, "owner_username": from_user.get("username"), "max_bet": 0}})
+        cnorm = _normalize_city_for_dice(str(city or "").strip()) if city else ""
+        await cancel_quicktrade_casino_listings_by_locations("casino_dice", city, cnorm or None)
         _invalidate_ownership_cache(current_user.get("id") or "")
         _invalidate_ownership_cache(from_owner_id)
         await resolve_gambling_log_buy_back(request.offer_id, "accepted", points_offered)
@@ -566,6 +572,7 @@ def register(router):
         if get_rank_info(target.get("rank_points", 0))[0] < CAPO_RANK_ID:
             send_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
         await db.dice_ownership.update_one({"city": stored_city or city}, {"$set": send_set})
+        await cancel_quicktrade_casino_listings_by_locations("casino_dice", stored_city or city, city)
         _invalidate_ownership_cache(target.get("id") or "")
         await maybe_revoke_civilian_protection(db, target.get("id") or "", "received_casino_transfer")
         return {"message": "Ownership transferred."}

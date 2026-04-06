@@ -35,6 +35,7 @@ from server import (
 )
 from routers.casinos.roulette import RouletteClaimRequest, RouletteSetMaxBetRequest, RouletteSendToUserRequest
 from routers.casinos.dice import DiceSellOnTradeRequest
+from routers.money.quicktrade import cancel_quicktrade_casino_listings_by_locations
 
 # ----- Constants -----
 BLACKJACK_MAX_BET = 50_000_000
@@ -477,6 +478,7 @@ def register(router):
             raise HTTPException(status_code=400, detail="This table already has an owner")
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -claim_cost}})
         await maybe_revoke_civilian_protection(db, current_user.get("id") or "", "casino_claim")
+        await cancel_quicktrade_casino_listings_by_locations("casino_blackjack", stored_city or city, city)
         return {"message": f"You now own the blackjack table in {city}!"}
 
     @router.post("/casino/blackjack/relinquish")
@@ -489,6 +491,7 @@ def register(router):
         if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this table")
         await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": None, "owner_username": None}})
+        await cancel_quicktrade_casino_listings_by_locations("casino_blackjack", stored_city or city, city)
         return {"message": "Ownership relinquished."}
 
     @router.post("/casino/blackjack/reset-profit")
@@ -568,6 +571,8 @@ def register(router):
         from_username = from_user.get("username") if from_user else None
         # Reset max_bet to 0 when ownership returns - owner must set it again
         await db.blackjack_ownership.update_one({"city": city}, {"$set": {"owner_id": from_owner_id, "owner_username": from_username, "max_bet": 0}})
+        cnorm = _normalize_city_for_blackjack(str(city or "").strip()) if city else ""
+        await cancel_quicktrade_casino_listings_by_locations("casino_blackjack", city, cnorm or None)
         _invalidate_ownership_cache(current_user.get("id") or "")
         _invalidate_ownership_cache(from_owner_id)
         await resolve_gambling_log_buy_back(request.offer_id, "accepted", points_offered)
@@ -601,6 +606,7 @@ def register(router):
         if get_rank_info(target.get("rank_points", 0))[0] < CAPO_RANK_ID:
             send_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
         await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$set": send_set})
+        await cancel_quicktrade_casino_listings_by_locations("casino_blackjack", stored_city or city, city)
         _invalidate_ownership_cache(target.get("id") or "")
         await maybe_revoke_civilian_protection(db, target.get("id") or "", "received_casino_transfer")
         return {"message": "Ownership transferred."}
@@ -717,6 +723,7 @@ def register(router):
                     if get_rank_info(current_user.get("rank_points", 0))[0] < CAPO_RANK_ID:
                         bj_owner_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
                     await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$set": bj_owner_set})
+                    await cancel_quicktrade_casino_listings_by_locations("casino_blackjack", stored_city or city, city)
                     # Track casino seizure stats
                     await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"casinos_seized": 1}})
                     await db.users.update_one({"id": owner_id}, {"$inc": {"casinos_lost": 1}})
@@ -985,6 +992,8 @@ def register(router):
                     if get_rank_info(current_user.get("rank_points", 0))[0] < CAPO_RANK_ID:
                         bj_owner_set2["below_capo_acquired_at"] = datetime.now(timezone.utc)
                     await db.blackjack_ownership.update_one({"city": stored_city_bj or bj_city}, {"$set": bj_owner_set2})
+                    bj_norm = _normalize_city_for_blackjack(str(bj_city or "").strip()) if bj_city else ""
+                    await cancel_quicktrade_casino_listings_by_locations("casino_blackjack", stored_city_bj or bj_city, bj_norm or None)
                     # Track casino seizure stats
                     await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"casinos_seized": 1}})
                     await db.users.update_one({"id": owner_id}, {"$inc": {"casinos_lost": 1}})
