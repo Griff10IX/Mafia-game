@@ -177,6 +177,7 @@ class AdminSettingsUpdate(BaseModel):
     login_turnstile_enabled: Optional[bool] = None  # Turnstile on /auth/login; reuses site key above
     spotify_feature_enabled: Optional[bool] = None
     stock_market_max_points: Optional[int] = None
+    sports_bet_max_total_open_stake: Optional[int] = None  # Max $ in open sports bets per user (default 25M)
     landing_banner_enabled: Optional[bool] = None
     landing_banner_message: Optional[str] = None
     login_lock_from: Optional[str] = None  # ISO datetime - start blocking logins from this date
@@ -5143,6 +5144,13 @@ def register(router):
             stock_market_max_points = max(1, int(stock_market_max_points))
         except (TypeError, ValueError):
             stock_market_max_points = 3000
+        sb_cap_doc = await db.game_settings.find_one({"key": "sports_bet_max_total_open_stake"}, {"_id": 0, "value": 1})
+        sports_bet_max_total_open_stake = 25_000_000
+        if sb_cap_doc and sb_cap_doc.get("value") is not None:
+            try:
+                sports_bet_max_total_open_stake = max(1, min(int(sb_cap_doc["value"]), 10**15))
+            except (TypeError, ValueError):
+                sports_bet_max_total_open_stake = 25_000_000
         banner_doc = await db.game_settings.find_one({"key": "landing_banner_enabled"}, {"_id": 0, "value": 1})
         landing_banner_enabled = bool(banner_doc.get("value") if banner_doc else False)
         msg_doc = await db.game_settings.find_one({"key": "landing_banner_message"}, {"_id": 0, "value": 1})
@@ -5192,6 +5200,7 @@ def register(router):
             "login_turnstile_enabled": login_turnstile_enabled,
             "spotify_feature_enabled": spotify_feature_enabled,
             "stock_market_max_points": stock_market_max_points,
+            "sports_bet_max_total_open_stake": sports_bet_max_total_open_stake,
             "landing_banner_enabled": landing_banner_enabled,
             "landing_banner_message": landing_banner_message,
             "login_lock_from": login_lock_from,
@@ -5301,6 +5310,13 @@ def register(router):
                 {"$set": {"value": val}},
                 upsert=True,
             )
+        if body.sports_bet_max_total_open_stake is not None:
+            sb_val = max(1, min(int(body.sports_bet_max_total_open_stake), 10**15))
+            await db.game_settings.update_one(
+                {"key": "sports_bet_max_total_open_stake"},
+                {"$set": {"value": sb_val}},
+                upsert=True,
+            )
         if body.landing_banner_enabled is not None:
             await db.game_settings.update_one(
                 {"key": "landing_banner_enabled"},
@@ -5401,6 +5417,13 @@ def register(router):
         sm_doc = await db.game_settings.find_one({"key": "stock_market_max_points"}, {"_id": 0, "value": 1})
         stock_market_max_points = int(sm_doc["value"]) if sm_doc and sm_doc.get("value") is not None else 3000
         stock_market_max_points = max(1, stock_market_max_points)
+        sb_cap_doc = await db.game_settings.find_one({"key": "sports_bet_max_total_open_stake"}, {"_id": 0, "value": 1})
+        sports_bet_max_total_open_stake = 25_000_000
+        if sb_cap_doc and sb_cap_doc.get("value") is not None:
+            try:
+                sports_bet_max_total_open_stake = max(1, min(int(sb_cap_doc["value"]), 10**15))
+            except (TypeError, ValueError):
+                sports_bet_max_total_open_stake = 25_000_000
         banner_doc = await db.game_settings.find_one({"key": "landing_banner_enabled"}, {"_id": 0, "value": 1})
         landing_banner_enabled = bool(banner_doc.get("value") if banner_doc else False)
         msg_doc = await db.game_settings.find_one({"key": "landing_banner_message"}, {"_id": 0, "value": 1})
@@ -5444,6 +5467,7 @@ def register(router):
             "login_turnstile_enabled": login_turnstile_enabled,
             "spotify_feature_enabled": spotify_feature_enabled,
             "stock_market_max_points": stock_market_max_points,
+            "sports_bet_max_total_open_stake": sports_bet_max_total_open_stake,
             "landing_banner_enabled": landing_banner_enabled,
             "landing_banner_message": landing_banner_message,
             "login_lock_from": login_lock_from,

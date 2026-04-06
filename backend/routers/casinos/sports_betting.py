@@ -111,7 +111,9 @@ class AdminSportsEventRequestDeny(BaseModel):
 
 # ----- Constants -----
 # Max total stake locked in open sports bets per user (split across any number of bets).
-SPORTS_BET_MAX_TOTAL_OPEN_STAKE = 10_000_000
+# Override persisted in game_settings key sports_bet_max_total_open_stake (see get_sports_bet_max_total_open_stake).
+SPORTS_BET_MAX_TOTAL_OPEN_STAKE = 25_000_000
+_SPORTS_BET_STAKE_CAP_CEILING = 10**15
 # Placing bets and cancelling open bets both end this many minutes before scheduled start.
 SPORTS_BETTING_CLOSE_BEFORE_START_MINUTES = 10
 # Public board: return enough open events that high-volume Football does not crowd out UFC/Boxing/F1.
@@ -126,6 +128,18 @@ THESPORTSDB_LEAGUE_UFC = 4443
 THESPORTSDB_LEAGUE_BOXING = 4445
 
 _sports_live_cache = {"football": [], "ufc": [], "boxing": [], "f1": [], "updated_at": 0.0}
+
+
+async def get_sports_bet_max_total_open_stake() -> int:
+    """Total open sports stake cap per user (admin-configurable via game_settings)."""
+    try:
+        doc = await db.game_settings.find_one({"key": "sports_bet_max_total_open_stake"}, {"_id": 0, "value": 1})
+        if doc is not None and doc.get("value") is not None:
+            v = int(doc["value"])
+            return max(1, min(v, _SPORTS_BET_STAKE_CAP_CEILING))
+    except (TypeError, ValueError):
+        pass
+    return SPORTS_BET_MAX_TOTAL_OPEN_STAKE
 
 
 def _sports_odds_cache_ttl_sec() -> int:
@@ -1585,12 +1599,13 @@ async def sports_betting_place(request: SportsBetPlaceRequest, current_user: dic
         raise HTTPException(status_code=400, detail="Invalid option")
     uid = current_user.get("id") or ""
     open_total = await _sports_open_stake_total(uid)
-    if open_total + stake > SPORTS_BET_MAX_TOTAL_OPEN_STAKE:
-        remaining = max(0, SPORTS_BET_MAX_TOTAL_OPEN_STAKE - open_total)
+    max_open = await get_sports_bet_max_total_open_stake()
+    if open_total + stake > max_open:
+        remaining = max(0, max_open - open_total)
         raise HTTPException(
             status_code=400,
             detail=(
-                f"Total open sports stakes are capped at ${SPORTS_BET_MAX_TOTAL_OPEN_STAKE:,}. "
+                f"Total open sports stakes are capped at ${max_open:,}. "
                 f"You have ${open_total:,} at risk; you can add at most ${remaining:,} more."
             ),
         )
@@ -1629,11 +1644,12 @@ async def sports_betting_my_bets(current_user: dict = Depends(get_current_user_v
         {"_id": 0},
     ).sort("settled_at", -1).to_list(50)
     open_stake_total = await _sports_open_stake_total(uid)
-    remaining = max(0, SPORTS_BET_MAX_TOTAL_OPEN_STAKE - open_stake_total)
+    max_open = await get_sports_bet_max_total_open_stake()
+    remaining = max(0, max_open - open_stake_total)
     return {
         "open": [{"id": b["id"], "event_name": b.get("event_name"), "option_name": b.get("option_name"), "odds": b.get("odds"), "stake": b.get("stake"), "created_at": b.get("created_at")} for b in open_bets],
         "closed": [{"id": b["id"], "event_name": b.get("event_name"), "option_name": b.get("option_name"), "odds": b.get("odds"), "stake": b.get("stake"), "status": b.get("status"), "created_at": b.get("created_at"), "settled_at": b.get("settled_at")} for b in closed_bets],
-        "max_total_open_stake": SPORTS_BET_MAX_TOTAL_OPEN_STAKE,
+        "max_total_open_stake": max_open,
         "open_stake_total": open_stake_total,
         "open_stake_remaining": remaining,
     }

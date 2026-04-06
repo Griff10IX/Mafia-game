@@ -89,7 +89,7 @@ function apiErrorDetail(e, fallback) {
 }
 
 /** Max total $ locked across all open sports bets (matches backend SPORTS_BET_MAX_TOTAL_OPEN_STAKE). */
-const SPORTS_MAX_TOTAL_OPEN_STAKE = 10_000_000;
+const SPORTS_MAX_TOTAL_OPEN_STAKE = 25_000_000;
 
 const STAKE_CHIPS = [
   { label: '10K', value: 10_000, color: '#e4e4e7', ring: '#a1a1aa' },
@@ -97,6 +97,7 @@ const STAKE_CHIPS = [
   { label: '1M', value: 1_000_000, color: '#16a34a', ring: '#166534' },
   { label: '5M', value: 5_000_000, color: '#18181b', ring: '#52525b' },
   { label: '10M', value: 10_000_000, color: '#7c3aed', ring: '#5b21b6' },
+  { label: '25M', value: 25_000_000, color: '#6d28d9', ring: '#4c1d95' },
 ];
 
 const CATEGORY_ICONS = { Football: '⚽', UFC: '🥊', Boxing: '🥊', 'Formula 1': '🏎️' };
@@ -808,7 +809,9 @@ export default function SportsBetting() {
 
       {/* Page header */}
       <div className="relative sb-fade-in space-y-0.5">
-        <p className="text-[10px] text-zinc-500 font-heading italic">Underground — closes 10 min before start. Max {formatMoney(SPORTS_MAX_TOTAL_OPEN_STAKE)} total staked across all your open bets.</p>
+        <p className="text-[10px] text-zinc-500 font-heading italic">
+          Underground — closes 10 min before start. Max {formatMoney(sportsOpenCap)} total staked across all your open bets.
+        </p>
         <p className="text-[10px] text-zinc-600 font-heading italic">Winnings are paid to your Swiss bank (can exceed your normal Swiss deposit limit). Stakes come from cash on hand.</p>
       </div>
 

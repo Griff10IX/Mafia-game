@@ -976,6 +976,7 @@ export default function Admin() {
   const [landingBannerEnabled, setLandingBannerEnabled] = useState(false);
   const [landingBannerMessage, setLandingBannerMessage] = useState('');
   const [stockMarketMaxPoints, setStockMarketMaxPoints] = useState(3000);
+  const [sportsBetMaxTotalOpenStake, setSportsBetMaxTotalOpenStake] = useState(25_000_000);
   const [adminSettingsSaving, setAdminSettingsSaving] = useState(false);
   const [loginLockFrom, setLoginLockFrom] = useState('');
   const [loginLockUntil, setLoginLockUntil] = useState('');
@@ -1575,6 +1576,9 @@ export default function Admin() {
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
       setLandingBannerMessage(res.data?.landing_banner_message ?? '');
       setStockMarketMaxPoints(Math.max(1, parseInt(res.data?.stock_market_max_points, 10) || 3000));
+      setSportsBetMaxTotalOpenStake(
+        Math.max(1, parseInt(res.data?.sports_bet_max_total_open_stake, 10) || 25_000_000),
+      );
       setLoginLockFrom(res.data?.login_lock_from || '');
       setLoginLockUntil(res.data?.login_lock_until || '');
       setLoginLockMessage(res.data?.login_lock_message || '');
@@ -1615,6 +1619,7 @@ export default function Admin() {
       setSpotifyFeatureEnabled(false);
       setLandingBannerMessage('');
       setStockMarketMaxPoints(3000);
+      setSportsBetMaxTotalOpenStake(25_000_000);
       setLoginLockFrom('');
       setLoginLockUntil('');
       setLoginLockMessage('');
@@ -1695,6 +1700,9 @@ export default function Admin() {
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
       if (res.data?.landing_banner_message !== undefined) setLandingBannerMessage(res.data.landing_banner_message ?? '');
       setStockMarketMaxPoints(Math.max(1, res.data?.stock_market_max_points ?? 3000));
+      if (res.data?.sports_bet_max_total_open_stake != null) {
+        setSportsBetMaxTotalOpenStake(Math.max(1, Number(res.data.sports_bet_max_total_open_stake) || 25_000_000));
+      }
       toast.success('Settings saved');
     } catch (e) {
       toast.error(e.response?.data?.detail ?? 'Failed to save');
@@ -10343,6 +10351,21 @@ export default function Admin() {
                 className="w-24 px-2 py-1 rounded border border-input bg-background text-foreground font-mono text-sm"
               />
               <span className="text-mutedForeground text-xs">Total points in open positions cannot exceed this.</span>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-primary/10">
+              <label className="text-sm font-heading text-foreground">Sports betting max open stake (cash, per user)</label>
+              <input
+                type="number"
+                min={1}
+                value={sportsBetMaxTotalOpenStake}
+                onChange={(e) =>
+                  setSportsBetMaxTotalOpenStake(Math.max(1, parseInt(e.target.value, 10) || 25_000_000))
+                }
+                className="w-36 px-2 py-1 rounded border border-input bg-background text-foreground font-mono text-sm"
+              />
+              <span className="text-mutedForeground text-xs">
+                Max total $ locked in open sports bets per player (split across all open tickets). Default $25,000,000.
+              </span>
             </div>
             <BtnPrimary onClick={handleSaveAdminSettings} disabled={adminSettingsSaving}>
               {adminSettingsSaving ? 'Saving...' : 'Save settings'}
