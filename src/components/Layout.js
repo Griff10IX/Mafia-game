@@ -134,6 +134,17 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
     },
     {
       type: 'group',
+      id: 'money',
+      icon: DollarSign,
+      label: 'Money',
+      items: [
+        { path: '/game/daily-rewards', label: 'Daily Rewards' },
+        { path: '/money/quick-trade', label: 'Quick Trade' },
+        { path: '/money/lottery', label: 'Lottery' },
+      ],
+    },
+    {
+      type: 'group',
       id: 'misc',
       icon: LayoutGrid,
       label: 'Misc',
@@ -149,12 +160,9 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
         { path: '/money/racket', label: 'Racket' },
         { path: '/game/users-online', label: 'Users Online' },
         { path: '/game/family/list', label: 'Families' },
-        { path: '/game/daily-rewards', label: 'Daily Rewards' },
         { path: '/game/leaderboard', label: 'Leaderboard' },
         { path: '/game/store', label: 'Store' },
         { path: '/game-pass', label: 'Game Pass' },
-        { path: '/money/quick-trade', label: 'Quick Trade' },
-        { path: '/money/lottery', label: 'Lottery' },
       ],
     },
   ];
