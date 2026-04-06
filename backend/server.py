@@ -1725,7 +1725,11 @@ def get_rank_info(rank_points: int, prestige_mult: float = 1.0):
     return 1, RANKS[0]["name"]
 
 
-async def maybe_auto_relinquish_below_capo(coll, filter_dict: dict):
+# Floor for owner-set max bet across casino routers (matches set-max-bet handlers).
+CASINO_MIN_OWNER_MAX_BET = 50_000
+
+
+async def maybe_auto_relinquish_below_capo(coll, filter_dict: dict, *, reset_casino_max_bet: bool = False):
     """If the ownership doc has owner_id and below_capo_acquired_at and 3+ hours have passed, clear ownership."""
     doc = await coll.find_one(filter_dict, {"_id": 0, "owner_id": 1, "below_capo_acquired_at": 1})
     if not doc or not doc.get("owner_id") or not doc.get("below_capo_acquired_at"):
@@ -1737,9 +1741,12 @@ async def maybe_auto_relinquish_below_capo(coll, filter_dict: dict):
     if acquired.tzinfo is None:
         acquired = acquired.replace(tzinfo=timezone.utc)
     if (datetime.now(timezone.utc) - acquired).total_seconds() >= 3 * 3600:
+        set_doc = {"owner_id": None, "owner_username": None}
+        if reset_casino_max_bet:
+            set_doc["max_bet"] = CASINO_MIN_OWNER_MAX_BET
         await coll.update_one(
             filter_dict,
-            {"$set": {"owner_id": None, "owner_username": None}, "$unset": {"below_capo_acquired_at": 1}},
+            {"$set": set_doc, "$unset": {"below_capo_acquired_at": 1}},
         )
 
 

@@ -22,6 +22,7 @@ from server import (
     get_rank_info,
     CAPO_RANK_ID,
     maybe_auto_relinquish_below_capo,
+    CASINO_MIN_OWNER_MAX_BET,
     log_gambling,
     resolve_gambling_log_buy_back,
     get_head_family_id_for_state,
@@ -72,7 +73,7 @@ async def _get_slots_ownership_doc(state: str):
         return None, None
     norm = _normalize_state(state)
     if norm:
-        await maybe_auto_relinquish_below_capo(db.slots_ownership, {"state": norm})
+        await maybe_auto_relinquish_below_capo(db.slots_ownership, {"state": norm}, reset_casino_max_bet=True)
     pattern = re.compile(f"^{re.escape(state)}$", re.IGNORECASE)
     doc = await db.slots_ownership.find_one({"state": pattern}, {"_id": 0})
     if doc:
@@ -454,7 +455,7 @@ def register(router):
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$set": {"slots_cooldown_until": cooldown_until}})
         await db.slots_ownership.update_one(
             {"state": stored_state or state},
-            {"$set": {"owner_id": None, "owner_username": None}},
+            {"$set": {"owner_id": None, "owner_username": None, "max_bet": CASINO_MIN_OWNER_MAX_BET}},
         )
         return {"message": "You have relinquished the slots. You cannot enter the next draw for 3 hours."}
 

@@ -6,6 +6,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-06 21:30 UTC[/color][/b] — [b]Casinos: max bet resets when a table is relinquished[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] When you [b]relinquish[/b] a casino (dice, roulette, blackjack, video poker, horse racing, or slots), or when a [b]below-Capo[/b] table [b]auto-relinquishes[/b] after the usual timer, the table’s [b]max bet[/b] is reset to the [b]minimum owner max bet[/b] ([b]$50,000[/b]) — the same floor used when owners set max bet. The next owner no longer inherits the previous owner’s high limit on an unclaimed table.[/color]
+[*][color=#888888][b]Player action:[/b] No action. New claimants still get normal claim defaults where those apply; anyone taking over an unowned table sees the updated limit in line with the rules above.[/color]
+[*][color=#888888][b]Impact:[/b] Unowned tables reflect a fair baseline max bet instead of carrying over an old owner’s settings.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-06 20:00 UTC[/color][/b] — [b]MP Poker tournaments, Tribute Bank clarity[/b][/size]
 [quote]
 [list]

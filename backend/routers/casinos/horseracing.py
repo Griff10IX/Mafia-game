@@ -22,6 +22,7 @@ from server import (
     get_rank_info,
     CAPO_RANK_ID,
     maybe_auto_relinquish_below_capo,
+    CASINO_MIN_OWNER_MAX_BET,
     log_gambling,
     resolve_gambling_log_buy_back,
     _user_owns_any_casino,
@@ -98,7 +99,7 @@ async def _get_horseracing_ownership_doc(city: str):
         return city, None
     norm = _normalize_city_for_horseracing(city) or city
     if norm:
-        await maybe_auto_relinquish_below_capo(db.horseracing_ownership, {"city": norm})
+        await maybe_auto_relinquish_below_capo(db.horseracing_ownership, {"city": norm}, reset_casino_max_bet=True)
     pattern = re.compile(f"^{re.escape(city)}$", re.IGNORECASE)
     doc = await db.horseracing_ownership.find_one({"city": pattern})
     if doc:
@@ -311,7 +312,10 @@ def register(router):
         stored_city, doc = await _get_horseracing_ownership_doc(city)
         if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this track")
-        await db.horseracing_ownership.update_one({"city": stored_city or city}, {"$set": {"owner_id": None, "owner_username": None}})
+        await db.horseracing_ownership.update_one(
+            {"city": stored_city or city},
+            {"$set": {"owner_id": None, "owner_username": None, "max_bet": CASINO_MIN_OWNER_MAX_BET}},
+        )
         await cancel_quicktrade_casino_listings_by_locations("casino_horseracing", stored_city or city, city)
         return {"message": "Ownership relinquished."}
 
