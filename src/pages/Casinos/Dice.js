@@ -517,7 +517,25 @@ export default function Dice() {
         <div>
           <p className="text-[10px] text-zinc-500 font-heading italic">
             Playing in <span className="text-primary font-bold">{currentCity}</span>
-            {ownership?.owner?.username && !isOwner && <span> · Owned by <Link to={`/profile/${encodeURIComponent(ownership.owner.username)}`} className="text-primary hover:underline font-heading">{ownership.owner.username}</Link></span>}
+            {ownership?.owner?.username && !isOwner && (
+              <span>
+                {' '}· Owned by{' '}
+                <Link to={`/profile/${encodeURIComponent(ownership.owner.username)}`} className="text-primary hover:underline font-heading">
+                  {ownership.owner.username}
+                </Link>
+                {ownership?.owner?.wealth_rank_name ? (
+                  <>
+                    {' '}·{' '}
+                    <span
+                      className="font-bold"
+                      style={ownership?.owner?.wealth_rank_color ? { color: ownership.owner.wealth_rank_color } : undefined}
+                    >
+                      {ownership.owner.wealth_rank_name}
+                    </span>
+                  </>
+                ) : null}
+              </span>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-3 text-xs font-heading">

@@ -6,6 +6,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-06 13:30 UTC[/color][/b] — [b]UI polish: casino owner links/ranks, profile avatar visibility, distillery clarity, and menu grouping[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Casino headers now show owner names as [b]clickable profile links[/b], and owner [b]wealth rank[/b] (e.g. Billionaire) on dice/roulette/blackjack/horse racing/video poker. Full profile view now shows the player [b]avatar[/b] in the profile header (not just edit view). Distillery aging area now shows clearer [b]production status[/b] (active/ready/aging counts, next completion ETA, per-batch remaining time and progress bars). Sidebar/mobile menu grouping was cleaned up so money-related items are easier to find (including [b]Daily Rewards[/b] under money grouping).[/color]
+[*][color=#888888][b]Player action:[/b] Click owner names in casino headers to open their profile; use the new distillery batch timing/progress info to decide when to claim; use the updated money menu grouping for faster navigation.[/color]
+[*][color=#888888][b]Impact:[/b] Better readability and navigation, faster profile access from casinos, and more informative distillery management without changing core economy rules.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-06 11:00 UTC[/color][/b] — [b]Quick Trade: casino listings clear when the table changes hands[/b][/size]
 [quote]
 [list]

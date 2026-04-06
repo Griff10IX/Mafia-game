@@ -33,6 +33,7 @@ from server import (
     assert_casino_buy_back_within_points_balance,
     _ownership_display_profit,
     bump_user_biggest_casino_payout,
+    get_wealth_rank,
 )
 from routers.casinos.roulette import RouletteClaimRequest, RouletteSetMaxBetRequest, RouletteSendToUserRequest
 from routers.casinos.dice import DiceSellOnTradeRequest
@@ -334,6 +335,8 @@ def register(router):
                 "current_city": display_city,
                 "owner_id": None,
                 "owner_name": None,
+                "owner_wealth_rank_name": None,
+                "owner_wealth_rank_color": None,
                 "is_owner": False,
                 "is_unclaimed": True,
                 "claim_cost": cc["video_poker"],
@@ -348,9 +351,13 @@ def register(router):
             return out
         owner_id = doc.get("owner_id")
         owner_name = None
+        owner_wealth_rank_name = None
+        owner_wealth_rank_color = None
         if owner_id:
-            u = await db.users.find_one({"id": owner_id}, {"username": 1})
+            u = await db.users.find_one({"id": owner_id}, {"username": 1, "money": 1})
             owner_name = u.get("username") if u else None
+            if u:
+                _, owner_wealth_rank_name, owner_wealth_rank_color = get_wealth_rank(int((u.get("money") or 0) or 0))
         is_owner = owner_id == current_user.get("id") or ""
         max_bet = doc.get("max_bet", VIDEO_POKER_DEFAULT_MAX_BET)
         total_earnings = doc.get("total_earnings", 0)
@@ -380,6 +387,8 @@ def register(router):
             "current_city": display_city,
             "owner_id": owner_id,
             "owner_name": owner_name,
+            "owner_wealth_rank_name": owner_wealth_rank_name,
+            "owner_wealth_rank_color": owner_wealth_rank_color,
             "is_owner": is_owner,
             "is_unclaimed": owner_id is None,
             "claim_cost": cc["video_poker"],

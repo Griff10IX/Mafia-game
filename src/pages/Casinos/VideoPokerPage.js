@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import api, { refreshUser } from '../../utils/api';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
@@ -504,7 +505,25 @@ export default function VideoPoker() {
         <div>
           <p className="text-[10px] text-zinc-500 font-heading italic">
             Playing in <span className="text-primary font-bold">{currentCity}</span>
-            {ownership?.owner_name && !isOwner && <span> · Owned by <span className="text-foreground">{ownership.owner_name}</span></span>}
+            {ownership?.owner_name && !isOwner && (
+              <span>
+                {' '}· Owned by{' '}
+                <Link to={`/profile/${encodeURIComponent(ownership.owner_name)}`} className="text-primary hover:underline font-heading">
+                  {ownership.owner_name}
+                </Link>
+                {ownership?.owner_wealth_rank_name ? (
+                  <>
+                    {' '}·{' '}
+                    <span
+                      className="font-bold"
+                      style={ownership?.owner_wealth_rank_color ? { color: ownership.owner_wealth_rank_color } : undefined}
+                    >
+                      {ownership.owner_wealth_rank_name}
+                    </span>
+                  </>
+                ) : null}
+              </span>
+            )}
           </p>
         </div>
         <div className="flex items-center gap-3 text-xs font-heading">
