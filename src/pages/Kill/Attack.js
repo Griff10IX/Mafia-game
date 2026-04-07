@@ -59,18 +59,6 @@ function stripBodyguardSlotFromToastMessage(msg) {
   return msg.replace(/\s+in slot\s+\d+/gi, '').trim();
 }
 
-// Subcomponents
-const LoadingSpinner = () => (
-  <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
-    <style>{ATTACK_STYLES}</style>
-    <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
-      <Crosshair size={20} className="text-primary/40 animate-pulse" />
-      <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      <span className="text-primary text-[9px] font-heading uppercase tracking-wider">Loading attack...</span>
-    </div>
-  </div>
-);
-
 const EventBanner = ({ event }) => (
   <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atk-fade-in mobile-panel`}>
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />

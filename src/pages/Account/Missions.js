@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   BookOpen, X, Crown, Clock, Lock, CheckCircle, Banknote,
@@ -7,6 +7,7 @@ import {
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
+import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // STYLES
@@ -34,6 +35,7 @@ const fmt = (n) => `$${Number(n ?? 0).toLocaleString()}`;
 // Must match backend `LOOT_BOX_PIECES_PER_OPEN` (routers/money/loot_box.py)
 const LOOT_BOX_PIECES_PER_OPEN = 100;
 const LOOT_BOX_PIECES_TOOLTIP = `Loot box pieces. Collect ${LOOT_BOX_PIECES_PER_OPEN} on the Loot Box page to open a box for random rewards (cash, points, bullets, respect, XP tokens, and more).`;
+const MISSIONS_CACHE_KEY = 'mafia_missions_v1';
 const TRIBUTE_BANK_TOKEN_TOOLTIP =
   'Tribute tokens stack here until you tap Collect. Each one becomes one random skill token (e.g. Crime XP, GTA XP, melt, travel — see token list in help).';
 
@@ -963,32 +965,45 @@ function TributeBanner({
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function Missions() {
-  const [data,       setData]       = useState(null);
-  const [missions,   setMissions]   = useState([]);
-  const [loading,    setLoading]    = useState(true);
-  const [city,       setCity]       = useState(null);
+  const missionsBoot = readSessionJson(MISSIONS_CACHE_KEY);
+  const [data,       setData]       = useState(missionsBoot?.data ?? null);
+  const [missions,   setMissions]   = useState(missionsBoot?.missions ?? []);
+  const [city,       setCity]       = useState(missionsBoot?.city ?? null);
   const [selected,   setSelected]   = useState(null);   // selected mission object
   const [completing, setCompleting] = useState(false);
   const [collecting, setCollecting] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false); // toggle completed missions view
 
-  const load = async () => {
+  const load = useCallback(async ({ silentError = false } = {}) => {
     try {
       const [mapRes, listRes] = await Promise.all([
         api.get('/missions/map'),
         api.get('/missions'),
       ]);
-      setData(mapRes.data);
-      setMissions(listRes.data?.missions || []);
-      if (!city) setCity(mapRes.data?.current_city || mapRes.data?.unlocked_cities?.[0] || 'Start');
+      const nextData = mapRes.data;
+      const nextMissions = listRes.data?.missions || [];
+      const nextCity = city || nextData?.current_city || nextData?.unlocked_cities?.[0] || 'Start';
+      setData(nextData);
+      setMissions(nextMissions);
+      if (!city) setCity(nextCity);
+      writeSessionJson(MISSIONS_CACHE_KEY, {
+        data: nextData,
+        missions: nextMissions,
+        city: nextCity,
+      });
     } catch {
-      toast.error('Failed to load missions');
-    } finally {
-      setLoading(false);
+      if (!silentError) toast.error('Failed to load missions');
     }
-  };
+  }, [city]);
 
-  useEffect(() => { load(); }, []); // eslint-disable-line
+  useEffect(() => { load({ silentError: false }); }, [load]);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      load({ silentError: true });
+    }, 60_000);
+    return () => clearInterval(id);
+  }, [load]);
 
   const handleComplete = async (missionId) => {
     setCompleting(true);
@@ -1072,13 +1087,10 @@ export default function Missions() {
     }
   };
 
-  if (loading || !data) {
+  if (!data) {
     return (
-      <div className={`flex flex-col items-center justify-center min-h-[40vh] gap-2 ${styles.pageContent} mobile-page-root`}>
+      <div className={`space-y-3 ${styles.pageContent} mobile-page-root`} style={{ padding: '12px 14px', maxWidth: 900, margin: '0 auto' }}>
         <style>{MISSIONS_STYLES}</style>
-        <BookOpen size={22} className="text-primary/40 animate-pulse" />
-        <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-        <span className="text-primary text-[9px] font-heading uppercase tracking-[0.2em]">Loading...</span>
       </div>
     );
   }

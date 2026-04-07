@@ -87,18 +87,6 @@ function formatDateTime(iso) {
   });
 }
 
-// Subcomponents
-const LoadingSpinner = () => (
-  <div className={`space-y-3 ${styles.pageContent} mobile-page-root`}>
-    <style>{PROFILE_STYLES}</style>
-    <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
-      <UserIcon size={22} className="text-primary/40 animate-pulse" />
-      <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      <span className="text-primary text-[10px] font-heading uppercase tracking-[0.25em]">Loading profile...</span>
-    </div>
-  </div>
-);
-
 const StaffProfileActions = ({ username, isDead, isAdmin, isModerator, onDone }) => {
   const [loading, setLoading] = useState(null);
   const handleLock = async () => {
@@ -1630,8 +1618,28 @@ export default function Profile() {
     }
   };
 
-  if ((loading || profileLoading) && !profile) {
-    return <LoadingSpinner />;
+  if (!usernameParam && (loading || profileLoading) && !profile) {
+    return (
+      <div className={`space-y-3 ${styles.pageContent} mobile-page-root`}>
+        <style>{PROFILE_STYLES}</style>
+      </div>
+    );
+  }
+
+  if (usernameParam && profileLoading && !profile) {
+    return (
+      <div className={`space-y-3 ${styles.pageContent} mobile-page-root`}>
+        <style>{PROFILE_STYLES}</style>
+      </div>
+    );
+  }
+
+  if (!profile && !profileLoadError) {
+    return (
+      <div className={`space-y-3 ${styles.pageContent} mobile-page-root`}>
+        <style>{PROFILE_STYLES}</style>
+      </div>
+    );
   }
 
   if (!profile) {

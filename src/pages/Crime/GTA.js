@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Car, Lock, ChevronDown, ChevronRight, Bot, Zap } from 'lucide-react';
 import ActiveTokenBadge from '../../components/ActiveTokenBadge';
@@ -18,6 +18,7 @@ function getRarityColor(rarity) {
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
+import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 
 const GTA_STYLES = `
   @keyframes gta-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -37,6 +38,7 @@ const GTA_STYLES = `
 // Constants
 const TICK_INTERVAL = 1000;
 const RECENT_STOLEN_COLLAPSED_KEY = 'gta_recent_stolen_collapsed';
+const GTA_CACHE_KEY = 'mafia_gta_v1';
 
 // Utility functions
 function formatCooldown(isoUntil) {
@@ -84,14 +86,6 @@ const useCooldownTicker = (options, onCooldownExpired) => {
 };
 
 // Subcomponents
-const LoadingSpinner = () => (
-  <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
-    <Car size={22} className="text-primary/40 animate-pulse" />
-    <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-    <span className="text-primary text-[9px] font-heading uppercase tracking-[0.2em]">Loading...</span>
-  </div>
-);
-
 const EventBanner = ({ event, eventsEnabled }) => {
   if (!eventsEnabled || !event?.name || (event.gta_success === 1 && event.rank_points === 1)) {
     return null;
@@ -390,16 +384,16 @@ const InfoSection = () => (
 
 // Main component
 export default function GTA() {
-  const [options, setOptions] = useState([]);
-  const [recentStolen, setRecentStolen] = useState([]);
+  const gtaBoot = readSessionJson(GTA_CACHE_KEY);
+  const [options, setOptions] = useState(() => gtaBoot?.options ?? []);
+  const [recentStolen, setRecentStolen] = useState(() => gtaBoot?.recentStolen ?? []);
   const [gtaStats, setGtaStats] = useState({
     count_today: 0, count_week: 0, success_today: 0, success_week: 0,
     profit_today: 0, profit_24h: 0, profit_week: 0,
   });
   const [attemptingOptionId, setAttemptingOptionId] = useState(null);
-  const [event, setEvent] = useState(null);
-  const [eventsEnabled, setEventsEnabled] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [event, setEvent] = useState(() => gtaBoot?.event ?? null);
+  const [eventsEnabled, setEventsEnabled] = useState(() => !!gtaBoot?.eventsEnabled);
   const [recentStolenCollapsed, setRecentStolenCollapsed] = useState(() => {
     try {
       return localStorage.getItem(RECENT_STOLEN_COLLAPSED_KEY) === 'true';
@@ -416,11 +410,18 @@ export default function GTA() {
     });
   };
 
-  const [autoRankGtaDisabled, setAutoRankGtaDisabled] = useState(false);
-  const [activeLootPerks, setActiveLootPerks] = useState([]);
-  const [user, setUser] = useState(null);
+  const [autoRankGtaDisabled, setAutoRankGtaDisabled] = useState(() => !!gtaBoot?.autoRankGtaDisabled);
+  const [activeLootPerks, setActiveLootPerks] = useState(() => gtaBoot?.activeLootPerks ?? []);
+  const [user, setUser] = useState(() => gtaBoot?.user ?? null);
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async ({ silent = false } = {}) => {
+    let nextOptions = options;
+    let nextRecentStolen = recentStolen;
+    let nextEvent = event;
+    let nextEventsEnabled = eventsEnabled;
+    let nextAutoRankGtaDisabled = autoRankGtaDisabled;
+    let nextActiveLootPerks = activeLootPerks;
+    let nextUser = user;
     try {
       const [optionsRes, recentStolenRes, eventsRes, statsRes, autoRankRes, lootStatusRes, meRes] = await Promise.allSettled([
         api.get('/gta/options'),
@@ -433,11 +434,11 @@ export default function GTA() {
       ]);
       
       if (optionsRes.status === 'fulfilled' && Array.isArray(optionsRes.value?.data)) {
-        setOptions(optionsRes.value.data);
+        nextOptions = optionsRes.value.data;
+        setOptions(nextOptions);
       } else {
-        if (optionsRes.status === 'rejected') {
+        if (!silent && optionsRes.status === 'rejected') {
           toast.error('Failed to load GTA options');
-          setOptions([]);
         }
       }
       if (statsRes.status === 'fulfilled' && statsRes.value?.data) {
@@ -445,42 +446,59 @@ export default function GTA() {
       }
       
       if (recentStolenRes.status === 'fulfilled' && recentStolenRes.value?.data) {
-        setRecentStolen(Array.isArray(recentStolenRes.value.data.cars) ? recentStolenRes.value.data.cars : []);
+        nextRecentStolen = Array.isArray(recentStolenRes.value.data.cars) ? recentStolenRes.value.data.cars : [];
+        setRecentStolen(nextRecentStolen);
       }
       
       if (eventsRes.status === 'fulfilled' && eventsRes.value?.data) {
-        setEvent(eventsRes.value.data?.event ?? null);
-        setEventsEnabled(!!eventsRes.value.data?.events_enabled);
+        nextEvent = eventsRes.value.data?.event ?? null;
+        nextEventsEnabled = !!eventsRes.value.data?.events_enabled;
+        setEvent(nextEvent);
+        setEventsEnabled(nextEventsEnabled);
       }
       if (autoRankRes.status === 'fulfilled' && autoRankRes.value?.data) {
         const ar = autoRankRes.value.data;
-        setAutoRankGtaDisabled(!!(ar.auto_rank_enabled && (ar.auto_rank_gta || ar.auto_rank_bust_every_5_sec)));
+        nextAutoRankGtaDisabled = !!(ar.auto_rank_enabled && (ar.auto_rank_gta || ar.auto_rank_bust_every_5_sec));
+        setAutoRankGtaDisabled(nextAutoRankGtaDisabled);
       }
       if (lootStatusRes.status === 'fulfilled' && Array.isArray(lootStatusRes.value?.data?.active_rewards)) {
-        const rewards = lootStatusRes.value.data.active_rewards.filter((r) => r.type === 'rp_10' || r.type === 'gta_rare_100');
-        setActiveLootPerks(rewards);
+        nextActiveLootPerks = lootStatusRes.value.data.active_rewards.filter((r) => r.type === 'rp_10' || r.type === 'gta_rare_100');
+        setActiveLootPerks(nextActiveLootPerks);
       } else {
-        setActiveLootPerks([]);
+        nextActiveLootPerks = [];
+        setActiveLootPerks(nextActiveLootPerks);
       }
       if (meRes.status === 'fulfilled' && meRes.value?.data) {
-        setUser(meRes.value.data);
+        nextUser = meRes.value.data;
+        setUser(nextUser);
       }
+      writeSessionJson(GTA_CACHE_KEY, {
+        options: nextOptions,
+        recentStolen: nextRecentStolen,
+        event: nextEvent,
+        eventsEnabled: nextEventsEnabled,
+        autoRankGtaDisabled: nextAutoRankGtaDisabled,
+        activeLootPerks: nextActiveLootPerks,
+        user: nextUser,
+      });
     } catch (error) {
-      toast.error('Failed to load GTA data');
-      console.error('Error fetching GTA data:', error);
-      setOptions([]);
-      setRecentStolen([]);
-      setGtaStats({ count_today: 0, count_week: 0, success_today: 0, success_week: 0, profit_today: 0, profit_24h: 0, profit_week: 0 });
-    } finally {
-      setLoading(false);
+      if (!silent) {
+        toast.error('Failed to load GTA data');
+        console.error('Error fetching GTA data:', error);
+      }
     }
-  };
+  }, [options, recentStolen, event, eventsEnabled, autoRankGtaDisabled, activeLootPerks, user]);
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    fetchData({ silent: !!gtaBoot?.options?.length });
+  }, [fetchData]);
 
-  const tick = useCooldownTicker(options, fetchData);
+  useEffect(() => {
+    const id = setInterval(() => fetchData({ silent: true }), 60_000);
+    return () => clearInterval(id);
+  }, [fetchData]);
+
+  const tick = useCooldownTicker(options, () => fetchData({ silent: true }));
 
   const attemptGTA = async (optionId, isRetry = false) => {
     if (attemptingOptionId) return;
@@ -525,7 +543,7 @@ export default function GTA() {
           )
         );
       }
-      fetchData();
+      fetchData({ silent: true });
     } catch (error) {
       const status = error.response?.status;
       const d = error.response?.data?.detail;
@@ -544,15 +562,6 @@ export default function GTA() {
       if (!willRetry) setAttemptingOptionId(null);
     }
   };
-
-  if (loading) {
-    return (
-      <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
-        <style>{GTA_STYLES}</style>
-        <LoadingSpinner />
-      </div>
-    );
-  }
 
   return (
     <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="gta-page">

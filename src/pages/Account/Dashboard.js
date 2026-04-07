@@ -12,7 +12,6 @@ import {
   Car,
   Trophy,
   Bot,
-  LayoutDashboard,
   Settings,
   ChevronUp,
   ChevronDown,
@@ -30,6 +29,7 @@ import EventOrStoreSlot from '../../components/dashboard/EventOrStoreSlot';
 import AutoRankStatusWidget from '../../components/dashboard/AutoRankStatusWidget';
 import BodyguardsWidget from '../../components/dashboard/BodyguardsWidget';
 import MyPropertiesWidget from '../../components/dashboard/MyPropertiesWidget';
+import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 
 const DASH_STYLES = `
   @keyframes dash-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -42,14 +42,6 @@ const DASH_STYLES = `
   .dash-stat-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
   .dash-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 `;
-
-const LoadingSpinner = () => (
-  <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
-    <LayoutDashboard size={22} className="text-primary/40 animate-pulse" />
-    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-    <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading command center...</span>
-  </div>
-);
 
 const RankProgressCard = ({ rankProgress, hasPremiumBar }) => {
   const current = Number(rankProgress.rank_points_current) || 0;
@@ -198,6 +190,7 @@ const DEFAULT_SECTION_ORDER = [
   'bodyguards_properties', 'auto_rank', 'at_a_glance', 'go_to',
 ];
 const DEFAULT_AT_A_GLANCE_STATS = ['money', 'rank', 'wealth', 'rp', 'location', 'kills'];
+const DASHBOARD_CACHE_KEY = 'mafia_dashboard_v1';
 const SECTION_LABELS = {
   rank_progress: 'Rank Progress',
   rewards_objectives: 'Rewards & Objectives',
@@ -217,13 +210,13 @@ const STAT_OPTIONS = [
 ];
 
 export default function Dashboard() {
-  const [user, setUser] = useState(null);
-  const [rankProgress, setRankProgress] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const dashboardBoot = readSessionJson(DASHBOARD_CACHE_KEY);
+  const [user, setUser] = useState(dashboardBoot?.user ?? null);
+  const [rankProgress, setRankProgress] = useState(dashboardBoot?.rankProgress ?? null);
   const [preferences, setPreferences] = useState({
-    section_order: DEFAULT_SECTION_ORDER,
-    at_a_glance_visible: true,
-    at_a_glance_stats: DEFAULT_AT_A_GLANCE_STATS,
+    section_order: dashboardBoot?.preferences?.section_order || DEFAULT_SECTION_ORDER,
+    at_a_glance_visible: dashboardBoot?.preferences?.at_a_glance_visible !== false,
+    at_a_glance_stats: dashboardBoot?.preferences?.at_a_glance_stats || DEFAULT_AT_A_GLANCE_STATS,
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -234,7 +227,7 @@ export default function Dashboard() {
   const [cpTerminating, setCpTerminating] = useState(false);
   const cpExpiredHandled = useRef(false);
 
-  const fetchData = useCallback(async () => {
+  const fetchData = useCallback(async ({ silentError = false } = {}) => {
     try {
       const [userRes, progressRes, dashRes, civRes] = await Promise.all([
         api.get('/auth/me'),
@@ -252,16 +245,34 @@ export default function Dashboard() {
           at_a_glance_stats: dashRes.data.at_a_glance_stats || DEFAULT_AT_A_GLANCE_STATS,
         });
       }
+      const nextPreferences = dashRes?.data
+        ? {
+            section_order: dashRes.data.section_order || DEFAULT_SECTION_ORDER,
+            at_a_glance_visible: dashRes.data.at_a_glance_visible !== false,
+            at_a_glance_stats: dashRes.data.at_a_glance_stats || DEFAULT_AT_A_GLANCE_STATS,
+          }
+        : preferences;
+      writeSessionJson(DASHBOARD_CACHE_KEY, {
+        user: userRes.data,
+        rankProgress: progressRes.data,
+        civilianProtection: civRes?.data ?? null,
+        preferences: nextPreferences,
+      });
     } catch (error) {
-      toast.error(getApiErrorMessage(error) || 'Failed to load profile');
+      if (!silentError) toast.error(getApiErrorMessage(error) || 'Failed to load profile');
       console.error('Error fetching dashboard data:', error);
-    } finally {
-      setLoading(false);
     }
-  }, []);
+  }, [preferences]);
 
   useEffect(() => {
-    fetchData();
+    fetchData({ silentError: false });
+  }, [fetchData]);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      fetchData({ silentError: true });
+    }, 60_000);
+    return () => clearInterval(id);
   }, [fetchData]);
 
   useEffect(() => {
@@ -352,15 +363,6 @@ export default function Dashboard() {
       setSaving(false);
     }
   }, [editPrefs, saving]);
-
-  if (loading) {
-    return (
-      <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
-        <style>{DASH_STYLES}</style>
-        <LoadingSpinner />
-      </div>
-    );
-  }
 
   const allStats = [
     { id: 'money', label: 'Cash', icon: DollarSign, value: `$${Math.floor(Number(user?.money ?? 0)).toLocaleString()}`, testId: 'stat-money' },

@@ -5,8 +5,10 @@ import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import ActiveTokenBadge from '../../components/ActiveTokenBadge';
+import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 
 const MAX_TRAVELS_PER_HOUR = 15;
+const TRAVEL_CACHE_KEY = 'mafia_travel_v1';
 
 /** Slug for location image path: "New York" -> "new-york". Images in public/images/travel/ to avoid /travel/ conflicting with SPA route. */
 function locationImageSlug(location) {
@@ -37,18 +39,6 @@ const TRAVEL_STYLES = `
   .trv-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
   .trv-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 `;
-
-// Subcomponents
-const LoadingSpinner = () => (
-  <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
-    <style>{TRAVEL_STYLES}</style>
-    <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
-      <Plane size={22} className="text-primary/40 animate-pulse" />
-      <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      <span className="text-primary text-[9px] font-heading uppercase tracking-[0.2em]">Loading travel...</span>
-    </div>
-  </div>
-);
 
 const TravelingScreen = ({ destination, timeLeft }) => (
   <div className="flex flex-col items-center justify-center min-h-[40vh] space-y-3" data-testid="traveling-screen">
@@ -346,17 +336,17 @@ const TravelInfoCard = ({ travelInfo, onBuyAirmiles }) => (
 
 // Main component
 export default function Travel() {
-  const [travelInfo, setTravelInfo] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const travelBoot = readSessionJson(TRAVEL_CACHE_KEY);
+  const [travelInfo, setTravelInfo] = useState(() => travelBoot?.travelInfo ?? null);
   const [traveling, setTraveling] = useState(false);
   const [travelTime, setTravelTime] = useState(0);
   const [selectedDest, setSelectedDest] = useState('');
-  const [autoRankBoozeOn, setAutoRankBoozeOn] = useState(false);
-  const [user, setUser] = useState(null);
+  const [autoRankBoozeOn, setAutoRankBoozeOn] = useState(() => !!travelBoot?.autoRankBoozeOn);
+  const [user, setUser] = useState(() => travelBoot?.user ?? null);
   /** Block travel while single-player or MP blackjack is unfinished */
-  const [bjTravelBlock, setBjTravelBlock] = useState(null);
+  const [bjTravelBlock, setBjTravelBlock] = useState(() => travelBoot?.bjTravelBlock ?? null);
 
-  const fetchTravelInfo = useCallback(async () => {
+  const fetchTravelInfo = useCallback(async ({ silent = false } = {}) => {
     try {
       const [infoRes, autoRankRes, userRes, bjRes, mpBjRes] = await Promise.all([
         api.get('/travel/info'),
@@ -375,18 +365,30 @@ export default function Travel() {
       } else {
         setBjTravelBlock(null);
       }
+      writeSessionJson(TRAVEL_CACHE_KEY, {
+        travelInfo: infoRes.data ?? null,
+        autoRankBoozeOn: !!(autoRankRes.data?.auto_rank_enabled && autoRankRes.data?.auto_rank_booze),
+        user: userRes.data ?? null,
+        bjTravelBlock: mpBjRes.data?.in_game && mpBjRes.data?.game_id
+          ? { kind: 'mp', gameId: String(mpBjRes.data.game_id) }
+          : bjRes.data?.hasGame
+            ? { kind: 'single' }
+            : null,
+      });
     } catch (error) {
-      toast.error('Failed to load travel info');
-      setTravelInfo(null);
-      setAutoRankBoozeOn(false);
-      setBjTravelBlock(null);
-    } finally {
-      setLoading(false);
+      if (!silent) toast.error('Failed to load travel info');
     }
   }, []);
 
   useEffect(() => {
-    fetchTravelInfo();
+    fetchTravelInfo({ silent: !!travelBoot?.travelInfo });
+  }, [fetchTravelInfo]);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      fetchTravelInfo({ silent: true });
+    }, 60_000);
+    return () => clearInterval(id);
   }, [fetchTravelInfo]);
 
   useEffect(() => {
@@ -396,7 +398,7 @@ export default function Travel() {
           if (prev <= 1) {
             clearInterval(timer);
             setTraveling(false);
-            fetchTravelInfo();
+            fetchTravelInfo({ silent: true });
             toast.success(`Arrived at ${selectedDest}!`);
             return 0;
           }
@@ -417,7 +419,7 @@ export default function Travel() {
       const tt = response.data.travel_time;
       if (tt <= 0) {
         setTraveling(false);
-        fetchTravelInfo();
+        fetchTravelInfo({ silent: true });
         refreshUser();
         toast.success(`Arrived at ${destination}!`);
       } else {
@@ -436,15 +438,11 @@ export default function Travel() {
       const response = await api.post('/travel/buy-airmiles');
       toast.success(response.data.message);
       refreshUser();
-      fetchTravelInfo();
+      fetchTravelInfo({ silent: true });
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to buy airmiles');
     }
   };
-
-  if (loading) {
-    return <LoadingSpinner />;
-  }
 
   if (traveling) {
     return <TravelingScreen destination={selectedDest} timeLeft={travelTime} />;

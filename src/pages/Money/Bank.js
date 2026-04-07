@@ -65,18 +65,6 @@ function timeLeft(iso) {
   return `${s}s`;
 }
 
-// Subcomponents
-const LoadingSpinner = () => (
-  <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
-    <style>{BANK_STYLES}</style>
-    <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2" data-testid="bank-loading">
-      <Landmark size={20} className="text-primary/40 animate-pulse" />
-      <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      <span className="text-primary text-[9px] font-heading uppercase tracking-wider">Loading bank...</span>
-    </div>
-  </div>
-);
-
 const InterestBankCard = ({
   overview,
   meta,
@@ -428,7 +416,6 @@ const TransferCard = ({ transfer, delay = 0 }) => {
 // Main component
 export default function Bank() {
   const bankBoot = readSessionJson(BANK_CACHE_KEY);
-  const [loading, setLoading] = useState(() => !bankBoot?.overview);
   const [meta, setMeta] = useState(() => bankBoot?.meta ?? { interest_options: [] });
   const [overview, setOverview] = useState(() => bankBoot?.overview ?? null);
 
@@ -464,7 +451,6 @@ export default function Bank() {
   const isCollapsed = (id) => !!collapsedSections[id];
 
   const fetchAll = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
     try {
       const [m, o] = await Promise.all([api.get('/bank/meta'), api.get('/bank/overview')]);
       const nextMeta = m.data ?? { interest_options: [] };
@@ -478,8 +464,6 @@ export default function Bank() {
         setMeta({ interest_options: [] });
         setOverview(null);
       }
-    } finally {
-      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -601,10 +585,6 @@ export default function Bank() {
       setSending(false);
     }
   };
-
-  if (loading && !overview) {
-    return <LoadingSpinner />;
-  }
 
   const deposits = Array.isArray(overview?.deposits) ? overview.deposits.filter((d) => !d.claimed_at) : [];
   const transfers = Array.isArray(overview?.transfers) ? overview.transfers : [];
