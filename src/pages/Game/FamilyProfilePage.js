@@ -5,6 +5,7 @@ import { Building2, Users, TrendingUp, Plane, ArrowLeft, Crosshair, Clock, Skull
 import { toast } from 'sonner';
 import { parseForumContent, insertAtCursor } from '../../utils/forumContent';
 import styles from '../../styles/noir.module.css';
+import { getFamilyProfilePrefetch, setFamilyProfilePrefetch } from '../../utils/prefetchCache';
 
 /** Preset notepad backgrounds (dark greys) — same options as player profile. */
 const NOTEPAD_COLOR_PRESETS = [
@@ -197,15 +198,26 @@ export default function FamilyProfilePage() {
   useEffect(() => {
     const id = (familyId && String(familyId).trim()) || '';
     if (!id || id === 'undefined' || id === 'null') { setFamily(null); setLoading(false); return; }
-    const run = async () => {
+    const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id);
+    const cached = getFamilyProfilePrefetch(id);
+    if (cached) {
+      setFamily(cached);
+      setProfileTextEdit((cached?.profile_text || '').trim() || '');
+      setNotepadColorEdit(cached?.profile_notepad_color ?? '');
+      setLoading(false);
+    } else {
       setLoading(true);
+    }
+    const run = async () => {
       try {
-        const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id);
         const params = isUuid ? { id } : { tag: id };
         const res = await api.get('/families/lookup', { params });
         setFamily(res.data);
         setProfileTextEdit((res.data?.profile_text || '').trim() || '');
         setNotepadColorEdit(res.data?.profile_notepad_color ?? '');
+        setFamilyProfilePrefetch(id, res.data);
+        if (res.data?.id) setFamilyProfilePrefetch(res.data.id, res.data);
+        if (res.data?.tag) setFamilyProfilePrefetch(res.data.tag, res.data);
         if (isUuid && res.data?.tag) {
           navigate(`/game/family/${encodeURIComponent(res.data.tag)}`, { replace: true });
         }

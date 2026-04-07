@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { getRacketAccent } from '../../constants';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
+import { getFamiliesPrefetch, setFamiliesPrefetch } from '../../utils/prefetchCache';
 
 // ============================================================================
 // CONSTANTS & UTILITIES
@@ -2243,6 +2244,22 @@ export default function FamilyPage() {
   const [vaultTransactions, setVaultTransactions] = useState([]);
   const [vaultTxTotal, setVaultTxTotal] = useState(0);
 
+  useEffect(() => {
+    const cached = getFamiliesPrefetch();
+    if (!cached) return;
+    setFamilies(cached.families ?? []);
+    setMyFamily(cached.myFamily ?? null);
+    setConfig(cached.config ?? null);
+    setWarHistory(cached.warHistory ?? []);
+    setEvent(cached.event ?? null);
+    setEventsEnabled(!!cached.eventsEnabled);
+    setWarStats(cached.warStats ?? null);
+    setRacketAttackTargets(cached.racketAttackTargets ?? []);
+    setVaultTransactions(cached.vaultTransactions ?? []);
+    setVaultTxTotal(cached.vaultTxTotal ?? 0);
+    setLoading(false);
+  }, []);
+
   const family = myFamily?.family;
   const members = myFamily?.members || [];
   const fallen = myFamily?.fallen || [];
@@ -2260,38 +2277,87 @@ export default function FamilyPage() {
 
   const fetchData = useCallback(async () => {
     try {
+      let nextFamilies = [];
+      let nextMyFamily = null;
+      let nextConfig = null;
+      let nextWarHistory = [];
+      let nextEvent = null;
+      let nextEventsEnabled = false;
+      let nextWarStats = null;
+      let nextRacketAttackTargets = [];
+      let nextVaultTransactions = [];
+      let nextVaultTxTotal = 0;
+
       const [listRes, myRes, configRes, historyRes, eventsRes] = await Promise.allSettled([
         api.get('/families'), api.get('/families/my'), api.get('/families/config').catch(() => ({ data: {} })),
         api.get('/families/wars/history').catch(() => ({ data: { wars: [] } })), api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
       ]);
-      if (listRes.status === 'fulfilled') setFamilies(listRes.value?.data || []);
+      if (listRes.status === 'fulfilled') {
+        nextFamilies = listRes.value?.data || [];
+        setFamilies(nextFamilies);
+      }
       if (myRes.status === 'fulfilled' && myRes.value?.data) {
-        setMyFamily(myRes.value.data);
+        nextMyFamily = myRes.value.data;
+        setMyFamily(nextMyFamily);
         if (myRes.value.data?.family) {
           const [statsRes, targetsRes, vaultRes] = await Promise.allSettled([
             api.get('/families/war/stats'),
             api.get('/families/racket-attack-targets', { params: { _: Date.now() } }),
             api.get('/families/vault-transactions', { params: { limit: 50 } }).catch(() => ({ data: { transactions: [], total: 0 } })),
           ]);
-          if (statsRes.status === 'fulfilled') setWarStats(statsRes.value?.data);
-          setRacketAttackTargets(targetsRes.status === 'fulfilled' ? targetsRes.value?.data?.targets ?? [] : []);
+          if (statsRes.status === 'fulfilled') {
+            nextWarStats = statsRes.value?.data;
+            setWarStats(nextWarStats);
+          }
+          nextRacketAttackTargets = targetsRes.status === 'fulfilled' ? targetsRes.value?.data?.targets ?? [] : [];
+          setRacketAttackTargets(nextRacketAttackTargets);
           if (vaultRes.status === 'fulfilled') {
-            setVaultTransactions(vaultRes.value?.data?.transactions ?? []);
-            setVaultTxTotal(vaultRes.value?.data?.total ?? 0);
+            nextVaultTransactions = vaultRes.value?.data?.transactions ?? [];
+            nextVaultTxTotal = vaultRes.value?.data?.total ?? 0;
+            setVaultTransactions(nextVaultTransactions);
+            setVaultTxTotal(nextVaultTxTotal);
           } else {
             setVaultTransactions([]);
             setVaultTxTotal(0);
           }
         } else {
+          nextWarStats = null;
+          nextRacketAttackTargets = [];
+          nextVaultTransactions = [];
+          nextVaultTxTotal = 0;
           setWarStats(null);
           setRacketAttackTargets([]);
           setVaultTransactions([]);
           setVaultTxTotal(0);
         }
       }
-      if (configRes.status === 'fulfilled') setConfig(configRes.value?.data);
-      if (historyRes.status === 'fulfilled') setWarHistory(historyRes.value?.data?.wars || []);
-      if (eventsRes.status === 'fulfilled') { setEvent(eventsRes.value?.data?.event ?? null); setEventsEnabled(!!eventsRes.value?.data?.events_enabled); }
+      if (configRes.status === 'fulfilled') {
+        nextConfig = configRes.value?.data;
+        setConfig(nextConfig);
+      }
+      if (historyRes.status === 'fulfilled') {
+        nextWarHistory = historyRes.value?.data?.wars || [];
+        setWarHistory(nextWarHistory);
+      }
+      if (eventsRes.status === 'fulfilled') {
+        nextEvent = eventsRes.value?.data?.event ?? null;
+        nextEventsEnabled = !!eventsRes.value?.data?.events_enabled;
+        setEvent(nextEvent);
+        setEventsEnabled(nextEventsEnabled);
+      }
+
+      setFamiliesPrefetch({
+        families: nextFamilies,
+        myFamily: nextMyFamily,
+        config: nextConfig,
+        warHistory: nextWarHistory,
+        event: nextEvent,
+        eventsEnabled: nextEventsEnabled,
+        warStats: nextWarStats,
+        racketAttackTargets: nextRacketAttackTargets,
+        vaultTransactions: nextVaultTransactions,
+        vaultTxTotal: nextVaultTxTotal,
+      });
     } catch (e) { toast.error(apiDetail(e)); } finally { setLoading(false); }
   }, []);
 
