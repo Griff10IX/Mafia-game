@@ -938,6 +938,8 @@ export default function Admin() {
   const [sportsStaleCancelLoading, setSportsStaleCancelLoading] = useState(false);
   const [sportsUnsettledEvents, setSportsUnsettledEvents] = useState({ events: [] });
   const [sportsUnsettledEventsLoading, setSportsUnsettledEventsLoading] = useState(false);
+  const [sportsUnsettledWinnerByEvent, setSportsUnsettledWinnerByEvent] = useState({});
+  const [sportsUnsettledSettlingEventId, setSportsUnsettledSettlingEventId] = useState('');
   const [sportsAutoSettleHealth, setSportsAutoSettleHealth] = useState(null);
   const [sportsAutoSettleHealthLoading, setSportsAutoSettleHealthLoading] = useState(false);
   const [respectLogUserId, setRespectLogUserId] = useState('');
@@ -5455,12 +5457,45 @@ export default function Admin() {
     try {
       const lim = Math.max(1, Math.min(1000, parseInt(String(sportsBetsLimit), 10) || 200));
       const res = await api.get('/admin/sports-betting/unsettled-events', { params: { limit: lim } });
-      setSportsUnsettledEvents(res.data || { events: [] });
+      const next = res.data || { events: [] };
+      setSportsUnsettledEvents(next);
+      setSportsUnsettledWinnerByEvent((prev) => {
+        const out = { ...prev };
+        (next.events || []).forEach((ev) => {
+          if (!out[ev.id]) {
+            const firstOpt = (ev.options || [])[0];
+            out[ev.id] = firstOpt?.id || '';
+          }
+        });
+        return out;
+      });
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to load unpaid events');
       setSportsUnsettledEvents({ events: [] });
     } finally {
       setSportsUnsettledEventsLoading(false);
+    }
+  };
+
+  const settleSportsUnpaidEvent = async (eventId) => {
+    const eid = String(eventId || '').trim();
+    const winningOptionId = String(sportsUnsettledWinnerByEvent[eid] || '').trim();
+    if (!eid || !winningOptionId) {
+      toast.error('Select winning option first');
+      return;
+    }
+    setSportsUnsettledSettlingEventId(eid);
+    try {
+      const res = await api.post('/admin/sports-betting/settle', {
+        event_id: eid,
+        winning_option_id: winningOptionId,
+      });
+      toast.success(res.data?.message || 'Event settled and payouts sent');
+      await Promise.all([fetchSportsUnsettledEvents(), fetchSportsBetsLedger(), fetchSportsAutoSettleHealth()]);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to settle event');
+    } finally {
+      setSportsUnsettledSettlingEventId('');
     }
   };
 
@@ -15465,7 +15500,7 @@ export default function Admin() {
                     Unpaid old events ({sportsUnsettledEvents.events.length})
                   </div>
                   <div className="max-h-52 overflow-auto">
-                    <table className="w-full text-[10px] font-heading min-w-[680px]">
+                    <table className="w-full text-[10px] font-heading min-w-[900px]">
                       <thead className="bg-zinc-800/50 sticky top-0">
                         <tr>
                           <th className="text-left p-2 text-mutedForeground uppercase whitespace-nowrap">Start</th>
@@ -15474,6 +15509,8 @@ export default function Admin() {
                           <th className="text-right p-2 text-mutedForeground uppercase whitespace-nowrap">Open bets</th>
                           <th className="text-right p-2 text-mutedForeground uppercase whitespace-nowrap">Open stake</th>
                           <th className="text-left p-2 text-mutedForeground uppercase whitespace-nowrap">Event ID</th>
+                          <th className="text-left p-2 text-mutedForeground uppercase whitespace-nowrap">Winning option</th>
+                          <th className="text-left p-2 text-mutedForeground uppercase whitespace-nowrap">Action</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -15485,6 +15522,26 @@ export default function Admin() {
                             <td className="p-2 text-right text-amber-300 whitespace-nowrap">{Number(ev.open_bets || 0).toLocaleString()}</td>
                             <td className="p-2 text-right text-amber-300 whitespace-nowrap">${Number(ev.open_stake_total || 0).toLocaleString()}</td>
                             <td className="p-2 text-[9px] font-mono text-mutedForeground truncate" title={ev.id || ''}>{ev.id || '—'}</td>
+                            <td className="p-2">
+                              <select
+                                value={sportsUnsettledWinnerByEvent[ev.id] || ''}
+                                onChange={(e) => setSportsUnsettledWinnerByEvent((prev) => ({ ...prev, [ev.id]: e.target.value }))}
+                                className="min-w-[170px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-[10px] text-foreground focus:border-primary/50 focus:outline-none"
+                              >
+                                <option value="">Select winner</option>
+                                {(ev.options || []).map((o) => (
+                                  <option key={`${ev.id}-${o.id}`} value={o.id}>{o.name}</option>
+                                ))}
+                              </select>
+                            </td>
+                            <td className="p-2">
+                              <BtnSecondary
+                                onClick={() => settleSportsUnpaidEvent(ev.id)}
+                                disabled={sportsUnsettledSettlingEventId === ev.id || !(sportsUnsettledWinnerByEvent[ev.id] || '').trim()}
+                              >
+                                {sportsUnsettledSettlingEventId === ev.id ? 'Settling...' : 'Settle + payout'}
+                              </BtnSecondary>
+                            </td>
                           </tr>
                         ))}
                       </tbody>

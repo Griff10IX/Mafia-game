@@ -2837,7 +2837,7 @@ async def admin_sports_unsettled_events(
     query: dict = {"status": "open", "start_time": {"$lt": now_iso}}
     cursor = db.sports_events.find(
         query,
-        {"_id": 0, "id": 1, "name": 1, "category": 1, "start_time": 1, "created_at": 1, "external_event_id": 1, "external_sport_key": 1},
+        {"_id": 0, "id": 1, "name": 1, "category": 1, "start_time": 1, "created_at": 1, "external_event_id": 1, "external_sport_key": 1, "options": 1},
     ).sort("start_time", 1).limit(limit)
     events = await cursor.to_list(limit)
     if not events:
@@ -2875,6 +2875,11 @@ async def admin_sports_unsettled_events(
             "external_sport_key": ev.get("external_sport_key"),
             "open_bets": cnt["open_bets"],
             "open_stake_total": cnt["open_stake_total"],
+            "options": [
+                {"id": o.get("id"), "name": o.get("name")}
+                for o in (ev.get("options") or [])
+                if o.get("id") and o.get("name")
+            ],
         })
     return {"events": out, "count": len(out)}
 
