@@ -8,7 +8,7 @@ import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
 import { getFamiliesPrefetch, setFamiliesPrefetch } from '../../utils/prefetchCache';
 import FamilyEmblem, { FAMILY_EMBLEM_PRESETS, groupFamilyEmblemPresets } from '../../components/FamilyEmblem';
-import { fileToCompressedDataUrl } from '../../utils/fileToCompressedDataUrl';
+import { fileToCompressedDataUrl, validateSafeImageFile } from '../../utils/fileToCompressedDataUrl';
 
 // ============================================================================
 // CONSTANTS & UTILITIES
@@ -1316,7 +1316,7 @@ const WarDetailsModal = ({ warId, onClose }) => {
   const [tab, setTab] = useState('fighters');
   const [data, setData] = useState(null);
   const [feed, setFeed] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [feedLoading, setFeedLoading] = useState(false);
 
   useEffect(() => {
@@ -2186,6 +2186,11 @@ const NoFamilyView = ({
                 const file = e.target.files?.[0];
                 e.target.value = '';
                 if (!file) return;
+                const valid = validateSafeImageFile(file);
+                if (!valid.ok) {
+                  toast.error(valid.reason);
+                  return;
+                }
                 try {
                   const url = await fileToCompressedDataUrl(file, 160, 0.82);
                   if (!url) {

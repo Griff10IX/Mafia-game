@@ -7,7 +7,7 @@ import { parseForumContent, insertAtCursor } from '../../utils/forumContent';
 import styles from '../../styles/noir.module.css';
 import { getFamilyProfilePrefetch, setFamilyProfilePrefetch } from '../../utils/prefetchCache';
 import FamilyEmblem, { FAMILY_EMBLEM_PRESETS, groupFamilyEmblemPresets } from '../../components/FamilyEmblem';
-import { fileToCompressedDataUrl } from '../../utils/fileToCompressedDataUrl';
+import { fileToCompressedDataUrl, validateSafeImageFile } from '../../utils/fileToCompressedDataUrl';
 
 /** Preset notepad backgrounds (dark greys) — same options as player profile. */
 const NOTEPAD_COLOR_PRESETS = [
@@ -347,6 +347,11 @@ export default function FamilyProfilePage() {
   const applyEmblemCustom = async (file) => {
     setEmblemBusy(true);
     try {
+      const valid = validateSafeImageFile(file);
+      if (!valid.ok) {
+        toast.error(valid.reason);
+        return;
+      }
       const url = await fileToCompressedDataUrl(file, 160, 0.82);
       if (!url) {
         toast.error('Invalid image');

@@ -379,7 +379,10 @@ async def get_topics(
     crew_oc_ids = list({t["crew_oc_family_id"] for t in topics if t.get("crew_oc_family_id")})
     crew_oc_fam_map = {}
     if crew_oc_ids:
-        async for fam in db.families.find({"id": {"$in": crew_oc_ids}}, {"_id": 0, "id": 1, "name": 1, "tag": 1, "crew_oc_join_fee": 1}):
+        async for fam in db.families.find(
+            {"id": {"$in": crew_oc_ids}},
+            {"_id": 0, "id": 1, "name": 1, "tag": 1, "crew_oc_join_fee": 1, "emblem_preset_id": 1, "avatar_url": 1},
+        ):
             if fam.get("id"):
                 crew_oc_fam_map[fam["id"]] = fam
     topic_ids = [t.get("id") for t in topics if t.get("id")]
@@ -451,6 +454,8 @@ async def get_topics(
                 item["crew_oc_family_name"] = fam.get("name")
                 item["crew_oc_family_tag"] = fam.get("tag")
                 item["crew_oc_join_fee"] = int(fam.get("crew_oc_join_fee") or 0)
+                item["crew_oc_family_emblem_preset_id"] = fam.get("emblem_preset_id")
+                item["crew_oc_family_emblem_avatar_url"] = fam.get("avatar_url")
         if t.get("redeem_code"):
             item["redeem_code"] = t["redeem_code"]
             rkey = (t["redeem_code"] or "").strip().upper()
@@ -543,12 +548,25 @@ async def get_topic(topic_id: str, current_user: dict = Depends(get_current_user
         c["disliked"] = cid in disliked_ids if cid else False
     await _attach_emoji_reactions(topic, comments, uid)
     if topic.get("crew_oc_family_id"):
-        fam = await db.families.find_one({"id": topic["crew_oc_family_id"]}, {"_id": 0, "name": 1, "tag": 1, "crew_oc_join_fee": 1, "crew_oc_cooldown_until": 1})
+        fam = await db.families.find_one(
+            {"id": topic["crew_oc_family_id"]},
+            {
+                "_id": 0,
+                "name": 1,
+                "tag": 1,
+                "crew_oc_join_fee": 1,
+                "crew_oc_cooldown_until": 1,
+                "emblem_preset_id": 1,
+                "avatar_url": 1,
+            },
+        )
         if fam:
             topic["crew_oc_family_name"] = fam.get("name")
             topic["crew_oc_family_tag"] = fam.get("tag")
             topic["crew_oc_join_fee"] = int(fam.get("crew_oc_join_fee") or 0)
             topic["crew_oc_cooldown_until"] = fam.get("crew_oc_cooldown_until")
+            topic["crew_oc_family_emblem_preset_id"] = fam.get("emblem_preset_id")
+            topic["crew_oc_family_emblem_avatar_url"] = fam.get("avatar_url")
         app = await db.family_crew_oc_applications.find_one(
             {"family_id": topic["crew_oc_family_id"], "user_id": current_user["id"]},
             {"_id": 0, "status": 1},

@@ -7,6 +7,7 @@ import GifPicker from '../../components/GifPicker';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import { parseForumContent, insertAtCursor } from '../../utils/forumContent';
 import styles from '../../styles/noir.module.css';
+import FamilyEmblem from '../../components/FamilyEmblem';
 
 const FORUM_STYLES = `
   @keyframes f-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -763,6 +764,13 @@ const TopicRowDesktop = ({ topic, canStickyImportant, canLock, onUpdate, updatin
       <div className="grid grid-cols-12 gap-2 px-3 py-2 f-row transition-colors items-center text-xs">
         <div className={`flex items-center gap-1.5 min-w-0 ${showFlagControls ? 'col-span-6' : 'col-span-7'}`}>
           <Link to={`/forum/topic/${topic.id}`} className="flex items-center gap-1.5 min-w-0 flex-1 truncate">
+            {topic.category === 'crew_oc' && (
+              <FamilyEmblem
+                emblemPresetId={topic.crew_oc_family_emblem_preset_id}
+                avatarUrl={topic.crew_oc_family_emblem_avatar_url}
+                size={18}
+              />
+            )}
             {topic.is_important && <AlertCircle size={12} className="text-amber-400 shrink-0" />}
             {topic.is_sticky && !topic.is_important && <Pin size={12} className="text-amber-400 shrink-0" />}
             {topic.is_important && <span className="text-amber-400 font-heading shrink-0">IMPORTANT:&nbsp;</span>}
@@ -869,6 +877,13 @@ const TopicRowMobile = ({ topic, canStickyImportant, canLock, onUpdate, updating
     <div className="flex items-start justify-between gap-2">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5">
+          {topic.category === 'crew_oc' && (
+            <FamilyEmblem
+              emblemPresetId={topic.crew_oc_family_emblem_preset_id}
+              avatarUrl={topic.crew_oc_family_emblem_avatar_url}
+              size={16}
+            />
+          )}
           {topic.is_important && <AlertCircle size={12} className="text-amber-400 shrink-0" />}
           {topic.is_sticky && !topic.is_important && <Pin size={12} className="text-amber-400 shrink-0" />}
           <span

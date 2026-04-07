@@ -8,6 +8,7 @@ import GifPicker from '../../components/GifPicker';
 import { toast } from 'sonner';
 import { parseForumContent, insertAtCursor } from '../../utils/forumContent';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
+import FamilyEmblem from '../../components/FamilyEmblem';
 import styles from '../../styles/noir.module.css';
 
 // Classic forum smileys (text codes that render as images)
@@ -1288,8 +1289,17 @@ export default function ForumTopic() {
             <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">Apply to Crew OC</span>
           </div>
           <div className="p-3">
+            <div className="flex items-center gap-2 mb-2">
+              <FamilyEmblem
+                emblemPresetId={topic.crew_oc_family_emblem_preset_id}
+                avatarUrl={topic.crew_oc_family_emblem_avatar_url}
+                size={26}
+              />
+              <p className="text-xs text-mutedForeground">
+                Join {topic.crew_oc_family_name} [{topic.crew_oc_family_tag}] for their next Crew OC run.
+              </p>
+            </div>
             <p className="text-xs text-mutedForeground mb-2">
-              Join {topic.crew_oc_family_name} [{topic.crew_oc_family_tag}] for their next Crew OC run.
               {topic.crew_oc_join_fee > 0
                 ? ` Pay ${(topic.crew_oc_join_fee || 0).toLocaleString()} cash to join instantly.`
                 : ' Free — your application will need approval.'}

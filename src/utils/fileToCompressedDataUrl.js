@@ -1,8 +1,28 @@
 /**
  * Read an image file as a small JPEG/PNG data URL (for emblems / avatars).
  */
+const SAFE_UPLOAD_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/gif', 'image/webp']);
+const SAFE_UPLOAD_IMAGE_EXTS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp']);
+
+export function validateSafeImageFile(file) {
+  if (!file) return { ok: false, reason: 'No file selected' };
+  const mime = String(file.type || '').toLowerCase().trim();
+  if (!SAFE_UPLOAD_IMAGE_TYPES.has(mime)) {
+    return { ok: false, reason: 'Only JPG, PNG, GIF, or WEBP files are allowed' };
+  }
+  const name = String(file.name || '').toLowerCase().trim();
+  const dot = name.lastIndexOf('.');
+  const ext = dot >= 0 ? name.slice(dot) : '';
+  if (!SAFE_UPLOAD_IMAGE_EXTS.has(ext)) {
+    return { ok: false, reason: 'File extension not allowed. Use .jpg, .png, .gif, or .webp' };
+  }
+  return { ok: true };
+}
+
 export async function fileToCompressedDataUrl(file, maxDim = 160, quality = 0.82) {
   if (!file) return '';
+  const valid = validateSafeImageFile(file);
+  if (!valid.ok) return '';
   const dataUrl = await new Promise((resolve, reject) => {
     const r = new FileReader();
     r.onload = () => resolve(String(r.result || ''));

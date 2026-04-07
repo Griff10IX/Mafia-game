@@ -13,6 +13,7 @@ import { BadgeShield, BADGE_STYLES as RANKING_BADGE_STYLES, CATEGORY_LABELS } fr
 import StaffUserDetailsPanel from '../../components/StaffUserDetailsPanel';
 import FamilyEmblem from '../../components/FamilyEmblem';
 import { getProfilePrefetch, setProfilePrefetch } from '../../utils/prefetchCache';
+import { fileToCompressedDataUrl, validateSafeImageFile } from '../../utils/fileToCompressedDataUrl';
 
 const PROFILE_STYLES = `
   @keyframes prof-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -84,36 +85,6 @@ function formatDateTime(iso) {
     minute: '2-digit',
     hour12: false,
   });
-}
-
-async function fileToCompressedDataUrl(file, maxDim = 160, quality = 0.82) {
-  if (!file) return '';
-  const dataUrl = await new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result || ''));
-    r.onerror = () => reject(new Error('Failed to read file'));
-    r.readAsDataURL(file);
-  });
-  if (!String(dataUrl).startsWith('data:image/')) return '';
-  const img = await new Promise((resolve, reject) => {
-    const i = new window.Image();
-    i.onload = () => resolve(i);
-    i.onerror = () => reject(new Error('Invalid image'));
-    i.src = String(dataUrl);
-  });
-  const w = img.width || 1;
-  const h = img.height || 1;
-  const scale = Math.min(1, maxDim / Math.max(w, h));
-  const cw = Math.max(1, Math.round(w * scale));
-  const ch = Math.max(1, Math.round(h * scale));
-  const canvas = document.createElement('canvas');
-  canvas.width = cw;
-  canvas.height = ch;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return String(dataUrl);
-  ctx.drawImage(img, 0, 0, cw, ch);
-  const jpeg = canvas.toDataURL('image/jpeg', quality);
-  return jpeg && jpeg.startsWith('data:image/') ? jpeg : canvas.toDataURL('image/png');
 }
 
 // Subcomponents
@@ -1160,6 +1131,11 @@ export default function Profile() {
 
   const uploadAvatar = async (file) => {
     if (!file) return;
+    const valid = validateSafeImageFile(file);
+    if (!valid.ok) {
+      toast.error(valid.reason);
+      return;
+    }
     setSavingAvatar(true);
     try {
       const dataUrl = await fileToCompressedDataUrl(file);
@@ -1730,7 +1706,7 @@ export default function Profile() {
                     <label className={`inline-flex items-center justify-center px-3 py-1.5 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-xs hover:bg-primary/30 cursor-pointer ${savingAvatar ? 'opacity-60 cursor-not-allowed' : ''}`}>
                       <input
                         type="file"
-                        accept="image/*"
+                          accept="image/jpeg,image/png,image/gif,image/webp"
                         className="hidden"
                         disabled={savingAvatar}
                         onChange={(e) => uploadAvatar(e.target.files?.[0])}
