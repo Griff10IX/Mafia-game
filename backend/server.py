@@ -792,6 +792,7 @@ class UserResponse(BaseModel):
     # Idempotency guard for tiered one-time rewards.
     rank_xp_pass_rewards_granted: bool = False
     shooting_range_bonus_plays: int = 0  # store upgrade: added to base 10 plays/hour in shooting range
+    hitlist_npc_bonus_slots: int = 0  # store upgrade: +1 NPC slot per 3h window (max +3)
     censor_profanity: bool = False  # when true, chat/forum show swear words as ***
     referred_by: Optional[str] = None  # first referrer id (legacy); see referred_by_ids for full list
     referred_by_username: Optional[str] = None  # comma-separated referrer usernames for display

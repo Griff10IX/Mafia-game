@@ -77,18 +77,6 @@ function buildTimelineEventCopySummary(ev) {
   return parts.join(' · ');
 }
 
-// Subcomponents
-const LoadingSpinner = () => (
-  <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
-    <style>{ATTEMPTS_STYLES}</style>
-    <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
-      <Crosshair size={22} className="text-primary/40 animate-pulse" />
-      <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      <span className="text-primary text-[9px] font-heading uppercase tracking-[0.2em]">Loading attempts...</span>
-    </div>
-  </div>
-);
-
 const AttemptRow = ({ attempt }) => {
   const outgoingRow = attempt.direction === 'outgoing';
   const killed = attempt.outcome === 'killed';
@@ -412,14 +400,6 @@ export default function Attempts() {
     setTimelineExpanded((m) => ({ ...m, [id]: !m[id] }));
   };
 
-  const showFullPageSpinner =
-    (tab === 'everything' && timelineLoading && timelineEvents.length === 0 && !timelineErr) ||
-    (tab === 'summary' && summaryLoading && attempts.length === 0);
-
-  if (showFullPageSpinner) {
-    return <LoadingSpinner />;
-  }
-
   return (
     <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="attempts-page">
       <style>{ATTEMPTS_STYLES}</style>
@@ -514,10 +494,7 @@ export default function Attempts() {
           )}
           {timelineErr && <p className="px-2.5 text-[10px] text-destructive font-heading">{timelineErr}</p>}
           {timelineLoading && timelineEvents.length === 0 && !timelineErr ? (
-            <div className="flex items-center gap-2 py-8 justify-center text-mutedForeground">
-              <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-              <span className="text-[9px] font-heading uppercase tracking-wider">Loading…</span>
-            </div>
+            <div className="py-8" />
           ) : timelineErr && timelineEvents.length === 0 ? null : timelineEvents.length === 0 ? (
             <div className="py-8 text-center">
               <History size={28} className="mx-auto text-primary/30 mb-2" />

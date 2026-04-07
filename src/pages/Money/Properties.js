@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import ActiveTokenBadge from '../../components/ActiveTokenBadge';
 import { getPropertiesPrefetch, setPropertiesPrefetch } from '../../utils/prefetchCache';
+import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 
 const PROP_STYLES = `
   @keyframes prop-fade-in { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
@@ -50,18 +51,19 @@ function isNoIncomeCollectMessage(msg) {
 }
 
 export default function Properties() {
-  const [properties, setProperties] = useState([]);
-  const [propertyIncomePerkUntil, setPropertyIncomePerkUntil] = useState(null);
-  const [targets, setTargets] = useState([]);
+  const propertiesBoot = getPropertiesPrefetch() || readSessionJson('mafia_properties_v1') || {};
+  const [properties, setProperties] = useState(() => propertiesBoot.properties ?? []);
+  const [propertyIncomePerkUntil, setPropertyIncomePerkUntil] = useState(() => propertiesBoot.propertyIncomePerkUntil ?? null);
+  const [targets, setTargets] = useState(() => propertiesBoot.targets ?? []);
   const [attackLoading, setAttackLoading] = useState(null); // property_id+username
   const [collectAllLoading, setCollectAllLoading] = useState(false);
-  const [user, setUser] = useState(null);
-  const [propertyUpkeep, setPropertyUpkeep] = useState(null);
+  const [user, setUser] = useState(() => propertiesBoot.user ?? null);
+  const [propertyUpkeep, setPropertyUpkeep] = useState(() => propertiesBoot.propertyUpkeep ?? null);
   const [upkeepPayLoading, setUpkeepPayLoading] = useState(false);
-  const [portfolioUpgrades, setPortfolioUpgrades] = useState(null);
+  const [portfolioUpgrades, setPortfolioUpgrades] = useState(() => propertiesBoot.portfolioUpgrades ?? null);
   const [buyUpgradeLoading, setBuyUpgradeLoading] = useState(false);
-  const [propertiesHeat, setPropertiesHeat] = useState(null);
-  const [propertiesHeatQuote, setPropertiesHeatQuote] = useState(null);
+  const [propertiesHeat, setPropertiesHeat] = useState(() => propertiesBoot.propertiesHeat ?? null);
+  const [propertiesHeatQuote, setPropertiesHeatQuote] = useState(() => propertiesBoot.propertiesHeatQuote ?? null);
   const [bribeInput, setBribeInput] = useState('');
   const [bribing, setBribing] = useState(false);
 
@@ -94,6 +96,16 @@ export default function Properties() {
         propertiesHeat,
         propertiesHeatQuote,
       });
+      writeSessionJson('mafia_properties_v1', {
+        properties,
+        propertyIncomePerkUntil,
+        targets,
+        user: r.data,
+        propertyUpkeep,
+        portfolioUpgrades,
+        propertiesHeat,
+        propertiesHeatQuote,
+      });
     }).catch(() => {});
   }, []);
 
@@ -114,6 +126,16 @@ export default function Properties() {
       setPropertiesHeat(nextPropertiesHeat);
       setPropertiesHeatQuote(nextPropertiesHeatQuote);
       setPropertiesPrefetch({
+        properties: nextProperties,
+        propertyIncomePerkUntil: nextPropertyIncomePerkUntil,
+        targets,
+        user,
+        propertyUpkeep: nextPropertyUpkeep,
+        portfolioUpgrades: nextPortfolioUpgrades,
+        propertiesHeat: nextPropertiesHeat,
+        propertiesHeatQuote: nextPropertiesHeatQuote,
+      });
+      writeSessionJson('mafia_properties_v1', {
         properties: nextProperties,
         propertyIncomePerkUntil: nextPropertyIncomePerkUntil,
         targets,
@@ -178,6 +200,16 @@ export default function Properties() {
       const nextTargets = res.data?.targets ?? [];
       setTargets(nextTargets);
       setPropertiesPrefetch({
+        properties,
+        propertyIncomePerkUntil,
+        targets: nextTargets,
+        user,
+        propertyUpkeep,
+        portfolioUpgrades,
+        propertiesHeat,
+        propertiesHeatQuote,
+      });
+      writeSessionJson('mafia_properties_v1', {
         properties,
         propertyIncomePerkUntil,
         targets: nextTargets,

@@ -1868,6 +1868,7 @@ def register(router):
                 rank_xp_pass_last_granted_micro_tier=_safe_int(u.get("rank_xp_pass_last_granted_micro_tier"), 0),
                 rank_xp_pass_rewards_granted=bool(u.get("rank_xp_pass_rewards_granted", False)),
                 shooting_range_bonus_plays=_safe_int(u.get("shooting_range_bonus_plays"), 0),
+                hitlist_npc_bonus_slots=_safe_int(u.get("hitlist_npc_bonus_slots"), 0),
                 censor_profanity=bool(u.get("censor_profanity", False)),
                 referred_by=referred_by_legacy,
                 referred_by_username=referred_by_username,

@@ -175,6 +175,8 @@ function GhostBtn({ children, onClick, disabled, small }) {
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function Distillery() {
   const [saving, setSaving] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [business, setBusiness] = useState(null);
   const [pendingTake, setPendingTake] = useState(0);
   const [state, setState] = useState(null);
@@ -199,6 +201,7 @@ export default function Distillery() {
       const next = distRes.data || null;
       setState(next);
       setCatalog(catRes.data || { tracks: {} });
+      setLoadError(false);
       const w = next?.distillery?.workers || {};
       setWorkerDraft({
         production: Number(w.production || 0),
@@ -215,10 +218,13 @@ export default function Distillery() {
     } catch (e) {
       if (!silent) toast.error(getApiErrorMessage(e));
       if (!silent) {
+        setLoadError(true);
         setState(null);
         setBusiness(null);
         setPendingTake(0);
       }
+    } finally {
+      setHasLoaded(true);
     }
   }, []);
 
@@ -313,7 +319,34 @@ export default function Distillery() {
   const recentFailures = Array.isArray(dist?.recent_failures) ? dist.recent_failures : [];
   const maintenanceWarn = maintenancePct < 35;
 
-  // ── Loading ─────────────────────────────────────────────────────────────────
+  // ── Loading / Error / Empty ────────────────────────────────────────────────
+  if (!hasLoaded && !state && !business) {
+    return (
+      <div className={`${styles.pageContent} mobile-page-root dist-root`}>
+        <div className="dist-empty-panel" />
+      </div>
+    );
+  }
+
+  if (hasLoaded && loadError && !state && !business) {
+    return (
+      <div className={`${styles.pageContent} mobile-page-root dist-root`}>
+        <div className="dist-empty-panel">
+          <div className="dist-empty-icon">⚠</div>
+          <h1 className="dist-empty-title">Couldn&apos;t Load Distillery</h1>
+          <p className="dist-empty-sub">Try again in a moment.</p>
+          <button
+            type="button"
+            onClick={() => load(false)}
+            className="inline-block border border-primary/35 bg-primary/10 px-5 py-2 text-[11px] font-heading font-bold uppercase tracking-wider text-primary transition-all hover:bg-primary/20"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // ── No business ─────────────────────────────────────────────────────────────
   if (!state || !business) {
     return (
