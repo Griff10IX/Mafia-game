@@ -2625,6 +2625,60 @@ def register(router):
                 })
         return {"cars": result}
 
+    @router.get("/admin/cars/exclusive-owners")
+    async def admin_get_exclusive_car_owners(current_user: dict = Depends(get_current_user)):
+        """List who owns each exclusive / loot-exclusive car. Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        exclusive_cars = [c for c in (CARS or []) if c.get("rarity") in ("exclusive", "loot_exclusive")]
+        if not exclusive_cars:
+            return {"cars": []}
+        car_map = {c.get("id"): c for c in exclusive_cars if c.get("id")}
+        car_ids = list(car_map.keys())
+        per_car: Dict[str, Dict[str, Any]] = {
+            cid: {
+                "car_id": cid,
+                "name": (car_map.get(cid) or {}).get("name") or cid,
+                "rarity": (car_map.get(cid) or {}).get("rarity") or "",
+                "owners_count": 0,
+                "owned_count_total": 0,
+                "owners": [],
+            }
+            for cid in car_ids
+        }
+        pipeline = [
+            {"$match": {"car_id": {"$in": car_ids}}},
+            {"$group": {"_id": {"car_id": "$car_id", "user_id": "$user_id"}, "owned_count": {"$sum": 1}}},
+        ]
+        rows = await db.user_cars.aggregate(pipeline).to_list(50_000)
+        if not rows:
+            return {"cars": list(per_car.values())}
+        user_ids = sorted({r.get("_id", {}).get("user_id") for r in rows if r.get("_id", {}).get("user_id")})
+        users = await db.users.find({"id": {"$in": user_ids}}, {"_id": 0, "id": 1, "username": 1}).to_list(60_000)
+        usernames = {u.get("id"): u.get("username") or "?" for u in users}
+        for r in rows:
+            rid = r.get("_id") or {}
+            cid = rid.get("car_id")
+            uid = rid.get("user_id")
+            if not cid or not uid or cid not in per_car:
+                continue
+            owned_count = int(r.get("owned_count") or 0)
+            per_car[cid]["owners"].append(
+                {"user_id": uid, "username": usernames.get(uid, "?"), "owned_count": owned_count}
+            )
+            per_car[cid]["owners_count"] += 1
+            per_car[cid]["owned_count_total"] += owned_count
+        for cid in per_car.keys():
+            per_car[cid]["owners"] = sorted(
+                per_car[cid]["owners"],
+                key=lambda x: (-int(x.get("owned_count") or 0), (x.get("username") or "").lower()),
+            )
+        cars_out = sorted(
+            per_car.values(),
+            key=lambda x: (-int(x.get("owners_count") or 0), (x.get("name") or "").lower()),
+        )
+        return {"cars": cars_out}
+
     @router.post("/admin/cars/edit-value")
     async def admin_edit_car_value(body: EditCarValueRequest, current_user: dict = Depends(get_current_user)):
         """Edit the value and/or travel bonus of an exclusive car. Persists across restarts."""

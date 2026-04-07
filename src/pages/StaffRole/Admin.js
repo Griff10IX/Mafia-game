@@ -843,6 +843,8 @@ export default function Admin() {
   const [giveEveryoneExclusiveLoading, setGiveEveryoneExclusiveLoading] = useState(false);
   const [exclusiveCarValues, setExclusiveCarValues] = useState([]);
   const [exclusiveCarValuesLoading, setExclusiveCarValuesLoading] = useState(false);
+  const [exclusiveCarOwners, setExclusiveCarOwners] = useState([]);
+  const [exclusiveCarOwnersLoading, setExclusiveCarOwnersLoading] = useState(false);
   const [editCarId, setEditCarId] = useState('');
   const [editCarValue, setEditCarValue] = useState('');
   const [editCarTravel, setEditCarTravel] = useState('');
@@ -4707,7 +4709,10 @@ export default function Admin() {
     const inCategory = activeCategoryId === 'admin-world-systems' || activeCategoryId === 'admin-analytics-monitoring';
     if (!isAdmin || !inCategory || !showingPanel) return;
     fetchGtaExclusivePool();
-    if (!collapsed.gtaPool) fetchExclusiveCarValues();
+    if (!collapsed.gtaPool) {
+      fetchExclusiveCarValues();
+      fetchExclusiveCarOwners();
+    }
   }, [isAdmin, activeCategoryId, collapsed.gtaPool, collapsed.gtaLogs]);
 
   const handleGiveEveryoneExclusiveCars = async (lootExclusive, alCapone) => {
@@ -4740,6 +4745,19 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed to load car values');
     } finally {
       setExclusiveCarValuesLoading(false);
+    }
+  };
+
+  const fetchExclusiveCarOwners = async () => {
+    setExclusiveCarOwnersLoading(true);
+    try {
+      const res = await api.get('/admin/cars/exclusive-owners');
+      setExclusiveCarOwners(res.data?.cars || []);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load exclusive car owners');
+      setExclusiveCarOwners([]);
+    } finally {
+      setExclusiveCarOwnersLoading(false);
     }
   };
 
@@ -10661,6 +10679,40 @@ export default function Admin() {
                     </div>
                   );
                 })}
+              </div>
+
+              <div className="pt-3 border-t border-zinc-700/50 space-y-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-heading text-mutedForeground">Who has exclusive cars:</span>
+                  <button
+                    type="button"
+                    disabled={exclusiveCarOwnersLoading}
+                    onClick={fetchExclusiveCarOwners}
+                    className="px-2 py-1 rounded border border-primary/40 bg-primary/10 text-[10px] font-heading font-bold text-primary hover:bg-primary/20 disabled:opacity-50"
+                  >
+                    {exclusiveCarOwnersLoading ? '…' : 'View owners'}
+                  </button>
+                </div>
+                <div className="max-h-56 overflow-y-auto space-y-1">
+                  {exclusiveCarOwners.map((car) => (
+                    <div key={car.car_id} className="rounded border border-zinc-700/30 bg-zinc-900/30 px-2 py-1.5">
+                      <div className="text-[10px] font-heading text-foreground">
+                        {car.name} <span className="text-mutedForeground">({car.rarity})</span> - {Number(car.owners_count || 0)} owner(s), {Number(car.owned_count_total || 0)} total
+                      </div>
+                      {Array.isArray(car.owners) && car.owners.length > 0 ? (
+                        <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                          {car.owners.map((o) => (
+                            <Link key={`${car.car_id}-${o.user_id}`} to={`/profile/${encodeURIComponent(o.username || '')}`} className="text-[9px] text-primary hover:underline font-heading">
+                              {o.username} x{Number(o.owned_count || 0)}
+                            </Link>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-[9px] text-mutedForeground">No owners</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <div className="pt-3 border-t border-zinc-700/50 space-y-2">
