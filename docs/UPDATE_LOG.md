@@ -6,6 +6,27 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-07 18:40 UTC[/color][/b] — [b]Exclusive car defense bonus in PvP[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Owning [b]exclusive[/b] cars now makes you harder to kill in PvP: [b]+5% bullets required[/b]. Owning a [b]loot-exclusive[/b] car applies a stronger [b]+10% bullets required[/b] bonus. If both are owned, the loot-exclusive bonus takes priority (no stacking beyond +10%).[/color]
+[*][color=#888888][b]Changed:[/b] This defense also applies when your [b]bodyguard[/b] is attacked (uses the bodyguard owner’s car bonus).[/color]
+[*][color=#888888][b]Player action:[/b] No action required. The bonus is automatic as soon as you own the qualifying car type.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-04-07 18:30 UTC[/color][/b] — [b]Casino Heist fail: jail + harder bust-outs[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Failing [b]Crimes → Casino Heist[/b] now sends you to [b]jail for 90 seconds[/b]. While you are in that jail term, other players need [b]roughly 2× the usual luck[/b] to [b]bust you out[/b] (bust success chance is halved against you for that window).[/color]
+[*][color=#888888][b]Player action:[/b] No setup needed — the new penalties apply automatically on failed Casino Heist attempts. If you are busting someone out, expect a tougher roll right after a failed heist catch.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-07 16:45 UTC[/color][/b] — [b]Grave Robber tuning + visibility updates[/b][/size]
 [quote]
 [list]

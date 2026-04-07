@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Skull, Shovel, Clock3, Coins, Sparkles, Gem, AlertTriangle, ChevronRight } from 'lucide-react';
+import { Skull, Shovel, Clock3, Coins, Sparkles, Gem, AlertTriangle, ChevronRight, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { refreshUser } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
@@ -52,6 +52,14 @@ function rewardIcon(reward) {
   if (k === 'tokens') return <Sparkles size={14} className="text-primary" />;
   if (k === 'car') return <Gem size={14} className="text-violet-400" />;
   return <Skull size={14} className="text-zinc-500" />;
+}
+
+function formatRecentAttemptLine(row) {
+  const attemptNo = Number(row?.attempt_number || 0);
+  const result = rewardText(row?.reward);
+  const cost = formatMoney(row?.attempt_cost);
+  const at = row?.attempted_at ? new Date(row.attempted_at).toLocaleString() : '—';
+  return `#${attemptNo} · ${result} · Cost ${cost} · ${at}`;
 }
 
 export default function GraveRobber() {
@@ -142,6 +150,16 @@ export default function GraveRobber() {
       toast.error(e.response?.data?.detail || 'Dig failed');
     } finally {
       setDigging(false);
+    }
+  };
+
+  const onCopyRecent = async (row) => {
+    const line = formatRecentAttemptLine(row);
+    try {
+      await navigator.clipboard.writeText(line);
+      toast.success('Copied line to clipboard');
+    } catch {
+      toast.error('Copy failed');
     }
   };
 
@@ -406,6 +424,15 @@ export default function GraveRobber() {
                     Cost {formatMoney(row.attempt_cost)} · {row.attempted_at ? new Date(row.attempted_at).toLocaleString() : '—'}
                   </p>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => onCopyRecent(row)}
+                  className="inline-flex items-center justify-center w-5 h-5 rounded border border-zinc-600/60 text-zinc-400 hover:text-primary hover:border-primary/50 transition-colors shrink-0"
+                  title="Copy this line"
+                  aria-label="Copy this line"
+                >
+                  <Copy size={11} />
+                </button>
                 <ChevronRight size={12} className="text-zinc-600 shrink-0" />
               </div>
             ))

@@ -249,6 +249,9 @@ LOOT_PIECE_AMOUNT = 1
 # Ultra-rare token drop from any successful crime
 # 0.001% = 1 in 100,000 successful crimes
 TOKEN_GLOBAL_DROP_CHANCE = 0.00001
+CASINO_HEIST_ID = "crime8"
+CASINO_HEIST_FAIL_JAIL_SECONDS = 90
+CASINO_HEIST_BUST_DIFFICULTY_MULT = 2.0
 
 
 # ---------------------------------------------------------------------------
@@ -844,6 +847,26 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
         prestige_bonus_earned = None
         message = _rng.choice(CRIME_FAIL_MESSAGES)
         respect_earned = 0
+        # Casino Heist fail: immediate 90s jail + temporary 2x harder bust-out.
+        if str(crime.get("id") or "") == CASINO_HEIST_ID:
+            jail_until_dt = now + timedelta(seconds=CASINO_HEIST_FAIL_JAIL_SECONDS)
+            jail_until_iso = jail_until_dt.isoformat()
+            await db.users.update_one(
+                {"id": current_user["id"]},
+                {
+                    "$set": {
+                        "in_jail": True,
+                        "jail_until": jail_until_iso,
+                        "snitch_attempted_this_term": False,
+                        "jail_bust_harder_until": jail_until_iso,
+                        "jail_bust_difficulty_mult": CASINO_HEIST_BUST_DIFFICULTY_MULT,
+                    }
+                },
+            )
+            message = (
+                f"{message} You got caught in the heist and were jailed for "
+                f"{CASINO_HEIST_FAIL_JAIL_SECONDS}s. Busting you out is 2x harder during this term."
+            )
     # Track attempts, successes, progress (success +6-8%; fail -1-3%; once at 92% floor is 77%)
     set_fields = {
         "last_committed": now.isoformat(),

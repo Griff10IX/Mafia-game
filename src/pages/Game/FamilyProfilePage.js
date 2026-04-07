@@ -6,6 +6,8 @@ import { toast } from 'sonner';
 import { parseForumContent, insertAtCursor } from '../../utils/forumContent';
 import styles from '../../styles/noir.module.css';
 import { getFamilyProfilePrefetch, setFamilyProfilePrefetch } from '../../utils/prefetchCache';
+import FamilyEmblem, { FAMILY_EMBLEM_PRESETS, groupFamilyEmblemPresets } from '../../components/FamilyEmblem';
+import { fileToCompressedDataUrl } from '../../utils/fileToCompressedDataUrl';
 
 /** Preset notepad backgrounds (dark greys) — same options as player profile. */
 const NOTEPAD_COLOR_PRESETS = [
@@ -193,6 +195,7 @@ export default function FamilyProfilePage() {
   const [profileTextEdit, setProfileTextEdit] = useState('');
   const [notepadColorEdit, setNotepadColorEdit] = useState('');
   const [savingProfileText, setSavingProfileText] = useState(false);
+  const [emblemBusy, setEmblemBusy] = useState(false);
   const profileTextareaRef = useRef(null);
 
   useEffect(() => {
@@ -321,6 +324,53 @@ export default function FamilyProfilePage() {
     } finally { setSavingProfileText(false); }
   };
 
+  const refreshFamilyLookup = async () => {
+    const r = await api.get('/families/lookup', { params: { tag: family.tag } });
+    setFamily(r.data);
+    setProfileTextEdit((r.data?.profile_text || '').trim() || '');
+    setNotepadColorEdit(r.data?.profile_notepad_color ?? '');
+    if (r.data?.id) setFamilyProfilePrefetch(r.data.id, r.data);
+    if (r.data?.tag) setFamilyProfilePrefetch(r.data.tag, r.data);
+  };
+
+  const applyEmblemPreset = async (presetId) => {
+    setEmblemBusy(true);
+    try {
+      await api.patch('/families/avatar', { preset_id: presetId });
+      toast.success('Emblem updated');
+      await refreshFamilyLookup();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not set emblem');
+    } finally { setEmblemBusy(false); }
+  };
+
+  const applyEmblemCustom = async (file) => {
+    setEmblemBusy(true);
+    try {
+      const url = await fileToCompressedDataUrl(file, 160, 0.82);
+      if (!url) {
+        toast.error('Invalid image');
+        return;
+      }
+      await api.patch('/families/avatar', { avatar_data: url });
+      toast.success('Custom emblem saved');
+      await refreshFamilyLookup();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not upload emblem');
+    } finally { setEmblemBusy(false); }
+  };
+
+  const clearEmblem = async () => {
+    setEmblemBusy(true);
+    try {
+      await api.patch('/families/avatar', { clear: true });
+      toast.success('Emblem removed');
+      await refreshFamilyLookup();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not clear emblem');
+    } finally { setEmblemBusy(false); }
+  };
+
   const sorted      = [...members].sort((a, b) => (getRoleConfig(a.role).rank ?? 5) - (getRoleConfig(b.role).rank ?? 5));
   const isBossRole  = (r) => ['boss', 'don'].includes((r || '').toString().toLowerCase());
   const boss        = sorted.find(m => isBossRole(m.role));
@@ -367,7 +417,9 @@ export default function FamilyProfilePage() {
           </div>
 
           <div className="flex flex-wrap items-end justify-between gap-4">
-            <div>
+            <div className="flex items-start gap-3 min-w-0">
+              <FamilyEmblem emblemPresetId={family.emblem_preset_id} avatarUrl={family.avatar_url} size={52} className="shrink-0 mt-0.5" />
+              <div className="min-w-0">
               <h1 className="text-2xl sm:text-3xl font-heading font-black text-primary tracking-widest uppercase leading-none">
                 {family.name}
               </h1>
@@ -380,6 +432,7 @@ export default function FamilyProfilePage() {
                   </span>
                 );
               })()}
+              </div>
             </div>
 
             {family.head_of_state && (
@@ -845,6 +898,59 @@ export default function FamilyProfilePage() {
                   className="w-full py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {savingProfileText ? 'Saving…' : 'Save profile text'}
+                </button>
+              </div>
+              <div className="space-y-2 pt-3 border-t border-zinc-700/40">
+                <label className="block text-[9px] font-heading font-bold text-primary/70 uppercase tracking-[0.2em]">Crew emblem</label>
+                <p className="text-[9px] text-zinc-500 font-heading leading-relaxed">
+                  Preset or custom image. Each design is unique — another active family cannot copy it. Wiped crews release their emblem for reuse.
+                </p>
+                <div className="space-y-2">
+                  {groupFamilyEmblemPresets(FAMILY_EMBLEM_PRESETS).map(({ group, items }) => (
+                    <div key={group}>
+                      <p className="text-[9px] font-heading text-zinc-500 uppercase tracking-wider mb-1">{group}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {items.map((p) => (
+                          <button
+                            key={p.id}
+                            type="button"
+                            title={p.label}
+                            disabled={emblemBusy}
+                            onClick={() => applyEmblemPreset(p.id)}
+                            className={`p-0.5 rounded-full border transition-colors disabled:opacity-50 ${
+                              family.emblem_preset_id === p.id
+                                ? 'border-primary ring-2 ring-primary/40'
+                                : 'border-zinc-600/50 hover:border-primary/40'
+                            }`}
+                          >
+                            <FamilyEmblem emblemPresetId={p.id} size={30} />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <label className="block">
+                  <span className="text-[9px] font-heading text-zinc-500 uppercase tracking-wider">Custom upload</span>
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/gif,image/webp"
+                    disabled={emblemBusy}
+                    className="mt-1 block w-full text-[10px] text-zinc-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-primary/20 file:text-primary file:font-heading disabled:opacity-50"
+                    onChange={async (e) => {
+                      const f = e.target.files?.[0];
+                      e.target.value = '';
+                      if (f) await applyEmblemCustom(f);
+                    }}
+                  />
+                </label>
+                <button
+                  type="button"
+                  disabled={emblemBusy || (!family.emblem_preset_id && !family.avatar_url)}
+                  onClick={() => clearEmblem()}
+                  className="text-[9px] font-heading uppercase tracking-wider text-zinc-500 hover:text-red-400 disabled:opacity-40"
+                >
+                  Remove emblem
                 </button>
               </div>
             </>

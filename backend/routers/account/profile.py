@@ -531,11 +531,20 @@ def register(router):
                         {"id": user_id},
                         {"$set": {"family_id": None, "family_role": None}},
                     )
-                return (None, None)
-            fam = await db.families.find_one({"id": str(fid)}, {"_id": 0, "name": 1, "tag": 1})
+                return (None, None, None, None)
+            fam = await db.families.find_one(
+                {"id": str(fid)},
+                {"_id": 0, "name": 1, "tag": 1, "emblem_preset_id": 1, "avatar_url": 1},
+            )
             if not fam:
-                return (None, None)
-            return (fam.get("name"), fam.get("tag"))
+                return (None, None, None, None)
+            pid = fam.get("emblem_preset_id")
+            return (
+                fam.get("name"),
+                fam.get("tag"),
+                pid,
+                None if pid else fam.get("avatar_url"),
+            )
 
         async def _badge_stat_fields():
             """Stats only — used for ranking badges on profile (same for self and visitors)."""
@@ -605,7 +614,7 @@ def register(router):
             _badge_stat_fields(),
         )
 
-        family_name, family_tag = family_name_tag or (None, None)
+        family_name, family_tag, family_emblem_preset_id, family_emblem_avatar_url = family_name_tag or (None, None, None, None)
 
         honours = [
             {"rank": rank_points_rank, "label": "Most Rank Points Earned"},
@@ -669,6 +678,8 @@ def register(router):
             "last_seen": last_seen,
             "family_name": family_name,
             "family_tag": family_tag,
+            "family_emblem_preset_id": family_emblem_preset_id,
+            "family_emblem_avatar_url": family_emblem_avatar_url,
             "honours": honours,
             "owned_casinos": owned_casinos,
             "property": property_,

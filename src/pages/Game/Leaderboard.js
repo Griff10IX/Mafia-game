@@ -176,15 +176,20 @@ export default function Leaderboard() {
   );
   const intervalRef = useRef(null);
 
-  const fetchLeaderboard = useCallback(async (showRefreshSpin = false, silentError = false) => {
+  const fetchLeaderboard = useCallback(async (showRefreshSpin = false, silentError = false, background = false) => {
     const dead = viewMode === 'dead';
-    const cached = readLbEntry(period, topLimit, dead);
-    if (cached?.boards && typeof cached.boards === 'object') {
-      setBoards(cached.boards);
-      setLastRewardWinners(cached.last_reward_winners ?? null);
+    if (!background) {
+      const cached = readLbEntry(period, topLimit, dead);
+      if (cached?.boards && typeof cached.boards === 'object') {
+        setBoards(cached.boards);
+        setLastRewardWinners(cached.last_reward_winners ?? null);
+      }
     }
-    if (showRefreshSpin) setRefreshing(true);
-    const timeoutId = setTimeout(() => setRefreshing(false), 15000);
+    let timeoutId;
+    if (showRefreshSpin) {
+      setRefreshing(true);
+      timeoutId = setTimeout(() => setRefreshing(false), 15000);
+    }
     try {
       const response = await api.get('/leaderboards/top', {
         params: { limit: topLimit, dead, period },
@@ -198,8 +203,8 @@ export default function Leaderboard() {
     } catch (error) {
       if (!silentError) toast.error('Failed to load leaderboard');
     } finally {
-      clearTimeout(timeoutId);
-      setRefreshing(false);
+      if (timeoutId) clearTimeout(timeoutId);
+      if (showRefreshSpin) setRefreshing(false);
     }
   }, [topLimit, viewMode, period]);
 
@@ -208,7 +213,7 @@ export default function Leaderboard() {
   }, [fetchLeaderboard]);
 
   useEffect(() => {
-    intervalRef.current = setInterval(() => fetchLeaderboard(false, true), 60_000);
+    intervalRef.current = setInterval(() => fetchLeaderboard(false, true, true), 60_000);
     return () => clearInterval(intervalRef.current);
   }, [fetchLeaderboard]);
 

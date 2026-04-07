@@ -327,7 +327,7 @@ const AttemptsCard = ({ title, attempts, icon: Icon, emptyMessage, delay = 0 }) 
 
 // Main component
 export default function Attempts() {
-  const [tab, setTab] = useState('everything');
+  const [tab, setTab] = useState('summary');
   const [summaryLoading, setSummaryLoading] = useState(false);
   /** True on first paint so default 'Everything' tab shows spinner until GET /attack/timeline returns. */
   const [timelineLoading, setTimelineLoading] = useState(true);
@@ -336,6 +336,7 @@ export default function Attempts() {
   const [timelineErr, setTimelineErr] = useState(null);
   const [timelineExpanded, setTimelineExpanded] = useState({});
   const [canViewPayload, setCanViewPayload] = useState(false);
+  const [canViewEverything, setCanViewEverything] = useState(false);
   const [timelineSubjectUsername, setTimelineSubjectUsername] = useState(null);
   const [adminTargetInput, setAdminTargetInput] = useState('');
   const [adminTargetApplied, setAdminTargetApplied] = useState('');
@@ -377,8 +378,11 @@ export default function Attempts() {
     try {
       const res = await api.get('/admin/whoami');
       const d = res?.data || {};
-      setCanViewPayload(Boolean(d.is_admin || d.is_moderator || d.is_help_desk_operator));
+      const staffCanViewEverything = Boolean(d.is_admin || d.is_moderator);
+      setCanViewEverything(staffCanViewEverything);
+      setCanViewPayload(staffCanViewEverything);
     } catch {
+      setCanViewEverything(false);
       setCanViewPayload(false);
     }
   }, []);
@@ -386,6 +390,12 @@ export default function Attempts() {
   useEffect(() => {
     void fetchViewerRole();
   }, [fetchViewerRole]);
+
+  useEffect(() => {
+    if (!canViewEverything && tab === 'everything') {
+      setTab('summary');
+    }
+  }, [canViewEverything, tab]);
 
   useEffect(() => {
     if (tab === 'summary') {
@@ -447,16 +457,18 @@ export default function Attempts() {
           </div>
         )}
         <div className="flex flex-wrap gap-1 p-0.5 rounded-md border border-primary/20 bg-primary/5">
-          <button
-            type="button"
-            onClick={() => setTab('everything')}
-            className={`flex items-center gap-1 px-2 py-1 rounded text-[9px] font-heading font-bold uppercase tracking-wider transition-colors ${
-              tab === 'everything' ? 'bg-primary/25 text-primary border border-primary/40' : 'text-mutedForeground hover:text-foreground border border-transparent'
-            }`}
-          >
-            <History size={11} />
-            Everything
-          </button>
+          {canViewEverything && (
+            <button
+              type="button"
+              onClick={() => setTab('everything')}
+              className={`flex items-center gap-1 px-2 py-1 rounded text-[9px] font-heading font-bold uppercase tracking-wider transition-colors ${
+                tab === 'everything' ? 'bg-primary/25 text-primary border border-primary/40' : 'text-mutedForeground hover:text-foreground border border-transparent'
+              }`}
+            >
+              <History size={11} />
+              Everything
+            </button>
+          )}
           <button
             type="button"
             onClick={() => setTab('summary')}
@@ -470,7 +482,7 @@ export default function Attempts() {
         </div>
       </div>
 
-      {tab === 'everything' && (
+      {canViewEverything && tab === 'everything' && (
         <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 atmp-card atmp-fade-in mobile-panel`}>
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2 flex-wrap">

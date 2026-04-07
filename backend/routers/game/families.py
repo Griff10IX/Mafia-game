@@ -1,6 +1,7 @@
 # Families: list, create, join, leave, kick, roles, treasury, rackets, crew OC, war stats/truce/history
 from datetime import datetime, timezone, timedelta
 import asyncio
+import hashlib
 import logging
 import secrets
 _rng = secrets.SystemRandom()
@@ -68,6 +69,47 @@ AIRPORT_CREW_PERK_POINTS_DISCOUNT = "points_discount"
 AIRPORT_CREW_PERK_VALUES = frozenset(
     {AIRPORT_CREW_PERK_NONE, AIRPORT_CREW_PERK_TRAVEL_TIME, AIRPORT_CREW_PERK_POINTS_DISCOUNT}
 )
+
+# Crew emblem: each active family claims a unique key (preset id or SHA-256 of custom image bytes).
+FAMILY_EMBLEM_PRESETS_PUBLIC = [
+    {"id": "skull_bones", "label": "Skull & bones"},
+    {"id": "wolf_strike", "label": "Wolf strike"},
+    {"id": "rose_thorn", "label": "Rose thorn"},
+    {"id": "dagger_drop", "label": "Dagger drop"},
+    {"id": "crown_sigil", "label": "Crown sigil"},
+    {"id": "fist_city", "label": "Fist of the city"},
+    {"id": "star_north", "label": "North star"},
+    {"id": "ace_spade", "label": "Ace of spades"},
+    {"id": "serpent_coil", "label": "Serpent coil"},
+    {"id": "hourglass", "label": "Hourglass oath"},
+    {"id": "crosshairs", "label": "Crosshairs"},
+    {"id": "mask_void", "label": "Venetian mask"},
+    {"id": "omerta_shield", "label": "Omerta shield"},
+    {"id": "blood_lock", "label": "Blood lock"},
+    {"id": "skeleton_key", "label": "Skeleton key"},
+    {"id": "black_diamond", "label": "Black diamond"},
+    {"id": "vendetta_flame", "label": "Vendetta flame"},
+    {"id": "headhunter", "label": "Headhunter"},
+    {"id": "dirty_cash", "label": "Dirty cash"},
+    {"id": "old_world", "label": "Old world"},
+    {"id": "getaway", "label": "Getaway"},
+    {"id": "powder_keg", "label": "Powder keg"},
+    {"id": "watcher", "label": "The watcher"},
+    {"id": "grave_cross", "label": "Grave cross"},
+    {"id": "coin_ring", "label": "Coin ring"},
+    {"id": "tax_collector", "label": "Tax collector"},
+    {"id": "front_business", "label": "Front business"},
+    {"id": "safehouse", "label": "Safehouse"},
+    {"id": "loaded_dice", "label": "Loaded dice"},
+    {"id": "tribute", "label": "Tribute"},
+    {"id": "racket_iron", "label": "Racket iron"},
+    {"id": "night_veil", "label": "Night veil"},
+    {"id": "throne_claim", "label": "Throne claim"},
+    {"id": "silent_contract", "label": "Silent contract"},
+    {"id": "war_crest", "label": "War crest"},
+    {"id": "empire_mark", "label": "Empire mark"},
+]
+FAMILY_EMBLEM_PRESET_IDS = frozenset(p["id"] for p in FAMILY_EMBLEM_PRESETS_PUBLIC)
 
 # Per-crew garage melt contribution (user doc); reset when leaving/kick/join — not global bullets_melted
 def _family_melt_stats_reset_fields() -> dict:
@@ -214,6 +256,8 @@ FAMILY_MELT_REWARD_MONEY_MAX = 5_000_000_000
 class FamilyCreateRequest(BaseModel):
     name: str
     tag: str
+    emblem_preset_id: Optional[str] = None
+    emblem_custom_data: Optional[str] = None  # data URL; mutually exclusive with emblem_preset_id
 
 
 class FamilyJoinRequest(BaseModel):
@@ -316,7 +360,9 @@ class FamilyProfileTextRequest(BaseModel):
 
 
 class FamilyAvatarRequest(BaseModel):
-    avatar_data: Optional[str] = None  # data URL (data:image/...); empty or null to clear
+    avatar_data: Optional[str] = None  # custom emblem data URL
+    preset_id: Optional[str] = None  # one of FAMILY_EMBLEM_PRESET_IDS
+    clear: bool = False  # remove emblem (preset and custom)
 
 
 class WarTruceRequest(BaseModel):
@@ -581,24 +627,27 @@ async def cleanup_dead_families():
             winner_name = (winner_fam_doc or {}).get("name") or (winner_fam_doc or {}).get("tag") or (winner_id or "?")
             await db.families.update_one(
                 {"id": family_id},
-                {"$set": {
-                    "wiped": True,
-                    "wiped_at": now,
-                    "wiped_by_family_id": winner_id,
-                    "wiped_by_family_name": winner_family_name,
-                    "boss_id": None,
-                    "rackets": {},
-                    "treasury": 0,
-                    "treasury_bullets": 0,
-                    "treasury_points": 0,
-                    "treasury_loot_pieces": 0,
-                    "melt_treasury_pct": 0,
-                    "melt_reward_tiers": [],
-                    "compound_cash": 0,
-                    "compound_points": 0,
-                    "compound_loot_pieces": 0,
-                    "compound_deposits_by_user": {},
-                }}
+                {
+                    "$set": {
+                        "wiped": True,
+                        "wiped_at": now,
+                        "wiped_by_family_id": winner_id,
+                        "wiped_by_family_name": winner_family_name,
+                        "boss_id": None,
+                        "rackets": {},
+                        "treasury": 0,
+                        "treasury_bullets": 0,
+                        "treasury_points": 0,
+                        "treasury_loot_pieces": 0,
+                        "melt_treasury_pct": 0,
+                        "melt_reward_tiers": [],
+                        "compound_cash": 0,
+                        "compound_points": 0,
+                        "compound_loot_pieces": 0,
+                        "compound_deposits_by_user": {},
+                    },
+                    "$unset": {"emblem_key": ""},
+                },
             )
             marked_any = True
 
@@ -1203,7 +1252,10 @@ async def families_list(current_user: dict = Depends(get_current_user)):
     # No in-memory cache: multi-worker setups would show stale data (e.g. deleted families) until TTL
     cursor = db.families.find(
         {"wiped": {"$ne": True}},
-        {"_id": 0, "id": 1, "name": 1, "tag": 1, "treasury": 1, "join_mode": 1, "crew_oc_cooldown_until": 1},
+        {
+            "_id": 0, "id": 1, "name": 1, "tag": 1, "treasury": 1, "join_mode": 1, "crew_oc_cooldown_until": 1,
+            "emblem_preset_id": 1, "avatar_url": 1,
+        },
     )
     fams = await cursor.to_list(FAMILY_LIST_QUERY_LIMIT)
     out = []
@@ -1242,6 +1294,8 @@ async def families_list(current_user: dict = Depends(get_current_user)):
                     "at_war": False,
                     "join_mode": f.get("join_mode") or "open",
                     "crew_oc_cooldown_until": f.get("crew_oc_cooldown_until"),
+                    "emblem_preset_id": f.get("emblem_preset_id"),
+                    "avatar_url": f.get("avatar_url"),
                 })
     # Tag families that are currently in an active war
     active_wars = await db.family_wars.find(
@@ -1277,6 +1331,7 @@ async def families_config(current_user: dict = Depends(get_current_user)):
         **_config_cache,
         "max_families": MAX_FAMILIES,
         "player_cap_families_count": toward_cap,
+        "emblem_presets": FAMILY_EMBLEM_PRESETS_PUBLIC,
     }
 
 
@@ -1489,6 +1544,8 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             "crew_oc_forum_topic_id": fam.get("crew_oc_forum_topic_id") if fam.get("crew_oc_forum_topic_id") and await db.forum_topics.find_one({"id": fam["crew_oc_forum_topic_id"]}, {"_id": 1}) else None,
             "profile_text": (fam.get("profile_text") or "").strip() or None,
             "profile_notepad_color": notepad_color_for_api_response(fam.get("profile_notepad_color")),
+            "avatar_url": fam.get("avatar_url"),
+            "emblem_preset_id": fam.get("emblem_preset_id"),
             "racket_income_bonus_percent": float((fam.get("racket_income_bonus_percent") or 0) or 0),
             "head_of_state": head_of_state,
             "state_head_income": fam.get("state_head_income") or {},
@@ -1635,6 +1692,7 @@ async def families_lookup(tag: Optional[str] = None, id: Optional[str] = None, c
         "profile_text": (fam.get("profile_text") or "").strip() or None,
         "profile_notepad_color": notepad_color_for_api_response(fam.get("profile_notepad_color")),
         "avatar_url": fam.get("avatar_url"),
+        "emblem_preset_id": fam.get("emblem_preset_id"),
         "member_count": len(members), "members": members, "fallen": fallen, "rackets": rackets, "my_role": my_role,
         "crew_oc_join_fee": crew_oc_join_fee, "crew_oc_cooldown_until": crew_oc_cooldown_until,
         "crew_oc_forum_topic_id": crew_oc_forum_topic_id,
@@ -1686,6 +1744,34 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
         raise HTTPException(status_code=400, detail="Maximum number of families reached")
     if await db.families.find_one({"wiped": {"$ne": True}, "$or": [{"name": name}, {"tag": tag}]}):
         raise HTTPException(status_code=400, detail="Name or tag already taken")
+    raw_preset = (request.emblem_preset_id or "").strip() or None
+    raw_custom = (request.emblem_custom_data or "").strip() or None
+    if raw_preset and raw_custom:
+        raise HTTPException(status_code=400, detail="Use either a preset emblem or a custom image, not both")
+    emblem_preset_id = None
+    emblem_key = None
+    avatar_url_set = None
+    if raw_preset:
+        if raw_preset not in FAMILY_EMBLEM_PRESET_IDS:
+            raise HTTPException(status_code=400, detail="Invalid emblem preset")
+        ek = f"p:{raw_preset}"
+        if await _family_emblem_key_taken(ek, None):
+            raise HTTPException(status_code=400, detail="Another crew already uses this emblem")
+        emblem_preset_id = raw_preset
+        emblem_key = ek
+    elif raw_custom:
+        if len(raw_custom) > FAMILY_AVATAR_MAX_BYTES:
+            raise HTTPException(status_code=400, detail="Emblem image too large (max ~180KB).")
+        is_valid, err_msg = _validate_family_avatar(raw_custom)
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=err_msg)
+        ek = _family_emblem_custom_key_from_data_url(raw_custom)
+        if not ek:
+            raise HTTPException(status_code=400, detail="Invalid custom emblem")
+        if await _family_emblem_key_taken(ek, None):
+            raise HTTPException(status_code=400, detail="Another crew already uses this image as their emblem")
+        avatar_url_set = raw_custom
+        emblem_key = ek
     family_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     first_racket_id = FAMILY_RACKETS[0]["id"]
@@ -1704,6 +1790,12 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
     }
     if is_admin:
         fam_doc["player_cap_exempt"] = True
+    if emblem_preset_id:
+        fam_doc["emblem_preset_id"] = emblem_preset_id
+    if avatar_url_set:
+        fam_doc["avatar_url"] = avatar_url_set
+    if emblem_key:
+        fam_doc["emblem_key"] = emblem_key
     await db.families.insert_one(fam_doc)
     await _delete_family_memberships_for_user(current_user["id"])
     await db.family_members.insert_one({
@@ -2658,6 +2750,33 @@ async def families_crew_oc_set_auto_accept(request: FamilyCrewOCSetAutoAcceptReq
 FAMILY_PROFILE_TEXT_MAX_LENGTH = 10000
 
 
+def _family_emblem_custom_key_from_data_url(data_url: str) -> Optional[str]:
+    """Stable uniqueness key for a custom emblem (SHA-256 of raw image bytes)."""
+    import base64
+    import re
+
+    match = re.match(r"^data:(image/[a-zA-Z0-9+-]+);base64,(.+)$", data_url or "")
+    if not match:
+        return None
+    try:
+        raw = base64.b64decode(match.group(2))
+    except Exception:
+        return None
+    if not raw:
+        return None
+    return "c:" + hashlib.sha256(raw).hexdigest()
+
+
+async def _family_emblem_key_taken(emblem_key: str, exclude_family_id: Optional[str]) -> bool:
+    if not emblem_key:
+        return False
+    q: Dict[str, Any] = {"wiped": {"$ne": True}, "emblem_key": emblem_key}
+    if exclude_family_id:
+        q["id"] = {"$ne": exclude_family_id}
+    doc = await db.families.find_one(q, {"_id": 1})
+    return doc is not None
+
+
 async def families_update_profile_text(request: FamilyProfileTextRequest, current_user: dict = Depends(get_current_user)):
     """Update your family's profile text and/or notepad background colour (hex). Only Boss, Underboss, or Capo."""
     if (current_user.get("family_role") or "").strip().lower() not in ("boss", "underboss", "capo"):
@@ -2757,29 +2876,70 @@ def _validate_family_avatar(data_url: str) -> tuple[bool, str]:
 
 
 async def families_update_avatar(request: FamilyAvatarRequest, current_user: dict = Depends(get_current_user)):
-    """Update your family's profile picture (data URL). Only Boss, Underboss, or Capo. Pass null or empty to clear."""
+    """Set crew emblem: preset_id, custom avatar_data (data URL), or clear. Each emblem is unique across active crews."""
     if (current_user.get("family_role") or "").strip().lower() not in ("boss", "underboss", "capo"):
-        raise HTTPException(status_code=403, detail="Only Boss, Underboss, or Capo can set family picture")
+        raise HTTPException(status_code=403, detail="Only Boss, Underboss, or Capo can set family emblem")
     family_id = current_user.get("family_id")
     if not family_id:
         raise HTTPException(status_code=400, detail="Not in a family")
 
+    preset = (request.preset_id or "").strip() or None
     avatar = (request.avatar_data or "").strip() or None
+    clear = bool(request.clear)
 
-    if avatar is not None:
-        # Size check first
+    if clear and (preset or avatar):
+        raise HTTPException(status_code=400, detail="Cannot combine clear with preset or custom image")
+    if preset and avatar:
+        raise HTTPException(status_code=400, detail="Choose either a preset emblem or a custom image")
+
+    if clear:
+        await db.families.update_one(
+            {"id": family_id},
+            {"$unset": {"avatar_url": "", "emblem_preset_id": "", "emblem_key": ""}},
+        )
+        _invalidate_my_cache(current_user.get("id") or "")
+        _invalidate_list_cache()
+        return {"message": "Family emblem removed.", "avatar_url": None, "emblem_preset_id": None}
+
+    if preset:
+        if preset not in FAMILY_EMBLEM_PRESET_IDS:
+            raise HTTPException(status_code=400, detail="Invalid emblem preset")
+        ek = f"p:{preset}"
+        if await _family_emblem_key_taken(ek, family_id):
+            raise HTTPException(status_code=400, detail="Another crew already uses this emblem")
+        await db.families.update_one(
+            {"id": family_id},
+            {"$set": {"emblem_preset_id": preset, "emblem_key": ek}, "$unset": {"avatar_url": ""}},
+        )
+        _invalidate_my_cache(current_user.get("id") or "")
+        _invalidate_list_cache()
+        return {"message": "Family emblem updated.", "avatar_url": None, "emblem_preset_id": preset}
+
+    if avatar:
         if len(avatar) > FAMILY_AVATAR_MAX_BYTES:
             raise HTTPException(status_code=400, detail="Image too large. Use a smaller image (max ~180KB).")
-        # Security validation
         is_valid, error_msg = _validate_family_avatar(avatar)
         if not is_valid:
             raise HTTPException(status_code=400, detail=error_msg)
+        ek = _family_emblem_custom_key_from_data_url(avatar)
+        if not ek:
+            raise HTTPException(status_code=400, detail="Invalid custom emblem")
+        if await _family_emblem_key_taken(ek, family_id):
+            raise HTTPException(status_code=400, detail="Another crew already uses this image as their emblem")
+        await db.families.update_one(
+            {"id": family_id},
+            {"$set": {"avatar_url": avatar, "emblem_key": ek}, "$unset": {"emblem_preset_id": ""}},
+        )
+        _invalidate_my_cache(current_user.get("id") or "")
+        _invalidate_list_cache()
+        return {"message": "Family emblem updated.", "avatar_url": avatar, "emblem_preset_id": None}
 
-    update = {"$set": {"avatar_url": avatar}} if avatar else {"$unset": {"avatar_url": ""}}
-    await db.families.update_one({"id": family_id}, update)
-    _invalidate_my_cache(current_user.get("id") or "")
-    _invalidate_list_cache()
-    return {"message": "Family picture updated.", "avatar_url": avatar}
+    doc = await db.families.find_one({"id": family_id}, {"_id": 0, "avatar_url": 1, "emblem_preset_id": 1})
+    return {
+        "message": "No emblem changes",
+        "avatar_url": (doc or {}).get("avatar_url"),
+        "emblem_preset_id": (doc or {}).get("emblem_preset_id"),
+    }
 
 
 CREW_OC_TOPIC_WINDOW_MINUTES = 10  # Can create Crew OC topic only when OC is available or within this many mins before

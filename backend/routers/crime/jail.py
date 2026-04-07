@@ -130,6 +130,29 @@ def _jailbust_failed_bust_avoids_jail(user: dict) -> bool:
     return _rng.random() < 0.5
 
 
+def _active_target_bust_difficulty_mult(target: dict) -> float:
+    """Extra bust difficulty from target state; defaults to 1.0 when inactive/invalid."""
+    raw_mult = target.get("jail_bust_difficulty_mult")
+    raw_until = target.get("jail_bust_harder_until")
+    if raw_mult is None or not raw_until:
+        return 1.0
+    try:
+        mult = float(raw_mult)
+    except (TypeError, ValueError):
+        return 1.0
+    if mult <= 1.0:
+        return 1.0
+    try:
+        until = datetime.fromisoformat(str(raw_until).replace("Z", "+00:00"))
+        if until.tzinfo is None:
+            until = until.replace(tzinfo=timezone.utc)
+        if until > datetime.now(timezone.utc):
+            return mult
+    except Exception:
+        return 1.0
+    return 1.0
+
+
 # Varied success messages when bust succeeds
 JAIL_BUST_SUCCESS_MESSAGES = [
     "Successfully busted out {target_username}!",
@@ -511,7 +534,9 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
         except (ValueError, TypeError):
             pass
 
-    success = _rng.random() < player_success_rate
+    target_bust_mult = _active_target_bust_difficulty_mult(target)
+    effective_success_rate = player_success_rate / target_bust_mult
+    success = _rng.random() < effective_success_rate
     if success:
         rank_points = 15
         now_utc = datetime.now(timezone.utc)

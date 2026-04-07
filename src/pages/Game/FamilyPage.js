@@ -7,6 +7,8 @@ import { getRacketAccent } from '../../constants';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
 import { getFamiliesPrefetch, setFamiliesPrefetch } from '../../utils/prefetchCache';
+import FamilyEmblem, { FAMILY_EMBLEM_PRESETS, groupFamilyEmblemPresets } from '../../components/FamilyEmblem';
+import { fileToCompressedDataUrl } from '../../utils/fileToCompressedDataUrl';
 
 // ============================================================================
 // CONSTANTS & UTILITIES
@@ -1225,7 +1227,9 @@ const FamiliesTab = ({ families, myFamilyId }) => {
             style={{ animationDelay: `${idx * 0.03}s` }}
           >
             {myFamilyId === f.id && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary/60" />}
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-1 flex items-start gap-2">
+              <FamilyEmblem emblemPresetId={f.emblem_preset_id} avatarUrl={f.avatar_url} size={34} className="mt-0.5" />
+              <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="font-heading font-bold text-foreground text-xs group-hover:text-primary transition-colors tracking-wide">{f.name}</span>
                 <span className="text-primary/50 text-[10px]">[{f.tag}]</span>
@@ -1238,6 +1242,7 @@ const FamiliesTab = ({ families, myFamilyId }) => {
               </div>
               <div className="mt-0.5">
                 <FamilyListCrewOCHint isoUntil={f.crew_oc_cooldown_until} />
+              </div>
               </div>
             </div>
             <div className="flex items-center gap-2 sm:gap-3 text-[10px] shrink-0">
@@ -2114,7 +2119,10 @@ const StateHeadTab = ({ headOfState, stateHeadIncome, stateHeadCasinoWeekStats =
 // NO FAMILY VIEW — recruitment board
 // ============================================================================
 
-const NoFamilyView = ({ families, config, createName, setCreateName, createTag, setCreateTag, onCreate, joinId, setJoinId, onJoin, joinModeForSelected, warHistory, onDetails }) => {
+const NoFamilyView = ({
+  families, config, createName, setCreateName, createTag, setCreateTag, onCreate, joinId, setJoinId, onJoin, joinModeForSelected, warHistory, onDetails,
+  emblemPresets, createEmblemPreset, setCreateEmblemPreset, createEmblemDataUrl, setCreateEmblemDataUrl,
+}) => {
   const maxFamilies = config?.max_families ?? 6;
   const towardCap = config?.player_cap_families_count ?? 0;
   const atPlayerCap = towardCap >= maxFamilies;
@@ -2142,6 +2150,62 @@ const NoFamilyView = ({ families, config, createName, setCreateName, createTag, 
             className="flex-1 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-sm text-foreground font-heading focus:border-primary/50 focus:outline-none transition-colors" />
           <input type="text" value={createTag} onChange={(e) => setCreateTag(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))} placeholder="TAG" maxLength={4}
             className="w-20 bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-sm text-foreground font-heading uppercase text-center focus:border-primary/50 focus:outline-none transition-colors" />
+        </div>
+        <div className="space-y-1.5">
+          <p className="text-[9px] text-zinc-500 font-heading leading-snug">Crew emblem (optional). Each preset or custom image can only belong to one active family — if taken, pick another.</p>
+          <div className="space-y-2">
+            {groupFamilyEmblemPresets(emblemPresets || FAMILY_EMBLEM_PRESETS).map(({ group, items }) => (
+              <div key={group}>
+                <p className="text-[9px] font-heading text-zinc-500 uppercase tracking-wider mb-1">{group}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {items.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      title={p.label}
+                      onClick={() => {
+                        setCreateEmblemPreset((cur) => (cur === p.id ? '' : p.id));
+                        setCreateEmblemDataUrl('');
+                      }}
+                      className={`p-0.5 rounded-full border transition-colors ${createEmblemPreset === p.id ? 'border-primary ring-2 ring-primary/40' : 'border-zinc-600/50 hover:border-primary/40 opacity-90 hover:opacity-100'}`}
+                    >
+                      <FamilyEmblem emblemPresetId={p.id} size={30} />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+          <label className="block">
+            <span className="text-[9px] font-heading text-zinc-500 uppercase tracking-wider">Or upload custom</span>
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/gif,image/webp"
+              className="mt-1 block w-full text-[10px] text-zinc-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-primary/20 file:text-primary file:font-heading"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                if (!file) return;
+                try {
+                  const url = await fileToCompressedDataUrl(file, 160, 0.82);
+                  if (!url) {
+                    toast.error('Invalid image');
+                    return;
+                  }
+                  setCreateEmblemDataUrl(url);
+                  setCreateEmblemPreset('');
+                } catch {
+                  toast.error('Could not read image');
+                }
+              }}
+            />
+          </label>
+          {createEmblemDataUrl ? (
+            <div className="flex items-center gap-2">
+              <FamilyEmblem avatarUrl={createEmblemDataUrl} size={32} />
+              <button type="button" onClick={() => setCreateEmblemDataUrl('')} className="text-[9px] font-heading text-zinc-500 hover:text-primary uppercase">Clear upload</button>
+            </div>
+          ) : null}
         </div>
         <button type="submit" disabled={atPlayerCap} title={atPlayerCap ? 'Maximum player founded families reached' : undefined} className="w-full py-2.5 min-h-[44px] rounded-lg text-xs font-heading font-bold uppercase tracking-wider border-2 bg-gradient-to-b from-primary/30 to-primary/10 border-primary/50 text-primary hover:from-primary/40 hover:shadow-lg hover:shadow-primary/10 transition-all touch-manipulation disabled:opacity-50 disabled:pointer-events-none disabled:cursor-not-allowed">
           Found the Family
@@ -2207,6 +2271,8 @@ export default function FamilyPage() {
   const [activeTab, setActiveTab] = useState('rackets');
   const [createName, setCreateName] = useState('');
   const [createTag, setCreateTag] = useState('');
+  const [createEmblemPreset, setCreateEmblemPreset] = useState('');
+  const [createEmblemDataUrl, setCreateEmblemDataUrl] = useState('');
   const [joinId, setJoinId] = useState('');
   const [depositAmount, setDepositAmount] = useState('');
   const [depositBullets, setDepositBullets] = useState('');
@@ -2369,7 +2435,34 @@ export default function FamilyPage() {
   }, [myFamily?.family]);
 
   // Handlers — all preserved exactly
-  const handleCreate = async (e) => { e.preventDefault(); const name = createName.trim(), tag = createTag.trim().toUpperCase(); if (!name || !tag) { toast.error('Name and tag required'); return; } try { await api.post('/families', { name, tag }); toast.success('Family created!'); setCreateName(''); setCreateTag(''); refreshUser(); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
+  const handleCreate = async (e) => {
+    e.preventDefault();
+    const name = createName.trim();
+    const tag = createTag.trim().toUpperCase();
+    if (!name || !tag) {
+      toast.error('Name and tag required');
+      return;
+    }
+    if (createEmblemPreset && createEmblemDataUrl) {
+      toast.error('Choose either a preset emblem or a custom upload');
+      return;
+    }
+    const payload = { name, tag };
+    if (createEmblemPreset) payload.emblem_preset_id = createEmblemPreset;
+    else if (createEmblemDataUrl) payload.emblem_custom_data = createEmblemDataUrl;
+    try {
+      await api.post('/families', payload);
+      toast.success('Family created!');
+      setCreateName('');
+      setCreateTag('');
+      setCreateEmblemPreset('');
+      setCreateEmblemDataUrl('');
+      refreshUser();
+      fetchData();
+    } catch (err) {
+      toast.error(apiDetail(err));
+    }
+  };
   const handleJoin = async (e) => {
     e.preventDefault();
     if (!joinId) { toast.error('Select a family'); return; }
@@ -2685,13 +2778,16 @@ export default function FamilyPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               {family ? (
-                <>
+                <div className="flex items-start gap-3">
+                  <FamilyEmblem emblemPresetId={family.emblem_preset_id} avatarUrl={family.avatar_url} size={44} className="mt-0.5 shrink-0" />
+                  <div className="min-w-0">
                   <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">La Cosa Nostra</p>
-                  <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary flex items-center gap-2 tracking-wider uppercase">
+                  <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary flex flex-wrap items-center gap-2 tracking-wider uppercase">
                     {family.name}
                     <span className="text-sm text-primary/40 font-mono font-normal">[{family.tag}]</span>
                   </h1>
-                </>
+                  </div>
+                </div>
               ) : null}
               {family && (
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
@@ -2966,7 +3062,26 @@ export default function FamilyPage() {
           </div>
         </>
       ) : (
-        <NoFamilyView families={families} config={config} createName={createName} setCreateName={setCreateName} createTag={createTag} setCreateTag={setCreateTag} onCreate={handleCreate} joinId={joinId} setJoinId={setJoinId} onJoin={handleJoin} joinModeForSelected={families.find((f) => f.id === joinId)?.join_mode} warHistory={warHistory} onDetails={setDetailsWarId} />
+        <NoFamilyView
+          families={families}
+          config={config}
+          createName={createName}
+          setCreateName={setCreateName}
+          createTag={createTag}
+          setCreateTag={setCreateTag}
+          onCreate={handleCreate}
+          joinId={joinId}
+          setJoinId={setJoinId}
+          onJoin={handleJoin}
+          joinModeForSelected={families.find((f) => f.id === joinId)?.join_mode}
+          warHistory={warHistory}
+          onDetails={setDetailsWarId}
+          emblemPresets={config?.emblem_presets}
+          createEmblemPreset={createEmblemPreset}
+          setCreateEmblemPreset={setCreateEmblemPreset}
+          createEmblemDataUrl={createEmblemDataUrl}
+          setCreateEmblemDataUrl={setCreateEmblemDataUrl}
+        />
       )}
 
       {/* War Details Modal — public, opened from history */}

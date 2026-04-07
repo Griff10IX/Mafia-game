@@ -11,6 +11,7 @@ import { filterProfanity } from '../../utils/profanityFilter';
 import styles from '../../styles/noir.module.css';
 import { BadgeShield, BADGE_STYLES as RANKING_BADGE_STYLES, CATEGORY_LABELS } from '../Game/RankingBadges';
 import StaffUserDetailsPanel from '../../components/StaffUserDetailsPanel';
+import FamilyEmblem from '../../components/FamilyEmblem';
 import { getProfilePrefetch, setProfilePrefetch } from '../../utils/prefetchCache';
 
 const PROFILE_STYLES = `
@@ -514,12 +515,19 @@ const ProfileInfoCard = ({
                     )}
                   </span>
                 ) : row.label === 'Crew' && profile.family_tag && profile.family_name ? (
-                  <Link
-                    to={`/families/${encodeURIComponent(profile.family_tag)}`}
-                    className={`${row.valueClass} hover:underline hover:text-primary transition-colors`}
-                  >
-                    {row.value}
-                  </Link>
+                  <div className="flex items-center justify-end gap-2 min-w-0">
+                    <FamilyEmblem
+                      emblemPresetId={profile.family_emblem_preset_id}
+                      avatarUrl={profile.family_emblem_avatar_url}
+                      size={30}
+                    />
+                    <Link
+                      to={`/families/${encodeURIComponent(profile.family_tag)}`}
+                      className={`${row.valueClass} hover:underline hover:text-primary transition-colors truncate`}
+                    >
+                      {row.value}
+                    </Link>
+                  </div>
                 ) : row.label === 'Rank'
                   && isHdoProfile
                   && typeof profile.rank_name === 'string'
@@ -658,7 +666,7 @@ const ProfileInfoCard = ({
                       className={`inline-flex items-center gap-0.5 px-1 py-0.5 rounded border bg-zinc-900/90 hover:bg-zinc-800/90 transition-colors prof-row text-[7px] font-heading leading-tight ${badgeClass}`}
                     >
                       <span className="shrink-0 uppercase">{label}:</span>
-                      <span className="text-foreground truncate max-w-[56px] sm:max-w-[72px]">{censorProfanity ? filterProfanity(car.name) : car.name}</span>
+                      <span className="text-foreground whitespace-normal break-words">{censorProfanity ? filterProfanity(car.name) : car.name}</span>
                     </Link>
                   );
                 })}
@@ -925,7 +933,7 @@ const TopCarsCard = ({ topCars, showCars }) => {
               className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded border bg-zinc-900/90 hover:bg-zinc-800/90 transition-colors prof-row text-[9px] ${badgeClass}`}
             >
               <span className="font-heading uppercase tracking-wide shrink-0">{label}:</span>
-              <span className="font-heading font-semibold text-white truncate max-w-[100px] sm:max-w-[140px]">{car.name}</span>
+              <span className="font-heading font-semibold text-white whitespace-normal break-words">{car.name}</span>
             </Link>
           );
         })}

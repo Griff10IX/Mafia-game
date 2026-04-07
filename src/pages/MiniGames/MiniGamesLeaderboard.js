@@ -103,9 +103,9 @@ export default function MiniGamesLeaderboard() {
   const [refreshing, setRefreshing] = useState(false);
   const intervalRef = useRef(null);
 
-  const fetchData = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
-    else setRefreshing(true);
+  const fetchData = useCallback(async (mode = 'load') => {
+    if (mode === 'load') setLoading(true);
+    if (mode === 'manual') setRefreshing(true);
     try {
       const [lbRes, statsRes] = await Promise.all([
         api.get('/minigames/leaderboard'),
@@ -115,7 +115,7 @@ export default function MiniGamesLeaderboard() {
       setMyStats(statsRes.data);
       writeSessionJson(MG_LB_CACHE_KEY, { data: lbRes.data, myStats: statsRes.data });
     } catch (error) {
-      if (!silent) toast.error('Failed to load mini games leaderboard');
+      if (mode === 'load') toast.error('Failed to load mini games leaderboard');
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -124,11 +124,11 @@ export default function MiniGamesLeaderboard() {
 
   useEffect(() => {
     const c = readSessionJson(MG_LB_CACHE_KEY);
-    fetchData(!!c?.data);
+    fetchData(c?.data ? 'silent' : 'load');
   }, [fetchData]);
 
   useEffect(() => {
-    intervalRef.current = setInterval(() => fetchData(true), 60_000);
+    intervalRef.current = setInterval(() => fetchData('silent'), 60_000);
     return () => clearInterval(intervalRef.current);
   }, [fetchData]);
 
@@ -162,7 +162,7 @@ export default function MiniGamesLeaderboard() {
         <AutoRefreshNote seconds={60} className="mt-0.5" />
         <button
           type="button"
-          onClick={() => fetchData(true)}
+          onClick={() => fetchData('manual')}
           disabled={refreshing}
           className={`absolute top-0 right-0 p-1 rounded-sm transition-colors ${styles.surface} ${styles.raisedHover} border border-primary/20`}
           title="Refresh"

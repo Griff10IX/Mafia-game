@@ -687,6 +687,40 @@ def _bullets_to_kill_breakdown(
         "bullets_required": bullets_required,
     }
 
+
+async def _exclusive_car_bullet_defense_multiplier(target: dict) -> float:
+    """Extra bullets to kill this target: +5% if owner has any exclusive car, +10% if any loot_exclusive (stronger wins).
+    Bodyguards use their hire owner's garage (same rule as completed_it armour bonus)."""
+    uid = (target.get("id") or "").strip()
+    if target.get("is_bodyguard"):
+        bg = await db.bodyguards.find_one(
+            {"bodyguard_user_id": uid}, {"_id": 0, "user_id": 1}
+        )
+        uid = ((bg or {}).get("user_id") or "").strip()
+    if not uid:
+        return 1.0
+    rows = await db.user_cars.find({"user_id": uid}, {"_id": 0, "car_id": 1}).to_list(300)
+    owned = {r.get("car_id") for r in rows if r.get("car_id")}
+    if not owned:
+        return 1.0
+    has_loot = False
+    has_exclusive = False
+    for car in CARS:
+        cid = car.get("id")
+        if not cid or cid not in owned:
+            continue
+        r = str(car.get("rarity") or "").strip().lower()
+        if r == "loot_exclusive":
+            has_loot = True
+        elif r == "exclusive":
+            has_exclusive = True
+    if has_loot:
+        return 1.10
+    if has_exclusive:
+        return 1.05
+    return 1.0
+
+
 # ---------------------------------------------------------------------------
 # Route handlers
 # ---------------------------------------------------------------------------
@@ -928,6 +962,9 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
             target_armour_bonus = bool((owner_user or {}).get("completed_it_armour_bonus"))
     if target_armour_bonus:
         bullets_required = bullets_required * 2
+    exclusive_car_bullet_mult = await _exclusive_car_bullet_defense_multiplier(target)
+    if exclusive_car_bullet_mult > 1.0:
+        bullets_required = int(math.ceil(bullets_required * exclusive_car_bullet_mult))
     # "Completed it" perk: 65% fewer bullets needed when attacking
     completed_it_discount = bool(current_user.get("completed_it_bullet_reduction"))
     if completed_it_discount:
@@ -952,6 +989,7 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
         "needed_before_clamp": breakdown["needed_before_clamp"],
         "completed_it_discount": completed_it_discount,
         "target_armour_bonus": target_armour_bonus,
+        "exclusive_car_bullet_mult": exclusive_car_bullet_mult,
     }
 
 async def get_attack_inflation(current_user: dict = Depends(get_current_user)):
@@ -1053,6 +1091,9 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             target_has_armour_bonus = bool((owner_user or {}).get("completed_it_armour_bonus"))
     if target_has_armour_bonus:
         bullets_required = bullets_required * 2
+    exclusive_car_bullet_mult = await _exclusive_car_bullet_defense_multiplier(target)
+    if exclusive_car_bullet_mult > 1.0:
+        bullets_required = int(math.ceil(bullets_required * exclusive_car_bullet_mult))
     # "Completed it" perk: 65% fewer bullets needed when attacking
     if current_user.get("completed_it_bullet_reduction"):
         bullets_required = max(1, int(bullets_required * 0.35))
