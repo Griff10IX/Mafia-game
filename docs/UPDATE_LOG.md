@@ -6,6 +6,28 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-07 14:25 UTC[/color][/b] — [b]Illegal Business mission guard-count mismatch fix[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Fixed a [b]Racket mission progress[/b] issue where some players could see low [b]guards hired[/b] progress (for example 6/12) despite having a larger crew/capacity. Mission tracking now resolves from the strongest live guard signal so guard-step missions no longer undercount on affected records.[/color]
+[*][color=#888888][b]Player action:[/b] Refresh [b]Money → Illegal Business[/b] and re-check your current mission progress.[/color]
+[*][color=#888888][b]Impact:[/b] Guard-related mission steps now reflect real crew state and should not soft-lock due to stale/legacy counters.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-04-07 14:10 UTC[/color][/b] — [b]Crimes page responsiveness + Illegal Business guard-mission unstick[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Crimes[/b] page no longer briefly shows available crimes as locked while data finishes loading. Manual crime rows now only show [b]Locked[/b] when Auto Rank crime mode is actually active, and the page load flow was tightened so state arrives together with less visible delay/flicker. [b]Illegal Business missions[/b] that require [b]guards hired[/b] now also respect your [b]current active guard count[/b], preventing players from getting stuck when they are already at/near slot cap.[/color]
+[*][color=#888888][b]Player action:[/b] Refresh the Crimes page for smoother load behavior. If you were stuck on a guards-hired mission, reopen Illegal Business missions and try complete again.[/color]
+[*][color=#888888][b]Impact:[/b] Faster-feeling Crimes navigation, fewer misleading lock states, and no soft-lock on guard-count mission steps for capped crews.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-07 13:20 UTC[/color][/b] — [b]Exclusive car rarity label fix + no-damage enforcement[/b][/size]
 [quote]
 [list]

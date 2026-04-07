@@ -1212,7 +1212,13 @@ def _ibm_mission_user_projection() -> Dict[str, int]:
     return proj
 
 
-def _ibm_requirement_current(user: dict, business: Optional[dict], mission: dict, key: str) -> int:
+def _ibm_requirement_current(
+    user: dict,
+    business: Optional[dict],
+    mission: dict,
+    key: str,
+    active_guards_count: Optional[int] = None,
+) -> int:
     """Progress for one requirement. Segmented keys use illegal_business_mission_baselines for this mission id."""
     if key == "crimes":
         return int(user.get("total_crimes") or 0)
@@ -1222,6 +1228,14 @@ def _ibm_requirement_current(user: dict, business: Optional[dict], mission: dict
         if not business:
             return 0
         return len(business.get("security_upgrades") or [])
+    if key == "guards_hired":
+        raw = _ibm_user_counter_raw(user, key)
+        base = _ibm_baseline_int(user, mission["id"], key)
+        delta_since_start = max(0, raw - base)
+        # Prevent undercount/soft-locks on legacy records by accepting the strongest guard signal.
+        active_count = int(active_guards_count or 0)
+        slots_count = int((business or {}).get("guard_slots") or 0)
+        return max(delta_since_start, active_count, slots_count)
     if key in IBM_SEGMENT_KEYS:
         raw = _ibm_user_counter_raw(user, key)
         base = _ibm_baseline_int(user, mission["id"], key)
@@ -1229,9 +1243,24 @@ def _ibm_requirement_current(user: dict, business: Optional[dict], mission: dict
     return 0
 
 
-def _ibm_mission_progress_row(user: dict, business: Optional[dict], mission: dict, completed_ids: set) -> Dict[str, Any]:
+def _ibm_mission_progress_row(
+    user: dict,
+    business: Optional[dict],
+    mission: dict,
+    completed_ids: set,
+    active_guards_count: Optional[int] = None,
+) -> Dict[str, Any]:
     req = mission.get("requirements") or {}
-    cur = {key: _ibm_requirement_current(user, business, mission, key) for key in req}
+    cur = {
+        key: _ibm_requirement_current(
+            user,
+            business,
+            mission,
+            key,
+            active_guards_count=active_guards_count,
+        )
+        for key in req
+    }
     return {"mission": mission, "completed": mission["id"] in completed_ids, "current": cur, "target": req}
 
 
@@ -1481,13 +1510,20 @@ async def get_illegal_business(current_user: dict = Depends(get_current_user)):
     g_limit = min(2000, max(slots + 100, 500))
     guards_raw = await db.illegal_business_guards.find({"business_id": business["id"]}, {"_id": 0}).sort("slot_number", 1).to_list(g_limit)
     guards = [_guard_doc_with_upgrade_costs(business, g) for g in guards_raw]
+    active_guards_count = len(guards_raw)
     progress_user = await _ibm_load_user_with_mission_baselines(current_user["id"], current_user)
     completions = progress_user.get("illegal_business_mission_completions") or []
     completed_ids = {c.get("mission_id") for c in completions if c.get("mission_id")}
     pending_rewards = current_user.get("pending_illegal_business_rewards") or []
     type_info = next((t for t in ILLEGAL_BUSINESS_TYPES if t["id"] == business.get("type_id")), {})
     missions_progress = [
-        _ibm_mission_progress_row(progress_user, business, m, completed_ids)
+        _ibm_mission_progress_row(
+            progress_user,
+            business,
+            m,
+            completed_ids,
+            active_guards_count=active_guards_count,
+        )
         for m in _ordered_ibm_missions()
     ]
     # Build security upgrades list (no mission locks; cost computed by index)
@@ -2236,11 +2272,22 @@ async def distillery_claim_aged_batch(req: DistilleryClaimBatchRequest, current_
 
 async def get_illegal_business_missions(current_user: dict = Depends(get_current_user)):
     business = await db.illegal_businesses.find_one({"user_id": current_user["id"]}, {"_id": 0})
+    active_guards_count = 0
+    if business and business.get("id"):
+        active_guards_count = int(
+            await db.illegal_business_guards.count_documents({"business_id": business["id"]})
+        )
     progress_user = await _ibm_load_user_with_mission_baselines(current_user["id"], current_user)
     completions = progress_user.get("illegal_business_mission_completions") or []
     completed_ids = {c.get("mission_id") for c in completions if c.get("mission_id")}
     progress = [
-        _ibm_mission_progress_row(progress_user, business, m, completed_ids)
+        _ibm_mission_progress_row(
+            progress_user,
+            business,
+            m,
+            completed_ids,
+            active_guards_count=active_guards_count,
+        )
         for m in _ordered_ibm_missions()
     ]
     return {"missions": progress}
@@ -2263,9 +2310,20 @@ async def complete_illegal_business_mission(mission_id: str, current_user: dict 
     if not business:
         raise HTTPException(status_code=404, detail="You need an illegal business.")
     req = mission.get("requirements") or {}
+    active_guards_count = 0
+    if business.get("id"):
+        active_guards_count = int(
+            await db.illegal_business_guards.count_documents({"business_id": business["id"]})
+        )
     met = True
     for key, target in req.items():
-        cur = _ibm_requirement_current(progress_user, business, mission, key)
+        cur = _ibm_requirement_current(
+            progress_user,
+            business,
+            mission,
+            key,
+            active_guards_count=active_guards_count,
+        )
         if cur < target:
             met = False
             break

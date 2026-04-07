@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useCallback } from 'react';
 import { HelpCircle, Clock, AlertCircle, Bot, Skull, Zap, Lock, Star } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
 import { getCrimesPrefetch, clearCrimesPrefetch } from '../../utils/prefetchCache';
@@ -229,8 +229,8 @@ const CrimeProgressBar = ({ progress }) => {
 const CrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
   const unavailable = !crime.can_commit && (!crime.remaining || crime.remaining <= 0);
   const onCooldown = !crime.can_commit && crime.remaining && crime.remaining > 0;
-  // Lock if manualPlayDisabled is true OR null (unknown/loading state) - safe default
-  const showLocked = (manualPlayDisabled === true || manualPlayDisabled === null) && crime.can_commit;
+  // Only lock when auto-rank/manual-play-disabled is confirmed true.
+  const showLocked = manualPlayDisabled === true && crime.can_commit;
 
   return (
     <div
@@ -417,7 +417,7 @@ const PrestigeCrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
 
         {/* Action button */}
         <div className="shrink-0">
-          {(manualPlayDisabled === true || manualPlayDisabled === null) && crime.can_commit ? (
+          {manualPlayDisabled === true && crime.can_commit ? (
             <button type="button" disabled className="bg-zinc-700/50 text-zinc-500 rounded px-1.5 py-0.5 text-[9px] font-heading font-bold uppercase border border-zinc-600/50 cursor-not-allowed">Locked</button>
           ) : crime.can_commit ? (
             <button
@@ -456,52 +456,38 @@ export default function Crimes() {
   const [autoRankCrimesDisabled, setAutoRankCrimesDisabled] = useState(null); // null = unknown/loading, true = disabled, false = enabled
   const [activeLootPerks, setActiveLootPerks] = useState([]);
 
-  const fetchCrimes = async () => {
+  const fetchCrimes = useCallback(async () => {
     try {
       const prefetched = getCrimesPrefetch();
-      let crimesData;
-      if (prefetched) {
-        crimesData = prefetched;
-        const [meRes, lootStatusRes] = await Promise.all([
-          api.get('/auth/me'),
-          api.get('/loot-box/status').catch(() => ({ data: {} })),
-        ]);
-        setCrimes(crimesData);
-        setUser(meRes.data);
-        if (Array.isArray(lootStatusRes?.data?.active_rewards)) {
-          setActiveLootPerks(lootStatusRes.data.active_rewards.filter((r) => r.type === 'rp_10'));
-        } else {
-          setActiveLootPerks([]);
-        }
-        setLoading(false);
-      } else {
-        const [crimesRes, meRes] = await Promise.all([
-          api.get('/crimes'),
-          api.get('/auth/me'),
-        ]);
-        crimesData = crimesRes.data;
-        setCrimes(crimesData);
-        setUser(meRes.data);
-        setLoading(false);
-      }
-      Promise.all([
+      const primaryReq = Promise.all([
+        prefetched ? Promise.resolve({ data: prefetched }) : api.get('/crimes'),
+        api.get('/auth/me'),
+        api.get('/auto-rank/me').catch(() => ({ data: {} })),
+      ]);
+      const secondaryReq = Promise.all([
         api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
         api.get('/crimes/stats').catch(() => ({ data: {} })),
-        api.get('/auto-rank/me').catch(() => ({ data: {} })),
         api.get('/loot-box/status').catch(() => ({ data: {} })),
-      ]).then(([eventsRes, statsRes, autoRankRes, lootStatusRes]) => {
-        setEvent(eventsRes.data?.event ?? null);
-        setEventsEnabled(!!eventsRes.data?.events_enabled);
-        setCrimeStats(statsRes.data || {});
-        const ar = autoRankRes.data || {};
-        setAutoRankCrimesDisabled(!!(ar.auto_rank_enabled && (ar.auto_rank_crimes || ar.auto_rank_bust_every_5_sec)));
-        if (Array.isArray(lootStatusRes?.data?.active_rewards)) {
-          const rewards = lootStatusRes.data.active_rewards.filter((r) => r.type === 'rp_10');
-          setActiveLootPerks(rewards);
-        } else {
-          setActiveLootPerks([]);
-        }
-      }).catch(() => {});
+      ]);
+      const [[crimesRes, meRes, autoRankRes], [eventsRes, statsRes, lootStatusRes]] = await Promise.all([
+        primaryReq,
+        secondaryReq,
+      ]);
+
+      setCrimes(crimesRes.data || []);
+      setUser(meRes.data || null);
+      const ar = autoRankRes.data || {};
+      setAutoRankCrimesDisabled(!!(ar.auto_rank_enabled && (ar.auto_rank_crimes || ar.auto_rank_bust_every_5_sec)));
+      setEvent(eventsRes.data?.event ?? null);
+      setEventsEnabled(!!eventsRes.data?.events_enabled);
+      setCrimeStats(statsRes.data || {});
+      if (Array.isArray(lootStatusRes?.data?.active_rewards)) {
+        const rewards = lootStatusRes.data.active_rewards.filter((r) => r.type === 'rp_10');
+        setActiveLootPerks(rewards);
+      } else {
+        setActiveLootPerks([]);
+      }
+      setLoading(false);
     } catch (error) {
       toast.error('Failed to load crimes');
       console.error('Error fetching crimes:', error);
@@ -511,11 +497,11 @@ export default function Crimes() {
       setAutoRankCrimesDisabled(false); // Allow manual play if we can't determine status
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchCrimes();
-  }, []);
+  }, [fetchCrimes]);
 
   const tick = useCooldownTicker(crimes, fetchCrimes);
 
