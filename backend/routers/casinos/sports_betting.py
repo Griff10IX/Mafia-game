@@ -4,6 +4,7 @@ import asyncio
 import logging
 import time
 import secrets
+import unicodedata
 _rng = secrets.SystemRandom()
 import os
 import re
@@ -853,14 +854,278 @@ def _derive_winning_option_from_scores(api_event: dict, options: list, three_way
     return None
 
 
+def _name_norm(s: str) -> str:
+    s = unicodedata.normalize("NFKD", str(s or ""))
+    s = "".join(ch for ch in s if not unicodedata.combining(ch))
+    return re.sub(r"[^a-z0-9]+", "", s.lower())
+
+
+def _match_option_id_by_name(options: list, target_name: str) -> Optional[str]:
+    t = _name_norm(target_name)
+    if not t:
+        return None
+    for o in options or []:
+        name = (o.get("name") or "")
+        if _name_norm(name) == t:
+            return o.get("id")
+    # fallback: token-ish containment
+    for o in options or []:
+        n = _name_norm(o.get("name") or "")
+        if n and (n in t or t in n):
+            return o.get("id")
+    return None
+
+
+def _derive_winning_option_from_simple_score(
+    options: list,
+    home_team: str,
+    away_team: str,
+    home_score: int,
+    away_score: int,
+    three_way: bool,
+) -> Optional[str]:
+    if home_score > away_score:
+        return _match_option_id_by_name(options, home_team)
+    if away_score > home_score:
+        return _match_option_id_by_name(options, away_team)
+    if three_way:
+        for o in options or []:
+            if _is_draw_outcome_name((o.get("name") or "")):
+                return o.get("id")
+    return None
+
+
+def _event_datetime_utc(ev: dict) -> Optional[datetime]:
+    return _parse_start_time_utc((ev or {}).get("start_time"))
+
+
+def _looks_like_same_teams(event_options: list, home_team: str, away_team: str) -> bool:
+    option_names = [str((o or {}).get("name") or "").strip() for o in (event_options or [])]
+    option_names = [n for n in option_names if n and not _is_draw_outcome_name(n)]
+    if len(option_names) < 2:
+        return False
+    h = _name_norm(home_team)
+    a = _name_norm(away_team)
+    if not h or not a:
+        return False
+    n0 = _name_norm(option_names[0])
+    n1 = _name_norm(option_names[1])
+    return (h in n0 or n0 in h) and (a in n1 or n1 in a) or (h in n1 or n1 in h) and (a in n0 or n0 in a)
+
+
+async def _fetch_football_data_finished_matches(days_back: int = 4) -> list:
+    token = (os.environ.get("FOOTBALL_DATA_ORG_TOKEN") or "").strip()
+    if not token:
+        return []
+    to_dt = datetime.now(timezone.utc).date()
+    from_dt = to_dt - timedelta(days=max(1, min(int(days_back), 10)))
+    out = []
+    comp_codes = ("PL", "PD", "BL1", "SA", "FL1", "CL", "EL", "PPL", "DED")
+    try:
+        async with httpx.AsyncClient(timeout=16.0) as client:
+            for code in comp_codes:
+                r = await client.get(
+                    "https://api.football-data.org/v4/competitions/%s/matches" % code,
+                    headers={"X-Auth-Token": token},
+                    params={"status": "FINISHED", "dateFrom": str(from_dt), "dateTo": str(to_dt)},
+                )
+                if r.status_code != 200:
+                    continue
+                data = r.json() or {}
+                for m in (data.get("matches") or []):
+                    ht = ((m.get("homeTeam") or {}).get("name") or "").strip()
+                    at = ((m.get("awayTeam") or {}).get("name") or "").strip()
+                    full = (m.get("score") or {}).get("fullTime") or {}
+                    try:
+                        hs = int(full.get("home"))
+                        as_ = int(full.get("away"))
+                    except Exception:
+                        continue
+                    dt_raw = (m.get("utcDate") or "").strip()
+                    if not ht or not at or not dt_raw:
+                        continue
+                    out.append({
+                        "home_team": ht,
+                        "away_team": at,
+                        "home_score": hs,
+                        "away_score": as_,
+                        "utcDate": dt_raw,
+                    })
+    except Exception as ex:
+        logger.warning("football-data.org finished matches fetch failed: %s", ex)
+        return []
+    return out
+
+
+async def _auto_settle_fallback_football_data() -> int:
+    """Fallback settle for soccer-linked open events when Odds API score polling fails."""
+    matches = await _fetch_football_data_finished_matches(days_back=4)
+    if not matches:
+        return 0
+    bet_event_ids = await _linkable_open_event_ids_with_open_bets()
+    if not bet_event_ids:
+        return 0
+    now_iso = datetime.now(timezone.utc).isoformat()
+    cursor = db.sports_events.find(
+        {
+            "status": "open",
+            "external_sport_key": {"$in": list(SOCCER_LEAGUES)},
+            "start_time": {"$lte": now_iso},
+            "id": {"$in": list(bet_event_ids)},
+        },
+        {"_id": 0, "id": 1, "options": 1, "start_time": 1},
+    ).limit(1000)
+    settled = 0
+    async for ev in cursor:
+        st = _event_datetime_utc(ev)
+        if st is None:
+            continue
+        winning_id = None
+        for m in matches:
+            if not _looks_like_same_teams(ev.get("options") or [], m["home_team"], m["away_team"]):
+                continue
+            try:
+                md = datetime.fromisoformat(str(m.get("utcDate") or "").replace("Z", "+00:00"))
+            except Exception:
+                continue
+            if abs((md - st).total_seconds()) > 60 * 60 * 48:
+                continue
+            winning_id = _derive_winning_option_from_simple_score(
+                ev.get("options") or [],
+                m["home_team"],
+                m["away_team"],
+                int(m["home_score"]),
+                int(m["away_score"]),
+                True,
+            )
+            if winning_id:
+                break
+        if not winning_id:
+            continue
+        if await _settle_event_internal(ev.get("id") or "", winning_id):
+            settled += 1
+    return settled
+
+
+async def _fetch_ergast_f1_results_recent() -> list:
+    out = []
+    endpoints = [
+        "https://ergast.com/api/f1/current/results.json?limit=500",
+        "https://ergast.com/api/f1/last/results.json?limit=500",
+    ]
+    try:
+        async with httpx.AsyncClient(timeout=16.0) as client:
+            for url in endpoints:
+                r = await client.get(url, headers={"Accept": "application/json"})
+                if r.status_code != 200:
+                    continue
+                data = r.json() or {}
+                races = (((data.get("MRData") or {}).get("RaceTable") or {}).get("Races") or [])
+                out.extend(races)
+    except Exception as ex:
+        logger.warning("Ergast F1 results fetch failed: %s", ex)
+        return []
+    return out
+
+
+def _driver_finish_pos_from_race(race: dict, option_name: str) -> Optional[int]:
+    target = _name_norm(option_name)
+    if not target:
+        return None
+    for row in (race.get("Results") or []):
+        drv = row.get("Driver") or {}
+        name = "%s %s" % ((drv.get("givenName") or "").strip(), (drv.get("familyName") or "").strip())
+        key = _name_norm(name)
+        if not key:
+            continue
+        if key == target or key in target or target in key:
+            try:
+                return int(row.get("position") or 0)
+            except Exception:
+                return None
+    return None
+
+
+async def _auto_settle_fallback_f1_ergast() -> int:
+    races = await _fetch_ergast_f1_results_recent()
+    if not races:
+        return 0
+    bet_event_ids = await _linkable_open_event_ids_with_open_bets()
+    if not bet_event_ids:
+        return 0
+    now_iso = datetime.now(timezone.utc).isoformat()
+    cursor = db.sports_events.find(
+        {
+            "status": "open",
+            "external_sport_key": "motor_racing_f1",
+            "start_time": {"$lte": now_iso},
+            "id": {"$in": list(bet_event_ids)},
+        },
+        {"_id": 0, "id": 1, "options": 1, "start_time": 1},
+    ).limit(500)
+    settled = 0
+    async for ev in cursor:
+        options = ev.get("options") or []
+        if len(options) < 2:
+            continue
+        try:
+            st = _event_datetime_utc(ev)
+        except Exception:
+            st = None
+        if st is None:
+            continue
+        best_winning_id = None
+        for race in races:
+            rd = (race.get("date") or "").strip()
+            if not rd:
+                continue
+            try:
+                race_dt = datetime.fromisoformat(rd).replace(tzinfo=timezone.utc)
+            except Exception:
+                continue
+            if abs((race_dt - st).total_seconds()) > 60 * 60 * 72:
+                continue
+            p0 = _driver_finish_pos_from_race(race, options[0].get("name") or "")
+            p1 = _driver_finish_pos_from_race(race, options[1].get("name") or "")
+            if p0 is None or p1 is None or p0 == p1:
+                continue
+            best_winning_id = options[0].get("id") if p0 < p1 else options[1].get("id")
+            if best_winning_id:
+                break
+        if not best_winning_id:
+            continue
+        if await _settle_event_internal(ev.get("id") or "", best_winning_id):
+            settled += 1
+    return settled
+
+
 async def _auto_settle_from_scores() -> dict:
     """Poll Odds API scores, match to open events with external_event_id, settle and pay. Returns stats."""
     settled_count = 0
     skipped_no_match = 0
     skipped_no_winner = 0
+    fallback_settled = 0
     key = _odds_api_key()
     if not key:
-        return {"settled": 0, "message": "No Odds API key"}
+        # Keep admin/cron/manual path useful even when Odds API key is absent.
+        try:
+            fallback_settled += await _auto_settle_fallback_football_data()
+        except Exception as ex:
+            logger.warning("Fallback auto-settle football-data failed (no Odds key): %s", ex)
+        try:
+            fallback_settled += await _auto_settle_fallback_f1_ergast()
+        except Exception as ex:
+            logger.warning("Fallback auto-settle F1 Ergast failed (no Odds key): %s", ex)
+        return {"settled": fallback_settled, "skipped_no_match": 0, "skipped_no_winner": 0, "source": "fallback_only"}
+    bet_event_ids = await _linkable_open_event_ids_with_open_bets()
+    if not bet_event_ids:
+        return {
+            "settled": fallback_settled,
+            "skipped_no_match": 0,
+            "skipped_no_winner": 0,
+            "fallback_settled": fallback_settled,
+            "message": "No open bet events to settle",
+        }
     sport_keys_used = set()
     for category, keys in ODDS_API_SPORT_KEYS.items():
         three_way = category == "Football"
@@ -876,7 +1141,12 @@ async def _auto_settle_from_scores() -> dict:
                 if not ext_id:
                     continue
                 ev = await db.sports_events.find_one(
-                    {"external_event_id": ext_id, "external_sport_key": sport_key, "status": "open"},
+                    {
+                        "external_event_id": ext_id,
+                        "external_sport_key": sport_key,
+                        "status": "open",
+                        "id": {"$in": list(bet_event_ids)},
+                    },
                     {"_id": 0, "id": 1, "options": 1},
                 )
                 if not ev:
@@ -888,7 +1158,20 @@ async def _auto_settle_from_scores() -> dict:
                     continue
                 if await _settle_event_internal(ev["id"], winning_id):
                     settled_count += 1
-    return {"settled": settled_count, "skipped_no_match": skipped_no_match, "skipped_no_winner": skipped_no_winner}
+    try:
+        fallback_settled += await _auto_settle_fallback_football_data()
+    except Exception as ex:
+        logger.warning("Fallback auto-settle football-data failed: %s", ex)
+    try:
+        fallback_settled += await _auto_settle_fallback_f1_ergast()
+    except Exception as ex:
+        logger.warning("Fallback auto-settle F1 Ergast failed: %s", ex)
+    return {
+        "settled": settled_count + fallback_settled,
+        "skipped_no_match": skipped_no_match,
+        "skipped_no_winner": skipped_no_winner,
+        "fallback_settled": fallback_settled,
+    }
 
 
 async def _fetch_football_events_football_data_org() -> list:
@@ -2550,11 +2833,25 @@ _LINKABLE_OPEN_EVENT_FILTER = {
 }
 
 
+async def _linkable_open_event_ids_with_open_bets() -> set[str]:
+    rows = await db.sports_bets.aggregate([
+        {"$match": {"status": "open", "event_id": {"$exists": True, "$nin": [None, ""]}}},
+        {"$group": {"_id": "$event_id"}},
+    ]).to_list(5000)
+    return {str(r.get("_id") or "") for r in rows if r.get("_id")}
+
+
 async def any_linkable_open_event_past_settle_delay() -> bool:
-    """True if any open Odds-linked event is past kickoff + configured delay."""
+    """True if any open Odds-linked event (with open bets) is past kickoff + configured delay."""
     now = datetime.now(timezone.utc)
     delay = timedelta(minutes=_sports_auto_settle_minutes_after_start())
-    cursor = db.sports_events.find(_LINKABLE_OPEN_EVENT_FILTER, {"_id": 0, "start_time": 1}).limit(500)
+    event_ids = await _linkable_open_event_ids_with_open_bets()
+    if not event_ids:
+        return False
+    cursor = db.sports_events.find(
+        {**_LINKABLE_OPEN_EVENT_FILTER, "id": {"$in": list(event_ids)}},
+        {"_id": 0, "start_time": 1},
+    ).limit(1000)
     async for doc in cursor:
         st = _parse_start_time_utc(doc.get("start_time"))
         if st is None:
@@ -2573,7 +2870,13 @@ async def _seconds_until_next_linkable_eligible_or_cap() -> float:
     delay = timedelta(minutes=_sports_auto_settle_minutes_after_start())
     cap = float(_sports_auto_settle_ticker_wait_cap_sec())
     min_positive: Optional[float] = None
-    cursor = db.sports_events.find(_LINKABLE_OPEN_EVENT_FILTER, {"_id": 0, "start_time": 1}).limit(500)
+    event_ids = await _linkable_open_event_ids_with_open_bets()
+    if not event_ids:
+        return 0.0
+    cursor = db.sports_events.find(
+        {**_LINKABLE_OPEN_EVENT_FILTER, "id": {"$in": list(event_ids)}},
+        {"_id": 0, "start_time": 1},
+    ).limit(1000)
     async for doc in cursor:
         st = _parse_start_time_utc(doc.get("start_time"))
         if st is None:
@@ -2607,7 +2910,13 @@ async def run_sports_auto_settle_ticker() -> None:
             warned_no_key = False
 
             try:
-                n_linkable = await db.sports_events.count_documents(_LINKABLE_OPEN_EVENT_FILTER)
+                event_ids = await _linkable_open_event_ids_with_open_bets()
+                if not event_ids:
+                    await asyncio.sleep(_sports_auto_settle_ticker_idle_sec())
+                    continue
+                n_linkable = await db.sports_events.count_documents(
+                    {**_LINKABLE_OPEN_EVENT_FILTER, "id": {"$in": list(event_ids)}},
+                )
             except Exception as ex:
                 log.warning("Sports auto-settle ticker: count linkable events failed: %s", ex)
                 await asyncio.sleep(300)
