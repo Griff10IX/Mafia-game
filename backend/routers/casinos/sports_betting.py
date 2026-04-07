@@ -2626,33 +2626,143 @@ async def admin_sports_cancel_event(request: AdminCancelEventRequest, current_us
         raise HTTPException(status_code=403, detail="Admin only")
     event_id = (request.event_id or "").strip()
     now = datetime.now(timezone.utc).isoformat()
-    ev = await db.sports_events.find_one_and_update(
-        {"id": event_id, "status": "open"},
-        {"$set": {"status": "cancelled", "cancelled_at": now}},
+    refunded_count, total_refunded = await _cancel_open_bets_for_event(
+        event_id=event_id,
+        now_iso=now,
+        cancel_event=True,
+        cancel_reason="admin_cancel_event",
     )
-    if not ev:
-        raise HTTPException(status_code=400, detail="Event not found or already cancelled")
+    return {
+        "message": f"Event cancelled. {refunded_count} bet(s) refunded (${total_refunded:,} total).",
+        "refunded_count": refunded_count,
+        "total_refunded": total_refunded,
+    }
+
+
+async def _cancel_open_bets_for_event(
+    event_id: str,
+    now_iso: str,
+    cancel_event: bool = False,
+    cancel_reason: Optional[str] = None,
+) -> tuple[int, int]:
+    if cancel_event:
+        ev = await db.sports_events.find_one_and_update(
+            {"id": event_id, "status": "open"},
+            {"$set": {"status": "cancelled", "cancelled_at": now_iso, "cancel_reason": cancel_reason or "cancelled"}},
+        )
+        if not ev:
+            return (0, 0)
     cursor = db.sports_bets.find(
         {"event_id": event_id, "status": "open"},
-        {"_id": 0, "id": 1, "user_id": 1, "stake": 1},
+        {"_id": 0, "id": 1, "user_id": 1, "stake": 1, "event_name": 1},
     )
     refunded_count = 0
     total_refunded = 0
     for b in await cursor.to_list(1000):
         bet_claim = await db.sports_bets.find_one_and_update(
             {"id": b["id"], "status": "open"},
-            {"$set": {"status": "cancelled", "settled_at": now}},
+            {"$set": {"status": "cancelled", "settled_at": now_iso, "cancel_reason": cancel_reason or "cancelled"}},
         )
         if not bet_claim:
             continue
         stake = int(bet_claim.get("stake") or 0)
         if stake > 0:
             await db.users.update_one({"id": bet_claim["user_id"]}, {"$inc": {"money": stake}})
+        try:
+            u = await db.users.find_one({"id": bet_claim["user_id"]}, {"_id": 0, "username": 1})
+            await log_gambling(
+                bet_claim["user_id"],
+                (u or {}).get("username") or "?",
+                "sports_bet",
+                {
+                    "bet_id": bet_claim["id"],
+                    "event_name": bet_claim.get("event_name"),
+                    "stake": stake,
+                    "status": "cancelled",
+                    "settled_at": now_iso,
+                    "cancel_reason": cancel_reason or "cancelled",
+                    "refund": stake,
+                },
+            )
+            await send_notification(
+                bet_claim["user_id"],
+                "Sports bet refunded",
+                f"Your open bet on \"{(bet_claim.get('event_name') or 'Sports event').strip() or 'Sports event'}\" was cancelled and refunded (${stake:,}).",
+                "system",
+            )
+        except Exception:
+            pass
         refunded_count += 1
         total_refunded += stake
+    return (refunded_count, total_refunded)
+
+
+async def admin_sports_cancel_stale_open_bets(
+    hours: int = Query(72, ge=1, le=24 * 30),
+    limit_events: int = Query(500, ge=1, le=2000),
+    current_user: dict = Depends(get_current_user_verified),
+):
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    now_dt = datetime.now(timezone.utc)
+    now_iso = now_dt.isoformat()
+    cutoff_iso = (now_dt - timedelta(hours=int(hours))).isoformat()
+
+    open_bet_rows = await db.sports_bets.aggregate([
+        {"$match": {"status": "open", "event_id": {"$exists": True, "$nin": [None, ""]}}},
+        {"$group": {"_id": "$event_id", "open_bets": {"$sum": 1}}},
+    ]).to_list(5000)
+    event_ids = [str(r.get("_id") or "") for r in open_bet_rows if r.get("_id")]
+    if not event_ids:
+        return {
+            "message": "No open bets found.",
+            "hours": int(hours),
+            "events_cancelled": 0,
+            "bets_refunded": 0,
+            "total_refunded": 0,
+        }
+
+    cursor = db.sports_events.find(
+        {
+            "id": {"$in": event_ids},
+            "status": "open",
+            "start_time": {"$lte": cutoff_iso},
+        },
+        {"_id": 0, "id": 1, "name": 1, "start_time": 1},
+    ).sort("start_time", 1).limit(int(limit_events))
+    stale_events = await cursor.to_list(int(limit_events))
+    if not stale_events:
+        return {
+            "message": f"No unresolved open-bet events older than {int(hours)}h.",
+            "hours": int(hours),
+            "events_cancelled": 0,
+            "bets_refunded": 0,
+            "total_refunded": 0,
+        }
+
+    events_cancelled = 0
+    bets_refunded = 0
+    total_refunded = 0
+    for ev in stale_events:
+        eid = str(ev.get("id") or "")
+        if not eid:
+            continue
+        rc, total = await _cancel_open_bets_for_event(
+            event_id=eid,
+            now_iso=now_iso,
+            cancel_event=True,
+            cancel_reason=f"stale_unresolved_{int(hours)}h",
+        )
+        if rc > 0:
+            events_cancelled += 1
+            bets_refunded += rc
+            total_refunded += total
+
     return {
-        "message": f"Event cancelled. {refunded_count} bet(s) refunded (${total_refunded:,} total).",
-        "refunded_count": refunded_count,
+        "message": f"Cancelled {events_cancelled} stale event(s) and refunded {bets_refunded} bet(s) (${total_refunded:,}).",
+        "hours": int(hours),
+        "events_cancelled": events_cancelled,
+        "bets_refunded": bets_refunded,
         "total_refunded": total_refunded,
     }
 
@@ -3134,6 +3244,7 @@ def register(router):
     router.add_api_route("/admin/sports-betting/events/betting-window", admin_sports_patch_event_betting_window, methods=["PATCH"])
     router.add_api_route("/admin/sports-betting/settle", admin_sports_settle, methods=["POST"])
     router.add_api_route("/admin/sports-betting/cancel-event", admin_sports_cancel_event, methods=["POST"])
+    router.add_api_route("/admin/sports-betting/cancel-stale-open-bets", admin_sports_cancel_stale_open_bets, methods=["POST"])
     router.add_api_route("/admin/sports-betting/bets", admin_sports_bets_list, methods=["GET"])
     router.add_api_route("/admin/sports-betting/unsettled-events", admin_sports_unsettled_events, methods=["GET"])
     router.add_api_route("/admin/sports-betting/auto-settle-health", admin_sports_auto_settle_health, methods=["GET"])

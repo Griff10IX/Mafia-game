@@ -934,6 +934,8 @@ export default function Admin() {
   const [sportsBetsEventId, setSportsBetsEventId] = useState('');
   const [sportsBetsLimit, setSportsBetsLimit] = useState(200);
   const [sportsBetsManualPayoutLoading, setSportsBetsManualPayoutLoading] = useState(false);
+  const [sportsStaleCancelHours, setSportsStaleCancelHours] = useState(72);
+  const [sportsStaleCancelLoading, setSportsStaleCancelLoading] = useState(false);
   const [sportsUnsettledEvents, setSportsUnsettledEvents] = useState({ events: [] });
   const [sportsUnsettledEventsLoading, setSportsUnsettledEventsLoading] = useState(false);
   const [sportsAutoSettleHealth, setSportsAutoSettleHealth] = useState(null);
@@ -5473,6 +5475,24 @@ export default function Admin() {
       setSportsAutoSettleHealth(null);
     } finally {
       setSportsAutoSettleHealthLoading(false);
+    }
+  };
+
+  const cancelStaleSportsOpenBets = async () => {
+    const hours = Math.max(1, Math.min(24 * 30, parseInt(String(sportsStaleCancelHours), 10) || 72));
+    if (!window.confirm(`Cancel and refund unresolved sports bets older than ${hours} hour(s)?`)) return;
+    setSportsStaleCancelLoading(true);
+    try {
+      const res = await api.post('/admin/sports-betting/cancel-stale-open-bets', null, { params: { hours } });
+      const d = res.data || {};
+      toast.success(
+        d.message || `Cancelled ${d.events_cancelled ?? 0} stale event(s), refunded ${d.bets_refunded ?? 0} bet(s).`,
+      );
+      await Promise.all([fetchSportsBetsLedger(), fetchSportsUnsettledEvents(), fetchSportsAutoSettleHealth()]);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to cancel stale sports bets');
+    } finally {
+      setSportsStaleCancelLoading(false);
     }
   };
 
@@ -15398,6 +15418,18 @@ export default function Admin() {
                 </BtnSecondary>
                 <BtnSecondary onClick={runSportsBetsManualPayout} disabled={sportsBetsManualPayoutLoading}>
                   {sportsBetsManualPayoutLoading ? 'Running payout...' : 'Run sports payout now'}
+                </BtnSecondary>
+                <span className="text-[10px] text-mutedForeground">Stale cutoff (h)</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={24 * 30}
+                  value={sportsStaleCancelHours}
+                  onChange={(e) => setSportsStaleCancelHours(Math.max(1, Math.min(24 * 30, parseInt(e.target.value, 10) || 72)))}
+                  className="w-16 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs"
+                />
+                <BtnSecondary onClick={cancelStaleSportsOpenBets} disabled={sportsStaleCancelLoading}>
+                  {sportsStaleCancelLoading ? 'Cancelling...' : 'Cancel+refund stale'}
                 </BtnSecondary>
               </div>
               {sportsAutoSettleHealth && (
