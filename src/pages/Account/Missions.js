@@ -25,6 +25,8 @@ const MISSIONS_STYLES = `
   .m-boss-pulse { animation: pulseBorder 2s ease-in-out infinite; }
   .shimmer-gold { background: linear-gradient(90deg,#92650a 0%,#eab308 40%,#fef08a 55%,#eab308 70%,#92650a 100%); background-size: 200% auto; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; animation: shimmer 2.8s linear infinite; }
   .progress-bar-fill { animation: progressFill 0.5s ease-out both; }
+  .m-focus-card { transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease; }
+  .m-focus-card:hover { transform: translateY(-1px); }
 `;
 
 const fmt = (n) => `$${Number(n ?? 0).toLocaleString()}`;
@@ -99,11 +101,12 @@ function DifficultyStars({ difficulty, size = 11 }) {
   );
 }
 
-function ProgressBar({ current, target, color = '#eab308' }) {
+function ProgressBar({ current, target, color = '#eab308', thick = false }) {
   const pct = target > 0 ? Math.min(100, (current / target) * 100) : 100;
+  const h = thick ? 8 : 5;
   return (
     <div style={{
-      width: '100%', height: 5, borderRadius: 4,
+      width: '100%', height: h, borderRadius: thick ? 6 : 4,
       background: 'rgba(63,63,70,0.6)', overflow: 'hidden',
     }}>
       <div
@@ -122,196 +125,229 @@ function ProgressBar({ current, target, color = '#eab308' }) {
   );
 }
 
-function StatusChip({ completed, requirementsMet, isBoss, unlocked }) {
+function StatusChip({ completed, requirementsMet, isBoss, unlocked, size = 'sm' }) {
+  const isLg = size === 'lg';
+  const chip = isLg ? 'px-2.5 py-1 text-[10px]' : 'px-1.5 py-0.5 text-[9px]';
+  const icon = isLg ? 11 : 9;
   if (completed) return (
-    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-green-500/10 border border-green-500/40 text-green-400 text-[9px] font-heading font-bold uppercase tracking-wide">
-      <CheckCircle size={9} /> Done
+    <span className={`inline-flex items-center gap-1 rounded-full bg-green-500/10 border border-green-500/40 text-green-400 font-heading font-bold uppercase tracking-wide ${chip}`}>
+      <CheckCircle size={icon} /> Done
     </span>
   );
   if (!unlocked) return (
-    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-zinc-800/50 border border-zinc-600/50 text-mutedForeground text-[9px] font-heading font-bold uppercase tracking-wide">
-      <Lock size={9} /> Locked
+    <span className={`inline-flex items-center gap-1 rounded-full bg-zinc-800/50 border border-zinc-600/50 text-mutedForeground font-heading font-bold uppercase tracking-wide ${chip}`}>
+      <Lock size={icon} /> Locked
     </span>
   );
   if (!requirementsMet) return (
-    <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full bg-zinc-800/50 border border-zinc-600/50 text-mutedForeground text-[9px] font-heading font-bold uppercase tracking-wide">
+    <span className={`inline-flex items-center gap-1 rounded-full bg-zinc-800/50 border border-zinc-600/50 text-mutedForeground font-heading font-bold uppercase tracking-wide ${chip}`}>
       In progress
     </span>
   );
   return (
-    <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full border text-[9px] font-heading font-bold uppercase tracking-wide ${isBoss ? 'bg-primary/15 border-primary/70 text-primary' : 'bg-primary/10 border-primary/40 text-primary'}`}>
-      <Star size={9} fill="currentColor" /> Ready
+    <span className={`inline-flex items-center gap-1 rounded-full border font-heading font-bold uppercase tracking-wide ${chip} ${isBoss ? 'bg-primary/15 border-primary/70 text-primary' : 'bg-primary/10 border-primary/40 text-primary'}`}>
+      <Star size={icon} fill="currentColor" /> Ready
     </span>
   );
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// MISSION CARD (area list item) – theme aligned with Crimes/GTA
+// FOCUS CARDS – current + next only (readable, spacious)
 // ─────────────────────────────────────────────────────────────────────────────
 
-function MissionCard({ mission, onClick, delay = 0, missionIndex, missionTotal, isCurrent }) {
-  const { completed, requirements_met, is_boss, progress, difficulty, title, type, reward_money, reward_points, reward_respect, reward_tribute, unlocked, previous_mission_title } = mission;
+function MissionFocusCard({ mission, role, missionIndex, missionTotal, onOpen, delay = 0 }) {
+  const {
+    completed, requirements_met, is_boss, progress, difficulty, title, type,
+    reward_money, reward_points, reward_respect, reward_tribute,
+    unlocked, previous_mission_title, area, description,
+  } = mission;
+  const isCurrent = role === 'current';
+  const reqParts = progress?.description ? String(progress.description).split(' · ').filter(Boolean) : [];
 
-  const borderCls = completed
-    ? 'border-green-500/30'
+  const borderCls = isCurrent
+    ? 'border-primary/55 ring-1 ring-primary/20 shadow-[0_0_32px_rgba(234,179,8,0.07)]'
     : !unlocked
-    ? 'border-zinc-700/50'
-    : is_boss && requirements_met
-    ? 'border-primary/60 m-boss-pulse'
-    : isCurrent
-    ? 'border-primary/50'
-    : 'border-primary/20';
-  const bgCls = completed
-    ? 'bg-green-500/5'
+    ? 'border-zinc-600/45 opacity-95'
+    : 'border-primary/25';
+
+  const bgCls = isCurrent
+    ? 'bg-gradient-to-b from-primary/[0.09] to-zinc-900/40'
     : !unlocked
-    ? 'bg-zinc-800/20 opacity-80'
-    : is_boss && requirements_met
-    ? 'bg-primary/8'
-    : isCurrent
-    ? 'bg-primary/6'
-    : 'bg-zinc-800/30';
+    ? 'bg-zinc-900/35'
+    : 'bg-zinc-800/40';
 
   return (
-    <div
-      className={`m-fade-in m-row relative rounded-md border px-3 py-2 transition-all min-w-0 ${borderCls} ${bgCls} ${unlocked && !completed ? 'cursor-pointer' : 'cursor-default'}`}
+    <button
+      type="button"
+      className={`m-fade-in m-focus-card text-left w-full rounded-xl border px-4 py-4 md:px-5 md:py-5 min-h-[200px] flex flex-col ${borderCls} ${bgCls} cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-950`}
       style={{ animationDelay: `${delay}s` }}
-      onClick={() => unlocked && onClick(mission)}
+      onClick={() => onOpen(mission)}
     >
-      {is_boss && (
-        <div className="absolute left-0 top-0 bottom-0 w-0.5 rounded-l-md bg-gradient-to-b from-primary to-primary/70" />
-      )}
-      <div className={is_boss ? 'pl-2' : ''}>
-        <div className="flex items-start justify-between gap-2 mb-1">
-          <div className="min-w-0 flex-1 overflow-hidden">
-            <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-              {missionIndex != null && missionTotal != null && (
-                <span className="text-[9px] font-heading font-bold text-primary/80 shrink-0">
-                  {missionIndex}/{missionTotal}
-                </span>
-              )}
-              {is_boss && !completed && <Skull size={11} className="text-primary shrink-0" />}
-              {completed && <CheckCircle size={11} className="text-green-400 shrink-0" />}
-              {isCurrent && !completed && unlocked && (
-                <span className="shrink-0 px-1 py-0.5 rounded bg-primary/20 border border-primary/40 text-[9px] font-heading font-bold text-primary uppercase">Current</span>
-              )}
-              <span className={`min-w-0 flex-1 text-[11px] font-heading font-bold line-clamp-2 ${completed ? 'text-green-400' : unlocked ? 'text-foreground' : 'text-mutedForeground'}`} title={title}>
-                {title}
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2 mb-1.5">
+            {missionIndex != null && missionTotal != null && (
+              <span className="text-[11px] md:text-xs font-heading font-bold text-primary/90 tabular-nums">
+                {missionIndex}/{missionTotal}
               </span>
-            </div>
-            <div className="text-[9px] text-mutedForeground mt-0.5 italic break-words">
-              {is_boss ? 'Boss' : (type === 'special' ? 'Progression' : missionTypeLabel(type))}
-              {is_boss && ' · Final Job'}
-            </div>
-            {!unlocked && previous_mission_title && (
-              <div className="text-[9px] text-amber-200/80 mt-1 flex items-center gap-1 break-words">
-                <Lock size={8} className="shrink-0" /> Complete &quot;{previous_mission_title}&quot; to unlock
-              </div>
+            )}
+            {is_boss && <Skull size={16} className="text-primary shrink-0" />}
+            {isCurrent && !completed && unlocked && (
+              <span className="px-2 py-0.5 rounded-md bg-primary/20 border border-primary/45 text-[10px] font-heading font-bold text-primary uppercase tracking-wider">
+                Current
+              </span>
+            )}
+            {!isCurrent && (
+              <span className="px-2 py-0.5 rounded-md bg-zinc-800/80 border border-zinc-600/60 text-[10px] font-heading font-bold text-mutedForeground uppercase tracking-wider">
+                Up next
+              </span>
             )}
           </div>
-          <div className="shrink-0">
-            <StatusChip completed={completed} requirementsMet={requirements_met} isBoss={is_boss} unlocked={unlocked} />
-          </div>
+          <h3 className={`font-heading font-bold text-base md:text-lg leading-tight ${completed ? 'text-green-400' : unlocked ? 'text-foreground' : 'text-zinc-300'}`}>
+            {title}
+          </h3>
+          <p className="text-[11px] md:text-xs text-mutedForeground mt-1">
+            {area} · {missionTypeLabel(type)}{is_boss ? ' · Final job' : ''}
+          </p>
         </div>
-
-        {!completed && progress?.target > 0 && unlocked && (
-          <div className="mb-1.5 min-w-0">
-            <ProgressBar current={progress.current} target={progress.target} />
-            <div className="text-[9px] text-mutedForeground mt-0.5 text-right break-words">{progress.description}</div>
-          </div>
-        )}
-        {completed && (
-          <div className="mb-1.5">
-            <ProgressBar current={1} target={1} color="#4ade80" />
-          </div>
-        )}
-
-        <div className="flex items-center gap-2 flex-wrap text-[9px]">
-          {reward_money > 0 && (
-            <span className="inline-flex items-center gap-1 text-green-400">
-              <Coins size={10} /> {fmt(reward_money)}
-            </span>
-          )}
-          {reward_points > 0 && (
-            <span className="inline-flex items-center gap-1 text-primary">
-              <Star size={10} /> {reward_points} RP
-            </span>
-          )}
-          {(reward_respect > 0) && (
-            <span className="inline-flex items-center gap-1 text-fuchsia-400">
-              +{reward_respect} resp
-            </span>
-          )}
-          {(reward_tribute > 0) && (
-            <span className="inline-flex items-center gap-1 text-green-500/90">
-              +{fmt(reward_tribute)} tribute
-            </span>
-          )}
-          {(mission.reward_tribute_daily > 0) && (
-            <span className="inline-flex items-center gap-1 text-green-400/90">{fmt(mission.reward_tribute_daily)}/day</span>
-          )}
-          {(mission.reward_respect_daily > 0) && (
-            <span className="inline-flex items-center gap-1 text-fuchsia-400/90">+{mission.reward_respect_daily} resp/day</span>
-          )}
-          {mission.unlocks_city && (
-            <span className="inline-flex items-center gap-1 text-violet-400">
-              <MapPin size={10} /> Unlocks {mission.unlocks_city}
-            </span>
-          )}
-          <span className="ml-auto">
-            <DifficultyStars difficulty={difficulty} size={10} />
-          </span>
+        <div className="shrink-0">
+          <StatusChip completed={completed} requirementsMet={requirements_met} isBoss={is_boss} unlocked={unlocked} size="lg" />
         </div>
       </div>
-    </div>
+
+      {!unlocked && previous_mission_title && (
+        <div className="flex items-start gap-2 text-[11px] text-amber-200/85 mb-3">
+          <Lock size={14} className="shrink-0 mt-0.5" />
+          <span>Complete &quot;{previous_mission_title}&quot; to unlock.</span>
+        </div>
+      )}
+
+      {unlocked && !completed && progress?.target > 0 && (
+        <div className="mb-3 min-w-0 rounded-lg border border-zinc-700/50 bg-zinc-800/80 p-1">
+          <ProgressBar current={progress.current} target={progress.target} thick />
+        </div>
+      )}
+
+      {reqParts.length > 0 && !completed && unlocked && (
+        <ul className="mb-3 space-y-1.5 text-[11px] md:text-xs text-zinc-300 flex-1">
+          {reqParts.map((line, i) => (
+            <li key={i} className="flex gap-2.5 leading-snug">
+              <span className="text-primary/60 shrink-0 font-bold">·</span>
+              <span>{line}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {isCurrent && description && (
+        <p className="text-[11px] md:text-xs text-mutedForeground italic leading-relaxed mb-3 line-clamp-4">
+          {description}
+        </p>
+      )}
+
+      <div className="mt-auto pt-3 border-t border-zinc-700/40 flex flex-wrap items-center gap-x-3 gap-y-2 text-[11px] md:text-xs">
+        {reward_money > 0 && (
+          <span className="inline-flex items-center gap-1 text-green-400 font-medium">
+            <Coins size={13} /> {fmt(reward_money)}
+          </span>
+        )}
+        {reward_points > 0 && (
+          <span className="inline-flex items-center gap-1 text-primary font-medium">
+            <Star size={13} /> {reward_points} RP
+          </span>
+        )}
+        {reward_respect > 0 && (
+          <span className="inline-flex items-center gap-1 text-fuchsia-400 font-medium">
+            +{reward_respect} resp
+          </span>
+        )}
+        {reward_tribute > 0 && (
+          <span className="inline-flex items-center gap-1 text-green-500/95 font-medium">
+            +{fmt(reward_tribute)} tribute
+          </span>
+        )}
+        {(mission.reward_tribute_daily > 0) && (
+          <span className="inline-flex items-center gap-1 text-green-400/90 font-medium">{fmt(mission.reward_tribute_daily)}/day</span>
+        )}
+        {(mission.reward_respect_daily > 0) && (
+          <span className="inline-flex items-center gap-1 text-fuchsia-400/90 font-medium">+{mission.reward_respect_daily} resp/day</span>
+        )}
+        {mission.unlocks_city && (
+          <span className="inline-flex items-center gap-1 text-violet-400 font-medium">
+            <MapPin size={13} /> Unlocks {mission.unlocks_city}
+          </span>
+        )}
+        <span className="ml-auto">
+          <DifficultyStars difficulty={difficulty} size={14} />
+        </span>
+      </div>
+    </button>
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// AREA SECTION – panel theme like Crimes/GTA
-// ─────────────────────────────────────────────────────────────────────────────
-
-function AreaSection({ areaName, missions, onMissionClick, delay = 0, isBossArea = false, missionIdToIndex, currentMissionId }) {
-  const completed = missions.filter(m => m.completed).length;
-  const total = missions.length;
-  const allDone = completed === total && total > 0;
-  const anyReady = missions.some(m => m.requirements_met && !m.completed);
-  const sorted = [...missions].sort((a, b) => a.order - b.order);
+function MissionFocusSection({
+  cityLabel,
+  currentMission,
+  nextMission,
+  missionIdToIndex,
+  orderedTotal,
+  completedCount,
+  onOpen,
+}) {
+  const allDone = !currentMission && orderedTotal > 0 && completedCount >= orderedTotal;
 
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 m-fade-in mb-2 mobile-panel`} style={{ animationDelay: `${delay}s` }}>
-      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      <div className={`px-2.5 py-1.5 border-b border-primary/20 flex items-center gap-2 ${isBossArea ? 'bg-primary/10' : 'bg-primary/8'}`}>
-        {isBossArea ? <Skull size={12} className="text-primary shrink-0" /> : <MapPin size={11} className={allDone ? 'text-green-400' : 'text-primary/80'} />}
-        <span className={`text-[9px] font-heading font-bold uppercase tracking-[0.1em] flex-1 ${allDone ? 'text-green-400' : isBossArea ? 'text-primary' : 'text-foreground'}`}>
-          {areaName}
-          {isBossArea && <span className="font-normal italic ml-1 text-primary/90">Final Job</span>}
-        </span>
-        <span className={`text-[9px] font-heading font-bold ${allDone ? 'text-green-400' : anyReady ? 'text-primary' : 'text-mutedForeground'}`}>
-          {completed}/{total}
-        </span>
-        {allDone && (
-          <span className="w-4 h-4 rounded-full bg-green-500 flex items-center justify-center shrink-0">
-            <CheckCircle size={10} className="text-white" />
+    <div className={`relative ${styles.panel} rounded-xl overflow-hidden border border-primary/25 m-fade-in mobile-panel shadow-lg shadow-black/20`}>
+      <div className="h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
+      <div className="px-4 py-3 md:px-5 md:py-3.5 bg-gradient-to-r from-primary/[0.12] to-transparent border-b border-primary/20 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <Zap size={16} className="text-primary shrink-0" />
+          <span className="text-[11px] md:text-xs font-heading font-bold text-primary uppercase tracking-[0.14em]">
+            Mission ladder
           </span>
+          <span className="text-mutedForeground hidden sm:inline">·</span>
+          <span className="text-[11px] text-mutedForeground truncate">{cityLabel}</span>
+        </div>
+        <span className="text-[11px] md:text-xs font-heading font-bold text-foreground tabular-nums">
+          {currentMission && missionIdToIndex[currentMission.id]
+            ? `Mission ${missionIdToIndex[currentMission.id].index} of ${orderedTotal}`
+            : `Progress ${completedCount} / ${orderedTotal}`}
+        </span>
+      </div>
+
+      <div className="p-4 md:p-5">
+        {allDone ? (
+          <div className="rounded-xl border border-green-500/35 bg-green-500/[0.06] px-5 py-8 text-center">
+            <CheckCircle size={36} className="text-green-400 mx-auto mb-3 opacity-90" />
+            <p className="font-heading font-bold text-green-400 text-lg">City cleared</p>
+            <p className="text-sm text-mutedForeground mt-2">Every mission in {cityLabel} is complete.</p>
+          </div>
+        ) : (
+          <div className={`grid gap-4 md:gap-5 ${nextMission ? 'md:grid-cols-2' : 'md:grid-cols-1 max-w-xl mx-auto'}`}>
+            {currentMission && (
+              <MissionFocusCard
+                mission={currentMission}
+                role="current"
+                missionIndex={missionIdToIndex[currentMission.id]?.index}
+                missionTotal={missionIdToIndex[currentMission.id]?.total}
+                onOpen={onOpen}
+                delay={0.05}
+              />
+            )}
+            {nextMission && (
+              <MissionFocusCard
+                mission={nextMission}
+                role="next"
+                missionIndex={missionIdToIndex[nextMission.id]?.index}
+                missionTotal={missionIdToIndex[nextMission.id]?.total}
+                onOpen={onOpen}
+                delay={0.1}
+              />
+            )}
+          </div>
         )}
       </div>
-      <div className="p-1.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5 gap-1.5">
-        {sorted.map((m, i) => {
-          const info = missionIdToIndex?.[m.id] ?? {};
-          return (
-            <MissionCard
-              key={m.id}
-              mission={m}
-              onClick={onMissionClick}
-              delay={delay + i * 0.03}
-              missionIndex={info.index}
-              missionTotal={info.total}
-              isCurrent={m.id === currentMissionId}
-            />
-          );
-        })}
-      </div>
-      <div className="m-art-line text-primary mx-2.5" />
+      <div className="m-art-line text-primary mx-4 md:mx-5" />
     </div>
   );
 }
@@ -1051,16 +1087,19 @@ export default function Missions() {
   const cityMissions = missions.filter(m => m.city === city);
   const orderedCityMissions = [...cityMissions].sort((a, b) => (a.is_boss ? 1 : 0) - (b.is_boss ? 1 : 0) || a.order - b.order);
   const currentMission = orderedCityMissions.find(m => !m.completed && m.unlocked) ?? null;
-  const currentMissionId = currentMission?.id ?? null;
+  const currentIdx = currentMission
+    ? orderedCityMissions.findIndex(m => m.id === currentMission.id)
+    : -1;
+  const nextMission =
+    currentIdx >= 0 && currentIdx + 1 < orderedCityMissions.length
+      ? orderedCityMissions[currentIdx + 1]
+      : null;
   const missionIdToIndex = {};
   orderedCityMissions.forEach((m, i) => {
     missionIdToIndex[m.id] = { index: i + 1, total: orderedCityMissions.length };
   });
 
-  const normalMissions = cityMissions.filter(m => !m.is_boss);
   const bossMissions   = cityMissions.filter(m => m.is_boss);
-  const activeNormal   = normalMissions.filter(m => !m.completed);
-  const activeBoss     = bossMissions.filter(m => !m.completed);
   const completedMissions = cityMissions.filter(m => m.completed).sort((a, b) => {
     const atA = a.completed_at ? new Date(a.completed_at).getTime() : null;
     const atB = b.completed_at ? new Date(b.completed_at).getTime() : null;
@@ -1069,17 +1108,6 @@ export default function Missions() {
     if (atB != null) return -1;
     return (a.order ?? 0) - (b.order ?? 0);
   });
-  const areaMap = {};
-  activeNormal.forEach(m => {
-    if (!areaMap[m.area]) areaMap[m.area] = [];
-    areaMap[m.area].push(m);
-  });
-  const areaNames = Object.keys(areaMap).sort((a, b) => {
-    const minA = Math.min(...areaMap[a].map(m => m.order));
-    const minB = Math.min(...areaMap[b].map(m => m.order));
-    return minA - minB;
-  });
-
   const totalMissions   = cityMissions.length;
   const completedCount  = cityMissions.filter(m => m.completed).length;
   const readyCount      = cityMissions.filter(m => m.requirements_met && !m.completed).length;
@@ -1143,27 +1171,6 @@ export default function Missions() {
       <style>{MISSIONS_STYLES}</style>
 
       <p className="text-[10px] text-mutedForeground italic">Prove yourself: commit 15 crimes and bust 1 NPC from jail. Earn tribute and claim your reward.</p>
-
-      {/* Current mission strip – Mission X of Y */}
-      {orderedCityMissions.length > 0 && (
-        <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 m-fade-in mobile-panel`}>
-          <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2 flex-wrap">
-            <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
-              {currentMissionId ? `Mission ${missionIdToIndex[currentMissionId]?.index ?? '—'} of ${orderedCityMissions.length}` : `${completedCount}/${totalMissions} completed`}
-            </span>
-            {currentMission && (
-              <span className="text-[10px] font-heading font-bold text-foreground truncate">
-                {currentMission.title}
-              </span>
-            )}
-            {!currentMission && completedCount === totalMissions && totalMissions > 0 && (
-              <span className="text-[10px] text-green-400 font-heading">All done in {cityDisplayName(city)}</span>
-            )}
-          </div>
-          <div className="m-art-line text-primary mx-2.5" />
-        </div>
-      )}
 
       <TributeBanner
         bank={tributeBank}
@@ -1264,46 +1271,16 @@ export default function Missions() {
         </div>
       )}
 
-      {/* District missions */}
-      {areaNames.map((area, i) => (
-        <AreaSection
-          key={area}
-          areaName={area}
-          missions={areaMap[area].sort((a, b) => a.order - b.order)}
-          onMissionClick={setSelected}
-          delay={0.1 + i * 0.04}
-          isBossArea={false}
+      {orderedCityMissions.length > 0 && (
+        <MissionFocusSection
+          cityLabel={cityDisplayName(city)}
+          currentMission={currentMission}
+          nextMission={nextMission}
           missionIdToIndex={missionIdToIndex}
-          currentMissionId={currentMissionId}
+          orderedTotal={orderedCityMissions.length}
+          completedCount={completedCount}
+          onOpen={setSelected}
         />
-      ))}
-
-      {/* Boss section (only incomplete) */}
-      {activeBoss.length > 0 && (
-        <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 m-fade-in mobile-panel`}>
-          <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <div className="px-2.5 py-1.5 bg-primary/10 border-b border-primary/20 flex items-center gap-2">
-            <Skull size={12} className="text-primary" />
-            <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.1em]">Final Jobs</span>
-          </div>
-          <div className="p-2.5 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 gap-2.5">
-            {activeBoss.map((m, i) => {
-              const info = missionIdToIndex[m.id] ?? {};
-              return (
-                <MissionCard
-                  key={m.id}
-                  mission={m}
-                  onClick={setSelected}
-                  delay={0.1 + (areaNames.length + i) * 0.04}
-                  missionIndex={info.index}
-                  missionTotal={info.total}
-                  isCurrent={m.id === currentMissionId}
-                />
-              );
-            })}
-          </div>
-          <div className="m-art-line text-primary mx-2.5" />
-        </div>
       )}
 
       {cityMissions.length === 0 && (

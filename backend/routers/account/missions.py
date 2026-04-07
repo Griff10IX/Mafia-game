@@ -24,6 +24,7 @@ from server import (
 )
 from routers.money.booze_run import BOOZE_TYPES
 from routers.kill.armoury import TOKEN_TYPES, TOKEN_CONFIG
+from utils.missions_extended import build_missions, MISSION_RANDOM_TOKEN_TYPES
 import random
 
 # Single first mission: no districts/cities
@@ -31,7 +32,6 @@ FIRST_MISSION_ID = "m_first"
 SECOND_MISSION_ID = "m_second"
 THIRD_MISSION_ID = "m_third"
 FOURTH_MISSION_ID = "m_fourth"
-COMMON_CAR_REWARD_ID = "car1"
 CITY_ORDER = ["Start"]  # single "city" for list/map compatibility
 
 # Daily tribute deposit: hour (0–23) in UTC when tribute enters the bank each day (e.g. territory cut).
@@ -57,152 +57,12 @@ def _next_tribute_deposit_utc(deposit_utc_hour: Optional[int] = None):
     return next_at.isoformat(), time_label
 
 # ─────────────────────────────────────────────────────────────────────────────
-# MISSION DEFINITIONS – single first mission (no districts)
-# Requirements: crimes (total_crimes), jail_busts_npc (bust 1 NPC from jail)
+# MISSION DEFINITIONS (100 missions): built at EOF via build_missions() to avoid
+# circular import (server imports this module before it finishes loading).
 # ─────────────────────────────────────────────────────────────────────────────
 
-MISSIONS = [
-    {
-        "id": FIRST_MISSION_ID,
-        "city": "Start",
-        "area": "—",
-        "order": 0,
-        "type": "starter",
-        "requirements": {"crimes": 15, "jail_busts_npc": 1},
-        "title": "Prove Yourself",
-        "description": "Commit 15 crimes and bust 1 NPC from jail. The outfit wants to see what you're made of.",
-        "reward_money": 50_000,
-        "reward_points": 50,
-        "reward_respect": 2,
-        "reward_tribute": 1_000,
-        "reward_tribute_daily": 25_000,
-        "reward_respect_daily": 1,
-        "reward_tribute_bullets_daily": 125,
-        "reward_car_id": COMMON_CAR_REWARD_ID,
-        "reward_token": "random",
-        "reward_auto_rank_2h": 1,
-        "difficulty": 1,
-        "unlocks_city": None,
-        "character_id": None,
-        "is_boss": False,
-    },
-    {
-        "id": "m_second",
-        "city": "Start",
-        "area": "—",
-        "order": 1,
-        "type": "special",
-        "requirements": {
-            "in_state": "New York",
-            "jail_busts": 2,
-            "crimes": 200,
-            "cars_melted": 1,
-        },
-        "title": "New York Run",
-        "description": "Travel to New York. Bust 2 people from jail (NPC or player). Commit 200 crimes. Melt 1 car.",
-        "reward_cash_immediate": 50_000,
-        "reward_tribute_daily": 100_000,
-        "reward_respect": 3,
-        "reward_respect_daily": 5,
-        "reward_tribute": 2_000,
-        "reward_car_ids": ["car7", "car2"],
-        "reward_bullets": 2_500,
-        "reward_tribute_bullets_daily": 250,
-        "reward_loot_box_pieces": 1,
-        "reward_auto_rank_2h": 1,
-        "difficulty": 2,
-        "unlocks_city": None,
-        "character_id": None,
-        "is_boss": False,
-    },
-    {
-        "id": THIRD_MISSION_ID,
-        "city": "Start",
-        "area": "—",
-        "order": 2,
-        "type": "special",
-        "requirements": {
-            "booze_sells": 25,
-            "crimes": 150,
-            "gta": 10,
-            "jail_busts": 15,
-            "bullets_melted": 5000,
-            "bullets_purchased_armoury": 300,
-            "uncommon_cars_scrapped": 3,
-        },
-        "title": "Making Moves",
-        "description": "Do 25 booze runs. Commit 150 crimes. Steal 10 cars. Bust 15 from jail. Melt 5,000 bullets (from cars). Buy 300 bullets from the armoury. Scrap 3 uncommon cars.",
-        "reward_money": 0,
-        "reward_cash_immediate": 150_000,
-        "reward_points": 0,
-        "reward_respect": 5,
-        "reward_tribute": 3_000,
-        "reward_tribute_daily": 250_000,
-        "reward_respect_daily": 10,
-        "reward_tribute_bullets_daily": 150,
-        "reward_token": "random",
-        "reward_auto_rank_2h": 1,
-        "difficulty": 3,
-        "unlocks_city": None,
-        "character_id": None,
-        "is_boss": False,
-    },
-    {
-        "id": FOURTH_MISSION_ID,
-        "city": "Start",
-        "area": "—",
-        "order": 3,
-        "type": "special",
-        "requirements": {
-            "uncommon_cars_stolen": 5,
-            "hitlist_npc_kills": 7,
-            "jail_busts": 15,
-            "bullets_purchased_armoury": 500,
-            "bullets_melted": 5000,
-            "deposit_interest": 1_000_000,
-        },
-        "title": "Big League",
-        "description": "Steal 5 uncommon cars. Kill 7 hitlist NPCs. Bust 15 from jail (NPC or player). Buy 500 bullets from the armoury. Melt 5,000 bullets. Add $1,000,000 to the interest bank.",
-        "reward_money": 1_000_000,
-        "reward_cash_immediate": 1_000_000,
-        "reward_points": 50,
-        "reward_respect": 10,
-        "reward_tribute": 5_000,
-        "reward_tribute_daily": 1_500_000,
-        "reward_respect_daily": 50,
-        "reward_tribute_bullets_daily": 1_500,
-        "reward_auto_rank_2h": 1,
-        "difficulty": 4,
-        "unlocks_city": None,
-        "character_id": None,
-        "is_boss": False,
-    },
-    # Missions 5–25: progressive difficulty and rewards (tokens start at m_5)
-    {"id": "m_5", "city": "Start", "area": "—", "order": 4, "type": "special", "requirements": {"crimes": 800, "jail_busts": 30, "gta": 25, "booze_sells": 50}, "title": "Street Boss", "description": "Commit 800 crimes. Bust 30 from jail. Steal 25 cars. Do 50 booze runs.", "reward_cash_immediate": 250_000, "reward_points": 75, "reward_respect": 8, "reward_tribute": 10_000, "reward_tribute_daily": 500_000, "reward_respect_daily": 15, "reward_tribute_bullets_daily": 250, "reward_tribute_tokens_daily": 1, "reward_bullets": 5_000, "reward_token": "random", "reward_auto_rank_2h": 1, "difficulty": 5, "unlocks_city": None, "character_id": None, "is_boss": False},
-    {"id": "m_6", "city": "Start", "area": "—", "order": 5, "type": "special", "requirements": {"bullets_melted": 10_000, "bullets_purchased_armoury": 800, "uncommon_cars_scrapped": 8, "cars_melted": 5}, "title": "Arms Dealer", "description": "Melt 10,000 bullets. Buy 800 from the armoury. Scrap 8 uncommon cars. Melt 5 cars.", "reward_cash_immediate": 400_000, "reward_points": 80, "reward_respect": 10, "reward_tribute": 15_000, "reward_tribute_daily": 750_000, "reward_respect_daily": 18, "reward_tribute_bullets_daily": 400, "reward_bullets": 8_000, "reward_auto_rank_2h": 1, "difficulty": 6, "unlocks_city": None, "character_id": None, "is_boss": False},
-    {"id": "m_7", "city": "Start", "area": "—", "order": 6, "type": "special", "requirements": {"hitlist_npc_kills": 15, "jail_busts": 50, "uncommon_cars_stolen": 10, "deposit_interest": 2_500_000}, "title": "Clean Up", "description": "Kill 15 hitlist NPCs. Bust 50 from jail. Steal 10 uncommon cars. Add $2.5M to the interest bank.", "reward_cash_immediate": 600_000, "reward_points": 100, "reward_respect": 12, "reward_tribute": 25_000, "reward_tribute_daily": 1_000_000, "reward_respect_daily": 22, "reward_tribute_bullets_daily": 500, "reward_tribute_tokens_daily": 1, "reward_token": "random", "reward_auto_rank_2h": 1, "difficulty": 7, "unlocks_city": None, "character_id": None, "is_boss": False},
-    {"id": "m_8", "city": "Start", "area": "—", "order": 7, "type": "special", "requirements": {"crimes": 1500, "gta": 50, "booze_sells": 100}, "title": "Territory", "description": "Commit 1,500 crimes. Steal 50 cars. Do 100 booze runs.", "reward_cash_immediate": 900_000, "reward_points": 120, "reward_respect": 15, "reward_tribute": 40_000, "reward_tribute_daily": 1_500_000, "reward_respect_daily": 28, "reward_tribute_bullets_daily": 600, "reward_bullets": 10_000, "reward_auto_rank_2h": 1, "difficulty": 8, "unlocks_city": None, "character_id": None, "is_boss": False},
-    {"id": "m_9", "city": "Start", "area": "—", "order": 8, "type": "special", "requirements": {"jail_busts": 80, "bullets_melted": 20_000, "uncommon_cars_scrapped": 15, "deposit_interest": 5_000_000}, "title": "Heavy Hitter", "description": "Bust 80 from jail. Melt 20,000 bullets. Scrap 15 uncommon cars. Add $5M to the interest bank.", "reward_cash_immediate": 1_200_000, "reward_points": 140, "reward_respect": 18, "reward_tribute": 60_000, "reward_tribute_daily": 2_000_000, "reward_respect_daily": 35, "reward_tribute_bullets_daily": 800, "reward_tribute_tokens_daily": 1, "reward_token": "random", "reward_auto_rank_2h": 1, "difficulty": 9, "unlocks_city": None, "character_id": None, "is_boss": False},
-    {"id": "m_10", "city": "Start", "area": "—", "order": 9, "type": "special", "requirements": {"crimes": 2500, "hitlist_npc_kills": 25, "uncommon_cars_stolen": 20, "bullets_purchased_armoury": 1500}, "title": "Capo", "description": "Commit 2,500 crimes. Kill 25 hitlist NPCs. Steal 20 uncommon cars. Buy 1,500 bullets from the armoury.", "reward_cash_immediate": 1_500_000, "reward_points": 160, "reward_respect": 22, "reward_tribute": 80_000, "reward_tribute_daily": 2_500_000, "reward_respect_daily": 42, "reward_tribute_bullets_daily": 1_000, "reward_tribute_tokens_daily": 1, "reward_bullets": 15_000, "reward_auto_rank_2h": 1, "difficulty": 10, "unlocks_city": None, "character_id": None, "is_boss": False},
-    {"id": "m_11", "city": "Start", "area": "—", "order": 10, "type": "special", "requirements": {"booze_sells": 150, "gta": 80, "cars_melted": 15, "deposit_interest": 10_000_000}, "title": "Empire Builder", "description": "Do 150 booze runs. Steal 80 cars. Melt 15 cars. Add $10M to the interest bank.", "reward_cash_immediate": 2_000_000, "reward_points": 180, "reward_respect": 26, "reward_tribute": 100_000, "reward_tribute_daily": 3_000_000, "reward_respect_daily": 50, "reward_tribute_bullets_daily": 1_200, "reward_tribute_tokens_daily": 1, "reward_tribute_auto_rank_2h_daily": 1, "reward_token": "random", "reward_auto_rank_2h": 1, "difficulty": 11, "unlocks_city": None, "character_id": None, "is_boss": False},
-    {"id": "m_12", "city": "Start", "area": "—", "order": 11, "type": "special", "requirements": {"crimes": 4000, "jail_busts": 120, "bullets_melted": 35_000}, "title": "Enforcer", "description": "Commit 4,000 crimes. Bust 120 from jail. Melt 35,000 bullets.", "reward_cash_immediate": 2_500_000, "reward_points": 200, "reward_respect": 30, "reward_tribute": 130_000, "reward_tribute_daily": 3_500_000, "reward_respect_daily": 58, "reward_tribute_bullets_daily": 1_500, "reward_tribute_tokens_daily": 1, "reward_auto_rank_2h": 1, "reward_bullets": 20_000, "difficulty": 12, "unlocks_city": None, "character_id": None, "is_boss": False},
-    {"id": "m_13", "city": "Start", "area": "—", "order": 12, "type": "special", "requirements": {"hitlist_npc_kills": 40, "uncommon_cars_stolen": 35, "uncommon_cars_scrapped": 25, "deposit_interest": 20_000_000}, "title": "Wheelman", "description": "Kill 40 hitlist NPCs. Steal 35 uncommon cars. Scrap 25 uncommon cars. Add $20M to the interest bank.", "reward_cash_immediate": 3_000_000, "reward_points": 220, "reward_respect": 35, "reward_tribute": 170_000, "reward_tribute_daily": 4_000_000, "reward_respect_daily": 65, "reward_tribute_bullets_daily": 1_800, "reward_tribute_tokens_daily": 2, "reward_tribute_auto_rank_2h_daily": 1, "reward_token": "random", "reward_auto_rank_2h": 1, "difficulty": 13, "unlocks_city": None, "character_id": None, "is_boss": False},
-    {"id": "m_14", "city": "Start", "area": "—", "order": 13, "type": "special", "requirements": {"crimes": 6000, "gta": 120, "booze_sells": 200, "bullets_purchased_armoury": 2500}, "title": "Underboss", "description": "Commit 6,000 crimes. Steal 120 cars. Do 200 booze runs. Buy 2,500 bullets from the armoury.", "reward_cash_immediate": 3_500_000, "reward_points": 250, "reward_respect": 40, "reward_tribute": 200_000, "reward_tribute_daily": 4_500_000, "reward_respect_daily": 72, "reward_tribute_bullets_daily": 2_000, "reward_tribute_tokens_daily": 2, "reward_auto_rank_2h": 1, "reward_bullets": 25_000, "difficulty": 14, "unlocks_city": None, "character_id": None, "is_boss": False},
-    {"id": "m_15", "city": "Start", "area": "—", "order": 14, "type": "special", "requirements": {"jail_busts": 180, "deposit_interest": 35_000_000, "cars_melted": 25}, "title": "Consigliere", "description": "Bust 180 from jail. Add $35M to the interest bank. Melt 25 cars.", "reward_cash_immediate": 4_000_000, "reward_points": 280, "reward_respect": 45, "reward_tribute": 250_000, "reward_tribute_daily": 5_000_000, "reward_respect_daily": 80, "reward_tribute_bullets_daily": 2_500, "reward_tribute_tokens_daily": 2, "reward_tribute_auto_rank_2h_daily": 1, "reward_token": "random", "reward_auto_rank_2h": 1, "difficulty": 15, "unlocks_city": None, "character_id": None, "is_boss": False},
-    {"id": "m_16", "city": "Start", "area": "—", "order": 15, "type": "special", "requirements": {"crimes": 9000, "hitlist_npc_kills": 60, "bullets_melted": 60_000, "uncommon_cars_scrapped": 40}, "title": "War Chief", "description": "Commit 9,000 crimes. Kill 60 hitlist NPCs. Melt 60,000 bullets. Scrap 40 uncommon cars.", "reward_cash_immediate": 5_000_000, "reward_points": 320, "reward_respect": 52, "reward_tribute": 320_000, "reward_tribute_daily": 5_500_000, "reward_respect_daily": 90, "reward_tribute_bullets_daily": 3_000, "reward_tribute_tokens_daily": 2, "reward_auto_rank_2h": 1, "reward_bullets": 30_000, "difficulty": 16, "unlocks_city": None, "character_id": None, "is_boss": False},
-    {"id": "m_17", "city": "Start", "area": "—", "order": 16, "type": "special", "requirements": {"gta": 180, "uncommon_cars_stolen": 55, "booze_sells": 300, "deposit_interest": 50_000_000}, "title": "Kingpin", "description": "Steal 180 cars. Steal 55 uncommon cars. Do 300 booze runs. Add $50M to the interest bank.", "reward_cash_immediate": 6_000_000, "reward_points": 360, "reward_respect": 58, "reward_tribute": 400_000, "reward_tribute_daily": 6_000_000, "reward_respect_daily": 100, "reward_tribute_bullets_daily": 3_500, "reward_tribute_tokens_daily": 3, "reward_tribute_auto_rank_2h_daily": 1, "reward_token": "random", "reward_auto_rank_2h": 1, "difficulty": 17, "unlocks_city": None, "character_id": None, "is_boss": False},
-    {"id": "m_18", "city": "Start", "area": "—", "order": 17, "type": "special", "requirements": {"crimes": 12000, "jail_busts": 250, "bullets_purchased_armoury": 4000}, "title": "Street General", "description": "Commit 12,000 crimes. Bust 250 from jail. Buy 4,000 bullets from the armoury.", "reward_cash_immediate": 7_000_000, "reward_points": 400, "reward_respect": 65, "reward_tribute": 480_000, "reward_tribute_daily": 6_500_000, "reward_respect_daily": 110, "reward_tribute_bullets_daily": 4_000, "reward_tribute_tokens_daily": 3, "reward_auto_rank_2h": 1, "reward_bullets": 40_000, "difficulty": 18, "unlocks_city": None, "character_id": None, "is_boss": False},
-    {"id": "m_19", "city": "Start", "area": "—", "order": 18, "type": "special", "requirements": {"hitlist_npc_kills": 90, "deposit_interest": 75_000_000, "uncommon_cars_scrapped": 60, "cars_melted": 40}, "title": "Shadow Don", "description": "Kill 90 hitlist NPCs. Add $75M to the interest bank. Scrap 60 uncommon cars. Melt 40 cars.", "reward_cash_immediate": 8_000_000, "reward_points": 450, "reward_respect": 72, "reward_tribute": 580_000, "reward_tribute_daily": 7_000_000, "reward_respect_daily": 120, "reward_tribute_bullets_daily": 4_500, "reward_tribute_tokens_daily": 3, "reward_auto_rank_2h": 1, "reward_token": "random", "difficulty": 19, "unlocks_city": None, "character_id": None, "is_boss": False},
-    {"id": "m_20", "city": "Start", "area": "—", "order": 19, "type": "special", "requirements": {"crimes": 16000, "gta": 250, "booze_sells": 400, "jail_busts": 350}, "title": "Boss of Bosses", "description": "Commit 16,000 crimes. Steal 250 cars. Do 400 booze runs. Bust 350 from jail.", "reward_cash_immediate": 10_000_000, "reward_points": 500, "reward_respect": 80, "reward_tribute": 700_000, "reward_tribute_daily": 8_000_000, "reward_respect_daily": 135, "reward_tribute_bullets_daily": 5_000, "reward_tribute_tokens_daily": 4, "reward_tribute_auto_rank_2h_daily": 1, "reward_auto_rank_2h": 1, "reward_bullets": 50_000, "difficulty": 20, "unlocks_city": None, "character_id": None, "is_boss": True},
-    {"id": "m_21", "city": "Start", "area": "—", "order": 20, "type": "special", "requirements": {"bullets_melted": 100_000, "uncommon_cars_stolen": 90, "deposit_interest": 100_000_000}, "title": "Legend", "description": "Melt 100,000 bullets. Steal 90 uncommon cars. Add $100M to the interest bank.", "reward_cash_immediate": 12_000_000, "reward_points": 550, "reward_respect": 88, "reward_tribute": 850_000, "reward_tribute_daily": 9_000_000, "reward_respect_daily": 150, "reward_tribute_bullets_daily": 5_500, "reward_tribute_tokens_daily": 4, "reward_auto_rank_2h": 1, "reward_token": "random", "difficulty": 21, "unlocks_city": None, "character_id": None, "is_boss": True},
-    {"id": "m_22", "city": "Start", "area": "—", "order": 21, "type": "special", "requirements": {"crimes": 22000, "hitlist_npc_kills": 120, "jail_busts": 450, "bullets_purchased_armoury": 6000}, "title": "Empire", "description": "Commit 22,000 crimes. Kill 120 hitlist NPCs. Bust 450 from jail. Buy 6,000 bullets from the armoury.", "reward_cash_immediate": 15_000_000, "reward_points": 600, "reward_respect": 96, "reward_tribute": 1_000_000, "reward_tribute_daily": 10_000_000, "reward_respect_daily": 165, "reward_tribute_bullets_daily": 6_000, "reward_tribute_tokens_daily": 5, "reward_auto_rank_2h": 1, "reward_bullets": 60_000, "difficulty": 22, "unlocks_city": None, "character_id": None, "is_boss": True},
-    {"id": "m_23", "city": "Start", "area": "—", "order": 22, "type": "special", "requirements": {"gta": 350, "uncommon_cars_scrapped": 85, "booze_sells": 500, "deposit_interest": 150_000_000}, "title": "Dynasty", "description": "Steal 350 cars. Scrap 85 uncommon cars. Do 500 booze runs. Add $150M to the interest bank.", "reward_cash_immediate": 18_000_000, "reward_points": 650, "reward_respect": 105, "reward_tribute": 1_200_000, "reward_tribute_daily": 11_000_000, "reward_respect_daily": 180, "reward_tribute_bullets_daily": 6_500, "reward_tribute_tokens_daily": 5, "reward_tribute_auto_rank_2h_daily": 1, "reward_token": "random", "reward_auto_rank_2h": 1, "difficulty": 23, "unlocks_city": None, "character_id": None, "is_boss": True},
-    {"id": "m_24", "city": "Start", "area": "—", "order": 23, "type": "special", "requirements": {"crimes": 30000, "jail_busts": 600, "cars_melted": 60, "hitlist_npc_kills": 150}, "title": "Immortal", "description": "Commit 30,000 crimes. Bust 600 from jail. Melt 60 cars. Kill 150 hitlist NPCs.", "reward_cash_immediate": 22_000_000, "reward_points": 700, "reward_respect": 115, "reward_tribute": 1_500_000, "reward_tribute_daily": 12_000_000, "reward_respect_daily": 200, "reward_tribute_bullets_daily": 7_000, "reward_tribute_tokens_daily": 6, "reward_auto_rank_2h": 1, "reward_bullets": 75_000, "difficulty": 24, "unlocks_city": None, "character_id": None, "is_boss": True},
-    {"id": "m_25", "city": "Start", "area": "—", "order": 24, "type": "special", "requirements": {"uncommon_cars_stolen": 125, "deposit_interest": 250_000_000, "bullets_melted": 150_000, "booze_sells": 750, "gta": 500}, "title": "Godfather", "description": "Steal 125 uncommon cars. Add $250M to the interest bank. Melt 150,000 bullets. Do 750 booze runs. Steal 500 cars.", "reward_cash_immediate": 30_000_000, "reward_points": 800, "reward_respect": 130, "reward_tribute": 2_000_000, "reward_tribute_daily": 15_000_000, "reward_respect_daily": 250, "reward_tribute_bullets_daily": 10_000, "reward_tribute_tokens_daily": 8, "reward_auto_rank_2h": 1, "reward_bullets": 100_000, "reward_token": "random", "difficulty": 25, "unlocks_city": None, "character_id": None, "is_boss": True},
-]  # end MISSIONS list
-
-# Lookup mission id -> title
-MISSION_ID_TO_TITLE = {m["id"]: m["title"] for m in MISSIONS}
+MISSIONS: List[Dict[str, Any]] = []
+MISSION_ID_TO_TITLE: Dict[str, str] = {}
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CHARACTERS
@@ -848,14 +708,20 @@ async def complete_mission(
                 update.setdefault("$inc", {})[f"booze_carrying.{bid}"] = int(amt)
                 update.setdefault("$set", {})[f"booze_carrying_cost.{bid}"] = 0
     token_awarded = None
+    tokens_awarded_list: List[str] = []
     if reward_token:
+        inc_tok = update.setdefault("$inc", {})
         if reward_token == "random":
-            token_awarded = random.choice(TOKEN_TYPES)
+            for _ in range(2):
+                tt = random.choice(MISSION_RANDOM_TOKEN_TYPES)
+                tokens_awarded_list.append(tt)
+                k = TOKEN_CONFIG[tt]["count_field"]
+                inc_tok[k] = inc_tok.get(k, 0) + 1
+            token_awarded = tokens_awarded_list[0] if tokens_awarded_list else None
         elif reward_token in TOKEN_TYPES:
             token_awarded = reward_token
-        if token_awarded:
             token_field = TOKEN_CONFIG[token_awarded]["count_field"]
-            update.setdefault("$inc", {})[token_field] = 1
+            inc_tok[token_field] = inc_tok.get(token_field, 0) + 1
     if unlocks_city:
         update.setdefault("$set", {})["unlocked_maps_up_to"] = unlocks_city
 
@@ -966,7 +832,7 @@ async def collect_tribute(current_user: dict = Depends(get_current_user)):
     tokens_awarded = {}
     if tokens > 0:
         for _ in range(tokens):
-            token_type = random.choice(TOKEN_TYPES)
+            token_type = random.choice(MISSION_RANDOM_TOKEN_TYPES)
             token_field = TOKEN_CONFIG[token_type]["count_field"]
             inc[token_field] = inc.get(token_field, 0) + 1
             tokens_awarded[token_type] = tokens_awarded.get(token_type, 0) + 1
@@ -1024,26 +890,23 @@ async def get_missions_characters(current_user: dict = Depends(get_current_user)
     return {"characters": out}
 
 
-# Derived from MISSIONS for map/tribute info (single source of truth)
-_def_m1 = next((m for m in MISSIONS if m.get("id") == FIRST_MISSION_ID), {})
-_def_m2 = next((m for m in MISSIONS if m.get("id") == "m_second"), {})
-_def_m3 = next((m for m in MISSIONS if m.get("id") == THIRD_MISSION_ID), {})
-_def_m4 = next((m for m in MISSIONS if m.get("id") == FOURTH_MISSION_ID), {})
-MISSION_1_DAILY_CASH = int(_def_m1.get("reward_tribute_daily") or 0)
-MISSION_1_DAILY_RESPECT = int(_def_m1.get("reward_respect_daily") or 0)
-MISSION_1_DAILY_BULLETS = int(_def_m1.get("reward_tribute_bullets_daily") or 0)
-MISSION_2_DAILY_CASH = int(_def_m2.get("reward_tribute_daily") or 0)
-MISSION_2_DAILY_BULLETS = int(_def_m2.get("reward_tribute_bullets_daily") or 0)
-MISSION_2_DAILY_RESPECT = int(_def_m2.get("reward_respect_daily") or 0)
-MISSION_3_DAILY_CASH = int(_def_m3.get("reward_tribute_daily") or 0)
-MISSION_3_DAILY_RESPECT = int(_def_m3.get("reward_respect_daily") or 0)
-MISSION_3_DAILY_BULLETS = int(_def_m3.get("reward_tribute_bullets_daily") or 0)
-MISSION_4_DAILY_CASH = int(_def_m4.get("reward_tribute_daily") or 0)
-MISSION_4_DAILY_RESPECT = int(_def_m4.get("reward_respect_daily") or 0)
-MISSION_4_DAILY_BULLETS = int(_def_m4.get("reward_tribute_bullets_daily") or 0)
 # Loot box pieces in daily tribute: base for all users, extra for mission 2 completers
 DAILY_TRIBUTE_LOOT_BOX_PIECES = int(os.environ.get("DAILY_TRIBUTE_LOOT_BOX_PIECES", "1"))
 MISSION_2_DAILY_LOOT_BOX_PIECES = int(os.environ.get("MISSION_2_DAILY_LOOT_BOX_PIECES", "1"))
+
+# Filled when MISSIONS loads at EOF (see register() block below)
+MISSION_1_DAILY_CASH = 0
+MISSION_1_DAILY_RESPECT = 0
+MISSION_1_DAILY_BULLETS = 0
+MISSION_2_DAILY_CASH = 0
+MISSION_2_DAILY_BULLETS = 0
+MISSION_2_DAILY_RESPECT = 0
+MISSION_3_DAILY_CASH = 0
+MISSION_3_DAILY_RESPECT = 0
+MISSION_3_DAILY_BULLETS = 0
+MISSION_4_DAILY_CASH = 0
+MISSION_4_DAILY_RESPECT = 0
+MISSION_4_DAILY_BULLETS = 0
 
 
 async def run_daily_tribute_deposit():
@@ -1136,3 +999,24 @@ def register(router):
     router.add_api_route("/missions/complete", complete_mission, methods=["POST"])
     router.add_api_route("/missions/collect-tribute", collect_tribute, methods=["POST"])
     router.add_api_route("/missions/characters", get_missions_characters, methods=["GET"])
+
+
+# Load mission table after router registration (avoids circular import with server).
+MISSIONS = build_missions()
+MISSION_ID_TO_TITLE = {m["id"]: m["title"] for m in MISSIONS}
+_def_m1 = next((m for m in MISSIONS if m.get("id") == FIRST_MISSION_ID), {})
+_def_m2 = next((m for m in MISSIONS if m.get("id") == "m_second"), {})
+_def_m3 = next((m for m in MISSIONS if m.get("id") == THIRD_MISSION_ID), {})
+_def_m4 = next((m for m in MISSIONS if m.get("id") == FOURTH_MISSION_ID), {})
+MISSION_1_DAILY_CASH = int(_def_m1.get("reward_tribute_daily") or 0)
+MISSION_1_DAILY_RESPECT = int(_def_m1.get("reward_respect_daily") or 0)
+MISSION_1_DAILY_BULLETS = int(_def_m1.get("reward_tribute_bullets_daily") or 0)
+MISSION_2_DAILY_CASH = int(_def_m2.get("reward_tribute_daily") or 0)
+MISSION_2_DAILY_BULLETS = int(_def_m2.get("reward_tribute_bullets_daily") or 0)
+MISSION_2_DAILY_RESPECT = int(_def_m2.get("reward_respect_daily") or 0)
+MISSION_3_DAILY_CASH = int(_def_m3.get("reward_tribute_daily") or 0)
+MISSION_3_DAILY_RESPECT = int(_def_m3.get("reward_respect_daily") or 0)
+MISSION_3_DAILY_BULLETS = int(_def_m3.get("reward_tribute_bullets_daily") or 0)
+MISSION_4_DAILY_CASH = int(_def_m4.get("reward_tribute_daily") or 0)
+MISSION_4_DAILY_RESPECT = int(_def_m4.get("reward_respect_daily") or 0)
+MISSION_4_DAILY_BULLETS = int(_def_m4.get("reward_tribute_bullets_daily") or 0)
