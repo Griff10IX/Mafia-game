@@ -1133,7 +1133,8 @@ async def _auto_settle_from_scores() -> dict:
             if sport_key in sport_keys_used:
                 continue
             sport_keys_used.add(sport_key)
-            events = await _fetch_odds_api_scores(sport_key, days_from=1)
+            # Look back farther so delayed/manual runs can still settle bets from previous days.
+            events = await _fetch_odds_api_scores(sport_key, days_from=3)
             for api_ev in events:
                 if not api_ev.get("completed"):
                     continue
