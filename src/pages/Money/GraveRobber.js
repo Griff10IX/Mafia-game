@@ -40,7 +40,7 @@ function rewardText(reward) {
     const parts = (r.tokens || []).map((t) => `${Number(t.amount || 0)} ${String(t.token_type || '').replace(/_/g, ' ')}`);
     return parts.length ? `Found token bundle: ${parts.join(', ')}` : 'Found tokens.';
   }
-  if (r.kind === 'car' && r.car) return `Legendary pull: ${r.car.name}`;
+  if (r.kind === 'car' && r.car) return `You found the keys to "${r.car.name}"`;
   return 'The grave gave up something.';
 }
 
@@ -99,6 +99,9 @@ export default function GraveRobber() {
   const progressPct = attemptsTotal > 0 ? Math.min(100, (attemptsUsed / attemptsTotal) * 100) : 0;
   const canStart = !status?.cooldown_active && !status?.run_started;
   const canDig = !!status?.run_started && attemptsRemaining > 0 && !status?.cooldown_active;
+  const totalSpent = Number(status?.total_spent || 0);
+  const totalRewardsCash = Number(status?.total_rewards_cash || 0);
+  const totalNetCash = Number(status?.total_net_cash || (totalRewardsCash - totalSpent));
 
   const tierChips = useMemo(() => {
     const list = [];
@@ -127,6 +130,9 @@ export default function GraveRobber() {
     try {
       const res = await api.post('/grave-robber/attempt');
       setLatest(res.data?.attempt || null);
+      if (res.data?.hitlist_event?.bounty_cash) {
+        toast.warning(`You were spotted and added to hitlist for ${formatMoney(res.data.hitlist_event.bounty_cash)}.`);
+      }
       refreshUser();
       await fetchStatus(true);
     } catch (e) {
@@ -207,6 +213,17 @@ export default function GraveRobber() {
               Cooldown active: {formatCountdown(status.cooldown_remaining_seconds)}
             </div>
           )}
+
+          <div className="mt-3 rounded border border-primary/20 bg-primary/5 px-2.5 py-2">
+            <p className="text-[9px] font-heading font-bold uppercase tracking-[0.14em] text-primary mb-1">How it works</p>
+            <ul className="space-y-0.5 text-[9px] text-zinc-500 font-heading">
+              <li>Run = 50 digs. Start at {formatMoney(status?.base_attempt_cost || 1_000_000)} per dig.</li>
+              <li>Cost rises by +{Math.round((Number(status?.tier_multiplier || 1.15) - 1) * 100)}% every {status?.tier_step_percent || 5}% progress.</li>
+              <li>After dig #50, cooldown is {status?.cooldown_hours || 24}h before a new run.</li>
+              <li>Possible outcomes: nothing, cash, bullets, points, tokens, or a non-exclusive car.</li>
+              <li>Profit/Loss below tracks cash only (other rewards are extra value).</li>
+            </ul>
+          </div>
         </div>
         <div className="gr-art-line text-primary mx-3 mb-1" />
       </div>
@@ -270,6 +287,68 @@ export default function GraveRobber() {
                 No dig yet in this session.
               </div>
             )}
+          </div>
+          <div className="gr-art-line text-primary mx-3 mb-1" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+        <div className={`relative ${styles.panel} rounded-xl overflow-hidden border border-primary/20 gr-fade-in mobile-panel`} style={{ animationDelay: '0.06s' }}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-3 py-2 border-b border-primary/15">
+            <p className="text-[10px] font-heading font-bold uppercase tracking-[0.15em] text-primary">What You Can Win</p>
+            <p className="text-[9px] text-zinc-500 font-heading">Values below use your current dig cost.</p>
+          </div>
+          <div className="p-2.5 space-y-1.5">
+            {(status?.possible_wins || []).map((w, idx) => (
+              <div key={`${w.kind}-${idx}`} className="rounded border border-zinc-700/40 bg-zinc-900/40 px-2 py-1.5 flex items-center gap-2">
+                <div className="shrink-0">{rewardIcon({ kind: w.kind })}</div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-heading text-foreground">
+                    {w.label} <span className="text-zinc-500">({Number(w.chance_pct || 0)}%)</span>
+                  </p>
+                  {typeof w.details === 'string' ? (
+                    <p className="text-[9px] text-zinc-500 font-heading">{w.details}</p>
+                  ) : (
+                    <p className="text-[9px] text-zinc-500 font-heading">
+                      {w.kind === 'cash' && `Range ${formatMoney(w.details?.min)} - ${formatMoney(w.details?.max)}`}
+                      {w.kind === 'bullets' && `Range ${Number(w.details?.min || 0).toLocaleString()} - ${Number(w.details?.max || 0).toLocaleString()} bullets`}
+                      {w.kind === 'points' && `Range ${Number(w.details?.min || 0).toLocaleString()} - ${Number(w.details?.max || 0).toLocaleString()} points (cap ${Number(w.details?.max_cap || 100)})`}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="gr-art-line text-primary mx-3 mb-1" />
+        </div>
+
+        <div className={`relative ${styles.panel} rounded-xl overflow-hidden border border-primary/20 gr-fade-in mobile-panel`} style={{ animationDelay: '0.07s' }}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-3 py-2 border-b border-primary/15">
+            <p className="text-[10px] font-heading font-bold uppercase tracking-[0.15em] text-primary">Profit / Loss</p>
+            <p className="text-[9px] text-zinc-500 font-heading">Cash-only run tracker.</p>
+          </div>
+          <div className="p-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px] font-heading">
+            <div className="rounded border border-zinc-700/50 bg-zinc-900/35 px-2.5 py-2">
+              <p className="text-zinc-500 uppercase tracking-wider">Spent</p>
+              <p className="text-rose-400 font-bold tabular-nums">{formatMoney(totalSpent)}</p>
+            </div>
+            <div className="rounded border border-zinc-700/50 bg-zinc-900/35 px-2.5 py-2">
+              <p className="text-zinc-500 uppercase tracking-wider">Cash won</p>
+              <p className="text-emerald-400 font-bold tabular-nums">{formatMoney(totalRewardsCash)}</p>
+            </div>
+            <div className="rounded border border-zinc-700/50 bg-zinc-900/35 px-2.5 py-2">
+              <p className="text-zinc-500 uppercase tracking-wider">Net</p>
+              <p className={`font-bold tabular-nums ${totalNetCash >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                {totalNetCash >= 0 ? '+' : '-'}{formatMoney(Math.abs(totalNetCash))}
+              </p>
+            </div>
+          </div>
+          <div className="px-3 pb-2">
+            <p className="text-[9px] text-zinc-600 font-heading">
+              Net uses cash in vs cash out only. Bullets, points, tokens, and cars are extra value not included in this line.
+            </p>
           </div>
           <div className="gr-art-line text-primary mx-3 mb-1" />
         </div>

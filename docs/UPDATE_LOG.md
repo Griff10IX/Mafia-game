@@ -6,6 +6,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-07 16:45 UTC[/color][/b] — [b]Grave Robber tuning + visibility updates[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Grave Robber[/b] now shows clearer player info: a [b]What you can win[/b] panel (with live odds/ranges) and a [b]cash Profit/Loss[/b] tracker (spent, cash won, net). Added a [b]How it works[/b] note at the top with run rules. [b]Points[/b] were tuned to be the hardest reward and are now hard-capped at [b]100 max[/b]. [/color]
+[*][color=#888888][b]Changed:[/b] Grave Robber now applies [b]90s jail[/b] per dig with [b]unbreakable[/b] for that same jail term. Added a [b]very rare[/b] retaliation event where a fallen gangster’s family can put you on [b]hitlist[/b] for your dig cost [b]+10%[/b]. Also adjusted post-run display so [b]Next cost[/b] resets to base during cooldown/new run state, and car rewards now read [b]You found the keys to \"car name\"[/b].[/color]
+[*][color=#888888][b]Player action:[/b] Reopen [b]Money → Grave Robber[/b] and check the new guide/win table/P&L cards. Plan digs around the 90s unbreakable jail and watch for rare retaliation warnings.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-07 16:05 UTC[/color][/b] — [b]New Money game: Grave Robber (50 digs, scaling cost, 24h cooldown)[/b][/size]
 [quote]
 [list]

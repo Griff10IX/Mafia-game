@@ -6,7 +6,7 @@ from typing import Optional
 
 from fastapi import Depends, HTTPException
 
-from server import CARS, db, get_current_user_verified, log_activity
+from server import CARS, db, get_current_user_verified, log_activity, send_notification
 from routers.kill.armoury import TOKEN_CONFIG, TOKEN_TYPES
 from utils.point_provenance import log_points_event
 
@@ -18,7 +18,9 @@ GR_TIER_STEP_PCT = 5
 GR_TIER_MULTIPLIER = 1.15
 GR_TIERS_TOTAL = int(100 / GR_TIER_STEP_PCT)  # 20
 GR_COOLDOWN_HOURS = 24
+GR_JAIL_SECONDS = 90
 GR_RECENT_ATTEMPTS_LIMIT = 20
+GR_FAMILY_RETALIATION_CHANCE = 0.005  # 0.5% per dig (very rare)
 
 # Rank-XP pass token is store-only, excluded from this reward pool.
 GR_TOKEN_TYPES = tuple(t for t in TOKEN_TYPES if t != "rank_xp_pass")
@@ -85,6 +87,23 @@ def _pick_reward_kind() -> str:
     return "nothing"
 
 
+def _reward_ranges_for_cost(attempt_cost: int) -> dict:
+    c = max(1, int(attempt_cost or GR_BASE_ATTEMPT_COST))
+    cash_min = max(250_000, int(c * 0.35))
+    cash_max = max(cash_min, int(c * 1.15))
+    bullets_min = max(75, int(c / 7000))
+    bullets_max = max(bullets_min + 25, int(c / 2500))
+    points_min = max(5, int(c / 250_000))
+    points_max = max(points_min + 5, int(c / 90_000))
+    points_max = min(100, points_max)
+    points_min = min(points_min, points_max)
+    return {
+        "cash": {"min": cash_min, "max": cash_max},
+        "bullets": {"min": bullets_min, "max": bullets_max},
+        "points": {"min": points_min, "max": points_max},
+    }
+
+
 def _roll_reward(attempt_cost: int) -> dict:
     kind = _pick_reward_kind()
     reward = {
@@ -144,9 +163,17 @@ def register(router):
         cooldown_active = bool(cooldown_until_dt and cooldown_until_dt > now)
         run_started_at = _as_utc_dt(fresh.get("grave_robber_run_started_at"))
 
-        current_attempt_cost = int(fresh.get("grave_robber_current_attempt_cost") or _cost_for_attempts_used(attempts_used))
-        next_attempt_cost = int(_cost_for_attempts_used(min(attempts_total - 1, attempts_used + 1)))
+        if attempts_used >= attempts_total:
+            current_attempt_cost = GR_BASE_ATTEMPT_COST
+            next_attempt_cost = GR_BASE_ATTEMPT_COST
+        else:
+            current_attempt_cost = int(fresh.get("grave_robber_current_attempt_cost") or _cost_for_attempts_used(attempts_used))
+            next_attempt_cost = int(_cost_for_attempts_used(min(attempts_total - 1, attempts_used + 1)))
         tier = _tier_for_attempts_used(attempts_used if attempts_used < attempts_total else attempts_total - 1)
+        ranges = _reward_ranges_for_cost(current_attempt_cost)
+        weights = dict(GR_REWARD_WEIGHTS)
+        total_spent = int(fresh.get("grave_robber_total_spent") or 0)
+        total_rewards_cash = int(fresh.get("grave_robber_total_rewards_cash") or 0)
 
         recent = await db.grave_robber_attempts.find(
             {"user_id": uid},
@@ -169,10 +196,49 @@ def register(router):
             "cooldown_active": cooldown_active,
             "cooldown_until": cooldown_until_dt.isoformat() if cooldown_until_dt and cooldown_until_dt > now else None,
             "cooldown_remaining_seconds": _remaining_seconds(cooldown_until_dt, now),
-            "total_spent": int(fresh.get("grave_robber_total_spent") or 0),
-            "total_rewards_cash": int(fresh.get("grave_robber_total_rewards_cash") or 0),
+            "total_spent": total_spent,
+            "total_rewards_cash": total_rewards_cash,
             "total_rewards_bullets": int(fresh.get("grave_robber_total_rewards_bullets") or 0),
             "total_rewards_points": int(fresh.get("grave_robber_total_rewards_points") or 0),
+            "total_net_cash": total_rewards_cash - total_spent,
+            "possible_wins": [
+                {
+                    "kind": "nothing",
+                    "label": "Nothing",
+                    "chance_pct": round(weights.get("nothing", 0) * 100, 2),
+                    "details": "Empty grave.",
+                },
+                {
+                    "kind": "cash",
+                    "label": "Cash",
+                    "chance_pct": round(weights.get("cash", 0) * 100, 2),
+                    "details": {"min": ranges["cash"]["min"], "max": ranges["cash"]["max"]},
+                },
+                {
+                    "kind": "bullets",
+                    "label": "Bullets",
+                    "chance_pct": round(weights.get("bullets", 0) * 100, 2),
+                    "details": {"min": ranges["bullets"]["min"], "max": ranges["bullets"]["max"]},
+                },
+                {
+                    "kind": "points",
+                    "label": "Points",
+                    "chance_pct": round(weights.get("points", 0) * 100, 2),
+                    "details": {"min": ranges["points"]["min"], "max": ranges["points"]["max"], "max_cap": 100},
+                },
+                {
+                    "kind": "tokens",
+                    "label": "Tokens",
+                    "chance_pct": round(weights.get("tokens", 0) * 100, 2),
+                    "details": "1 token type (65%) or 2 types (35%); each type gives 1-2 tokens. No game pass token.",
+                },
+                {
+                    "kind": "car",
+                    "label": "Car",
+                    "chance_pct": round(weights.get("car", 0) * 100, 2),
+                    "details": "Random non-exclusive car only.",
+                },
+            ],
             "recent_attempts": recent,
         }
 
@@ -226,6 +292,11 @@ def register(router):
         cooldown_until_dt = _as_utc_dt(fresh.get("grave_robber_cooldown_until"))
         if cooldown_until_dt and cooldown_until_dt > now:
             raise HTTPException(status_code=400, detail="Cooldown active. Come back when the heat dies down.")
+        if fresh.get("in_jail"):
+            jail_until_dt = _as_utc_dt(fresh.get("jail_until"))
+            if jail_until_dt and jail_until_dt > now:
+                remaining = int((jail_until_dt - now).total_seconds()) + 1
+                raise HTTPException(status_code=400, detail=f"You are in jail for {remaining}s.")
 
         attempts_total = int(fresh.get("grave_robber_attempts_total") or GR_ATTEMPTS_TOTAL)
         attempts_used = int(fresh.get("grave_robber_attempts_used") or 0)
@@ -254,6 +325,10 @@ def register(router):
                 "$set": {
                     "grave_robber_current_attempt_cost": next_cost,
                     "grave_robber_last_attempt_at": now,
+                    "in_jail": True,
+                    "jail_until": (now + timedelta(seconds=GR_JAIL_SECONDS)).isoformat(),
+                    "unbreakable_until": (now + timedelta(seconds=GR_JAIL_SECONDS)).isoformat(),
+                    "snitch_attempted_this_term": False,
                 },
             },
         )
@@ -324,6 +399,7 @@ def register(router):
                     "$set": {
                         "grave_robber_cooldown_until": cool_until,
                         "grave_robber_run_completed_at": now,
+                        "grave_robber_current_attempt_cost": GR_BASE_ATTEMPT_COST,
                     }
                 },
             )
@@ -351,6 +427,55 @@ def register(router):
             },
         )
 
+        hitlist_event = None
+        if _rng.random() < GR_FAMILY_RETALIATION_CHANCE:
+            bounty_cash = int(round(expected_cost * 1.10))
+            hitlist_event = {
+                "bounty_cash": bounty_cash,
+                "reason": "A fallen gangster's family spotted you at the graveyard.",
+            }
+            await db.hitlist.insert_one(
+                {
+                    "id": uuid.uuid4().hex,
+                    "target_id": uid,
+                    "target_username": uname,
+                    "target_type": "user",
+                    "placer_id": "system",
+                    "placer_username": "Fallen Family",
+                    "reward_type": "cash",
+                    "reward_amount": bounty_cash,
+                    "hidden": False,
+                    "created_at": now.isoformat(),
+                }
+            )
+            await db.hitlist_bodyguard_events.insert_one(
+                {
+                    "at": now.isoformat(),
+                    "type": "grave_robber_retaliation_hitlist",
+                    "placer_id": "system",
+                    "placer_username": "Fallen Family",
+                    "target_id": uid,
+                    "target_username": uname,
+                    "target_type": "user",
+                    "reward_type": "cash",
+                    "reward_amount": bounty_cash,
+                    "hidden": False,
+                }
+            )
+            await send_notification(
+                uid,
+                "⚠️ Graveyard retaliation",
+                f"A fallen gangster's family spotted you. You've been added to hitlist for ${bounty_cash:,}.",
+                "system",
+                category="hitlist",
+            )
+            await log_activity(
+                uid,
+                uname,
+                "grave_robber_retaliation_hitlist",
+                {"bounty_cash": bounty_cash, "attempt_number": next_attempts_used},
+            )
+
         return {
             "message": "Grave disturbed.",
             "attempt": {
@@ -358,6 +483,9 @@ def register(router):
                 "attempt_cost": expected_cost,
                 "reward": reward,
             },
+            "hitlist_event": hitlist_event,
+            "jail_seconds": GR_JAIL_SECONDS,
+            "jail_until": (now + timedelta(seconds=GR_JAIL_SECONDS)).isoformat(),
             "attempts_total": attempts_total,
             "attempts_used": next_attempts_used,
             "attempts_remaining": max(0, attempts_total - next_attempts_used),
