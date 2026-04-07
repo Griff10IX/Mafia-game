@@ -4,6 +4,7 @@ import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import ActiveTokenBadge from '../../components/ActiveTokenBadge';
+import { getPropertiesPrefetch, setPropertiesPrefetch } from '../../utils/prefetchCache';
 
 const PROP_STYLES = `
   @keyframes prop-fade-in { from { opacity: 0; transform: translateY(10px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
@@ -66,21 +67,65 @@ export default function Properties() {
   const [bribing, setBribing] = useState(false);
 
   useEffect(() => {
-    fetchProperties();
-    fetchTargets();
-    api.get('/auth/me').then((r) => setUser(r.data)).catch(() => {});
+    const cached = getPropertiesPrefetch();
+    if (!cached) return;
+    setProperties(cached.properties ?? []);
+    setPropertyIncomePerkUntil(cached.propertyIncomePerkUntil ?? null);
+    setTargets(cached.targets ?? []);
+    setUser(cached.user ?? null);
+    setPropertyUpkeep(cached.propertyUpkeep ?? null);
+    setPortfolioUpgrades(cached.portfolioUpgrades ?? null);
+    setPropertiesHeat(cached.propertiesHeat ?? null);
+    setPropertiesHeatQuote(cached.propertiesHeatQuote ?? null);
+    setLoading(false);
   }, []);
 
-  const fetchProperties = async () => {
+  useEffect(() => {
+    const cached = getPropertiesPrefetch();
+    fetchProperties({ silent: !!cached });
+    fetchTargets();
+    api.get('/auth/me').then((r) => {
+      setUser(r.data);
+      setPropertiesPrefetch({
+        properties,
+        propertyIncomePerkUntil,
+        targets,
+        user: r.data,
+        propertyUpkeep,
+        portfolioUpgrades,
+        propertiesHeat,
+        propertiesHeatQuote,
+      });
+    }).catch(() => {});
+  }, []);
+
+  const fetchProperties = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const response = await api.get('/properties');
       const data = response.data;
-      setProperties(Array.isArray(data) ? data : (data?.properties ?? []));
-      setPropertyIncomePerkUntil(data?.property_income_perk_until ?? null);
-      setPropertyUpkeep(data?.property_upkeep ?? null);
-      setPortfolioUpgrades(data?.property_portfolio_upgrades ?? null);
-      setPropertiesHeat(data?.properties_heat ?? null);
-      setPropertiesHeatQuote(data?.properties_heat_bribe_quote ?? null);
+      const nextProperties = Array.isArray(data) ? data : (data?.properties ?? []);
+      const nextPropertyIncomePerkUntil = data?.property_income_perk_until ?? null;
+      const nextPropertyUpkeep = data?.property_upkeep ?? null;
+      const nextPortfolioUpgrades = data?.property_portfolio_upgrades ?? null;
+      const nextPropertiesHeat = data?.properties_heat ?? null;
+      const nextPropertiesHeatQuote = data?.properties_heat_bribe_quote ?? null;
+      setProperties(nextProperties);
+      setPropertyIncomePerkUntil(nextPropertyIncomePerkUntil);
+      setPropertyUpkeep(nextPropertyUpkeep);
+      setPortfolioUpgrades(nextPortfolioUpgrades);
+      setPropertiesHeat(nextPropertiesHeat);
+      setPropertiesHeatQuote(nextPropertiesHeatQuote);
+      setPropertiesPrefetch({
+        properties: nextProperties,
+        propertyIncomePerkUntil: nextPropertyIncomePerkUntil,
+        targets,
+        user,
+        propertyUpkeep: nextPropertyUpkeep,
+        portfolioUpgrades: nextPortfolioUpgrades,
+        propertiesHeat: nextPropertiesHeat,
+        propertiesHeatQuote: nextPropertiesHeatQuote,
+      });
     } catch (error) {
       const detail = error.response?.data?.detail || error.message || 'Unknown error';
       toast.error(`Failed to load properties: ${detail}`);
@@ -91,7 +136,7 @@ export default function Properties() {
       setPropertiesHeat(null);
       setPropertiesHeatQuote(null);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -135,7 +180,18 @@ export default function Properties() {
   const fetchTargets = async () => {
     try {
       const res = await api.get('/racket/targets');
-      setTargets(res.data?.targets ?? []);
+      const nextTargets = res.data?.targets ?? [];
+      setTargets(nextTargets);
+      setPropertiesPrefetch({
+        properties,
+        propertyIncomePerkUntil,
+        targets: nextTargets,
+        user,
+        propertyUpkeep,
+        portfolioUpgrades,
+        propertiesHeat,
+        propertiesHeatQuote,
+      });
     } catch {
       setTargets([]);
     }

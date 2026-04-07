@@ -4,6 +4,7 @@ import api from '../../utils/api';
 import { toast } from 'sonner';
 import { refreshUser } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
+import { getSportsBettingPrefetch, setSportsBettingPrefetch } from '../../utils/prefetchCache';
 
 const SB_STYLES = `
   .sb-fade-in { animation: sb-fade-in 0.4s ease-out both; }
@@ -101,6 +102,29 @@ const STAKE_CHIPS = [
 ];
 
 const CATEGORY_ICONS = { Football: '⚽', UFC: '🥊', Boxing: '🥊', 'Formula 1': '🏎️' };
+
+const DEFAULT_MY_BETS = {
+  open: [],
+  closed: [],
+  max_total_open_stake: SPORTS_MAX_TOTAL_OPEN_STAKE,
+  open_stake_total: 0,
+  open_stake_remaining: SPORTS_MAX_TOTAL_OPEN_STAKE,
+};
+
+const DEFAULT_PUBLIC_LIBRARY = {
+  categories: [],
+  templates: {},
+  on_board_template_ids: [],
+  requests_per_day_limit: 3,
+  football_league_filter_options: null,
+};
+
+const DEFAULT_REQUEST_INFO = {
+  used_today: 0,
+  limit: 3,
+  remaining: 3,
+  recent_requests: [],
+};
 
 function StatusDot({ status }) {
   if (status === 'in_play') return <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.6)] inline-block" title="In play" />;
@@ -229,13 +253,7 @@ function Chip({ label, color, ring, selected, onClick, size = 36 }) {
 export default function SportsBetting() {
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState([]);
-  const [myBets, setMyBets] = useState({
-    open: [],
-    closed: [],
-    max_total_open_stake: SPORTS_MAX_TOTAL_OPEN_STAKE,
-    open_stake_total: 0,
-    open_stake_remaining: SPORTS_MAX_TOTAL_OPEN_STAKE,
-  });
+  const [myBets, setMyBets] = useState(DEFAULT_MY_BETS);
   const [stats, setStats] = useState(null);
   const [recentResults, setRecentResults] = useState([]);
   const [placing, setPlacing] = useState(null);
@@ -277,19 +295,8 @@ export default function SportsBetting() {
   const [betWindowClosesLocal, setBetWindowClosesLocal] = useState('');
   const [savingBetWindow, setSavingBetWindow] = useState(false);
   const [activeTab, setActiveTab] = useState('events');
-  const [publicLibrary, setPublicLibrary] = useState({
-    categories: [],
-    templates: {},
-    on_board_template_ids: [],
-    requests_per_day_limit: 3,
-    football_league_filter_options: null,
-  });
-  const [requestInfo, setRequestInfo] = useState({
-    used_today: 0,
-    limit: 3,
-    remaining: 3,
-    recent_requests: [],
-  });
+  const [publicLibrary, setPublicLibrary] = useState(DEFAULT_PUBLIC_LIBRARY);
+  const [requestInfo, setRequestInfo] = useState(DEFAULT_REQUEST_INFO);
   const [pendingPlayerRequests, setPendingPlayerRequests] = useState([]);
   const [browseCategory, setBrowseCategory] = useState('Football');
   const [browseLeagueFilter, setBrowseLeagueFilter] = useState('');
@@ -320,9 +327,28 @@ export default function SportsBetting() {
     }
   }, []);
 
-  const fetchAll = useCallback(async () => {
-    setLoading(true);
+  useEffect(() => {
+    const cached = getSportsBettingPrefetch();
+    if (!cached) return;
+    setEvents(cached.events ?? []);
+    setMyBets(cached.myBets ?? DEFAULT_MY_BETS);
+    setStats(cached.stats ?? null);
+    setRecentResults(cached.recentResults ?? []);
+    setPublicLibrary(cached.publicLibrary ?? DEFAULT_PUBLIC_LIBRARY);
+    setRequestInfo(cached.requestInfo ?? DEFAULT_REQUEST_INFO);
+    setLoading(false);
+  }, []);
+
+  const fetchAll = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
+      let nextEvents = [];
+      let nextMyBets = DEFAULT_MY_BETS;
+      let nextStats = null;
+      let nextRecentResults = [];
+      let nextPublicLibrary = DEFAULT_PUBLIC_LIBRARY;
+      let nextRequestInfo = DEFAULT_REQUEST_INFO;
+
       const [eventsRes, betsRes, statsRes, resultsRes, libRes, reqRes] = await Promise.all([
         api.get('/sports-betting/events'),
         api.get('/sports-betting/my-bets'),
@@ -331,49 +357,63 @@ export default function SportsBetting() {
         api.get('/sports-betting/template-library').catch(() => ({ data: null })),
         api.get('/sports-betting/my-event-requests').catch(() => ({ data: null })),
       ]);
-      setEvents(eventsRes.data?.events ?? []);
-      setMyBets({
+      nextEvents = eventsRes.data?.events ?? [];
+      nextMyBets = {
         open: betsRes.data?.open ?? [],
         closed: betsRes.data?.closed ?? [],
         max_total_open_stake: betsRes.data?.max_total_open_stake ?? SPORTS_MAX_TOTAL_OPEN_STAKE,
         open_stake_total: betsRes.data?.open_stake_total ?? 0,
         open_stake_remaining: betsRes.data?.open_stake_remaining ?? SPORTS_MAX_TOTAL_OPEN_STAKE,
-      });
-      setStats(statsRes.data ?? null);
-      setRecentResults(resultsRes.data?.results ?? []);
+      };
+      nextStats = statsRes.data ?? null;
+      nextRecentResults = resultsRes.data?.results ?? [];
+
+      setEvents(nextEvents);
+      setMyBets(nextMyBets);
+      setStats(nextStats);
+      setRecentResults(nextRecentResults);
       if (libRes?.data) {
-        setPublicLibrary({
+        nextPublicLibrary = {
           categories: libRes.data.categories ?? [],
           templates: libRes.data.templates ?? {},
           on_board_template_ids: libRes.data.on_board_template_ids ?? [],
           requests_per_day_limit: libRes.data.requests_per_day_limit ?? 3,
           football_league_filter_options: libRes.data.football_league_filter_options ?? null,
-        });
+        };
+        setPublicLibrary(nextPublicLibrary);
       }
       if (reqRes?.data) {
-        setRequestInfo({
+        nextRequestInfo = {
           used_today: reqRes.data.used_today ?? 0,
           limit: reqRes.data.limit ?? 3,
           remaining: reqRes.data.remaining ?? 0,
           recent_requests: reqRes.data.recent_requests ?? [],
-        });
+        };
+        setRequestInfo(nextRequestInfo);
       }
+      setSportsBettingPrefetch({
+        events: nextEvents,
+        myBets: nextMyBets,
+        stats: nextStats,
+        recentResults: nextRecentResults,
+        publicLibrary: nextPublicLibrary,
+        requestInfo: nextRequestInfo,
+      });
     } catch (e) {
       toast.error(apiErrorDetail(e, 'Failed to load'));
       setEvents([]);
-      setMyBets({
-        open: [],
-        closed: [],
-        max_total_open_stake: SPORTS_MAX_TOTAL_OPEN_STAKE,
-        open_stake_total: 0,
-        open_stake_remaining: SPORTS_MAX_TOTAL_OPEN_STAKE,
-      });
+      setMyBets(DEFAULT_MY_BETS);
       setStats(null);
       setRecentResults([]);
-    } finally { setLoading(false); }
+    } finally {
+      if (!silent) setLoading(false);
+    }
   }, []);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => {
+    const cached = getSportsBettingPrefetch();
+    fetchAll({ silent: !!cached });
+  }, [fetchAll]);
 
   useEffect(() => {
     let cancelled = false;

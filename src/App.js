@@ -104,6 +104,7 @@ const Properties = lazy(() => import("./pages/Money/Properties"));
 const QuickTrade = lazy(() => import("./pages/Money/QuickTrade"));
 const Lottery = lazy(() => import("./pages/Money/Lottery"));
 const StockMarket = lazy(() => import("./pages/Money/StockMarket"));
+const GraveRobber = lazy(() => import("./pages/Money/GraveRobber"));
 
 // Social pages
 const Forum = lazy(() => import("./pages/Social/Forum"));
@@ -932,6 +933,19 @@ function App() {
             }
           />
           <Route path="/crack-safe" element={<Navigate to="/money/crack-safe" replace />} />
+          <Route
+            path="/money/grave-robber"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <GraveRobber />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
+          <Route path="/grave-robber" element={<Navigate to="/money/grave-robber" replace />} />
           <Route
             path="/game/daily-rewards"
             element={

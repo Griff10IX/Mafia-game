@@ -2399,7 +2399,7 @@ from routers.crime import crimes, jail, organised_crime, oc
 from routers.game import families, leaderboard, states, stats, store, dead_alive, events, notifications, meta, entertainer, achievements
 from routers.kill import attack, armoury, bodyguards, hitlist, witness_statements
 from routers.minigames import gauntlet, boxing, racing, snake
-from routers.money import bank, stock_market, properties, quicktrade, crack_safe, illegal_business, booze_run, racket, payments, lottery
+from routers.money import bank, stock_market, properties, quicktrade, crack_safe, illegal_business, booze_run, racket, payments, lottery, grave_robber
 from routers.social import forum, game_chat, giphy, image_host, designer_auctions
 from routers.account import objectives
 from routers.account.objectives import update_objectives_progress  # re-export for server.py callers (e.g. booze sell)
@@ -2459,6 +2459,7 @@ illegal_business.register(api_router)
 store.register(api_router)
 racket.register(api_router)
 lottery.register(api_router)
+grave_robber.register(api_router)
 leaderboard.register(api_router)
 meta.register(api_router)
 user_progress.register(api_router)

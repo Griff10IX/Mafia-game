@@ -6,6 +6,16 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-07 16:05 UTC[/color][/b] — [b]New Money game: Grave Robber (50 digs, scaling cost, 24h cooldown)[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Added [b]Money → Grave Robber[/b], a new graveyard-themed money sink. Each run has [b]50 digs[/b]. Attempt cost starts at [b]$1,000,000[/b] and rises by [b]+15%[/b] every [b]5%[/b] run progress. After dig #50, a [b]24h cooldown[/b] starts before a new run can begin. Rewards can be [b]cash[/b], [b]bullets[/b], [b]points[/b], [b]tokens[/b] (excluding game pass token), [b]cars[/b] (no exclusive/loot-exclusive), or [b]nothing[/b].[/color]
+[*][color=#888888][b]Player action:[/b] Open [b]Money → Grave Robber[/b], start a run, and dig tombs until you finish all 50 attempts. Watch cost scaling before committing deeper into the run.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-07 15:10 UTC[/color][/b] — [b]Families load-speed refresh, profile property detail, and Hangman payout fix[/b][/size]
 [quote]
 [list]

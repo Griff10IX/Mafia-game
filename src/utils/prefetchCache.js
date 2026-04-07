@@ -2,11 +2,15 @@ const CRIMES_PREFETCH_MAX_AGE_MS = 30000;
 const PROFILE_PREFETCH_MAX_AGE_MS = 60000;
 const FAMILIES_PREFETCH_MAX_AGE_MS = 30000;
 const FAMILY_PROFILE_PREFETCH_MAX_AGE_MS = 30000;
+const SPORTS_BETTING_PREFETCH_MAX_AGE_MS = 30000;
+const PROPERTIES_PREFETCH_MAX_AGE_MS = 30000;
 
 let crimesPrefetch = null;
 let profilePrefetch = {};
 let familiesPrefetch = null;
 let familyProfilePrefetch = {};
+let sportsBettingPrefetch = null;
+let propertiesPrefetch = null;
 
 export function getCrimesPrefetch() {
   if (!crimesPrefetch?.data) return null;
@@ -93,4 +97,42 @@ export function clearFamilyProfilePrefetch(familyIdOrTag) {
   const key = String(familyIdOrTag || '').trim().toLowerCase();
   if (!key) return;
   delete familyProfilePrefetch[key];
+}
+
+export function getSportsBettingPrefetch() {
+  if (!sportsBettingPrefetch?.data) return null;
+  const age = Date.now() - (sportsBettingPrefetch.timestamp || 0);
+  if (age > SPORTS_BETTING_PREFETCH_MAX_AGE_MS) {
+    sportsBettingPrefetch = null;
+    return null;
+  }
+  return sportsBettingPrefetch.data;
+}
+
+export function setSportsBettingPrefetch(data) {
+  if (!data) return;
+  sportsBettingPrefetch = { data, timestamp: Date.now() };
+}
+
+export function clearSportsBettingPrefetch() {
+  sportsBettingPrefetch = null;
+}
+
+export function getPropertiesPrefetch() {
+  if (!propertiesPrefetch?.data) return null;
+  const age = Date.now() - (propertiesPrefetch.timestamp || 0);
+  if (age > PROPERTIES_PREFETCH_MAX_AGE_MS) {
+    propertiesPrefetch = null;
+    return null;
+  }
+  return propertiesPrefetch.data;
+}
+
+export function setPropertiesPrefetch(data) {
+  if (!data) return;
+  propertiesPrefetch = { data, timestamp: Date.now() };
+}
+
+export function clearPropertiesPrefetch() {
+  propertiesPrefetch = null;
 }

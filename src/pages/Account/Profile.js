@@ -335,7 +335,7 @@ const ProfileInfoCard = ({
     { 
       label: 'Jailbusts', 
       icon: GalleryVerticalEnd,
-      value: String(profile.jail_busts ?? 0), 
+      value: Number(profile.jail_busts ?? 0).toLocaleString(),
       valueClass: 'text-foreground font-heading font-bold' 
     },
     { 
