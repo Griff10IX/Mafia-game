@@ -434,6 +434,14 @@ export default function IllegalBusiness() {
   const totalUpgrades = securityList.length;
   const missions = Array.isArray(data?.missions) ? data.missions : [];
   const completedMissions = missions.filter(m => m.completed);
+  const MISSION_LOG_PREVIEW = 18;
+  const completedMissionsSorted = [...completedMissions].sort(
+    (a, b) => (Number(b.mission?.order) || 0) - (Number(a.mission?.order) || 0),
+  );
+  const missionLogRows = missionLogShowAll
+    ? completedMissionsSorted
+    : completedMissionsSorted.slice(0, MISSION_LOG_PREVIEW);
+  const missionLogHasMore = completedMissionsSorted.length > MISSION_LOG_PREVIEW;
   const activeMission = missions.find(m => !m.completed);
   const raidDailyLimit = Number(data?.raid_daily_limit) || 5;
   const raidsToday = Number(data?.raids_today) || 0;
