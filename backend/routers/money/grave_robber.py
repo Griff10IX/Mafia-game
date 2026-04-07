@@ -32,12 +32,12 @@ GR_CAR_POOL = [
 ]
 
 GR_REWARD_WEIGHTS = (
-    ("nothing", 0.37),
-    ("cash", 0.31),
-    ("bullets", 0.17),
+    ("nothing", 0.24),
+    ("cash", 0.38),
+    ("bullets", 0.16),
     ("points", 0.02),  # hardest reward to hit
-    ("tokens", 0.10),
-    ("car", 0.03),
+    ("tokens", 0.14),
+    ("car", 0.06),
 )
 
 
@@ -89,8 +89,8 @@ def _pick_reward_kind() -> str:
 
 def _reward_ranges_for_cost(attempt_cost: int) -> dict:
     c = max(1, int(attempt_cost or GR_BASE_ATTEMPT_COST))
-    cash_min = max(250_000, int(c * 0.35))
-    cash_max = max(cash_min, int(c * 1.15))
+    cash_min = max(250_000, int(c * 0.55))
+    cash_max = max(cash_min, int(c * 1.50))
     bullets_min = max(75, int(c / 7000))
     bullets_max = max(bullets_min + 25, int(c / 2500))
     points_min = max(5, int(c / 250_000))
@@ -117,8 +117,8 @@ def _roll_reward(attempt_cost: int) -> dict:
     if kind == "nothing":
         return reward
     if kind == "cash":
-        lo = max(250_000, int(attempt_cost * 0.35))
-        hi = max(lo, int(attempt_cost * 1.15))
+        lo = max(250_000, int(attempt_cost * 0.55))
+        hi = max(lo, int(attempt_cost * 1.50))
         reward["money"] = _rng.randint(lo, hi)
         return reward
     if kind == "bullets":
