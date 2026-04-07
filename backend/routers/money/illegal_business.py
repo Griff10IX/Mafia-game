@@ -1,6 +1,6 @@
 # Illegal business (1920s–30s mafia): one per player, Capo+, raid formula, guards/security, missions, killer choice on death
 from datetime import datetime, timezone, timedelta
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 import re
 import uuid
 import secrets
@@ -184,6 +184,38 @@ SECURITY_UPGRADES = [
     {"id": "vault_4", "name": "Underground vault", "defence_weight": 16},
     {"id": "lookout_4", "name": "24/7 watch", "defence_weight": 14},
     {"id": "bouncers_4", "name": "Armoured bouncers", "defence_weight": 18},
+    # Tier 5 (indices 49–79) — supports security_level up to 80 for ibm_100
+    {"id": "reinforced_door_5", "name": "Fortress-grade door", "defence_weight": 13},
+    {"id": "vault_5", "name": "Deep vault annex", "defence_weight": 17},
+    {"id": "lookout_5", "name": "Radio lookout net", "defence_weight": 15},
+    {"id": "bouncers_5", "name": "Armed house crew", "defence_weight": 19},
+    {"id": "alarm_5", "name": "Silent alarm grid", "defence_weight": 13},
+    {"id": "bribed_cop_5", "name": "Precinct friend", "defence_weight": 17},
+    {"id": "thompson_5", "name": "Crew Thompsons", "defence_weight": 21},
+    {"id": "iron_bars_5", "name": "Steel shutters", "defence_weight": 10},
+    {"id": "guard_dog_5", "name": "Patrol dogs", "defence_weight": 14},
+    {"id": "spotlight_5", "name": "Generator floodlights", "defence_weight": 9},
+    {"id": "safe_room_5", "name": "Command safe room", "defence_weight": 20},
+    {"id": "wire_taps_5", "name": "Federal-grade taps", "defence_weight": 13},
+    {"id": "armoured_desk_5", "name": "Ballistic counter", "defence_weight": 11},
+    {"id": "back_exit_5", "name": "Escape tunnel II", "defence_weight": 12},
+    {"id": "panic_button_5", "name": "Syndicate hotline", "defence_weight": 16},
+    {"id": "reinforced_door_6", "name": "Blast door", "defence_weight": 14},
+    {"id": "vault_6", "name": "Tri-vault system", "defence_weight": 18},
+    {"id": "lookout_6", "name": "Block watch network", "defence_weight": 16},
+    {"id": "bouncers_6", "name": "Veteran enforcers", "defence_weight": 20},
+    {"id": "alarm_6", "name": "City tie-in alarm", "defence_weight": 14},
+    {"id": "bribed_cop_6", "name": "Captain on payroll", "defence_weight": 18},
+    {"id": "thompson_6", "name": "Gun nest", "defence_weight": 22},
+    {"id": "iron_bars_6", "name": "Window cages", "defence_weight": 11},
+    {"id": "guard_dog_6", "name": "Attack kennel", "defence_weight": 15},
+    {"id": "spotlight_6", "name": "Tower lights", "defence_weight": 10},
+    {"id": "safe_room_6", "name": "Sub-basement bunker", "defence_weight": 21},
+    {"id": "wire_taps_6", "name": "Switchboard taps", "defence_weight": 14},
+    {"id": "armoured_desk_6", "name": "Reinforced office", "defence_weight": 12},
+    {"id": "back_exit_6", "name": "Sewer route", "defence_weight": 13},
+    {"id": "panic_button_6", "name": "War council line", "defence_weight": 17},
+    {"id": "citadel_lock", "name": "Citadel lockdown", "defence_weight": 24},
 ]
 # Cost for security upgrade at index i: base + step * i (gradually higher).
 # 75% reduction for beta
@@ -192,6 +224,26 @@ SECURITY_UPGRADE_STEP_CASH = 5_000
 SECURITY_UPGRADE_BASE_POINTS = 0
 SECURITY_UPGRADE_STEP_POINTS = 0
 SECURITY_UPGRADE_IDS = [u["id"] for u in SECURITY_UPGRADES]
+# Original chain length (tier 1–4); extended tier 5+ prices align with ibm_31+ vault rewards (~$1.05M–$6.5M).
+SECURITY_UPGRADE_LEGACY_LAST_INDEX = 48
+
+
+def security_upgrade_cost_cash(idx: int) -> int:
+    """Vault cash cost for security upgrade at list index ``idx`` (0-based)."""
+    if idx < 0:
+        idx = 0
+    if idx <= SECURITY_UPGRADE_LEGACY_LAST_INDEX:
+        return int(SECURITY_UPGRADE_BASE_CASH + SECURITY_UPGRADE_STEP_CASH * idx)
+    ext_i = idx - SECURITY_UPGRADE_LEGACY_LAST_INDEX - 1
+    ext_n = len(SECURITY_UPGRADES) - SECURITY_UPGRADE_LEGACY_LAST_INDEX - 1
+    if ext_n <= 1:
+        return 6_500_000
+    # Match extended mission vault scale (ibm_missions_extended ~$1.05M → $6.5M)
+    v0 = 1_200_000
+    v1 = 6_500_000
+    t = ext_i / (ext_n - 1)
+    return int(v0 + (v1 - v0) * t)
+
 
 # Guard hire: cost per slot; armour/weapon 0..base_max + mission unlocks (cap at 20).
 # 75% reduction for beta
@@ -205,10 +257,21 @@ GUARD_SLOT_MULT = 1.5
 GUARD_ARMOUR_MAX = 20
 GUARD_WEAPON_MAX = 20
 GUARD_WEAPON_BASE_MAX = 3  # missions add +1 via guard_weapon_max_unlock on business
+GUARD_ARMOUR_BASE_MAX = 3  # missions add +1 via guard_armour_max_unlock on business
+# Post-hire guard gear upgrade (vault); cost for level L -> L+1
+GUARD_UPGRADE_BASE_CASH = 8_000
+GUARD_UPGRADE_LEVEL_MULT = 1.38
+# Till cap bonus from missions (hours stacked on income_cap_hours)
+INCOME_CAP_HOURS_MAX = 168
+# Defender meta: flat strength bonus (missions); raid loot taken from this business
+DEFENDER_STRENGTH_BONUS_CAP = 400
+RAID_INCOMING_LOOT_MULT_MIN = 0.50  # victim: min multiplier on cash lost to raiders
 
 # Raid
 RAID_COOLDOWN_HOURS = 12
-RAID_DAILY_LIMIT = 5
+RAID_DAILY_LIMIT_DEFAULT = 5
+RAID_DAILY_LIMIT_MAX = 10
+RAID_DAILY_LIMIT = RAID_DAILY_LIMIT_DEFAULT  # backward compat for imports
 RAID_LOOT_PERCENT = 0.25  # attacker gets 25% of target's uncollected income (capped)
 RAID_VARIANCE = 0.15  # random +/- 15% on strength for drama
 DEFENDER_BASE_STRENGTH = 10
@@ -230,7 +293,7 @@ INCOME_BOOST_PER_KILL_PERCENT = 2
 MODERATELY_UPGRADED_LEVEL = 2
 MODERATELY_UPGRADED_SECURITY = 1
 
-ILLEGAL_BUSINESS_MISSIONS = [
+IBM_MISSIONS_CORE = [
     # Tier 1 — Getting Started
     {"id": "ibm_1", "order": 1, "title": "Prove the operation",
      "story": "The Commissioner wants a cut — prove you can run the block.",
@@ -398,6 +461,9 @@ ILLEGAL_BUSINESS_MISSIONS = [
      "rewards": {"vault_cash": 1_000_000, "racket_tokens": 5, "xp_crimes_tokens": 2, "jailbust_tokens": 2, "income_per_hour_add": 6_200,
                  "melt_tokens": 1, "booze_tokens": 1, "properties_tokens": 1, "auto_rank_2h_tokens": 1}},
 ]
+
+# Populated at EOF after all defs (avoids circular import with server).
+ILLEGAL_BUSINESS_MISSIONS: List[Dict[str, Any]] = []
 
 # Mission requirements that count only since baselines were set for this mission id (user.illegal_business_mission_baselines).
 IBM_REQUIREMENT_USER_FIELDS = {
@@ -1018,8 +1084,37 @@ def _user_rank_id(user: dict) -> int:
     return rid
 
 
+def _guard_gear_upgrade_cost(current_level: int) -> int:
+    """Vault cost to raise armour or weapon from current_level to current_level+1."""
+    lv = max(0, int(current_level))
+    return int(GUARD_UPGRADE_BASE_CASH * (GUARD_UPGRADE_LEVEL_MULT**lv))
+
+
+def _guard_level_caps(business: dict) -> Tuple[int, int]:
+    """Max armour_level and weapon_level for hires and upgrades (mission unlocks)."""
+    w_unlock = int(business.get("guard_weapon_max_unlock") or 0)
+    a_raw = business.get("guard_armour_max_unlock")
+    if a_raw is None:
+        a_unlock = w_unlock
+    else:
+        a_unlock = int(a_raw)
+    armour_max = min(GUARD_ARMOUR_MAX, GUARD_ARMOUR_BASE_MAX + a_unlock)
+    weapon_max = min(GUARD_WEAPON_MAX, GUARD_WEAPON_BASE_MAX + w_unlock)
+    return armour_max, weapon_max
+
+
+def _guard_doc_with_upgrade_costs(business: dict, guard: dict) -> dict:
+    armour_max, weapon_max = _guard_level_caps(business)
+    al = int(guard.get("armour_level") or 0)
+    wl = int(guard.get("weapon_level") or 0)
+    row = dict(guard)
+    row["next_armour_upgrade_cost"] = None if al >= armour_max else _guard_gear_upgrade_cost(al)
+    row["next_weapon_upgrade_cost"] = None if wl >= weapon_max else _guard_gear_upgrade_cost(wl)
+    return row
+
+
 def _business_defender_strength(business: dict, guards: List[dict]) -> float:
-    base = DEFENDER_BASE_STRENGTH
+    base = DEFENDER_BASE_STRENGTH + float(business.get("defender_strength_bonus") or 0)
     guard_sum = 0
     for g in guards:
         armour = int(g.get("armour_level") or 0)
@@ -1059,6 +1154,11 @@ def _raid_win_probability(attacker_str: float, defender_str: float) -> float:
     a = attacker_str * variance
     d = max(1.0, defender_str)
     return a / (a + d)
+
+
+def _effective_raid_daily_limit(user: dict) -> int:
+    raw = int(user.get("illegal_business_raid_daily_limit") or RAID_DAILY_LIMIT_DEFAULT)
+    return max(RAID_DAILY_LIMIT_DEFAULT, min(RAID_DAILY_LIMIT_MAX, raw))
 
 
 def _is_moderately_upgraded(business: dict) -> bool:
@@ -1233,6 +1333,12 @@ class HireGuardRequest(BaseModel):
     weapon_level: int = 0
 
 
+class GuardGearUpgradeRequest(BaseModel):
+    guard_id: str
+    upgrade_armour: bool = False
+    upgrade_weapon: bool = False
+
+
 class WithdrawRequest(BaseModel):
     amount: int
 
@@ -1371,7 +1477,10 @@ async def get_illegal_business(current_user: dict = Depends(get_current_user)):
             distillery_payload = _distillery_public_payload(distillery, business)
         if changed:
             await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": {"distillery": distillery}})
-    guards = await db.illegal_business_guards.find({"business_id": business["id"]}, {"_id": 0}).sort("slot_number", 1).to_list(20)
+    slots = int(business.get("guard_slots") or GUARD_SLOTS_INITIAL)
+    g_limit = min(2000, max(slots + 100, 500))
+    guards_raw = await db.illegal_business_guards.find({"business_id": business["id"]}, {"_id": 0}).sort("slot_number", 1).to_list(g_limit)
+    guards = [_guard_doc_with_upgrade_costs(business, g) for g in guards_raw]
     progress_user = await _ibm_load_user_with_mission_baselines(current_user["id"], current_user)
     completions = progress_user.get("illegal_business_mission_completions") or []
     completed_ids = {c.get("mission_id") for c in completions if c.get("mission_id")}
@@ -1385,11 +1494,10 @@ async def get_illegal_business(current_user: dict = Depends(get_current_user)):
     security_upgrades_with_lock = []
     for i, u in enumerate(SECURITY_UPGRADES):
         entry = dict(u)
-        entry["cost_cash"] = SECURITY_UPGRADE_BASE_CASH + SECURITY_UPGRADE_STEP_CASH * i
+        entry["cost_cash"] = security_upgrade_cost_cash(i)
         entry["locked"] = False
         entry["unlock_mission_title"] = None
         security_upgrades_with_lock.append(entry)
-    slots = int(business.get("guard_slots") or GUARD_SLOTS_INITIAL)
     if slots < GUARD_SLOTS_MAX:
         exp = slots - GUARD_SLOTS_INITIAL
         next_guard_slot_cash = int(GUARD_SLOT_BASE_CASH * (GUARD_SLOT_MULT ** exp))
@@ -1397,6 +1505,12 @@ async def get_illegal_business(current_user: dict = Depends(get_current_user)):
         next_guard_slot_cash = None
     now = datetime.now(timezone.utc)
     pending_take, _ = await _illegal_business_pending_take_and_hours(business, current_user, now)
+    today_key = now.strftime("%Y-%m-%d")
+    raid_date = current_user.get("illegal_business_raids_date")
+    raid_count = int(current_user.get("illegal_business_raids_today") or 0)
+    if raid_date != today_key:
+        raid_count = 0
+    raid_lim = _effective_raid_daily_limit(current_user)
     return {
         "business": business,
         "pending_take": round(pending_take, 2),
@@ -1410,6 +1524,8 @@ async def get_illegal_business(current_user: dict = Depends(get_current_user)):
         "next_guard_slot_cost_cash": next_guard_slot_cash,
         "guard_hire_cost": GUARD_HIRE_COST_CASH,
         "distillery": distillery_payload,
+        "raid_daily_limit": raid_lim,
+        "raids_today": raid_count,
     }
 
 
@@ -2170,6 +2286,28 @@ async def complete_illegal_business_mission(mission_id: str, current_user: dict 
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Mission already completed.")
     await _ibm_set_baselines_for_next_mission(current_user["id"], mission_id)
+    if rewards.get("raid_daily_limit_add"):
+        add = int(rewards["raid_daily_limit_add"])
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            [
+                {
+                    "$set": {
+                        "illegal_business_raid_daily_limit": {
+                            "$min": [
+                                RAID_DAILY_LIMIT_MAX,
+                                {
+                                    "$add": [
+                                        {"$ifNull": ["$illegal_business_raid_daily_limit", RAID_DAILY_LIMIT_DEFAULT]},
+                                        add,
+                                    ]
+                                },
+                            ]
+                        }
+                    }
+                }
+            ],
+        )
     update_business_set = {}
     update_business_inc = {}
     if "income_mult" in rewards or "income_per_hour_add" in rewards:
@@ -2181,8 +2319,29 @@ async def complete_illegal_business_mission(mission_id: str, current_user: dict 
         update_business_set["income_per_hour"] = max(0, iph)
     if "guard_weapon_max" in rewards:
         update_business_set["guard_weapon_max_unlock"] = int(business.get("guard_weapon_max_unlock") or 0) + 1
+    if "guard_armour_max" in rewards:
+        cur_a = business.get("guard_armour_max_unlock")
+        if cur_a is None:
+            cur_a = int(business.get("guard_weapon_max_unlock") or 0)
+        else:
+            cur_a = int(cur_a)
+        update_business_set["guard_armour_max_unlock"] = cur_a + 1
     if rewards.get("guard_slots"):
         update_business_inc["guard_slots"] = int(rewards["guard_slots"])
+    if rewards.get("income_cap_hours_add"):
+        cur_cap = int(business.get("income_cap_hours") or INCOME_CAP_HOURS_BASE)
+        new_cap = cur_cap + int(rewards["income_cap_hours_add"])
+        update_business_set["income_cap_hours"] = min(INCOME_CAP_HOURS_MAX, new_cap)
+    if rewards.get("defender_strength_bonus_add"):
+        cur_b = int(business.get("defender_strength_bonus") or 0)
+        new_b = cur_b + int(rewards["defender_strength_bonus_add"])
+        update_business_set["defender_strength_bonus"] = min(DEFENDER_STRENGTH_BONUS_CAP, new_b)
+    if rewards.get("raid_incoming_loot_mult_sub") is not None:
+        cur_m = float(business.get("raid_incoming_loot_mult") or 1.0)
+        sub = float(rewards["raid_incoming_loot_mult_sub"])
+        update_business_set["raid_incoming_loot_mult"] = max(
+            RAID_INCOMING_LOOT_MULT_MIN, round(cur_m - sub, 4)
+        )
     if rewards.get("vault_cash"):
         update_business_inc["vault"] = int(rewards["vault_cash"])
         update_business_inc["vault_lifetime_earned"] = int(rewards["vault_cash"])
@@ -2202,7 +2361,8 @@ async def get_illegal_business_guards(current_user: dict = Depends(get_current_u
         raise HTTPException(status_code=404, detail="You don't have an illegal business.")
     slots = int(business.get("guard_slots") or GUARD_SLOTS_INITIAL)
     limit = min(2000, max(slots + 100, 500))
-    guards = await db.illegal_business_guards.find({"business_id": business["id"]}, {"_id": 0}).sort("slot_number", 1).to_list(limit)
+    guards_raw = await db.illegal_business_guards.find({"business_id": business["id"]}, {"_id": 0}).sort("slot_number", 1).to_list(limit)
+    guards = [_guard_doc_with_upgrade_costs(business, g) for g in guards_raw]
     return {"guards": guards, "guard_slots": slots}
 
 
@@ -2242,10 +2402,9 @@ async def hire_illegal_business_guard(req: HireGuardRequest, current_user: dict 
         raise HTTPException(status_code=400, detail="Invalid slot.")
     if any(g.get("slot_number") == slot for g in existing):
         raise HTTPException(status_code=400, detail="Slot already filled.")
-    unlock = int(business.get("guard_weapon_max_unlock") or 0)
-    effective_max = min(GUARD_WEAPON_MAX, GUARD_WEAPON_BASE_MAX + unlock)
-    armour = max(0, min(effective_max, req.armour_level))
-    weapon = max(0, min(effective_max, req.weapon_level))
+    armour_max, weapon_max = _guard_level_caps(business)
+    armour = max(0, min(armour_max, req.armour_level))
+    weapon = max(0, min(weapon_max, req.weapon_level))
     cost_cash = GUARD_HIRE_COST_CASH
     vault = int(business.get("vault") or 0)
     if vault < cost_cash:
@@ -2274,6 +2433,65 @@ async def hire_illegal_business_guard(req: HireGuardRequest, current_user: dict 
     return {"message": "Another pair of hands on the door.", "guard_id": guard_id}
 
 
+async def upgrade_illegal_business_guard_gear(req: GuardGearUpgradeRequest, current_user: dict = Depends(get_current_user)):
+    if not req.upgrade_armour and not req.upgrade_weapon:
+        raise HTTPException(status_code=400, detail="Choose armour and/or weapon to upgrade.")
+    business = await db.illegal_businesses.find_one({"user_id": current_user["id"]}, {"_id": 0})
+    if not business:
+        raise HTTPException(status_code=404, detail="You don't have an illegal business.")
+    guard = await db.illegal_business_guards.find_one(
+        {"id": req.guard_id, "business_id": business["id"], "user_id": current_user["id"]},
+        {"_id": 0},
+    )
+    if not guard:
+        raise HTTPException(status_code=404, detail="Guard not found.")
+    armour_max, weapon_max = _guard_level_caps(business)
+    armour = int(guard.get("armour_level") or 0)
+    weapon = int(guard.get("weapon_level") or 0)
+    cost = 0
+    new_a, new_w = armour, weapon
+    if req.upgrade_armour:
+        if armour >= armour_max:
+            raise HTTPException(status_code=400, detail="Armour is already at max for your unlocks.")
+        cost += _guard_gear_upgrade_cost(armour)
+        new_a = armour + 1
+    if req.upgrade_weapon:
+        if weapon >= weapon_max:
+            raise HTTPException(status_code=400, detail="Weapon is already at max for your unlocks.")
+        cost += _guard_gear_upgrade_cost(weapon)
+        new_w = weapon + 1
+    if cost <= 0:
+        raise HTTPException(status_code=400, detail="Nothing to upgrade.")
+    vault = int(business.get("vault") or 0)
+    if vault < cost:
+        raise HTTPException(status_code=400, detail=f"Need ${cost:,} in vault. You have ${vault:,}.")
+    prev_spent = int(business.get("total_spent") or 0)
+    total_spent = prev_spent + cost
+    result = await db.illegal_businesses.update_one(
+        {"id": business["id"], "vault": {"$gte": cost}},
+        {"$inc": {"vault": -cost}, "$set": {"total_spent": total_spent}},
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient vault funds")
+    gresult = await db.illegal_business_guards.update_one(
+        {"id": req.guard_id, "business_id": business["id"]},
+        {"$set": {"armour_level": new_a, "weapon_level": new_w}},
+    )
+    if gresult.modified_count == 0:
+        await db.illegal_businesses.update_one(
+            {"id": business["id"]},
+            {"$inc": {"vault": cost}, "$set": {"total_spent": prev_spent}},
+        )
+        raise HTTPException(status_code=500, detail="Could not update guard; vault charge reverted.")
+    return {
+        "message": "Gear upgraded.",
+        "guard_id": req.guard_id,
+        "armour_level": new_a,
+        "weapon_level": new_w,
+        "cost_cash": cost,
+    }
+
+
 async def upgrade_security(upgrade_id: str, current_user: dict = Depends(get_current_user)):
     business = await db.illegal_businesses.find_one({"user_id": current_user["id"]}, {"_id": 0})
     if not business:
@@ -2288,7 +2506,7 @@ async def upgrade_security(upgrade_id: str, current_user: dict = Depends(get_cur
         raise HTTPException(status_code=400, detail="Already have this upgrade.")
     if idx > len(upgrades_done):
         raise HTTPException(status_code=400, detail="Unlock previous upgrades first.")
-    cost_cash = SECURITY_UPGRADE_BASE_CASH + SECURITY_UPGRADE_STEP_CASH * idx
+    cost_cash = security_upgrade_cost_cash(idx)
     up_def = SECURITY_UPGRADES[idx]
     vault = int(business.get("vault") or 0)
     if vault < cost_cash:
@@ -2374,11 +2592,30 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
     cooldowns_new = dict(cooldowns)
     cooldowns_new[target_id] = now
     claim_result = await db.users.find_one_and_update(
-        {"id": current_user["id"],
-         "$or": [
-             {"illegal_business_raids_date": {"$ne": today_key}},
-             {"illegal_business_raids_today": {"$lt": RAID_DAILY_LIMIT}},
-         ]},
+        {
+            "id": current_user["id"],
+            "$or": [
+                {"illegal_business_raids_date": {"$ne": today_key}},
+                {
+                    "$expr": {
+                        "$lt": [
+                            {"$ifNull": ["$illegal_business_raids_today", 0]},
+                            {
+                                "$min": [
+                                    RAID_DAILY_LIMIT_MAX,
+                                    {
+                                        "$max": [
+                                            RAID_DAILY_LIMIT_DEFAULT,
+                                            {"$ifNull": ["$illegal_business_raid_daily_limit", RAID_DAILY_LIMIT_DEFAULT]},
+                                        ]
+                                    },
+                                ]
+                            },
+                        ]
+                    }
+                },
+            ],
+        },
         [{"$set": {
             "illegal_business_raid_cooldowns": cooldowns_new,
             "illegal_business_raids_date": today_key,
@@ -2393,7 +2630,8 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
         return_document=False,
     )
     if not claim_result:
-        raise HTTPException(status_code=400, detail=f"Daily raid limit ({RAID_DAILY_LIMIT}) reached.")
+        lim = _effective_raid_daily_limit(current_user)
+        raise HTTPException(status_code=400, detail=f"Daily raid limit ({lim}) reached.")
     await db.users.update_one({"id": current_user["id"]}, {"$inc": {"illegal_business_raids_attempted": 1}})
     guards = await db.illegal_business_guards.find({"business_id": business["id"]}, {"_id": 0}).to_list(2000)
     defender_str = _business_defender_strength(business, guards)
@@ -2416,7 +2654,9 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
         iph = int(business.get("income_per_hour") or INCOME_PER_HOUR_BASE)
         cap = int(business.get("income_cap_hours") or INCOME_CAP_HOURS_BASE)
         available = min(hours * iph, iph * cap)
-        loot_cash = int(available * RAID_LOOT_PERCENT)
+        victim_mult = float(business.get("raid_incoming_loot_mult") or 1.0)
+        victim_mult = max(RAID_INCOMING_LOOT_MULT_MIN, min(1.0, victim_mult))
+        loot_cash = int(available * RAID_LOOT_PERCENT * victim_mult)
         loot_cash_credited = loot_cash
         if loot_cash > 0:
             ev = await get_effective_event()
@@ -2490,8 +2730,9 @@ async def raid_random_illegal_business(current_user: dict = Depends(get_current_
     raid_date = current_user.get("illegal_business_raids_date")
     if raid_date != today_key:
         raid_count_today = 0
-    if raid_count_today >= RAID_DAILY_LIMIT:
-        raise HTTPException(status_code=400, detail=f"Daily raid limit ({RAID_DAILY_LIMIT}) reached.")
+    lim_rr = _effective_raid_daily_limit(current_user)
+    if raid_count_today >= lim_rr:
+        raise HTTPException(status_code=400, detail=f"Daily raid limit ({lim_rr}) reached.")
     # Sample only businesses whose owner still exists with a usable username (avoids orphaned
     # illegal_businesses rows → intermittent "Target not found" on $sample + lookup mismatch).
     me_id = current_user["id"]
@@ -2595,9 +2836,17 @@ def register(router):
     router.add_api_route("/illegal-business/guards", get_illegal_business_guards, methods=["GET"])
     router.add_api_route("/illegal-business/guards/buy-slot", buy_guard_slot, methods=["POST"])
     router.add_api_route("/illegal-business/guards/hire", hire_illegal_business_guard, methods=["POST"])
+    router.add_api_route("/illegal-business/guards/upgrade", upgrade_illegal_business_guard_gear, methods=["POST"])
     router.add_api_route("/illegal-business/security/upgrade/{upgrade_id}", upgrade_security, methods=["POST"])
     router.add_api_route("/illegal-business/withdraw", withdraw_illegal_business, methods=["POST"])
     router.add_api_route("/illegal-business", patch_illegal_business, methods=["PATCH"])
     router.add_api_route("/illegal-business/raid", raid_illegal_business, methods=["POST"])
     router.add_api_route("/illegal-business/raid/random", raid_random_illegal_business, methods=["POST"])
     router.add_api_route("/illegal-business/claim-kill-reward", claim_kill_reward, methods=["POST"])
+
+
+from utils.ibm_missions_extended import EXTENDED_IBM_MISSIONS
+
+ILLEGAL_BUSINESS_MISSIONS.clear()
+ILLEGAL_BUSINESS_MISSIONS.extend(IBM_MISSIONS_CORE)
+ILLEGAL_BUSINESS_MISSIONS.extend(EXTENDED_IBM_MISSIONS)

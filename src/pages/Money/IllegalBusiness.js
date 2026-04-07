@@ -87,6 +87,14 @@ function getMissionRewardParts(rewards) {
   }
   if (rewards.income_per_hour_add) parts.push(`+${formatMoney(rewards.income_per_hour_add)}/h passive`);
   if (rewards.guard_weapon_max) parts.push('Weapon tier +1');
+  if (rewards.guard_armour_max) parts.push('Armour tier +1');
+  if (rewards.raid_daily_limit_add) parts.push(`+${rewards.raid_daily_limit_add} daily raid${Number(rewards.raid_daily_limit_add) > 1 ? 's' : ''} (max 10)`);
+  if (rewards.income_cap_hours_add) parts.push(`+${rewards.income_cap_hours_add}h till cap`);
+  if (rewards.defender_strength_bonus_add) parts.push(`+${rewards.defender_strength_bonus_add} joint defence`);
+  if (rewards.raid_incoming_loot_mult_sub != null && Number(rewards.raid_incoming_loot_mult_sub) > 0) {
+    const pct = Math.round(Number(rewards.raid_incoming_loot_mult_sub) * 100);
+    parts.push(`−${pct}% cash lost when raided`);
+  }
   if (rewards.jailbust_tokens) parts.push(`${rewards.jailbust_tokens} Jailbust token${Number(rewards.jailbust_tokens) > 1 ? 's' : ''}`);
   if (rewards.xp_crimes_tokens) parts.push(`${rewards.xp_crimes_tokens} XP Crimes token${Number(rewards.xp_crimes_tokens) > 1 ? 's' : ''}`);
   if (rewards.xp_gta_tokens) parts.push(`${rewards.xp_gta_tokens} XP GTA token${Number(rewards.xp_gta_tokens) > 1 ? 's' : ''}`);
@@ -247,6 +255,7 @@ export default function IllegalBusiness() {
   const [raidResult, setRaidResult] = useState(null);
   const [user, setUser] = useState(null);
   const [withdrawAmount, setWithdrawAmount] = useState('');
+  const [missionLogShowAll, setMissionLogShowAll] = useState(false);
 
   const fetchData = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -340,6 +349,15 @@ export default function IllegalBusiness() {
     toast.success('Another slot on the door.');
     fetchData();
   });
+  const handleGuardGearUpgrade = withSave(async (guardId, { armour, weapon }) => {
+    await api.post('/illegal-business/guards/upgrade', {
+      guard_id: guardId,
+      upgrade_armour: !!armour,
+      upgrade_weapon: !!weapon,
+    });
+    toast.success('Gear upgraded.');
+    fetchData();
+  });
   const handleUpgradeSecurity = withSave(async (upgradeId) => {
     await api.post(`/illegal-business/security/upgrade/${upgradeId}`);
     toast.success('Upgrade installed.');
@@ -417,6 +435,8 @@ export default function IllegalBusiness() {
   const missions = Array.isArray(data?.missions) ? data.missions : [];
   const completedMissions = missions.filter(m => m.completed);
   const activeMission = missions.find(m => !m.completed);
+  const raidDailyLimit = Number(data?.raid_daily_limit) || 5;
+  const raidsToday = Number(data?.raids_today) || 0;
   const incomeCapHours = Number(business?.income_cap_hours) || 24;
   const incomePerHourNum = Number(business?.income_per_hour) || 0;
   const maxTillAtCap = Math.round(incomePerHourNum * incomeCapHours);
@@ -453,6 +473,15 @@ export default function IllegalBusiness() {
             </div>
             <div className="text-[9px] text-zinc-500 font-heading mt-1 leading-snug">
               Max till {formatMoney(maxTillAtCap)} ({incomeCapHours}h cap)
+              {Number(business?.defender_strength_bonus) > 0 && (
+                <span className="text-zinc-600"> · +{Number(business.defender_strength_bonus)} defence</span>
+              )}
+              {business?.raid_incoming_loot_mult != null && Number(business.raid_incoming_loot_mult) < 1 && (
+                <span className="text-zinc-600">
+                  {' '}
+                  · raiders take {Math.round(Number(business.raid_incoming_loot_mult) * 100)}% of usual loot
+                </span>
+              )}
             </div>
             <div className="text-[8px] text-zinc-600 font-heading mt-0.5 leading-snug">
               ~{formatMoney(weekTillCeiling)}/wk if you max the till daily — events &amp; boosts change real collects.
@@ -709,9 +738,33 @@ export default function IllegalBusiness() {
               {guards.length > 0 && (
                 <div className="flex flex-wrap gap-1.5 mb-2">
                   {guards.map((g, i) => (
-                    <div key={g.id} className="flex items-center gap-1.5 px-2 py-1 rounded bg-primary/5 border border-primary/12">
-                      <span className="text-[9px] font-heading font-bold text-primary">#{i + 1}</span>
-                      <span className="text-[9px] text-zinc-500">A{g.armour_level} W{g.weapon_level}</span>
+                    <div key={g.id} className="flex flex-wrap items-center gap-1 px-2 py-1 rounded bg-primary/5 border border-primary/12 max-w-full">
+                      <span className="text-[9px] font-heading font-bold text-primary shrink-0">#{i + 1}</span>
+                      <span className="text-[9px] text-zinc-500 shrink-0">A{g.armour_level} W{g.weapon_level}</span>
+                      <div className="flex flex-wrap gap-1">
+                        {g.next_armour_upgrade_cost != null && (
+                          <button
+                            type="button"
+                            onClick={() => handleGuardGearUpgrade(g.id, { armour: true, weapon: false })}
+                            disabled={saving || vault < g.next_armour_upgrade_cost}
+                            title={`Vault: +1 armour — ${formatMoney(g.next_armour_upgrade_cost)}`}
+                            className="text-[8px] font-heading font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-primary/25 text-primary hover:bg-primary/10 disabled:opacity-40"
+                          >
+                            +A {formatMoney(g.next_armour_upgrade_cost)}
+                          </button>
+                        )}
+                        {g.next_weapon_upgrade_cost != null && (
+                          <button
+                            type="button"
+                            onClick={() => handleGuardGearUpgrade(g.id, { armour: false, weapon: true })}
+                            disabled={saving || vault < g.next_weapon_upgrade_cost}
+                            title={`Vault: +1 weapon — ${formatMoney(g.next_weapon_upgrade_cost)}`}
+                            className="text-[8px] font-heading font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border border-primary/25 text-primary hover:bg-primary/10 disabled:opacity-40"
+                          >
+                            +W {formatMoney(g.next_weapon_upgrade_cost)}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -741,6 +794,12 @@ export default function IllegalBusiness() {
           <div className="p-4">
             <p className="text-[11px] text-mutedForeground font-body italic mb-3">
               Send your crew to knock over a rival&apos;s operation. Come back with their green — or come back with nothing.
+            </p>
+            <p className="text-[10px] font-heading text-zinc-500 mb-3">
+              Raids today: <span className="text-primary font-bold">{raidsToday}</span>
+              <span className="text-zinc-600"> / </span>
+              <span className="text-foreground">{raidDailyLimit}</span>
+              <span className="text-zinc-600 ml-1">(complete racket missions to raise the cap up to 10)</span>
             </p>
             <div className="flex flex-wrap gap-2 items-end">
               <div className="flex-1 min-w-[120px]">
@@ -786,7 +845,7 @@ export default function IllegalBusiness() {
         {completedMissions.length > 0 && (
           <Collapsible label="Mission Log" count={completedMissions.length}>
             <div className="p-3 space-y-2">
-              {completedMissions.map(({ mission }) => (
+              {missionLogRows.map(({ mission }) => (
                 <div key={mission.id} className="flex items-center gap-2.5 px-2 py-1.5">
                   <div className="w-2 h-2 rounded-full bg-primary shrink-0" style={{ boxShadow: '0 0 5px rgba(var(--noir-primary-rgb),.45)' }} />
                   <div className="flex-1 min-w-0">
@@ -797,6 +856,17 @@ export default function IllegalBusiness() {
                   </div>
                 </div>
               ))}
+              {missionLogHasMore && (
+                <button
+                  type="button"
+                  onClick={() => setMissionLogShowAll((v) => !v)}
+                  className="w-full text-center text-[9px] font-heading font-bold uppercase tracking-wider text-primary/90 py-2 rounded border border-primary/20 hover:bg-primary/5"
+                >
+                  {missionLogShowAll
+                    ? `Show fewer (${MISSION_LOG_PREVIEW} recent)`
+                    : `Show all ${completedMissionsSorted.length} completed`}
+                </button>
+              )}
             </div>
           </Collapsible>
         )}
