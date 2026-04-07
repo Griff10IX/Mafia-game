@@ -15,7 +15,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, field_validator
 
-from server import db, get_current_user, log_activity, send_notification
+from server import db, get_current_user, log_activity, send_notification, ADMIN_EMAILS
 
 logger = logging.getLogger(__name__)
 
@@ -358,6 +358,25 @@ async def lottery_draw_cron(_: bool = Depends(_cron_verify())):
             {"round_id": rid},
             {"_id": 0, "user_id": 1, "username": 1, "numbers": 1},
         ).to_list(500_000)
+        # Staff can buy tickets to grow the pot, but cannot win payouts.
+        ticket_user_ids = sorted({
+            _normalize_lottery_user_id(t.get("user_id"))
+            for t in tickets
+            if _normalize_lottery_user_id(t.get("user_id"))
+        })
+        blocked_winner_ids: set[str] = set()
+        if ticket_user_ids:
+            staff_rows = await db.users.find(
+                {"id": {"$in": ticket_user_ids}},
+                {"_id": 0, "id": 1, "email": 1, "is_moderator": 1},
+            ).to_list(len(ticket_user_ids))
+            for u in staff_rows:
+                uid = _normalize_lottery_user_id(u.get("id"))
+                if not uid:
+                    continue
+                email = (u.get("email") or "").strip().lower()
+                if bool(u.get("is_moderator")) or email in ADMIN_EMAILS:
+                    blocked_winner_ids.add(uid)
         n = len(tickets)
         rollover_start = int(rd.get("rollover_in") or 0)
         ticket_revenue = n * TICKET_PRICE
@@ -378,7 +397,8 @@ async def lottery_draw_cron(_: bool = Depends(_cron_verify())):
         if gross > 0 and payout > 0:
             for t in tickets:
                 norm = _normalize_ticket_numbers(t.get("numbers"))
-                if norm is not None and norm == winning_numbers:
+                owner_id = _normalize_lottery_user_id(t.get("user_id"))
+                if norm is not None and norm == winning_numbers and owner_id not in blocked_winner_ids:
                     matches.append(t)
             exact_match_count = len(matches)
 
