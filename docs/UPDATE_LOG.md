@@ -6,6 +6,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-07 15:10 UTC[/color][/b] — [b]Families load-speed refresh, profile property detail, and Hangman payout fix[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Families[/b] and [b]Family Profile[/b] pages now use a silent-refresh flow (show recent cached data instantly, then refresh in background) to reduce visible loading time on repeat visits. Player [b]Profile → Properties[/b] compact row now includes each casino’s [b]max bet[/b] and [b]buy back[/b] points where applicable. [b]Hangman[/b] no longer pays cash/rewards when the game ends on misses without solving the word (no fallback winner on a loss).[/color]
+[*][color=#888888][b]Player action:[/b] No action required. Reopen Families/Profile pages to see faster reload behavior; check profile property rows for max bet and buy-back values.[/color]
+[*][color=#888888][b]Impact:[/b] Faster-feeling family navigation, clearer ownership info on profiles, and fair Hangman rewards (win required for payout).[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-07 14:25 UTC[/color][/b] — [b]Illegal Business mission guard-count mismatch fix[/b][/size]
 [quote]
 [list]

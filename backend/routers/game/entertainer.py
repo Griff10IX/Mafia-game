@@ -576,8 +576,11 @@ async def _settle_game(game: dict):
                             f"Pot: ${pot:,}. Total cash paid: ${total_money:,}{points_str}."
                         )
                     else:
-                        winner_name = (result or {}).get("winner_username") or "Someone"
-                        msg = f"Game over. Winner: {winner_name}. Pot was ${pot:,}. Better luck next time!"
+                        winner_name = (result or {}).get("winner_username")
+                        if game_type == "hangman" and not winner_name:
+                            msg = f"Game over. No winner this round. Pot was ${pot:,}."
+                        else:
+                            msg = f"Game over. Winner: {winner_name or 'Someone'}. Pot was ${pot:,}. Better luck next time!"
                     title = "🧩 Hangman results" if game_type == "hangman" else "🎲 E-Game results"
                     await send_notification(uid, title, msg, "system", category="ent_games")
                 else:
@@ -716,7 +719,7 @@ async def _run_dice_payout(game: dict):
 async def _run_hangman_payout(game: dict):
     """Winner = participant who guessed the most correct letters.
     Tiebreak = whoever's latest correct letter had the earliest timestamp.
-    Fallback = random participant (when no letters were guessed correctly).
+    No winner when hangman completes on wrong guesses without solving the word.
     """
     participants = game.get("participants") or []
     if not participants:
@@ -737,16 +740,19 @@ async def _run_hangman_payout(game: dict):
     winner_id = None
     winner_username = None
     word_solved = state.get("solved_by") is not None
-    if uid_scores:
-        # Sort: most letters first; tiebreak by earliest latest-timestamp
-        ranked = sorted(uid_scores.keys(), key=lambda u: (-uid_scores[u]["count"], uid_scores[u]["latest_at"]))
-        winner_id = ranked[0]
-        winner_p = next((p for p in participants if p.get("user_id") == winner_id), None)
-        winner_username = (winner_p or {}).get("username")
-    if not winner_id:
-        fallback = _rng.choice(participants)
-        winner_id = fallback.get("user_id")
-        winner_username = fallback.get("username")
+    if word_solved:
+        if uid_scores:
+            # Sort: most letters first; tiebreak by earliest latest-timestamp
+            ranked = sorted(uid_scores.keys(), key=lambda u: (-uid_scores[u]["count"], uid_scores[u]["latest_at"]))
+            winner_id = ranked[0]
+            winner_p = next((p for p in participants if p.get("user_id") == winner_id), None)
+            winner_username = (winner_p or {}).get("username")
+        if not winner_id:
+            solved_by = state.get("solved_by")
+            winner_id = solved_by if any((p.get("user_id") == solved_by) for p in participants) else None
+            if winner_id:
+                winner_p = next((p for p in participants if p.get("user_id") == winner_id), None)
+                winner_username = (winner_p or {}).get("username")
     reward = None
     if winner_id:
         manual_reward = game.get("manual_reward") or {}

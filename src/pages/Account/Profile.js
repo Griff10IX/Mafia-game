@@ -34,6 +34,43 @@ const NOTEPAD_COLOR_PRESETS = [
   { hex: '#282828', label: 'Graphite' },
 ];
 
+const casinoTypeShortLabel = (type) => (
+  type === 'dice' ? 'Dice'
+    : type === 'roulette' ? 'Roulette'
+    : type === 'blackjack' ? 'BJ'
+    : type === 'horseracing' ? 'Horse'
+    : type === 'videopoker' ? 'Video Poker'
+    : type === 'slots' ? 'Slots'
+    : type || ''
+);
+
+const casinoTypeLabel = (type) => (
+  type === 'dice' ? 'Dice'
+    : type === 'roulette' ? 'Roulette'
+    : type === 'blackjack' ? 'Blackjack'
+    : type === 'horseracing' ? 'Horse Racing'
+    : type === 'videopoker' ? 'Video Poker'
+    : type === 'slots' ? 'Slots'
+    : type || 'Casino'
+);
+
+const casinoTypeEmoji = (type) => (
+  type === 'dice' ? '🎲'
+    : type === 'roulette' ? '🎡'
+    : type === 'blackjack' ? '🃏'
+    : type === 'horseracing' ? '🏇'
+    : type === 'videopoker' ? '🃏'
+    : type === 'slots' ? '🎰'
+    : '🎰'
+);
+
+const formatCasinoCompactLine = (c) => {
+  const maxBet = `$${Number(c?.max_bet || 0).toLocaleString()}`;
+  const buyBack = Number(c?.buy_back_reward || 0);
+  const buyBackPart = buyBack > 0 ? ` · Buy back ${buyBack.toLocaleString()} pts` : '';
+  return `${c?.city || '—'} ${casinoTypeShortLabel(c?.type)} · Max bet ${maxBet}${buyBackPart}`;
+};
+
 function formatDateTime(iso) {
   if (!iso) return '-';
   const d = new Date(iso);
@@ -561,7 +598,7 @@ const ProfileInfoCard = ({
                   <span>None</span>
                 )}
                 {ownedCasinos?.length > 0 && (
-                  <span className="block truncate">{ownedCasinos.slice(0, 3).map((c) => `${c.city} ${c.type === 'dice' ? 'Dice' : c.type === 'roulette' ? 'Roulette' : c.type === 'blackjack' ? 'BJ' : c.type === 'horseracing' ? 'Horse' : c.type || ''}`).join(', ')}{ownedCasinos.length > 3 ? '…' : ''}</span>
+                  <span className="block truncate">{ownedCasinos.slice(0, 3).map((c) => formatCasinoCompactLine(c)).join(', ')}{ownedCasinos.length > 3 ? '…' : ''}</span>
                 )}
                 {profileProperty?.type === 'airport' && <span className="block">Airport — {profileProperty.state ?? '—'}</span>}
                 {profileProperty?.type === 'bullet_factory' && <span className="block">Bullet factory — {profileProperty.state ?? '—'}</span>}
@@ -925,8 +962,8 @@ const PropertiesCard = ({ ownedCasinos, property, isOwner }) => {
             {hasCasinos && (
               <div className="space-y-2">
                 {ownedCasinos.map((c, i) => {
-                  const typeLabel = c.type === 'dice' ? 'Dice' : c.type === 'roulette' ? 'Roulette' : c.type === 'blackjack' ? 'Blackjack' : c.type === 'horseracing' ? 'Horse Racing' : c.type === 'videopoker' ? 'Video Poker' : c.type === 'slots' ? 'Slots' : c.type || 'Casino';
-                  const typeEmoji = c.type === 'dice' ? '🎲' : c.type === 'roulette' ? '🎡' : c.type === 'blackjack' ? '🃏' : c.type === 'horseracing' ? '🏇' : c.type === 'videopoker' ? '🃏' : c.type === 'slots' ? '🎰' : '🎰';
+                  const typeLabel = casinoTypeLabel(c.type);
+                  const typeEmoji = casinoTypeEmoji(c.type);
                   return (
                     <div key={`${c.type}-${c.city}-${i}`} className="prof-row rounded-md border border-primary/20 px-2.5 py-1.5 bg-zinc-800/30 flex items-start gap-2">
                       <span className="text-lg md:text-xl shrink-0 mt-0.5" aria-hidden>{typeEmoji}</span>
