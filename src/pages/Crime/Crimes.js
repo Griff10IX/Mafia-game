@@ -443,8 +443,9 @@ const PrestigeCrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
 
 // Main component
 export default function Crimes() {
-  const [crimes, setCrimes] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [bootPrefetchedCrimes] = useState(() => getCrimesPrefetch());
+  const [crimes, setCrimes] = useState(() => bootPrefetchedCrimes || []);
+  const [loading, setLoading] = useState(() => !bootPrefetchedCrimes);
   const [user, setUser] = useState(null);
   const [event, setEvent] = useState(null);
   const [eventsEnabled, setEventsEnabled] = useState(false);
@@ -456,52 +457,55 @@ export default function Crimes() {
   const [autoRankCrimesDisabled, setAutoRankCrimesDisabled] = useState(null); // null = unknown/loading, true = disabled, false = enabled
   const [activeLootPerks, setActiveLootPerks] = useState([]);
 
-  const fetchCrimes = useCallback(async () => {
+  const fetchCrimes = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const prefetched = getCrimesPrefetch();
-      const primaryReq = Promise.all([
+      const [crimesRes, meRes, autoRankRes] = await Promise.all([
         prefetched ? Promise.resolve({ data: prefetched }) : api.get('/crimes'),
         api.get('/auth/me'),
         api.get('/auto-rank/me').catch(() => ({ data: {} })),
-      ]);
-      const secondaryReq = Promise.all([
-        api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
-        api.get('/crimes/stats').catch(() => ({ data: {} })),
-        api.get('/loot-box/status').catch(() => ({ data: {} })),
-      ]);
-      const [[crimesRes, meRes, autoRankRes], [eventsRes, statsRes, lootStatusRes]] = await Promise.all([
-        primaryReq,
-        secondaryReq,
       ]);
 
       setCrimes(crimesRes.data || []);
       setUser(meRes.data || null);
       const ar = autoRankRes.data || {};
       setAutoRankCrimesDisabled(!!(ar.auto_rank_enabled && (ar.auto_rank_crimes || ar.auto_rank_bust_every_5_sec)));
-      setEvent(eventsRes.data?.event ?? null);
-      setEventsEnabled(!!eventsRes.data?.events_enabled);
-      setCrimeStats(statsRes.data || {});
-      if (Array.isArray(lootStatusRes?.data?.active_rewards)) {
-        const rewards = lootStatusRes.data.active_rewards.filter((r) => r.type === 'rp_10');
-        setActiveLootPerks(rewards);
-      } else {
-        setActiveLootPerks([]);
-      }
       setLoading(false);
+
+      Promise.all([
+        api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
+        api.get('/crimes/stats').catch(() => ({ data: {} })),
+        api.get('/loot-box/status').catch(() => ({ data: {} })),
+      ])
+        .then(([eventsRes, statsRes, lootStatusRes]) => {
+          setEvent(eventsRes.data?.event ?? null);
+          setEventsEnabled(!!eventsRes.data?.events_enabled);
+          setCrimeStats(statsRes.data || {});
+          if (Array.isArray(lootStatusRes?.data?.active_rewards)) {
+            const rewards = lootStatusRes.data.active_rewards.filter((r) => r.type === 'rp_10');
+            setActiveLootPerks(rewards);
+          } else {
+            setActiveLootPerks([]);
+          }
+        })
+        .catch(() => {});
     } catch (error) {
-      toast.error('Failed to load crimes');
-      console.error('Error fetching crimes:', error);
-      setCrimes([]);
-      setUser(null);
-      setCrimeStats({ count_today: 0, count_week: 0, success_today: 0, success_week: 0, profit_today: 0, profit_24h: 0, profit_week: 0 });
-      setAutoRankCrimesDisabled(false); // Allow manual play if we can't determine status
-      setLoading(false);
+      if (!silent) {
+        toast.error('Failed to load crimes');
+        console.error('Error fetching crimes:', error);
+        setCrimes([]);
+        setUser(null);
+        setCrimeStats({ count_today: 0, count_week: 0, success_today: 0, success_week: 0, profit_today: 0, profit_24h: 0, profit_week: 0 });
+        setAutoRankCrimesDisabled(false); // Allow manual play if we can't determine status
+        setLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
-    fetchCrimes();
-  }, [fetchCrimes]);
+    fetchCrimes(!!bootPrefetchedCrimes);
+  }, [fetchCrimes, bootPrefetchedCrimes]);
 
   const tick = useCooldownTicker(crimes, fetchCrimes);
 
