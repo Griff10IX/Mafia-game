@@ -7,6 +7,7 @@ import AutoRefreshNote from '../../components/AutoRefreshNote';
 import { toast } from 'sonner';
 import { HoverCard, HoverCardTrigger, HoverCardPortal, HoverCardContent } from "@/components/ui/hover-card";
 import PrestigeBadge from '../../components/PrestigeBadge';
+import FamilyEmblem from '../../components/FamilyEmblem';
 import styles from '../../styles/noir.module.css';
 
 const UO_STYLES = `
@@ -242,7 +243,14 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, ad
                     {preview.family && (
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-mutedForeground">Family</span>
-                        <span className="text-foreground truncate">{preview.family}</span>
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <FamilyEmblem
+                            emblemPresetId={preview.family_emblem_preset_id}
+                            avatarUrl={preview.family_emblem_avatar_url}
+                            size={18}
+                          />
+                          <span className="text-foreground truncate">{preview.family}</span>
+                        </div>
                       </div>
                     )}
                     <div className="flex flex-wrap items-center gap-1.5">

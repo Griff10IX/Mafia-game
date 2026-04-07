@@ -1228,7 +1228,7 @@ const FamiliesTab = ({ families, myFamilyId }) => {
           >
             {myFamilyId === f.id && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary/60" />}
             <div className="min-w-0 flex-1 flex items-start gap-2">
-              <FamilyEmblem emblemPresetId={f.emblem_preset_id} avatarUrl={f.avatar_url} size={34} className="mt-0.5" />
+              <FamilyEmblem emblemPresetId={f.emblem_preset_id} avatarUrl={f.avatar_url} size={36} className="mt-0.5" />
               <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="font-heading font-bold text-foreground text-xs group-hover:text-primary transition-colors tracking-wide">{f.name}</span>
@@ -2169,7 +2169,7 @@ const NoFamilyView = ({
                       }}
                       className={`p-0.5 rounded-full border transition-colors ${createEmblemPreset === p.id ? 'border-primary ring-2 ring-primary/40' : 'border-zinc-600/50 hover:border-primary/40 opacity-90 hover:opacity-100'}`}
                     >
-                      <FamilyEmblem emblemPresetId={p.id} size={30} />
+                      <FamilyEmblem emblemPresetId={p.id} size={32} />
                     </button>
                   ))}
                 </div>
@@ -2207,7 +2207,7 @@ const NoFamilyView = ({
           </label>
           {createEmblemDataUrl ? (
             <div className="flex items-center gap-2">
-              <FamilyEmblem avatarUrl={createEmblemDataUrl} size={32} />
+              <FamilyEmblem avatarUrl={createEmblemDataUrl} size={34} />
               <button type="button" onClick={() => setCreateEmblemDataUrl('')} className="text-[9px] font-heading text-zinc-500 hover:text-primary uppercase">Clear upload</button>
             </div>
           ) : null}
@@ -2784,7 +2784,7 @@ export default function FamilyPage() {
             <div>
               {family ? (
                 <div className="flex items-start gap-3">
-                  <FamilyEmblem emblemPresetId={family.emblem_preset_id} avatarUrl={family.avatar_url} size={44} className="mt-0.5 shrink-0" />
+                  <FamilyEmblem emblemPresetId={family.emblem_preset_id} avatarUrl={family.avatar_url} size={46} className="mt-0.5 shrink-0" />
                   <div className="min-w-0">
                   <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">La Cosa Nostra</p>
                   <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary flex flex-wrap items-center gap-2 tracking-wider uppercase">

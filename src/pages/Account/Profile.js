@@ -490,7 +490,7 @@ const ProfileInfoCard = ({
                     <FamilyEmblem
                       emblemPresetId={profile.family_emblem_preset_id}
                       avatarUrl={profile.family_emblem_avatar_url}
-                      size={30}
+                      size={32}
                     />
                     <Link
                       to={`/families/${encodeURIComponent(profile.family_tag)}`}
@@ -1063,6 +1063,8 @@ export default function Profile() {
   const [me, setMe] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(!usernameParam);
+  const [profileLoading, setProfileLoading] = useState(!!usernameParam);
+  const [profileLoadError, setProfileLoadError] = useState('');
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
   const [hasAdminEmail, setHasAdminEmail] = useState(false);
@@ -1115,6 +1117,8 @@ export default function Profile() {
     if (!targetUsername) return null;
     const reqId = ++profileRequestIdRef.current;
     if (forceLoading) setLoading(true);
+    setProfileLoading(true);
+    setProfileLoadError('');
     try {
       const res = await api.get(`/users/${encodeURIComponent(targetUsername)}/profile`);
       if (reqId !== profileRequestIdRef.current) return null;
@@ -1122,10 +1126,14 @@ export default function Profile() {
       setProfilePrefetch(targetUsername, res.data);
       return res.data;
     } catch (e) {
+      if (reqId === profileRequestIdRef.current && !silent) {
+        setProfileLoadError(e.response?.data?.detail || 'Failed to load profile');
+      }
       if (!silent) throw e;
       return null;
     } finally {
       if (forceLoading) setLoading(false);
+      if (reqId === profileRequestIdRef.current) setProfileLoading(false);
     }
   };
 
@@ -1207,14 +1215,17 @@ export default function Profile() {
 
   useEffect(() => {
     if (!username) return;
+    setProfileLoadError('');
     const cached = getProfilePrefetch(username);
     if (cached) {
       setProfile(cached);
       setLoading(false);
+      setProfileLoading(false);
       refetchProfile({ silent: true, usernameOverride: username });
       return;
     }
     // Keep any previously rendered profile on screen while revalidating this target in background.
+    setProfileLoading(true);
     refetchProfile({ silent: false, usernameOverride: username }).catch((e) => {
       toast.error(e.response?.data?.detail || 'Failed to load profile');
     });
@@ -1619,7 +1630,7 @@ export default function Profile() {
     }
   };
 
-  if (loading && !profile) {
+  if ((loading || profileLoading) && !profile) {
     return <LoadingSpinner />;
   }
 
@@ -1638,7 +1649,7 @@ export default function Profile() {
             Profile not found
           </p>
           <p className="text-sm text-mutedForeground font-heading">
-            This user doesn't exist or has been deleted
+            {profileLoadError || "This user doesn't exist or has been deleted"}
           </p>
         </div>
       </div>

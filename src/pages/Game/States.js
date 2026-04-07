@@ -140,7 +140,7 @@ const CityCard = ({
                   <FamilyEmblem
                     emblemPresetId={headFamily.family_emblem_preset_id}
                     avatarUrl={headFamily.family_emblem_avatar_url}
-                    size={20}
+                    size={22}
                   />
                   <span className="text-[10px] font-heading text-foreground truncate">
                     {headFamily.family_name} <span className="text-primary font-bold">({headFamily.family_tag})</span>

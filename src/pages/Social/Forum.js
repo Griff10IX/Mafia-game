@@ -768,7 +768,7 @@ const TopicRowDesktop = ({ topic, canStickyImportant, canLock, onUpdate, updatin
               <FamilyEmblem
                 emblemPresetId={topic.crew_oc_family_emblem_preset_id}
                 avatarUrl={topic.crew_oc_family_emblem_avatar_url}
-                size={18}
+                size={20}
               />
             )}
             {topic.is_important && <AlertCircle size={12} className="text-amber-400 shrink-0" />}
@@ -881,7 +881,7 @@ const TopicRowMobile = ({ topic, canStickyImportant, canLock, onUpdate, updating
             <FamilyEmblem
               emblemPresetId={topic.crew_oc_family_emblem_preset_id}
               avatarUrl={topic.crew_oc_family_emblem_avatar_url}
-              size={16}
+              size={18}
             />
           )}
           {topic.is_important && <AlertCircle size={12} className="text-amber-400 shrink-0" />}

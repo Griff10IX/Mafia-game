@@ -1293,7 +1293,7 @@ export default function ForumTopic() {
               <FamilyEmblem
                 emblemPresetId={topic.crew_oc_family_emblem_preset_id}
                 avatarUrl={topic.crew_oc_family_emblem_avatar_url}
-                size={26}
+                size={28}
               />
               <p className="text-xs text-mutedForeground">
                 Join {topic.crew_oc_family_name} [{topic.crew_oc_family_tag}] for their next Crew OC run.

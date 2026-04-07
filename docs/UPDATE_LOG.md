@@ -6,6 +6,20 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-07 20:55 UTC[/color][/b] — [b]Family emblems expansion, safer uploads, and silent-refresh UI polish[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Added a full [b]Family Emblem[/b] system with many mafia-themed presets plus custom emblem upload. Emblems are [b]unique per active family[/b] (you cannot use another active family’s same preset/image). Expanded preset catalog and grouped it by category for easier picking ([b]Violence / Power / Stealth / Money / Operations[/b]).[/color]
+[*][color=#888888][b]Changed:[/b] Emblems now display in more places: [b]family list[/b], [b]family profile/header[/b], [b]player profile crew row[/b], [b]states head family[/b], [b]Crew OC forum thread rows[/b], [b]Crew OC apply panel[/b], and [b]Users Online profile preview[/b]. Also bumped emblem display size slightly for clearer visibility across UI cards.[/color]
+[*][color=#888888][b]Changed:[/b] Upload safety tightened for avatars/emblems: only [b]JPG/PNG/GIF/WEBP[/b] files are allowed (by MIME + extension), blocking odd/masqueraded file types earlier before upload processing.[/color]
+[*][color=#888888][b]Changed:[/b] Silent-refresh behavior improved to reduce loading flashes: [b]Leaderboard[/b], [b]Family list[/b], and [b]Profile[/b] loading flow were tuned to revalidate in background with fewer “Loading/Profile not found” flickers on valid pages.[/color]
+[*][color=#888888][b]Player action:[/b] Open [b]Game → Family[/b] to choose/set emblems, and [b]Forum → Crew OC[/b] / [b]States[/b] / [b]Users Online[/b] to see the new emblem surfaces. If you upload an image, use allowed formats only (.jpg/.png/.gif/.webp).[/color]
+[*][color=#888888][b]Impact:[/b] Stronger family identity across the game, cleaner/safer upload behavior, and faster-feeling navigation with less UI flicker.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-07 18:40 UTC[/color][/b] — [b]Exclusive car defense bonus in PvP[/b][/size]
 [quote]
 [list]

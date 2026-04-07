@@ -423,7 +423,7 @@ export default function FamilyProfilePage() {
 
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div className="flex items-start gap-3 min-w-0">
-              <FamilyEmblem emblemPresetId={family.emblem_preset_id} avatarUrl={family.avatar_url} size={52} className="shrink-0 mt-0.5" />
+              <FamilyEmblem emblemPresetId={family.emblem_preset_id} avatarUrl={family.avatar_url} size={54} className="shrink-0 mt-0.5" />
               <div className="min-w-0">
               <h1 className="text-2xl sm:text-3xl font-heading font-black text-primary tracking-widest uppercase leading-none">
                 {family.name}
@@ -928,7 +928,7 @@ export default function FamilyProfilePage() {
                                 : 'border-zinc-600/50 hover:border-primary/40'
                             }`}
                           >
-                            <FamilyEmblem emblemPresetId={p.id} size={30} />
+                            <FamilyEmblem emblemPresetId={p.id} size={32} />
                           </button>
                         ))}
                       </div>

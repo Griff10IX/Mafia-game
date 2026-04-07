@@ -356,13 +356,19 @@ def register(router):
                         {"id": user_id},
                         {"$set": {"family_id": None, "family_role": None}},
                     )
-                return None
-            fam = await db.families.find_one({"id": str(fid)}, {"_id": 0, "name": 1, "tag": 1})
+                return (None, None, None)
+            fam = await db.families.find_one(
+                {"id": str(fid)},
+                {"_id": 0, "name": 1, "tag": 1, "emblem_preset_id": 1, "avatar_url": 1},
+            )
             if not fam:
-                return None
+                return (None, None, None)
             name = fam.get("name") or "?"
             tag = (fam.get("tag") or "").strip()
-            return f"{name}" + (f" [{tag}]" if tag else "") if name else None
+            display = f"{name}" + (f" [{tag}]" if tag else "") if name else None
+            pid = fam.get("emblem_preset_id")
+            avatar = None if pid else fam.get("avatar_url")
+            return (display, pid, avatar)
 
         async def _owns_casino():
             for coll_name in ("dice_ownership", "roulette_ownership", "blackjack_ownership", "horseracing_ownership", "slots_ownership", "videopoker_ownership"):
@@ -381,7 +387,7 @@ def register(router):
             hitlist_count,
             messages_received,
             messages_sent,
-            family_display,
+            family_data,
             owns_casino,
             property_type,
         ) = await asyncio.gather(
@@ -392,6 +398,7 @@ def register(router):
             _owns_casino(),
             _property_type(),
         )
+        family_display, family_emblem_preset_id, family_emblem_avatar_url = family_data or (None, None, None)
 
         return {
             "username": user.get("username"),
@@ -402,6 +409,8 @@ def register(router):
             "messages_sent": messages_sent,
             "messages_received": messages_received,
             "family": family_display,
+            "family_emblem_preset_id": family_emblem_preset_id,
+            "family_emblem_avatar_url": family_emblem_avatar_url,
             "owns_casino": owns_casino,
             "property_type": property_type,
         }
