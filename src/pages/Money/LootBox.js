@@ -358,7 +358,6 @@ const LOOT_REFRESH = 30_000;
 
 export default function LootBox() {
   const [status, setStatus] = useState(_cachedLootStatus);
-  const [loading, setLoading] = useState(!_cachedLootStatus);
   const [phase, setPhase] = useState('idle'); // idle | shaking | exploding | done
   const [result, setResult] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -374,8 +373,6 @@ export default function LootBox() {
       setStatus(res.data);
     } catch (e) {
       if (!silent) toast.error(e.response?.data?.detail || 'Failed to load loot box status');
-    } finally {
-      if (!silent) setLoading(false);
     }
   };
 
@@ -509,14 +506,10 @@ export default function LootBox() {
   const claimed = status?.claimed_counts ?? { weapon: 0, car: 0, armour: 0, property: 0 };
   const canOpen = pieces >= 100 && phase === 'idle';
 
-  if (loading) {
+  if (!status) {
     return (
       <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
         <style>{LOOT_BOX_STYLES}</style>
-        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
-          <Gift size={24} className="text-primary/50 animate-pulse" />
-          <span className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider">Loading the vault…</span>
-        </div>
       </div>
     );
   }

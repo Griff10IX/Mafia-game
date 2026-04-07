@@ -77,14 +77,6 @@ function normalizeMeltScrapRarityList(arr) {
 }
 
 // Subcomponents
-const LoadingSpinner = () => (
-  <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
-    <Car size={28} className="text-primary/40 animate-pulse" />
-    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-    <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading...</span>
-  </div>
-);
-
 const RARITY_COLORS = {
   common: 'text-gray-400',
   uncommon: 'text-green-400',
@@ -448,7 +440,6 @@ export default function Garage() {
   const [bootGarage] = useState(() => readSessionJson(GARAGE_CACHE_KEY));
   const [cars, setCars] = useState(() => (bootGarage?.cars ?? []).map((c) => ({ ...c, rarity: normalizeCarRarity(c?.rarity) })));
   const [selectedCars, setSelectedCars] = useState([]);
-  const [loading, setLoading] = useState(() => bootGarage == null);
   const [sortBy, setSortBy] = useState('value-high');
   const [filterRarity, setFilterRarity] = useState('all');
   const [garagePage, setGaragePage] = useState(0);
@@ -465,7 +456,6 @@ export default function Garage() {
   const { getCaptchaToken, captchaModal } = useGameActionsTurnstile();
 
   const fetchGarage = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
     try {
       const response = await api.get('/gta/garage');
       const nextCars = (response.data?.cars ?? []).map((c) => ({ ...c, rarity: normalizeCarRarity(c?.rarity) }));
@@ -479,8 +469,6 @@ export default function Garage() {
         setCars([]);
         setMeltBulletsCooldownUntil(null);
       }
-    } finally {
-      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -762,15 +750,6 @@ export default function Garage() {
       prev.includes(rarity) ? prev.filter((r) => r !== rarity) : [...prev, rarity]
     );
   };
-
-  if (loading) {
-    return (
-      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
-        <style>{GARAGE_STYLES}</style>
-        <LoadingSpinner />
-      </div>
-    );
-  }
 
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>

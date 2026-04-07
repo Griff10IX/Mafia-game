@@ -12,30 +12,19 @@ const INV_STYLES = `
   .inv-item:hover { background-color: rgba(var(--noir-primary-rgb), 0.04); }
 `;
 
-const LoadingSpinner = () => (
-  <div className={`${styles.pageContent} p-4 mobile-page-root`}>
-    <style>{INV_STYLES}</style>
-    <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
-      <Package size={24} className="text-primary/50 animate-pulse" />
-      <span className="text-primary text-[10px] font-heading uppercase tracking-wider">Loading inventory...</span>
-    </div>
-  </div>
-);
-
 let _cachedInventory = null;
 let _invLastFetch = 0;
 const INV_REFRESH = 30_000;
 
 export default function MyInventory() {
+  const [hasLoaded, setHasLoaded] = useState(Boolean(_cachedInventory));
   const [data, setData] = useState(_cachedInventory);
-  const [loading, setLoading] = useState(!_cachedInventory);
   const [equipping, setEquipping] = useState({ weapon: null, armour: null });
   const [usingToken, setUsingToken] = useState(null);
   const [collectingSpeakeasy, setCollectingSpeakeasy] = useState(false);
   const [exchangingAutoRank, setExchangingAutoRank] = useState(false);
 
   const fetchInventory = (silent = false) => {
-    if (!silent) setLoading(true);
     api
       .get('/inventory')
       .then((res) => {
@@ -48,7 +37,7 @@ export default function MyInventory() {
       .catch(() => {
         if (!silent) setData({ weapons: [], armour: { options: [] }, loot_exclusives: {}, tokens: {} });
       })
-      .finally(() => { if (!silent) setLoading(false); });
+      .finally(() => { setHasLoaded(true); });
   };
 
   useEffect(() => {
@@ -144,7 +133,7 @@ export default function MyInventory() {
     }
   };
 
-  if (loading) return <LoadingSpinner />;
+  if (!hasLoaded) return <div className={`${styles.pageContent} p-4 mobile-page-root`}><style>{INV_STYLES}</style></div>;
   if (!data) {
     return (
       <div className={`${styles.pageContent} p-4 mobile-page-root`}>

@@ -108,7 +108,7 @@ function LevelCard({ row, isCurrent, isUnlocked }) {
 
 export default function Prestige() {
   const [info, setInfo]           = useState(null);
-  const [loading, setLoading]     = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [activating, setActivating] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const levelsScrollRef = useRef(null);
@@ -121,7 +121,7 @@ export default function Prestige() {
       toast.error('Failed to load prestige info');
       setInfo(null);
     } finally {
-      setLoading(false);
+      setHasLoaded(true);
     }
   }, []);
 
@@ -150,11 +150,7 @@ export default function Prestige() {
     }
   };
 
-  if (loading) return (
-    <div className="flex items-center justify-center py-20">
-      <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading...</span>
-    </div>
-  );
+  if (!hasLoaded) return <div className={`space-y-3 md:space-y-4 ${styles.pageContent} mobile-page-root`} />;
 
   if (!info) return (
     <div className="text-center py-20 text-zinc-600 text-xs font-heading">Failed to load prestige data.</div>

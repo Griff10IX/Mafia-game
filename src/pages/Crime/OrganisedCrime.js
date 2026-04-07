@@ -88,15 +88,6 @@ const useCooldownTicker = (cooldownUntil, onCooldownExpired) => {
   return tick;
 };
 
-// Subcomponents
-const LoadingSpinner = () => (
-  <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
-    <UserCheck size={22} className="text-primary/40 animate-pulse" />
-    <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-    <span className="text-primary text-[9px] font-heading uppercase tracking-[0.2em]">Loading...</span>
-  </div>
-);
-
 // Compact status icon: Auto Rank active
 const AutoRankIcon = () => (
   <span
@@ -437,7 +428,6 @@ export default function OrganisedCrime() {
   const [pcts, setPcts] = useState(() => defaultPctsForSlots(defaultSlots));
   const [executing, setExecuting] = useState(false);
   const [sendInviteLoading, setSendInviteLoading] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [pendingSlotEdit, setPendingSlotEdit] = useState({ role: null, value: '' });
   const [equipmentData, setEquipmentData] = useState(null);
   const [equipmentSelecting, setEquipmentSelecting] = useState(false);
@@ -492,8 +482,6 @@ export default function OrganisedCrime() {
       toast.error('Failed to load Organised Crime data');
       setConfig({ jobs: [], roles: [] });
       setStatus(null);
-    } finally {
-      setLoading(false);
     }
   }, [selectedJobId]);
 
@@ -748,15 +736,6 @@ export default function OrganisedCrime() {
 
   const onCooldown = status?.cooldown_until && new Date(status.cooldown_until) > new Date();
   const cooldownStr = formatCooldown(status?.cooldown_until);
-
-  if (loading) {
-    return (
-      <div className={`space-y-1.5 ${styles.pageContent} mobile-page-root`}>
-        <style>{OC_STYLES}</style>
-        <LoadingSpinner />
-      </div>
-    );
-  }
 
   return (
     <div className={`space-y-1.5 ${styles.pageContent} mobile-page-root`} data-testid="organised-crime-page">

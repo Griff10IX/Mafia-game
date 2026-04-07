@@ -314,7 +314,7 @@ export default function MPPokerGamePage() {
   const { gameId } = useParams();
   const navigate = useNavigate();
   const [game, setGame] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [fetchError, setFetchError] = useState(false);
   const [myUserId, setMyUserId] = useState(null);
   const [actionLoading, setActionLoading] = useState(false);
@@ -413,7 +413,7 @@ export default function MPPokerGamePage() {
           return prev;
         });
       })
-      .finally(() => setLoading(false));
+      .finally(() => setHasLoaded(true));
   }, [gameId]);
 
   // Keep vs-dealer ref in sync with current game (e.g. from location.state or any fetch)
@@ -716,19 +716,18 @@ export default function MPPokerGamePage() {
     return `Waiting for ${name} to check, call, raise, or fold.`;
   })();
 
-  if (loading && !game) {
+  if (!hasLoaded && !game) {
     return (
       <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
         <div className="flex items-center gap-2">
           <Link to="/casino/mp-poker" className="p-1.5 rounded border border-primary/20 text-primary hover:bg-primary/10 transition-colors">
             <ArrowLeft size={16} />
           </Link>
-          <p className="text-[10px] text-mutedForeground font-heading animate-pulse">Entering the poker room…</p>
         </div>
       </div>
     );
   }
-  if (fetchError || (!loading && !game)) {
+  if (fetchError || (hasLoaded && !game)) {
     return (
       <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
         <div className="rounded-xl border p-6 text-center space-y-3" style={{ borderColor: 'rgba(248,113,113,0.25)', background: 'rgba(248,113,113,0.05)' }}>

@@ -300,7 +300,7 @@ export default function ForumTopic() {
   const [searchParams] = useSearchParams();
   const [topic, setTopic] = useState(null);
   const [comments, setComments] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [commentText, setCommentText] = useState('');
   const [posting, setPosting] = useState(false);
   const [likingId, setLikingId] = useState(null);
@@ -354,7 +354,6 @@ export default function ForumTopic() {
 
   const fetchTopic = useCallback(async (silent = false) => {
     if (!topicId) return;
-    if (!silent) setLoading(true);
     try {
       const res = await api.get(`/forum/topics/${topicId}`);
       const t = res.data?.topic ?? null;
@@ -374,7 +373,7 @@ export default function ForumTopic() {
         }
       }
     } finally {
-      if (!silent) setLoading(false);
+      setHasLoaded(true);
     }
   }, [topicId, navigate]);
 
@@ -385,7 +384,7 @@ export default function ForumTopic() {
     if (c?.topic) {
       setTopic(c.topic);
       setComments(c.comments ?? []);
-      setLoading(false);
+      setHasLoaded(true);
       fetchTopic(true);
     } else {
       setTopic(null);
@@ -900,10 +899,9 @@ export default function ForumTopic() {
     }
   };
 
-  if (loading && !topic) {
+  if (!hasLoaded && !topic) {
     return (
       <div className={`${styles.pageContent} flex items-center justify-center min-h-[40vh] mobile-page-root`}>
-        <div className="text-primary font-heading text-sm">Loading...</div>
       </div>
     );
   }

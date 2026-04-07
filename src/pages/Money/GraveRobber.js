@@ -63,22 +63,18 @@ function formatRecentAttemptLine(row) {
 }
 
 export default function GraveRobber() {
-  const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState(null);
   const [starting, setStarting] = useState(false);
   const [digging, setDigging] = useState(false);
   const [latest, setLatest] = useState(null);
 
   const fetchStatus = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
     try {
       const res = await api.get('/grave-robber/status');
       setStatus(res.data || null);
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to load Grave Robber');
       setStatus(null);
-    } finally {
-      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -163,15 +159,10 @@ export default function GraveRobber() {
     }
   };
 
-  if (loading) {
+  if (!status) {
     return (
       <div className={`space-y-3 ${styles.pageContent} mobile-page-root`}>
         <style>{GR_STYLES}</style>
-        <div className="min-h-[55vh] flex flex-col items-center justify-center gap-3">
-          <Skull size={24} className="text-primary/40 animate-pulse" />
-          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Preparing graveyard...</span>
-        </div>
       </div>
     );
   }

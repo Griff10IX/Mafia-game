@@ -74,17 +74,6 @@ const formatCountdown = (seconds) => {
 };
 
 /* ═══════════════════════════════════════════════════════
-   Loading Spinner
-   ═══════════════════════════════════════════════════════ */
-const LoadingSpinner = () => (
-  <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3 text-zinc-300">
-    <Bot size={28} className="text-primary/60 animate-pulse" />
-    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-    <span className="text-[9px] sm:text-[10px] font-heading uppercase tracking-[0.3em]">Loading…</span>
-  </div>
-);
-
-/* ═══════════════════════════════════════════════════════
    Toggle Switch Component
    ═══════════════════════════════════════════════════════ */
 const ToggleSwitch = ({ checked, disabled, onChange }) => (
@@ -1115,7 +1104,6 @@ const AdminGlobalLoopCard = ({
    Main Component
    ═══════════════════════════════════════════════════════ */
 export default function AutoRank() {
-  const [loading, setLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [prefs, setPrefs] = useState({
     auto_rank_enabled: false,
@@ -1454,8 +1442,6 @@ export default function AutoRank() {
         }
       } catch {
         setPrefs((p) => ({ ...p, auto_rank_purchased: false }));
-      } finally {
-        setLoading(false);
       }
     };
     run();
@@ -1765,15 +1751,6 @@ export default function AutoRank() {
       setWipingStats(false);
     }
   };
-
-  if (loading) {
-    return (
-      <div className="min-h-[40vh] px-3 sm:px-4 max-w-4xl mx-auto bg-zinc-900 text-zinc-100">
-        <style>{AR_STYLES}</style>
-        <LoadingSpinner />
-      </div>
-    );
-  }
 
   return (
     <div className={`min-h-[40vh] px-3 sm:px-4 max-w-4xl mx-auto space-y-3 sm:space-y-4 ${styles.pageContent} mobile-page-root`}>

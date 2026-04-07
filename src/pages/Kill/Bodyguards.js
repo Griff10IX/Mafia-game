@@ -59,7 +59,7 @@ export default function Bodyguards() {
   const [eventsEnabled, setEventsEnabled] = useState(false);
   const [nextHireInflationPct, setNextHireInflationPct] = useState(0);
   const [inflationWindowEndsAt, setInflationWindowEndsAt] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [expandedSlot, setExpandedSlot] = useState(null);
   const [upgradingSlot, setUpgradingSlot] = useState(null);
   const [bgStats, setBgStats] = useState(null);
@@ -149,7 +149,7 @@ export default function Bodyguards() {
         const msg = bodyguardsRes.data?.detail ?? bodyguardsRes.statusText ?? 'Bodyguards request failed';
         console.error('[Bodyguards] /bodyguards bad status', bodyguardsRes.status, bodyguardsRes.data);
         toast.error(`Bodyguards: ${msg}`, { duration: 12000 });
-        setLoading(false);
+        setHasLoaded(true);
         return;
       }
       if (userRes.status >= 400) {
@@ -160,7 +160,7 @@ export default function Bodyguards() {
           console.error('[Bodyguards] /auth/me bad status', userRes.status);
         }
         toast.error(`Auth: ${msg}`, { duration: 12000 });
-        setLoading(false);
+        setHasLoaded(true);
         return;
       }
       const bgData = bodyguardsRes.data;
@@ -196,7 +196,7 @@ export default function Bodyguards() {
       setNextHireInflationPct(0);
       setInflationWindowEndsAt(null);
     } finally {
-      setLoading(false);
+      setHasLoaded(true);
     }
   };
 
@@ -573,15 +573,10 @@ export default function Bodyguards() {
     );
   };
 
-  if (loading) {
+  if (!hasLoaded) {
     return (
       <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
         <style>{BG_STYLES}</style>
-        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
-          <Shield size={28} className="text-primary/40 animate-pulse" />
-          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading bodyguards...</span>
-        </div>
       </div>
     );
   }

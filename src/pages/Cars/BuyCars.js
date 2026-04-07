@@ -53,14 +53,13 @@ export default function BuyCars() {
   const [dealerCars, setDealerCars] = useState([]);
   const [marketplaceListings, setMarketplaceListings] = useState([]);
   const [userMoney, setUserMoney] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [selectedRarity, setSelectedRarity] = useState(null);
   const [sourceFilter, setSourceFilter] = useState('all'); // 'all' | 'dealer' | 'listing'
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [buying, setBuying] = useState(false);
 
   const fetchAll = async () => {
-    setLoading(true);
     try {
       const [garageRes, saleRes, meRes, marketRes] = await Promise.all([
         api.get('/gta/garage').catch(() => ({ data: { cars: [] } })),
@@ -73,9 +72,7 @@ export default function BuyCars() {
       setUserMoney(meRes.data?.money ?? null);
       setMarketplaceListings(Array.isArray(marketRes.data?.listings) ? marketRes.data.listings : []);
     } catch (_) {}
-    finally {
-      setLoading(false);
-    }
+    finally { setHasLoaded(true); }
   };
 
   useEffect(() => {
@@ -219,15 +216,10 @@ export default function BuyCars() {
     setBuying(false);
   };
 
-  if (loading) {
+  if (!hasLoaded) {
     return (
       <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
         <style>{BUY_STYLES}</style>
-        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
-          <Car size={28} className="text-primary/40 animate-pulse" />
-          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading...</span>
-        </div>
       </div>
     );
   }

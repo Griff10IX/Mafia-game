@@ -6,7 +6,7 @@ import styles from '../styles/noir.module.css';
 
 export default function Weapons() {
   const [weapons, setWeapons] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [me, setMe] = useState(null);
   const [buyingId, setBuyingId] = useState(null);
 
@@ -22,7 +22,7 @@ export default function Weapons() {
     } catch (error) {
       toast.error('Failed to load weapons');
     } finally {
-      setLoading(false);
+      setHasLoaded(true);
     }
   };
 
@@ -96,11 +96,9 @@ export default function Weapons() {
     }, owned[0]);
   }, [weapons]);
 
-  if (loading) {
+  if (!hasLoaded) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-primary text-xl font-heading">Loading...</div>
-      </div>
+      <div className="space-y-6" data-testid="weapons-page" />
     );
   }
 

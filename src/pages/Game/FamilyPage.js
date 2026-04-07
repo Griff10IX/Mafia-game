@@ -2272,7 +2272,6 @@ export default function FamilyPage() {
   const [families, setFamilies] = useState([]);
   const [myFamily, setMyFamily] = useState(null);
   const [config, setConfig] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('rackets');
   const [createName, setCreateName] = useState('');
   const [createTag, setCreateTag] = useState('');
@@ -2328,7 +2327,6 @@ export default function FamilyPage() {
     setRacketAttackTargets(cached.racketAttackTargets ?? []);
     setVaultTransactions(cached.vaultTransactions ?? []);
     setVaultTxTotal(cached.vaultTxTotal ?? 0);
-    setLoading(false);
   }, []);
 
   const family = myFamily?.family;
@@ -2429,7 +2427,7 @@ export default function FamilyPage() {
         vaultTransactions: nextVaultTransactions,
         vaultTxTotal: nextVaultTxTotal,
       });
-    } catch (e) { toast.error(apiDetail(e)); } finally { setLoading(false); }
+    } catch (e) { toast.error(apiDetail(e)); }
   }, []);
 
   const fetchRacketAttackTargets = useCallback(async () => {
@@ -2723,13 +2721,6 @@ export default function FamilyPage() {
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { const id = setInterval(() => setTick((t) => t + 1), 1000); return () => clearInterval(id); }, []);
   useEffect(() => { if (showWarModal && myFamily?.family) api.get('/families/war/stats').then((res) => setWarStats(res.data)).catch(() => {}); }, [showWarModal, myFamily?.family]);
-
-  if (loading) return (
-    <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
-      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Gathering intel...</span>
-    </div>
-  );
 
   return (
     <div className={`space-y-2 sm:space-y-3 ${styles.pageContent} mobile-page-root px-3 sm:px-4 pb-6`} data-testid="families-page">

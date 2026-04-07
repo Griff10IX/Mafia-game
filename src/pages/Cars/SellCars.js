@@ -50,7 +50,7 @@ const PAGE_SIZE = 15;
 
 export default function SellCars() {
   const [cars, setCars] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [selectedRarity, setSelectedRarity] = useState(null);
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [listPrice, setListPrice] = useState('');
@@ -59,14 +59,11 @@ export default function SellCars() {
   const [page, setPage] = useState(0);
 
   const fetchCars = async () => {
-    setLoading(true);
     try {
       const res = await api.get('/gta/garage').catch(() => ({ data: { cars: [] } }));
       setCars(Array.isArray(res.data?.cars) ? res.data.cars : []);
     } catch (_) {}
-    finally {
-      setLoading(false);
-    }
+    finally { setHasLoaded(true); }
   };
 
   useEffect(() => {
@@ -189,15 +186,10 @@ export default function SellCars() {
     setStopping(false);
   };
 
-  if (loading) {
+  if (!hasLoaded) {
     return (
       <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
         <style>{SELL_STYLES}</style>
-        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
-          <DollarSign size={28} className="text-primary/40 animate-pulse" />
-          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading...</span>
-        </div>
       </div>
     );
   }

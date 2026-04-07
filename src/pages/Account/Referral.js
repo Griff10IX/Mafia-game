@@ -44,7 +44,6 @@ const StatCard = ({ label, value, title, valueColor = 'text-foreground', icon: I
 
 export default function Referral() {
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [redeemCodeInput, setRedeemCodeInput] = useState('');
   const [redeemLoading, setRedeemLoading] = useState(false);
@@ -57,9 +56,6 @@ export default function Referral() {
       })
       .catch((err) => {
         if (!cancelled) setError(err.response?.data?.detail || 'Failed to load referral data');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
       });
     return () => { cancelled = true; };
   }, []);
@@ -94,19 +90,6 @@ export default function Referral() {
       setRedeemLoading(false);
     }
   };
-
-  if (loading) {
-    return (
-      <div className={`${styles.pageContent} mobile-page-root`}>
-        <style>{REF_STYLES}</style>
-        <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3 text-zinc-300">
-          <UserPlus size={28} className="text-primary/60 animate-pulse" />
-          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <span className="text-[9px] sm:text-[10px] font-heading uppercase tracking-[0.3em]">Loading…</span>
-        </div>
-      </div>
-    );
-  }
 
   if (error) {
     return (

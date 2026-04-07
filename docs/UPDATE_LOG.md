@@ -6,6 +6,19 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-07 22:10 UTC[/color][/b] — [b]Silent refresh rollout across account, money, social, cars, and game pages[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Completed a broad [b]silent refresh[/b] rollout so pages render immediately with cached/current state and refresh in the background instead of blocking on page-level loading spinners. This was applied in phased batches across [b]Account[/b], [b]Money[/b], [b]Kill[/b], [b]Social[/b], and [b]Cars[/b] sections.[/color]
+[*][color=#888888][b]Changed:[/b] Phase coverage included: [b]Auto Rank[/b], [b]Referral[/b], [b]Objectives[/b], [b]Daily Rewards[/b], [b]Booze Run[/b], [b]Loot Box[/b], [b]Properties[/b], [b]Crack Safe[/b], [b]Distillery[/b], [b]Quick Trade[/b], [b]Grave Robber[/b], [b]Armour[/b], [b]Armoury/Weapons[/b], [b]Bodyguards[/b], [b]Inbox[/b], [b]Inbox Chat[/b], [b]Garage[/b], [b]Buy Cars[/b], [b]Sell Cars[/b], [b]View Car[/b], and [b]Car Profile[/b].[/color]
+[*][color=#888888][b]Changed:[/b] Conditional safety pages were softened with [b]neutral shell[/b] loading while keeping object-safety guards where needed: [b]MP Blackjack[/b], [b]MP Poker[/b], [b]Game Pass[/b], and [b]Forum Topic[/b].[/color]
+[*][color=#888888][b]Player action:[/b] No setup needed. Navigation should feel faster with fewer loading flashes/flickers while normal action feedback (button busy states, errors, and confirmations) remains intact.[/color]
+[*][color=#888888][b]Impact:[/b] Better perceived performance and smoother page transitions without changing underlying gameplay rules or economy logic.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-07 20:55 UTC[/color][/b] — [b]Family emblems expansion, safer uploads, and silent-refresh UI polish[/b][/size]
 [quote]
 [list]

@@ -44,7 +44,6 @@ function casinoResetProfitPayload(casino) {
 
 export default function MyProperties() {
   const [data, setData] = useState({ casino: null, airport: null, armoury: null, points: 0 });
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [casinoMaxBet, setCasinoMaxBet] = useState('');
   const [casinoBuyBack, setCasinoBuyBack] = useState('');
@@ -86,8 +85,6 @@ export default function MyProperties() {
       const detail = error.response?.data?.detail || error.message || 'Unknown error';
       toast.error(`Failed to load properties: ${detail}`);
       setData({ casino: null, airport: null, armoury: null, points: 0 });
-    } finally {
-      setLoading(false);
     }
   }, []);
 
@@ -369,19 +366,6 @@ export default function MyProperties() {
       setSaving(false);
     }
   };
-
-  if (loading) {
-    return (
-      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
-        <style>{MP_STYLES}</style>
-        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3">
-          <Building2 size={28} className="text-primary/40 animate-pulse" />
-          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading...</span>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="my-properties-page">

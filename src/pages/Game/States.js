@@ -316,7 +316,6 @@ const StatsOverview = ({ cities, games, allOwners, bulletFactories, airports }) 
 
 export default function States() {
   const [data, setData] = useState({ cities: [], games: [], state_heads: {} });
-  const [loading, setLoading] = useState(true);
   const [bulletFactories, setBulletFactories] = useState([]);
   const [airports, setAirports] = useState([]);
   const [airportClaimCost, setAirportClaimCost] = useState(175_000_000);
@@ -342,7 +341,6 @@ export default function States() {
   useEffect(() => { fetchFamilyMy(); }, [fetchFamilyMy]);
 
   const fetchStates = useCallback(() => {
-    setLoading(true);
     api.get('/states')
       .then((res) => {
         setData({
@@ -367,8 +365,7 @@ export default function States() {
       .catch(() => {
         toast.error('Failed to load states');
         setData({ cities: [], games: [], state_heads: {} });
-      })
-      .finally(() => setLoading(false));
+      });
   }, []);
 
   useEffect(() => { fetchStates(); }, [fetchStates]);
@@ -487,19 +484,6 @@ export default function States() {
   const isBoss = (familyMy?.my_role || '').toLowerCase() === 'boss';
   const familyQualifiesForStateHead = !!familyMy?.qualifies_for_state_head;
   const stateHeads = data.state_heads || {};
-
-  if (loading) {
-    return (
-      <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
-        <style>{STATES_STYLES}</style>
-        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
-          <MapPin size={22} className="text-primary/40 animate-pulse" />
-          <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <span className="text-primary text-[9px] font-heading uppercase tracking-[0.2em]">Loading states...</span>
-        </div>
-      </div>
-    );
-  }
 
   if (cities.length === 0) {
     return (

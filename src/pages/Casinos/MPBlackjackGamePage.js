@@ -221,7 +221,7 @@ export default function MPBlackjackGamePage() {
   const { gameId } = useParams();
   const navigate = useNavigate();
   const [game, setGame] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [myUserId, setMyUserId] = useState(null);
   const [chatInput, setChatInput] = useState('');
@@ -286,7 +286,7 @@ export default function MPBlackjackGamePage() {
         });
       })
       .catch(() => setGame(null))
-      .finally(() => setLoading(false));
+      .finally(() => setHasLoaded(true));
   }, [gameId, myUserId]);
 
   useEffect(() => {
@@ -500,10 +500,9 @@ export default function MPBlackjackGamePage() {
   }, [turnSecondsLeft, status, phase, currentTurnIndex, turnStartedAt, triggerTimeout]);
 
   // ── Early returns ──
-  if (loading && !game) {
+  if (!hasLoaded && !game) {
     return (
       <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
-        <p className="text-[10px] text-mutedForeground font-heading animate-pulse">Loading table…</p>
       </div>
     );
   }

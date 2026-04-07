@@ -85,22 +85,18 @@ const ObjectiveRow = ({ obj, delay = 0 }) => {
 
 export default function Objectives() {
   const [data, setData] = useState(() => readSessionJson(OBJ_CACHE_KEY));
-  const [loading, setLoading] = useState(() => readSessionJson(OBJ_CACHE_KEY) == null);
 
   const [claiming, setClaiming] = useState(null);
   const [showAdminStats, setShowAdminStats] = useState(false);
 
   const fetchObjectives = useCallback(async (opts = {}) => {
     const silent = opts.silent === true;
-    if (!silent) setLoading(true);
     try {
       const res = await api.get('/objectives');
       setData(res.data);
       writeSessionJson(OBJ_CACHE_KEY, res.data);
     } catch (e) {
       if (!silent) toast.error(e.response?.data?.detail || 'Failed to load objectives');
-    } finally {
-      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -124,7 +120,6 @@ export default function Objectives() {
     const c = readSessionJson(OBJ_CACHE_KEY);
     if (c != null) {
       setData(c);
-      setLoading(false);
       fetchObjectives({ silent: true });
     } else {
       fetchObjectives({ silent: false });
@@ -136,15 +131,10 @@ export default function Objectives() {
     return () => clearInterval(id);
   }, [fetchObjectives]);
 
-  if (loading && !data) {
+  if (!data) {
     return (
       <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
         <style>{OBJ_STYLES}</style>
-        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
-          <ListChecks size={22} className="text-primary/40 animate-pulse" />
-          <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <span className="text-primary text-[10px] font-heading uppercase tracking-[0.25em]">Loading objectives...</span>
-        </div>
       </div>
     );
   }

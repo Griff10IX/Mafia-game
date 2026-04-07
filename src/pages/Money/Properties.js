@@ -53,7 +53,6 @@ export default function Properties() {
   const [properties, setProperties] = useState([]);
   const [propertyIncomePerkUntil, setPropertyIncomePerkUntil] = useState(null);
   const [targets, setTargets] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [attackLoading, setAttackLoading] = useState(null); // property_id+username
   const [collectAllLoading, setCollectAllLoading] = useState(false);
   const [user, setUser] = useState(null);
@@ -77,7 +76,6 @@ export default function Properties() {
     setPortfolioUpgrades(cached.portfolioUpgrades ?? null);
     setPropertiesHeat(cached.propertiesHeat ?? null);
     setPropertiesHeatQuote(cached.propertiesHeatQuote ?? null);
-    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -100,7 +98,6 @@ export default function Properties() {
   }, []);
 
   const fetchProperties = async ({ silent = false } = {}) => {
-    if (!silent) setLoading(true);
     try {
       const response = await api.get('/properties');
       const data = response.data;
@@ -135,8 +132,6 @@ export default function Properties() {
       setPortfolioUpgrades(null);
       setPropertiesHeat(null);
       setPropertiesHeatQuote(null);
-    } finally {
-      if (!silent) setLoading(false);
     }
   };
 
@@ -303,15 +298,10 @@ export default function Properties() {
     setCollectAllLoading(false);
   };
 
-  if (loading) {
+  if (!user && properties.length === 0) {
     return (
       <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
         <style>{PROP_STYLES}</style>
-        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
-          <Building size={28} className="text-primary/40 animate-pulse" />
-          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading...</span>
-        </div>
       </div>
     );
   }

@@ -16,7 +16,7 @@ const QT_STYLES = `
 const qtActionBtn = 'relative z-[2] touch-manipulation';
 
 export default function QuickTrade() {
-  const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [sellOffers, setSellOffers] = useState([]);
   const [buyOffers, setBuyOffers] = useState([]);
   const [tokenOffers, setTokenOffers] = useState([]);
@@ -74,7 +74,6 @@ export default function QuickTrade() {
   };
 
   const fetchTrades = async () => {
-    setLoading(true);
     try {
       const [sellRes, buyRes, tokenRes, propRes, balancesRes] = await Promise.all([
         api.get('/trade/sell-offers'),
@@ -90,9 +89,7 @@ export default function QuickTrade() {
       setTokenBalances(balancesRes.data || {});
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to load trades');
-    } finally {
-      setLoading(false);
-    }
+    } finally { setHasLoaded(true); }
   };
 
   // Auto-fill offer/cost from existing offers: buy = highest + 1, sell = lowest - 1 (only when field is empty)
@@ -355,15 +352,10 @@ export default function QuickTrade() {
       ? Number(sellTokBal.founding_locks_trade)
       : sellFoundingRaw;
 
-  if (loading) {
+  if (!hasLoaded) {
     return (
       <div className={`space-y-6 ${styles.pageContent} mobile-page-root`}>
         <style>{QT_STYLES}</style>
-        <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
-          <ArrowLeftRight size={28} className="text-primary/40 animate-pulse" />
-          <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading…</span>
-        </div>
       </div>
     );
   }

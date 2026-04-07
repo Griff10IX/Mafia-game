@@ -76,7 +76,7 @@ export default function InboxChat() {
   const navigate = useNavigate();
   const [thread, setThread] = useState([]);
   const [otherUsername, setOtherUsername] = useState('');
-  const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [sending, setSending] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
@@ -121,13 +121,10 @@ export default function InboxChat() {
       setThread([]);
       setOtherUsername('');
       navigate('/inbox');
-    } finally {
-      setLoading(false);
-    }
+    } finally { setHasLoaded(true); }
   };
 
   useEffect(() => {
-    setLoading(true);
     fetchThread();
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -155,12 +152,9 @@ export default function InboxChat() {
     }
   };
 
-  if (loading) {
+  if (!hasLoaded) {
     return (
       <div className={`${styles.pageContent} ${styles.page} mobile-page-root`}>
-        <div className="flex items-center justify-center min-h-[50vh]">
-          <span className="text-primary font-heading">Loading chat...</span>
-        </div>
       </div>
     );
   }

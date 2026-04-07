@@ -104,14 +104,6 @@ function ocInviteActionError(detail, action) {
 }
 
 // Subcomponents
-const LoadingSpinner = () => (
-  <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
-    <Mail size={22} className="text-primary/40 animate-pulse" />
-    <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-    <span className="text-primary text-[9px] font-heading uppercase tracking-[0.2em]">Loading...</span>
-  </div>
-);
-
 const ComposeModal = ({ 
   isOpen,
   onClose,
@@ -559,7 +551,7 @@ export default function Inbox() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [readRetentionDays, setReadRetentionDays] = useState(5);
   const [unreadRetentionDays, setUnreadRetentionDays] = useState(60);
-  const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [filter, setFilter] = useState(initialFilter);
   const [selectedNotification, setSelectedNotification] = useState(null);
   const [showCompose, setShowCompose] = useState(false);
@@ -585,7 +577,7 @@ export default function Inbox() {
       toast.error('Failed to load notifications');
       // Do not clear inbox on failure — a later refetch can error while data is still valid on the server.
     } finally {
-      setLoading(false);
+      setHasLoaded(true);
     }
   }, []);
 
@@ -722,11 +714,10 @@ export default function Inbox() {
       ? notifications.filter(n => !n.read)
       : notifications.filter(n => n.notification_type === filter);
 
-  if (loading) {
+  if (!hasLoaded) {
     return (
       <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
         <style>{INBOX_STYLES}</style>
-        <LoadingSpinner />
       </div>
     );
   }

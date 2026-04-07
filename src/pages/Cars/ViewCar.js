@@ -20,7 +20,7 @@ export default function ViewCar() {
   const [searchParams] = useSearchParams();
   const id = searchParams.get('id');
   const [car, setCar] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileCarIds, setProfileCarIds] = useState([]);
   const [customPicOpen, setCustomPicOpen] = useState(false);
@@ -30,7 +30,7 @@ export default function ViewCar() {
   useEffect(() => {
     let cancelled = false;
     if (!id) {
-      if (!cancelled) setLoading(false);
+      if (!cancelled) setHasLoaded(true);
       return;
     }
     const fetchCar = async () => {
@@ -48,7 +48,7 @@ export default function ViewCar() {
           toast.error(e.response?.status === 404 ? 'Car not found' : 'Failed to load car');
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setHasLoaded(true);
       }
     };
     fetchCar();
@@ -69,12 +69,9 @@ export default function ViewCar() {
     );
   }
 
-  if (loading) {
+  if (!hasLoaded) {
     return (
       <div className={`${styles.pageContent} mobile-page-root`}>
-        <div className="flex items-center justify-center min-h-[40vh]">
-          <span className="text-primary font-heading font-bold">Loading...</span>
-        </div>
       </div>
     );
   }

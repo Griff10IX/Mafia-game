@@ -248,7 +248,6 @@ export default function IllegalBusiness() {
   const bizBoot = readSessionJson(BIZ_CACHE_KEY);
   const [data, setData] = useState(() => bizBoot?.data ?? null);
   const [types, setTypes] = useState(() => bizBoot?.types ?? []);
-  const [loading, setLoading] = useState(() => bizBoot?.data == null);
   const [saving, setSaving] = useState(false);
   const [raidTarget, setRaidTarget] = useState('');
   const [raidState, setRaidState] = useState('');
@@ -258,7 +257,6 @@ export default function IllegalBusiness() {
   const [missionLogShowAll, setMissionLogShowAll] = useState(false);
 
   const fetchData = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
     try {
       const [res, typesRes] = await Promise.all([
         api.get('/illegal-business').catch((e) => ({ ...e, response: e.response })),
@@ -290,8 +288,6 @@ export default function IllegalBusiness() {
         const prevSnap = readSessionJson(BIZ_CACHE_KEY) || {};
         writeSessionJson(BIZ_CACHE_KEY, { data: nextData, types: prevSnap.types ?? [], t: Date.now() });
       } else if (!silent) toast.error(getApiErrorMessage(e));
-    } finally {
-      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -392,15 +388,10 @@ export default function IllegalBusiness() {
     fetchData();
   });
 
-  if (loading && !data) {
+  if (!data) {
     return (
       <div className={`${styles.pageContent} mobile-page-root`}>
-        <div className="flex items-center justify-center min-h-[200px]">
-          <div className="flex flex-col items-center gap-3">
-            <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
-            <span className="text-[10px] font-heading text-mutedForeground tracking-widest uppercase">Loading…</span>
-          </div>
-        </div>
+        <style>{RACKET_STYLES}</style>
       </div>
     );
   }

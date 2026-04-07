@@ -426,7 +426,6 @@ function MyTicketsSection() {
 
 function Lottery() {
   const [state, setState] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [buying, setBuying] = useState(false);
   const [count, setCount] = useState(1);
   const [tick, setTick] = useState(0);
@@ -440,8 +439,6 @@ function Lottery() {
       setState(data);
     } catch (e) {
       toast.error(apiErrorDetail(e, 'Could not load lottery'));
-    } finally {
-      setLoading(false);
     }
   }, []);
 
@@ -489,16 +486,10 @@ function Lottery() {
     doBuy(n);
   };
 
-  if (loading && !state) {
+  if (!state) {
     return (
       <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
         <style>{LOT_STYLES}</style>
-        <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
-          <div className="lot-ball lot-ball-gold lot-glow" style={{ width: 48, height: 48, fontSize: 16 }}>
-            <span style={{ animation: 'lot-spin-slow 2s linear infinite', display: 'inline-block' }}>$</span>
-          </div>
-          <span className="text-primary text-[10px] font-heading uppercase tracking-[0.25em]">Loading lottery...</span>
-        </div>
       </div>
     );
   }

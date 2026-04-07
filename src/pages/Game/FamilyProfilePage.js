@@ -190,7 +190,7 @@ export default function FamilyProfilePage() {
   const { familyId } = useParams();
   const navigate = useNavigate();
   const [family, setFamily] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [crewOCApplyLoading, setCrewOCApplyLoading] = useState(false);
   const [profileTextEdit, setProfileTextEdit] = useState('');
   const [notepadColorEdit, setNotepadColorEdit] = useState('');
@@ -200,16 +200,14 @@ export default function FamilyProfilePage() {
 
   useEffect(() => {
     const id = (familyId && String(familyId).trim()) || '';
-    if (!id || id === 'undefined' || id === 'null') { setFamily(null); setLoading(false); return; }
+    if (!id || id === 'undefined' || id === 'null') { setFamily(null); setHasLoaded(true); return; }
     const isUuid = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(id);
     const cached = getFamilyProfilePrefetch(id);
     if (cached) {
       setFamily(cached);
       setProfileTextEdit((cached?.profile_text || '').trim() || '');
       setNotepadColorEdit(cached?.profile_notepad_color ?? '');
-      setLoading(false);
-    } else {
-      setLoading(true);
+      setHasLoaded(true);
     }
     const run = async () => {
       try {
@@ -227,7 +225,7 @@ export default function FamilyProfilePage() {
       } catch (e) {
         toast.error(e.response?.data?.detail ?? e.message ?? 'Family not found');
         setFamily(null);
-      } finally { setLoading(false); }
+      } finally { setHasLoaded(true); }
     };
     run();
   }, [familyId, navigate]);
@@ -235,12 +233,9 @@ export default function FamilyProfilePage() {
   // Don card tilt (stronger effect for the feature card)
   const donTilt = useTilt(7);
 
-  if (loading) {
+  if (!hasLoaded && !family) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
-        <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-        <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Pulling the file...</span>
-      </div>
+      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} />
     );
   }
 

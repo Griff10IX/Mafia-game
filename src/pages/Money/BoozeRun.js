@@ -61,14 +61,6 @@ const BOOZE_STYLES = `
   .bz-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 `;
 
-const LoadingSpinner = () => (
-  <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
-    <Wine size={22} className="text-primary/40 animate-pulse" />
-    <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-    <span className="text-primary text-[9px] font-heading uppercase tracking-[0.2em]">Loading the shipment...</span>
-  </div>
-);
-
 // Compact status icon: Auto Rank booze active
 const AutoRankIcon = () => (
   <span
@@ -616,7 +608,6 @@ const InfoCard = ({ rotationHours, rotationSeconds, dailyEstimateRough }) => (
 // Main component
 export default function BoozeRun() {
   const [config, setConfig] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [tradeAmounts, setTradeAmounts] = useState({});
   const [tradeMode, setTradeMode] = useState('buy');
   const [timer, setTimer] = useState('');
@@ -631,8 +622,6 @@ export default function BoozeRun() {
     } catch (e) {
       toast.error(apiErrorDetail(e, 'Failed to load booze run'));
       setConfig(null);
-    } finally {
-      setLoading(false);
     }
   }, []);
 
@@ -754,8 +743,12 @@ export default function BoozeRun() {
     }
   };
 
-  if (loading || !config) {
-    return <LoadingSpinner />;
+  if (!config) {
+    return (
+      <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="booze-run-page">
+        <style>{BOOZE_STYLES}</style>
+      </div>
+    );
   }
 
   const historyList = config.history || [];

@@ -174,7 +174,6 @@ function GhostBtn({ children, onClick, disabled, small }) {
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function Distillery() {
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [business, setBusiness] = useState(null);
   const [pendingTake, setPendingTake] = useState(0);
@@ -189,7 +188,6 @@ export default function Distillery() {
   const [agingQty, setAgingQty] = useState(50);
 
   const load = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
     try {
       const [bizRes, distRes, catRes] = await Promise.all([
         api.get('/illegal-business'),
@@ -221,8 +219,6 @@ export default function Distillery() {
         setBusiness(null);
         setPendingTake(0);
       }
-    } finally {
-      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -318,17 +314,6 @@ export default function Distillery() {
   const maintenanceWarn = maintenancePct < 35;
 
   // ── Loading ─────────────────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <div className={`${styles.pageContent} mobile-page-root dist-root`}>
-        <div className="dist-loading">
-          <div className="dist-loading-still">⚗</div>
-          <div className="dist-loading-text">Firing up the copper…</div>
-        </div>
-      </div>
-    );
-  }
-
   // ── No business ─────────────────────────────────────────────────────────────
   if (!state || !business) {
     return (

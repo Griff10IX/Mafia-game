@@ -185,7 +185,6 @@ function ThinkingDots() {
 
 export default function DailyRewards() {
   const [info,       setInfo]       = useState(null);
-  const [loading,    setLoading]    = useState(true);
   const [playing,    setPlaying]    = useState(false);
   const [result,     setResult]     = useState(null);
   const [lastThrow,  setLastThrow]  = useState(null);
@@ -202,8 +201,6 @@ export default function DailyRewards() {
     } catch (e) {
       toast.error(getApiErrorMessage(e) || 'Failed to load daily rewards');
       setInfo(null);
-    } finally {
-      setLoading(false);
     }
   }, []);
 
@@ -309,23 +306,10 @@ export default function DailyRewards() {
     }
   };
 
-  /* ── Loading ─────────────────────────────────────────────── */
-  if (loading) {
+  if (!info) {
     return (
       <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
         <style>{RPS_STYLES}</style>
-        <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3">
-          <div
-            style={{
-              width: 36, height: 36,
-              border: '3px solid rgba(var(--noir-primary-rgb),0.15)',
-              borderTopColor: 'rgba(var(--noir-primary-rgb),1)',
-              borderRadius: '50%',
-              animation: 'spinnerRotate 0.8s linear infinite',
-            }}
-          />
-          <span className="text-[10px] text-zinc-500 font-heading uppercase tracking-widest">Preparing rewards…</span>
-        </div>
       </div>
     );
   }

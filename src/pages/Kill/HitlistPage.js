@@ -134,20 +134,6 @@ const CashStack = ({ className = "" }) => (
 );
 
 /* ═══════════════════════════════════════════════════════
-   Loading Spinner
-   ═══════════════════════════════════════════════════════ */
-const LoadingSpinner = () => (
-  <div className="space-y-3 px-3 sm:px-4">
-    <style>{HITLIST_STYLES}</style>
-    <div className="flex flex-col items-center justify-center min-h-[40vh] gap-3">
-      <Target size={24} className="text-primary/40 animate-pulse" />
-      <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-      <span className="text-primary text-[10px] sm:text-xs font-heading uppercase tracking-[0.2em]">Loading contracts...</span>
-    </div>
-  </div>
-);
-
-/* ═══════════════════════════════════════════════════════
    Your Status Card (Combined)
    ═══════════════════════════════════════════════════════ */
 const YourStatusCard = ({ me, user, revealed, who, submitting, onBuyOff, onReveal, npcStatus, addingNpc, onAddNpc }) => {
@@ -699,7 +685,6 @@ export default function HitlistPage() {
   const [me, setMe] = useState(() => hitBoot?.me ?? null);
   const [user, setUser] = useState(() => hitBoot?.user ?? null);
   const [npcStatus, setNpcStatus] = useState(() => hitBoot?.npcStatus ?? null);
-  const [loading, setLoading] = useState(() => !hitBoot?.user);
   const [submitting, setSubmitting] = useState(false);
   const [addingNpc, setAddingNpc] = useState(false);
   const [targetUsername, setTargetUsername] = useState('');
@@ -710,7 +695,6 @@ export default function HitlistPage() {
   const [buyingOffTarget, setBuyingOffTarget] = useState(null);
 
   const fetchData = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
     try {
       const [listRes, meRes, userRes, npcStatusRes] = await Promise.all([
         api.get('/hitlist/list'),
@@ -743,8 +727,6 @@ export default function HitlistPage() {
         setUser(null);
         setNpcStatus(null);
       }
-    } finally {
-      if (!silent) setLoading(false);
     }
   }, []);
 
@@ -875,10 +857,6 @@ export default function HitlistPage() {
       setBuyingOffTarget(null);
     }
   };
-
-  if (loading) {
-    return <LoadingSpinner />;
-  }
 
   const revealed = me?.revealed ?? false;
   const who = me?.who ?? [];

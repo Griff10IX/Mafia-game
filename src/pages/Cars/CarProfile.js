@@ -18,7 +18,7 @@ const RARITY_COLORS = {
 export default function CarProfile() {
   const { carId } = useParams();
   const [car, setCar] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -31,19 +31,16 @@ export default function CarProfile() {
           toast.error(e.response?.status === 404 ? 'Car not found' : 'Failed to load car');
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) setHasLoaded(true);
       }
     };
     fetchCar();
     return () => { cancelled = true; };
   }, [carId]);
 
-  if (loading) {
+  if (!hasLoaded) {
     return (
       <div className={`${styles.pageContent} mobile-page-root`}>
-        <div className="flex items-center justify-center min-h-[40vh]">
-          <span className="text-primary font-heading font-bold">Loading...</span>
-        </div>
       </div>
     );
   }

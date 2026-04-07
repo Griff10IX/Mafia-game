@@ -404,7 +404,6 @@ function SafeDoor({ dialAngle, won, shaking }) {
 /* ─── Main Page ─── */
 export default function CrackSafe() {
   const [info, setInfo] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [numbers, setNumbers] = useState([1, 1, 1, 1, 1]);
   const [guessing, setGuessing] = useState(false);
   const [result, setResult] = useState(null);
@@ -434,8 +433,6 @@ export default function CrackSafe() {
     } catch {
       toast.error('Failed to load safe info');
       setInfo(null);
-    } finally {
-      setLoading(false);
     }
   }, []);
 
@@ -518,12 +515,9 @@ export default function CrackSafe() {
   const won = result?.cracked === true;
   const isAdmin = info?.is_admin ?? false;
 
-  if (loading) {
+  if (!info) {
     return (
       <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
-        <div className="text-center text-zinc-500 py-20 font-heading text-sm tracking-widest">
-          Accessing the vault...
-        </div>
       </div>
     );
   }

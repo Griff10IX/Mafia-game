@@ -414,16 +414,8 @@ function getTierPrimaryLabel(tier, { isFreeMembership, freeUnlockedRewardKey } =
   return '—';
 }
 
-const LoadingSpinner = () => (
-  <div className={`${styles.pageContent} p-4 mobile-page-root`}>
-    <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
-      <Package size={24} className="text-primary/50 animate-pulse" />
-      <span className="text-primary text-[10px] font-heading uppercase tracking-wider">Loading game pass…</span>
-    </div>
-  </div>
-);
-
 export default function GamePass() {
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [user, setUser] = useState(null);
@@ -443,6 +435,8 @@ export default function GamePass() {
       setIsAdmin(!!adminRes.data?.is_admin);
     } catch {
       toast.error('Failed to load data');
+    } finally {
+      setHasLoaded(true);
     }
   }, []);
 
@@ -598,9 +592,8 @@ export default function GamePass() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  if (loading || user == null) {
-    // Keep the full spinner when user is unknown; avoid flashing content while redirecting.
-    return <LoadingSpinner />;
+  if (!hasLoaded || user == null) {
+    return <div className={`${styles.pageContent} p-3 sm:p-4 mobile-page-root`} data-testid="game-pass-page" data-page="game-pass" />;
   }
 
   return (

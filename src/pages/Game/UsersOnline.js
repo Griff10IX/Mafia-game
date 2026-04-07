@@ -40,15 +40,6 @@ function formatDateTime(iso) {
   });
 }
 
-// Subcomponents
-const LoadingSpinner = () => (
-  <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
-    <Users size={22} className="text-primary/40 animate-pulse" />
-    <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-    <span className="text-primary text-[9px] font-heading uppercase tracking-[0.2em]">Loading...</span>
-  </div>
-);
-
 const snapshotTile = (Icon, label, value, caption, accentClass) => (
   <div
     className={`rounded-md border border-primary/15 bg-black/20 px-2 py-1.5 flex flex-col gap-0.5 min-h-[4.5rem] ${accentClass || ''}`}
@@ -400,7 +391,7 @@ export default function UsersOnline() {
   const [adminOnlineColor, setAdminOnlineColor] = useState(() => bootCache?.admin_online_color ?? '#a78bfa');
   const [modDefaultOnlineColor, setModDefaultOnlineColor] = useState(() => bootCache?.mod_default_online_color ?? DEFAULT_MOD_COLOR);
   const [hdoOnlineColor, setHdoOnlineColor] = useState(() => bootCache?.hdo_online_color ?? DEFAULT_HDO_COLOR);
-  const [loading, setLoading] = useState(() => !bootCache);
+  const [hasLoaded, setHasLoaded] = useState(() => !!bootCache);
   const [profileCache, setProfileCache] = useState({});
   const [profileLoading, setProfileLoading] = useState({});
   const [profileHoverEnabled, setProfileHoverEnabled] = useState(() =>
@@ -416,7 +407,6 @@ export default function UsersOnline() {
   }, []);
 
   const fetchOnlineUsers = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
     try {
       const response = await api.get('/users/online');
       setTotalOnline(response.data.total_online);
@@ -445,7 +435,7 @@ export default function UsersOnline() {
         setUsers([]);
       }
     } finally {
-      if (!silent) setLoading(false);
+      setHasLoaded(true);
     }
   }, []);
 
@@ -478,11 +468,10 @@ export default function UsersOnline() {
     return () => window.removeEventListener('focus', onFocus);
   }, [fetchOnlineUsers]);
 
-  if (loading && !bootCache) {
+  if (!hasLoaded && !bootCache) {
     return (
       <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
         <style>{UO_STYLES}</style>
-        <LoadingSpinner />
       </div>
     );
   }

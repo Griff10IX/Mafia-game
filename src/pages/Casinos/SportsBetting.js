@@ -251,7 +251,8 @@ function Chip({ label, color, ring, selected, onClick, size = 36 }) {
    Main Page
    ═══════════════════════════════════════════════════════ */
 export default function SportsBetting() {
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [events, setEvents] = useState([]);
   const [myBets, setMyBets] = useState(DEFAULT_MY_BETS);
   const [stats, setStats] = useState(null);
@@ -336,7 +337,7 @@ export default function SportsBetting() {
     setRecentResults(cached.recentResults ?? []);
     setPublicLibrary(cached.publicLibrary ?? DEFAULT_PUBLIC_LIBRARY);
     setRequestInfo(cached.requestInfo ?? DEFAULT_REQUEST_INFO);
-    setLoading(false);
+    setHasLoaded(true);
   }, []);
 
   const fetchAll = useCallback(async ({ silent = false } = {}) => {
@@ -407,6 +408,7 @@ export default function SportsBetting() {
       setRecentResults([]);
     } finally {
       if (!silent) setLoading(false);
+      setHasLoaded(true);
     }
   }, []);
 
@@ -826,13 +828,9 @@ export default function SportsBetting() {
 
   const shownBrowseCount = filteredBrowseTemplates.length;
 
-  if (loading) {
+  if (!hasLoaded) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3">
-        <Trophy size={28} className="text-primary/40 animate-pulse" />
-        <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-        <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading the book...</span>
-      </div>
+      <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="sports-betting-page"><style>{SB_STYLES}</style></div>
     );
   }
 

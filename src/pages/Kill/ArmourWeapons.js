@@ -233,7 +233,6 @@ const StatCard = ({ icon: Icon, label, value, highlight, pulseActive }) => (
    ═══════════════════════════════════════════════════════ */
 export default function BulletFactory({ me: meProp, ownedArmouryState }) {
   const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
   const [me, setMe] = useState(meProp ?? null);
   const [activeTab, setActiveTab] = useState('shop');
   const [claiming, setClaiming] = useState(false);
@@ -280,8 +279,6 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
     } catch {
       toast.error('Failed to load armoury');
       setData(null);
-    } finally {
-      setLoading(false);
     }
   }, [effectiveState]);
 
@@ -604,13 +601,9 @@ export default function BulletFactory({ me: meProp, ownedArmouryState }) {
     }
   };
 
-  if (loading) {
+  if (!data && !me) {
     return (
-      <div className="flex items-center justify-center py-16">
-        <div className="flex items-center gap-3">
-          <div className="w-5 h-5 sm:w-6 sm:h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-          <span className="text-primary font-heading text-xs sm:text-sm uppercase tracking-widest">Loading...</span>
-        </div>
+      <div className={`space-y-3 sm:space-y-4 relative ${styles.pageContent} mobile-page-root`} data-page="armoury">
       </div>
     );
   }

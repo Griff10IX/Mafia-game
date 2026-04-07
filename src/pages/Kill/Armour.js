@@ -11,22 +11,18 @@ function formatCost(opt) {
 }
 
 export default function Armour() {
-  const [loading, setLoading] = useState(true);
   const [me, setMe] = useState(null);
   const [data, setData] = useState({ current_level: 0, options: [] });
   const [buyingLevel, setBuyingLevel] = useState(null);
   const [equippingLevel, setEquippingLevel] = useState(null);
 
   const fetchAll = async () => {
-    setLoading(true);
     try {
       const [meRes, optRes] = await Promise.all([api.get('/auth/me'), api.get('/armour/options')]);
       setMe(meRes.data);
       setData(optRes.data);
     } catch (e) {
       toast.error('Failed to load armour shop');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -81,10 +77,9 @@ export default function Armour() {
     }
   };
 
-  if (loading) {
+  if (!me && (!data?.options || data.options.length === 0)) {
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-primary text-xl font-heading">Loading...</div>
+      <div className={`space-y-6 ${styles.pageContent} mobile-page-root`}>
       </div>
     );
   }
