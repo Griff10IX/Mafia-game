@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { MapPin, Dice5, Spade, Trophy, CircleDot, Users, Plane, Shield, ChevronRight, ChevronDown } from 'lucide-react';
+import FamilyEmblem from '../../components/FamilyEmblem';
 
 /** Slot machine icon: three reel windows, same outline style as Spade/CircleDot/Dice5 */
 function SlotsIcon({ size = 10, className = '' }) {
@@ -135,9 +136,16 @@ const CityCard = ({
             </div>
             <div className="flex items-center justify-between px-1.5 py-1 bg-zinc-800/30 rounded">
               {headFamily ? (
-                <span className="text-[10px] font-heading text-foreground">
-                  {headFamily.family_name} <span className="text-primary font-bold">({headFamily.family_tag})</span>
-                </span>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <FamilyEmblem
+                    emblemPresetId={headFamily.family_emblem_preset_id}
+                    avatarUrl={headFamily.family_emblem_avatar_url}
+                    size={20}
+                  />
+                  <span className="text-[10px] font-heading text-foreground truncate">
+                    {headFamily.family_name} <span className="text-primary font-bold">({headFamily.family_tag})</span>
+                  </span>
+                </div>
               ) : canClaimState ? (
                 <button
                   type="button"

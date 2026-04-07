@@ -108,6 +108,16 @@ FAMILY_EMBLEM_PRESETS_PUBLIC = [
     {"id": "silent_contract", "label": "Silent contract"},
     {"id": "war_crest", "label": "War crest"},
     {"id": "empire_mark", "label": "Empire mark"},
+    {"id": "don_regalia", "label": "Don regalia"},
+    {"id": "crossed_tommy", "label": "Crossed tommy guns"},
+    {"id": "honor_and_blood", "label": "Honor and blood"},
+    {"id": "black_hand", "label": "Black hand"},
+    {"id": "golden_omerta", "label": "Golden omerta"},
+    {"id": "la_famiglia", "label": "La famiglia"},
+    {"id": "midnight_syndicate", "label": "Midnight syndicate"},
+    {"id": "vault_dynasty", "label": "Vault dynasty"},
+    {"id": "iron_rose", "label": "Iron rose"},
+    {"id": "boss_throne", "label": "Boss throne"},
 ]
 FAMILY_EMBLEM_PRESET_IDS = frozenset(p["id"] for p in FAMILY_EMBLEM_PRESETS_PUBLIC)
 

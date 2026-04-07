@@ -1091,7 +1091,7 @@ export default function Profile() {
   const viewPublic = searchParams.get('view') === 'public';
   const [me, setMe] = useState(null);
   const [profile, setProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!usernameParam);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
   const [hasAdminEmail, setHasAdminEmail] = useState(false);
@@ -1194,7 +1194,7 @@ export default function Profile() {
 
   useEffect(() => {
     const run = async () => {
-      setLoading(true);
+      if (!usernameParam) setLoading(true);
       try {
         const [meRes, adminRes] = await Promise.all([
           api.get('/auth/me'),
@@ -1207,11 +1207,11 @@ export default function Profile() {
       } catch (e) {
         toast.error('Failed to load your account');
       } finally {
-        setLoading(false);
+        if (!usernameParam) setLoading(false);
       }
     };
     run();
-  }, []);
+  }, [usernameParam]);
 
   useEffect(() => {
     try {
@@ -1238,8 +1238,8 @@ export default function Profile() {
       refetchProfile({ silent: true, usernameOverride: username });
       return;
     }
-    setProfile(null);
-    refetchProfile({ silent: false, forceLoading: true, usernameOverride: username }).catch((e) => {
+    // Keep any previously rendered profile on screen while revalidating this target in background.
+    refetchProfile({ silent: false, usernameOverride: username }).catch((e) => {
       toast.error(e.response?.data?.detail || 'Failed to load profile');
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch by username only; profile is the result, not a trigger
