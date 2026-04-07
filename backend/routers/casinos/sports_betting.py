@@ -1099,6 +1099,149 @@ async def _auto_settle_fallback_f1_ergast() -> int:
     return settled
 
 
+def _event_duel_names_from_options(options: list) -> tuple[str, str]:
+    names = [str((o or {}).get("name") or "").strip() for o in (options or [])]
+    names = [n for n in names if n and not _is_draw_outcome_name(n)]
+    if len(names) < 2:
+        return ("", "")
+    return (names[0], names[1])
+
+
+def _event_name_query_candidates(name: str, team_a: str, team_b: str) -> list[str]:
+    raw = (name or "").strip()
+    candidates = []
+    if raw:
+        candidates.append(raw)
+        if ":" in raw:
+            right = raw.split(":", 1)[1].strip()
+            if right:
+                candidates.append(right)
+    if team_a and team_b:
+        candidates.append(f"{team_a} vs {team_b}")
+        candidates.append(f"{team_b} vs {team_a}")
+    # De-dupe while preserving order.
+    seen = set()
+    out = []
+    for c in candidates:
+        k = _name_norm(c)
+        if not k or k in seen:
+            continue
+        seen.add(k)
+        out.append(c)
+    return out[:5]
+
+
+async def _thesportsdb_search_finished_events(query: str) -> list[dict]:
+    q = (query or "").strip()
+    if not q:
+        return []
+    try:
+        async with httpx.AsyncClient(timeout=14.0) as client:
+            r = await client.get(
+                "https://www.thesportsdb.com/api/v1/json/123/searchevents.php",
+                params={"e": q},
+            )
+        if r.status_code != 200:
+            return []
+        events = (r.json() or {}).get("event") or []
+        out = []
+        for e in events:
+            status = ((e.get("strStatus") or "") + " " + (e.get("strPostponed") or "")).lower()
+            # Keep only completed/finished outcomes.
+            if not ("match finished" in status or "finished" in status or "ft" in status):
+                continue
+            ht = (e.get("strHomeTeam") or "").strip()
+            at = (e.get("strAwayTeam") or "").strip()
+            try:
+                hs = int(e.get("intHomeScore"))
+                as_ = int(e.get("intAwayScore"))
+            except Exception:
+                continue
+            dt_raw = (e.get("dateEvent") or "").strip()
+            if not ht or not at or not dt_raw:
+                continue
+            out.append({
+                "home_team": ht,
+                "away_team": at,
+                "home_score": hs,
+                "away_score": as_,
+                "dateEvent": dt_raw,
+                "strEvent": (e.get("strEvent") or "").strip(),
+            })
+        return out
+    except Exception:
+        return []
+
+
+async def _auto_settle_fallback_thesportsdb_open_bets() -> int:
+    """Fallback settle using TheSportsDB finished results for football/boxing-style 2-side events."""
+    bet_event_ids = await _linkable_open_event_ids_with_open_bets()
+    # Also include non-linkable open bet events so old manual/custom board events can still resolve.
+    rows = await db.sports_bets.aggregate([
+        {"$match": {"status": "open", "event_id": {"$exists": True, "$nin": [None, ""]}}},
+        {"$group": {"_id": "$event_id"}},
+    ]).to_list(5000)
+    for r in rows:
+        eid = str(r.get("_id") or "")
+        if eid:
+            bet_event_ids.add(eid)
+    if not bet_event_ids:
+        return 0
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    cursor = db.sports_events.find(
+        {
+            "status": "open",
+            "id": {"$in": list(bet_event_ids)},
+            "start_time": {"$lte": now_iso},
+            "category": {"$in": ["Football", "Boxing"]},
+        },
+        {"_id": 0, "id": 1, "name": 1, "category": 1, "options": 1, "start_time": 1},
+    ).limit(1200)
+
+    cache: dict[str, list[dict]] = {}
+    settled = 0
+    async for ev in cursor:
+        st = _event_datetime_utc(ev)
+        if st is None:
+            continue
+        team_a, team_b = _event_duel_names_from_options(ev.get("options") or [])
+        if not team_a or not team_b:
+            continue
+        candidates = _event_name_query_candidates(ev.get("name") or "", team_a, team_b)
+        winning_id = None
+        for c in candidates:
+            key = _name_norm(c)
+            if key not in cache:
+                cache[key] = await _thesportsdb_search_finished_events(c)
+            for m in cache.get(key) or []:
+                if not _looks_like_same_teams(ev.get("options") or [], m["home_team"], m["away_team"]):
+                    continue
+                try:
+                    md = datetime.fromisoformat(str(m.get("dateEvent") or "")).replace(tzinfo=timezone.utc)
+                except Exception:
+                    continue
+                if abs((md - st).total_seconds()) > 60 * 60 * 72:
+                    continue
+                winning_id = _derive_winning_option_from_simple_score(
+                    ev.get("options") or [],
+                    m["home_team"],
+                    m["away_team"],
+                    int(m["home_score"]),
+                    int(m["away_score"]),
+                    True if (ev.get("category") or "") == "Football" else False,
+                )
+                if winning_id:
+                    break
+            if winning_id:
+                break
+        if not winning_id:
+            continue
+        if await _settle_event_internal(ev.get("id") or "", winning_id):
+            settled += 1
+    return settled
+
+
 async def _auto_settle_from_scores() -> dict:
     """Poll Odds API scores, match to open events with external_event_id, settle and pay. Returns stats."""
     settled_count = 0
@@ -1116,6 +1259,10 @@ async def _auto_settle_from_scores() -> dict:
             fallback_settled += await _auto_settle_fallback_f1_ergast()
         except Exception as ex:
             logger.warning("Fallback auto-settle F1 Ergast failed (no Odds key): %s", ex)
+        try:
+            fallback_settled += await _auto_settle_fallback_thesportsdb_open_bets()
+        except Exception as ex:
+            logger.warning("Fallback auto-settle TheSportsDB failed (no Odds key): %s", ex)
         return {"settled": fallback_settled, "skipped_no_match": 0, "skipped_no_winner": 0, "source": "fallback_only"}
     bet_event_ids = await _linkable_open_event_ids_with_open_bets()
     if not bet_event_ids:
@@ -1167,6 +1314,10 @@ async def _auto_settle_from_scores() -> dict:
         fallback_settled += await _auto_settle_fallback_f1_ergast()
     except Exception as ex:
         logger.warning("Fallback auto-settle F1 Ergast failed: %s", ex)
+    try:
+        fallback_settled += await _auto_settle_fallback_thesportsdb_open_bets()
+    except Exception as ex:
+        logger.warning("Fallback auto-settle TheSportsDB failed: %s", ex)
     return {
         "settled": settled_count + fallback_settled,
         "skipped_no_match": skipped_no_match,

@@ -1910,10 +1910,11 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 logging.exception("War stats record on kill: %s", e)
         if victim_family_id:
             try:
+                killer_name_for_notice = current_user["username"] if make_public else "Unknown"
                 await send_notification_to_family(
                     victim_family_id,
                     "💀 Family Member Killed",
-                    f"{target_name} was killed by {current_user['username']}.",
+                    f"{target_name} was killed by {killer_name_for_notice}.",
                     "attack",
                 )
                 if killer_family_id:
