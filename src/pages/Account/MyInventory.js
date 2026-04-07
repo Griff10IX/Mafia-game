@@ -394,7 +394,9 @@ export default function MyInventory() {
                 <div key={c.id || c.car_id || c.name} className="inv-item flex items-center gap-2 py-2">
                   <Car size={12} className="text-amber-400 shrink-0" />
                   <span className="text-[11px] font-heading text-foreground">{c.name ?? 'Car'}</span>
-                  <span className="text-[9px] text-amber-400">Loot Exclusive</span>
+                  <span className="text-[9px] text-amber-400">
+                    {(String(c.rarity || '').toLowerCase() === 'exclusive') ? 'Exclusive' : 'Loot Exclusive'}
+                  </span>
                   <Link to="/cars/garage" className="ml-auto text-[9px] text-primary hover:underline">View in Garage →</Link>
                 </div>
               ))}

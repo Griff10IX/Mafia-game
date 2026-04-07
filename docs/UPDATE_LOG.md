@@ -6,6 +6,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-07 13:20 UTC[/color][/b] — [b]Exclusive car rarity label fix + no-damage enforcement[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]My Inventory[/b] now shows the correct rarity label for exclusive cars (e.g. Al Capone now displays [b]Exclusive[/b], not [b]Loot Exclusive[/b]). Also, [b]exclusive[/b] and [b]loot-exclusive[/b] cars are now fully [b]damage-immune[/b]: new acquisitions roll with [b]0% damage[/b], and any existing damaged copies are auto-corrected back to [b]0%[/b] when garage/inventory data is refreshed.[/color]
+[*][color=#888888][b]Player action:[/b] No action needed. Refresh your garage/inventory pages if you still see old cached values.[/color]
+[*][color=#888888][b]Impact:[/b] Rarity badges now match the real car type, and all exclusive-tier cars stay pristine as intended.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-07 01:35 UTC[/color][/b] — [b]GTA exclusive pool auto-reopens when the car leaves the game[/b][/size]
 [quote]
 [list]

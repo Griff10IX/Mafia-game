@@ -546,8 +546,10 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
                 car = _rng.choices(pool_cars + [exclusive_car], weights=pool_weights + [ex_w], k=1)[0]
             else:
                 car = _rng.choice(pool_cars)
-        # Stolen car damage: 15–77% common; 0–14% uncommon but possible
-        if _rng.random() < 0.08:
+        # Stolen car damage: custom/exclusive cars are always pristine.
+        if _is_damage_immune_car(car.get("id"), car.get("rarity")):
+            damage_percent = 0
+        elif _rng.random() < 0.08:
             damage_percent = _rng.randint(0, 14)
         else:
             damage_percent = _rng.randint(15, 77)
@@ -824,6 +826,22 @@ def _normalize_garage_rarity_str(raw: object) -> str:
     return s if s in _VALID_GARAGE_RARITIES else "common"
 
 
+def _is_damage_immune_car(car_id: Optional[str], rarity_hint: Optional[str] = None) -> bool:
+    """Custom + exclusive cars should always have 0 damage."""
+    if car_id == "car_custom":
+        return True
+    rarity = (rarity_hint or "").strip().lower()
+    if not rarity and car_id:
+        car_info = next((c for c in CARS if c.get("id") == car_id), None)
+        rarity = str((car_info or {}).get("rarity") or "").strip().lower()
+    return rarity in ("exclusive", "loot_exclusive")
+
+
+def _damage_immune_car_ids() -> List[str]:
+    ids = [c.get("id") for c in CARS if _is_damage_immune_car(c.get("id"), c.get("rarity")) and c.get("id")]
+    return list(dict.fromkeys(ids))
+
+
 def _garage_entry_from_user_car(user_car: Dict[str, Any]) -> Optional[dict]:
     """Build one garage row. Includes catalog miss fallback so owned cars still show (e.g. loot exclusives if CARS out of sync)."""
     car_id = user_car.get("car_id")
@@ -833,7 +851,7 @@ def _garage_entry_from_user_car(user_car: Dict[str, Any]) -> Optional[dict]:
     car_info = next((c for c in CARS if c.get("id") == car_id), None)
     if car_info:
         display_name = (user_car.get("custom_name") or user_car.get("car_name")) if car_id == "car_custom" else (user_car.get("car_name") or car_info.get("name"))
-        damage = 0 if car_id == "car_custom" else min(100, max(0, float(user_car.get("damage_percent", 0))))
+        damage = 0 if _is_damage_immune_car(car_id, car_info.get("rarity")) else min(100, max(0, float(user_car.get("damage_percent", 0))))
         entry = {
             "user_car_id": user_car_id,
             "car_id": car_id,
@@ -852,7 +870,7 @@ def _garage_entry_from_user_car(user_car: Dict[str, Any]) -> Optional[dict]:
             entry["listed_at"] = user_car.get("listed_at")
         return entry
     display_name = user_car.get("car_name") or user_car.get("custom_name") or str(car_id)
-    damage = 0 if car_id == "car_custom" else min(100, max(0, float(user_car.get("damage_percent", 0))))
+    damage = 0 if _is_damage_immune_car(car_id, rarity) else min(100, max(0, float(user_car.get("damage_percent", 0))))
     rarity = _normalize_garage_rarity_str(user_car.get("rarity"))
     try:
         value = int(user_car.get("value") or 0)
@@ -881,6 +899,14 @@ def _garage_entry_from_user_car(user_car: Dict[str, Any]) -> Optional[dict]:
 
 async def get_garage(current_user: dict = Depends(get_current_user)):
     uid = current_user.get("id") or ""
+    await db.user_cars.update_many(
+        {
+            "user_id": uid,
+            "car_id": {"$in": _damage_immune_car_ids()},
+            "damage_percent": {"$gt": 0},
+        },
+        {"$set": {"damage_percent": 0}},
+    )
     cars = await db.user_cars.find({"user_id": uid}).sort("acquired_at", -1).to_list(GARAGE_FETCH_LIMIT)
     user_doc = await db.users.find_one(
         {"id": uid},
@@ -897,6 +923,14 @@ async def get_garage(current_user: dict = Depends(get_current_user)):
 
 async def get_recent_stolen(current_user: dict = Depends(get_current_user)):
     """Last 10 cars stolen (by acquired_at desc) for the GTA page. Same shape as garage entries."""
+    await db.user_cars.update_many(
+        {
+            "user_id": current_user.get("id") or "",
+            "car_id": {"$in": _damage_immune_car_ids()},
+            "damage_percent": {"$gt": 0},
+        },
+        {"$set": {"damage_percent": 0}},
+    )
     cursor = (
         db.user_cars.find({"user_id": current_user.get("id") or ""})
         .sort("acquired_at", -1)
@@ -1491,9 +1525,8 @@ async def get_marketplace_listings(current_user: dict = Depends(get_current_user
         display_name = (uc.get("custom_name") or uc.get("car_name") or car_info.get("name")) if uc.get("car_id") == "car_custom" else (uc.get("car_name") or car_info.get("name"))
         seller = seller_map.get(uc.get("user_id") or "")
         listing_id = uc.get("id") or str(uc.get("_id", ""))
-        # Custom cars never have damage
         car_id = uc.get("car_id")
-        damage = 0 if car_id == "car_custom" else min(100, max(0, float(uc.get("damage_percent", 0))))
+        damage = 0 if _is_damage_immune_car(car_id, car_info.get("rarity")) else min(100, max(0, float(uc.get("damage_percent", 0))))
         # Public marketplace response: expose only seller_username, never raw seller_id
         out.append({
             "user_car_id": listing_id,
@@ -1705,12 +1738,15 @@ async def repair_car(
             user_car = None
     if not user_car:
         raise HTTPException(status_code=404, detail="Car not found in your garage")
-    damage = min(100, max(0, float(user_car.get("damage_percent", 0))))
-    if damage <= 0:
-        return {"message": "No repair needed", "damage_percent": 0}
     car_info = next((c for c in CARS if c.get("id") == user_car.get("car_id")), None)
     if not car_info:
         raise HTTPException(status_code=400, detail="Car type not found")
+    if _is_damage_immune_car(user_car.get("car_id"), car_info.get("rarity")):
+        damage = 0.0
+    else:
+        damage = min(100, max(0, float(user_car.get("damage_percent", 0))))
+    if damage <= 0:
+        return {"message": "No repair needed", "damage_percent": 0}
     value = int(car_info.get("value", 0))
     cost = max(1, round((damage / 100) * value * REPAIR_COST_FRACTION))
     result = await db.users.update_one(
@@ -1819,8 +1855,7 @@ async def get_view_car(
     car_id = user_car.get("car_id")
     rarity = car_info.get("rarity") or "common"
     travel_time = TRAVEL_TIMES.get("custom", 12) if car_id == "car_custom" else TRAVEL_TIMES.get(rarity, 45)
-    # Custom cars never have damage
-    damage_percent = 0 if car_id == "car_custom" else min(100, max(0, float(user_car.get("damage_percent", 0))))
+    damage_percent = 0 if _is_damage_immune_car(car_id, rarity) else min(100, max(0, float(user_car.get("damage_percent", 0))))
     name = user_car.get("custom_name") or user_car.get("car_name") or car_info.get("name")
     image = car_info.get("image")
     if car_id == "car_custom" and user_car.get("custom_image_url"):
