@@ -1376,6 +1376,7 @@ DEALER_PRICE_MULTIPLIER_BY_RARITY = {
     "custom": 1.2,
     "exclusive": 1.2,
 }
+DEALER_PRICE_GLOBAL_MULTIPLIER = 9.0
 
 
 def _dealer_max_stock(car_info: dict) -> int:
@@ -1385,7 +1386,7 @@ def _dealer_max_stock(car_info: dict) -> int:
 
 def _dealer_price_multiplier(car_info: dict) -> float:
     r = car_info.get("rarity") or "common"
-    return DEALER_PRICE_MULTIPLIER_BY_RARITY.get(r, 1.35)
+    return DEALER_PRICE_MULTIPLIER_BY_RARITY.get(r, 1.35) * DEALER_PRICE_GLOBAL_MULTIPLIER
 
 
 async def _fill_dealer_stock_full() -> None:

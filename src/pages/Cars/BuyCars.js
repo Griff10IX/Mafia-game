@@ -48,8 +48,6 @@ const RARITY_COLOR = {
   exclusive: 'text-red-400',
 };
 
-const PAGE_SIZE = 15;
-
 export default function BuyCars() {
   const [cars, setCars] = useState([]);
   const [dealerCars, setDealerCars] = useState([]);
@@ -60,7 +58,6 @@ export default function BuyCars() {
   const [sourceFilter, setSourceFilter] = useState('all'); // 'all' | 'dealer' | 'listing'
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [buying, setBuying] = useState(false);
-  const [page, setPage] = useState(0);
 
   const fetchAll = async () => {
     setLoading(true);
@@ -155,14 +152,7 @@ export default function BuyCars() {
     return list;
   }, [allVehicles, selectedRarity, sourceFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredVehicles.length / PAGE_SIZE));
-  const paginatedVehicles = useMemo(() => {
-    const start = page * PAGE_SIZE;
-    return filteredVehicles.slice(start, start + PAGE_SIZE);
-  }, [filteredVehicles, page]);
-
   useEffect(() => {
-    setPage(0);
     setSelectedIds(new Set());
   }, [selectedRarity, sourceFilter]);
 
@@ -185,7 +175,7 @@ export default function BuyCars() {
   };
 
   const toggleSelectAll = () => {
-    const canSelect = paginatedVehicles.filter((v) => v.canBuy).map((v) => v.id);
+    const canSelect = filteredVehicles.filter((v) => v.canBuy).map((v) => v.id);
     const allSelected = canSelect.length > 0 && canSelect.every((id) => selectedIds.has(id));
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -314,8 +304,8 @@ export default function BuyCars() {
               <tr className={`${styles.surface} text-[10px] uppercase tracking-wider font-heading text-primary/80 border-b border-border`}>
                 <th className="w-7 py-1 pl-1.5 pr-0">
                   <button type="button" onClick={toggleSelectAll} className="p-0.5 rounded hover:bg-primary/10" title="Check all">
-                    {paginatedVehicles.filter((v) => v.canBuy).length > 0 &&
-                    paginatedVehicles.filter((v) => v.canBuy).every((v) => selectedIds.has(v.id)) ? (
+                    {filteredVehicles.filter((v) => v.canBuy).length > 0 &&
+                    filteredVehicles.filter((v) => v.canBuy).every((v) => selectedIds.has(v.id)) ? (
                       <CheckSquare size={12} className="text-primary" />
                     ) : (
                       <Square size={12} className="text-mutedForeground" />
@@ -331,7 +321,7 @@ export default function BuyCars() {
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {paginatedVehicles.map((row) => (
+              {filteredVehicles.map((row) => (
                 <tr key={row.id} className={`bc-row transition-colors ${!row.canBuy ? 'opacity-60' : ''}`}>
                   <td className="py-1 pl-1.5 pr-0">
                     {row.source === 'dealer' && (row.inStock ?? 0) > 0 ? (
@@ -403,7 +393,7 @@ export default function BuyCars() {
             </tbody>
           </table>
         </div>
-        {paginatedVehicles.length === 0 && (
+        {filteredVehicles.length === 0 && (
           <p className="py-2 text-center text-[11px] text-mutedForeground font-heading">
             {selectedRarity ? `No vehicles in ${RARITY_LABELS[selectedRarity]}.` : 'No vehicles for sale.'}
           </p>
@@ -423,25 +413,6 @@ export default function BuyCars() {
               }`}
             >
               Buy — ${selectedTotal.toLocaleString()}
-            </button>
-          </div>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              disabled={page === 0}
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              className="p-1 rounded border border-border text-mutedForeground hover:text-foreground hover:border-primary/30 disabled:opacity-50 disabled:cursor-not-allowed font-heading text-[11px]"
-            >
-              Prev
-            </button>
-            <span className="text-[10px] font-heading text-mutedForeground px-1.5">{page + 1}/{totalPages}</span>
-            <button
-              type="button"
-              disabled={page >= totalPages - 1}
-              onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-              className="p-1 rounded border border-border text-mutedForeground hover:text-foreground hover:border-primary/30 disabled:opacity-50 disabled:cursor-not-allowed font-heading text-[11px]"
-            >
-              Next
             </button>
           </div>
         </div>
