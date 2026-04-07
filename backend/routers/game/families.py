@@ -131,7 +131,8 @@ def _family_melt_stats_reset_fields() -> dict:
     }
 
 
-# Tuned so all 9 rackets at level 5 generate about $10M/day total (before event/war multipliers).
+# Racket progression: extended levels for longer crew grind.
+# At full upgrade (all 9 rackets around level 15), hourly active collections land around multi-million/day treasury flow.
 RACKET_BASE_COOLDOWN_HOURS = 10 / 60  # 10 minutes
 FAMILY_RACKETS = [
     {"id": "protection", "name": "Protection Racket", "cooldown_hours": RACKET_BASE_COOLDOWN_HOURS, "base_income": 620, "description": "Extortion from businesses"},
@@ -146,7 +147,10 @@ FAMILY_RACKETS = [
 ]
 RACKET_UPGRADE_COST = 12_500  # 75% reduction
 RACKET_UNLOCK_COST = 25_000  # 75% reduction
-RACKET_MAX_LEVEL = 5
+RACKET_MAX_LEVEL = 15
+# One daily treasury bullet payout per racket, paid on first collect of the UTC day.
+# With all rackets maxed, this is roughly ~100 bullets/day total.
+RACKET_DAILY_BULLETS_PER_LEVEL = 0.75
 FAMILY_RACKET_ATTACK_BASE_SUCCESS = 0.70
 FAMILY_RACKET_ATTACK_LEVEL_PENALTY = 0.10
 FAMILY_RACKET_ATTACK_MIN_SUCCESS = 0.10
@@ -3286,6 +3290,11 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
     income_final = int(income * (1 + bonus_pct / 100.0) * founding_member_income_mult(current_user))
     last_at = state.get("last_collected_at")
     now = datetime.now(timezone.utc)
+    today_utc = now.date().isoformat()
+    last_bullet_payout_day = str(state.get("last_bullet_payout_day") or "")
+    bullets_bonus = 0
+    if level > 0 and last_bullet_payout_day != today_utc:
+        bullets_bonus = max(1, int(round(level * RACKET_DAILY_BULLETS_PER_LEVEL)))
     if last_at:
         try:
             last_dt = datetime.fromisoformat(last_at.replace("Z", "+00:00"))
@@ -3305,7 +3314,10 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
         except Exception:
             pass
     now_iso = now.isoformat()
-    rackets[racket_id] = {**state, "level": level, "last_collected_at": now_iso}
+    next_state = {**state, "level": level, "last_collected_at": now_iso}
+    if bullets_bonus > 0:
+        next_state["last_bullet_payout_day"] = today_utc
+    rackets[racket_id] = next_state
     filter_cond: dict = {"id": family_id}
     if last_at:
         filter_cond[f"rackets.{racket_id}.last_collected_at"] = last_at
@@ -3313,7 +3325,13 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
         # Unlocks store last_collected_at: null (field exists). {"$exists": false} does not match null → update never ran.
         lc_key = f"rackets.{racket_id}.last_collected_at"
         filter_cond["$or"] = [{lc_key: {"$exists": False}}, {lc_key: None}]
-    collect_result = await db.families.update_one(filter_cond, {"$set": {"rackets": rackets}, "$inc": {"treasury": income_final}})
+    collect_result = await db.families.update_one(
+        filter_cond,
+        {
+            "$set": {"rackets": rackets},
+            "$inc": {"treasury": income_final, "treasury_bullets": bullets_bonus},
+        },
+    )
     if collect_result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Racket on cooldown. Another collection likely just happened.")
     await log_family_vault_tx(
@@ -3323,11 +3341,14 @@ async def families_racket_collect(racket_id: str, current_user: dict = Depends(g
         current_user["id"],
         current_user.get("username") or "?",
         cash_delta=income_final,
+        bullets_delta=bullets_bonus,
         meta={"racket_id": racket_id},
     )
     msg = _rng.choice(FAMILY_RACKET_COLLECT_SUCCESS_MESSAGES).format(income=income_final)
+    if bullets_bonus > 0:
+        msg = f"{msg} +{bullets_bonus} bullets."
     _invalidate_my_cache(current_user["id"])
-    return {"message": msg, "amount": income_final}
+    return {"message": msg, "amount": income_final, "bullets": bullets_bonus}
 
 
 async def families_racket_unlock(racket_id: str, current_user: dict = Depends(get_current_user)):

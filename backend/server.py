@@ -2686,7 +2686,10 @@ async def startup_db():
         )
     # Sports betting auto-settle: in-process ticker (kickoff + delay) vs external cron only
     sports_settle_use_cron = (os.environ.get("SPORTS_AUTO_SETTLE_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
-    sports_settle_ticker = (os.environ.get("SPORTS_AUTO_SETTLE_TICKER") or "").strip().lower() in ("1", "true", "yes")
+    # Default ON so old open bets get settled automatically without extra setup.
+    # Set SPORTS_AUTO_SETTLE_TICKER=0 to disable when needed.
+    _sports_settle_ticker_raw = (os.environ.get("SPORTS_AUTO_SETTLE_TICKER") or "").strip().lower()
+    sports_settle_ticker = _sports_settle_ticker_raw not in ("0", "false", "no", "off")
     if sports_settle_use_cron:
         logging.getLogger(__name__).info(
             "Sports auto-settle: ticker disabled (SPORTS_AUTO_SETTLE_USE_CRON=1). Use POST /api/sports-betting/cron/auto-settle on a schedule."
@@ -2696,7 +2699,7 @@ async def startup_db():
 
         asyncio.create_task(sports_betting_mod.run_sports_auto_settle_ticker())
         logging.getLogger(__name__).info(
-            "Sports auto-settle: in-process ticker enabled (SPORTS_AUTO_SETTLE_TICKER=1). Multi-worker: each worker runs a ticker — use one worker or cron-only mode."
+            "Sports auto-settle: in-process ticker enabled (default ON; set SPORTS_AUTO_SETTLE_TICKER=0 to disable). Multi-worker: each worker runs a ticker — use one worker or cron-only mode."
         )
     from routers.cars import gta as gta_router
     asyncio.create_task(gta_router.run_dealer_replenish_loop())
