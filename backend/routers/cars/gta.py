@@ -487,6 +487,21 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
                 count = await db.user_cars.count_documents({"car_id": GTA_EXCLUSIVE_CAR_ID})
                 if count == 0:
                     exclusive_in_roll = True
+        # Auto-rank attempts should only roll exclusive while user is actively online.
+        # Manual GTA attempts are not affected.
+        if caller_updates_total_gta and exclusive_in_roll:
+            active_for_exclusive = False
+            now_for_active = datetime.now(timezone.utc)
+            ls_raw = current_user.get("last_seen")
+            ls_dt = _parse_iso_datetime(ls_raw) if ls_raw else None
+            if ls_dt and (now_for_active - ls_dt).total_seconds() <= 300:
+                active_for_exclusive = True
+            fu_raw = current_user.get("forced_online_until")
+            fu_dt = _parse_iso_datetime(fu_raw) if fu_raw else None
+            if fu_dt and fu_dt > now_for_active:
+                active_for_exclusive = True
+            if not active_for_exclusive:
+                exclusive_in_roll = False
         # Prestige bonus and loot-box GTA rare perk: weight rarer cars more heavily
         from server import get_prestige_bonus, founding_member_income_mult
         _fm_gta = founding_member_income_mult(current_user)
