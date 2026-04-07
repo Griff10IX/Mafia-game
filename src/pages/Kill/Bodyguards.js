@@ -769,7 +769,7 @@ export default function Bodyguards() {
               <button
                 type="button"
                 onClick={handleManualRefresh}
-                disabled={refreshing || loading}
+                disabled={refreshing}
                 className="flex items-center gap-1 px-2 py-1 rounded text-[10px] font-heading font-bold uppercase tracking-wide border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 transition-colors"
                 title="Refresh list and data"
               >

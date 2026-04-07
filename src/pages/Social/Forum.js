@@ -990,7 +990,7 @@ export default function Forum() {
     else if (searchParams.get('tab') === 'game_ideas') setActiveTab('game_ideas');
     else setActiveTab('general');
   }, [searchParams, location.state?.category]);
-  const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [gameModalOpen, setGameModalOpen] = useState(false);
   const [entertainerGames, setEntertainerGames] = useState([]);
@@ -1102,7 +1102,6 @@ export default function Forum() {
   }, [giImplSeasonId, isAdmin]);
 
   const fetchTopics = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
     try {
       const res = await api.get('/forum/topics', { params: { category: activeTab, page: forumPage } });
       setTopics(res.data?.topics ?? []);
@@ -1111,7 +1110,7 @@ export default function Forum() {
       if (!silent) toast.error('Failed to load forum');
       if (!silent) setTopics([]);
     } finally {
-      if (!silent) setLoading(false);
+      setHasLoaded(true);
     }
   }, [activeTab, forumPage]);
 
@@ -2322,12 +2321,8 @@ export default function Forum() {
           )}
         </div>
 
-        {loading ? (
-          <div className="p-6 flex flex-col items-center justify-center gap-3">
-            <MessageSquare size={28} className="text-primary/40 animate-pulse" />
-            <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-            <span className="text-primary text-[10px] font-heading uppercase tracking-[0.3em]">Loading...</span>
-          </div>
+        {!hasLoaded && topics.length === 0 ? (
+          <div className="p-6" />
         ) : topics.length === 0 ? (
           <div className="p-6 text-center text-xs text-mutedForeground">No topics yet. Create one!</div>
         ) : (

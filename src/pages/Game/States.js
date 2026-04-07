@@ -316,6 +316,8 @@ const StatsOverview = ({ cities, games, allOwners, bulletFactories, airports }) 
 
 export default function States() {
   const [data, setData] = useState({ cities: [], games: [], state_heads: {} });
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [bulletFactories, setBulletFactories] = useState([]);
   const [airports, setAirports] = useState([]);
   const [airportClaimCost, setAirportClaimCost] = useState(175_000_000);
@@ -343,6 +345,7 @@ export default function States() {
   const fetchStates = useCallback(() => {
     api.get('/states')
       .then((res) => {
+        setLoadError(false);
         setData({
           cities: res.data?.cities ?? [],
           games: res.data?.games ?? [],
@@ -363,9 +366,11 @@ export default function States() {
         }
       })
       .catch(() => {
+        setLoadError(true);
         toast.error('Failed to load states');
         setData({ cities: [], games: [], state_heads: {} });
-      });
+      })
+      .finally(() => setHasLoaded(true));
   }, []);
 
   useEffect(() => { fetchStates(); }, [fetchStates]);
@@ -485,7 +490,18 @@ export default function States() {
   const familyQualifiesForStateHead = !!familyMy?.qualifies_for_state_head;
   const stateHeads = data.state_heads || {};
 
-  if (cities.length === 0) {
+  if (!hasLoaded && cities.length === 0) {
+    return (
+      <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="states-page">
+        <style>{STATES_STYLES}</style>
+        <div className="relative st-fade-in">
+          <p className="text-[9px] text-zinc-500 font-heading italic">Travel · Casinos · Properties. Who owns what where.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (hasLoaded && loadError && cities.length === 0) {
     return (
       <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="states-page">
         <style>{STATES_STYLES}</style>

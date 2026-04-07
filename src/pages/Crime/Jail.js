@@ -21,15 +21,6 @@ const JAIL_BACKGROUND_IMAGE =
   process.env.REACT_APP_JAIL_BACKGROUND_IMAGE ||
   `${(process.env.PUBLIC_URL || '')}/jail-background.png`;
 
-// Subcomponents
-const LoadingSpinner = () => (
-  <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
-    <Lock size={22} className="text-primary/40 animate-pulse" />
-    <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-    <span className="text-primary text-[9px] font-heading uppercase tracking-[0.2em]">Loading...</span>
-  </div>
-);
-
 const JailStatusCard = ({ 
   inJail, 
   secondsRemaining, 
@@ -491,7 +482,6 @@ export default function Jail() {
     return (
       <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
         <style>{JAIL_STYLES}</style>
-        <LoadingSpinner />
       </div>
     );
   }
