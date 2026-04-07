@@ -102,6 +102,9 @@ export default function GraveRobber() {
   const totalSpent = Number(status?.total_spent || 0);
   const totalRewardsCash = Number(status?.total_rewards_cash || 0);
   const totalNetCash = Number(status?.total_net_cash || (totalRewardsCash - totalSpent));
+  const globalSpent = Number(status?.global_cash_spent || 0);
+  const globalCashWon = Number(status?.global_cash_won || 0);
+  const globalNetCash = Number(status?.global_net_cash || (globalCashWon - globalSpent));
 
   const tierChips = useMemo(() => {
     const list = [];
@@ -352,6 +355,36 @@ export default function GraveRobber() {
           </div>
           <div className="gr-art-line text-primary mx-3 mb-1" />
         </div>
+      </div>
+
+      <div className={`relative ${styles.panel} rounded-xl overflow-hidden border border-primary/20 gr-fade-in mobile-panel`} style={{ animationDelay: '0.075s' }}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-3 py-2 border-b border-primary/15">
+          <p className="text-[10px] font-heading font-bold uppercase tracking-[0.15em] text-primary">Game-Wide Profit / Loss</p>
+          <p className="text-[9px] text-zinc-500 font-heading">All players combined (cash-only).</p>
+        </div>
+        <div className="p-3 grid grid-cols-1 sm:grid-cols-3 gap-2 text-[10px] font-heading">
+          <div className="rounded border border-zinc-700/50 bg-zinc-900/35 px-2.5 py-2">
+            <p className="text-zinc-500 uppercase tracking-wider">Spent</p>
+            <p className="text-rose-400 font-bold tabular-nums">{formatMoney(globalSpent)}</p>
+          </div>
+          <div className="rounded border border-zinc-700/50 bg-zinc-900/35 px-2.5 py-2">
+            <p className="text-zinc-500 uppercase tracking-wider">Cash won</p>
+            <p className="text-emerald-400 font-bold tabular-nums">{formatMoney(globalCashWon)}</p>
+          </div>
+          <div className="rounded border border-zinc-700/50 bg-zinc-900/35 px-2.5 py-2">
+            <p className="text-zinc-500 uppercase tracking-wider">Net</p>
+            <p className={`font-bold tabular-nums ${globalNetCash >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+              {globalNetCash >= 0 ? '+' : '-'}{formatMoney(Math.abs(globalNetCash))}
+            </p>
+          </div>
+        </div>
+        <div className="px-3 pb-2">
+          <p className="text-[9px] text-zinc-600 font-heading">
+            Same scope as personal P/L: cash only. Bullets, points, tokens, and cars are excluded from this net line.
+          </p>
+        </div>
+        <div className="gr-art-line text-primary mx-3 mb-1" />
       </div>
 
       <div className={`relative ${styles.panel} rounded-xl overflow-hidden border border-primary/20 gr-fade-in mobile-panel`} style={{ animationDelay: '0.08s' }}>

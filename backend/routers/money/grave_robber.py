@@ -179,6 +179,19 @@ def register(router):
             {"user_id": uid},
             {"_id": 0},
         ).sort("attempted_at", -1).limit(GR_RECENT_ATTEMPTS_LIMIT).to_list(GR_RECENT_ATTEMPTS_LIMIT)
+        global_totals = await db.users.aggregate(
+            [
+                {
+                    "$group": {
+                        "_id": None,
+                        "spent": {"$sum": {"$ifNull": ["$grave_robber_total_spent", 0]}},
+                        "cash_won": {"$sum": {"$ifNull": ["$grave_robber_total_rewards_cash", 0]}},
+                    }
+                }
+            ]
+        ).to_list(1)
+        global_spent = int((global_totals[0] if global_totals else {}).get("spent") or 0)
+        global_cash_won = int((global_totals[0] if global_totals else {}).get("cash_won") or 0)
 
         return {
             "attempts_total": attempts_total,
@@ -201,6 +214,9 @@ def register(router):
             "total_rewards_bullets": int(fresh.get("grave_robber_total_rewards_bullets") or 0),
             "total_rewards_points": int(fresh.get("grave_robber_total_rewards_points") or 0),
             "total_net_cash": total_rewards_cash - total_spent,
+            "global_cash_spent": global_spent,
+            "global_cash_won": global_cash_won,
+            "global_net_cash": global_cash_won - global_spent,
             "possible_wins": [
                 {
                     "kind": "nothing",
