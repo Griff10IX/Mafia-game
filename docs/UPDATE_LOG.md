@@ -6,6 +6,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-06 23:00 UTC[/color][/b] — [b]Illegal Business: guard gear upgrades, mission meta perks, mission log[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Racket ladder[/b] now runs up to [b]100 missions[/b] with matching vault rewards and requirements; [b]security[/b] upgrades extend much further (endgame tiers cost more from the vault in line with those rewards). [b]Daily raid attempts[/b] can rise above the old default — complete certain missions to raise your cap (up to [b]10[/b]/day); the racket page shows [b]used / limit[/b]. [b]Guards[/b] treat [b]armour[/b] and [b]weapon[/b] unlocks separately from missions where those rewards apply. After hiring, you can raise each guard’s armour or weapon [b]from the vault[/b] (cost scales with current tier; still respects your unlock caps). Select high missions and the [b]century[/b] finale also grant [b]longer till cap[/b], [b]joint defence strength[/b], and [b]less cash lost when you are successfully raided[/b] (within server limits); the income panel summarizes active perks. [b]Mission log[/b] stays in the same collapsible but defaults to the [b]most recent[/b] completions — [b]Show all[/b] expands the full list. Full guard lists load for large crews, with per-guard upgrade prices on the racket screen.[/color]
+[*][color=#888888][b]Player action:[/b] Open [b]Money → Illegal Business[/b]: check [b]raids today / limit[/b], install further [b]security[/b] from the vault as you unlock tiers, use [b]+A[/b] / [b]+W[/b] on guards to upgrade gear, and keep climbing missions for till-cap, defence, and anti-raid perks. In the mission log, use [b]Show all completed[/b] when you want the full list.[/color]
+[*][color=#888888][b]Impact:[/b] Longer endgame progression, fairer raid limits for dedicated players, more control over guards and defence, and a readable mission history at scale.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-06 21:30 UTC[/color][/b] — [b]Casinos: max bet resets on relinquish or send[/b][/size]
 [quote]
 [list]
