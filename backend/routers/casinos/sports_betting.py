@@ -962,7 +962,7 @@ async def _auto_settle_fallback_football_data() -> int:
     matches = await _fetch_football_data_finished_matches(days_back=4)
     if not matches:
         return 0
-    bet_event_ids = await _linkable_open_event_ids_with_open_bets()
+    bet_event_ids = await _linkable_due_once_event_ids_with_open_bets()
     if not bet_event_ids:
         return 0
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -1050,7 +1050,7 @@ async def _auto_settle_fallback_f1_ergast() -> int:
     races = await _fetch_ergast_f1_results_recent()
     if not races:
         return 0
-    bet_event_ids = await _linkable_open_event_ids_with_open_bets()
+    bet_event_ids = await _linkable_due_once_event_ids_with_open_bets()
     if not bet_event_ids:
         return 0
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -1175,16 +1175,7 @@ async def _thesportsdb_search_finished_events(query: str) -> list[dict]:
 
 async def _auto_settle_fallback_thesportsdb_open_bets() -> int:
     """Fallback settle using TheSportsDB finished results for football/boxing-style 2-side events."""
-    bet_event_ids = await _linkable_open_event_ids_with_open_bets()
-    # Also include non-linkable open bet events so old manual/custom board events can still resolve.
-    rows = await db.sports_bets.aggregate([
-        {"$match": {"status": "open", "event_id": {"$exists": True, "$nin": [None, ""]}}},
-        {"$group": {"_id": "$event_id"}},
-    ]).to_list(5000)
-    for r in rows:
-        eid = str(r.get("_id") or "")
-        if eid:
-            bet_event_ids.add(eid)
+    bet_event_ids = await _open_bet_due_once_event_ids()
     if not bet_event_ids:
         return 0
 
@@ -1248,6 +1239,15 @@ async def _auto_settle_from_scores() -> dict:
     skipped_no_match = 0
     skipped_no_winner = 0
     fallback_settled = 0
+    due_open_event_ids = await _open_bet_due_once_event_ids()
+    if not due_open_event_ids:
+        return {
+            "settled": 0,
+            "skipped_no_match": 0,
+            "skipped_no_winner": 0,
+            "fallback_settled": 0,
+            "message": "No due open-bet events to settle",
+        }
     key = _odds_api_key()
     if not key:
         # Keep admin/cron/manual path useful even when Odds API key is absent.
@@ -1263,16 +1263,15 @@ async def _auto_settle_from_scores() -> dict:
             fallback_settled += await _auto_settle_fallback_thesportsdb_open_bets()
         except Exception as ex:
             logger.warning("Fallback auto-settle TheSportsDB failed (no Odds key): %s", ex)
+        try:
+            await db.sports_events.update_many(
+                {"id": {"$in": list(due_open_event_ids)}, "status": "open", "auto_settle_attempted_at": {"$exists": False}},
+                {"$set": {"auto_settle_attempted_at": datetime.now(timezone.utc).isoformat()}},
+            )
+        except Exception as ex:
+            logger.warning("Auto-settle attempted marker update failed (no Odds key): %s", ex)
         return {"settled": fallback_settled, "skipped_no_match": 0, "skipped_no_winner": 0, "source": "fallback_only"}
-    bet_event_ids = await _linkable_open_event_ids_with_open_bets()
-    if not bet_event_ids:
-        return {
-            "settled": fallback_settled,
-            "skipped_no_match": 0,
-            "skipped_no_winner": 0,
-            "fallback_settled": fallback_settled,
-            "message": "No open bet events to settle",
-        }
+    due_event_ids = await _linkable_due_once_event_ids_with_open_bets()
     sport_keys_used = set()
     for category, keys in ODDS_API_SPORT_KEYS.items():
         three_way = category == "Football"
@@ -1293,7 +1292,7 @@ async def _auto_settle_from_scores() -> dict:
                         "external_event_id": ext_id,
                         "external_sport_key": sport_key,
                         "status": "open",
-                        "id": {"$in": list(bet_event_ids)},
+                        "id": {"$in": list(due_event_ids)},
                     },
                     {"_id": 0, "id": 1, "options": 1},
                 )
@@ -1318,6 +1317,15 @@ async def _auto_settle_from_scores() -> dict:
         fallback_settled += await _auto_settle_fallback_thesportsdb_open_bets()
     except Exception as ex:
         logger.warning("Fallback auto-settle TheSportsDB failed: %s", ex)
+    # Mark all due events as attempted so each event is auto-processed only once.
+    try:
+        if due_open_event_ids:
+            await db.sports_events.update_many(
+                {"id": {"$in": list(due_open_event_ids)}, "status": "open", "auto_settle_attempted_at": {"$exists": False}},
+                {"$set": {"auto_settle_attempted_at": datetime.now(timezone.utc).isoformat()}},
+            )
+    except Exception as ex:
+        logger.warning("Auto-settle attempted marker update failed: %s", ex)
     return {
         "settled": settled_count + fallback_settled,
         "skipped_no_match": skipped_no_match,
@@ -3054,10 +3062,10 @@ async def admin_sports_event_request_deny(
 # ----- In-process auto-settle ticker (time-gated; optional via SPORTS_AUTO_SETTLE_TICKER) -----
 def _sports_auto_settle_minutes_after_start() -> int:
     try:
-        v = int(os.environ.get("SPORTS_AUTO_SETTLE_MINUTES_AFTER_START", "100"))
+        v = int(os.environ.get("SPORTS_AUTO_SETTLE_MINUTES_AFTER_START", "122"))
         return max(1, min(v, 600))
     except ValueError:
-        return 100
+        return 122
 
 
 def _sports_auto_settle_ticker_idle_sec() -> int:
@@ -3108,24 +3116,57 @@ async def _linkable_open_event_ids_with_open_bets() -> set[str]:
     return {str(r.get("_id") or "") for r in rows if r.get("_id")}
 
 
-async def any_linkable_open_event_past_settle_delay() -> bool:
-    """True if any open Odds-linked event (with open bets) is past kickoff + configured delay."""
+async def _open_bet_due_once_event_ids() -> set[str]:
+    """Open events with open bets that reached delay and have not been auto-attempted yet."""
+    bet_event_ids = await _linkable_open_event_ids_with_open_bets()
+    if not bet_event_ids:
+        return set()
     now = datetime.now(timezone.utc)
     delay = timedelta(minutes=_sports_auto_settle_minutes_after_start())
-    event_ids = await _linkable_open_event_ids_with_open_bets()
-    if not event_ids:
-        return False
     cursor = db.sports_events.find(
-        {**_LINKABLE_OPEN_EVENT_FILTER, "id": {"$in": list(event_ids)}},
-        {"_id": 0, "start_time": 1},
-    ).limit(1000)
+        {
+            "status": "open",
+            "id": {"$in": list(bet_event_ids)},
+            "auto_settle_attempted_at": {"$exists": False},
+        },
+        {"_id": 0, "id": 1, "start_time": 1},
+    ).limit(3000)
+    out: set[str] = set()
     async for doc in cursor:
+        eid = str(doc.get("id") or "")
+        if not eid:
+            continue
         st = _parse_start_time_utc(doc.get("start_time"))
-        if st is None:
-            return True
-        if now >= st + delay:
-            return True
-    return False
+        if st is None or now >= st + delay:
+            out.add(eid)
+    return out
+
+
+async def _linkable_due_once_event_ids_with_open_bets() -> set[str]:
+    """Open Odds-linked events with open bets that are due for their one auto-settle attempt."""
+    bet_event_ids = await _open_bet_due_once_event_ids()
+    if not bet_event_ids:
+        return set()
+    cursor = db.sports_events.find(
+        {
+            **_LINKABLE_OPEN_EVENT_FILTER,
+            "id": {"$in": list(bet_event_ids)},
+        },
+        {"_id": 0, "id": 1},
+    ).limit(2000)
+    out: set[str] = set()
+    async for doc in cursor:
+        eid = str(doc.get("id") or "")
+        if not eid:
+            continue
+        out.add(eid)
+    return out
+
+
+async def any_linkable_open_event_past_settle_delay() -> bool:
+    """True if any open Odds-linked event is due for its one auto-settle attempt."""
+    due_ids = await _linkable_due_once_event_ids_with_open_bets()
+    return len(due_ids) > 0
 
 
 async def _seconds_until_next_linkable_eligible_or_cap() -> float:
@@ -3141,7 +3182,11 @@ async def _seconds_until_next_linkable_eligible_or_cap() -> float:
     if not event_ids:
         return 0.0
     cursor = db.sports_events.find(
-        {**_LINKABLE_OPEN_EVENT_FILTER, "id": {"$in": list(event_ids)}},
+        {
+            **_LINKABLE_OPEN_EVENT_FILTER,
+            "id": {"$in": list(event_ids)},
+            "auto_settle_attempted_at": {"$exists": False},
+        },
         {"_id": 0, "start_time": 1},
     ).limit(1000)
     async for doc in cursor:
@@ -3177,13 +3222,11 @@ async def run_sports_auto_settle_ticker() -> None:
             warned_no_key = False
 
             try:
-                event_ids = await _linkable_open_event_ids_with_open_bets()
-                if not event_ids:
+                due_ids = await _linkable_due_once_event_ids_with_open_bets()
+                if not due_ids:
                     await asyncio.sleep(_sports_auto_settle_ticker_idle_sec())
                     continue
-                n_linkable = await db.sports_events.count_documents(
-                    {**_LINKABLE_OPEN_EVENT_FILTER, "id": {"$in": list(event_ids)}},
-                )
+                n_linkable = len(due_ids)
             except Exception as ex:
                 log.warning("Sports auto-settle ticker: count linkable events failed: %s", ex)
                 await asyncio.sleep(300)

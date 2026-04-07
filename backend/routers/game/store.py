@@ -11,6 +11,13 @@ from fastapi import Depends, HTTPException, Query
 from utils.profanity import contains_profanity
 
 
+def _normalize_store_pay_with(pay_with: str) -> str:
+    v = (str(pay_with or "auto")).strip().lower()
+    if v in ("points", "respect", "auto"):
+        return v
+    raise HTTPException(status_code=400, detail="pay_with must be 'points' or 'respect'")
+
+
 def _store_respect_cost_for_points(k: int) -> int:
     """Respect spent to cover k 'points' of store price using respect (+35% vs old 5*k: ceil(6.75*k))."""
     k = int(k)
@@ -28,17 +35,29 @@ def _store_max_points_coverable_by_respect(respect_balance: int, points_cost: in
     return min(p, (4 * r) // 27)
 
 
-def _store_cost_inc(current_user: dict, points_cost: int):
+def _store_cost_inc(current_user: dict, points_cost: int, pay_with: str = "auto"):
     """Return (cost_used, $inc dict, $gte filter dict) for atomic store purchases.
     Uses respect first at ceil(6.75 respect per point of price) vs old 5:1, then points for the remainder.
     Returns (None, None, None) if insufficient funds."""
+    mode = _normalize_store_pay_with(pay_with)
     respect_balance = int(current_user.get("respect_points") or 0)
     points_balance = int(current_user.get("points") or 0)
-    use_respect_equiv = _store_max_points_coverable_by_respect(respect_balance, points_cost)
-    respect_decrement = _store_respect_cost_for_points(use_respect_equiv)
-    points_decrement = points_cost - use_respect_equiv
-    if points_balance < points_decrement:
-        return None, None, None
+    if mode == "points":
+        if points_balance < points_cost:
+            return None, None, None
+        respect_decrement = 0
+        points_decrement = points_cost
+    elif mode == "respect":
+        respect_decrement = _store_respect_cost_for_points(points_cost)
+        if respect_balance < respect_decrement:
+            return None, None, None
+        points_decrement = 0
+    else:
+        use_respect_equiv = _store_max_points_coverable_by_respect(respect_balance, points_cost)
+        respect_decrement = _store_respect_cost_for_points(use_respect_equiv)
+        points_decrement = points_cost - use_respect_equiv
+        if points_balance < points_decrement:
+            return None, None, None
     inc = {}
     gte = {}
     if respect_decrement > 0:
@@ -233,12 +252,13 @@ class BuyStoreTokenBundleBody(BaseModel):
 
 
 async def buy_premium_rank_bar(
+    pay_with: str = Query("auto"),
     current_user: dict = Depends(get_current_user),
 ):
     if current_user.get("premium_rank_bar", False):
         raise HTTPException(status_code=400, detail="You already own the premium rank bar")
     cost = 50
-    cost_used, inc, gte_filter = _store_cost_inc(current_user, cost)
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, cost, pay_with)
     if not cost_used:
         raise HTTPException(status_code=400, detail="Insufficient points")
     result = await db.users.update_one(
@@ -253,11 +273,12 @@ async def buy_premium_rank_bar(
 
 
 async def buy_silencer(
+    pay_with: str = Query("auto"),
     current_user: dict = Depends(get_current_user),
 ):
     if current_user.get("has_silencer", False):
         raise HTTPException(status_code=400, detail="You already own a silencer")
-    cost_used, inc, gte_filter = _store_cost_inc(current_user, SILENCER_COST_POINTS)
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, SILENCER_COST_POINTS, pay_with)
     if not cost_used:
         raise HTTPException(status_code=400, detail="Insufficient points")
     owned = await db.user_weapons.find_one({"user_id": current_user["id"], "quantity": {"$gt": 0}}, {"_id": 0})
@@ -274,12 +295,13 @@ async def buy_silencer(
 
 
 async def buy_anti_snitch(
+    pay_with: str = Query("auto"),
     current_user: dict = Depends(get_current_user),
 ):
     """Purchase Anti Snitch: you cannot be snitched on by other players in jail."""
     if current_user.get("anti_snitch", False):
         raise HTTPException(status_code=400, detail="You already have Anti Snitch")
-    cost_used, inc, gte_filter = _store_cost_inc(current_user, ANTI_SNITCH_COST_POINTS)
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, ANTI_SNITCH_COST_POINTS, pay_with)
     if not cost_used:
         raise HTTPException(status_code=400, detail="Insufficient points")
     result = await db.users.update_one(
@@ -293,11 +315,12 @@ async def buy_anti_snitch(
 
 
 async def buy_oc_timer(
+    pay_with: str = Query("auto"),
     current_user: dict = Depends(get_current_user),
 ):
     if current_user.get("oc_timer_reduced", False):
         raise HTTPException(status_code=400, detail="You already have the reduced OC timer (4h)")
-    cost_used, inc, gte_filter = _store_cost_inc(current_user, OC_TIMER_COST_POINTS)
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, OC_TIMER_COST_POINTS, pay_with)
     if not cost_used:
         raise HTTPException(status_code=400, detail="Insufficient points")
     result = await db.users.update_one(
@@ -311,12 +334,13 @@ async def buy_oc_timer(
 
 
 async def buy_crew_oc_timer(
+    pay_with: str = Query("auto"),
     current_user: dict = Depends(get_current_user),
 ):
     """Crew OC (family): when you commit, cooldown is 6h instead of 8h."""
     if current_user.get("crew_oc_timer_reduced", False):
         raise HTTPException(status_code=400, detail="You already have the Crew OC timer (6h)")
-    cost_used, inc, gte_filter = _store_cost_inc(current_user, CREW_OC_TIMER_COST_POINTS)
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, CREW_OC_TIMER_COST_POINTS, pay_with)
     if not cost_used:
         raise HTTPException(status_code=400, detail="Insufficient points")
     result = await db.users.update_one(
@@ -330,12 +354,13 @@ async def buy_crew_oc_timer(
 
 
 async def upgrade_garage_batch_limit(
+    pay_with: str = Query("auto"),
     current_user: dict = Depends(get_current_user),
 ):
     current_limit = current_user.get("garage_batch_limit", DEFAULT_GARAGE_BATCH_LIMIT)
     if current_limit >= GARAGE_BATCH_LIMIT_MAX:
         raise HTTPException(status_code=400, detail="Garage batch limit already maxed")
-    cost_used, inc, gte_filter = _store_cost_inc(current_user, GARAGE_BATCH_UPGRADE_COST)
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, GARAGE_BATCH_UPGRADE_COST, pay_with)
     if not cost_used:
         raise HTTPException(status_code=400, detail="Insufficient points")
     new_limit = min(GARAGE_BATCH_LIMIT_MAX, current_limit + GARAGE_BATCH_UPGRADE_INCREMENT)
@@ -350,12 +375,13 @@ async def upgrade_garage_batch_limit(
 
 
 async def buy_booze_capacity(
+    pay_with: str = Query("auto"),
     current_user: dict = Depends(get_current_user),
 ):
     current_bonus = min(current_user.get("booze_capacity_bonus", 0), BOOZE_CAPACITY_BONUS_MAX)
     if current_bonus >= BOOZE_CAPACITY_BONUS_MAX:
         raise HTTPException(status_code=400, detail="Booze capacity bonus is already at the maximum (1000)")
-    cost_used, inc, gte_filter = _store_cost_inc(current_user, BOOZE_CAPACITY_UPGRADE_COST)
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, BOOZE_CAPACITY_UPGRADE_COST, pay_with)
     if not cost_used:
         raise HTTPException(status_code=400, detail="Insufficient points")
     add_bonus = min(BOOZE_CAPACITY_UPGRADE_AMOUNT, BOOZE_CAPACITY_BONUS_MAX - current_bonus)
@@ -400,12 +426,13 @@ async def store_buy_bullets(
 
 
 async def buy_auto_rank(
+    pay_with: str = Query("auto"),
     current_user: dict = Depends(get_current_user),
 ):
     """Purchase Auto Rank; user enables it themselves on the Auto Rank page. Telegram is optional (for notifications)."""
     if current_user.get("auto_rank_purchased", False) and not current_user.get("auto_rank_trial"):
         raise HTTPException(status_code=400, detail="You already purchased Auto Rank")
-    cost_used, inc, gte_filter = _store_cost_inc(current_user, AUTO_RANK_COST_POINTS)
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, AUTO_RANK_COST_POINTS, pay_with)
     if not cost_used:
         raise HTTPException(status_code=400, detail="Insufficient points")
     result = await db.users.update_one(
@@ -422,13 +449,14 @@ async def buy_auto_rank(
 
 
 async def buy_health(
+    pay_with: str = Query("auto"),
     current_user: dict = Depends(get_current_user),
 ):
     """Restore health to 100% for 15 points (or 102 respect if paid fully with respect)."""
     current_health = float(current_user.get("health", FULL_HEALTH))
     if current_health >= FULL_HEALTH:
         raise HTTPException(status_code=400, detail="You already have full health")
-    cost_used, inc, gte_filter = _store_cost_inc(current_user, BUY_HEALTH_COST_POINTS)
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, BUY_HEALTH_COST_POINTS, pay_with)
     if not cost_used:
         raise HTTPException(status_code=400, detail="Insufficient points")
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -444,6 +472,7 @@ async def buy_health(
 
 async def buy_custom_car(
     request: CustomCarPurchase,
+    pay_with: str = Query("auto"),
     current_user: dict = Depends(get_current_user),
 ):
     if not request.car_name or len(request.car_name) < 2 or len(request.car_name) > 30:
@@ -452,7 +481,7 @@ async def buy_custom_car(
     extra = frozenset(additions) if additions else None
     if contains_profanity(request.car_name, extra_words=extra):
         raise HTTPException(status_code=400, detail="Custom car name contains disallowed language.")
-    cost_used, inc, gte_filter = _store_cost_inc(current_user, CUSTOM_CAR_COST)
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, CUSTOM_CAR_COST, pay_with)
     if not cost_used:
         raise HTTPException(status_code=400, detail="Insufficient points")
     result = await db.users.update_one(
@@ -717,6 +746,7 @@ async def buy_shooting_range_bonus(
 
 
 async def buy_hitlist_npc_bonus_slot(
+    pay_with: str = Query("auto"),
     current_user: dict = Depends(get_current_user),
 ):
     """Increase hitlist NPC add cap by +1 (3h window). Base 3; store can raise to 6."""
@@ -725,7 +755,7 @@ async def buy_hitlist_npc_bonus_slot(
         raise HTTPException(status_code=400, detail="Hitlist NPC practice target cap is already maxed")
     next_bonus_slot = cur_bonus + 1
     cost = _hitlist_npc_bonus_slot_cost(next_bonus_slot)
-    cost_used, inc, gte_filter = _store_cost_inc(current_user, cost)
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, cost, pay_with)
     if not cost_used:
         raise HTTPException(status_code=400, detail="Insufficient points")
     inc["hitlist_npc_bonus_slots"] = inc.get("hitlist_npc_bonus_slots", 0) + 1

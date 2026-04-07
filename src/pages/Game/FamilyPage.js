@@ -1227,8 +1227,7 @@ const FamiliesTab = ({ families, myFamilyId }) => {
             style={{ animationDelay: `${idx * 0.03}s` }}
           >
             {myFamilyId === f.id && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary/60" />}
-            <div className="min-w-0 flex-1 flex items-start gap-2">
-              <FamilyEmblem emblemPresetId={f.emblem_preset_id} avatarUrl={f.avatar_url} size={36} className="mt-0.5" />
+            <div className="min-w-0 flex-1 flex items-start">
               <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="font-heading font-bold text-foreground text-xs group-hover:text-primary transition-colors tracking-wide">{f.name}</span>

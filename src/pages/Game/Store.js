@@ -159,7 +159,7 @@ const Tab = ({ active, onClick, children, disabled, className = '' }) => (
   </button>
 );
 
-const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, onBuy, loading, disabled, user, children }) => (
+const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, onBuy, loading, disabled, user, payWith = 'auto', children }) => (
   <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
     <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
@@ -175,10 +175,34 @@ const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, onBuy, loadi
         <button
           type="button"
           onClick={() => onBuy()}
-          disabled={loading || disabled || (user && respectPrice != null && (user.points ?? 0) < price && (user.respect_points ?? 0) < respectPrice)}
+          disabled={
+            loading
+            || disabled
+            || (
+              user
+              && respectPrice != null
+              && (
+                payWith === 'points'
+                  ? (user.points ?? 0) < price
+                  : payWith === 'respect'
+                    ? (user.respect_points ?? 0) < respectPrice
+                    : ((user.points ?? 0) < price && (user.respect_points ?? 0) < respectPrice)
+              )
+            )
+          }
           className="w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 mt-1 touch-manipulation"
         >
-          {loading ? '...' : respectPrice != null ? `${price} pts or ${respectPrice} resp` : `${price} pts`}
+          {loading
+            ? '...'
+            : respectPrice != null
+              ? (
+                payWith === 'points'
+                  ? `${price} pts`
+                  : payWith === 'respect'
+                    ? `${respectPrice} resp`
+                    : `${price} pts or ${respectPrice} resp`
+              )
+              : `${price} pts`}
         </button>
       )}
     </div>
@@ -218,6 +242,7 @@ export default function Store() {
   const [manualCreditEta, setManualCreditEta] = useState(null);
   const [pendingPoints, setPendingPoints] = useState(0);
   const [claimingPending, setClaimingPending] = useState(false);
+  const [upgradesPayWith, setUpgradesPayWith] = useState('points');
 
   const handleClaimPendingPoints = async () => {
     setClaimingPending(true);
@@ -770,6 +795,17 @@ export default function Store() {
               <span className="text-foreground font-semibold">5,000 pts</span> or the respect equivalent — the buy button shows both prices.
               {' '}Bought upgrades are removed from this list once owned permanently (e.g. Auto Rank after purchase — trial access still shows the buy option).
             </p>
+            <div className="flex items-center gap-2">
+              <span className="text-[9px] text-zinc-500 font-heading uppercase tracking-wider">Pay with</span>
+              <select
+                value={upgradesPayWith}
+                onChange={(e) => setUpgradesPayWith(e.target.value === 'respect' ? 'respect' : 'points')}
+                className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-[10px] text-foreground focus:border-primary/50 focus:outline-none"
+              >
+                <option value="points">Points</option>
+                <option value="respect">Respect points</option>
+              </select>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2">
           {UPGRADES.filter((u) => {
             if (u.id === 'auto-rank') {
@@ -806,7 +842,8 @@ export default function Store() {
                 loading={loading}
                 disabled={disabled}
                 user={user}
-                onBuy={() => apiBuy(u.path, {}, 'Purchased')}
+                payWith={upgradesPayWith}
+                onBuy={() => apiBuy(`${u.path}?pay_with=${encodeURIComponent(upgradesPayWith)}`, {}, 'Purchased')}
               >
                 {extra && (
                   <p className="text-[10px] text-mutedForeground mb-1">Current: {extra.value}</p>
@@ -848,12 +885,20 @@ export default function Store() {
                         toast.error('Custom car name contains disallowed language.');
                         return;
                       }
-                      apiBuy('/store/buy-custom-car', { car_name: name }, 'Custom car purchased').then(() => setCustomCarName(''));
+                      apiBuy(`/store/buy-custom-car?pay_with=${encodeURIComponent(upgradesPayWith)}`, { car_name: name }, 'Custom car purchased').then(() => setCustomCarName(''));
                     }}
-                    disabled={!user || ((user.points ?? 0) < 500 && (user.respect_points ?? 0) < storeRespectForPoints(500)) || !customCarName.trim()}
+                    disabled={
+                      !user
+                      || !customCarName.trim()
+                      || (
+                        upgradesPayWith === 'points'
+                          ? (user.points ?? 0) < 500
+                          : (user.respect_points ?? 0) < storeRespectForPoints(500)
+                      )
+                    }
                     className="w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
                   >
-                    {`500 pts or ${storeRespectForPoints(500)} resp`}
+                    {upgradesPayWith === 'points' ? '500 pts' : `${storeRespectForPoints(500)} resp`}
                   </button>
                 </div>
               </div>
