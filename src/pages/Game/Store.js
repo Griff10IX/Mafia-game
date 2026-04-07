@@ -37,7 +37,7 @@ const BULLET_PACKS = [
 ];
 const CUSTOM_BULLETS_MAX = 250_000;
 
-const VALID_TABS = ['points', 'sendpts', 'upgrades', 'bullets'];
+const VALID_TABS = ['points', 'sendpts', 'upgrades', 'tokens', 'bullets'];
 const bulletCost = (bullets) => bullets < 5000 ? Math.max(1, Math.floor(bullets * 0.02)) : 100 + Math.ceil((bullets - 5000) * 75 / 5000);
 
 /** Match backend store._store_respect_cost_for_points: +35% vs old 5:1 → ceil(6.75×pts) = (pts×27+3)//4 */
@@ -574,6 +574,7 @@ export default function Store() {
         >Points</Tab>
         <Tab active={activeTab === 'sendpts'} onClick={() => { setActiveTab('sendpts'); setSearchParams({ tab: 'sendpts' }); }}>Send pts</Tab>
         <Tab active={activeTab === 'upgrades'} onClick={() => { setActiveTab('upgrades'); setSearchParams({ tab: 'upgrades' }); }}>Upgrades</Tab>
+        <Tab active={activeTab === 'tokens'} onClick={() => { setActiveTab('tokens'); setSearchParams({ tab: 'tokens' }); }}>Tokens</Tab>
         <Tab active={activeTab === 'bullets'} onClick={() => { setActiveTab('bullets'); setSearchParams({ tab: 'bullets' }); }}>Bullets</Tab>
       </div>
 
@@ -817,6 +818,52 @@ export default function Store() {
             </div>
           </div>
 
+          {/* Custom Car — always show (can buy multiple) */}
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+              <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+              <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
+                <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Custom Car</span>
+                <Car className="text-primary shrink-0" size={14} />
+              </div>
+              <div className="p-2.5">
+                <p className="text-[10px] text-mutedForeground font-heading mb-1.5">Named car, 12s travel, below Exclusive.</p>
+                <input
+                  type="text"
+                  placeholder="Name (2–30 chars)"
+                  value={customCarName}
+                  onChange={(e) => setCustomCarName(e.target.value)}
+                  maxLength={30}
+                  className="w-full px-2 py-1.5 text-xs bg-zinc-900/50 border border-zinc-700/50 rounded mb-1.5 focus:border-primary/50 focus:outline-none"
+                />
+                <div className="flex gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const name = customCarName.trim();
+                      if (!name || name.length < 2) {
+                        toast.error('Name 2+ characters');
+                        return;
+                      }
+                      if (containsProfanity(name)) {
+                        toast.error('Custom car name contains disallowed language.');
+                        return;
+                      }
+                      apiBuy('/store/buy-custom-car', { car_name: name }, 'Custom car purchased').then(() => setCustomCarName(''));
+                    }}
+                    disabled={!user || ((user.points ?? 0) < 500 && (user.respect_points ?? 0) < storeRespectForPoints(500)) || !customCarName.trim()}
+                    className="w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
+                  >
+                    {`500 pts or ${storeRespectForPoints(500)} resp`}
+                  </button>
+                </div>
+              </div>
+              <div className="store-art-line text-primary mx-3" />
+            </div>
+        </div>
+      )}
+
+      {activeTab === 'tokens' && (
+        <div className="space-y-6">
           <div className="space-y-2">
             <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Consumable tokens</h2>
             <p className="text-[9px] text-zinc-500 font-heading italic max-w-2xl">
@@ -867,47 +914,6 @@ export default function Store() {
               ))}
             </div>
           </div>
-          {/* Custom Car — always show (can buy multiple) */}
-          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
-              <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-              <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
-                <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Custom Car</span>
-                <Car className="text-primary shrink-0" size={14} />
-              </div>
-              <div className="p-2.5">
-                <p className="text-[10px] text-mutedForeground font-heading mb-1.5">Named car, 12s travel, below Exclusive.</p>
-                <input
-                  type="text"
-                  placeholder="Name (2–30 chars)"
-                  value={customCarName}
-                  onChange={(e) => setCustomCarName(e.target.value)}
-                  maxLength={30}
-                  className="w-full px-2 py-1.5 text-xs bg-zinc-900/50 border border-zinc-700/50 rounded mb-1.5 focus:border-primary/50 focus:outline-none"
-                />
-                <div className="flex gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const name = customCarName.trim();
-                      if (!name || name.length < 2) {
-                        toast.error('Name 2+ characters');
-                        return;
-                      }
-                      if (containsProfanity(name)) {
-                        toast.error('Custom car name contains disallowed language.');
-                        return;
-                      }
-                      apiBuy('/store/buy-custom-car', { car_name: name }, 'Custom car purchased').then(() => setCustomCarName(''));
-                    }}
-                    disabled={!user || ((user.points ?? 0) < 500 && (user.respect_points ?? 0) < storeRespectForPoints(500)) || !customCarName.trim()}
-                    className="w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
-                  >
-                    {`500 pts or ${storeRespectForPoints(500)} resp`}
-                  </button>
-                </div>
-              </div>
-              <div className="store-art-line text-primary mx-3" />
-            </div>
         </div>
       )}
 

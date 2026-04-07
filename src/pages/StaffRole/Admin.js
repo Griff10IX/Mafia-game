@@ -2866,6 +2866,17 @@ export default function Admin() {
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
   };
 
+  const handleRemoveCar = async () => {
+    try {
+      const u = (formData.targetUsername || '').trim();
+      if (!u) { toast.error('Enter target username'); return; }
+      const response = await api.post(`/admin/remove-car?target_username=${encodeURIComponent(u)}&car_id=${encodeURIComponent(formData.carId)}`);
+      const removed = Number(response.data?.removed_count || 0);
+      const carName = response.data?.car_name || formData.carId || 'car';
+      toast.success(`Removed ${removed.toLocaleString()} ${carName} from ${u}`);
+    } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
   const handleAddRandomCars = async (count = 1000) => {
     try {
       const u = (formData.targetUsername || '').trim();
@@ -8148,6 +8159,9 @@ export default function Admin() {
                 {cars.length > 0 ? cars.map((c) => <option key={c.id} value={c.id}>{c.name}</option>) : Array.from({ length: 20 }, (_, i) => <option key={i} value={`car${i + 1}`}>Car {i + 1}</option>)}
               </Select>
               <BtnPrimary onClick={handleAddCar}>Add</BtnPrimary>
+              <BtnDanger onClick={handleRemoveCar} title="Removes all instances of the selected car from the target user.">
+                Remove
+              </BtnDanger>
               <BtnSecondary onClick={() => handleAddRandomCars(1000)} title="Adds 1000 random cars to the target user's garage (bulk insert).">
                 +1000 random
               </BtnSecondary>

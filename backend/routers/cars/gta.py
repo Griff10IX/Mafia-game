@@ -195,6 +195,22 @@ GTA_MILESTONE_REWARDS = {
 }
 
 
+async def _sync_gta_exclusive_pool_release_state() -> bool:
+    """
+    Keep GTA exclusive pool release in sync with ownership.
+    - If any copy exists: released=False.
+    - If no copies exist: released=True (auto-reopen pool).
+    """
+    existing_count = await db.user_cars.count_documents({"car_id": GTA_EXCLUSIVE_CAR_ID})
+    should_release = existing_count == 0
+    await db.game_config.update_one(
+        {"id": GTA_EXCLUSIVE_POOL_CONFIG_ID},
+        {"$set": {"released": should_release}},
+        upsert=True,
+    )
+    return should_release
+
+
 async def _award_gta_milestones(user_id: str, new_total_gta: int, claimed: list, bonus_mult: float = 1.0) -> None:
     """If new_total_gta crosses any unclaimed milestone, award respect_points and mark claimed."""
     new_claimed = [m for m in GTA_MILESTONES if m <= new_total_gta and m not in claimed]
@@ -459,6 +475,8 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         exclusive_drop_weight = GTA_EXCLUSIVE_DROP_WEIGHT_DEFAULT
         exclusive_in_roll = False
         if exclusive_car:
+            # Auto-sync pool state to ownership so exclusive reopens when last copy is gone.
+            await _sync_gta_exclusive_pool_release_state()
             config = await db.game_config.find_one(
                 {"id": GTA_EXCLUSIVE_POOL_CONFIG_ID},
                 {"_id": 0, "released": 1, "drop_weight": 1},
@@ -1860,20 +1878,8 @@ async def run_dealer_replenish_loop():
 
 async def get_gta_exclusive_pool_status(current_user: dict = Depends(get_current_user)):
     """Return whether the Al Capone exclusive is currently in the GTA car pool (any authenticated user)."""
-    doc = await db.game_config.find_one({"id": GTA_EXCLUSIVE_POOL_CONFIG_ID}, {"_id": 0, "released": 1})
-    released = bool(doc.get("released") if doc else False)
-    if not released:
-        return {"exclusive_in_pool": False}
-    # Pool is effectively off once at least one exists in garages.
-    existing_count = await db.user_cars.count_documents({"car_id": GTA_EXCLUSIVE_CAR_ID})
-    if existing_count > 0:
-        await db.game_config.update_one(
-            {"id": GTA_EXCLUSIVE_POOL_CONFIG_ID},
-            {"$set": {"released": False}},
-            upsert=True,
-        )
-        return {"exclusive_in_pool": False}
-    return {"exclusive_in_pool": True}
+    released = await _sync_gta_exclusive_pool_release_state()
+    return {"exclusive_in_pool": bool(released)}
 
 
 def register(router):

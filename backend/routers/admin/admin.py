@@ -2468,6 +2468,27 @@ def register(router):
             await maybe_revoke_civilian_protection(db, target["id"], "exclusive_car")
         return {"message": f"Added {car['name']} to {target_username}'s garage"}
 
+    @router.post("/admin/remove-car")
+    async def admin_remove_car(target_username: str, car_id: str, current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        car = next((c for c in CARS if c["id"] == car_id), None)
+        if not car:
+            raise HTTPException(status_code=404, detail="Car not found")
+        result = await db.user_cars.delete_many({"user_id": target["id"], "car_id": car_id})
+        removed = int(result.deleted_count or 0)
+        return {
+            "message": f"Removed {removed} {car['name']} from {target.get('username', target_username)}",
+            "removed_count": removed,
+            "car_id": car_id,
+            "car_name": car["name"],
+            "target_username": target.get("username", target_username),
+        }
+
     @router.post("/admin/add-random-cars")
     async def admin_add_random_cars(target_username: str, count: int = 1000, current_user: dict = Depends(get_current_user)):
         """Give a user N random cars (default 1000). Admin only."""

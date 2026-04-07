@@ -826,6 +826,9 @@ export default function Distillery() {
             <div className="dist-panel">
               <SectionHead icon={Users} title="Crew Roster" />
               <div className="dist-worker-cap">{workerTotal} / {workerCap} workers assigned</div>
+              <div className="text-[10px] text-mutedForeground font-heading mb-2">
+                Increase worker cap by upgrading <strong className="text-foreground">Bribe Office</strong> (+2 capacity per level).
+              </div>
               <div className="dist-worker-grid">
                 {['production', 'quality', 'security', 'sales'].map((role) => {
                   const current = Number(workers[role] || 0);

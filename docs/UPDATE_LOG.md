@@ -6,6 +6,28 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-07 01:35 UTC[/color][/b] — [b]GTA exclusive pool auto-reopens when the car leaves the game[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] The Al Capone [b]exclusive GTA pool[/b] now auto-syncs with ownership. If any copy exists in player garages, the pool stays retracted. If no copies exist anymore (for example after melt/scrap/removal), the pool is automatically released again so it can drop on successful GTA attempts.[/color]
+[*][color=#888888][b]Player action:[/b] No action needed. Staff no longer need to manually re-toggle the pool after the last copy leaves circulation.[/color]
+[*][color=#888888][b]Impact:[/b] Cleaner exclusive lifecycle and less admin overhead; GTA pool status now reflects real in-game supply automatically.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-04-07 01:15 UTC[/color][/b] — [b]Store organization, hitlist practice cap upgrades, GTA exclusive pool behavior, and stats fixes[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Store[/b] is now cleaner: all consumable tokens and token bundles moved into a dedicated [b]Tokens[/b] tab (separate from Upgrades). [b]Hitlist practice targets[/b] keep a base cap of [b]3 per 3 hours[/b], and you can now buy higher cap tiers in Store: [b]4th slot = 100 points[/b], [b]5th = 200[/b], [b]6th = 300[/b]. [b]Distillery[/b] worker panel now explains how cap growth works (upgrade [b]Bribe Office[/b], +2 worker capacity per level). [b]GTA exclusive pool[/b] behavior now auto-retracts once the Al Capone exclusive is actually won, so the pool status and flashing GTA indicator stop automatically. [b]Global stats[/b] for cars melted/scrapped now correctly include Auto Rank melt/scrap totals.[/color]
+[*][color=#888888][b]Player action:[/b] In Store, use the new [b]Tokens[/b] tab for token purchases. If you want more hitlist NPC practice targets, buy the Practice Targets upgrade tiers. In Distillery, raise [b]Bribe Office[/b] to increase worker cap above 5. If GTA exclusive was released, expect it to auto-close after first successful steal.[/color]
+[*][color=#888888][b]Impact:[/b] Better Store navigation, clearer progression for hitlist and distillery loops, cleaner GTA exclusive lifecycle, and more accurate melted/scrapped tracking in stats.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-06 23:00 UTC[/color][/b] — [b]Illegal Business: guard gear upgrades, mission meta perks, mission log[/b][/size]
 [quote]
 [list]
