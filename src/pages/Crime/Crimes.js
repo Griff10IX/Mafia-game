@@ -507,7 +507,7 @@ export default function Crimes() {
     fetchCrimes(!!bootPrefetchedCrimes);
   }, [fetchCrimes, bootPrefetchedCrimes]);
 
-  const tick = useCooldownTicker(crimes, fetchCrimes);
+  const tick = useCooldownTicker(crimes, () => fetchCrimes(true));
 
   const [commitAllLoading, setCommitAllLoading] = useState(false);
 

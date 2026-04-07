@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import React from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
 import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, ChevronDown, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd, Radio, Award, Music2, Play, Pause, SkipBack, SkipForward, ExternalLink } from 'lucide-react';
@@ -11,6 +11,7 @@ import { filterProfanity } from '../../utils/profanityFilter';
 import styles from '../../styles/noir.module.css';
 import { BadgeShield, BADGE_STYLES as RANKING_BADGE_STYLES, CATEGORY_LABELS } from '../Game/RankingBadges';
 import StaffUserDetailsPanel from '../../components/StaffUserDetailsPanel';
+import { getProfilePrefetch, setProfilePrefetch } from '../../utils/prefetchCache';
 
 const PROFILE_STYLES = `
   @keyframes prof-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -1084,6 +1085,7 @@ export default function Profile() {
   const isPublicView = isMe && viewPublic;
   const [savingAvatar, setSavingAvatar] = useState(false);
   const spotifyPlayerRef = React.useRef(null);
+  const profileRequestIdRef = useRef(0);
 
   const refetchMe = async () => {
     try {
@@ -1092,12 +1094,23 @@ export default function Profile() {
     } catch (_) {}
   };
 
-  const refetchProfile = async () => {
-    if (!username) return;
+  const refetchProfile = async ({ silent = true, forceLoading = false, usernameOverride } = {}) => {
+    const targetUsername = String(usernameOverride || username || '').trim();
+    if (!targetUsername) return null;
+    const reqId = ++profileRequestIdRef.current;
+    if (forceLoading) setLoading(true);
     try {
-      const res = await api.get(`/users/${encodeURIComponent(username)}/profile`);
+      const res = await api.get(`/users/${encodeURIComponent(targetUsername)}/profile`);
+      if (reqId !== profileRequestIdRef.current) return null;
       setProfile(res.data);
-    } catch (_) {}
+      setProfilePrefetch(targetUsername, res.data);
+      return res.data;
+    } catch (e) {
+      if (!silent) throw e;
+      return null;
+    } finally {
+      if (forceLoading) setLoading(false);
+    }
   };
 
   const uploadAvatar = async (file) => {
@@ -1173,19 +1186,17 @@ export default function Profile() {
 
   useEffect(() => {
     if (!username) return;
-    setLoading(true);
+    const cached = getProfilePrefetch(username);
+    if (cached) {
+      setProfile(cached);
+      setLoading(false);
+      refetchProfile({ silent: true, usernameOverride: username });
+      return;
+    }
     setProfile(null);
-    const run = async () => {
-      try {
-        const res = await api.get(`/users/${encodeURIComponent(username)}/profile`);
-        setProfile(res.data);
-      } catch (e) {
-        toast.error(e.response?.data?.detail || 'Failed to load profile');
-      } finally {
-        setLoading(false);
-      }
-    };
-    run();
+    refetchProfile({ silent: false, forceLoading: true, usernameOverride: username }).catch((e) => {
+      toast.error(e.response?.data?.detail || 'Failed to load profile');
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fetch by username only; profile is the result, not a trigger
   }, [username]);
 
@@ -1429,8 +1440,7 @@ export default function Profile() {
         hide_jailbusts_on_profile: hideJailbustsOnProfile,
       });
       toast.success('Profile visibility saved');
-      const res = await api.get(`/users/${encodeURIComponent(me?.username)}/profile`);
-      setProfile(res.data);
+      await refetchProfile({ silent: true, usernameOverride: me?.username });
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to save');
     } finally {
@@ -1496,8 +1506,7 @@ export default function Profile() {
         notepad_color: (notepadColorEdit || '').trim() === '' ? '' : notepadColorEdit.trim(),
       });
       toast.success('Profile text updated');
-      const res = await api.get(`/users/${encodeURIComponent(profile?.username)}/profile`);
-      setProfile(res.data);
+      await refetchProfile({ silent: true, usernameOverride: profile?.username });
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to save');
     } finally {
@@ -1539,8 +1548,7 @@ export default function Profile() {
       toast.success(enabled ? 'Ghost mode on — you won\'t appear online' : 'Ghost mode off');
       await refetchMe();
       if (isMe && username) {
-        const p = await api.get(`/users/${encodeURIComponent(username)}/profile`);
-        setProfile(p.data);
+        await refetchProfile({ silent: true, usernameOverride: username });
       }
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to toggle ghost mode');
@@ -1565,8 +1573,7 @@ export default function Profile() {
       await refetchMe();
       await refetchAdmin();
       if (isMe && username) {
-        const p = await api.get(`/users/${encodeURIComponent(username)}/profile`);
-        setProfile(p.data);
+        await refetchProfile({ silent: true, usernameOverride: username });
       }
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to toggle');
@@ -2179,8 +2186,7 @@ export default function Profile() {
               isAdmin={isAdmin}
               isModerator={isModerator}
               onStaffActionDone={async () => {
-                const res = await api.get(`/users/${encodeURIComponent(username || profile?.username)}/profile`);
-                setProfile(res.data);
+                await refetchProfile({ silent: true, usernameOverride: username || profile?.username });
               }}
               staffDetailsOpen={staffDetailsOpen}
               setStaffDetailsOpen={setStaffDetailsOpen}
