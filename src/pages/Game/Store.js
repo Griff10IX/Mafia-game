@@ -89,6 +89,16 @@ const UPGRADES = [
   { id: 'crew-oc-timer', title: 'Crew OC Timer', Icon: Clock, price: 350, path: '/store/buy-crew-oc-timer', ownedKey: 'crew_oc_timer_reduced', desc: 'Family Crew OC 6h when you commit' },
   { id: 'garage', title: 'Garage Batch', Icon: Zap, price: 75, path: '/store/upgrade-garage-batch', ownedKey: null, desc: '+10 melt/scrap at once', extra: (u) => ({ line: 'Limit', value: u?.garage_batch_limit ?? 6 }) },
   { id: 'booze', title: 'Booze Capacity', Icon: ShoppingBag, price: 100, path: '/store/buy-booze-capacity', ownedKey: null, desc: '+25 capacity (max 1000)', extra: (u, cfg) => cfg && ({ line: 'Capacity', value: cfg.capacity ?? '—' }) },
+  {
+    id: 'hitlist-npc-cap',
+    title: 'Practice Targets',
+    Icon: Crosshair,
+    price: (u) => (Math.min(3, (Number(u?.hitlist_npc_bonus_slots) || 0) + 1) * 100),
+    path: '/store/buy-hitlist-npc-bonus-slot',
+    ownedKey: null,
+    desc: '+1 max hitlist NPC per 3h window (base 3, max 6). Costs: 4th=100, 5th=200, 6th=300.',
+    extra: (u) => ({ line: 'Limit', value: `${3 + (Number(u?.hitlist_npc_bonus_slots) || 0)} per 3h` }),
+  },
 ];
 
 function StorePointsTransferRow({ t, compact }) {
@@ -772,11 +782,15 @@ export default function Store() {
             if (u.id === 'garage' && (user?.garage_batch_limit ?? 0) >= 100) return false;
             // Hide Booze Capacity when already at max
             if (u.id === 'booze' && boozeConfig?.capacity_bonus_max != null && (user?.booze_capacity_bonus ?? 0) >= boozeConfig.capacity_bonus_max) return false;
+            // Hide Practice Targets when already at max (base 3 + bonus 3)
+            if (u.id === 'hitlist-npc-cap' && (Number(user?.hitlist_npc_bonus_slots) || 0) >= 3) return false;
             return true;
           }).map((u) => {
             const extra = u.extra?.(user, boozeConfig);
+            const priceVal = typeof u.price === 'function' ? Number(u.price(user, boozeConfig)) : Number(u.price);
             const disabled =
               (u.id === 'booze' && boozeConfig?.capacity_bonus_max != null && (user?.booze_capacity_bonus ?? 0) >= boozeConfig.capacity_bonus_max) ||
+              (u.id === 'hitlist-npc-cap' && (Number(user?.hitlist_npc_bonus_slots) || 0) >= 3) ||
               (u.id === 'health' && Number(user?.health ?? 100) >= 100) ||
               !!u.disabledWhen?.(user);
             return (
@@ -785,8 +799,8 @@ export default function Store() {
                 title={u.title}
                 Icon={u.Icon}
                 desc={u.desc}
-                price={u.price}
-                respectPrice={storeRespectForPoints(u.price)}
+                price={priceVal}
+                respectPrice={storeRespectForPoints(priceVal)}
                 owned={false}
                 loading={loading}
                 disabled={disabled}

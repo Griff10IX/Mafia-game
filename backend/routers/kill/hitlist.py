@@ -62,6 +62,7 @@ HITLIST_BUY_OFF_MULTIPLIER = 1.5  # pay bounty amount + 50% per entry (cash or p
 HITLIST_REVEAL_COST_POINTS = 5000
 HITLIST_NPC_COOLDOWN_HOURS = 3
 HITLIST_NPC_MAX_PER_WINDOW = 3
+HITLIST_NPC_STORE_BONUS_SLOTS_MAX = 3  # base 3 + max 3 from store = 6
 
 HITLIST_NPC_NAMES = [
     "Tony the Rat", "Vinny the Snake", "Lucky Lou", "Mad Dog Mike",
@@ -82,6 +83,12 @@ HITLIST_NPC_TEMPLATES = [
     {"id": "npc_9", "rank": 3, "rewards": {"cash": 400_000, "booze": {"speakeasy_whiskey": 10, "needle_beer": 10}, "respect_points": 15}},
     {"id": "npc_10", "rank": 7, "rewards": {"cash": 500_000, "booze": {"jamaica_ginger": 30}, "respect_points": 50}},
 ]
+
+
+def _hitlist_npc_max_per_window_for_user(user: dict) -> int:
+    bonus = int((user or {}).get("hitlist_npc_bonus_slots") or 0)
+    bonus = max(0, min(HITLIST_NPC_STORE_BONUS_SLOTS_MAX, bonus))
+    return HITLIST_NPC_MAX_PER_WINDOW + bonus
 
 
 async def hitlist_add(request: HitlistAddRequest, current_user: dict = Depends(get_current_user)):
@@ -245,6 +252,7 @@ async def hitlist_npc_status(current_user: dict = Depends(get_current_user)):
     """Whether this user can add an NPC to the hitlist (max 3 per 3 hours). Timers are per-user, not global."""
     now = datetime.now(timezone.utc)
     window_start = now - timedelta(hours=HITLIST_NPC_COOLDOWN_HOURS)
+    max_per_window = _hitlist_npc_max_per_window_for_user(current_user)
     raw = (current_user.get("hitlist_npc_add_timestamps") or [])[:]
     timestamps = []
     for t in raw:
@@ -254,7 +262,7 @@ async def hitlist_npc_status(current_user: dict = Depends(get_current_user)):
         if dt and dt > window_start:
             timestamps.append(t)
     adds_in_window = len(timestamps)
-    can_add = adds_in_window < HITLIST_NPC_MAX_PER_WINDOW
+    can_add = adds_in_window < max_per_window
     next_add_at = None
     if not can_add and timestamps:
         def _ts_key(x):
@@ -267,7 +275,7 @@ async def hitlist_npc_status(current_user: dict = Depends(get_current_user)):
     return {
         "can_add": can_add,
         "adds_used_in_window": adds_in_window,
-        "max_per_window": HITLIST_NPC_MAX_PER_WINDOW,
+        "max_per_window": max_per_window,
         "window_hours": HITLIST_NPC_COOLDOWN_HOURS,
         "next_add_at": next_add_at,
     }
@@ -278,6 +286,7 @@ async def hitlist_add_npc(current_user: dict = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
     window_start_iso = (now - timedelta(hours=HITLIST_NPC_COOLDOWN_HOURS)).isoformat()
     now_iso = now.isoformat()
+    max_per_window = _hitlist_npc_max_per_window_for_user(current_user)
     claim = await db.users.find_one_and_update(
         {"id": current_user["id"]},
         [{"$set": {
@@ -293,7 +302,7 @@ async def hitlist_add_npc(current_user: dict = Depends(get_current_user)):
                                 "input": {"$ifNull": ["$hitlist_npc_add_timestamps", []]},
                                 "cond": {"$gt": ["$$this", window_start_iso]},
                             }}},
-                            HITLIST_NPC_MAX_PER_WINDOW,
+                            max_per_window,
                         ]},
                         "then": [now_iso],
                         "else": [],
@@ -304,10 +313,10 @@ async def hitlist_add_npc(current_user: dict = Depends(get_current_user)):
         return_document=False,
     )
     old_timestamps = [t for t in (claim.get("hitlist_npc_add_timestamps") or []) if t and t > window_start_iso] if claim else []
-    if len(old_timestamps) >= HITLIST_NPC_MAX_PER_WINDOW:
+    if len(old_timestamps) >= max_per_window:
         raise HTTPException(
             status_code=400,
-            detail=f"You can add at most {HITLIST_NPC_MAX_PER_WINDOW} NPCs per {HITLIST_NPC_COOLDOWN_HOURS} hours. Try again later."
+            detail=f"You can add at most {max_per_window} NPCs per {HITLIST_NPC_COOLDOWN_HOURS} hours. Try again later."
         )
     template = random.choice(HITLIST_NPC_TEMPLATES)
     hitlist_id = str(uuid.uuid4())

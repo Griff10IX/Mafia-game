@@ -207,6 +207,13 @@ TOKEN_STORE_BUNDLES = {
 SHOOTING_RANGE_BONUS_STEP = 2
 SHOOTING_RANGE_BONUS_COST_POINTS = 85
 SHOOTING_RANGE_BONUS_CAP = 10  # must match armoury.SHOOTING_RANGE_BONUS_STORE_MAX
+HITLIST_NPC_BONUS_SLOTS_BASE = 3
+HITLIST_NPC_BONUS_SLOTS_CAP = 3  # +3 -> max 6 per 3h
+
+
+def _hitlist_npc_bonus_slot_cost(next_bonus_slot: int) -> int:
+    """Cost for next store slot: +1st bonus=100, +2nd=200, +3rd=300."""
+    return max(1, int(next_bonus_slot) * 100)
 
 
 class BuyStoreTokenBody(BaseModel):
@@ -709,6 +716,36 @@ async def buy_shooting_range_bonus(
     }
 
 
+async def buy_hitlist_npc_bonus_slot(
+    current_user: dict = Depends(get_current_user),
+):
+    """Increase hitlist NPC add cap by +1 (3h window). Base 3; store can raise to 6."""
+    cur_bonus = int(current_user.get("hitlist_npc_bonus_slots") or 0)
+    if cur_bonus >= HITLIST_NPC_BONUS_SLOTS_CAP:
+        raise HTTPException(status_code=400, detail="Hitlist NPC practice target cap is already maxed")
+    next_bonus_slot = cur_bonus + 1
+    cost = _hitlist_npc_bonus_slot_cost(next_bonus_slot)
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, cost)
+    if not cost_used:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    inc["hitlist_npc_bonus_slots"] = inc.get("hitlist_npc_bonus_slots", 0) + 1
+    result = await db.users.update_one(
+        {"id": current_user["id"], **gte_filter},
+        {"$inc": inc},
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    await _record_store_points_spend(current_user["id"], inc, "buy-hitlist-npc-bonus-slot")
+    new_bonus = cur_bonus + 1
+    new_limit = HITLIST_NPC_BONUS_SLOTS_BASE + new_bonus
+    return {
+        "message": f"Practice target cap increased to {new_limit} per 3h window. Cost {cost_used} points.",
+        "cost": cost_used,
+        "hitlist_npc_bonus_slots": new_bonus,
+        "hitlist_npc_window_limit": new_limit,
+    }
+
+
 def register(router):
     router.add_api_route("/store/buy-rank-bar", buy_premium_rank_bar, methods=["POST"])
     router.add_api_route("/store/buy-auto-rank", buy_auto_rank, methods=["POST"])
@@ -724,6 +761,7 @@ def register(router):
     router.add_api_route("/store/buy-token", buy_store_token, methods=["POST"])
     router.add_api_route("/store/buy-token-bundle", buy_store_token_bundle, methods=["POST"])
     router.add_api_route("/store/buy-shooting-range-bonus", buy_shooting_range_bonus, methods=["POST"])
+    router.add_api_route("/store/buy-hitlist-npc-bonus-slot", buy_hitlist_npc_bonus_slot, methods=["POST"])
     router.add_api_route("/store/send-points", send_points, methods=["POST"])
     router.add_api_route("/store/points-transfers", get_my_points_transfers, methods=["GET"])
     router.add_api_route("/store/points-transfers/admin", admin_points_transfers, methods=["GET"])

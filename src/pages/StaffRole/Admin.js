@@ -4715,6 +4715,15 @@ export default function Admin() {
     }
   }, [isAdmin, activeCategoryId, collapsed.gtaPool, collapsed.gtaLogs]);
 
+  useEffect(() => {
+    if (!isAdmin || collapsed.gtaPool) return;
+    const id = setInterval(() => {
+      fetchGtaExclusivePool();
+      fetchExclusiveCarOwners();
+    }, 5000);
+    return () => clearInterval(id);
+  }, [isAdmin, collapsed.gtaPool]);
+
   const handleGiveEveryoneExclusiveCars = async (lootExclusive, alCapone) => {
     setGiveEveryoneExclusiveLoading(true);
     try {

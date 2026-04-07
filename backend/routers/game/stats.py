@@ -287,7 +287,27 @@ def register(router):
         # Cars scrapped and melted totals
         cars_scrapped_agg = await db.users.aggregate([
             {"$match": real_user_match},
-            {"$group": {"_id": None, "scrapped": {"$sum": {"$ifNull": ["$total_cars_scrapped", 0]}}, "melted": {"$sum": {"$ifNull": ["$total_cars_melted", 0]}}}}
+            {
+                "$group": {
+                    "_id": None,
+                    "scrapped": {
+                        "$sum": {
+                            "$add": [
+                                {"$ifNull": ["$total_cars_scrapped", 0]},
+                                {"$ifNull": ["$auto_rank_total_cars_scrapped", 0]},
+                            ]
+                        }
+                    },
+                    "melted": {
+                        "$sum": {
+                            "$add": [
+                                {"$ifNull": ["$total_cars_melted", 0]},
+                                {"$ifNull": ["$auto_rank_total_cars_melted", 0]},
+                            ]
+                        }
+                    },
+                }
+            }
         ]).to_list(1)
         cars_scrapped_doc = cars_scrapped_agg[0] if cars_scrapped_agg else {}
         

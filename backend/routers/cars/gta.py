@@ -551,6 +551,13 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
                 "damage_percent": damage_percent,
             }
         )
+        # If the Al Capone exclusive was just won, auto-disable pool release.
+        if (car.get("id") or "") == GTA_EXCLUSIVE_CAR_ID:
+            await db.game_config.update_one(
+                {"id": GTA_EXCLUSIVE_POOL_CONFIG_ID},
+                {"$set": {"released": False}},
+                upsert=True,
+            )
         if (car.get("rarity") or "") in ("exclusive", "loot_exclusive"):
             await maybe_revoke_civilian_protection(db, current_user.get("id") or "", "exclusive_car")
         _invalidate_travel_info_cache(current_user.get("id") or "")
@@ -1854,7 +1861,19 @@ async def run_dealer_replenish_loop():
 async def get_gta_exclusive_pool_status(current_user: dict = Depends(get_current_user)):
     """Return whether the Al Capone exclusive is currently in the GTA car pool (any authenticated user)."""
     doc = await db.game_config.find_one({"id": GTA_EXCLUSIVE_POOL_CONFIG_ID}, {"_id": 0, "released": 1})
-    return {"exclusive_in_pool": bool(doc.get("released") if doc else False)}
+    released = bool(doc.get("released") if doc else False)
+    if not released:
+        return {"exclusive_in_pool": False}
+    # Pool is effectively off once at least one exists in garages.
+    existing_count = await db.user_cars.count_documents({"car_id": GTA_EXCLUSIVE_CAR_ID})
+    if existing_count > 0:
+        await db.game_config.update_one(
+            {"id": GTA_EXCLUSIVE_POOL_CONFIG_ID},
+            {"$set": {"released": False}},
+            upsert=True,
+        )
+        return {"exclusive_in_pool": False}
+    return {"exclusive_in_pool": True}
 
 
 def register(router):

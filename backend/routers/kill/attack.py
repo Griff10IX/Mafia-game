@@ -1452,7 +1452,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             await maybe_process_rank_up(killer_id, killer_rp_before, rank_points, (killer_doc or {}).get("username", ""))
         except Exception as e:
             logging.exception("Rank-up notification (kill): %s", e)
-        # Transfer cars to killer; only exclusives get a new id so old view-car links are dead
+        # Transfer cars to killer; exclusive + loot-exclusive get a new id so old view-car links are dead
         killer_has_loot_car = await db.user_cars.count_documents({"user_id": killer_id, "car_id": "car21"})
         for uc in victim_cars:
             car_info = next((c for c in CARS if c.get("id") == uc.get("car_id")), None)
@@ -1463,7 +1463,10 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 else:
                     await db.user_cars.update_one(
                         {"_id": uc["_id"]},
-                        {"$set": {"user_id": killer_id}, "$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""}},
+                        {
+                            "$set": {"user_id": killer_id, "id": str(uuid.uuid4())},
+                            "$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""},
+                        },
                     )
                     killer_has_loot_car = 1
                 continue
