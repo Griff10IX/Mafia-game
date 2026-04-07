@@ -2279,6 +2279,138 @@ async def admin_sports_bets_list(
     return {"bets": out, "count": len(out)}
 
 
+async def admin_sports_unsettled_events(
+    limit: int = Query(200, ge=1, le=1000),
+    include_no_open_bets: bool = Query(False),
+    current_user: dict = Depends(get_current_user_verified),
+):
+    """Admin/moderator: old open events that look overdue for settlement."""
+    if not _is_admin(current_user) and not _is_moderator(current_user):
+        raise HTTPException(status_code=403, detail="Admin or moderator access required")
+    limit = min(max(1, int(limit)), 1000)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    query: dict = {"status": "open", "start_time": {"$lt": now_iso}}
+    cursor = db.sports_events.find(
+        query,
+        {"_id": 0, "id": 1, "name": 1, "category": 1, "start_time": 1, "created_at": 1, "external_event_id": 1, "external_sport_key": 1},
+    ).sort("start_time", 1).limit(limit)
+    events = await cursor.to_list(limit)
+    if not events:
+        return {"events": [], "count": 0}
+
+    event_ids = [e.get("id") for e in events if e.get("id")]
+    open_counts: dict = {}
+    if event_ids:
+        pipeline = [
+            {"$match": {"event_id": {"$in": event_ids}, "status": "open"}},
+            {"$group": {"_id": "$event_id", "open_bets": {"$sum": 1}, "open_stake_total": {"$sum": {"$toInt": "$stake"}}}},
+        ]
+        rows = await db.sports_bets.aggregate(pipeline).to_list(len(event_ids))
+        for row in rows:
+            eid = row.get("_id")
+            if eid:
+                open_counts[eid] = {
+                    "open_bets": int(row.get("open_bets") or 0),
+                    "open_stake_total": int(row.get("open_stake_total") or 0),
+                }
+
+    out = []
+    for ev in events:
+        eid = ev.get("id") or ""
+        cnt = open_counts.get(eid, {"open_bets": 0, "open_stake_total": 0})
+        if not include_no_open_bets and cnt["open_bets"] <= 0:
+            continue
+        out.append({
+            "id": eid,
+            "name": ev.get("name"),
+            "category": ev.get("category"),
+            "start_time": ev.get("start_time"),
+            "created_at": ev.get("created_at"),
+            "external_event_id": ev.get("external_event_id"),
+            "external_sport_key": ev.get("external_sport_key"),
+            "open_bets": cnt["open_bets"],
+            "open_stake_total": cnt["open_stake_total"],
+        })
+    return {"events": out, "count": len(out)}
+
+
+async def admin_sports_auto_settle_health(current_user: dict = Depends(get_current_user_verified)):
+    """Admin/moderator: quick diagnostics for why auto-settle may appear stuck."""
+    if not _is_admin(current_user) and not _is_moderator(current_user):
+        raise HTTPException(status_code=403, detail="Admin or moderator access required")
+
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
+    delay_minutes = _sports_auto_settle_minutes_after_start()
+    delay = timedelta(minutes=delay_minutes)
+    ticker_use_cron = (os.environ.get("SPORTS_AUTO_SETTLE_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
+    ticker_raw = (os.environ.get("SPORTS_AUTO_SETTLE_TICKER") or "").strip().lower()
+    ticker_enabled = ticker_raw not in ("0", "false", "no", "off")
+    odds_key_present = bool(_odds_api_key())
+
+    linkable_open = await db.sports_events.count_documents(_LINKABLE_OPEN_EVENT_FILTER)
+
+    overdue_linkable = 0
+    cur = db.sports_events.find(_LINKABLE_OPEN_EVENT_FILTER, {"_id": 0, "start_time": 1}).limit(2000)
+    async for doc in cur:
+        st = _parse_start_time_utc(doc.get("start_time"))
+        if st is None or now >= (st + delay):
+            overdue_linkable += 1
+
+    stale_open_filter = {"status": "open", "start_time": {"$lt": now_iso}}
+    stale_open_events_total = await db.sports_events.count_documents(stale_open_filter)
+    stale_non_linkable_events = await db.sports_events.count_documents({
+        **stale_open_filter,
+        "$or": [
+            {"external_event_id": {"$in": [None, ""]}},
+            {"external_event_id": {"$exists": False}},
+            {"external_sport_key": {"$in": [None, ""]}},
+            {"external_sport_key": {"$exists": False}},
+        ],
+    })
+
+    stale_with_open_bets_rows = await db.sports_bets.aggregate([
+        {"$match": {"status": "open"}},
+        {"$group": {"_id": "$event_id", "open_bets": {"$sum": 1}}},
+    ]).to_list(5000)
+    open_bets_by_event = {str(r.get("_id") or ""): int(r.get("open_bets") or 0) for r in stale_with_open_bets_rows if r.get("_id")}
+
+    stale_non_linkable_with_open_bets = 0
+    stale_non_linkable_open_bets_total = 0
+    stale_cursor = db.sports_events.find(
+        {
+            **stale_open_filter,
+            "$or": [
+                {"external_event_id": {"$in": [None, ""]}},
+                {"external_event_id": {"$exists": False}},
+                {"external_sport_key": {"$in": [None, ""]}},
+                {"external_sport_key": {"$exists": False}},
+            ],
+        },
+        {"_id": 0, "id": 1},
+    ).limit(3000)
+    async for ev in stale_cursor:
+        eid = str(ev.get("id") or "")
+        c = int(open_bets_by_event.get(eid, 0))
+        if c > 0:
+            stale_non_linkable_with_open_bets += 1
+            stale_non_linkable_open_bets_total += c
+
+    return {
+        "odds_api_key_present": odds_key_present,
+        "ticker_enabled": ticker_enabled,
+        "ticker_use_cron": ticker_use_cron,
+        "minutes_after_start": delay_minutes,
+        "linkable_open_events": linkable_open,
+        "overdue_linkable_events": overdue_linkable,
+        "stale_open_events_total": stale_open_events_total,
+        "stale_non_linkable_events": stale_non_linkable_events,
+        "stale_non_linkable_with_open_bets": stale_non_linkable_with_open_bets,
+        "stale_non_linkable_open_bets_total": stale_non_linkable_open_bets_total,
+        "note": "Only events with external_event_id + external_sport_key are auto-settled.",
+    }
+
+
 async def admin_sports_event_requests_list(current_user: dict = Depends(get_current_user_verified)):
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin only")
@@ -2542,6 +2674,8 @@ def register(router):
     router.add_api_route("/admin/sports-betting/settle", admin_sports_settle, methods=["POST"])
     router.add_api_route("/admin/sports-betting/cancel-event", admin_sports_cancel_event, methods=["POST"])
     router.add_api_route("/admin/sports-betting/bets", admin_sports_bets_list, methods=["GET"])
+    router.add_api_route("/admin/sports-betting/unsettled-events", admin_sports_unsettled_events, methods=["GET"])
+    router.add_api_route("/admin/sports-betting/auto-settle-health", admin_sports_auto_settle_health, methods=["GET"])
     router.add_api_route("/admin/sports-betting/event-requests", admin_sports_event_requests_list, methods=["GET"])
     router.add_api_route("/admin/sports-betting/event-requests/approve", admin_sports_event_request_approve, methods=["POST"])
     router.add_api_route("/admin/sports-betting/event-requests/deny", admin_sports_event_request_deny, methods=["POST"])

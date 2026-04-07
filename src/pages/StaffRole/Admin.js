@@ -933,6 +933,11 @@ export default function Admin() {
   const [sportsBetsStatus, setSportsBetsStatus] = useState('');
   const [sportsBetsEventId, setSportsBetsEventId] = useState('');
   const [sportsBetsLimit, setSportsBetsLimit] = useState(200);
+  const [sportsBetsManualPayoutLoading, setSportsBetsManualPayoutLoading] = useState(false);
+  const [sportsUnsettledEvents, setSportsUnsettledEvents] = useState({ events: [] });
+  const [sportsUnsettledEventsLoading, setSportsUnsettledEventsLoading] = useState(false);
+  const [sportsAutoSettleHealth, setSportsAutoSettleHealth] = useState(null);
+  const [sportsAutoSettleHealthLoading, setSportsAutoSettleHealthLoading] = useState(false);
   const [respectLogUserId, setRespectLogUserId] = useState('');
   const [respectLogLimit, setRespectLogLimit] = useState(200);
   const [respectLogData, setRespectLogData] = useState(null);
@@ -5418,6 +5423,56 @@ export default function Admin() {
       setSportsBetsLedger({ bets: [] });
     } finally {
       setSportsBetsLedgerLoading(false);
+    }
+  };
+
+  const runSportsBetsManualPayout = async () => {
+    if (!window.confirm('Run manual sports payout settlement now? This checks open events and settles anything eligible.')) return;
+    setSportsBetsManualPayoutLoading(true);
+    try {
+      const res = await api.post('/admin/sports-betting/auto-settle-run');
+      const d = res.data || {};
+      if (d.message && typeof d.message === 'string') {
+        toast.error(d.message);
+        return;
+      }
+      const settled = Number(d.settled ?? 0);
+      toast.success(
+        `Manual payout complete: ${settled} settled · skipped (no board match) ${d.skipped_no_match ?? 0} · skipped (no winner) ${d.skipped_no_winner ?? 0}`,
+      );
+      await fetchSportsBetsLedger();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Manual payout failed');
+    } finally {
+      setSportsBetsManualPayoutLoading(false);
+    }
+  };
+
+  const fetchSportsUnsettledEvents = async () => {
+    setSportsUnsettledEventsLoading(true);
+    try {
+      const lim = Math.max(1, Math.min(1000, parseInt(String(sportsBetsLimit), 10) || 200));
+      const res = await api.get('/admin/sports-betting/unsettled-events', { params: { limit: lim } });
+      setSportsUnsettledEvents(res.data || { events: [] });
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load unpaid events');
+      setSportsUnsettledEvents({ events: [] });
+    } finally {
+      setSportsUnsettledEventsLoading(false);
+    }
+  };
+
+  const fetchSportsAutoSettleHealth = async () => {
+    setSportsAutoSettleHealthLoading(true);
+    try {
+      const res = await api.get('/admin/sports-betting/auto-settle-health');
+      setSportsAutoSettleHealth(res.data || null);
+      toast.success('Auto-settle health loaded');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load auto-settle health');
+      setSportsAutoSettleHealth(null);
+    } finally {
+      setSportsAutoSettleHealthLoading(false);
     }
   };
 
@@ -15335,7 +15390,76 @@ export default function Admin() {
                 <BtnPrimary onClick={fetchSportsBetsLedger} disabled={sportsBetsLedgerLoading}>
                   {sportsBetsLedgerLoading ? '...' : 'Load'}
                 </BtnPrimary>
+                <BtnPrimary onClick={fetchSportsUnsettledEvents} disabled={sportsUnsettledEventsLoading}>
+                  {sportsUnsettledEventsLoading ? '...' : 'Load unpaid events'}
+                </BtnPrimary>
+                <BtnSecondary onClick={fetchSportsAutoSettleHealth} disabled={sportsAutoSettleHealthLoading}>
+                  {sportsAutoSettleHealthLoading ? 'Checking...' : 'Check auto-settle health'}
+                </BtnSecondary>
+                <BtnSecondary onClick={runSportsBetsManualPayout} disabled={sportsBetsManualPayoutLoading}>
+                  {sportsBetsManualPayoutLoading ? 'Running payout...' : 'Run sports payout now'}
+                </BtnSecondary>
               </div>
+              {sportsAutoSettleHealth && (
+                <div className="rounded border border-primary/30 bg-primary/5 p-2 text-[10px] font-heading space-y-1">
+                  <div className="text-primary uppercase tracking-wider">Auto-settle health</div>
+                  <div className="text-mutedForeground">
+                    key: <span className={sportsAutoSettleHealth.odds_api_key_present ? 'text-emerald-300' : 'text-rose-300'}>{sportsAutoSettleHealth.odds_api_key_present ? 'present' : 'missing'}</span>
+                    {' · '}
+                    ticker: <span className={sportsAutoSettleHealth.ticker_enabled ? 'text-emerald-300' : 'text-rose-300'}>{sportsAutoSettleHealth.ticker_enabled ? 'enabled' : 'disabled'}</span>
+                    {' · '}
+                    cron mode: <span className={sportsAutoSettleHealth.ticker_use_cron ? 'text-amber-300' : 'text-emerald-300'}>{sportsAutoSettleHealth.ticker_use_cron ? 'on' : 'off'}</span>
+                    {' · '}
+                    delay: <span className="text-foreground">{sportsAutoSettleHealth.minutes_after_start ?? 0}m</span>
+                  </div>
+                  <div className="text-mutedForeground">
+                    linkable open: <span className="text-foreground">{Number(sportsAutoSettleHealth.linkable_open_events || 0).toLocaleString()}</span>
+                    {' · '}
+                    overdue linkable: <span className="text-foreground">{Number(sportsAutoSettleHealth.overdue_linkable_events || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="text-mutedForeground">
+                    stale open total: <span className="text-foreground">{Number(sportsAutoSettleHealth.stale_open_events_total || 0).toLocaleString()}</span>
+                    {' · '}
+                    stale non-linkable: <span className="text-foreground">{Number(sportsAutoSettleHealth.stale_non_linkable_events || 0).toLocaleString()}</span>
+                    {' · '}
+                    non-linkable with open bets: <span className="text-foreground">{Number(sportsAutoSettleHealth.stale_non_linkable_with_open_bets || 0).toLocaleString()}</span>
+                  </div>
+                  <div className="text-zinc-400 italic">{sportsAutoSettleHealth.note}</div>
+                </div>
+              )}
+              {(sportsUnsettledEvents.events || []).length > 0 && (
+                <div className="rounded border border-amber-500/30 bg-amber-500/5 p-2">
+                  <div className="text-[10px] uppercase tracking-wider text-amber-300 font-heading mb-1">
+                    Unpaid old events ({sportsUnsettledEvents.events.length})
+                  </div>
+                  <div className="max-h-52 overflow-auto">
+                    <table className="w-full text-[10px] font-heading min-w-[680px]">
+                      <thead className="bg-zinc-800/50 sticky top-0">
+                        <tr>
+                          <th className="text-left p-2 text-mutedForeground uppercase whitespace-nowrap">Start</th>
+                          <th className="text-left p-2 text-mutedForeground uppercase">Event</th>
+                          <th className="text-left p-2 text-mutedForeground uppercase whitespace-nowrap">Category</th>
+                          <th className="text-right p-2 text-mutedForeground uppercase whitespace-nowrap">Open bets</th>
+                          <th className="text-right p-2 text-mutedForeground uppercase whitespace-nowrap">Open stake</th>
+                          <th className="text-left p-2 text-mutedForeground uppercase whitespace-nowrap">Event ID</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(sportsUnsettledEvents.events || []).map((ev) => (
+                          <tr key={ev.id} className="border-t border-zinc-700/30 hover:bg-zinc-800/30">
+                            <td className="p-2 text-mutedForeground whitespace-nowrap">{ev.start_time ? new Date(ev.start_time).toLocaleString() : '—'}</td>
+                            <td className="p-2 text-foreground">{ev.name || '—'}</td>
+                            <td className="p-2 text-mutedForeground whitespace-nowrap">{ev.category || '—'}</td>
+                            <td className="p-2 text-right text-amber-300 whitespace-nowrap">{Number(ev.open_bets || 0).toLocaleString()}</td>
+                            <td className="p-2 text-right text-amber-300 whitespace-nowrap">${Number(ev.open_stake_total || 0).toLocaleString()}</td>
+                            <td className="p-2 text-[9px] font-mono text-mutedForeground truncate" title={ev.id || ''}>{ev.id || '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
               <div className="max-h-96 overflow-x-auto overflow-y-auto rounded border border-zinc-700/50">
                 <table className="w-full text-[10px] font-heading min-w-[720px]">
                   <thead className="bg-zinc-800/50 sticky top-0">

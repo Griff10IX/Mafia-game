@@ -74,7 +74,7 @@ function writeLbEntry(period, topLimit, dead, boards, lastRewardWinners) {
   } catch (_) {}
 }
 
-function StatBoard({ title, icon: Icon, entries, valueLabel, topLabel }) {
+function StatBoard({ title, icon: Icon, entries, valueLabel, topLabel, fetching }) {
   const list = entries || [];
   return (
     <section className={`relative ${styles.panel} rounded-lg overflow-hidden shadow-lg shadow-primary/5 mobile-panel`}>
@@ -88,7 +88,11 @@ function StatBoard({ title, icon: Icon, entries, valueLabel, topLabel }) {
       </div>
       <div className="p-2 space-y-1">
         {list.length === 0 ? (
+          fetching ? (
+            <div className="py-3" />
+          ) : (
           <p className="text-[10px] text-mutedForeground italic py-3 text-center font-heading">No data yet.</p>
+          )
         ) : (
           list.map((entry) => (
             <div
@@ -171,6 +175,7 @@ export default function Leaderboard() {
     return b && typeof b === 'object' ? b : EMPTY_BOARDS;
   });
   const [refreshing, setRefreshing] = useState(false);
+  const [fetchingBoards, setFetchingBoards] = useState(false);
   const [lastRewardWinners, setLastRewardWinners] = useState(
     () => readLbEntry('weekly', 10, false)?.last_reward_winners ?? null,
   );
@@ -178,6 +183,7 @@ export default function Leaderboard() {
 
   const fetchLeaderboard = useCallback(async (showRefreshSpin = false, silentError = false, background = false) => {
     const dead = viewMode === 'dead';
+    if (!background) setFetchingBoards(true);
     if (!background) {
       const cached = readLbEntry(period, topLimit, dead);
       if (cached?.boards && typeof cached.boards === 'object') {
@@ -205,6 +211,7 @@ export default function Leaderboard() {
     } finally {
       if (timeoutId) clearTimeout(timeoutId);
       if (showRefreshSpin) setRefreshing(false);
+      if (!background) setFetchingBoards(false);
     }
   }, [topLimit, viewMode, period]);
 
@@ -216,6 +223,31 @@ export default function Leaderboard() {
     intervalRef.current = setInterval(() => fetchLeaderboard(false, true, true), 60_000);
     return () => clearInterval(intervalRef.current);
   }, [fetchLeaderboard]);
+
+  useEffect(() => {
+    // Prewarm opposite view cache for snappier mode switch.
+    const dead = viewMode === 'dead';
+    const oppositeCached = readLbEntry(period, topLimit, !dead);
+    if (oppositeCached?.boards) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const response = await api.get('/leaderboards/top', {
+          params: { limit: topLimit, dead: !dead, period },
+        });
+        if (cancelled) return;
+        const d = response.data || {};
+        const { last_reward_winners, ...rest } = d;
+        const nextBoards = Object.keys(rest).length ? rest : EMPTY_BOARDS;
+        writeLbEntry(period, topLimit, !dead, nextBoards, last_reward_winners ?? null);
+      } catch {
+        // Silent prewarm only.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [period, topLimit, viewMode]);
 
   return (
     <div className={`space-y-3 ${styles.pageContent} mobile-page-root`} data-testid="leaderboard-page">
@@ -319,6 +351,7 @@ export default function Leaderboard() {
           entries={boards?.kills}
           valueLabel="kills"
           topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''}`}
+          fetching={fetchingBoards}
         />
         <StatBoard
           title={viewMode === 'dead' ? 'Top dead · Crimes' : 'Top Crimes'}
@@ -326,6 +359,7 @@ export default function Leaderboard() {
           entries={boards?.crimes}
           valueLabel="crimes"
           topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''}`}
+          fetching={fetchingBoards}
         />
         <StatBoard
           title={viewMode === 'dead' ? 'Top dead · GTA' : 'Top GTA'}
@@ -333,6 +367,7 @@ export default function Leaderboard() {
           entries={boards?.gta}
           valueLabel="GTA"
           topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''}`}
+          fetching={fetchingBoards}
         />
         <StatBoard
           title={viewMode === 'dead' ? 'Top dead · Jail Busts' : 'Top Jail Busts'}
@@ -340,6 +375,7 @@ export default function Leaderboard() {
           entries={boards?.jail_busts}
           valueLabel="busts"
           topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''}`}
+          fetching={fetchingBoards}
         />
         {period === 'alltime' && (
           <StatBoard
@@ -348,6 +384,7 @@ export default function Leaderboard() {
             entries={boards?.points_spent}
             valueLabel="pts"
             topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (all-time)`}
+            fetching={fetchingBoards}
           />
         )}
         <StatBoard
@@ -356,6 +393,7 @@ export default function Leaderboard() {
           entries={boards?.respect_points}
           valueLabel="respect"
           topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (${period === 'weekly' ? 'this week' : 'all-time'})`}
+          fetching={fetchingBoards}
         />
         <StatBoard
           title={viewMode === 'dead' ? 'Top dead · Bullets Melted' : 'Bullets Melted'}
@@ -363,6 +401,7 @@ export default function Leaderboard() {
           entries={boards?.bullets_melted}
           valueLabel="bullets"
           topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (${period === 'weekly' ? 'this week' : 'all-time'})`}
+          fetching={fetchingBoards}
         />
         <StatBoard
           title={viewMode === 'dead' ? 'Top dead · Stock Market Profit' : 'Highest Stock Market Profit'}
@@ -370,6 +409,7 @@ export default function Leaderboard() {
           entries={boards?.stock_market_profit}
           valueLabel="pts"
           topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (${period === 'weekly' ? 'this week' : 'all-time'})`}
+          fetching={fetchingBoards}
         />
         <StatBoard
           title={viewMode === 'dead' ? 'Top dead · Booze Run Profit' : 'Booze Run Profit'}
@@ -377,6 +417,7 @@ export default function Leaderboard() {
           entries={boards?.booze_run_profit}
           valueLabel="$"
           topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (${period === 'weekly' ? 'this week' : 'all-time'})`}
+          fetching={fetchingBoards}
         />
       </div>
 
