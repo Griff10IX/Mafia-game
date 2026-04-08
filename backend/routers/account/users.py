@@ -171,12 +171,16 @@ def register(router):
                 u["online_color"] = mod_default_online_color
 
         admin_emails = list(ADMIN_EMAILS or [])
+        now_iso = now.isoformat()
 
-        def _seen_activity_match(cutoff_iso: str):
+        def _activity_snapshot_match(cutoff_iso: str):
+            """Count accounts 'around' like the live roster: last_seen in window, or non-idle auto-rank, or forced online now.
+
+            Pure last_seen would under-count vs the roster because many listed players are there only via auto-rank
+            (or admin force-online) without a recent browser ping."""
             return {
                 "is_dead": {"$ne": True},
                 "is_bodyguard": {"$ne": True},
-                "last_seen": {"$gte": cutoff_iso},
                 "username": {"$regex": r"\S"},
                 "$nor": [
                     {
@@ -191,15 +195,20 @@ def register(router):
                         ]
                     }
                 ],
+                "$or": [
+                    {"last_seen": {"$gte": cutoff_iso}},
+                    {"$and": [{"auto_rank_enabled": True}, {"auto_rank_idle": {"$ne": True}}]},
+                    {"forced_online_until": {"$gt": now_iso}},
+                ],
             }
 
         hour_ago = (now - timedelta(hours=1)).isoformat()
         day_ago = (now - timedelta(days=1)).isoformat()
         week_ago = (now - timedelta(days=7)).isoformat()
         active_hour, active_day, active_week = await asyncio.gather(
-            db.users.count_documents(_seen_activity_match(hour_ago)),
-            db.users.count_documents(_seen_activity_match(day_ago)),
-            db.users.count_documents(_seen_activity_match(week_ago)),
+            db.users.count_documents(_activity_snapshot_match(hour_ago)),
+            db.users.count_documents(_activity_snapshot_match(day_ago)),
+            db.users.count_documents(_activity_snapshot_match(week_ago)),
         )
 
         return OnlineUsersResponse(

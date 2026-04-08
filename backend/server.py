@@ -894,7 +894,7 @@ class OnlineUsersResponse(BaseModel):
     admin_online_color: Optional[str] = None
     mod_default_online_color: Optional[str] = None  # default for Mod in legend (individual mods can override)
     hdo_online_color: Optional[str] = None  # colour for Help Desk Operator in legend
-    # Distinct accounts with last_seen in window (same visibility rules as online list; ghost staff excluded)
+    # Activity snapshots: last_seen in window OR non-idle auto-rank OR forced online now (same ghost/bodyguard rules as /users/online)
     active_last_hour: int = 0
     active_last_day: int = 0
     active_last_week: int = 0

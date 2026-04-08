@@ -65,7 +65,8 @@ const ActivitySnapshotCard = ({ totalOnline, activeHour, activeDay, activeWeek }
     </div>
     <div className="p-2">
       <p className="text-[9px] text-mutedForeground font-heading mb-2 leading-snug">
-        Live list below; these counts use <span className="text-foreground/90">last seen</span> (staff in ghost mode are excluded from the totals).
+        Live list below; the tiles count anyone with <span className="text-foreground/90">last seen</span> in that window, or{' '}
+        <span className="text-foreground/90">auto-rank on</span> (not idle), or <span className="text-foreground/90">forced online</span> — same idea as the roster (staff in ghost mode excluded).
       </p>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {snapshotTile(

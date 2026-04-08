@@ -1227,7 +1227,14 @@ const FamiliesTab = ({ families, myFamilyId }) => {
             style={{ animationDelay: `${idx * 0.03}s` }}
           >
             {myFamilyId === f.id && <div className="absolute left-0 top-0 bottom-0 w-0.5 bg-primary/60" />}
-            <div className="min-w-0 flex-1 flex items-start">
+            <div className="min-w-0 flex-1 flex items-start gap-2">
+              <div className="w-8 h-8 shrink-0 flex items-center justify-center self-start mt-0.5" aria-hidden>
+                {f.emblem_preset_id || (f.avatar_url && String(f.avatar_url).startsWith('data:')) ? (
+                  <FamilyEmblem emblemPresetId={f.emblem_preset_id} avatarUrl={f.avatar_url} size={32} />
+                ) : (
+                  <span className="block w-8 h-8 rounded-full border border-zinc-700/35 bg-zinc-900/40" />
+                )}
+              </div>
               <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5 flex-wrap">
                 <span className="font-heading font-bold text-foreground text-xs group-hover:text-primary transition-colors tracking-wide">{f.name}</span>
