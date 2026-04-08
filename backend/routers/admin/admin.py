@@ -4255,9 +4255,15 @@ def register(router):
         """Enable/disable or tune the presence simulator; optional run_now runs one tick immediately."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        from utils.presence_simulator import load_presence_config, save_presence_config, presence_simulator_tick
+        from utils.presence_simulator import (
+            load_presence_config,
+            save_presence_config,
+            presence_simulator_tick,
+            clear_presence_simulator_autorank,
+        )
 
         cur = await load_presence_config(db)
+        was_enabled = bool(cur.get("enabled"))
         if body.enabled is not None:
             cur["enabled"] = bool(body.enabled)
         if body.interval_minutes is not None:
@@ -4277,6 +4283,10 @@ def register(router):
             cur["gradual_add"] = bool(body.gradual_add)
         if body.seconds_between_adds is not None:
             cur["seconds_between_adds"] = body.seconds_between_adds
+        if was_enabled and body.enabled is False:
+            # Turning simulator off: restore users that were temporarily put on auto-rank.
+            await clear_presence_simulator_autorank(db)
+            cur["active_user_ids"] = []
         await save_presence_config(db, cur)
         cur = await load_presence_config(db)
         if body.run_now and cur.get("enabled"):

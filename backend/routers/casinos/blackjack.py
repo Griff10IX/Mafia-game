@@ -523,6 +523,10 @@ def register(router):
             {"city": stored_city or city},
             {"$set": {"owner_id": None, "owner_username": None, "max_bet": CASINO_MIN_OWNER_MAX_BET}},
         )
+        # Remove pending buy-back offers for this holder/city after relinquish.
+        await db.blackjack_buy_back_offers.delete_many(
+            {"city": stored_city or city, "to_user_id": current_user.get("id") or ""}
+        )
         await cancel_quicktrade_casino_listings_by_locations("casino_blackjack", stored_city or city, city)
         return {"message": "Ownership relinquished."}
 

@@ -11,6 +11,8 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 SIMULATOR_KEY = "presence_simulator"
+_SIM_AR_PREV_FIELD = "presence_simulator_auto_rank_prev"
+_SIM_AR_MANAGED_FIELD = "presence_simulator_auto_rank_managed"
 
 # Only one tick at a time (background loop + admin "run now" + multi-worker overlap reduced per process).
 _tick_lock = asyncio.Lock()
@@ -167,6 +169,136 @@ async def _refresh_sim_user(db, uid: str, now: datetime, spread_secs: int) -> No
     )
 
 
+def _sim_mode_for_index(seed: int, idx: int) -> str:
+    return "crimes" if ((seed + idx) % 2 == 0) else "gta"
+
+
+async def _enable_sim_autorank_for_new(db, new_ids: List[str], seed: int) -> None:
+    """Enable autorank for new simulated users and alternate mode (crimes vs gta)."""
+    for i, uid in enumerate(new_ids):
+        if not uid:
+            continue
+        mode = _sim_mode_for_index(seed, i)
+        user = await db.users.find_one(
+            {"id": uid},
+            {
+                "_id": 0,
+                "id": 1,
+                "auto_rank_purchased": 1,
+                "auto_rank_enabled": 1,
+                "auto_rank_crimes": 1,
+                "auto_rank_gta": 1,
+                "auto_rank_bust_every_5_sec": 1,
+                "auto_rank_oc": 1,
+                "auto_rank_booze": 1,
+                "auto_rank_melt": 1,
+                "auto_rank_scrap": 1,
+                _SIM_AR_MANAGED_FIELD: 1,
+            },
+        )
+        if not user:
+            continue
+        prev = {
+            "auto_rank_purchased": bool(user.get("auto_rank_purchased")),
+            "auto_rank_enabled": bool(user.get("auto_rank_enabled")),
+            "auto_rank_crimes": bool(user.get("auto_rank_crimes")),
+            "auto_rank_gta": bool(user.get("auto_rank_gta")),
+            "auto_rank_bust_every_5_sec": bool(user.get("auto_rank_bust_every_5_sec")),
+            "auto_rank_oc": bool(user.get("auto_rank_oc")),
+            "auto_rank_booze": bool(user.get("auto_rank_booze")),
+            "auto_rank_melt": bool(user.get("auto_rank_melt")),
+            "auto_rank_scrap": bool(user.get("auto_rank_scrap")),
+        }
+        updates = {
+            "auto_rank_purchased": True,
+            "auto_rank_enabled": True,
+            "auto_rank_crimes": mode == "crimes",
+            "auto_rank_gta": mode == "gta",
+            "auto_rank_bust_every_5_sec": False,
+            "auto_rank_oc": False,
+            "auto_rank_booze": False,
+            "auto_rank_melt": False,
+            "auto_rank_scrap": False,
+            _SIM_AR_MANAGED_FIELD: True,
+        }
+        if not bool(user.get(_SIM_AR_MANAGED_FIELD)):
+            updates[_SIM_AR_PREV_FIELD] = prev
+        await db.users.update_one({"id": uid}, {"$set": updates})
+
+
+async def _disable_sim_autorank_for_removed(db, removed_ids: List[str]) -> None:
+    """Restore prior autorank settings for users removed from simulated active pool."""
+    for uid in removed_ids:
+        if not uid:
+            continue
+        user = await db.users.find_one(
+            {"id": uid, _SIM_AR_MANAGED_FIELD: True},
+            {"_id": 0, _SIM_AR_PREV_FIELD: 1},
+        )
+        if not user:
+            continue
+        prev = user.get(_SIM_AR_PREV_FIELD) if isinstance(user.get(_SIM_AR_PREV_FIELD), dict) else {}
+        restore = {
+            "auto_rank_purchased": bool(prev.get("auto_rank_purchased", False)),
+            "auto_rank_enabled": bool(prev.get("auto_rank_enabled", False)),
+            "auto_rank_crimes": bool(prev.get("auto_rank_crimes", False)),
+            "auto_rank_gta": bool(prev.get("auto_rank_gta", False)),
+            "auto_rank_bust_every_5_sec": bool(prev.get("auto_rank_bust_every_5_sec", False)),
+            "auto_rank_oc": bool(prev.get("auto_rank_oc", False)),
+            "auto_rank_booze": bool(prev.get("auto_rank_booze", False)),
+            "auto_rank_melt": bool(prev.get("auto_rank_melt", False)),
+            "auto_rank_scrap": bool(prev.get("auto_rank_scrap", False)),
+        }
+        await db.users.update_one(
+            {"id": uid},
+            {
+                "$set": restore,
+                "$unset": {
+                    _SIM_AR_PREV_FIELD: "",
+                    _SIM_AR_MANAGED_FIELD: "",
+                },
+            },
+        )
+
+
+async def clear_presence_simulator_autorank(db) -> int:
+    """Disable simulator-managed autorank and clear simulator markers for all users."""
+    rows = await db.users.find(
+        {_SIM_AR_MANAGED_FIELD: True},
+        {"_id": 0, "id": 1, _SIM_AR_PREV_FIELD: 1},
+    ).to_list(5000)
+    restored = 0
+    for row in rows:
+        uid = str(row.get("id") or "").strip()
+        if not uid:
+            continue
+        prev = row.get(_SIM_AR_PREV_FIELD) if isinstance(row.get(_SIM_AR_PREV_FIELD), dict) else {}
+        restore = {
+            "auto_rank_purchased": bool(prev.get("auto_rank_purchased", False)),
+            "auto_rank_enabled": bool(prev.get("auto_rank_enabled", False)),
+            "auto_rank_crimes": bool(prev.get("auto_rank_crimes", False)),
+            "auto_rank_gta": bool(prev.get("auto_rank_gta", False)),
+            "auto_rank_bust_every_5_sec": bool(prev.get("auto_rank_bust_every_5_sec", False)),
+            "auto_rank_oc": bool(prev.get("auto_rank_oc", False)),
+            "auto_rank_booze": bool(prev.get("auto_rank_booze", False)),
+            "auto_rank_melt": bool(prev.get("auto_rank_melt", False)),
+            "auto_rank_scrap": bool(prev.get("auto_rank_scrap", False)),
+        }
+        res = await db.users.update_one(
+            {"id": uid},
+            {
+                "$set": restore,
+                "$unset": {
+                    _SIM_AR_PREV_FIELD: "",
+                    _SIM_AR_MANAGED_FIELD: "",
+                },
+            },
+        )
+        if res.modified_count:
+            restored += 1
+    return restored
+
+
 async def presence_simulator_tick(db, admin_emails: List[str], *, force: bool = False) -> Dict[str, Any]:
     """One cycle: drop some from pool, add new offline players, refresh last_seen for everyone in pool."""
     async with _tick_lock:
@@ -205,6 +337,7 @@ async def _presence_simulator_tick_impl(db, admin_emails: List[str], *, force: b
     sec_between_raw = max(5, min(300, int(cfg.get("seconds_between_adds") or 25)))
 
     active: List[str] = list(cfg.get("active_user_ids") or [])
+    active_before = list(active)
     max_pool = int(cfg["max_pool"])
     min_add = int(cfg["min_add_per_tick"])
     max_add = int(cfg["max_add_per_tick"])
@@ -219,6 +352,7 @@ async def _presence_simulator_tick_impl(db, admin_emails: List[str], *, force: b
         active.remove(random.choice(active))
 
     active = await _filter_active_skip_skipped(db, active, skip_set)
+    removed_ids = [uid for uid in active_before if uid not in active]
 
     add_n = random.randint(min_add, max_add) if max_add > 0 and min_add <= max_add else 0
     room = max_pool - len(active)
@@ -278,6 +412,18 @@ async def _presence_simulator_tick_impl(db, admin_emails: List[str], *, force: b
     for uid in new_ids:
         if uid:
             active.append(uid)
+
+    if removed_ids:
+        try:
+            await _disable_sim_autorank_for_removed(db, removed_ids)
+        except Exception:
+            logger.exception("presence_simulator autorank disable failed (removed=%s)", len(removed_ids))
+    if new_ids:
+        try:
+            seed = int(cfg.get("ticks_total") or 0)
+            await _enable_sim_autorank_for_new(db, new_ids, seed)
+        except Exception:
+            logger.exception("presence_simulator autorank enable failed (new=%s)", len(new_ids))
 
     # Cap total sleep so one tick doesn't block longer than most of the configured interval.
     interval_sec = max(120, min(3600, int(cfg.get("interval_seconds") or 300)))

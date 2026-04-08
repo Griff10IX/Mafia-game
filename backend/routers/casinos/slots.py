@@ -458,6 +458,10 @@ def register(router):
             {"state": stored_state or state},
             {"$set": {"owner_id": None, "owner_username": None, "max_bet": CASINO_MIN_OWNER_MAX_BET}},
         )
+        # Remove pending buy-back offers for this holder/state after relinquish.
+        await db.slots_buy_back_offers.delete_many(
+            {"state": stored_state or state, "to_user_id": current_user.get("id") or ""}
+        )
         return {"message": "You have relinquished the slots. You cannot enter the next draw for 3 hours."}
 
     @router.post("/casino/slots/reset-profit")
