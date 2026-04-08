@@ -6,6 +6,18 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-08 17:00 UTC[/color][/b] — [b]Kills vs NPCs, Stats defaults, and sports book pool info[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] Your main [b]Kills[/b] stat (profile, combat stats, kill badges, weekly kill boards, and related feeds) no longer increases when you kill [b]hitlist NPC[/b] targets. [b]Robot bodyguard[/b] kills still count as real kills. [b]Missions[/b] that require [b]attacks[/b] still count [b]hitlist NPC[/b] kills toward the mission goal.[/color]
+[*][color=#888888][b]Changed:[/b] [b]Game → Stats[/b] — [b]Last 15 Kills[/b] now opens with [b]show users only[/b] turned on by default (you can still toggle it off).[/color]
+[*][color=#888888][b]Changed:[/b] [b]Casino → Sports betting[/b] — each outcome on an event card shows [b]open money staked[/b] on that pick and [b]what % of the event’s open pool[/b] it represents.[/color]
+[*][color=#888888][b]Player action:[/b] No setup needed. If your Kills number changed versus older behavior, it’s because hitlist NPC kills were removed from that total; bodyguard robots still add kills normally.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-07 22:10 UTC[/color][/b] — [b]Silent refresh rollout across account, money, social, cars, and game pages[/b][/size]
 [quote]
 [list]
