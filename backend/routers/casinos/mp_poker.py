@@ -531,6 +531,8 @@ def register(router):
         for p in players:
             p["current_bet"] = 0
         if street == "preflop":
+            if deck:
+                deck.pop()  # burn
             for _ in range(3):
                 if deck:
                     board.append(deck.pop())
@@ -540,12 +542,16 @@ def register(router):
             )
         elif street == "flop":
             if deck:
+                deck.pop()  # burn
+            if deck:
                 board.append(deck.pop())
             await db.mp_poker_games.update_one(
                 {"id": game_id},
                 {"$set": {"street": "turn", "board": board, "deck": deck, "players": players, "current_turn_index": 0, "to_call": 0, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
             )
         elif street == "turn":
+            if deck:
+                deck.pop()  # burn
             if deck:
                 board.append(deck.pop())
             await db.mp_poker_games.update_one(
@@ -1866,30 +1872,63 @@ def register(router):
                     "hand": None,
                 })
         else:
-            best_rank = None
-            winners = []
-            winner_hand_name = None
-            for p in active:
-                hole = p.get("hole_cards") or []
-                r = _best_hand_seven(hole, board)
-                if best_rank is None or r > best_rank:
-                    best_rank = r
-                    winners = [p]
-                    winner_hand_name = _hand_description(r[0], r[1]) if r else None
-                elif r == best_rank:
-                    winners.append(p)
-            split = pot // len(winners)
-            remainder = pot - split * len(winners)
-            for i, w in enumerate(winners):
-                uid = w.get("user_id")
-                winner_payouts[uid] = split + (remainder if i == 0 else 0)
+            # Side-pot algorithm: a player can only win from each opponent
+            # the amount they themselves invested.
+            contribs = []
+            for i, p in enumerate(players):
+                contribs.append((int(p.get("total_bet_this_hand") or 0), i, p.get("status") == "folded"))
+            levels = sorted(set(b for b, _, _ in contribs if b > 0))
+            prev_level = 0
+            side_pots = []
+            for level in levels:
+                pot_amt = 0
+                elig = []
+                for bet, idx, folded in contribs:
+                    pot_amt += min(bet, level) - min(bet, prev_level)
+                    if not folded and bet >= level:
+                        elig.append(idx)
+                if pot_amt > 0 and elig:
+                    side_pots.append((pot_amt, elig))
+                elif pot_amt > 0 and side_pots:
+                    prev_a, prev_e = side_pots[-1]
+                    side_pots[-1] = (prev_a + pot_amt, prev_e)
+                prev_level = level
+            side_pot_total = sum(a for a, _ in side_pots)
+            if side_pots and side_pot_total < pot:
+                a, e = side_pots[-1]
+                side_pots[-1] = (a + pot - side_pot_total, e)
+            if not side_pots:
+                side_pots = [(pot, [i for i, p in enumerate(players) if p.get("status") != "folded"])]
+
+            winner_hand_names = {}
+            for sp_amt, sp_elig in side_pots:
+                best_rank = None
+                pot_winners = []
+                pot_hand_name = None
+                for idx in sp_elig:
+                    hole = players[idx].get("hole_cards") or []
+                    r = _best_hand_seven(hole, board)
+                    if best_rank is None or r > best_rank:
+                        best_rank = r
+                        pot_winners = [players[idx]]
+                        pot_hand_name = _hand_description(r[0], r[1]) if r else None
+                    elif r == best_rank:
+                        pot_winners.append(players[idx])
+                sp_split = sp_amt // len(pot_winners)
+                sp_rem = sp_amt - sp_split * len(pot_winners)
+                for i, w in enumerate(pot_winners):
+                    uid = w.get("user_id")
+                    winner_payouts[uid] = winner_payouts.get(uid, 0) + sp_split + (sp_rem if i == 0 else 0)
+                    if uid not in winner_hand_names:
+                        winner_hand_names[uid] = pot_hand_name
+
             for p in players:
                 uid = p.get("user_id")
                 results.append({
                     "user_id": uid,
                     "result": "win" if uid in winner_payouts else "lose",
                     "payout": winner_payouts.get(uid, 0),
-                    "hand": winner_hand_name if uid in winner_payouts else None,
+                    "hand": winner_hand_names.get(uid) if uid in winner_payouts else None,
                 })
         if is_tournament:
             # Tournament hand: pot is returned to winner stack(s), not paid out to wallet.
@@ -1999,8 +2038,12 @@ def register(router):
             p["total_bet_this_hand"] = 0
             p["acted_this_street"] = False
             p["status"] = "active"
-        sb_seat = (button_index + 1) % n
-        bb_seat = (button_index + 2) % n
+        if n == 2:
+            sb_seat = button_index
+            bb_seat = (button_index + 1) % 2
+        else:
+            sb_seat = (button_index + 1) % n
+            bb_seat = (button_index + 2) % n
         sb_stack = max(0, int(players[sb_seat].get("stack") or 0))
         sb_post = min(sb, sb_stack)
         players[sb_seat]["stack"] = sb_stack - sb_post
@@ -2018,7 +2061,10 @@ def register(router):
             players[bb_seat]["stack"] = 0
             players[bb_seat]["status"] = "all_in"
         pot = int(g.get("pot") or 0) + sb_post + bb_post
-        first_act = _first_actor_after_advance(players, (button_index + 3) % n)
+        if n == 2:
+            first_act = _first_actor_after_advance(players, button_index)
+        else:
+            first_act = _first_actor_after_advance(players, (button_index + 3) % n)
         preflop_to_call = max(int(x.get("current_bet") or 0) for x in players)
         now_iso = datetime.now(timezone.utc).isoformat()
         await db.mp_poker_games.update_one(
@@ -2061,12 +2107,13 @@ def register(router):
             p["acted_this_street"] = False
         button = int(g.get("button_index") or 0)
         if street == "preflop":
+            if deck:
+                deck.pop()  # burn
             for _ in range(3):
                 if deck:
                     board.append(deck.pop())
-            first = _first_actor_after_advance(players, (button + 3) % n)
+            first = _first_actor_after_advance(players, (button + 1) % n)
             if players[first].get("status") in ("folded", "all_in"):
-                # Nobody can act on this street (all remaining players are all-in/folded) -> run out board.
                 await db.mp_poker_games.update_one(
                     {"id": game_id},
                     {"$set": {"street": "flop", "board": board, "deck": deck, "players": players, "to_call": 0}},
@@ -2078,6 +2125,8 @@ def register(router):
                     {"$set": {"street": "flop", "board": board, "deck": deck, "players": players, "current_turn_index": first, "first_turn_index_this_street": first, "to_call": 0, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
                 )
         elif street == "flop":
+            if deck:
+                deck.pop()  # burn
             if deck:
                 board.append(deck.pop())
             first = _first_actor_after_advance(players, (button + 1) % n)
@@ -2093,6 +2142,8 @@ def register(router):
                     {"$set": {"street": "turn", "board": board, "deck": deck, "players": players, "current_turn_index": first, "first_turn_index_this_street": first, "to_call": 0, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
                 )
         elif street == "turn":
+            if deck:
+                deck.pop()  # burn
             if deck:
                 board.append(deck.pop())
             first = _first_actor_after_advance(players, (button + 1) % n)

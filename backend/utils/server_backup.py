@@ -1342,8 +1342,11 @@ async def get_stats_overview(
             {"_id": 0, "is_npc": 1, "rank_points": 1}
         )
 
-        if users_only_kills and (bool(killer and killer.get("is_npc")) or bool(victim and victim.get("is_npc"))):
-            continue
+        if users_only_kills:
+            if bool(killer and killer.get("is_npc")):
+                continue
+            if bool(victim and victim.get("is_npc")) and not a.get("is_bodyguard_kill"):
+                continue
 
         # Prefer rank stored on the attempt record (stable even if user doc changes)
         victim_rank_name = None

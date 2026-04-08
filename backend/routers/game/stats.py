@@ -410,9 +410,6 @@ def register(router):
                 if killer_is_npc:
                     continue
                 if victim_is_npc:
-                    # Robot bodyguard kills count as "user" kills; hitlist NPC kills do not.
-                    if a.get("is_npc_kill"):
-                        continue
                     if not a.get("is_bodyguard_kill"):
                         continue
 

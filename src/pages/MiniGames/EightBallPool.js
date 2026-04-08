@@ -30,6 +30,15 @@ const POOL_STYLES = `
     margin: 0 auto;
     max-width: 760px;
   }
+  @media (max-width: 640px) {
+    .pool-table-wrap {
+      max-width: 100%;
+    }
+    .pool-canvas-shell {
+      padding: 4px !important;
+      border-radius: 8px !important;
+    }
+  }
   @media (min-width: 1024px) {
     .pool-table-wrap {
       max-width: 700px;
@@ -38,17 +47,6 @@ const POOL_STYLES = `
   @media (min-width: 1280px) {
     .pool-table-wrap {
       max-width: 650px;
-    }
-  }
-  .pool-rotate-notice {
-    display: none;
-  }
-  @media (max-width: 900px) and (orientation: portrait) {
-    .pool-rotate-notice {
-      display: flex;
-    }
-    .pool-hide-portrait {
-      display: none;
     }
   }
 `;
@@ -244,7 +242,6 @@ export default function EightBallPool() {
   const [renderTick, setRenderTick] = useState(0);
   const [replayActive, setReplayActive] = useState(false);
   const [sfxEnabled, setSfxEnabled] = useState(true);
-  const [mobileNeedsRotate, setMobileNeedsRotate] = useState(false);
   const canvasRef = useRef(null);
   const animFrameRef = useRef(null);
   const replayAnimRef = useRef(null);
@@ -310,16 +307,6 @@ export default function EightBallPool() {
     if (replayActive) setIsAiming(false);
   }, [replayActive]);
 
-  useEffect(() => {
-    const checkRotate = () => {
-      const smallScreen = window.innerWidth <= 900;
-      const portrait = window.matchMedia('(orientation: portrait)').matches;
-      setMobileNeedsRotate(smallScreen && portrait);
-    };
-    checkRotate();
-    window.addEventListener('resize', checkRotate);
-    return () => window.removeEventListener('resize', checkRotate);
-  }, []);
 
   useEffect(() => {
     const loadImg = (src, targetRef) => {
@@ -1935,13 +1922,7 @@ export default function EightBallPool() {
                   })}
                 </div>
               </div>
-              <div className="pool-rotate-notice rounded-xl border border-primary/25 bg-zinc-900/70 p-4 items-center justify-center text-center">
-                <div className="space-y-1">
-                  <div className="text-xs font-heading uppercase tracking-wide text-primary">Rotate device to play</div>
-                  <div className="text-[11px] text-mutedForeground">For Mini Clip-style aim and table visibility, switch to landscape mode.</div>
-                </div>
-              </div>
-              <div className="pool-table-wrap pool-hide-portrait">
+              <div className="pool-table-wrap">
                 <div className="pool-canvas-shell rounded-xl p-1.5 xl:p-1">
                 <canvas
                   ref={canvasRef}
@@ -1951,7 +1932,6 @@ export default function EightBallPool() {
                   style={{ aspectRatio: '2 / 1', maxWidth: '100%' }}
                   onPointerDown={(e) => {
                     if (replayActive || !ballsSettled) return;
-                    if (mobileNeedsRotate) return;
                     if (inBreakPlacement && canRenderCue) {
                       e.preventDefault();
                       const pos = pointerToKitchen(e);
@@ -1960,39 +1940,41 @@ export default function EightBallPool() {
                     }
                     if (!canAim) return;
                     e.currentTarget.setPointerCapture?.(e.pointerId);
-                    const ptr = getPointerOnCanvas(e);
-                    if (!ptr) return;
-                    const cue = ballsForRender.find((b) => b.number === 0 && !b.pocketed);
-                    if (!cue) return;
-                    const cx = tableToCanvasX(cue.x, ptr.canvas.width);
-                    const cy = tableToCanvasY(cue.y, ptr.canvas.height);
-                    const a = (Number(angleDeg || 0) * Math.PI) / 180;
-                    const behind = -((ptr.sx - cx) * Math.cos(a) + (ptr.sy - cy) * Math.sin(a));
-                    if (behind > 15) {
-                      setAimPhase('pulling');
-                      setIsAiming(true);
-                      updatePullPower(e);
-                    } else {
-                      setAimPhase('aiming');
-                      setIsAiming(true);
-                      updateAimAngle(e);
-                    }
+                    setAimPhase('aiming');
+                    setIsAiming(true);
+                    updateAimAngle(e);
                   }}
                   onPointerMove={(e) => {
                     if (replayActive || !ballsSettled) return;
-                    if (mobileNeedsRotate) return;
                     if (inBreakPlacement && canRenderCue) {
                       const pos = pointerToKitchen(e);
                       if (pos) setBreakPreview(pos);
                       return;
                     }
                     if (!canAim || !isAiming) return;
-                    if (aimPhase === 'aiming') updateAimAngle(e);
-                    else if (aimPhase === 'pulling') updatePullPower(e);
+                    if (aimPhase === 'pulling') {
+                      updatePullPower(e);
+                    } else {
+                      const ptr = getPointerOnCanvas(e);
+                      if (ptr) {
+                        const cb = ballsForRender.find((b) => b.number === 0 && !b.pocketed);
+                        if (cb) {
+                          const ccx = tableToCanvasX(cb.x, ptr.canvas.width);
+                          const ccy = tableToCanvasY(cb.y, ptr.canvas.height);
+                          const ang = (Number(angleDeg || 0) * Math.PI) / 180;
+                          const behind = -((ptr.sx - ccx) * Math.cos(ang) + (ptr.sy - ccy) * Math.sin(ang));
+                          if (behind > 30) {
+                            setAimPhase('pulling');
+                            updatePullPower(e);
+                            return;
+                          }
+                        }
+                      }
+                      updateAimAngle(e);
+                    }
                   }}
                   onPointerUp={async (e) => {
                     if (replayActive || !ballsSettled) return;
-                    if (mobileNeedsRotate) return;
                     if (inBreakPlacement && canRenderCue) {
                       const pos = pointerToKitchen(e);
                       if (pos) await placeBreakCue(pos.x, pos.y);
@@ -2046,10 +2028,10 @@ export default function EightBallPool() {
                   <span className="text-mutedForeground">Spin</span>
                   <div className="flex items-center gap-2">
                     <div
-                      className="relative w-14 h-14 rounded-full border border-zinc-500/70 bg-gradient-to-b from-zinc-100 to-zinc-300 shadow-inner cursor-pointer select-none"
-                      onPointerDown={(e) => updateSpinFromPad(e)}
-                      onPointerMove={(e) => { if ((e.buttons & 1) === 1) updateSpinFromPad(e); }}
-                      title="Drag red marker to set spin"
+                      className="relative w-14 h-14 rounded-full border border-zinc-500/70 bg-gradient-to-b from-zinc-100 to-zinc-300 shadow-inner cursor-pointer select-none touch-none"
+                      onPointerDown={(e) => { e.currentTarget.setPointerCapture?.(e.pointerId); updateSpinFromPad(e); }}
+                      onPointerMove={(e) => { if (e.currentTarget.hasPointerCapture?.(e.pointerId) || (e.buttons & 1) === 1) updateSpinFromPad(e); }}
+                      title="Drag marker to set spin"
                     >
                       <div className="absolute inset-[10%] rounded-full border border-zinc-400/60" />
                       <div
@@ -2067,13 +2049,13 @@ export default function EightBallPool() {
                     </button>
                   </div>
                 </div>
-                <div className="flex-1 min-w-[140px] text-[9px] text-mutedForeground leading-snug font-heading p-2 rounded bg-zinc-800/40 border border-zinc-700/30">
+                <div className="flex-1 min-w-[100px] text-[9px] text-mutedForeground leading-snug font-heading p-2 rounded bg-zinc-800/40 border border-zinc-700/30">
                   {inBreakPlacement
-                    ? 'Click the kitchen area to place the cue ball'
+                    ? 'Tap the kitchen area to place the cue ball'
                     : canAim
                       ? <>
-                          <span className="text-foreground font-bold">Aim:</span> Click & drag on felt.{' '}
-                          <span className="text-foreground font-bold">Shoot:</span> Click behind the cue ball, pull back, release.
+                          <span className="text-foreground font-bold">Aim:</span> Drag on felt.{' '}
+                          <span className="text-foreground font-bold">Shoot:</span> Drag behind cue ball, pull back, release.
                         </>
                       : (replayActive || !ballsSettled)
                         ? 'Balls rolling...'

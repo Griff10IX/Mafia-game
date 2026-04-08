@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Landmark, ShieldCheck, ArrowRightLeft, Clock, Coins, ChevronDown, ChevronRight, Copy } from 'lucide-react';
 import { toast } from 'sonner';
@@ -425,6 +425,7 @@ export default function Bank() {
   const [swissAmount, setSwissAmount] = useState('');
   const location = useLocation();
   const [transferTo, setTransferTo] = useState(location.state?.transferTo ?? '');
+  const sendMoneyRef = useRef(null);
   const [transferAmount, setTransferAmount] = useState('');
   const [sending, setSending] = useState(false);
 
@@ -482,6 +483,9 @@ export default function Bank() {
     if (to && typeof to === 'string') {
       setTransferTo(to);
       setCollapsedSections((prev) => ({ ...prev, sendMoney: false }));
+      setTimeout(() => {
+        sendMoneyRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 150);
     }
   }, [location.state?.transferTo]);
 
@@ -692,6 +696,7 @@ export default function Bank() {
           <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
           <button
             type="button"
+            ref={sendMoneyRef}
             onClick={() => toggleSection('sendMoney')}
             className="w-full px-2 py-1 bg-primary/8 border-b border-primary/20 flex items-center gap-1 text-left hover:bg-primary/12 transition-colors"
           >
