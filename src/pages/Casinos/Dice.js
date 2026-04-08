@@ -203,6 +203,7 @@ export default function Dice() {
   const [buyBackOffer, setBuyBackOffer] = useState(null);
   const [buyBackSecondsLeft, setBuyBackSecondsLeft] = useState(null);
   const [buyBackActionLoading, setBuyBackActionLoading] = useState(false);
+  const buyBackFromGameRef = useRef(false);
 
   const rollIntervalRef = useRef(null);
   const rollTimeoutRef = useRef(null);
@@ -220,13 +221,14 @@ export default function Dice() {
         if (data.buy_back_reward != null) setOwnerBuyBack(String(data.buy_back_reward));
         if (data.buy_back_offer) {
           setBuyBackOffer({ ...data.buy_back_offer, offer_id: data.buy_back_offer.offer_id || data.buy_back_offer.id });
-        } else {
+          buyBackFromGameRef.current = false;
+        } else if (!buyBackFromGameRef.current) {
           setBuyBackOffer(null);
         }
       })
       .catch(() => {
         setOwnership({ current_city: null, owner: null });
-        setBuyBackOffer(null);
+        if (!buyBackFromGameRef.current) setBuyBackOffer(null);
       });
   };
 
@@ -286,7 +288,7 @@ export default function Dice() {
         const received = data.actual_payout ?? data.owner_paid ?? 0;
         toast.success(`Rolled ${data.roll}! House paid ${formatMoney(received)} (full win: ${formatMoney(data.payout)})`);
         if (data.ownership_transferred) toast.success('You won the casino! This table is now yours.');
-        if (data.buy_back_offer) setBuyBackOffer(data.buy_back_offer);
+        if (data.buy_back_offer) { setBuyBackOffer(data.buy_back_offer); buyBackFromGameRef.current = true; }
       } else {
         toast.success(`Rolled ${data.roll}! You won ${formatMoney(data.payout)}!`);
       }

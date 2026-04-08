@@ -95,15 +95,12 @@ export default function QuickTrade() {
   // Auto-fill offer/cost from existing offers: buy = highest + 1, sell = lowest - 1 (only when field is empty)
   useEffect(() => {
     if (buyOffers.length && buyOffer === '') {
-      const maxCost = Math.max(...buyOffers.map((o) => Number(o.cost) || 0));
-      if (maxCost >= 0) setBuyOffer(String(maxCost + 1));
+      const rates = buyOffers.map((o) => (Number(o.cost) || 0) / (Number(o.points) || 1)).filter((r) => r > 0);
+      if (rates.length) setBuyOffer(String(Math.round(Math.max(...rates) + 1)));
     }
     if (sellOffers.length && sellCost === '') {
-      const costs = sellOffers.map((o) => Number(o.money) || 0).filter((n) => n > 0);
-      if (costs.length) {
-        const minCost = Math.min(...costs);
-        setSellCost(String(minCost - 1));
-      }
+      const rates = sellOffers.map((o) => (Number(o.money) || 0) / (Number(o.points) || 1)).filter((r) => r > 0);
+      if (rates.length) setSellCost(String(Math.max(1, Math.round(Math.min(...rates) - 1))));
     }
   }, [buyOffers, sellOffers, buyOffer, sellCost]);
 
@@ -124,7 +121,7 @@ export default function QuickTrade() {
       for (let i = 0; i < count; i++) {
         await api.post('/trade/sell-offer', {
           points: parsedSellPoints,
-          cost: Math.round(parseFloat(String(sellCost).replace(/,/g, '')) || 0),
+          cost: sellTotal,
           hide_name: hideNameSell
         });
         created++;
@@ -164,7 +161,7 @@ export default function QuickTrade() {
       for (let i = 0; i < count; i++) {
         await api.post('/trade/buy-offer', {
           points: parsedBuyPoints,
-          offer: Math.round(parseFloat(String(buyOffer).replace(/,/g, '')) || 0),
+          offer: buyTotal,
           hide_name: hideNameBuy
         });
         created++;
@@ -335,8 +332,8 @@ export default function QuickTrade() {
     return parseFloat(num).toLocaleString('en-US');
   };
   
-  const sellPerPoint = sellPoints && sellCost && parseFloat(sellPoints) > 0 ? (parseFloat(sellCost) / parseFloat(sellPoints)) : 0;
-  const buyPerPoint = buyPoints && buyOffer && parseFloat(buyPoints) > 0 ? (parseFloat(buyOffer) / parseFloat(buyPoints)) : 0;
+  const sellTotal = sellPoints && sellCost ? Math.round(parseFloat(sellPoints) * parseFloat(sellCost)) : 0;
+  const buyTotal = buyPoints && buyOffer ? Math.round(parseFloat(buyPoints) * parseFloat(buyOffer)) : 0;
   
   const calculateFee = (points) => Math.max(1, Math.floor(parseFloat(points) * 0.005));
   
@@ -389,16 +386,16 @@ export default function QuickTrade() {
               />
             </div>
             <div>
-              <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">Cost ($)</label>
+              <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">Price per point ($)</label>
               <FormattedNumberInput
                 value={sellCost}
                 onChange={setSellCost}
                 allowDecimals
-                placeholder="e.g. 50,000"
+                placeholder="e.g. 2,500"
                 className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
               />
-              {sellPoints && sellCost && (
-                <p className="text-[10px] text-mutedForeground mt-1">Per point: <span className="text-primary font-bold">${formatCurrency(sellPerPoint)}</span></p>
+              {sellTotal > 0 && (
+                <p className="text-[10px] text-mutedForeground mt-1">Total you&apos;ll receive: <span className="text-primary font-bold">${formatNumber(sellTotal)}</span></p>
               )}
             </div>
             <div className="relative group">
@@ -437,7 +434,7 @@ export default function QuickTrade() {
               disabled={!sellPoints || !sellCost || creatingOffers}
               className="w-full px-4 py-2 rounded bg-primary/20 text-primary text-xs font-heading font-bold border border-primary/40 hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {creatingOffers ? `Adding ${sellOfferCount}…` : `Add ${sellOfferCount > 1 ? `x${sellOfferCount} ` : ''}$${sellCost ? formatNumber(sellCost) : '0'}`}
+              {creatingOffers ? `Adding ${sellOfferCount}…` : `Add ${sellOfferCount > 1 ? `x${sellOfferCount} ` : ''}$${sellTotal ? formatNumber(sellTotal) : '0'}`}
               {!creatingOffers && sellPoints && sellOfferCount === 1 && <span className="text-[10px] opacity-90 ml-1">({formatNumber(sellAfterFee)} after fee)</span>}
             </button>
           </div>
@@ -464,16 +461,16 @@ export default function QuickTrade() {
               />
             </div>
             <div>
-              <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">Offer ($)</label>
+              <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">Price per point ($)</label>
               <FormattedNumberInput
                 value={buyOffer}
                 onChange={setBuyOffer}
                 allowDecimals
-                placeholder="e.g. 50,000"
+                placeholder="e.g. 2,500"
                 className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
               />
-              {buyPoints && buyOffer && (
-                <p className="text-[10px] text-mutedForeground mt-1">Per point: <span className="text-primary font-bold">${formatCurrency(buyPerPoint)}</span></p>
+              {buyTotal > 0 && (
+                <p className="text-[10px] text-mutedForeground mt-1">Total you&apos;ll pay: <span className="text-primary font-bold">${formatNumber(buyTotal)}</span></p>
               )}
             </div>
             <div className="relative group">
@@ -512,7 +509,7 @@ export default function QuickTrade() {
               disabled={!buyPoints || !buyOffer || creatingOffers}
               className="w-full px-4 py-2 rounded bg-primary/20 text-primary text-xs font-heading font-bold border border-primary/40 hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {creatingOffers ? `Adding ${buyOfferCount}…` : `Add ${buyOfferCount > 1 ? `x${buyOfferCount} ` : ''}$${buyOffer ? formatNumber(buyOffer) : '0'}`}
+              {creatingOffers ? `Adding ${buyOfferCount}…` : `Add ${buyOfferCount > 1 ? `x${buyOfferCount} ` : ''}$${buyTotal ? formatNumber(buyTotal) : '0'}`}
               {!creatingOffers && buyPoints && buyOfferCount === 1 && <span className="text-[10px] opacity-90 ml-1">({formatNumber(buyAfterFee)} after fee)</span>}
             </button>
           </div>

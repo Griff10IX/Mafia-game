@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import api, { refreshUser } from '../../utils/api';
@@ -224,6 +224,7 @@ export default function VideoPoker() {
   const [buyBackOffer, setBuyBackOffer] = useState(null);
   const [buyBackSecondsLeft, setBuyBackSecondsLeft] = useState(null);
   const [buyBackActionLoading, setBuyBackActionLoading] = useState(false);
+  const buyBackFromGameRef = useRef(false);
 
   const fetchConfigAndOwnership = () => {
     api.get('/casino/videopoker/config').then((r) =>
@@ -240,10 +241,11 @@ export default function VideoPoker() {
       if (data?.buy_back_reward != null) setOwnerBuyBack(String(data.buy_back_reward));
       if (data?.buy_back_offer) {
         setBuyBackOffer({ ...data.buy_back_offer, offer_id: data.buy_back_offer.offer_id || data.buy_back_offer.id });
-      } else {
+        buyBackFromGameRef.current = false;
+      } else if (!buyBackFromGameRef.current) {
         setBuyBackOffer(null);
       }
-    }).catch(() => { setOwnership(null); setBuyBackOffer(null); });
+    }).catch(() => { setOwnership(null); if (!buyBackFromGameRef.current) setBuyBackOffer(null); });
   };
 
   const fetchHistory = () => {
@@ -456,7 +458,7 @@ export default function VideoPoker() {
           setShowWin(true);
           setTimeout(() => setShowWin(false), 3000);
           if (data.ownership_transferred) toast.success('You won the table! It is now yours.');
-          if (data.buy_back_offer) setBuyBackOffer(data.buy_back_offer);
+          if (data.buy_back_offer) { setBuyBackOffer(data.buy_back_offer); buyBackFromGameRef.current = true; }
         } else {
           toast.info(`${handLabel}. Bet returned`);
         }

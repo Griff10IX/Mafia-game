@@ -52,23 +52,59 @@ const FormattedNumberInput = React.forwardRef(function FormattedNumberInput(
   { value, onChange, allowDecimals = false, max, className, type, ...props },
   ref
 ) {
+  const innerRef = React.useRef(null);
+  const cursorRef = React.useRef(null);
+  const mergedRef = React.useCallback(
+    (node) => {
+      innerRef.current = node;
+      if (typeof ref === 'function') ref(node);
+      else if (ref) ref.current = node;
+    },
+    [ref],
+  );
+
   const raw = value === undefined || value === null ? '' : String(value);
   const display = formatWithCommas(raw, allowDecimals);
 
+  React.useLayoutEffect(() => {
+    const el = innerRef.current;
+    if (!el || cursorRef.current == null) return;
+    el.setSelectionRange(cursorRef.current, cursorRef.current);
+    cursorRef.current = null;
+  });
+
   const handleChange = (e) => {
-    let nextRaw = parseRaw(e.target.value, allowDecimals);
+    const el = e.target;
+    const prev = display;
+    const next = el.value;
+    const caretBefore = el.selectionStart ?? next.length;
+
+    let nextRaw = parseRaw(next, allowDecimals);
     if (!allowDecimals && max != null && nextRaw !== '') {
       const n = parseInt(nextRaw, 10);
       if (!Number.isNaN(n) && n > max) {
         nextRaw = String(max);
       }
     }
+
+    const nextDisplay = formatWithCommas(nextRaw, allowDecimals);
+
+    const digitsBefore = next.slice(0, caretBefore).replace(/[^0-9.]/g, '').length;
+    let newCaret = 0;
+    let counted = 0;
+    for (let i = 0; i < nextDisplay.length; i++) {
+      if (counted >= digitsBefore) break;
+      if (/[0-9.]/.test(nextDisplay[i])) counted++;
+      newCaret = i + 1;
+    }
+    cursorRef.current = newCaret;
+
     onChange(nextRaw);
   };
 
   return (
     <input
-      ref={ref}
+      ref={mergedRef}
       type="text"
       inputMode="decimal"
       value={display}

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -187,6 +187,7 @@ export default function Blackjack() {
   const [buyBackOffer, setBuyBackOffer] = useState(null);
   const [buyBackSecondsLeft, setBuyBackSecondsLeft] = useState(null);
   const [buyBackActionLoading, setBuyBackActionLoading] = useState(false);
+  const buyBackFromGameRef = useRef(false);
   const navigate = useNavigate();
 
   const fetchConfigAndOwnership = () => {
@@ -199,10 +200,11 @@ export default function Blackjack() {
       if (data?.buy_back_reward != null) setOwnerBuyBack(String(data.buy_back_reward));
       if (data?.buy_back_offer) {
         setBuyBackOffer({ ...data.buy_back_offer, offer_id: data.buy_back_offer.offer_id || data.buy_back_offer.id });
-      } else { setBuyBackOffer(null); }
+        buyBackFromGameRef.current = false;
+      } else if (!buyBackFromGameRef.current) { setBuyBackOffer(null); }
     }).catch(() => {
       setOwnership(null);
-      setBuyBackOffer(null);
+      if (!buyBackFromGameRef.current) setBuyBackOffer(null);
     });
   };
 
@@ -400,7 +402,7 @@ export default function Blackjack() {
       else toast.error(`Dealer wins. Lost ${formatMoney(game.bet)}`);
       if (isWin) { setShowWin(true); setTimeout(() => setShowWin(false), 3000); }
       if (data.ownership_transferred) toast.success('You won the casino!');
-      if (data.buy_back_offer) setBuyBackOffer(data.buy_back_offer);
+      if (data.buy_back_offer) { setBuyBackOffer(data.buy_back_offer); buyBackFromGameRef.current = true; }
       refreshUser(data.new_balance); fetchHistory(); fetchConfigAndOwnership();
     } catch (e) { toast.error(apiErrorDetail(e, 'Failed')); }
     finally { setLoading(false); }

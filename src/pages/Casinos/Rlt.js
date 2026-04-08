@@ -321,6 +321,7 @@ export default function Rlt() {
   const [buyBackOffer, setBuyBackOffer] = useState(null);
   const [buyBackSecondsLeft, setBuyBackSecondsLeft] = useState(null);
   const [buyBackActionLoading, setBuyBackActionLoading] = useState(false);
+  const buyBackFromGameRef = useRef(false);
 
   const fetchOwnership = () => {
     api.get('/casino/roulette/ownership').then((r) => {
@@ -330,12 +331,13 @@ export default function Rlt() {
       if (data?.buy_back_reward != null) setOwnerBuyBack(String(data.buy_back_reward));
       if (data?.buy_back_offer) {
         setBuyBackOffer({ ...data.buy_back_offer, offer_id: data.buy_back_offer.offer_id || data.buy_back_offer.id });
-      } else {
+        buyBackFromGameRef.current = false;
+      } else if (!buyBackFromGameRef.current) {
         setBuyBackOffer(null);
       }
     }).catch(() => {
       setOwnership(null);
-      setBuyBackOffer(null);
+      if (!buyBackFromGameRef.current) setBuyBackOffer(null);
     });
   };
 
@@ -412,10 +414,12 @@ export default function Rlt() {
     } else {
       toast.error(`Landed ${data.result}. Lost ${formatMoney(data.total_stake)}`);
     }
+    if (data.ownership_transferred) toast.success('You won the casino!');
+    if (data.buy_back_offer) { setBuyBackOffer(data.buy_back_offer); buyBackFromGameRef.current = true; }
     refreshUser();
+    fetchOwnership();
     setSpinning(false);
     if (busyClearTimeoutRef.current) clearTimeout(busyClearTimeoutRef.current);
-    // Keep perf mode active slightly into toast reveal, then release.
     busyClearTimeoutRef.current = setTimeout(() => {
       busyClearTimeoutRef.current = null;
       setBusyAnimationsFlag(false);

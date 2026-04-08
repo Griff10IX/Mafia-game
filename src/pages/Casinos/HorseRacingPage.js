@@ -332,6 +332,7 @@ export default function HorseRacingPage() {
   const [buyBackOffer, setBuyBackOffer] = useState(null);
   const [buyBackSecondsLeft, setBuyBackSecondsLeft] = useState(null);
   const [buyBackActionLoading, setBuyBackActionLoading] = useState(false);
+  const buyBackFromGameRef = useRef(false);
   const raceEndRef = useRef(null);
   const gateTimeoutRef = useRef(null);
   const raceStartTimeRef = useRef(null);
@@ -368,10 +369,11 @@ export default function HorseRacingPage() {
       if (data?.buy_back_reward != null) setOwnerBuyBack(String(data.buy_back_reward));
       if (data?.buy_back_offer) {
         setBuyBackOffer({ ...data.buy_back_offer, offer_id: data.buy_back_offer.offer_id || data.buy_back_offer.id });
-      } else {
+        buyBackFromGameRef.current = false;
+      } else if (!buyBackFromGameRef.current) {
         setBuyBackOffer(null);
       }
-    }).catch(() => { setOwnership(null); setBuyBackOffer(null); });
+    }).catch(() => { setOwnership(null); if (!buyBackFromGameRef.current) setBuyBackOffer(null); });
   }, []);
 
   useEffect(() => { fetchConfigAndOwnership(); fetchHistory(); }, [fetchConfigAndOwnership, fetchHistory]);
@@ -621,7 +623,7 @@ export default function HorseRacingPage() {
           setShowWin(true);
           setTimeout(() => setShowWin(false), 3000);
           if (data.ownership_transferred) toast.success('You won the track! It is now yours.');
-          if (data.buy_back_offer) setBuyBackOffer(data.buy_back_offer);
+          if (data.buy_back_offer) { setBuyBackOffer(data.buy_back_offer); buyBackFromGameRef.current = true; }
         } else {
           toast.error(`${data.winner_name} won. Lost ${formatMoney(betNum)}`);
         }
