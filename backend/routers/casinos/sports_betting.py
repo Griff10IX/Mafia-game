@@ -121,6 +121,7 @@ SPORTS_BETTING_CLOSE_BEFORE_START_MINUTES = 10
 SPORTS_BETTING_PUBLIC_EVENTS_LIMIT = 500
 # Player-submitted requests to add a template to the board (UTC calendar day).
 SPORTS_EVENT_REQUESTS_PER_DAY = 3
+SPORTS_EVENT_REQUEST_MAX_HOURS_AHEAD = 24
 SPORTS_LIVE_CACHE_TTL = 30 * 60  # 30 min (was 6h) so "Check for events" gets fresher templates
 ODDS_API_BASE = "https://api.the-odds-api.com/v4"
 THESPORTSDB_LEAGUE_PREMIER = 4328
@@ -504,6 +505,7 @@ SOCCER_LEAGUES = (
     "soccer_spl",
     "soccer_belgium_first_div",
     "soccer_turkey_super_league",
+    "soccer_saudi_arabia_pro_league",
     "soccer_usa_mls",
     "soccer_mexico_ligamx",
     "soccer_brazil_campeonato",
@@ -563,6 +565,7 @@ def _soccer_league_display_name(sport_key: str) -> str:
         "soccer_spl": "Scottish Premiership",
         "soccer_belgium_first_div": "Belgium First Division",
         "soccer_turkey_super_league": "Turkey Super League",
+        "soccer_saudi_arabia_pro_league": "Saudi Pro League",
         "soccer_usa_mls": "MLS",
         "soccer_mexico_ligamx": "Liga MX",
         "soccer_brazil_campeonato": "Brazil Série A",
@@ -2323,6 +2326,19 @@ async def sports_request_event(body: SportsRequestEventBody, current_user: dict 
     template = next((t for t in db_list if (t.get("id") or "").strip() == template_id), None)
     if not template:
         raise HTTPException(status_code=404, detail="Game not found in the saved library — it may have expired from the list")
+    now_dt = datetime.now(timezone.utc)
+    start_iso = template.get("start_time") or _parse_commence_time(template.get("commence_time"))
+    start_dt = _parse_start_time_utc(start_iso)
+    if start_dt is None:
+        raise HTTPException(status_code=400, detail="This game is missing a valid start time and cannot be requested")
+    if start_dt <= now_dt:
+        raise HTTPException(status_code=400, detail="This game has already started and cannot be requested")
+    max_allowed = now_dt + timedelta(hours=SPORTS_EVENT_REQUEST_MAX_HOURS_AHEAD)
+    if start_dt > max_allowed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"You can only request games starting within the next {SPORTS_EVENT_REQUEST_MAX_HOURS_AHEAD} hours.",
+        )
     on_board = await _open_board_template_ids()
     if template_id in on_board:
         raise HTTPException(status_code=400, detail="This game is already on the board")

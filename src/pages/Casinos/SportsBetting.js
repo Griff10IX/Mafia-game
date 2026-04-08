@@ -81,6 +81,14 @@ function templateMatchesDateFilter(t, preset, specificYmd) {
   return true;
 }
 
+function templateStartsWithinNextDay(t) {
+  const kickoff = parseTemplateStart(t);
+  if (!kickoff) return false;
+  const now = new Date();
+  const inMs = kickoff.getTime() - now.getTime();
+  return inMs > 0 && inMs <= 24 * 60 * 60 * 1000;
+}
+
 function apiErrorDetail(e, fallback) {
   const d = e.response?.data?.detail;
   if (d == null) return fallback;
@@ -1160,6 +1168,7 @@ export default function SportsBetting() {
               <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Browse saved games</p>
               <p className="text-[9px] text-zinc-500 font-heading leading-relaxed">
                 This list is the house database (same source as after staff runs &quot;Check for events&quot;). If a game is not on the board yet, you can request it — staff are notified in their inbox.
+                {' '}Only games starting within the next 24 hours can be requested.
                 {' '}
                 <span className="text-zinc-400">
                   {requestInfo.remaining ?? 0} of {requestInfo.limit ?? 3} request{requestInfo.limit === 1 ? '' : 's'} left today (resets midnight UTC).
@@ -1244,7 +1253,8 @@ export default function SportsBetting() {
                 ) : (
                   filteredBrowseTemplates.map((t) => {
                     const onBoard = onBoardTemplateSet.has(String(t.id ?? ''));
-                    const canRequest = !onBoard && (requestInfo.remaining ?? 0) > 0;
+                    const withinNextDay = templateStartsWithinNextDay(t);
+                    const canRequest = !onBoard && withinNextDay && (requestInfo.remaining ?? 0) > 0;
                     return (
                       <div
                         key={t.id}
@@ -1272,6 +1282,8 @@ export default function SportsBetting() {
                               title={
                                 (requestInfo.remaining ?? 0) <= 0
                                   ? 'Daily request limit reached (UTC midnight reset)'
+                                  : !withinNextDay
+                                    ? 'Only games starting in the next 24 hours can be requested'
                                   : 'Ask staff to add this game'
                               }
                               className="bg-primary/20 text-primary rounded px-2 py-1 text-[9px] font-heading font-bold border border-primary/40 hover:bg-primary/30 disabled:opacity-40 disabled:cursor-not-allowed"

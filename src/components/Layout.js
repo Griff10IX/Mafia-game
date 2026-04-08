@@ -15,6 +15,7 @@ import FindWordHuntLayer from './entertainer/FindWordHuntLayer';
 import { NotificationMessage } from './NotificationMessage';
 import GameChat from './GameChat';
 import DeathScreen from './DeathScreen';
+import FamilyEmblem from './FamilyEmblem';
 import styles from '../styles/noir.module.css';
 
 /** Bottom bar: 6 icons. Rank = crimes/rank; Misc = everything that doesn't fit elsewhere. */
@@ -2049,7 +2050,25 @@ export default function Layout({ children }) {
                   { label: 'Weapon', value: user.gun_name || 'None', isLink: true, to: '/kill/armour-weapons' },
                   { label: 'Armour', value: user.armour_name || 'None', isLink: true, to: '/kill/armour-weapons' },
                   { label: 'Location', value: user.current_state || user.location || '—', truncate: true, isLink: true, to: '/travel' },
-                  { label: 'Family', value: user.gang_name || 'None', wrapValue: true, isLink: true, to: '/game/family/list' },
+                  {
+                    label: 'Family',
+                    value: (
+                      <span className="inline-flex items-center justify-end gap-1.5 w-full">
+                        {(user.family_emblem_preset_id || user.family_emblem_avatar_url) ? (
+                          <FamilyEmblem
+                            emblemPresetId={user.family_emblem_preset_id}
+                            avatarUrl={user.family_emblem_avatar_url}
+                            size={14}
+                            className="shrink-0"
+                          />
+                        ) : null}
+                        <span className="min-w-0 break-words leading-snug">{user.gang_name || 'None'}</span>
+                      </span>
+                    ),
+                    wrapValue: true,
+                    isLink: true,
+                    to: '/game/family/list',
+                  },
                   { label: 'Guards', value: typeof user.bodyguard_count === 'number' ? `${user.bodyguard_count}/${user.bodyguard_slots ?? 1}` : '—', isLink: true, to: '/kill/bodyguards' },
                   ...(hasCasinoOrProperty ? [
                     { label: 'Casino', value: formatMoney(user.casino_profit ?? 0), className: (user.casino_profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400', isLink: true, to: '/my-properties' },
@@ -2071,7 +2090,7 @@ export default function Layout({ children }) {
                               : `shrink min-w-0 text-right ${row.truncate ? 'truncate max-w-[72px]' : 'truncate'} ${row.className || ''}`
                           }
                           style={row.className ? undefined : { color: 'var(--noir-primary)' }}
-                          title={row.wrapValue ? undefined : row.value}
+                          title={row.wrapValue || typeof row.value !== 'string' ? undefined : row.value}
                         >
                           {row.value}
                         </span>
@@ -2083,7 +2102,7 @@ export default function Layout({ children }) {
                       onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(var(--noir-primary-rgb), 0.04)'; }}
                       onMouseLeave={(e) => { e.currentTarget.style.background = ''; }}>
                       <span className="shrink-0" style={{ color: 'var(--noir-muted)' }}>{row.label}</span>
-                      <span className={`shrink min-w-0 text-right ${row.truncate ? 'truncate max-w-[72px]' : ''} ${row.className || ''}`} style={!row.className ? { color: 'var(--noir-foreground)' } : undefined} title={row.value}>{row.value}</span>
+                      <span className={`shrink min-w-0 text-right ${row.truncate ? 'truncate max-w-[72px]' : ''} ${row.className || ''}`} style={!row.className ? { color: 'var(--noir-foreground)' } : undefined} title={typeof row.value === 'string' ? row.value : undefined}>{row.value}</span>
                     </div>
                   );
                 })}
