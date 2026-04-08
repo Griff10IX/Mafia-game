@@ -22,21 +22,20 @@ from utils.minigame_run_session import (
 # Base tiers (score threshold -> cash, respect for that tier only; cumulative applied in _get_reward)
 # 75% reduction for beta
 REWARD_TIERS = [
-    {"score": 1, "cash": 63, "respect": 5, "label": "Street Punk"},
-    {"score": 5, "cash": 250, "respect": 5, "label": "Corner Boy"},
-    {"score": 10, "cash": 625, "respect": 10, "label": "Made Man"},
-    {"score": 20, "cash": 1_500, "respect": 20, "label": "Underboss"},
-    {"score": 35, "cash": 3_125, "respect": 20, "label": "Capo"},
-    {"score": 50, "cash": 6_250, "respect": 40, "label": "Don"},
+    {"score": 25, "cash": 63, "respect": 0, "label": "Street Punk"},
+    {"score": 50, "cash": 250, "respect": 5, "label": "Corner Boy"},
+    {"score": 100, "cash": 625, "respect": 10, "label": "Made Man"},
+    {"score": 200, "cash": 1_500, "respect": 15, "label": "Underboss"},
+    {"score": 350, "cash": 3_125, "respect": 25, "label": "Capo"},
+    {"score": 500, "cash": 6_250, "respect": 40, "label": "Don"},
 ]
 
 # Caps per single run (infinite levels, but one claim cannot exceed these)
 MAX_CASH_PER_CLAIM = 250_000  # 75% reduction
 MAX_RESPECT_PER_CLAIM = 300
 
-# Beyond tier 50: every gate adds this cash (until cap) and 2 respect (until cap)
-CASH_PER_GATE_AFTER_50 = 500  # 75% reduction
-RESPECT_PER_GATE_AFTER_50 = 2
+CASH_PER_GATE_AFTER_MAX = 500  # 75% reduction
+RESPECT_PER_GATE_AFTER_MAX = 1
 
 # Reject only absurd client-reported scores. Per-run cash/respect are still capped by _get_reward.
 MAX_SCORE_SANITY = 100_000
@@ -62,11 +61,10 @@ def _get_reward(score: int) -> dict:
             label = str(t["label"])
             tier = i
 
-    # Beyond 50 gates: infinite progression (capped)
-    if score > 50:
-        extra_gates = score - 50
-        cash += min(MAX_CASH_PER_CLAIM - cash, extra_gates * CASH_PER_GATE_AFTER_50)
-        respect += min(MAX_RESPECT_PER_CLAIM - respect, extra_gates * RESPECT_PER_GATE_AFTER_50)
+    if score > 500:
+        extra_gates = score - 500
+        cash += min(MAX_CASH_PER_CLAIM - cash, extra_gates * CASH_PER_GATE_AFTER_MAX)
+        respect += min(MAX_RESPECT_PER_CLAIM - respect, extra_gates * RESPECT_PER_GATE_AFTER_MAX)
 
     cash = min(MAX_CASH_PER_CLAIM, cash)
     respect = min(MAX_RESPECT_PER_CLAIM, respect)

@@ -1,9 +1,9 @@
-# Events: active daily event, flash news (ticker)
+# Events: active event(s), flash news (ticker)
 from datetime import datetime, timezone, timedelta
 
 from fastapi import Depends
 
-from server import db, get_current_user, get_effective_event, get_events_enabled
+from server import db, get_current_user, get_effective_event, get_effective_event_full, get_events_enabled, GAME_EVENTS_BY_ID
 from routers.money.booze_run import get_booze_rotation_interval_seconds, get_booze_rotation_index
 
 # Rotating tips for flash news ticker (multiple shown per load so the bar has variety)
@@ -24,10 +24,20 @@ FLASH_NEWS_TIPS = [
 
 
 async def get_active_event(current_user: dict = Depends(get_current_user)):
-    """Current game-wide daily event when enabled; otherwise null."""
+    """Current game-wide event(s) when enabled; includes rotation info."""
     enabled = await get_events_enabled()
-    event = await get_effective_event() if enabled else None
-    return {"event": event, "events_enabled": enabled}
+    if not enabled:
+        return {"event": None, "events_enabled": False, "active_event_ids": [], "active_event_names": [], "expires_at": None, "duration_hours": 0}
+    full = await get_effective_event_full()
+    names = [GAME_EVENTS_BY_ID.get(eid, {}).get("name", eid) for eid in (full.get("event_ids") or [])]
+    return {
+        "event": full["event"],
+        "events_enabled": True,
+        "active_event_ids": full.get("event_ids") or [],
+        "active_event_names": names,
+        "expires_at": full.get("expires_at"),
+        "duration_hours": full.get("duration_hours", 0),
+    }
 
 
 async def get_flash_news(current_user: dict = Depends(get_current_user)):
@@ -36,14 +46,29 @@ async def get_flash_news(current_user: dict = Depends(get_current_user)):
     now_ts = now.timestamp()
     items = []
     try:
-        ev = await get_effective_event()
-        if ev.get("id") != "none":
-            event_start_iso = datetime.now(timezone.utc).date().isoformat()
+        full = await get_effective_event_full()
+        ev = full.get("event") or {}
+        if ev.get("id") != "none" and full.get("event_ids"):
+            names = [GAME_EVENTS_BY_ID.get(eid, {}).get("name", eid) for eid in full["event_ids"]]
+            expires_raw = full.get("expires_at") or ""
+            remaining_str = ""
+            if expires_raw:
+                try:
+                    exp_dt = datetime.fromisoformat(str(expires_raw).replace("Z", "+00:00"))
+                    if exp_dt.tzinfo is None:
+                        exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+                    secs = max(0, int((exp_dt - now).total_seconds()))
+                    h, m = secs // 3600, (secs % 3600) // 60
+                    remaining_str = f" — changes in {h}h {m}m" if h else f" — changes in {m}m"
+                except Exception:
+                    pass
+            msg = "Active: " + ", ".join(names) + remaining_str
+            ids_key = "_".join(full["event_ids"])
             items.append({
-                "id": f"event_{ev.get('id', '')}_{event_start_iso}",
+                "id": f"event_{ids_key}",
                 "type": "game_event",
-                "message": ev.get("message") or f"Today: {ev.get('name', 'Event')}",
-                "at": event_start_iso + "T00:00:00+00:00",
+                "message": msg,
+                "at": now.isoformat(),
             })
     except Exception:
         pass
@@ -132,10 +157,11 @@ async def get_flash_news(current_user: dict = Depends(get_current_user)):
     except Exception:
         pass
 
-    # Recent player kills (cap 5)
+    # Recent public player kills (cap 5) — only kills the attacker marked as public
     try:
         kill_docs = await db.attack_attempts.find({
             "outcome": "killed",
+            "make_public": True,
             "$or": [
                 {"target_is_npc": {"$ne": True}},
                 {"$and": [{"is_bodyguard_kill": True}, {"is_npc_kill": {"$ne": True}}]},

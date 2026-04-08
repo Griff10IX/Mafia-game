@@ -10,6 +10,7 @@ import styles from '../../styles/noir.module.css';
 import railOrnateAsset from '../../lib/pool_assets/rail-ornate.svg';
 import feltNoiseAsset from '../../lib/pool_assets/felt-noise.svg';
 import cueSkinAsset from '../../lib/pool_assets/cue-skin.svg';
+import { simulatePreview, pockets as physicsPockets } from '../../lib/pool_physics';
 
 const POOL_STYLES = `
   .pool-fade-in { animation: pool-fade-in 0.35s ease-out both; }
@@ -57,17 +58,7 @@ const TABLE_H = 1.1;
 /** Must match `MP_8BALL_HEAD_STRING_X` / kitchen logic in backend mp_8ball.py */
 const TABLE_HEAD_STRING_X = TABLE_W * 0.25;
 const BALL_R = 0.028;
-/** Capture radius in table units — must match `MP_8BALL_POCKET_R` in backend/routers/casinos/mp_8ball.py */
-const POCKET_R_TABLE = 0.045;
-/** Same centers as backend `_pockets()` — used so aim preview stops at pocket capture, not pocket art. */
-const POCKET_CENTERS_TABLE = [
-  [0, 0],
-  [TABLE_W / 2, 0],
-  [TABLE_W, 0],
-  [0, TABLE_H],
-  [TABLE_W / 2, TABLE_H],
-  [TABLE_W, TABLE_H],
-];
+const POCKET_CENTERS_TABLE = physicsPockets();
 const AI_POOL_ID = 'ai_pool_bot';
 const POOL_SHOT_CLOCK_SEC = 60;
 const REPLAY_IDLE_POS_EPS = 0.00035;
@@ -224,117 +215,6 @@ function rayToTableWall(ox, oy, dx, dy, minX, maxX, minY, maxY) {
   return wallDist;
 }
 
-/**
- * First distance t (same units as canvas ray param) where ball center enters pocket capture.
- * Must use table-space line (same linear map as canvas→table); matches server pocket test.
- */
-function rayToPocketCaptureFirst(ox, oy, dx, dy, w, h, pocketR) {
-  const m = PREVIEW_TABLE_MARGIN;
-  const fw = w - 2 * m;
-  const fh = h - 2 * m;
-  const oxT = ((ox - m) / fw) * TABLE_W;
-  const oyT = ((oy - m) / fh) * TABLE_H;
-  const vx = dx * (TABLE_W / fw);
-  const vy = dy * (TABLE_H / fh);
-  let best = Infinity;
-  for (const [px, py] of POCKET_CENTERS_TABLE) {
-    const A = vx * vx + vy * vy;
-    if (A < 1e-20) continue;
-    const dx0 = oxT - px;
-    const dy0 = oyT - py;
-    const B = 2 * (dx0 * vx + dy0 * vy);
-    const C = dx0 * dx0 + dy0 * dy0 - pocketR * pocketR;
-    const disc = B * B - 4 * A * C;
-    if (disc < 0) continue;
-    const sd = Math.sqrt(disc);
-    const t1 = (-B - sd) / (2 * A);
-    const t2 = (-B + sd) / (2 * A);
-    for (const t of [t1, t2]) {
-      if (t <= 1e-8) continue;
-      const xt = oxT + t * vx;
-      const yt = oyT + t * vy;
-      if (Math.hypot(xt - px, yt - py) <= pocketR + 1e-5) best = Math.min(best, t);
-    }
-  }
-  return best;
-}
-
-/** Table-space unit direction (cos/sin of shot) — matches mp_8ball _simulate_shot. */
-function rayToInnerRectTableUnits(oxT, oyT, udx, udy) {
-  const minx = BALL_R;
-  const maxx = TABLE_W - BALL_R;
-  const miny = BALL_R;
-  const maxy = TABLE_H - BALL_R;
-  let wallDist = Infinity;
-  if (udx > 1e-12) wallDist = Math.min(wallDist, (maxx - oxT) / udx);
-  if (udx < -1e-12) wallDist = Math.min(wallDist, (minx - oxT) / udx);
-  if (udy > 1e-12) wallDist = Math.min(wallDist, (maxy - oyT) / udy);
-  if (udy < -1e-12) wallDist = Math.min(wallDist, (miny - oyT) / udy);
-  return wallDist;
-}
-
-function rayToPocketCaptureTableUnits(oxT, oyT, udx, udy, pocketR) {
-  let best = Infinity;
-  for (const [px, py] of POCKET_CENTERS_TABLE) {
-    const A = udx * udx + udy * udy;
-    if (A < 1e-20) continue;
-    const dx0 = oxT - px;
-    const dy0 = oyT - py;
-    const B = 2 * (dx0 * udx + dy0 * udy);
-    const C = dx0 * dx0 + dy0 * dy0 - pocketR * pocketR;
-    const disc = B * B - 4 * A * C;
-    if (disc < 0) continue;
-    const sd = Math.sqrt(disc);
-    const t1 = (-B - sd) / (2 * A);
-    const t2 = (-B + sd) / (2 * A);
-    for (const t of [t1, t2]) {
-      if (t <= 1e-8) continue;
-      const xt = oxT + t * udx;
-      const yt = oyT + t * udy;
-      if (Math.hypot(xt - px, yt - py) <= pocketR + 1e-5) best = Math.min(best, t);
-    }
-  }
-  return best;
-}
-
-/** Ray–circle in table space (same geometry as server ball–ball contact). */
-function rayCircleHitTable(oxT, oyT, udx, udy, bxT, byT, radius) {
-  const dx = oxT - bxT;
-  const dy = oyT - byT;
-  const b = 2 * ((udx * dx) + (udy * dy));
-  const c = (dx * dx) + (dy * dy) - (radius * radius);
-  const A = udx * udx + udy * udy;
-  const disc = (b * b) - (4 * A * c);
-  if (disc < 0) return null;
-  const sd = Math.sqrt(disc);
-  const t1 = (-b - sd) / (2 * A);
-  const t2 = (-b + sd) / (2 * A);
-  const candidates = [t1, t2].filter((t) => t > 1e-6);
-  if (!candidates.length) return null;
-  return Math.min(...candidates);
-}
-
-function reflectDirTableUnitWall(xT, yT, udx, udy) {
-  const eps = 1.2e-4;
-  const minx = BALL_R;
-  const maxx = TABLE_W - BALL_R;
-  const miny = BALL_R;
-  const maxy = TABLE_H - BALL_R;
-  let rdx = udx;
-  let rdy = udy;
-  if (Math.abs(xT - minx) < eps || Math.abs(xT - maxx) < eps) rdx = -rdx;
-  if (Math.abs(yT - miny) < eps || Math.abs(yT - maxy) < eps) rdy = -rdy;
-  return { rdx, rdy };
-}
-
-function reflectDirAtPoint(nx, ny, dx, dy, minX, maxX, minY, maxY) {
-  let rdx = dx;
-  let rdy = dy;
-  if (Math.abs(nx - maxX) < 0.7 || Math.abs(nx - minX) < 0.7) rdx *= -1;
-  if (Math.abs(ny - maxY) < 0.7 || Math.abs(ny - minY) < 0.7) rdy *= -1;
-  return { rdx, rdy };
-}
-
 export default function EightBallPool() {
   const { getCaptchaToken, captchaModal } = useMinigameCaptcha();
   const [tab, setTab] = useState('ai'); // ai | pvp
@@ -359,6 +239,7 @@ export default function EightBallPool() {
   const [breakPreview, setBreakPreview] = useState(null);
   const [displayBalls, setDisplayBalls] = useState([]);
   const [isAiming, setIsAiming] = useState(false);
+  const [aimPhase, setAimPhase] = useState('idle'); // idle | aiming | pulling
   const [tableSkin, setTableSkin] = useState('miniclip_blue');
   const [renderTick, setRenderTick] = useState(0);
   const [replayActive, setReplayActive] = useState(false);
@@ -377,7 +258,7 @@ export default function EightBallPool() {
   const animatingRef = useRef(false);
   const lastTargetBallsRef = useRef([]);
   const pocketedSetRef = useRef(new Set());
-  const fxRef = useRef({ impacts: [], pockets: [] });
+  const fxRef = useRef({ impacts: [], pockets: [], pocketDrops: [] });
 
   const activeGame = tab === 'ai' ? aiGame : pvpGame;
   const balls = useMemo(() => activeGame?.table_state?.balls || [], [activeGame?.table_state?.balls]);
@@ -454,25 +335,92 @@ export default function EightBallPool() {
   const playSfx = useCallback((type, strength = 1) => {
     if (!sfxEnabled) return;
     const now = Date.now();
-    const minGap = type === 'collision' ? 45 : 80;
+    const minGap = type === 'collision' ? 35 : 60;
     if (now - (lastSfxAtRef.current[type] || 0) < minGap) return;
     lastSfxAtRef.current[type] = now;
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     if (!AudioCtx) return;
     if (!audioCtxRef.current) audioCtxRef.current = new AudioCtx();
     const ctx = audioCtxRef.current;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = type === 'pocket' ? 'triangle' : 'sine';
-    const baseFreq = type === 'cue' ? 180 : type === 'rail' ? 220 : type === 'pocket' ? 130 : 280;
-    osc.frequency.value = baseFreq + Math.min(220, strength * 250);
-    gain.gain.setValueAtTime(0.0001, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(Math.min(0.05, 0.01 + strength * 0.02), ctx.currentTime + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + (type === 'pocket' ? 0.2 : 0.08));
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + (type === 'pocket' ? 0.22 : 0.1));
+    const t = ctx.currentTime;
+    const vol = Math.min(0.12, 0.02 + strength * 0.04);
+
+    if (type === 'cue') {
+      // Sharp cue strike — short bright click + thud
+      const o1 = ctx.createOscillator();
+      const o2 = ctx.createOscillator();
+      const g1 = ctx.createGain();
+      const g2 = ctx.createGain();
+      o1.type = 'sine';
+      o1.frequency.value = 800 + strength * 400;
+      g1.gain.setValueAtTime(0.0001, t);
+      g1.gain.linearRampToValueAtTime(vol * 1.5, t + 0.003);
+      g1.gain.exponentialRampToValueAtTime(0.0001, t + 0.04);
+      o2.type = 'triangle';
+      o2.frequency.value = 120;
+      g2.gain.setValueAtTime(0.0001, t);
+      g2.gain.linearRampToValueAtTime(vol * 0.8, t + 0.005);
+      g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.08);
+      o1.connect(g1).connect(ctx.destination);
+      o2.connect(g2).connect(ctx.destination);
+      o1.start(t); o1.stop(t + 0.05);
+      o2.start(t); o2.stop(t + 0.1);
+    } else if (type === 'collision') {
+      // Ball-ball: two tones scaled by impact, softer for soft hits
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'sine';
+      o.frequency.value = 350 + Math.min(400, strength * 600);
+      const dur = strength > 0.1 ? 0.06 : 0.035;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(vol, t + 0.003);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.connect(g).connect(ctx.destination);
+      o.start(t); o.stop(t + dur + 0.01);
+      if (strength > 0.08) {
+        const o2 = ctx.createOscillator();
+        const g2 = ctx.createGain();
+        o2.type = 'triangle';
+        o2.frequency.value = 180;
+        g2.gain.setValueAtTime(0.0001, t);
+        g2.gain.linearRampToValueAtTime(vol * 0.4, t + 0.005);
+        g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+        o2.connect(g2).connect(ctx.destination);
+        o2.start(t); o2.stop(t + 0.06);
+      }
+    } else if (type === 'pocket') {
+      // Satisfying pocket drop: low thump + descending tone
+      const o1 = ctx.createOscillator();
+      const o2 = ctx.createOscillator();
+      const g1 = ctx.createGain();
+      const g2 = ctx.createGain();
+      o1.type = 'sine';
+      o1.frequency.setValueAtTime(200, t);
+      o1.frequency.exponentialRampToValueAtTime(80, t + 0.15);
+      g1.gain.setValueAtTime(0.0001, t);
+      g1.gain.linearRampToValueAtTime(vol * 1.2, t + 0.008);
+      g1.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+      o2.type = 'triangle';
+      o2.frequency.value = 90;
+      g2.gain.setValueAtTime(0.0001, t);
+      g2.gain.linearRampToValueAtTime(vol * 0.6, t + 0.01);
+      g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+      o1.connect(g1).connect(ctx.destination);
+      o2.connect(g2).connect(ctx.destination);
+      o1.start(t); o1.stop(t + 0.22);
+      o2.start(t); o2.stop(t + 0.27);
+    } else if (type === 'rail') {
+      // Cushion bounce: muted thud
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      o.type = 'triangle';
+      o.frequency.value = 140 + Math.min(120, strength * 180);
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.linearRampToValueAtTime(vol * 0.7, t + 0.004);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+      o.connect(g).connect(ctx.destination);
+      o.start(t); o.stop(t + 0.08);
+    }
   }, [sfxEnabled]);
 
   useEffect(() => {
@@ -601,20 +549,11 @@ export default function EightBallPool() {
     const fh = h - 2 * m;
     const pxPerMeter = (fw / TABLE_W + fh / TABLE_H) / 2;
     const a = (Number(angleDeg || 0) * Math.PI) / 180;
-    let udx = Math.cos(a);
-    let udy = Math.sin(a);
-    let oxT = Number(cue.x);
-    let oyT = Number(cue.y);
-    let remain = Math.max(0.04, (previewDistance + (Number(power || 0) * 120)) / pxPerMeter);
-    const segs = [];
-    let ghost = null;
-    let contactDone = false;
-    const hitR = BALL_R * 2;
-    const objectSegmentBudget = objectRailSegmentCap;
-    const objectPathLength = 90 + (previewLevel * 14) + (previewTier * 48) + (Number(effPower || 0) * 95);
     const objectLineWidth = 1.55 + (previewTier * 0.52) + Math.min(2.85, previewLevel * 0.05);
-    const objectPathTable = objectPathLength / pxPerMeter;
-    const deflectTable = Math.min(4.2, Math.max(0.55, (62 + previewLevel * 6 + objectPathLength * 0.32) / pxPerMeter));
+    const maxCuePathPx = previewDistance + (Number(power || 0) * 120);
+    const maxObjectPathPx = 90 + (previewLevel * 14) + (previewTier * 48) + (Number(effPower || 0) * 95);
+
+    const sim = simulatePreview(displayBalls, a, Number(effPower || power || 0), Number(spinX || 0), Number(spinY || 0));
 
     const toSeg = (x1t, y1t, x2t, y2t, kind, lw) => {
       const o = {
@@ -628,84 +567,57 @@ export default function EightBallPool() {
       return o;
     };
 
-    for (let segmentIndex = 0; segmentIndex < previewSegmentBudget && remain > 1e-5; segmentIndex += 1) {
-      const wallDist = rayToInnerRectTableUnits(oxT, oyT, udx, udy);
-      const pocketDist = rayToPocketCaptureTableUnits(oxT, oyT, udx, udy, POCKET_R_TABLE);
-      let hitBall = null;
-      let ballDist = Number.POSITIVE_INFINITY;
-      if (!contactDone) {
-        for (const b of displayBalls) {
-          if (b.pocketed || b.number === 0) continue;
-          const bxT = Number(b.x);
-          const byT = Number(b.y);
-          const t = rayCircleHitTable(oxT, oyT, udx, udy, bxT, byT, hitR);
-          if (t !== null && t < ballDist) {
-            ballDist = t;
-            hitBall = { bxT, byT, number: Number(b.number || 0) };
-          }
-        }
+    const segs = [];
+    let ghost = null;
+
+    // Build cue-ball path segments (limited by upgrade-gated preview distance).
+    const cueMax = maxCuePathPx / pxPerMeter;
+    let cueDist = 0;
+    for (let i = 1; i < sim.cuePath.length && cueDist < cueMax; i++) {
+      const p0 = sim.cuePath[i - 1];
+      const p1 = sim.cuePath[i];
+      const segLen = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+      if (segLen < 1e-7) continue;
+      const remaining = cueMax - cueDist;
+      if (segLen <= remaining) {
+        segs.push(toSeg(p0.x, p0.y, p1.x, p1.y, 'path'));
+        cueDist += segLen;
+      } else {
+        const frac = remaining / segLen;
+        segs.push(toSeg(p0.x, p0.y, p0.x + (p1.x - p0.x) * frac, p0.y + (p1.y - p0.y) * frac, 'path'));
+        cueDist = cueMax;
       }
-      const travel = Math.min(remain, wallDist, ballDist, pocketDist);
-      if (!Number.isFinite(travel) || travel <= 0) break;
-      const nxT = oxT + udx * travel;
-      const nyT = oyT + udy * travel;
-      const atBall = Boolean(
-        hitBall && ballDist <= wallDist && ballDist <= pocketDist && Math.abs(ballDist - travel) < 1e-5,
-      );
-      const atPocket = !atBall && Math.abs(pocketDist - travel) < 1e-5;
-      segs.push(toSeg(oxT, oyT, nxT, nyT, atBall ? 'contact' : 'path'));
-      remain -= travel;
-      if (atPocket) break;
-      if (atBall) {
-        contactDone = true;
-        const gcx = tableToCanvasX(nxT, w);
-        const gcy = tableToCanvasY(nyT, h);
-        ghost = { x: gcx, y: gcy, objectX: tableToCanvasX(hitBall.bxT, w), objectY: tableToCanvasY(hitBall.byT, h) };
-        let odx = hitBall.bxT - nxT;
-        let ody = hitBall.byT - nyT;
-        const om = Math.hypot(odx, ody) || 1;
-        odx /= om;
-        ody /= om;
-        let ooxT = hitBall.bxT;
-        let ooyT = hitBall.byT;
-        let oRemain = objectPathTable;
-        let uodx = odx;
-        let uody = ody;
-        for (let oi = 0; oi < objectSegmentBudget && oRemain > 1e-5; oi += 1) {
-          const oWall = rayToInnerRectTableUnits(ooxT, ooyT, uodx, uody);
-          const oPocket = rayToPocketCaptureTableUnits(ooxT, ooyT, uodx, uody, POCKET_R_TABLE);
-          const oTravel = Math.min(oRemain, oWall, oPocket);
-          if (!Number.isFinite(oTravel) || oTravel <= 0) break;
-          const onxT = ooxT + uodx * oTravel;
-          const onyT = ooyT + uody * oTravel;
-          segs.push(toSeg(ooxT, ooyT, onxT, onyT, 'object', objectLineWidth));
-          oRemain -= oTravel;
-          if (Math.abs(oPocket - oTravel) < 1e-5) break;
-          const { rdx, rdy } = reflectDirTableUnitWall(onxT, onyT, uodx, uody);
-          uodx = rdx;
-          uody = rdy;
-          ooxT = onxT;
-          ooyT = onyT;
-        }
-        const dot = (udx * odx) + (udy * ody);
-        let cdx = udx - dot * odx;
-        let cdy = udy - dot * ody;
-        const cm = Math.hypot(cdx, cdy);
-        if (cm > 0.02) {
-          cdx /= cm;
-          cdy /= cm;
-          segs.push(toSeg(nxT, nyT, nxT + cdx * deflectTable, nyT + cdy * deflectTable, 'cue_deflect'));
-        }
-        break;
-      }
-      const { rdx, rdy } = reflectDirTableUnitWall(nxT, nyT, udx, udy);
-      udx = rdx;
-      udy = rdy;
-      oxT = nxT;
-      oyT = nyT;
     }
+
+    // Build object-ball path segments.
+    if (sim.objectPath && sim.objectPath.length > 1) {
+      const objMax = maxObjectPathPx / pxPerMeter;
+      let objDist = 0;
+      for (let i = 1; i < sim.objectPath.length && objDist < objMax; i++) {
+        const p0 = sim.objectPath[i - 1];
+        const p1 = sim.objectPath[i];
+        const segLen = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+        if (segLen < 1e-7) continue;
+        const remaining = objMax - objDist;
+        if (segLen <= remaining) {
+          segs.push(toSeg(p0.x, p0.y, p1.x, p1.y, 'object', objectLineWidth));
+          objDist += segLen;
+        } else {
+          const frac = remaining / segLen;
+          segs.push(toSeg(p0.x, p0.y, p0.x + (p1.x - p0.x) * frac, p0.y + (p1.y - p0.y) * frac, 'object', objectLineWidth));
+          objDist = objMax;
+        }
+      }
+      ghost = {
+        x: tableToCanvasX(sim.objectPath[0].x, w),
+        y: tableToCanvasY(sim.objectPath[0].y, h),
+        objectX: tableToCanvasX(sim.objectPath[0].x, w),
+        objectY: tableToCanvasY(sim.objectPath[0].y, h),
+      };
+    }
+
     return { segments: segs, ghost, objectLineWidth };
-  }, [displayBalls, angleDeg, power, effPower, canAim, previewDistance, previewSegmentBudget, previewTier, previewLevel, objectRailSegmentCap]);
+  }, [displayBalls, angleDeg, power, effPower, spinX, spinY, canAim, previewDistance, previewTier, previewLevel]);
 
   useEffect(() => {
     const skinByCue = (selectedCue?.cue_id || '').toLowerCase();
@@ -750,6 +662,12 @@ export default function EightBallPool() {
             playSfx('rail', Number(ev?.strength || 0.1));
           } else if (ev?.type === 'pocket') {
             fxRef.current.pockets.push({ number: Number(ev?.number || 0), at: Date.now() });
+            fxRef.current.pocketDrops.push({
+              number: Number(ev?.number || 0),
+              x: tableToCanvasX(ev?.x, POOL_CANVAS_W),
+              y: tableToCanvasY(ev?.y, POOL_CANVAS_H),
+              at: Date.now(),
+            });
             playSfx('pocket', 1);
           }
         }
@@ -1062,26 +980,18 @@ export default function EightBallPool() {
     }
 
     const feltW = playR - playL;
-    const pr = POCKET_R_TABLE * (feltW / TABLE_W);
-    /** Base mouth — side pockets use rot=0 so the opening reads wide; corners rotate ~45° and looked too tight vs physics (same MP_8BALL_POCKET_R). */
-    const mouthRx = pr * 1.22;
-    const mouthRy = pr * 1.08;
     const tcx = tableToCanvasX(TABLE_W * 0.5, w);
     const tcy = tableToCanvasY(TABLE_H * 0.5, h);
-    const pocketCentersTable = [
-      [0, 0], [TABLE_W / 2, 0], [TABLE_W, 0],
-      [0, TABLE_H], [TABLE_W / 2, TABLE_H], [TABLE_W, TABLE_H],
-    ];
-
-    for (let pi = 0; pi < pocketCentersTable.length; pi += 1) {
-      const [tx, ty] = pocketCentersTable[pi];
+    for (let pi = 0; pi < POCKET_CENTERS_TABLE.length; pi += 1) {
+      const { x: tx, y: ty, r: pkR } = POCKET_CENTERS_TABLE[pi];
+      const pr = pkR * (feltW / TABLE_W);
       const px = tableToCanvasX(tx, w);
       const py = tableToCanvasY(ty, h);
       const isMidShortRail = pi === 1 || pi === 4;
       const rot = isMidShortRail ? 0 : Math.atan2(tcy - py, tcx - px);
       const cornerMul = isMidShortRail ? 1 : 1.36;
-      const rx = mouthRx * cornerMul;
-      const ry = mouthRy * cornerMul;
+      const rx = pr * 1.22 * cornerMul;
+      const ry = pr * 1.08 * cornerMul;
       const rGrad = Math.max(rx, ry);
       const pocketGrad = ctx.createRadialGradient(px, py, 2, px, py, rGrad + 8);
       pocketGrad.addColorStop(0, currentSkin.pocket[0]);
@@ -1463,12 +1373,14 @@ export default function EightBallPool() {
         ctx.stroke();
       }
 
-      const cueGrad = ctx.createLinearGradient(
-        cx - ox * (cueLen * (0.45 + Number(power || 0) * 0.65)),
-        cy - oy * (cueLen * (0.45 + Number(power || 0) * 0.65)),
-        cx - ox * 18,
-        cy - oy * 18,
-      );
+      const pullBack = Number(power || 0) * 60;
+      const tipDist = 14 + pullBack;
+      const buttDist = tipDist + cueLen;
+      const tipX = cx - ox * tipDist;
+      const tipY = cy - oy * tipDist;
+      const buttX = cx - ox * buttDist;
+      const buttY = cy - oy * buttDist;
+      const cueGrad = ctx.createLinearGradient(buttX, buttY, tipX, tipY);
       cueGrad.addColorStop(0, '#fdf6e3');
       cueGrad.addColorStop(0.25, '#e8c88a');
       cueGrad.addColorStop(0.55, '#b8894a');
@@ -1478,9 +1390,10 @@ export default function EightBallPool() {
         const cuePattern = ctx.createPattern(cueTextureRef.current, 'repeat');
         if (cuePattern) ctx.strokeStyle = cuePattern;
       }
+      ctx.save();
       ctx.beginPath();
-      ctx.moveTo(cx - ox * (cueLen * (0.45 + Number(power || 0) * 0.65)), cy - oy * (cueLen * (0.45 + Number(power || 0) * 0.65)));
-      ctx.lineTo(cx - ox * 18, cy - oy * 18);
+      ctx.moveTo(buttX, buttY);
+      ctx.lineTo(tipX, tipY);
       if (!cueTextureRef.current) ctx.strokeStyle = cueGrad;
       ctx.lineWidth = 7;
       ctx.lineCap = 'round';
@@ -1489,19 +1402,48 @@ export default function EightBallPool() {
       ctx.shadowOffsetX = 1;
       ctx.shadowOffsetY = 2;
       ctx.stroke();
+      // Ferrule (white tip)
+      ctx.beginPath();
+      ctx.moveTo(tipX, tipY);
+      ctx.lineTo(tipX + ox * 4, tipY + oy * 4);
+      ctx.strokeStyle = '#e0e0e0';
+      ctx.lineWidth = 6;
       ctx.shadowBlur = 0;
-      ctx.shadowOffsetX = 0;
-      ctx.shadowOffsetY = 0;
+      ctx.stroke();
+      // Tip (blue chalk)
+      ctx.beginPath();
+      ctx.arc(tipX + ox * 5, tipY + oy * 5, 3.2, 0, Math.PI * 2);
+      ctx.fillStyle = '#3b82f6';
+      ctx.fill();
+      ctx.restore();
     }
     const now = Date.now();
     fxRef.current.pockets = fxRef.current.pockets.filter((f) => now - f.at < 450);
     for (const f of fxRef.current.pockets) {
       const alpha = 1 - ((now - f.at) / 450);
-      const flash = ctx.createRadialGradient(w * 0.5, h * 0.5, 30, w * 0.5, h * 0.5, w * 0.55);
-      flash.addColorStop(0, `rgba(255,255,255,${0.12 * alpha})`);
-      flash.addColorStop(1, 'rgba(255,255,255,0)');
-      ctx.fillStyle = flash;
+      const glowR = 18 + (1 - alpha) * 10;
+      const pkGlow = ctx.createRadialGradient(f.x || w * 0.5, f.y || h * 0.5, 2, f.x || w * 0.5, f.y || h * 0.5, glowR);
+      pkGlow.addColorStop(0, `rgba(34,197,94,${0.55 * alpha})`);
+      pkGlow.addColorStop(0.6, `rgba(34,197,94,${0.15 * alpha})`);
+      pkGlow.addColorStop(1, 'rgba(34,197,94,0)');
+      ctx.fillStyle = pkGlow;
       ctx.fillRect(0, 0, w, h);
+    }
+    const dropDuration = 350;
+    fxRef.current.pocketDrops = fxRef.current.pocketDrops.filter((f) => now - f.at < dropDuration);
+    for (const f of fxRef.current.pocketDrops) {
+      const t = (now - f.at) / dropDuration;
+      const scale = Math.max(0, 1 - t * t);
+      const alpha = Math.max(0, 1 - t);
+      const r = ballRadiusMax(w, h) * scale;
+      if (r < 0.5) continue;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.fill();
+      ctx.restore();
     }
     fxRef.current.impacts = fxRef.current.impacts.filter((f) => now - f.at < 300);
     for (const f of fxRef.current.impacts) {
@@ -1730,28 +1672,48 @@ export default function EightBallPool() {
     }
   };
 
-  const updateAimFromPointer = (event) => {
-    if (replayActiveRef.current) return;
-    if (!canAim || !ballsSettled) return;
+  const MAX_PULL_PX = 200;
+
+  const getPointerOnCanvas = (event) => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    return {
+      sx: ((event.clientX - rect.left) / rect.width) * canvas.width,
+      sy: ((event.clientY - rect.top) / rect.height) * canvas.height,
+      canvas,
+    };
+  };
+
+  const updateAimAngle = (event) => {
+    const ptr = getPointerOnCanvas(event);
+    if (!ptr) return;
     const cue = ballsForRender.find((b) => b.number === 0 && !b.pocketed);
     if (!cue) return;
-    const rect = canvas.getBoundingClientRect();
-    const sx = ((event.clientX - rect.left) / rect.width) * canvas.width;
-    const sy = ((event.clientY - rect.top) / rect.height) * canvas.height;
-    const cx = tableToCanvasX(cue.x, canvas.width);
-    const cy = tableToCanvasY(cue.y, canvas.height);
-    const dx = sx - cx;
-    const dy = sy - cy;
-    const ang = Math.atan2(dy, dx);
+    const cx = tableToCanvasX(cue.x, ptr.canvas.width);
+    const cy = tableToCanvasY(cue.y, ptr.canvas.height);
+    const dx = ptr.sx - cx;
+    const dy = ptr.sy - cy;
     const dist = Math.hypot(dx, dy);
-    const targetDeg = (ang * 180) / Math.PI;
-    const angleDamping = dist < 55 ? 0.22 : 0.4;
-    setAngleDeg((prev) => prev + (targetDeg - prev) * angleDamping);
-    const normalized = Math.max(0.02, Math.min(1, dist / 260));
-    const curvedPower = Math.pow(normalized, 1.22);
-    setPower((prev) => prev + (curvedPower - prev) * 0.38);
+    if (dist < 3) return;
+    const targetDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
+    const damping = dist < 55 ? 0.25 : 0.5;
+    setAngleDeg((prev) => prev + (targetDeg - prev) * damping);
+  };
+
+  const updatePullPower = (event) => {
+    const ptr = getPointerOnCanvas(event);
+    if (!ptr) return;
+    const cue = ballsForRender.find((b) => b.number === 0 && !b.pocketed);
+    if (!cue) return;
+    const cx = tableToCanvasX(cue.x, ptr.canvas.width);
+    const cy = tableToCanvasY(cue.y, ptr.canvas.height);
+    const a = (Number(angleDeg || 0) * Math.PI) / 180;
+    const behindX = ptr.sx - cx;
+    const behindY = ptr.sy - cy;
+    const pullDist = -(behindX * Math.cos(a) + behindY * Math.sin(a));
+    const normalized = Math.max(0.02, Math.min(1, pullDist / MAX_PULL_PX));
+    setPower(Math.pow(normalized, 1.1));
   };
 
   const updateSpinFromPad = useCallback((event) => {
@@ -1986,6 +1948,7 @@ export default function EightBallPool() {
                   width={900}
                   height={450}
                   className="pool-canvas w-full rounded-lg border border-cyan-300/20 bg-[#0c1929] touch-none"
+                  style={{ aspectRatio: '2 / 1', maxWidth: '100%' }}
                   onPointerDown={(e) => {
                     if (replayActive || !ballsSettled) return;
                     if (mobileNeedsRotate) return;
@@ -1996,8 +1959,24 @@ export default function EightBallPool() {
                       return;
                     }
                     if (!canAim) return;
-                    setIsAiming(true);
-                    updateAimFromPointer(e);
+                    e.currentTarget.setPointerCapture?.(e.pointerId);
+                    const ptr = getPointerOnCanvas(e);
+                    if (!ptr) return;
+                    const cue = ballsForRender.find((b) => b.number === 0 && !b.pocketed);
+                    if (!cue) return;
+                    const cx = tableToCanvasX(cue.x, ptr.canvas.width);
+                    const cy = tableToCanvasY(cue.y, ptr.canvas.height);
+                    const a = (Number(angleDeg || 0) * Math.PI) / 180;
+                    const behind = -((ptr.sx - cx) * Math.cos(a) + (ptr.sy - cy) * Math.sin(a));
+                    if (behind > 15) {
+                      setAimPhase('pulling');
+                      setIsAiming(true);
+                      updatePullPower(e);
+                    } else {
+                      setAimPhase('aiming');
+                      setIsAiming(true);
+                      updateAimAngle(e);
+                    }
                   }}
                   onPointerMove={(e) => {
                     if (replayActive || !ballsSettled) return;
@@ -2007,9 +1986,9 @@ export default function EightBallPool() {
                       if (pos) setBreakPreview(pos);
                       return;
                     }
-                    if (!canAim) return;
-                    if (!isAiming) return;
-                    updateAimFromPointer(e);
+                    if (!canAim || !isAiming) return;
+                    if (aimPhase === 'aiming') updateAimAngle(e);
+                    else if (aimPhase === 'pulling') updatePullPower(e);
                   }}
                   onPointerUp={async (e) => {
                     if (replayActive || !ballsSettled) return;
@@ -2020,13 +1999,16 @@ export default function EightBallPool() {
                       setBreakPreview(null);
                       return;
                     }
-                    if (!canAim) return;
-                    if (!isAiming) return;
-                    updateAimFromPointer(e);
+                    if (!canAim || !isAiming) return;
                     setIsAiming(false);
-                    await shoot();
+                    if (aimPhase === 'pulling') {
+                      setAimPhase('idle');
+                      await shoot();
+                    } else {
+                      setAimPhase('idle');
+                    }
                   }}
-                  onPointerLeave={() => { setIsAiming(false); }}
+                  onPointerLeave={() => { setIsAiming(false); setAimPhase('idle'); }}
                 />
                 </div>
               </div>
@@ -2054,43 +2036,50 @@ export default function EightBallPool() {
                   </div>
                 ))}
               </div>
-              <div className="grid grid-cols-2 md:grid-cols-6 gap-2 text-[10px]">
+              <div className="flex flex-wrap items-center gap-3 text-[10px]">
                 <label className="space-y-1"><span className="text-mutedForeground">Table skin</span>
                   <select value={tableSkin} onChange={(e) => setTableSkin(e.target.value)} className="w-full px-2 py-1 rounded border border-input bg-transparent">
                     {Object.keys(TABLE_SKINS).map((k) => <option key={k} value={k}>{TABLE_SKINS[k].name}</option>)}
                   </select>
                 </label>
-                <label className="space-y-1"><span className="text-mutedForeground">Angle (deg)</span><input type="number" value={angleDeg} onChange={(e) => setAngleDeg(Number(e.target.value || 0))} className="w-full px-2 py-1 rounded border border-input bg-transparent" /></label>
-                <label className="space-y-1"><span className="text-mutedForeground">Power (0-1)</span><input type="number" min={0} max={1} step={0.01} value={power} onChange={(e) => setPower(Number(e.target.value || 0))} className="w-full px-2 py-1 rounded border border-input bg-transparent" /></label>
-                <div className="space-y-1 col-span-2 md:col-span-2">
-                  <span className="text-mutedForeground">Curve/Spin ball</span>
-                  <div className="flex items-center gap-3">
+                <div className="space-y-1">
+                  <span className="text-mutedForeground">Spin</span>
+                  <div className="flex items-center gap-2">
                     <div
-                      className="relative w-16 h-16 rounded-full border border-zinc-500/70 bg-gradient-to-b from-zinc-100 to-zinc-300 shadow-inner cursor-pointer select-none"
+                      className="relative w-14 h-14 rounded-full border border-zinc-500/70 bg-gradient-to-b from-zinc-100 to-zinc-300 shadow-inner cursor-pointer select-none"
                       onPointerDown={(e) => updateSpinFromPad(e)}
                       onPointerMove={(e) => { if ((e.buttons & 1) === 1) updateSpinFromPad(e); }}
-                      title="Drag red marker to set curve"
+                      title="Drag red marker to set spin"
                     >
                       <div className="absolute inset-[10%] rounded-full border border-zinc-400/60" />
                       <div
-                        className="absolute w-3.5 h-3.5 rounded-full border border-red-100"
+                        className="absolute w-3 h-3 rounded-full border border-red-100"
                         style={{
-                          left: `calc(50% + ${Number(spinX || 0) * 21}px - 7px)`,
-                          top: `calc(50% + ${-Number(spinY || 0) * 21}px - 7px)`,
+                          left: `calc(50% + ${Number(spinX || 0) * 18}px - 6px)`,
+                          top: `calc(50% + ${-Number(spinY || 0) * 18}px - 6px)`,
                           backgroundColor: '#dc2626',
                           boxShadow: '0 0 0 2px rgba(220,38,38,0.35)',
                         }}
                       />
                     </div>
-                    <div className="px-2 py-1 rounded border border-input bg-transparent text-[10px] text-foreground min-w-[120px]">
-                      X {Number(spinX || 0).toFixed(2)} · Y {Number(spinY || 0).toFixed(2)}
-                    </div>
-                    <button type="button" onClick={() => { setSpinX(0); setSpinY(0); }} className="px-2 py-1 rounded border border-zinc-700 text-mutedForeground hover:text-foreground">
-                      Center
+                    <button type="button" onClick={() => { setSpinX(0); setSpinY(0); }} className="px-2 py-1 rounded border border-zinc-700 text-mutedForeground hover:text-foreground text-[9px]">
+                      Reset
                     </button>
                   </div>
                 </div>
-                <div className="flex items-end"><button type="button" onClick={shoot} disabled={busy || replayActive || mobileNeedsRotate || !canAim || !ballsSettled} className="w-full px-3 py-2 rounded bg-primary/20 border border-primary/50 text-primary font-heading">{mobileNeedsRotate ? 'Rotate Phone' : (replayActive || !ballsSettled) ? 'Rolling...' : busy ? '...' : inBreakPlacement ? 'Place cue in kitchen' : 'Shoot'}</button></div>
+                <div className="flex-1 min-w-[140px] text-[9px] text-mutedForeground leading-snug font-heading p-2 rounded bg-zinc-800/40 border border-zinc-700/30">
+                  {inBreakPlacement
+                    ? 'Click the kitchen area to place the cue ball'
+                    : canAim
+                      ? <>
+                          <span className="text-foreground font-bold">Aim:</span> Click & drag on felt.{' '}
+                          <span className="text-foreground font-bold">Shoot:</span> Click behind the cue ball, pull back, release.
+                        </>
+                      : (replayActive || !ballsSettled)
+                        ? 'Balls rolling...'
+                        : 'Waiting for turn...'
+                  }
+                </div>
               </div>
             </div>
           )}
@@ -2206,7 +2195,7 @@ export default function EightBallPool() {
                 })}
               </div>
               <div className="text-[9px] text-mutedForeground font-heading px-0.5">
-                Aim preview: tier {previewTier} · cue {previewSegmentBudget} seg · object {objectRailSegmentCap} seg · range {Math.round(previewDistance)}px
+                Aim preview: tier {previewTier} · range {Math.round(previewDistance)}px
               </div>
             </div>
           )}

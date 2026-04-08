@@ -118,13 +118,8 @@ const RankStatsCard = ({ rankStats }) => (
   </div>
 );
 
-function isNpcVictimKill(k) {
-  if (k?.victim_is_npc === true) return true;
-  return typeof k?.victim_username === 'string' && k.victim_username.includes('(NPC)');
-}
-
-const KillsListView = ({ kills, usersOnly, onToggleUsersOnly, hideNpcKills, onToggleHideNpcKills }) => {
-  const displayKills = hideNpcKills ? kills.filter((k) => !isNpcVictimKill(k)) : kills;
+const KillsListView = ({ kills }) => {
+  const displayKills = kills;
   return (
   <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 stat-card stat-fade-in mobile-panel`} style={{ animationDelay: '0.1s' }}>
     <div className="absolute top-0 left-0 w-20 h-20 bg-primary/5 rounded-full blur-2xl pointer-events-none stat-glow" />
@@ -133,26 +128,6 @@ const KillsListView = ({ kills, usersOnly, onToggleUsersOnly, hideNpcKills, onTo
       <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">
         Last 15 Kills
       </h2>
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 justify-end">
-        <label className="inline-flex items-center gap-1 text-[9px] text-mutedForeground font-heading select-none cursor-pointer">
-          <input
-            type="checkbox"
-            className="h-3 w-3 accent-primary rounded border-primary/30 cursor-pointer"
-            checked={hideNpcKills}
-            onChange={(e) => onToggleHideNpcKills(e.target.checked)}
-          />
-          hide NPC kills
-        </label>
-        <label className="inline-flex items-center gap-1 text-[9px] text-mutedForeground font-heading select-none cursor-pointer">
-          <input
-            type="checkbox"
-            className="h-3 w-3 accent-primary rounded border-primary/30 cursor-pointer"
-            checked={usersOnly}
-            onChange={(e) => onToggleUsersOnly(e.target.checked)}
-          />
-          show users only
-        </label>
-      </div>
     </div>
 
     {/* Desktop view */}
@@ -387,8 +362,7 @@ function buildVehicleRows(data) {
 
 // Main component
 export default function Stats() {
-  const [usersOnlyKills, setUsersOnlyKills] = useState(true);
-  const [hideNpcKills, setHideNpcKills] = useState(false);
+  const usersOnlyKills = false;
   const [data, setData] = useState(() => getStatsOverview(true));
   const [statsListTab, setStatsListTab] = useState('kills'); // 'kills' | 'wiped'
 
@@ -500,13 +474,7 @@ export default function Stats() {
 
       {/* List views */}
       {statsListTab === 'kills' && (
-        <KillsListView
-          kills={recentKills}
-          usersOnly={usersOnlyKills}
-          onToggleUsersOnly={setUsersOnlyKills}
-          hideNpcKills={hideNpcKills}
-          onToggleHideNpcKills={setHideNpcKills}
-        />
+        <KillsListView kills={recentKills} />
       )}
 
       {statsListTab === 'wiped' && (

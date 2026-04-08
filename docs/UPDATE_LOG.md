@@ -6,6 +6,52 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-08 23:15 UTC[/color][/b] — [b]Flash news kills now respect Make Public[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] The [b]flash news ticker[/b] now only shows kills where the attacker checked [b]Make Public[/b] on the attack page. Previously all kills appeared in the ticker regardless of that setting.[/color]
+[*][color=#888888][b]Player action:[/b] No setup needed. If you want your kills to appear in the ticker, check [b]Make Public[/b] before attacking.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-04-08 23:30 UTC[/color][/b] — [b]8-Ball Pool overhaul + Stats kills list cleanup[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]8-Ball Pool[/b] aim preview now uses the exact same physics simulation as the server. The preview line accurately shows where balls will go, including spin, cushion bounces, and deflections — no more mismatches between the preview and the actual shot.[/color]
+[*][color=#888888][b]Changed:[/b] [b]8-Ball Pool[/b] controls reworked to Miniclip-style. Click and drag on the felt to aim, then click behind the cue ball, pull back to set power, and release to shoot. Removed the old angle/power number inputs.[/color]
+[*][color=#888888][b]Fixed:[/b] [b]8-Ball Pool[/b] pocket detection upgraded to swept-sphere — fast balls no longer tunnel past pockets. Corner pockets are now slightly larger than side pockets (matching real tables). Balls near a pocket lip get a subtle "gravity" pull simulating jaw funnelling.[/color]
+[*][color=#888888][b]Changed:[/b] [b]8-Ball Pool[/b] cue stick rendering improved with pull-back animation, ferrule, and chalk tip. Pocket-drop animations added (balls shrink/fade into the hole). Sound effects enhanced with distinct cue strike, ball collision, pocket drop, and cushion bounce tones.[/color]
+[*][color=#888888][b]Changed:[/b] [b]Stats → Last 15 Kills[/b] now always shows all kills including robot bodyguards and normal users. Removed the "hide NPC kills" and "show users only" checkboxes.[/color]
+[*][color=#888888][b]Player action:[/b] No setup needed. 8-Ball Pool plays the same but feels much better — aim where you want, pull back to shoot. Stats kills list shows everything by default now.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-04-08 23:00 UTC[/color][/b] — [b]Game Events overhaul: random auto-rotation, positive only[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Game Events[/b] are now fully random and automatic. [b]1 or 2[/b] positive events are picked at random and rotate after a random [b]1–24 hour[/b] window — no more fixed daily schedule. All [b]negative[/b] events (price increases, reduced payouts, lower success) have been removed from the pool; only [b]buffs and discounts[/b] can appear.[/color]
+[*][color=#888888][b]Changed:[/b] The event banner now shows which event(s) are active and a countdown to the next rotation. The flash news ticker also lists the current events with time remaining.[/color]
+[*][color=#888888][b]Player action:[/b] No setup needed. Events rotate automatically — check the banner or news ticker to see what's active and when it changes.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-04-08 22:30 UTC[/color][/b] — [b]Flappy Gangster rebalance + Kill form fix[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Flappy Gangster[/b] reward tiers now require far more gates to reach. Previous tier thresholds (5 → 75 gates) were too easy — skilled players regularly cleared 600+ gates and capped respect every run. New thresholds span [b]25 → 500 gates[/b] with rebalanced respect per tier. Beyond the final tier, per-gate respect is halved ([b]1/gate[/b] instead of 2). A 600-gate run now earns roughly [b]195 respect[/b] instead of the old [b]300 cap[/b]; reaching the 300 cap requires ~705 gates.[/color]
+[*][color=#888888][b]Fixed:[/b] [b]Kill → Kill User[/b] button no longer silently starts a [b]Find User[/b] search when the target isn't in your found list. It now tells you to search first instead of auto-triggering a search behind the scenes.[/color]
+[*][color=#888888][b]Player action:[/b] No setup needed. Flappy Gangster rewards are automatic; just expect longer runs to hit higher tiers. Use [b]Find User[/b] to search before attempting a kill.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-08 21:00 UTC[/color][/b] — [b]Referral: 10% cuts and referred-user bonuses[/b][/size]
 [quote]
 [list]

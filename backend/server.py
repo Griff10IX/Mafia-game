@@ -317,37 +317,37 @@ async def set_state_head(state: str, family_id: Optional[str], force: bool = Fal
     return ""
 
 
-# Game-wide daily events (rotate by UTC date). Multipliers default 1.0 when not set.
-# racket_cooldown: <1 = faster, >1 = longer; racket_payout: >1 = extra %, <1 = reduced %
-# armour_weapon_cost: applies to armour shop and weapon purchases
+# Game-wide events. Positive-only random auto-rotation (1-2 events, 1-24h random duration).
+# racket_cooldown: <1 = faster; racket_payout: >1 = extra %; armour_weapon_cost: <1 = cheaper
+# Full legacy list kept for backward compat (DB records reference old ids).
 GAME_EVENTS = [
-    {"id": "double_rank", "name": "Double Rank Points", "message": "Double rank points today! Kills and GTA reward 2x rank.", "rank_points": 2.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
-    {"id": "double_cash", "name": "Double Cash Rewards", "message": "Double cash rewards today! Kill loot is 2x.", "rank_points": 1.0, "kill_cash": 2.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
-    {"id": "gta_double_chance", "name": "2x GTA Success Chance", "message": "2x GTA success chance today! Better odds on heists.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 2.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
-    {"id": "bodyguard_half_price", "name": "Bodyguards 50% Off", "message": "Bodyguards 50% off today! Slots, hire, and armour upgrades.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 0.5, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
-    {"id": "bodyguard_premium", "name": "Bodyguards 10% More", "message": "Bodyguard services 10% more expensive today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.1, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
-    {"id": "racket_extra_payout", "name": "Rackets +10% Payouts", "message": "Family rackets pay 10% more today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.1, "armour_weapon_cost": 1.0},
-    {"id": "racket_reduced_payout", "name": "Rackets -10% Payouts", "message": "Family rackets pay 10% less today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 0.9, "armour_weapon_cost": 1.0},
-    {"id": "racket_faster_cooldown", "name": "Rackets 50% Faster", "message": "Racket cooldowns are half as long today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 0.5, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
+    {"id": "double_rank", "name": "Double Rank Points", "message": "Double rank points! Kills and GTA reward 2x rank.", "rank_points": 2.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
+    {"id": "double_cash", "name": "Double Cash Rewards", "message": "Double cash rewards! Kill loot is 2x.", "rank_points": 1.0, "kill_cash": 2.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
+    {"id": "gta_double_chance", "name": "2x GTA Success Chance", "message": "2x GTA success chance! Better odds on heists.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 2.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
+    {"id": "bodyguard_half_price", "name": "Bodyguards 50% Off", "message": "Bodyguards 50% off! Slots, hire, and armour upgrades.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 0.5, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
+    {"id": "bodyguard_premium", "name": "Bodyguards 10% More", "message": "Bodyguard services 10% more expensive.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.1, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
+    {"id": "racket_extra_payout", "name": "Rackets +10% Payouts", "message": "Family rackets pay 10% more.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.1, "armour_weapon_cost": 1.0},
+    {"id": "racket_reduced_payout", "name": "Rackets -10% Payouts", "message": "Family rackets pay 10% less.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 0.9, "armour_weapon_cost": 1.0},
+    {"id": "racket_faster_cooldown", "name": "Rackets 50% Faster", "message": "Racket cooldowns are half as long.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 0.5, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
     {"id": "racket_bonus_day", "name": "Racket Bonus Day", "message": "Rackets: +10% payouts and 25% faster cooldowns.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 0.75, "racket_payout": 1.1, "armour_weapon_cost": 1.0},
-    {"id": "armour_weapon_half_price", "name": "Armour & Weapons 50% Off", "message": "Armour and weapons 50% off today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 0.5},
-    {"id": "armour_weapon_premium", "name": "Armour & Weapons 10% More", "message": "Armour and weapons 10% more expensive today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.1},
-    {"id": "oc_payout_boost", "name": "OC Payout +15%", "message": "Organised crime payouts 15% higher today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.15, "armour_weapon_cost": 1.0},
-    {"id": "racket_cooldown_faster", "name": "Crime Cooldown -20%", "message": "Racket cooldowns 20% shorter today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 0.8, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
-    {"id": "gta_cash_boost", "name": "GTA Cash +50%", "message": "Kill loot and heist cash 50% higher today.", "rank_points": 1.0, "kill_cash": 1.5, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
-    {"id": "no_event_day", "name": "No Event Day", "message": "No bonuses or penalties today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
-    {"id": "rank_points_boost", "name": "Rank Points +50%", "message": "Kills and GTA reward 50% more rank points today.", "rank_points": 1.5, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
-    {"id": "bodyguard_quarter_off", "name": "Bodyguards 25% Off", "message": "Bodyguard services 25% off today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 0.75, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
-    {"id": "racket_payout_boost", "name": "Rackets +20% Payouts", "message": "Family rackets pay 20% more today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.2, "armour_weapon_cost": 1.0},
-    {"id": "armour_weapon_quarter_off", "name": "Armour & Weapons 25% Off", "message": "Armour and weapons 25% off today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 0.75},
-    {"id": "gta_success_boost", "name": "GTA Success +25%", "message": "GTA success chance 25% higher today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.25, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
-    {"id": "rank_points_penalty", "name": "Rank Points -25%", "message": "Kills and GTA reward 25% less rank points today.", "rank_points": 0.75, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
-    {"id": "bodyguard_premium_day", "name": "Bodyguards 25% More", "message": "Bodyguard services 25% more expensive today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.25, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
-    {"id": "racket_payout_penalty", "name": "Rackets -20% Payouts", "message": "Family rackets pay 20% less today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 0.8, "armour_weapon_cost": 1.0},
-    {"id": "armour_weapon_premium_day", "name": "Armour & Weapons 25% More", "message": "Armour and weapons 25% more expensive today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.25},
-    {"id": "gta_success_penalty", "name": "GTA Success -25%", "message": "GTA success chance 25% lower today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 0.75, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
-    {"id": "bullets_store_25_off", "name": "Bullets in Store 25% Off", "message": "Bullets in the store 25% cheaper today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 0.75},
-    {"id": "bullets_store_25_more", "name": "Bullets in Store +25%", "message": "Bullets in the store 25% more expensive today.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.25},
+    {"id": "armour_weapon_half_price", "name": "Armour & Weapons 50% Off", "message": "Armour and weapons 50% off.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 0.5},
+    {"id": "armour_weapon_premium", "name": "Armour & Weapons 10% More", "message": "Armour and weapons 10% more expensive.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.1},
+    {"id": "oc_payout_boost", "name": "OC Payout +15%", "message": "Organised crime payouts 15% higher.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.15, "armour_weapon_cost": 1.0},
+    {"id": "racket_cooldown_faster", "name": "Crime Cooldown -20%", "message": "Racket cooldowns 20% shorter.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 0.8, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
+    {"id": "gta_cash_boost", "name": "GTA Cash +50%", "message": "Kill loot and heist cash 50% higher.", "rank_points": 1.0, "kill_cash": 1.5, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
+    {"id": "no_event_day", "name": "No Event Day", "message": "No bonuses or penalties.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
+    {"id": "rank_points_boost", "name": "Rank Points +50%", "message": "Kills and GTA reward 50% more rank points.", "rank_points": 1.5, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
+    {"id": "bodyguard_quarter_off", "name": "Bodyguards 25% Off", "message": "Bodyguard services 25% off.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 0.75, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
+    {"id": "racket_payout_boost", "name": "Rackets +20% Payouts", "message": "Family rackets pay 20% more.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.2, "armour_weapon_cost": 1.0},
+    {"id": "armour_weapon_quarter_off", "name": "Armour & Weapons 25% Off", "message": "Armour and weapons 25% off.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 0.75},
+    {"id": "gta_success_boost", "name": "GTA Success +25%", "message": "GTA success chance 25% higher.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.25, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
+    {"id": "rank_points_penalty", "name": "Rank Points -25%", "message": "Kills and GTA reward 25% less rank points.", "rank_points": 0.75, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
+    {"id": "bodyguard_premium_day", "name": "Bodyguards 25% More", "message": "Bodyguard services 25% more expensive.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.25, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
+    {"id": "racket_payout_penalty", "name": "Rackets -20% Payouts", "message": "Family rackets pay 20% less.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 0.8, "armour_weapon_cost": 1.0},
+    {"id": "armour_weapon_premium_day", "name": "Armour & Weapons 25% More", "message": "Armour and weapons 25% more expensive.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.25},
+    {"id": "gta_success_penalty", "name": "GTA Success -25%", "message": "GTA success chance 25% lower.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 0.75, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0},
+    {"id": "bullets_store_25_off", "name": "Bullets in Store 25% Off", "message": "Bullets in the store 25% cheaper.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 0.75},
+    {"id": "bullets_store_25_more", "name": "Bullets in Store +25%", "message": "Bullets in the store 25% more expensive.", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.25},
 ]
 NO_EVENT = {"id": "none", "name": "No event", "message": "", "rank_points": 1.0, "kill_cash": 1.0, "gta_success": 1.0, "bodyguard_cost": 1.0, "racket_cooldown": 1.0, "racket_payout": 1.0, "armour_weapon_cost": 1.0}
 
@@ -355,217 +355,168 @@ MULTIPLIER_KEYS = ["rank_points", "kill_cash", "gta_success", "bodyguard_cost", 
 
 GAME_EVENTS_BY_ID = {ev["id"]: ev for ev in GAME_EVENTS}
 
-# Admin random multi-bundle: pick k groups in {1,2,all}, one random event per group (no conflicts).
-# get_combined_event (tests): one event per group (deterministic by UTC day), then multiply those only.
-# no_event_day is neutral and omitted. Every other GAME_EVENTS id must appear exactly once.
-GAME_EVENT_CONFLICT_GROUPS = [
-    ["double_rank", "rank_points_boost", "rank_points_penalty"],
+_NEGATIVE_EVENT_IDS = {
+    "bodyguard_premium", "bodyguard_premium_day",
+    "racket_reduced_payout", "racket_payout_penalty",
+    "armour_weapon_premium", "armour_weapon_premium_day", "bullets_store_25_more",
+    "rank_points_penalty", "gta_success_penalty",
+    "no_event_day",
+}
+POSITIVE_GAME_EVENTS = [ev for ev in GAME_EVENTS if ev["id"] not in _NEGATIVE_EVENT_IDS]
+POSITIVE_GAME_EVENTS_BY_ID = {ev["id"]: ev for ev in POSITIVE_GAME_EVENTS}
+
+# Groups of events that modify the same multiplier — never pick two from the same group.
+POSITIVE_EVENT_CONFLICT_GROUPS = [
+    ["double_rank", "rank_points_boost"],
     ["double_cash", "gta_cash_boost"],
-    ["gta_double_chance", "gta_success_boost", "gta_success_penalty"],
-    ["bodyguard_half_price", "bodyguard_premium", "bodyguard_quarter_off", "bodyguard_premium_day"],
-    [
-        "racket_extra_payout",
-        "racket_reduced_payout",
-        "racket_faster_cooldown",
-        "racket_bonus_day",
-        "racket_cooldown_faster",
-        "racket_payout_boost",
-        "racket_payout_penalty",
-        "oc_payout_boost",
-    ],
-    [
-        "armour_weapon_half_price",
-        "armour_weapon_premium",
-        "armour_weapon_quarter_off",
-        "armour_weapon_premium_day",
-        "bullets_store_25_off",
-        "bullets_store_25_more",
-    ],
+    ["gta_double_chance", "gta_success_boost"],
+    ["bodyguard_half_price", "bodyguard_quarter_off"],
+    ["racket_extra_payout", "racket_faster_cooldown", "racket_bonus_day", "racket_cooldown_faster", "racket_payout_boost", "oc_payout_boost"],
+    ["armour_weapon_half_price", "armour_weapon_quarter_off", "bullets_store_25_off"],
 ]
 
+_POSITIVE_EVENT_ID_TO_GROUP: dict = {}
+for _gi, _grp in enumerate(POSITIVE_EVENT_CONFLICT_GROUPS):
+    for _eid in _grp:
+        _POSITIVE_EVENT_ID_TO_GROUP[_eid] = _gi
 
-def _validate_game_event_conflict_groups() -> None:
-    covered: set = set()
-    for g in GAME_EVENT_CONFLICT_GROUPS:
-        for eid in g:
-            if eid in covered:
-                raise RuntimeError(f"Duplicate event id in GAME_EVENT_CONFLICT_GROUPS: {eid}")
-            covered.add(eid)
-    all_ids = {ev["id"] for ev in GAME_EVENTS}
-    expected = all_ids - {"no_event_day"}
-    if covered != expected:
-        raise RuntimeError(
-            "GAME_EVENT_CONFLICT_GROUPS must list every GAME_EVENTS id except no_event_day exactly once. "
-            f"extra={sorted(covered - expected)} missing={sorted(expected - covered)}"
-        )
+RANDOM_EVENT_MIN_HOURS = 1.0
+RANDOM_EVENT_MAX_HOURS = 24.0
 
 
-_validate_game_event_conflict_groups()
-
-
-def _event_id_to_group_index(eid: str) -> Optional[int]:
-    for gi, group in enumerate(GAME_EVENT_CONFLICT_GROUPS):
-        if eid in group:
-            return gi
-    return None
-
-
-def _validate_bundle_event_ids(event_ids: List[str]) -> List[str]:
-    """Keep ids that are valid GAME_EVENTS and at most one per conflict group; drop invalid, dedupe groups."""
-    seen_groups: set = set()
-    out: List[str] = []
-    for raw in event_ids:
-        eid = str(raw).strip()
-        if not eid or eid not in GAME_EVENTS_BY_ID:
-            continue
-        gi = _event_id_to_group_index(eid)
-        if gi is None:
-            continue
-        if gi in seen_groups:
-            continue
-        seen_groups.add(gi)
-        out.append(eid)
-    return out
-
-
-def build_resolved_event_from_event_ids(event_ids: List[str]) -> dict:
-    """Multiply multipliers from the given events (one per conflict group expected)."""
+def _build_combined_event(event_ids: List[str]) -> dict:
+    """Multiply multipliers from the given event ids into one resolved event dict."""
     combined = {k: NO_EVENT[k] for k in NO_EVENT}
-    combined["id"] = "random_multi_bundle"
-    combined["name"] = "Random multi-event bundle"
-    picked_labels: List[str] = []
+    combined["id"] = "random_auto"
+    labels: List[str] = []
     for eid in event_ids:
         ev = GAME_EVENTS_BY_ID.get(eid)
         if not ev:
             continue
-        picked_labels.append(ev.get("name") or eid)
+        labels.append(ev.get("name") or eid)
         for key in MULTIPLIER_KEYS:
             combined[key] = float(combined.get(key, 1.0)) * float(ev.get(key, 1.0))
-    combined["message"] = (
-        "One modifier per category (mutually exclusive). Active: " + "; ".join(picked_labels) + "."
-    )
+    combined["name"] = " + ".join(labels) if labels else "No event"
+    combined["message"] = "; ".join(ev.get("message", "") for eid2 in event_ids for ev in [GAME_EVENTS_BY_ID.get(eid2)] if ev) if labels else ""
     return combined
 
 
-def roll_random_multi_event_bundle() -> List[str]:
-    """Random k in {1, 2, all groups}; pick k distinct groups and one random event from each."""
-    n_groups = len(GAME_EVENT_CONFLICT_GROUPS)
-    k = secrets.choice([1, 2, n_groups])
-    group_indices = random.sample(range(n_groups), k)
-    picked: List[str] = []
-    for gi in group_indices:
-        group = GAME_EVENT_CONFLICT_GROUPS[gi]
-        picked.append(secrets.choice(group))
-    return picked
+def roll_random_events() -> tuple:
+    """Pick 1 or 2 non-conflicting positive events and a random duration (1-24h).
+    Returns (event_ids, duration_hours)."""
+    pool = list(POSITIVE_GAME_EVENTS)
+    first = secrets.choice(pool)
+    picked = [first["id"]]
+    count = secrets.choice([1, 2])
+    if count == 2:
+        first_group = _POSITIVE_EVENT_ID_TO_GROUP.get(first["id"])
+        candidates = [ev for ev in pool if ev["id"] != first["id"] and _POSITIVE_EVENT_ID_TO_GROUP.get(ev["id"]) != first_group]
+        if candidates:
+            picked.append(secrets.choice(candidates)["id"])
+    duration_hours = round(random.uniform(RANDOM_EVENT_MIN_HOURS, RANDOM_EVENT_MAX_HOURS), 2)
+    return picked, duration_hours
 
 
-def _utc_days_since_game_events_epoch() -> int:
-    """Same day index as get_active_game_event (UTC)."""
-    today = datetime.now(timezone.utc).date()
-    epoch = datetime(2025, 1, 1, tzinfo=timezone.utc).date()
-    return (today - epoch).days
-
-
-def get_active_game_event():
-    """Current game-wide event for today (UTC). Returns dict with id, name, message, and multiplier keys."""
-    today = datetime.now(timezone.utc).date()
-    epoch = datetime(2025, 1, 1, tzinfo=timezone.utc).date()
-    days = (today - epoch).days
-    idx = days % len(GAME_EVENTS)
-    return GAME_EVENTS[idx].copy()
-
-def get_combined_event():
-    """Admin all-events testing: one winner per GAME_EVENT_CONFLICT_GROUPS row (deterministic by UTC day), multiply those only."""
-    days = _utc_days_since_game_events_epoch()
-    combined = {k: NO_EVENT[k] for k in NO_EVENT}
-    combined["id"] = "all_testing_resolved"
-    combined["name"] = "All events (testing, resolved)"
-    picked_labels: List[str] = []
-    for gi, group in enumerate(GAME_EVENT_CONFLICT_GROUPS):
-        if not group:
-            continue
-        idx = (days + gi * 31) % len(group)
-        eid = group[idx]
-        ev = GAME_EVENTS_BY_ID[eid]
-        picked_labels.append(ev.get("name") or eid)
-        for key in MULTIPLIER_KEYS:
-            combined[key] = float(combined.get(key, 1.0)) * float(ev.get(key, 1.0))
-    combined["message"] = (
-        "One modifier per category (mutually exclusive). Active: " + "; ".join(picked_labels) + "."
-    )
-    return combined
-
-async def get_events_enabled() -> bool:
-    """Whether daily game events are enabled (admin can disable). Default True if not set."""
-    doc = await db.game_config.find_one({"id": "main"}, {"_id": 0, "events_enabled": 1})
-    if doc is None:
-        return True  # no doc = enabled; admin toggle will create doc
-    return bool(doc.get("events_enabled", True))
-
-async def get_random_multi_event_bundle_enabled() -> bool:
-    """Admin: random bundle mode on (stored ids may still be empty if invalid)."""
-    doc = await db.game_config.find_one({"id": "main"}, {"_id": 0, "random_multi_event_bundle_enabled": 1})
-    if doc is None:
-        return False
-    return bool(doc.get("random_multi_event_bundle_enabled", False))
-
-
-async def get_random_multi_event_bundle_ids() -> List[str]:
-    """Resolved, validated event ids for the random bundle; empty if disabled or invalid."""
+async def get_or_rotate_random_events() -> dict:
+    """Return the currently active random events (auto-rotating on expiry).
+    Returns dict with keys: event (combined multiplier dict), event_ids, expires_at, duration_hours."""
+    now = datetime.now(timezone.utc)
     doc = await db.game_config.find_one(
         {"id": "main"},
-        {"_id": 0, "random_multi_event_bundle_enabled": 1, "random_multi_event_bundle_ids": 1},
+        {"_id": 0, "random_events_active_ids": 1, "random_events_expires_at": 1, "random_events_duration_hours": 1},
     )
-    if not doc or not doc.get("random_multi_event_bundle_enabled"):
-        return []
-    raw = doc.get("random_multi_event_bundle_ids")
-    if not isinstance(raw, list):
-        return []
-    ids = [str(x).strip() for x in raw if x]
-    return _validate_bundle_event_ids(ids)
+    if doc:
+        raw_expires = doc.get("random_events_expires_at")
+        if raw_expires:
+            if isinstance(raw_expires, str):
+                try:
+                    expires_dt = datetime.fromisoformat(raw_expires.replace("Z", "+00:00"))
+                    if expires_dt.tzinfo is None:
+                        expires_dt = expires_dt.replace(tzinfo=timezone.utc)
+                except Exception:
+                    expires_dt = None
+            elif isinstance(raw_expires, datetime):
+                expires_dt = raw_expires if raw_expires.tzinfo else raw_expires.replace(tzinfo=timezone.utc)
+            else:
+                expires_dt = None
+            ids = doc.get("random_events_active_ids") or []
+            if expires_dt and expires_dt > now and ids:
+                valid_ids = [eid for eid in ids if eid in GAME_EVENTS_BY_ID]
+                if valid_ids:
+                    return {
+                        "event": _build_combined_event(valid_ids),
+                        "event_ids": valid_ids,
+                        "expires_at": expires_dt.isoformat(),
+                        "duration_hours": float(doc.get("random_events_duration_hours") or 0),
+                    }
+    event_ids, duration_hours = roll_random_events()
+    expires_at = now + timedelta(hours=duration_hours)
+    await db.game_config.update_one(
+        {"id": "main"},
+        {"$set": {
+            "random_events_active_ids": event_ids,
+            "random_events_expires_at": expires_at.isoformat(),
+            "random_events_duration_hours": duration_hours,
+        }},
+        upsert=True,
+    )
+    return {
+        "event": _build_combined_event(event_ids),
+        "event_ids": event_ids,
+        "expires_at": expires_at.isoformat(),
+        "duration_hours": duration_hours,
+    }
 
 
-async def get_disabled_event_ids() -> list:
-    """Event ids that are disabled by admin. When today's rotated event is in this list, effective event is NO_EVENT."""
-    doc = await db.game_config.find_one({"id": "main"}, {"_id": 0, "disabled_event_ids": 1})
-    raw = doc.get("disabled_event_ids") if doc else None
-    if not isinstance(raw, list):
-        return []
-    return [str(x).strip() for x in raw if x]
+async def force_rotate_random_events() -> dict:
+    """Admin: immediately roll new random events regardless of current expiry."""
+    now = datetime.now(timezone.utc)
+    event_ids, duration_hours = roll_random_events()
+    expires_at = now + timedelta(hours=duration_hours)
+    await db.game_config.update_one(
+        {"id": "main"},
+        {"$set": {
+            "random_events_active_ids": event_ids,
+            "random_events_expires_at": expires_at.isoformat(),
+            "random_events_duration_hours": duration_hours,
+        }},
+        upsert=True,
+    )
+    return {
+        "event": _build_combined_event(event_ids),
+        "event_ids": event_ids,
+        "expires_at": expires_at.isoformat(),
+        "duration_hours": duration_hours,
+    }
 
-async def get_override_event_id() -> Optional[str]:
-    """Admin-set override: when set, this event is used instead of the day's rotation. None = use rotation."""
-    doc = await db.game_config.find_one({"id": "main"}, {"_id": 0, "override_event_id": 1})
-    raw = doc.get("override_event_id") if doc else None
-    if raw is None:
-        return None
-    s = str(raw).strip()
-    return s if s else None
 
-async def get_active_game_event_async():
-    """Today's game event (rotation or admin override); returns NO_EVENT if that event is disabled by admin."""
-    override_id = await get_override_event_id()
-    if override_id:
-        for ev in GAME_EVENTS:
-            if ev.get("id") == override_id:
-                return ev.copy()
-    event = get_active_game_event()
-    disabled = await get_disabled_event_ids()
-    if event.get("id") in disabled:
-        return NO_EVENT.copy()
-    return event
+async def get_events_enabled() -> bool:
+    """Whether game events are enabled (admin can disable). Default True if not set."""
+    doc = await db.game_config.find_one({"id": "main"}, {"_id": 0, "events_enabled": 1})
+    if doc is None:
+        return True
+    return bool(doc.get("events_enabled", True))
+
 
 async def get_effective_event():
-    """Current event multipliers if events enabled, else NO_EVENT. When random multi-bundle is on, multiply that bundle only (no conflicting events). Never raises."""
+    """Current event multipliers if events enabled, else NO_EVENT. Auto-rotates random events. Never raises."""
     try:
         if not await get_events_enabled():
             return NO_EVENT.copy()
-        bundle_ids = await get_random_multi_event_bundle_ids()
-        if bundle_ids:
-            return build_resolved_event_from_event_ids(bundle_ids)
-        return await get_active_game_event_async()
+        result = await get_or_rotate_random_events()
+        return result["event"]
     except Exception:
         return NO_EVENT.copy()
+
+
+async def get_effective_event_full():
+    """Like get_effective_event but returns the full rotation info (event_ids, expires_at, duration_hours)."""
+    try:
+        if not await get_events_enabled():
+            return {"event": NO_EVENT.copy(), "event_ids": [], "expires_at": None, "duration_hours": 0}
+        return await get_or_rotate_random_events()
+    except Exception:
+        return {"event": NO_EVENT.copy(), "event_ids": [], "expires_at": None, "duration_hours": 0}
 
 # Armoury/weapons: production cost is paid to produce; sell price = production_cost * ARMOUR_WEAPON_MARGIN (35% profit)
 ARMOUR_WEAPON_MARGIN = 1.35  # sell at 1.35× production cost → 35% profit per item

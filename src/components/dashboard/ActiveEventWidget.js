@@ -18,8 +18,8 @@ export default function ActiveEventWidget() {
     return null;
   }
 
-  const event = data.event;
-  const message = event.message || `Today: ${event.name || 'Event'}`;
+  const names = data.active_event_names || [];
+  const title = names.length > 0 ? names.join(' + ') : (data.event?.name || 'Event');
 
   return (
     <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
@@ -31,7 +31,7 @@ export default function ActiveEventWidget() {
         </span>
       </div>
       <div className="px-2.5 py-2">
-        <p className="text-[11px] font-heading text-foreground">{message}</p>
+        <p className="text-[11px] font-heading text-foreground">{title}</p>
       </div>
     </div>
   );

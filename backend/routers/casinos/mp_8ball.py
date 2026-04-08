@@ -28,9 +28,8 @@ MP_8BALL_TABLE_H = 1.1
 MP_8BALL_BALL_R = 0.028
 # Head string at W/4 from the breaking end (left); kitchen is behind it toward the head cushion.
 MP_8BALL_HEAD_STRING_X = MP_8BALL_TABLE_W * 0.25
-# Ball pockets when center is within this distance of pocket center (see `_pockets()`).
-# Keep in sync with `POCKET_R_TABLE` on the pool client (EightBallPool.js).
 MP_8BALL_POCKET_R = 0.045
+MP_8BALL_CORNER_POCKET_R = 0.052
 MP_8BALL_RESTITUTION = 0.985
 MP_8BALL_FRICTION = 0.994
 MP_8BALL_STOP_SPEED = 0.012
@@ -190,15 +189,44 @@ def _new_table_state() -> dict:
     }
 
 
-def _pockets() -> List[Tuple[float, float]]:
+def _pockets() -> List[Tuple[float, float, float]]:
+    """Returns (x, y, capture_radius) for each pocket. Corners are larger than sides."""
+    cr = MP_8BALL_CORNER_POCKET_R
+    sr = MP_8BALL_POCKET_R
     return [
-        (0.0, 0.0),
-        (MP_8BALL_TABLE_W / 2.0, 0.0),
-        (MP_8BALL_TABLE_W, 0.0),
-        (0.0, MP_8BALL_TABLE_H),
-        (MP_8BALL_TABLE_W / 2.0, MP_8BALL_TABLE_H),
-        (MP_8BALL_TABLE_W, MP_8BALL_TABLE_H),
+        (0.0, 0.0, cr),
+        (MP_8BALL_TABLE_W / 2.0, 0.0, sr),
+        (MP_8BALL_TABLE_W, 0.0, cr),
+        (0.0, MP_8BALL_TABLE_H, cr),
+        (MP_8BALL_TABLE_W / 2.0, MP_8BALL_TABLE_H, sr),
+        (MP_8BALL_TABLE_W, MP_8BALL_TABLE_H, cr),
     ]
+
+
+def _seg_circle_intersect(x0: float, y0: float, x1: float, y1: float, cx: float, cy: float, r: float) -> float:
+    """Swept segment vs circle. Returns parametric t in [0,1] of first intersection, or -1."""
+    dx = x1 - x0
+    dy = y1 - y0
+    fx = x0 - cx
+    fy = y0 - cy
+    a = dx * dx + dy * dy
+    if a < 1e-20:
+        return 0.0 if math.hypot(fx, fy) <= r else -1.0
+    b = 2.0 * (fx * dx + fy * dy)
+    c = fx * fx + fy * fy - r * r
+    disc = b * b - 4.0 * a * c
+    if disc < 0:
+        return -1.0
+    sd = math.sqrt(disc)
+    t1 = (-b - sd) / (2.0 * a)
+    if 0.0 <= t1 <= 1.0:
+        return t1
+    t2 = (-b + sd) / (2.0 * a)
+    if 0.0 <= t2 <= 1.0:
+        return t2
+    if math.hypot(x0 - cx, y0 - cy) <= r:
+        return 0.0
+    return -1.0
 
 
 def _try_pocket_balls(
@@ -207,13 +235,15 @@ def _try_pocket_balls(
     replay_events: List[dict],
     t_ms: int,
 ) -> None:
-    """Mark balls whose center is inside a pocket capture radius. Must run before rail bounce so corner/side
-    pockets are not treated as cushion hits first (which would reflect the ball away from the hole)."""
+    """Swept-sphere pocket detection: test the ball's movement segment against each pocket."""
     for b in out:
         if b.get("pocketed"):
             continue
-        for px, py in _pockets():
-            if math.hypot(b["x"] - px, b["y"] - py) <= MP_8BALL_POCKET_R:
+        prev_x = b.get("_px", b["x"])
+        prev_y = b.get("_py", b["y"])
+        for px, py, pr in _pockets():
+            t = _seg_circle_intersect(prev_x, prev_y, b["x"], b["y"], px, py, pr)
+            if t >= 0:
                 b["pocketed"] = True
                 b["vx"] = 0.0
                 b["vy"] = 0.0
@@ -229,6 +259,22 @@ def _try_pocket_balls(
                         }
                     )
                 break
+
+
+def _apply_pocket_gravity(out: List[dict]) -> None:
+    """Subtle attraction when a ball is near a pocket lip — simulates jaw funnelling."""
+    for b in out:
+        if b.get("pocketed"):
+            continue
+        for px, py, pr in _pockets():
+            dx = px - b["x"]
+            dy = py - b["y"]
+            dist = math.hypot(dx, dy)
+            threshold = pr * 1.3
+            if dist < threshold and dist > 0.001:
+                strength = 0.0008 * (1.0 - dist / threshold)
+                b["vx"] += (dx / dist) * strength
+                b["vy"] += (dy / dist) * strength
 
 
 def _active_balls(balls: List[dict]) -> List[dict]:
@@ -286,6 +332,8 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
         sim_elapsed_ms = int((step + 1) * MP_8BALL_SIM_DT * 1000)
         active = _active_balls(out)
         for b in active:
+            b["_px"] = b["x"]
+            b["_py"] = b["y"]
             # Apply cue-ball spin as gradual side-force (swerve) and top/back speed bias.
             if b.get("number") == 0:
                 speed_now = math.hypot(b["vx"], b["vy"])
@@ -305,8 +353,8 @@ def _simulate_shot(balls: List[dict], cue_angle: float, cue_power: float, spin_x
             b["x"] += b["vx"] * MP_8BALL_SIM_DT
             b["y"] += b["vy"] * MP_8BALL_SIM_DT
 
-        # Pocket before rails: otherwise cushion logic at x/y clamps reflects balls away from corner/side pockets.
         _try_pocket_balls(out, pocketed_numbers, replay_events, sim_elapsed_ms)
+        _apply_pocket_gravity(_active_balls(out))
 
         active = _active_balls(out)
         for b in active:

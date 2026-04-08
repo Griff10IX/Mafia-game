@@ -110,20 +110,6 @@ class EventsToggleRequest(BaseModel):
     enabled: bool
 
 
-class RandomMultiEventBundleRequest(BaseModel):
-    """enabled=true: roll 1–6 non-conflicting events and save; enabled=false: turn off bundle."""
-
-    enabled: bool
-
-
-class ToggleEventRequest(BaseModel):
-    event_id: str
-    enabled: bool
-
-
-class RandomEventRequest(BaseModel):
-    """If event_ids is omitted or empty, pick from all events. Otherwise pick from the given ids only."""
-    event_ids: Optional[List[str]] = None
 
 
 class HealPreregReferralsRequest(BaseModel):
@@ -423,15 +409,9 @@ def register(router):
     SWISS_BANK_LIMIT_START = srv.SWISS_BANK_LIMIT_START
     DEFAULT_HEALTH = srv.DEFAULT_HEALTH
     get_events_enabled = srv.get_events_enabled
-    get_random_multi_event_bundle_enabled = srv.get_random_multi_event_bundle_enabled
-    get_random_multi_event_bundle_ids = srv.get_random_multi_event_bundle_ids
-    build_resolved_event_from_event_ids = srv.build_resolved_event_from_event_ids
-    roll_random_multi_event_bundle = srv.roll_random_multi_event_bundle
-    get_combined_event = srv.get_combined_event
-    get_active_game_event = srv.get_active_game_event
-    get_disabled_event_ids = srv.get_disabled_event_ids
-    get_active_game_event_async = srv.get_active_game_event_async
-    get_override_event_id = srv.get_override_event_id
+    get_effective_event_full = srv.get_effective_event_full
+    force_rotate_random_events = srv.force_rotate_random_events
+    POSITIVE_GAME_EVENTS = srv.POSITIVE_GAME_EVENTS
     GAME_EVENTS = srv.GAME_EVENTS
 
     from routers.money import crack_safe as _crack_safe_mod
@@ -10050,25 +10030,15 @@ def register(router):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         enabled = await get_events_enabled()
-        rand_bundle_on = await get_random_multi_event_bundle_enabled()
-        bundle_ids = await get_random_multi_event_bundle_ids()
-        if rand_bundle_on and bundle_ids:
-            today_event = build_resolved_event_from_event_ids(bundle_ids)
-        else:
-            today_event = await get_active_game_event_async() if enabled else None
-        disabled_ids = await get_disabled_event_ids()
-        override_event_id = await get_override_event_id()
-        events = [
-            {"id": ev["id"], "name": ev["name"], "message": ev.get("message", ""), "enabled": ev["id"] not in disabled_ids}
-            for ev in GAME_EVENTS
-        ]
+        full = await get_effective_event_full() if enabled else {"event": None, "event_ids": [], "expires_at": None, "duration_hours": 0}
+        pool = [{"id": ev["id"], "name": ev["name"], "message": ev.get("message", "")} for ev in POSITIVE_GAME_EVENTS]
         return {
             "events_enabled": enabled,
-            "random_multi_event_bundle_enabled": rand_bundle_on,
-            "random_multi_event_bundle_ids": bundle_ids,
-            "today_event": today_event,
-            "events": events,
-            "override_event_id": override_event_id,
+            "active_event": full["event"],
+            "active_event_ids": full["event_ids"],
+            "expires_at": full["expires_at"],
+            "duration_hours": full["duration_hours"],
+            "pool": pool,
         }
 
     @router.post("/admin/events/toggle")
@@ -10081,100 +10051,21 @@ def register(router):
             {"$set": {"events_enabled": bool(enabled)}},
             upsert=True,
         )
-        return {"message": "Daily events " + ("enabled" if enabled else "disabled"), "events_enabled": bool(enabled)}
+        return {"message": "Game events " + ("enabled" if enabled else "disabled"), "events_enabled": bool(enabled)}
 
-    @router.post("/admin/events/random-multi-bundle")
-    async def admin_random_multi_event_bundle(request: RandomMultiEventBundleRequest, current_user: dict = Depends(get_current_user)):
+    @router.post("/admin/events/force-rotate")
+    async def admin_force_rotate_events(current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        if request.enabled:
-            ids = roll_random_multi_event_bundle()
-            await db.game_config.update_one(
-                {"id": "main"},
-                {
-                    "$set": {
-                        "random_multi_event_bundle_enabled": True,
-                        "random_multi_event_bundle_ids": ids,
-                    },
-                    "$unset": {"all_events_for_testing": ""},
-                },
-                upsert=True,
-            )
-            return {
-                "message": "Random multi-event bundle rolled (1, 2, or all groups — one event per group, no conflicts).",
-                "random_multi_event_bundle_enabled": True,
-                "random_multi_event_bundle_ids": ids,
-            }
-        await db.game_config.update_one(
-            {"id": "main"},
-            {
-                "$set": {"random_multi_event_bundle_enabled": False, "random_multi_event_bundle_ids": []},
-                "$unset": {"all_events_for_testing": ""},
-            },
-            upsert=True,
-        )
+        result = await force_rotate_random_events()
+        names = [srv.GAME_EVENTS_BY_ID.get(eid, {}).get("name", eid) for eid in result["event_ids"]]
         return {
-            "message": "Random multi-event bundle disabled.",
-            "random_multi_event_bundle_enabled": False,
-            "random_multi_event_bundle_ids": [],
+            "message": f"New events rolled: {', '.join(names)} ({result['duration_hours']:.1f}h)",
+            "active_event": result["event"],
+            "active_event_ids": result["event_ids"],
+            "expires_at": result["expires_at"],
+            "duration_hours": result["duration_hours"],
         }
-
-    @router.post("/admin/events/toggle-event")
-    async def admin_toggle_event(request: ToggleEventRequest, current_user: dict = Depends(get_current_user)):
-        if not _is_admin(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
-        event_id = (request.event_id or "").strip()
-        if not event_id:
-            raise HTTPException(status_code=400, detail="event_id required")
-        valid_ids = {ev["id"] for ev in GAME_EVENTS}
-        if event_id not in valid_ids:
-            raise HTTPException(status_code=400, detail="Unknown event_id")
-        enabled = request.enabled
-        if enabled:
-            await db.game_config.update_one(
-                {"id": "main"},
-                {"$pull": {"disabled_event_ids": event_id}},
-                upsert=True,
-            )
-        else:
-            await db.game_config.update_one(
-                {"id": "main"},
-                {"$addToSet": {"disabled_event_ids": event_id}},
-                upsert=True,
-            )
-        disabled_ids = await get_disabled_event_ids()
-        return {"message": f"Event '{event_id}' " + ("enabled" if enabled else "disabled"), "disabled_event_ids": disabled_ids}
-
-    @router.post("/admin/events/random-event")
-    async def admin_random_event(request: RandomEventRequest, current_user: dict = Depends(get_current_user)):
-        if not _is_admin(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
-        valid_ids = {ev["id"] for ev in GAME_EVENTS}
-        pool = request.event_ids if request.event_ids else []
-        if not pool:
-            pool = list(valid_ids)
-        else:
-            pool = [str(x).strip() for x in pool if str(x).strip() in valid_ids]
-        if not pool:
-            raise HTTPException(status_code=400, detail="No valid events to choose from")
-        chosen_id = random.choice(pool)
-        await db.game_config.update_one(
-            {"id": "main"},
-            {"$set": {"override_event_id": chosen_id}},
-            upsert=True,
-        )
-        chosen = next((ev for ev in GAME_EVENTS if ev["id"] == chosen_id), None)
-        return {"message": f"Random event set: {chosen['name'] if chosen else chosen_id}", "event": chosen.copy() if chosen else {"id": chosen_id}, "override_event_id": chosen_id}
-
-    @router.post("/admin/events/clear-override")
-    async def admin_clear_event_override(current_user: dict = Depends(get_current_user)):
-        if not _is_admin(current_user):
-            raise HTTPException(status_code=403, detail="Admin access required")
-        await db.game_config.update_one(
-            {"id": "main"},
-            {"$unset": {"override_event_id": ""}},
-        )
-        return {"message": "Event override cleared; daily rotation applies again", "override_event_id": None}
 
     def _redeem_forum_reward_lines(reward_dict: dict) -> List[str]:
         lines: List[str] = []

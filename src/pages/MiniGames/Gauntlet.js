@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo, memo } from "react";
 import { toast } from "sonner";
 import api, { getApiErrorMessage, refreshUser } from "../../utils/api";
 import useMinigamePlaysLeft from "../../hooks/useMinigamePlaysLeft";
@@ -392,17 +392,17 @@ const THEMES = [
 ];
 
 const REWARD_TIERS = [
-  { score: 1, cash: 63, respect: 5, label: "Street Punk" },
-  { score: 5, cash: 250, respect: 5, label: "Corner Boy" },
-  { score: 10, cash: 625, respect: 10, label: "Made Man" },
-  { score: 20, cash: 1500, respect: 20, label: "Underboss" },
-  { score: 35, cash: 3125, respect: 20, label: "Capo" },
-  { score: 50, cash: 6250, respect: 40, label: "Don" },
+  { score: 25, cash: 63, respect: 0, label: "Street Punk" },
+  { score: 50, cash: 250, respect: 5, label: "Corner Boy" },
+  { score: 100, cash: 625, respect: 10, label: "Made Man" },
+  { score: 200, cash: 1500, respect: 15, label: "Underboss" },
+  { score: 350, cash: 3125, respect: 25, label: "Capo" },
+  { score: 500, cash: 6250, respect: 40, label: "Don" },
 ];
 const MAX_CASH_CAP = 250_000;
 const MAX_RESPECT_CAP = 300;
-const CASH_PER_GATE_AFTER_50 = 500;
-const RESPECT_PER_GATE_AFTER_50 = 2;
+const CASH_PER_GATE_AFTER_MAX = 500;
+const RESPECT_PER_GATE_AFTER_MAX = 1;
 
 function getReward(score) {
   let cash = 0, respect = 0, label = "Nobody", tier = -1;
@@ -412,22 +412,22 @@ function getReward(score) {
       label = REWARD_TIERS[i].label; tier = i;
     }
   }
-  if (score > 50) {
-    const extra = score - 50;
-    cash += Math.min(MAX_CASH_CAP - cash, extra * CASH_PER_GATE_AFTER_50);
-    respect += Math.min(MAX_RESPECT_CAP - respect, extra * RESPECT_PER_GATE_AFTER_50);
+  if (score > 500) {
+    const extra = score - 500;
+    cash += Math.min(MAX_CASH_CAP - cash, extra * CASH_PER_GATE_AFTER_MAX);
+    respect += Math.min(MAX_RESPECT_CAP - respect, extra * RESPECT_PER_GATE_AFTER_MAX);
   }
   return { cash: Math.min(MAX_CASH_CAP, cash), respect: Math.min(MAX_RESPECT_CAP, respect), label, tier };
 }
 
 function getNextTier(score) {
-  if (score >= 50) return { score: score + 10, cash: CASH_PER_GATE_AFTER_50 * 10, respect: RESPECT_PER_GATE_AFTER_50 * 10, label: `${score + 10} gates` };
+  if (score >= 500) return { score: score + 10, cash: CASH_PER_GATE_AFTER_MAX * 10, respect: RESPECT_PER_GATE_AFTER_MAX * 10, label: `${score + 10} gates` };
   for (const t of REWARD_TIERS) { if (score < t.score) return t; }
   return null;
 }
 
 // ─── BACKGROUND ELEMENTS ─────────────────────────────────────────────────────
-function BgElements({ theme, bgOffset, tick }) {
+const BgElements = memo(function BgElements({ theme, bgOffset, tick }) {
   const t = tick || 0;
   if (theme.bgElements === "buildings") {
     return (
@@ -644,10 +644,10 @@ function BgElements({ theme, bgOffset, tick }) {
     );
   }
   return null;
-}
+});
 
 // ─── PIPE ────────────────────────────────────────────────────────────────────
-function Pipe({ x, topHeight, gap, theme }) {
+const Pipe = memo(function Pipe({ x, topHeight, gap, theme }) {
   const pipeFill = theme?.pipe || "var(--noir-panel)";
   const patternId = `brickPattern-${theme?.id || "classic"}`;
   const bottomY = topHeight + gap;
@@ -666,7 +666,7 @@ function Pipe({ x, topHeight, gap, theme }) {
       <rect x={x} y={bottomY} width="3" height={bottomHeight} fill="rgba(255,255,255,0.10)" />
     </g>
   );
-}
+});
 
 // ─── CHARACTER SELECT SCREEN ─────────────────────────────────────────────────
 function CharacterSelect({ characters, selected, onSelect, money, bestScore, onClose, onBuy, ownedChars = [] }) {
@@ -1030,12 +1030,17 @@ export default function Gauntlet() {
     return "ontouchstart" in window || navigator.maxTouchPoints > 0;
   }, []);
 
-  // Ambient animation tick (for backgrounds when not playing)
+  // Ambient animation tick — throttled to ~10fps, paused during gameplay
   useEffect(() => {
-    const run = () => { setTick(t => t + 1); animTickRef.current = requestAnimationFrame(run); };
+    if (gameState === "playing") return;
+    let last = 0;
+    const run = (now) => {
+      if (now - last >= 100) { last = now; setTick(t => t + 1); }
+      animTickRef.current = requestAnimationFrame(run);
+    };
     animTickRef.current = requestAnimationFrame(run);
     return () => cancelAnimationFrame(animTickRef.current);
-  }, []);
+  }, [gameState]);
 
   useEffect(() => {
     let mounted = true;
@@ -1341,7 +1346,7 @@ export default function Gauntlet() {
         </div>
 
         {/* Stats bar */}
-        <div style={{ display: "flex", gap: "18px", marginBottom: "10px", padding: "8px 16px", background: "rgba(var(--noir-primary-rgb),0.06)", border: "1px solid var(--noir-border-light)", borderRadius: "6px", width: "100%", maxWidth: "min(900px, 100%)", marginLeft: "auto", marginRight: "auto", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", gap: "18px", marginBottom: "10px", padding: "8px 16px", background: "rgba(var(--noir-primary-rgb),0.06)", border: "1px solid var(--noir-border-light)", borderRadius: "6px", width: "100%", maxWidth: "min(480px, 100%)", marginLeft: "auto", marginRight: "auto", justifyContent: "space-between" }}>
           <div style={{ textAlign: "center", flex: 1 }}>
             <div style={{ color: "var(--noir-muted)", fontSize: "9px", letterSpacing: "0.1em" }}>BANK</div>
             <div style={{ color: "var(--noir-primary)", fontSize: "16px", fontWeight: "700" }}>${Number(money || 0).toLocaleString()}</div>
@@ -1359,7 +1364,7 @@ export default function Gauntlet() {
         </div>
 
         {/* Controls row */}
-        <div style={{ marginBottom: "10px", padding: "8px 12px", background: "var(--noir-content)", border: "1px solid var(--noir-border-light)", borderRadius: "6px", width: "100%", maxWidth: "min(900px, 100%)", marginLeft: "auto", marginRight: "auto" }}>
+        <div style={{ marginBottom: "10px", padding: "8px 12px", background: "var(--noir-content)", border: "1px solid var(--noir-border-light)", borderRadius: "6px", width: "100%", maxWidth: "min(480px, 100%)", marginLeft: "auto", marginRight: "auto" }}>
           {/* Character + World pickers */}
           <div style={{ display: "flex", gap: 8, marginBottom: 8, justifyContent: "center" }}>
             <button type="button" onClick={() => setShowCharSelect(true)}
@@ -1406,7 +1411,7 @@ export default function Gauntlet() {
         {/* Game viewport */}
         <div className="w-full flex flex-col lg:flex-row lg:items-start lg:justify-center gap-4 lg:gap-6">
           <div style={{
-            position: "relative", width: "100%", maxWidth: "min(820px, 100%)", marginLeft: "auto", marginRight: "auto", borderRadius: "10px",
+            position: "relative", width: "100%", maxWidth: "min(480px, 100%)", marginLeft: "auto", marginRight: "auto", borderRadius: "10px",
             overflow: "hidden", border: "2px solid var(--noir-border-mid)",
             boxShadow: "0 0 40px rgba(var(--noir-primary-rgb),0.10), inset 0 0 40px rgba(0,0,0,0.45)",
             cursor: "pointer", touchAction: "manipulation", userSelect: "none",
@@ -1623,7 +1628,7 @@ export default function Gauntlet() {
         </div>
 
         {/* Reward tiers */}
-        <div style={{ marginTop: "10px", display: "flex", gap: "6px", flexWrap: "wrap", justifyContent: "center", width: "100%", maxWidth: "min(900px, 100%)", marginLeft: "auto", marginRight: "auto" }}>
+        <div style={{ marginTop: "10px", display: "flex", gap: "6px", flexWrap: "wrap", justifyContent: "center", width: "100%", maxWidth: "min(920px, 100%)", marginLeft: "auto", marginRight: "auto" }}>
           {REWARD_TIERS.map((t, i) => {
             const active = score >= t.score && gameState === "dead";
             const current = reward.tier === i && gameState === "dead";

@@ -536,16 +536,12 @@ export default function Admin() {
   });
 
   const [eventsEnabled, setEventsEnabled] = useState(true);
-  const [randomMultiEventBundleEnabled, setRandomMultiEventBundleEnabled] = useState(false);
-  const [randomMultiEventBundleIds, setRandomMultiEventBundleIds] = useState([]);
-  const [randomBundleLoading, setRandomBundleLoading] = useState(false);
-  const [todayEvent, setTodayEvent] = useState(null);
-  const [eventList, setEventList] = useState([]);
-  const [eventToggleLoadingId, setEventToggleLoadingId] = useState(null);
-  const [overrideEventId, setOverrideEventId] = useState(null);
-  const [eventRandomLoading, setEventRandomLoading] = useState(false);
-  const [eventClearOverrideLoading, setEventClearOverrideLoading] = useState(false);
-  const [selectedForRandomPool, setSelectedForRandomPool] = useState({});
+  const [activeEvent, setActiveEvent] = useState(null);
+  const [activeEventIds, setActiveEventIds] = useState([]);
+  const [eventsExpiresAt, setEventsExpiresAt] = useState(null);
+  const [eventsDurationHours, setEventsDurationHours] = useState(0);
+  const [eventPool, setEventPool] = useState([]);
+  const [forceRotateLoading, setForceRotateLoading] = useState(false);
   const [cfBotBlockEnabled, setCfBotBlockEnabled] = useState(null);
   const [cfBotBlockLoading, setCfBotBlockLoading] = useState(false);
   const [cfBotBlockError, setCfBotBlockError] = useState(null);
@@ -1391,18 +1387,18 @@ export default function Admin() {
     try {
       const res = await api.get('/admin/events');
       setEventsEnabled(!!res.data?.events_enabled);
-      setRandomMultiEventBundleEnabled(!!res.data?.random_multi_event_bundle_enabled);
-      setRandomMultiEventBundleIds(res.data?.random_multi_event_bundle_ids ?? []);
-      setTodayEvent(res.data?.today_event ?? null);
-      setEventList(res.data?.events ?? []);
-      setOverrideEventId(res.data?.override_event_id ?? null);
+      setActiveEvent(res.data?.active_event ?? null);
+      setActiveEventIds(res.data?.active_event_ids ?? []);
+      setEventsExpiresAt(res.data?.expires_at ?? null);
+      setEventsDurationHours(res.data?.duration_hours ?? 0);
+      setEventPool(res.data?.pool ?? []);
     } catch {
       setEventsEnabled(true);
-      setRandomMultiEventBundleEnabled(false);
-      setRandomMultiEventBundleIds([]);
-      setTodayEvent(null);
-      setEventList([]);
-      setOverrideEventId(null);
+      setActiveEvent(null);
+      setActiveEventIds([]);
+      setEventsExpiresAt(null);
+      setEventsDurationHours(0);
+      setEventPool([]);
     }
   };
 
@@ -2419,84 +2415,17 @@ export default function Admin() {
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
   };
 
-  const handleRollRandomMultiBundle = async () => {
-    setRandomBundleLoading(true);
+  const handleForceRotate = async () => {
+    setForceRotateLoading(true);
     try {
-      const res = await api.post('/admin/events/random-multi-bundle', { enabled: true });
-      setRandomMultiEventBundleEnabled(!!res.data?.random_multi_event_bundle_enabled);
-      setRandomMultiEventBundleIds(res.data?.random_multi_event_bundle_ids ?? []);
-      toast.success(res.data?.message || 'Bundle rolled');
-      fetchEventsStatus();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed');
-    } finally {
-      setRandomBundleLoading(false);
-    }
-  };
-
-  const handleDisableRandomMultiBundle = async () => {
-    setRandomBundleLoading(true);
-    try {
-      const res = await api.post('/admin/events/random-multi-bundle', { enabled: false });
-      setRandomMultiEventBundleEnabled(!!res.data?.random_multi_event_bundle_enabled);
-      setRandomMultiEventBundleIds(res.data?.random_multi_event_bundle_ids ?? []);
-      toast.success(res.data?.message || 'Bundle disabled');
-      fetchEventsStatus();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed');
-    } finally {
-      setRandomBundleLoading(false);
-    }
-  };
-
-  const handleToggleEvent = async (eventId, enabled) => {
-    setEventToggleLoadingId(eventId);
-    try {
-      await api.post('/admin/events/toggle-event', { event_id: eventId, enabled });
-      toast.success(`Event ${enabled ? 'enabled' : 'disabled'}`);
+      const res = await api.post('/admin/events/force-rotate');
+      toast.success(res.data?.message || 'Events rotated');
       await fetchEventsStatus();
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to toggle event');
+      toast.error(e.response?.data?.detail || 'Failed to rotate events');
     } finally {
-      setEventToggleLoadingId(null);
+      setForceRotateLoading(false);
     }
-  };
-
-  const handleRandomEvent = async (fromSelected) => {
-    setEventRandomLoading(true);
-    try {
-      const body = fromSelected
-        ? { event_ids: eventList.filter((ev) => selectedForRandomPool[ev.id]).map((ev) => ev.id) }
-        : {};
-      if (fromSelected && (!body.event_ids || body.event_ids.length === 0)) {
-        toast.error('Select at least one event for the random pool');
-        return;
-      }
-      const res = await api.post('/admin/events/random-event', body.event_ids?.length ? body : {});
-      toast.success(res.data?.message || 'Random event set');
-      await fetchEventsStatus();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to set random event');
-    } finally {
-      setEventRandomLoading(false);
-    }
-  };
-
-  const handleClearEventOverride = async () => {
-    setEventClearOverrideLoading(true);
-    try {
-      await api.post('/admin/events/clear-override');
-      toast.success('Override cleared; daily rotation applies');
-      await fetchEventsStatus();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to clear override');
-    } finally {
-      setEventClearOverrideLoading(false);
-    }
-  };
-
-  const toggleRandomPoolSelection = (eventId) => {
-    setSelectedForRandomPool((prev) => ({ ...prev, [eventId]: !prev[eventId] }));
   };
 
   const fetchCfBotBlockStatus = async () => {
@@ -9259,7 +9188,7 @@ export default function Admin() {
           badge={
             <span className="text-[10px] font-heading">
               <span className={eventsEnabled ? 'text-emerald-400' : 'text-red-400'}>{eventsEnabled ? 'On' : 'Off'}</span>
-              {todayEvent?.name && <span className="text-mutedForeground"> · {todayEvent.name}</span>}
+              {activeEvent?.name && <span className="text-mutedForeground"> · {activeEvent.name}</span>}
             </span>
           }
           toolAnchor="events"
@@ -9270,69 +9199,33 @@ export default function Admin() {
           <div className="p-3 space-y-2">
             <div className="flex flex-wrap gap-2">
               <BtnPrimary onClick={handleToggleEvents}>{eventsEnabled ? 'Disable' : 'Enable'} Events</BtnPrimary>
-              <BtnPrimary onClick={handleRollRandomMultiBundle} disabled={randomBundleLoading}>
-                {randomBundleLoading ? '…' : 'Roll random bundle'}
+              <BtnPrimary onClick={handleForceRotate} disabled={forceRotateLoading}>
+                {forceRotateLoading ? '…' : 'Force Rotate'}
               </BtnPrimary>
-              <BtnSecondary onClick={handleDisableRandomMultiBundle} disabled={randomBundleLoading || !randomMultiEventBundleEnabled}>
-                Disable bundle
-              </BtnSecondary>
             </div>
             <p className="text-[10px] text-mutedForeground">
-              Random bundle: picks 1, 2, or all modifier groups at once (one random event per group — no conflicting multipliers). Roll again anytime.
+              Events auto-rotate randomly (1-2 positive events, 1-24h duration). Force Rotate picks new events immediately.
             </p>
-            {randomMultiEventBundleEnabled && randomMultiEventBundleIds?.length > 0 && (
-              <p className="text-[10px] text-foreground/90">
-                Active event ids: {randomMultiEventBundleIds.join(', ')}
-              </p>
+            {eventsEnabled && activeEvent && activeEvent.id !== 'none' && (
+              <div className="rounded border border-primary/30 bg-primary/10 px-2.5 py-2 space-y-1">
+                <p className="text-xs font-medium text-foreground">
+                  Active: {activeEventIds.map((eid) => (eventPool.find((e) => e.id === eid) || {}).name || eid).join(' + ')}
+                </p>
+                {eventsExpiresAt && (
+                  <p className="text-[10px] text-mutedForeground">
+                    Duration: {eventsDurationHours.toFixed(1)}h · Expires: {new Date(eventsExpiresAt).toLocaleString()}
+                  </p>
+                )}
+              </div>
             )}
-            <div className="pt-2 border-t border-primary/20 space-y-2">
-              <p className="text-xs font-medium text-foreground">Choose random event</p>
-              <div className="flex flex-wrap gap-2 items-center">
-                <BtnSecondary onClick={() => handleRandomEvent(false)} disabled={eventRandomLoading}>
-                  {eventRandomLoading ? '...' : 'Random (from all)'}
-                </BtnSecondary>
-                <BtnSecondary onClick={() => handleRandomEvent(true)} disabled={eventRandomLoading}>
-                  {eventRandomLoading ? '...' : 'Random (from selected)'}
-                </BtnSecondary>
-                <span className="text-[10px] text-mutedForeground">Tick &quot;In pool&quot; below to choose from specific events only.</span>
-              </div>
-              {overrideEventId && (
-                <div className="flex flex-wrap gap-2 items-center py-1.5 px-2 rounded bg-primary/10 border border-primary/30">
-                  <span className="text-xs text-foreground">Overridden: {eventList.find((e) => e.id === overrideEventId)?.name ?? overrideEventId}</span>
-                  <BtnSecondary onClick={handleClearEventOverride} disabled={eventClearOverrideLoading}>
-                    {eventClearOverrideLoading ? '...' : 'Clear override'}
-                  </BtnSecondary>
-                </div>
-              )}
-            </div>
             <div className="pt-2 border-t border-primary/20">
-              <p className="text-xs font-medium text-foreground mb-1">Global events</p>
-              <p className="text-[10px] text-mutedForeground mb-2">Enable or disable each event type. Disabled events are skipped on their day (no event that day). Event types are defined in code (GAME_EVENTS).</p>
-              <div className="flex flex-wrap gap-2 items-center mb-2">
-                <span className="text-[10px] text-mutedForeground">In pool for Random (from selected):</span>
-                <BtnSecondary onClick={() => setSelectedForRandomPool(Object.fromEntries((eventList || []).map((ev) => [ev.id, true])))}>
-                  Select all
-                </BtnSecondary>
-                <BtnSecondary onClick={() => setSelectedForRandomPool({})}>
-                  Deselect all
-                </BtnSecondary>
-              </div>
-              <div className="space-y-1.5 max-h-64 overflow-y-auto">
-                {eventList.map((ev) => (
-                  <div key={ev.id} className="flex flex-wrap items-center gap-2 py-1.5 px-2 rounded bg-black/20">
-                    <label className="flex items-center gap-1 shrink-0 cursor-pointer" title="Include in random pool (when using Random from selected)">
-                      <input type="checkbox" checked={!!selectedForRandomPool[ev.id]} onChange={() => toggleRandomPoolSelection(ev.id)} className="rounded border-primary/50" />
-                      <span className="text-[10px] text-mutedForeground">In pool</span>
-                    </label>
+              <p className="text-xs font-medium text-foreground mb-1">Event pool ({eventPool.length} positive events)</p>
+              <div className="space-y-1 max-h-48 overflow-y-auto">
+                {eventPool.map((ev) => (
+                  <div key={ev.id} className="flex items-center gap-2 py-1 px-2 rounded bg-black/20">
                     <span className="text-xs font-medium text-foreground min-w-0 truncate flex-1">{ev.name}</span>
-                    {todayEvent?.id === ev.id && <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/30 text-primary font-medium shrink-0">Today</span>}
+                    {activeEventIds.includes(ev.id) && <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/30 text-primary font-medium shrink-0">Active</span>}
                     <span className="text-[10px] text-mutedForeground truncate max-w-[200px]" title={ev.message}>{ev.message || ev.id}</span>
-                    <BtnSecondary
-                      onClick={() => handleToggleEvent(ev.id, !ev.enabled)}
-                      disabled={eventToggleLoadingId !== null}
-                    >
-                      {eventToggleLoadingId === ev.id ? '...' : ev.enabled ? 'Disable' : 'Enable'}
-                    </BtnSecondary>
                   </div>
                 ))}
               </div>
