@@ -182,6 +182,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Remove respect points', categoryId: 'admin-players', collapseKey: 'player', keywords: ['respect', 'remove', 'deduct', 'take'] },
   { label: 'Points Provenance', categoryId: 'admin-donations', collapseKey: 'donationsProvenance', keywords: ['chargeback', 'provenance', 'payment session', 'points tree'], adminOnly: true },
   { label: 'Add Tokens', categoryId: 'admin-players', collapseKey: 'tokens', keywords: ['tokens', 'crime', 'gta', 'melt', 'booze', 'travel', 'oc', 'racket', 'jailbust'] },
+  { label: 'Token Inspector', categoryId: 'admin-players', collapseKey: 'tokens', keywords: ['token', 'inspect', 'balance', 'boost', 'expiry', 'held', 'used', 'purchased', 'active'] },
   { label: 'Clear pool cue upgrades', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-user-adjust-hub', keywords: ['pool', '8-ball', '8 ball', 'cue', 'upgrades', 'reset', 'minigame'] },
   { label: 'Founding Member', categoryId: 'admin-players', collapseKey: 'founding', keywords: ['founding', 'member', 'badge', 'founder'] },
   { label: 'Add Money', categoryId: 'admin-players', collapseKey: 'money', keywords: ['money', 'cash', 'add', 'give'] },
@@ -1136,6 +1137,9 @@ export default function Admin() {
   const [redeemCodesLoading, setRedeemCodesLoading] = useState(false);
   const [redeemCodeCreateLoading, setRedeemCodeCreateLoading] = useState(false);
   const [tokenTypes, setTokenTypes] = useState([]);
+  const [tokenInspectUser, setTokenInspectUser] = useState('');
+  const [tokenInspectData, setTokenInspectData] = useState(null);
+  const [tokenInspectLoading, setTokenInspectLoading] = useState(false);
   const [redeemForm, setRedeemForm] = useState({
     code: '',
     max_uses: '',
@@ -2808,6 +2812,17 @@ export default function Admin() {
       const response = await api.post(`/admin/add-tokens?target_username=${formData.targetUsername}&token_type=${formData.tokenType}&amount=${formData.tokenAmount}`);
       toast.success(response.data.message);
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  const handleTokenInspect = async () => {
+    const u = (tokenInspectUser || formData.targetUsername || '').trim();
+    if (!u) { toast.error('Enter a username'); return; }
+    setTokenInspectLoading(true);
+    try {
+      const res = await api.get(`/admin/user-tokens?target_username=${encodeURIComponent(u)}`);
+      setTokenInspectData(res.data);
+    } catch (err) { toast.error(err.response?.data?.detail || 'Failed to fetch token data'); }
+    setTokenInspectLoading(false);
   };
 
   const handlePoolClearCueUpgrades = async () => {
@@ -8079,6 +8094,107 @@ export default function Admin() {
               <Input type="number" min="1" value={formData.tokenAmount} onChange={(e) => setFormData((prev) => ({ ...prev, tokenAmount: parseInt(e.target.value) || 1 }))} className="w-20" />
               <BtnPrimary onClick={handleAddTokens}>Give</BtnPrimary>
             </ActionRow>
+
+            <ActionRow icon={Eye} label="Token Inspector" description="Look up a player's full token state: balances, active boosts, expiry, purchases, and usage history.">
+              <Input
+                placeholder="Username (or uses target above)"
+                value={tokenInspectUser}
+                onChange={(e) => setTokenInspectUser(e.target.value)}
+                className="w-44"
+              />
+              <BtnPrimary onClick={handleTokenInspect} disabled={tokenInspectLoading}>
+                {tokenInspectLoading ? 'Loading...' : 'Inspect'}
+              </BtnPrimary>
+            </ActionRow>
+
+            {tokenInspectData && (
+              <div style={{ background: 'var(--bg-card, #1a1a2e)', border: '1px solid var(--border-color, #333)', borderRadius: 8, padding: 16, marginBottom: 16 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <h4 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>Tokens for {tokenInspectData.username}</h4>
+                  <button onClick={() => setTokenInspectData(null)} style={{ background: 'none', border: 'none', color: '#999', cursor: 'pointer', fontSize: 18 }}>&times;</button>
+                </div>
+
+                <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 12, fontSize: 13 }}>
+                  <span style={{ color: '#aaa' }}>Total held: <strong style={{ color: '#fff' }}>{tokenInspectData.total_held}</strong></span>
+                  <span style={{ color: '#aaa' }}>Tribute tokens: <strong style={{ color: '#fff' }}>{tokenInspectData.tribute_tokens}</strong></span>
+                </div>
+
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13, marginBottom: 16 }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid #444', textAlign: 'left' }}>
+                      <th style={{ padding: '6px 8px', color: '#aaa' }}>Token</th>
+                      <th style={{ padding: '6px 8px', color: '#aaa' }}>Held</th>
+                      <th style={{ padding: '6px 8px', color: '#aaa' }}>Boost Status</th>
+                      <th style={{ padding: '6px 8px', color: '#aaa' }}>Active Until</th>
+                      {tokenInspectData.tokens.some(t => t.token_expires_at) && <th style={{ padding: '6px 8px', color: '#aaa' }}>Token Expiry</th>}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tokenInspectData.tokens.map((t) => (
+                      <tr key={t.token_type} style={{ borderBottom: '1px solid #333' }}>
+                        <td style={{ padding: '6px 8px' }}>{t.label}</td>
+                        <td style={{ padding: '6px 8px', fontWeight: 600, color: t.held > 0 ? '#4ade80' : '#666' }}>{t.held}</td>
+                        <td style={{ padding: '6px 8px' }}>
+                          {t.boost_active ? <span style={{ color: '#4ade80' }}>Active</span>
+                            : t.boost_expired ? <span style={{ color: '#f87171' }}>Expired</span>
+                            : <span style={{ color: '#666' }}>--</span>}
+                        </td>
+                        <td style={{ padding: '6px 8px', color: '#aaa', fontSize: 12 }}>
+                          {t.active_until ? new Date(t.active_until).toLocaleString() : '--'}
+                        </td>
+                        {tokenInspectData.tokens.some(tok => tok.token_expires_at) && (
+                          <td style={{ padding: '6px 8px', fontSize: 12, color: t.token_expired ? '#f87171' : '#aaa' }}>
+                            {t.token_expires_at ? new Date(t.token_expires_at).toLocaleString() : '--'}
+                            {t.token_expired && ' (expired)'}
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {tokenInspectData.game_pass && (
+                  <div style={{ marginBottom: 16 }}>
+                    <h5 style={{ margin: '0 0 8px', fontSize: 14, fontWeight: 600, color: '#c084fc' }}>Game Pass</h5>
+                    <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', fontSize: 13 }}>
+                      <span style={{ color: '#aaa' }}>Tokens: <strong style={{ color: '#fff' }}>{tokenInspectData.game_pass.tokens_held}</strong></span>
+                      <span style={{ color: '#aaa' }}>VIP Rewards: <strong style={{ color: tokenInspectData.game_pass.rewards_granted ? '#4ade80' : '#666' }}>{tokenInspectData.game_pass.rewards_granted ? 'Granted' : 'No'}</strong></span>
+                      <span style={{ color: '#aaa' }}>Micro Tier: <strong style={{ color: '#fff' }}>{tokenInspectData.game_pass.last_granted_micro_tier}</strong></span>
+                      <span style={{ color: '#aaa' }}>Free Tier: <strong style={{ color: '#fff' }}>{tokenInspectData.game_pass.free_last_micro_tier_granted}</strong></span>
+                      <span style={{ color: '#aaa' }}>Rank Points: <strong style={{ color: '#fff' }}>{(tokenInspectData.game_pass.rank_points || 0).toLocaleString()}</strong></span>
+                    </div>
+                  </div>
+                )}
+
+                {(tokenInspectData.recent_token_purchases?.length > 0 || tokenInspectData.recent_token_activity?.length > 0) && (
+                  <div>
+                    <h5 style={{ margin: '0 0 8px', fontSize: 14, fontWeight: 600 }}>Recent Token Activity</h5>
+                    <div style={{ maxHeight: 200, overflowY: 'auto', fontSize: 12, border: '1px solid #333', borderRadius: 6, padding: 8 }}>
+                      {(tokenInspectData.recent_token_purchases || []).map((ev, i) => (
+                        <div key={`p-${i}`} style={{ padding: '4px 0', borderBottom: '1px solid #222', color: '#aaa' }}>
+                          <span style={{ color: '#60a5fa' }}>Purchase</span>{' '}
+                          {ev.event_ref?.replace('buy-token:', '') || '?'}{' '}
+                          <span style={{ color: '#f87171' }}>-{Math.abs(ev.points || 0)} pts</span>{' '}
+                          <span style={{ color: '#666', fontSize: 11 }}>{ev.created_at ? new Date(ev.created_at).toLocaleString() : ''}</span>
+                        </div>
+                      ))}
+                      {(tokenInspectData.recent_token_activity || []).map((ev, i) => (
+                        <div key={`a-${i}`} style={{ padding: '4px 0', borderBottom: '1px solid #222', color: '#aaa' }}>
+                          <span style={{ color: '#fbbf24' }}>{ev.action === 'inventory_auto_rank_exchange' ? 'Exchange' : 'Store'}</span>{' '}
+                          {ev.details?.item || ev.action}{' '}
+                          {ev.details?.amount ? `x${ev.details.amount}` : ''}{' '}
+                          {ev.details?.cost ? <span style={{ color: '#f87171' }}>-{ev.details.cost} pts</span> : ''}
+                          {' '}<span style={{ color: '#666', fontSize: 11 }}>{ev.created_at ? new Date(ev.created_at).toLocaleString() : ''}</span>
+                        </div>
+                      ))}
+                      {(!tokenInspectData.recent_token_purchases?.length && !tokenInspectData.recent_token_activity?.length) && (
+                        <span style={{ color: '#666' }}>No recent token activity found.</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             <ActionRow icon={Layers} label="Clear pool cue upgrades" description="8-ball minigame: reset power/curve/luck/aim/control on every owned cue (target username above)">
               <BtnDanger onClick={handlePoolClearCueUpgrades}>Clear all</BtnDanger>

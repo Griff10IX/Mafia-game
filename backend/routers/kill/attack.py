@@ -1281,6 +1281,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 }
                 if target.get("is_bodyguard"):
                     inc["robot_bodyguard_kills"] = 1
+                    inc["total_kills"] = 1
                 reward_respect = int((rewards.get("respect_points", 0) or 0) * hitlist_mult)
                 respect_drop = maybe_respect_points_drop()
                 inc["respect_points"] = reward_respect + (respect_drop or 0)

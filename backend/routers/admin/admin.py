@@ -1899,6 +1899,122 @@ def register(router):
             raise HTTPException(status_code=403, detail="Admin access required")
         return {"token_types": list(ADMIN_TOKEN_TYPES.keys())}
 
+    @router.get("/admin/user-tokens")
+    async def admin_user_tokens(
+        target_username: str,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Inspect a user's full token state: balances, active boosts, expiry, and recent token activity."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        username_pattern = _username_pattern(target_username)
+        token_fields = {"_id": 0, "id": 1, "username": 1}
+        for cfg in TOKEN_CONFIG.values():
+            token_fields[cfg["count_field"]] = 1
+            token_fields[cfg["until_field"]] = 1
+            if cfg.get("expiry_field"):
+                token_fields[cfg["expiry_field"]] = 1
+        token_fields["tribute_tokens"] = 1
+        token_fields["rank_xp_pass_rewards_granted"] = 1
+        token_fields["rank_xp_pass_tier_snapshot"] = 1
+        token_fields["rank_xp_pass_pending_tier_snapshot"] = 1
+        token_fields["rank_xp_pass_last_granted_micro_tier"] = 1
+        token_fields["rank_xp_pass_free_last_micro_tier_granted"] = 1
+        token_fields["rank_xp_pass_prestige_carry_rp"] = 1
+        token_fields["rank_points"] = 1
+        target = await db.users.find_one({"username": username_pattern}, token_fields)
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        now = datetime.now(timezone.utc)
+        tokens = []
+        total_held = 0
+        for ttype, cfg in TOKEN_CONFIG.items():
+            count = int(target.get(cfg["count_field"]) or 0)
+            until_raw = target.get(cfg["until_field"])
+            until_iso = str(until_raw) if until_raw else None
+            active = False
+            expired = False
+            if until_iso:
+                try:
+                    until_dt = datetime.fromisoformat(until_iso.replace("Z", "+00:00"))
+                    if until_dt.tzinfo is None:
+                        until_dt = until_dt.replace(tzinfo=timezone.utc)
+                    active = until_dt > now
+                    expired = not active
+                except Exception:
+                    pass
+
+            entry = {
+                "token_type": ttype,
+                "label": ttype.replace("_", " ").title(),
+                "held": count,
+                "active_until": until_iso,
+                "boost_active": active,
+                "boost_expired": expired,
+            }
+            if cfg.get("expiry_field"):
+                exp_raw = target.get(cfg["expiry_field"])
+                exp_iso = str(exp_raw) if exp_raw else None
+                token_expired = False
+                if exp_iso:
+                    try:
+                        exp_dt = datetime.fromisoformat(exp_iso.replace("Z", "+00:00"))
+                        if exp_dt.tzinfo is None:
+                            exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+                        token_expired = exp_dt <= now
+                    except Exception:
+                        pass
+                entry["token_expires_at"] = exp_iso
+                entry["token_expired"] = token_expired
+            total_held += count
+            tokens.append(entry)
+
+        game_pass = {
+            "tokens_held": int(target.get("rank_xp_pass_tokens") or 0),
+            "rewards_granted": bool(target.get("rank_xp_pass_rewards_granted")),
+            "tier_snapshot": target.get("rank_xp_pass_tier_snapshot"),
+            "pending_tier_snapshot": target.get("rank_xp_pass_pending_tier_snapshot"),
+            "last_granted_micro_tier": int(target.get("rank_xp_pass_last_granted_micro_tier") or 0),
+            "free_last_micro_tier_granted": int(target.get("rank_xp_pass_free_last_micro_tier_granted") or 0),
+            "prestige_carry_rp": int(target.get("rank_xp_pass_prestige_carry_rp") or 0),
+            "rank_points": int(target.get("rank_points") or 0),
+        }
+
+        activity_actions = [
+            "store_purchase",
+            "inventory_auto_rank_exchange",
+        ]
+        recent_activity = []
+        cursor = db.activity_log.find(
+            {"user_id": target["id"], "action": {"$in": activity_actions}},
+            {"_id": 0, "action": 1, "details": 1, "created_at": 1},
+        ).sort("created_at", -1).limit(50)
+        async for doc in cursor:
+            details = doc.get("details") or {}
+            item = str(details.get("item") or "")
+            if "token" in item.lower() or doc.get("action") == "inventory_auto_rank_exchange":
+                recent_activity.append(doc)
+
+        point_events = []
+        pe_cursor = db.point_ledger_events.find(
+            {"user_id": target["id"], "event_ref": {"$regex": "^buy-token"}},
+            {"_id": 0, "event_type": 1, "event_ref": 1, "points": 1, "created_at": 1},
+        ).sort("created_at", -1).limit(30)
+        async for doc in pe_cursor:
+            point_events.append(doc)
+
+        return {
+            "username": target.get("username"),
+            "user_id": target["id"],
+            "tokens": tokens,
+            "total_held": total_held,
+            "tribute_tokens": int(target.get("tribute_tokens") or 0),
+            "game_pass": game_pass,
+            "recent_token_activity": recent_activity,
+            "recent_token_purchases": point_events,
+        }
+
     @router.post("/admin/add-tokens")
     async def admin_add_tokens(
         target_username: str,

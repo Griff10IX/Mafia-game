@@ -374,7 +374,7 @@ def register(router):
         attempts = await db.attack_attempts.find(
             {"outcome": "killed"},
             {"_id": 0}
-        ).sort("created_at", -1).to_list(200)
+        ).sort("created_at", -1).to_list(500)
 
         all_user_ids = set()
         for a in attempts:
