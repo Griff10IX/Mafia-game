@@ -6,6 +6,16 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-08 19:30 UTC[/color][/b] — [b]Grave Robber: rarer jail on digs[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Money → Grave Robber[/b] — jail from digging is no longer guaranteed every attempt. Each dig now has about a [b]4%[/b] chance to bring heat ([b]short jail[/b] when caught, [b]unbreakable[/b] for that term). When caught, jail is [b]60s[/b] (previously [b]90s on every dig[/b]). The [b]How it works[/b] panel shows the current heat chance.[/color]
+[*][color=#888888][b]Player action:[/b] No setup needed. Open [b]Money → Grave Robber[/b] for the updated line; runs should feel much less interrupted by jail.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-08 17:00 UTC[/color][/b] — [b]Kills vs NPCs, Stats defaults, and sports book pool info[/b][/size]
 [quote]
 [list]

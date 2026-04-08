@@ -6,12 +6,12 @@ import time
 import uuid
 import os
 import sys
-from typing import Optional
 from pydantic import BaseModel
 from fastapi import Depends, HTTPException, Request
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from server import db, get_current_user, get_current_user_verified, log_activity, send_notification
+from utils.bank_economy_settings import get_bank_economy_config, interest_option_for_hours
 
 # Set from server in register() (server keeps constants for UserProfile / new-user / auth/me)
 SWISS_BANK_LIMIT_START = None
@@ -21,8 +21,7 @@ security_module = None
 _username_pattern_fn = None
 check_rate_limit = None
 
-# Caching: meta is static (same for all users), overview per-user with short TTL
-_bank_meta_cache: Optional[dict] = None
+# Overview per-user with short TTL (bank meta reads live game_settings)
 _overview_cache: dict = {}  # user_id -> (payload, expires_at)
 _OVERVIEW_CACHE_TTL_SEC = 10
 _OVERVIEW_CACHE_MAX_ENTRIES = 5000
@@ -46,12 +45,8 @@ class MoneyTransferRequest(BaseModel):
     amount: int
 
 
-def _interest_option(duration_hours: int) -> dict | None:
-    try:
-        h = int(duration_hours)
-    except Exception:
-        return None
-    return next((o for o in BANK_INTEREST_OPTIONS if int(o.get("hours", 0) or 0) == h), None)
+def _interest_option(duration_hours: int, options: list) -> dict | None:
+    return interest_option_for_hours(options or [], duration_hours)
 
 
 def _parse_matures_at(matures_at: str | None) -> datetime | None:
@@ -73,14 +68,17 @@ def _invalidate_overview_cache(user_id: str):
 
 
 async def bank_meta(current_user: dict = Depends(get_current_user_verified)):
-    global _bank_meta_cache
-    if _bank_meta_cache is not None:
-        return _bank_meta_cache
-    _bank_meta_cache = {
-        "swiss_limit_start": SWISS_BANK_LIMIT_START,
-        "interest_options": BANK_INTEREST_OPTIONS,
+    cfg = await get_bank_economy_config(
+        db,
+        swiss_fallback=int(SWISS_BANK_LIMIT_START or 50_000_000),
+        interest_max_fallback=50_000_000,
+        interest_options_fallback=list(BANK_INTEREST_OPTIONS or []),
+    )
+    return {
+        "swiss_limit_start": cfg["swiss_limit_start"],
+        "interest_options": cfg["interest_options"],
+        "interest_max_unclaimed_principal": cfg["interest_max_unclaimed_principal"],
     }
-    return _bank_meta_cache
 
 
 async def bank_overview(current_user: dict = Depends(get_current_user_verified)):
@@ -94,7 +92,14 @@ async def bank_overview(current_user: dict = Depends(get_current_user_verified))
     user = await db.users.find_one({"id": uid}, {"_id": 0, "money": 1, "swiss_balance": 1, "swiss_limit": 1})
     money = int(user.get("money", 0) or 0) if user else 0
     swiss_balance = int((user or {}).get("swiss_balance", 0) or 0)
-    swiss_limit = int((user or {}).get("swiss_limit", SWISS_BANK_LIMIT_START) or SWISS_BANK_LIMIT_START)
+    cfg_sw = await get_bank_economy_config(
+        db,
+        swiss_fallback=int(SWISS_BANK_LIMIT_START or 50_000_000),
+        interest_max_fallback=50_000_000,
+        interest_options_fallback=list(BANK_INTEREST_OPTIONS or []),
+    )
+    default_swiss = cfg_sw["swiss_limit_start"]
+    swiss_limit = int((user or {}).get("swiss_limit", default_swiss) or default_swiss)
 
     deposits_raw, transfers_raw = await asyncio.gather(
         db.bank_deposits.find({"user_id": uid}, {"_id": 0}).sort("created_at", -1).to_list(50),
@@ -128,14 +133,19 @@ async def bank_interest_deposit(request: BankInterestDepositRequest, current_use
     amount = int(request.amount or 0)
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than 0")
-    opt = _interest_option(request.duration_hours)
+    cfg = await get_bank_economy_config(
+        db,
+        swiss_fallback=int(SWISS_BANK_LIMIT_START or 50_000_000),
+        interest_max_fallback=50_000_000,
+        interest_options_fallback=list(BANK_INTEREST_OPTIONS or []),
+    )
+    opt = _interest_option(request.duration_hours, cfg["interest_options"])
     if not opt:
         raise HTTPException(status_code=400, detail="Invalid duration")
     rate = float(opt["rate"])
     hours = int(opt["hours"])
 
-    # ECONOMY LIMIT: Max $50M total in unclaimed interest deposits
-    MAX_INTEREST_DEPOSITS = 50_000_000
+    MAX_INTEREST_DEPOSITS = int(cfg["interest_max_unclaimed_principal"])
     existing_deposits = await db.bank_deposits.aggregate([
         {"$match": {"user_id": current_user.get("id") or "", "claimed_at": None}},
         {"$group": {"_id": None, "total_principal": {"$sum": "$principal"}}}
@@ -143,10 +153,13 @@ async def bank_interest_deposit(request: BankInterestDepositRequest, current_use
     current_total = int(existing_deposits[0].get("total_principal", 0)) if existing_deposits else 0
     
     if current_total + amount > MAX_INTEREST_DEPOSITS:
-        remaining = MAX_INTEREST_DEPOSITS - current_total
+        remaining = max(0, MAX_INTEREST_DEPOSITS - current_total)
         raise HTTPException(
-            status_code=400, 
-            detail=f"Maximum ${MAX_INTEREST_DEPOSITS:,} in interest deposits allowed. You have ${current_total:,} deposited. You can deposit up to ${remaining:,} more."
+            status_code=400,
+            detail=(
+                f"Maximum ${MAX_INTEREST_DEPOSITS:,} in active interest deposits allowed. "
+                f"You have ${current_total:,} deposited. You can deposit up to ${remaining:,} more."
+            ),
         )
 
     now = datetime.now(timezone.utc)
@@ -220,9 +233,16 @@ async def bank_swiss_deposit(request: BankSwissMoveRequest, current_user: dict =
     amount = int(request.amount or 0)
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be greater than 0")
+    cfg = await get_bank_economy_config(
+        db,
+        swiss_fallback=int(SWISS_BANK_LIMIT_START or 50_000_000),
+        interest_max_fallback=50_000_000,
+        interest_options_fallback=list(BANK_INTEREST_OPTIONS or []),
+    )
+    default_swiss = cfg["swiss_limit_start"]
     user = await db.users.find_one({"id": current_user.get("id") or ""}, {"_id": 0, "swiss_balance": 1, "swiss_limit": 1})
     swiss_balance = int(user.get("swiss_balance", 0) or 0) if user else 0
-    swiss_limit = int(user.get("swiss_limit", SWISS_BANK_LIMIT_START) or SWISS_BANK_LIMIT_START) if user else SWISS_BANK_LIMIT_START
+    swiss_limit = int(user.get("swiss_limit", default_swiss) or default_swiss) if user else default_swiss
     if swiss_balance + amount > swiss_limit:
         raise HTTPException(status_code=400, detail=f"Swiss bank limit is ${swiss_limit:,}")
 

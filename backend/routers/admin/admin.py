@@ -53,6 +53,14 @@ from utils.claim_costs import (
     load_claim_costs,
     merge_claim_costs,
 )
+from utils.bank_economy_settings import (
+    get_bank_economy_config,
+    compute_bank_interest_previews,
+    normalize_interest_options,
+    KEY_SWISS_DEFAULT,
+    KEY_INTEREST_MAX,
+    KEY_INTEREST_OPTIONS,
+)
 from utils.email_sender import is_email_configured, send_inactivity_reminder_email
 
 # Cloudflare API config for bot blocking toggle
@@ -163,6 +171,11 @@ class BetaSignupToggleRequest(BaseModel):
     enabled: bool
 
 
+class AdminBankInterestOptionIn(BaseModel):
+    hours: int
+    rate: float
+
+
 class AdminSettingsUpdate(BaseModel):
     admin_online_color: Optional[str] = None
     mod_default_online_color: Optional[str] = None  # default colour for Mod on Users Online (mods can override on profile)
@@ -192,6 +205,9 @@ class AdminSettingsUpdate(BaseModel):
     casino_buyback_max_points: Optional[int] = None  # Max points for buy-back reward (default 15000)
     mp_poker_max_blind: Optional[int] = None  # Max MP poker small blind cap (default 2.5M)
     mod_visible_category_ids: Optional[List[str]] = None  # Admin Tool category ids visible to moderators
+    bank_swiss_default_limit: Optional[int] = None  # Default Swiss bank cap for new users & bank meta (game_settings)
+    bank_interest_max_unclaimed_principal: Optional[int] = None  # Max total $ in unclaimed interest deposits per user
+    bank_interest_options: Optional[List[AdminBankInterestOptionIn]] = None  # Term structure: hours + rate (fractional, e.g. 0.025 = 2.5%)
 
 
 class AdminClaimCostsPatch(BaseModel):
@@ -5236,6 +5252,28 @@ def register(router):
                 logging.exception("Game chat unmute notification: %s", e)
             return {"message": f"Unmuted {target.get('username')} from game chat"}
 
+    async def _bank_economy_admin_payload():
+        import server as srv
+
+        fb_sw = int(getattr(srv, "SWISS_BANK_LIMIT_START", 50_000_000) or 50_000_000)
+        fb_opts = list(getattr(srv, "BANK_INTEREST_OPTIONS", []) or [])
+        cfg = await get_bank_economy_config(
+            db,
+            swiss_fallback=fb_sw,
+            interest_max_fallback=50_000_000,
+            interest_options_fallback=fb_opts,
+        )
+        principals = [1_000_000, 10_000_000, 50_000_000]
+        previews = compute_bank_interest_previews(cfg["interest_options"], principals)
+        return {
+            "bank_swiss_default_limit": cfg["swiss_limit_start"],
+            "bank_interest_max_unclaimed_principal": cfg["interest_max_unclaimed_principal"],
+            "bank_interest_options": cfg["interest_options"],
+            "bank_interest_previews": previews,
+            "bank_interest_preview_sample_principals": principals,
+            "code_default_interest_options": [dict(x) for x in fb_opts],
+        }
+
     @router.get("/admin/settings")
     async def admin_get_settings(current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
@@ -5299,6 +5337,7 @@ def register(router):
             mod_visible_category_ids = raw_mod_cats
         else:
             mod_visible_category_ids = list(MOD_VISIBLE_CATEGORY_IDS_DEFAULT)
+        bank_payload = await _bank_economy_admin_payload()
         return {
             "admin_online_color": admin_online_color.strip(),
             "mod_default_online_color": mod_default_online_color.strip(),
@@ -5328,6 +5367,7 @@ def register(router):
             "casino_buyback_max_points": casino_buyback_max_points,
             "mp_poker_max_blind": mp_poker_max_blind,
             "mod_visible_category_ids": mod_visible_category_ids,
+            **bank_payload,
         }
 
     @router.patch("/admin/settings")
@@ -5518,6 +5558,31 @@ def register(router):
                 {"$set": {"value": ids}},
                 upsert=True,
             )
+        if body.bank_swiss_default_limit is not None:
+            bv = max(1_000, min(int(body.bank_swiss_default_limit), 10**15))
+            await db.game_settings.update_one(
+                {"key": KEY_SWISS_DEFAULT},
+                {"$set": {"key": KEY_SWISS_DEFAULT, "value": bv}},
+                upsert=True,
+            )
+        if body.bank_interest_max_unclaimed_principal is not None:
+            mv = max(1, min(int(body.bank_interest_max_unclaimed_principal), 10**15))
+            await db.game_settings.update_one(
+                {"key": KEY_INTEREST_MAX},
+                {"$set": {"key": KEY_INTEREST_MAX, "value": mv}},
+                upsert=True,
+            )
+        if body.bank_interest_options is not None:
+            import server as srv
+
+            raw_list = [x.model_dump() for x in body.bank_interest_options]
+            fb_opts = list(getattr(srv, "BANK_INTEREST_OPTIONS", []) or [])
+            cleaned = normalize_interest_options(raw_list, fb_opts)
+            await db.game_settings.update_one(
+                {"key": KEY_INTEREST_OPTIONS},
+                {"$set": {"key": KEY_INTEREST_OPTIONS, "value": cleaned}},
+                upsert=True,
+            )
         MOD_DEFAULT = "#1e3a5f"
         doc = await db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1})
         admin_online_color = (doc.get("value") or "#a78bfa") if doc else "#a78bfa"
@@ -5566,6 +5631,7 @@ def register(router):
         casino_global_max_bet = int(main_doc.get("casino_global_max_bet") or 1_000_000_000) if main_doc else 1_000_000_000
         casino_buyback_max_points = int(main_doc.get("casino_buyback_max_points") or 15_000) if main_doc else 15_000
         mp_poker_max_blind = int(main_doc.get("mp_poker_max_blind") or 2_500_000) if main_doc else 2_500_000
+        bank_payload = await _bank_economy_admin_payload()
         return {
             "admin_online_color": admin_online_color,
             "mod_default_online_color": mod_default_online_color.strip() if isinstance(mod_default_online_color, str) else MOD_DEFAULT,
@@ -5594,6 +5660,30 @@ def register(router):
             "casino_global_max_bet": casino_global_max_bet,
             "casino_buyback_max_points": casino_buyback_max_points,
             "mp_poker_max_blind": mp_poker_max_blind,
+            **bank_payload,
+        }
+
+    @router.post("/admin/bank/apply-swiss-default-to-all-users")
+    async def admin_apply_swiss_default_to_all_users(current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        import server as srv
+
+        fb_sw = int(getattr(srv, "SWISS_BANK_LIMIT_START", 50_000_000) or 50_000_000)
+        fb_opts = list(getattr(srv, "BANK_INTEREST_OPTIONS", []) or [])
+        cfg = await get_bank_economy_config(
+            db,
+            swiss_fallback=fb_sw,
+            interest_max_fallback=50_000_000,
+            interest_options_fallback=fb_opts,
+        )
+        lim = int(cfg["swiss_limit_start"])
+        result = await db.users.update_many({}, {"$set": {"swiss_limit": lim}})
+        return {
+            "message": f"Set swiss_limit to ${lim:,} on {result.modified_count} user document(s) (matched {result.matched_count}).",
+            "swiss_limit": lim,
+            "matched_count": result.matched_count,
+            "modified_count": result.modified_count,
         }
 
     _CLAIM_COST_MAX = 10**15

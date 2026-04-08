@@ -831,6 +831,16 @@ def register(router):
                             referral_tokens[count_field] = n
                         user_doc["referral_tokens"] = referral_tokens
 
+            from utils.bank_economy_settings import get_bank_economy_config
+
+            _bank_cfg = await get_bank_economy_config(
+                db,
+                swiss_fallback=int(SWISS_BANK_LIMIT_START),
+                interest_max_fallback=50_000_000,
+                interest_options_fallback=list(getattr(srv, "BANK_INTEREST_OPTIONS", []) or []),
+            )
+            user_doc["swiss_limit"] = int(_bank_cfg["swiss_limit_start"])
+
             await db.users.insert_one(user_doc.copy())
 
             # Beta signup: grant Al Capone car (car20), loot-exclusive car (car21), and loot-exclusive weapon (weapon_loot)

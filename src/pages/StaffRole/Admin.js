@@ -220,6 +220,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Claim costs (casino, airport, armoury)', categoryId: 'admin-gameworld', collapseKey: 'claimCosts', keywords: ['claim', 'cost', 'casino', 'airport', 'armoury', 'bullet', 'factory', 'dice', 'roulette'], adminOnly: true },
   { label: 'Casino per-game max bets', categoryId: 'admin-gameworld', collapseKey: 'casinoMaxBets', keywords: ['casino', 'max bet', 'per game', 'slots', 'blackjack', 'roulette'] },
   { label: 'Admin display & signup', categoryId: 'admin-gameworld', collapseKey: 'adminDisplay', keywords: ['admin', 'display', 'colour', 'color', 'online', 'email', 'verification', 'vpn', 'proxy', 'user agent', 'signup'], adminOnly: true },
+  { label: 'Swiss & interest bank limits', categoryId: 'admin-gameworld', collapseKey: 'bankEconomy', keywords: ['swiss', 'interest', 'bank', 'limit', 'deposit', 'maturity', 'principal'], adminOnly: true },
   { label: 'Launch & login lock', categoryId: 'admin-gameworld', collapseKey: 'launchSettings', keywords: ['login', 'lock', 'launch', 'store', 'preorder', 'preregister', 'banner', 'landing'], adminOnly: true },
   { label: 'Maintenance banner', categoryId: 'admin-gameworld', collapseKey: 'maintenanceBanner', keywords: ['maintenance', 'banner', 'downtime'] },
   // Security
@@ -327,8 +328,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, quicktradeTool: true, toastNotifications: true, ...parsed };
-  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, quicktradeTool: true, toastNotifications: true }; }
+    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, quicktradeTool: true, toastNotifications: true, bankEconomy: true, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, quicktradeTool: true, toastNotifications: true, bankEconomy: true }; }
 }
 
 function saveCollapsed(state) {
@@ -347,6 +348,28 @@ function formatAdminMoneyInt(n) {
   const x = Number(n);
   if (Number.isNaN(x)) return '—';
   return `$${x.toLocaleString()}`;
+}
+
+/** Live interest preview from draft term rows + principal (matches backend rounding). */
+function buildBankInterestPreviewRows(rows, principalRaw) {
+  const principal = Math.max(0, parseInt(String(principalRaw).replace(/,/g, ''), 10) || 0);
+  const opts = (rows || [])
+    .map((r) => ({
+      hours: Math.max(0, parseInt(r.hours, 10) || 0),
+      rate: parseFloat(String(r.rate).replace(/,/g, '.')) || 0,
+    }))
+    .filter((o) => o.hours >= 1 && o.rate >= 0);
+  const sorted = [...opts].sort((a, b) => a.hours - b.hours);
+  return sorted.map((o) => {
+    const interest = Math.round(principal * o.rate);
+    return {
+      hours: o.hours,
+      rate: o.rate,
+      ratePercent: Math.round(o.rate * 10000) / 100,
+      interest,
+      maturityTotal: principal + interest,
+    };
+  });
 }
 
 function casinoSeizureGameLabel(gt) {
@@ -1011,6 +1034,14 @@ export default function Admin() {
   const [landingBannerMessage, setLandingBannerMessage] = useState('');
   const [stockMarketMaxPoints, setStockMarketMaxPoints] = useState(3000);
   const [sportsBetMaxTotalOpenStake, setSportsBetMaxTotalOpenStake] = useState(25_000_000);
+  const [bankSwissDefaultLimit, setBankSwissDefaultLimit] = useState(50_000_000);
+  const [bankInterestMaxUnclaimed, setBankInterestMaxUnclaimed] = useState(50_000_000);
+  const [bankInterestOptionsRows, setBankInterestOptionsRows] = useState([]);
+  const [bankCodeDefaultInterestOptions, setBankCodeDefaultInterestOptions] = useState([]);
+  const [bankPreviewCustomPrincipal, setBankPreviewCustomPrincipal] = useState(10_000_000);
+  const [bankApplySwissAllLoading, setBankApplySwissAllLoading] = useState(false);
+  const [bankEconomySaving, setBankEconomySaving] = useState(false);
+  const [bankInterestPreviewsServer, setBankInterestPreviewsServer] = useState(null);
   const [adminSettingsSaving, setAdminSettingsSaving] = useState(false);
   const [loginLockFrom, setLoginLockFrom] = useState('');
   const [loginLockUntil, setLoginLockUntil] = useState('');
@@ -1613,6 +1644,31 @@ export default function Admin() {
       setSportsBetMaxTotalOpenStake(
         Math.max(1, parseInt(res.data?.sports_bet_max_total_open_stake, 10) || 25_000_000),
       );
+      setBankSwissDefaultLimit(Math.max(1000, parseInt(res.data?.bank_swiss_default_limit, 10) || 50_000_000));
+      setBankInterestMaxUnclaimed(Math.max(1, parseInt(res.data?.bank_interest_max_unclaimed_principal, 10) || 50_000_000));
+      if (Array.isArray(res.data?.bank_interest_options) && res.data.bank_interest_options.length > 0) {
+        setBankInterestOptionsRows(
+          res.data.bank_interest_options.map((o) => ({
+            hours: String(o.hours ?? ''),
+            rate: String(o.rate ?? ''),
+          })),
+        );
+      } else if (Array.isArray(res.data?.code_default_interest_options) && res.data.code_default_interest_options.length > 0) {
+        setBankInterestOptionsRows(
+          res.data.code_default_interest_options.map((o) => ({
+            hours: String(o.hours ?? ''),
+            rate: String(o.rate ?? ''),
+          })),
+        );
+      }
+      if (Array.isArray(res.data?.code_default_interest_options)) {
+        setBankCodeDefaultInterestOptions(res.data.code_default_interest_options);
+      }
+      if (Array.isArray(res.data?.bank_interest_previews)) {
+        setBankInterestPreviewsServer(res.data.bank_interest_previews);
+      } else {
+        setBankInterestPreviewsServer(null);
+      }
       setLoginLockFrom(res.data?.login_lock_from || '');
       setLoginLockUntil(res.data?.login_lock_until || '');
       setLoginLockMessage(res.data?.login_lock_message || '');
@@ -1695,6 +1751,77 @@ export default function Admin() {
     }
   };
 
+  const handleApplySwissDefaultToAllUsers = async () => {
+    if (
+      !window.confirm(
+        "Set every account's Swiss bank limit (swiss_limit) to the current default cap? Cash already in Swiss is unchanged. Continue?",
+      )
+    ) {
+      return;
+    }
+    setBankApplySwissAllLoading(true);
+    try {
+      const res = await api.post('/admin/bank/apply-swiss-default-to-all-users');
+      toast.success(res.data?.message || 'Updated Swiss limits');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setBankApplySwissAllLoading(false);
+    }
+  };
+
+  const handleSaveBankEconomy = async () => {
+    setBankEconomySaving(true);
+    try {
+      const res = await api.patch('/admin/settings', {
+        bank_swiss_default_limit: Math.max(1000, parseInt(bankSwissDefaultLimit, 10) || 50_000_000),
+        bank_interest_max_unclaimed_principal: Math.max(1, parseInt(bankInterestMaxUnclaimed, 10) || 50_000_000),
+        bank_interest_options: (bankInterestOptionsRows || [])
+          .map((r) => ({
+            hours: Math.max(1, parseInt(r.hours, 10) || 0),
+            rate: parseFloat(String(r.rate).replace(/,/g, '.')) || 0,
+          }))
+          .filter((r) => r.hours >= 1 && r.rate >= 0 && r.rate <= 10),
+      });
+      if (res.data?.bank_swiss_default_limit != null) {
+        setBankSwissDefaultLimit(Math.max(1000, Number(res.data.bank_swiss_default_limit) || 50_000_000));
+      }
+      if (res.data?.bank_interest_max_unclaimed_principal != null) {
+        setBankInterestMaxUnclaimed(Math.max(1, Number(res.data.bank_interest_max_unclaimed_principal) || 50_000_000));
+      }
+      if (Array.isArray(res.data?.bank_interest_options)) {
+        setBankInterestOptionsRows(
+          res.data.bank_interest_options.map((o) => ({
+            hours: String(o.hours ?? ''),
+            rate: String(o.rate ?? ''),
+          })),
+        );
+      }
+      if (Array.isArray(res.data?.bank_interest_previews)) {
+        setBankInterestPreviewsServer(res.data.bank_interest_previews);
+      }
+      toast.success('Bank economy saved');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to save bank economy');
+    } finally {
+      setBankEconomySaving(false);
+    }
+  };
+
+  const handleLoadBankCodeDefaults = () => {
+    if (!Array.isArray(bankCodeDefaultInterestOptions) || bankCodeDefaultInterestOptions.length === 0) {
+      toast.error('No code defaults available');
+      return;
+    }
+    setBankInterestOptionsRows(
+      bankCodeDefaultInterestOptions.map((o) => ({
+        hours: String(o.hours ?? ''),
+        rate: String(o.rate ?? ''),
+      })),
+    );
+    toast.message('Loaded code defaults into the form (save to apply)');
+  };
+
   const handleSaveAdminSettings = async () => {
     setAdminSettingsSaving(true);
     try {
@@ -1714,6 +1841,15 @@ export default function Admin() {
         landing_banner_enabled: landingBannerEnabled,
         landing_banner_message: landingBannerMessage,
         stock_market_max_points: Math.max(1, parseInt(stockMarketMaxPoints, 10) || 3000),
+        sports_bet_max_total_open_stake: Math.max(1, parseInt(sportsBetMaxTotalOpenStake, 10) || 25_000_000),
+        bank_swiss_default_limit: Math.max(1000, parseInt(bankSwissDefaultLimit, 10) || 50_000_000),
+        bank_interest_max_unclaimed_principal: Math.max(1, parseInt(bankInterestMaxUnclaimed, 10) || 50_000_000),
+        bank_interest_options: (bankInterestOptionsRows || [])
+          .map((r) => ({
+            hours: Math.max(1, parseInt(r.hours, 10) || 0),
+            rate: parseFloat(String(r.rate).replace(/,/g, '.')) || 0,
+          }))
+          .filter((r) => r.hours >= 1 && r.rate >= 0 && r.rate <= 10),
       });
       setAdminOnlineColor(res.data?.admin_online_color || adminOnlineColor);
       setModDefaultOnlineColor(res.data?.mod_default_online_color || modDefaultOnlineColor);
@@ -1736,6 +1872,23 @@ export default function Admin() {
       setStockMarketMaxPoints(Math.max(1, res.data?.stock_market_max_points ?? 3000));
       if (res.data?.sports_bet_max_total_open_stake != null) {
         setSportsBetMaxTotalOpenStake(Math.max(1, Number(res.data.sports_bet_max_total_open_stake) || 25_000_000));
+      }
+      if (res.data?.bank_swiss_default_limit != null) {
+        setBankSwissDefaultLimit(Math.max(1000, Number(res.data.bank_swiss_default_limit) || 50_000_000));
+      }
+      if (res.data?.bank_interest_max_unclaimed_principal != null) {
+        setBankInterestMaxUnclaimed(Math.max(1, Number(res.data.bank_interest_max_unclaimed_principal) || 50_000_000));
+      }
+      if (Array.isArray(res.data?.bank_interest_options)) {
+        setBankInterestOptionsRows(
+          res.data.bank_interest_options.map((o) => ({
+            hours: String(o.hours ?? ''),
+            rate: String(o.rate ?? ''),
+          })),
+        );
+      }
+      if (Array.isArray(res.data?.bank_interest_previews)) {
+        setBankInterestPreviewsServer(res.data.bank_interest_previews);
       }
       toast.success('Settings saved');
     } catch (e) {
@@ -10602,6 +10755,208 @@ export default function Admin() {
             <BtnPrimary onClick={handleSaveAdminSettings} disabled={adminSettingsSaving}>
               {adminSettingsSaving ? 'Saving...' : 'Save settings'}
             </BtnPrimary>
+          </div>
+        )}
+        </div>
+        )}
+
+        {isAdmin && (
+        <div id="admin-bank-economy" className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Landmark}
+          title="Swiss & interest bank"
+          badge={null}
+          toolAnchor="bankEconomy"
+          isCollapsed={collapsed.bankEconomy}
+          onToggle={() => toggleSection('bankEconomy')}
+        />
+        {!collapsed.bankEconomy && (
+          <div className="p-3 space-y-3">
+            <p className="text-[10px] text-mutedForeground font-heading">
+              Default Swiss cap for new accounts; interest bank terms (hours and rate as a decimal fraction, e.g. 0.025 = 2.5%).
+              Max unclaimed principal limits how much can remain in the interest bank before players must claim.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <label className="block text-[10px] font-heading uppercase tracking-wider text-mutedForeground">
+                Swiss default cap
+                <input
+                  type="number"
+                  min={1000}
+                  value={bankSwissDefaultLimit}
+                  onChange={(e) => setBankSwissDefaultLimit(Math.max(1000, parseInt(e.target.value, 10) || 50_000_000))}
+                  className="mt-1 w-full px-2 py-1.5 rounded border border-input bg-transparent text-[11px] font-mono font-heading"
+                />
+              </label>
+              <label className="block text-[10px] font-heading uppercase tracking-wider text-mutedForeground">
+                Max unclaimed interest principal
+                <input
+                  type="number"
+                  min={1}
+                  value={bankInterestMaxUnclaimed}
+                  onChange={(e) => setBankInterestMaxUnclaimed(Math.max(1, parseInt(e.target.value, 10) || 50_000_000))}
+                  className="mt-1 w-full px-2 py-1.5 rounded border border-input bg-transparent text-[11px] font-mono font-heading"
+                />
+              </label>
+            </div>
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Interest terms</p>
+                <span className="text-[10px] text-mutedForeground">One row per duration; rate 0–10 (fraction of principal)</span>
+              </div>
+              <div className="overflow-x-auto rounded border border-primary/15">
+                <table className="w-full text-[11px] font-heading">
+                  <thead>
+                    <tr className="border-b border-primary/20 bg-zinc-900/40">
+                      <th className="text-left px-2 py-1.5 text-mutedForeground">Hours</th>
+                      <th className="text-left px-2 py-1.5 text-mutedForeground">Rate</th>
+                      <th className="w-10 px-2 py-1.5" />
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bankInterestOptionsRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={3} className="px-2 py-2 text-[10px] text-mutedForeground">
+                          No rows. Click Add term.
+                        </td>
+                      </tr>
+                    ) : (
+                      bankInterestOptionsRows.map((row, idx) => (
+                        <tr key={idx} className="border-b border-primary/10">
+                          <td className="px-2 py-1">
+                            <input
+                              type="number"
+                              min={1}
+                              value={row.hours}
+                              onChange={(e) => {
+                                const next = [...bankInterestOptionsRows];
+                                next[idx] = { ...next[idx], hours: e.target.value };
+                                setBankInterestOptionsRows(next);
+                              }}
+                              className="w-full min-w-[4rem] px-1.5 py-0.5 rounded border border-input bg-transparent font-mono"
+                            />
+                          </td>
+                          <td className="px-2 py-1">
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={row.rate}
+                              onChange={(e) => {
+                                const next = [...bankInterestOptionsRows];
+                                next[idx] = { ...next[idx], rate: e.target.value };
+                                setBankInterestOptionsRows(next);
+                              }}
+                              className="w-full min-w-[5rem] px-1.5 py-0.5 rounded border border-input bg-transparent font-mono"
+                            />
+                          </td>
+                          <td className="px-2 py-1 text-right">
+                            <button
+                              type="button"
+                              onClick={() => setBankInterestOptionsRows((prev) => prev.filter((_, i) => i !== idx))}
+                              className="p-1 rounded text-mutedForeground hover:text-red-400 hover:bg-red-500/10"
+                              aria-label="Remove row"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <BtnSecondary type="button" onClick={() => setBankInterestOptionsRows((prev) => [...prev, { hours: '', rate: '' }])}>
+                  Add term
+                </BtnSecondary>
+                <BtnSecondary type="button" onClick={handleLoadBankCodeDefaults}>
+                  Load code defaults
+                </BtnSecondary>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2 pt-1">
+              <BtnPrimary onClick={handleSaveBankEconomy} disabled={bankEconomySaving}>
+                {bankEconomySaving ? 'Saving…' : 'Save bank economy'}
+              </BtnPrimary>
+              <BtnSecondary type="button" onClick={handleApplySwissDefaultToAllUsers} disabled={bankApplySwissAllLoading}>
+                {bankApplySwissAllLoading ? 'Applying…' : 'Apply Swiss default to all users'}
+              </BtnSecondary>
+            </div>
+            <div className="pt-2 border-t border-primary/10 space-y-2">
+              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Live preview (current form)</p>
+              <label className="block text-[10px] text-mutedForeground mb-1">Custom principal ($)</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={bankPreviewCustomPrincipal}
+                onChange={(e) => setBankPreviewCustomPrincipal(e.target.value)}
+                className="w-full max-w-xs px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono"
+              />
+              {(() => {
+                const live = buildBankInterestPreviewRows(bankInterestOptionsRows, bankPreviewCustomPrincipal);
+                return (
+                  <>
+                    <div className="overflow-x-auto rounded border border-primary/15">
+                      <table className="w-full text-[11px] font-heading">
+                        <thead>
+                          <tr className="border-b border-primary/20 bg-zinc-900/40">
+                            <th className="text-left px-2 py-1.5 text-mutedForeground">Hours</th>
+                            <th className="text-left px-2 py-1.5 text-mutedForeground">Rate %</th>
+                            <th className="text-left px-2 py-1.5 text-mutedForeground">Interest</th>
+                            <th className="text-left px-2 py-1.5 text-mutedForeground">Maturity</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {live.map((r, i) => (
+                            <tr key={`${r.hours}-${i}`} className="border-b border-primary/10">
+                              <td className="px-2 py-1 font-mono">{r.hours}</td>
+                              <td className="px-2 py-1 font-mono">{r.ratePercent}%</td>
+                              <td className="px-2 py-1 font-mono">{formatAdminMoneyInt(r.interest)}</td>
+                              <td className="px-2 py-1 font-mono">{formatAdminMoneyInt(r.maturityTotal)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    {live.length === 0 && (
+                      <p className="text-[10px] text-mutedForeground">Add at least one valid term (hours ≥ 1, rate ≥ 0) to see preview.</p>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+            {Array.isArray(bankInterestPreviewsServer) && bankInterestPreviewsServer.length > 0 && (
+              <div className="pt-2 border-t border-primary/10 space-y-2">
+                <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Saved config (sample principals)</p>
+                {bankInterestPreviewsServer.map((block) => (
+                  <div key={block.principal} className="space-y-1">
+                    <p className="text-[10px] font-heading text-primary">Principal {formatAdminMoneyInt(block.principal)}</p>
+                    <div className="overflow-x-auto rounded border border-primary/15">
+                      <table className="w-full text-[11px] font-heading">
+                        <thead>
+                          <tr className="border-b border-primary/20 bg-zinc-900/40">
+                            <th className="text-left px-2 py-1.5 text-mutedForeground">Hours</th>
+                            <th className="text-left px-2 py-1.5 text-mutedForeground">Rate %</th>
+                            <th className="text-left px-2 py-1.5 text-mutedForeground">Interest</th>
+                            <th className="text-left px-2 py-1.5 text-mutedForeground">Maturity</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(block.options || []).map((row) => (
+                            <tr key={row.hours} className="border-b border-primary/10">
+                              <td className="px-2 py-1 font-mono">{row.hours}</td>
+                              <td className="px-2 py-1 font-mono">{row.rate_percent}%</td>
+                              <td className="px-2 py-1 font-mono">{formatAdminMoneyInt(row.interest)}</td>
+                              <td className="px-2 py-1 font-mono">{formatAdminMoneyInt(row.maturity_total)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
         </div>

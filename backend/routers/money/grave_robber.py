@@ -18,7 +18,9 @@ GR_TIER_STEP_PCT = 5
 GR_TIER_MULTIPLIER = 1.15
 GR_TIERS_TOTAL = int(100 / GR_TIER_STEP_PCT)  # 20
 GR_COOLDOWN_HOURS = 24
-GR_JAIL_SECONDS = 90
+# Not every dig alerts the cops; when it does, short unbreakable jail.
+GR_JAIL_CHANCE = 0.04  # ~4% per dig (tune within ~2–6%)
+GR_JAIL_SECONDS = 60
 GR_RECENT_ATTEMPTS_LIMIT = 20
 GR_FAMILY_RETALIATION_CHANCE = 0.005  # 0.5% per dig (very rare)
 
@@ -217,6 +219,8 @@ def register(router):
             "global_cash_spent": global_spent,
             "global_cash_won": global_cash_won,
             "global_net_cash": global_cash_won - global_spent,
+            "jail_chance_per_dig": GR_JAIL_CHANCE,
+            "jail_seconds_on_caught": GR_JAIL_SECONDS,
             "possible_wins": [
                 {
                     "kind": "nothing",
@@ -326,6 +330,18 @@ def register(router):
         next_attempts_used = attempts_used + 1
         next_cost = _cost_for_attempts_used(next_attempts_used)
 
+        go_to_jail = _rng.random() < GR_JAIL_CHANCE
+        jail_fields = {}
+        jail_until_iso = None
+        if go_to_jail:
+            jail_until_iso = (now + timedelta(seconds=GR_JAIL_SECONDS)).isoformat()
+            jail_fields = {
+                "in_jail": True,
+                "jail_until": jail_until_iso,
+                "unbreakable_until": jail_until_iso,
+                "snitch_attempted_this_term": False,
+            }
+
         step = await db.users.update_one(
             {
                 "id": uid,
@@ -341,10 +357,7 @@ def register(router):
                 "$set": {
                     "grave_robber_current_attempt_cost": next_cost,
                     "grave_robber_last_attempt_at": now,
-                    "in_jail": True,
-                    "jail_until": (now + timedelta(seconds=GR_JAIL_SECONDS)).isoformat(),
-                    "unbreakable_until": (now + timedelta(seconds=GR_JAIL_SECONDS)).isoformat(),
-                    "snitch_attempted_this_term": False,
+                    **jail_fields,
                 },
             },
         )
@@ -500,8 +513,9 @@ def register(router):
                 "reward": reward,
             },
             "hitlist_event": hitlist_event,
-            "jail_seconds": GR_JAIL_SECONDS,
-            "jail_until": (now + timedelta(seconds=GR_JAIL_SECONDS)).isoformat(),
+            "jailed": go_to_jail,
+            "jail_seconds": GR_JAIL_SECONDS if go_to_jail else 0,
+            "jail_until": jail_until_iso,
             "attempts_total": attempts_total,
             "attempts_used": next_attempts_used,
             "attempts_remaining": max(0, attempts_total - next_attempts_used),
