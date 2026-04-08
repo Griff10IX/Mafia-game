@@ -546,41 +546,18 @@ export default function Crimes() {
     const available = crimeRows.filter((c) => c.can_commit);
     if (available.length === 0 || commitAllLoading || user?.in_jail) return;
     setCommitAllLoading(true);
-    let committed = 0;
-    let failed = 0;
-    let totalCash = 0;
-    let totalRespect = 0;
 
     try {
-      const results = await Promise.allSettled(
-        available.map((crime) => api.post(`/crimes/${crime.id}/commit`))
-      );
-
-      for (let i = 0; i < results.length; i++) {
-        const result = results[i];
-        const crime = available[i];
-        if (result.status === 'fulfilled') {
-          const response = result.value;
-          if (response.data?.success) {
-            committed += 1;
-            const msg = response.data?.message || '';
-            const cashMatch = msg.match(/\$([0-9,]+)/);
-            if (cashMatch) totalCash += parseInt(cashMatch[1].replace(/,/g, ''), 10) || 0;
-            if (typeof response.data?.respect_points === 'number') totalRespect += response.data.respect_points;
-          } else {
-            failed += 1;
-            toast.error(response.data?.message || `${crime.name} failed`);
-          }
-        } else {
-          failed += 1;
-          const detail = result.reason?.response?.data?.detail ?? result.reason?.message ?? 'Request failed';
-          toast.error(typeof detail === 'string' ? `${crime.name}: ${detail}` : detail);
-        }
-      }
-
-      if (committed > 0) {
+      const res = await api.post('/crimes/commit-all');
+      const committed = Number(res.data?.committed || 0);
+      const failed = Number(res.data?.failed || 0);
+      const totalCash = Number(res.data?.total_cash || 0);
+      const totalRespect = Number(res.data?.total_respect || 0);
+      const errors = Array.isArray(res.data?.errors) ? res.data.errors : [];
+      if (committed > 0 || failed > 0) {
         refreshUser();
         const parts = [`Committed ${committed} crime${committed !== 1 ? 's' : ''}`];
+        if (failed > 0) parts.push(`${failed} failed`);
         if (totalCash > 0 || totalRespect > 0) {
           const rewards = [];
           if (totalCash > 0) rewards.push(`$${totalCash.toLocaleString()}`);
@@ -589,8 +566,11 @@ export default function Crimes() {
         }
         toast.success(parts.join(' and '));
       }
+      errors.slice(0, 3).forEach((msg) => toast.error(String(msg)));
       clearCrimesPrefetch();
       await fetchCrimes();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
     } finally {
       setCommitAllLoading(false);
     }

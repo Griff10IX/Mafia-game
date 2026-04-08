@@ -231,6 +231,14 @@ class CommitCrimeResponse(BaseModel):
     prestige_bonus_earned: Optional[dict] = None
 
 
+class CommitAllCrimesResponse(BaseModel):
+    committed: int
+    failed: int
+    total_cash: int
+    total_respect: int
+    errors: list[str]
+
+
 # Global molotov drop from any successful crime
 # 0.1% (~1 in 1,000 successful crimes) for 1 molotov
 MOLOTOV_GLOBAL_DROP_CHANCE = 0.001
@@ -495,6 +503,50 @@ async def commit_crime(crime_id: str, current_user: dict = Depends(get_current_u
     except Exception as e:
         logger.exception("commit_crime failed: %s", e)
         raise HTTPException(status_code=500, detail="Something went wrong. Please try again.")
+
+
+async def commit_all_crimes(current_user: dict = Depends(get_current_user_verified)):
+    """Commit every currently-available non-prestige crime in one request."""
+    if current_user.get("in_jail"):
+        raise HTTPException(status_code=400, detail="You can't commit crimes while in jail.")
+    crimes = await get_crimes(current_user)
+    available_ids: list[str] = []
+    for c in crimes:
+        crime_id = c.get("id") if isinstance(c, dict) else getattr(c, "id", None)
+        can_commit = c.get("can_commit") if isinstance(c, dict) else getattr(c, "can_commit", False)
+        crime_type = c.get("crime_type") if isinstance(c, dict) else getattr(c, "crime_type", "")
+        if crime_id and can_commit and crime_type != "prestige":
+            available_ids.append(str(crime_id))
+
+    committed = 0
+    failed = 0
+    total_cash = 0
+    total_respect = 0
+    errors: list[str] = []
+    for crime_id in available_ids:
+        try:
+            res = await commit_crime_locked(crime_id, current_user)
+            if bool(getattr(res, "success", False)):
+                committed += 1
+                total_cash += int(getattr(res, "reward", 0) or 0)
+                total_respect += int(getattr(res, "respect_points", 0) or 0)
+            else:
+                failed += 1
+                errors.append(f"{crime_id}: {getattr(res, 'message', 'Failed')}")
+        except HTTPException as e:
+            failed += 1
+            errors.append(f"{crime_id}: {e.detail}")
+        except Exception:
+            failed += 1
+            errors.append(f"{crime_id}: Request failed")
+
+    return {
+        "committed": committed,
+        "failed": failed,
+        "total_cash": int(total_cash),
+        "total_respect": int(total_respect),
+        "errors": errors[:25],
+    }
 
 
 def _get_crime_by_id(crime_id: str):
@@ -1004,4 +1056,10 @@ def register(router):
         commit_crime,
         methods=["POST"],
         response_model=CommitCrimeResponse,
+    )
+    router.add_api_route(
+        "/crimes/commit-all",
+        commit_all_crimes,
+        methods=["POST"],
+        response_model=CommitAllCrimesResponse,
     )
