@@ -41,6 +41,46 @@ def _parse_iso_datetime(val):
         return None
 
 
+def _hitlist_npc_ts_to_utc(val):
+    """Normalize hitlist_npc_add_timestamps element to aware UTC datetime, or None."""
+    if val is None or val == "":
+        return None
+    if isinstance(val, str):
+        return _parse_iso_datetime(val)
+    if hasattr(val, "year"):
+        dt = val
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    return None
+
+
+def _hitlist_npc_pruned_iso_in_window(raw, window_start_utc: datetime) -> list:
+    """UTC ISO strings for NPC add timestamps still inside the rolling window (chronological order)."""
+    pairs = []
+    for t in raw or []:
+        dt = _hitlist_npc_ts_to_utc(t)
+        if dt and dt > window_start_utc:
+            pairs.append((dt, t))
+    pairs.sort(key=lambda x: x[0])
+    return [p[0].replace(microsecond=0).isoformat().replace("+00:00", "Z") for p in pairs]
+
+
+def _hitlist_npc_window_entries_stale(raw, window_start_utc: datetime, pruned_iso: list) -> bool:
+    """True if DB array should be rewritten (nulls, expired adds, or count mismatch vs rolling window)."""
+    raw = raw or []
+    if any(t is None or t == "" for t in raw):
+        return True
+    clean = [t for t in raw if t]
+    for t in clean:
+        dt = _hitlist_npc_ts_to_utc(t)
+        if not dt or dt <= window_start_utc:
+            return True
+    if any(not isinstance(t, str) for t in clean):
+        return True
+    return len(pruned_iso) != len(clean)
+
+
 # Request models (used only by hitlist)
 class HitlistAddRequest(BaseModel):
     target_username: str
@@ -253,71 +293,60 @@ async def hitlist_npc_status(current_user: dict = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
     window_start = now - timedelta(hours=HITLIST_NPC_COOLDOWN_HOURS)
     max_per_window = _hitlist_npc_max_per_window_for_user(current_user)
+    uid = current_user["id"]
     raw = (current_user.get("hitlist_npc_add_timestamps") or [])[:]
-    timestamps = []
-    for t in raw:
-        if not t:
-            continue
-        dt = _parse_iso_datetime(t) if isinstance(t, str) else (t if hasattr(t, "year") else None)
-        if dt and dt > window_start:
-            timestamps.append(t)
-    adds_in_window = len(timestamps)
+    pruned_iso = _hitlist_npc_pruned_iso_in_window(raw, window_start)
+    if _hitlist_npc_window_entries_stale(raw, window_start, pruned_iso):
+        try:
+            await db.users.update_one({"id": uid}, {"$set": {"hitlist_npc_add_timestamps": pruned_iso}})
+        except Exception:
+            logger.exception("hitlist_npc_status: failed to prune hitlist_npc_add_timestamps for user_id=%s", uid)
+    adds_in_window = len(pruned_iso)
     can_add = adds_in_window < max_per_window
     next_add_at = None
-    if not can_add and timestamps:
-        def _ts_key(x):
-            d = _parse_iso_datetime(x) if isinstance(x, str) else (x if hasattr(x, "year") else None)
-            return d or datetime.min.replace(tzinfo=timezone.utc)
-        oldest = min(timestamps, key=_ts_key)
-        oldest_dt = _parse_iso_datetime(oldest) if isinstance(oldest, str) else (oldest if hasattr(oldest, "year") else None)
-        if oldest_dt:
-            next_add_at = (oldest_dt + timedelta(hours=HITLIST_NPC_COOLDOWN_HOURS)).isoformat()
+    seconds_until_next_slot = None
+    window_next_frees_at = None
+    seconds_until_window_frees = None
+    if pruned_iso:
+        dts = [_parse_iso_datetime(s) for s in pruned_iso]
+        dts = [d for d in dts if d]
+        if dts:
+            oldest_dt = min(dts)
+            next_dt = oldest_dt + timedelta(hours=HITLIST_NPC_COOLDOWN_HOURS)
+            window_next_frees_at = next_dt.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+            seconds_until_window_frees = max(0, int((next_dt - now).total_seconds()))
+    if not can_add:
+        next_add_at = window_next_frees_at
+        seconds_until_next_slot = seconds_until_window_frees
     return {
         "can_add": can_add,
         "adds_used_in_window": adds_in_window,
         "max_per_window": max_per_window,
         "window_hours": HITLIST_NPC_COOLDOWN_HOURS,
         "next_add_at": next_add_at,
+        "seconds_until_next_slot": seconds_until_next_slot,
+        "window_next_frees_at": window_next_frees_at,
+        "seconds_until_window_frees": seconds_until_window_frees,
     }
 
 
 async def hitlist_add_npc(current_user: dict = Depends(get_current_user)):
     """Add a random NPC to the hitlist. Max 3 per 3 hours per user. NPC is attackable from Attack page."""
     now = datetime.now(timezone.utc)
-    window_start_iso = (now - timedelta(hours=HITLIST_NPC_COOLDOWN_HOURS)).isoformat()
-    now_iso = now.isoformat()
+    window_start = now - timedelta(hours=HITLIST_NPC_COOLDOWN_HOURS)
+    now_iso = now.replace(microsecond=0).isoformat().replace("+00:00", "Z")
     max_per_window = _hitlist_npc_max_per_window_for_user(current_user)
-    claim = await db.users.find_one_and_update(
-        {"id": current_user["id"]},
-        [{"$set": {
-            "hitlist_npc_add_timestamps": {
-                "$concatArrays": [
-                    {"$filter": {
-                        "input": {"$ifNull": ["$hitlist_npc_add_timestamps", []]},
-                        "cond": {"$gt": ["$$this", window_start_iso]},
-                    }},
-                    {"$cond": {
-                        "if": {"$lt": [
-                            {"$size": {"$filter": {
-                                "input": {"$ifNull": ["$hitlist_npc_add_timestamps", []]},
-                                "cond": {"$gt": ["$$this", window_start_iso]},
-                            }}},
-                            max_per_window,
-                        ]},
-                        "then": [now_iso],
-                        "else": [],
-                    }},
-                ],
-            },
-        }}],
-        return_document=False,
-    )
-    old_timestamps = [t for t in (claim.get("hitlist_npc_add_timestamps") or []) if t and t > window_start_iso] if claim else []
-    if len(old_timestamps) >= max_per_window:
+    uid = current_user["id"]
+    doc = await db.users.find_one({"id": uid}, {"_id": 0, "hitlist_npc_add_timestamps": 1})
+    raw = (doc or {}).get("hitlist_npc_add_timestamps") or []
+    pruned_iso = _hitlist_npc_pruned_iso_in_window(raw, window_start)
+    if len(pruned_iso) >= max_per_window:
         raise HTTPException(
             status_code=400,
             detail=f"You can add at most {max_per_window} NPCs per {HITLIST_NPC_COOLDOWN_HOURS} hours. Try again later."
         )
+    new_list = pruned_iso + [now_iso]
+    await db.users.update_one({"id": uid}, {"$set": {"hitlist_npc_add_timestamps": new_list}})
     template = random.choice(HITLIST_NPC_TEMPLATES)
     hitlist_id = str(uuid.uuid4())
     npc_user_id = str(uuid.uuid4())

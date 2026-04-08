@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Target, Eye, ShieldOff, DollarSign, Coins, User, Users, UserPlus, Clock, Crosshair } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
@@ -136,8 +136,41 @@ const CashStack = ({ className = "" }) => (
 /* ═══════════════════════════════════════════════════════
    Your Status Card (Combined)
    ═══════════════════════════════════════════════════════ */
+function formatNpcSlotCountdown(nextAddAtIso) {
+  if (!nextAddAtIso) return null;
+  const end = new Date(nextAddAtIso).getTime();
+  if (Number.isNaN(end)) return null;
+  const sec = Math.max(0, Math.ceil((end - Date.now()) / 1000));
+  if (sec <= 0) return 'now';
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const s = sec % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function formatNpcNextLocal(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+}
+
 const YourStatusCard = ({ me, user, revealed, who, submitting, onBuyOff, onReveal, npcStatus, addingNpc, onAddNpc }) => {
   const onHitlist = me?.on_hitlist ?? false;
+  const [npcCooldownTick, setNpcCooldownTick] = useState(0);
+  const npcAddsUsed = Number(npcStatus?.adds_used_in_window ?? 0);
+  const npcWindowFreesAt = npcStatus?.window_next_frees_at;
+  useEffect(() => {
+    if (!npcStatus || !npcWindowFreesAt || npcAddsUsed <= 0) return undefined;
+    const id = setInterval(() => setNpcCooldownTick((x) => x + 1), 1000);
+    return () => clearInterval(id);
+  }, [npcWindowFreesAt, npcAddsUsed]);
+  const npcWindowCountdown = useMemo(
+    () => (npcWindowFreesAt && npcAddsUsed > 0 ? formatNpcSlotCountdown(npcWindowFreesAt) : null),
+    [npcWindowFreesAt, npcAddsUsed, npcCooldownTick],
+  );
   
   // Don't show if not on hitlist and no NPC status
   if (!onHitlist && !npcStatus) return null;
@@ -234,15 +267,59 @@ const YourStatusCard = ({ me, user, revealed, who, submitting, onBuyOff, onRevea
                 {addingNpc ? 'Adding...' : 'Add NPC'}
               </button>
             ) : (
-              <div className="flex-1 min-w-[120px] flex items-center justify-center gap-1 text-[9px] sm:text-[10px] text-zinc-400 font-heading bg-zinc-800/50 px-2 py-1.5 rounded border border-zinc-700/40">
-                <Clock size={10} />
-                <span>
-                  {npcStatus.adds_used_in_window ?? 0}/{npcStatus.max_per_window ?? 3} NPCs
+              <div className="flex-1 min-w-[120px] flex flex-col items-center justify-center gap-0.5 text-[9px] sm:text-[10px] text-zinc-400 font-heading bg-zinc-800/50 px-2 py-1.5 rounded border border-zinc-700/40">
+                <div className="flex items-center justify-center gap-1">
+                  <Clock size={10} />
+                  <span>
+                    {npcStatus.adds_used_in_window ?? 0}/{npcStatus.max_per_window ?? 3} NPCs
+                  </span>
+                </div>
+                <span className="text-[8px] text-amber-200/80 font-heading text-center leading-tight">
+                  At cap — see below for next add time
                 </span>
               </div>
             )
           )}
         </div>
+
+        {npcStatus && npcWindowFreesAt && npcAddsUsed > 0 && (
+          <div className="rounded-lg bg-zinc-900/70 border border-primary/25 px-2.5 py-2 space-y-1">
+            <div className="text-[8px] sm:text-[9px] font-heading font-bold text-primary uppercase tracking-wider">
+              {!npcStatus.can_add ? 'Next NPC add' : '3h rolling window'}
+            </div>
+            {!npcStatus.can_add ? (
+              <p className="text-[9px] sm:text-[10px] text-zinc-300 font-heading leading-snug">
+                You can add another practice NPC at{' '}
+                <span className="text-foreground font-bold tabular-nums">{formatNpcNextLocal(npcWindowFreesAt)}</span>
+                {npcWindowCountdown && npcWindowCountdown !== 'now' ? (
+                  <>
+                    {' '}
+                    <span className="text-zinc-500">(</span>
+                    <span className="text-primary font-mono font-bold tabular-nums">in {npcWindowCountdown}</span>
+                    <span className="text-zinc-500">)</span>
+                  </>
+                ) : null}
+                {npcWindowCountdown === 'now' ? (
+                  <span className="text-emerald-400 font-heading font-bold"> — slot open now, refresh if this stuck</span>
+                ) : null}
+              </p>
+            ) : (
+              <p className="text-[9px] sm:text-[10px] text-zinc-300 font-heading leading-snug">
+                You can add now ({npcAddsUsed}/{npcStatus.max_per_window ?? 3} used). Oldest add drops from your window at{' '}
+                <span className="text-foreground font-bold tabular-nums">{formatNpcNextLocal(npcWindowFreesAt)}</span>
+                {npcWindowCountdown && npcWindowCountdown !== 'now' ? (
+                  <>
+                    {' '}
+                    <span className="text-zinc-500">(</span>
+                    <span className="text-primary font-mono font-bold tabular-nums">in {npcWindowCountdown}</span>
+                    <span className="text-zinc-500">)</span>
+                  </>
+                ) : null}
+                .
+              </p>
+            )}
+          </div>
+        )}
         
         {/* NPC info */}
         {npcStatus && !onHitlist && (
@@ -739,6 +816,18 @@ export default function HitlistPage() {
     const id = setInterval(() => fetchData(true), 60_000);
     return () => clearInterval(id);
   }, [fetchData]);
+
+  useEffect(() => {
+    if (!npcStatus || npcStatus.can_add) return undefined;
+    const poll = async () => {
+      try {
+        const st = await api.get('/hitlist/npc-status');
+        if (st.data) setNpcStatus(st.data);
+      } catch (_) {}
+    };
+    const id = setInterval(poll, 15_000);
+    return () => clearInterval(id);
+  }, [npcStatus?.can_add, npcStatus?.max_per_window]);
 
   const mult = hidden ? 1.5 : 1;
   const cashAmt = parseInt(rewardCash, 10) || 0;
