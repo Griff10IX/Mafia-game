@@ -21,12 +21,15 @@ const STORE_STYLES = `
 `;
 
 const PACKAGES = [
+  { id: 'mini', name: '1,000 pts', points: 1000, price: 2.49, popular: false },
   { id: 'starter', name: '2,500 pts', points: 2500, price: 5.99, popular: false },
   { id: 'bronze', name: '5,000 pts', points: 5000, price: 11.99, popular: false },
   { id: 'silver', name: '10,000 pts', points: 10000, price: 21.99, popular: true },
   { id: 'gold', name: '25,000 pts', points: 25000, price: 52.99, popular: false },
   { id: 'platinum', name: '50,000 pts', points: 50000, price: 99.99, popular: false },
   { id: 'diamond', name: '100,000 pts', points: 100000, price: 189.99, popular: false },
+  { id: 'elite', name: '150,000 pts', points: 150000, price: 274.99, popular: false },
+  { id: 'legend', name: '200,000 pts', points: 200000, price: 349.99, popular: false },
 ];
 
 const BULLET_PACKS = [
