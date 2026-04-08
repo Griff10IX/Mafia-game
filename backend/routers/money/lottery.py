@@ -157,14 +157,17 @@ async def _ensure_open_round() -> dict[str, Any]:
         {"status": "open"},
         {"_id": 1, "closes_at": 1, "status": 1, "created_at": 1, "rollover_in": 1},
     ).to_list(500)
-    future_rounds = []
+    future_rounds: list[tuple[int, datetime, dict[str, Any]]] = []
     for r in open_rounds:
         closes_at = _parse_iso(r.get("closes_at"))
         if closes_at and closes_at > now:
-            future_rounds.append((closes_at, r))
+            rollover_in = int(r.get("rollover_in") or 0)
+            future_rounds.append((rollover_in, closes_at, r))
     if future_rounds:
-        future_rounds.sort(key=lambda x: x[0])
-        return future_rounds[0][1]
+        # If duplicate open rounds exist, prefer the round carrying rollover.
+        # Tie-break on earliest close time so buys still target the next due draw.
+        future_rounds.sort(key=lambda x: (-x[0], x[1]))
+        return future_rounds[0][2]
     closes = _next_draw_utc(now)
     doc = {"closes_at": closes.isoformat(), "status": "open", "created_at": now.isoformat(), "rollover_in": 0}
     ins = await db.lottery_rounds.insert_one(doc)
@@ -662,9 +665,54 @@ async def lottery_repair_stuck_rounds(_: bool = Depends(_cron_verify())):
             normalized += 1
 
     draw_res = await lottery_draw_cron(True)
+    now2 = datetime.now(timezone.utc)
+    open_rounds_after = await db.lottery_rounds.find(
+        {"status": "open"},
+        {"_id": 1, "closes_at": 1, "rollover_in": 1, "created_at": 1},
+    ).to_list(500)
+    future: list[tuple[int, datetime, dict[str, Any]]] = []
+    for rd in open_rounds_after:
+        dt = _parse_iso(rd.get("closes_at"))
+        if dt and dt > now2:
+            future.append((int(rd.get("rollover_in") or 0), dt, rd))
+
+    merged_open_rounds = 0
+    merged_rollover = 0
+    if len(future) > 1:
+        future.sort(key=lambda x: (-x[0], x[1]))
+        primary = future[0][2]
+        primary_id = primary["_id"]
+        move_total = 0
+        for _, _, rd in future[1:]:
+            rid = rd["_id"]
+            ticket_count = await db.lottery_tickets.count_documents({"round_id": rid}, limit=1)
+            if ticket_count > 0:
+                continue
+            rollover_in = int(rd.get("rollover_in") or 0)
+            move_total += rollover_in
+            res = await db.lottery_rounds.update_one(
+                {"_id": rid, "status": "open"},
+                {
+                    "$set": {
+                        "status": "merged",
+                        "merged_into_round_id": str(primary_id),
+                        "merged_at": now2.isoformat(),
+                    }
+                },
+            )
+            if res.modified_count:
+                merged_open_rounds += 1
+                merged_rollover += rollover_in
+        if move_total > 0:
+            await db.lottery_rounds.update_one(
+                {"_id": primary_id},
+                {"$inc": {"rollover_in": move_total}},
+            )
     return {
         "ok": True,
         "normalized_open_rounds": normalized,
+        "merged_open_rounds": merged_open_rounds,
+        "merged_rollover_into_primary": merged_rollover,
         "draw_result": draw_res,
     }
 
