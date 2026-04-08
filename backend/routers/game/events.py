@@ -136,8 +136,10 @@ async def get_flash_news(current_user: dict = Depends(get_current_user)):
     try:
         kill_docs = await db.attack_attempts.find({
             "outcome": "killed",
-            "target_is_npc": {"$ne": True},
-            "is_npc_kill": {"$ne": True},
+            "$or": [
+                {"target_is_npc": {"$ne": True}},
+                {"$and": [{"is_bodyguard_kill": True}, {"is_npc_kill": {"$ne": True}}]},
+            ],
         }).sort("created_at", -1).limit(10).to_list(10)
         for i, doc in enumerate(kill_docs):
             if i >= 5:

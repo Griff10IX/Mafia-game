@@ -1791,6 +1791,24 @@ def get_rank_info(rank_points: int, prestige_mult: float = 1.0):
     return 1, RANKS[0]["name"]
 
 
+def effective_player_kill_count(user: Optional[Dict]) -> int:
+    """Kills that count toward player stats (excludes hitlist NPCs only; robot bodyguards count).
+    After DB migration sets total_kills_excludes_npc_v1, users.total_kills is already net."""
+    if not user:
+        return 0
+    try:
+        raw = int(user.get("total_kills") or 0)
+    except (TypeError, ValueError):
+        raw = 0
+    if user.get("total_kills_excludes_npc_v1"):
+        return max(0, raw)
+    try:
+        hn = int(user.get("hitlist_npc_kills") or 0)
+    except (TypeError, ValueError):
+        hn = 0
+    return max(0, raw - hn)
+
+
 # Floor for owner-set max bet across casino routers (matches set-max-bet handlers).
 CASINO_MIN_OWNER_MAX_BET = 50_000
 

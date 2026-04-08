@@ -70,15 +70,24 @@ BONUS_BENEFITS = {
 }
 
 
+def _player_kill_progress(user: dict) -> int:
+    from server import effective_player_kill_count
+
+    return effective_player_kill_count(user)
+
+
 def compute_profile_badges(user: dict) -> list:
     """Return current (highest) badge per category for profile display (no DB call needed)."""
     result = []
     for cat in BADGE_CATEGORIES:
-        raw = user.get(cat["progress_key"])
-        try:
-            progress = int(raw) if raw is not None else 0
-        except (TypeError, ValueError):
-            progress = 0
+        if cat["progress_key"] == "total_kills":
+            progress = _player_kill_progress(user)
+        else:
+            raw = user.get(cat["progress_key"])
+            try:
+                progress = int(raw) if raw is not None else 0
+            except (TypeError, ValueError):
+                progress = 0
         unlocked = [t for t in sorted(cat["targets"]) if progress >= t]
         if not unlocked:
             continue
@@ -101,7 +110,8 @@ async def get_badge_bonuses(user_id: str) -> dict:
             "_id": 0,
             "total_crimes": 1, "total_gta": 1, "jail_busts": 1, "total_kills": 1,
             "total_oc_heists": 1, "bullets_melted": 1, "booze_runs_count": 1,
-            "hitlist_npc_kills": 1, "rank_points": 1, "prestige_level": 1,
+            "hitlist_npc_kills": 1, "robot_bodyguard_kills": 1, "total_kills_excludes_npc_v1": 1,
+            "rank_points": 1, "prestige_level": 1,
         },
     )
     user = u or {}
@@ -159,7 +169,10 @@ async def log_badge_events(
 def _compute_category(cat: dict, user: dict) -> dict:
     """Compute badge state for one category."""
     key = cat["progress_key"]
-    progress = int(user.get(key) or 0)
+    if key == "total_kills":
+        progress = _player_kill_progress(user)
+    else:
+        progress = int(user.get(key) or 0)
 
     targets = sorted(cat["targets"])
     unlocked = [t for t in targets if progress >= t]
@@ -208,7 +221,8 @@ def register(router):
                 "_id": 0,
                 "total_crimes": 1, "total_gta": 1, "jail_busts": 1, "total_kills": 1,
                 "total_oc_heists": 1, "bullets_melted": 1, "booze_runs_count": 1,
-                "hitlist_npc_kills": 1, "rank_points": 1, "prestige_level": 1,
+                "hitlist_npc_kills": 1, "robot_bodyguard_kills": 1, "total_kills_excludes_npc_v1": 1,
+                "rank_points": 1, "prestige_level": 1,
             },
         )
         user = u or {}

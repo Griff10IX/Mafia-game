@@ -387,9 +387,9 @@ function buildVehicleRows(data) {
 
 // Main component
 export default function Stats() {
-  const [usersOnlyKills, setUsersOnlyKills] = useState(false);
-  const [hideNpcKills, setHideNpcKills] = useState(true);
-  const [data, setData] = useState(() => getStatsOverview(false));
+  const [usersOnlyKills, setUsersOnlyKills] = useState(true);
+  const [hideNpcKills, setHideNpcKills] = useState(false);
+  const [data, setData] = useState(() => getStatsOverview(true));
   const [statsListTab, setStatsListTab] = useState('kills'); // 'kills' | 'wiped'
 
   const rankStats = Array.isArray(data?.rank_stats) ? data.rank_stats : [];

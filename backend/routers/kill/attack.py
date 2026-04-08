@@ -1277,7 +1277,6 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     "money": int((rewards.get("cash", 0) or 0) * hitlist_mult),
                     "rank_points": rp_added,
                     "bullets": max(raw_bullets, min_bullets),
-                    "total_kills": 1,
                     "hitlist_npc_kills": 1,
                 }
                 if target.get("is_bodyguard"):
@@ -1485,7 +1484,10 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         prop_names = [f"{count}x {name}" if count > 1 else name for name, count in prop_name_counts.items()]
         killer_doc = await db.users.find_one({"id": killer_id}, {"_id": 0, "rank_points": 1, "username": 1})
         killer_rp_before = int((killer_doc or {}).get("rank_points") or 0)
-        kill_inc = {"money": cash_loot, "total_kills": 1, "rank_points": rank_points}
+        kill_inc = {"money": cash_loot, "rank_points": rank_points}
+        # Count kills vs real players and robot bodyguards; not vs hitlist NPCs (handled above) or other NPCs.
+        if not target.get("is_npc") or target.get("is_bodyguard"):
+            kill_inc["total_kills"] = 1
         if target.get("is_bodyguard") and target.get("is_npc"):
             kill_inc["robot_bodyguard_kills"] = 1
         await db.users.update_one({"id": killer_id}, {"$inc": kill_inc})

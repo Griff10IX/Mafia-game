@@ -145,6 +145,7 @@ function StatusDot({ status }) {
    ═══════════════════════════════════════════════════════ */
 function EventCard({ event, onPlaceBet, isAdmin, onSettle, onCancelEvent, onEditBetWindow, cancellingEventId }) {
   const options = event.options || [];
+  const poolTotal = Number(event.open_pool_total ?? 0);
   const bettingOpen = event.betting_open !== false;
   const icon = CATEGORY_ICONS[event.category] || '🎲';
   const opensAt = event.betting_opens_at ? new Date(event.betting_opens_at).getTime() : null;
@@ -200,6 +201,17 @@ function EventCard({ event, onPlaceBet, isAdmin, onSettle, onCancelEvent, onEdit
           >
             <span className="block text-[10px] font-heading text-zinc-400 truncate">{opt.name}</span>
             <span className="block text-sm font-heading font-black text-primary mt-0.5">{Number(opt.odds).toFixed(2)}</span>
+            <span className="block text-[9px] font-heading text-zinc-500 mt-1 tabular-nums leading-tight">
+              {poolTotal > 0 ? (
+                <>
+                  {formatMoney(opt.open_stake_total ?? 0)}
+                  <span className="text-zinc-600"> · </span>
+                  {Number(opt.open_stake_pct ?? 0).toFixed(1)}% of pool
+                </>
+              ) : (
+                <span className="text-zinc-600">$0 · —</span>
+              )}
+            </span>
           </button>
         ))}
       </div>

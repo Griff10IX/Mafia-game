@@ -428,6 +428,7 @@ def register(router):
     SWISS_BANK_LIMIT_START = srv.SWISS_BANK_LIMIT_START
     ADMIN_EMAILS = srv.ADMIN_EMAILS
     send_notification = srv.send_notification
+    effective_player_kill_count = srv.effective_player_kill_count
     RANKS = getattr(srv, "RANKS", [])
     PRESTIGE_CONFIGS = getattr(srv, "PRESTIGE_CONFIGS", {})
     CARS = getattr(srv, "CARS", [])
@@ -919,7 +920,7 @@ def register(router):
                     "points": user_doc["points"],
                     "bodyguard_slots": user_doc["bodyguard_slots"],
                     "current_state": user_doc["current_state"],
-                    "total_kills": user_doc["total_kills"],
+                    "total_kills": effective_player_kill_count(user_doc),
                     "total_deaths": user_doc["total_deaths"],
                     "created_at": user_doc["created_at"],
                     "rules_accepted": bool(user_doc.get("rules_accepted", False)),
@@ -982,7 +983,7 @@ def register(router):
                 "points": user_doc["points"],
                 "bodyguard_slots": user_doc["bodyguard_slots"],
                 "current_state": user_doc["current_state"],
-                "total_kills": user_doc["total_kills"],
+                "total_kills": effective_player_kill_count(user_doc),
                 "total_deaths": user_doc["total_deaths"],
                 "created_at": user_doc["created_at"],
                 "email_verified": False,
@@ -1792,7 +1793,7 @@ def register(router):
                 health=_safe_int(u.get("health"), DEFAULT_HEALTH),
                 armour_level=_safe_int(u.get("armour_level"), 0),
                 current_state=str(u.get("current_state") or ""),
-                total_kills=_safe_int(u.get("total_kills"), 0),
+                total_kills=effective_player_kill_count(u),
                 total_deaths=_safe_int(u.get("total_deaths"), 0),
                 in_jail=bool(u.get("in_jail", False)),
                 jail_until=u.get("jail_until"),

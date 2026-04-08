@@ -8,7 +8,14 @@ from typing import List
 from fastapi import Depends, Query
 from pydantic import BaseModel
 
-from server import ADMIN_EMAILS, db, get_current_user, _staff_exclude_user_filter, send_notification
+from server import (
+    ADMIN_EMAILS,
+    db,
+    get_current_user,
+    _staff_exclude_user_filter,
+    send_notification,
+    effective_player_kill_count,
+)
 
 _lb_cache: dict = {}
 _LB_CACHE_TTL = 30
@@ -21,6 +28,15 @@ _last_reward_winners_cache: dict = {}
 _LAST_WINNERS_CACHE_TTL = 300
 
 _leaderboard_user_filter = _staff_exclude_user_filter
+
+# Weekly kills: real victims + robot bodyguards; exclude hitlist NPCs (is_npc_kill) and other NPCs.
+_ATTACK_WEEKLY_PLAYER_KILL_MATCH = {
+    "outcome": "killed",
+    "$or": [
+        {"target_is_npc": {"$ne": True}},
+        {"$and": [{"is_bodyguard_kill": True}, {"is_npc_kill": {"$ne": True}}]},
+    ],
+}
 
 
 def _week_start(dt: datetime) -> datetime:
@@ -264,7 +280,8 @@ async def _get_last_reward_winners(database) -> dict:
     kills, crimes, gta, jail_busts = await asyncio.gather(
         _top_by_field_for_week(
             database, "attack_attempts", "attacker_id", "created_at", True,
-            last_week_start, this_week_start, 10, {"outcome": "killed"},
+            last_week_start, this_week_start, 10,
+            _ATTACK_WEEKLY_PLAYER_KILL_MATCH,
         ),
         _top_by_field_for_week(
             database, "crime_events", "user_id", "at", False,
@@ -365,7 +382,8 @@ async def run_weekly_leaderboard_payout(database, test_run: bool = False):
     kills, crimes, gta, jail_busts = await asyncio.gather(
         _top_by_field_for_week(
             database, "attack_attempts", "attacker_id", "created_at", True,
-            last_week_start, this_week_start, 10, {"outcome": "killed"},
+            last_week_start, this_week_start, 10,
+            _ATTACK_WEEKLY_PLAYER_KILL_MATCH,
         ),
         _top_by_field_for_week(
             database, "crime_events", "user_id", "at", False,
@@ -506,7 +524,19 @@ async def get_leaderboard(current_user: dict = Depends(get_current_user)):
     query.update(_leaderboard_user_filter())
     users = await db.users.find(
         query,
-        {"_id": 0, "username": 1, "money": 1, "total_kills": 1, "total_crimes": 1, "total_gta": 1, "jail_busts": 1, "id": 1}
+        {
+            "_id": 0,
+            "username": 1,
+            "money": 1,
+            "total_kills": 1,
+            "total_crimes": 1,
+            "total_gta": 1,
+            "jail_busts": 1,
+            "id": 1,
+            "hitlist_npc_kills": 1,
+            "robot_bodyguard_kills": 1,
+            "total_kills_excludes_npc_v1": 1,
+        },
     ).sort("money", -1).limit(10).to_list(10)
     result = []
     for i, user in enumerate(users):
@@ -514,7 +544,7 @@ async def get_leaderboard(current_user: dict = Depends(get_current_user)):
             rank=i + 1,
             username=user["username"],
             money=user["money"],
-            kills=user["total_kills"],
+            kills=effective_player_kill_count(user),
             crimes=user.get("total_crimes", 0),
             gta=user.get("total_gta", 0),
             jail_busts=user.get("jail_busts", 0),
@@ -543,7 +573,16 @@ async def _fetch_top_boards_raw(limit: int, dead: bool, period: str) -> dict:
     dummy_uid = "__cache__"
     if (period or "").lower() == "weekly":
         kills, crimes, gta, jail_busts, stock_market_profit, booze_run_profit, respect_points, bullets_melted = await asyncio.gather(
-            _top_by_field_weekly("attack_attempts", "attacker_id", "created_at", True, dummy_uid, limit, dead, {"outcome": "killed"}),
+            _top_by_field_weekly(
+                "attack_attempts",
+                "attacker_id",
+                "created_at",
+                True,
+                dummy_uid,
+                limit,
+                dead,
+                _ATTACK_WEEKLY_PLAYER_KILL_MATCH,
+            ),
             _top_by_field_weekly("crime_events", "user_id", "at", False, dummy_uid, limit, dead, {"success": True}),
             _top_by_field_weekly("gta_events", "user_id", "at", False, dummy_uid, limit, dead, {"success": True}),
             _top_by_field_weekly("bust_events", "user_id", "at", False, dummy_uid, limit, dead, {"success": True}),

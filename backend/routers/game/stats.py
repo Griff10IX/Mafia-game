@@ -187,6 +187,7 @@ def register(router):
     import server as srv
 
     db = srv.db
+    effective_player_kill_count = srv.effective_player_kill_count
     get_current_user = srv.get_current_user
     get_current_user_verified = srv.get_current_user_verified
     get_rank_info = srv.get_rank_info
@@ -405,8 +406,15 @@ def register(router):
 
             killer_is_npc = bool(killer and killer.get("is_npc"))
             victim_is_npc = bool(victim and victim.get("is_npc"))
-            if users_only_kills and (killer_is_npc or victim_is_npc):
-                continue
+            if users_only_kills:
+                if killer_is_npc:
+                    continue
+                if victim_is_npc:
+                    # Robot bodyguard kills count as "user" kills; hitlist NPC kills do not.
+                    if a.get("is_npc_kill"):
+                        continue
+                    if not a.get("is_bodyguard_kill"):
+                        continue
 
             victim_rank_name = None
             tr_id = a.get("target_rank_id")
@@ -535,7 +543,11 @@ def register(router):
             {"id": uid},
             {
                 "_id": 0,
-                "total_kills": 1, "total_deaths": 1, "hitlist_npc_kills": 1, "robot_bodyguard_kills": 1,
+                "total_kills": 1,
+                "total_deaths": 1,
+                "hitlist_npc_kills": 1,
+                "robot_bodyguard_kills": 1,
+                "total_kills_excludes_npc_v1": 1,
                 "total_crimes": 1, "crime_profit": 1,
                 "total_gta": 1,
                 "jail_busts": 1, "jail_bust_attempts": 1, "jail_busts_npc": 1,
@@ -639,8 +651,7 @@ def register(router):
 
         hitlist_npc_kills = int(u.get("hitlist_npc_kills") or 0)
         robot_bodyguard_kills = int(u.get("robot_bodyguard_kills") or 0)
-        total_kills = int(u.get("total_kills") or 0)
-        user_kills = max(0, total_kills - hitlist_npc_kills - robot_bodyguard_kills)
+        combat_total_kills = effective_player_kill_count(u)
 
         gambling_by_game_lt: dict = {}
         gambling_total_lt = 0
@@ -668,11 +679,11 @@ def register(router):
 
         return {
             "combat": {
-                "total_kills": total_kills,
+                "total_kills": combat_total_kills,
                 "total_deaths": int(u.get("total_deaths") or 0),
                 "hitlist_npc_kills": hitlist_npc_kills,
                 "robot_bodyguard_kills": robot_bodyguard_kills,
-                "user_kills": user_kills,
+                "user_kills": combat_total_kills,
             },
             "rank": {
                 "total_crimes": int(u.get("total_crimes") or 0),

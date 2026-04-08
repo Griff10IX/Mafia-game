@@ -21,6 +21,7 @@ from server import (
     RANKS,
     CARS,
     founding_member_income_mult,
+    effective_player_kill_count,
 )
 from routers.money.booze_run import BOOZE_TYPES
 from routers.kill.armoury import TOKEN_TYPES, TOKEN_CONFIG
@@ -172,7 +173,7 @@ def _get_user_progress_value(user: dict, req_key: str) -> int:
     if req_key == "crime_profit":
         return int(user.get("crime_profit") or 0)
     if req_key == "attacks":
-        return int(user.get("total_kills") or 0)
+        return effective_player_kill_count(user)
     if req_key == "hitlist_npc_kills":
         return int(user.get("hitlist_npc_kills") or 0)
     if req_key == "money_earned":

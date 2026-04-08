@@ -70,6 +70,7 @@ def register(router):
     import server as srv
 
     db = srv.db
+    effective_player_kill_count = srv.effective_player_kill_count
     get_current_user = srv.get_current_user
     get_current_user_verified = srv.get_current_user_verified
     _username_pattern = srv._username_pattern
@@ -320,7 +321,18 @@ def register(router):
         """Minimal profile data for hover previews (e.g. Users Online). Only returns public-safe fields."""
         user = await _find_user_by_profile_username(
             username,
-            {"_id": 0, "id": 1, "username": 1, "avatar_url": 1, "total_kills": 1, "jail_busts": 1, "family_id": 1},
+            {
+                "_id": 0,
+                "id": 1,
+                "username": 1,
+                "avatar_url": 1,
+                "total_kills": 1,
+                "hitlist_npc_kills": 1,
+                "robot_bodyguard_kills": 1,
+                "total_kills_excludes_npc_v1": 1,
+                "jail_busts": 1,
+                "family_id": 1,
+            },
         )
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
@@ -403,7 +415,7 @@ def register(router):
         return {
             "username": user.get("username"),
             "avatar_url": user.get("avatar_url"),
-            "kills": int(user.get("total_kills") or 0),
+            "kills": effective_player_kill_count(user),
             "jail_busts": int(user.get("jail_busts") or 0),
             "on_hitlist": hitlist_count > 0,
             "messages_sent": messages_sent,
@@ -593,7 +605,7 @@ def register(router):
             badge_stat_fields,
         ) = await asyncio.gather(
             _family_name_and_tag(),
-            _rank_for_field("total_kills", int(user.get("total_kills") or 0)),
+            _rank_for_field("total_kills", effective_player_kill_count(user)),
             _rank_for_field("total_crimes", int(user.get("total_crimes") or 0)),
             _rank_for_field("total_gta", int(user.get("total_gta") or 0)),
             _rank_for_field("jail_busts", int(user.get("jail_busts") or 0)),
@@ -634,7 +646,7 @@ def register(router):
             {"rank": points_spent_rank, "label": "Most Points Spent"},
         ]
         from routers.game.achievements import compute_profile_badges
-        achievement_badges = compute_profile_badges(badge_stat_fields or user)
+        achievement_badges = compute_profile_badges(user)
         owned_casinos = dice_casinos + roulette_casinos + blackjack_casinos + horseracing_casinos + slots_casinos + videopoker_casinos
 
         if property_ and user_id != current_user.get("id") and property_.get("type") == "airport":
@@ -675,7 +687,7 @@ def register(router):
             "wealth_rank_range": wealth_range,
             "hide_kills_on_profile": bool(user.get("hide_kills_on_profile", False)),
             "hide_jailbusts_on_profile": bool(user.get("hide_jailbusts_on_profile", False)),
-            "kills": None if user.get("hide_kills_on_profile") else user.get("total_kills", 0),
+            "kills": None if user.get("hide_kills_on_profile") else effective_player_kill_count(user),
             "jail_busts": None if user.get("hide_jailbusts_on_profile") else user.get("jail_busts", 0),
             "created_at": created_at,
             "avatar_url": user.get("avatar_url"),

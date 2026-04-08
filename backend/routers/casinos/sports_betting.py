@@ -2023,6 +2023,47 @@ async def sports_betting_events(current_user: dict = Depends(get_current_user_ve
         if league_label:
             row["league_label"] = league_label
         result.append(row)
+
+    event_ids = [r["id"] for r in result]
+    stake_by_event_option: dict = {}
+    event_pool: dict = {}
+    if event_ids:
+        stake_rows = await db.sports_bets.aggregate(
+            [
+                {"$match": {"status": "open", "event_id": {"$in": event_ids}}},
+                {
+                    "$group": {
+                        "_id": {"e": "$event_id", "o": "$option_id"},
+                        "total": {"$sum": "$stake"},
+                    }
+                },
+            ]
+        ).to_list(len(event_ids) * 32)
+        for sr in stake_rows:
+            kid = sr.get("_id") or {}
+            eid = kid.get("e")
+            oid = kid.get("o")
+            if not eid or not oid:
+                continue
+            amt = int(sr.get("total") or 0)
+            stake_by_event_option[(eid, oid)] = amt
+            event_pool[eid] = event_pool.get(eid, 0) + amt
+
+    for row in result:
+        eid = row["id"]
+        pool = int(event_pool.get(eid, 0))
+        enriched_opts = []
+        for o in row.get("options") or []:
+            oid = o.get("id")
+            amt = int(stake_by_event_option.get((eid, oid), 0)) if oid else 0
+            pct = round((100.0 * amt / pool), 1) if pool > 0 else 0.0
+            od = dict(o)
+            od["open_stake_total"] = amt
+            od["open_stake_pct"] = pct
+            enriched_opts.append(od)
+        row["options"] = enriched_opts
+        row["open_pool_total"] = pool
+
     return {"events": result}
 
 
