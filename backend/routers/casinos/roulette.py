@@ -48,6 +48,7 @@ ROULETTE_MAX_BET = 50_000_000
 ROULETTE_HOUSE_EDGE = 0.0005  # 0.05% house edge goes to owner
 ROULETTE_DEFAULT_MAX_BET = 50_000_000
 ROULETTE_ABSOLUTE_MAX_BET = 500_000_000
+ROULETTE_BUY_BACK_EXPIRY_MINUTES = 10
 
 # ----- Models -----
 class RouletteBetItem(BaseModel):
@@ -314,6 +315,11 @@ def register(router):
             {"city": stored_city or city},
             {"$set": {"owner_id": None, "owner_username": None, "max_bet": CASINO_MIN_OWNER_MAX_BET}},
         )
+        # If the current owner relinquishes, any pending buy-back offer to them
+        # for this city is no longer actionable and should be removed.
+        await db.roulette_buy_back_offers.delete_many(
+            {"city": stored_city or city, "to_user_id": current_user.get("id") or ""}
+        )
         await cancel_quicktrade_casino_listings_by_locations("casino_rlt", stored_city or city, city)
         return {"message": "Ownership relinquished."}
 
@@ -382,7 +388,10 @@ def register(router):
             try:
                 exp_dt = datetime.fromisoformat(expires.replace("Z", "+00:00"))
                 if exp_dt < datetime.now(timezone.utc):
-                    raise HTTPException(status_code=400, detail="Offer expired")
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Offer expired ({ROULETTE_BUY_BACK_EXPIRY_MINUTES} minute window).",
+                    )
             except ValueError:
                 pass
         city = offer.get("city")
@@ -392,13 +401,13 @@ def register(router):
             raise HTTPException(status_code=400, detail="Invalid offer (0 points)")
         from_user = await db.users.find_one({"id": from_owner_id}, {"_id": 0, "points": 1, "username": 1})
         if not from_user or int(from_user.get("points") or 0) < points_offered:
-            raise HTTPException(status_code=400, detail="Previous owner does not have enough points")
+            raise HTTPException(status_code=400, detail="Previous owner no longer has enough points for buy-back.")
         debit_result = await db.users.update_one(
             {"id": from_owner_id, "points": {"$gte": points_offered}},
             {"$inc": {"points": -points_offered}},
         )
         if debit_result.modified_count == 0:
-            raise HTTPException(status_code=400, detail="Previous owner does not have enough points")
+            raise HTTPException(status_code=400, detail="Previous owner no longer has enough points for buy-back.")
         await log_points_event(db, user_id=from_owner_id, points=-points_offered, event_type="casino_roulette", event_ref=f"buyback:{request.offer_id}", meta={"action": "buyback_deduct", "city": city, "offer_id": request.offer_id})
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"points": points_offered}})
         await log_points_event(db, user_id=current_user.get("id") or "", points=points_offered, event_type="casino_roulette", event_ref=f"buyback:{request.offer_id}", meta={"action": "buyback_credit", "city": city, "offer_id": request.offer_id})
@@ -611,7 +620,7 @@ def register(router):
                 )
                 # Create buy-back offer if owner has set a reward; otherwise state head gets the stake (same as dice/horseracing)
                 if buy_back_reward > 0:
-                    expires_at = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()
+                    expires_at = (datetime.now(timezone.utc) + timedelta(minutes=ROULETTE_BUY_BACK_EXPIRY_MINUTES)).isoformat()
                     offer_id = str(uuid.uuid4())
                     await db.roulette_buy_back_offers.insert_one({
                         "id": offer_id,

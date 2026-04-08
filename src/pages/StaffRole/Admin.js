@@ -477,6 +477,7 @@ export default function Admin() {
   const [lotteryMoneyTrailData, setLotteryMoneyTrailData] = useState(null);
   const [lotteryMoneyTrailLoading, setLotteryMoneyTrailLoading] = useState(false);
   const [lotteryMoneyTrailRoundsLoading, setLotteryMoneyTrailRoundsLoading] = useState(false);
+  const [lotteryRepairLoading, setLotteryRepairLoading] = useState(false);
   const [ranks, setRanks] = useState([]);
   const [cars, setCars] = useState([]);
   const [bgTestCount, setBgTestCount] = useState(2);
@@ -2123,6 +2124,24 @@ export default function Admin() {
       setLotteryMoneyTrailData(null);
     } finally {
       setLotteryMoneyTrailLoading(false);
+    }
+  };
+
+  const handleLotteryRepairStuckRounds = async () => {
+    setLotteryRepairLoading(true);
+    try {
+      const res = await api.post('/admin/lottery/repair-stuck-rounds');
+      const normalized = Number(res.data?.normalized_open_rounds || 0);
+      const drawn = Number(res.data?.draw_result?.rounds_drawn || 0);
+      toast.success(`Lottery repair complete: normalized ${normalized}, drawn ${drawn}.`);
+      await fetchLotteryMoneyTrailRounds();
+      if (lotteryMoneyTrailRoundId) {
+        await fetchLotteryMoneyTrail(lotteryMoneyTrailRoundId);
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to repair lottery rounds');
+    } finally {
+      setLotteryRepairLoading(false);
     }
   };
 
@@ -9817,6 +9836,9 @@ export default function Admin() {
               </label>
               <BtnSecondary type="button" onClick={fetchLotteryMoneyTrailRounds} disabled={lotteryMoneyTrailRoundsLoading}>
                 {lotteryMoneyTrailRoundsLoading ? 'Loading…' : 'Refresh list'}
+              </BtnSecondary>
+              <BtnSecondary type="button" onClick={handleLotteryRepairStuckRounds} disabled={lotteryRepairLoading}>
+                {lotteryRepairLoading ? 'Repairing…' : 'Repair stuck rounds'}
               </BtnSecondary>
               <BtnPrimary type="button" onClick={() => fetchLotteryMoneyTrail()} disabled={lotteryMoneyTrailLoading}>
                 {lotteryMoneyTrailLoading ? 'Loading…' : 'Load money trail'}

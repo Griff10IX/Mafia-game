@@ -153,12 +153,18 @@ def _next_draw_utc(after: datetime) -> datetime:
 
 async def _ensure_open_round() -> dict[str, Any]:
     now = datetime.now(timezone.utc)
-    r = await db.lottery_rounds.find_one(
-        {"status": "open", "closes_at": {"$gt": now.isoformat()}},
-        {"_id": 1, "closes_at": 1, "status": 1, "created_at": 1},
-    )
-    if r:
-        return r
+    open_rounds = await db.lottery_rounds.find(
+        {"status": "open"},
+        {"_id": 1, "closes_at": 1, "status": 1, "created_at": 1, "rollover_in": 1},
+    ).to_list(500)
+    future_rounds = []
+    for r in open_rounds:
+        closes_at = _parse_iso(r.get("closes_at"))
+        if closes_at and closes_at > now:
+            future_rounds.append((closes_at, r))
+    if future_rounds:
+        future_rounds.sort(key=lambda x: x[0])
+        return future_rounds[0][1]
     closes = _next_draw_utc(now)
     doc = {"closes_at": closes.isoformat(), "status": "open", "created_at": now.isoformat(), "rollover_in": 0}
     ins = await db.lottery_rounds.insert_one(doc)
@@ -347,7 +353,20 @@ async def lottery_draw_cron(_: bool = Depends(_cron_verify())):
     now = datetime.now(timezone.utc)
     processed = 0
     while True:
-        rd = await db.lottery_rounds.find_one({"status": "open", "closes_at": {"$lte": now.isoformat()}})
+        open_rounds = await db.lottery_rounds.find(
+            {"status": "open"},
+            {"_id": 1, "closes_at": 1, "status": 1, "created_at": 1, "rollover_in": 1},
+        ).to_list(500)
+        due_rounds = []
+        for r in open_rounds:
+            closes_at = _parse_iso(r.get("closes_at"))
+            if closes_at and closes_at <= now:
+                due_rounds.append((closes_at, r))
+        if due_rounds:
+            due_rounds.sort(key=lambda x: x[0])
+            rd = due_rounds[0][1]
+        else:
+            rd = None
         if not rd:
             break
         rid = rd["_id"]
@@ -618,8 +637,41 @@ async def lottery_draw_cron(_: bool = Depends(_cron_verify())):
     return {"ok": True, "rounds_drawn": processed}
 
 
+async def lottery_repair_stuck_rounds(_: bool = Depends(_cron_verify())):
+    """
+    One-off repair for stuck open rounds:
+    - Normalize malformed/empty closes_at on open rounds to "now"
+    - Immediately run draw cron to settle anything now due
+    """
+    now = datetime.now(timezone.utc)
+    now_iso = now.isoformat()
+    open_rounds = await db.lottery_rounds.find(
+        {"status": "open"},
+        {"_id": 1, "closes_at": 1, "created_at": 1},
+    ).to_list(1000)
+
+    normalized = 0
+    for rd in open_rounds:
+        if _parse_iso(rd.get("closes_at")) is not None:
+            continue
+        res = await db.lottery_rounds.update_one(
+            {"_id": rd["_id"], "status": "open"},
+            {"$set": {"closes_at": now_iso}},
+        )
+        if res.modified_count:
+            normalized += 1
+
+    draw_res = await lottery_draw_cron(True)
+    return {
+        "ok": True,
+        "normalized_open_rounds": normalized,
+        "draw_result": draw_res,
+    }
+
+
 def register(router: APIRouter) -> None:
     router.add_api_route("/lottery", get_lottery_state, methods=["GET"])
     router.add_api_route("/lottery/my-tickets", get_my_lottery_tickets, methods=["GET"])
     router.add_api_route("/lottery/buy", buy_lottery_tickets, methods=["POST"])
     router.add_api_route("/lottery/draw-cron", lottery_draw_cron, methods=["POST"])
+    router.add_api_route("/lottery/repair-stuck-rounds", lottery_repair_stuck_rounds, methods=["POST"])

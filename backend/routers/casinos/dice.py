@@ -47,6 +47,7 @@ DICE_SIDES_MAX = 5000
 DICE_HOUSE_EDGE = 0.0005  # 0.05% house edge
 DICE_MAX_BET = 5_000_000          # default max bet for new tables
 DICE_ABSOLUTE_MAX_BET = 500_000_000  # hard ceiling owners can set up to
+DICE_BUY_BACK_EXPIRY_MINUTES = 10
 # Dice claim costs: utils.claim_costs.DEFAULT_CLAIM_COSTS (dice_cash, dice_points); override via game_settings key claim_costs
 DICE_SIDES_BONUS_MULT = 1.05  # physical die has 5% more faces (ceil), e.g. 2→3, 1000→1050
 
@@ -330,7 +331,7 @@ def register(router):
                     await db.dice_ownership.update_one({"city": db_city}, {"$inc": {"profit": stake - actual_payout}})
                     _invalidate_ownership_cache(owner_id)
             else:
-                expires_at = (datetime.now(timezone.utc) + timedelta(minutes=2)).isoformat()
+                expires_at = (datetime.now(timezone.utc) + timedelta(minutes=DICE_BUY_BACK_EXPIRY_MINUTES)).isoformat()
                 offer_id = str(uuid.uuid4())
                 buy_back_doc = {
                     "id": offer_id,
@@ -452,6 +453,10 @@ def register(router):
             {"city": stored_city or city},
             {"$set": {"owner_id": None, "owner_username": None, "max_bet": CASINO_MIN_OWNER_MAX_BET}},
         )
+        # Remove pending buy-back offers for this holder/city after relinquish.
+        await db.dice_buy_back_offers.delete_many(
+            {"city": stored_city or city, "to_user_id": current_user.get("id") or ""}
+        )
         await cancel_quicktrade_casino_listings_by_locations("casino_dice", stored_city or city, city)
         return {"message": "You have relinquished the dice table."}
 
@@ -538,8 +543,13 @@ def register(router):
         if expires:
             try:
                 if datetime.fromisoformat(expires.replace("Z", "+00:00")) < datetime.now(timezone.utc):
-                    raise HTTPException(status_code=400, detail="Offer expired")
-            except Exception:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Offer expired ({DICE_BUY_BACK_EXPIRY_MINUTES} minute window).",
+                    )
+            except HTTPException:
+                raise
+            except ValueError:
                 pass
         city = offer.get("city")
         from_owner_id = offer.get("from_owner_id")
@@ -554,7 +564,7 @@ def register(router):
             {"$inc": {"points": -points_offered}},
         )
         if not deduct_res:
-            raise HTTPException(status_code=400, detail="Previous owner does not have enough points")
+            raise HTTPException(status_code=400, detail="Previous owner no longer has enough points for buy-back.")
         await log_points_event(db, user_id=from_owner_id, points=-points_offered, event_type="casino_dice", event_ref=f"buyback:{request.offer_id}", meta={"action": "buyback_deduct", "city": city, "offer_id": request.offer_id})
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"points": points_offered}})
         await log_points_event(db, user_id=current_user.get("id") or "", points=points_offered, event_type="casino_dice", event_ref=f"buyback:{request.offer_id}", meta={"action": "buyback_credit", "city": city, "offer_id": request.offer_id})

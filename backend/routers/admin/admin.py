@@ -2937,6 +2937,13 @@ def register(router):
             ),
         }
 
+    @router.post("/admin/lottery/repair-stuck-rounds")
+    async def admin_lottery_repair_stuck_rounds(current_user: dict = Depends(get_current_user)):
+        """Admin: repair malformed open lottery rounds and settle any now due."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        return await lottery_audit_mod.lottery_repair_stuck_rounds(True)
+
     @router.post("/admin/gauntlet/wipe-user-scores")
     async def admin_gauntlet_wipe_user_scores(
         target_username: str,
