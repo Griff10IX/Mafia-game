@@ -1757,7 +1757,11 @@ def effective_player_kill_count(user: Optional[Dict]) -> int:
         hn = int(user.get("hitlist_npc_kills") or 0)
     except (TypeError, ValueError):
         hn = 0
-    return max(0, raw - hn)
+    try:
+        rbg = int(user.get("robot_bodyguard_kills") or 0)
+    except (TypeError, ValueError):
+        rbg = 0
+    return max(0, raw - hn + rbg)
 
 
 # Floor for owner-set max bet across casino routers (matches set-max-bet handlers).
