@@ -214,13 +214,12 @@ def register(router):
         dead_users = max(0, total_users - alive_users)
 
         # Totals only from real users; total_cash only from alive real users
+        # Game Capital "booze" = one number: sum of every non-NPC user's stored booze_profit_total (alive + dead + staff).
         totals = await db.users.aggregate([
             {"$match": real_user_match},
             {
                 "$group": {
                     "_id": None,
-                    "money_total": {"$sum": {"$ifNull": ["$money", 0]}},
-                    "booze_profit_total": {"$sum": {"$ifNull": ["$booze_profit_total", 0]}},
                     "swiss_total": {"$sum": {"$ifNull": ["$swiss_balance", 0]}},
                     "bullets_total": {"$sum": {"$ifNull": ["$bullets", 0]}},
                     "total_crimes": {"$sum": {"$ifNull": ["$total_crimes", 0]}},
@@ -232,7 +231,15 @@ def register(router):
             }
         ]).to_list(1)
         totals_doc = totals[0] if totals else {}
-        
+
+        booze_sum_rows = await db.users.aggregate(
+            [
+                {"$match": {"is_npc": {"$ne": True}}},
+                {"$group": {"_id": None, "t": {"$sum": {"$ifNull": ["$booze_profit_total", 0]}}}},
+            ]
+        ).to_list(1)
+        booze_profit_grand_total = int(booze_sum_rows[0].get("t", 0) or 0) if booze_sum_rows else 0
+
         # Family treasuries total
         family_treasury_agg = await db.families.aggregate([
             {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$treasury", 0]}}}}
@@ -477,7 +484,7 @@ def register(router):
                 "swiss_total": int(totals_doc.get("swiss_total", 0) or 0),
                 "interest_bank_total": interest_bank_total,
                 "quicktrade_cash": quicktrade_cash,
-                "booze_profit_total": int(totals_doc.get("booze_profit_total", 0) or 0),
+                "booze_profit_total": booze_profit_grand_total,
                 "bullets_total": int(totals_doc.get("bullets_total", 0) or 0),
                 "family_treasury_total": family_treasury_total,
             },

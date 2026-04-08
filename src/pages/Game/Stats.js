@@ -72,7 +72,7 @@ const StatCard = ({ title, rows, delay = 0 }) => {
               key={r.label}
               className="stat-row flex items-center justify-between px-2 py-1.5 text-[10px] font-heading"
             >
-              <span className="text-mutedForeground">{r.label}</span>
+              <span className="text-mutedForeground" title={r.title || undefined}>{r.label}</span>
               <span className="font-bold text-foreground tabular-nums">{r.value}</span>
             </div>
           ))}
@@ -342,7 +342,12 @@ function buildGameCapitalRows(data) {
     { label: 'Swiss bank cash', value: formatMoney(gc?.swiss_total) },
     { label: 'Interest bank cash', value: formatMoney(gc?.interest_bank_total) },
     { label: 'Quick Trade cash', value: formatMoney(gc?.quicktrade_cash) },
-    { label: 'Booze profits', value: formatMoney(gc?.booze_profit_total) },
+    {
+      label: 'Booze run profit (all players)',
+      value: formatMoney(gc?.booze_profit_total),
+      title:
+        'Adds each account’s booze profit the same way you see on a profile (sum of users.booze_profit_total). Every non-bot user counts—if one player has $280M and another $120M, this row shows $400M. Lifetime run earnings, not cash on hand, so it will not match Total cash.',
+    },
     { label: 'Total bullets', value: formatNumber(gc?.bullets_total) },
     { label: 'Family treasuries', value: formatMoney(gc?.family_treasury_total) },
   ];
