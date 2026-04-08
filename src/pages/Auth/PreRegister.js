@@ -370,10 +370,10 @@ export default function PreRegister() {
               <div className="p-2.5 sm:p-3">
                 <ul className="text-[9px] sm:text-[10px] font-heading space-y-1 list-disc list-inside" style={{ color: 'var(--noir-muted)' }}>
                   <li>10% of their bullets from melting cars</li>
-                  <li>5% of their crime profit (cash)</li>
-                  <li>5% of their OC heist profit (cash)</li>
-                  <li>5% of their garage scrap profit (cash)</li>
-                  <li>2% of their booze profit (cash)</li>
+                  <li>10% of their crime profit (cash)</li>
+                  <li>10% of their OC heist profit (cash)</li>
+                  <li>10% of their garage scrap profit (cash)</li>
+                  <li>10% of their booze profit (cash)</li>
                 </ul>
               </div>
             </div>
@@ -386,7 +386,7 @@ export default function PreRegister() {
               </div>
               <div className="p-2.5 sm:p-3">
                 <p className="text-[9px] sm:text-[10px] font-heading" style={{ color: 'var(--noir-muted)' }}>
-                  People who sign up with your link get: free premium rank bar, 500 respect, 18 tokens (non-tradeable), 2% higher crime payouts, and a slight GTA rare car boost.
+                  People who sign up with your link get: free premium rank bar, 500 respect, 18 tokens (non-tradeable), 10% higher crime payouts, and a 10% GTA rare car boost.
                 </p>
               </div>
             </div>

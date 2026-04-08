@@ -179,7 +179,7 @@ GTA_EXCLUSIVE_POOL_CONFIG_ID = "gta_exclusive"
 GTA_EXCLUSIVE_DROP_WEIGHT_DEFAULT = 0.000006
 GTA_EXCLUSIVE_DROP_WEIGHT_MIN = 0.0000001
 GTA_EXCLUSIVE_DROP_WEIGHT_MAX = 0.05
-REFERRED_USER_GTA_RARE_BOOST = 0.15  # Slight GTA rare car weight boost for users who signed up with a referral
+REFERRED_USER_GTA_RARE_BOOST = 0.10  # GTA rare car weight boost for referred signups (pairs with ~10% copy)
 FOUNDING_MEMBER_GTA_RARE_BOOST = 0.025  # Founding Member: extra weight toward rarer cars
 
 # One-time respect_points rewards when total_gta crosses milestones (same progression as busts/crimes)
@@ -514,7 +514,7 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
             _rare_boost += bb.get("gta", 0) * 0.001 * bb.get("prestige_badge_mult", 1)
         except Exception:
             pass
-        # Referred user: slight GTA rare car boost
+        # Referred user: extra weight toward rarer cars (see REFERRED_USER_GTA_RARE_BOOST)
         if user_has_referrers(current_user.get("referred_by")):
             _rare_boost += REFERRED_USER_GTA_RARE_BOOST
         if _fm_gta > 1.0:
@@ -1282,11 +1282,11 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
                 "car_ids": car_ids[:limit],
             },
         )
-        # Referral: referrers split 5% of garage scrap profit (game-paid)
+        # Referral: referrers split 10% of garage scrap profit (game-paid)
         _rb = await db.users.find_one({"id": user["id"]}, {"_id": 0, "referred_by": 1})
         ref_ids = normalize_referred_by_ids((_rb or user).get("referred_by"))
         if ref_ids and total_value > 0:
-            pool = referral_pool_int(total_value, 0.05)
+            pool = referral_pool_int(total_value, 0.10)
             for rid, amt in split_referral_pool(pool, ref_ids, self_id=user["id"]):
                 if amt > 0:
                     await apply_referrer_referral_increment(

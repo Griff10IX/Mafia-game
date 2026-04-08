@@ -274,6 +274,8 @@ def _pick_author_online_color(
 FORUM_CATEGORIES = ["general", "entertainer", "crew_oc", "designer", "game_ideas"]  # game_ideas = Game Ideas hub + submissions
 FORUM_TOPICS_PER_PAGE = 20
 FORUM_TOPICS_MAX_TOTAL = 40  # page 1 = 20, page 2 = 20; beyond that topics are deleted (mods/admins only see page 2). Topics with prune_exempt=True are never auto-deleted.
+FORUM_CREW_OC_TOPICS_PER_PAGE = 10
+FORUM_CREW_OC_MAX_TOTAL = 20  # crew_oc: 10 per page × 2 pages; oldest beyond this are pruned
 
 class TopicCreate(BaseModel):
     title: str
@@ -323,12 +325,42 @@ async def _delete_topic_fully(topic_id: str, deleted_by_id: str = None, deleted_
     await db.forum_topics.delete_one({"id": topic_id})
 
 
+async def _delete_all_crew_oc_topics_for_family(family_id: str) -> None:
+    """Delete every crew_oc forum topic for this family (one active ad replaces prior runs / orphaned rows)."""
+    if not family_id:
+        return
+    docs = await db.forum_topics.find(
+        {"category": "crew_oc", "crew_oc_family_id": family_id},
+        {"_id": 0, "id": 1},
+    ).to_list(200)
+    for d in docs:
+        tid = d.get("id")
+        if tid:
+            await _delete_topic_fully(tid)
+
+
+async def _prune_forum_topics_for_category(category: str) -> None:
+    """Drop oldest topics in a category past the cap (sticky/important first; prune_exempt skipped)."""
+    cleanup_query = (
+        {"category": category}
+        if category in FORUM_CATEGORIES
+        else {"$or": [{"category": "general"}, {"category": {"$exists": False}}]}
+    )
+    max_total = FORUM_CREW_OC_MAX_TOTAL if category == "crew_oc" else FORUM_TOPICS_MAX_TOTAL
+    sort = [("is_important", -1), ("is_sticky", -1), ("updated_at", -1)]
+    all_in_category = await db.forum_topics.find(cleanup_query, {"_id": 0, "id": 1, "prune_exempt": 1}).sort(sort).to_list(max_total + 50)
+    for t in all_in_category[max_total:]:
+        if t.get("prune_exempt"):
+            continue
+        await _delete_topic_fully(t["id"])
+
+
 async def get_topics(
     category: Optional[str] = None,
     page: int = 1,
     current_user: dict = Depends(get_current_user),
 ):
-    """List topics: 20 per page. Page 1 = newest 20; page 2 = next 20 (mods/admins only). Topics beyond 40 are deleted elsewhere."""
+    """List topics: 20 per page (10 for Crew OC). Page 2 is mods/admins only. Oldest beyond cap are pruned on new posts."""
     if page not in (1, 2):
         page = 1
     if page == 2 and not _is_admin(current_user) and not _is_moderator(current_user):
@@ -345,8 +377,9 @@ async def get_topics(
         else:
             query["category"] = category
     sort = [("is_important", -1), ("is_sticky", -1), ("updated_at", -1)]
-    skip = (page - 1) * FORUM_TOPICS_PER_PAGE
-    topics = await db.forum_topics.find(query, {"_id": 0}).sort(sort).skip(skip).limit(FORUM_TOPICS_PER_PAGE).to_list(FORUM_TOPICS_PER_PAGE)
+    per_page = FORUM_CREW_OC_TOPICS_PER_PAGE if category == "crew_oc" else FORUM_TOPICS_PER_PAGE
+    skip = (page - 1) * per_page
+    topics = await db.forum_topics.find(query, {"_id": 0}).sort(sort).skip(skip).limit(per_page).to_list(per_page)
     author_ids = [t.get("author_id") for t in topics if t.get("author_id")]
     # Resolve every displayed author_username so staff colors work even when author_id is stale (wrong id, legacy import).
     username_to_id = {}
@@ -474,7 +507,13 @@ async def get_topics(
                 }
         out.append(item)
     can_view_page_2 = _is_admin(current_user) or _is_moderator(current_user)
-    return {"topics": out, "categories": FORUM_CATEGORIES, "page": page, "can_view_page_2": can_view_page_2}
+    return {
+        "topics": out,
+        "categories": FORUM_CATEGORIES,
+        "page": page,
+        "can_view_page_2": can_view_page_2,
+        "topics_per_page": per_page,
+    }
 
 
 async def get_topic(topic_id: str, current_user: dict = Depends(get_current_user)):
@@ -654,20 +693,6 @@ async def create_topic(
         role = (current_user.get("family_role") or "").strip().lower()
         if role not in ("boss", "underboss", "capo"):
             raise HTTPException(status_code=403, detail="Only Boss, Underboss, or Capo can create Crew OC ads")
-        existing = await db.families.find_one(
-            {"id": crew_oc_family_id, "crew_oc_forum_topic_id": {"$exists": True, "$ne": None}},
-            {"_id": 0, "crew_oc_forum_topic_id": 1},
-        )
-        existing_topic_id = ((existing or {}).get("crew_oc_forum_topic_id") or "").strip()
-        if existing_topic_id:
-            topic_exists = await db.forum_topics.find_one({"id": existing_topic_id}, {"_id": 1})
-            if topic_exists:
-                raise HTTPException(status_code=400, detail="Family already has a Crew OC topic. Use that topic or remove the link from family first.")
-            # Topic was deleted but family still references it; clear stale link.
-            await db.families.update_one(
-                {"id": crew_oc_family_id},
-                {"$unset": {"crew_oc_forum_topic_id": ""}},
-            )
         # Crew OC topic only when OC is available or within CREW_OC_TOPIC_WINDOW_MINUTES before it becomes available
         cooldown_until = _parse_iso_datetime(fam.get("crew_oc_cooldown_until"))
         if cooldown_until:
@@ -717,6 +742,7 @@ async def create_topic(
     if title_color:
         doc["title_color"] = title_color
     if crew_oc_family_id:
+        await _delete_all_crew_oc_topics_for_family(crew_oc_family_id)
         doc["crew_oc_family_id"] = crew_oc_family_id
     await db.forum_topics.insert_one(doc)
     if crew_oc_family_id:
@@ -730,14 +756,7 @@ async def create_topic(
         "forum_topic",
         {"topic_id": topic_id, "title": title},
     )
-    # Keep only FORUM_TOPICS_MAX_TOTAL topics per category; delete oldest beyond that
-    cleanup_query = {"category": category} if category in FORUM_CATEGORIES else {"$or": [{"category": "general"}, {"category": {"$exists": False}}]}
-    sort = [("is_important", -1), ("is_sticky", -1), ("updated_at", -1)]
-    all_in_category = await db.forum_topics.find(cleanup_query, {"_id": 0, "id": 1, "prune_exempt": 1}).sort(sort).to_list(FORUM_TOPICS_MAX_TOTAL + 50)
-    for t in all_in_category[FORUM_TOPICS_MAX_TOTAL:]:
-        if t.get("prune_exempt"):
-            continue
-        await _delete_topic_fully(t["id"])
+    await _prune_forum_topics_for_category(category)
     return {"id": topic_id, "message": "Topic created", "topic": {**doc, "_id": 0}}
 
 

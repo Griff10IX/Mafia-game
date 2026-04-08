@@ -1846,7 +1846,7 @@ export default function Profile() {
                       {(me?.referred_by_ids?.length > 1) ? 'Referrers' : 'Referred by'}: <span className="text-foreground font-semibold">{me.referred_by_username}</span>
                     </p>
                     <p className="text-[11px] text-mutedForeground font-heading">
-                      Your signup bonus: premium rank bar, 500 respect points, and 18 tokens (use them; they can&apos;t be sold on Quick Trade). You also get 2% higher crime payouts and a slight GTA rare car boost.
+                      Your signup bonus: premium rank bar, 500 respect points, and 18 tokens (use them; they can&apos;t be sold on Quick Trade). You also get 10% higher crime payouts and a 10% GTA rare car boost.
                     </p>
                   </>
                 )}
@@ -1855,10 +1855,10 @@ export default function Profile() {
                 </p>
                 <ul className="text-[11px] text-mutedForeground font-heading list-disc list-inside space-y-0.5 mb-2">
                   <li>10% of their bullets from melting cars</li>
-                  <li>5% of their crime profit</li>
-                  <li>5% of their OC heist profit</li>
-                  <li>5% of their garage scrap (cash) profit</li>
-                  <li>2% of their booze profit (cash)</li>
+                  <li>10% of their crime profit</li>
+                  <li>10% of their OC heist profit</li>
+                  <li>10% of their garage scrap (cash) profit</li>
+                  <li>10% of their booze profit (cash)</li>
                 </ul>
                 <p className="text-[10px] text-mutedForeground font-heading mb-1.5">
                   Referrals must verify email before their play counts toward your earnings.

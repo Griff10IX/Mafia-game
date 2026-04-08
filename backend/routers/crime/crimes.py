@@ -740,9 +740,9 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
         _fm_cr = founding_member_income_mult(current_user)
         reward = int(reward * _fm_cr)
         rank_points = int(rank_points * _fm_cr)
-        # Referred user: 2% higher crime payouts
+        # Referred user: 10% higher crime cash payouts
         if user_has_referrers(current_user.get("referred_by")):
-            reward = int(reward * 1.02)
+            reward = int(reward * 1.10)
         from server import rank_xp_pass_multiplier
         pass_mult = float(rank_xp_pass_multiplier(current_user))
         reward = int(reward * pass_mult)
@@ -811,11 +811,11 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
                 )
         except Exception:
             pass
-        # Referral: referrers split 5% of crime profit evenly (game-paid)
+        # Referral: referrers split 10% of crime profit evenly (game-paid)
         _rb = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "referred_by": 1})
         ref_ids = normalize_referred_by_ids((_rb or current_user).get("referred_by"))
         if ref_ids and reward > 0:
-            pool = referral_pool_int(reward, 0.05)
+            pool = referral_pool_int(reward, 0.10)
             for rid, amt in split_referral_pool(pool, ref_ids, self_id=current_user["id"]):
                 if amt > 0:
                     await apply_referrer_referral_increment(

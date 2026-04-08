@@ -1992,7 +1992,7 @@ def register(router):
         }
         signup_bonus = None
         if referred_by_username:
-            signup_bonus = "Premium rank bar, 500 respect points, and 18 tokens (use them; they can't be sold on Quick Trade). Plus 2% higher crime payouts and a slight GTA rare car boost."
+            signup_bonus = "Premium rank bar, 500 respect points, and 18 tokens (use them; they can't be sold on Quick Trade). Plus 10% higher crime payouts and a 10% GTA rare car boost."
         redeem_stats = {
             "total_money": int(current_user.get("redeem_stats_total_money") or 0),
             "total_points": int(current_user.get("redeem_stats_total_points") or 0),

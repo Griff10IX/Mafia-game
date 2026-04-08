@@ -973,7 +973,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
                     Referred by {referralCode}
                   </p>
                   <p className="text-[10px] font-heading" style={{ color: 'var(--noir-muted)' }}>
-                    You&apos;ll get a free premium rank bar, 500 respect points, and bonus tokens (non-tradeable). Plus 2% higher crime payouts and a slight GTA rare car boost.
+                    You&apos;ll get a free premium rank bar, 500 respect points, and bonus tokens (non-tradeable). Plus 10% higher crime payouts and a 10% GTA rare car boost.
                   </p>
                 </>
               )}

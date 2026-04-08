@@ -6,6 +6,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-08 21:00 UTC[/color][/b] — [b]Referral: 10% cuts and referred-user bonuses[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Referrers[/b] — game-paid cuts from referred players are now [b]10%[/b] across the board: [b]crime cash profit[/b], [b]OC heist cash[/b], [b]garage scrap cash[/b], [b]booze profit[/b], and [b]bullets from melting cars[/b] (unchanged at 10%; other categories were raised to match).[/color]
+[*][color=#888888][b]Changed:[/b] [b]Referred signups[/b] — bonus is now [b]10% higher crime cash[/b] on successful crimes (was 2%) and a [b]10% GTA rare-car weight boost[/b] (was a smaller boost). Copy on [b]Account → Referral[/b], [b]Profile[/b], [b]Pre-register[/b], and [b]Landing[/b] matches.[/color]
+[*][color=#888888][b]Player action:[/b] No setup needed. [b]FAQ[/b] referral bullet was updated for referrer percentages.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-08 19:30 UTC[/color][/b] — [b]Grave Robber: rarer jail on digs[/b][/size]
 [quote]
 [list]

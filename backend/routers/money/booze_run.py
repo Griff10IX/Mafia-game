@@ -622,11 +622,11 @@ async def _booze_sell_impl(user: dict, booze_id: str, amount: int, *, via_auto_r
             await update_objectives_progress(user["id"], "booze_runs", 1)
         except Exception:
             pass
-        # Referral: referrers split 2% of booze profit (game-paid)
+        # Referral: referrers split 10% of booze profit (game-paid)
         _rb = await db.users.find_one({"id": user["id"]}, {"_id": 0, "referred_by": 1})
         ref_ids = normalize_referred_by_ids((_rb or user).get("referred_by"))
         if ref_ids and profit > 0:
-            pool = referral_pool_int(profit, 0.02)
+            pool = referral_pool_int(profit, 0.10)
             for rid, amt in split_referral_pool(pool, ref_ids, self_id=user["id"]):
                 if amt > 0:
                     await apply_referrer_referral_increment(

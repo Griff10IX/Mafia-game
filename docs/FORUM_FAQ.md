@@ -964,7 +964,7 @@ Community discussion boards:
 
 [color=#1ABC9C][b]Referrals[/b][/color]
 [list]
-[*][color=#888888]If you registered with a referral link, your referrer earns [b]extra rewards paid by the game[/b] (not taken from you) on some of your payouts — e.g. [b]5%[/b] of crime cash profit, [b]5%[/b] of OC heist cash share, [b]2%[/b] of booze profit, [b]10%[/b] of bullets when you melt for bullets (referrer gets a parallel grant), [b]5%[/b] of garage scrap cash. Use the register / invite UI for your own link.[/color]
+[*][color=#888888]If you registered with a referral link, your referrer earns [b]extra rewards paid by the game[/b] (not taken from you) on some of your payouts — e.g. [b]10%[/b] of crime cash profit, [b]10%[/b] of OC heist cash share, [b]10%[/b] of booze profit, [b]10%[/b] of bullets when you melt for bullets (referrer gets a parallel grant), [b]10%[/b] of garage scrap cash. Use the register / invite UI for your own link.[/color]
 [/list]
 
 [color=#1ABC9C][b]Pre-launch registration (Founding Member)[/b][/color]

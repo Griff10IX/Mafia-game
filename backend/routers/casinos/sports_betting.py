@@ -962,11 +962,18 @@ async def _fetch_football_data_finished_matches(days_back: int = 4) -> list:
 
 async def _auto_settle_fallback_football_data() -> int:
     """Fallback settle for soccer-linked open events when Odds API score polling fails."""
-    matches = await _fetch_football_data_finished_matches(days_back=4)
-    if not matches:
-        return 0
     bet_event_ids = await _linkable_due_once_event_ids_with_open_bets()
     if not bet_event_ids:
+        return 0
+    has_soccer = await db.sports_events.find_one(
+        {"status": "open", "id": {"$in": list(bet_event_ids)},
+         "external_sport_key": {"$in": list(SOCCER_LEAGUES)}},
+        {"_id": 1},
+    )
+    if not has_soccer:
+        return 0
+    matches = await _fetch_football_data_finished_matches(days_back=4)
+    if not matches:
         return 0
     now_iso = datetime.now(timezone.utc).isoformat()
     cursor = db.sports_events.find(
@@ -1050,11 +1057,18 @@ def _driver_finish_pos_from_race(race: dict, option_name: str) -> Optional[int]:
 
 
 async def _auto_settle_fallback_f1_ergast() -> int:
-    races = await _fetch_ergast_f1_results_recent()
-    if not races:
-        return 0
     bet_event_ids = await _linkable_due_once_event_ids_with_open_bets()
     if not bet_event_ids:
+        return 0
+    has_f1 = await db.sports_events.find_one(
+        {"status": "open", "id": {"$in": list(bet_event_ids)},
+         "external_sport_key": "motor_racing_f1"},
+        {"_id": 1},
+    )
+    if not has_f1:
+        return 0
+    races = await _fetch_ergast_f1_results_recent()
+    if not races:
         return 0
     now_iso = datetime.now(timezone.utc).isoformat()
     cursor = db.sports_events.find(
@@ -1183,6 +1197,14 @@ async def _auto_settle_fallback_thesportsdb_open_bets() -> int:
         return 0
 
     now_iso = datetime.now(timezone.utc).isoformat()
+    has_fb = await db.sports_events.find_one(
+        {"status": "open", "id": {"$in": list(bet_event_ids)},
+         "start_time": {"$lte": now_iso},
+         "category": {"$in": ["Football", "Boxing"]}},
+        {"_id": 1},
+    )
+    if not has_fb:
+        return 0
     cursor = db.sports_events.find(
         {
             "status": "open",
@@ -1275,14 +1297,29 @@ async def _auto_settle_from_scores() -> dict:
             logger.warning("Auto-settle attempted marker update failed (no Odds key): %s", ex)
         return {"settled": fallback_settled, "skipped_no_match": 0, "skipped_no_winner": 0, "source": "fallback_only"}
     due_event_ids = await _linkable_due_once_event_ids_with_open_bets()
+    # Collect only the sport keys that actually have due events with open bets.
+    needed_sport_keys: set[str] = set()
+    if due_event_ids:
+        _nsk_cursor = db.sports_events.find(
+            {**_LINKABLE_OPEN_EVENT_FILTER, "id": {"$in": list(due_event_ids)}},
+            {"_id": 0, "external_sport_key": 1},
+        ).limit(3000)
+        async for _nsk_doc in _nsk_cursor:
+            _sk = (_nsk_doc.get("external_sport_key") or "").strip()
+            if _sk:
+                needed_sport_keys.add(_sk)
+    all_sport_keys: set[str] = set()
+    for _ks in ODDS_API_SPORT_KEYS.values():
+        all_sport_keys.update(_ks)
     sport_keys_used = set()
     for category, keys in ODDS_API_SPORT_KEYS.items():
         three_way = category == "Football"
         for sport_key in keys:
             if sport_key in sport_keys_used:
                 continue
+            if sport_key not in needed_sport_keys:
+                continue
             sport_keys_used.add(sport_key)
-            # Look back farther so delayed/manual runs can still settle bets from previous days.
             events = await _fetch_odds_api_scores(sport_key, days_from=3)
             for api_ev in events:
                 if not api_ev.get("completed"):
@@ -1334,6 +1371,8 @@ async def _auto_settle_from_scores() -> dict:
         "skipped_no_match": skipped_no_match,
         "skipped_no_winner": skipped_no_winner,
         "fallback_settled": fallback_settled,
+        "sport_keys_queried": len(sport_keys_used),
+        "sport_keys_skipped": len(all_sport_keys) - len(sport_keys_used),
     }
 
 

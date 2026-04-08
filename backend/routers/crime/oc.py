@@ -665,12 +665,12 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
                 )
             except Exception as e:
                 logger.exception("Rank-up notification (team OC): %s", e)
-    # Referral: referrers split 5% of OC profit for heist runner (game-paid)
+    # Referral: referrers split 10% of OC profit for heist runner (game-paid)
     if cash_each > 0:
         uid_doc = await db.users.find_one({"id": uid}, {"_id": 0, "referred_by": 1})
         ref_ids = normalize_referred_by_ids((uid_doc or {}).get("referred_by"))
         if ref_ids:
-            pool = referral_pool_int(cash_each, 0.05)
+            pool = referral_pool_int(cash_each, 0.10)
             for rid, amt in split_referral_pool(pool, ref_ids, self_id=uid):
                 if amt > 0:
                     await apply_referrer_referral_increment(

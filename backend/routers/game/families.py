@@ -2971,13 +2971,6 @@ async def families_crew_oc_advertise(current_user: dict = Depends(get_current_us
     )
     if not fam:
         raise HTTPException(status_code=404, detail="Family not found")
-    existing_topic_id = (fam.get("crew_oc_forum_topic_id") or "").strip()
-    if existing_topic_id:
-        topic_exists = await db.forum_topics.find_one({"id": existing_topic_id}, {"_id": 1})
-        if topic_exists:
-            raise HTTPException(status_code=400, detail="Family already has a Crew OC topic. Go to Forum → Crew OC to find it.")
-        # Stale link from a deleted topic; clear it so a new ad can be posted.
-        await db.families.update_one({"id": family_id}, {"$unset": {"crew_oc_forum_topic_id": ""}})
     # Only allow when Crew OC is available or within CREW_OC_TOPIC_WINDOW_MINUTES before it becomes available
     cooldown_until = fam.get("crew_oc_cooldown_until")
     if cooldown_until:
@@ -2994,6 +2987,9 @@ async def families_crew_oc_advertise(current_user: dict = Depends(get_current_us
             raise
         except Exception:
             pass
+    from routers.social.forum import _delete_all_crew_oc_topics_for_family, _prune_forum_topics_for_category
+
+    await _delete_all_crew_oc_topics_for_family(family_id)
     topic_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
     title = f"Crew OC: {fam.get('name')} [{fam.get('tag')}]"
@@ -3006,6 +3002,7 @@ async def families_crew_oc_advertise(current_user: dict = Depends(get_current_us
     }
     await db.forum_topics.insert_one(doc)
     await db.families.update_one({"id": family_id}, {"$set": {"crew_oc_forum_topic_id": topic_id}})
+    await _prune_forum_topics_for_category("crew_oc")
     _invalidate_my_cache(current_user["id"])
     return {"message": "Crew OC topic created.", "topic_id": topic_id, "title": title}
 
