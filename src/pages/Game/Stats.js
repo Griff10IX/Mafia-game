@@ -362,7 +362,7 @@ function buildVehicleRows(data) {
 
 // Main component
 export default function Stats() {
-  const usersOnlyKills = false;
+  const usersOnlyKills = true;
   const [data, setData] = useState(() => getStatsOverview(true));
   const [statsListTab, setStatsListTab] = useState('kills'); // 'kills' | 'wiped'
 
