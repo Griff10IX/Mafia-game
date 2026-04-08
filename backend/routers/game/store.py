@@ -400,6 +400,7 @@ async def buy_booze_capacity(
 
 async def store_buy_bullets(
     bullets: int = Query(..., ge=1, le=CUSTOM_BULLETS_MAX),
+    pay_with: str = Query("auto"),
     current_user: dict = Depends(get_current_user),
 ):
     cost = BULLET_PACKS.get(bullets)
@@ -411,7 +412,7 @@ async def store_buy_bullets(
         except ValueError as e:
             logger.exception("store_buy_bullets validation error: %s", e)
             raise HTTPException(status_code=400, detail="Invalid bullet quantity.")
-    cost_used, inc, gte_filter = _store_cost_inc(current_user, cost)
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, cost, pay_with)
     if not cost_used:
         raise HTTPException(status_code=400, detail="Insufficient points")
     inc["bullets"] = bullets
@@ -643,6 +644,7 @@ async def admin_points_transfers(
 
 async def buy_store_token(
     body: BuyStoreTokenBody,
+    pay_with: str = Query("auto"),
     current_user: dict = Depends(get_current_user),
 ):
     from routers.kill.armoury import TOKEN_CONFIG, TOKEN_TYPES
@@ -663,7 +665,7 @@ async def buy_store_token(
         )
     unit = TOKEN_STORE_UNIT_PRICE_POINTS[tt]
     total_cost = unit * amt
-    cost_used, inc, gte_filter = _store_cost_inc(current_user, total_cost)
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, total_cost, pay_with)
     if not cost_used:
         raise HTTPException(status_code=400, detail="Insufficient points")
     inc[cf] = inc.get(cf, 0) + amt
@@ -682,6 +684,7 @@ async def buy_store_token(
 
 async def buy_store_token_bundle(
     body: BuyStoreTokenBundleBody,
+    pay_with: str = Query("auto"),
     current_user: dict = Depends(get_current_user),
 ):
     bid = (body.bundle_id or "").strip()
@@ -695,7 +698,7 @@ async def buy_store_token_bundle(
                 status_code=400,
                 detail=f"Would exceed max {STORE_TOKEN_MAX_HELD} stored for {field} (currently {cur}).",
             )
-    cost_used, inc, gte_filter = _store_cost_inc(current_user, cost)
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, cost, pay_with)
     if not cost_used:
         raise HTTPException(status_code=400, detail="Insufficient points")
     for field, add in field_inc.items():

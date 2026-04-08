@@ -159,6 +159,22 @@ const Tab = ({ active, onClick, children, disabled, className = '' }) => (
   </button>
 );
 
+function StorePayWithSelect({ value, onChange }) {
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-[9px] text-zinc-500 font-heading uppercase tracking-wider">Pay with</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value === 'respect' ? 'respect' : 'points')}
+        className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-[10px] text-foreground focus:border-primary/50 focus:outline-none"
+      >
+        <option value="points">Points</option>
+        <option value="respect">Respect points</option>
+      </select>
+    </div>
+  );
+}
+
 const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, onBuy, loading, disabled, user, payWith = 'auto', children }) => (
   <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
     <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -242,7 +258,7 @@ export default function Store() {
   const [manualCreditEta, setManualCreditEta] = useState(null);
   const [pendingPoints, setPendingPoints] = useState(0);
   const [claimingPending, setClaimingPending] = useState(false);
-  const [upgradesPayWith, setUpgradesPayWith] = useState('points');
+  const [storePayWith, setStorePayWith] = useState('points');
 
   const handleClaimPendingPoints = async () => {
     setClaimingPending(true);
@@ -439,13 +455,17 @@ export default function Store() {
     }
     const cost = bulletCost(b);
     const respectCost = storeRespectForPoints(cost);
-    if (user && (user.points ?? 0) < cost && (user.respect_points ?? 0) < respectCost) {
-      toast.error(`Need ${cost} pts or ${respectCost} respect`);
+    if (storePayWith === 'points' && (user.points ?? 0) < cost) {
+      toast.error(`Need ${cost} pts`);
+      return;
+    }
+    if (storePayWith === 'respect' && (user.respect_points ?? 0) < respectCost) {
+      toast.error(`Need ${respectCost} respect`);
       return;
     }
     setLoading(true);
     try {
-      await api.post(`/store/buy-bullets?bullets=${b}`);
+      await api.post(`/store/buy-bullets?bullets=${b}&pay_with=${encodeURIComponent(storePayWith)}`);
       toast.success(`Bought ${b.toLocaleString()} bullets`);
       setCustomBullets('');
       refreshUser();
@@ -602,6 +622,11 @@ export default function Store() {
         <Tab active={activeTab === 'tokens'} onClick={() => { setActiveTab('tokens'); setSearchParams({ tab: 'tokens' }); }}>Tokens</Tab>
         <Tab active={activeTab === 'bullets'} onClick={() => { setActiveTab('bullets'); setSearchParams({ tab: 'bullets' }); }}>Bullets</Tab>
       </div>
+      {['upgrades', 'tokens', 'bullets'].includes(activeTab) && (
+        <div className="mb-2">
+          <StorePayWithSelect value={storePayWith} onChange={setStorePayWith} />
+        </div>
+      )}
 
       {activeTab === 'points' && (
         <div className="space-y-3">
@@ -795,17 +820,6 @@ export default function Store() {
               <span className="text-foreground font-semibold">5,000 pts</span> or the respect equivalent — the buy button shows both prices.
               {' '}Bought upgrades are removed from this list once owned permanently (e.g. Auto Rank after purchase — trial access still shows the buy option).
             </p>
-            <div className="flex items-center gap-2">
-              <span className="text-[9px] text-zinc-500 font-heading uppercase tracking-wider">Pay with</span>
-              <select
-                value={upgradesPayWith}
-                onChange={(e) => setUpgradesPayWith(e.target.value === 'respect' ? 'respect' : 'points')}
-                className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-[10px] text-foreground focus:border-primary/50 focus:outline-none"
-              >
-                <option value="points">Points</option>
-                <option value="respect">Respect points</option>
-              </select>
-            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2">
           {UPGRADES.filter((u) => {
             if (u.id === 'auto-rank') {
@@ -842,8 +856,8 @@ export default function Store() {
                 loading={loading}
                 disabled={disabled}
                 user={user}
-                payWith={upgradesPayWith}
-                onBuy={() => apiBuy(`${u.path}?pay_with=${encodeURIComponent(upgradesPayWith)}`, {}, 'Purchased')}
+                payWith={storePayWith}
+                onBuy={() => apiBuy(`${u.path}?pay_with=${encodeURIComponent(storePayWith)}`, {}, 'Purchased')}
               >
                 {extra && (
                   <p className="text-[10px] text-mutedForeground mb-1">Current: {extra.value}</p>
@@ -885,20 +899,20 @@ export default function Store() {
                         toast.error('Custom car name contains disallowed language.');
                         return;
                       }
-                      apiBuy(`/store/buy-custom-car?pay_with=${encodeURIComponent(upgradesPayWith)}`, { car_name: name }, 'Custom car purchased').then(() => setCustomCarName(''));
+                      apiBuy(`/store/buy-custom-car?pay_with=${encodeURIComponent(storePayWith)}`, { car_name: name }, 'Custom car purchased').then(() => setCustomCarName(''));
                     }}
                     disabled={
                       !user
                       || !customCarName.trim()
                       || (
-                        upgradesPayWith === 'points'
+                        storePayWith === 'points'
                           ? (user.points ?? 0) < 500
                           : (user.respect_points ?? 0) < storeRespectForPoints(500)
                       )
                     }
                     className="w-full min-h-[44px] py-2.5 sm:py-2 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
                   >
-                    {upgradesPayWith === 'points' ? '500 pts' : `${storeRespectForPoints(500)} resp`}
+                    {storePayWith === 'points' ? '500 pts' : `${storeRespectForPoints(500)} resp`}
                   </button>
                 </div>
               </div>
@@ -930,7 +944,8 @@ export default function Store() {
                     loading={loading}
                     disabled={atCap}
                     user={user}
-                    onBuy={() => apiBuy('/store/buy-token', { token_type: t.tokenType, amount: 1 }, `+1 ${t.title}`)}
+                    payWith={storePayWith}
+                    onBuy={() => apiBuy(`/store/buy-token?pay_with=${encodeURIComponent(storePayWith)}`, { token_type: t.tokenType, amount: 1 }, `+1 ${t.title}`)}
                   >
                     <p className="text-[10px] text-mutedForeground mb-1">Held: {held}/{STORE_TOKEN_MAX_HELD}</p>
                   </StoreCard>
@@ -954,7 +969,8 @@ export default function Store() {
                   loading={loading}
                   disabled={!user}
                   user={user}
-                  onBuy={() => apiBuy('/store/buy-token-bundle', { bundle_id: b.id }, 'Bundle purchased')}
+                  payWith={storePayWith}
+                  onBuy={() => apiBuy(`/store/buy-token-bundle?pay_with=${encodeURIComponent(storePayWith)}`, { bundle_id: b.id }, 'Bundle purchased')}
                 />
               ))}
             </div>
@@ -967,6 +983,11 @@ export default function Store() {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-2">
             {BULLET_PACKS.map((pack) => {
               const respectCost = storeRespectForPoints(pack.cost);
+              const canAfford =
+                user
+                && (storePayWith === 'points'
+                  ? (user.points ?? 0) >= pack.cost
+                  : (user.respect_points ?? 0) >= respectCost);
               return (
                 <div key={pack.bullets} className={`relative ${styles.panel} rounded-lg border border-primary/20 overflow-hidden mobile-panel`}>
                   <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -975,14 +996,16 @@ export default function Store() {
                     <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">{(pack.bullets / 1000).toFixed(0)}k bullets</span>
                   </div>
                   <div className="p-2.5 text-center">
-                    <p className="text-[10px] text-zinc-500 font-heading mb-2">{pack.cost} pts or {respectCost} resp</p>
+                    <p className="text-[10px] text-zinc-500 font-heading mb-2">
+                      {storePayWith === 'points' ? `${pack.cost} pts` : `${respectCost} resp`}
+                    </p>
                     <button
                       type="button"
-                      onClick={() => apiBuy(`/store/buy-bullets?bullets=${pack.bullets}`, null, `Bought ${pack.bullets.toLocaleString()} bullets`)}
-                      disabled={!user || ((user.points ?? 0) < pack.cost && (user.respect_points ?? 0) < respectCost)}
+                      onClick={() => apiBuy(`/store/buy-bullets?bullets=${pack.bullets}&pay_with=${encodeURIComponent(storePayWith)}`, null, `Bought ${pack.bullets.toLocaleString()} bullets`)}
+                      disabled={!canAfford}
                       className="w-full min-h-[44px] py-2.5 sm:py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
                     >
-                      Buy
+                      {storePayWith === 'points' ? `Buy · ${pack.cost} pts` : `Buy · ${respectCost} resp`}
                     </button>
                   </div>
                   <div className="store-art-line text-primary mx-3" />
@@ -1007,7 +1030,8 @@ export default function Store() {
                     if (!Number.isFinite(b) || b < 1) return null;
                     if (b > CUSTOM_BULLETS_MAX) return '—';
                     const c = bulletCost(b);
-                    return `${c} pts or ${storeRespectForPoints(c)} resp`;
+                    const r = storeRespectForPoints(c);
+                    return storePayWith === 'points' ? `${c} pts` : `${r} resp`;
                   })() || '—'
                 ) : (
                   '—'
@@ -1018,9 +1042,13 @@ export default function Store() {
               <button
                 type="button"
                 onClick={handleCustomBulletsPurchase}
-                disabled={loading || !customBullets || (() => {
+                disabled={loading || !user || !customBullets || (() => {
                   const b = parseInt(String(customBullets).replace(/\D/g, ''), 10);
-                  return !Number.isFinite(b) || b < 1 || b > CUSTOM_BULLETS_MAX;
+                  if (!Number.isFinite(b) || b < 1 || b > CUSTOM_BULLETS_MAX) return true;
+                  const c = bulletCost(b);
+                  const r = storeRespectForPoints(c);
+                  if (storePayWith === 'points') return (user.points ?? 0) < c;
+                  return (user.respect_points ?? 0) < r;
                 })()}
                 className="w-full min-h-[44px] py-2.5 sm:py-1.5 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50 touch-manipulation"
               >

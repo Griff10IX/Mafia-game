@@ -281,7 +281,7 @@ function SidebarCatHeader({ label, classic }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 8px 3px 10px', marginTop: 3 }}>
       <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
-      <span style={{ fontFamily: 'var(--font-heading, "Cinzel", serif)', fontSize: 8, letterSpacing: '0.22em', textTransform: 'uppercase', color: labelColor, whiteSpace: 'nowrap' }}>{label}</span>
+      <span style={{ fontFamily: 'var(--font-heading, "Cinzel", serif)', fontSize: 8, letterSpacing: '0.14em', textTransform: 'uppercase', color: labelColor, whiteSpace: 'nowrap' }}>{label}</span>
       <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
     </div>
   );
@@ -1051,7 +1051,7 @@ export default function Layout({ children }) {
         className={`w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isRankingPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
         style={{ padding: '5px 8px 3px 10px', marginTop: 3 }}>
         <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
-        <span style={{ fontFamily: 'var(--font-heading, "Cinzel", serif)', fontSize: 8, letterSpacing: '0.22em', textTransform: 'uppercase', color: isRankingPath(location.pathname) ? 'var(--noir-primary)' : 'var(--noir-muted)', whiteSpace: 'nowrap' }}>Ranking</span>
+        <span style={{ fontFamily: 'var(--font-heading, "Cinzel", serif)', fontSize: 8, letterSpacing: '0.14em', textTransform: 'uppercase', color: isRankingPath(location.pathname) ? 'var(--noir-primary)' : 'var(--noir-muted)', whiteSpace: 'nowrap' }}>Ranking</span>
         {!rankingOpen && (rankingCounts.crimes > 0 || rankingCounts.gta > 0) && (
           <span className="bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30 shrink-0">
             {rankingCounts.crimes + rankingCounts.gta}
@@ -1121,7 +1121,7 @@ export default function Layout({ children }) {
         className={`w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isCombatPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
         style={{ padding: '5px 8px 3px 10px', marginTop: 3 }}>
         <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
-        <span style={{ fontFamily: 'var(--font-heading, "Cinzel", serif)', fontSize: 8, letterSpacing: '0.22em', textTransform: 'uppercase', color: isCombatPath(location.pathname) ? 'var(--noir-primary)' : 'var(--noir-muted)', whiteSpace: 'nowrap' }}>Combat</span>
+        <span style={{ fontFamily: 'var(--font-heading, "Cinzel", serif)', fontSize: 8, letterSpacing: '0.14em', textTransform: 'uppercase', color: isCombatPath(location.pathname) ? 'var(--noir-primary)' : 'var(--noir-muted)', whiteSpace: 'nowrap' }}>Combat</span>
         {combatOpen ? <ChevronDown size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" /> : <ChevronRight size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" />}
         <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
       </button>
@@ -1179,7 +1179,7 @@ export default function Layout({ children }) {
             style={{
               fontFamily: 'var(--font-heading, "Cinzel", serif)',
               fontSize: 8,
-              letterSpacing: '0.22em',
+              letterSpacing: '0.14em',
               textTransform: 'uppercase',
               color: isMessagingPath(location.pathname) ? 'var(--noir-primary)' : 'var(--noir-muted)',
               whiteSpace: 'nowrap',
@@ -1243,7 +1243,7 @@ export default function Layout({ children }) {
         className={`w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isCasinoPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
         style={{ padding: '5px 8px 3px 10px', marginTop: 3 }}>
         <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
-        <span style={{ fontFamily: 'var(--font-heading, "Cinzel", serif)', fontSize: 8, letterSpacing: '0.22em', textTransform: 'uppercase', color: isCasinoPath(location.pathname) ? 'var(--noir-primary)' : 'var(--noir-muted)', whiteSpace: 'nowrap' }}>Casino</span>
+        <span style={{ fontFamily: 'var(--font-heading, "Cinzel", serif)', fontSize: 8, letterSpacing: '0.14em', textTransform: 'uppercase', color: isCasinoPath(location.pathname) ? 'var(--noir-primary)' : 'var(--noir-muted)', whiteSpace: 'nowrap' }}>Casino</span>
         {casinoOpen ? <ChevronDown size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" /> : <ChevronRight size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" />}
         <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
       </button>
@@ -1294,7 +1294,7 @@ export default function Layout({ children }) {
         className={`w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent ${isMiniGamesPath(location.pathname) ? 'opacity-100' : 'opacity-90 hover:opacity-100'}`}
         style={{ padding: '5px 8px 3px 10px', marginTop: 3 }}>
         <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
-        <span style={{ fontFamily: 'var(--font-heading, "Cinzel", serif)', fontSize: 8, letterSpacing: '0.22em', textTransform: 'uppercase', color: isMiniGamesPath(location.pathname) ? 'var(--noir-primary)' : 'var(--noir-muted)', whiteSpace: 'nowrap' }}>Mini games</span>
+        <span style={{ fontFamily: 'var(--font-heading, "Cinzel", serif)', fontSize: 8, letterSpacing: '0.14em', textTransform: 'uppercase', color: isMiniGamesPath(location.pathname) ? 'var(--noir-primary)' : 'var(--noir-muted)', whiteSpace: 'nowrap' }}>Mini games</span>
         {miniGamesOpen ? <ChevronDown size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" /> : <ChevronRight size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" />}
         <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
       </button>
@@ -1582,7 +1582,7 @@ export default function Layout({ children }) {
                         {isBlockCategory ? null : (
                           <button type="button" onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-1.5 rounded-sm transition-smooth cursor-pointer border-0 bg-transparent opacity-90 hover:opacity-100" style={{ padding: '5px 8px 3px 10px', marginTop: 3 }} aria-expanded={open}>
                             <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
-                            <span style={{ fontFamily: 'var(--font-heading, "Cinzel", serif)', fontSize: 8, letterSpacing: '0.22em', textTransform: 'uppercase', color: 'var(--noir-muted)', whiteSpace: 'nowrap' }}>{cat.label}</span>
+                            <span style={{ fontFamily: 'var(--font-heading, "Cinzel", serif)', fontSize: 8, letterSpacing: '0.14em', textTransform: 'uppercase', color: 'var(--noir-muted)', whiteSpace: 'nowrap' }}>{cat.label}</span>
                             {open ? <ChevronDown size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" /> : <ChevronRight size={9} style={{ color: 'var(--noir-primary)', opacity: 0.5 }} className="shrink-0" />}
                             <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
                           </button>
