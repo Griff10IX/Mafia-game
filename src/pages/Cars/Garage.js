@@ -342,11 +342,13 @@ const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, onRepair, repai
           </button>
         )}
       </div>
-      {damage >= 100 ? (
-        <p className="text-[9px] font-heading text-red-400 mt-0.5">100% — scrap/melt only</p>
-      ) : damage > 0 && !isListed && (
+      {damage > 0 && !isListed && (
         <div className="flex items-center justify-between gap-1 mt-1">
-          <span className="text-[9px] font-heading text-mutedForeground">{damage}% damage</span>
+          <span
+            className={`text-[9px] font-heading ${damage >= 100 ? 'text-red-400' : 'text-mutedForeground'}`}
+          >
+            {damage >= 100 ? '100% damage' : `${damage}% damage`}
+          </span>
           {onRepair && (
             <button
               type="button"
