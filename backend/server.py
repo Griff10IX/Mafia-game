@@ -1746,30 +1746,16 @@ def get_rank_info(rank_points: int, prestige_mult: float = 1.0):
 
 
 def effective_player_kill_count(user: Optional[Dict]) -> int:
-    """Kills that count toward player stats (excludes hitlist NPCs only; robot bodyguards count).
-    After DB migration sets total_kills_excludes_npc_v1, users.total_kills is already net."""
+    """Kills that count toward player stats: normal user kills + robot bodyguard kills.
+    The kill code only increments total_kills for player and robot bodyguard kills
+    (never for hitlist NPCs), so total_kills is already the correct count.
+    Migrated users (total_kills_excludes_npc_v1) had hitlist NPC kills subtracted."""
     if not user:
         return 0
     try:
-        raw = int(user.get("total_kills") or 0)
+        return max(0, int(user.get("total_kills") or 0))
     except (TypeError, ValueError):
-        raw = 0
-    if user.get("total_kills_excludes_npc_v1"):
-        return max(0, raw)
-    try:
-        hn = int(user.get("hitlist_npc_kills") or 0)
-    except (TypeError, ValueError):
-        hn = 0
-    try:
-        rbg = int(user.get("robot_bodyguard_kills") or 0)
-    except (TypeError, ValueError):
-        rbg = 0
-    # If total_kills is already less than hitlist NPC kills, the NPC kills
-    # were never baked into total_kills (user joined after the code change),
-    # so skip the legacy subtraction.
-    if raw < hn:
-        return max(0, raw)
-    return max(0, raw - hn + rbg)
+        return 0
 
 
 # Floor for owner-set max bet across casino routers (matches set-max-bet handlers).
