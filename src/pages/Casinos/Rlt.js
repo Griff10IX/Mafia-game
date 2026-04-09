@@ -312,7 +312,8 @@ export default function Rlt() {
   const spinTimeoutRef = useRef(null);
   const busyClearTimeoutRef = useRef(null);
   const pendingResultRef = useRef(null);
-  const spinChainRef = useRef(Promise.resolve());
+  /** True while a spin is in progress (API + optional wheel animation). Extra Spin taps do nothing — no queued phantom bets. */
+  const spinInFlightRef = useRef(false);
   const betsRef = useRef(bets);
   const configRef = useRef(config);
   const useAnimationRef = useRef(useAnimation);
@@ -435,7 +436,7 @@ export default function Rlt() {
     }, 700);
   };
 
-  /** One spin end-to-end. Chained so rapid clicks queue without overlapping API calls or animation state. */
+  /** One spin end-to-end (async). Caller must ensure only one instance runs at a time via spinInFlightRef. */
   const runSingleSpin = async () => {
     const b = betsRef.current;
     const cfg = configRef.current;
@@ -493,7 +494,11 @@ export default function Rlt() {
 
   const spin = () => {
     if (!canSpin) return;
-    spinChainRef.current = spinChainRef.current.then(runSingleSpin).catch(() => {});
+    if (spinInFlightRef.current) return;
+    spinInFlightRef.current = true;
+    runSingleSpin().finally(() => {
+      spinInFlightRef.current = false;
+    });
   };
 
   const handleClaim = async () => {

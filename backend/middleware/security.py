@@ -847,10 +847,10 @@ GLOBAL_RATE_LIMITS_ENABLED = False
 
 # Token bucket + strict inter-arrival sustain + hard cooldown (endpoint RL; see security_middleware).
 # docs/RATE_LIMITS.md
-ENDPOINT_RL_BURST_TOKENS = 3
+ENDPOINT_RL_BURST_TOKENS = 25
 ENDPOINT_RL_SUSTAIN_WINDOW_SEC = 30
-ENDPOINT_RL_SUSTAIN_MIN_SPAN_SEC = 15
-ENDPOINT_RL_SUSTAIN_MIN_COUNT = 3
+ENDPOINT_RL_SUSTAIN_MIN_SPAN_SEC = 26
+ENDPOINT_RL_SUSTAIN_MIN_COUNT = 60
 ENDPOINT_RL_HARD_COOLDOWN_MIN_SEC = 15
 ENDPOINT_RL_HARD_COOLDOWN_MAX_SEC = 30
 ENDPOINT_RL_DB_ATTEMPTS = 5
@@ -1064,15 +1064,24 @@ async def _endpoint_rl_record_violation_and_maybe_arm_hard(
         logger.warning("endpoint_rl_violations insert: %s", e)
         return False
     cutoff = now - timedelta(seconds=ENDPOINT_RL_SUSTAIN_WINDOW_SEC)
+    q = {"user_id": user_id, "at": {"$gte": cutoff}}
     try:
-        docs = await db.endpoint_rl_violations.find({"user_id": user_id, "at": {"$gte": cutoff}}).sort("at", 1).to_list(200)
+        vcount = await db.endpoint_rl_violations.count_documents(q)
     except Exception as e:
-        logger.warning("endpoint_rl_violations query: %s", e)
+        logger.warning("endpoint_rl_violations count: %s", e)
         return False
-    if len(docs) < ENDPOINT_RL_SUSTAIN_MIN_COUNT:
+    if vcount < ENDPOINT_RL_SUSTAIN_MIN_COUNT:
         return False
-    first_at = _coerce_utc_dt(docs[0].get("at")) or now
-    last_at = _coerce_utc_dt(docs[-1].get("at")) or now
+    try:
+        first_doc = await db.endpoint_rl_violations.find_one(q, sort=[("at", 1)])
+        last_doc = await db.endpoint_rl_violations.find_one(q, sort=[("at", -1)])
+    except Exception as e:
+        logger.warning("endpoint_rl_violations first/last: %s", e)
+        return False
+    if not first_doc or not last_doc:
+        return False
+    first_at = _coerce_utc_dt(first_doc.get("at")) or now
+    last_at = _coerce_utc_dt(last_doc.get("at")) or now
     span = (last_at - first_at).total_seconds()
     if span < ENDPOINT_RL_SUSTAIN_MIN_SPAN_SEC:
         return False
@@ -1093,10 +1102,10 @@ async def _endpoint_rl_record_violation_and_maybe_arm_hard(
             username,
             "endpoint_rate_limit_hard",
             (
-                f"Sustained endpoint rate abuse ({len(docs)} hits in {ENDPOINT_RL_SUSTAIN_WINDOW_SEC}s, "
+                f"Sustained endpoint rate abuse ({vcount} hits in {ENDPOINT_RL_SUSTAIN_WINDOW_SEC}s, "
                 f"span {span:.0f}s): hard cooldown {secs}s on {path}"
             ),
-            {"path": path, "endpoint_key": key, "cooldown_seconds": secs, "violation_count": len(docs)},
+            {"path": path, "endpoint_key": key, "cooldown_seconds": secs, "violation_count": vcount},
         )
     except Exception as e:
         logger.warning("arm hard endpoint RL: %s", e)

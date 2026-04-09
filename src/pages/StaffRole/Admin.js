@@ -5817,6 +5817,25 @@ export default function Admin() {
     finally { setSecurityLoading(false); }
   };
 
+  const handleDisableAllEndpointTogglesOnly = async () => {
+    if (
+      !window.confirm(
+        'Turn OFF every per-endpoint rate limit row?\n\nGlobal rate limits stay as they are (ON/OFF unchanged). This is NOT the red “Disable” that turns off global + security middleware.'
+      )
+    )
+      return;
+    setSecurityLoading(true);
+    try {
+      const response = await api.post('/admin/security/rate-limits/disable-all-endpoints-only');
+      toast.success(response.data.message);
+      await handleViewRateLimits();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to disable endpoint rows');
+    } finally {
+      setSecurityLoading(false);
+    }
+  };
+
   const fetchRateLimitLog = async () => {
     setRateLimitLogLoading(true);
     try {
@@ -11621,6 +11640,9 @@ export default function Admin() {
                     {ms >= 1000 ? `${ms/1000}s` : `${ms}ms`}
                   </button>
                 ))}
+                <BtnSecondary type="button" onClick={handleDisableAllEndpointTogglesOnly} disabled={securityLoading}>
+                  {securityLoading ? '...' : 'All rows OFF (keep global)'}
+                </BtnSecondary>
               </div>
             </ActionRow>
 

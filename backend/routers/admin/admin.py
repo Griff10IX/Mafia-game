@@ -3225,15 +3225,15 @@ def register(router):
             "security_middleware_enabled": middleware_enabled,
             "note": "Values are in milliseconds. All security middleware is OFF by default.",
             "endpoint_rl_policy": {
-                "burst_tokens": getattr(security_module, "ENDPOINT_RL_BURST_TOKENS", 3),
+                "burst_tokens": getattr(security_module, "ENDPOINT_RL_BURST_TOKENS", 25),
                 "sustain_window_sec": getattr(security_module, "ENDPOINT_RL_SUSTAIN_WINDOW_SEC", 30),
-                "sustain_min_span_sec": getattr(security_module, "ENDPOINT_RL_SUSTAIN_MIN_SPAN_SEC", 15),
-                "sustain_min_violations": getattr(security_module, "ENDPOINT_RL_SUSTAIN_MIN_COUNT", 3),
+                "sustain_min_span_sec": getattr(security_module, "ENDPOINT_RL_SUSTAIN_MIN_SPAN_SEC", 26),
+                "sustain_min_violations": getattr(security_module, "ENDPOINT_RL_SUSTAIN_MIN_COUNT", 60),
                 "hard_cooldown_sec_range": [
                     getattr(security_module, "ENDPOINT_RL_HARD_COOLDOWN_MIN_SEC", 15),
                     getattr(security_module, "ENDPOINT_RL_HARD_COOLDOWN_MAX_SEC", 30),
                 ],
-                "summary": "Sub-interval spacing feeds sustain; soft 429 has no short punitive cooldown; 15–30s hard lockout only after sustained abuse (DB). Spam/burst counts POST/PUT/PATCH/DELETE only.",
+                "summary": "Sub-interval spacing feeds sustain; soft 429 has no short punitive cooldown; 15–30s hard lockout only after mass sustained abuse (DB). Spam/burst counts POST/PUT/PATCH/DELETE only.",
             },
         }
 
@@ -3358,6 +3358,23 @@ def register(router):
             "min_interval_ms": min_interval_ms,
             "min_interval_sec": min_interval_sec,
             "count": count
+        }
+
+    @router.post("/admin/security/rate-limits/disable-all-endpoints-only")
+    async def admin_disable_all_endpoint_toggles_only(current_user: dict = Depends(get_current_user)):
+        """Turn off every per-pattern rate limit; leaves GLOBAL_RATE_LIMITS_ENABLED and SECURITY_MIDDLEWARE_ENABLED unchanged."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        global_enabled = bool(getattr(security_module, "GLOBAL_RATE_LIMITS_ENABLED", False))
+        count = 0
+        for endpoint in security_module.RATE_LIMIT_CONFIG:
+            interval, _ = security_module.RATE_LIMIT_CONFIG[endpoint]
+            security_module.RATE_LIMIT_CONFIG[endpoint] = (interval, False)
+            count += 1
+        return {
+            "message": f"Disabled {count} per-endpoint rate limit rows only; global rate limits remain {'ON' if global_enabled else 'OFF'}",
+            "count": count,
+            "global_enabled": global_enabled,
         }
 
     @router.post("/admin/security/middleware-toggle")

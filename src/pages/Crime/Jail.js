@@ -319,6 +319,7 @@ export default function Jail() {
     personal_npc_count: 0,
   });
   const [privateCellLoading, setPrivateCellLoading] = useState(false);
+  const [privateCellCooldownRemaining, setPrivateCellCooldownRemaining] = useState(0);
   const [user, setUser] = useState(null);
   const [staffListColors, setStaffListColors] = useState({
     admin_online_color: '#a78bfa',
@@ -413,6 +414,18 @@ export default function Jail() {
       clearInterval(playersInterval);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    setPrivateCellCooldownRemaining(Math.max(0, Number(privateCell.cooldown_seconds) || 0));
+  }, [privateCell.cooldown_seconds]);
+
+  useEffect(() => {
+    if (privateCellCooldownRemaining <= 0) return undefined;
+    const id = window.setInterval(() => {
+      setPrivateCellCooldownRemaining((s) => Math.max(0, s - 1));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [privateCellCooldownRemaining > 0]);
 
   useEffect(() => {
     if (bustRewardInput === '' && (jailStatus.bust_reward_cash ?? 0) > 0) {
@@ -649,58 +662,56 @@ export default function Jail() {
         </div>
       )}
 
-      {privateCell.global_npc_count === 0 && (
-        <div
-          className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 j-fade-in mobile-panel`}
-          style={{ animationDelay: '0.04s' }}
+      <div className="flex flex-wrap items-center gap-2 j-fade-in rounded border border-primary/15 bg-zinc-900/40 px-2 py-1.5">
+        <button
+          type="button"
+          onClick={summonPrivateCell}
+          disabled={
+            privateCellLoading ||
+            !privateCell.available ||
+            jailStatus.in_jail ||
+            autoRankJailDisabled ||
+            privateCell.global_npc_count > 0
+          }
+          className="shrink-0 px-2.5 py-1 rounded border border-primary/40 bg-primary/15 text-primary text-[9px] font-heading font-bold uppercase tracking-wide hover:bg-primary/25 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
         >
-          <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
-            <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
-              Private cell
-            </span>
-          </div>
-          <div className="p-2.5 space-y-2 text-[10px] text-mutedForeground font-heading leading-relaxed">
-            {privateCell.personal_npc_count > 0 ? (
-              <p>
-                <strong className="text-foreground">{privateCell.personal_npc_count}/5</strong> private inmates only you can see.
-                Bust them out to summon another batch (5-minute cooldown between summons).
-              </p>
-            ) : privateCell.cooldown_seconds > 0 ? (
-              <p>
-                Next summon in{' '}
-                <strong className="text-primary tabular-nums">
-                  {Math.floor(privateCell.cooldown_seconds / 60)}:{String(privateCell.cooldown_seconds % 60).padStart(2, '0')}
-                </strong>
-                . No public NPCs are in jail — your last batch was cleared.
-              </p>
-            ) : (
-              <p>
-                There are <strong className="text-foreground">no public NPCs</strong> in jail. Summon{' '}
-                <strong className="text-foreground">5 inmates</strong> that only you see. You can do this every{' '}
-                <strong className="text-foreground">5 minutes</strong> (after you have busted them all).
-              </p>
-            )}
-            <button
-              type="button"
-              onClick={summonPrivateCell}
-              disabled={
-                privateCellLoading ||
-                !privateCell.available ||
-                jailStatus.in_jail ||
-                autoRankJailDisabled
-              }
-              className="w-full sm:w-auto px-3 py-1.5 rounded border border-primary/40 bg-primary/20 text-primary text-[9px] font-heading font-bold uppercase tracking-wide hover:bg-primary/30 disabled:opacity-45 disabled:cursor-not-allowed transition-all"
-            >
-              {privateCellLoading ? 'Summoning…' : 'Summon 5 private inmates'}
-            </button>
-            {autoRankJailDisabled && (
-              <p className="text-[9px] text-amber-400/90">Turn off Auto Rank bust-every-5s to summon manually.</p>
-            )}
-          </div>
-          <div className="j-art-line text-primary mx-2.5" />
-        </div>
-      )}
+          {privateCellLoading ? '…' : 'Private cell'}
+        </button>
+        <p className="text-[9px] text-mutedForeground font-heading leading-snug min-w-0 flex-1">
+          {privateCell.global_npc_count > 0 ? (
+            <>Public NPCs in jail — private summon locked.</>
+          ) : jailStatus.in_jail ? (
+            <>Can&apos;t summon while you&apos;re in jail.</>
+          ) : autoRankJailDisabled ? (
+            <span className="text-amber-400/90">Auto Rank bust-5s on — turn off to summon manually.</span>
+          ) : privateCell.personal_npc_count > 0 ? (
+            <>
+              <span className="text-foreground font-bold tabular-nums">{privateCell.personal_npc_count}/5</span> yours — bust out to summon again
+              {privateCellCooldownRemaining > 0 && (
+                <>
+                  {' '}
+                  · <span className="text-primary tabular-nums">
+                    {Math.floor(privateCellCooldownRemaining / 60)}:{String(privateCellCooldownRemaining % 60).padStart(2, '0')}
+                  </span>{' '}
+                  until next batch allowed
+                </>
+              )}
+            </>
+          ) : privateCellCooldownRemaining > 0 ? (
+            <>
+              Next summon{' '}
+              <span className="text-primary font-bold tabular-nums">
+                {Math.floor(privateCellCooldownRemaining / 60)}:{String(privateCellCooldownRemaining % 60).padStart(2, '0')}
+              </span>
+              {' '}(5 min between batches)
+            </>
+          ) : privateCell.available ? (
+            <>No public NPCs — adds 5 inmates only you see (5 min cooldown).</>
+          ) : (
+            <>When the jail has no public NPCs, tap to summon 5 private inmates.</>
+          )}
+        </p>
+      </div>
 
       {/* Jailed Players */}
       <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 j-fade-in mobile-panel`} style={{ animationDelay: '0.05s' }}>
