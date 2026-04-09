@@ -682,6 +682,14 @@ async def ensure_all_indexes(db):
         except Exception as e:
             logger.warning("lottery indexes: %s", e)
 
+        # --- MDG automated games ---
+        try:
+            await db.mdg_games.create_index([("is_automated", 1), ("status", 1)])
+            await db.mdg_games.create_index([("cycle_id", 1), ("status", 1)])
+            await db.mdg_house_stats.create_index([("id", 1)], unique=True)
+        except Exception as e:
+            logger.warning("mdg indexes: %s", e)
+
         logger.info("All non-profile indexes ensured.")
     except Exception as e:
         logger.warning("ensure_all_indexes: %s", e)

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { Zap, PlusCircle, Dices } from 'lucide-react';
+import { Zap, PlusCircle, Dices, Bot, TrendingUp, TrendingDown } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
@@ -9,6 +9,8 @@ const MDG_STYLES = `
   @keyframes mdg-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .mdg-fade-in { animation: mdg-fade-in 0.4s ease-out both; }
   .mdg-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+  @keyframes mdg-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+  .mdg-auto-badge { animation: mdg-pulse 2s ease-in-out infinite; }
 `;
 
 function formatMoney(n) {
@@ -36,6 +38,9 @@ function formatPot(game) {
 }
 
 function formatMdgResultToast(data) {
+  if (data?.house_won) {
+    return `The House won! Pot burned. Better luck next time.`;
+  }
   const roll = data?.roll ?? '?';
   const name = (data?.winner_username || '?').toUpperCase();
   const pts = Number(data?.pot_points ?? 0);
@@ -45,6 +50,25 @@ function formatMdgResultToast(data) {
   if (pts > 0) parts.push(`${pts.toLocaleString()} pts`);
   const withStr = parts.length ? ` with ${parts.join(' and ')}` : '';
   return `The dice rolled ${roll} and the winner is ${name}${withStr}!`;
+}
+
+function useCountdown(deadline) {
+  const [remaining, setRemaining] = useState('');
+  useEffect(() => {
+    if (!deadline) return;
+    const update = () => {
+      const diff = new Date(deadline).getTime() - Date.now();
+      if (diff <= 0) { setRemaining('Rolling soon…'); return; }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setRemaining(`${h > 0 ? `${h}h ` : ''}${m}m ${s}s`);
+    };
+    update();
+    const t = setInterval(update, 1000);
+    return () => clearInterval(t);
+  }, [deadline]);
+  return remaining;
 }
 
 function formatExtraPot(game) {
@@ -91,6 +115,7 @@ export default function MDGPage() {
   const [myUserId, setMyUserId] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
+  const [autoStats, setAutoStats] = useState(null);
 
   useEffect(() => {
     api.get('/auth/me').then((r) => setMyUserId(r.data?.id ?? null)).catch(() => setMyUserId(null));
@@ -102,6 +127,16 @@ export default function MDGPage() {
       setIsModerator(!!r.data?.is_moderator);
     }).catch(() => {});
   }, []);
+
+  const fetchAutoStats = useCallback(() => {
+    api.get('/casino/mdg/auto-stats').then((r) => setAutoStats(r.data)).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    fetchAutoStats();
+    const t = setInterval(fetchAutoStats, 30000);
+    return () => clearInterval(t);
+  }, [fetchAutoStats]);
 
   const fetchGames = useCallback(() => {
     api.get('/casino/mdg/games').then((r) => setGames(r.data?.games || [])).catch(() => setGames([])).finally(() => setLoading(false));
@@ -188,6 +223,10 @@ export default function MDGPage() {
     }
   };
 
+  const autoGames = games.filter((g) => g.is_automated);
+  const playerGames = games.filter((g) => !g.is_automated);
+  const houseNet = autoStats ? (autoStats.total_fees_collected ?? 0) - ((autoStats.total_paid_to_winners ?? 0) - (autoStats.total_pot_created ?? 0)) : 0;
+
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="mdg-page">
       <style>{MDG_STYLES}</style>
@@ -198,12 +237,72 @@ export default function MDGPage() {
         <p className="text-[10px] text-mutedForeground font-heading italic mt-1">Set a fee, fill spots, one winner takes the pot. Points or money — or both.</p>
       </div>
 
+      {/* ════ AUTOMATED HOUSE GAMES ════ */}
+      {autoGames.length > 0 && (
+        <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-amber-500/30 mdg-fade-in`} style={{ animationDelay: '0.02s' }}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
+          <div className="px-3 py-2.5 bg-amber-500/8 border-b border-amber-500/20 flex items-center gap-2">
+            <Bot size={16} className="text-amber-400 mdg-auto-badge" />
+            <div>
+              <h2 className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-[0.15em]">House Games</h2>
+              <p className="text-[9px] text-mutedForeground font-heading mt-0.5">Automated — the House puts up the pot and takes a slot in the roll. 3 games every 3 hours.</p>
+            </div>
+          </div>
+          <div className="p-2">
+            <ul className="space-y-0 divide-y divide-amber-500/10">
+              {autoGames.map((g, idx) => (
+                <AutoGameRow
+                  key={g.id}
+                  game={g}
+                  idx={idx}
+                  myUserId={myUserId}
+                  joiningId={joiningId}
+                  onJoin={handleJoin}
+                />
+              ))}
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {/* ════ HOUSE STATS ════ */}
+      {autoStats && autoStats.total_games > 0 && (
+        <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20 mdg-fade-in`} style={{ animationDelay: '0.04s' }}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+            <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">House Stats</h2>
+          </div>
+          <div className="p-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div>
+              <p className="text-[9px] font-heading text-mutedForeground uppercase">Total Games</p>
+              <p className="text-sm font-heading font-bold text-foreground">{(autoStats.total_games ?? 0).toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="text-[9px] font-heading text-mutedForeground uppercase">House Wins</p>
+              <p className="text-sm font-heading font-bold text-amber-400">{(autoStats.house_wins ?? 0).toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="text-[9px] font-heading text-mutedForeground uppercase">Player Wins</p>
+              <p className="text-sm font-heading font-bold text-emerald-400">{(autoStats.player_wins ?? 0).toLocaleString()}</p>
+            </div>
+            <div>
+              <p className="text-[9px] font-heading text-mutedForeground uppercase">House Net</p>
+              <p className={`text-sm font-heading font-bold inline-flex items-center gap-1 ${houseNet >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                {houseNet >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                {formatMoney(Math.abs(houseNet))}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ════ PLAYER GAMES ════ */}
       <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20 mdg-fade-in`} style={{ animationDelay: '0.03s' }}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between flex-wrap gap-2">
           <div>
-            <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Current Games</h2>
-            <p className="text-[9px] text-mutedForeground font-heading mt-0.5">View & join games below</p>
+            <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Player Games</h2>
+            <p className="text-[9px] text-mutedForeground font-heading mt-0.5">User-created games — view & join below</p>
           </div>
           <button
             type="button"
@@ -216,11 +315,11 @@ export default function MDGPage() {
         <div className="p-2">
           {loading ? (
             <p className="text-[10px] text-mutedForeground font-heading py-4 text-center">Loading…</p>
-          ) : games.length === 0 ? (
-            <p className="text-[10px] text-mutedForeground font-heading py-4 text-center">No open games. Create one above.</p>
+          ) : playerGames.length === 0 ? (
+            <p className="text-[10px] text-mutedForeground font-heading py-4 text-center">No open player games. Create one above.</p>
           ) : (
             <ul className="space-y-0 divide-y divide-primary/10">
-              {games.map((g, idx) => {
+              {playerGames.map((g, idx) => {
                 const entries = g.entries || [];
                 const playerNames = entries.map((e) => e.username).join(' – ');
                 const isCreator = g.created_by === myUserId;
@@ -376,5 +475,65 @@ export default function MDGPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function AutoGameRow({ game: g, idx, myUserId, joiningId, onJoin }) {
+  const entries = g.entries || [];
+  const isIn = entries.some((e) => e.user_id === myUserId);
+  const spots = `${entries.length}/${g.max_players || 10}`;
+  const countdown = useCountdown(g.auto_roll_deadline);
+  const housePot = Number(g.house_pot ?? g.pot_money ?? 0);
+  const fee = Number(g.fee_money ?? 0);
+
+  return (
+    <li key={g.id} className={`py-3 px-2 mdg-fade-in`} style={{ animationDelay: `${0.05 + idx * 0.02}s` }}>
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div className="min-w-0 flex-1 space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[8px] font-heading font-bold uppercase tracking-wider mdg-auto-badge">
+              <Bot size={10} /> House Game
+            </span>
+            <span className="text-[9px] font-heading text-mutedForeground">{spots} players</span>
+          </div>
+          <p className="text-[10px] font-heading text-foreground">
+            <span className="text-mutedForeground">House Pot: </span>
+            <span className="font-semibold text-amber-400">{formatMoney(housePot)}</span>
+            <span className="text-mutedForeground mx-1.5">·</span>
+            <span className="text-mutedForeground">Entry Fee: </span>
+            <span className="font-semibold text-foreground">{formatMoney(fee)}</span>
+            <span className="text-mutedForeground mx-1.5">·</span>
+            <span className="text-mutedForeground">Total Pot: </span>
+            <span className="font-semibold text-primary">{formatPot(g)}</span>
+          </p>
+          <p className="text-[9px] font-heading text-mutedForeground">
+            {entries.length > 0
+              ? entries.map((e) => e.username).join(' – ') + ` – ${entries.length} Players`
+              : 'No players yet'}
+          </p>
+          {countdown && (
+            <p className="text-[9px] font-heading text-amber-400/80">
+              Rolls in: <span className="font-bold">{countdown}</span>
+              {entries.length >= (g.max_players || 10) && ' (full — rolling!)'}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {!isIn && (
+            <button
+              type="button"
+              disabled={joiningId === g.id}
+              onClick={() => onJoin(g.id)}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded border border-amber-500/50 bg-amber-500/20 text-amber-400 font-heading font-bold text-[9px] uppercase hover:bg-amber-500/30 disabled:opacity-50 transition-colors"
+            >
+              {joiningId === g.id ? '…' : `Join · ${formatMoney(fee)}`}
+            </button>
+          )}
+          {isIn && (
+            <span className="text-[9px] font-heading text-emerald-400 font-bold uppercase">Entered</span>
+          )}
+        </div>
+      </div>
+    </li>
   );
 }

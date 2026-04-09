@@ -2641,6 +2641,9 @@ async def startup_db():
             except Exception as e:
                 logging.exception("Entertainer auto-create: %s", e)
     asyncio.create_task(entertainer_auto_create_cycle())
+    # Automated MDG: 3 house-vs-player games every 3 hours
+    from routers.casinos import mdg as mdg_mod
+    asyncio.create_task(mdg_mod.run_automated_mdg_ticker())
     # Auto Rank: when AUTO_RANK_USE_CRON=1, all Auto Rank (main + bust + OC) is driven by cron only
     from routers.account import auto_rank
     auto_rank_use_cron = (os.environ.get("AUTO_RANK_USE_CRON") or "").strip().lower() in ("1", "true", "yes")

@@ -1,6 +1,9 @@
 # Casino MDG (Pot Game): create game (fee points/money/both), join, list; one winner takes pot; auto-roll when N spots filled
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
+import asyncio
+import logging
+import math
 import secrets
 _rng = secrets.SystemRandom()
 import uuid
@@ -20,6 +23,16 @@ MDG_MAX_FEE_MONEY = 1_000_000_000
 MDG_MAX_EXTRA_POT_POINTS = 100_000_000
 MDG_MAX_EXTRA_POT_MONEY = 1_000_000_000
 
+# ── Automated MDG constants ──
+AUTO_MDG_CYCLE_HOURS = 3
+AUTO_MDG_GAMES_PER_CYCLE = 3
+AUTO_MDG_POT_MIN = 5_000_000
+AUTO_MDG_POT_MAX = 25_000_000
+AUTO_MDG_MAX_PLAYERS = 10
+AUTO_MDG_EARLY_ROLL_MINUTES = 10
+
+_logger = logging.getLogger(__name__)
+
 
 class MDGCreateRequest(BaseModel):
     fee_points: int = 0
@@ -36,6 +49,230 @@ class MDGJoinRequest(BaseModel):
 
 class MDGRollRequest(BaseModel):
     game_id: str
+
+
+# ── Automated MDG helpers (module-level so ticker can call them) ──
+
+def _next_cycle_boundary(now: datetime) -> datetime:
+    """Return the next 3h UTC boundary (00:00, 03:00, 06:00 ... 21:00)."""
+    h = now.hour
+    next_h = (math.ceil((h + 1) / AUTO_MDG_CYCLE_HOURS)) * AUTO_MDG_CYCLE_HOURS
+    if next_h > 23:
+        base = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    else:
+        base = now.replace(hour=next_h, minute=0, second=0, microsecond=0)
+    if base <= now:
+        base += timedelta(hours=AUTO_MDG_CYCLE_HOURS)
+    return base
+
+
+async def _create_automated_games(cycle_id: str) -> list:
+    """Create AUTO_MDG_GAMES_PER_CYCLE automated house games."""
+    created = []
+    now_iso = datetime.now(timezone.utc).isoformat()
+    next_cycle = _next_cycle_boundary(datetime.now(timezone.utc))
+    deadline = (next_cycle - timedelta(minutes=AUTO_MDG_EARLY_ROLL_MINUTES)).isoformat()
+    for _ in range(AUTO_MDG_GAMES_PER_CYCLE):
+        house_pot = _rng.randint(AUTO_MDG_POT_MIN, AUTO_MDG_POT_MAX)
+        fee_money = round(house_pot * 0.10)
+        game_id = str(uuid.uuid4())
+        doc = {
+            "id": game_id,
+            "created_by": "__house__",
+            "created_by_username": "House",
+            "created_at": now_iso,
+            "fee_points": 0,
+            "fee_money": float(fee_money),
+            "max_players": AUTO_MDG_MAX_PLAYERS,
+            "auto_roll_at": AUTO_MDG_MAX_PLAYERS,
+            "extra_pot_points": 0,
+            "extra_pot_money": 0.0,
+            "entries": [],
+            "pot_points": 0,
+            "pot_money": float(house_pot),
+            "status": "open",
+            "winner_id": None,
+            "winner_username": None,
+            "rolled_at": None,
+            "is_automated": True,
+            "house_pot": float(house_pot),
+            "cycle_id": cycle_id,
+            "auto_roll_deadline": deadline,
+        }
+        await db.mdg_games.insert_one(doc)
+        created.append(game_id)
+    return created
+
+
+async def _roll_automated_game(game: dict) -> None:
+    """Roll an automated game. House gets one slot in the pool alongside players."""
+    game_id = game["id"]
+    entries = list(game.get("entries") or [])
+    pot_pts = int(game.get("pot_points") or 0)
+    pot_money = float(game.get("pot_money") or 0)
+    house_pot = float(game.get("house_pot") or 0)
+    fees_collected = sum(float(e.get("paid_money") or 0) for e in entries)
+
+    if not entries:
+        # No players joined — close quietly, house loses nothing
+        await db.mdg_games.update_one(
+            {"id": game_id, "status": "open"},
+            {"$set": {"status": "completed", "winner_id": "__house__", "winner_username": "House", "rolled_at": datetime.now(timezone.utc).isoformat(), "roll": 0}},
+        )
+        return
+
+    # Build pool: players (alive only if possible) + 1 house slot
+    entry_ids = [e["user_id"] for e in entries]
+    alive_users = await db.users.find(
+        {"id": {"$in": entry_ids}, "is_dead": {"$ne": True}},
+        {"_id": 0, "id": 1},
+    ).to_list(len(entry_ids))
+    alive_ids = {u["id"] for u in alive_users}
+    alive_entries = [e for e in entries if e["user_id"] in alive_ids]
+    player_pool = alive_entries if alive_entries else entries
+
+    # +1 for house slot — house is the last slot
+    total_slots = len(player_pool) + 1
+    roll = _rng.randint(1, total_slots)
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    house_won = roll == total_slots  # last slot = house
+
+    if house_won:
+        # House wins — pot is burned (removed from economy)
+        claim_res = await db.mdg_games.find_one_and_update(
+            {"id": game_id, "status": "open"},
+            {"$set": {"status": "completed", "winner_id": "__house__", "winner_username": "House", "rolled_at": now_iso, "roll": roll}},
+        )
+        if not claim_res:
+            return
+        # Stats: house gained fees_collected, pot was house money that returns
+        await db.mdg_house_stats.update_one(
+            {"id": "global"},
+            {"$inc": {
+                "total_games": 1,
+                "house_wins": 1,
+                "total_pot_created": house_pot,
+                "total_fees_collected": fees_collected,
+                "total_paid_to_winners": 0,
+            }},
+            upsert=True,
+        )
+        # Notify all players they lost
+        for e in entries:
+            uid = (e.get("user_id") or "").strip()
+            if not uid:
+                continue
+            try:
+                await send_notification(
+                    uid,
+                    "🎲 Auto MDG Result",
+                    f"The House won this automated MDG. Pot: ${pot_money:,.0f}. Better luck next time!",
+                    "system",
+                )
+            except Exception:
+                continue
+    else:
+        # Player wins
+        winner_entry = player_pool[roll - 1]
+        winner_id = winner_entry["user_id"]
+        winner_user = await db.users.find_one({"id": winner_id}, {"_id": 0, "username": 1})
+        winner_username = (winner_user and winner_user.get("username")) or winner_entry.get("username") or "?"
+        claim_res = await db.mdg_games.find_one_and_update(
+            {"id": game_id, "status": "open"},
+            {"$set": {"status": "completed", "winner_id": winner_id, "winner_username": winner_username, "rolled_at": now_iso, "roll": roll}},
+        )
+        if not claim_res:
+            return
+        await db.users.update_one(
+            {"id": winner_id},
+            {"$inc": {"money": pot_money}},
+        )
+        await log_gambling(
+            winner_id, winner_username, "mdg",
+            {"action": "payout", "game_id": game_id, "pot_points": 0, "pot_money": pot_money, "trigger": "auto_mdg"},
+        )
+        # Stats: house put up house_pot, collected fees, paid out full pot
+        await db.mdg_house_stats.update_one(
+            {"id": "global"},
+            {"$inc": {
+                "total_games": 1,
+                "player_wins": 1,
+                "total_pot_created": house_pot,
+                "total_fees_collected": fees_collected,
+                "total_paid_to_winners": pot_money,
+            }},
+            upsert=True,
+        )
+        await send_notification(winner_id, "🎲 Auto MDG Won!", f"You won the automated MDG pot: ${pot_money:,.0f}!", "reward")
+        # Notify losers
+        for e in entries:
+            uid = (e.get("user_id") or "").strip()
+            if not uid or uid == winner_id:
+                continue
+            try:
+                await send_notification(
+                    uid,
+                    "🎲 Auto MDG Result",
+                    f"You lost this automated MDG. Winner: {winner_username}. Pot: ${pot_money:,.0f}.",
+                    "system",
+                )
+            except Exception:
+                continue
+
+
+async def run_automated_mdg_ticker():
+    """Background loop: every 3h create 3 automated MDG games. Roll unfilled games 10min before next cycle."""
+    await asyncio.sleep(10)  # let server finish startup
+    _logger.info("Automated MDG ticker started")
+
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            next_cycle = _next_cycle_boundary(now)
+            cycle_id = next_cycle.isoformat()
+
+            # Roll any leftover open automated games from previous cycles
+            leftover = await db.mdg_games.find(
+                {"is_automated": True, "status": "open", "cycle_id": {"$ne": cycle_id}},
+                {"_id": 0},
+            ).to_list(50)
+            for g in leftover:
+                try:
+                    await _roll_automated_game(g)
+                except Exception:
+                    _logger.exception("Failed to roll leftover auto-MDG %s", g.get("id"))
+
+            # Create new games for this cycle if not already created
+            existing = await db.mdg_games.count_documents({"is_automated": True, "cycle_id": cycle_id})
+            if existing < AUTO_MDG_GAMES_PER_CYCLE:
+                ids = await _create_automated_games(cycle_id)
+                _logger.info("Created %d automated MDG games for cycle %s: %s", len(ids), cycle_id, ids)
+
+            # Sleep until early-roll deadline (10min before next cycle)
+            deadline = next_cycle - timedelta(minutes=AUTO_MDG_EARLY_ROLL_MINUTES)
+            sleep_to_deadline = max(0, (deadline - datetime.now(timezone.utc)).total_seconds())
+            if sleep_to_deadline > 0:
+                await asyncio.sleep(sleep_to_deadline)
+
+            # Roll any automated games that haven't filled yet
+            unfilled = await db.mdg_games.find(
+                {"is_automated": True, "status": "open", "cycle_id": cycle_id},
+                {"_id": 0},
+            ).to_list(50)
+            for g in unfilled:
+                try:
+                    await _roll_automated_game(g)
+                except Exception:
+                    _logger.exception("Failed to early-roll auto-MDG %s", g.get("id"))
+
+            # Sleep until next cycle boundary
+            sleep_to_cycle = max(5, (next_cycle - datetime.now(timezone.utc)).total_seconds())
+            await asyncio.sleep(sleep_to_cycle)
+
+        except Exception:
+            _logger.exception("Automated MDG ticker error")
+            await asyncio.sleep(60)
 
 
 def register(router):
@@ -69,10 +306,18 @@ def register(router):
         """List open MDG games (joinable)."""
         cursor = db.mdg_games.find(
             {"status": "open"},
-            {"_id": 0, "id": 1, "created_by": 1, "created_by_username": 1, "created_at": 1, "fee_points": 1, "fee_money": 1, "max_players": 1, "auto_roll_at": 1, "extra_pot_points": 1, "extra_pot_money": 1, "entries": 1, "pot_points": 1, "pot_money": 1, "status": 1},
+            {"_id": 0, "id": 1, "created_by": 1, "created_by_username": 1, "created_at": 1, "fee_points": 1, "fee_money": 1, "max_players": 1, "auto_roll_at": 1, "extra_pot_points": 1, "extra_pot_money": 1, "entries": 1, "pot_points": 1, "pot_money": 1, "status": 1, "is_automated": 1, "house_pot": 1, "auto_roll_deadline": 1},
         ).sort("created_at", -1)
         games = await cursor.to_list(100)
         return {"games": games}
+
+    @router.get("/casino/mdg/auto-stats")
+    async def mdg_auto_stats(current_user: dict = Depends(get_current_user_verified)):
+        """Return cumulative house stats for automated MDG games."""
+        doc = await db.mdg_house_stats.find_one({"id": "global"}, {"_id": 0})
+        if not doc:
+            doc = {"id": "global", "total_games": 0, "house_wins": 0, "player_wins": 0, "total_pot_created": 0, "total_fees_collected": 0, "total_paid_to_winners": 0}
+        return doc
 
     @router.post("/casino/mdg/create")
     async def mdg_create(request: MDGCreateRequest, current_user: dict = Depends(get_current_user_verified)):
@@ -211,18 +456,40 @@ def register(router):
         auto_roll_at = game.get("auto_roll_at")
         should_roll = (auto_roll_at is not None and len(new_entries) >= auto_roll_at) or len(new_entries) >= max_players
         if should_roll and len(new_entries) >= MDG_MIN_PLAYERS:
-            # Roll between 1 and number of players; winner is the player at that position (1=creator, 2=first joiner, etc.)
+            is_auto_game = game.get("is_automated")
+
+            if is_auto_game:
+                # Automated game: use house-roll logic (house gets a slot)
+                refreshed = await db.mdg_games.find_one({"id": request.game_id, "status": "open"}, {"_id": 0})
+                if refreshed:
+                    await _roll_automated_game(refreshed)
+                    refreshed_after = await db.mdg_games.find_one({"id": request.game_id}, {"_id": 0, "winner_id": 1, "winner_username": 1, "roll": 1, "pot_money": 1})
+                    w_id = (refreshed_after or {}).get("winner_id", "?")
+                    w_name = (refreshed_after or {}).get("winner_username", "?")
+                    r = (refreshed_after or {}).get("roll", 0)
+                    house_won = w_id == "__house__"
+                    return {
+                        "message": "Joined; game rolled." + (" House won — pot burned!" if house_won else f" Winner: {w_name}"),
+                        "roll": r,
+                        "winner_id": w_id,
+                        "winner_username": w_name,
+                        "pot_points": new_pot_pts,
+                        "pot_money": new_pot_money,
+                        "house_won": house_won,
+                    }
+                return {"message": "Joined", "players": len(new_entries), "pot_points": new_pot_pts, "pot_money": new_pot_money}
+
+            # Regular (non-automated) game roll
             entry_ids = [e["user_id"] for e in new_entries]
             alive_users = await db.users.find(
                 {"id": {"$in": entry_ids}, "is_dead": {"$ne": True}},
                 {"_id": 0, "id": 1},
             ).to_list(len(entry_ids))
             alive_ids = {u["id"] for u in alive_users}
-            # Build pool preserving order, only alive players
             alive_entries = [e for e in new_entries if e["user_id"] in alive_ids]
             pool = alive_entries if alive_entries else new_entries
             roll = _rng.randint(1, len(pool))
-            winner_entry = pool[roll - 1]  # roll is 1-indexed, list is 0-indexed
+            winner_entry = pool[roll - 1]
             winner_id = winner_entry["user_id"]
             winner_user = await db.users.find_one({"id": winner_id}, {"_id": 0, "username": 1})
             winner_username = (winner_user and winner_user.get("username")) or winner_entry.get("username") or "?"
@@ -257,6 +524,8 @@ def register(router):
         game = await db.mdg_games.find_one({"id": request.game_id, "status": "open"}, {"_id": 0})
         if not game:
             raise HTTPException(status_code=404, detail="Game not found or already closed")
+        if game.get("is_automated"):
+            raise HTTPException(status_code=403, detail="Automated games are rolled by the system")
         if game.get("created_by") != current_user["id"] and not _is_admin(current_user) and not _is_moderator(current_user):
             raise HTTPException(status_code=403, detail="Only the game creator or staff can roll")
         entries = list(game.get("entries") or [])

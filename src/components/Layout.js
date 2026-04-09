@@ -1332,7 +1332,7 @@ export default function Layout({ children }) {
     </div>
   );
 
-  const renderNavItem = (item, showDivider) => {
+  const renderNavItem = (item, showDivider, compact = false) => {
     const itemKey = item.navKey || item.path;
     const navDivider = showDivider ? navDividerEl(`div-${itemKey}`) : null;
     if (item.path === '/game/ranking') return <Fragment key="nav-ranking-group">{navDivider}{rankingNavBlock}</Fragment>;
@@ -1343,11 +1343,12 @@ export default function Layout({ children }) {
     const Icon = item.icon;
     const isActive = location.pathname === item.path;
     const isFamiliesAtWar = item.path === '/game/family/list' && atWar;
+    const sizeClass = compact ? 'py-0.5 min-h-[22px]' : 'py-2 md:py-1 min-h-[44px] md:min-h-[26px]';
     return (
       <Fragment key={itemKey}>
         {navDivider}
         <Link to={item.path} data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`} data-at-war={atWar && item.path === '/game/family/list' ? 'true' : undefined}
-          className={`flex items-center gap-1 px-2 py-2 md:py-1 min-h-[44px] md:min-h-[26px] rounded-sm transition-smooth touch-manipulation ${isFamiliesAtWar ? (isActive ? 'bg-red-500/20 text-red-400 border-l-2 border-red-500' : 'text-red-400 hover:bg-red-500/10') : (isActive ? styles.navItemActivePage : styles.sidebarNavLink)}`}
+          className={`flex items-center gap-1 px-2 ${sizeClass} rounded-sm transition-smooth touch-manipulation ${isFamiliesAtWar ? (isActive ? 'bg-red-500/20 text-red-400 border-l-2 border-red-500' : 'text-red-400 hover:bg-red-500/10') : (isActive ? styles.navItemActivePage : styles.sidebarNavLink)}`}
           style={isFamiliesAtWar ? { color: '#f87171' } : isActive ? sidebarActiveStyle : undefined}
           onClick={() => setSidebarOpen(false)}
         >
@@ -1590,7 +1591,7 @@ export default function Layout({ children }) {
                         )}
                         {open && (
                           <>
-                            {items.map((item, idx) => renderNavItem(item, idx > 0))}
+                            {items.map((item, idx) => renderNavItem(item, idx > 0, true))}
                           </>
                         )}
                       </Fragment>
