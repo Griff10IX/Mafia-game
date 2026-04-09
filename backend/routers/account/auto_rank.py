@@ -721,8 +721,8 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
             return
         bust_result = await _attempt_bust_impl(user, bust_target_username)
         if bust_result.get("error"):
-            # 429 = jail bust rate limit; do not count as a failed bust for stats.
-            if bust_result.get("error_code") != 429:
+            # bust_cooldown = jail min interval between attempts; not a failed bust for stats.
+            if not bust_result.get("bust_cooldown"):
                 now = datetime.now(timezone.utc)
                 await _inc_failed_today(db, user_id, "auto_rank_failed_busts_today", "auto_rank_failed_busts_date", now)
             return

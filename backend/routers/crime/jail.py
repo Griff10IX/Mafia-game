@@ -533,10 +533,12 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
                 pass
         if remaining < 1:
             remaining = 1
+        # Use 400 (not 429): game spacing rule only — avoids global "rate limit" overlay in api.js.
         return {
             "success": False,
             "error": f"Wait {remaining}s before another bust attempt.",
-            "error_code": 429,
+            "error_code": 400,
+            "bust_cooldown": True,
         }
 
     total_attempts = _safe_int(current_user.get("jail_bust_attempts"), 0)
