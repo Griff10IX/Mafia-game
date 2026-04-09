@@ -5,7 +5,7 @@ import secrets
 _rng = secrets.SystemRandom()
 import time
 import uuid
-from typing import Optional, Union
+from typing import Any, List, Optional, Union
 from pydantic import BaseModel
 from bson.objectid import ObjectId
 
@@ -58,7 +58,9 @@ class RouletteBetItem(BaseModel):
 
 
 class RouletteSpinRequest(BaseModel):
-    bets: list
+    bets: List[Any]
+    """Echoed in the response so the client can order results when multiple spins are in flight (turbo / no animation)."""
+    client_spin_id: Optional[int] = None
 
 
 class RouletteClaimRequest(BaseModel):
@@ -668,7 +670,7 @@ def register(router):
             "roulette",
             r_details,
         )
-        return {
+        out = {
             "result": result,
             "win": win,
             "total_payout": settled_payout,
@@ -678,3 +680,9 @@ def register(router):
             "shortfall": shortfall if win and owner_id else 0,
             "buy_back_offer": buy_back_offer if win and owner_id else None,
         }
+        if request.client_spin_id is not None:
+            try:
+                out["client_spin_id"] = int(request.client_spin_id)
+            except (TypeError, ValueError):
+                pass
+        return out

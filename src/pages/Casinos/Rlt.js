@@ -312,8 +312,12 @@ export default function Rlt() {
   const spinTimeoutRef = useRef(null);
   const busyClearTimeoutRef = useRef(null);
   const pendingResultRef = useRef(null);
-  /** True while a spin is in progress (API + optional wheel animation). Extra Spin taps do nothing — no queued phantom bets. */
+  /** Animation mode only: one spin at a time (wheel + pendingResult ref). Turbo mode allows many in-flight HTTP spins. */
   const spinInFlightRef = useRef(false);
+  const spinSeqRef = useRef(0);
+  const completedSpinDataRef = useRef(new Map());
+  const inFlightCountRef = useRef(0);
+  const lastMoneyErrRef = useRef(0);
   const betsRef = useRef(bets);
   const configRef = useRef(config);
   const useAnimationRef = useRef(useAnimation);
@@ -436,6 +440,34 @@ export default function Rlt() {
     }, 700);
   };
 
+  /** No-animation / turbo: many spins in flight; order history and “last” number by client_spin_id when responses race. */
+  const applyResultTurbo = (seq, data) => {
+    completedSpinDataRef.current.set(seq, data);
+    const keys = [...completedSpinDataRef.current.keys()].sort((a, b) => a - b);
+    const hi = keys[keys.length - 1];
+    keys.forEach((k) => {
+      if (k < hi - 150) completedSpinDataRef.current.delete(k);
+    });
+    const sorted = [...completedSpinDataRef.current.entries()].sort((a, b) => b[0] - a[0]).slice(0, 12);
+    setRecentNumbers(sorted.map(([s, d]) => ({ id: s, n: d.result })));
+    const maxSeq = sorted.length ? sorted[0][0] : seq;
+    const lead = completedSpinDataRef.current.get(maxSeq);
+    if (lead && lead.result != null) setLastResult(lead.result);
+
+    if (data.win) {
+      toast.success(`Landed ${data.result}! Won ${formatMoney(data.total_payout)}`);
+      setShowWin(true);
+      setTimeout(() => setShowWin(false), 2200);
+    }
+    if (data.ownership_transferred) toast.success('You won the casino!');
+    if (data.buy_back_offer) {
+      setBuyBackOffer({ ...data.buy_back_offer, offer_id: data.buy_back_offer.offer_id || data.buy_back_offer.id });
+      buyBackFromGameRef.current = true;
+    }
+    refreshUser();
+    fetchOwnership();
+  };
+
   /** One spin end-to-end (async). Caller must ensure only one instance runs at a time via spinInFlightRef. */
   const runSingleSpin = async () => {
     const b = betsRef.current;
@@ -494,11 +526,73 @@ export default function Rlt() {
 
   const spin = () => {
     if (!canSpin) return;
-    if (spinInFlightRef.current) return;
-    spinInFlightRef.current = true;
-    runSingleSpin().finally(() => {
-      spinInFlightRef.current = false;
-    });
+    const anim = useAnimationRef.current;
+
+    if (anim) {
+      if (spinInFlightRef.current) return;
+      spinInFlightRef.current = true;
+      runSingleSpin().finally(() => {
+        spinInFlightRef.current = false;
+      });
+      return;
+    }
+
+    const b = betsRef.current;
+    const cfg = configRef.current;
+    const stake = b.reduce((s, x) => s + x.amount, 0);
+    if (b.length === 0 || stake > (cfg.max_bet || 0)) return;
+
+    const seq = ++spinSeqRef.current;
+    const payload = b.map((bet) => ({
+      type: bet.type,
+      selection: bet.type === 'straight' ? Number(bet.selection) : bet.selection,
+      amount: bet.amount,
+    }));
+
+    inFlightCountRef.current += 1;
+    setSpinning(true);
+    setBusyAnimationsFlag(true);
+    setWheelRotation(0);
+
+    const finishOne = () => {
+      inFlightCountRef.current -= 1;
+      if (inFlightCountRef.current <= 0) {
+        inFlightCountRef.current = 0;
+        setSpinning(false);
+        if (busyClearTimeoutRef.current) clearTimeout(busyClearTimeoutRef.current);
+        busyClearTimeoutRef.current = setTimeout(() => {
+          busyClearTimeoutRef.current = null;
+          setBusyAnimationsFlag(false);
+        }, 400);
+      }
+    };
+
+    const runPost = () => {
+      api
+        .post('/casino/roulette/spin', { bets: payload, client_spin_id: seq })
+        .then((res) => {
+          const raw = res.data || {};
+          const sid = raw.client_spin_id != null ? Number(raw.client_spin_id) : seq;
+          applyResultTurbo(sid, raw);
+        })
+        .catch((e) => {
+          const msg = e.response?.data?.detail || 'Spin failed';
+          const s = typeof msg === 'string' ? msg : String(msg);
+          const now = Date.now();
+          if (s.toLowerCase().includes('money') || s.toLowerCase().includes('enough')) {
+            if (now - lastMoneyErrRef.current > 1200) {
+              lastMoneyErrRef.current = now;
+              toast.error(s);
+            }
+          } else {
+            toast.error(s);
+          }
+          refreshUser();
+        })
+        .finally(finishOne);
+    };
+
+    requestAnimationFrame(() => requestAnimationFrame(runPost));
   };
 
   const handleClaim = async () => {
