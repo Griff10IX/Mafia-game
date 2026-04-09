@@ -6,6 +6,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-09 00:30 UTC[/color][/b] — [b]Distillery: upgrade descriptions, Stock Market speed[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Distillery[/b] equipment cards now show what each piece of equipment does per level (e.g. Stills: +14% production / lv, Bribe Office: +2.5% cash & +2 workers / lv). The [b]Best Next Upgrades[/b] list and [b]Special Upgrade Tracks[/b] showcase also display per-tier bonuses for each ledger track so you know exactly what you're buying.[/color]
+[*][color=#888888][b]Changed:[/b] [b]Stock Market[/b] loads significantly faster. Live prices are now fetched in a single batch request instead of one per stock, with connection reuse and a lock to prevent duplicate refreshes. Change columns updated to [b]1 Hour[/b], [b]24 Hours[/b], and [b]7 Days[/b].[/color]
+[*][color=#888888][b]Player action:[/b] Open [b]Money → Distillery[/b] to see upgrade descriptions on all equipment and ledger cards. Open [b]Money → Stock Market[/b] for faster loading.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-08 23:15 UTC[/color][/b] — [b]Flash news kills now respect Make Public[/b][/size]
 [quote]
 [list]

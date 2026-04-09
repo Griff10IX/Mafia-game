@@ -12301,7 +12301,7 @@ def register(router):
         uid = target["id"]
 
         npc_ids = []
-        async for npc in db.users.find({"is_npc": True}, {"_id": 0, "id": 1}):
+        async for npc in db.users.find({"is_npc": True, "is_bodyguard": {"$ne": True}}, {"_id": 0, "id": 1}):
             if npc.get("id"):
                 npc_ids.append(npc["id"])
 

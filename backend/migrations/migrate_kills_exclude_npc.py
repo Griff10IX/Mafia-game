@@ -25,10 +25,10 @@ async def migrate():
     db = client[db_name]
 
     npc_ids = []
-    async for npc in db.users.find({"is_npc": True}, {"_id": 0, "id": 1}):
+    async for npc in db.users.find({"is_npc": True, "is_bodyguard": {"$ne": True}}, {"_id": 0, "id": 1}):
         if npc.get("id"):
             npc_ids.append(npc["id"])
-    print(f"Found {len(npc_ids)} NPC user(s) to exclude from kill counts.\n")
+    print(f"Found {len(npc_ids)} hitlist NPC user(s) to exclude (bodyguard bots NOT excluded).\n")
 
     cursor = db.users.find(
         {},
