@@ -651,12 +651,12 @@ export default function Jail() {
 
       {privateCell.global_npc_count === 0 && (
         <div
-          className={`relative ${styles.panel} rounded-md overflow-hidden border border-violet-500/25 j-fade-in mobile-panel`}
+          className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 j-fade-in mobile-panel`}
           style={{ animationDelay: '0.04s' }}
         >
-          <div className="h-px bg-gradient-to-r from-transparent via-violet-400/40 to-transparent" />
-          <div className="px-2.5 py-1.5 bg-violet-500/10 border-b border-violet-500/20">
-            <span className="text-[9px] font-heading font-bold text-violet-300 uppercase tracking-[0.12em]">
+          <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
+            <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
               Private cell
             </span>
           </div>
@@ -669,7 +669,7 @@ export default function Jail() {
             ) : privateCell.cooldown_seconds > 0 ? (
               <p>
                 Next summon in{' '}
-                <strong className="text-violet-300 tabular-nums">
+                <strong className="text-primary tabular-nums">
                   {Math.floor(privateCell.cooldown_seconds / 60)}:{String(privateCell.cooldown_seconds % 60).padStart(2, '0')}
                 </strong>
                 . No public NPCs are in jail — your last batch was cleared.
@@ -690,7 +690,7 @@ export default function Jail() {
                 jailStatus.in_jail ||
                 autoRankJailDisabled
               }
-              className="w-full sm:w-auto px-3 py-1.5 rounded border border-violet-500/40 bg-violet-500/15 text-violet-200 text-[9px] font-heading font-bold uppercase tracking-wide hover:bg-violet-500/25 disabled:opacity-45 disabled:cursor-not-allowed transition-all"
+              className="w-full sm:w-auto px-3 py-1.5 rounded border border-primary/40 bg-primary/20 text-primary text-[9px] font-heading font-bold uppercase tracking-wide hover:bg-primary/30 disabled:opacity-45 disabled:cursor-not-allowed transition-all"
             >
               {privateCellLoading ? 'Summoning…' : 'Summon 5 private inmates'}
             </button>
@@ -698,7 +698,7 @@ export default function Jail() {
               <p className="text-[9px] text-amber-400/90">Turn off Auto Rank bust-every-5s to summon manually.</p>
             )}
           </div>
-          <div className="j-art-line text-violet-400/50 mx-2.5" />
+          <div className="j-art-line text-primary mx-2.5" />
         </div>
       )}
 

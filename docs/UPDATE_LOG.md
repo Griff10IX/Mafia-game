@@ -6,6 +6,18 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-09 14:00 UTC[/color][/b] — [b]Witness statements log & badge, private jail cell, Auto Rank jail[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] [b]Combat → Witness statements[/b] — [b]Witness log[/b] lists your recent witness lines (same text as inbox notifications). [b]Combat[/b] nav shows a [b]green count[/b] next to Witness statements when you hold tradable statements (your balance).[/color]
+[*][color=#888888][b]New:[/b] [b]Jail → Private cell[/b] — when there are [b]no public jail NPCs[/b], you can [b]summon 5 inmates only you see[/b]. [b]Max 5[/b] at a time (bust them all before summoning again). [b]5-minute cooldown[/b] between summons. Not available while you’re in jail.[/color]
+[*][color=#888888][b]Changed:[/b] [b]Auto Rank[/b] with [b]Bust every 5 seconds[/b] on can [b]fill your private cell[/b] when the jail is empty of public NPCs and then [b]jailbust[/b] as usual — same rules as manual summon (cooldown, empty cell, etc.).[/color]
+[*][color=#888888][b]Player action:[/b] Open [b]Combat → Witness statements[/b] for the log and market. Open [b]Crime → Jail[/b] when the jail has no shared NPCs to use [b]Private cell[/b].[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-09 02:00 UTC[/color][/b] — [b]Automated House Games in MDG[/b][/size]
 [quote]
 [list]
