@@ -312,6 +312,14 @@ export default function Rlt() {
   const spinTimeoutRef = useRef(null);
   const busyClearTimeoutRef = useRef(null);
   const pendingResultRef = useRef(null);
+  const spinChainRef = useRef(Promise.resolve());
+  const betsRef = useRef(bets);
+  const configRef = useRef(config);
+  const useAnimationRef = useRef(useAnimation);
+  const historySeqRef = useRef(0);
+  betsRef.current = bets;
+  configRef.current = config;
+  useAnimationRef.current = useAnimation;
 
   const [newMaxBet, setNewMaxBet] = useState('');
   const [ownerBuyBack, setOwnerBuyBack] = useState('');
@@ -406,7 +414,8 @@ export default function Rlt() {
 
   const applyResult = (data) => {
     setLastResult(data.result);
-    setRecentNumbers((prev) => [data.result, ...prev].slice(0, 12));
+    const hid = ++historySeqRef.current;
+    setRecentNumbers((prev) => [{ id: hid, n: data.result }, ...prev].slice(0, 12));
     if (data.win) {
       toast.success(`Landed ${data.result}! Won ${formatMoney(data.total_payout)}`);
       setShowWin(true);
@@ -426,29 +435,36 @@ export default function Rlt() {
     }, 700);
   };
 
-  const spin = async () => {
-    if (!canSpin) return;
+  /** One spin end-to-end. Chained so rapid clicks queue without overlapping API calls or animation state. */
+  const runSingleSpin = async () => {
+    const b = betsRef.current;
+    const cfg = configRef.current;
+    const anim = useAnimationRef.current;
+    const stake = b.reduce((s, x) => s + x.amount, 0);
+    if (b.length === 0 || stake > (cfg.max_bet || 0)) return;
+
     setBusyAnimationsFlag(true);
     setSpinning(true);
     setLastResult(null);
     setShowWin(false);
-    if (!useAnimation) {
+    if (!anim) {
       setWheelRotation(0);
     } else {
-      // Immediate visual feedback so spin feels responsive before API returns.
       setWheelRotation((prev) => prev + 360);
     }
     if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current);
 
     try {
-      // Let React paint the pressed/loading state before awaiting network.
       await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
-      const payload = bets.map((b) => ({ type: b.type, selection: b.type === 'straight' ? Number(b.selection) : b.selection, amount: b.amount }));
+      const payload = b.map((bet) => ({
+        type: bet.type,
+        selection: bet.type === 'straight' ? Number(bet.selection) : bet.selection,
+        amount: bet.amount,
+      }));
       const res = await api.post('/casino/roulette/spin', { bets: payload });
       const data = res.data || {};
 
-      if (!useAnimation) {
-        // No-animation mode: keep wheel fixed and reveal outcome instantly.
+      if (!anim) {
         setWheelRotation(0);
         applyResult(data);
         return;
@@ -456,17 +472,28 @@ export default function Rlt() {
 
       pendingResultRef.current = data;
       startWheelSpin(data.result);
-      spinTimeoutRef.current = setTimeout(() => {
-        spinTimeoutRef.current = null;
-        if (pendingResultRef.current) applyResult(pendingResultRef.current);
-      }, SPIN_DURATION_MS + 80);
+      await new Promise((resolve) => {
+        spinTimeoutRef.current = setTimeout(() => {
+          spinTimeoutRef.current = null;
+          const pending = pendingResultRef.current;
+          pendingResultRef.current = null;
+          if (pending) applyResult(pending);
+          resolve();
+        }, SPIN_DURATION_MS + 80);
+      });
     } catch (e) {
       if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current);
+      pendingResultRef.current = null;
       toast.error(e.response?.data?.detail || 'Spin failed');
       setSpinning(false);
       setBusyAnimationsFlag(false);
-      refreshUser(); // Sync balance in case debit succeeded but response failed
+      refreshUser();
     }
+  };
+
+  const spin = () => {
+    if (!canSpin) return;
+    spinChainRef.current = spinChainRef.current.then(runSingleSpin).catch(() => {});
   };
 
   const handleClaim = async () => {
@@ -797,19 +824,23 @@ export default function Rlt() {
                 {/* Recent numbers rail */}
                 {recentNumbers.length > 0 && (
                   <div className="flex gap-1 justify-center flex-wrap">
-                    {recentNumbers.slice(0, 10).map((n, i) => (
-                      <div
-                        key={`${n}-${i}`}
-                        className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow-sm"
-                        style={{
-                          background: n === 0 ? '#059669' : isRed(n) ? '#b91c1c' : '#27272a',
-                          border: '1.5px solid rgba(255,255,255,0.15)',
-                          opacity: 1 - i * 0.07,
-                        }}
-                      >
-                        {n}
-                      </div>
-                    ))}
+                    {recentNumbers.slice(0, 10).map((entry, i) => {
+                      const n = typeof entry === 'object' && entry != null && 'n' in entry ? entry.n : entry;
+                      const key = typeof entry === 'object' && entry != null && entry.id != null ? entry.id : `${n}-${i}`;
+                      return (
+                        <div
+                          key={key}
+                          className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold text-white shadow-sm"
+                          style={{
+                            background: n === 0 ? '#059669' : isRed(n) ? '#b91c1c' : '#27272a',
+                            border: '1.5px solid rgba(255,255,255,0.15)',
+                            opacity: 1 - i * 0.07,
+                          }}
+                        >
+                          {n}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
