@@ -694,6 +694,7 @@ def register(router):
                 "swiss_balance": 0,
                 "swiss_limit": SWISS_BANK_LIMIT_START,
                 "total_kills": 0,
+                "total_kills_excludes_npc_v1": True,
                 "total_deaths": 0,
                 "in_jail": False,
                 "jail_until": None,

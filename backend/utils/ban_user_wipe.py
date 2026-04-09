@@ -150,6 +150,7 @@ async def wipe_user_for_account_ban(db, user_id: str) -> Dict[str, Any]:
         "total_crimes": 0,
         "crime_profit": 0,
         "total_kills": 0,
+        "total_kills_excludes_npc_v1": True,
         "total_deaths": 0,
         "bullets": 0,
         "molotovs": 0,
