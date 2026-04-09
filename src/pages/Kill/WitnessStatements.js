@@ -41,6 +41,7 @@ export default function WitnessStatements() {
   const [cash, setCash] = useState(0);
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [listPrice, setListPrice] = useState('');
+  const [listSellerAnonymous, setListSellerAnonymous] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const load = useCallback(async () => {
@@ -98,10 +99,15 @@ export default function WitnessStatements() {
     }
     setSubmitting(true);
     try {
-      await api.post('/witness-statements/list', { notification_ids: ids, price_cash: price });
+      await api.post('/witness-statements/list', {
+        notification_ids: ids,
+        price_cash: price,
+        seller_anonymous: listSellerAnonymous,
+      });
       toast.success('Listed on the market.');
       setSelectedIds(new Set());
       setListPrice('');
+      setListSellerAnonymous(false);
       await load();
       refreshUser();
     } catch (e) {
@@ -158,7 +164,7 @@ export default function WitnessStatements() {
           </div>
           <p className="text-[10px] text-mutedForeground mt-1 max-w-xl leading-relaxed">
             When you receive a <strong className="text-foreground">Witness statement</strong> notification from a kill, you gain one tradable statement here.
-            Choose specific lines from your log to list for <strong className="text-foreground">cash</strong> (total price for the lot). Other players see the text with the <strong className="text-foreground">killer hidden</strong> until they buy.
+            Choose specific lines from your log to list for <strong className="text-foreground">cash</strong> (total price for the lot). Other players see the text with the <strong className="text-foreground">killer hidden</strong> until they buy. You can <strong className="text-foreground">hide your name</strong> as seller on the market.
           </p>
         </div>
         <button
@@ -206,6 +212,15 @@ export default function WitnessStatements() {
               List
             </button>
           </div>
+          <label className="flex items-center gap-2 cursor-pointer select-none text-[9px] text-mutedForeground font-heading">
+            <input
+              type="checkbox"
+              className="rounded border-zinc-600 accent-primary"
+              checked={listSellerAnonymous}
+              onChange={(e) => setListSellerAnonymous(e.target.checked)}
+            />
+            <span>List as <strong className="text-foreground">Anonymous</strong> (others won&apos;t see your username or profile link)</span>
+          </label>
         </div>
         <div className="ws-art-line text-primary mx-3" />
       </div>
@@ -274,7 +289,7 @@ export default function WitnessStatements() {
           <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Market</span>
         </div>
         <p className="px-3 pt-2 text-[9px] text-mutedForeground font-heading">
-          Previews hide the killer&apos;s name until purchase. Your own listings show full text to you.
+          Previews hide the killer&apos;s name until purchase. Sellers who list anonymously appear as &quot;Anonymous&quot; (no profile link). Your own listings always show full preview text to you.
         </p>
         {loading ? (
           <div className="p-8 text-center text-xs text-mutedForeground font-heading">Loading…</div>
@@ -297,7 +312,14 @@ export default function WitnessStatements() {
                   <tr key={row.id} className="border-b border-zinc-800/50 hover:bg-zinc-900/30 align-top">
                     <td className="px-3 py-2">
                       {row.is_own ? (
-                        <span className="text-primary font-heading font-bold">You</span>
+                        <div className="flex flex-col gap-0.5">
+                          <span className="text-primary font-heading font-bold">You</span>
+                          {row.seller_anonymous && (
+                            <span className="text-[8px] text-mutedForeground font-heading uppercase tracking-wide">Anonymous to others</span>
+                          )}
+                        </div>
+                      ) : row.seller_profile_hidden ? (
+                        <span className="text-mutedForeground font-heading font-medium">Anonymous</span>
                       ) : (
                         <Link to={`/profile/${encodeURIComponent(row.seller_username)}`} className="text-foreground hover:text-primary font-medium">
                           {row.seller_username}

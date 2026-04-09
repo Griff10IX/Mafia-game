@@ -26,6 +26,7 @@ def redact_witness_killer_for_market(message: str) -> str:
 class WitnessListRequest(BaseModel):
     notification_ids: list[str] = Field(..., min_length=1, max_length=WITNESS_MAX_QTY_PER_LISTING)
     price_cash: int = Field(..., ge=1)
+    seller_anonymous: bool = False
 
     @field_validator("notification_ids", mode="before")
     @classmethod
@@ -105,6 +106,7 @@ def register(router):
                 "id": r.get("id"),
                 "seller_id": r.get("seller_id"),
                 "seller_username": r.get("seller_username") or "?",
+                "seller_anonymous": bool(r.get("seller_anonymous")),
                 "quantity": int(r.get("quantity") or 0),
                 "price_cash": int(r.get("price_cash") or 0),
                 "created_at": r.get("created_at"),
@@ -162,17 +164,23 @@ def register(router):
         for r in rows:
             seller = r.get("seller_id")
             is_own = seller == me
+            anon = bool(r.get("seller_anonymous"))
             nids = r.get("notification_ids") or []
             qty = int(r.get("quantity") or 0) or len(nids)
             previews = _ordered_previews(nids, msg_by_id, redact=not is_own) if nids else []
+            seller_username_out = r.get("seller_username") or "?"
+            if not is_own and anon:
+                seller_username_out = "Anonymous"
             out.append(
                 {
                     "id": r.get("id"),
-                    "seller_username": r.get("seller_username") or "?",
+                    "seller_username": seller_username_out,
                     "quantity": qty,
                     "price_cash": int(r.get("price_cash") or 0),
                     "created_at": r.get("created_at"),
                     "is_own": is_own,
+                    "seller_anonymous": anon,
+                    "seller_profile_hidden": (not is_own) and anon,
                     "previews": previews,
                 }
             )
@@ -197,6 +205,7 @@ def register(router):
                 "quantity": int(r.get("quantity") or 0) or len(r.get("notification_ids") or []),
                 "price_cash": int(r.get("price_cash") or 0),
                 "created_at": r.get("created_at"),
+                "seller_anonymous": bool(r.get("seller_anonymous")),
                 "previews": _ordered_previews(r.get("notification_ids") or [], msg_by_id, redact=False),
             }
             for r in rows
@@ -264,6 +273,7 @@ def register(router):
             "id": listing_id,
             "seller_id": uid,
             "seller_username": current_user.get("username") or "?",
+            "seller_anonymous": bool(req.seller_anonymous),
             "quantity": qty,
             "notification_ids": ids,
             "price_cash": price,
