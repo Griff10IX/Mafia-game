@@ -409,13 +409,15 @@ def register(router):
         cc = await load_claim_costs(db)
         cash_cost = cc["dice_cash"]
         pts_cost = cc["dice_points"]
-        user = await db.users.find_one({"id": current_user.get("id") or ""})
-        if not user or user.get("money", 0) < cash_cost:
-            raise HTTPException(status_code=400, detail=f"You need ${cash_cost:,} to claim")
-        points = int((current_user.get("points") or 0) or 0)
-        if points < pts_cost:
-            raise HTTPException(status_code=400, detail="Not enough points to claim")
         db_city = stored_city or city
+        debit_filter = {"id": current_user.get("id") or "", "money": {"$gte": cash_cost}}
+        debit_inc = {"money": -cash_cost}
+        if pts_cost > 0:
+            debit_filter["points"] = {"$gte": pts_cost}
+            debit_inc["points"] = -pts_cost
+        debit_result = await db.users.find_one_and_update(debit_filter, {"$inc": debit_inc})
+        if not debit_result:
+            raise HTTPException(status_code=400, detail=f"You need ${cash_cost:,} cash" + (f" and {pts_cost:,} points" if pts_cost > 0 else "") + " to claim")
         res = await db.dice_ownership.update_one(
             {"city": db_city, "owner_id": None},
             {
@@ -430,10 +432,12 @@ def register(router):
             upsert=True,
         )
         if res.matched_count == 0 and res.upserted_id is None:
+            refund_inc = {"money": cash_cost}
+            if pts_cost > 0:
+                refund_inc["points"] = pts_cost
+            await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": refund_inc})
             raise HTTPException(status_code=400, detail="This table is already owned")
-        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -cash_cost}})
         if pts_cost > 0:
-            await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"points": -pts_cost}})
             await log_points_event(db, user_id=current_user.get("id") or "", points=-pts_cost, event_type="casino_dice", event_ref=f"claim:{city}", meta={"action": "claim_cost", "city": city})
         await maybe_revoke_civilian_protection(db, current_user.get("id") or "", "casino_claim")
         await cancel_quicktrade_casino_listings_by_locations("casino_dice", db_city, city)

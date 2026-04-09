@@ -228,6 +228,9 @@ def register(router):
                     "total_jail_busts": {"$sum": {"$ifNull": ["$jail_busts", 0]}},
                     "total_oc_heists": {"$sum": {"$ifNull": ["$total_oc_heists", 0]}},
                     "bullets_melted_total": {"$sum": {"$ifNull": ["$bullets_melted", 0]}},
+                    "token_store_points_spent_total": {"$sum": {"$ifNull": ["$token_points_spent", 0]}},
+                    "token_store_respect_spent_total": {"$sum": {"$ifNull": ["$token_respect_spent", 0]}},
+                    "token_store_cash_spent_total": {"$sum": {"$ifNull": ["$token_cash_spent", 0]}},
                 }
             }
         ]).to_list(1)
@@ -492,6 +495,9 @@ def register(router):
                 "booze_profit_total": booze_profit_grand_total,
                 "bullets_total": int(totals_doc.get("bullets_total", 0) or 0),
                 "family_treasury_total": family_treasury_total,
+                "token_store_points_spent_total": int(totals_doc.get("token_store_points_spent_total", 0) or 0),
+                "token_store_respect_spent_total": int(totals_doc.get("token_store_respect_spent_total", 0) or 0),
+                "token_store_cash_spent_total": int(totals_doc.get("token_store_cash_spent_total", 0) or 0),
             },
             "user_stats": {
                 "total_users": int(total_users),

@@ -1173,8 +1173,8 @@ async def bullet_factory_sell_on_trade(
     current_user: dict = Depends(get_current_user),
 ):
     """List the armoury on Quick Trade for points. Relinquishes ownership when listed (buyer gets it)."""
-    if request.points < 0:
-        raise HTTPException(status_code=400, detail="Points must be non-negative")
+    if request.points <= 0:
+        raise HTTPException(status_code=400, detail="Points must be positive")
     state = _normalize_state(request.state or current_user.get("current_state"))
     factory = await _get_or_create_factory(state)
     # Fallback: if UI/current_state is out of sync, resolve the actual owned armoury state.

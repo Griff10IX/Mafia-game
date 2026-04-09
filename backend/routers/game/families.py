@@ -2584,11 +2584,20 @@ async def families_compound_withdraw(request: CompoundWithdrawRequest, current_u
     my_deposits["cash"] = my_cash - cash_take
     my_deposits["points"] = my_points - points_take
     my_deposits["loot_pieces"] = my_loot - loot_take
+    withdraw_filter = {"id": family_id}
+    if cash_take > 0:
+        withdraw_filter["compound_cash"] = {"$gte": cash_take}
+    if points_take > 0:
+        withdraw_filter["compound_points"] = {"$gte": points_take}
+    if loot_take > 0:
+        withdraw_filter["compound_loot_pieces"] = {"$gte": loot_take}
     updates = {
         "$inc": {"compound_cash": -cash_take, "compound_points": -points_take, "compound_loot_pieces": -loot_take},
         "$set": {f"compound_deposits_by_user.{uid}": my_deposits},
     }
-    await db.families.update_one({"id": family_id}, updates)
+    withdraw_result = await db.families.update_one(withdraw_filter, updates)
+    if withdraw_result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Not enough in compound (may have been withdrawn concurrently)")
     await db.users.update_one(
         {"id": current_user["id"]},
         {"$inc": {"money": cash_take, "points": points_take, "loot_box_pieces": loot_take}},

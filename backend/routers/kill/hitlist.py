@@ -198,7 +198,7 @@ async def hitlist_add(request: HitlistAddRequest, current_user: dict = Depends(g
         if deduct_result.modified_count == 0:
             raise HTTPException(status_code=400, detail="Insufficient funds")
         if cost_points > 0:
-            await log_points_event(db, user_id=user_id, points=-cost_points, event_type="hitlist_place_bounty",
+            await log_points_event(db, user_id=current_user["id"], points=-cost_points, event_type="hitlist_place_bounty",
                                    event_ref=f"target:{target['id']}", meta={"target_username": target.get("username")})
 
     inserted = []

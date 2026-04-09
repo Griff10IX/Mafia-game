@@ -495,8 +495,11 @@ def register(router):
         stored_city, doc = await _get_blackjack_ownership_doc(city)
         cc = await load_claim_costs(db)
         claim_cost = cc["blackjack"]
-        user = await db.users.find_one({"id": current_user.get("id") or ""})
-        if not user or user.get("money", 0) < claim_cost:
+        debit_result = await db.users.find_one_and_update(
+            {"id": current_user.get("id") or "", "money": {"$gte": claim_cost}},
+            {"$inc": {"money": -claim_cost}},
+        )
+        if not debit_result:
             raise HTTPException(status_code=400, detail=f"You need ${claim_cost:,} to claim")
         res = await db.blackjack_ownership.update_one(
             {"city": stored_city or city, "owner_id": None},
@@ -504,8 +507,8 @@ def register(router):
             upsert=True,
         )
         if not res.modified_count and not res.upserted_id:
+            await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": claim_cost}})
             raise HTTPException(status_code=400, detail="This table already has an owner")
-        await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": -claim_cost}})
         await maybe_revoke_civilian_protection(db, current_user.get("id") or "", "casino_claim")
         await cancel_quicktrade_casino_listings_by_locations("casino_blackjack", stored_city or city, city)
         return {"message": f"You now own the blackjack table in {city}!"}

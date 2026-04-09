@@ -669,6 +669,12 @@ async def buy_store_token(
     if not cost_used:
         raise HTTPException(status_code=400, detail="Insufficient points")
     inc[cf] = inc.get(cf, 0) + amt
+    _pts = inc.get("lifetime_points_spent", 0)
+    _rsp = inc.get("lifetime_respect_points_spent", 0)
+    if _pts > 0:
+        inc["token_points_spent"] = _pts
+    if _rsp > 0:
+        inc["token_respect_spent"] = _rsp
     filt = {
         "id": current_user["id"],
         **_token_count_lte_atom_filter(cf, STORE_TOKEN_MAX_HELD - amt),
@@ -703,6 +709,12 @@ async def buy_store_token_bundle(
         raise HTTPException(status_code=400, detail="Insufficient points")
     for field, add in field_inc.items():
         inc[field] = inc.get(field, 0) + add
+    _pts = inc.get("lifetime_points_spent", 0)
+    _rsp = inc.get("lifetime_respect_points_spent", 0)
+    if _pts > 0:
+        inc["token_points_spent"] = _pts
+    if _rsp > 0:
+        inc["token_respect_spent"] = _rsp
     expr_clauses = [
         {"$lte": [{"$ifNull": [f"${field}", 0]}, STORE_TOKEN_MAX_HELD - add]}
         for field, add in field_inc.items()
@@ -869,7 +881,7 @@ async def buy_store_token_cash(
         "money": {"$gte": cash_cost},
         **_token_count_lte_atom_filter(cf, STORE_TOKEN_MAX_HELD - amt),
     }
-    inc = {"money": -cash_cost, cf: amt, "token_cash_purchases_today": amt}
+    inc = {"money": -cash_cost, cf: amt, "token_cash_purchases_today": amt, "token_cash_spent": cash_cost}
     result = await db.users.update_one(
         filt,
         {"$inc": inc, "$set": {"token_cash_purchases_date": today}},
@@ -921,7 +933,7 @@ async def buy_store_token_bundle_cash(
         raise HTTPException(status_code=400, detail=f"Insufficient cash. Need ${cash_cost:,.0f}, have ${money_balance:,.0f}.")
 
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    inc = {"money": -cash_cost, "token_cash_purchases_today": 1}
+    inc = {"money": -cash_cost, "token_cash_purchases_today": 1, "token_cash_spent": cash_cost}
     gte = {"money": {"$gte": cash_cost}}
     for field, add in field_inc.items():
         inc[field] = inc.get(field, 0) + add

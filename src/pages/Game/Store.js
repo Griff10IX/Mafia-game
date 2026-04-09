@@ -962,6 +962,26 @@ export default function Store() {
 
       {activeTab === 'tokens' && (
         <div className="space-y-6">
+          {user && (Number(user.token_points_spent || 0) > 0 || Number(user.token_respect_spent || 0) > 0 || Number(user.token_cash_spent || 0) > 0) && (
+            <div className="flex flex-wrap items-center gap-3 px-3 py-2 rounded border border-primary/20 bg-primary/5">
+              <span className="text-[9px] font-heading text-zinc-400 uppercase tracking-wider">Spent on tokens:</span>
+              {Number(user.token_points_spent || 0) > 0 && (
+                <span className="text-[9px] font-heading text-zinc-300">
+                  <span className="text-primary font-bold">{Number(user.token_points_spent).toLocaleString()}</span> pts
+                </span>
+              )}
+              {Number(user.token_respect_spent || 0) > 0 && (
+                <span className="text-[9px] font-heading text-zinc-300">
+                  <span className="text-primary font-bold">{Number(user.token_respect_spent).toLocaleString()}</span> respect
+                </span>
+              )}
+              {Number(user.token_cash_spent || 0) > 0 && (
+                <span className="text-[9px] font-heading text-zinc-300">
+                  <span className="text-primary font-bold">${Number(user.token_cash_spent).toLocaleString()}</span> cash
+                </span>
+              )}
+            </div>
+          )}
           {storePayWith === 'cash' && (
             <div className="flex flex-wrap items-center gap-3">
               {cashPriceAvailable ? (

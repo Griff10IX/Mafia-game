@@ -1189,11 +1189,7 @@ def register(router):
             raise HTTPException(status_code=404, detail="Tournament not found")
         if g.get("approval_status") != "approved" or g.get("tournament_status") != "registration":
             raise HTTPException(status_code=400, detail="Tournament is not open for registration")
-        players = list(g.get("players") or [])
-        if any(p.get("user_id") == uid for p in players):
-            raise HTTPException(status_code=400, detail="Already registered")
-        if len(players) >= int(g.get("max_players") or MP_POKER_TOURNAMENT_MAX_PLAYERS):
-            raise HTTPException(status_code=400, detail="Tournament full")
+        max_players = int(g.get("max_players") or MP_POKER_TOURNAMENT_MAX_PLAYERS)
         buy_in = int(g.get("buy_in") or 0)
         deduct = await db.users.update_one(
             {"id": uid, "money": {"$gte": buy_in}},
@@ -1201,25 +1197,36 @@ def register(router):
         )
         if deduct.modified_count == 0:
             raise HTTPException(status_code=400, detail="Insufficient funds")
-        players.append(
+        new_player = {
+            "user_id": uid,
+            "username": username,
+            "seat_index": 0,
+            "stack": MP_POKER_TOURNAMENT_STARTING_STACK,
+            "hole_cards": [],
+            "current_bet": 0,
+            "total_bet_this_hand": 0,
+            "status": "waiting",
+            "ready": False,
+            "is_bot": False,
+            "is_creator": False,
+        }
+        join_result = await db.mp_poker_games.update_one(
             {
-                "user_id": uid,
-                "username": username,
-                "seat_index": len(players),
-                "stack": MP_POKER_TOURNAMENT_STARTING_STACK,
-                "hole_cards": [],
-                "current_bet": 0,
-                "total_bet_this_hand": 0,
-                "status": "waiting",
-                "ready": False,
-                "is_bot": False,
-                "is_creator": False,
-            }
+                "id": game_id,
+                "players.user_id": {"$ne": uid},
+                "$expr": {"$lt": [{"$size": "$players"}, max_players]},
+            },
+            {"$push": {"players": new_player}, "$inc": {"prize_pool": buy_in}},
         )
-        await db.mp_poker_games.update_one(
-            {"id": game_id},
-            {"$set": {"players": players, "phase": "ready" if len(players) >= MP_POKER_TOURNAMENT_MIN_PLAYERS else "lobby"}, "$inc": {"prize_pool": buy_in}},
-        )
+        if join_result.modified_count == 0:
+            await db.users.update_one({"id": uid}, {"$inc": {"money": buy_in}})
+            raise HTTPException(status_code=400, detail="Could not join (tournament full, already registered, or closed)")
+        g = await db.mp_poker_games.find_one({"id": game_id})
+        players = list(g.get("players") or [])
+        for i, p in enumerate(players):
+            p["seat_index"] = i
+        phase = "ready" if len(players) >= MP_POKER_TOURNAMENT_MIN_PLAYERS else "lobby"
+        await db.mp_poker_games.update_one({"id": game_id}, {"$set": {"players": players, "phase": phase}})
         await log_gambling(uid, username, "mp_poker", {"action": "join", "game_id": game_id, "buy_in": buy_in, "mode": "tournament"})
         g = await db.mp_poker_games.find_one({"id": game_id})
         return {k: v for k, v in (g or {}).items() if k != "_id"}
@@ -1710,23 +1717,19 @@ def register(router):
         if _is_tournament_game(g):
             if g.get("approval_status") != "approved" or g.get("tournament_status") != "registration":
                 raise HTTPException(status_code=400, detail="Tournament is not open for registration")
-        players = list(g.get("players") or [])
-        if any(p.get("user_id") == uid for p in players):
-            raise HTTPException(status_code=400, detail="Already in game")
-        if len(players) >= g.get("max_players", 6):
-            raise HTTPException(status_code=400, detail="Game full")
+        max_players = g.get("max_players", 6)
         buy_in = int(g.get("buy_in") or 0)
+        is_tournament = _is_tournament_game(g)
         join_deduct = await db.users.update_one(
             {"id": uid, "money": {"$gte": buy_in}},
             {"$inc": {"money": -buy_in}},
         )
         if join_deduct.modified_count == 0:
             raise HTTPException(status_code=400, detail="Insufficient funds")
-        is_tournament = _is_tournament_game(g)
-        players.append({
+        new_player = {
             "user_id": uid,
             "username": username,
-            "seat_index": len(players),
+            "seat_index": 0,
             "stack": MP_POKER_TOURNAMENT_STARTING_STACK if is_tournament else buy_in,
             "hole_cards": [],
             "current_bet": 0,
@@ -1734,18 +1737,30 @@ def register(router):
             "status": "waiting",
             "ready": False,
             "is_bot": False,
-        })
-        await log_gambling(uid, username, "mp_poker", {"action": "join", "game_id": game_id, "buy_in": buy_in, "mode": "tournament" if is_tournament else "vs_players"})
-        # 2+ players is enough to enter ready phase; creator can start once all current players are ready
+        }
+        join_update = {"$push": {"players": new_player}}
+        if is_tournament:
+            join_update["$inc"] = {"prize_pool": buy_in}
+        join_result = await db.mp_poker_games.update_one(
+            {
+                "id": game_id,
+                "status": "open",
+                "players.user_id": {"$ne": uid},
+                "$expr": {"$lt": [{"$size": "$players"}, max_players]},
+            },
+            join_update,
+        )
+        if join_result.modified_count == 0:
+            await db.users.update_one({"id": uid}, {"$inc": {"money": buy_in}})
+            raise HTTPException(status_code=400, detail="Could not join (game full, already joined, or closed)")
+        g = await db.mp_poker_games.find_one({"id": game_id})
+        players = list(g.get("players") or [])
+        for i, p in enumerate(players):
+            p["seat_index"] = i
         min_players = MP_POKER_TOURNAMENT_MIN_PLAYERS if is_tournament else 2
         phase = "ready" if len(players) >= min_players else "lobby"
-        update_doc: Dict[str, Any] = {"players": players, "phase": phase}
-        if is_tournament:
-            update_doc["prize_pool"] = int(g.get("prize_pool") or 0) + buy_in
-        await db.mp_poker_games.update_one(
-            {"id": game_id},
-            {"$set": update_doc},
-        )
+        await db.mp_poker_games.update_one({"id": game_id}, {"$set": {"players": players, "phase": phase}})
+        await log_gambling(uid, username, "mp_poker", {"action": "join", "game_id": game_id, "buy_in": buy_in, "mode": "tournament" if is_tournament else "vs_players"})
         g = await db.mp_poker_games.find_one({"id": game_id})
         return {k: v for k, v in g.items() if k != "_id"}
 

@@ -325,6 +325,21 @@ function buildGameCapitalRows(data) {
     },
     { label: 'Total bullets', value: formatNumber(gc?.bullets_total) },
     { label: 'Family treasuries', value: formatMoney(gc?.family_treasury_total) },
+    {
+      label: 'Store tokens — points spent (all players)',
+      value: formatNumber(gc?.token_store_points_spent_total ?? 0),
+      title: 'Sum of each player’s token store points spend. Counts purchases after token spend tracking was added.',
+    },
+    {
+      label: 'Store tokens — respect spent (all players)',
+      value: formatNumber(gc?.token_store_respect_spent_total ?? 0),
+      title: 'Sum of respect spent in the token store (same tracking window as points).',
+    },
+    {
+      label: 'Store tokens — cash spent (all players)',
+      value: formatMoney(gc?.token_store_cash_spent_total ?? 0),
+      title: 'Sum of in-game cash spent on token purchases via Quick Trade pricing.',
+    },
   ];
 }
 

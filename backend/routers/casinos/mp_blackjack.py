@@ -872,64 +872,57 @@ def register(router):
             raise HTTPException(status_code=400, detail="Game is not open for join")
         if game.get("exclude_yourself") and game.get("creator_id") == uid:
             raise HTTPException(status_code=400, detail="Creator cannot join this game")
-        players = list(game.get("players") or [])
-        if any(p.get("user_id") == uid for p in players):
-            raise HTTPException(status_code=400, detail="You are already in this game")
         max_players = game.get("max_players", 6)
-        if len(players) >= max_players:
-            raise HTTPException(status_code=400, detail="Game is full")
         buy_in = int(game.get("buy_in") or 0)
 
-        seat_index = len(players)
-        new_player = {
-            "user_id": uid,
-            "username": username,
-            "seat_index": seat_index,
-            "hand": [],
-            "status": "waiting",
-            "bet": buy_in,
-            "ready": False,
-            "eliminated": False,
-        }
         join_deduct = await db.users.update_one(
             {"id": uid, "money": {"$gte": buy_in}},
             {"$inc": {"money": -buy_in}},
         )
         if join_deduct.modified_count == 0:
             raise HTTPException(status_code=400, detail="Insufficient money to join")
-        players.append(new_player)
-        new_pot = int(game.get("pot") or 0) + buy_in
-        now_iso = datetime.now(timezone.utc).isoformat()
+
+        new_player = {
+            "user_id": uid,
+            "username": username,
+            "seat_index": 0,
+            "hand": [],
+            "status": "waiting",
+            "bet": buy_in,
+            "ready": False,
+            "eliminated": False,
+        }
+        join_result = await db.mp_blackjack_games.update_one(
+            {
+                "id": game_id,
+                "status": "open",
+                "players.user_id": {"$ne": uid},
+                "$expr": {"$lt": [{"$size": "$players"}, max_players]},
+            },
+            {"$push": {"players": new_player}, "$inc": {"pot": buy_in}},
+        )
+        if join_result.modified_count == 0:
+            await db.users.update_one({"id": uid}, {"$inc": {"money": buy_in}})
+            raise HTTPException(status_code=400, detail="Could not join (game may be full, already joined, or closed)")
+
+        updated = await db.mp_blackjack_games.find_one({"id": game_id})
+        players = list(updated.get("players") or [])
+        for i, p in enumerate(players):
+            p["seat_index"] = i
 
         if len(players) >= max_players:
-            # Table full — move to ready phase, no more joins
             await db.mp_blackjack_games.update_one(
                 {"id": game_id},
-                {
-                    "$set": {
-                        "status": "playing",
-                        "phase": "ready",
-                        "players": players,
-                        "pot": new_pot,
-                        "all_ready_at": None,
-                    }
-                },
+                {"$set": {"status": "playing", "phase": "ready", "players": players, "all_ready_at": None}},
             )
             await log_gambling(uid, username, "mp_blackjack", {"action": "join", "game_id": game_id, "buy_in": buy_in})
             updated = await db.mp_blackjack_games.find_one({"id": game_id})
             return {"message": "Joined — table is full! Ready up to start.", "game": _serialize_game(updated, uid)}
 
+        phase_update = {"players": players}
         if len(players) >= 2:
-            # 2+ players is enough — creator can start once all current players are ready
-            await db.mp_blackjack_games.update_one(
-                {"id": game_id},
-                {"$set": {"players": players, "pot": new_pot, "phase": "ready"}},
-            )
-        else:
-            await db.mp_blackjack_games.update_one(
-                {"id": game_id},
-                {"$set": {"players": players, "pot": new_pot}},
-            )
+            phase_update["phase"] = "ready"
+        await db.mp_blackjack_games.update_one({"id": game_id}, {"$set": phase_update})
         await log_gambling(uid, username, "mp_blackjack", {"action": "join", "game_id": game_id, "buy_in": buy_in})
         updated = await db.mp_blackjack_games.find_one({"id": game_id})
         return {"message": "Joined", "game": _serialize_game(updated, uid)}
