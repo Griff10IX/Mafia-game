@@ -27,13 +27,19 @@ function formatLogTime(iso) {
   }
 }
 
+function previewSnippet(text, maxLen = 140) {
+  const s = (text || '').replace(/\s+/g, ' ').trim();
+  if (!s) return '—';
+  return s.length > maxLen ? `${s.slice(0, maxLen - 1)}…` : s;
+}
+
 export default function WitnessStatements() {
   const [loading, setLoading] = useState(true);
   const [listings, setListings] = useState([]);
   const [recentLog, setRecentLog] = useState([]);
   const [balance, setBalance] = useState(0);
   const [cash, setCash] = useState(0);
-  const [listQty, setListQty] = useState('');
+  const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [listPrice, setListPrice] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -48,7 +54,16 @@ export default function WitnessStatements() {
       setBalance(Number(meRes.data?.witness_statements ?? 0));
       setCash(Number(meRes.data?.money ?? 0));
       setListings(Array.isArray(listRes.data) ? listRes.data : []);
-      setRecentLog(Array.isArray(recentRes.data?.items) ? recentRes.data.items : []);
+      const items = Array.isArray(recentRes.data?.items) ? recentRes.data.items : [];
+      setRecentLog(items);
+      setSelectedIds((prev) => {
+        const next = new Set();
+        const available = new Set(items.filter((r) => !r.listed_listing_id).map((r) => r.id));
+        prev.forEach((id) => {
+          if (available.has(id)) next.add(id);
+        });
+        return next;
+      });
     } catch (e) {
       toast.error(getApiErrorMessage(e, 'Failed to load'));
       setListings([]);
@@ -62,18 +77,30 @@ export default function WitnessStatements() {
     load();
   }, [load]);
 
+  const toggleSelect = (row) => {
+    if (row.listed_listing_id) return;
+    const id = row.id;
+    if (!id) return;
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
   const handleList = async () => {
-    const qty = parseInt(String(listQty).replace(/\D/g, ''), 10) || 0;
+    const ids = [...selectedIds];
     const price = parseInt(String(listPrice).replace(/\D/g, ''), 10) || 0;
-    if (qty < 1 || price < 1) {
-      toast.error('Enter quantity (1+) and total cash price (1+).');
+    if (ids.length < 1 || price < 1) {
+      toast.error('Select at least one statement from the log and enter a total cash price (1+).');
       return;
     }
     setSubmitting(true);
     try {
-      await api.post('/witness-statements/list', { quantity: qty, price_cash: price });
+      await api.post('/witness-statements/list', { notification_ids: ids, price_cash: price });
       toast.success('Listed on the market.');
-      setListQty('');
+      setSelectedIds(new Set());
       setListPrice('');
       await load();
       refreshUser();
@@ -100,7 +127,10 @@ export default function WitnessStatements() {
   };
 
   const handleBuy = async (row) => {
-    if (!window.confirm(`Buy ${row.quantity} statement(s) for ${money(row.price_cash)} total?`)) return;
+    const lines = Array.isArray(row.previews) && row.previews.length > 0
+      ? row.previews.map((p, i) => `${i + 1}. ${previewSnippet(p, 200)}`).join('\n')
+      : `${row.quantity} statement(s)`;
+    if (!window.confirm(`Buy ${row.quantity} statement(s) for ${money(row.price_cash)} total?\n\n${lines}`)) return;
     setSubmitting(true);
     try {
       await api.post('/witness-statements/buy', { listing_id: row.id });
@@ -114,6 +144,8 @@ export default function WitnessStatements() {
     }
   };
 
+  const nSelected = selectedIds.size;
+
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root ws-fade-in`}>
       <style>{WS_STYLES}</style>
@@ -126,7 +158,7 @@ export default function WitnessStatements() {
           </div>
           <p className="text-[10px] text-mutedForeground mt-1 max-w-xl leading-relaxed">
             When you receive a <strong className="text-foreground">Witness statement</strong> notification from a kill, you gain one tradable statement here.
-            List stacks for <strong className="text-foreground">cash</strong> (total price for the lot) or buy from other players.
+            Choose specific lines from your log to list for <strong className="text-foreground">cash</strong> (total price for the lot). Other players see the text with the <strong className="text-foreground">killer hidden</strong> until they buy.
           </p>
         </div>
         <button
@@ -151,11 +183,15 @@ export default function WitnessStatements() {
         </div>
         <div className="p-3 space-y-3">
           <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Create listing</div>
-          <p className="text-[9px] text-mutedForeground">Up to 5 active listings. Statements are held in escrow until sold or cancelled.</p>
+          <p className="text-[9px] text-mutedForeground">
+            Up to 5 active listings. Tick rows in the witness log below, then set one price for the whole lot. Listed lines stay in your log but are held in escrow until sold or cancelled.
+          </p>
           <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
             <div className="flex-1 space-y-1">
-              <label className="text-[9px] text-mutedForeground font-heading uppercase">Quantity</label>
-              <FormattedNumberInput value={listQty} onChange={setListQty} placeholder="e.g. 10" className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs" />
+              <label className="text-[9px] text-mutedForeground font-heading uppercase">Selected</label>
+              <div className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground tabular-nums">
+                {nSelected < 1 ? '—' : `${nSelected} statement${nSelected === 1 ? '' : 's'}`}
+              </div>
             </div>
             <div className="flex-1 space-y-1">
               <label className="text-[9px] text-mutedForeground font-heading uppercase">Total cash ($)</label>
@@ -164,7 +200,7 @@ export default function WitnessStatements() {
             <button
               type="button"
               onClick={handleList}
-              disabled={submitting || loading}
+              disabled={submitting || loading || nSelected < 1}
               className="px-4 py-2 rounded border border-primary/40 bg-primary/20 text-primary text-[10px] font-heading font-bold uppercase hover:bg-primary/30 disabled:opacity-50 shrink-0"
             >
               List
@@ -193,17 +229,40 @@ export default function WitnessStatements() {
             <table className="w-full text-left text-[11px]">
               <thead>
                 <tr className="border-b border-zinc-700/50 text-[9px] font-heading uppercase text-mutedForeground">
+                  <th className="px-2 py-2 w-10 whitespace-nowrap"> </th>
                   <th className="px-3 py-2 whitespace-nowrap w-36">Time</th>
                   <th className="px-3 py-2">Details</th>
                 </tr>
               </thead>
               <tbody>
-                {recentLog.map((row) => (
-                  <tr key={row.id || row.created_at} className="border-b border-zinc-800/50 align-top hover:bg-zinc-900/30">
-                    <td className="px-3 py-2 text-mutedForeground tabular-nums whitespace-nowrap">{formatLogTime(row.created_at)}</td>
-                    <td className="px-3 py-2 text-foreground whitespace-pre-wrap break-words">{row.message || '—'}</td>
-                  </tr>
-                ))}
+                {recentLog.map((row) => {
+                  const locked = !!row.listed_listing_id;
+                  const checked = row.id && selectedIds.has(row.id);
+                  return (
+                    <tr
+                      key={row.id || row.created_at}
+                      className={`border-b border-zinc-800/50 align-top hover:bg-zinc-900/30 ${locked ? 'opacity-60' : ''}`}
+                    >
+                      <td className="px-2 py-2 text-center">
+                        <input
+                          type="checkbox"
+                          className="rounded border-zinc-600 accent-primary cursor-pointer disabled:cursor-not-allowed"
+                          checked={checked}
+                          disabled={!row.id || locked}
+                          onChange={() => toggleSelect(row)}
+                          title={locked ? 'Already in an active listing' : 'Include in next listing'}
+                        />
+                      </td>
+                      <td className="px-3 py-2 text-mutedForeground tabular-nums whitespace-nowrap">
+                        {formatLogTime(row.created_at)}
+                        {locked && (
+                          <span className="block text-[8px] text-amber-500/90 font-heading uppercase mt-0.5">Listed</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-foreground whitespace-pre-wrap break-words">{row.message || '—'}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -214,6 +273,9 @@ export default function WitnessStatements() {
         <div className="px-3 py-2 bg-primary/10 border-b border-primary/20">
           <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Market</span>
         </div>
+        <p className="px-3 pt-2 text-[9px] text-mutedForeground font-heading">
+          Previews hide the killer&apos;s name until purchase. Your own listings show full text to you.
+        </p>
         {loading ? (
           <div className="p-8 text-center text-xs text-mutedForeground font-heading">Loading…</div>
         ) : listings.length === 0 ? (
@@ -225,13 +287,14 @@ export default function WitnessStatements() {
                 <tr className="border-b border-zinc-700/50 text-[9px] font-heading uppercase text-mutedForeground">
                   <th className="px-3 py-2">Seller</th>
                   <th className="px-3 py-2 tabular-nums">Qty</th>
+                  <th className="px-3 py-2 min-w-[200px]">Preview</th>
                   <th className="px-3 py-2 tabular-nums">Total</th>
                   <th className="px-3 py-2 w-32"> </th>
                 </tr>
               </thead>
               <tbody>
                 {listings.map((row) => (
-                  <tr key={row.id} className="border-b border-zinc-800/50 hover:bg-zinc-900/30">
+                  <tr key={row.id} className="border-b border-zinc-800/50 hover:bg-zinc-900/30 align-top">
                     <td className="px-3 py-2">
                       {row.is_own ? (
                         <span className="text-primary font-heading font-bold">You</span>
@@ -242,6 +305,17 @@ export default function WitnessStatements() {
                       )}
                     </td>
                     <td className="px-3 py-2 tabular-nums text-foreground">{row.quantity.toLocaleString()}</td>
+                    <td className="px-3 py-2 text-mutedForeground space-y-1">
+                      {Array.isArray(row.previews) && row.previews.length > 0 ? (
+                        row.previews.map((p, i) => (
+                          <div key={i} className="text-[10px] leading-snug border-l-2 border-primary/25 pl-2">
+                            {previewSnippet(p, 220)}
+                          </div>
+                        ))
+                      ) : (
+                        <span className="text-[10px] italic">No preview (legacy listing)</span>
+                      )}
+                    </td>
                     <td className="px-3 py-2 tabular-nums text-emerald-400 font-heading">{money(row.price_cash)}</td>
                     <td className="px-3 py-2">
                       {row.is_own ? (

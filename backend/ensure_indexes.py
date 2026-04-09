@@ -364,6 +364,7 @@ async def ensure_all_indexes(db):
         await db.notifications.create_index([("user_id", 1), ("sender_id", 1), ("created_at", 1)])
         await db.notifications.create_index([("user_id", 1), ("recipient_id", 1), ("created_at", 1)])
         await db.notifications.create_index([("title", 1), ("created_at", -1)])
+        await db.notifications.create_index([("listed_listing_id", 1)], sparse=True)
 
         # --- Sports betting ---
         await db.sports_events.create_index("id", unique=True)

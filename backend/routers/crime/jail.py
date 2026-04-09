@@ -1,6 +1,7 @@
 # Jail endpoints: list players (incl. jail NPCs), bust out, status; NPC admin & list; jail NPC spawner
 import asyncio
 import logging
+import math
 import re
 import secrets
 _rng = secrets.SystemRandom()
@@ -207,6 +208,9 @@ JAIL_BUST_FAIL_AVOID_JAIL_MESSAGES = [
     "Bad timing. Bust failed, but you stayed out of jail.",
 ]
 
+
+# Minimum seconds between bust attempts (same player, any target — manual + Auto Rank).
+JAIL_BUST_MIN_INTERVAL_SEC = 3
 
 # Jail bust difficulty: raw rates multiplied by this (1.0 = no penalty; was 0.9, raised slightly to make busting easier)
 JAIL_BUST_DIFFICULTY_MULT = 0.95
@@ -498,6 +502,42 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
         return {"success": False, "error": "Target username required", "error_code": 400}
     if current_user.get("in_jail"):
         return {"success": False, "error": "You cannot attempt a bust while you are in jail.", "error_code": 400}
+
+    uid = current_user.get("id") or ""
+    now = datetime.now(timezone.utc)
+    cutoff_iso = (now - timedelta(seconds=JAIL_BUST_MIN_INTERVAL_SEC)).isoformat()
+    cd_res = await db.users.update_one(
+        {
+            "id": uid,
+            "$or": [
+                {"jail_last_bust_attempt_at": {"$exists": False}},
+                {"jail_last_bust_attempt_at": None},
+                {"jail_last_bust_attempt_at": {"$lt": cutoff_iso}},
+            ],
+        },
+        {"$set": {"jail_last_bust_attempt_at": now.isoformat()}},
+    )
+    if cd_res.modified_count == 0:
+        u = await db.users.find_one({"id": uid}, {"jail_last_bust_attempt_at": 1})
+        raw_last = (u or {}).get("jail_last_bust_attempt_at")
+        remaining = JAIL_BUST_MIN_INTERVAL_SEC
+        if raw_last:
+            try:
+                last_dt = datetime.fromisoformat(str(raw_last).replace("Z", "+00:00"))
+                if last_dt.tzinfo is None:
+                    last_dt = last_dt.replace(tzinfo=timezone.utc)
+                last_dt = last_dt.astimezone(timezone.utc)
+                elapsed = (now - last_dt).total_seconds()
+                remaining = max(0, math.ceil(JAIL_BUST_MIN_INTERVAL_SEC - elapsed))
+            except (ValueError, TypeError, OSError):
+                pass
+        if remaining < 1:
+            remaining = 1
+        return {
+            "success": False,
+            "error": f"Wait {remaining}s before another bust attempt.",
+            "error_code": 429,
+        }
 
     total_attempts = _safe_int(current_user.get("jail_bust_attempts"), 0)
     total_successes = _safe_int(current_user.get("jail_busts"), 0)

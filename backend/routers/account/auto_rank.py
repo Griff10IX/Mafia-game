@@ -720,7 +720,13 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
         if not user or user.get("in_jail"):
             return
         bust_result = await _attempt_bust_impl(user, bust_target_username)
-        if bust_result.get("error") or not bust_result.get("success"):
+        if bust_result.get("error"):
+            # 429 = jail bust rate limit; do not count as a failed bust for stats.
+            if bust_result.get("error_code") != 429:
+                now = datetime.now(timezone.utc)
+                await _inc_failed_today(db, user_id, "auto_rank_failed_busts_today", "auto_rank_failed_busts_date", now)
+            return
+        if not bust_result.get("success"):
             now = datetime.now(timezone.utc)
             await _inc_failed_today(db, user_id, "auto_rank_failed_busts_today", "auto_rank_failed_busts_date", now)
             return
@@ -754,7 +760,7 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
 #   cooldown_until from the attempted option's cooldown (one attempt = all options on cooldown).
 # - OC: run_oc_heist_npc_only checks oc_cooldown_until and returns without running if on cooldown.
 # - Booze: uses same buy/sell/travel impls; travel duration and arrival are enforced there.
-# - Jail: no cooldown per bust; success rate only. When bust-every-5-sec is on, only the bust loop runs (no crimes/GTA in main cycle).
+# - Jail: bust attempts are limited to once per JAIL_BUST_MIN_INTERVAL_SEC (see jail.py). When bust-every-5-sec is on, only the bust loop runs (no crimes/GTA in main cycle).
 
 
 async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id: Optional[str] = None, bot_token: Optional[str] = None, crimes: Optional[list] = None):

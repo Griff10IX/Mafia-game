@@ -18,7 +18,7 @@ from typing import List, Optional, Dict, Union
 import uuid
 from datetime import datetime, timezone, timedelta
 from utils.ban_user_wipe import user_has_active_account_ban
-from utils.ip_ban_check import raise_http_if_ip_banned
+from utils.ip_ban_check import raise_http_if_ip_banned, client_ip_from_request
 from utils.game_pass_micro_rewards import (
     micro_tier_from_rank_points,
     rewards_for_micro_tier,
@@ -1203,8 +1203,21 @@ async def get_current_user(
                         bump = True
                 if bump:
                     now_iso = now_ts.isoformat()
-                    await db.users.update_one({"id": user_id}, {"$set": {"last_seen": now_iso}})
+                    spa_path = (request.headers.get("x-current-path") or "").strip() or None
+                    client_ip = client_ip_from_request(request) or None
+                    update = {"last_seen": now_iso}
+                    if spa_path is not None:
+                        update["last_path"] = spa_path[:500]
+                    elif request.url.path:
+                        update["last_path"] = (request.url.path or "")[:500]
+                    if client_ip:
+                        update["last_request_ip"] = client_ip
+                    await db.users.update_one({"id": user_id}, {"$set": update})
                     user["last_seen"] = now_iso
+                    if "last_path" in update:
+                        user["last_path"] = update["last_path"]
+                    if "last_request_ip" in update:
+                        user["last_request_ip"] = update["last_request_ip"]
         except Exception:
             pass
 
