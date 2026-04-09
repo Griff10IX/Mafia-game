@@ -18,9 +18,28 @@ const TRACK_FLAVOR = {
   labor: 'Crew quality, shift control, and upkeep flow.',
   black_market: 'Premium buyers and off-book margins.',
 };
+const TRACK_EFFECTS = {
+  production: ['+8% production per tier', '+1.5% cash income per tier'],
+  aging: ['+5% quality per tier', '+2% aging cash bonus per tier'],
+  logistics: ['+4% automation per tier (caps +120%)', '+1% worker efficiency per tier'],
+  stealth: ['+3.5% heat control per tier', '+1% booze loss reduction per tier (caps 80%)'],
+  labor: ['+3% worker efficiency per tier', '+1.2% maintenance slowdown per tier (caps 65%)'],
+  black_market: ['+2.5% sale margin per tier', '+3% cash income per tier'],
+};
 const EQUIPMENT_ICONS = {
   stills: '⚗', condensers: '🌡', mash_tun: '🪣', barrels: '🛢',
   bottling: '🍾', tunnel: '🕳', bribe_office: '💼', fake_labels: '🏷', quality_lab: '🔬',
+};
+const EQUIPMENT_DESC = {
+  stills: '+14% production / lv',
+  condensers: '+11% production / lv',
+  mash_tun: '+9% production / lv',
+  barrels: '+5% quality / lv',
+  bottling: '+7% production / lv',
+  tunnel: '+25% heat mitigation / lv',
+  bribe_office: '+2.5% cash & +2 workers / lv',
+  fake_labels: '+1% sale margin / lv',
+  quality_lab: '+6% quality / lv',
 };
 
 function money(n) {
@@ -499,6 +518,7 @@ export default function Distillery() {
         .dist-equip-card:disabled { opacity: 0.5; cursor: not-allowed; }
         .dist-equip-icon { font-size: 18px; margin-bottom: 6px; }
         .dist-equip-name { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: var(--text-dim); margin-bottom: 8px; }
+        .dist-equip-desc { font-size: 8px; color: var(--cyan, #67e8f9); margin-bottom: 4px; letter-spacing: 0.3px; }
         .dist-equip-cost { font-size: 10px; color: var(--amber); margin-top: 5px; }
         .dist-equip-maxed { font-size: 10px; color: var(--green); margin-top: 5px; }
 
@@ -558,6 +578,8 @@ export default function Distillery() {
         .dist-upgrade-status-owned { font-size: 11px; color: var(--green); font-style: italic; margin-top: 4px; }
         .dist-upgrade-status-avail { font-size: 11px; color: var(--text-dim); font-style: italic; margin-top: 4px; }
         .dist-upgrade-status-locked { font-size: 11px; color: var(--text-faint); font-style: italic; margin-top: 4px; }
+        .dist-upgrade-effects { margin-top: 6px; display: flex; flex-wrap: wrap; gap: 4px 10px; }
+        .dist-upgrade-effects span { font-size: 9px; color: var(--cyan, #67e8f9); letter-spacing: 0.5px; }
         .dist-no-upgrade { font-size: 13px; color: var(--text-faint); font-style: italic; }
 
         /* Aging */
@@ -746,6 +768,7 @@ export default function Distillery() {
                   >
                     <div className="dist-equip-icon">{EQUIPMENT_ICONS[lane] || '⚙'}</div>
                     <div className="dist-equip-name">{prettyKey(lane)}</div>
+                    {EQUIPMENT_DESC[lane] && <div className="dist-equip-desc">{EQUIPMENT_DESC[lane]}</div>}
                     <LevelPips level={lv} max={20} />
                     <div style={{ fontSize: 8, color: 'var(--text-faint)', marginBottom: 3 }}>Lv {lv} / 20</div>
                     {cost == null
@@ -768,6 +791,11 @@ export default function Distillery() {
                   <div>
                     <div className="dist-best-name">{u.name}</div>
                     <div className="dist-best-meta">{prettyKey(u.track)} · Tier {u.tier}</div>
+                    {TRACK_EFFECTS[u.track] && (
+                      <div className="dist-upgrade-effects">
+                        {TRACK_EFFECTS[u.track].map((e) => <span key={e}>{e}</span>)}
+                      </div>
+                    )}
                   </div>
                   <GoldBtn
                     small
@@ -820,6 +848,11 @@ export default function Distillery() {
                   <div className="dist-upgrade-name">{activeSpecial.name}</div>
                   <div className="dist-upgrade-tier">Tier {activeSpecial.tier} · {prettyKey(activeSpecial.track)}</div>
                   <div className="dist-upgrade-price">{money(activeSpecial.cost)}</div>
+                  {TRACK_EFFECTS[activeSpecial.track] && (
+                    <div className="dist-upgrade-effects">
+                      {TRACK_EFFECTS[activeSpecial.track].map((e) => <span key={e}>{e}</span>)}
+                    </div>
+                  )}
                   {activeSpecial.purchased
                     ? <div className="dist-upgrade-status-owned">✓ Owned</div>
                     : activeSpecial.available
