@@ -223,6 +223,7 @@ export default function ThemePicker({ open, onClose }) {
 
   /* ── state ── */
   const [activeTab, setActiveTab] = useState('presets');
+  const [presetCat, setPresetCat] = useState('all');
   const [colourSearch, setColourSearch] = useState('');
   const [customName, setCustomName] = useState('');
   const [customNumColours, setCustomNumColours] = useState(2);
@@ -543,8 +544,41 @@ export default function ThemePicker({ open, onClose }) {
               </TabSection>
 
               <TabSection icon={Sparkles} title="Full presets" sub="Applies accent + text + buttons + layout all at once">
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {[
+                    { id: 'all', label: 'All' },
+                    { id: 'cyberpunk', label: 'Cyberpunk' },
+                    { id: 'luxury', label: 'Luxury' },
+                    { id: 'nature', label: 'Nature' },
+                    { id: 'retro', label: 'Retro' },
+                    { id: 'minimalist', label: 'Minimalist' },
+                    { id: 'winter', label: 'Winter' },
+                    { id: 'metallic', label: 'Metallic' },
+                    { id: 'dark-pro', label: 'Dark Pro' },
+                    { id: 'gradient', label: 'Gradient' },
+                    { id: 'other', label: 'Other' },
+                  ].map(cat => (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setPresetCat(cat.id)}
+                      className={`px-2.5 py-1 rounded-lg border text-[10px] font-heading font-bold uppercase tracking-wider transition-colors ${
+                        presetCat === cat.id
+                          ? 'border-primary bg-primary/20 text-primary'
+                          : 'border-zinc-700 bg-zinc-800/60 text-zinc-400 hover:border-zinc-500'
+                      }`}
+                    >
+                      {cat.label}
+                    </button>
+                  ))}
+                </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
-                  {THEME_PRESETS.filter(p => p.isFullPreset).map(p => <PresetCard key={p.id} preset={p} active={getPresetIsActive(p)} onSelect={applyPreset} />)}
+                  {THEME_PRESETS.filter(p => {
+                    if (!p.isFullPreset) return false;
+                    if (presetCat === 'all') return true;
+                    if (presetCat === 'other') return !p.presetCategory;
+                    return p.presetCategory === presetCat;
+                  }).map(p => <PresetCard key={p.id} preset={p} active={getPresetIsActive(p)} onSelect={applyPreset} />)}
                 </div>
               </TabSection>
 
@@ -723,14 +757,17 @@ export default function ThemePicker({ open, onClose }) {
                   {THEME_FONTS.map(f => (
                     <button
                       key={f.id} type="button" onClick={() => setFont(f.id)}
-                      className={`flex items-center justify-between px-3 py-2.5 rounded-xl border-2 transition-all text-left ${
+                      className={`flex items-center justify-between px-3 py-3 rounded-xl border-2 transition-all text-left ${
                         fontId === f.id ? 'border-primary bg-primary/10' : 'border-zinc-700 bg-zinc-800/40 hover:border-zinc-500'
                       }`}
                     >
-                      <div>
-                        <span className="block text-xs font-bold text-zinc-100" style={{ fontFamily: f.heading }}>{f.name}</span>
-                        <span className="block text-[9px] text-zinc-500 mt-0.5" style={{ fontFamily: f.body }}>
-                          The quick brown fox — Aa Bb
+                      <div className="min-w-0 flex-1">
+                        <span className="block text-sm font-bold text-zinc-100" style={{ fontFamily: f.heading }}>{f.name}</span>
+                        <span className="block text-xs text-zinc-300 mt-1" style={{ fontFamily: f.heading }}>
+                          Heading Preview
+                        </span>
+                        <span className="block text-[10px] text-zinc-500 mt-0.5" style={{ fontFamily: f.body }}>
+                          Body text — The quick brown fox jumps over the lazy dog
                         </span>
                       </div>
                       {fontId === f.id && <Check className="w-4 h-4 text-primary shrink-0 ml-2" />}
