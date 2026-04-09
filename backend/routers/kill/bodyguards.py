@@ -8,7 +8,8 @@ import uuid
 import random
 from pydantic import BaseModel
 
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Query
+from pymongo import UpdateOne
 from utils.point_provenance import log_points_event
 
 logger = logging.getLogger(__name__)
@@ -200,6 +201,7 @@ async def _create_robot_bodyguard_user(owner_user: dict) -> tuple[str, str]:
         "total_gta": 0,
         "total_oc_heists": 0,
         "oc_timer_reduced": False,
+        # Random spawn city once at hire; robots cannot travel (see airport + get_current_user).
         "current_state": random.choice(STATES) if STATES else "Chicago",
         "total_kills": 0,
         "total_deaths": 0,
@@ -1075,6 +1077,84 @@ async def admin_generate_bodyguards(request: AdminBodyguardsGenerateRequest, cur
     return payload
 
 
+async def admin_sync_robot_bodyguard_locations(
+    dry_run: bool = Query(False, description="If true, only report counts and samples; no DB writes."),
+    current_user: dict = Depends(get_current_user),
+):
+    """One-time / maintenance: set each robot bodyguard's current_state to their owner's current_state (valid STATES only)."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+
+    stats = {
+        "dry_run": dry_run,
+        "robots_scanned": 0,
+        "updated": 0,
+        "unchanged": 0,
+        "skipped_no_owner": 0,
+        "skipped_owner_invalid_state": 0,
+    }
+    samples: List[dict] = []
+    bulk: List[UpdateOne] = []
+
+    cursor = db.users.find(
+        {
+            "is_npc": True,
+            "is_bodyguard": True,
+            "bodyguard_owner_id": {"$exists": True, "$nin": [None, ""]},
+        },
+        {"_id": 0, "id": 1, "username": 1, "current_state": 1, "bodyguard_owner_id": 1},
+    )
+    async for robot in cursor:
+        stats["robots_scanned"] += 1
+        raw_oid = robot.get("bodyguard_owner_id")
+        owner_id = str(raw_oid).strip() if raw_oid is not None else ""
+        if not owner_id:
+            stats["skipped_no_owner"] += 1
+            continue
+        owner = await db.users.find_one({"id": owner_id}, {"_id": 0, "current_state": 1, "username": 1})
+        if not owner:
+            stats["skipped_no_owner"] += 1
+            continue
+        own_st = owner.get("current_state")
+        if own_st not in STATES:
+            stats["skipped_owner_invalid_state"] += 1
+            continue
+        prev = robot.get("current_state")
+        if prev == own_st:
+            stats["unchanged"] += 1
+            continue
+        stats["updated"] += 1
+        if len(samples) < 25:
+            samples.append(
+                {
+                    "robot_username": robot.get("username"),
+                    "owner_username": owner.get("username"),
+                    "from": prev,
+                    "to": own_st,
+                }
+            )
+        if not dry_run:
+            bulk.append(UpdateOne({"id": robot["id"]}, {"$set": {"current_state": own_st}}))
+            if len(bulk) >= 500:
+                await db.users.bulk_write(bulk, ordered=False)
+                bulk = []
+
+    if bulk:
+        await db.users.bulk_write(bulk, ordered=False)
+
+    action = "Would update" if dry_run else "Updated"
+    return {
+        "message": (
+            f"{action} {stats['updated']} robot bodyguard location(s); "
+            f"{stats['unchanged']} already correct; "
+            f"{stats['skipped_no_owner']} skipped (missing owner); "
+            f"{stats['skipped_owner_invalid_state']} skipped (owner has no valid city)."
+        ),
+        **stats,
+        "samples": samples,
+    }
+
+
 async def admin_get_bodyguard_hire_intervals(
     target_username: str,
     current_user: dict = Depends(get_current_user),
@@ -1574,6 +1654,7 @@ def register(router):
     router.add_api_route("/admin/bodyguards/drop-all-human", admin_drop_all_human_bodyguards, methods=["POST"])
     router.add_api_route("/admin/bodyguards/drop-all", admin_drop_all_bodyguards, methods=["POST"])
     router.add_api_route("/admin/bodyguards/generate", admin_generate_bodyguards, methods=["POST"])
+    router.add_api_route("/admin/bodyguards/sync-robot-locations", admin_sync_robot_bodyguard_locations, methods=["POST"])
     router.add_api_route("/admin/bodyguards/seed-humans", admin_seed_human_bodyguards, methods=["POST"])
     router.add_api_route("/admin/bodyguards/seed-random", admin_seed_random_bodyguards, methods=["POST"])
     router.add_api_route("/admin/bodyguards/reset-cooldown", admin_reset_bodyguard_cooldown, methods=["POST"])

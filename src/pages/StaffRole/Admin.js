@@ -281,7 +281,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Deleted messages', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-deleted-messages', keywords: ['deleted', 'messages', 'archive', 'forum', 'chat', 'dm', 'notification', 'history'], adminOnly: true },
   { label: 'Reset OC Timers', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['oc', 'organised', 'crime', 'timer'] },
   { label: 'Reset Daily Rewards Timer', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['daily', 'rewards', 'timer', 'rps'] },
-  { label: 'Bodyguard Tools', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'robot', 'generate'] },
+  { label: 'Bodyguard Tools', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'robot', 'generate', 'sync', 'location'] },
   { label: 'Generate Bodyguards', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'generate', 'robot'] },
   { label: 'Test Bodyguard Payout', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'payout', 'test'] },
   { label: 'GTA exclusive pool & dealer', categoryId: 'admin-world-systems', collapseKey: 'gtaPool', keywords: ['gta', 'exclusive', 'pool', 'dealer', 'cars', 'values'], adminOnly: true },
@@ -3951,6 +3951,25 @@ export default function Admin() {
       toast.success(res.data?.message ?? 'Cooldown reset', { duration: 5000 });
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed', { duration: 5000 });
+    }
+  };
+
+  const [syncRobotBgLoading, setSyncRobotBgLoading] = useState(false);
+  const handleSyncRobotBodyguardLocations = async (dryRun) => {
+    if (!dryRun && !window.confirm("Set every robot bodyguard's city to their owner's current city? (Legacy fix — robots do not travel.)")) return;
+    setSyncRobotBgLoading(true);
+    try {
+      const res = await api.post('/admin/bodyguards/sync-robot-locations', null, { params: { dry_run: dryRun } });
+      const data = res.data || {};
+      toast.success(data.message || (dryRun ? 'Dry run complete' : 'Sync complete'), { duration: 12000 });
+      if (Array.isArray(data.samples) && data.samples.length > 0) {
+        const lines = data.samples.slice(0, 8).map((s) => `${s.robot_username ?? '?'}: ${s.from ?? '—'} → ${s.to ?? '—'}`);
+        toast.info(lines.join(' · '), { duration: 14000 });
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed', { duration: 8000 });
+    } finally {
+      setSyncRobotBgLoading(false);
     }
   };
 
@@ -16550,6 +16569,15 @@ export default function Admin() {
 
               <ActionRow icon={Shield} label="Reset Drop Cooldown" description="Clear your bodyguard drop timer" color="text-amber-400">
                 <BtnPrimary onClick={handleResetBgCooldown}>Reset</BtnPrimary>
+              </ActionRow>
+
+              <ActionRow icon={Bot} label="Sync robot locations" description="Set each robot BG’s city to owner’s current city (dry run first)" color="text-sky-400">
+                <BtnPrimary onClick={() => handleSyncRobotBodyguardLocations(true)} disabled={syncRobotBgLoading}>
+                  {syncRobotBgLoading ? '…' : 'Dry run'}
+                </BtnPrimary>
+                <BtnPrimary onClick={() => handleSyncRobotBodyguardLocations(false)} disabled={syncRobotBgLoading} className="ml-1">
+                  {syncRobotBgLoading ? '…' : 'Apply'}
+                </BtnPrimary>
               </ActionRow>
             </div>
           )}

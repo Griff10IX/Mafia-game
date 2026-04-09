@@ -83,6 +83,38 @@ def _parse_iso_datetime(val):
         return None
 
 
+def _hunt_location_when_search_timer_fires(target_user: Optional[dict], attack: dict) -> str:
+    """City when a hunt becomes FOUND. Robot NPC bodyguards are fixed in place — never assign a random city for them."""
+    tu = target_user or {}
+    if tu.get("is_npc") and tu.get("is_bodyguard"):
+        if tu.get("current_state") in STATES:
+            return tu["current_state"]
+        pl = attack.get("planned_location_state")
+        if pl in STATES:
+            return pl
+        return random.choice(STATES) if STATES else "Chicago"
+    return (
+        (tu.get("current_state") if tu.get("current_state") in STATES else None)
+        or attack.get("planned_location_state")
+        or (random.choice(STATES) if STATES else "Chicago")
+    )
+
+
+def _resolved_target_location(attack: dict, target_user: Optional[dict]) -> Optional[str]:
+    """For a FOUND hunt, use the target user's current_state when valid (robot bodyguards do not move)."""
+    if not attack or attack.get("status") != "found":
+        return attack.get("location_state") if attack else None
+    tu = target_user or {}
+    live = tu.get("current_state")
+    if live and live in STATES:
+        return live
+    if tu.get("is_npc") and tu.get("is_bodyguard"):
+        pl = attack.get("planned_location_state")
+        if pl in STATES:
+            return pl
+    return attack.get("location_state") or attack.get("planned_location_state")
+
+
 def _request_meta(request: Optional[Request]) -> dict:
     """Build dict of user_agent, client_ip, attacker_is_bot, and attacker_bot_label for attack attempt logging."""
     out = {}
@@ -569,11 +601,7 @@ async def _build_active_attacks_list(attacker_id: str, attacker_current_state: s
                 found_time = now
             if now >= found_time:
                 tu = users_map.get(attack.get("target_id") or "")
-                new_location = (
-                    (tu.get("current_state") if tu and tu.get("current_state") in STATES else None)
-                    or attack.get("planned_location_state")
-                    or random.choice(STATES)
-                )
+                new_location = _hunt_location_when_search_timer_fires(tu, attack)
                 bulk_ops.append(
                     UpdateOne(
                         {"id": attack["id"]},
@@ -582,6 +610,19 @@ async def _build_active_attacks_list(attacker_id: str, attacker_current_state: s
                 )
                 attack["status"] = "found"
                 attack["location_state"] = new_location
+        if attack["status"] == "found":
+            tu_found = users_map.get(attack.get("target_id") or "") if attack.get("target_id") else None
+            eff_loc = _resolved_target_location(attack, tu_found)
+            if eff_loc and eff_loc != attack.get("location_state"):
+                bulk_ops.append(
+                    UpdateOne(
+                        {"id": attack["id"]},
+                        {"$set": {"location_state": eff_loc}},
+                    )
+                )
+                attack["location_state"] = eff_loc
+            elif eff_loc:
+                attack["location_state"] = eff_loc
         can_travel = attack["status"] == "found" and attack.get("location_state") and ac_state != attack["location_state"]
         can_attack = attack["status"] == "found" and attack.get("location_state") and ac_state == attack["location_state"]
         msg = "Searching..." if attack["status"] == "searching" else (
@@ -770,13 +811,17 @@ async def search_target(request: AttackSearchRequest, current_user: dict = Depen
                 override_minutes = int(default_mins)
             except Exception:
                 override_minutes = None
-    # Only one active search per target: if we're already searching for this target, remove the old search and start a new one (so "try again" / refresh works)
-    existing = await db.attacks.find_one(
-        {"attacker_id": current_user["id"], "target_id": target["id"], "status": "searching"},
-        {"_id": 1, "id": 1}
+    # Only one active hunt per target: drop searching, found, or traveling rows for this target.
+    # Otherwise a second POST /attack/search (e.g. from profile) leaves the old FOUND row in place and
+    # creates another row — each snapshots location_state when it flips to found, so the same username
+    # can show two different cities. Replacing all active rows matches the comment intent.
+    await db.attacks.delete_many(
+        {
+            "attacker_id": current_user["id"],
+            "target_id": target["id"],
+            "status": {"$in": ["searching", "found", "traveling"]},
+        }
     )
-    if existing:
-        await db.attacks.delete_one({"attacker_id": current_user["id"], "id": existing.get("id")})
 
     search_duration = (
         int(override_minutes)
@@ -852,14 +897,27 @@ async def get_attack_status(
     if found_time is None:
         found_time = now
     if attack["status"] == "searching" and now >= found_time:
-        target_user = await db.users.find_one({"id": attack["target_id"]}, {"_id": 0, "current_state": 1})
-        new_location = (target_user.get("current_state") if target_user and target_user.get("current_state") in STATES else None) or attack.get("planned_location_state") or random.choice(STATES)
+        target_user = await db.users.find_one(
+            {"id": attack["target_id"]},
+            {"_id": 0, "current_state": 1, "is_npc": 1, "is_bodyguard": 1},
+        )
+        new_location = _hunt_location_when_search_timer_fires(target_user, attack)
         await db.attacks.update_one(
             {"id": attack["id"]},
             {"$set": {"status": "found", "location_state": new_location}}
         )
         attack["status"] = "found"
         attack["location_state"] = new_location
+    if attack["status"] == "found" and attack.get("target_id"):
+        tu_status = await db.users.find_one(
+            {"id": attack["target_id"]},
+            {"_id": 0, "current_state": 1, "is_npc": 1, "is_bodyguard": 1},
+        )
+        eff_s = _resolved_target_location(attack, tu_status)
+        if eff_s and eff_s != attack.get("location_state"):
+            await db.attacks.update_one({"id": attack["id"]}, {"$set": {"location_state": eff_s}})
+        if eff_s:
+            attack["location_state"] = eff_s
     can_travel = attack["status"] == "found" and attack.get("location_state") and current_user["current_state"] != attack["location_state"]
     can_attack = attack["status"] == "found" and attack.get("location_state") and current_user["current_state"] == attack["location_state"]
     message = ""
@@ -898,7 +956,11 @@ async def travel_to_target(request: AttackIdRequest, current_user: dict = Depend
     )
     if not attack:
         raise HTTPException(status_code=404, detail="No target found to travel to")
-    location_state = attack.get("location_state")
+    tu_travel = await db.users.find_one(
+        {"id": attack.get("target_id")},
+        {"_id": 0, "current_state": 1, "is_npc": 1, "is_bodyguard": 1},
+    )
+    location_state = _resolved_target_location(attack, tu_travel)
     if not location_state:
         raise HTTPException(status_code=400, detail="Target location unknown")
     await db.users.update_one(
@@ -1005,20 +1067,21 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     if not attack:
         await _log_attack_error(current_user["id"], current_user.get("username"), "No active attack to execute", req)
         raise HTTPException(status_code=404, detail="No active attack to execute")
-    target_location = attack.get("location_state")
+    target = await db.users.find_one({"id": attack["target_id"]}, {"_id": 0})
+    if not target:
+        await _log_attack_error(current_user["id"], current_user.get("username"), "Target not found", req)
+        raise HTTPException(status_code=404, detail="Target not found")
+    target_location = _resolved_target_location(attack, target)
     if not target_location:
         await _log_attack_error(current_user["id"], current_user.get("username"), "Target location unknown; cannot attack.", req)
         raise HTTPException(status_code=400, detail="Target location unknown; cannot attack.")
+    attack["location_state"] = target_location
     # Re-fetch attacker location from DB so we never use stale state (e.g. after instant travel)
     attacker_row = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "current_state": 1})
     attacker_location = (attacker_row or {}).get("current_state") or ""
     if attacker_location != target_location:
         await _log_attack_error(current_user["id"], current_user.get("username"), "You must be in the target's location to attack or bodyguard-check. Travel there first.", req)
         raise HTTPException(status_code=400, detail="You must be in the target's location to attack or bodyguard-check. Travel there first.")
-    target = await db.users.find_one({"id": attack["target_id"]}, {"_id": 0})
-    if not target:
-        await _log_attack_error(current_user["id"], current_user.get("username"), "Target not found", req)
-        raise HTTPException(status_code=404, detail="Target not found")
     if await soft_launch_blocks_pvp_kill_on_target(db, target):
         await _log_attack_error(current_user["id"], current_user.get("username"), "Release soft-launch PvP block", req)
         raise HTTPException(status_code=403, detail=PVP_KILLS_DISABLED_DETAIL)

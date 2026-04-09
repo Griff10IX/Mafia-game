@@ -1072,21 +1072,31 @@ async def get_current_user(
             status_code=403,
             detail="Account is under investigation. You can only access the account status page.",
         )
-    # If car travel has arrived, apply location and clear traveling state
+    # Car travel arrival: real players only. Robot bodyguards cannot move — drop stale travel fields only.
     arrives_at = user.get("travel_arrives_at")
     if arrives_at:
-        try:
-            arrives_dt = datetime.fromisoformat(arrives_at.replace("Z", "+00:00"))
-            if datetime.now(timezone.utc) >= arrives_dt:
-                destination = user.get("traveling_to")
-                if destination:
-                    await db.users.update_one(
-                        {"id": user_id},
-                        {"$set": {"current_state": destination}, "$unset": {"traveling_to": "", "travel_arrives_at": ""}}
-                    )
-                    user = await db.users.find_one({"id": user_id}, {"_id": 0})
-        except Exception:
-            pass
+        if user.get("is_npc") and user.get("is_bodyguard"):
+            try:
+                await db.users.update_one(
+                    {"id": user_id},
+                    {"$unset": {"traveling_to": "", "travel_arrives_at": ""}},
+                )
+                user = await db.users.find_one({"id": user_id}, {"_id": 0})
+            except Exception:
+                pass
+        else:
+            try:
+                arrives_dt = datetime.fromisoformat(arrives_at.replace("Z", "+00:00"))
+                if datetime.now(timezone.utc) >= arrives_dt:
+                    destination = user.get("traveling_to")
+                    if destination:
+                        await db.users.update_one(
+                            {"id": user_id},
+                            {"$set": {"current_state": destination}, "$unset": {"traveling_to": "", "travel_arrives_at": ""}}
+                        )
+                        user = await db.users.find_one({"id": user_id}, {"_id": 0})
+            except Exception:
+                pass
     await apply_passive_health_regen(user_id, user)
 
     # VIP Game Pass auto-grant: grant rewards and send inbox messages as rank_points crosses new micro tiers.

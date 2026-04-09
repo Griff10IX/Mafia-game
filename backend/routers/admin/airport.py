@@ -347,6 +347,8 @@ async def _start_travel_impl(
         raise HTTPException(status_code=400, detail="Booze runs can only use a car, not airport.")
     if destination not in STATES:
         raise HTTPException(status_code=400, detail="Invalid destination")
+    if user.get("is_npc") and user.get("is_bodyguard"):
+        raise HTTPException(status_code=400, detail="Robot bodyguards cannot travel.")
     now_utc = datetime.now(timezone.utc)
     current_location = user.get("current_state")
     if user.get("travel_arrives_at"):
