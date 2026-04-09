@@ -475,7 +475,7 @@ async def _build_active_attacks_list(attacker_id: str, attacker_current_state: s
     attacks = await db.attacks.find(
         {"attacker_id": attacker_id, "status": {"$in": ["searching", "found"]}},
         {"_id": 0},
-    ).sort("search_started", -1).to_list(50)
+    ).sort("search_started", -1).to_list(None)
     if not attacks:
         return []
 
@@ -1856,14 +1856,28 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         # At least one witness notification whenever the cap allows (still 0 when cap is 0, e.g. very high weapon damage).
         number_to_send = random.randint(1, max_statements) if max_statements >= 1 else 0
         if number_to_send > 0:
+            now_w = datetime.now(timezone.utc)
+            five_min_ago = now_w - timedelta(minutes=5)
+            five_iso = five_min_ago.isoformat()
+            now_iso = now_w.isoformat()
             location = attack.get("location_state") or "Unknown"
-            time_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+            time_str = now_w.strftime("%Y-%m-%d %H:%M UTC")
             # Human and robot bodyguards both use is_bodyguard on the victim user doc; label clarifies it was a guard.
             victim_label = f"bodyguard {target_name}" if target.get("is_bodyguard") else target_name
             witness_msg = f"{current_user.get('username') or 'Someone'} killed {victim_label}. Weapon: {best_weapon_name}. Bullets used: {bullets_used:,}. Location: {location}. Time: {time_str}."
+            # Witness statements only go to accounts that are online (same rule as /users/online), not dead/offline.
             all_user_ids = await db.users.find(
-                {"is_dead": {"$ne": True}, "is_npc": {"$ne": True}, "is_bodyguard": {"$ne": True}, "id": {"$ne": killer_id}},
-                {"_id": 0, "id": 1}
+                {
+                    "is_dead": {"$ne": True},
+                    "is_npc": {"$ne": True},
+                    "is_bodyguard": {"$ne": True},
+                    "id": {"$ne": killer_id},
+                    "$or": [
+                        {"last_seen": {"$gte": five_iso}},
+                        {"forced_online_until": {"$gt": now_iso}},
+                    ],
+                },
+                {"_id": 0, "id": 1},
             ).to_list(5000)
             recipient_ids = [u["id"] for u in all_user_ids]
             if recipient_ids:

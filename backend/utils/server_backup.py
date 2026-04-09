@@ -20,6 +20,7 @@ import time
 from urllib.parse import unquote
 import httpx
 from emergentintegrations.payments.stripe.checkout import StripeCheckout, CheckoutSessionResponse, CheckoutStatusResponse, CheckoutSessionRequest
+from utils.attack_attempt_display import is_hitlist_npc_kill_excluded_from_stats
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -1342,11 +1343,10 @@ async def get_stats_overview(
             {"_id": 0, "is_npc": 1, "rank_points": 1}
         )
 
-        if users_only_kills:
-            if bool(killer and killer.get("is_npc")):
-                continue
-            if bool(victim and victim.get("is_npc")) and not a.get("is_bodyguard_kill"):
-                continue
+        if is_hitlist_npc_kill_excluded_from_stats(a, victim):
+            continue
+        if users_only_kills and bool(killer and killer.get("is_npc")):
+            continue
 
         # Prefer rank stored on the attempt record (stable even if user doc changes)
         victim_rank_name = None

@@ -118,6 +118,7 @@ const ImageHost = lazy(() => import("./pages/Social/ImageHost"));
 const AdminShell = lazy(() => import("./pages/StaffRole/AdminShell"));
 const AdminLocked = lazy(() => import("./pages/StaffRole/AdminLocked"));
 const AdminUsersOnline = lazy(() => import("./pages/StaffRole/AdminUsersOnline"));
+const AdminWitnessStatements = lazy(() => import("./pages/StaffRole/AdminWitnessStatements"));
 
 // Casinos pages
 const Casino = lazy(() => import("./pages/Casinos/Casino"));
@@ -617,10 +618,23 @@ function App() {
               )
             }
           />
+          <Route
+            path="/staffrole/witness-statements"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <AdminWitnessStatements />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
           {/* Staff redirects */}
           <Route path="/admin" element={<Navigate to="/staffrole/admin/overview" replace />} />
           <Route path="/admin/locked" element={<Navigate to="/staffrole/locked" replace />} />
           <Route path="/admin/users-online" element={<Navigate to="/staffrole/users-online" replace />} />
+          <Route path="/admin/witness-statements" element={<Navigate to="/staffrole/witness-statements" replace />} />
           <Route
             path="/account/autorank"
             element={

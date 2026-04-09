@@ -22,6 +22,87 @@ class WitnessListingIdRequest(BaseModel):
 
 
 def register(router):
+    _PLAYER_MATCH = {"is_npc": {"$ne": True}, "is_bodyguard": {"$ne": True}}
+
+    @router.get("/admin/witness-statements-overview")
+    async def admin_witness_statements_overview(current_user: dict = Depends(get_current_user)):
+        """Staff: balances, marketplace, and recent witness inbox deliveries."""
+        from server import _is_admin, _is_moderator
+
+        if not (_is_admin(current_user) or _is_moderator(current_user)):
+            raise HTTPException(status_code=403, detail="Admin or moderator access required")
+        now = datetime.now(timezone.utc).isoformat()
+        agg = await db.users.aggregate(
+            [
+                {"$match": _PLAYER_MATCH},
+                {"$group": {"_id": None, "circulating": {"$sum": {"$ifNull": ["$witness_statements", 0]}}}},
+            ]
+        ).to_list(1)
+        circulating = int((agg[0] or {}).get("circulating") or 0) if agg else 0
+        holders_with_balance = await db.users.count_documents({**_PLAYER_MATCH, "witness_statements": {"$gt": 0}})
+        top = await db.users.find(
+            {**_PLAYER_MATCH, "witness_statements": {"$gt": 0}},
+            {"_id": 0, "id": 1, "username": 1, "witness_statements": 1, "is_dead": 1, "last_seen": 1},
+        ).sort("witness_statements", -1).limit(50).to_list(50)
+        top_holders = [
+            {
+                "user_id": r.get("id"),
+                "username": r.get("username") or "?",
+                "balance": int(r.get("witness_statements") or 0),
+                "is_dead": bool(r.get("is_dead")),
+                "last_seen": r.get("last_seen"),
+            }
+            for r in top
+        ]
+        listings = await db.witness_statement_listings.find(
+            {"status": "active"},
+            {"_id": 0},
+        ).sort("created_at", -1).to_list(100)
+        active_listings = [
+            {
+                "id": r.get("id"),
+                "seller_id": r.get("seller_id"),
+                "seller_username": r.get("seller_username") or "?",
+                "quantity": int(r.get("quantity") or 0),
+                "price_cash": int(r.get("price_cash") or 0),
+                "created_at": r.get("created_at"),
+            }
+            for r in listings
+        ]
+        notif_rows = await db.notifications.find(
+            {"title": "Witness statement"},
+            {"_id": 0, "id": 1, "user_id": 1, "message": 1, "created_at": 1},
+        ).sort("created_at", -1).limit(50).to_list(50)
+        nuids = list({n.get("user_id") for n in notif_rows if n.get("user_id")})
+        unames = {}
+        if nuids:
+            async for u in db.users.find({"id": {"$in": nuids}}, {"_id": 0, "id": 1, "username": 1}):
+                unames[u["id"]] = u.get("username") or "?"
+        recent_notifications = []
+        for n in notif_rows:
+            uid = n.get("user_id")
+            msg = (n.get("message") or "").replace("\n", " ")
+            if len(msg) > 160:
+                msg = msg[:157] + "..."
+            recent_notifications.append(
+                {
+                    "id": n.get("id"),
+                    "user_id": uid,
+                    "username": unames.get(uid, "?"),
+                    "created_at": n.get("created_at"),
+                    "message_preview": msg,
+                }
+            )
+        return {
+            "generated_at": now,
+            "circulating_total": circulating,
+            "holders_with_balance": holders_with_balance,
+            "active_listings_count": len(active_listings),
+            "top_holders": top_holders,
+            "active_listings": active_listings,
+            "recent_witness_notifications": recent_notifications,
+        }
+
     @router.get("/witness-statements/listings")
     async def witness_listings(current_user: dict = Depends(get_current_user)):
         me = current_user.get("id") or ""

@@ -6,6 +6,8 @@ from typing import Optional
 
 from fastapi import Depends, HTTPException
 
+from utils.attack_attempt_display import is_hitlist_npc_kill_excluded_from_stats
+
 
 def _gambling_profit_from_details(game_type: str, details: dict) -> int:
     """Compute profit from gambling_log details. Positive = won, negative = lost."""
@@ -392,7 +394,7 @@ def register(router):
             users_list = await db.users.find(
                 {"id": {"$in": list(all_user_ids)}},
                 {"_id": 0, "id": 1, "is_npc": 1, "rank_points": 1, "username": 1},
-            ).to_list(500)
+            ).to_list(None)
             users_batch = {u["id"]: u for u in users_list}
 
         recent_kills = []
@@ -409,12 +411,10 @@ def register(router):
 
             killer_is_npc = bool(killer and killer.get("is_npc"))
             victim_is_npc = bool(victim and victim.get("is_npc"))
-            if users_only_kills:
-                if killer_is_npc:
-                    continue
-                if victim_is_npc:
-                    if not a.get("is_bodyguard_kill"):
-                        continue
+            if is_hitlist_npc_kill_excluded_from_stats(a, victim):
+                continue
+            if users_only_kills and killer_is_npc:
+                continue
 
             victim_rank_name = None
             tr_id = a.get("target_rank_id")
