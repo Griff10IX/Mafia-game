@@ -811,17 +811,7 @@ async def search_target(request: AttackSearchRequest, current_user: dict = Depen
                 override_minutes = int(default_mins)
             except Exception:
                 override_minutes = None
-    # Only one active hunt per target: drop searching, found, or traveling rows for this target.
-    # Otherwise a second POST /attack/search (e.g. from profile) leaves the old FOUND row in place and
-    # creates another row — each snapshots location_state when it flips to found, so the same username
-    # can show two different cities. Replacing all active rows matches the comment intent.
-    await db.attacks.delete_many(
-        {
-            "attacker_id": current_user["id"],
-            "target_id": target["id"],
-            "status": {"$in": ["searching", "found", "traveling"]},
-        }
-    )
+    # Multiple concurrent hunts for the same target are allowed; each row has its own timer and attack_id.
 
     search_duration = (
         int(override_minutes)
@@ -864,20 +854,23 @@ async def get_attack_status(
 ):
     base_filter = {"attacker_id": current_user["id"], "status": {"$in": ["searching", "found", "traveling"]}}
     attack = None
+    _attack_sort = [("search_started", -1)]
     if target_username and target_username.strip():
         want = (target_username or "").strip()
         # Prefer FOUND (or traveling) for this target so we use existing search instead of starting a new one
         attack = await db.attacks.find_one(
             {**base_filter, "target_username": {"$regex": f"^{re.escape(want)}$", "$options": "i"}, "status": {"$in": ["found", "traveling"]}},
-            {"_id": 0}
+            {"_id": 0},
+            sort=_attack_sort,
         )
         if not attack:
             attack = await db.attacks.find_one(
                 {**base_filter, "target_username": {"$regex": f"^{re.escape(want)}$", "$options": "i"}, "status": "searching"},
-                {"_id": 0}
+                {"_id": 0},
+                sort=_attack_sort,
             )
     if not attack:
-        attack = await db.attacks.find_one(base_filter, {"_id": 0})
+        attack = await db.attacks.find_one(base_filter, {"_id": 0}, sort=_attack_sort)
     if not attack:
         raise HTTPException(status_code=404, detail="No active attack")
     # If target is dead or is a bodyguard who was killed (e.g. by someone else), remove this search and return 404
