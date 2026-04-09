@@ -24,7 +24,12 @@ async def migrate():
     client = AsyncIOMotorClient(mongo_url)
     db = client[db_name]
 
-    # Get all users
+    npc_ids = []
+    async for npc in db.users.find({"is_npc": True}, {"_id": 0, "id": 1}):
+        if npc.get("id"):
+            npc_ids.append(npc["id"])
+    print(f"Found {len(npc_ids)} NPC user(s) to exclude from kill counts.\n")
+
     cursor = db.users.find(
         {},
         {"_id": 0, "id": 1, "username": 1, "total_kills": 1},
@@ -38,12 +43,11 @@ async def migrate():
             continue
         old_total = int(user.get("total_kills") or 0)
 
-        # Count kills from attack_attempts: outcome=killed, target is a real player or robot bodyguard
         actual_kills = await db.attack_attempts.count_documents({
             "attacker_id": uid,
             "outcome": "killed",
             "$or": [
-                {"target_is_npc": {"$ne": True}},
+                {"target_id": {"$nin": npc_ids}},
                 {"is_bodyguard_kill": True},
             ],
         })
