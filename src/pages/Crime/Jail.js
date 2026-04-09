@@ -205,8 +205,14 @@ const JailedPlayerRow = ({ player, index, onBust, loading, userInJail, manualPla
             You
           </span>
         ) : isNpc ? (
-          <span className="px-1 py-0.5 rounded text-[9px] font-bold uppercase bg-zinc-700/50 text-mutedForeground border border-zinc-600/50">
-            NPC
+          <span
+            className={`px-1 py-0.5 rounded text-[9px] font-bold uppercase border ${
+              player.private_cell_npc
+                ? 'bg-violet-500/15 text-violet-300 border-violet-500/35'
+                : 'bg-zinc-700/50 text-mutedForeground border-zinc-600/50'
+            }`}
+          >
+            {player.private_cell_npc ? 'Yours' : 'NPC'}
           </span>
         ) : null}
       </div>
@@ -270,6 +276,12 @@ const InfoSection = () => (
         </li>
         <li className="flex items-start gap-1">
           <span className="text-primary shrink-0">•</span>
+          <span>
+            No public NPCs in jail? Summon <strong className="text-foreground">5 private inmates</strong> only you see — once every 5 minutes, max 5 at a time until you bust them out.
+          </span>
+        </li>
+        <li className="flex items-start gap-1">
+          <span className="text-primary shrink-0">•</span>
           <span>Failed bust = 30s in jail (jailbust token can sometimes avoid the penalty)</span>
         </li>
         <li className="flex items-start gap-1">
@@ -300,6 +312,13 @@ export default function Jail() {
   const [snitching, setSnitching] = useState(false);
 
   const [autoRankJailDisabled, setAutoRankJailDisabled] = useState(false);
+  const [privateCell, setPrivateCell] = useState({
+    available: false,
+    cooldown_seconds: 0,
+    global_npc_count: 0,
+    personal_npc_count: 0,
+  });
+  const [privateCellLoading, setPrivateCellLoading] = useState(false);
   const [user, setUser] = useState(null);
   const [staffListColors, setStaffListColors] = useState({
     admin_online_color: '#a78bfa',
@@ -318,6 +337,14 @@ export default function Jail() {
       setJailStatus(jailRes.data || { in_jail: false });
       const pd = playersRes.data || {};
       setJailedPlayers(Array.isArray(pd.players) ? pd.players : []);
+      if (pd.private_cell && typeof pd.private_cell === 'object') {
+        setPrivateCell({
+          available: !!pd.private_cell.available,
+          cooldown_seconds: Math.max(0, Number(pd.private_cell.cooldown_seconds) || 0),
+          global_npc_count: Math.max(0, Number(pd.private_cell.global_npc_count) || 0),
+          personal_npc_count: Math.max(0, Number(pd.private_cell.personal_npc_count) || 0),
+        });
+      }
       setStaffListColors({
         admin_online_color: pd.admin_online_color || '#a78bfa',
         mod_default_online_color: pd.mod_default_online_color || DEFAULT_MOD_COLOR,
@@ -342,6 +369,14 @@ export default function Jail() {
       const res = await api.get('/jail/players');
       const pd = res.data || {};
       setJailedPlayers(Array.isArray(pd.players) ? pd.players : []);
+      if (pd.private_cell && typeof pd.private_cell === 'object') {
+        setPrivateCell({
+          available: !!pd.private_cell.available,
+          cooldown_seconds: Math.max(0, Number(pd.private_cell.cooldown_seconds) || 0),
+          global_npc_count: Math.max(0, Number(pd.private_cell.global_npc_count) || 0),
+          personal_npc_count: Math.max(0, Number(pd.private_cell.personal_npc_count) || 0),
+        });
+      }
       if (pd.admin_online_color != null || pd.mod_default_online_color != null) {
         setStaffListColors((prev) => ({
           admin_online_color: pd.admin_online_color ?? prev.admin_online_color,
@@ -478,6 +513,36 @@ export default function Jail() {
     }
   };
 
+  const summonPrivateCell = async () => {
+    setPrivateCellLoading(true);
+    try {
+      const res = await api.post('/jail/private-cell');
+      toast.success(res.data?.message || 'Private inmates summoned.');
+      await fetchJailData();
+      refreshUser();
+    } catch (e) {
+      const st = e.response?.status;
+      const detail = e.response?.data?.detail;
+      toast.error(typeof detail === 'string' ? detail : 'Could not summon private inmates');
+      if (st === 429 || st === 400) {
+        try {
+          const r = await api.get('/jail/players');
+          const pd = r.data || {};
+          if (pd.private_cell && typeof pd.private_cell === 'object') {
+            setPrivateCell({
+              available: !!pd.private_cell.available,
+              cooldown_seconds: Math.max(0, Number(pd.private_cell.cooldown_seconds) || 0),
+              global_npc_count: Math.max(0, Number(pd.private_cell.global_npc_count) || 0),
+              personal_npc_count: Math.max(0, Number(pd.private_cell.personal_npc_count) || 0),
+            });
+          }
+        } catch (_) {}
+      }
+    } finally {
+      setPrivateCellLoading(false);
+    }
+  };
+
   if (initialLoading) {
     return (
       <div className={`space-y-2 ${styles.pageContent} mobile-page-root`}>
@@ -581,6 +646,59 @@ export default function Jail() {
       {autoRankJailDisabled && (
         <div className="j-fade-in flex items-center justify-start">
           <AutoRankIcon />
+        </div>
+      )}
+
+      {privateCell.global_npc_count === 0 && (
+        <div
+          className={`relative ${styles.panel} rounded-md overflow-hidden border border-violet-500/25 j-fade-in mobile-panel`}
+          style={{ animationDelay: '0.04s' }}
+        >
+          <div className="h-px bg-gradient-to-r from-transparent via-violet-400/40 to-transparent" />
+          <div className="px-2.5 py-1.5 bg-violet-500/10 border-b border-violet-500/20">
+            <span className="text-[9px] font-heading font-bold text-violet-300 uppercase tracking-[0.12em]">
+              Private cell
+            </span>
+          </div>
+          <div className="p-2.5 space-y-2 text-[10px] text-mutedForeground font-heading leading-relaxed">
+            {privateCell.personal_npc_count > 0 ? (
+              <p>
+                <strong className="text-foreground">{privateCell.personal_npc_count}/5</strong> private inmates only you can see.
+                Bust them out to summon another batch (5-minute cooldown between summons).
+              </p>
+            ) : privateCell.cooldown_seconds > 0 ? (
+              <p>
+                Next summon in{' '}
+                <strong className="text-violet-300 tabular-nums">
+                  {Math.floor(privateCell.cooldown_seconds / 60)}:{String(privateCell.cooldown_seconds % 60).padStart(2, '0')}
+                </strong>
+                . No public NPCs are in jail — your last batch was cleared.
+              </p>
+            ) : (
+              <p>
+                There are <strong className="text-foreground">no public NPCs</strong> in jail. Summon{' '}
+                <strong className="text-foreground">5 inmates</strong> that only you see. You can do this every{' '}
+                <strong className="text-foreground">5 minutes</strong> (after you have busted them all).
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={summonPrivateCell}
+              disabled={
+                privateCellLoading ||
+                !privateCell.available ||
+                jailStatus.in_jail ||
+                autoRankJailDisabled
+              }
+              className="w-full sm:w-auto px-3 py-1.5 rounded border border-violet-500/40 bg-violet-500/15 text-violet-200 text-[9px] font-heading font-bold uppercase tracking-wide hover:bg-violet-500/25 disabled:opacity-45 disabled:cursor-not-allowed transition-all"
+            >
+              {privateCellLoading ? 'Summoning…' : 'Summon 5 private inmates'}
+            </button>
+            {autoRankJailDisabled && (
+              <p className="text-[9px] text-amber-400/90">Turn off Auto Rank bust-every-5s to summon manually.</p>
+            )}
+          </div>
+          <div className="j-art-line text-violet-400/50 mx-2.5" />
         </div>
       )}
 

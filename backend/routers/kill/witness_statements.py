@@ -139,6 +139,18 @@ def register(router):
             for r in rows
         ]
 
+    @router.get("/witness-statements/recent")
+    async def witness_statements_recent(current_user: dict = Depends(get_current_user)):
+        """Kill witness inbox lines for this account (same text as notifications)."""
+        uid = current_user.get("id") or ""
+        if not uid:
+            raise HTTPException(status_code=401, detail="Not logged in")
+        rows = await db.notifications.find(
+            {"user_id": uid, "title": "Witness statement"},
+            {"_id": 0, "id": 1, "message": 1, "created_at": 1, "read": 1},
+        ).sort("created_at", -1).limit(100).to_list(100)
+        return {"items": rows}
+
     @router.post("/witness-statements/list")
     async def witness_list(req: WitnessListRequest, current_user: dict = Depends(get_current_user)):
         uid = current_user.get("id") or ""

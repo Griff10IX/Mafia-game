@@ -1862,8 +1862,16 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             now_iso = now_w.isoformat()
             location = attack.get("location_state") or "Unknown"
             time_str = now_w.strftime("%Y-%m-%d %H:%M UTC")
-            # Human and robot bodyguards both use is_bodyguard on the victim user doc; label clarifies it was a guard.
-            victim_label = f"bodyguard {target_name}" if target.get("is_bodyguard") else target_name
+            # Human and robot bodyguards both use is_bodyguard on the victim user doc; include who they guarded when known.
+            if target.get("is_bodyguard"):
+                owner_un = (bodyguard_owner_username or "").strip()
+                victim_label = (
+                    f"bodyguard {target_name} (guarding {owner_un})"
+                    if owner_un
+                    else f"bodyguard {target_name}"
+                )
+            else:
+                victim_label = target_name
             witness_msg = f"{current_user.get('username') or 'Someone'} killed {victim_label}. Weapon: {best_weapon_name}. Bullets used: {bullets_used:,}. Location: {location}. Time: {time_str}."
             # Witness statements only go to accounts that are online (same rule as /users/online), not dead/offline.
             all_user_ids = await db.users.find(

@@ -463,9 +463,20 @@ export default function Layout({ children }) {
           )),
         };
       }
+      if (i.type === 'group' && i.id === 'combat') {
+        const wsBal = Math.max(0, Math.floor(Number(user?.witness_statements ?? 0)));
+        return {
+          ...i,
+          items: i.items.map((sub) =>
+            sub.path === '/kill/witness-statements' && wsBal > 0
+              ? { ...sub, badge: wsBal, badgeTone: 'emerald' }
+              : sub
+          ),
+        };
+      }
       return i;
     });
-  }, [isAdmin, isModerator, hasAdminEmail, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount]);
+  }, [isAdmin, isModerator, hasAdminEmail, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, user?.witness_statements]);
 
   useEffect(() => onCooldownChange(setCooldownSeconds), []);
 
@@ -1140,12 +1151,21 @@ export default function Layout({ children }) {
           ].map((item, idx) => {
             const isActive = location.pathname === item.to;
             const Icon = item.Icon;
+            const wsBadge =
+              item.to === '/kill/witness-statements'
+                ? Math.max(0, Math.floor(Number(user?.witness_statements ?? 0)))
+                : 0;
             return (
               <Fragment key={item.to}>
                 {showSidebarDividers && idx > 0 && navDividerEl(`cb${idx}`)}
                 <Link to={item.to} onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${isActive ? styles.navItemActivePage : styles.sidebarNavLink}`} style={isActive ? sidebarActiveStyle : undefined} data-testid={item.testId}>
                   <Icon size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
                   <span className="uppercase tracking-widest font-heading flex-1">{item.label}</span>
+                  {wsBadge > 0 && (
+                    <span className="shrink-0 min-w-[16px] h-[16px] rounded-full border border-emerald-500/40 bg-emerald-600/30 text-[9px] font-bold text-emerald-200 flex items-center justify-center px-0.5 tabular-nums font-heading">
+                      {wsBadge > 99 ? '99+' : wsBadge}
+                    </span>
+                  )}
                 </Link>
               </Fragment>
             );

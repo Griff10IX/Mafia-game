@@ -6,7 +6,7 @@ import secrets
 _rng = secrets.SystemRandom()
 import uuid
 from datetime import datetime, timezone, timedelta
-from typing import Optional, List
+from typing import Optional, List, Tuple
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel
 
@@ -180,6 +180,24 @@ JAIL_BUST_FAIL_MESSAGES = [
     "Sloppy work. They threw you in. 30 seconds to think it over.",
 ]
 
+# Private "cell" NPCs: only when no global jail NPCs exist; per-user, max 5 at once; summon batch every 5 min.
+JAIL_PRIVATE_CELL_COOLDOWN_SECONDS = 5 * 60
+JAIL_PRIVATE_CELL_MAX = 5
+JAIL_PRIVATE_CELL_BATCH = 5
+
+JAIL_NPC_NAME_POOL = [
+    "Tony the Rat", "Vinny the Snake", "Lucky Lou", "Mad Dog Mike",
+    "Scarface Sam", "Big Al", "Johnny Two-Times", "Knuckles McGee",
+    "Frankie the Fist", "Lefty Louie", "Joey Bananas", "Paulie Walnuts",
+    "Dutch Schultz", "Waxey Gordon", "Legs Diamond", "Machine Gun Jack",
+    "Nails Morton", "Bugs Moran", "Diamond Joe", "Broadway Charlie",
+    "Pretty Amberg", "Mad Dog Coll", "Big Jim Colosimo", "Jake the Barber",
+    "Trigger Mike", "Three-Finger Brown", "Sleepy Sam", "Cockeyed Lou",
+    "Bottles Capone", "Fats McCarthy", "Greasy Thumb Guzik", "Terrible Tommy",
+    "The Enforcer", "Ice Pick Willie", "Slippery Sal", "Cement Charlie",
+    "Razor Eddie", "Sticky Fingers Sal", "Cigar Box Tommy", "Mugsy Malone", "Black Hand Bruno",
+]
+
 # Failure messages when bust fails but user avoids the 30s jail penalty (e.g. jailbust token effect).
 JAIL_BUST_FAIL_AVOID_JAIL_MESSAGES = [
     "Bust failed — but you slipped away before they could cuff you.",
@@ -228,22 +246,69 @@ def _player_bust_success_rate(total_attempts: int, total_successes: int = 0) -> 
     return min(1.0, rate + 0.05)  # 5% easier: +5 pp success chance
 
 
-# Cache for jail NPCs list (invalidated when spawn adds or bust removes an NPC)
-_jail_npcs_cache: Optional[List[dict]] = None
+def _global_jail_npc_filter() -> dict:
+    """NPCs visible to everyone (background spawner). Personal NPCs set owner_user_id."""
+    return {"$or": [{"owner_user_id": {"$exists": False}}, {"owner_user_id": None}]}
 
 
-def _invalidate_jail_npcs_cache():
-    global _jail_npcs_cache
-    _jail_npcs_cache = None
+async def _count_global_jail_npcs() -> int:
+    return await db.jail_npcs.count_documents(_global_jail_npc_filter())
 
 
-async def _get_jail_npcs():
-    """Return jail NPCs list, using cache when valid."""
-    global _jail_npcs_cache
-    if _jail_npcs_cache is not None:
-        return _jail_npcs_cache
-    _jail_npcs_cache = await db.jail_npcs.find({}, {"_id": 0}).to_list(20)
-    return _jail_npcs_cache
+async def _count_personal_jail_npcs(user_id: str) -> int:
+    return await db.jail_npcs.count_documents({"owner_user_id": user_id})
+
+
+async def _get_visible_jail_npcs(user_id: str) -> List[dict]:
+    """Global jail NPCs plus this user's private-cell NPCs only."""
+    g = await db.jail_npcs.find(_global_jail_npc_filter(), {"_id": 0}).to_list(30)
+    p = await db.jail_npcs.find({"owner_user_id": user_id}, {"_id": 0}).to_list(JAIL_PRIVATE_CELL_MAX + 2)
+    return list(g) + list(p)
+
+
+def _npc_visible_to_user_filter(user_id: str) -> dict:
+    return {
+        "$or": [
+            {"owner_user_id": {"$exists": False}},
+            {"owner_user_id": None},
+            {"owner_user_id": user_id},
+        ]
+    }
+
+
+async def _private_cell_meta(user_id: str) -> dict:
+    now = datetime.now(timezone.utc)
+    global_count = await _count_global_jail_npcs()
+    personal_count = await _count_personal_jail_npcs(user_id)
+    me = await db.users.find_one(
+        {"id": user_id},
+        {"_id": 0, "jail_private_cell_last_spawn_at": 1, "in_jail": 1},
+    )
+    in_jail = bool((me or {}).get("in_jail"))
+    last_raw = (me or {}).get("jail_private_cell_last_spawn_at")
+    cooldown_remaining = 0
+    if last_raw:
+        try:
+            lt = datetime.fromisoformat(str(last_raw).replace("Z", "+00:00"))
+            if lt.tzinfo is None:
+                lt = lt.replace(tzinfo=timezone.utc)
+            elapsed = (now - lt).total_seconds()
+            if elapsed < JAIL_PRIVATE_CELL_COOLDOWN_SECONDS:
+                cooldown_remaining = int(JAIL_PRIVATE_CELL_COOLDOWN_SECONDS - elapsed)
+        except Exception:
+            pass
+    available = (
+        not in_jail
+        and global_count == 0
+        and personal_count == 0
+        and cooldown_remaining == 0
+    )
+    return {
+        "available": available,
+        "cooldown_seconds": cooldown_remaining,
+        "global_npc_count": global_count,
+        "personal_npc_count": personal_count,
+    }
 
 
 async def get_jailed_players(current_user: dict = Depends(get_current_user)):
@@ -297,7 +362,7 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
             )
             continue
         real_players.append(p)
-    npcs = await _get_jail_npcs()
+    npcs = await _get_visible_jail_npcs(current_user["id"])
     hitlist_totals = {}
     if real_players:
         user_ids = [p["id"] for p in real_players if p.get("id") is not None]
@@ -351,19 +416,22 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
         )
     for npc in npcs:
         bust_reward_cash = int((npc.get("bust_reward_cash") or 0) or 0)
-        players_data.append(
-            {
-                "username": npc["username"],
-                "rank_name": npc.get("rank_name", "Goon"),
-                "rp_reward": 25,
-                "bust_reward_cash": bust_reward_cash,
-            }
-        )
+        row = {
+            "username": npc["username"],
+            "rank_name": npc.get("rank_name", "Goon"),
+            "rp_reward": 25,
+            "bust_reward_cash": bust_reward_cash,
+        }
+        if npc.get("owner_user_id"):
+            row["private_cell_npc"] = True
+        players_data.append(row)
     players_data.sort(key=lambda x: int(x.get("bust_reward_cash") or 0), reverse=True)
+    private_cell = await _private_cell_meta(current_user["id"])
     return {
         "players": players_data,
         "admin_online_color": admin_online_color,
         "mod_default_online_color": mod_default_online_color,
+        "private_cell": private_cell,
     }
 
 
@@ -444,7 +512,10 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
     if _jailbust_bonus_active(current_user):
         player_success_rate = min(0.95, player_success_rate + 0.10)
 
-    npc = await db.jail_npcs.find_one({"username": username_ci}, {"_id": 0})
+    npc = await db.jail_npcs.find_one(
+        {"$and": [{"username": username_ci}, _npc_visible_to_user_filter(current_user["id"])]},
+        {"_id": 0},
+    )
     if npc:
         success = _rng.random() < player_success_rate
         rank_points = 25
@@ -464,10 +535,11 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
             npc_username = npc.get("username")
             claimed_npc = None
             if npc_username is not None:
-                claimed_npc = await db.jail_npcs.find_one_and_delete({"username": npc_username})
+                claimed_npc = await db.jail_npcs.find_one_and_delete(
+                    {"$and": [{"username": npc_username}, _npc_visible_to_user_filter(current_user["id"])]}
+                )
             if not claimed_npc:
                 return {"success": False, "message": "That inmate was already busted out.", "jail_time": 0}
-            _invalidate_jail_npcs_cache()
             new_consec = _safe_int(current_user.get("current_consecutive_busts"), 0) + 1
             record = max(_safe_int(current_user.get("consecutive_busts_record"), 0), new_consec)
             rp_before = _safe_int(current_user.get("rank_points"), 0)
@@ -951,6 +1023,99 @@ async def toggle_npcs(request: NPCToggleRequest, current_user: dict = Depends(ge
     raise HTTPException(status_code=410, detail="Deprecated: NPC seeding tools have been removed")
 
 
+async def try_spawn_private_jail_cell(uid: str) -> Tuple[bool, Optional[str], int]:
+    """
+    Spawn 5 private jail NPCs for uid if rules allow. Used by POST /jail/private-cell and Auto Rank bust.
+    Returns (success, error_detail, http_status). On success, error_detail is None and http_status is 200.
+    """
+    if not uid:
+        return False, "Not logged in", 401
+    me = await db.users.find_one(
+        {"id": uid},
+        {"_id": 0, "in_jail": 1, "jail_private_cell_last_spawn_at": 1},
+    )
+    if not me:
+        return False, "User not found", 404
+    if me.get("in_jail"):
+        return False, "You can't summon inmates while you're in jail.", 400
+
+    if await _count_global_jail_npcs() > 0:
+        return False, "There are already inmates everyone can see. Private fill is only when the jail has no public NPCs.", 400
+
+    personal_count = await _count_personal_jail_npcs(uid)
+    if personal_count > 0:
+        return (
+            False,
+            f"Bust out your private inmates first ({personal_count} left). Summon again when your private cell is empty.",
+            400,
+        )
+
+    now = datetime.now(timezone.utc)
+    last_raw = me.get("jail_private_cell_last_spawn_at")
+    if last_raw:
+        try:
+            lt = datetime.fromisoformat(str(last_raw).replace("Z", "+00:00"))
+            if lt.tzinfo is None:
+                lt = lt.replace(tzinfo=timezone.utc)
+            elapsed = (now - lt).total_seconds()
+            if elapsed < JAIL_PRIVATE_CELL_COOLDOWN_SECONDS:
+                left = int(JAIL_PRIVATE_CELL_COOLDOWN_SECONDS - elapsed)
+                return False, f"Wait {left}s before summoning another private cell.", 429
+        except Exception:
+            pass
+
+    rank_names = [r["name"] for r in RANKS]
+    weights = [30, 25, 20, 15, 10, 7, 5, 3, 2, 1, 1, 1, 1]
+    now_iso = now.isoformat()
+    used_local: set = set()
+    for _ in range(JAIL_PRIVATE_CELL_BATCH):
+        inserted = False
+        for _attempt in range(100):
+            base = _rng.choice(JAIL_NPC_NAME_POOL)
+            suffix = uuid.uuid4().hex[:6]
+            uname = f"{base} ({suffix})"
+            if uname in used_local:
+                continue
+            clash = await db.jail_npcs.find_one({"username": uname}, {"_id": 1})
+            if clash:
+                continue
+            used_local.add(uname)
+            rank_name = _rng.choices(rank_names, weights=weights, k=1)[0]
+            rank_index = rank_names.index(rank_name) if rank_name in rank_names else 0
+            cash_min = 50 + rank_index * 30
+            cash_max = 150 + rank_index * 50
+            bust_reward_cash = _rng.randint(cash_min, cash_max)
+            await db.jail_npcs.insert_one({
+                "username": uname,
+                "rank_name": rank_name,
+                "bust_reward_cash": bust_reward_cash,
+                "spawned_at": now_iso,
+                "owner_user_id": uid,
+            })
+            inserted = True
+            break
+        if not inserted:
+            return False, "Could not create inmates. Try again.", 500
+
+    await db.users.update_one(
+        {"id": uid},
+        {"$set": {"jail_private_cell_last_spawn_at": now_iso}},
+    )
+    return True, None, 200
+
+
+async def spawn_private_jail_cell(current_user: dict = Depends(get_current_user_verified)):
+    """When there are no global jail NPCs, add 5 NPCs only this user sees. 5-minute cooldown; max 5 at a time (must bust all before summoning again)."""
+    uid = current_user.get("id") or ""
+    ok, err, code = await try_spawn_private_jail_cell(uid)
+    if not ok:
+        raise HTTPException(status_code=code, detail=err or "Failed")
+    return {
+        "message": f"{JAIL_PRIVATE_CELL_BATCH} private inmates appeared — only you can see them.",
+        "added": JAIL_PRIVATE_CELL_BATCH,
+    }
+
+
 async def list_npcs_for_attack(current_user: dict = Depends(get_current_user)):
     """Get NPCs that can be attacked (same state, not in jail)."""
     settings = await db.game_settings.find_one({"key": "npcs_enabled"}, {"_id": 0})
@@ -965,27 +1130,15 @@ async def list_npcs_for_attack(current_user: dict = Depends(get_current_user)):
 
 async def spawn_jail_npcs():
     """Background task to spawn NPCs in jail every 1-2 minutes. Call from app startup."""
-    npc_names = [
-        "Tony the Rat", "Vinny the Snake", "Lucky Lou", "Mad Dog Mike",
-        "Scarface Sam", "Big Al", "Johnny Two-Times", "Knuckles McGee",
-        "Frankie the Fist", "Lefty Louie", "Joey Bananas", "Paulie Walnuts",
-        "Dutch Schultz", "Waxey Gordon", "Legs Diamond", "Machine Gun Jack",
-        "Nails Morton", "Bugs Moran", "Diamond Joe", "Broadway Charlie",
-        "Pretty Amberg", "Mad Dog Coll", "Big Jim Colosimo", "Jake the Barber",
-        "Trigger Mike", "Three-Finger Brown", "Sleepy Sam", "Cockeyed Lou",
-        "Bottles Capone", "Fats McCarthy", "Greasy Thumb Guzik", "Terrible Tommy",
-        "The Enforcer", "Ice Pick Willie", "Slippery Sal", "Cement Charlie",
-        "Razor Eddie", "Sticky Fingers Sal", "Cigar Box Tommy", "Mugsy Malone", "Black Hand Bruno",
-    ]
     while True:
         try:
             await asyncio.sleep(_rng.randint(60, 120))
-            current_npcs = await db.jail_npcs.count_documents({})
-            if current_npcs < 10:
-                npc_name = _rng.choice(npc_names)
+            current_global = await _count_global_jail_npcs()
+            if current_global < 10:
+                npc_name = _rng.choice(JAIL_NPC_NAME_POOL)
                 rank_names = [r["name"] for r in RANKS]
                 weights = [30, 25, 20, 15, 10, 7, 5, 3, 2, 1, 1, 1, 1]
-                existing = await db.jail_npcs.find_one({"username": npc_name})
+                existing = await db.jail_npcs.find_one({"$and": [{"username": npc_name}, _global_jail_npc_filter()]})
                 if not existing:
                     rank_name = _rng.choices(rank_names, weights=weights, k=1)[0]
                     # Cash reward scales with rank (low for beta - few hundred max)
@@ -999,7 +1152,6 @@ async def spawn_jail_npcs():
                         "bust_reward_cash": bust_reward_cash,
                         "spawned_at": datetime.now(timezone.utc).isoformat(),
                     })
-                    _invalidate_jail_npcs_cache()
         except Exception as e:
             logger.error(f"Error spawning jail NPC: {e}")
             await asyncio.sleep(60)
@@ -1007,6 +1159,7 @@ async def spawn_jail_npcs():
 
 def register(router):
     router.add_api_route("/jail/players", get_jailed_players, methods=["GET"])
+    router.add_api_route("/jail/private-cell", spawn_private_jail_cell, methods=["POST"])
     router.add_api_route("/jail/bust", bust_out_of_jail, methods=["POST"])
     router.add_api_route("/jail/stats", get_jail_stats, methods=["GET"])
     router.add_api_route("/jail/status", get_jail_status, methods=["GET"])

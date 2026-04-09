@@ -239,6 +239,7 @@ async def ensure_all_indexes(db):
 
         # --- Jail ---
         await db.jail_npcs.create_index("username", unique=True)
+        await db.jail_npcs.create_index("owner_user_id")
         await db.bust_events.create_index([("user_id", 1), ("at", -1)])
 
         # --- Bodyguards / hitlist ---

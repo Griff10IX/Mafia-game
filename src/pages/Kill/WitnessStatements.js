@@ -16,9 +16,21 @@ function money(n) {
   return `$${Math.trunc(Number(n || 0)).toLocaleString()}`;
 }
 
+function formatLogTime(iso) {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return String(iso);
+    return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', second: '2-digit' });
+  } catch (_) {
+    return String(iso);
+  }
+}
+
 export default function WitnessStatements() {
   const [loading, setLoading] = useState(true);
   const [listings, setListings] = useState([]);
+  const [recentLog, setRecentLog] = useState([]);
   const [balance, setBalance] = useState(0);
   const [cash, setCash] = useState(0);
   const [listQty, setListQty] = useState('');
@@ -28,13 +40,19 @@ export default function WitnessStatements() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [meRes, listRes] = await Promise.all([api.get('/auth/me'), api.get('/witness-statements/listings')]);
+      const [meRes, listRes, recentRes] = await Promise.all([
+        api.get('/auth/me'),
+        api.get('/witness-statements/listings'),
+        api.get('/witness-statements/recent'),
+      ]);
       setBalance(Number(meRes.data?.witness_statements ?? 0));
       setCash(Number(meRes.data?.money ?? 0));
       setListings(Array.isArray(listRes.data) ? listRes.data : []);
+      setRecentLog(Array.isArray(recentRes.data?.items) ? recentRes.data.items : []);
     } catch (e) {
       toast.error(getApiErrorMessage(e, 'Failed to load'));
       setListings([]);
+      setRecentLog([]);
     } finally {
       setLoading(false);
     }
@@ -154,6 +172,42 @@ export default function WitnessStatements() {
           </div>
         </div>
         <div className="ws-art-line text-primary mx-3" />
+      </div>
+
+      <div className={`${styles.panel} rounded-lg border border-primary/20 overflow-hidden`}>
+        <div className="px-3 py-2 bg-primary/10 border-b border-primary/20">
+          <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Witness log</span>
+        </div>
+        {loading ? (
+          <div className="p-6 text-center text-xs text-mutedForeground font-heading">Loading…</div>
+        ) : recentLog.length === 0 ? (
+          <div className="p-6 text-center text-xs text-mutedForeground leading-relaxed">
+            No witness lines yet. When you are online during a kill you witness, the same text appears here and in{' '}
+            <Link to="/social/inbox" className="text-primary hover:underline font-heading">
+              Inbox
+            </Link>
+            .
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-[11px]">
+              <thead>
+                <tr className="border-b border-zinc-700/50 text-[9px] font-heading uppercase text-mutedForeground">
+                  <th className="px-3 py-2 whitespace-nowrap w-36">Time</th>
+                  <th className="px-3 py-2">Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recentLog.map((row) => (
+                  <tr key={row.id || row.created_at} className="border-b border-zinc-800/50 align-top hover:bg-zinc-900/30">
+                    <td className="px-3 py-2 text-mutedForeground tabular-nums whitespace-nowrap">{formatLogTime(row.created_at)}</td>
+                    <td className="px-3 py-2 text-foreground whitespace-pre-wrap break-words">{row.message || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <div className={`${styles.panel} rounded-lg border border-primary/20 overflow-hidden`}>

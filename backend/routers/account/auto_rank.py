@@ -680,7 +680,7 @@ async def _run_booze_for_user(db, user_id: str, username: str, telegram_chat_id:
 async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id: str, bot_token: Optional[str] = None, bust_target_username: Optional[str] = None):
     """Try one jail bust, send result to Telegram."""
     import server as srv
-    from routers.crime.jail import _attempt_bust_impl
+    from routers.crime.jail import _attempt_bust_impl, _npc_visible_to_user_filter, try_spawn_private_jail_cell
     from middleware.security import send_telegram_to_chat
 
     db = srv.db
@@ -691,13 +691,28 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
         return
     token = bot_token or (user.get("telegram_bot_token") or "").strip()
     if bust_target_username is None:
-        npc = await db.jail_npcs.find_one({}, {"_id": 0, "username": 1})
+        npc = await db.jail_npcs.find_one(
+            _npc_visible_to_user_filter(user_id),
+            {"_id": 0, "username": 1},
+        )
         if npc:
             bust_target_username = npc.get("username")
         if not bust_target_username:
             jailed = await db.users.find_one({"in_jail": True, "id": {"$ne": user_id}}, {"_id": 0, "username": 1})
             if jailed:
                 bust_target_username = jailed.get("username")
+        if not bust_target_username:
+            spawned, _, _ = await try_spawn_private_jail_cell(user_id)
+            if spawned:
+                user = await db.users.find_one({"id": user_id}, {"_id": 0})
+                if not user or user.get("in_jail"):
+                    return
+                npc2 = await db.jail_npcs.find_one(
+                    _npc_visible_to_user_filter(user_id),
+                    {"_id": 0, "username": 1},
+                )
+                if npc2:
+                    bust_target_username = (npc2.get("username") or "").strip() or None
     if not bust_target_username:
         return
     try:
@@ -1277,6 +1292,8 @@ async def run_bust_5sec_once():
     Skips users who have been inactive for 24+ hours (auto_rank_idle)."""
     import random
     import server as srv
+    from routers.crime.jail import _global_jail_npc_filter
+
     db = srv.db
     now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
@@ -1304,7 +1321,7 @@ async def run_bust_5sec_once():
         users = active_users
         buster_user_ids = {u["id"] for u in users}
         targets = []
-        async for npc in db.jail_npcs.find({}, {"_id": 0, "username": 1}):
+        async for npc in db.jail_npcs.find(_global_jail_npc_filter(), {"_id": 0, "username": 1}):
             un = (npc.get("username") or "").strip()
             if un:
                 targets.append(un)
@@ -1314,8 +1331,6 @@ async def run_bust_5sec_once():
                 if un:
                     targets.append(un)
         bust_target_username = random.choice(targets) if targets else None
-        if not bust_target_username and users:
-            return
         async def run_one(u):
             chat_id = (u.get("telegram_chat_id") or "").strip()
             bot_token = (u.get("telegram_bot_token") or "").strip()
@@ -1324,6 +1339,9 @@ async def run_bust_5sec_once():
                     await _run_bust_only_for_user(u["id"], u.get("username", "?"), chat_id, bot_token or None, bust_target_username=bust_target_username)
                 elif bust_target_username:
                     await _run_auto_rank_for_user(u["id"], u.get("username", "?"), chat_id, bot_token or None)
+                else:
+                    # No shared NPC / jailed target: each user may spawn a private cell and bust (see _run_bust_only_for_user).
+                    await _run_bust_only_for_user(u["id"], u.get("username", "?"), chat_id, bot_token or None, bust_target_username=None)
             except Exception as e:
                 logger.exception("Auto rank bust 5sec for user %s: %s", u.get("id"), e)
 
