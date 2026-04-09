@@ -242,6 +242,22 @@ const ProfileInfoCard = ({
     || (typeof profile.rank_name === 'string' && profile.rank_name.startsWith('(HDO)'))
     || profile.rank_name === 'Help Desk Operator';
   const isStaffProfile = isAdminProfile || isModeratorProfile || isHdoProfile;
+  const [killDebug, setKillDebug] = useState(null);
+  const [killDebugOpen, setKillDebugOpen] = useState(false);
+  const [killDebugLoading, setKillDebugLoading] = useState(false);
+  const fetchKillDebug = async () => {
+    if (killDebugLoading) return;
+    setKillDebugLoading(true);
+    try {
+      const res = await api.get(`/admin/kill-debug/${encodeURIComponent(profile.username)}`);
+      setKillDebug(res.data);
+      setKillDebugOpen(true);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load kill debug');
+    } finally {
+      setKillDebugLoading(false);
+    }
+  };
   const adminColor = profile.admin_online_color ?? adminOnlineColor ?? '#a78bfa';
   const modColor = profile.mod_online_color ?? '#1e3a5f';
   const hdoColor = '#166534';
@@ -302,7 +318,19 @@ const ProfileInfoCard = ({
       label: 'Kills', 
       icon: Skull,
       value: String(profile.kills ?? 0), 
-      valueClass: 'text-red-400 font-heading font-bold' 
+      valueClass: 'text-red-400 font-heading font-bold',
+      ...(isAdmin && !isMe ? {
+        component: (
+          <span className="flex items-center gap-1.5 justify-end">
+            <span className="text-red-400 font-heading font-bold text-[10px] md:text-sm">{String(profile.kills ?? 0)}</span>
+            <button type="button" onClick={fetchKillDebug} disabled={killDebugLoading}
+              className="text-[8px] px-1.5 py-0.5 rounded border border-zinc-600/50 bg-zinc-800/50 text-zinc-400 hover:text-primary hover:border-primary/40 transition-colors disabled:opacity-50"
+              title="Debug kill count">
+              {killDebugLoading ? '...' : 'debug'}
+            </button>
+          </span>
+        ),
+      } : {}),
     },
   ];
   
@@ -705,6 +733,50 @@ const ProfileInfoCard = ({
           </div>
           <div className="px-3 py-2 md:px-4 md:py-2.5 text-foreground font-heading text-[11px] md:text-sm text-center">
             {formatDateTime(profile.created_at)}
+          </div>
+        </div>
+      )}
+
+      {killDebugOpen && killDebug && (
+        <div className="mx-3 mb-2 rounded border border-zinc-700/60 bg-zinc-900/80 overflow-hidden">
+          <div className="px-2.5 py-1.5 bg-zinc-800/80 border-b border-zinc-700/40 flex items-center justify-between">
+            <span className="text-[9px] font-heading font-bold text-zinc-400 uppercase tracking-wider">Kill Debug — {killDebug.username}</span>
+            <button type="button" onClick={() => setKillDebugOpen(false)} className="text-zinc-500 hover:text-zinc-300 text-xs">&times;</button>
+          </div>
+          <div className="p-2 space-y-1.5 text-[9px] font-heading max-h-64 overflow-y-auto">
+            <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+              <span className="text-zinc-500">stored total_kills:</span><span className="text-foreground font-bold">{killDebug.stored_total_kills}</span>
+              <span className="text-zinc-500">effective (displayed):</span><span className="text-foreground font-bold">{killDebug.effective_kill_count}</span>
+              <span className="text-zinc-500">excludes_npc_v1 flag:</span><span className={killDebug.total_kills_excludes_npc_v1 ? 'text-emerald-400' : 'text-amber-400'}>{String(killDebug.total_kills_excludes_npc_v1)}</span>
+              <span className="text-zinc-500">hitlist_npc_kills:</span><span className="text-foreground">{killDebug.hitlist_npc_kills}</span>
+              <span className="text-zinc-500">robot_bodyguard_kills:</span><span className="text-foreground">{killDebug.robot_bodyguard_kills}</span>
+              <span className="text-zinc-500">NPC IDs excluded:</span><span className="text-foreground">{killDebug.npc_ids_excluded}</span>
+              <span className="text-zinc-500">counted from attempts:</span><span className="text-primary font-bold">{killDebug.counted_from_attempts}</span>
+            </div>
+            {killDebug.attempts?.length > 0 && (
+              <div className="mt-1 border-t border-zinc-700/40 pt-1">
+                <p className="text-zinc-500 uppercase tracking-wider mb-1">Matching attempts (newest first):</p>
+                {killDebug.attempts.map((a, i) => (
+                  <div key={a.id || i} className="rounded border border-zinc-700/30 bg-zinc-800/30 px-2 py-1 mb-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-foreground font-bold">{a.target_username || a.target_id}</span>
+                      <span className="text-zinc-600">{a.created_at ? new Date(a.created_at).toLocaleString() : '—'}</span>
+                    </div>
+                    <div className="flex gap-2 text-zinc-500 mt-0.5 flex-wrap">
+                      <span>target_is_npc: <span className={a.target_is_npc ? 'text-amber-400' : 'text-zinc-400'}>{String(a.target_is_npc ?? 'n/a')}</span></span>
+                      <span>is_npc_kill: <span className={a.is_npc_kill ? 'text-amber-400' : 'text-zinc-400'}>{String(a.is_npc_kill ?? 'n/a')}</span></span>
+                      <span>bodyguard: <span className={a.is_bodyguard_kill ? 'text-sky-400' : 'text-zinc-400'}>{String(a.is_bodyguard_kill ?? 'n/a')}</span></span>
+                    </div>
+                  </div>
+                ))}
+                {killDebug.counted_from_attempts > killDebug.attempts.length && (
+                  <p className="text-zinc-600 italic">...and {killDebug.counted_from_attempts - killDebug.attempts.length} more</p>
+                )}
+              </div>
+            )}
+            {killDebug.attempts?.length === 0 && (
+              <p className="text-zinc-600 italic mt-1">No matching attack_attempts found.</p>
+            )}
           </div>
         </div>
       )}

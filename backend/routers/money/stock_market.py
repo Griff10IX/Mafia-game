@@ -23,9 +23,11 @@ def _get_stock_buy_lock(uid: str) -> asyncio.Lock:
 # CoinGecko API (free, no key). Cache to respect rate limits.
 COINGECKO_BASE = "https://api.coingecko.com/api/v3"
 _LIVE_CACHE = {"data": None, "ts": 0}
-CACHE_TTL_SEC = 60  # 1 minute
+CACHE_TTL_SEC = 90
 SELL_COOLDOWN_SEC = 180  # 3 minutes after buy before allowed to sell
 AUTO_SELL_DAYS = 7  # positions are auto-sold after 7 days
+_FETCH_LOCK = asyncio.Lock()
+_http_client: httpx.AsyncClient = None
 
 STOCKS = [
     {"id": "btc", "name": "Bitcoin", "symbol": "BTC", "coingecko_id": "bitcoin", "base_price": 64935},
@@ -41,81 +43,90 @@ STOCKS = [
 ]
 
 
-def _closest_price(prices: list, target_ts_ms: int) -> Optional[float]:
-    """From [[ts_ms, price], ...] return price at closest timestamp to target_ts_ms."""
-    if not prices:
-        return None
-    best = None
-    best_diff = float("inf")
-    for ts_ms, price in prices:
-        diff = abs(ts_ms - target_ts_ms)
-        if diff < best_diff:
-            best_diff = diff
-            best = price
-    return best
+def _get_http_client() -> httpx.AsyncClient:
+    global _http_client
+    if _http_client is None or _http_client.is_closed:
+        _http_client = httpx.AsyncClient(
+            timeout=12.0,
+            limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+        )
+    return _http_client
 
 
 async def _fetch_live_prices() -> list:
-    """Fetch real prices and % changes from CoinGecko. Returns list of {id, name, symbol, price, change_3h, change_1d, change_3d, change_1w}."""
-    now_ts = time.time()
-    now_ms = int(now_ts * 1000)
-    ts_3h = now_ms - 3 * 3600 * 1000
-    ts_1d = now_ms - 24 * 3600 * 1000
-    ts_3d = now_ms - 3 * 24 * 3600 * 1000
-    ts_1w = now_ms - 7 * 24 * 3600 * 1000
-
-    async def fetch_one(s: dict):
+    """Fetch prices + % changes from CoinGecko using a single batch request."""
+    cg_ids = ",".join(s.get("coingecko_id") or s["id"] for s in STOCKS)
+    id_to_stock = {}
+    for s in STOCKS:
         cg_id = s.get("coingecko_id") or s["id"]
-        try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                r = await client.get(f"{COINGECKO_BASE}/coins/{cg_id}/market_chart", params={"vs_currency": "usd", "days": "7"})
-                if r.status_code != 200:
-                    return None
-                data = r.json()
-                prices = data.get("prices") or []
-                if not prices:
-                    return None
-                current = prices[-1][1]
-                p_3h = _closest_price(prices, ts_3h) or current
-                p_1d = _closest_price(prices, ts_1d) or current
-                p_3d = _closest_price(prices, ts_3d) or current
-                p_1w = _closest_price(prices, ts_1w) or current
-                def pct(cur, past):
-                    if past and past > 0:
-                        return round((cur - past) / past * 100, 2)
-                    return 0.0
-                return {
-                    "id": s["id"],
-                    "name": s["name"],
-                    "symbol": s.get("symbol", s["id"].upper()),
-                    "price": round(current, 2),
-                    "change_3h": pct(current, p_3h),
-                    "change_1d": pct(current, p_1d),
-                    "change_3d": pct(current, p_3d),
-                    "change_1w": pct(current, p_1w),
-                }
-        except Exception:
-            return None
+        id_to_stock[cg_id] = s
 
-    results = await asyncio.gather(*[fetch_one(s) for s in STOCKS])
-    out = [r for r in results if r is not None]
+    client = _get_http_client()
+    try:
+        r = await client.get(
+            f"{COINGECKO_BASE}/coins/markets",
+            params={
+                "vs_currency": "usd",
+                "ids": cg_ids,
+                "price_change_percentage": "1h,24h,7d",
+                "sparkline": "false",
+                "per_page": len(STOCKS),
+            },
+        )
+        if r.status_code != 200:
+            return []
+        data = r.json()
+        if not isinstance(data, list):
+            return []
+    except Exception:
+        return []
+
+    out = []
+    for coin in data:
+        cg_id = coin.get("id")
+        stock = id_to_stock.get(cg_id)
+        if not stock:
+            continue
+        price = coin.get("current_price")
+        if price is None:
+            continue
+        out.append({
+            "id": stock["id"],
+            "name": stock["name"],
+            "symbol": stock.get("symbol", stock["id"].upper()),
+            "price": round(price, 2),
+            "change_1h": round(coin.get("price_change_percentage_1h_in_currency") or 0, 2),
+            "change_24h": round(coin.get("price_change_percentage_24h") or 0, 2),
+            "change_7d": round(coin.get("price_change_percentage_7d_in_currency") or 0, 2),
+        })
     return out
 
 
 async def _get_cached_live_prices() -> list:
-    """Return cached live prices; refresh if expired."""
+    """Return cached live prices; refresh if expired. Uses lock to prevent thundering herd."""
     now = time.time()
     if _LIVE_CACHE["data"] is not None and (now - _LIVE_CACHE["ts"]) < CACHE_TTL_SEC:
         return _LIVE_CACHE["data"]
-    try:
-        data = await _fetch_live_prices()
-        if data:
-            _LIVE_CACHE["data"] = data
-            _LIVE_CACHE["ts"] = now
-            return data
-    except Exception:
-        pass
-    return _LIVE_CACHE["data"] or []
+
+    if _FETCH_LOCK.locked():
+        if _LIVE_CACHE["data"]:
+            return _LIVE_CACHE["data"]
+        async with _FETCH_LOCK:
+            return _LIVE_CACHE["data"] or []
+
+    async with _FETCH_LOCK:
+        now = time.time()
+        if _LIVE_CACHE["data"] is not None and (now - _LIVE_CACHE["ts"]) < CACHE_TTL_SEC:
+            return _LIVE_CACHE["data"]
+        try:
+            data = await _fetch_live_prices()
+            if data:
+                _LIVE_CACHE["data"] = data
+                _LIVE_CACHE["ts"] = now
+                return data
+        except Exception:
+            pass
+        return _LIVE_CACHE["data"] or []
 
 
 def _get_price_by_stock_id(live_list: list, stock_id: str) -> Optional[float]:
@@ -294,10 +305,9 @@ def register(router):
                     "name": item["name"],
                     "symbol": item.get("symbol", sid.upper()),
                     "price": item["price"],
-                    "change_3h": item.get("change_3h", 0),
-                    "change_1d": item.get("change_1d", 0),
-                    "change_3d": item.get("change_3d", 0),
-                    "change_1w": item.get("change_1w", 0),
+                    "change_1h": item.get("change_1h", 0),
+                    "change_24h": item.get("change_24h", 0),
+                    "change_7d": item.get("change_7d", 0),
                     "icon_url": icon_url,
                     "live": True,
                 })
@@ -308,7 +318,7 @@ def register(router):
                     "name": s["name"],
                     "symbol": s.get("symbol", s["id"].upper()),
                     "price": round(price, 2),
-                    "change_3h": 0, "change_1d": 0, "change_3d": 0, "change_1w": 0,
+                    "change_1h": 0, "change_24h": 0, "change_7d": 0,
                     "icon_url": icon_url,
                     "live": False,
                 })

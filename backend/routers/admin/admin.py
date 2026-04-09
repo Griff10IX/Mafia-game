@@ -388,6 +388,7 @@ def register(router):
     _is_hdo = srv._is_hdo
     ADMIN_EMAILS = srv.ADMIN_EMAILS
     _staff_exclude_user_filter = srv._staff_exclude_user_filter
+    effective_player_kill_count = srv.effective_player_kill_count
 
     def _admin_or_mod(user: dict) -> bool:
         """True if user is admin or moderator (mods have limited tools: logs, account info, lock user; no wealth/rank)."""
@@ -12282,4 +12283,60 @@ def register(router):
             "message": "Lifetime objectives set to almost complete (5 crimes away). Visit objectives page to trigger admin notification.",
             "total_crimes_set_to": update_set.get("total_crimes"),
             "all_other_objectives": "completed",
+        }
+
+    @router.get("/admin/kill-debug/{username}")
+    async def admin_kill_debug(username: str, current_user: dict = Depends(get_current_user)):
+        """Return the actual attack_attempts that count toward a user's kill total. Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        target = await db.users.find_one(
+            {"username": _username_pattern(username)},
+            {"_id": 0, "id": 1, "username": 1, "total_kills": 1,
+             "hitlist_npc_kills": 1, "robot_bodyguard_kills": 1,
+             "total_kills_excludes_npc_v1": 1, "is_npc": 1},
+        )
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = target["id"]
+
+        npc_ids = []
+        async for npc in db.users.find({"is_npc": True}, {"_id": 0, "id": 1}):
+            if npc.get("id"):
+                npc_ids.append(npc["id"])
+
+        query = {
+            "attacker_id": uid,
+            "outcome": "killed",
+            "$or": [
+                {"target_id": {"$nin": npc_ids}},
+                {"is_bodyguard_kill": True},
+            ],
+        }
+        counted_kills = []
+        async for doc in db.attack_attempts.find(query).sort("created_at", -1).limit(50):
+            counted_kills.append({
+                "id": doc.get("id"),
+                "target_username": doc.get("target_username"),
+                "target_id": doc.get("target_id"),
+                "target_is_npc": doc.get("target_is_npc"),
+                "is_npc_kill": doc.get("is_npc_kill"),
+                "is_bodyguard_kill": doc.get("is_bodyguard_kill"),
+                "outcome": doc.get("outcome"),
+                "created_at": str(doc.get("created_at") or ""),
+            })
+        counted_total = await db.attack_attempts.count_documents(query)
+
+        effective = effective_player_kill_count(target)
+
+        return {
+            "username": target.get("username"),
+            "stored_total_kills": int(target.get("total_kills") or 0),
+            "effective_kill_count": effective,
+            "total_kills_excludes_npc_v1": bool(target.get("total_kills_excludes_npc_v1")),
+            "hitlist_npc_kills": int(target.get("hitlist_npc_kills") or 0),
+            "robot_bodyguard_kills": int(target.get("robot_bodyguard_kills") or 0),
+            "npc_ids_excluded": len(npc_ids),
+            "counted_from_attempts": counted_total,
+            "attempts": counted_kills,
         }

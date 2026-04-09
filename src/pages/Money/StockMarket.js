@@ -176,10 +176,9 @@ export default function StockMarket() {
                   <tr className="border-b border-primary/10">
                     <th className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider py-2 px-2 w-8" />
                     <th className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider py-2 px-2">Stock</th>
-                    <th className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider py-2 px-2 text-right">3 Hours</th>
-                    <th className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider py-2 px-2 text-right">1 Day</th>
-                    <th className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider py-2 px-2 text-right">3 Days</th>
-                    <th className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider py-2 px-2 text-right">1 Week</th>
+                    <th className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider py-2 px-2 text-right">1 Hour</th>
+                    <th className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider py-2 px-2 text-right">24 Hours</th>
+                    <th className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider py-2 px-2 text-right">7 Days</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -214,10 +213,9 @@ export default function StockMarket() {
                           </span>
                         </div>
                       </td>
-                      <td className="py-2 px-2 text-right text-[10px] font-heading"><ChangeCell value={s.change_3h} /></td>
-                      <td className="py-2 px-2 text-right text-[10px] font-heading"><ChangeCell value={s.change_1d} /></td>
-                      <td className="py-2 px-2 text-right text-[10px] font-heading"><ChangeCell value={s.change_3d} /></td>
-                      <td className="py-2 px-2 text-right text-[10px] font-heading"><ChangeCell value={s.change_1w} /></td>
+                      <td className="py-2 px-2 text-right text-[10px] font-heading"><ChangeCell value={s.change_1h} /></td>
+                      <td className="py-2 px-2 text-right text-[10px] font-heading"><ChangeCell value={s.change_24h} /></td>
+                      <td className="py-2 px-2 text-right text-[10px] font-heading"><ChangeCell value={s.change_7d} /></td>
                     </tr>
                   ))}
                 </tbody>
