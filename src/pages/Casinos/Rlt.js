@@ -458,6 +458,8 @@ export default function Rlt() {
       toast.success(`Landed ${data.result}! Won ${formatMoney(data.total_payout)}`);
       setShowWin(true);
       setTimeout(() => setShowWin(false), 2200);
+    } else {
+      toast.error(`Landed ${data.result}. Lost ${formatMoney(data.total_stake)}`);
     }
     if (data.ownership_transferred) toast.success('You won the casino!');
     if (data.buy_back_offer) {
