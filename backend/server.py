@@ -1183,6 +1183,31 @@ async def get_current_user(
         # Never block user requests due to reward automation.
         pass
 
+    # Profile online/idle uses last_seen, but historically only GET /auth/me bumped it. Gameplay endpoints
+    # (jail bust, casino, etc.) authenticate here without hitting /auth/me → players looked "offline" while
+    # stats changed. Refresh at most once per 5 minutes per request burst; skip /auth/me (handler sets it).
+    if request and not user.get("is_dead") and not user.get("is_npc") and not user.get("is_bodyguard"):
+        try:
+            if (request.url.path or "") != "/auth/me":
+                now_ts = datetime.now(timezone.utc)
+                five_ago = now_ts - timedelta(minutes=5)
+                ls_raw = user.get("last_seen")
+                bump = True
+                if ls_raw:
+                    try:
+                        ls_dt = datetime.fromisoformat(str(ls_raw).replace("Z", "+00:00"))
+                        if ls_dt.tzinfo is None:
+                            ls_dt = ls_dt.replace(tzinfo=timezone.utc)
+                        bump = ls_dt < five_ago
+                    except Exception:
+                        bump = True
+                if bump:
+                    now_iso = now_ts.isoformat()
+                    await db.users.update_one({"id": user_id}, {"$set": {"last_seen": now_iso}})
+                    user["last_seen"] = now_iso
+        except Exception:
+            pass
+
     return user
 
 
