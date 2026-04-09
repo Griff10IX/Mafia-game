@@ -210,13 +210,20 @@ export default function Distillery() {
 
   const load = useCallback(async (silent = false) => {
     try {
-      const [bizRes, distRes, catRes] = await Promise.all([
-        api.get('/illegal-business'),
+      const bizRes = await api.get('/illegal-business');
+      const biz = bizRes.data?.business || null;
+      setBusiness(biz);
+      setPendingTake(Number(bizRes.data?.pending_take || 0));
+      if (!biz) {
+        setState(null);
+        setCatalog({ tracks: {} });
+        setLoadError(false);
+        return;
+      }
+      const [distRes, catRes] = await Promise.all([
         api.get('/illegal-business/distillery'),
         api.get('/illegal-business/distillery/progression-catalog'),
       ]);
-      setBusiness(bizRes.data?.business || null);
-      setPendingTake(Number(bizRes.data?.pending_take || 0));
       const next = distRes.data || null;
       setState(next);
       setCatalog(catRes.data || { tracks: {} });
@@ -235,12 +242,24 @@ export default function Distillery() {
         batch_size: Number(a.batch_size || 1),
       });
     } catch (e) {
-      if (!silent) toast.error(getApiErrorMessage(e));
-      if (!silent) {
-        setLoadError(true);
-        setState(null);
+      const status = e.response?.status;
+      const detail = String(e.response?.data?.detail || '');
+      const noBusiness =
+        status === 404 && /don'?t have an illegal business|illegal business/i.test(detail);
+      if (noBusiness) {
         setBusiness(null);
+        setState(null);
+        setCatalog({ tracks: {} });
         setPendingTake(0);
+        setLoadError(false);
+      } else {
+        if (!silent) toast.error(getApiErrorMessage(e));
+        if (!silent) {
+          setLoadError(true);
+          setState(null);
+          setBusiness(null);
+          setPendingTake(0);
+        }
       }
     } finally {
       setHasLoaded(true);
@@ -354,13 +373,25 @@ export default function Distillery() {
           <div className="dist-empty-icon">⚠</div>
           <h1 className="dist-empty-title">Couldn&apos;t Load Distillery</h1>
           <p className="dist-empty-sub">Try again in a moment.</p>
-          <button
-            type="button"
-            onClick={() => load(false)}
-            className="inline-block border border-primary/35 bg-primary/10 px-5 py-2 text-[11px] font-heading font-bold uppercase tracking-wider text-primary transition-all hover:bg-primary/20"
-          >
-            Retry
-          </button>
+          <p className="dist-empty-sub mt-3 text-[10px] text-mutedForeground max-w-md mx-auto">
+            If you don&apos;t have an illegal business yet: reach <strong className="text-foreground">Capo</strong> rank or higher, then{' '}
+            <strong className="text-foreground">open your racket</strong> on the Racket page (choose <strong className="text-foreground">Booze making</strong> for this still).
+          </p>
+          <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+            <button
+              type="button"
+              onClick={() => load(false)}
+              className="inline-block border border-primary/35 bg-primary/10 px-5 py-2 text-[11px] font-heading font-bold uppercase tracking-wider text-primary transition-all hover:bg-primary/20"
+            >
+              Retry
+            </button>
+            <Link
+              to="/money/racket"
+              className="inline-block border border-border bg-secondary/40 px-5 py-2 text-[11px] font-heading font-bold uppercase tracking-wider text-foreground transition-all hover:bg-secondary/60"
+            >
+              Racket →
+            </Link>
+          </div>
         </div>
       </div>
     );
@@ -373,10 +404,21 @@ export default function Distillery() {
         <div className="dist-empty-panel">
           <div className="dist-empty-icon">⚗</div>
           <h1 className="dist-empty-title">No Still Running</h1>
-          <p className="dist-empty-sub">You need an illegal business first. Start one from your racket page.</p>
+          <p className="dist-empty-sub max-w-lg mx-auto leading-relaxed">
+            This page needs an <strong className="text-foreground">illegal business</strong> with a still. Requirements:
+          </p>
+          <ul className="dist-empty-sub text-left max-w-md mx-auto mt-3 space-y-2 text-[11px] list-disc pl-5">
+            <li>
+              Reach <strong className="text-foreground">Capo</strong> rank or higher (the game blocks starting a racket below Capo).
+            </li>
+            <li>
+              <strong className="text-foreground">Open your racket</strong> on the Racket page — start an illegal business and pick{' '}
+              <strong className="text-foreground">Booze making</strong> if you want the distillery.
+            </li>
+          </ul>
           <Link
             to="/money/racket"
-            className="inline-block border border-primary/35 bg-primary/10 px-5 py-2 text-[11px] font-heading font-bold uppercase tracking-wider text-primary transition-all hover:bg-primary/20"
+            className="mt-5 inline-block border border-primary/35 bg-primary/10 px-5 py-2 text-[11px] font-heading font-bold uppercase tracking-wider text-primary transition-all hover:bg-primary/20"
           >
             Go to Racket →
           </Link>
