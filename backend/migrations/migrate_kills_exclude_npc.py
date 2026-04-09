@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-One-time migration: for all users without total_kills_excludes_npc_v1,
-subtract hitlist NPC kills (minus robot bodyguard kills) from total_kills
-and set the flag so the profile shows only real player + robot bodyguard kills.
-Safe to run multiple times (idempotent — skips users that already have the flag).
+Migration: recompute total_kills for ALL users by counting actual kills
+from attack_attempts (player kills + robot bodyguard kills only).
+This is the source of truth — no formula guessing needed.
+Safe to re-run (overwrites total_kills with the correct count each time).
 """
 
 import asyncio
@@ -18,44 +18,48 @@ async def migrate():
     mongo_url = os.environ.get("MONGO_URL", "mongodb://localhost:27017")
     db_name = os.environ.get("DB_NAME", "mafia_game")
 
-    print("Migration: fix total_kills to exclude hitlist NPC kills")
+    print("Migration: recompute total_kills from attack_attempts")
     print(f"Database: {db_name}\n")
 
     client = AsyncIOMotorClient(mongo_url)
     db = client[db_name]
 
+    # Get all users
     cursor = db.users.find(
-        {"total_kills_excludes_npc_v1": {"$ne": True}},
-        {"_id": 0, "id": 1, "username": 1, "total_kills": 1, "hitlist_npc_kills": 1, "robot_bodyguard_kills": 1},
+        {},
+        {"_id": 0, "id": 1, "username": 1, "total_kills": 1},
     )
 
     updated = 0
-    skipped = 0
+    unchanged = 0
     async for user in cursor:
         uid = user.get("id")
         if not uid:
             continue
-        raw = int(user.get("total_kills") or 0)
-        hn = int(user.get("hitlist_npc_kills") or 0)
-        rbg = int(user.get("robot_bodyguard_kills") or 0)
+        old_total = int(user.get("total_kills") or 0)
 
-        if hn == 0 and rbg == 0:
-            # No hitlist or bodyguard kills — just set the flag
-            await db.users.update_one({"id": uid}, {"$set": {"total_kills_excludes_npc_v1": True}})
-            skipped += 1
-            continue
+        # Count kills from attack_attempts: outcome=killed, target is a real player or robot bodyguard
+        actual_kills = await db.attack_attempts.count_documents({
+            "attacker_id": uid,
+            "outcome": "killed",
+            "$or": [
+                {"target_is_npc": {"$ne": True}},
+                {"is_bodyguard_kill": True},
+            ],
+        })
 
-        # Compute adjusted total: remove hitlist NPC kills, keep robot bodyguard kills
-        adjusted = max(0, raw - hn + rbg)
+        if actual_kills != old_total:
+            print(f"  {user.get('username', uid)}: {old_total} -> {actual_kills}")
+            updated += 1
+        else:
+            unchanged += 1
+
         await db.users.update_one(
             {"id": uid},
-            {"$set": {"total_kills": adjusted, "total_kills_excludes_npc_v1": True}},
+            {"$set": {"total_kills": actual_kills, "total_kills_excludes_npc_v1": True}},
         )
-        if adjusted != raw:
-            print(f"  {user.get('username', uid)}: {raw} -> {adjusted} (hn={hn}, rbg={rbg})")
-        updated += 1
 
-    print(f"\nAdjusted {updated} user(s), flagged {skipped} user(s) with no NPC kills.")
+    print(f"\nFixed {updated} user(s), {unchanged} already correct.")
     client.close()
     print("Done.")
 
