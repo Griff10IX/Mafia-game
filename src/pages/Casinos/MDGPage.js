@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
-import { Zap, PlusCircle, Dices, Bot, TrendingUp, TrendingDown } from 'lucide-react';
+import { Zap, PlusCircle, Dices, Bot, TrendingUp, TrendingDown, Clock, Users, Trophy, Skull } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
@@ -11,6 +11,25 @@ const MDG_STYLES = `
   .mdg-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
   @keyframes mdg-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
   .mdg-auto-badge { animation: mdg-pulse 2s ease-in-out infinite; }
+
+  @keyframes mdg-dice-spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+  @keyframes mdg-dice-bounce { 0%,100% { transform: translateY(0) rotate(-8deg); } 50% { transform: translateY(-4px) rotate(8deg); } }
+  @keyframes mdg-glow-pulse { 0%,100% { box-shadow: 0 0 8px rgba(245,158,11,0.15), inset 0 0 8px rgba(245,158,11,0.05); } 50% { box-shadow: 0 0 20px rgba(245,158,11,0.3), inset 0 0 15px rgba(245,158,11,0.1); } }
+  @keyframes mdg-shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+  @keyframes mdg-slot-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+  @keyframes mdg-countdown-tick { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
+  @keyframes mdg-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+  @keyframes mdg-pot-glow { 0%,100% { text-shadow: 0 0 6px rgba(245,158,11,0.3); } 50% { text-shadow: 0 0 16px rgba(245,158,11,0.6); } }
+
+  .mdg-dice-bounce { animation: mdg-dice-bounce 2.5s ease-in-out infinite; }
+  .mdg-glow-panel { animation: mdg-glow-pulse 3s ease-in-out infinite; }
+  .mdg-shimmer-bar { background: linear-gradient(90deg, transparent 0%, rgba(245,158,11,0.15) 50%, transparent 100%); background-size: 200% 100%; animation: mdg-shimmer 2.5s linear infinite; }
+  .mdg-countdown-tick { animation: mdg-countdown-tick 1s ease-in-out infinite; }
+  .mdg-float { animation: mdg-float 3s ease-in-out infinite; }
+  .mdg-pot-glow { animation: mdg-pot-glow 2s ease-in-out infinite; }
+
+  .mdg-stat-card { position: relative; overflow: hidden; }
+  .mdg-stat-card::before { content: ''; position: absolute; inset: 0; background: linear-gradient(135deg, rgba(245,158,11,0.06) 0%, transparent 60%); pointer-events: none; }
 `;
 
 function formatMoney(n) {
@@ -97,6 +116,94 @@ function formatRollMode(game) {
     label: 'Manual roll',
     detail: `Host rolls when ready — or when the table fills (${n}/${maxP}).`,
   };
+}
+
+function DiceArt({ size = 32, className = '' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 40 40" fill="none" className={className}>
+      <rect x="4" y="4" width="32" height="32" rx="6" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.4" fill="currentColor" fillOpacity="0.06" />
+      <circle cx="13" cy="13" r="2.5" fill="currentColor" fillOpacity="0.6" />
+      <circle cx="27" cy="13" r="2.5" fill="currentColor" fillOpacity="0.6" />
+      <circle cx="20" cy="20" r="2.5" fill="currentColor" fillOpacity="0.6" />
+      <circle cx="13" cy="27" r="2.5" fill="currentColor" fillOpacity="0.6" />
+      <circle cx="27" cy="27" r="2.5" fill="currentColor" fillOpacity="0.6" />
+    </svg>
+  );
+}
+
+function DicePair({ className = '' }) {
+  return (
+    <div className={`flex items-center gap-0.5 ${className}`}>
+      <DiceArt size={28} className="text-amber-400/70 mdg-dice-bounce" />
+      <DiceArt size={24} className="text-amber-500/50 mdg-dice-bounce" />
+    </div>
+  );
+}
+
+function SlotMeter({ filled, total, hasHouse = false, className = '' }) {
+  const displayTotal = hasHouse ? total + 1 : total;
+  const displayFilled = hasHouse ? filled + 1 : filled;
+  const pct = displayTotal > 0 ? (displayFilled / displayTotal) * 100 : 0;
+  const isFull = filled >= total;
+  return (
+    <div className={`flex items-center gap-2 ${className}`}>
+      <div className="flex-1 h-2 rounded-full bg-zinc-800/80 border border-amber-500/20 overflow-hidden relative">
+        <div
+          className={`h-full rounded-full transition-all duration-500 ${isFull ? 'bg-emerald-500' : 'bg-gradient-to-r from-amber-600 to-amber-400'}`}
+          style={{ width: `${pct}%` }}
+        />
+        {!isFull && <div className="absolute inset-0 mdg-shimmer-bar rounded-full" />}
+      </div>
+      <div className="flex gap-0.5">
+        {hasHouse && (
+          <div className="w-1.5 h-3 rounded-sm bg-red-500/80 border border-red-400/40" title="House slot" />
+        )}
+        {Array.from({ length: total }, (_, i) => (
+          <div
+            key={i}
+            className={`w-1.5 h-3 rounded-sm transition-colors duration-300 ${
+              i < filled ? (isFull ? 'bg-emerald-400' : 'bg-amber-400') : 'bg-zinc-700/60'
+            }`}
+          />
+        ))}
+      </div>
+      <span className={`text-[9px] font-heading font-bold tabular-nums ${isFull ? 'text-emerald-400' : 'text-amber-400/80'}`}>
+        {displayFilled}/{displayTotal}
+      </span>
+    </div>
+  );
+}
+
+function HouseIcon({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" className="mdg-float">
+      <path d="M3 21V10L12 3L21 10V21H15V14H9V21H3Z" stroke="currentColor" strokeWidth="1.5" strokeLinejoin="round" fill="currentColor" fillOpacity="0.1" />
+      <rect x="10" y="15" width="4" height="6" rx="0.5" fill="currentColor" fillOpacity="0.3" />
+    </svg>
+  );
+}
+
+function NextCycleCountdown({ deadline, large = false }) {
+  const countdown = useCountdown(deadline);
+  if (!deadline || !countdown) return null;
+  if (large) {
+    return (
+      <div className="flex items-center justify-center gap-2 mt-2">
+        <Clock size={14} className="text-amber-400/60 mdg-countdown-tick" />
+        <span className="text-xs font-heading font-bold text-amber-400">
+          Next games in: <span className="tabular-nums">{countdown}</span>
+        </span>
+      </div>
+    );
+  }
+  return (
+    <div className="flex items-center justify-center gap-1.5">
+      <Clock size={10} className="text-amber-400/50 mdg-countdown-tick" />
+      <span className="text-[8px] font-heading text-amber-400/60 uppercase tracking-wider">
+        Next games in: <span className="font-bold text-amber-400/80 tabular-nums">{countdown}</span>
+      </span>
+    </div>
+  );
 }
 
 export default function MDGPage() {
@@ -231,66 +338,154 @@ export default function MDGPage() {
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="mdg-page">
       <style>{MDG_STYLES}</style>
 
-      <div className="relative mdg-fade-in">
-        <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Pot Game</p>
-        <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">MDG</h1>
-        <p className="text-[10px] text-mutedForeground font-heading italic mt-1">Set a fee, fill spots, one winner takes the pot. Points or money — or both.</p>
+      <div className="relative mdg-fade-in flex items-center justify-between">
+        <div>
+          <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Pot Game</p>
+          <h1 className="text-xl sm:text-2xl font-heading font-bold text-primary tracking-wider uppercase">MDG</h1>
+          <p className="text-[10px] text-mutedForeground font-heading italic mt-1">Set a fee, fill spots, one winner takes the pot. Points or money — or both.</p>
+        </div>
+        <div className="hidden sm:flex items-end gap-1 opacity-30">
+          <DiceArt size={36} className="text-primary" />
+          <DiceArt size={28} className="text-primary/70" />
+        </div>
       </div>
 
       {/* ════ AUTOMATED HOUSE GAMES ════ */}
-      {autoGames.length > 0 && (
-        <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-amber-500/30 mdg-fade-in`} style={{ animationDelay: '0.02s' }}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
-          <div className="px-3 py-2.5 bg-amber-500/8 border-b border-amber-500/20 flex items-center gap-2">
-            <Bot size={16} className="text-amber-400 mdg-auto-badge" />
+      <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-amber-500/30 mdg-fade-in mdg-glow-panel`} style={{ animationDelay: '0.02s' }}>
+        <div className="h-1 bg-gradient-to-r from-amber-600/0 via-amber-400/60 to-amber-600/0" />
+        <div className="px-4 py-3 bg-gradient-to-br from-amber-500/10 via-amber-600/5 to-transparent border-b border-amber-500/20 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <div className="w-10 h-10 rounded-lg bg-amber-500/15 border border-amber-500/30 flex items-center justify-center">
+                <HouseIcon size={22} />
+              </div>
+              <div className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-amber-500 border border-amber-300 flex items-center justify-center mdg-auto-badge">
+                <Bot size={8} className="text-black" />
+              </div>
+            </div>
             <div>
-              <h2 className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-[0.15em]">House Games</h2>
-              <p className="text-[9px] text-mutedForeground font-heading mt-0.5">Automated — the House puts up the pot and takes a slot in the roll. 3 games every 3 hours.</p>
+              <h2 className="text-xs font-heading font-bold text-amber-400 uppercase tracking-[0.15em]">House Games</h2>
+              <p className="text-[9px] text-amber-200/40 font-heading mt-0.5">The House puts up the pot and takes a slot in every roll</p>
             </div>
           </div>
-          <div className="p-2">
-            <ul className="space-y-0 divide-y divide-amber-500/10">
-              {autoGames.map((g, idx) => (
-                <AutoGameRow
-                  key={g.id}
-                  game={g}
-                  idx={idx}
-                  myUserId={myUserId}
-                  joiningId={joiningId}
-                  onJoin={handleJoin}
-                />
-              ))}
-            </ul>
+          <DicePair />
+        </div>
+
+        {/* Info strip */}
+        <div className="px-3 py-2 bg-amber-500/5 border-b border-amber-500/10 space-y-1.5">
+          <div className="flex items-center justify-center gap-4">
+            <span className="text-[8px] font-heading text-amber-400/50 uppercase tracking-widest">3 games</span>
+            <span className="w-1 h-1 rounded-full bg-amber-500/30" />
+            <span className="text-[8px] font-heading text-amber-400/50 uppercase tracking-widest">every 3 hours</span>
+            <span className="w-1 h-1 rounded-full bg-amber-500/30" />
+            <span className="text-[8px] font-heading text-amber-400/50 uppercase tracking-widest">max 10 players</span>
+          </div>
+          {/* Next cycle countdown */}
+          <NextCycleCountdown deadline={autoStats?.next_cycle} />
+        </div>
+
+        {/* How it works */}
+        <div className="px-3 py-2 border-b border-amber-500/8 bg-zinc-900/50">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[9px] font-heading">
+            <div className="flex items-start gap-2">
+              <div className="w-4 h-4 rounded bg-amber-500/15 flex items-center justify-center shrink-0 mt-0.5">
+                <Dices size={10} className="text-amber-400" />
+              </div>
+              <p className="text-zinc-400"><span className="text-amber-300/80 font-semibold">Entry fee</span> is 10% of the house pot. Fee gets added to the total pot.</p>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="w-4 h-4 rounded bg-emerald-500/15 flex items-center justify-center shrink-0 mt-0.5">
+                <Trophy size={10} className="text-emerald-400" />
+              </div>
+              <p className="text-zinc-400"><span className="text-emerald-300/80 font-semibold">Player wins?</span> They take the entire pot — house pot + all entry fees.</p>
+            </div>
+            <div className="flex items-start gap-2">
+              <div className="w-4 h-4 rounded bg-red-500/15 flex items-center justify-center shrink-0 mt-0.5">
+                <Skull size={10} className="text-red-400" />
+              </div>
+              <p className="text-zinc-400"><span className="text-red-300/80 font-semibold">House wins?</span> The pot is burned — all money is removed from the game. Nobody wins.</p>
+            </div>
           </div>
         </div>
-      )}
+
+        {autoGames.length > 0 ? (
+          <div className="p-2 space-y-2">
+            {autoGames.map((g, idx) => (
+              <AutoGameRow
+                key={g.id}
+                game={g}
+                idx={idx}
+                myUserId={myUserId}
+                joiningId={joiningId}
+                onJoin={handleJoin}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="p-4 text-center">
+            <p className="text-[10px] font-heading text-zinc-500">No house games right now.</p>
+            <NextCycleCountdown deadline={autoStats?.next_cycle} large />
+          </div>
+        )}
+        <div className="h-0.5 bg-gradient-to-r from-amber-600/0 via-amber-400/30 to-amber-600/0" />
+      </div>
 
       {/* ════ HOUSE STATS ════ */}
       {autoStats && autoStats.total_games > 0 && (
-        <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20 mdg-fade-in`} style={{ animationDelay: '0.04s' }}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
-            <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">House Stats</h2>
+        <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-amber-500/20 mdg-fade-in`} style={{ animationDelay: '0.04s' }}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-500/40 to-transparent" />
+          <div className="px-4 py-2.5 bg-gradient-to-r from-amber-500/8 to-transparent border-b border-amber-500/15 flex items-center gap-2">
+            <Trophy size={14} className="text-amber-400/70" />
+            <h2 className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-[0.15em]">House Scoreboard</h2>
           </div>
           <div className="p-3 grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div>
-              <p className="text-[9px] font-heading text-mutedForeground uppercase">Total Games</p>
-              <p className="text-sm font-heading font-bold text-foreground">{(autoStats.total_games ?? 0).toLocaleString()}</p>
+            <div className="mdg-stat-card rounded-lg border border-zinc-700/50 bg-zinc-800/40 p-2.5">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Dices size={11} className="text-zinc-500" />
+                <p className="text-[8px] font-heading text-zinc-500 uppercase tracking-wider">Games Played</p>
+              </div>
+              <p className="text-lg font-heading font-bold text-foreground tabular-nums">{(autoStats.total_games ?? 0).toLocaleString()}</p>
             </div>
-            <div>
-              <p className="text-[9px] font-heading text-mutedForeground uppercase">House Wins</p>
-              <p className="text-sm font-heading font-bold text-amber-400">{(autoStats.house_wins ?? 0).toLocaleString()}</p>
+            <div className="mdg-stat-card rounded-lg border border-amber-500/20 bg-amber-500/5 p-2.5">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Skull size={11} className="text-amber-500/60" />
+                <p className="text-[8px] font-heading text-amber-500/60 uppercase tracking-wider">House Wins</p>
+              </div>
+              <p className="text-lg font-heading font-bold text-amber-400 tabular-nums">{(autoStats.house_wins ?? 0).toLocaleString()}</p>
             </div>
-            <div>
-              <p className="text-[9px] font-heading text-mutedForeground uppercase">Player Wins</p>
-              <p className="text-sm font-heading font-bold text-emerald-400">{(autoStats.player_wins ?? 0).toLocaleString()}</p>
+            <div className="mdg-stat-card rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-2.5">
+              <div className="flex items-center gap-1.5 mb-1">
+                <Users size={11} className="text-emerald-500/60" />
+                <p className="text-[8px] font-heading text-emerald-500/60 uppercase tracking-wider">Player Wins</p>
+              </div>
+              <p className="text-lg font-heading font-bold text-emerald-400 tabular-nums">{(autoStats.player_wins ?? 0).toLocaleString()}</p>
             </div>
-            <div>
-              <p className="text-[9px] font-heading text-mutedForeground uppercase">House Net</p>
-              <p className={`text-sm font-heading font-bold inline-flex items-center gap-1 ${houseNet >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                {houseNet >= 0 ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
-                {formatMoney(Math.abs(houseNet))}
+            <div className={`mdg-stat-card rounded-lg border p-2.5 ${houseNet >= 0 ? 'border-emerald-500/20 bg-emerald-500/5' : 'border-red-500/20 bg-red-500/5'}`}>
+              <div className="flex items-center gap-1.5 mb-1">
+                {houseNet >= 0 ? <TrendingUp size={11} className="text-emerald-500/60" /> : <TrendingDown size={11} className="text-red-500/60" />}
+                <p className={`text-[8px] font-heading uppercase tracking-wider ${houseNet >= 0 ? 'text-emerald-500/60' : 'text-red-500/60'}`}>House Net</p>
+              </div>
+              <p className={`text-lg font-heading font-bold tabular-nums ${houseNet >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                {houseNet >= 0 ? '+' : '-'}{formatMoney(Math.abs(houseNet))}
               </p>
+            </div>
+          </div>
+          {/* Win rate bar */}
+          <div className="px-4 pb-3">
+            <div className="flex items-center gap-2 text-[8px] font-heading text-zinc-500 uppercase mb-1">
+              <span>House {Math.round(((autoStats.house_wins ?? 0) / (autoStats.total_games || 1)) * 100)}%</span>
+              <span className="flex-1" />
+              <span>Players {Math.round(((autoStats.player_wins ?? 0) / (autoStats.total_games || 1)) * 100)}%</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-zinc-800 overflow-hidden flex">
+              <div
+                className="h-full bg-gradient-to-r from-amber-600 to-amber-400 transition-all duration-700"
+                style={{ width: `${((autoStats.house_wins ?? 0) / (autoStats.total_games || 1)) * 100}%` }}
+              />
+              <div
+                className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-700"
+                style={{ width: `${((autoStats.player_wins ?? 0) / (autoStats.total_games || 1)) * 100}%` }}
+              />
             </div>
           </div>
         </div>
@@ -480,60 +675,95 @@ export default function MDGPage() {
 
 function AutoGameRow({ game: g, idx, myUserId, joiningId, onJoin }) {
   const entries = g.entries || [];
+  const maxP = g.max_players || 10;
   const isIn = entries.some((e) => e.user_id === myUserId);
-  const spots = `${entries.length}/${g.max_players || 10}`;
+  const isFull = entries.length >= maxP;
   const countdown = useCountdown(g.auto_roll_deadline);
   const housePot = Number(g.house_pot ?? g.pot_money ?? 0);
+  const currentPot = Number(g.pot_money ?? 0);
   const fee = Number(g.fee_money ?? 0);
+  const odds = entries.length > 0 ? `1/${entries.length + 1}` : '—';
 
   return (
-    <li key={g.id} className={`py-3 px-2 mdg-fade-in`} style={{ animationDelay: `${0.05 + idx * 0.02}s` }}>
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div className="min-w-0 flex-1 space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-500/30 text-amber-400 text-[8px] font-heading font-bold uppercase tracking-wider mdg-auto-badge">
-              <Bot size={10} /> House Game
-            </span>
-            <span className="text-[9px] font-heading text-mutedForeground">{spots} players</span>
+    <div
+      className="rounded-lg border border-amber-500/15 bg-gradient-to-br from-amber-500/5 via-transparent to-transparent p-3 mdg-fade-in"
+      style={{ animationDelay: `${0.05 + idx * 0.04}s` }}
+    >
+      {/* Top row: pot display + join */}
+      <div className="flex items-start justify-between gap-3 mb-2.5">
+        <div className="flex items-center gap-3">
+          <div className="relative">
+            <div className="w-12 h-12 rounded-lg bg-amber-500/10 border border-amber-500/25 flex items-center justify-center">
+              <span className="text-[15px] font-heading font-black text-amber-400 mdg-pot-glow tabular-nums">
+                ${Math.round(housePot / 1_000_000)}M
+              </span>
+            </div>
+            <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 px-1.5 py-0 rounded bg-zinc-900 border border-amber-500/30 text-[7px] font-heading text-amber-300/60 uppercase whitespace-nowrap">
+              house pot
+            </div>
           </div>
-          <p className="text-[10px] font-heading text-foreground">
-            <span className="text-mutedForeground">House Pot: </span>
-            <span className="font-semibold text-amber-400">{formatMoney(housePot)}</span>
-            <span className="text-mutedForeground mx-1.5">·</span>
-            <span className="text-mutedForeground">Entry Fee: </span>
-            <span className="font-semibold text-foreground">{formatMoney(fee)}</span>
-            <span className="text-mutedForeground mx-1.5">·</span>
-            <span className="text-mutedForeground">Total Pot: </span>
-            <span className="font-semibold text-primary">{formatPot(g)}</span>
-          </p>
-          <p className="text-[9px] font-heading text-mutedForeground">
-            {entries.length > 0
-              ? entries.map((e) => e.username).join(' – ') + ` – ${entries.length} Players`
-              : 'No players yet'}
-          </p>
-          {countdown && (
-            <p className="text-[9px] font-heading text-amber-400/80">
-              Rolls in: <span className="font-bold">{countdown}</span>
-              {entries.length >= (g.max_players || 10) && ' (full — rolling!)'}
+          <div>
+            <p className="text-xs font-heading font-bold text-foreground">
+              Total Pot: <span className="text-amber-400 mdg-pot-glow">{formatMoney(currentPot)}</span>
             </p>
-          )}
+            <p className="text-[9px] font-heading text-mutedForeground mt-0.5">
+              Entry: <span className="text-foreground font-semibold">{formatMoney(fee)}</span>
+              <span className="text-zinc-600 mx-1">·</span>
+              Your odds: <span className="text-amber-300/80 font-semibold">{odds}</span>
+            </p>
+          </div>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex flex-col items-end gap-1.5 shrink-0">
           {!isIn && (
             <button
               type="button"
-              disabled={joiningId === g.id}
+              disabled={joiningId === g.id || isFull}
               onClick={() => onJoin(g.id)}
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded border border-amber-500/50 bg-amber-500/20 text-amber-400 font-heading font-bold text-[9px] uppercase hover:bg-amber-500/30 disabled:opacity-50 transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border border-amber-500/50 bg-gradient-to-r from-amber-600/25 to-amber-500/15 text-amber-300 font-heading font-bold text-[10px] uppercase tracking-wider hover:from-amber-600/35 hover:to-amber-500/25 disabled:opacity-40 transition-all shadow-lg shadow-amber-500/5"
             >
-              {joiningId === g.id ? '…' : `Join · ${formatMoney(fee)}`}
+              <Dices size={13} />
+              {joiningId === g.id ? 'Joining…' : isFull ? 'Full' : `Join · ${formatMoney(fee)}`}
             </button>
           )}
           {isIn && (
-            <span className="text-[9px] font-heading text-emerald-400 font-bold uppercase">Entered</span>
+            <div className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-emerald-500/30 bg-emerald-500/10 text-emerald-400 text-[9px] font-heading font-bold uppercase">
+              <svg width="10" height="10" viewBox="0 0 16 16" fill="currentColor"><path d="M13.78 4.22a.75.75 0 0 1 0 1.06l-7 7a.75.75 0 0 1-1.06 0l-3.25-3.25a.75.75 0 0 1 1.06-1.06L6.25 10.69l6.47-6.47a.75.75 0 0 1 1.06 0Z"/></svg>
+              Entered
+            </div>
           )}
         </div>
       </div>
-    </li>
+
+      {/* Slot meter — house counts as slot #1 */}
+      <SlotMeter filled={entries.length} total={maxP} hasHouse className="mb-2" />
+
+      {/* Bottom info row */}
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+        {/* Countdown */}
+        {countdown && (
+          <div className="flex items-center gap-1.5">
+            <Clock size={11} className={`text-amber-500/60 ${!isFull ? 'mdg-countdown-tick' : ''}`} />
+            <span className="text-[9px] font-heading text-amber-400/80">
+              {isFull ? (
+                <span className="text-emerald-400 font-bold">Full — rolling now!</span>
+              ) : (
+                <>Rolls in <span className="font-bold tabular-nums">{countdown}</span></>
+              )}
+            </span>
+          </div>
+        )}
+        {/* Players list — show House as first participant */}
+        <div className="flex items-center gap-1.5">
+          <Users size={11} className="text-zinc-600" />
+          <span className="text-[9px] font-heading text-zinc-500 truncate max-w-[250px]">
+            <span className="text-red-400/80 font-semibold">House</span>
+            {entries.length > 0 && <>, {entries.map((e) => e.username).join(', ')}</>}
+          </span>
+        </div>
+        {entries.length === 0 && (
+          <span className="text-[9px] font-heading text-zinc-600 italic">— be the first player to challenge the House!</span>
+        )}
+      </div>
+    </div>
   );
 }

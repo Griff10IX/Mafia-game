@@ -6,6 +6,19 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-09 02:00 UTC[/color][/b] — [b]Automated House Games in MDG[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] [b]MDG House Games[/b] — the House now runs 3 automated dice games every 3 hours with pots between $5M and $25M. Entry fee is 10% of the pot. The House takes a slot in every roll — if the House wins, the pot is burned and nobody gets paid. If a player wins, they take the entire pot.[/color]
+[*][color=#888888][b]New:[/b] Max 10 players per house game. Games roll automatically when full, or 10 minutes before the next batch of games.[/color]
+[*][color=#888888][b]New:[/b] [b]House Scoreboard[/b] — see how many games the House has won vs players, plus the House's net profit/loss.[/color]
+[*][color=#888888][b]New:[/b] Winners and losers both receive inbox notifications with the result.[/color]
+[*][color=#888888][b]Player action:[/b] Open [b]Casino → MDG[/b] to see and join the House Games at the top of the page.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-09 00:30 UTC[/color][/b] — [b]Distillery: upgrade descriptions, Stock Market speed[/b][/size]
 [quote]
 [list]

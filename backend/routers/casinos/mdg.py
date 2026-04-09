@@ -313,10 +313,12 @@ def register(router):
 
     @router.get("/casino/mdg/auto-stats")
     async def mdg_auto_stats(current_user: dict = Depends(get_current_user_verified)):
-        """Return cumulative house stats for automated MDG games."""
+        """Return cumulative house stats for automated MDG games + next cycle time."""
         doc = await db.mdg_house_stats.find_one({"id": "global"}, {"_id": 0})
         if not doc:
             doc = {"id": "global", "total_games": 0, "house_wins": 0, "player_wins": 0, "total_pot_created": 0, "total_fees_collected": 0, "total_paid_to_winners": 0}
+        now = datetime.now(timezone.utc)
+        doc["next_cycle"] = _next_cycle_boundary(now).isoformat()
         return doc
 
     @router.post("/casino/mdg/create")

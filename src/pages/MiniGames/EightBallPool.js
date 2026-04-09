@@ -1659,7 +1659,7 @@ export default function EightBallPool() {
     }
   };
 
-  const MAX_PULL_PX = 200;
+  const MAX_PULL_PX = 120;
 
   const getPointerOnCanvas = (event) => {
     const canvas = canvasRef.current;
@@ -1682,9 +1682,9 @@ export default function EightBallPool() {
     const dx = ptr.sx - cx;
     const dy = ptr.sy - cy;
     const dist = Math.hypot(dx, dy);
-    if (dist < 3) return;
+    if (dist < 1) return;
     const targetDeg = (Math.atan2(dy, dx) * 180) / Math.PI;
-    const damping = dist < 55 ? 0.25 : 0.5;
+    const damping = dist < 55 ? 0.4 : 0.65;
     setAngleDeg((prev) => prev + (targetDeg - prev) * damping);
   };
 
@@ -1700,7 +1700,7 @@ export default function EightBallPool() {
     const behindY = ptr.sy - cy;
     const pullDist = -(behindX * Math.cos(a) + behindY * Math.sin(a));
     const normalized = Math.max(0.02, Math.min(1, pullDist / MAX_PULL_PX));
-    setPower(Math.pow(normalized, 1.1));
+    setPower(Math.pow(normalized, 0.9));
   };
 
   const updateSpinFromPad = useCallback((event) => {
@@ -1963,7 +1963,7 @@ export default function EightBallPool() {
                           const ccy = tableToCanvasY(cb.y, ptr.canvas.height);
                           const ang = (Number(angleDeg || 0) * Math.PI) / 180;
                           const behind = -((ptr.sx - ccx) * Math.cos(ang) + (ptr.sy - ccy) * Math.sin(ang));
-                          if (behind > 30) {
+                          if (behind > 10) {
                             setAimPhase('pulling');
                             updatePullPower(e);
                             return;
