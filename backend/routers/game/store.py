@@ -779,7 +779,176 @@ async def buy_hitlist_npc_bonus_slot(
     }
 
 
+TOKEN_CASH_DAILY_LIMIT = 25
+
+
+async def _get_cash_price_per_point() -> tuple:
+    """Return (available: bool, price_per_point: float, offer_count: int) from top-3 QT sell offers."""
+    try:
+        offers = await db.trade_sell_offers.find(
+            {"status": "active"},
+        ).sort("created_at", -1).to_list(3)
+    except Exception:
+        return False, 0, 0
+    if not offers:
+        return False, 0, 0
+    per_points = []
+    for o in offers:
+        pts = int(o.get("points") or 0)
+        cost = int(o.get("cost") or 0)
+        if pts > 0 and cost > 0:
+            per_points.append(cost / pts)
+    if not per_points:
+        return False, 0, 0
+    avg = sum(per_points) / len(per_points)
+    return True, avg, len(per_points)
+
+
+def _cash_purchases_today(user: dict) -> int:
+    """Return how many cash token purchases the user has made today (UTC)."""
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    if user.get("token_cash_purchases_date") != today:
+        return 0
+    return int(user.get("token_cash_purchases_today") or 0)
+
+
+async def get_token_cash_price(current_user: dict = Depends(get_current_user)):
+    available, price_per_point, offer_count = await _get_cash_price_per_point()
+    used = _cash_purchases_today(current_user)
+    return {
+        "available": available,
+        "price_per_point": round(price_per_point, 2) if available else 0,
+        "offer_count": offer_count,
+        "cash_purchases_today": used,
+        "cash_purchases_limit": TOKEN_CASH_DAILY_LIMIT,
+    }
+
+
+async def buy_store_token_cash(
+    body: BuyStoreTokenBody,
+    current_user: dict = Depends(get_current_user),
+):
+    from routers.kill.armoury import TOKEN_CONFIG, TOKEN_TYPES
+
+    tt = (body.token_type or "").strip()
+    if tt not in TOKEN_TYPES:
+        raise HTTPException(status_code=400, detail=f"Invalid token_type. Use one of: {list(TOKEN_TYPES)}")
+    if tt not in TOKEN_STORE_UNIT_PRICE_POINTS:
+        raise HTTPException(status_code=400, detail="This token type is not sold in the store")
+
+    amt = int(body.amount)
+    cfg = TOKEN_CONFIG[tt]
+    cf = cfg["count_field"]
+    cur = int(current_user.get(cf) or 0)
+    if cur + amt > STORE_TOKEN_MAX_HELD:
+        raise HTTPException(
+            status_code=400,
+            detail=f"You can hold at most {STORE_TOKEN_MAX_HELD} unactivated tokens of this type (have {cur}).",
+        )
+
+    used = _cash_purchases_today(current_user)
+    if used + amt > TOKEN_CASH_DAILY_LIMIT:
+        raise HTTPException(status_code=400, detail=f"Daily cash purchase limit reached ({TOKEN_CASH_DAILY_LIMIT}/day).")
+
+    available, price_per_point, _ = await _get_cash_price_per_point()
+    if not available:
+        raise HTTPException(status_code=400, detail="Cash purchase unavailable — no active sell offers on Quick Trade.")
+
+    unit_pts = TOKEN_STORE_UNIT_PRICE_POINTS[tt]
+    cash_cost = round(unit_pts * amt * price_per_point)
+    if cash_cost <= 0:
+        raise HTTPException(status_code=400, detail="Calculated cash cost is invalid.")
+
+    money_balance = float(current_user.get("money") or 0)
+    if money_balance < cash_cost:
+        raise HTTPException(status_code=400, detail=f"Insufficient cash. Need ${cash_cost:,.0f}, have ${money_balance:,.0f}.")
+
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    filt = {
+        "id": current_user["id"],
+        "money": {"$gte": cash_cost},
+        **_token_count_lte_atom_filter(cf, STORE_TOKEN_MAX_HELD - amt),
+    }
+    inc = {"money": -cash_cost, cf: amt, "token_cash_purchases_today": amt}
+    result = await db.users.update_one(
+        filt,
+        {"$inc": inc, "$set": {"token_cash_purchases_date": today}},
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Purchase failed (balance or token cap). Try again.")
+
+    await log_activity(
+        current_user["id"], current_user.get("username", "?"), "store_purchase",
+        {"item": f"token-cash:{tt}", "amount": amt, "cash_cost": cash_cost, "price_per_point": round(price_per_point, 2)},
+    )
+    return {
+        "message": f"+{amt} {tt.replace('_', ' ')} token(s) for ${cash_cost:,.0f}",
+        "cost_cash": cash_cost,
+        "token_type": tt,
+        "amount": amt,
+        "cash_purchases_today": used + amt,
+    }
+
+
+async def buy_store_token_bundle_cash(
+    body: BuyStoreTokenBundleBody,
+    current_user: dict = Depends(get_current_user),
+):
+    bid = (body.bundle_id or "").strip()
+    if bid not in TOKEN_STORE_BUNDLES:
+        raise HTTPException(status_code=400, detail=f"Unknown bundle. Options: {list(TOKEN_STORE_BUNDLES.keys())}")
+
+    cost_pts, field_inc = TOKEN_STORE_BUNDLES[bid]
+    for field, add in field_inc.items():
+        cur = int(current_user.get(field) or 0)
+        if cur + add > STORE_TOKEN_MAX_HELD:
+            raise HTTPException(status_code=400, detail=f"Token cap reached for {field.replace('_tokens', '')} (have {cur}).")
+
+    used = _cash_purchases_today(current_user)
+    if used + 1 > TOKEN_CASH_DAILY_LIMIT:
+        raise HTTPException(status_code=400, detail=f"Daily cash purchase limit reached ({TOKEN_CASH_DAILY_LIMIT}/day).")
+
+    available, price_per_point, _ = await _get_cash_price_per_point()
+    if not available:
+        raise HTTPException(status_code=400, detail="Cash purchase unavailable — no active sell offers on Quick Trade.")
+
+    cash_cost = round(cost_pts * price_per_point)
+    if cash_cost <= 0:
+        raise HTTPException(status_code=400, detail="Calculated cash cost is invalid.")
+
+    money_balance = float(current_user.get("money") or 0)
+    if money_balance < cash_cost:
+        raise HTTPException(status_code=400, detail=f"Insufficient cash. Need ${cash_cost:,.0f}, have ${money_balance:,.0f}.")
+
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    inc = {"money": -cash_cost, "token_cash_purchases_today": 1}
+    gte = {"money": {"$gte": cash_cost}}
+    for field, add in field_inc.items():
+        inc[field] = inc.get(field, 0) + add
+    filt = {"id": current_user["id"], **gte}
+    for field, add in field_inc.items():
+        filt.update(_token_count_lte_atom_filter(field, STORE_TOKEN_MAX_HELD - add))
+
+    result = await db.users.update_one(filt, {"$inc": inc, "$set": {"token_cash_purchases_date": today}})
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Purchase failed (balance or token cap). Try again.")
+
+    await log_activity(
+        current_user["id"], current_user.get("username", "?"), "store_purchase",
+        {"item": f"token-bundle-cash:{bid}", "cash_cost": cash_cost, "price_per_point": round(price_per_point, 2)},
+    )
+    return {
+        "message": f"Bundle '{bid}' purchased for ${cash_cost:,.0f}",
+        "cost_cash": cash_cost,
+        "bundle_id": bid,
+        "cash_purchases_today": used + 1,
+    }
+
+
 def register(router):
+    router.add_api_route("/store/token-cash-price", get_token_cash_price, methods=["GET"])
+    router.add_api_route("/store/buy-token-cash", buy_store_token_cash, methods=["POST"])
+    router.add_api_route("/store/buy-token-bundle-cash", buy_store_token_bundle_cash, methods=["POST"])
     router.add_api_route("/store/buy-rank-bar", buy_premium_rank_bar, methods=["POST"])
     router.add_api_route("/store/buy-auto-rank", buy_auto_rank, methods=["POST"])
     router.add_api_route("/store/buy-silencer", buy_silencer, methods=["POST"])

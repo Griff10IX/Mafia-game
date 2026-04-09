@@ -183,12 +183,13 @@ export default function Leaderboard() {
 
   const fetchLeaderboard = useCallback(async (showRefreshSpin = false, silentError = false, background = false) => {
     const dead = viewMode === 'dead';
-    if (!background) setFetchingBoards(true);
     if (!background) {
       const cached = readLbEntry(period, topLimit, dead);
       if (cached?.boards && typeof cached.boards === 'object') {
         setBoards(cached.boards);
         setLastRewardWinners(cached.last_reward_winners ?? null);
+      } else {
+        setFetchingBoards(true);
       }
     }
     let timeoutId;
@@ -225,28 +226,33 @@ export default function Leaderboard() {
   }, [fetchLeaderboard]);
 
   useEffect(() => {
-    // Prewarm opposite view cache for snappier mode switch.
     const dead = viewMode === 'dead';
-    const oppositeCached = readLbEntry(period, topLimit, !dead);
-    if (oppositeCached?.boards) return;
     let cancelled = false;
+    const prewarmTargets = [];
+    if (!readLbEntry(period, topLimit, !dead)?.boards) {
+      prewarmTargets.push({ limit: topLimit, dead: !dead, period });
+    }
+    const oppPeriod = period === 'weekly' ? 'alltime' : 'weekly';
+    if (!readLbEntry(oppPeriod, topLimit, dead)?.boards) {
+      prewarmTargets.push({ limit: topLimit, dead, period: oppPeriod });
+    }
+    if (!prewarmTargets.length) return;
     (async () => {
-      try {
-        const response = await api.get('/leaderboards/top', {
-          params: { limit: topLimit, dead: !dead, period },
-        });
+      for (const params of prewarmTargets) {
         if (cancelled) return;
-        const d = response.data || {};
-        const { last_reward_winners, ...rest } = d;
-        const nextBoards = Object.keys(rest).length ? rest : EMPTY_BOARDS;
-        writeLbEntry(period, topLimit, !dead, nextBoards, last_reward_winners ?? null);
-      } catch {
-        // Silent prewarm only.
+        try {
+          const response = await api.get('/leaderboards/top', { params });
+          if (cancelled) return;
+          const d = response.data || {};
+          const { last_reward_winners, ...rest } = d;
+          const nextBoards = Object.keys(rest).length ? rest : EMPTY_BOARDS;
+          writeLbEntry(params.period, params.limit, params.dead, nextBoards, last_reward_winners ?? null);
+        } catch {
+          // Silent prewarm only.
+        }
       }
     })();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [period, topLimit, viewMode]);
 
   return (

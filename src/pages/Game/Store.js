@@ -162,23 +162,29 @@ const Tab = ({ active, onClick, children, disabled, className = '' }) => (
   </button>
 );
 
-function StorePayWithSelect({ value, onChange }) {
+function StorePayWithSelect({ value, onChange, showCash = false }) {
   return (
     <div className="flex items-center gap-2 flex-wrap">
       <span className="text-[9px] text-zinc-500 font-heading uppercase tracking-wider">Pay with</span>
       <select
         value={value}
-        onChange={(e) => onChange(e.target.value === 'respect' ? 'respect' : 'points')}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v === 'cash' && showCash) onChange('cash');
+          else if (v === 'respect') onChange('respect');
+          else onChange('points');
+        }}
         className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-[10px] text-foreground focus:border-primary/50 focus:outline-none"
       >
         <option value="points">Points</option>
         <option value="respect">Respect points</option>
+        {showCash && <option value="cash">Cash ($)</option>}
       </select>
     </div>
   );
 }
 
-const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, onBuy, loading, disabled, user, payWith = 'auto', children }) => (
+const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, onBuy, loading, disabled, user, payWith = 'auto', cashPrice, children }) => (
   <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
     <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
@@ -197,15 +203,18 @@ const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, onBuy, loadi
           disabled={
             loading
             || disabled
-            || (
-              user
-              && respectPrice != null
-              && (
-                payWith === 'points'
-                  ? (user.points ?? 0) < price
-                  : payWith === 'respect'
-                    ? (user.respect_points ?? 0) < respectPrice
-                    : ((user.points ?? 0) < price && (user.respect_points ?? 0) < respectPrice)
+            || (payWith === 'cash'
+              ? (!cashPrice || (user && (user.money ?? 0) < cashPrice))
+              : (
+                user
+                && respectPrice != null
+                && (
+                  payWith === 'points'
+                    ? (user.points ?? 0) < price
+                    : payWith === 'respect'
+                      ? (user.respect_points ?? 0) < respectPrice
+                      : ((user.points ?? 0) < price && (user.respect_points ?? 0) < respectPrice)
+                )
               )
             )
           }
@@ -213,15 +222,17 @@ const StoreCard = ({ title, Icon, desc, price, respectPrice, owned, onBuy, loadi
         >
           {loading
             ? '...'
-            : respectPrice != null
-              ? (
-                payWith === 'points'
-                  ? `${price} pts`
-                  : payWith === 'respect'
-                    ? `${respectPrice} resp`
-                    : `${price} pts or ${respectPrice} resp`
-              )
-              : `${price} pts`}
+            : payWith === 'cash'
+              ? (cashPrice ? `$${Math.round(cashPrice).toLocaleString()}` : 'Unavailable')
+              : respectPrice != null
+                ? (
+                  payWith === 'points'
+                    ? `${price} pts`
+                    : payWith === 'respect'
+                      ? `${respectPrice} resp`
+                      : `${price} pts or ${respectPrice} resp`
+                )
+                : `${price} pts`}
         </button>
       )}
     </div>
@@ -262,6 +273,30 @@ export default function Store() {
   const [pendingPoints, setPendingPoints] = useState(0);
   const [claimingPending, setClaimingPending] = useState(false);
   const [storePayWith, setStorePayWith] = useState('points');
+  const [cashPricePerPoint, setCashPricePerPoint] = useState(0);
+  const [cashPriceAvailable, setCashPriceAvailable] = useState(false);
+  const [cashPurchasesToday, setCashPurchasesToday] = useState(0);
+  const [cashPurchasesLimit, setCashPurchasesLimit] = useState(25);
+
+  useEffect(() => {
+    if (activeTab !== 'tokens' && storePayWith === 'cash') {
+      setStorePayWith('points');
+    }
+  }, [activeTab, storePayWith]);
+
+  useEffect(() => {
+    if (activeTab === 'tokens' && storePayWith === 'cash') {
+      api.get('/store/token-cash-price').then(({ data }) => {
+        setCashPriceAvailable(data.available);
+        setCashPricePerPoint(data.price_per_point || 0);
+        setCashPurchasesToday(data.cash_purchases_today || 0);
+        setCashPurchasesLimit(data.cash_purchases_limit || 25);
+      }).catch(() => {
+        setCashPriceAvailable(false);
+        setCashPricePerPoint(0);
+      });
+    }
+  }, [activeTab, storePayWith]);
 
   const handleClaimPendingPoints = async () => {
     setClaimingPending(true);
@@ -424,14 +459,15 @@ export default function Store() {
     setCheckingPayment(false);
   };
 
-  const apiBuy = async (path, body, successMsg) => {
+  const apiBuy = async (path, body, successMsg, onSuccess) => {
     if (loading) return;
     setLoading(true);
     try {
-      await api.post(path, body || {});
+      const res = await api.post(path, body || {});
       toast.success(successMsg || 'Done');
       refreshUser();
       fetchData();
+      if (onSuccess) onSuccess(res.data);
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed');
     } finally {
@@ -627,7 +663,7 @@ export default function Store() {
       </div>
       {['upgrades', 'tokens', 'bullets'].includes(activeTab) && (
         <div className="mb-2">
-          <StorePayWithSelect value={storePayWith} onChange={setStorePayWith} />
+          <StorePayWithSelect value={storePayWith} onChange={setStorePayWith} showCash={activeTab === 'tokens'} />
         </div>
       )}
 
@@ -926,6 +962,24 @@ export default function Store() {
 
       {activeTab === 'tokens' && (
         <div className="space-y-6">
+          {storePayWith === 'cash' && (
+            <div className="flex flex-wrap items-center gap-3">
+              {cashPriceAvailable ? (
+                <>
+                  <span className="text-[9px] font-heading text-zinc-500">
+                    Price per point: <span className="text-primary font-bold">${Math.round(cashPricePerPoint).toLocaleString()}</span>
+                    <span className="text-zinc-600 ml-1">(avg of top {cashPriceAvailable ? '≤3' : '0'} QT sell offers)</span>
+                  </span>
+                  <span className="text-[9px] font-heading text-zinc-500">
+                    Daily: <span className={`font-bold ${cashPurchasesToday >= cashPurchasesLimit ? 'text-red-400' : 'text-primary'}`}>{cashPurchasesToday}/{cashPurchasesLimit}</span> used
+                  </span>
+                </>
+              ) : (
+                <span className="text-[9px] font-heading text-red-400/80">No active sell offers on Quick Trade — cash purchase unavailable.</span>
+              )}
+            </div>
+          )}
+
           <div className="space-y-2">
             <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Consumable tokens</h2>
             <p className="text-[9px] text-zinc-500 font-heading italic max-w-2xl">
@@ -935,6 +989,7 @@ export default function Store() {
               {TOKEN_STORE_ITEMS.map((t) => {
                 const held = Number(user?.[t.userKey] ?? 0);
                 const atCap = held >= STORE_TOKEN_MAX_HELD;
+                const tokenCashPrice = cashPriceAvailable ? Math.round(t.price * cashPricePerPoint) : 0;
                 return (
                   <StoreCard
                     key={t.tokenType}
@@ -945,10 +1000,19 @@ export default function Store() {
                     respectPrice={storeRespectForPoints(t.price)}
                     owned={false}
                     loading={loading}
-                    disabled={atCap}
+                    disabled={atCap || (storePayWith === 'cash' && cashPurchasesToday >= cashPurchasesLimit)}
                     user={user}
                     payWith={storePayWith}
-                    onBuy={() => apiBuy(`/store/buy-token?pay_with=${encodeURIComponent(storePayWith)}`, { token_type: t.tokenType, amount: 1 }, `+1 ${t.title}`)}
+                    cashPrice={storePayWith === 'cash' ? tokenCashPrice : undefined}
+                    onBuy={() => {
+                      if (storePayWith === 'cash') {
+                        apiBuy('/store/buy-token-cash', { token_type: t.tokenType, amount: 1 }, `+1 ${t.title}`, (d) => {
+                          if (d?.cash_purchases_today != null) setCashPurchasesToday(d.cash_purchases_today);
+                        });
+                      } else {
+                        apiBuy(`/store/buy-token?pay_with=${encodeURIComponent(storePayWith)}`, { token_type: t.tokenType, amount: 1 }, `+1 ${t.title}`);
+                      }
+                    }}
                   >
                     <p className="text-[10px] text-mutedForeground mb-1">Held: {held}/{STORE_TOKEN_MAX_HELD}</p>
                   </StoreCard>
@@ -960,22 +1024,34 @@ export default function Store() {
           <div className="space-y-2">
             <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Token bundles</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-2">
-              {TOKEN_BUNDLES.map((b) => (
-                <StoreCard
-                  key={b.id}
-                  title={b.title}
-                  Icon={Package}
-                  desc={b.desc}
-                  price={b.price}
-                  respectPrice={storeRespectForPoints(b.price)}
-                  owned={false}
-                  loading={loading}
-                  disabled={!user}
-                  user={user}
-                  payWith={storePayWith}
-                  onBuy={() => apiBuy(`/store/buy-token-bundle?pay_with=${encodeURIComponent(storePayWith)}`, { bundle_id: b.id }, 'Bundle purchased')}
-                />
-              ))}
+              {TOKEN_BUNDLES.map((b) => {
+                const bundleCashPrice = cashPriceAvailable ? Math.round(b.price * cashPricePerPoint) : 0;
+                return (
+                  <StoreCard
+                    key={b.id}
+                    title={b.title}
+                    Icon={Package}
+                    desc={b.desc}
+                    price={b.price}
+                    respectPrice={storeRespectForPoints(b.price)}
+                    owned={false}
+                    loading={loading}
+                    disabled={!user || (storePayWith === 'cash' && cashPurchasesToday >= cashPurchasesLimit)}
+                    user={user}
+                    payWith={storePayWith}
+                    cashPrice={storePayWith === 'cash' ? bundleCashPrice : undefined}
+                    onBuy={() => {
+                      if (storePayWith === 'cash') {
+                        apiBuy('/store/buy-token-bundle-cash', { bundle_id: b.id }, 'Bundle purchased', (d) => {
+                          if (d?.cash_purchases_today != null) setCashPurchasesToday(d.cash_purchases_today);
+                        });
+                      } else {
+                        apiBuy(`/store/buy-token-bundle?pay_with=${encodeURIComponent(storePayWith)}`, { bundle_id: b.id }, 'Bundle purchased');
+                      }
+                    }}
+                  />
+                );
+              })}
             </div>
           </div>
         </div>

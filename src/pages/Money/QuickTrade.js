@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Coins, ArrowLeftRight, Users, Building2, TrendingUp, TrendingDown, HelpCircle, Zap } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
@@ -93,16 +93,17 @@ export default function QuickTrade() {
   };
 
   // Auto-fill offer/cost from existing offers: buy = highest + 1, sell = lowest - 1 (only when field is empty)
+  const didAutoFill = useRef({ buy: false, sell: false });
   useEffect(() => {
-    if (buyOffers.length && buyOffer === '') {
+    if (buyOffers.length && !didAutoFill.current.buy) {
       const rates = buyOffers.map((o) => (Number(o.cost) || 0) / (Number(o.points) || 1)).filter((r) => r > 0);
-      if (rates.length) setBuyOffer(String(Math.round(Math.max(...rates) + 1)));
+      if (rates.length) { setBuyOffer(String(Math.round(Math.max(...rates) + 1))); didAutoFill.current.buy = true; }
     }
-    if (sellOffers.length && sellCost === '') {
+    if (sellOffers.length && !didAutoFill.current.sell) {
       const rates = sellOffers.map((o) => (Number(o.money) || 0) / (Number(o.points) || 1)).filter((r) => r > 0);
-      if (rates.length) setSellCost(String(Math.max(1, Math.round(Math.min(...rates) - 1))));
+      if (rates.length) { setSellCost(String(Math.max(1, Math.round(Math.min(...rates) - 1)))); didAutoFill.current.sell = true; }
     }
-  }, [buyOffers, sellOffers, buyOffer, sellCost]);
+  }, [buyOffers, sellOffers]);
 
   const handleCreateSellOffer = async () => {
     if (!sellPoints || !sellCost) {
@@ -112,6 +113,11 @@ export default function QuickTrade() {
     const parsedSellPoints = parseInt(String(sellPoints).replace(/,/g, ''), 10) || 0;
     if (parsedSellPoints < 2) {
       toast.error('Minimum 2 points (1 point fee leaves 0 listed).');
+      return;
+    }
+    const perPoint = parseFloat(sellCost) || 0;
+    if (perPoint < 50000) {
+      toast.error('Minimum price is $50,000 per point.');
       return;
     }
     const count = Math.max(1, Math.min(10, parseInt(String(sellOfferCount), 10) || 1));
@@ -152,6 +158,11 @@ export default function QuickTrade() {
     const parsedBuyPoints = parseInt(String(buyPoints).replace(/,/g, ''), 10) || 0;
     if (parsedBuyPoints < 2) {
       toast.error('Minimum 2 points (1 point fee leaves 0 listed).');
+      return;
+    }
+    const perPoint = parseFloat(buyOffer) || 0;
+    if (perPoint < 50000) {
+      toast.error('Minimum price is $50,000 per point.');
       return;
     }
     const count = Math.max(1, Math.min(10, parseInt(String(buyOfferCount), 10) || 1));
@@ -517,191 +528,6 @@ export default function QuickTrade() {
         </section>
       </div>
 
-      {/* Token offers: sell for points or cash */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
-            <div className="flex items-center gap-2">
-              <Zap className="w-5 h-5 text-primary" />
-              <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Sell tokens (points or cash)</h2>
-            </div>
-          </div>
-          <div className="p-4 space-y-2.5">
-            <div>
-              <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">Token type</label>
-              <select
-                value={tokenType}
-                onChange={(e) => setTokenType(e.target.value)}
-                className="w-full bg-zinc-900 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none cursor-pointer capitalize"
-              >
-                {TOKEN_TYPES.map((t) => {
-                  const b = tokenBalances?.[t];
-                  const held = b?.total;
-                  const tradable = b?.sellable;
-                  const label =
-                    held != null && tradable != null
-                      ? `${formatTokenName(t)} (${held} held · ${tradable} tradable)`
-                      : formatTokenName(t);
-                  return (
-                    <option key={t} value={t} className="bg-zinc-900 text-foreground py-2">
-                      {label}
-                    </option>
-                  );
-                })}
-              </select>
-            </div>
-            {sellTokBal != null && (
-              <div className="flex flex-col gap-1 rounded-md px-3 py-2 bg-zinc-800/40 border border-zinc-700/30 text-[10px] font-heading">
-                <span className="text-mutedForeground">Your balance: <span className="text-foreground font-bold">{sellTokBal.total}</span> total</span>
-                <span className="text-mutedForeground">Referral: <span className="text-foreground font-bold">{sellTokBal.referral}</span> (cannot be sold)</span>
-                {Number(sellTokBal.entertainer || 0) > 0 && (
-                  <span className="text-mutedForeground">Entertainer: <span className="text-foreground font-bold">{sellTokBal.entertainer}</span> (cannot be sold)</span>
-                )}
-                {sellFoundingRaw > 0 && (
-                  <span className="text-mutedForeground">
-                    Founding Member drops: <span className="text-foreground font-bold">{sellFoundingRaw}</span>
-                    {sellFoundingLock > 0
-                      ? ' (cannot be sold on Quick Trade)'
-                      : ' (this type can still be sold — same pool as Game Pass / store)'}
-                  </span>
-                )}
-                <span className="text-primary font-bold">Tradable on Quick Trade: {sellTokBal.sellable}</span>
-              </div>
-            )}
-            <div>
-              <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">Quantity{tokenBalances[tokenType]?.sellable != null ? ` (max ${tokenBalances[tokenType].sellable})` : ''}</label>
-              <FormattedNumberInput
-                value={tokenQuantity}
-                onChange={setTokenQuantity}
-                placeholder="1"
-                className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
-              />
-            </div>
-            <div>
-              <span className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1.5">Price in</span>
-              <div className="flex flex-wrap gap-3 mb-2">
-                <label className="flex items-center gap-2 cursor-pointer text-xs font-heading text-foreground">
-                  <input
-                    type="radio"
-                    name="tokenPriceCurrency"
-                    checked={tokenPriceCurrency === 'points'}
-                    onChange={() => setTokenPriceCurrency('points')}
-                    className="rounded border-zinc-600"
-                  />
-                  Points
-                </label>
-                <label className="flex items-center gap-2 cursor-pointer text-xs font-heading text-foreground">
-                  <input
-                    type="radio"
-                    name="tokenPriceCurrency"
-                    checked={tokenPriceCurrency === 'money'}
-                    onChange={() => setTokenPriceCurrency('money')}
-                    className="rounded border-zinc-600"
-                  />
-                  Cash ($)
-                </label>
-              </div>
-              <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">
-                {tokenPriceCurrency === 'points' ? 'Price (points)' : 'Price (total $ for this listing)'}
-              </label>
-              {tokenPriceCurrency === 'points' ? (
-                <FormattedNumberInput
-                  value={tokenPrice}
-                  onChange={setTokenPrice}
-                  placeholder="e.g. 100"
-                  className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
-                />
-              ) : (
-                <FormattedNumberInput
-                  value={tokenPrice}
-                  onChange={setTokenPrice}
-                  allowDecimals
-                  placeholder={`min ${formatNumber(TOKEN_MIN_CASH_PER_TOKEN)} per token`}
-                  className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
-                />
-              )}
-              {tokenPriceCurrency === 'money' && (
-                <p className="text-[9px] text-mutedForeground font-heading mt-1">
-                  Minimum <span className="text-primary font-bold">${formatNumber(TOKEN_MIN_CASH_PER_TOKEN)}</span> per token
-                  (e.g. {tokenQuantity || '1'} token(s) → min ${formatNumber(TOKEN_MIN_CASH_PER_TOKEN * Math.max(1, parseInt(String(tokenQuantity).replace(/,/g, ''), 10) || 1))}).
-                </p>
-              )}
-            </div>
-            <button
-              onClick={handleCreateTokenOffer}
-              disabled={!tokenPrice || creatingToken}
-              className="w-full px-4 py-2 rounded bg-primary/20 text-primary text-xs font-heading font-bold border border-primary/40 hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {creatingToken
-                ? 'Creating…'
-                : tokenPriceCurrency === 'points'
-                  ? `List ${tokenQuantity || '0'} ${formatTokenName(tokenType)} for ${tokenPrice ? formatNumber(tokenPrice) : '0'} pts`
-                  : `List ${tokenQuantity || '0'} ${formatTokenName(tokenType)} for $${tokenPrice ? formatNumber(tokenPrice) : '0'}`}
-            </button>
-          </div>
-          <div className="qt-art-line text-primary mx-3" />
-        </section>
-        <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
-            <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Token offers</h3>
-          </div>
-          <div className="divide-y divide-zinc-700/30 max-h-96 overflow-y-auto">
-            {tokenOffers.length === 0 ? (
-              <div className="p-6 text-center">
-                <Zap size={28} className="mx-auto text-primary/30 mb-2" />
-                <p className="text-xs text-mutedForeground font-heading">No token offers</p>
-              </div>
-            ) : (
-              tokenOffers.map((offer) => (
-                <div key={offer.id} className={`px-4 py-2.5 flex items-center justify-between gap-3 hover:bg-zinc-800/30 ${offer.is_own ? 'bg-primary/5' : ''}`}>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-heading font-bold text-foreground">
-                        {renderQtTraderLabel(offer, offer.is_own)}
-                      </span>
-                    </div>
-                    <div className="text-[10px] text-mutedForeground mt-0.5">
-                      <span className="text-primary font-bold">{offer.quantity}</span> {formatTokenName(offer.token_type || '')} ·{' '}
-                      {(offer.price_currency || 'points') === 'money' ? (
-                        <>
-                          <span className="text-foreground font-bold">${formatNumber(offer.price_money || 0)}</span> cash
-                        </>
-                      ) : (
-                        <>
-                          <span className="text-foreground font-bold">{formatNumber(offer.price_points)}</span> pts
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  <div className="shrink-0">
-                    {offer.is_own ? (
-                      <button
-                        type="button"
-                        onClick={() => handleCancelTokenOffer(offer.id)}
-                        className={`px-2.5 py-1 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30 min-h-[36px] sm:min-h-0 ${qtActionBtn}`}
-                      >
-                        Cancel
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => handleAcceptTokenOffer(offer.id)}
-                        className={`px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 min-h-[36px] sm:min-h-0 ${qtActionBtn}`}
-                      >
-                        Accept
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-          <div className="qt-art-line text-primary mx-3" />
-        </section>
-      </div>
-
       {/* Offers Lists */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Sell Points Offers */}
@@ -897,6 +723,191 @@ export default function QuickTrade() {
                   );
                 });
               })()
+            )}
+          </div>
+          <div className="qt-art-line text-primary mx-3" />
+        </section>
+      </div>
+
+      {/* Token offers: sell for points or cash */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
+            <div className="flex items-center gap-2">
+              <Zap className="w-5 h-5 text-primary" />
+              <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Sell tokens (points or cash)</h2>
+            </div>
+          </div>
+          <div className="p-4 space-y-2.5">
+            <div>
+              <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">Token type</label>
+              <select
+                value={tokenType}
+                onChange={(e) => setTokenType(e.target.value)}
+                className="w-full bg-zinc-900 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none cursor-pointer capitalize"
+              >
+                {TOKEN_TYPES.map((t) => {
+                  const b = tokenBalances?.[t];
+                  const held = b?.total;
+                  const tradable = b?.sellable;
+                  const label =
+                    held != null && tradable != null
+                      ? `${formatTokenName(t)} (${held} held · ${tradable} tradable)`
+                      : formatTokenName(t);
+                  return (
+                    <option key={t} value={t} className="bg-zinc-900 text-foreground py-2">
+                      {label}
+                    </option>
+                  );
+                })}
+              </select>
+            </div>
+            {sellTokBal != null && (
+              <div className="flex flex-col gap-1 rounded-md px-3 py-2 bg-zinc-800/40 border border-zinc-700/30 text-[10px] font-heading">
+                <span className="text-mutedForeground">Your balance: <span className="text-foreground font-bold">{sellTokBal.total}</span> total</span>
+                <span className="text-mutedForeground">Referral: <span className="text-foreground font-bold">{sellTokBal.referral}</span> (cannot be sold)</span>
+                {Number(sellTokBal.entertainer || 0) > 0 && (
+                  <span className="text-mutedForeground">Entertainer: <span className="text-foreground font-bold">{sellTokBal.entertainer}</span> (cannot be sold)</span>
+                )}
+                {sellFoundingRaw > 0 && (
+                  <span className="text-mutedForeground">
+                    Founding Member drops: <span className="text-foreground font-bold">{sellFoundingRaw}</span>
+                    {sellFoundingLock > 0
+                      ? ' (cannot be sold on Quick Trade)'
+                      : ' (this type can still be sold — same pool as Game Pass / store)'}
+                  </span>
+                )}
+                <span className="text-primary font-bold">Tradable on Quick Trade: {sellTokBal.sellable}</span>
+              </div>
+            )}
+            <div>
+              <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">Quantity{tokenBalances[tokenType]?.sellable != null ? ` (max ${tokenBalances[tokenType].sellable})` : ''}</label>
+              <FormattedNumberInput
+                value={tokenQuantity}
+                onChange={setTokenQuantity}
+                placeholder="1"
+                className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+              />
+            </div>
+            <div>
+              <span className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1.5">Price in</span>
+              <div className="flex flex-wrap gap-3 mb-2">
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-heading text-foreground">
+                  <input
+                    type="radio"
+                    name="tokenPriceCurrency"
+                    checked={tokenPriceCurrency === 'points'}
+                    onChange={() => setTokenPriceCurrency('points')}
+                    className="rounded border-zinc-600"
+                  />
+                  Points
+                </label>
+                <label className="flex items-center gap-2 cursor-pointer text-xs font-heading text-foreground">
+                  <input
+                    type="radio"
+                    name="tokenPriceCurrency"
+                    checked={tokenPriceCurrency === 'money'}
+                    onChange={() => setTokenPriceCurrency('money')}
+                    className="rounded border-zinc-600"
+                  />
+                  Cash ($)
+                </label>
+              </div>
+              <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">
+                {tokenPriceCurrency === 'points' ? 'Price (points)' : 'Price (total $ for this listing)'}
+              </label>
+              {tokenPriceCurrency === 'points' ? (
+                <FormattedNumberInput
+                  value={tokenPrice}
+                  onChange={setTokenPrice}
+                  placeholder="e.g. 100"
+                  className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+                />
+              ) : (
+                <FormattedNumberInput
+                  value={tokenPrice}
+                  onChange={setTokenPrice}
+                  allowDecimals
+                  placeholder={`min ${formatNumber(TOKEN_MIN_CASH_PER_TOKEN)} per token`}
+                  className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+                />
+              )}
+              {tokenPriceCurrency === 'money' && (
+                <p className="text-[9px] text-mutedForeground font-heading mt-1">
+                  Minimum <span className="text-primary font-bold">${formatNumber(TOKEN_MIN_CASH_PER_TOKEN)}</span> per token
+                  (e.g. {tokenQuantity || '1'} token(s) → min ${formatNumber(TOKEN_MIN_CASH_PER_TOKEN * Math.max(1, parseInt(String(tokenQuantity).replace(/,/g, ''), 10) || 1))}).
+                </p>
+              )}
+            </div>
+            <button
+              onClick={handleCreateTokenOffer}
+              disabled={!tokenPrice || creatingToken}
+              className="w-full px-4 py-2 rounded bg-primary/20 text-primary text-xs font-heading font-bold border border-primary/40 hover:bg-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {creatingToken
+                ? 'Creating…'
+                : tokenPriceCurrency === 'points'
+                  ? `List ${tokenQuantity || '0'} ${formatTokenName(tokenType)} for ${tokenPrice ? formatNumber(tokenPrice) : '0'} pts`
+                  : `List ${tokenQuantity || '0'} ${formatTokenName(tokenType)} for $${tokenPrice ? formatNumber(tokenPrice) : '0'}`}
+            </button>
+          </div>
+          <div className="qt-art-line text-primary mx-3" />
+        </section>
+        <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
+            <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Token offers</h3>
+          </div>
+          <div className="divide-y divide-zinc-700/30 max-h-96 overflow-y-auto">
+            {tokenOffers.length === 0 ? (
+              <div className="p-6 text-center">
+                <Zap size={28} className="mx-auto text-primary/30 mb-2" />
+                <p className="text-xs text-mutedForeground font-heading">No token offers</p>
+              </div>
+            ) : (
+              tokenOffers.map((offer) => (
+                <div key={offer.id} className={`px-4 py-2.5 flex items-center justify-between gap-3 hover:bg-zinc-800/30 ${offer.is_own ? 'bg-primary/5' : ''}`}>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-heading font-bold text-foreground">
+                        {renderQtTraderLabel(offer, offer.is_own)}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-mutedForeground mt-0.5">
+                      <span className="text-primary font-bold">{offer.quantity}</span> {formatTokenName(offer.token_type || '')} ·{' '}
+                      {(offer.price_currency || 'points') === 'money' ? (
+                        <>
+                          <span className="text-foreground font-bold">${formatNumber(offer.price_money || 0)}</span> cash
+                        </>
+                      ) : (
+                        <>
+                          <span className="text-foreground font-bold">{formatNumber(offer.price_points)}</span> pts
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <div className="shrink-0">
+                    {offer.is_own ? (
+                      <button
+                        type="button"
+                        onClick={() => handleCancelTokenOffer(offer.id)}
+                        className={`px-2.5 py-1 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30 min-h-[36px] sm:min-h-0 ${qtActionBtn}`}
+                      >
+                        Cancel
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleAcceptTokenOffer(offer.id)}
+                        className={`px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 min-h-[36px] sm:min-h-0 ${qtActionBtn}`}
+                      >
+                        Accept
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))
             )}
           </div>
           <div className="qt-art-line text-primary mx-3" />

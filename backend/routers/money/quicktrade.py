@@ -176,6 +176,9 @@ async def create_sell_offer(offer: CreateSellOffer, current_user: dict = Depends
     username = current_user.get("username", "Unknown")
     if offer.points <= 0 or offer.cost <= 0:
         raise HTTPException(status_code=400, detail="Points and cost must be positive")
+    per_point = offer.cost / offer.points
+    if per_point < 50_000:
+        raise HTTPException(status_code=400, detail="Minimum price is $50,000 per point")
     active_offers = await db.trade_sell_offers.count_documents({"user_id": user_id, "status": "active"})
     if active_offers >= 10:
         raise HTTPException(status_code=400, detail="Maximum 10 offers at once (normal + anonymous combined)")
@@ -698,6 +701,9 @@ async def create_buy_offer(offer: CreateBuyOffer, current_user: dict = Depends(g
     username = current_user.get("username", "Unknown")
     if offer.points <= 0 or offer.offer <= 0:
         raise HTTPException(status_code=400, detail="Points and offer must be positive")
+    per_point = offer.offer / offer.points
+    if per_point < 50_000:
+        raise HTTPException(status_code=400, detail="Minimum price is $50,000 per point")
     active_offers = await db.trade_buy_offers.count_documents({"user_id": user_id, "status": "active"})
     if active_offers >= 10:
         raise HTTPException(status_code=400, detail="Maximum 10 offers at once (normal + anonymous combined)")
