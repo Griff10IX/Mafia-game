@@ -2262,27 +2262,104 @@ def _sports_stats_threshold_dt(settled_after_iso: Optional[str]) -> Optional[dat
         dt = datetime.fromisoformat(raw)
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
-        return dt
+        return dt.astimezone(timezone.utc)
     except Exception:
         return None
 
 
-async def compute_sports_betting_stats(uid: str, settled_after_iso: Optional[str] = None) -> dict:
-    """Aggregate sports bet stats. If settled_after_iso is set, only bets with settled_at/created_at on or after that instant.
+def _sports_bet_datetime(val) -> Optional[datetime]:
+    """Normalize sports_bets created_at / settled_at (BSON datetime or ISO string)."""
+    if val is None:
+        return None
+    if isinstance(val, datetime):
+        dt = val
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc)
+    if isinstance(val, str):
+        s = val.strip()
+        if not s:
+            return None
+        try:
+            dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
+        except Exception:
+            return None
+    return None
 
-    Uses $expr + $toDate so comparisons work whether sports_bets stores timestamps as ISO strings or BSON dates."""
+
+async def compute_sports_betting_stats(uid: str, settled_after_iso: Optional[str] = None) -> dict:
+    """Aggregate sports bet stats. If settled_after_iso is set, only rows on/after that instant.
+
+    Period stats are computed in Python so BSON datetimes, ISO strings, and reset times always compare
+    correctly (Mongo $expr/$toDate is unreliable across versions and string shapes)."""
     threshold_dt = _sports_stats_threshold_dt(settled_after_iso)
     use_period = threshold_dt is not None
 
-    base_settled: Dict[str, Any] = {"user_id": uid}
+    u = await db.users.find_one({"id": uid}, {"sports_current_win_streak": 1, "sports_best_win_streak": 1})
+    current_win_streak = int((u or {}).get("sports_current_win_streak", 0))
+    best_win_streak = int((u or {}).get("sports_best_win_streak", 0))
+
     if use_period:
-        base_settled["$expr"] = {"$gte": [{"$toDate": "$settled_at"}, threshold_dt]}
-    settled_match = {**base_settled, "status": {"$in": ["won", "lost"]}}
+        docs = await db.sports_bets.find(
+            {"user_id": uid},
+            {"_id": 0, "status": 1, "stake": 1, "odds": 1, "created_at": 1, "settled_at": 1},
+        ).to_list(10000)
+
+        won_count = 0
+        lost_count = 0
+        bets_placed_count = 0
+        winnings = 0
+        losses = 0
+        biggest_win = 0
+        biggest_loss = 0
+
+        for b in docs:
+            ca = _sports_bet_datetime(b.get("created_at"))
+            if ca is not None and ca >= threshold_dt:
+                bets_placed_count += 1
+
+            st = (b.get("status") or "").strip()
+            if st not in ("won", "lost"):
+                continue
+            # Prefer settled_at; fall back to created_at for older rows missing settlement time
+            sa = _sports_bet_datetime(b.get("settled_at")) or _sports_bet_datetime(b.get("created_at"))
+            if sa is None or sa < threshold_dt:
+                continue
+
+            stake = int(b.get("stake") or 0)
+            odds = float(b.get("odds") or 1)
+            if st == "won":
+                won_count += 1
+                w = int(stake * odds)
+                winnings += w
+                biggest_win = max(biggest_win, w)
+            else:
+                lost_count += 1
+                losses += stake
+                biggest_loss = max(biggest_loss, stake)
+
+        total_settled = won_count + lost_count
+        win_pct = round(100 * won_count / total_settled, 1) if total_settled else 0
+        profit_loss = winnings - losses
+
+        return {
+            "total_bets_placed": bets_placed_count,
+            "total_bets_won": won_count,
+            "total_bets_lost": lost_count,
+            "win_pct": win_pct,
+            "profit_loss": profit_loss,
+            "biggest_win": biggest_win,
+            "biggest_loss": biggest_loss,
+            "current_win_streak": current_win_streak,
+            "best_win_streak": best_win_streak,
+        }
+
+    settled_match = {"user_id": uid, "status": {"$in": ["won", "lost"]}}
     won_match: Dict[str, Any] = {"user_id": uid, "status": "won"}
     lost_match: Dict[str, Any] = {"user_id": uid, "status": "lost"}
-    if use_period:
-        won_match["$expr"] = {"$gte": [{"$toDate": "$settled_at"}, threshold_dt]}
-        lost_match["$expr"] = {"$gte": [{"$toDate": "$settled_at"}, threshold_dt]}
     pipeline = [
         {"$match": settled_match},
         {"$group": {"_id": None, "total_stake": {"$sum": "$stake"}, "won_count": {"$sum": {"$cond": [{"$eq": ["$status", "won"]}, 1, 0]}}, "lost_count": {"$sum": {"$cond": [{"$eq": ["$status", "lost"]}, 1, 0]}}}},
@@ -2305,10 +2382,7 @@ async def compute_sports_betting_stats(uid: str, settled_after_iso: Optional[str
     profit_loss = winnings - losses
     win_pct = round(100 * won_count / total_placed_settled, 1) if total_placed_settled else 0
 
-    placed_q: Dict[str, Any] = {"user_id": uid}
-    if use_period:
-        placed_q["$expr"] = {"$gte": [{"$toDate": "$created_at"}, threshold_dt]}
-    bets_placed_count = await db.sports_bets.count_documents(placed_q)
+    bets_placed_count = await db.sports_bets.count_documents({"user_id": uid})
 
     biggest_win_doc = await db.sports_bets.find_one(
         won_match,
@@ -2323,10 +2397,6 @@ async def compute_sports_betting_stats(uid: str, settled_after_iso: Optional[str
         sort=[("stake", -1)],
     )
     biggest_loss = int(biggest_loss_doc.get("stake", 0)) if biggest_loss_doc else 0
-
-    u = await db.users.find_one({"id": uid}, {"sports_current_win_streak": 1, "sports_best_win_streak": 1})
-    current_win_streak = int((u or {}).get("sports_current_win_streak", 0))
-    best_win_streak = int((u or {}).get("sports_best_win_streak", 0))
 
     return {
         "total_bets_placed": bets_placed_count,
