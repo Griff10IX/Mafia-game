@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import { Zap, PlusCircle, Dices, Bot, TrendingUp, TrendingDown, Clock, Users, Trophy, Skull } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
@@ -116,6 +117,22 @@ function formatRollMode(game) {
     label: 'Manual roll',
     detail: `Host rolls when ready — or when the table fills (${n}/${maxP}).`,
   };
+}
+
+/** Entry usernames as profile links; `separator` between names (e.g. ' – ' or ', '). */
+function MdgPlayerUsernameLinks({ entries, separator }) {
+  if (!Array.isArray(entries) || entries.length === 0) return null;
+  return entries.map((e, i) => (
+    <span key={e.user_id ?? `${String(e.username)}-${i}`}>
+      {i > 0 ? separator : null}
+      <Link
+        to={`/profile/${encodeURIComponent(e.username)}`}
+        className="text-primary/90 hover:text-primary hover:underline font-medium"
+      >
+        {e.username}
+      </Link>
+    </span>
+  ));
 }
 
 function DiceArt({ size = 32, className = '' }) {
@@ -471,7 +488,6 @@ export default function MDGPage() {
             <ul className="space-y-0 divide-y divide-primary/10">
               {playerGames.map((g, idx) => {
                 const entries = g.entries || [];
-                const playerNames = entries.map((e) => e.username).join(' – ');
                 const isCreator = g.created_by === myUserId;
                 const isStaff = isAdmin || isModerator;
                 const isIn = entries.some((e) => e.user_id === myUserId) || isCreator;
@@ -495,7 +511,14 @@ export default function MDGPage() {
                           <span className="text-mutedForeground">{rollMode.detail}</span>
                         </p>
                         <p className="text-[9px] font-heading text-mutedForeground break-words">
-                          {playerNames || '—'} {entries.length > 0 && `– ${entries.length} Players`}
+                          {entries.length > 0 ? (
+                            <>
+                              <MdgPlayerUsernameLinks entries={entries} separator=" – " />
+                              {` – ${entries.length} Players`}
+                            </>
+                          ) : (
+                            '—'
+                          )}
                           {(g.extra_pot_points > 0 || g.extra_pot_money > 0) && ` – Extra Pot: ${formatExtraPot(g)}`}
                         </p>
                       </div>
@@ -759,7 +782,12 @@ function AutoGameRow({ game: g, idx, myUserId, joiningId, onJoin }) {
           <Users size={11} className="text-zinc-600" />
           <span className="text-[9px] font-heading text-zinc-500 truncate max-w-[250px]">
             <span className="text-red-400/80 font-semibold">House</span>
-            {entries.length > 0 && <>, {entries.map((e) => e.username).join(', ')}</>}
+            {entries.length > 0 && (
+              <>
+                {', '}
+                <MdgPlayerUsernameLinks entries={entries} separator=", " />
+              </>
+            )}
           </span>
         </div>
         {entries.length === 0 && (

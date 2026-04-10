@@ -66,6 +66,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
         { path: '/cars/sell', label: 'Sell Cars' },
         { path: '/money/lottery', label: 'Lottery' },
         { path: '/money/loot-box', label: 'Loot Box' },
+        { path: '/money/crack-safe', label: 'Crack the Safe' },
         { path: '/money/grave-robber', label: 'Grave Robber' },
         { path: '/game-pass', label: 'Game Pass' },
         { path: '/game/store', label: 'Store' },
