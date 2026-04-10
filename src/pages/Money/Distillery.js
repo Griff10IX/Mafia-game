@@ -56,6 +56,19 @@ function intOr(v, fallback = 0) {
   return Number.isFinite(n) ? Math.trunc(n) : fallback;
 }
 
+/** Lets users clear the field while typing; `Number(''||1)` would snap back to 1 (bad on mobile). */
+function onDigitsOnlyOptionalIntChange(setter) {
+  return (e) => {
+    const raw = e.target.value;
+    if (raw === '') {
+      setter('');
+      return;
+    }
+    if (!/^\d+$/.test(raw)) return;
+    setter(Number.parseInt(raw, 10));
+  };
+}
+
 // ── Animated steam wisps ──────────────────────────────────────────────────────
 function SteamWisps({ count = 3 }) {
   return (
@@ -995,8 +1008,12 @@ export default function Distillery() {
                   <input
                     type="number"
                     min="1"
-                    value={maintenancePoints}
-                    onChange={(e) => setMaintenancePoints(Number(e.target.value || 1))}
+                    inputMode="numeric"
+                    value={maintenancePoints === '' ? '' : maintenancePoints}
+                    onChange={onDigitsOnlyOptionalIntChange(setMaintenancePoints)}
+                    onBlur={() =>
+                      setMaintenancePoints((q) => Math.max(1, intOr(q === '' ? NaN : q, 1)))
+                    }
                     className="dist-maint-input"
                   />
                   <GhostBtn
@@ -1073,14 +1090,16 @@ export default function Distillery() {
                 <input
                   type="number"
                   min="1"
-                  value={agingQty}
-                  onChange={(e) => setAgingQty(Number(e.target.value || 1))}
+                  inputMode="numeric"
+                  value={agingQty === '' ? '' : agingQty}
+                  onChange={onDigitsOnlyOptionalIntChange(setAgingQty)}
+                  onBlur={() => setAgingQty((q) => Math.max(1, intOr(q === '' ? NaN : q, 1)))}
                   className="dist-aging-qty-input"
                 />
                 <GoldBtn
                   disabled={saving}
                   onClick={() => run(async () => {
-                    const quantity = Math.max(1, intOr(agingQty, 1));
+                    const quantity = Math.max(1, intOr(agingQty === '' ? NaN : agingQty, 1));
                     const res = await api.post('/illegal-business/distillery/start-aging-batch', { tier: agingTier, quantity });
                     toast.success(res.data?.message || 'Batch started.');
                   })}
