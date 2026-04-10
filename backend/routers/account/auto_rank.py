@@ -488,6 +488,36 @@ async def _send_jail_notification(
     await send_telegram_to_chat(telegram_chat_id, msg, bot_token, username=username)
 
 
+def _format_auto_rank_oc_telegram(username: str, result: dict) -> str:
+    """Build OC outcome text for Telegram (success/fail, payouts, flavor message)."""
+    uname = username or "?"
+    job = (result.get("job_name") or result.get("job_id") or "Heist").strip() or "Heist"
+    if result.get("success"):
+        cash = int(result.get("cash_earned") or 0)
+        rp = int(result.get("rp_earned") or 0)
+        flavor = (result.get("message") or "").strip()
+        parts = [
+            f"**Auto Rank** — {uname}",
+            "",
+            f"**OC** — **Success** · {job}",
+            f"Cash: **${cash:,}**  ·  Rank pts: **{rp:,}**",
+        ]
+        if flavor:
+            parts.append(flavor)
+        return "\n".join(parts)
+    flavor = (result.get("message") or "The heist failed.").strip()
+    parts = [
+        f"**Auto Rank** — {uname}",
+        "",
+        f"**OC** — **Failed** · {job}",
+        flavor,
+        "Cash: **$0**  ·  Rank pts: **0**",
+    ]
+    if result.get("jailed"):
+        parts.append("**Jailed** (cooldown still applied).")
+    return "\n".join(parts)
+
+
 # ─── Booze running ────────────────────────────────────────────────
 
 async def _booze_sell_at_city(db, user, user_id: str, username: str, telegram_chat_id: str, bot_token, now: datetime, lines: list):
@@ -1412,8 +1442,8 @@ async def run_auto_rank_oc_once():
                     retry_until = datetime.fromtimestamp(now.timestamp() + OC_RETRY_AFTER_AFFORD_SECONDS, tz=timezone.utc)
                     await db.users.update_one({"id": u["id"]}, {"$set": {"auto_rank_oc_retry_at": retry_until.isoformat()}})
                     return
-                if chat_id and _auto_rank_telegram_notify(u) and result.get("ran") is True and result.get("success") is True:
-                    msg = f"**Auto Rank** — {u.get('username', '?')}\n\n**OC** — {result.get('message', 'Heist done')}."
+                if chat_id and _auto_rank_telegram_notify(u) and result.get("ran") is True:
+                    msg = _format_auto_rank_oc_telegram(u.get("username") or "?", result)
                     try:
                         await send_telegram_to_chat(chat_id, msg, bot_token, username=u.get("username", "?"))
                     except Exception as e:

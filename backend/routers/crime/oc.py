@@ -687,7 +687,7 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
 
 
 async def run_oc_heist_npc_only(user_id: str, selected_equipment_override: Optional[str] = None) -> dict:
-    """Run one OC heist with self + 3 NPCs if timer is ready and user can afford a job. For Auto Rank. Returns {ran, success, message, cooldown_until, skipped_afford}. When selected_equipment_override is set (e.g. from OC loop), skip user_organised_crime lookup."""
+    """Run one OC heist with self + 3 NPCs if timer is ready and user can afford a job. For Auto Rank. Returns ran, success, message, cooldown_until, skipped_afford, and on run: job_id/job_name; on success: cash_earned, rp_earned; on fail: optional jailed, jail_until. When selected_equipment_override is set (e.g. from OC loop), skip user_organised_crime lookup."""
     user = await db.users.find_one(
         {"id": user_id},
         {"_id": 0, "id": 1, "oc_cooldown_until": 1, "money": 1, "oc_timer_reduced": 1, "oc_reduced_until": 1},
@@ -729,6 +729,12 @@ async def run_oc_heist_npc_only(user_id: str, selected_equipment_override: Optio
         "message": result.get("message", ""),
         "cooldown_until": result.get("cooldown_until"),
         "skipped_afford": False,
+        "cash_earned": result.get("cash_earned"),
+        "rp_earned": result.get("rp_earned"),
+        "jailed": result.get("jailed"),
+        "jail_until": result.get("jail_until"),
+        "job_id": best_job.get("id"),
+        "job_name": best_job.get("name"),
     }
 
 
