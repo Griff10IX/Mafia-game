@@ -162,10 +162,11 @@ const ActionsBar = ({
   pageSummary,
   selectedCount,
   selectedEligibleCount,
-  allDisplayedSelected,
-  noEligibleInView,
+  allBulkSelected,
+  noBulkSelectable,
+  noMeltMatchInList,
   filterActive,
-  displayedEligibleCount,
+  bulkSelectCount,
   onToggleSelectAll,
   onOpenSettings,
   onMelt,
@@ -199,24 +200,33 @@ const ActionsBar = ({
               <button
                 type="button"
                 onClick={onToggleSelectAll}
-                disabled={noEligibleInView}
+                disabled={noBulkSelectable}
+                title={
+                  noBulkSelectable
+                    ? filterActive
+                      ? 'No cars in this list match your melt/scrap rarity filter (or all are listed).'
+                      : 'No unlisted cars in this list.'
+                    : undefined
+                }
                 className={`inline-flex items-center gap-1.5 px-2 py-1 rounded border text-[10px] font-heading font-bold uppercase tracking-wide transition-all ${
-                  noEligibleInView
+                  noBulkSelectable
                     ? 'border-border text-mutedForeground/60 cursor-not-allowed'
                     : 'border-primary/30 text-foreground hover:border-primary/50 hover:bg-primary/10 active:scale-95'
                 }`}
                 data-testid="garage-select-all"
               >
-                {allDisplayedSelected ? (
+                {allBulkSelected ? (
                   <CheckSquare size={12} className="text-primary" />
                 ) : (
                   <Square size={12} className="text-mutedForeground" />
                 )}
-                {noEligibleInView
-                  ? 'No match'
-                  : allDisplayedSelected
-                  ? `Clear${filterActive ? ` (${displayedEligibleCount})` : ''}`
-                  : `Select all${filterActive ? ` (${displayedEligibleCount})` : ''}`}
+                {noBulkSelectable
+                  ? noMeltMatchInList
+                    ? 'No match'
+                    : 'None to select'
+                  : allBulkSelected
+                    ? `Clear${bulkSelectCount > 0 ? ` (${bulkSelectCount})` : ''}`
+                    : `Select all${bulkSelectCount > 0 ? ` (${bulkSelectCount})` : ''}`}
               </button>
               
               <button
@@ -704,13 +714,21 @@ export default function Garage() {
         ? `Page ${safePage + 1} / ${totalPages} · ${pageOffset + 1}–${pageOffset + displayedCars.length} of ${totalCount}`
         : `${totalCount} car${totalCount === 1 ? '' : 's'}`;
 
-  const displayedEligibleForMelt = displayedCars.filter(
-    (c) => !c.listed_for_sale && meltScrapRarities.length > 0 && meltScrapRarities.includes(c.rarity)
-  );
-  const displayedEligibleIds = displayedEligibleForMelt.map((c) => c.user_car_id);
-  const allDisplayedSelected = displayedEligibleIds.length > 0 && displayedEligibleIds.every((id) => selectedCars.includes(id));
   const filterActive = meltScrapRarities.length > 0;
-  const noEligibleInView = filterActive && displayedEligibleIds.length === 0;
+  const bulkSelectIds = useMemo(() => {
+    return allFilteredCars
+      .filter((c) => {
+        if (c.listed_for_sale) return false;
+        if (filterActive) return meltScrapRarities.includes(c.rarity);
+        return true;
+      })
+      .map((c) => c.user_car_id);
+  }, [allFilteredCars, filterActive, meltScrapRarities]);
+  const bulkSelectCount = bulkSelectIds.length;
+  const allBulkSelected =
+    bulkSelectCount > 0 && bulkSelectIds.every((id) => selectedCars.includes(id));
+  const noBulkSelectable = bulkSelectCount === 0;
+  const noMeltMatchInList = filterActive && bulkSelectCount === 0;
 
   const batchLimit = user?.garage_batch_limit ?? 6;
   const selectedCarsForMelt = allFilteredCars.filter(
@@ -724,13 +742,14 @@ export default function Garage() {
       MELT_BULLETS_TOTAL_PAYOUT_MULT_DEN
   );
 
-  const toggleSelectAllDisplayed = () => {
-    if (noEligibleInView) return;
+  const toggleSelectAllBulk = () => {
+    if (bulkSelectCount === 0) return;
     setSelectedCars((prev) => {
-      if (allDisplayedSelected) {
-        return prev.filter((id) => !displayedEligibleIds.includes(id));
+      if (allBulkSelected) {
+        const drop = new Set(bulkSelectIds);
+        return prev.filter((id) => !drop.has(id));
       }
-      return [...new Set([...prev, ...displayedEligibleIds])];
+      return [...new Set([...prev, ...bulkSelectIds])];
     });
   };
 
@@ -792,11 +811,12 @@ export default function Garage() {
             pageSummary={pageSummary}
             selectedCount={selectedCars.length}
             selectedEligibleCount={selectedCarsForMelt.length}
-            allDisplayedSelected={allDisplayedSelected}
-            noEligibleInView={noEligibleInView}
+            allBulkSelected={allBulkSelected}
+            noBulkSelectable={noBulkSelectable}
+            noMeltMatchInList={noMeltMatchInList}
             filterActive={filterActive}
-            displayedEligibleCount={displayedEligibleIds.length}
-            onToggleSelectAll={toggleSelectAllDisplayed}
+            bulkSelectCount={bulkSelectCount}
+            onToggleSelectAll={toggleSelectAllBulk}
             onOpenSettings={openMeltScrapSettings}
             onMelt={meltCars}
             onScrap={scrapCars}
