@@ -60,7 +60,6 @@ FAMILY_CREATE_COST = 75_000_000  # $75M to create a family
 FAMILY_ROLES = ["boss", "underboss", "consigliere", "capo", "soldier", "associate"]
 FAMILY_ROLE_LIMITS = {"boss": 1, "underboss": 1, "consigliere": 1, "capo": 4, "soldier": 15, "associate": 30}
 FAMILY_ROLE_ORDER = {"boss": 0, "underboss": 1, "consigliere": 2, "capo": 3, "soldier": 4, "associate": 5}
-FAMILY_WAR_RECRUITMENT_WINDOW_HOURS = 24
 
 # High command (chain of command top 3) + legacy "don" role stored on some crews
 TOP3_FAMILY_ROLES = ("boss", "don", "underboss", "consigliere")
@@ -1846,35 +1845,7 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
     return {"message": "Family created", "family_id": family_id}
 
 
-async def _family_war_recruitment_open(family_id: str) -> bool:
-    """True if new members may join: not at war, or still within 24h of earliest active war's created_at."""
-    if not family_id:
-        return False
-    wars = await db.family_wars.find(
-        {
-            "$or": [{"family_a_id": family_id}, {"family_b_id": family_id}],
-            "status": {"$in": ["active", "truce_offered"]},
-        },
-        {"_id": 0, "created_at": 1},
-    ).sort("created_at", 1).to_list(20)
-    if not wars:
-        return True
-    ca = wars[0].get("created_at")
-    if not ca:
-        return False
-    try:
-        start = datetime.fromisoformat(str(ca).replace("Z", "+00:00"))
-        if start.tzinfo is None:
-            start = start.replace(tzinfo=timezone.utc)
-    except Exception:
-        return False
-    now = datetime.now(timezone.utc)
-    return now < start + timedelta(hours=FAMILY_WAR_RECRUITMENT_WINDOW_HOURS)
-
-
 async def _add_member_to_family(family_id: str, user_id: str) -> None:
-    if not await _family_war_recruitment_open(family_id):
-        raise HTTPException(status_code=403, detail="family_war_recruitment_closed")
     now = datetime.now(timezone.utc).isoformat()
     await _delete_family_memberships_for_user(user_id)
     await db.family_members.insert_one({
@@ -2117,18 +2088,12 @@ async def families_leave(current_user: dict = Depends(get_current_user)):
     fam = await db.families.find_one({"id": family_id}, {"_id": 0, "boss_id": 1})
     if fam and fam.get("boss_id") == current_user["id"]:
         raise HTTPException(status_code=400, detail="Boss must transfer leadership or dissolve family first")
-    in_war = await _family_in_active_war(family_id)
     variants = _user_id_variants_for_family_members(current_user["id"])
     if variants:
         await db.family_members.delete_many({"family_id": family_id, "user_id": {"$in": variants}})
-    leave_set = {"family_id": None, "family_role": None, **_family_melt_stats_reset_fields()}
-    if in_war:
-        leave_set["war_rat_badge_until"] = (
-            datetime.now(timezone.utc) + timedelta(hours=FAMILY_WAR_RECRUITMENT_WINDOW_HOURS)
-        ).isoformat()
     await db.users.update_one(
         _user_id_filter_for_users_collection(current_user["id"]),
-        {"$set": leave_set},
+        {"$set": {"family_id": None, "family_role": None, **_family_melt_stats_reset_fields()}},
     )
     _invalidate_list_cache()
     _invalidate_my_cache(current_user["id"])

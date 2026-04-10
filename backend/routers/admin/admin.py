@@ -5075,8 +5075,6 @@ def register(router):
                 merged = list(raw)
                 if "admin-world-systems" not in merged:
                     merged.append("admin-world-systems")
-                if "admin-analytics-monitoring" not in merged:
-                    merged.append("admin-analytics-monitoring")
                 out["mod_visible_category_ids"] = merged
             else:
                 out["mod_visible_category_ids"] = list(MOD_VISIBLE_CATEGORY_IDS_DEFAULT)
@@ -7762,34 +7760,19 @@ def register(router):
 
     @router.get("/admin/attacks/logs")
     async def admin_attacks_logs(
-        username: Optional[str] = Query(
-            None,
-            description="If omitted or empty, return recent attempts for all players (newest first).",
-        ),
+        username: str = Query(..., min_length=1),
         limit: int = Query(500, ge=1, le=1000),
         since: Optional[str] = Query(None, description="ISO created_at; return only attempts after this (for live refresh)"),
         current_user: dict = Depends(get_current_user),
     ):
         """
-        Admin/moderator only. Return raw attack_attempts for a user (as attacker or target),
-        or the most recent attempts globally when username is omitted.
+        Admin/moderator only. Return raw attack_attempts for a user (as attacker or target).
         Full post data: who shot whom, outcome, bodyguard, bullets, location, etc.
         Use since= to fetch only new entries (e.g. for live refresh).
         """
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin or moderator access required")
         key = (username or "").strip()
-        if not key or key.lower() in ("*", "all"):
-            q: Dict[str, Any] = {}
-            if since:
-                q["created_at"] = {"$gt": since}
-            effective_limit = min(limit, 100) if since else limit
-            docs = (
-                await db.attack_attempts.find(q, {"_id": 0})
-                .sort("created_at", -1)
-                .to_list(effective_limit)
-            )
-            return {"username": None, "scope": "all", "logs": docs}
         user = await db.users.find_one(
             {"id": key},
             {"_id": 0, "id": 1, "username": 1},
@@ -7818,7 +7801,7 @@ def register(router):
             .sort("created_at", -1)
             .to_list(effective_limit)
         )
-        return {"username": user.get("username"), "scope": "user", "logs": docs}
+        return {"username": user.get("username"), "logs": docs}
 
     def _audit_iso(val: Any) -> str:
         if val is None:
@@ -7851,51 +7834,6 @@ def register(router):
             else:
                 out[k] = v
         return out
-
-    @router.get("/admin/bodyguards/monitoring/summary")
-    async def admin_bodyguards_monitoring_summary(
-        days: int = Query(7, ge=1, le=90),
-        token_limit: int = Query(200, ge=1, le=500),
-        recent_limit: int = Query(120, ge=1, le=300),
-        current_user: dict = Depends(get_current_user),
-    ):
-        """
-        Admin or moderator only. Robot bodyguard session-token integrity failures and recent bodyguard lifecycle rows.
-        """
-        if not _admin_or_mod(current_user):
-            raise HTTPException(status_code=403, detail="Admin or moderator access required")
-        now = datetime.now(timezone.utc)
-        since = now - timedelta(days=int(days))
-        tlim = int(token_limit)
-        rlim = int(recent_limit)
-        token_failures = (
-            await db.hitlist_bodyguard_events.find(
-                {"type": "bodyguard_execute_token_fail", "at": {"$gte": since}},
-                {"_id": 0},
-            )
-            .sort("at", -1)
-            .limit(tlim)
-            .to_list(tlim)
-        )
-        recent_events = (
-            await db.hitlist_bodyguard_events.find(
-                {"at": {"$gte": since}, "type": {"$ne": "bodyguard_execute_token_fail"}},
-                {"_id": 0},
-            )
-            .sort("at", -1)
-            .limit(rlim)
-            .to_list(rlim)
-        )
-        token_failure_count_period = await db.hitlist_bodyguard_events.count_documents(
-            {"type": "bodyguard_execute_token_fail", "at": {"$gte": since}}
-        )
-        return {
-            "generated_at": now.isoformat().replace("+00:00", "Z"),
-            "days": int(days),
-            "token_failure_count_period": token_failure_count_period,
-            "token_failures": token_failures,
-            "recent_events": recent_events,
-        }
 
     @router.get("/admin/bodyguards/audit")
     async def admin_bodyguards_audit(

@@ -2,15 +2,13 @@
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 import asyncio
-import copy
 import logging
-import secrets
 import time
 import uuid
 import random
 from pydantic import BaseModel
 
-from fastapi import Body, Depends, HTTPException, Query, Request
+from fastapi import Depends, HTTPException, Query
 from pymongo import UpdateOne
 from utils.point_provenance import log_points_event
 
@@ -96,78 +94,6 @@ _BODYGUARDS_CACHE_MAX_ENTRIES = 5000
 _hire_locks: dict = {}
 _hire_locks_meta_lock = asyncio.Lock()
 
-BG_ROBOT_TOKEN_FIELD = "bodyguard_robot_tokens"
-
-
-def _safe_compare_execute_token(stored: Optional[str], submitted: Optional[str]) -> bool:
-    """Constant-time compare for server-minted execute tokens (same pattern as attack execute)."""
-    a = (stored or "").strip()
-    b = (submitted or "").strip()
-    if len(a) < 16 or len(a) != len(b):
-        return False
-    try:
-        return secrets.compare_digest(a.encode("utf-8"), b.encode("utf-8"))
-    except Exception:
-        return False
-
-
-async def _ensure_bodyguard_robot_token(user_id: str, key: str) -> Optional[str]:
-    """Mint or return existing token under users.bodyguard_robot_tokens.<key>."""
-    doc = await db.users.find_one({"id": user_id}, {"_id": 0, BG_ROBOT_TOKEN_FIELD: 1})
-    bag = (doc or {}).get(BG_ROBOT_TOKEN_FIELD) or {}
-    t = bag.get(key)
-    if isinstance(t, str) and len(t) >= 16:
-        return t
-    new_t = secrets.token_urlsafe(24)
-    await db.users.update_one(
-        {"id": user_id},
-        {"$set": {f"{BG_ROBOT_TOKEN_FIELD}.{key}": new_t}},
-    )
-    return new_t
-
-
-async def _report_bodyguard_execute_token_failure(
-    http_request: Request,
-    current_user: dict,
-    *,
-    action: str,
-    slot: Optional[int],
-    reason: str,
-) -> None:
-    """Persist integrity event and notify staff (throttled in staff_bot_client_alert)."""
-    try:
-        now = datetime.now(timezone.utc)
-        from utils.staff_bot_client_alert import client_ip_from_request, maybe_notify_staff_bodyguard_execute_token_fail
-
-        ip = client_ip_from_request(http_request)
-        ua = (http_request.headers.get("user-agent") or "").strip()
-        ua_short = (ua[:200] + "…") if len(ua) > 200 else ua
-        oid = (current_user.get("id") or "").strip()
-        await db.hitlist_bodyguard_events.insert_one(
-            {
-                "at": now,
-                "type": "bodyguard_execute_token_fail",
-                "owner_id": oid,
-                "owner_username": (current_user.get("username") or "")[:64],
-                "action": (action or "")[:32],
-                "slot": slot,
-                "reason": (reason or "")[:64],
-                "client_ip": (ip or "")[:64],
-                "user_agent_short": (ua_short or "")[:300],
-            }
-        )
-        await maybe_notify_staff_bodyguard_execute_token_fail(
-            db=db,
-            request=http_request,
-            owner_id=oid,
-            owner_username=current_user.get("username") or "",
-            action=action,
-            slot=slot,
-            reason=reason,
-        )
-    except Exception:
-        logger.exception("_report_bodyguard_execute_token_failure failed")
-
 
 async def _hire_lock(user_id: str):
     async with _hire_locks_meta_lock:
@@ -192,9 +118,6 @@ class BodyguardResponse(BaseModel):
     payment_points: int = 0
     payment_money: int = 0
     payout_weekday: Optional[int] = None  # 0=Monday, 6=Sunday
-    # Server-minted on GET /bodyguards for robot slots (POST must echo); omitted when not applicable.
-    armour_execute_token: Optional[str] = None
-    drop_execute_token: Optional[str] = None
 
 
 class BodyguardInviteRequest(BaseModel):
@@ -208,13 +131,6 @@ class BodyguardInviteRequest(BaseModel):
 class BodyguardHireRequest(BaseModel):
     slot: int
     is_robot: bool
-    execute_token: Optional[str] = None
-
-
-class RobotBodyguardActionBody(BaseModel):
-    """Optional JSON body for robot armour upgrade / drop; ignored for human-only actions where not required."""
-
-    execute_token: Optional[str] = None
 
 
 class AdminBodyguardsGenerateRequest(BaseModel):
@@ -337,54 +253,58 @@ async def get_bodyguards_hire_inflation(current_user: dict = Depends(get_current
     return {"next_hire_inflation_pct": pct, "inflation_window_ends_at": window_ends_at}
 
 
-def _bodyguard_response_to_dict(m: BodyguardResponse) -> dict:
-    if hasattr(m, "model_dump"):
-        return m.model_dump()
-    return m.dict()
-
-
-async def _build_bodyguards_core_payload_dict(uid: str) -> dict:
-    """Slot snapshot for GET /bodyguards without per-request execute tokens (safe to cache)."""
-    bodyguards = await db.bodyguards.find({"user_id": uid}, {"_id": 0}).to_list(10)
-    logger.debug("get_bodyguards found %d raw slots for uid=%s", len(bodyguards), uid)
-    guard_ids = list(
-        {
-            b["bodyguard_user_id"]
-            for b in bodyguards
-            if b.get("bodyguard_user_id")
-        }
-    )
-    guard_users_map = {}
-    if guard_ids:
-        async for u in db.users.find(
-            {"id": {"$in": guard_ids}},
-            {"_id": 0, "id": 1, "username": 1, "rank_points": 1, "armour_level": 1},
-        ):
-            guard_users_map[u["id"]] = u
-    result: List[BodyguardResponse] = []
-    for i in range(4):
-        bg = next((b for b in bodyguards if b.get("slot_number") == i + 1), None)
-        if bg and (bg.get("bodyguard_user_id") or bg.get("is_robot")):
-            username_bg = None
-            rank_name = None
-            is_robot = bg.get("is_robot", False)
-            if not is_robot and bg.get("bodyguard_user_id"):
-                guard_id = bg["bodyguard_user_id"]
-                bg_user = guard_users_map.get(guard_id)
-                username_bg = bg_user.get("username", "Unknown") if bg_user else "Unknown"
-                if bg_user:
-                    _, rank_name = get_rank_info(int(bg_user.get("rank_points", 0) or 0))
-                armour_level = int(bg_user.get("armour_level", 0) or 0) if bg_user else 0
-            else:
-                if bg.get("bodyguard_user_id"):
-                    bg_user = guard_users_map.get(bg["bodyguard_user_id"])
-                    username_bg = bg_user.get("username") if bg_user else None
+async def get_bodyguards(current_user: dict = Depends(get_current_user)):
+    global _bodyguards_cache
+    uid = current_user.get("id")
+    username = current_user.get("username", "?")
+    logger.info("get_bodyguards start uid=%s username=%s", uid, username)
+    try:
+        now = time.monotonic()
+        if uid in _bodyguards_cache:
+            payload, expires = _bodyguards_cache[uid]
+            if now <= expires:
+                logger.debug("get_bodyguards cache hit uid=%s", uid)
+                return payload
+        bodyguards = await db.bodyguards.find({"user_id": uid}, {"_id": 0}).to_list(10)
+        logger.debug("get_bodyguards found %d raw slots for uid=%s", len(bodyguards), uid)
+        guard_ids = list(
+            {
+                b["bodyguard_user_id"]
+                for b in bodyguards
+                if b.get("bodyguard_user_id")
+            }
+        )
+        guard_users_map = {}
+        if guard_ids:
+            async for u in db.users.find(
+                {"id": {"$in": guard_ids}},
+                {"_id": 0, "id": 1, "username": 1, "rank_points": 1, "armour_level": 1},
+            ):
+                guard_users_map[u["id"]] = u
+        result = []
+        for i in range(4):
+            bg = next((b for b in bodyguards if b.get("slot_number") == i + 1), None)
+            if bg and (bg.get("bodyguard_user_id") or bg.get("is_robot")):
+                username_bg = None
+                rank_name = None
+                is_robot = bg.get("is_robot", False)
+                if not is_robot and bg.get("bodyguard_user_id"):
+                    # Human: armour is always the guard's actual user armour (never from the slot doc)
+                    guard_id = bg["bodyguard_user_id"]
+                    bg_user = guard_users_map.get(guard_id)
+                    username_bg = bg_user.get("username", "Unknown") if bg_user else "Unknown"
                     if bg_user:
                         _, rank_name = get_rank_info(int(bg_user.get("rank_points", 0) or 0))
-                username_bg = username_bg or bg.get("robot_name") or f"Robot Guard #{i + 1}"
-                armour_level = int(bg.get("armour_level", 0) or 0)
-            result.append(
-                BodyguardResponse(
+                    armour_level = int(bg_user.get("armour_level", 0) or 0) if bg_user else 0
+                else:
+                    if bg.get("bodyguard_user_id"):
+                        bg_user = guard_users_map.get(bg["bodyguard_user_id"])
+                        username_bg = bg_user.get("username") if bg_user else None
+                        if bg_user:
+                            _, rank_name = get_rank_info(int(bg_user.get("rank_points", 0) or 0))
+                    username_bg = username_bg or bg.get("robot_name") or f"Robot Guard #{i + 1}"
+                    armour_level = int(bg.get("armour_level", 0) or 0)
+                result.append(BodyguardResponse(
                     slot_number=i + 1,
                     is_robot=is_robot,
                     bodyguard_username=username_bg,
@@ -395,11 +315,9 @@ async def _build_bodyguards_core_payload_dict(uid: str) -> dict:
                     payment_points=int(bg.get("payment_points") or 0),
                     payment_money=int(bg.get("payment_money") or 0),
                     payout_weekday=bg.get("payout_weekday"),
-                )
-            )
-        else:
-            result.append(
-                BodyguardResponse(
+                ))
+            else:
+                result.append(BodyguardResponse(
                     slot_number=i + 1,
                     is_robot=False,
                     bodyguard_username=None,
@@ -410,89 +328,38 @@ async def _build_bodyguards_core_payload_dict(uid: str) -> dict:
                     payment_points=0,
                     payment_money=0,
                     payout_weekday=None,
-                )
-            )
-    payload: dict = {"bodyguards": [_bodyguard_response_to_dict(x) for x in result]}
-    user_doc = await db.users.find_one({"id": uid}, {"_id": 0, "bodyguard_last_drop_at": 1})
-    payload["bodyguard_last_drop_at"] = user_doc.get("bodyguard_last_drop_at") if user_doc else None
-    as_guard = await db.bodyguards.find_one(
-        {"bodyguard_user_id": uid, "is_robot": False},
-        {"_id": 0, "user_id": 1},
-    )
-    if as_guard:
-        owner = await db.users.find_one({"id": as_guard["user_id"]}, {"_id": 0, "id": 1, "username": 1})
-        if owner:
-            payload["bodyguard_for"] = {"owner_id": owner["id"], "owner_username": owner.get("username") or "?"}
+                ))
+        if len(_bodyguards_cache) >= _BODYGUARDS_CACHE_MAX_ENTRIES:
+            oldest = next(iter(_bodyguards_cache))
+            _bodyguards_cache.pop(oldest, None)
+        payload = {"bodyguards": result}
+        user_doc = await db.users.find_one({"id": uid}, {"_id": 0, "bodyguard_last_drop_at": 1})
+        payload["bodyguard_last_drop_at"] = user_doc.get("bodyguard_last_drop_at") if user_doc else None
+        as_guard = await db.bodyguards.find_one(
+            {"bodyguard_user_id": uid, "is_robot": False},
+            {"_id": 0, "user_id": 1},
+        )
+        if as_guard:
+            owner = await db.users.find_one({"id": as_guard["user_id"]}, {"_id": 0, "id": 1, "username": 1})
+            if owner:
+                payload["bodyguard_for"] = {"owner_id": owner["id"], "owner_username": owner.get("username") or "?"}
+            else:
+                payload["bodyguard_for"] = {"owner_id": as_guard["user_id"], "owner_username": "?"}
         else:
-            payload["bodyguard_for"] = {"owner_id": as_guard["user_id"], "owner_username": "?"}
-    else:
-        payload["bodyguard_for"] = None
-    profit_cursor = db.bodyguard_payouts.aggregate(
-        [
+            payload["bodyguard_for"] = None
+        # Total profit from being a bodyguard (all-time payouts received), shown whether or not currently under contract
+        profit_cursor = db.bodyguard_payouts.aggregate([
             {"$match": {"guard_id": uid}},
             {"$group": {"_id": None, "points": {"$sum": "$payment_points"}, "money": {"$sum": "$payment_money"}}},
-        ]
-    )
-    profit_list = await profit_cursor.to_list(length=1)
-    if profit_list:
-        payload["bodyguard_profit"] = {
-            "points": int(profit_list[0].get("points") or 0),
-            "money": float(profit_list[0].get("money") or 0),
-        }
-    else:
-        payload["bodyguard_profit"] = {"points": 0, "money": 0.0}
-    return payload
-
-
-async def _attach_robot_bodyguard_execute_tokens(uid: str, payload: dict) -> None:
-    """
-    Mint/return session tokens on the response so POST hire / robot armour / robot drop must echo them.
-    Mutates payload in place (caller should pass a deep copy of cached core).
-    """
-    rows = payload.get("bodyguards") or []
-    filled = sum(1 for r in rows if r.get("bodyguard_username"))
-    if filled < 4 and not payload.get("bodyguard_for"):
-        tok = await _ensure_bodyguard_robot_token(uid, "hire")
-        if tok:
-            payload["robot_hire_execute_token"] = tok
-    for row in rows:
-        if not row.get("is_robot") or not row.get("bodyguard_username"):
-            continue
-        sn = int(row.get("slot_number") or 0)
-        if sn < 1 or sn > 4:
-            continue
-        if int(row.get("armour_level") or 0) < 5:
-            at = await _ensure_bodyguard_robot_token(uid, f"armour_{sn}")
-            if at:
-                row["armour_execute_token"] = at
-        dt = await _ensure_bodyguard_robot_token(uid, f"drop_{sn}")
-        if dt:
-            row["drop_execute_token"] = dt
-
-
-async def get_bodyguards(current_user: dict = Depends(get_current_user)):
-    global _bodyguards_cache
-    uid = current_user.get("id")
-    username = current_user.get("username", "?")
-    logger.info("get_bodyguards start uid=%s username=%s", uid, username)
-    try:
-        now = time.monotonic()
-        core: Optional[dict] = None
-        if uid in _bodyguards_cache:
-            cached, expires = _bodyguards_cache[uid]
-            if now <= expires:
-                logger.debug("get_bodyguards cache hit uid=%s", uid)
-                core = cached
-        if core is None:
-            if len(_bodyguards_cache) >= _BODYGUARDS_CACHE_MAX_ENTRIES:
-                oldest = next(iter(_bodyguards_cache))
-                _bodyguards_cache.pop(oldest, None)
-            core = await _build_bodyguards_core_payload_dict(uid)
-            _bodyguards_cache[uid] = (core, now + _BODYGUARDS_CACHE_TTL_SEC)
-            logger.info("get_bodyguards success uid=%s (cached core)", uid)
-        out = copy.deepcopy(core)
-        await _attach_robot_bodyguard_execute_tokens(uid, out)
-        return out
+        ])
+        profit_list = await profit_cursor.to_list(length=1)
+        if profit_list:
+            payload["bodyguard_profit"] = {"points": int(profit_list[0].get("points") or 0), "money": float(profit_list[0].get("money") or 0)}
+        else:
+            payload["bodyguard_profit"] = {"points": 0, "money": 0.0}
+        _bodyguards_cache[uid] = (payload, now + _BODYGUARDS_CACHE_TTL_SEC)
+        logger.info("get_bodyguards success uid=%s slots=%d", uid, len(result))
+        return payload
     except HTTPException:
         raise
     except Exception as e:
@@ -550,12 +417,7 @@ async def get_bodyguards_stats(current_user: dict = Depends(get_current_user)):
     }
 
 
-async def upgrade_bodyguard_armour(
-    request: Request,
-    slot: int,
-    body: RobotBodyguardActionBody = Body(default=RobotBodyguardActionBody()),
-    current_user: dict = Depends(get_current_user),
-):
+async def upgrade_bodyguard_armour(slot: int, current_user: dict = Depends(get_current_user)):
     if slot < 1 or slot > 4:
         raise HTTPException(status_code=400, detail="Invalid slot")
     bg = await db.bodyguards.find_one({"user_id": current_user["id"], "slot_number": slot}, {"_id": 0})
@@ -563,24 +425,6 @@ async def upgrade_bodyguard_armour(
         raise HTTPException(status_code=404, detail="No bodyguard in that slot")
     if not bg.get("is_robot"):
         raise HTTPException(status_code=400, detail="Human bodyguards use their own armour; it cannot be upgraded")
-    ak = f"armour_{slot}"
-    tok_doc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, BG_ROBOT_TOKEN_FIELD: 1})
-    bag = (tok_doc or {}).get(BG_ROBOT_TOKEN_FIELD) or {}
-    armour_tok = bag.get(ak)
-    if isinstance(armour_tok, str) and len(armour_tok) >= 16:
-        if not _safe_compare_execute_token(armour_tok, body.execute_token):
-            await _report_bodyguard_execute_token_failure(
-                request, current_user, action="armour", slot=slot, reason="token_mismatch"
-            )
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid or expired session token. Open the bodyguards page and try again.",
-            )
-    else:
-        await _report_bodyguard_execute_token_failure(
-            request, current_user, action="armour", slot=slot, reason="no_server_token"
-        )
-        raise HTTPException(status_code=400, detail="Refresh the bodyguards page before upgrading robot armour.")
     cur_level = int(bg.get("armour_level", 0) or 0)
     if cur_level >= 5:
         raise HTTPException(status_code=400, detail="Bodyguard armour is already maxed")
@@ -603,7 +447,6 @@ async def upgrade_bodyguard_armour(
     )
     await db.users.update_one({"id": bg["bodyguard_user_id"]}, {"$set": {"armour_level": new_level}})
     _invalidate_bodyguards_cache(current_user["id"])
-    await db.users.update_one({"id": current_user["id"]}, {"$unset": {f"{BG_ROBOT_TOKEN_FIELD}.{ak}": ""}})
     await db.hitlist_bodyguard_events.insert_one({
         "at": datetime.now(timezone.utc),
         "type": "bodyguard_armour_upgrade",
@@ -646,44 +489,20 @@ async def buy_bodyguard_slot(current_user: dict = Depends(get_current_user)):
     return {"message": f"Bodyguard slot purchased for {cost} points"}
 
 
-async def hire_bodyguard(
-    http_request: Request,
-    hire_request: BodyguardHireRequest,
-    current_user: dict = Depends(get_current_user),
-):
+async def hire_bodyguard(request: BodyguardHireRequest, current_user: dict = Depends(get_current_user)):
+    is_robot = request.is_robot
     async with await _hire_lock(current_user["id"]):
-        return await _do_hire_bodyguard(hire_request, current_user, http_request)
+        return await _do_hire_bodyguard(request.slot, is_robot, current_user)
 
 
-async def _do_hire_bodyguard(hire_request: BodyguardHireRequest, current_user: dict, http_request: Request):
+async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
     if await db.bodyguards.find_one({"bodyguard_user_id": current_user["id"], "is_robot": False}, {"_id": 1}):
         raise HTTPException(
             status_code=400,
             detail="You cannot hire bodyguards while you're working as one. Ask your client to drop you first.",
         )
-    is_robot = hire_request.is_robot
     if not is_robot:
         raise HTTPException(status_code=400, detail="Human bodyguards are temporarily disabled. Use robot bodyguards.")
-    tok_doc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, BG_ROBOT_TOKEN_FIELD: 1})
-    bag = (tok_doc or {}).get(BG_ROBOT_TOKEN_FIELD) or {}
-    hire_tok = bag.get("hire")
-    if isinstance(hire_tok, str) and len(hire_tok) >= 16:
-        if not _safe_compare_execute_token(hire_tok, hire_request.execute_token):
-            await _report_bodyguard_execute_token_failure(
-                http_request, current_user, action="hire", slot=None, reason="token_mismatch"
-            )
-            raise HTTPException(
-                status_code=400,
-                detail="Invalid or expired session token. Open the bodyguards page and try again.",
-            )
-    else:
-        await _report_bodyguard_execute_token_failure(
-            http_request, current_user, action="hire", slot=None, reason="no_server_token"
-        )
-        raise HTTPException(
-            status_code=400,
-            detail="Refresh the bodyguards page before hiring a robot.",
-        )
     fresh = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "bodyguard_slots": 1})
     slots = int((fresh or {}).get("bodyguard_slots") or 0)
     existing_bgs = await db.bodyguards.find(
@@ -784,27 +603,10 @@ async def _do_hire_bodyguard(hire_request: BodyguardHireRequest, current_user: d
         "bodyguard"
     ))
     _invalidate_bodyguards_cache(current_user["id"])
-    occupied_after = occupied | {slot}
-    slots_remaining = 4 - len(occupied_after)
-    next_hire_token: Optional[str] = None
-    if is_robot and slots_remaining > 0:
-        next_hire_token = secrets.token_urlsafe(24)
-        await db.users.update_one(
-            {"id": current_user["id"]},
-            {"$set": {f"{BG_ROBOT_TOKEN_FIELD}.hire": next_hire_token}},
-        )
-    else:
-        await db.users.update_one({"id": current_user["id"]}, {"$unset": {f"{BG_ROBOT_TOKEN_FIELD}.hire": ""}})
     await log_activity(current_user["id"], current_user.get("username", "?"), "bodyguard_hire", {
         "slot": slot, "is_robot": is_robot, "cost": total_cost, "name": robot_name,
     })
-    out = {
-        "message": f"{'Robot bodyguard ' + robot_name if is_robot else 'Human bodyguard slot'} hired for {total_cost} points",
-        "bodyguard_name": robot_name,
-    }
-    if next_hire_token:
-        out["robot_hire_execute_token"] = next_hire_token
-    return out
+    return {"message": f"{'Robot bodyguard ' + robot_name if is_robot else 'Human bodyguard slot'} hired for {total_cost} points", "bodyguard_name": robot_name}
 
 
 def _weekday_name(weekday: int) -> str:
@@ -1739,12 +1541,7 @@ async def run_bodyguard_weekly_payout(database, test_run: bool = False):
     return paid
 
 
-async def drop_bodyguard(
-    request: Request,
-    slot: int,
-    body: RobotBodyguardActionBody = Body(default=RobotBodyguardActionBody()),
-    current_user: dict = Depends(get_current_user),
-):
+async def drop_bodyguard(slot: int, current_user: dict = Depends(get_current_user)):
     """Owner drops a bodyguard (robot or human) from a slot. Payments stop; the slot becomes empty. Once every 3 hours (shared cooldown for all types)."""
     if slot < 1 or slot > 4:
         raise HTTPException(status_code=400, detail="Invalid slot")
@@ -1784,26 +1581,6 @@ async def drop_bodyguard(
     guard_name = guard_user.get("username", "?") if guard_user else "?"
 
     if is_robot:
-        dk = f"drop_{slot}"
-        tok_doc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, BG_ROBOT_TOKEN_FIELD: 1})
-        bag = (tok_doc or {}).get(BG_ROBOT_TOKEN_FIELD) or {}
-        drop_tok = bag.get(dk)
-        if isinstance(drop_tok, str) and len(drop_tok) >= 16:
-            if not _safe_compare_execute_token(drop_tok, body.execute_token):
-                await _report_bodyguard_execute_token_failure(
-                    request, current_user, action="drop", slot=slot, reason="token_mismatch"
-                )
-                await db.users.update_one({"id": current_user["id"]}, {"$unset": {"bodyguard_last_drop_at": ""}})
-                raise HTTPException(
-                    status_code=400,
-                    detail="Invalid or expired session token. Open the bodyguards page and try again.",
-                )
-        else:
-            await _report_bodyguard_execute_token_failure(
-                request, current_user, action="drop", slot=slot, reason="no_server_token"
-            )
-            await db.users.update_one({"id": current_user["id"]}, {"$unset": {"bodyguard_last_drop_at": ""}})
-            raise HTTPException(status_code=400, detail="Refresh the bodyguards page before dropping a robot.")
         # Robot: delete the bodyguard slot doc and the robot user record entirely (is_npc ensures we never delete real players)
         await db.bodyguards.delete_one({"user_id": current_user["id"], "slot_number": slot})
         await db.users.delete_one({"id": guard_id, "is_bodyguard": True, "is_npc": True})
@@ -1844,7 +1621,6 @@ async def drop_bodyguard(
     _invalidate_bodyguards_cache(current_user["id"])
     if not is_robot:
         _invalidate_bodyguards_cache(guard_id)
-    await db.users.update_one({"id": current_user["id"]}, {"$unset": {BG_ROBOT_TOKEN_FIELD: ""}})
     guard_type = "robot" if is_robot else "human"
     await log_activity(current_user["id"], current_user.get("username", "?"), "bodyguard_drop", {
         "slot": slot, "guard": guard_name, "type": guard_type,

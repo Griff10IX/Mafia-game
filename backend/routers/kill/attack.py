@@ -4,7 +4,6 @@ from datetime import datetime, timezone, timedelta
 import math
 import random
 import re
-import secrets
 import uuid
 import os
 import sys
@@ -67,43 +66,7 @@ from routers.money.booze_run import BOOZE_TYPES
 from routers.account.objectives import update_objectives_progress
 from routers.kill.armoury import _best_weapon_for_user, _get_weapon_mastery_pct, MASTERY_MAX_BULLET_REDUCTION_PCT
 from routers.game.families import resolve_family_id
-from utils.staff_bot_client_alert import (
-    maybe_notify_staff_bot_attack_from_ua,
-    maybe_notify_staff_attack_execute_token_fail,
-)
-
-
-def _safe_compare_execute_token(stored: str, submitted: Optional[str]) -> bool:
-    """Constant-time compare for server-minted execute tokens."""
-    a = (stored or "").strip()
-    b = (submitted or "").strip()
-    if len(a) < 16 or len(a) != len(b):
-        return False
-    try:
-        return secrets.compare_digest(a.encode("utf-8"), b.encode("utf-8"))
-    except Exception:
-        return False
-
-
-async def _ensure_execute_token(attacker_id: str, attack_id: str) -> Optional[str]:
-    """
-    Mint a per-attack token when the client can execute (same location as target).
-    Lazy scripts that only POST /attack/execute never see this value until they poll list or status.
-    """
-    doc = await db.attacks.find_one({"id": attack_id, "attacker_id": attacker_id}, {"_id": 0, "execute_token": 1})
-    if not doc:
-        return None
-    t = doc.get("execute_token")
-    if isinstance(t, str) and len(t) >= 16:
-        return t
-    new_t = secrets.token_urlsafe(24)
-    await db.attacks.update_one(
-        {"id": attack_id, "attacker_id": attacker_id, "$or": [{"execute_token": {"$exists": False}}, {"execute_token": None}, {"execute_token": ""}]},
-        {"$set": {"execute_token": new_t}},
-    )
-    doc2 = await db.attacks.find_one({"id": attack_id, "attacker_id": attacker_id}, {"_id": 0, "execute_token": 1})
-    out = (doc2 or {}).get("execute_token")
-    return out if isinstance(out, str) and len(out) >= 16 else new_t
+from utils.staff_bot_client_alert import maybe_notify_staff_bot_attack_from_ua
 
 
 def _parse_iso_datetime(val):
@@ -120,12 +83,16 @@ def _parse_iso_datetime(val):
         return None
 
 
-def _hunt_location_when_search_timer_fires(target_user: Optional[dict], attack: dict) -> Optional[str]:
-    """City when a hunt becomes FOUND. Robot NPC bodyguards: only their users.current_state (no planned/random)."""
+def _hunt_location_when_search_timer_fires(target_user: Optional[dict], attack: dict) -> str:
+    """City when a hunt becomes FOUND. Robot NPC bodyguards are fixed in place — never assign a random city for them."""
     tu = target_user or {}
     if tu.get("is_npc") and tu.get("is_bodyguard"):
-        cs = (tu.get("current_state") or "").strip()
-        return cs if cs else None
+        if tu.get("current_state") in STATES:
+            return tu["current_state"]
+        pl = attack.get("planned_location_state")
+        if pl in STATES:
+            return pl
+        return random.choice(STATES) if STATES else "Chicago"
     return (
         (tu.get("current_state") if tu.get("current_state") in STATES else None)
         or attack.get("planned_location_state")
@@ -134,200 +101,34 @@ def _hunt_location_when_search_timer_fires(target_user: Optional[dict], attack: 
 
 
 def _resolved_target_location(attack: dict, target_user: Optional[dict]) -> Optional[str]:
-    """For a FOUND hunt, use the target user's current_state when valid. Robot bodyguards: only that field, never planned."""
+    """For a FOUND hunt, use the target user's current_state when valid (robot bodyguards do not move)."""
     if not attack or attack.get("status") != "found":
         return attack.get("location_state") if attack else None
     tu = target_user or {}
-    if tu.get("is_npc") and tu.get("is_bodyguard"):
-        cs = (tu.get("current_state") or "").strip()
-        return cs if cs else None
     live = tu.get("current_state")
     if live and live in STATES:
         return live
+    if tu.get("is_npc") and tu.get("is_bodyguard"):
+        pl = attack.get("planned_location_state")
+        if pl in STATES:
+            return pl
     return attack.get("location_state") or attack.get("planned_location_state")
 
 
-_CLIENT_SIGNAL_DETAIL_MAX = 80
-
-
-def _is_automation_ua(user_agent: str) -> bool:
-    u = (user_agent or "").lower()
-    return any(x in u for x in ("selenium", "webdriver", "headless", "puppeteer", "playwright", "phantom"))
-
-
-def _is_script_http_client_ua(user_agent: str) -> bool:
-    """Non-browser HTTP clients, crawlers, and tooling (includes automation UAs)."""
-    if not user_agent or not isinstance(user_agent, str):
-        return False
-    ua = user_agent.lower()
-    if _is_automation_ua(user_agent):
-        return True
-    if "mafiakillbot" in ua or ("bot" in ua and ("kill" in ua or "attack" in ua)):
-        return True
-    if any(x in ua for x in ("bot", "crawler", "spider", "scraper", "fetcher", "curl", "wget", "libwww")):
-        return True
-    if any(x in ua for x in ("python", "requests", "urllib", "aiohttp", "httpx")):
-        return True
-    if any(x in ua for x in ("axios/", "node/", "node.js", "undici", "got/", "superagent")):
-        return True
-    if any(x in ua for x in ("java/", "apache-httpclient", "jetty", "java ")):
-        return True
-    if any(x in ua for x in ("dotnet", ".net", "httpclient", "webrequest")):
-        return True
-    if any(x in ua for x in ("go-http", "go/", "ruby", "faraday", "php/", "php ", "reqwest", "ureq")):
-        return True
-    if any(x in ua for x in ("postman", "insomnia", "rest-assured", "swagger")):
-        return True
-    if "libcurl" in ua:
-        return True
-    if "scrapy" in ua:
-        return True
-    if "httpie" in ua:
-        return True
-    if "powershell" in ua:
-        return True
-    if "winhttp" in ua:
-        return True
-    if "rest-client" in ua or "restclient" in ua:
-        return True
-    if "mechanize" in ua:
-        return True
-    if "apachebench" in ua or ua.startswith("ab/") or "/ab/" in ua:
-        return True
-    if "artillery" in ua:
-        return True
-    if ua.startswith("k6/") or " k6/" in ua:
-        return True
-    if "restsharp" in ua:
-        return True
-    if "okhttp" in ua and "mozilla" not in ua:
-        return True
-    return False
-
-
-def _automation_label_from_ua(user_agent: str) -> str:
-    u = (user_agent or "").lower()
-    if any(x in u for x in ("puppeteer",)):
-        return "Browser automation (Puppeteer)"
-    if any(x in u for x in ("playwright",)):
-        return "Browser automation (Playwright)"
-    if any(x in u for x in ("selenium", "webdriver")):
-        return "Browser automation (Selenium/WebDriver)"
-    if "phantom" in u:
-        return "Browser automation (PhantomJS)"
-    if "headless" in u:
-        return "Browser automation (headless)"
-    return "Browser automation"
-
-
-def _script_label_from_ua(user_agent: str) -> Optional[str]:
-    """Label for script/HTTP client UAs (not used for pure automation-only branch when a finer automation label exists)."""
-    if not user_agent or not isinstance(user_agent, str):
-        return None
-    ua = user_agent.lower()
-    if "mafiakillbot" in ua:
-        return "MafiaKillBot (C# / .NET)"
-    if "bot" in ua and ("kill" in ua or "attack" in ua):
-        return "Custom attack bot"
-    if any(x in ua for x in ("python", "requests", "urllib", "aiohttp", "httpx")):
-        return "Python"
-    if any(x in ua for x in ("axios/", "node/", "node.js", "undici", "got/", "superagent")):
-        return "JavaScript / Node.js"
-    if any(x in ua for x in ("java/", "apache-httpclient", "jetty")):
-        return "Java"
-    if "okhttp" in ua and "mozilla" not in ua:
-        return "OkHttp (non-browser)"
-    if any(x in ua for x in ("dotnet", ".net", "httpclient", "webrequest")):
-        return "C# / .NET"
-    if any(x in ua for x in ("go-http", "go/")):
-        return "Go"
-    if "ruby" in ua or "faraday" in ua:
-        return "Ruby"
-    if "php" in ua:
-        return "PHP"
-    if any(x in ua for x in ("reqwest", "ureq")):
-        return "Rust"
-    if any(x in ua for x in ("curl", "wget", "libwww", "libcurl")):
-        return "curl / wget / libcurl"
-    if any(x in ua for x in ("postman", "insomnia", "rest-assured", "swagger")):
-        return "API client (Postman/Insomnia/etc.)"
-    if any(x in ua for x in ("scrapy", "mechanize")):
-        return "Scraper framework"
-    if "httpie" in ua:
-        return "HTTPie"
-    if "powershell" in ua:
-        return "PowerShell"
-    if "winhttp" in ua:
-        return "WinHTTP"
-    if "rest-client" in ua or "restclient" in ua or "restsharp" in ua:
-        return "REST client library"
-    if "apachebench" in ua or ua.startswith("ab/") or "/ab/" in ua:
-        return "Apache Bench"
-    if "artillery" in ua or ua.startswith("k6/") or " k6/" in ua:
-        return "Load testing tool"
-    if any(x in ua for x in ("crawler", "spider", "scraper", "fetcher")):
-        return "Crawler / scraper"
-    if "bot" in ua:
-        return "Bot (generic)"
-    return "Script / HTTP client"
-
-
-def _classify_attack_client(request: Optional[Request]) -> Dict[str, Any]:
-    """
-    Tiered client classification for staff logs. Staff alerts still use attacker_is_bot True only
-    (script + automation). Suspicious uses header/UA heuristics and may false-positive if proxies strip Sec-Fetch-*.
-    """
-    if not request:
-        return {}
-    ua_raw = (request.headers.get("user-agent") or "").strip()
-    ua_l = ua_raw.lower()
-
-    def cap_detail(s: str) -> str:
-        return (s or "")[:_CLIENT_SIGNAL_DETAIL_MAX]
-
-    if ua_raw and _is_automation_ua(ua_raw):
-        lab = _automation_label_from_ua(ua_raw)
-        return {
-            "attacker_client_signal": "automation",
-            "attacker_is_bot": True,
-            "attacker_bot_label": lab[:120],
-        }
-    if ua_raw and _is_script_http_client_ua(ua_raw):
-        label = _script_label_from_ua(ua_raw) or "Script / HTTP client"
-        return {
-            "attacker_client_signal": "script",
-            "attacker_is_bot": True,
-            "attacker_bot_label": label[:120],
-        }
-
-    suspicious_reason: Optional[str] = None
-    if len(ua_raw) < 12:
-        suspicious_reason = "empty_or_short_ua"
-    elif "mozilla" in ua_l and "chrome" in ua_l:
-        # Browsers sending credentialed XHR/fetch to API usually include Sec-Fetch-Mode; many spoofed scripts omit it.
-        if not request.headers.get("sec-fetch-mode"):
-            suspicious_reason = "chrome_like_no_sec_fetch_mode"
-    if suspicious_reason:
-        return {
-            "attacker_client_signal": "suspicious",
-            "attacker_is_bot": False,
-            "attacker_client_signal_detail": cap_detail(suspicious_reason),
-        }
-
-    return {
-        "attacker_client_signal": "browser",
-        "attacker_is_bot": False,
-    }
-
-
 def _request_meta(request: Optional[Request]) -> dict:
-    """Build dict for attack attempt logging: UA, IP, tiered client classification."""
-    out: Dict[str, Any] = {}
+    """Build dict of user_agent, client_ip, attacker_is_bot, and attacker_bot_label for attack attempt logging."""
+    out = {}
     if request:
-        ua_full = (request.headers.get("user-agent") or "").strip()
-        if ua_full:
-            out["user_agent"] = ua_full[:500]
-        out.update(_classify_attack_client(request))
+        ua = (request.headers.get("user-agent") or "").strip() or None
+        if ua:
+            out["user_agent"] = ua[:500]  # cap length
+        is_bot = _is_bot_ua(out.get("user_agent") or "")
+        out["attacker_is_bot"] = is_bot
+        if is_bot:
+            label = _bot_label_from_ua(out.get("user_agent") or "")
+            if label:
+                out["attacker_bot_label"] = label[:120]
+        # Get client IP (prefer Cloudflare header)
         cf_ip = (request.headers.get("cf-connecting-ip") or "").strip()
         if cf_ip:
             out["client_ip"] = cf_ip[:45]
@@ -340,18 +141,85 @@ def _request_meta(request: Optional[Request]) -> dict:
     return out
 
 
-async def _log_attack_error(
-    attacker_id: str,
-    attacker_username: str,
-    player_message: str,
-    req: Optional[Request] = None,
-    extra: Optional[Dict[str, Any]] = None,
-    request_meta: Optional[Dict[str, Any]] = None,
-):
+def _bot_label_from_ua(user_agent: str) -> Optional[str]:
+    """Return a short human-readable bot type/language label from User-Agent, or None if not a bot."""
+    if not user_agent or not isinstance(user_agent, str):
+        return None
+    ua = user_agent.lower()
+    # Order matters: check specific names first
+    if "mafiakillbot" in ua:
+        return "MafiaKillBot (C# / .NET)"
+    if "bot" in ua and ("kill" in ua or "attack" in ua):
+        return "Custom attack bot"
+    if any(x in ua for x in ("python", "requests", "urllib", "aiohttp", "httpx")):
+        return "Python"
+    if any(x in ua for x in ("axios/", "node/", "node.js", "undici", "got/", "superagent")):
+        return "JavaScript / Node.js"
+    if any(x in ua for x in ("java/", "okhttp", "apache-httpclient", "jetty")):
+        return "Java"
+    if any(x in ua for x in ("dotnet", ".net", "httpclient", "webrequest")):
+        return "C# / .NET"
+    if any(x in ua for x in ("go-http", "go/")):
+        return "Go"
+    if "ruby" in ua or "faraday" in ua:
+        return "Ruby"
+    if "php" in ua:
+        return "PHP"
+    if any(x in ua for x in ("reqwest", "ureq")):
+        return "Rust"
+    if any(x in ua for x in ("selenium", "webdriver", "headless", "puppeteer", "playwright", "phantom")):
+        return "Browser automation (Selenium/Puppeteer/etc.)"
+    if any(x in ua for x in ("curl", "wget", "libwww")):
+        return "curl / wget (CLI)"
+    if any(x in ua for x in ("postman", "insomnia", "rest-assured", "swagger")):
+        return "API client (Postman/Insomnia/etc.)"
+    if any(x in ua for x in ("crawler", "spider", "scraper", "fetcher")):
+        return "Crawler / scraper"
+    if "bot" in ua:
+        return "Bot (generic)"
+    return None
+
+
+def _is_bot_ua(user_agent: str) -> bool:
+    """True if the User-Agent looks like a bot/script. Diverse patterns: custom bots, languages, HTTP clients, automation."""
+    if not user_agent or not isinstance(user_agent, str):
+        return False
+    ua = user_agent.lower()
+    # Custom / game bots
+    if "mafiakillbot" in ua or ("bot" in ua and ("kill" in ua or "attack" in ua)):
+        return True
+    # Generic crawlers / scrapers
+    if any(x in ua for x in ("bot", "crawler", "spider", "scraper", "fetcher", "curl", "wget", "libwww")):
+        return True
+    # Python
+    if any(x in ua for x in ("python", "requests", "urllib", "aiohttp", "httpx")):
+        return True
+    # JavaScript / Node
+    if any(x in ua for x in ("axios/", "node/", "node.js", "undici", "got/", "superagent")):
+        return True
+    # Java / JVM
+    if any(x in ua for x in ("java/", "okhttp", "apache-httpclient", "jetty", "java ")):
+        return True
+    # .NET / C#
+    if any(x in ua for x in ("dotnet", ".net", "httpclient", "webrequest")):
+        return True
+    # Go / Ruby / PHP / Rust
+    if any(x in ua for x in ("go-http", "go/", "ruby", "faraday", "php/", "php ", "reqwest", "ureq")):
+        return True
+    # Browser automation
+    if any(x in ua for x in ("selenium", "webdriver", "headless", "puppeteer", "playwright", "phantom")):
+        return True
+    # API / testing tools
+    if any(x in ua for x in ("postman", "insomnia", "rest-assured", "swagger")):
+        return True
+    return False
+
+
+async def _log_attack_error(attacker_id: str, attacker_username: str, player_message: str, req: Optional[Request] = None):
     """Log a failed execute attempt (validation/perm error) so admin sees every click."""
     try:
-        meta = request_meta if request_meta is not None else _request_meta(req)
-        doc: Dict[str, Any] = {
+        meta = _request_meta(req)
+        await db.attack_attempts.insert_one({
             "id": str(uuid.uuid4()),
             "attacker_id": attacker_id,
             "attacker_username": attacker_username or "?",
@@ -359,12 +227,7 @@ async def _log_attack_error(
             "player_message": (player_message or "")[:1000],
             "created_at": datetime.now(timezone.utc),
             **meta,
-        }
-        if extra:
-            for k, v in extra.items():
-                if v is not None:
-                    doc[k] = v
-        await db.attack_attempts.insert_one(doc)
+        })
     except Exception:
         pass
 
@@ -524,7 +387,6 @@ class AttackStatusResponse(BaseModel):
     can_travel: bool
     can_attack: bool
     message: str
-    execute_token: Optional[str] = None
 
 class AttackIdRequest(BaseModel):
     attack_id: str
@@ -538,8 +400,6 @@ class AttackExecuteRequest(BaseModel):
     make_public: bool = False
     bullets_to_use: Optional[int] = None
     use_molotovs: Optional[bool] = False
-    # Issued when GET /attack/list or GET /attack/status shows can_attack; required if the attack row has a token.
-    execute_token: Optional[str] = None
 
     @field_validator("bullets_to_use", mode="before")
     @classmethod
@@ -587,16 +447,7 @@ def _first_bodyguard_client_payload(
 
 # Strip from attack_attempts when returning to players (timeline / future APIs).
 _PLAYER_ATTACK_ATTEMPT_META_KEYS = frozenset(
-    {
-        "client_ip",
-        "user_agent",
-        "attacker_is_bot",
-        "attacker_bot_label",
-        "attacker_client_signal",
-        "attacker_client_signal_detail",
-        "execute_token_fail",
-        "staff_integrity_alert",
-    }
+    {"client_ip", "user_agent", "attacker_is_bot", "attacker_bot_label"}
 )
 
 
@@ -792,12 +643,6 @@ async def _build_active_attacks_list(attacker_id: str, attacker_current_state: s
             "message": msg,
             "target_is_npc": bool((users_map.get(tid or "") or {}).get("is_npc")) if tid else False,
         }
-        # Mint server-side token as soon as the hunt is "found" (any list refresh). Execute requires it once set,
-        # so scripts that only POST /execute without polling list fail. Only return the token to the client when can_attack.
-        if attack["status"] == "found":
-            tok = await _ensure_execute_token(attacker_id, attack["id"])
-            if can_attack and tok:
-                item["execute_token"] = tok
         if attack["status"] == "found" and tid:
             target_bgs = bgs_by_owner.get(tid) or []
             if target_bgs:
@@ -966,7 +811,17 @@ async def search_target(request: AttackSearchRequest, current_user: dict = Depen
                 override_minutes = int(default_mins)
             except Exception:
                 override_minutes = None
-    # Multiple concurrent hunts for the same target are allowed; each row has its own timer and attack_id.
+    # Only one active hunt per target: drop searching, found, or traveling rows for this target.
+    # Otherwise a second POST /attack/search (e.g. from profile) leaves the old FOUND row in place and
+    # creates another row — each snapshots location_state when it flips to found, so the same username
+    # can show two different cities. Replacing all active rows matches the comment intent.
+    await db.attacks.delete_many(
+        {
+            "attacker_id": current_user["id"],
+            "target_id": target["id"],
+            "status": {"$in": ["searching", "found", "traveling"]},
+        }
+    )
 
     search_duration = (
         int(override_minutes)
@@ -978,11 +833,7 @@ async def search_target(request: AttackSearchRequest, current_user: dict = Depen
     attack_id = str(uuid.uuid4())
     note = (request.note or "").strip()
     note = note[:80] if note else None
-    if target.get("is_npc") and target.get("is_bodyguard"):
-        # Robot bodyguard location always comes from their user doc only (not a random planned city).
-        target_state = (target.get("current_state") or "").strip() or None
-    else:
-        target_state = target.get("current_state") if target.get("current_state") in STATES else random.choice(STATES)
+    target_state = target.get("current_state") if target.get("current_state") in STATES else random.choice(STATES)
     target_username = (target.get("username") or "").strip() or "?"
     await db.attacks.insert_one({
         "id": attack_id,
@@ -1013,23 +864,20 @@ async def get_attack_status(
 ):
     base_filter = {"attacker_id": current_user["id"], "status": {"$in": ["searching", "found", "traveling"]}}
     attack = None
-    _attack_sort = [("search_started", -1)]
     if target_username and target_username.strip():
         want = (target_username or "").strip()
         # Prefer FOUND (or traveling) for this target so we use existing search instead of starting a new one
         attack = await db.attacks.find_one(
             {**base_filter, "target_username": {"$regex": f"^{re.escape(want)}$", "$options": "i"}, "status": {"$in": ["found", "traveling"]}},
-            {"_id": 0},
-            sort=_attack_sort,
+            {"_id": 0}
         )
         if not attack:
             attack = await db.attacks.find_one(
                 {**base_filter, "target_username": {"$regex": f"^{re.escape(want)}$", "$options": "i"}, "status": "searching"},
-                {"_id": 0},
-                sort=_attack_sort,
+                {"_id": 0}
             )
     if not attack:
-        attack = await db.attacks.find_one(base_filter, {"_id": 0}, sort=_attack_sort)
+        attack = await db.attacks.find_one(base_filter, {"_id": 0})
     if not attack:
         raise HTTPException(status_code=404, detail="No active attack")
     # If target is dead or is a bodyguard who was killed (e.g. by someone else), remove this search and return 404
@@ -1077,11 +925,6 @@ async def get_attack_status(
         message = "Searching..."
     elif attack["status"] == "found":
         message = f"Target found in {attack['location_state']}! You are in the same location. Ready to attack!" if can_attack else f"Target found in {attack['location_state']}! Travel there to attack."
-    exec_tok = None
-    if attack["status"] == "found":
-        ensured = await _ensure_execute_token(current_user["id"], attack["id"])
-        if can_attack:
-            exec_tok = ensured
     return AttackStatusResponse(
         attack_id=attack["id"],
         status=attack["status"],
@@ -1089,8 +932,7 @@ async def get_attack_status(
         location_state=attack.get("location_state"),
         can_travel=can_travel,
         can_attack=can_attack,
-        message=message,
-        execute_token=exec_tok,
+        message=message
     )
 
 async def list_attacks(current_user: dict = Depends(get_current_user)):
@@ -1240,49 +1082,6 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     if attacker_location != target_location:
         await _log_attack_error(current_user["id"], current_user.get("username"), "You must be in the target's location to attack or bodyguard-check. Travel there first.", req)
         raise HTTPException(status_code=400, detail="You must be in the target's location to attack or bodyguard-check. Travel there first.")
-    stored_tok = attack.get("execute_token")
-    if isinstance(stored_tok, str) and len(stored_tok) >= 16:
-        if not _safe_compare_execute_token(stored_tok, request.execute_token):
-            staff_log_msg = (
-                "Execute session token missing or invalid — likely bot/script or client that did not load My Searches. "
-                "Staff inbox notified (throttled per attacker per hour)."
-            )
-            req_meta = _request_meta(req)
-            await _log_attack_error(
-                current_user["id"],
-                current_user.get("username"),
-                staff_log_msg,
-                req,
-                extra={
-                    "target_id": target.get("id"),
-                    "target_username": (target.get("username") or "").strip() or "?",
-                    "location_state": target_location,
-                    "attack_id": request.attack_id,
-                    "execute_token_fail": True,
-                    "staff_integrity_alert": "execute_token",
-                },
-                request_meta=req_meta,
-            )
-            try:
-                await maybe_notify_staff_attack_execute_token_fail(
-                    db=db,
-                    request=req,
-                    attacker_id=current_user["id"],
-                    attacker_username=current_user.get("username") or "?",
-                    target_username=(target.get("username") or "").strip() or "?",
-                    attack_id=request.attack_id,
-                    location_state=target_location,
-                    client_signal=req_meta.get("attacker_client_signal"),
-                )
-            except Exception:
-                pass
-            raise HTTPException(
-                status_code=400,
-                detail=(
-                    "Stop using bots or scripts on the attack page. A report was sent to staff. "
-                    "If you only use the website, open Attack and refresh My Searches, then try again."
-                ),
-            )
     if await soft_launch_blocks_pvp_kill_on_target(db, target):
         await _log_attack_error(current_user["id"], current_user.get("username"), "Release soft-launch PvP block", req)
         raise HTTPException(status_code=403, detail=PVP_KILLS_DISABLED_DETAIL)

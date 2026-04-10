@@ -78,11 +78,8 @@ export default function Bodyguards() {
   const [hiringSlots, setHiringSlots] = useState(new Set());
   const [refreshing, setRefreshing] = useState(false);
   const [hireBanner, setHireBanner] = useState(null);
-  const [robotHireInFlight, setRobotHireInFlight] = useState(false);
   const claimedSlotsRef = useRef(new Set());
   const pendingHiresRef = useRef(0);
-  /** Latest server-minted token for POST /bodyguards/hire (robot); set from GET /bodyguards. */
-  const robotHireExecuteTokenRef = useRef(null);
 
   const DROP_COOLDOWN_HOURS = 3;
 
@@ -167,7 +164,6 @@ export default function Bodyguards() {
         return;
       }
       const bgData = bodyguardsRes.data;
-      robotHireExecuteTokenRef.current = bgData?.robot_hire_execute_token ?? null;
       setBodyguards(Array.isArray(bgData) ? bgData : (bgData?.bodyguards ?? []));
       setBodyguardFor(bgData?.bodyguard_for ?? null);
       setBodyguardProfit(bgData?.bodyguard_profit ?? null);
@@ -199,7 +195,6 @@ export default function Bodyguards() {
       setInvites({ sent: [], received: [] });
       setNextHireInflationPct(0);
       setInflationWindowEndsAt(null);
-      robotHireExecuteTokenRef.current = null;
     } finally {
       setHasLoaded(true);
     }
@@ -234,26 +229,9 @@ export default function Bodyguards() {
   const hireBodyguard = async (isRobot) => {
     const slot = claimNextSlot();
     if (slot == null) return;
-    if (isRobot) {
-      const tok = robotHireExecuteTokenRef.current;
-      if (!tok) {
-        showHireBanner('error', 'Refresh the bodyguards page before hiring a robot.');
-        claimedSlotsRef.current.delete(slot);
-        setHiringSlots(new Set(claimedSlotsRef.current));
-        return;
-      }
-    }
     pendingHiresRef.current += 1;
-    if (isRobot) setRobotHireInFlight(true);
     try {
-      const hirePayload = { slot, is_robot: isRobot };
-      if (isRobot && robotHireExecuteTokenRef.current) {
-        hirePayload.execute_token = robotHireExecuteTokenRef.current;
-      }
-      const response = await api.post('/bodyguards/hire', hirePayload);
-      if (isRobot && response?.data?.robot_hire_execute_token) {
-        robotHireExecuteTokenRef.current = response.data.robot_hire_execute_token;
-      }
+      const response = await api.post('/bodyguards/hire', { slot, is_robot: isRobot });
       showHireBanner('success', response?.data?.message ?? 'Bodyguard hired');
     } catch (error) {
       claimedSlotsRef.current.delete(slot);
@@ -275,7 +253,6 @@ export default function Bodyguards() {
     } finally {
       pendingHiresRef.current -= 1;
       if (pendingHiresRef.current === 0) {
-        setRobotHireInFlight(false);
         claimedSlotsRef.current.clear();
         refreshUser().catch(() => {});
         await fetchData();
@@ -291,12 +268,7 @@ export default function Bodyguards() {
   const upgradeArmour = async (slot) => {
     setUpgradingSlot(slot);
     try {
-      const row = bodyguards.find((b) => b.slot_number === slot);
-      const armourTok = row?.armour_execute_token;
-      const res = await api.post(
-        `/bodyguards/armour/upgrade?slot=${slot}`,
-        row?.is_robot && armourTok ? { execute_token: armourTok } : {},
-      );
+      const res = await api.post(`/bodyguards/armour/upgrade?slot=${slot}`);
       const newLevel = res.data?.armour_level;
       if (typeof newLevel === 'number') {
         setBodyguards((prev) =>
@@ -423,14 +395,11 @@ export default function Bodyguards() {
     }
   };
 
-  const dropBodyguard = async (bg) => {
-    const slot = bg.slot_number;
+  const dropBodyguard = async (slot) => {
     if (droppingSlot) return;
     setDroppingSlot(slot);
     try {
-      const dropPayload =
-        bg.is_robot && bg.drop_execute_token ? { execute_token: bg.drop_execute_token } : {};
-      await api.post(`/bodyguards/drop?slot=${slot}`, dropPayload);
+      await api.post(`/bodyguards/drop?slot=${slot}`);
       toast.success('Bodyguard dropped. Payments cancelled.');
       setBodyguards((prev) =>
         prev.map((b) =>
@@ -589,7 +558,7 @@ export default function Bodyguards() {
                 <div className="col-span-2 pt-1">
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); dropBodyguard(bg); }}
+                    onClick={(e) => { e.stopPropagation(); dropBodyguard(bg.slot_number); }}
                     disabled={!!droppingSlot || dropOnCooldown}
                     className="text-[10px] font-heading uppercase tracking-wide text-red-400 hover:text-red-300 border border-red-500/40 rounded px-2 py-1.5 bg-red-500/10 disabled:opacity-50"
                   >
@@ -651,9 +620,8 @@ export default function Bodyguards() {
           {activeCount < 4 && nextEmptySlot && !bodyguardFor?.owner_username && (
             <button
               onClick={() => hireBodyguard(true)}
-              disabled={robotHireInFlight}
               data-testid="hire-robot-next"
-              className="bg-primary/20 text-primary rounded px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation font-heading shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="bg-primary/20 text-primary rounded px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation font-heading shrink-0"
             >
               {`🤖 Hire robot (${getHireCost(nextEmptySlot)} pts${nextHireInflationPct > 0 ? ` +${nextHireInflationPct}%` : ''})`}
             </button>

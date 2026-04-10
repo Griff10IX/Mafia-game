@@ -75,35 +75,50 @@ const EventBanner = ({ event }) => (
   </div>
 );
 
+const KILL_TOAST_STYLE_KEY = 'kill_toast_style';
+const getKillToastStyle = () => {
+  try {
+    return localStorage.getItem(KILL_TOAST_STYLE_KEY) || 'popup';
+  } catch {
+    return 'popup';
+  }
+};
+
 // Only run the F5-resend check once per document load so navigating away and back doesn't resend
 let attackResendCheckDoneThisLoad = false;
 
-/** Kill / execute feedback: same pattern as roulette — compact banner, × to dismiss only (no auto-close). */
+/** Banner shown between event and Kill User when theme is "banner". */
 const KillNotificationBanner = ({ message, onDismiss }) => {
+  useEffect(() => {
+    if (!message) return;
+    const t = setTimeout(onDismiss, 8000);
+    return () => clearTimeout(t);
+  }, [message, onDismiss]);
+
   if (!message) return null;
   const { text, type, description, action } = message;
-  const vClass =
-    type === 'success'
-      ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100'
-      : type === 'warning'
-        ? 'border-amber-500/40 bg-amber-500/10 text-amber-100'
-        : type === 'error'
-          ? 'border-red-500/40 bg-red-500/10 text-red-100'
-          : 'border-primary/30 bg-primary/10 text-foreground';
+  const isSuccess = type === 'success';
+  const isWarning = type === 'warning';
+  const isError = type === 'error';
+  const typeClass = isSuccess
+    ? 'bg-primary/10 border-primary/30 text-primary'
+    : isWarning
+      ? 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400'
+      : isError
+        ? 'bg-destructive/10 border-destructive/30 text-destructive'
+        : 'bg-muted/20 border-border text-foreground';
   return (
-    <div className={`atk-fade-in rounded-md border px-2.5 py-1.5 flex items-start justify-between gap-2 ${vClass}`} role="status">
-      <div className="flex-1 min-w-0 max-h-[4.25rem] sm:max-h-[4.75rem] overflow-y-auto pr-1">
-        <p className="text-[10px] font-heading leading-snug whitespace-pre-line font-bold">{text}</p>
-        {description && (
-          <p className="text-[10px] font-heading leading-snug text-white/70 dark:text-white/60 mt-0.5">{description}</p>
-        )}
+    <div className={`atk-fade-in rounded-md border px-3 py-2 flex items-center justify-between gap-2 flex-wrap ${typeClass}`}>
+      <div className="min-w-0 flex-1">
+        <p className="text-[11px] font-heading font-bold truncate">{text}</p>
+        {description && <p className="text-[10px] font-heading text-mutedForeground mt-0.5">{description}</p>}
       </div>
-      <div className="flex items-start gap-1.5 shrink-0">
+      <div className="flex items-center gap-2 shrink-0">
         {action && (
           <button
             type="button"
             onClick={action.onClick}
-            className="px-2 py-0.5 text-[10px] font-heading font-bold uppercase tracking-wider rounded border border-white/25 hover:bg-black/20 transition-colors"
+            className="px-2 py-1 text-[10px] font-heading font-bold uppercase tracking-wider rounded border border-current opacity-80 hover:opacity-100 transition-opacity"
           >
             {action.label}
           </button>
@@ -111,8 +126,8 @@ const KillNotificationBanner = ({ message, onDismiss }) => {
         <button
           type="button"
           onClick={onDismiss}
-          className="shrink-0 leading-none px-1 py-0.5 rounded text-[11px] text-white/60 hover:text-white hover:bg-black/20 font-heading"
-          aria-label="Dismiss message"
+          className="p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+          aria-label="Dismiss"
         >
           ×
         </button>
@@ -257,13 +272,13 @@ const KillUserCard = ({
       
       <button
         type="button"
-        disabled={loading || killPvpBlocked || !killUsername.trim() || !bulletsToUse.trim() || parseInt(bulletsToUse, 10) < 1}
+        disabled={killPvpBlocked || !killUsername.trim() || !bulletsToUse.trim() || parseInt(bulletsToUse, 10) < 1}
         onClick={onKill}
         title={killPvpBlocked ? 'Player kills are disabled during release soft-launch (NPCs still allowed).' : undefined}
         className="w-full bg-gradient-to-r from-red-700 via-red-800 to-red-900 hover:from-red-600 hover:via-red-700 hover:to-red-800 text-white rounded font-heading font-bold uppercase tracking-widest py-2 text-[10px] border-2 border-red-600/50 shadow-lg shadow-red-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation"
         data-testid="kill-inline-button"
       >
-        {loading ? '⏳ …' : '💀 Kill User'}
+        💀 Kill User
       </button>
     </div>
     <div className="atk-art-line text-primary mx-2" />
@@ -855,10 +870,7 @@ export default function Attack() {
   const [note, setNote] = useState('');
   const [attacks, setAttacks] = useState([]);
   const [selectedAttackIds, setSelectedAttackIds] = useState([]);
-  /** Kill / execute / delete / travel rows — not Find User search. */
   const [loading, setLoading] = useState(false);
-  /** Find User form + hitlist auto-search + bodyguard "Search" from banner only. */
-  const [searchLoading, setSearchLoading] = useState(false);
   const [filterText, setFilterText] = useState('');
   const [show, setShow] = useState('all');
   const [killUsername, setKillUsernameState] = useState(() => {
@@ -958,7 +970,15 @@ export default function Attack() {
 
   const showKillResult = (text, type, options = {}) => {
     const { description, action } = options;
-    setKillBannerMessage({ text, type, description, action });
+    if (getKillToastStyle() === 'banner') {
+      setKillBannerMessage({ text, type, description, action });
+    } else if (type === 'success') {
+      toast.success(text, { description });
+    } else if (type === 'warning') {
+      toast.warning(text, { duration: 10000, action });
+    } else {
+      toast.error(text);
+    }
   };
 
   const fetchBullets = async () => {
@@ -1091,7 +1111,7 @@ export default function Attack() {
     };
     (async () => {
       try {
-        setSearchLoading(true);
+        setLoading(true);
         try {
           sessionStorage.setItem(
             'attack-last-submit',
@@ -1114,7 +1134,7 @@ export default function Attack() {
         stripBoardQuery();
         toast.error(getApiErrorMessage(error) || 'Failed to search target');
       } finally {
-        if (!cancelled) setSearchLoading(false);
+        if (!cancelled) setLoading(false);
       }
     })();
 
@@ -1210,7 +1230,7 @@ export default function Attack() {
 
     const run = async () => {
       if (payload.type === 'search') {
-        setSearchLoading(true);
+        setLoading(true);
         try {
           const response = await api.post('/attack/search', {
             target_username: payload.target_username || '',
@@ -1221,7 +1241,7 @@ export default function Attack() {
         } catch (error) {
           toast.error(error.response?.data?.detail || 'Failed to search target');
         } finally {
-          setSearchLoading(false);
+          setLoading(false);
         }
         return;
       }
@@ -1246,7 +1266,6 @@ export default function Attack() {
             make_public: payload.makePublic || false,
             bullets_to_use: payload.bulletsToUse ?? 1,
             use_molotovs: payload.useMolotovs ?? false,
-            ...(best.execute_token ? { execute_token: best.execute_token } : {}),
           };
           const execRes = await api.post('/attack/execute', { attack_id: best.attack_id, ...extra });
           refreshUser();
@@ -1267,7 +1286,7 @@ export default function Attack() {
                   label: 'Search',
                   onClick: async () => {
                     setKillBannerMessage(null);
-                    setSearchLoading(true);
+                    setLoading(true);
                     try {
                       const note = bg.target_username ? `Bodyguard for: ${bg.target_username}` : '';
                       const res = await api.post('/attack/search', { target_username: bg.search_username, note });
@@ -1276,7 +1295,7 @@ export default function Attack() {
                     } catch (err) {
                       toast.error(err.response?.data?.detail || 'Failed to search', { duration: 10000 });
                     } finally {
-                      setSearchLoading(false);
+                      setLoading(false);
                     }
                   },
                 },
@@ -1329,7 +1348,7 @@ export default function Attack() {
 
   const searchTarget = async (e) => {
     e.preventDefault();
-    setSearchLoading(true);
+    setLoading(true);
     const target = (targetUsername || '').trim();
     const noteVal = (note || '').trim();
     try {
@@ -1344,7 +1363,7 @@ export default function Attack() {
     } catch (error) {
       toast.error(getApiErrorMessage(error) || 'Failed to search target');
     } finally {
-      setSearchLoading(false);
+      setLoading(false);
     }
   };
 
@@ -1395,7 +1414,7 @@ export default function Attack() {
             label: 'Search',
             onClick: async () => {
               setKillBannerMessage(null);
-              setSearchLoading(true);
+              setLoading(true);
               try {
                 const note = bg.target_username ? `Bodyguard for: ${bg.target_username}` : '';
                 const res = await api.post('/attack/search', { target_username: bg.search_username, note });
@@ -1404,7 +1423,7 @@ export default function Attack() {
               } catch (err) {
                 toast.error(err.response?.data?.detail || 'Failed to search', { duration: 10000 });
               } finally {
-                setSearchLoading(false);
+                setLoading(false);
               }
             },
           },
@@ -1425,17 +1444,20 @@ export default function Attack() {
   const killByUsername = async () => {
     const username = (killUsername || '').trim();
     if (!username) {
-      showKillResult('Enter a username', 'error');
+      toast.error('Enter a username');
       return;
     }
 
     // Refetch attacks so we have the latest list (e.g. after refresh), then use that list
+    setLoading(true);
     let list;
     try {
       list = await refreshAttacks();
       if (!Array.isArray(list)) list = attacks;
     } catch {
       list = attacks;
+    } finally {
+      setLoading(false);
     }
 
     const found = list.filter((a) => (a.target_username || '').toLowerCase() === username.toLowerCase() && a.status === 'found');
@@ -1443,32 +1465,26 @@ export default function Attack() {
 
     if (!best) {
       if (found.length > 0) {
-        showKillResult('You must be in the target\'s location to attack or bodyguard-check. Travel there first.', 'error');
+        toast.error('You must be in the target\'s location to attack or bodyguard-check. Travel there first.');
         return;
       }
       const alreadySearching = list.some(
         (a) => (a.target_username || '').toLowerCase() === username.toLowerCase() && a.status === 'searching'
       );
       if (alreadySearching) {
-        showKillResult('A search is already in progress for this target. Wait for it to finish.', 'error');
+        toast.error('A search is already in progress for this target. Wait for it to finish.');
       } else {
-        showKillResult('Target not found. Use "Find User" to search for them first.', 'error');
+        toast.error('Target not found. Use "Find User" to search for them first.');
       }
       return;
     }
 
     const bulletNum = bulletsToUse !== "" && bulletsToUse != null ? parseInt(bulletsToUse, 10) : NaN;
     if (Number.isNaN(bulletNum) || bulletNum < 1) {
-      showKillResult('Enter how many bullets to use (at least 1).', 'error');
+      toast.error('Enter how many bullets to use (at least 1).');
       return;
     }
-    const extra = {
-      death_message: deathMessage,
-      make_public: makePublic,
-      bullets_to_use: bulletNum,
-      use_molotovs: useMolotovs,
-      ...(best.execute_token ? { execute_token: best.execute_token } : {}),
-    };
+    const extra = { death_message: deathMessage, make_public: makePublic, bullets_to_use: bulletNum, use_molotovs: useMolotovs };
     try {
       sessionStorage.setItem('attack-last-submit', JSON.stringify({
         type: 'kill',
@@ -1659,7 +1675,7 @@ export default function Attack() {
             setTargetUsername={setTargetUsername}
             note={note}
             setNote={setNote}
-            loading={searchLoading}
+            loading={loading}
             onSearch={searchTarget}
           />
         </div>

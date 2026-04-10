@@ -196,12 +196,6 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, ad
                   <span className="text-[10px] font-heading font-bold text-red-400 uppercase">On the hitlist</span>
                 </div>
               )}
-              {preview.show_war_rat_badge && (
-                <div className="px-2.5 py-1 bg-rose-500/15 border-b border-rose-500/25 flex items-center gap-1.5">
-                  <span className="text-[10px] font-heading font-bold text-rose-300 uppercase">Rat</span>
-                  <span className="text-[9px] text-mutedForeground font-heading">Left a crew during war (24h)</span>
-                </div>
-              )}
               <div className="p-2">
                 <div className="flex items-center gap-2">
                   <div className="w-11 h-11 rounded-md overflow-hidden border border-primary/25 bg-secondary flex items-center justify-center shrink-0">
