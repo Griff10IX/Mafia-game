@@ -340,6 +340,7 @@ const ProfileInfoCard = ({
   
   // Check if user is a founding member
   const isFoundingMember = profile.founding_member || (profile.badges || []).includes('Founding Member');
+  const isWarRat = Boolean(profile.show_war_rat_badge) || (profile.badges || []).includes('Rat');
   
   let profileRows = isStaffProfile
     ? allRows.filter((r) => r.label !== 'Status' && r.label !== 'Messages' && r.label !== 'Jailbusts')
@@ -375,6 +376,14 @@ const ProfileInfoCard = ({
           {isFoundingMember && (
             <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] md:text-[9px] font-heading font-bold uppercase tracking-wider bg-amber-500/20 text-amber-400 border border-amber-500/40 shrink-0">
               ⭐ Founder
+            </span>
+          )}
+          {isWarRat && (
+            <span
+              className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[8px] md:text-[9px] font-heading font-bold uppercase tracking-wider bg-rose-500/20 text-rose-300 border border-rose-500/45 shrink-0"
+              title="Left a crew during an active family war"
+            >
+              Rat
             </span>
           )}
         </div>

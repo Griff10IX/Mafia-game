@@ -62,12 +62,13 @@ export default function AdminAttackLogs() {
       setAnalyticsError(msg);
       setAnalytics(null);
       if (e.response?.status === 403) {
-        toast.error(msg || 'Admin or moderator access required');
+        toast.error('Admin or moderator access required');
+        navigate('/dashboard', { replace: true });
       }
     } finally {
       setAnalyticsLoading(false);
     }
-  }, [accessChecked]);
+  }, [accessChecked, navigate]);
 
   useEffect(() => {
     if (accessChecked) fetchAnalytics();
@@ -129,17 +130,15 @@ export default function AdminAttackLogs() {
             </p>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => fetchAnalytics()}
-            disabled={analyticsLoading}
-            className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded border border-border bg-secondary hover:bg-secondary/80 text-[10px] font-heading uppercase tracking-wider disabled:opacity-50"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${analyticsLoading ? 'animate-spin' : ''}`} />
-            Refresh stats
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => fetchAnalytics()}
+          disabled={analyticsLoading}
+          className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded border border-border bg-secondary hover:bg-secondary/80 text-[10px] font-heading uppercase tracking-wider disabled:opacity-50"
+        >
+          <RefreshCw className={`w-3.5 h-3.5 ${analyticsLoading ? 'animate-spin' : ''}`} />
+          Refresh stats
+        </button>
       </div>
 
       {analyticsError && (

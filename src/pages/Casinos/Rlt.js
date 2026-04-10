@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import api, { refreshUser } from '../../utils/api';
@@ -51,6 +51,48 @@ function betLabel(type, selection) {
   if (type === 'dozen') return `${(Number(selection) - 1) * 12 + 1}-${Number(selection) * 12}`;
   if (type === 'column') return `Col ${selection}`;
   return String(selection ?? type).replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Multi-line banner copy for a spin response (uses API fields only). */
+function buildRouletteSpinBannerMessage(data) {
+  const n = data.result;
+  const num = Number(n);
+  let toneWord = 'black';
+  let slot = String(n ?? '—');
+  if (num === 0) {
+    toneWord = 'green';
+    slot = '0';
+  } else if (RED.has(num)) {
+    toneWord = 'red';
+  }
+  const stake = Number(data.total_stake || 0);
+  const payout = Number(data.total_payout || 0);
+  const shortfall = Number(data.shortfall || 0);
+  const ownerCut = Number(data.owner_cut || 0);
+  const lines = [];
+  lines.push(`Ball landed on ${slot} (${toneWord}).`);
+  if (data.win) {
+    const net = payout - stake;
+    let line2 = `Paid out ${formatMoney(payout)} on ${formatMoney(stake)} wagered.`;
+    if (net > 0) line2 += ` Net gain ${formatMoney(net)}.`;
+    else if (net < 0) line2 += ` Net ${formatMoney(net)}.`;
+    else line2 += ' Break-even on this spin.';
+    lines.push(line2);
+    if (shortfall > 0) {
+      lines.push(
+        `The owner could not cover the full win — you still collected ${formatMoney(payout)} (${formatMoney(shortfall)} below the full payout).`,
+      );
+    }
+  } else {
+    lines.push(`No winning bets — ${formatMoney(stake)} stays with the house.`);
+    if (ownerCut > 0) {
+      lines.push(`State head / edge share: ${formatMoney(ownerCut)}.`);
+    }
+  }
+  if (data.ownership_transferred) {
+    lines.push('You seized this roulette table — the previous owner could not pay.');
+  }
+  return lines.join('\n');
 }
 
 function setBusyAnimationsFlag(isBusy) {
@@ -335,6 +377,36 @@ export default function Rlt() {
   const [buyBackSecondsLeft, setBuyBackSecondsLeft] = useState(null);
   const [buyBackActionLoading, setBuyBackActionLoading] = useState(false);
   const buyBackFromGameRef = useRef(false);
+  const [rouletteBanner, setRouletteBannerState] = useState(null);
+
+  const clearRouletteBanner = useCallback(() => {
+    setRouletteBannerState(null);
+  }, []);
+
+  /** No auto-dismiss — avoids layout collapse/jump; replaced on next spin result or cleared with ×. */
+  const showRouletteBanner = useCallback((variant, message) => {
+    setRouletteBannerState({ variant, message: String(message || '') });
+  }, []);
+
+  const [betBarWiggle, setBetBarWiggle] = useState(false);
+  const betWiggleTimeoutRef = useRef(null);
+
+  const triggerBetBarWiggle = useCallback(() => {
+    if (betWiggleTimeoutRef.current) {
+      clearTimeout(betWiggleTimeoutRef.current);
+      betWiggleTimeoutRef.current = null;
+    }
+    setBetBarWiggle(false);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setBetBarWiggle(true);
+        betWiggleTimeoutRef.current = setTimeout(() => {
+          betWiggleTimeoutRef.current = null;
+          setBetBarWiggle(false);
+        }, 450);
+      });
+    });
+  }, []);
 
   const fetchOwnership = () => {
     api.get('/casino/roulette/ownership').then((r) => {
@@ -364,6 +436,7 @@ export default function Rlt() {
   useEffect(() => () => {
     if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current);
     if (busyClearTimeoutRef.current) clearTimeout(busyClearTimeoutRef.current);
+    if (betWiggleTimeoutRef.current) clearTimeout(betWiggleTimeoutRef.current);
     setBusyAnimationsFlag(false);
   }, []);
 
@@ -409,9 +482,16 @@ export default function Rlt() {
   const betCountFor = (type, sel) => bets.filter((b) => b.type === type && String(b.selection) === String(sel)).length;
 
   const addBet = (type, selection) => {
-    if (!chipValue || chipValue <= 0) { toast.error('Select chip amount'); return; }
-    if (totalBet + chipValue > (config.max_bet || 0)) { toast.error(`Max bet ${formatMoney(config.max_bet)}`); return; }
+    if (!chipValue || chipValue <= 0) {
+      showRouletteBanner('error', 'Select chip amount');
+      return;
+    }
+    if (totalBet + chipValue > (config.max_bet || 0)) {
+      showRouletteBanner('error', `Max bet ${formatMoney(config.max_bet)}`);
+      return;
+    }
     setBets((prev) => [...prev, { id: Date.now() + Math.random(), type, selection, amount: chipValue }]);
+    triggerBetBarWiggle();
   };
 
   const removeBet = (id) => setBets((prev) => prev.filter((b) => b.id !== id));
@@ -420,15 +500,13 @@ export default function Rlt() {
   const applyResult = (data) => {
     setLastResult(data.result);
     const hid = ++historySeqRef.current;
-    setRecentNumbers((prev) => [{ id: hid, n: data.result }, ...prev].slice(0, 12));
+    // Namespace key so it never collides with turbo `client_spin_id` (both count from 1) — duplicate React keys reused the wrong chip.
+    setRecentNumbers((prev) => [{ histKey: `a-${hid}`, n: data.result }, ...prev].slice(0, 12));
+    showRouletteBanner(data.win ? 'success' : 'error', buildRouletteSpinBannerMessage(data));
     if (data.win) {
-      toast.success(`Landed ${data.result}! Won ${formatMoney(data.total_payout)}`);
       setShowWin(true);
       setTimeout(() => setShowWin(false), 2200);
-    } else {
-      toast.error(`Landed ${data.result}. Lost ${formatMoney(data.total_stake)}`);
     }
-    if (data.ownership_transferred) toast.success('You won the casino!');
     if (data.buy_back_offer) { setBuyBackOffer(data.buy_back_offer); buyBackFromGameRef.current = true; }
     refreshUser();
     fetchOwnership();
@@ -449,19 +527,16 @@ export default function Rlt() {
       if (k < hi - 150) completedSpinDataRef.current.delete(k);
     });
     const sorted = [...completedSpinDataRef.current.entries()].sort((a, b) => b[0] - a[0]).slice(0, 12);
-    setRecentNumbers(sorted.map(([s, d]) => ({ id: s, n: d.result })));
+    setRecentNumbers(sorted.map(([s, d]) => ({ histKey: `t-${s}`, n: d.result })));
     const maxSeq = sorted.length ? sorted[0][0] : seq;
     const lead = completedSpinDataRef.current.get(maxSeq);
     if (lead && lead.result != null) setLastResult(lead.result);
 
+    showRouletteBanner(data.win ? 'success' : 'error', buildRouletteSpinBannerMessage(data));
     if (data.win) {
-      toast.success(`Landed ${data.result}! Won ${formatMoney(data.total_payout)}`);
       setShowWin(true);
       setTimeout(() => setShowWin(false), 2200);
-    } else {
-      toast.error(`Landed ${data.result}. Lost ${formatMoney(data.total_stake)}`);
     }
-    if (data.ownership_transferred) toast.success('You won the casino!');
     if (data.buy_back_offer) {
       setBuyBackOffer({ ...data.buy_back_offer, offer_id: data.buy_back_offer.offer_id || data.buy_back_offer.id });
       buyBackFromGameRef.current = true;
@@ -519,7 +594,8 @@ export default function Rlt() {
     } catch (e) {
       if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current);
       pendingResultRef.current = null;
-      toast.error(e.response?.data?.detail || 'Spin failed');
+      const d = e.response?.data?.detail;
+      showRouletteBanner('error', typeof d === 'string' ? d : d != null ? String(d) : 'Spin failed');
       setSpinning(false);
       setBusyAnimationsFlag(false);
       refreshUser();
@@ -538,6 +614,8 @@ export default function Rlt() {
       });
       return;
     }
+
+    if (spinInFlightRef.current) return;
 
     const b = betsRef.current;
     const cfg = configRef.current;
@@ -584,10 +662,10 @@ export default function Rlt() {
           if (s.toLowerCase().includes('money') || s.toLowerCase().includes('enough')) {
             if (now - lastMoneyErrRef.current > 1200) {
               lastMoneyErrRef.current = now;
-              toast.error(s);
+              showRouletteBanner('error', s);
             }
           } else {
-            toast.error(s);
+            showRouletteBanner('error', s);
           }
           refreshUser();
         })
@@ -708,6 +786,35 @@ export default function Rlt() {
     finally { setOwnerLoading(false); }
   };
 
+  const renderRouletteBanner = (extraClassName = '') => {
+    if (!rouletteBanner) return null;
+    const variant = rouletteBanner.variant;
+    const vClass =
+      variant === 'success'
+        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100'
+        : variant === 'error'
+          ? 'border-red-500/40 bg-red-500/10 text-red-100'
+          : 'border-primary/30 bg-primary/10 text-foreground';
+    return (
+      <div
+        className={`rounded-md border px-2.5 py-1.5 flex items-start justify-between gap-2 ${vClass} ${extraClassName}`.trim()}
+        role="status"
+      >
+        <p className="text-[10px] font-heading leading-snug whitespace-pre-line flex-1 min-w-0 max-h-[4.25rem] sm:max-h-[4.75rem] overflow-y-auto pr-1">
+          {rouletteBanner.message}
+        </p>
+        <button
+          type="button"
+          onClick={clearRouletteBanner}
+          className="shrink-0 leading-none px-1 py-0.5 rounded text-[11px] text-mutedForeground hover:text-foreground hover:bg-black/20 font-heading"
+          aria-label="Dismiss message"
+        >
+          ×
+        </button>
+      </div>
+    );
+  };
+
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="roulette-page">
       <style>{CG_STYLES}</style>
@@ -734,11 +841,18 @@ export default function Rlt() {
         .animate-result-pop { animation: result-number-pop 0.5s cubic-bezier(0.2, 0.8, 0.3, 1.1) forwards; }
         .animate-win-shower { animation: win-shower ease-in forwards; }
         .animate-spin-pulse { animation: spin-pulse 1s ease-in-out infinite; }
+        @keyframes rlt-bet-wiggle {
+          0%, 100% { transform: translateY(0); }
+          25% { transform: translateY(-6px); }
+          50% { transform: translateY(5px); }
+          75% { transform: translateY(-2px); }
+        }
+        .rlt-bet-wiggle { animation: rlt-bet-wiggle 0.42s ease-in-out; }
       `}</style>
 
       {/* Page header */}
-      <div className="relative cg-fade-in flex flex-wrap items-end justify-between gap-4">
-        <div>
+      <div className="relative cg-fade-in flex flex-wrap items-end justify-between gap-y-2 gap-x-4">
+        <div className="w-full min-w-0 sm:w-auto">
           <p className="text-[10px] text-zinc-500 font-heading italic">
             Playing in <span className="text-primary font-bold">{currentCity}</span>
             {ownership?.owner_name && !isOwner && (
@@ -771,8 +885,9 @@ export default function Rlt() {
               </span>
             )}
           </p>
+          {renderRouletteBanner('mt-1.5 max-w-xl hidden sm:flex')}
         </div>
-        <div className="flex items-center gap-3 text-xs font-heading">
+        <div className="flex w-full flex-wrap items-center justify-between gap-2 text-xs font-heading sm:w-auto sm:justify-end">
           {ownership?.owner_name ? (
             <span className="text-mutedForeground">Buy-back: <span className="text-primary font-bold">{Number(ownership.buy_back_reward ?? 0).toLocaleString()} pts</span></span>
           ) : null}
@@ -783,6 +898,7 @@ export default function Rlt() {
             </button>
           )}
         </div>
+        {renderRouletteBanner('mt-1 flex w-full sm:hidden')}
       </div>
 
       {/* Buy-back offer */}
@@ -873,8 +989,8 @@ export default function Rlt() {
           <div style={{ height: 3, background: 'linear-gradient(90deg, #5a3e1b, var(--noir-primary-bright), #8b6914, var(--noir-primary-bright), #5a3e1b)' }} />
 
           <div className="p-3 sm:p-4">
-            {/* Bet info bar */}
-            <div className="flex items-center justify-between mb-3 px-1">
+            {/* Bet info bar — wiggles up/down when a chip is placed */}
+            <div className={`flex items-center justify-between mb-3 px-1 ${betBarWiggle ? 'rlt-bet-wiggle' : ''}`}>
               <span className="text-[10px] font-heading text-emerald-200/70 uppercase tracking-wider">Place your bets</span>
               <div className="flex items-center gap-3 text-[10px] font-heading">
                 <span className="text-emerald-200/60">Wager: <span className="text-white font-bold">{formatMoney(totalBet)}</span></span>
@@ -889,7 +1005,7 @@ export default function Rlt() {
                 <div className={`rounded-full p-1 ${spinning && useAnimation ? 'animate-spin-pulse' : ''}`}>
                   <RouletteWheel
                     rotationDeg={wheelRotation}
-                    spinning={spinning && useAnimation}
+                    spinning={spinning}
                     lastResult={lastResult}
                     size={200}
                   />
@@ -927,7 +1043,10 @@ export default function Rlt() {
                   <div className="flex gap-1 justify-center flex-wrap">
                     {recentNumbers.slice(0, 10).map((entry, i) => {
                       const n = typeof entry === 'object' && entry != null && 'n' in entry ? entry.n : entry;
-                      const key = typeof entry === 'object' && entry != null && entry.id != null ? entry.id : `${n}-${i}`;
+                      const key =
+                        typeof entry === 'object' && entry != null && entry.histKey != null
+                          ? entry.histKey
+                          : `${n}-${i}`;
                       return (
                         <div
                           key={key}
@@ -973,7 +1092,7 @@ export default function Rlt() {
                 {/* Spin */}
                 <button
                   onClick={spin}
-                  disabled={!canSpin}
+                  disabled={!canSpin || spinning}
                   className="w-full max-w-[200px] rounded-lg px-6 py-2.5 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all"
                   style={{
                     background: 'linear-gradient(180deg, var(--noir-primary), #a08020, #8a6e18)',
@@ -986,8 +1105,14 @@ export default function Rlt() {
                 </button>
 
                 {/* Animation toggle */}
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input type="checkbox" checked={useAnimation} onChange={(e) => setUseAnimation(e.target.checked)} className="w-3 h-3 rounded accent-primary" />
+                <label className={`flex items-center gap-1.5 ${spinning ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
+                  <input
+                    type="checkbox"
+                    checked={useAnimation}
+                    disabled={spinning}
+                    onChange={(e) => setUseAnimation(e.target.checked)}
+                    className="w-3 h-3 rounded accent-primary disabled:cursor-not-allowed"
+                  />
                   <span className="text-[10px] text-emerald-200/50 font-heading">Animation</span>
                 </label>
               </div>

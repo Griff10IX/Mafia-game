@@ -124,12 +124,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
         { action: 'logout', label: 'Logout' },
         { path: '/account/autorank', label: 'Auto Rank' },
         ...(isAdmin ? [{ path: '/staffrole/admin/overview', label: 'Admin Tools' }, { path: '/staffrole/locked', label: 'Locked accounts' }] : []),
-        ...(isModerator && !isAdmin
-          ? [
-              { path: '/staffrole/admin/overview', label: 'Moderator tools' },
-              { path: '/staffrole/attack-logs', label: 'Attack logs' },
-            ]
-          : []),
+        ...(isModerator && !isAdmin ? [{ path: '/staffrole/admin/overview', label: 'Moderator tools' }] : []),
       ],
     },
     {

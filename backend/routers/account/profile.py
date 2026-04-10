@@ -332,6 +332,7 @@ def register(router):
                 "total_kills_excludes_npc_v1": 1,
                 "jail_busts": 1,
                 "family_id": 1,
+                "war_rat_badge_until": 1,
             },
         )
         if not user:
@@ -412,6 +413,18 @@ def register(router):
         )
         family_display, family_emblem_preset_id, family_emblem_avatar_url = family_data or (None, None, None)
 
+        preview_now = datetime.now(timezone.utc)
+        wr_until = user.get("war_rat_badge_until")
+        show_war_rat = False
+        if wr_until:
+            try:
+                wdt = datetime.fromisoformat(str(wr_until).replace("Z", "+00:00"))
+                if wdt.tzinfo is None:
+                    wdt = wdt.replace(tzinfo=timezone.utc)
+                show_war_rat = preview_now < wdt
+            except Exception:
+                show_war_rat = False
+
         return {
             "username": user.get("username"),
             "avatar_url": user.get("avatar_url"),
@@ -425,6 +438,7 @@ def register(router):
             "family_emblem_avatar_url": family_emblem_avatar_url,
             "owns_casino": owns_casino,
             "property_type": property_type,
+            "show_war_rat_badge": show_war_rat,
         }
 
     @router.get("/users/{username}/profile")
@@ -718,6 +732,23 @@ def register(router):
             "founding_member": bool(user.get("founding_member")),
             "achievement_badges": achievement_badges,
         }
+        wr_until = user.get("war_rat_badge_until")
+        show_war_rat = False
+        if wr_until:
+            try:
+                wdt = datetime.fromisoformat(str(wr_until).replace("Z", "+00:00"))
+                if wdt.tzinfo is None:
+                    wdt = wdt.replace(tzinfo=timezone.utc)
+                show_war_rat = now_utc < wdt
+            except Exception:
+                show_war_rat = False
+        out["war_rat_badge_until"] = wr_until if show_war_rat else None
+        out["show_war_rat_badge"] = show_war_rat
+        if show_war_rat:
+            b = list(out.get("badges") or [])
+            if "Rat" not in b:
+                b.append("Rat")
+            out["badges"] = b
         if not is_own_profile:
             for key in (
                 "last_seen",

@@ -166,9 +166,7 @@ export default function AttackLogsPanel({
                   <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">IP</th>
                   <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">User-Agent</th>
                   <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Device</th>
-                  <th className="py-1 pr-1 font-bold text-mutedForeground uppercase" title="UA tier + execute-token failures">
-                    Bot / token
-                  </th>
+                  <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Bot?</th>
                   <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Bodyguard?</th>
                   <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Bullets</th>
                   <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Location</th>
@@ -324,27 +322,6 @@ export default function AttackLogsPanel({
                   <div className="col-span-2">
                     <span className="text-mutedForeground">Bot type:</span>{' '}
                     <span className="text-amber-400 font-medium">{attackLogViewRow.attacker_bot_label}</span>
-                  </div>
-                )}
-                {attackLogViewRow.execute_token_fail === true && (
-                  <div className="col-span-2 rounded border border-red-500/40 bg-red-500/10 px-2 py-1.5">
-                    <span className="text-red-300 font-bold uppercase tracking-wide text-[9px]">Session token check</span>
-                    <p className="text-red-100/95 text-[10px] mt-1 leading-snug">
-                      Failed — attack execute without a valid token (likely automation or replay). Staff inbox alert sent
-                      (throttled per attacker).
-                    </p>
-                  </div>
-                )}
-                {attackLogViewRow.staff_integrity_alert && (
-                  <div>
-                    <span className="text-mutedForeground">Integrity alert:</span>{' '}
-                    <span className="text-foreground font-mono text-[9px]">{attackLogViewRow.staff_integrity_alert}</span>
-                  </div>
-                )}
-                {attackLogViewRow.attack_id && (
-                  <div className="col-span-2">
-                    <span className="text-mutedForeground">Attack row id:</span>{' '}
-                    <span className="font-mono text-[9px] break-all">{attackLogViewRow.attack_id}</span>
                   </div>
                 )}
                 <div>

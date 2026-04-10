@@ -67,10 +67,7 @@ from routers.money.booze_run import BOOZE_TYPES
 from routers.account.objectives import update_objectives_progress
 from routers.kill.armoury import _best_weapon_for_user, _get_weapon_mastery_pct, MASTERY_MAX_BULLET_REDUCTION_PCT
 from routers.game.families import resolve_family_id
-from utils.staff_bot_client_alert import (
-    maybe_notify_staff_bot_attack_from_ua,
-    maybe_notify_staff_attack_execute_token_fail,
-)
+from utils.staff_bot_client_alert import maybe_notify_staff_bot_attack_from_ua
 
 
 def _safe_compare_execute_token(stored: str, submitted: Optional[str]) -> bool:
@@ -340,18 +337,11 @@ def _request_meta(request: Optional[Request]) -> dict:
     return out
 
 
-async def _log_attack_error(
-    attacker_id: str,
-    attacker_username: str,
-    player_message: str,
-    req: Optional[Request] = None,
-    extra: Optional[Dict[str, Any]] = None,
-    request_meta: Optional[Dict[str, Any]] = None,
-):
+async def _log_attack_error(attacker_id: str, attacker_username: str, player_message: str, req: Optional[Request] = None):
     """Log a failed execute attempt (validation/perm error) so admin sees every click."""
     try:
-        meta = request_meta if request_meta is not None else _request_meta(req)
-        doc: Dict[str, Any] = {
+        meta = _request_meta(req)
+        await db.attack_attempts.insert_one({
             "id": str(uuid.uuid4()),
             "attacker_id": attacker_id,
             "attacker_username": attacker_username or "?",
@@ -359,12 +349,7 @@ async def _log_attack_error(
             "player_message": (player_message or "")[:1000],
             "created_at": datetime.now(timezone.utc),
             **meta,
-        }
-        if extra:
-            for k, v in extra.items():
-                if v is not None:
-                    doc[k] = v
-        await db.attack_attempts.insert_one(doc)
+        })
     except Exception:
         pass
 
@@ -594,8 +579,6 @@ _PLAYER_ATTACK_ATTEMPT_META_KEYS = frozenset(
         "attacker_bot_label",
         "attacker_client_signal",
         "attacker_client_signal_detail",
-        "execute_token_fail",
-        "staff_integrity_alert",
     }
 )
 
@@ -1243,45 +1226,15 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     stored_tok = attack.get("execute_token")
     if isinstance(stored_tok, str) and len(stored_tok) >= 16:
         if not _safe_compare_execute_token(stored_tok, request.execute_token):
-            staff_log_msg = (
-                "Execute session token missing or invalid — likely bot/script or client that did not load My Searches. "
-                "Staff inbox notified (throttled per attacker per hour)."
-            )
-            req_meta = _request_meta(req)
             await _log_attack_error(
                 current_user["id"],
                 current_user.get("username"),
-                staff_log_msg,
+                "Stale or missing execute token — refresh My Searches (or attack status) and try again.",
                 req,
-                extra={
-                    "target_id": target.get("id"),
-                    "target_username": (target.get("username") or "").strip() or "?",
-                    "location_state": target_location,
-                    "attack_id": request.attack_id,
-                    "execute_token_fail": True,
-                    "staff_integrity_alert": "execute_token",
-                },
-                request_meta=req_meta,
             )
-            try:
-                await maybe_notify_staff_attack_execute_token_fail(
-                    db=db,
-                    request=req,
-                    attacker_id=current_user["id"],
-                    attacker_username=current_user.get("username") or "?",
-                    target_username=(target.get("username") or "").strip() or "?",
-                    attack_id=request.attack_id,
-                    location_state=target_location,
-                    client_signal=req_meta.get("attacker_client_signal"),
-                )
-            except Exception:
-                pass
             raise HTTPException(
                 status_code=400,
-                detail=(
-                    "Stop using bots or scripts on the attack page. A report was sent to staff. "
-                    "If you only use the website, open Attack and refresh My Searches, then try again."
-                ),
+                detail="Stale or missing attack session. Refresh your searches and try again.",
             )
     if await soft_launch_blocks_pvp_kill_on_target(db, target):
         await _log_attack_error(current_user["id"], current_user.get("username"), "Release soft-launch PvP block", req)
