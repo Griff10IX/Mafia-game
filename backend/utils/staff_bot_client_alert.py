@@ -35,9 +35,11 @@ def _staff_inbox_cooldown_sec() -> float:
 
 _ALERT_TTL_ATTACK_BOT_SEC = 3600.0
 _ALERT_TTL_EXECUTE_TOKEN_FAIL_SEC = 3600.0
+_ALERT_TTL_BODYGUARD_TOKEN_FAIL_SEC = 3600.0
 _last_blocked: dict[str, float] = {}
 _last_attack_bot: dict[str, float] = {}
 _last_execute_token_fail: dict[str, float] = {}
+_last_bodyguard_execute_token_fail: dict[str, float] = {}
 _MAX_TRACK = 3000
 
 
@@ -435,3 +437,60 @@ async def maybe_notify_staff_attack_execute_token_fail(
                 logger.warning("staff execute_token fail notify %s: %s", uid, e)
     except Exception:
         logger.exception("maybe_notify_staff_attack_execute_token_fail failed")
+
+
+async def maybe_notify_staff_bodyguard_execute_token_fail(
+    *,
+    db,
+    request,
+    owner_id: str,
+    owner_username: str,
+    action: str,
+    slot: Optional[int],
+    reason: str,
+) -> None:
+    """Staff inbox when bodyguard hire/armour/drop is called without a valid session token. Throttled per owner."""
+    now = time.monotonic()
+    oid = (owner_id or "").strip()
+    if not oid:
+        return
+    key = f"bgtok|{oid}"
+    if _last_bodyguard_execute_token_fail.get(key, 0) + _ALERT_TTL_BODYGUARD_TOKEN_FAIL_SEC > now:
+        return
+    _last_bodyguard_execute_token_fail[key] = now
+    _prune(_last_bodyguard_execute_token_fail)
+
+    ip = client_ip_from_request(request)
+    ua = (request.headers.get("user-agent") or "").strip()
+    ua_short = (ua[:200] + "…") if len(ua) > 200 else ua
+    slot_part = f" · slot {slot}" if slot is not None else ""
+    lines = [
+        "— Bodyguard action: invalid / missing session token —",
+        "Likely automation (skipped GET /bodyguards) or replayed POST without execute_token.",
+        f"Owner: {owner_username} (id {oid})",
+        f"Action: {(action or '?').strip()}{slot_part}",
+        f"Reason: {(reason or '?').strip()}",
+        f"IP: {ip or '—'}",
+        f"User-Agent: {ua_short or '—'}",
+    ]
+    lines.append("— Request metadata —")
+    lines.extend(_request_intel_lines(request))
+    acc = await _account_intel_lines(db, oid)
+    if acc:
+        lines.append("— Account —")
+        lines.extend(acc)
+
+    try:
+        from server import _get_staff_user_ids, send_notification
+
+        staff_ids = await _get_staff_user_ids()
+        title = "Bodyguard: session token failed (possible bot)"
+        msg = "\n".join(lines)
+        extra = {"staff_alert_kind": "bodyguard_execute_token_fail", "staff_alert_owner_id": oid[:64]}
+        for uid in staff_ids:
+            try:
+                await send_notification(uid, title, msg, "staff_bodyguard_integrity", **extra)
+            except Exception as e:
+                logger.warning("staff bodyguard execute_token fail notify %s: %s", uid, e)
+    except Exception:
+        logger.exception("maybe_notify_staff_bodyguard_execute_token_fail failed")

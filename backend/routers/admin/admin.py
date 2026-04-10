@@ -7852,6 +7852,51 @@ def register(router):
                 out[k] = v
         return out
 
+    @router.get("/admin/bodyguards/monitoring/summary")
+    async def admin_bodyguards_monitoring_summary(
+        days: int = Query(7, ge=1, le=90),
+        token_limit: int = Query(200, ge=1, le=500),
+        recent_limit: int = Query(120, ge=1, le=300),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Admin or moderator only. Robot bodyguard session-token integrity failures and recent bodyguard lifecycle rows.
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin or moderator access required")
+        now = datetime.now(timezone.utc)
+        since = now - timedelta(days=int(days))
+        tlim = int(token_limit)
+        rlim = int(recent_limit)
+        token_failures = (
+            await db.hitlist_bodyguard_events.find(
+                {"type": "bodyguard_execute_token_fail", "at": {"$gte": since}},
+                {"_id": 0},
+            )
+            .sort("at", -1)
+            .limit(tlim)
+            .to_list(tlim)
+        )
+        recent_events = (
+            await db.hitlist_bodyguard_events.find(
+                {"at": {"$gte": since}, "type": {"$ne": "bodyguard_execute_token_fail"}},
+                {"_id": 0},
+            )
+            .sort("at", -1)
+            .limit(rlim)
+            .to_list(rlim)
+        )
+        token_failure_count_period = await db.hitlist_bodyguard_events.count_documents(
+            {"type": "bodyguard_execute_token_fail", "at": {"$gte": since}}
+        )
+        return {
+            "generated_at": now.isoformat().replace("+00:00", "Z"),
+            "days": int(days),
+            "token_failure_count_period": token_failure_count_period,
+            "token_failures": token_failures,
+            "recent_events": recent_events,
+        }
+
     @router.get("/admin/bodyguards/audit")
     async def admin_bodyguards_audit(
         username: str = Query(..., min_length=1),

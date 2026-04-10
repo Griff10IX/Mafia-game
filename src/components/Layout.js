@@ -123,11 +123,19 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
         { action: 'theme', label: 'Theme' },
         { action: 'logout', label: 'Logout' },
         { path: '/account/autorank', label: 'Auto Rank' },
-        ...(isAdmin ? [{ path: '/staffrole/admin/overview', label: 'Admin Tools' }, { path: '/staffrole/locked', label: 'Locked accounts' }] : []),
+        ...(isAdmin
+          ? [
+              { path: '/staffrole/admin/overview', label: 'Admin Tools' },
+              { path: '/staffrole/locked', label: 'Locked accounts' },
+              { path: '/staffrole/attack-logs', label: 'Attack logs' },
+              { path: '/staffrole/bodyguard-monitoring', label: 'Bodyguard monitoring' },
+            ]
+          : []),
         ...(isModerator && !isAdmin
           ? [
               { path: '/staffrole/admin/overview', label: 'Moderator tools' },
               { path: '/staffrole/attack-logs', label: 'Attack logs' },
+              { path: '/staffrole/bodyguard-monitoring', label: 'Bodyguard monitoring' },
             ]
           : []),
       ],
@@ -1047,12 +1055,14 @@ export default function Layout({ children }) {
     { path: '/staffrole/users-online', icon: Users, label: 'Users online (live)' },
     { path: '/staffrole/witness-statements', icon: FileText, label: 'Witness statements' },
     { path: '/staffrole/attack-logs', icon: Crosshair, label: 'Attack logs' },
+    { path: '/staffrole/bodyguard-monitoring', icon: Activity, label: 'Bodyguard monitoring' },
   ] : [];
   const moderatorNavItems = isModerator && !isAdmin ? [
     { path: '/staffrole/admin/overview', icon: Shield, label: 'Moderator tools' },
     { path: '/staffrole/users-online', icon: Users, label: 'Users online (live)' },
     { path: '/staffrole/witness-statements', icon: FileText, label: 'Witness statements' },
     { path: '/staffrole/attack-logs', icon: Crosshair, label: 'Attack logs' },
+    { path: '/staffrole/bodyguard-monitoring', icon: Activity, label: 'Bodyguard monitoring' },
   ] : [];
 
   const sidebarBgStyle = { backgroundColor: 'var(--noir-content)' };

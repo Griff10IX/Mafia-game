@@ -80,6 +80,8 @@ export default function Bodyguards() {
   const [hireBanner, setHireBanner] = useState(null);
   const claimedSlotsRef = useRef(new Set());
   const pendingHiresRef = useRef(0);
+  /** Latest server-minted token for POST /bodyguards/hire (robot); set from GET /bodyguards. */
+  const robotHireExecuteTokenRef = useRef(null);
 
   const DROP_COOLDOWN_HOURS = 3;
 
@@ -164,6 +166,7 @@ export default function Bodyguards() {
         return;
       }
       const bgData = bodyguardsRes.data;
+      robotHireExecuteTokenRef.current = bgData?.robot_hire_execute_token ?? null;
       setBodyguards(Array.isArray(bgData) ? bgData : (bgData?.bodyguards ?? []));
       setBodyguardFor(bgData?.bodyguard_for ?? null);
       setBodyguardProfit(bgData?.bodyguard_profit ?? null);
@@ -195,6 +198,7 @@ export default function Bodyguards() {
       setInvites({ sent: [], received: [] });
       setNextHireInflationPct(0);
       setInflationWindowEndsAt(null);
+      robotHireExecuteTokenRef.current = null;
     } finally {
       setHasLoaded(true);
     }
@@ -229,9 +233,22 @@ export default function Bodyguards() {
   const hireBodyguard = async (isRobot) => {
     const slot = claimNextSlot();
     if (slot == null) return;
+    if (isRobot) {
+      const tok = robotHireExecuteTokenRef.current;
+      if (!tok) {
+        showHireBanner('error', 'Refresh the bodyguards page before hiring a robot.');
+        claimedSlotsRef.current.delete(slot);
+        setHiringSlots(new Set(claimedSlotsRef.current));
+        return;
+      }
+    }
     pendingHiresRef.current += 1;
     try {
-      const response = await api.post('/bodyguards/hire', { slot, is_robot: isRobot });
+      const hirePayload = { slot, is_robot: isRobot };
+      if (isRobot && robotHireExecuteTokenRef.current) {
+        hirePayload.execute_token = robotHireExecuteTokenRef.current;
+      }
+      const response = await api.post('/bodyguards/hire', hirePayload);
       showHireBanner('success', response?.data?.message ?? 'Bodyguard hired');
     } catch (error) {
       claimedSlotsRef.current.delete(slot);
@@ -268,7 +285,12 @@ export default function Bodyguards() {
   const upgradeArmour = async (slot) => {
     setUpgradingSlot(slot);
     try {
-      const res = await api.post(`/bodyguards/armour/upgrade?slot=${slot}`);
+      const row = bodyguards.find((b) => b.slot_number === slot);
+      const armourTok = row?.armour_execute_token;
+      const res = await api.post(
+        `/bodyguards/armour/upgrade?slot=${slot}`,
+        row?.is_robot && armourTok ? { execute_token: armourTok } : {},
+      );
       const newLevel = res.data?.armour_level;
       if (typeof newLevel === 'number') {
         setBodyguards((prev) =>
@@ -395,11 +417,14 @@ export default function Bodyguards() {
     }
   };
 
-  const dropBodyguard = async (slot) => {
+  const dropBodyguard = async (bg) => {
+    const slot = bg.slot_number;
     if (droppingSlot) return;
     setDroppingSlot(slot);
     try {
-      await api.post(`/bodyguards/drop?slot=${slot}`);
+      const dropPayload =
+        bg.is_robot && bg.drop_execute_token ? { execute_token: bg.drop_execute_token } : {};
+      await api.post(`/bodyguards/drop?slot=${slot}`, dropPayload);
       toast.success('Bodyguard dropped. Payments cancelled.');
       setBodyguards((prev) =>
         prev.map((b) =>
@@ -558,7 +583,7 @@ export default function Bodyguards() {
                 <div className="col-span-2 pt-1">
                   <button
                     type="button"
-                    onClick={(e) => { e.stopPropagation(); dropBodyguard(bg.slot_number); }}
+                    onClick={(e) => { e.stopPropagation(); dropBodyguard(bg); }}
                     disabled={!!droppingSlot || dropOnCooldown}
                     className="text-[10px] font-heading uppercase tracking-wide text-red-400 hover:text-red-300 border border-red-500/40 rounded px-2 py-1.5 bg-red-500/10 disabled:opacity-50"
                   >

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Crosshair, RefreshCw, Shield } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
@@ -129,15 +129,24 @@ export default function AdminAttackLogs() {
             </p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={() => fetchAnalytics()}
-          disabled={analyticsLoading}
-          className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded border border-border bg-secondary hover:bg-secondary/80 text-[10px] font-heading uppercase tracking-wider disabled:opacity-50"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${analyticsLoading ? 'animate-spin' : ''}`} />
-          Refresh stats
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link
+            to="/staffrole/bodyguard-monitoring"
+            className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded border border-border bg-card/50 text-[10px] font-heading uppercase tracking-wider text-mutedForeground hover:text-foreground"
+          >
+            <Shield className="w-3.5 h-3.5" />
+            Bodyguard monitoring
+          </Link>
+          <button
+            type="button"
+            onClick={() => fetchAnalytics()}
+            disabled={analyticsLoading}
+            className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded border border-border bg-secondary hover:bg-secondary/80 text-[10px] font-heading uppercase tracking-wider disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${analyticsLoading ? 'animate-spin' : ''}`} />
+            Refresh stats
+          </button>
+        </div>
       </div>
 
       {analyticsError && (
