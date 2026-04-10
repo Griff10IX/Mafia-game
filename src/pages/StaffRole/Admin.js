@@ -3936,7 +3936,11 @@ export default function Admin() {
 
   const [syncRobotBgLoading, setSyncRobotBgLoading] = useState(false);
   const handleSyncRobotBodyguardLocations = async (dryRun) => {
-    if (!dryRun && !window.confirm("Set every robot bodyguard's city to their owner's current city? (Legacy fix — robots do not travel.)")) return;
+    if (dryRun) {
+      if (!window.confirm("Run a dry run of robot bodyguard location sync? No cities will be changed.")) return;
+    } else if (!window.confirm("Set every robot bodyguard's city to their owner's current city? (Legacy fix — robots do not travel.)")) {
+      return;
+    }
     setSyncRobotBgLoading(true);
     try {
       const res = await api.post('/admin/bodyguards/sync-robot-locations', null, { params: { dry_run: dryRun } });
@@ -3961,6 +3965,7 @@ export default function Admin() {
       toast.error('Enter target username above');
       return;
     }
+    if (!window.confirm(`Fetch bodyguard hire-intervals (speeds) for "${username}"?`)) return;
     setBodyguardSpeedsLoading(true);
     setBodyguardSpeedsResult(null);
     try {

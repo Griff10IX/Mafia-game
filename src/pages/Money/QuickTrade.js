@@ -550,25 +550,39 @@ export default function QuickTrade() {
                   acc[key].push(offer);
                   return acc;
                 }, {});
-                
-                return Object.values(groupedOffers).map((userOffers, groupIdx) => {
+
+                const sellPerPoint = (o) => (Number(o.money) || 0) / (Number(o.points) || 1);
+
+                const sellGroupsSorted = Object.values(groupedOffers)
+                  .map((userOffers) => {
+                    const stackedOffers = userOffers.reduce((acc, offer) => {
+                      const key = `${offer.points}-${offer.money}`;
+                      if (!acc[key]) {
+                        acc[key] = { ...offer, ids: [], count: 0 };
+                      }
+                      acc[key].ids.push(offer.id);
+                      acc[key].count++;
+                      return acc;
+                    }, {});
+                    const stacks = Object.values(stackedOffers).sort((a, b) => {
+                      const ra = sellPerPoint(a);
+                      const rb = sellPerPoint(b);
+                      if (ra !== rb) return ra - rb;
+                      return (Number(a.money) || 0) - (Number(b.money) || 0);
+                    });
+                    const bestRate = stacks.length ? sellPerPoint(stacks[0]) : Number.POSITIVE_INFINITY;
+                    return { userOffers, stacks, bestRate };
+                  })
+                  .sort((a, b) => a.bestRate - b.bestRate);
+
+                return sellGroupsSorted.map(({ userOffers, stacks }, groupIdx) => {
                   const firstOffer = userOffers[0];
                   const isMyOffer = firstOffer.is_own;
                   const totalOffers = userOffers.length;
-                  
-                  const stackedOffers = userOffers.reduce((acc, offer) => {
-                    const key = `${offer.points}-${offer.money}`;
-                    if (!acc[key]) {
-                      acc[key] = { ...offer, ids: [], count: 0 };
-                    }
-                    acc[key].ids.push(offer.id);
-                    acc[key].count++;
-                    return acc;
-                  }, {});
-                  
+
                   const mySellIds = isMyOffer ? userOffers.map((o) => o.id) : [];
                   return (
-                    <div key={groupIdx} className={`px-4 py-2 hover:bg-zinc-800/30 transition-colors ${isMyOffer ? 'bg-primary/5' : ''}`}>
+                    <div key={firstOffer.group_key ?? groupIdx} className={`px-4 py-2 hover:bg-zinc-800/30 transition-colors ${isMyOffer ? 'bg-primary/5' : ''}`}>
                       <div className="flex items-center justify-between gap-2 mb-1.5">
                         <div className="flex items-center gap-1.5">
                           <Users size={12} className="text-primary" />
@@ -581,7 +595,7 @@ export default function QuickTrade() {
                         </div>
                       </div>
                       <div className="space-y-1.5">
-                        {Object.values(stackedOffers).map((offer, offerIdx) => (
+                        {stacks.map((offer, offerIdx) => (
                           <div key={offerIdx} className="flex items-start justify-between gap-3 pl-3 border-l-2 border-primary/20">
                             <div className="flex-1 min-w-0 text-[10px] text-mutedForeground space-y-0.5">
                               <div>Pts: <span className="text-primary font-bold">{formatNumber(offer.points)}</span></div>
@@ -649,25 +663,39 @@ export default function QuickTrade() {
                   acc[key].push(offer);
                   return acc;
                 }, {});
-                
-                return Object.values(groupedOffers).map((userOffers, groupIdx) => {
+
+                const buyPerPoint = (o) => (Number(o.cost) || 0) / (Number(o.points) || 1);
+
+                const buyGroupsSorted = Object.values(groupedOffers)
+                  .map((userOffers) => {
+                    const stackedOffers = userOffers.reduce((acc, offer) => {
+                      const key = `${offer.points}-${offer.cost}`;
+                      if (!acc[key]) {
+                        acc[key] = { ...offer, ids: [], count: 0 };
+                      }
+                      acc[key].ids.push(offer.id);
+                      acc[key].count++;
+                      return acc;
+                    }, {});
+                    const stacks = Object.values(stackedOffers).sort((a, b) => {
+                      const ra = buyPerPoint(a);
+                      const rb = buyPerPoint(b);
+                      if (ra !== rb) return rb - ra;
+                      return (Number(b.cost) || 0) - (Number(a.cost) || 0);
+                    });
+                    const bestRate = stacks.length ? buyPerPoint(stacks[0]) : 0;
+                    return { userOffers, stacks, bestRate };
+                  })
+                  .sort((a, b) => b.bestRate - a.bestRate);
+
+                return buyGroupsSorted.map(({ userOffers, stacks }, groupIdx) => {
                   const firstOffer = userOffers[0];
                   const isMyOffer = firstOffer.is_own;
                   const totalOffers = userOffers.length;
-                  
-                  const stackedOffers = userOffers.reduce((acc, offer) => {
-                    const key = `${offer.points}-${offer.cost}`;
-                    if (!acc[key]) {
-                      acc[key] = { ...offer, ids: [], count: 0 };
-                    }
-                    acc[key].ids.push(offer.id);
-                    acc[key].count++;
-                    return acc;
-                  }, {});
-                  
+
                   const myBuyIds = isMyOffer ? userOffers.map((o) => o.id) : [];
                   return (
-                    <div key={groupIdx} className={`px-4 py-2 hover:bg-zinc-800/30 transition-colors ${isMyOffer ? 'bg-primary/5' : ''}`}>
+                    <div key={firstOffer.group_key ?? groupIdx} className={`px-4 py-2 hover:bg-zinc-800/30 transition-colors ${isMyOffer ? 'bg-primary/5' : ''}`}>
                       <div className="flex items-center justify-between gap-2 mb-1.5">
                         <div className="flex items-center gap-1.5">
                           <Users size={12} className="text-primary" />
@@ -680,7 +708,7 @@ export default function QuickTrade() {
                         </div>
                       </div>
                       <div className="space-y-1.5">
-                        {Object.values(stackedOffers).map((offer, offerIdx) => (
+                        {stacks.map((offer, offerIdx) => (
                           <div key={offerIdx} className="flex items-start justify-between gap-3 pl-3 border-l-2 border-primary/20">
                             <div className="flex-1 min-w-0 text-[10px] text-mutedForeground space-y-0.5">
                               <div>Pts: <span className="text-primary font-bold">{formatNumber(offer.points)}</span></div>

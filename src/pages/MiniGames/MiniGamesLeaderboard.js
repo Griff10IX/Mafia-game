@@ -1,13 +1,22 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Trophy, Medal, Award, RefreshCw, Gamepad2, Clock, Gift, DollarSign, Heart, Package, Crosshair, Bomb, Ship, Car, PersonStanding, Shield, Landmark } from 'lucide-react';
-import api from '../../utils/api';
+import api, { getApiErrorMessage } from '../../utils/api';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 
 const MG_LB_CACHE_KEY = 'mafia_minigames_lb_v1';
+
+/** Reject corrupt sessionStorage (e.g. data as string) so we never show infinite "Loading" with silent refresh. */
+function isValidMgLbCache(entry) {
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
+  const d = entry.data;
+  return d != null && typeof d === 'object' && !Array.isArray(d);
+}
+
+const LB_FETCH_TIMEOUT_MS = 25_000;
 
 const LB_STYLES = `
   .mg-fade-in { animation: mg-fade-in 0.4s ease-out both; }
@@ -97,26 +106,40 @@ function RewardBadge({ reward, rank }) {
 
 export default function MiniGamesLeaderboard() {
   const initialMg = readSessionJson(MG_LB_CACHE_KEY);
-  const [data, setData] = useState(() => initialMg?.data ?? null);
-  const [myStats, setMyStats] = useState(() => initialMg?.myStats ?? null);
-  const [loading, setLoading] = useState(() => !initialMg?.data);
+  const cacheOk = isValidMgLbCache(initialMg);
+  const [data, setData] = useState(() => (cacheOk ? initialMg.data : null));
+  const [myStats, setMyStats] = useState(() => (cacheOk ? initialMg.myStats ?? null : null));
+  const [loading, setLoading] = useState(() => !cacheOk);
   const [refreshing, setRefreshing] = useState(false);
   const intervalRef = useRef(null);
+  const fetchInFlightRef = useRef(false);
 
   const fetchData = useCallback(async (mode = 'load') => {
+    if (mode === 'silent' && fetchInFlightRef.current) return;
+    fetchInFlightRef.current = true;
     if (mode === 'load') setLoading(true);
     if (mode === 'manual') setRefreshing(true);
+    const axiosOpts = { timeout: LB_FETCH_TIMEOUT_MS };
     try {
       const [lbRes, statsRes] = await Promise.all([
-        api.get('/minigames/leaderboard'),
-        api.get('/minigames/my-stats'),
+        api.get('/minigames/leaderboard', axiosOpts),
+        api.get('/minigames/my-stats', axiosOpts),
       ]);
       setData(lbRes.data);
       setMyStats(statsRes.data);
       writeSessionJson(MG_LB_CACHE_KEY, { data: lbRes.data, myStats: statsRes.data });
     } catch (error) {
-      if (mode === 'load') toast.error('Failed to load mini games leaderboard');
+      const canceled = error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError';
+      if (canceled) return;
+      if (mode === 'load') {
+        const msg =
+          error?.code === 'ECONNABORTED'
+            ? 'Leaderboard request timed out. Check your connection and tap refresh.'
+            : getApiErrorMessage(error) || 'Failed to load mini games leaderboard';
+        toast.error(msg);
+      }
     } finally {
+      fetchInFlightRef.current = false;
       setLoading(false);
       setRefreshing(false);
     }
@@ -124,7 +147,7 @@ export default function MiniGamesLeaderboard() {
 
   useEffect(() => {
     const c = readSessionJson(MG_LB_CACHE_KEY);
-    fetchData(c?.data ? 'silent' : 'load');
+    fetchData(isValidMgLbCache(c) ? 'silent' : 'load');
   }, [fetchData]);
 
   useEffect(() => {
