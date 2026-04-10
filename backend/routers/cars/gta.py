@@ -124,6 +124,12 @@ from routers.account.objectives import update_objectives_progress
 from routers.admin.airport import _invalidate_travel_info_cache
 from routers.game.families import resolve_family_id
 from utils.family_vault_log import log_family_vault_tx
+
+# Family members in an active war cannot liquidate exclusive / loot-exclusive cars (list, scrap, melt).
+EXCLUSIVE_CAR_WAR_LOCK_DETAIL = (
+    "Exclusive and loot-exclusive cars are locked while your family is at war. "
+    "You cannot sell, scrap, or melt them until the war ends; they can still transfer if you are killed in PvP."
+)
 from utils.minigame_captcha_gate import require_turnstile_for_game_action
 from utils.civilian_protection import maybe_revoke_civilian_protection
 
@@ -976,6 +982,26 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
     family_id = await resolve_family_id(user.get("id") or "") or (str(user.get("family_id") or "").strip() or None)
     in_war = family_id and await _family_in_active_war(family_id)
 
+    if in_war:
+        for raw_id in car_ids[:limit]:
+            uc = await db.user_cars.find_one({**owner, "id": raw_id, "listed_for_sale": {"$ne": True}})
+            if not uc:
+                try:
+                    uc = await db.user_cars.find_one(
+                        {**owner, "_id": ObjectId(raw_id), "listed_for_sale": {"$ne": True}}
+                    )
+                except Exception:
+                    uc = None
+            if not uc:
+                continue
+            car_info = next((c for c in CARS if c.get("id") == uc.get("car_id")), None)
+            if car_info and car_info.get("rarity") in ("exclusive", "loot_exclusive"):
+                return {
+                    "success": False,
+                    "message": EXCLUSIVE_CAR_WAR_LOCK_DETAIL,
+                    "exclusive_war_lock": True,
+                }
+
     # Bullets melt: claim cooldown atomically before deleting cars (parallel POSTs used to share the same read).
     claimed_bullets_melt = False
     prev_user_before_bullets_claim = None
@@ -1035,9 +1061,6 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
         if deleted_car:
             model_id = deleted_car["car_id"]
             car_info = next((c for c in CARS if c["id"] == model_id), None)
-            if in_war and car_info and car_info.get("rarity") in ("exclusive", "loot_exclusive"):
-                await db.user_cars.insert_one(deleted_car)
-                continue
             if car_info:
                 if car_info.get("rarity") == "uncommon":
                     uncommon_count += 1
@@ -1335,6 +1358,8 @@ async def melt_cars(
         body.action,
         manual_garage=body.manual_garage,
     )
+    if result.get("exclusive_war_lock"):
+        raise HTTPException(status_code=403, detail=result.get("message") or EXCLUSIVE_CAR_WAR_LOCK_DETAIL)
     if result.get("cooldown"):
         raise HTTPException(status_code=400, detail=result.get("detail", "Melt on cooldown"))
     return result
@@ -1564,11 +1589,11 @@ async def list_car(
         raise HTTPException(status_code=404, detail="Car not found in your garage")
     if user_car.get("listed_for_sale"):
         raise HTTPException(status_code=400, detail="Car is already listed")
-    family_id = current_user.get("family_id")
-    if family_id and await _family_in_active_war(family_id):
+    list_family_id = await resolve_family_id(current_user.get("id") or "")
+    if list_family_id and await _family_in_active_war(list_family_id):
         car_info = next((c for c in CARS if c.get("id") == user_car.get("car_id")), None)
         if car_info and car_info.get("rarity") in ("exclusive", "loot_exclusive"):
-            raise HTTPException(status_code=403, detail="Exclusive and loot-exclusive cars cannot be sold during a family war")
+            raise HTTPException(status_code=403, detail=EXCLUSIVE_CAR_WAR_LOCK_DETAIL)
     now = datetime.now(timezone.utc).isoformat()
     if user_car.get("_id") is not None:
         q = {"_id": user_car["_id"]}
@@ -1656,7 +1681,13 @@ async def buy_listed_car(
         seller_family_id = await resolve_family_id(seller_id)
         if seller_family_id and await _family_in_active_war(seller_family_id):
             await _rollback_car()
-            raise HTTPException(status_code=403, detail="Cannot buy — seller's family is at war; exclusive cars cannot be sold during war")
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Cannot buy this listing — the seller's family is at war. "
+                    "Exclusive and loot-exclusive cars cannot be sold on the market until the war ends."
+                ),
+            )
     price = int(user_car.get("sale_price") or 0)
     if price <= 0:
         await _rollback_car()

@@ -1041,11 +1041,13 @@ export default function Layout({ children }) {
     { path: '/staffrole/locked', icon: Lock, label: 'Locked accounts' },
     { path: '/staffrole/users-online', icon: Users, label: 'Users online (live)' },
     { path: '/staffrole/witness-statements', icon: FileText, label: 'Witness statements' },
+    { path: '/staffrole/attack-logs', icon: Crosshair, label: 'Attack logs' },
   ] : [];
   const moderatorNavItems = isModerator && !isAdmin ? [
     { path: '/staffrole/admin/overview', icon: Shield, label: 'Moderator tools' },
     { path: '/staffrole/users-online', icon: Users, label: 'Users online (live)' },
     { path: '/staffrole/witness-statements', icon: FileText, label: 'Witness statements' },
+    { path: '/staffrole/attack-logs', icon: Crosshair, label: 'Attack logs' },
   ] : [];
 
   const sidebarBgStyle = { backgroundColor: 'var(--noir-content)' };

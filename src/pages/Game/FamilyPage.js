@@ -2488,11 +2488,31 @@ export default function FamilyPage() {
       setJoinId('');
       refreshUser();
       fetchData();
-    } catch (e) { toast.error(apiDetail(e)); }
+    } catch (e) {
+      const d = apiDetail(e);
+      toast.error(
+        d === 'family_war_recruitment_closed'
+          ? 'This crew is at war: new members can only join for 24 hours after the war started, and that window has closed.'
+          : d,
+      );
+    }
   };
   const handleLeave = async () => { if (!window.confirm('Leave family?')) return; try { const res = await api.post('/families/leave'); if (res.data?.retribution) { toast.warning(`Left family. The family sent a hitman — you were shot and lost ${res.data.health_lost_pct ?? '?'}% health. You survived.`); } else { toast.success('Left'); } refreshUser(); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const handleKick = async (userId) => { if (!window.confirm('Kick?')) return; try { await api.post('/families/kick', { user_id: userId }); toast.success('Kicked'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
-  const handleAcceptJoinApplication = async (applicationId) => { try { await api.post(`/families/join-applications/${applicationId}/accept`); toast.success('Application accepted'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
+  const handleAcceptJoinApplication = async (applicationId) => {
+    try {
+      await api.post(`/families/join-applications/${applicationId}/accept`);
+      toast.success('Application accepted');
+      fetchData();
+    } catch (e) {
+      const d = apiDetail(e);
+      toast.error(
+        d === 'family_war_recruitment_closed'
+          ? 'This crew is at war: new members can only join for 24 hours after the war started, and that window has closed.'
+          : d,
+      );
+    }
+  };
   const handleDenyJoinApplication = async (applicationId) => { try { await api.post(`/families/join-applications/${applicationId}/deny`); toast.success('Application denied'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const handleJoinSettingsUpdate = async (payload) => { try { await api.patch('/families/join-settings', payload); toast.success('Join settings updated'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const handleMeltSettingsUpdate = async (payload) => { try { await api.patch('/families/melt-settings', payload); toast.success('Melt settings updated'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
