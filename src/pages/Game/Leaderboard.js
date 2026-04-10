@@ -109,7 +109,9 @@ function StatBoard({ title, boardKey, icon: Icon, entries, valueLabel, topLabel,
       <div className="p-2 space-y-1">
         {list.length === 0 ? (
           fetching ? (
-            <div className="py-3" />
+            <p className="text-[10px] text-primary/80 italic py-3 text-center font-heading animate-pulse">
+              Loading…
+            </p>
           ) : (
           <p className="text-[10px] text-mutedForeground italic py-3 text-center font-heading">No data yet.</p>
           )

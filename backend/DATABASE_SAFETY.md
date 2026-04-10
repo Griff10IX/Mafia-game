@@ -46,16 +46,13 @@ mongodump --uri="your_mongo_uri" --out=backup_$(date +%Y%m%d)
 ```
 
 ### 2. **Restrict Admin Access**
-Only these emails can call dangerous endpoints:
-```python
-ADMIN_EMAILS = ["admin@mafia.com", "boss@mafia.com", "jakeg_lfc2016@icloud.com"]
-```
+Only emails listed in the **`ADMIN_EMAILS`** environment variable (comma-separated, case-insensitive) can call dangerous admin endpoints.
 
 ### 3. **Monitor Server Logs**
 All dangerous operations now log with 🚨 emoji:
 ```
-🚨 DATABASE WIPE initiated by admin@mafia.com (AdminUser)
-🚨 DATABASE WIPE completed by admin@mafia.com: 15234 documents deleted
+🚨 DATABASE WIPE initiated by admin@example.com (AdminUser)
+🚨 DATABASE WIPE completed by admin@example.com: 15234 documents deleted
 ```
 
 ### 4. **Use Environment Variables**

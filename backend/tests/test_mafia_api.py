@@ -13,9 +13,9 @@ from routers.kill.armoury import UseTokenRequest, _tokens_to_reach_stack_cap, us
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://gangsters-haven.preview.emergentagent.com').rstrip('/')
 
-# Test credentials
-ADMIN_EMAIL = "admin@mafia.com"
-ADMIN_PASSWORD = "mafia123"
+# Integration tests: set TEST_ADMIN_EMAIL and TEST_ADMIN_PASSWORD to an admin on BASE_URL
+ADMIN_EMAIL = os.environ.get("TEST_ADMIN_EMAIL", "")
+ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "")
 
 class TestAuth:
     """Authentication endpoint tests"""

@@ -2729,8 +2729,9 @@ async def sell_armour(current_user: dict = Depends(get_current_user)):
     msg += f"${refund_money:,}" if refund_money is not None else f"{refund_points} points"
     return {"message": msg + " (50% of purchase price).", "refund_money": refund_money, "refund_points": refund_points}
 
-# Admin endpoints
-ADMIN_EMAILS = ["admin@mafia.com", "boss@mafia.com"]
+# Admin endpoints (same as main server: comma-separated ADMIN_EMAILS in .env)
+_raw_admin = (os.environ.get("ADMIN_EMAILS") or "").strip()
+ADMIN_EMAILS = [e.strip().lower() for e in _raw_admin.split(",") if e.strip()] if _raw_admin else []
 
 @api_router.post("/admin/change-rank")
 async def admin_change_rank(target_username: str, new_rank: int, current_user: dict = Depends(get_current_user)):

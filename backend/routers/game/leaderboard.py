@@ -3,7 +3,7 @@ import asyncio
 import logging
 import time
 from datetime import datetime, timezone, timedelta
-from typing import List
+from typing import List, Optional
 
 from fastapi import Depends, Query
 from pydantic import BaseModel
@@ -28,6 +28,62 @@ _last_reward_winners_cache: dict = {}
 _LAST_WINNERS_CACHE_TTL = 300
 
 _leaderboard_user_filter = _staff_exclude_user_filter
+
+
+def _weekly_agg_candidate_limit(limit: int) -> int:
+    """How many users to pull from weekly $group before alive/dead filter (was limit*2, too small for dead)."""
+    limit = max(1, min(100, int(limit)))
+    return min(500, max(limit * 4, limit * 25))
+
+
+def _expand_user_ids_for_lookup(ids: List) -> List:
+    """Event logs may store user_id as str or int; users.id may differ — widen $in for the batch lookup."""
+    out: List = []
+    seen = set()
+
+    def _add(x):
+        if x is None or x in seen:
+            return
+        seen.add(x)
+        out.append(x)
+
+    for raw in ids:
+        if raw is None:
+            continue
+        _add(raw)
+        try:
+            if isinstance(raw, str) and raw.strip().lstrip("-").isdigit():
+                _add(int(raw.strip(), 10))
+            elif isinstance(raw, (int, float)) and not isinstance(raw, bool):
+                _add(str(int(raw)))
+        except (ValueError, TypeError, OverflowError):
+            pass
+    return out
+
+
+def _user_from_leaderboard_map(users_by_id: dict, uid) -> Optional[dict]:
+    """Resolve users collection row when aggregate _id may not match map key type."""
+    if uid is None:
+        return None
+    u = users_by_id.get(uid)
+    if u is not None:
+        return u
+    try:
+        if isinstance(uid, str) and uid.strip().lstrip("-").isdigit():
+            u = users_by_id.get(int(uid.strip(), 10))
+            if u is not None:
+                return u
+    except (ValueError, TypeError):
+        pass
+    try:
+        if isinstance(uid, (int, float)) and not isinstance(uid, bool):
+            u = users_by_id.get(str(int(uid)))
+            if u is not None:
+                return u
+    except (ValueError, TypeError, OverflowError):
+        pass
+    return None
+
 
 # Weekly kills: real victims + robot bodyguards; exclude hitlist NPCs (is_npc_kill) and other NPCs.
 _ATTACK_WEEKLY_PLAYER_KILL_MATCH = {
@@ -106,33 +162,35 @@ async def _top_by_field_weekly(
     match_stage = {"_lb_ts": {"$gte": week_start, "$lt": week_end}}
     if extra_match:
         match_stage.update(extra_match)
+    cap = _weekly_agg_candidate_limit(limit)
     pipeline = [
         # Normalize time to date so both BSON Date and ISO string in DB compare correctly
         {"$addFields": {"_lb_ts": {"$toDate": f"${time_field}"}}},
         {"$match": match_stage},
         {"$group": {"_id": f"${user_field}", "value": {"$sum": 1}}},
         {"$sort": {"value": -1}},
-        {"$limit": limit * 2},
+        {"$limit": cap},
     ]
     coll = getattr(db, collection)
     cursor = coll.aggregate(pipeline)
-    docs = await cursor.to_list(limit * 2)
+    docs = await cursor.to_list(cap)
     if not docs:
         return []
     user_ids = [d["_id"] for d in docs if d.get("_id")]
-    q = {"id": {"$in": user_ids}}
+    id_list = _expand_user_ids_for_lookup(user_ids)
+    q = {"id": {"$in": id_list}}
     q.update(_leaderboard_user_filter())
     users_map = await db.users.find(
         q,
         {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "is_bodyguard": 1, "is_npc": 1}
-    ).to_list(len(user_ids) + 1)
+    ).to_list(len(id_list) + 1)
     users_by_id = {u["id"]: u for u in users_map}
     filtered = []
     for d in docs:
         uid = d.get("_id")
         if not uid:
             continue
-        u = users_by_id.get(uid)
+        u = _user_from_leaderboard_map(users_by_id, uid)
         if not u:
             continue
         if bool(dead) != bool(u.get("is_dead")):
@@ -171,32 +229,34 @@ async def _top_by_field_weekly_sum(
     match_stage = {"_lb_ts": {"$gte": week_start, "$lt": week_end}}
     if extra_match:
         match_stage.update(extra_match)
+    cap = _weekly_agg_candidate_limit(limit)
     pipeline = [
         {"$addFields": {"_lb_ts": {"$toDate": f"${time_field}"}}},
         {"$match": match_stage},
         {"$group": {"_id": f"${user_field}", "value": {"$sum": {"$ifNull": [f"${value_field}", 0]}}}},
         {"$sort": {"value": -1}},
-        {"$limit": limit * 2},
+        {"$limit": cap},
     ]
     coll = getattr(db, collection)
     cursor = coll.aggregate(pipeline)
-    docs = await cursor.to_list(limit * 2)
+    docs = await cursor.to_list(cap)
     if not docs:
         return []
     user_ids = [d["_id"] for d in docs if d.get("_id")]
-    q = {"id": {"$in": user_ids}}
+    id_list = _expand_user_ids_for_lookup(user_ids)
+    q = {"id": {"$in": id_list}}
     q.update(_leaderboard_user_filter())
     users_map = await db.users.find(
         q,
         {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "is_bodyguard": 1, "is_npc": 1}
-    ).to_list(len(user_ids) + 1)
+    ).to_list(len(id_list) + 1)
     users_by_id = {u["id"]: u for u in users_map}
     filtered = []
     for d in docs:
         uid = d.get("_id")
         if not uid:
             continue
-        u = users_by_id.get(uid)
+        u = _user_from_leaderboard_map(users_by_id, uid)
         if not u:
             continue
         if bool(dead) != bool(u.get("is_dead")):
@@ -642,7 +702,7 @@ async def get_top_leaderboards(
     period: str = Query("alltime", description="weekly = this week (Mon UTC), alltime = lifetime stats"),
     current_user: dict = Depends(get_current_user),
 ):
-    """Top N leaderboards per stat. Results are cached for 30s to keep background refreshes fast."""
+    """Top N leaderboards per stat. Results are cached briefly to keep background refreshes fast."""
     username = current_user.get("username") or ""
     now = time.monotonic()
     period_l = (period or "alltime").lower()
