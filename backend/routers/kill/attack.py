@@ -67,7 +67,7 @@ from routers.money.booze_run import BOOZE_TYPES
 from routers.account.objectives import update_objectives_progress
 from routers.kill.armoury import _best_weapon_for_user, _get_weapon_mastery_pct, MASTERY_MAX_BULLET_REDUCTION_PCT
 from routers.game.families import resolve_family_id
-from utils.staff_bot_client_alert import maybe_notify_staff_bot_attack_from_ua
+from utils.staff_bot_client_alert import maybe_notify_staff_bot_attack_from_ua, maybe_notify_staff_attack_execute_token_fail
 
 
 def _safe_compare_execute_token(stored: str, submitted: Optional[str]) -> bool:
@@ -337,11 +337,18 @@ def _request_meta(request: Optional[Request]) -> dict:
     return out
 
 
-async def _log_attack_error(attacker_id: str, attacker_username: str, player_message: str, req: Optional[Request] = None):
+async def _log_attack_error(
+    attacker_id: str,
+    attacker_username: str,
+    player_message: str,
+    req: Optional[Request] = None,
+    *,
+    extra: Optional[Dict[str, Any]] = None,
+):
     """Log a failed execute attempt (validation/perm error) so admin sees every click."""
     try:
         meta = _request_meta(req)
-        await db.attack_attempts.insert_one({
+        doc: Dict[str, Any] = {
             "id": str(uuid.uuid4()),
             "attacker_id": attacker_id,
             "attacker_username": attacker_username or "?",
@@ -349,7 +356,12 @@ async def _log_attack_error(attacker_id: str, attacker_username: str, player_mes
             "player_message": (player_message or "")[:1000],
             "created_at": datetime.now(timezone.utc),
             **meta,
-        })
+        }
+        if extra:
+            for k, v in extra.items():
+                if v is not None and k not in doc:
+                    doc[k] = v
+        await db.attack_attempts.insert_one(doc)
     except Exception:
         pass
 
@@ -579,6 +591,8 @@ _PLAYER_ATTACK_ATTEMPT_META_KEYS = frozenset(
         "attacker_bot_label",
         "attacker_client_signal",
         "attacker_client_signal_detail",
+        "integrity_violation",
+        "attack_id",
     }
 )
 
@@ -1229,12 +1243,34 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             await _log_attack_error(
                 current_user["id"],
                 current_user.get("username"),
-                "Stale or missing execute token — refresh My Searches (or attack status) and try again.",
+                "Execute rejected: invalid or missing session token (anti-bot / scripted client).",
                 req,
+                extra={
+                    "integrity_violation": "execute_token",
+                    "attack_id": request.attack_id,
+                    "location_state": target_location,
+                },
             )
+            try:
+                await maybe_notify_staff_attack_execute_token_fail(
+                    db=db,
+                    request=req,
+                    attacker_id=str(current_user["id"]),
+                    attacker_username=current_user.get("username") or "?",
+                    target_id=str(target.get("id") or ""),
+                    target_username=(target.get("username") or "").strip() or "?",
+                    attack_id=request.attack_id,
+                    location_state=target_location,
+                )
+            except Exception:
+                pass
             raise HTTPException(
                 status_code=400,
-                detail="Stale or missing attack session. Refresh your searches and try again.",
+                detail=(
+                    "Do not use bots or automated tools on attacks. Use the Kill page in a normal browser. "
+                    "If you are playing fairly, refresh the page and open My Searches before attacking again. "
+                    "A report has been sent to staff."
+                ),
             )
     if await soft_launch_blocks_pvp_kill_on_target(db, target):
         await _log_attack_error(current_user["id"], current_user.get("username"), "Release soft-launch PvP block", req)

@@ -136,7 +136,6 @@ const KillUserCard = ({
   userBullets,
   userMolotovs,
   foundAndReady,
-  loading,
   onKill,
   onOpenCalc,
   bulletsNeededForKill,
@@ -257,13 +256,13 @@ const KillUserCard = ({
       
       <button
         type="button"
-        disabled={loading || killPvpBlocked || !killUsername.trim() || !bulletsToUse.trim() || parseInt(bulletsToUse, 10) < 1}
+        disabled={killPvpBlocked || !killUsername.trim() || !bulletsToUse.trim() || parseInt(bulletsToUse, 10) < 1}
         onClick={onKill}
         title={killPvpBlocked ? 'Player kills are disabled during release soft-launch (NPCs still allowed).' : undefined}
         className="w-full bg-gradient-to-r from-red-700 via-red-800 to-red-900 hover:from-red-600 hover:via-red-700 hover:to-red-800 text-white rounded font-heading font-bold uppercase tracking-widest py-2 text-[10px] border-2 border-red-600/50 shadow-lg shadow-red-500/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 touch-manipulation"
         data-testid="kill-inline-button"
       >
-        {loading ? '⏳ …' : '💀 Kill User'}
+        💀 Kill User
       </button>
     </div>
     <div className="atk-art-line text-primary mx-2" />
@@ -1383,6 +1382,7 @@ export default function Attack() {
     try {
       const payload = extra ? { attack_id: attackId, ...extra } : { attack_id: attackId };
       const response = await api.post('/attack/execute', payload);
+      setLoading(false);
       if (response.data.success) {
         const rewardMoney = response.data.rewards?.money;
         showKillResult(response.data.message, 'success', {
@@ -1646,7 +1646,6 @@ export default function Attack() {
             userBullets={userBullets}
             userMolotovs={userMolotovs}
             foundAndReady={foundAndReady}
-            loading={loading}
             onKill={killByUsername}
             onOpenCalc={() => setShowCalcModal(true)}
             bulletsNeededForKill={killBulletsResult}

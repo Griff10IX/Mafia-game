@@ -2,7 +2,12 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { X } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
-import { formatAttackLogTime, formatAttackLogBotCell, parseAttackLogUA } from '../../utils/attackLogDisplay';
+import {
+  formatAttackLogTime,
+  formatAttackLogBotCell,
+  formatAttackLogIntegrityCell,
+  parseAttackLogUA,
+} from '../../utils/attackLogDisplay';
 
 function BtnPrimary({ children, ...props }) {
   return (
@@ -167,6 +172,9 @@ export default function AttackLogsPanel({
                   <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">User-Agent</th>
                   <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Device</th>
                   <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Bot?</th>
+                  <th className="py-1 pr-1 font-bold text-mutedForeground uppercase" title="Anti-bot / session integrity">
+                    Flags
+                  </th>
                   <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Bodyguard?</th>
                   <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Bullets</th>
                   <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Location</th>
@@ -178,6 +186,7 @@ export default function AttackLogsPanel({
                 {attackLogsData.logs.map((row, idx) => {
                   const { device } = parseAttackLogUA(row.user_agent);
                   const botCell = formatAttackLogBotCell(row);
+                  const integCell = formatAttackLogIntegrityCell(row);
                   return (
                     <tr key={row.id || idx} className="border-b border-zinc-700/30">
                       <td className="py-1 pr-1 text-foreground">{row.attacker_username ?? '—'}</td>
@@ -207,6 +216,15 @@ export default function AttackLogsPanel({
                         ) : (
                           <span className={botCell.className} title={botCell.title || undefined}>
                             {botCell.text}
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-1 pr-1">
+                        {integCell.text === '—' ? (
+                          '—'
+                        ) : (
+                          <span className={integCell.className} title={integCell.title || undefined}>
+                            {integCell.text}
                           </span>
                         )}
                       </td>
@@ -242,27 +260,14 @@ export default function AttackLogsPanel({
           >
             <div className="px-4 py-3 border-b border-zinc-700/50 flex items-center justify-between shrink-0">
               <h3 className="text-sm font-heading font-bold text-primary">Attack log entry</h3>
-              <div className="flex items-center gap-3">
-                <label className="flex items-center gap-1.5 text-[10px] font-heading text-mutedForeground cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={attackLogsLive}
-                    onChange={(e) => setAttackLogsLive(e.target.checked)}
-                    className="rounded border border-input"
-                  />
-                  Live
-                </label>
-                {attackLogsLive && (
-                  <span className="text-[9px] text-primary font-heading">Refreshing every 5s</span>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setAttackLogViewRow(null)}
-                  className="p-1 rounded border border-zinc-600 text-zinc-400 hover:bg-zinc-700 hover:text-foreground"
-                >
-                  <X size={14} />
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setAttackLogViewRow(null)}
+                className="p-1 rounded border border-zinc-600 text-zinc-400 hover:bg-zinc-700 hover:text-foreground"
+                aria-label="Close"
+              >
+                <X size={14} />
+              </button>
             </div>
             <div className="p-4 overflow-y-auto flex-1 text-[10px] font-heading space-y-3">
               <div className="grid grid-cols-2 gap-x-4 gap-y-1">
@@ -322,6 +327,19 @@ export default function AttackLogsPanel({
                   <div className="col-span-2">
                     <span className="text-mutedForeground">Bot type:</span>{' '}
                     <span className="text-amber-400 font-medium">{attackLogViewRow.attacker_bot_label}</span>
+                  </div>
+                )}
+                {attackLogViewRow.integrity_violation && (
+                  <div className="col-span-2 rounded border border-red-500/40 bg-red-500/10 px-2 py-1.5">
+                    <span className="text-mutedForeground font-bold uppercase tracking-wider text-[9px]">Integrity / anti-bot</span>
+                    <p className="text-red-200 font-heading text-[10px] mt-1">
+                      {attackLogViewRow.integrity_violation === 'execute_token'
+                        ? 'Session token mismatch — client likely skipped loading searches or used a script. Player was warned; staff inbox notified (throttled per attacker).'
+                        : String(attackLogViewRow.integrity_violation).replace(/_/g, ' ')}
+                    </p>
+                    {attackLogViewRow.attack_id && (
+                      <p className="text-[9px] font-mono text-white/70 mt-1">Attack id: {attackLogViewRow.attack_id}</p>
+                    )}
                   </div>
                 )}
                 <div>

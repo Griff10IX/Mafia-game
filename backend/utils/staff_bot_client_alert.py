@@ -373,3 +373,73 @@ async def maybe_notify_staff_bot_attack_from_ua(
                 logger.warning("staff bot attack notify %s: %s", uid, e)
     except Exception:
         logger.exception("maybe_notify_staff_bot_attack_from_ua failed")
+
+
+_last_execute_token_alert: dict[str, float] = {}
+_EXECUTE_TOKEN_ALERT_TTL_SEC = 3600.0
+
+
+async def maybe_notify_staff_attack_execute_token_fail(
+    *,
+    db,
+    request,
+    attacker_id: str,
+    attacker_username: str,
+    target_id: str,
+    target_username: str,
+    attack_id: str,
+    location_state: Optional[str] = None,
+) -> None:
+    """Staff inbox when execute fails anti-bot session token (throttled per attacker)."""
+    now = time.monotonic()
+    aid = (attacker_id or "").strip()
+    if not aid:
+        return
+    key = f"atktok|{aid}"
+    if _last_execute_token_alert.get(key, 0) + _EXECUTE_TOKEN_ALERT_TTL_SEC > now:
+        return
+    _last_execute_token_alert[key] = now
+    _prune(_last_execute_token_alert)
+
+    ip = client_ip_from_request(request)
+    ua = (request.headers.get("user-agent") or "").strip()
+    ua_short = (ua[:200] + "…") if len(ua) > 200 else ua
+    loc = f" · location {location_state}" if location_state else ""
+    lines = [
+        "— Attack execute: invalid / missing session token (anti-bot) —",
+        "The client POSTed /attack/execute without a valid execute_token (or with a stale one).",
+        "Legitimate players should refresh My Searches; scripts often skip that step.",
+        f"Attacker: {attacker_username} (id {aid})",
+        f"Target: {target_username} (id {target_id or '?'}){loc}",
+        f"Attack row id: {attack_id}",
+        f"IP: {ip or '—'}",
+        f"User-Agent: {ua_short or '—'}",
+        "— Request metadata —",
+    ]
+    lines.extend(_request_intel_lines(request))
+    acc = await _account_intel_lines(db, aid)
+    if acc:
+        lines.append("— Account —")
+        lines.extend(acc)
+
+    try:
+        from server import _get_admin_user_ids, _get_staff_user_ids, send_notification
+
+        mode = (os.environ.get("BOT_BLOCK_ALERT_RECIPIENTS") or "staff").strip().lower()
+        if mode == "admins":
+            recipient_ids = await _get_admin_user_ids()
+            if not recipient_ids:
+                recipient_ids = await _get_staff_user_ids()
+        else:
+            recipient_ids = await _get_staff_user_ids()
+
+        title = "Security: attack session token failed (possible bot)"
+        msg = "\n".join(lines)
+        extra = {"staff_alert_kind": "attack_execute_token_fail"}
+        for uid in recipient_ids:
+            try:
+                await send_notification(uid, title, msg, "staff_bot_client", **extra)
+            except Exception as e:
+                logger.warning("staff execute-token notify %s: %s", uid, e)
+    except Exception:
+        logger.exception("maybe_notify_staff_attack_execute_token_fail failed")

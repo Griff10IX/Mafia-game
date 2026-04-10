@@ -3857,8 +3857,14 @@ export default function Admin() {
   };
 
   const handleClearBodyguards = async () => {
+    const username = (formData.targetUsername || '').trim();
+    if (!username) {
+      toast.error('Enter a username');
+      return;
+    }
+    if (!window.confirm(`Remove all bodyguards for "${username}"?`)) return;
     try {
-      const res = await api.post(`/admin/bodyguards/clear?target_username=${encodeURIComponent(formData.targetUsername)}`);
+      const res = await api.post(`/admin/bodyguards/clear?target_username=${encodeURIComponent(username)}`);
       toast.success(res.data?.message || 'Cleared', { duration: 10000 });
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed', { duration: 10000 }); }
   };
@@ -3874,6 +3880,7 @@ export default function Admin() {
   };
 
   const handleTestBodyguardPayout = async () => {
+    if (!window.confirm('Run the test bodyguard payout job now (human BGs only)?')) return;
     setTestPayoutLoading(true);
     try {
       const res = await api.post('/admin/bodyguards/test-payout');
@@ -3887,6 +3894,7 @@ export default function Admin() {
 
   const [seedHumanBgLoading, setSeedHumanBgLoading] = useState(false);
   const handleSeedHumanBodyguards = async () => {
+    if (!window.confirm('Clear your robots and create 4 test human bodyguards on your account?')) return;
     setSeedHumanBgLoading(true);
     try {
       const res = await api.post('/admin/bodyguards/seed-humans');
@@ -3900,6 +3908,7 @@ export default function Admin() {
 
   const [seedRandomBgLoading, setSeedRandomBgLoading] = useState(false);
   const handleSeedRandomBodyguards = async () => {
+    if (!window.confirm('Create 4 random bodyguards (robots/humans mix) on your account?')) return;
     setSeedRandomBgLoading(true);
     try {
       const res = await api.post('/admin/bodyguards/seed-random');
@@ -3916,6 +3925,7 @@ export default function Admin() {
   };
 
   const handleResetBgCooldown = async () => {
+    if (!window.confirm('Clear your bodyguard drop cooldown?')) return;
     try {
       const res = await api.post('/admin/bodyguards/reset-cooldown');
       toast.success(res.data?.message ?? 'Cooldown reset', { duration: 5000 });
@@ -3975,9 +3985,15 @@ export default function Admin() {
   };
 
   const handleGenerateBodyguards = async () => {
+    const username = (formData.targetUsername || '').trim();
+    if (!username) {
+      toast.error('Enter a username');
+      return;
+    }
+    if (!window.confirm(`Generate ${bgTestCount} robot(s) for "${username}"? Existing robots will be replaced.`)) return;
     try {
       const res = await api.post('/admin/bodyguards/generate', {
-        target_username: formData.targetUsername,
+        target_username: username,
         count: bgTestCount,
         replace_existing: true,
       });

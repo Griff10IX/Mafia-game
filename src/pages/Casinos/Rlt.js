@@ -120,14 +120,16 @@ function piePath(cx, cy, r, startDeg, endDeg) {
   return `M${cx},${cy} L${s.x.toFixed(2)},${s.y.toFixed(2)} A${r},${r} 0 0 1 ${e.x.toFixed(2)},${e.y.toFixed(2)} Z`;
 }
 
-function RouletteWheel({ rotationDeg, spinning, lastResult, size = 260 }) {
+function RouletteWheel({ rotationDeg, spinning, animationEnabled = true, lastResult, size = 260 }) {
   const cx = 100, cy = 100, outerR = 95, textR = 78;
   const segAngle = 360 / WHEEL_ORDER.length;
   const ballOrbitRef = useRef(null);
   const ballAnimRef = useRef(null);
+  /** Ball + wheel CSS spin only when Animation is on; turbo mode still sets `spinning` for UI busy state. */
+  const motion = spinning && animationEnabled;
 
   useEffect(() => {
-    if (spinning && ballOrbitRef.current) {
+    if (motion && ballOrbitRef.current) {
       const el = ballOrbitRef.current;
       const startTime = performance.now();
       const duration = SPIN_DURATION_MS;
@@ -149,10 +151,10 @@ function RouletteWheel({ rotationDeg, spinning, lastResult, size = 260 }) {
       return () => {
         if (ballAnimRef.current) cancelAnimationFrame(ballAnimRef.current);
       };
-    } else if (!spinning && ballOrbitRef.current) {
+    } else if (!motion && ballOrbitRef.current) {
       ballOrbitRef.current.style.transform = 'rotate(0deg)';
     }
-  }, [spinning]);
+  }, [motion]);
 
   return (
     <div className="relative" style={{ width: size, height: size }}>
@@ -198,7 +200,7 @@ function RouletteWheel({ rotationDeg, spinning, lastResult, size = 260 }) {
         style={{
           inset: 14,
           transform: `rotate(${rotationDeg}deg)`,
-          transition: spinning ? `transform ${SPIN_DURATION_MS / 1000}s cubic-bezier(0.0, 0.0, 0.18, 1.0)` : 'none',
+          transition: motion ? `transform ${SPIN_DURATION_MS / 1000}s cubic-bezier(0.0, 0.0, 0.18, 1.0)` : 'none',
           willChange: 'transform',
         }}
       >
@@ -1006,6 +1008,7 @@ export default function Rlt() {
                   <RouletteWheel
                     rotationDeg={wheelRotation}
                     spinning={spinning}
+                    animationEnabled={useAnimation}
                     lastResult={lastResult}
                     size={200}
                   />

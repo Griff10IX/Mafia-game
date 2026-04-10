@@ -53,3 +53,26 @@ export function formatAttackLogBotCell(row) {
   }
   return { text: '—', className: 'text-mutedForeground', title: '' };
 }
+
+/** Staff: anti-bot / integrity flags stored on attack_attempts (e.g. execute_token mismatch). */
+export function formatAttackLogIntegrityCell(row) {
+  if (!row || typeof row !== 'object') {
+    return { text: '—', className: 'text-mutedForeground', title: '' };
+  }
+  const v = row.integrity_violation;
+  if (v === 'execute_token') {
+    return {
+      text: 'Token fail',
+      className: 'text-red-400 font-bold',
+      title: 'POST /attack/execute without valid session token (anti-bot). Staff were notified (throttled).',
+    };
+  }
+  if (v) {
+    return {
+      text: String(v).replace(/_/g, ' '),
+      className: 'text-amber-400 font-medium',
+      title: String(v),
+    };
+  }
+  return { text: '—', className: 'text-mutedForeground', title: '' };
+}
