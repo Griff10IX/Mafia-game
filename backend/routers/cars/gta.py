@@ -814,6 +814,9 @@ async def get_gta_stats(current_user: dict = Depends(get_current_user)):
 
 
 MELT_BULLETS_COOLDOWN_SECONDS = 45  # Only 1 car can be melted for bullets every 45s. Scrap has no cooldown.
+# Applied once to the sum of bullets from a melt (all rarities), after per-car math (+25% vs previous payout).
+MELT_BULLETS_TOTAL_PAYOUT_MULT_NUM = 125
+MELT_BULLETS_TOTAL_PAYOUT_MULT_DEN = 100
 
 GARAGE_FETCH_LIMIT = 10_000
 _VALID_GARAGE_RARITIES = frozenset(
@@ -1070,10 +1073,10 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
                     melt_value = (car_value * MELT_BULLETS_VALUE_MULT_NUM) // MELT_BULLETS_VALUE_MULT_DEN
                     car_bullets = melt_value // MELT_VALUE_PER_BULLET
                     if car_info.get("rarity") == "common":
-                        if car_bullets < 2:
-                            car_bullets = 2
-                        elif car_bullets > 3:
-                            car_bullets = 3
+                        if car_bullets < 5:
+                            car_bullets = 5
+                        elif car_bullets > 7:
+                            car_bullets = 7
                     if rarity not in ("exclusive", "loot_exclusive"):
                         # +25% bullets for all but exclusive / loot_exclusive (floor-rounded).
                         car_bullets = (int(car_bullets) * 125) // 100
@@ -1087,6 +1090,7 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
                 processed += 1
     if deleted_count > 0:
         if action == "bullets":
+            total_bullets = (int(total_bullets or 0) * MELT_BULLETS_TOTAL_PAYOUT_MULT_NUM) // MELT_BULLETS_TOTAL_PAYOUT_MULT_DEN
             base_cooldown = int(MELT_BULLETS_COOLDOWN_SECONDS * 0.5) if melt_token_active else MELT_BULLETS_COOLDOWN_SECONDS
             cooldown_seconds = base_cooldown * deleted_count
             # Badge bonus: 0.1% per bullets melted badge reduces cooldown (min 50%); prestige: 0.5% boost per level

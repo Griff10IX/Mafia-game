@@ -27,6 +27,9 @@ const MELT_SCRAP_RARITIES_KEY = 'garage_melt_scrap_rarities';
 const MELT_VALUE_PER_BULLET = 385;
 const MELT_VALUE_MULTIPLIER_NUM = 122;
 const MELT_VALUE_MULTIPLIER_DEN = 100;
+/** Applied to sum of per-car bullets in one melt; keep in sync with `gta.py` MELT_BULLETS_TOTAL_PAYOUT_* */
+const MELT_BULLETS_TOTAL_PAYOUT_MULT_NUM = 125;
+const MELT_BULLETS_TOTAL_PAYOUT_MULT_DEN = 100;
 const ALL_RARITIES = ['common', 'uncommon', 'rare', 'ultra_rare', 'legendary', 'custom', 'loot_exclusive', 'exclusive'];
 
 function normalizeCarRarity(rarity) {
@@ -44,8 +47,8 @@ function previewBulletsForCarValue(value, rarity) {
   const meltValue = Math.floor((carValue * MELT_VALUE_MULTIPLIER_NUM) / MELT_VALUE_MULTIPLIER_DEN);
   let bullets = Math.floor(meltValue / MELT_VALUE_PER_BULLET);
   if (rarity === 'common') {
-    if (bullets < 2) bullets = 2;
-    else if (bullets > 3) bullets = 3;
+    if (bullets < 5) bullets = 5;
+    else if (bullets > 7) bullets = 7;
   }
   // +25% bullets for all but exclusive / loot_exclusive (floor-rounded), keep in sync with backend melt rewards.
   if (rarity !== 'exclusive' && rarity !== 'loot_exclusive') bullets = Math.floor((bullets * 125) / 100);
@@ -713,9 +716,13 @@ export default function Garage() {
   const selectedCarsForMelt = allFilteredCars.filter(
     (c) => selectedCars.includes(c.user_car_id) && !c.listed_for_sale && meltScrapRarities.length > 0 && meltScrapRarities.includes(c.rarity)
   );
-  const predictedMeltBullets = selectedCarsForMelt
-    .slice(0, batchLimit)
-    .reduce((sum, c) => sum + previewBulletsForCarValue(c.value, c.rarity), 0);
+  const predictedMeltBullets = Math.floor(
+    (selectedCarsForMelt
+      .slice(0, batchLimit)
+      .reduce((sum, c) => sum + previewBulletsForCarValue(c.value, c.rarity), 0) *
+      MELT_BULLETS_TOTAL_PAYOUT_MULT_NUM) /
+      MELT_BULLETS_TOTAL_PAYOUT_MULT_DEN
+  );
 
   const toggleSelectAllDisplayed = () => {
     if (noEligibleInView) return;
