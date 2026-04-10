@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { X } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
-import { formatAttackLogTime, parseAttackLogUA } from '../../utils/attackLogDisplay';
+import { formatAttackLogTime, formatAttackLogBotCell, parseAttackLogUA } from '../../utils/attackLogDisplay';
 
 function BtnPrimary({ children, ...props }) {
   return (
@@ -21,7 +21,7 @@ function BtnPrimary({ children, ...props }) {
  * Used from Admin.js (embedded) and AdminAttackLogs.js (standalone page section).
  */
 export default function AttackLogsPanel({
-  introText = "Search by username to load that user's attack attempts (as attacker or target). Full post data: who shot whom, outcome, bodyguard, bullets, location, etc.",
+  introText = "Leave username empty to load recent attempts for all players (newest first, up to your limit). Enter a username to filter to that player as attacker or target. Turn on Live to refresh every 5s and prepend new rows.",
   tableMaxHeightClass = 'max-h-[420px]',
   onCountChange,
   onLogsLoaded,
@@ -48,18 +48,16 @@ export default function AttackLogsPanel({
 
   const handleFetchAttackLogs = async () => {
     const un = (attackLogsUsername || '').trim();
-    if (!un) {
-      toast.error('Enter a username');
-      return;
-    }
     setAttackLogsLoading(true);
     setAttackLogsData(null);
     try {
-      const res = await api.get('/admin/attacks/logs', { params: { username: un, limit: attackLogsLimit } });
+      const params = { limit: attackLogsLimit };
+      if (un) params.username = un;
+      const res = await api.get('/admin/attacks/logs', { params });
       const payload = res.data || null;
       setAttackLogsData(payload);
       toast.success(`Loaded ${payload?.logs?.length ?? 0} attack log entries`);
-      if (payload) onLogsLoaded?.(un);
+      if (payload) onLogsLoaded?.(un || null);
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to load attack logs');
     } finally {
@@ -68,14 +66,15 @@ export default function AttackLogsPanel({
   };
 
   useEffect(() => {
-    if (!attackLogsLive || !(attackLogsUsername || '').trim()) return;
+    if (!attackLogsLive) return;
     const un = (attackLogsUsername || '').trim();
     const limit = attackLogsLimit;
     const run = async () => {
       try {
         const prev = attackLogsDataRef.current;
         const since = prev?.logs?.length ? prev.logs[0].created_at : null;
-        const params = { username: un, limit: since ? 100 : limit };
+        const params = { limit: since ? 100 : limit };
+        if (un) params.username = un;
         if (since) params.since = since;
         const res = await api.get('/admin/attacks/logs', { params });
         const data = res.data;
@@ -113,7 +112,7 @@ export default function AttackLogsPanel({
           type="text"
           value={attackLogsUsername}
           onChange={(e) => setAttackLogsUsername(e.target.value)}
-          placeholder="Username"
+          placeholder="Username (optional)"
           className="w-40 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading"
         />
         <span className="text-[10px] text-mutedForeground">Limit</span>
@@ -137,14 +136,22 @@ export default function AttackLogsPanel({
           />
           Live
         </label>
-        {attackLogsLive && (attackLogsUsername || '').trim() && (
+        {attackLogsLive && (
           <span className="text-[9px] text-primary font-heading">Refreshing every 5s</span>
         )}
       </div>
       {attackLogsData && (
         <div className={`overflow-x-auto overflow-y-auto ${tableMaxHeightClass}`}>
           <p className="text-[10px] font-heading text-primary mb-1">
-            Attack log for: <strong>{attackLogsData.username ?? '—'}</strong>
+            {attackLogsData.scope === 'all' || attackLogsData.username == null ? (
+              <>
+                Showing: <strong>All players</strong> (most recent first, limit {attackLogsLimit})
+              </>
+            ) : (
+              <>
+                Attack log for: <strong>{attackLogsData.username}</strong>
+              </>
+            )}
           </p>
           {!attackLogsData.logs || attackLogsData.logs.length === 0 ? (
             <p className="text-[10px] text-mutedForeground font-heading">No attack attempts found.</p>
@@ -169,15 +176,8 @@ export default function AttackLogsPanel({
               </thead>
               <tbody>
                 {attackLogsData.logs.map((row, idx) => {
-                  const { device, bot: uaBot } = parseAttackLogUA(row.user_agent);
-                  const botLabel =
-                    row.attacker_is_bot === true
-                      ? row.attacker_bot_label
-                        ? `Yes · ${row.attacker_bot_label}`
-                        : 'Yes'
-                      : row.attacker_is_bot === false
-                        ? 'No'
-                        : uaBot || '—';
+                  const { device } = parseAttackLogUA(row.user_agent);
+                  const botCell = formatAttackLogBotCell(row);
                   return (
                     <tr key={row.id || idx} className="border-b border-zinc-700/30">
                       <td className="py-1 pr-1 text-foreground">{row.attacker_username ?? '—'}</td>
@@ -202,7 +202,13 @@ export default function AttackLogsPanel({
                       </td>
                       <td className="py-1 pr-1 text-mutedForeground">{device}</td>
                       <td className="py-1 pr-1">
-                        {botLabel ? <span className="text-amber-400 font-medium">{botLabel}</span> : '—'}
+                        {botCell.text === '—' ? (
+                          '—'
+                        ) : (
+                          <span className={botCell.className} title={botCell.title || undefined}>
+                            {botCell.text}
+                          </span>
+                        )}
                       </td>
                       <td className="py-1 pr-1">
                         {row.is_bodyguard_kill ? 'Yes' : row.outcome === 'bodyguard' ? 'Blocked' : '—'}
@@ -246,7 +252,7 @@ export default function AttackLogsPanel({
                   />
                   Live
                 </label>
-                {attackLogsLive && (attackLogsUsername || '').trim() && (
+                {attackLogsLive && (
                   <span className="text-[9px] text-primary font-heading">Refreshing every 5s</span>
                 )}
                 <button
@@ -287,8 +293,31 @@ export default function AttackLogsPanel({
                 </div>
                 <div>
                   <span className="text-mutedForeground">Bot?</span>{' '}
-                  {attackLogViewRow.attacker_is_bot === true ? 'Yes' : attackLogViewRow.attacker_is_bot === false ? 'No' : '—'}
+                  {(() => {
+                    const c = formatAttackLogBotCell(attackLogViewRow);
+                    return c.text === '—' ? (
+                      '—'
+                    ) : (
+                      <span className={c.className} title={c.title || undefined}>
+                        {c.text}
+                      </span>
+                    );
+                  })()}
                 </div>
+                {attackLogViewRow.attacker_client_signal && (
+                  <div>
+                    <span className="text-mutedForeground">Client signal:</span>{' '}
+                    <span className="text-foreground font-medium">{attackLogViewRow.attacker_client_signal}</span>
+                  </div>
+                )}
+                {attackLogViewRow.attacker_client_signal_detail && (
+                  <div className="col-span-2">
+                    <span className="text-mutedForeground">Signal detail:</span>{' '}
+                    <span className="text-foreground font-mono text-[9px]">
+                      {String(attackLogViewRow.attacker_client_signal_detail).replace(/_/g, ' ')}
+                    </span>
+                  </div>
+                )}
                 {attackLogViewRow.attacker_bot_label && (
                   <div className="col-span-2">
                     <span className="text-mutedForeground">Bot type:</span>{' '}
@@ -299,21 +328,6 @@ export default function AttackLogsPanel({
                   <span className="text-mutedForeground">Time:</span> {formatAttackLogTime(attackLogViewRow.created_at)}
                 </div>
               </div>
-              {(attackLogViewRow.attacker_is_bot || attackLogViewRow.attacker_bot_label) && (
-                <div>
-                  <div className="text-mutedForeground font-bold uppercase tracking-wider border-b border-zinc-700/50 pb-0.5 mb-1">
-                    Bot info
-                  </div>
-                  <p className="text-foreground text-[10px]">
-                    {attackLogViewRow.attacker_bot_label && (
-                      <>
-                        <span className="text-amber-400 font-medium">Type/language: </span>
-                        {attackLogViewRow.attacker_bot_label}
-                      </>
-                    )}
-                  </p>
-                </div>
-              )}
               <div>
                 <div className="text-mutedForeground font-bold uppercase tracking-wider border-b border-zinc-700/50 pb-0.5 mb-1">
                   Player message

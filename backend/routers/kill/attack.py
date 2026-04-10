@@ -115,38 +115,84 @@ def _resolved_target_location(attack: dict, target_user: Optional[dict]) -> Opti
     return attack.get("location_state") or attack.get("planned_location_state")
 
 
-def _request_meta(request: Optional[Request]) -> dict:
-    """Build dict of user_agent, client_ip, attacker_is_bot, and attacker_bot_label for attack attempt logging."""
-    out = {}
-    if request:
-        ua = (request.headers.get("user-agent") or "").strip() or None
-        if ua:
-            out["user_agent"] = ua[:500]  # cap length
-        is_bot = _is_bot_ua(out.get("user_agent") or "")
-        out["attacker_is_bot"] = is_bot
-        if is_bot:
-            label = _bot_label_from_ua(out.get("user_agent") or "")
-            if label:
-                out["attacker_bot_label"] = label[:120]
-        # Get client IP (prefer Cloudflare header)
-        cf_ip = (request.headers.get("cf-connecting-ip") or "").strip()
-        if cf_ip:
-            out["client_ip"] = cf_ip[:45]
-        else:
-            forwarded = (request.headers.get("x-forwarded-for") or "").strip()
-            if forwarded:
-                out["client_ip"] = forwarded.split(",")[0].strip()[:45]
-            elif getattr(request, "client", None) and getattr(request.client, "host", None):
-                out["client_ip"] = str(request.client.host)[:45]
-    return out
+_CLIENT_SIGNAL_DETAIL_MAX = 80
 
 
-def _bot_label_from_ua(user_agent: str) -> Optional[str]:
-    """Return a short human-readable bot type/language label from User-Agent, or None if not a bot."""
+def _is_automation_ua(user_agent: str) -> bool:
+    u = (user_agent or "").lower()
+    return any(x in u for x in ("selenium", "webdriver", "headless", "puppeteer", "playwright", "phantom"))
+
+
+def _is_script_http_client_ua(user_agent: str) -> bool:
+    """Non-browser HTTP clients, crawlers, and tooling (includes automation UAs)."""
+    if not user_agent or not isinstance(user_agent, str):
+        return False
+    ua = user_agent.lower()
+    if _is_automation_ua(user_agent):
+        return True
+    if "mafiakillbot" in ua or ("bot" in ua and ("kill" in ua or "attack" in ua)):
+        return True
+    if any(x in ua for x in ("bot", "crawler", "spider", "scraper", "fetcher", "curl", "wget", "libwww")):
+        return True
+    if any(x in ua for x in ("python", "requests", "urllib", "aiohttp", "httpx")):
+        return True
+    if any(x in ua for x in ("axios/", "node/", "node.js", "undici", "got/", "superagent")):
+        return True
+    if any(x in ua for x in ("java/", "apache-httpclient", "jetty", "java ")):
+        return True
+    if any(x in ua for x in ("dotnet", ".net", "httpclient", "webrequest")):
+        return True
+    if any(x in ua for x in ("go-http", "go/", "ruby", "faraday", "php/", "php ", "reqwest", "ureq")):
+        return True
+    if any(x in ua for x in ("postman", "insomnia", "rest-assured", "swagger")):
+        return True
+    if "libcurl" in ua:
+        return True
+    if "scrapy" in ua:
+        return True
+    if "httpie" in ua:
+        return True
+    if "powershell" in ua:
+        return True
+    if "winhttp" in ua:
+        return True
+    if "rest-client" in ua or "restclient" in ua:
+        return True
+    if "mechanize" in ua:
+        return True
+    if "apachebench" in ua or ua.startswith("ab/") or "/ab/" in ua:
+        return True
+    if "artillery" in ua:
+        return True
+    if ua.startswith("k6/") or " k6/" in ua:
+        return True
+    if "restsharp" in ua:
+        return True
+    if "okhttp" in ua and "mozilla" not in ua:
+        return True
+    return False
+
+
+def _automation_label_from_ua(user_agent: str) -> str:
+    u = (user_agent or "").lower()
+    if any(x in u for x in ("puppeteer",)):
+        return "Browser automation (Puppeteer)"
+    if any(x in u for x in ("playwright",)):
+        return "Browser automation (Playwright)"
+    if any(x in u for x in ("selenium", "webdriver")):
+        return "Browser automation (Selenium/WebDriver)"
+    if "phantom" in u:
+        return "Browser automation (PhantomJS)"
+    if "headless" in u:
+        return "Browser automation (headless)"
+    return "Browser automation"
+
+
+def _script_label_from_ua(user_agent: str) -> Optional[str]:
+    """Label for script/HTTP client UAs (not used for pure automation-only branch when a finer automation label exists)."""
     if not user_agent or not isinstance(user_agent, str):
         return None
     ua = user_agent.lower()
-    # Order matters: check specific names first
     if "mafiakillbot" in ua:
         return "MafiaKillBot (C# / .NET)"
     if "bot" in ua and ("kill" in ua or "attack" in ua):
@@ -155,8 +201,10 @@ def _bot_label_from_ua(user_agent: str) -> Optional[str]:
         return "Python"
     if any(x in ua for x in ("axios/", "node/", "node.js", "undici", "got/", "superagent")):
         return "JavaScript / Node.js"
-    if any(x in ua for x in ("java/", "okhttp", "apache-httpclient", "jetty")):
+    if any(x in ua for x in ("java/", "apache-httpclient", "jetty")):
         return "Java"
+    if "okhttp" in ua and "mozilla" not in ua:
+        return "OkHttp (non-browser)"
     if any(x in ua for x in ("dotnet", ".net", "httpclient", "webrequest")):
         return "C# / .NET"
     if any(x in ua for x in ("go-http", "go/")):
@@ -167,52 +215,97 @@ def _bot_label_from_ua(user_agent: str) -> Optional[str]:
         return "PHP"
     if any(x in ua for x in ("reqwest", "ureq")):
         return "Rust"
-    if any(x in ua for x in ("selenium", "webdriver", "headless", "puppeteer", "playwright", "phantom")):
-        return "Browser automation (Selenium/Puppeteer/etc.)"
-    if any(x in ua for x in ("curl", "wget", "libwww")):
-        return "curl / wget (CLI)"
+    if any(x in ua for x in ("curl", "wget", "libwww", "libcurl")):
+        return "curl / wget / libcurl"
     if any(x in ua for x in ("postman", "insomnia", "rest-assured", "swagger")):
         return "API client (Postman/Insomnia/etc.)"
+    if any(x in ua for x in ("scrapy", "mechanize")):
+        return "Scraper framework"
+    if "httpie" in ua:
+        return "HTTPie"
+    if "powershell" in ua:
+        return "PowerShell"
+    if "winhttp" in ua:
+        return "WinHTTP"
+    if "rest-client" in ua or "restclient" in ua or "restsharp" in ua:
+        return "REST client library"
+    if "apachebench" in ua or ua.startswith("ab/") or "/ab/" in ua:
+        return "Apache Bench"
+    if "artillery" in ua or ua.startswith("k6/") or " k6/" in ua:
+        return "Load testing tool"
     if any(x in ua for x in ("crawler", "spider", "scraper", "fetcher")):
         return "Crawler / scraper"
     if "bot" in ua:
         return "Bot (generic)"
-    return None
+    return "Script / HTTP client"
 
 
-def _is_bot_ua(user_agent: str) -> bool:
-    """True if the User-Agent looks like a bot/script. Diverse patterns: custom bots, languages, HTTP clients, automation."""
-    if not user_agent or not isinstance(user_agent, str):
-        return False
-    ua = user_agent.lower()
-    # Custom / game bots
-    if "mafiakillbot" in ua or ("bot" in ua and ("kill" in ua or "attack" in ua)):
-        return True
-    # Generic crawlers / scrapers
-    if any(x in ua for x in ("bot", "crawler", "spider", "scraper", "fetcher", "curl", "wget", "libwww")):
-        return True
-    # Python
-    if any(x in ua for x in ("python", "requests", "urllib", "aiohttp", "httpx")):
-        return True
-    # JavaScript / Node
-    if any(x in ua for x in ("axios/", "node/", "node.js", "undici", "got/", "superagent")):
-        return True
-    # Java / JVM
-    if any(x in ua for x in ("java/", "okhttp", "apache-httpclient", "jetty", "java ")):
-        return True
-    # .NET / C#
-    if any(x in ua for x in ("dotnet", ".net", "httpclient", "webrequest")):
-        return True
-    # Go / Ruby / PHP / Rust
-    if any(x in ua for x in ("go-http", "go/", "ruby", "faraday", "php/", "php ", "reqwest", "ureq")):
-        return True
-    # Browser automation
-    if any(x in ua for x in ("selenium", "webdriver", "headless", "puppeteer", "playwright", "phantom")):
-        return True
-    # API / testing tools
-    if any(x in ua for x in ("postman", "insomnia", "rest-assured", "swagger")):
-        return True
-    return False
+def _classify_attack_client(request: Optional[Request]) -> Dict[str, Any]:
+    """
+    Tiered client classification for staff logs. Staff alerts still use attacker_is_bot True only
+    (script + automation). Suspicious uses header/UA heuristics and may false-positive if proxies strip Sec-Fetch-*.
+    """
+    if not request:
+        return {}
+    ua_raw = (request.headers.get("user-agent") or "").strip()
+    ua_l = ua_raw.lower()
+
+    def cap_detail(s: str) -> str:
+        return (s or "")[:_CLIENT_SIGNAL_DETAIL_MAX]
+
+    if ua_raw and _is_automation_ua(ua_raw):
+        lab = _automation_label_from_ua(ua_raw)
+        return {
+            "attacker_client_signal": "automation",
+            "attacker_is_bot": True,
+            "attacker_bot_label": lab[:120],
+        }
+    if ua_raw and _is_script_http_client_ua(ua_raw):
+        label = _script_label_from_ua(ua_raw) or "Script / HTTP client"
+        return {
+            "attacker_client_signal": "script",
+            "attacker_is_bot": True,
+            "attacker_bot_label": label[:120],
+        }
+
+    suspicious_reason: Optional[str] = None
+    if len(ua_raw) < 12:
+        suspicious_reason = "empty_or_short_ua"
+    elif "mozilla" in ua_l and "chrome" in ua_l:
+        # Browsers sending credentialed XHR/fetch to API usually include Sec-Fetch-Mode; many spoofed scripts omit it.
+        if not request.headers.get("sec-fetch-mode"):
+            suspicious_reason = "chrome_like_no_sec_fetch_mode"
+    if suspicious_reason:
+        return {
+            "attacker_client_signal": "suspicious",
+            "attacker_is_bot": False,
+            "attacker_client_signal_detail": cap_detail(suspicious_reason),
+        }
+
+    return {
+        "attacker_client_signal": "browser",
+        "attacker_is_bot": False,
+    }
+
+
+def _request_meta(request: Optional[Request]) -> dict:
+    """Build dict for attack attempt logging: UA, IP, tiered client classification."""
+    out: Dict[str, Any] = {}
+    if request:
+        ua_full = (request.headers.get("user-agent") or "").strip()
+        if ua_full:
+            out["user_agent"] = ua_full[:500]
+        out.update(_classify_attack_client(request))
+        cf_ip = (request.headers.get("cf-connecting-ip") or "").strip()
+        if cf_ip:
+            out["client_ip"] = cf_ip[:45]
+        else:
+            forwarded = (request.headers.get("x-forwarded-for") or "").strip()
+            if forwarded:
+                out["client_ip"] = forwarded.split(",")[0].strip()[:45]
+            elif getattr(request, "client", None) and getattr(request.client, "host", None):
+                out["client_ip"] = str(request.client.host)[:45]
+    return out
 
 
 async def _log_attack_error(attacker_id: str, attacker_username: str, player_message: str, req: Optional[Request] = None):
@@ -447,7 +540,14 @@ def _first_bodyguard_client_payload(
 
 # Strip from attack_attempts when returning to players (timeline / future APIs).
 _PLAYER_ATTACK_ATTEMPT_META_KEYS = frozenset(
-    {"client_ip", "user_agent", "attacker_is_bot", "attacker_bot_label"}
+    {
+        "client_ip",
+        "user_agent",
+        "attacker_is_bot",
+        "attacker_bot_label",
+        "attacker_client_signal",
+        "attacker_client_signal_detail",
+    }
 )
 
 

@@ -21,3 +21,35 @@ export function parseAttackLogUA(ua) {
   else if (/mobile|opera mini|blackberry|windows phone/i.test(ua)) device = 'Mobile';
   return { device, bot };
 }
+
+/** Staff attack logs: tiered client signal from API + legacy rows (UA hints only). */
+export function formatAttackLogBotCell(row) {
+  if (!row || typeof row !== 'object') {
+    return { text: '—', className: 'text-mutedForeground', title: '' };
+  }
+  const { bot: uaBot } = parseAttackLogUA(row.user_agent || '');
+  const sig = row.attacker_client_signal;
+  if (sig === 'automation' || sig === 'script') {
+    const label = row.attacker_bot_label ? `Yes · ${row.attacker_bot_label}` : 'Yes';
+    return { text: label, className: 'text-amber-400 font-medium', title: label };
+  }
+  if (sig === 'suspicious') {
+    const detail = (row.attacker_client_signal_detail || '').replace(/_/g, ' ');
+    const title = detail ? `Suspicious — ${detail}` : 'Weak browser fingerprint (not a confirmed bot)';
+    return { text: 'Suspicious', className: 'text-amber-500 font-medium', title };
+  }
+  if (sig === 'browser') {
+    return { text: 'No', className: 'text-mutedForeground', title: '' };
+  }
+  if (row.attacker_is_bot === true) {
+    const label = row.attacker_bot_label ? `Yes · ${row.attacker_bot_label}` : 'Yes';
+    return { text: label, className: 'text-amber-400 font-medium', title: label };
+  }
+  if (row.attacker_is_bot === false) {
+    return { text: 'No', className: 'text-mutedForeground', title: '' };
+  }
+  if (uaBot) {
+    return { text: uaBot, className: 'text-amber-400 font-medium', title: `UA hint only: ${uaBot}` };
+  }
+  return { text: '—', className: 'text-mutedForeground', title: '' };
+}

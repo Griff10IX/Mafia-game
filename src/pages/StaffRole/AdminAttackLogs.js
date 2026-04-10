@@ -178,7 +178,7 @@ export default function AdminAttackLogs() {
         </div>
         <div className="p-3">
           <AttackLogsPanel
-            introText="Load a player by username. Includes incoming and outgoing attempts with IP, user-agent, bodyguard outcomes, and bullets."
+            introText="Leave username empty for recent attempts from all players, or enter a username for that player only. Use Live to watch new attempts every 5 seconds."
             tableMaxHeightClass="max-h-[min(70vh,560px)]"
             onLogsLoaded={onAttackLogsLoaded}
           />
