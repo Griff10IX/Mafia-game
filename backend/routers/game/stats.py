@@ -216,7 +216,7 @@ def register(router):
 
     @router.get("/stats/overview")
     async def get_stats_overview(
-        users_only_kills: bool = True,
+        users_only_kills: bool = False,
         current_user: dict = Depends(get_current_user),
     ):
         now = datetime.now(timezone.utc)
@@ -390,10 +390,12 @@ def register(router):
 
         rank_stats = [rank_stats_map[r["id"]] for r in RANKS]
 
+        # Pull enough recent attempts that we can still fill 15 slots after filters
+        # (hitlist/NPC victim exclusions, optional users_only_kills, dedup).
         attempts = await db.attack_attempts.find(
             {"outcome": "killed"},
             {"_id": 0}
-        ).sort("created_at", -1).to_list(500)
+        ).sort("created_at", -1).to_list(3000)
 
         all_user_ids = set()
         for a in attempts:

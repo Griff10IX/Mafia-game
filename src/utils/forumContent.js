@@ -91,6 +91,14 @@ function resolveSmileyImgSrc(relativePath) {
   return `${getStaticAssetPrefix()}${p}`;
 }
 
+/** PNG :kekw: etc. and Unicode :fire: wrapper share this height so BBCode icons stay readable in text-xs UI. */
+const FORUM_INLINE_SMILEY_PX = 22;
+
+/** Wrap :fire: etc. so emoji do not inherit tiny parent font-size (unlike fixed-size PNG smileys). */
+function wrapForumUnicodeEmoji(emoji) {
+  return `<span class="forum-content-emoji" style="font-size:${FORUM_INLINE_SMILEY_PX}px;line-height:1;display:inline-block;vertical-align:-0.2em;">${emoji}</span>`;
+}
+
 // ---------------------------------------------------------------------------
 // Image-based smileys — classic forum style (render as <img> tags)
 // IMPORTANT: Longer codes MUST come before shorter ones to avoid partial matches
@@ -799,7 +807,7 @@ export function parseForumContent(content, options = {}) {
 
   // 6) Smileys - long emoji codes first, then image smileys, then text emojis
   for (const [from, emoji] of LONG_EMOJI_CODES) {
-    s = s.replace(new RegExp(escapeRegex(from), 'g'), emoji);
+    s = s.replace(new RegExp(escapeRegex(from), 'g'), wrapForumUnicodeEmoji(emoji));
   }
   if (options.dmUnicodeSmileys) {
     const DM_WINK_UNICODE = [
@@ -808,16 +816,17 @@ export function parseForumContent(content, options = {}) {
       [';)', '😉'],
     ];
     for (const [from, ch] of DM_WINK_UNICODE) {
-      s = s.replace(new RegExp(escapeRegex(from), 'g'), ch);
+      s = s.replace(new RegExp(escapeRegex(from), 'g'), wrapForumUnicodeEmoji(ch));
     }
   }
   for (const [from, imgPath] of IMAGE_SMILEYS) {
     const src = escapeAttr(resolveSmileyImgSrc(imgPath));
-    const imgTag = `<img src="${src}" alt="${escapeAttr(from)}" class="inline-smiley" style="display:inline;vertical-align:middle;width:15px;height:15px;max-width:15px;max-height:15px;object-fit:contain;" />`;
+    const px = FORUM_INLINE_SMILEY_PX;
+    const imgTag = `<img src="${src}" alt="${escapeAttr(from)}" class="inline-smiley" style="display:inline;vertical-align:middle;width:${px}px;height:${px}px;max-width:${px}px;max-height:${px}px;object-fit:contain;" />`;
     s = s.replace(new RegExp(escapeRegex(from), 'g'), imgTag);
   }
   for (const [from, emoji] of SMILEYS) {
-    s = s.replace(new RegExp(escapeRegex(from), 'g'), emoji);
+    s = s.replace(new RegExp(escapeRegex(from), 'g'), wrapForumUnicodeEmoji(emoji));
   }
 
   // 7) Restore media placeholders

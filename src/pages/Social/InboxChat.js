@@ -163,10 +163,10 @@ export default function InboxChat() {
     <div data-chat-surface="inbox" className={`${styles.pageContent} flex flex-col h-[calc(100vh-10rem)] max-h-[700px] min-h-[320px] mobile-page-root`}>
       <style>{`
         [data-chat-surface="inbox"] [data-chat-part="message-text"] .inline-smiley {
-          width: 15px !important;
-          height: 15px !important;
-          max-width: 15px !important;
-          max-height: 15px !important;
+          width: 22px !important;
+          height: 22px !important;
+          max-width: 22px !important;
+          max-height: 22px !important;
           object-fit: contain;
           vertical-align: middle;
         }
@@ -303,7 +303,7 @@ export default function InboxChat() {
               title={code}
               aria-label={code}
             >
-              <img src={`${SMILEY_IMG_BASE}/${img}.png`} alt={code} className="w-[15px] h-[15px] object-contain" />
+              <img src={`${SMILEY_IMG_BASE}/${img}.png`} alt={code} className="w-[22px] h-[22px] object-contain" />
             </button>
           ))}
           {/* Modern emojis */}

@@ -306,12 +306,13 @@ async def ensure_all_indexes(db):
             "at",
             compound_indexes=[[("user_id", 1), ("at", -1)]],
         )
-        await _ensure_event_log_ttl(
-            db,
-            "attack_attempts",
-            "created_at",
-            compound_indexes=[[("attacker_id", 1), ("created_at", -1)]],
-        )
+        # attack_attempts: no TTL — these rows power the public Last N kills feed, player timelines,
+        # and staff tools. A 14d expiry deleted real kills while users expected a rolling top-15 only.
+        # Weekly kill boards still scope by date in aggregations; indexes above cover queries.
+        try:
+            await db.attack_attempts.drop_index("created_at_1")
+        except Exception:
+            pass
         await _ensure_event_log_ttl(
             db,
             "stock_transactions",

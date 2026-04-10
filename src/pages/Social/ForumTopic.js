@@ -129,6 +129,7 @@ const FORUM_CONTENT_STYLES = `
   .forum-content-gif { max-height: 280px; object-fit: contain; }
   .forum-content strong { font-weight: 700; }
   .forum-content em { font-style: italic; }
+  .forum-content .forum-content-emoji { font-size: 22px !important; line-height: 1; display: inline-block; vertical-align: -0.2em; }
 `;
 
 function getTimeAgo(iso) {
@@ -1733,7 +1734,7 @@ export default function ForumTopic() {
                       <img 
                         src={`/images/smileys/${img}.png`}
                         alt={code}
-                        className="w-[15px] h-[15px] object-contain"
+                        className="w-[22px] h-[22px] object-contain"
                       />
                     </button>
                   ))}

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Trophy, Target, Flame, Car, Lock, RefreshCw, Medal, Award, Skull, History, DollarSign, Star, Zap, TrendingUp, Wine } from 'lucide-react';
 import api from '../../utils/api';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
@@ -10,11 +10,19 @@ const LB_STYLES = `
   .lb-fade-in { animation: lb-fade-in 0.4s ease-out both; }
   @keyframes lb-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .lb-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+  .lb-highlight-pulse { animation: lb-highlight-pulse 1.6s ease-out 2; }
+  @keyframes lb-highlight-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0); } 40% { box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.45); } }
 `;
+
+const LB_BOARD_KEYS = new Set([
+  'rank_points', 'kills', 'crimes', 'gta', 'jail_busts', 'points_spent',
+  'respect_points', 'bullets_melted', 'stock_market_profit', 'booze_run_profit',
+]);
 
 const TOP_OPTIONS = [5, 10, 20, 50, 100];
 
 const EMPTY_BOARDS = {
+  rank_points: [],
   kills: [], crimes: [], gta: [], jail_busts: [], points_spent: [],
   respect_points: [], bullets_melted: [], stock_market_profit: [], booze_run_profit: [],
 };
@@ -83,10 +91,13 @@ function writeLbEntry(period, topLimit, dead, boards, lastRewardWinners) {
   } catch (_) {}
 }
 
-function StatBoard({ title, icon: Icon, entries, valueLabel, topLabel, fetching }) {
+function StatBoard({ title, boardKey, icon: Icon, entries, valueLabel, topLabel, fetching }) {
   const list = entries || [];
   return (
-    <section className={`relative ${styles.panel} rounded-lg overflow-hidden shadow-lg shadow-primary/5 mobile-panel`}>
+    <section
+      id={boardKey ? `lb-board-${boardKey}` : undefined}
+      className={`relative ${styles.panel} rounded-lg overflow-hidden shadow-lg shadow-primary/5 mobile-panel`}
+    >
       <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="px-3 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center gap-1.5">
         <Icon className="text-primary shrink-0" size={14} />
@@ -106,6 +117,7 @@ function StatBoard({ title, icon: Icon, entries, valueLabel, topLabel, fetching 
           list.map((entry) => (
             <div
               key={`${title}-${entry.rank}-${entry.username}`}
+              id={boardKey ? `lb-row-${boardKey}-${entry.rank}` : undefined}
               className={`flex items-center gap-2 p-1.5 rounded-sm border transition-colors ${
                 entry.is_current_user
                   ? 'bg-primary/15 border-primary/40'
@@ -175,6 +187,7 @@ function StatBoard({ title, icon: Icon, entries, valueLabel, topLabel, fetching 
 }
 
 export default function Leaderboard() {
+  const [searchParams] = useSearchParams();
   const [period, setPeriod] = useState(readPersistedPeriod);
   const [topLimit, setTopLimit] = useState(10);
   const [viewMode, setViewMode] = useState('alive');
@@ -190,6 +203,8 @@ export default function Leaderboard() {
     () => readLbEntry(readPersistedPeriod(), 10, false)?.last_reward_winners ?? null,
   );
   const intervalRef = useRef(null);
+  const deepLinkConsumedRef = useRef(false);
+  const [pendingHighlight, setPendingHighlight] = useState(null);
   /** Latest UI selection — compared after each fetch so stale in-flight responses cannot overwrite boards. */
   const lbSelectionRef = useRef({ period: readPersistedPeriod(), topLimit: 10, viewMode: 'alive' });
   lbSelectionRef.current = { period, topLimit, viewMode };
@@ -200,6 +215,20 @@ export default function Leaderboard() {
       sessionStorage.setItem(LB_PERIOD_STORAGE_KEY, p);
     } catch (_) {}
   }, []);
+
+  useEffect(() => {
+    if (deepLinkConsumedRef.current) return;
+    const board = (searchParams.get('board') || '').trim();
+    const rankRaw = searchParams.get('rank');
+    const rank = rankRaw != null ? parseInt(String(rankRaw), 10) : NaN;
+    if (!board || !LB_BOARD_KEYS.has(board) || !Number.isFinite(rank) || rank < 1) return;
+    deepLinkConsumedRef.current = true;
+    const needTop = TOP_OPTIONS.find((n) => n >= rank) ?? 100;
+    setPeriodPersist('alltime');
+    setViewMode('alive');
+    setTopLimit((prev) => Math.max(prev, needTop));
+    setPendingHighlight({ board, rank });
+  }, [searchParams, setPeriodPersist]);
 
   const fetchLeaderboard = useCallback(async (showRefreshSpin = false, silentError = false, background = false) => {
     const dead = viewMode === 'dead';
@@ -280,6 +309,22 @@ export default function Leaderboard() {
     })();
     return () => { cancelled = true; };
   }, [period, topLimit, viewMode]);
+
+  useEffect(() => {
+    if (!pendingHighlight || fetchingBoards) return;
+    const { board, rank } = pendingHighlight;
+    const timer = window.setTimeout(() => {
+      const row = document.getElementById(`lb-row-${board}-${rank}`);
+      const section = document.getElementById(`lb-board-${board}`);
+      const target = row || section;
+      if (target) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        if (row) row.classList.add('lb-highlight-pulse');
+      }
+      setPendingHighlight(null);
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [pendingHighlight, fetchingBoards, boards]);
 
   return (
     <div className={`space-y-3 ${styles.pageContent} mobile-page-root`} data-testid="leaderboard-page">
@@ -378,7 +423,17 @@ export default function Leaderboard() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-2">
         <StatBoard
+          title={viewMode === 'dead' ? 'Top dead · Rank Points' : 'Most Rank Points Earned'}
+          boardKey="rank_points"
+          icon={Medal}
+          entries={boards?.rank_points}
+          valueLabel="XP"
+          topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (current total)`}
+          fetching={fetchingBoards}
+        />
+        <StatBoard
           title={viewMode === 'dead' ? 'Top dead · Kills' : 'Top Kills'}
+          boardKey="kills"
           icon={Target}
           entries={boards?.kills}
           valueLabel="kills"
@@ -387,6 +442,7 @@ export default function Leaderboard() {
         />
         <StatBoard
           title={viewMode === 'dead' ? 'Top dead · Crimes' : 'Top Crimes'}
+          boardKey="crimes"
           icon={Flame}
           entries={boards?.crimes}
           valueLabel="crimes"
@@ -395,6 +451,7 @@ export default function Leaderboard() {
         />
         <StatBoard
           title={viewMode === 'dead' ? 'Top dead · GTA' : 'Top GTA'}
+          boardKey="gta"
           icon={Car}
           entries={boards?.gta}
           valueLabel="GTA"
@@ -403,6 +460,7 @@ export default function Leaderboard() {
         />
         <StatBoard
           title={viewMode === 'dead' ? 'Top dead · Jail Busts' : 'Top Jail Busts'}
+          boardKey="jail_busts"
           icon={Lock}
           entries={boards?.jail_busts}
           valueLabel="busts"
@@ -412,6 +470,7 @@ export default function Leaderboard() {
         {period === 'alltime' && (
           <StatBoard
             title={viewMode === 'dead' ? 'Top dead · Points Spent' : 'Most Points Spent'}
+            boardKey="points_spent"
             icon={DollarSign}
             entries={boards?.points_spent}
             valueLabel="pts"
@@ -421,6 +480,7 @@ export default function Leaderboard() {
         )}
         <StatBoard
           title={viewMode === 'dead' ? 'Top dead · Respect Points' : 'Respect Points Earned'}
+          boardKey="respect_points"
           icon={Star}
           entries={boards?.respect_points}
           valueLabel="respect"
@@ -429,6 +489,7 @@ export default function Leaderboard() {
         />
         <StatBoard
           title={viewMode === 'dead' ? 'Top dead · Bullets Melted' : 'Bullets Melted'}
+          boardKey="bullets_melted"
           icon={Zap}
           entries={boards?.bullets_melted}
           valueLabel="bullets"
@@ -437,6 +498,7 @@ export default function Leaderboard() {
         />
         <StatBoard
           title={viewMode === 'dead' ? 'Top dead · Stock Market Profit' : 'Highest Stock Market Profit'}
+          boardKey="stock_market_profit"
           icon={TrendingUp}
           entries={boards?.stock_market_profit}
           valueLabel="pts"
@@ -445,6 +507,7 @@ export default function Leaderboard() {
         />
         <StatBoard
           title={viewMode === 'dead' ? 'Top dead · Booze Run Profit' : 'Booze Run Profit'}
+          boardKey="booze_run_profit"
           icon={Wine}
           entries={boards?.booze_run_profit}
           valueLabel="$"

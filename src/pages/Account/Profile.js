@@ -87,6 +87,23 @@ function formatDateTime(iso) {
   });
 }
 
+/** Profile honours match main leaderboard boards; API may send `board` or we fall back by label. */
+const HONOUR_BOARD_FALLBACK = {
+  'Most Rank Points Earned': 'rank_points',
+  'Most Kills': 'kills',
+  'Most Crimes Committed': 'crimes',
+  'Most GTAs Committed': 'gta',
+  'Most Jail Busts': 'jail_busts',
+  'Most Points Spent': 'points_spent',
+};
+
+function honourLeaderboardTo(h) {
+  const board = h?.board || HONOUR_BOARD_FALLBACK[h?.label];
+  const rank = Number(h?.rank);
+  if (!board || !Number.isFinite(rank) || rank < 1) return '/game/leaderboard';
+  return `/game/leaderboard?period=alltime&board=${encodeURIComponent(board)}&rank=${encodeURIComponent(rank)}`;
+}
+
 const StaffProfileActions = ({ username, isDead, isAdmin, isModerator, onDone }) => {
   const [loading, setLoading] = useState(null);
   const handleLock = async () => {
@@ -582,8 +599,8 @@ const ProfileInfoCard = ({
                     return (
                       <Link
                         key={i}
-                        to="/game/leaderboard"
-                        title="View leaderboards"
+                        to={honourLeaderboardTo(h)}
+                        title={`${h.label} — #${h.rank} on leaderboards`}
                         className={`flex items-center gap-0.5 px-1 py-0.5 rounded border text-[8px] font-heading leading-tight min-w-0 w-full transition-colors hover:border-primary/40 hover:bg-primary/10 ${
                           top10 ? 'border-primary/20 bg-primary/5' : 'border-zinc-500/30 bg-zinc-500/5'
                         }`}
@@ -837,8 +854,8 @@ const HonoursCard = ({ honours }) => (
             return (
               <Link
                 key={i}
-                to="/game/leaderboard"
-                title="View leaderboards"
+                to={honourLeaderboardTo(h)}
+                title={`${h.label} — #${h.rank} on leaderboards`}
                 className={`prof-row flex items-center gap-2 rounded-md border px-2.5 py-1.5 transition-colors hover:border-primary/40 hover:bg-primary/10 ${
                   top10 ? 'border-primary/20 bg-primary/5' : 'border-zinc-500/20 bg-zinc-500/5'
                 }`}

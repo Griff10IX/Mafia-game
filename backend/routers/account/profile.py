@@ -665,12 +665,12 @@ def register(router):
         family_name, family_tag, family_emblem_preset_id, family_emblem_avatar_url = family_name_tag or (None, None, None, None)
 
         honours = [
-            {"rank": rank_points_rank, "label": "Most Rank Points Earned"},
-            {"rank": kills_rank, "label": "Most Kills"},
-            {"rank": crimes_rank, "label": "Most Crimes Committed"},
-            {"rank": gta_rank, "label": "Most GTAs Committed"},
-            {"rank": jail_rank, "label": "Most Jail Busts"},
-            {"rank": points_spent_rank, "label": "Most Points Spent"},
+            {"rank": rank_points_rank, "label": "Most Rank Points Earned", "board": "rank_points"},
+            {"rank": kills_rank, "label": "Most Kills", "board": "kills"},
+            {"rank": crimes_rank, "label": "Most Crimes Committed", "board": "crimes"},
+            {"rank": gta_rank, "label": "Most GTAs Committed", "board": "gta"},
+            {"rank": jail_rank, "label": "Most Jail Busts", "board": "jail_busts"},
+            {"rank": points_spent_rank, "label": "Most Points Spent", "board": "points_spent"},
         ]
         from routers.game.achievements import compute_profile_badges
         achievement_badges = compute_profile_badges(user)

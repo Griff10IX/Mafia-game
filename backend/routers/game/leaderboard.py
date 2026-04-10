@@ -572,7 +572,7 @@ async def _fetch_top_boards_raw(limit: int, dead: bool, period: str) -> dict:
     """Run all DB aggregations, return dicts with _uid so is_current_user can be stamped per request."""
     dummy_uid = "__cache__"
     if (period or "").lower() == "weekly":
-        kills, crimes, gta, jail_busts, stock_market_profit, booze_run_profit, respect_points, bullets_melted = await asyncio.gather(
+        kills, crimes, gta, jail_busts, rank_points, stock_market_profit, booze_run_profit, respect_points, bullets_melted = await asyncio.gather(
             _top_by_field_weekly(
                 "attack_attempts",
                 "attacker_id",
@@ -586,6 +586,7 @@ async def _fetch_top_boards_raw(limit: int, dead: bool, period: str) -> dict:
             _top_by_field_weekly("crime_events", "user_id", "at", False, dummy_uid, limit, dead, {"success": True}),
             _top_by_field_weekly("gta_events", "user_id", "at", False, dummy_uid, limit, dead, {"success": True}),
             _top_by_field_weekly("bust_events", "user_id", "at", False, dummy_uid, limit, dead, {"success": True}),
+            _top_by_field("rank_points", dummy_uid, limit, dead=dead),
             _top_by_field_weekly_sum("stock_transactions", "user_id", "created_at", "profit_points", dummy_uid, limit, dead),
             _top_by_field_weekly_sum("economy_events", "user_id", "at", "profit", dummy_uid, limit, dead, {"type": "booze_run_sell"}),
             _top_by_field_weekly_sum(
@@ -601,11 +602,12 @@ async def _fetch_top_boards_raw(limit: int, dead: bool, period: str) -> dict:
             _top_by_field_weekly_sum("melt_events", "user_id", "at", "bullets", dummy_uid, limit, dead),
         )
     else:
-        kills, crimes, gta, jail_busts, points_spent, respect_points, bullets_melted, stock_market_profit, booze_run_profit = await asyncio.gather(
+        kills, crimes, gta, jail_busts, rank_points, points_spent, respect_points, bullets_melted, stock_market_profit, booze_run_profit = await asyncio.gather(
             _top_by_field("total_kills", dummy_uid, limit, dead=dead),
             _top_by_field("total_crimes", dummy_uid, limit, dead=dead),
             _top_by_field("total_gta", dummy_uid, limit, dead=dead),
             _top_by_field("jail_busts", dummy_uid, limit, dead=dead),
+            _top_by_field("rank_points", dummy_uid, limit, dead=dead),
             _top_by_field("lifetime_points_spent", dummy_uid, limit, dead=dead),
             _top_by_field("respect_points", dummy_uid, limit, dead=dead),
             _top_by_field("bullets_melted", dummy_uid, limit, dead=dead),
@@ -616,7 +618,13 @@ async def _fetch_top_boards_raw(limit: int, dead: bool, period: str) -> dict:
     def _to_raw(entries):
         return [{"rank": e.rank, "username": e.username, "value": e.value, "_uid": e.username} for e in entries]
 
-    result = {"kills": _to_raw(kills), "crimes": _to_raw(crimes), "gta": _to_raw(gta), "jail_busts": _to_raw(jail_busts)}
+    result = {
+        "kills": _to_raw(kills),
+        "crimes": _to_raw(crimes),
+        "gta": _to_raw(gta),
+        "jail_busts": _to_raw(jail_busts),
+        "rank_points": _to_raw(rank_points),
+    }
     if (period or "").lower() != "weekly":
         result["points_spent"] = _to_raw(points_spent)
     else:

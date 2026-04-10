@@ -377,8 +377,8 @@ function buildVehicleRows(data) {
 
 // Main component
 export default function Stats() {
-  const usersOnlyKills = true;
-  const [data, setData] = useState(() => getStatsOverview(true));
+  const usersOnlyKills = false;
+  const [data, setData] = useState(() => getStatsOverview(false));
   const [statsListTab, setStatsListTab] = useState('kills'); // 'kills' | 'wiped'
 
   const rankStats = Array.isArray(data?.rank_stats) ? data.rank_stats : [];

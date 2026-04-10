@@ -594,7 +594,7 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general', ca
               {/* Classic forum smileys first */}
               {CLASSIC_SMILEYS.map(({ code, img }) => (
                 <button key={code} type="button" onClick={() => insertEmoji(code)} className="hover:scale-110 transition-transform p-0.5" title={code}>
-                  <img src={`/images/smileys/${img}.png`} alt={code} className="w-[15px] h-[15px] object-contain" />
+                  <img src={`/images/smileys/${img}.png`} alt={code} className="w-[22px] h-[22px] object-contain" />
                 </button>
               ))}
               {/* Modern emojis */}
