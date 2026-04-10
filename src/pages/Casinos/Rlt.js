@@ -378,36 +378,15 @@ export default function Rlt() {
   const [buyBackActionLoading, setBuyBackActionLoading] = useState(false);
   const buyBackFromGameRef = useRef(false);
   const [rouletteBanner, setRouletteBannerState] = useState(null);
-  const rouletteBannerTimeoutRef = useRef(null);
 
   const clearRouletteBanner = useCallback(() => {
-    if (rouletteBannerTimeoutRef.current) {
-      clearTimeout(rouletteBannerTimeoutRef.current);
-      rouletteBannerTimeoutRef.current = null;
-    }
     setRouletteBannerState(null);
   }, []);
 
+  /** No auto-dismiss — avoids layout collapse/jump; replaced on next spin result or cleared with ×. */
   const showRouletteBanner = useCallback((variant, message) => {
-    if (rouletteBannerTimeoutRef.current) {
-      clearTimeout(rouletteBannerTimeoutRef.current);
-      rouletteBannerTimeoutRef.current = null;
-    }
     setRouletteBannerState({ variant, message: String(message || '') });
-    rouletteBannerTimeoutRef.current = setTimeout(() => {
-      rouletteBannerTimeoutRef.current = null;
-      setRouletteBannerState(null);
-    }, 7000);
   }, []);
-
-  useEffect(
-    () => () => {
-      if (rouletteBannerTimeoutRef.current) {
-        clearTimeout(rouletteBannerTimeoutRef.current);
-      }
-    },
-    [],
-  );
 
   const [betBarWiggle, setBetBarWiggle] = useState(false);
   const betWiggleTimeoutRef = useRef(null);
@@ -573,7 +552,6 @@ export default function Rlt() {
     const stake = b.reduce((s, x) => s + x.amount, 0);
     if (b.length === 0 || stake > (cfg.max_bet || 0)) return;
 
-    clearRouletteBanner();
     setBusyAnimationsFlag(true);
     setSpinning(true);
     setLastResult(null);
@@ -649,7 +627,6 @@ export default function Rlt() {
     }));
 
     inFlightCountRef.current += 1;
-    clearRouletteBanner();
     setSpinning(true);
     setBusyAnimationsFlag(true);
     setWheelRotation(0);
@@ -817,10 +794,12 @@ export default function Rlt() {
           : 'border-primary/30 bg-primary/10 text-foreground';
     return (
       <div
-        className={`rounded-md border px-2.5 py-1.5 flex items-start justify-between gap-2 ${vClass} ${extraClassName}`.trim()}
+        className={`rounded-md border px-2.5 py-1.5 flex items-start justify-between gap-2 min-h-[5.5rem] max-h-[5.5rem] sm:min-h-[6rem] sm:max-h-[6rem] overflow-hidden ${vClass} ${extraClassName}`.trim()}
         role="status"
       >
-        <p className="text-[10px] font-heading leading-snug whitespace-pre-line flex-1 min-w-0">{rouletteBanner.message}</p>
+        <p className="text-[10px] font-heading leading-snug whitespace-pre-line flex-1 min-h-0 min-w-0 overflow-y-auto pr-0.5">
+          {rouletteBanner.message}
+        </p>
         <button
           type="button"
           onClick={clearRouletteBanner}
