@@ -71,6 +71,7 @@ def register(router):
 
     db = srv.db
     effective_player_kill_count = srv.effective_player_kill_count
+    mongodb_effective_kill_count_expr = srv.mongodb_effective_kill_count_expr
     get_current_user = srv.get_current_user
     get_current_user_verified = srv.get_current_user_verified
     _username_pattern = srv._username_pattern
@@ -530,6 +531,18 @@ def register(router):
             })
             return n_better + 1
 
+        async def _rank_for_effective_kills(effective_value: int) -> int:
+            """Rank by the same kill total shown on profile (not raw total_kills)."""
+            if effective_value is None:
+                effective_value = 0
+            eff_expr = mongodb_effective_kill_count_expr()
+            n_better = await db.users.count_documents({
+                "is_dead": {"$ne": True},
+                "is_bodyguard": {"$ne": True},
+                "$expr": {"$gt": [eff_expr, int(effective_value)]},
+            })
+            return n_better + 1
+
         async def _casinos_for_type(game_type: str, coll, location_key: str = "city"):
             out = []
             cursor = coll.find(
@@ -619,7 +632,7 @@ def register(router):
             badge_stat_fields,
         ) = await asyncio.gather(
             _family_name_and_tag(),
-            _rank_for_field("total_kills", effective_player_kill_count(user)),
+            _rank_for_effective_kills(effective_player_kill_count(user)),
             _rank_for_field("total_crimes", int(user.get("total_crimes") or 0)),
             _rank_for_field("total_gta", int(user.get("total_gta") or 0)),
             _rank_for_field("jail_busts", int(user.get("jail_busts") or 0)),

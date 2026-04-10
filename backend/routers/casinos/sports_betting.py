@@ -10,7 +10,7 @@ import os
 import re
 import uuid
 from pathlib import Path
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 # Ensure backend/.env is loaded before reading THE_ODDS_API_KEY (matches server.py paths)
 try:
@@ -2253,14 +2253,36 @@ async def sports_betting_cancel_all_bets(current_user: dict = Depends(get_curren
     return {"message": msg, "refunded": total_refund, "cancelled_count": cancelled_count, "skipped_count": skipped_count}
 
 
+def _sports_stats_threshold_dt(settled_after_iso: Optional[str]) -> Optional[datetime]:
+    """Parse reset / period start for sports stats. None = all-time."""
+    if not settled_after_iso or not str(settled_after_iso).strip():
+        return None
+    try:
+        raw = str(settled_after_iso).strip().replace("Z", "+00:00")
+        dt = datetime.fromisoformat(raw)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return None
+
+
 async def compute_sports_betting_stats(uid: str, settled_after_iso: Optional[str] = None) -> dict:
-    """Aggregate sports bet stats. If settled_after_iso is set, only settled won/lost with settled_at >= that ISO string."""
-    base_settled: dict = {"user_id": uid}
-    if settled_after_iso:
-        base_settled["settled_at"] = {"$gte": settled_after_iso}
+    """Aggregate sports bet stats. If settled_after_iso is set, only bets with settled_at/created_at on or after that instant.
+
+    Uses $expr + $toDate so comparisons work whether sports_bets stores timestamps as ISO strings or BSON dates."""
+    threshold_dt = _sports_stats_threshold_dt(settled_after_iso)
+    use_period = threshold_dt is not None
+
+    base_settled: Dict[str, Any] = {"user_id": uid}
+    if use_period:
+        base_settled["$expr"] = {"$gte": [{"$toDate": "$settled_at"}, threshold_dt]}
     settled_match = {**base_settled, "status": {"$in": ["won", "lost"]}}
-    won_match = {**base_settled, "status": "won"}
-    lost_match = {**base_settled, "status": "lost"}
+    won_match: Dict[str, Any] = {"user_id": uid, "status": "won"}
+    lost_match: Dict[str, Any] = {"user_id": uid, "status": "lost"}
+    if use_period:
+        won_match["$expr"] = {"$gte": [{"$toDate": "$settled_at"}, threshold_dt]}
+        lost_match["$expr"] = {"$gte": [{"$toDate": "$settled_at"}, threshold_dt]}
     pipeline = [
         {"$match": settled_match},
         {"$group": {"_id": None, "total_stake": {"$sum": "$stake"}, "won_count": {"$sum": {"$cond": [{"$eq": ["$status", "won"]}, 1, 0]}}, "lost_count": {"$sum": {"$cond": [{"$eq": ["$status", "lost"]}, 1, 0]}}}},
@@ -2283,9 +2305,9 @@ async def compute_sports_betting_stats(uid: str, settled_after_iso: Optional[str
     profit_loss = winnings - losses
     win_pct = round(100 * won_count / total_placed_settled, 1) if total_placed_settled else 0
 
-    placed_q: dict = {"user_id": uid}
-    if settled_after_iso:
-        placed_q["created_at"] = {"$gte": settled_after_iso}
+    placed_q: Dict[str, Any] = {"user_id": uid}
+    if use_period:
+        placed_q["$expr"] = {"$gte": [{"$toDate": "$created_at"}, threshold_dt]}
     bets_placed_count = await db.sports_bets.count_documents(placed_q)
 
     biggest_win_doc = await db.sports_bets.find_one(

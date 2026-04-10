@@ -43,21 +43,24 @@ from utils.quicktrade_casino_cleanup import cancel_quicktrade_casino_listings_by
 
 # ----- Constants -----
 DICE_SIDES_MIN = 2
-DICE_SIDES_MAX = 5000
+# Max nominal sides (payout multiplier base); player cannot enter more than this.
+DICE_SIDES_MAX = 2500
 DICE_HOUSE_EDGE = 0.0005  # 0.05% house edge
 DICE_MAX_BET = 5_000_000          # default max bet for new tables
 DICE_ABSOLUTE_MAX_BET = 500_000_000  # hard ceiling owners can set up to
 DICE_BUY_BACK_EXPIRY_MINUTES = 10
 # Dice claim costs: utils.claim_costs.DEFAULT_CLAIM_COSTS (dice_cash, dice_points); override via game_settings key claim_costs
-DICE_SIDES_BONUS_MULT = 1.05  # physical die has 5% more faces (ceil), e.g. 2→3, 1000→1050
+DICE_SIDES_BONUS_MULT = 1.05  # roll uses ceil(nominal * 1.05) dice faces, capped below
+# Max dice faces / max number you can pick: ⌈DICE_SIDES_MAX × 1.05⌉ (e.g. 2500 → 2625).
+DICE_ROLL_FACES_CAP = math.ceil(DICE_SIDES_MAX * DICE_SIDES_BONUS_MULT)
 
 
 def _actual_dice_sides(nominal: int) -> int:
-    """Roll range 1..N where N = min(DICE_SIDES_MAX, ceil(nominal * 1.05)). Player may pick any integer in that range."""
+    """Roll range 1..N where N = min(DICE_ROLL_FACES_CAP, ceil(nominal * 1.05)). Player may pick any integer in that range."""
     n = int(nominal)
     if n < DICE_SIDES_MIN:
         return DICE_SIDES_MIN
-    return min(DICE_SIDES_MAX, math.ceil(n * DICE_SIDES_BONUS_MULT))
+    return min(DICE_ROLL_FACES_CAP, math.ceil(n * DICE_SIDES_BONUS_MULT))
 
 
 # ----- Models -----
@@ -144,6 +147,7 @@ def register(router):
         return {
             "sides_min": DICE_SIDES_MIN,
             "sides_max": DICE_SIDES_MAX,
+            "roll_faces_max": DICE_ROLL_FACES_CAP,
             "max_bet": DICE_MAX_BET,
             "house_edge": DICE_HOUSE_EDGE,
             "sides_bonus_mult": DICE_SIDES_BONUS_MULT,
@@ -242,7 +246,10 @@ def register(router):
         if chosen_raw < 1 or chosen_raw > actual_sides:
             raise HTTPException(
                 status_code=400,
-                detail=f"Prediction must be between 1 and {actual_sides} (max roll for {sides} sides including the {int((DICE_SIDES_BONUS_MULT - 1) * 100)}% extra faces)",
+                detail=(
+                    f"Prediction must be between 1 and {actual_sides} "
+                    f"(⌈{sides}×{DICE_SIDES_BONUS_MULT}⌉ dice faces, cap {DICE_ROLL_FACES_CAP}; nominal sides max {DICE_SIDES_MAX})"
+                ),
             )
         chosen = chosen_raw
         if stake <= 0:

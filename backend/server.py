@@ -1796,17 +1796,20 @@ def get_rank_info(rank_points: int, prestige_mult: float = 1.0):
 
 
 def effective_player_kill_count(user: Optional[Dict]) -> int:
-    """Kills that count toward player stats: normal user kills + robot bodyguard kills.
-    Users with total_kills_excludes_npc_v1 (migrated or registered after the code change)
-    already have a correct total_kills. Legacy users need hitlist NPC kills subtracted."""
+    """Kills that count toward player stats: real players + robot bodyguards.
+    Hitlist NPCs (non-bodyguard) do not count; see migrate_kills_exclude_npc.py.
+
+    v1: total_kills is the canonical count from migration / live increments; if it ever
+    lags robot_bodyguard_kills, take the max so bodyguard kills still display.
+
+    Legacy: total_kills may have mixed semantics; adjust with hitlist_npc_kills and
+    robot_bodyguard_kills (same as pre-v1 behaviour)."""
     if not user:
         return 0
     try:
         raw = int(user.get("total_kills") or 0)
     except (TypeError, ValueError):
         raw = 0
-    if user.get("total_kills_excludes_npc_v1"):
-        return max(0, raw)
     try:
         hn = int(user.get("hitlist_npc_kills") or 0)
     except (TypeError, ValueError):
@@ -1815,7 +1818,23 @@ def effective_player_kill_count(user: Optional[Dict]) -> int:
         rbg = int(user.get("robot_bodyguard_kills") or 0)
     except (TypeError, ValueError):
         rbg = 0
+    if user.get("total_kills_excludes_npc_v1"):
+        return max(0, raw, rbg)
     return max(0, raw - hn + rbg)
+
+
+def mongodb_effective_kill_count_expr() -> dict:
+    """Same rules as effective_player_kill_count (for $expr / honours ranking)."""
+    raw_e = {"$ifNull": ["$total_kills", 0]}
+    hn_e = {"$ifNull": ["$hitlist_npc_kills", 0]}
+    rbg_e = {"$ifNull": ["$robot_bodyguard_kills", 0]}
+    return {
+        "$cond": [
+            {"$eq": [{"$ifNull": ["$total_kills_excludes_npc_v1", False]}, True]},
+            {"$max": [0, {"$max": [raw_e, rbg_e]}]},
+            {"$max": [0, {"$add": [{"$subtract": [raw_e, hn_e]}, rbg_e]}]},
+        ]
+    }
 
 
 # Floor for owner-set max bet across casino routers (matches set-max-bet handlers).

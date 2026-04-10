@@ -155,6 +155,20 @@ def _stats_parse_iso(s: Optional[str]) -> Optional[datetime]:
         return None
 
 
+def _gambling_log_entry_dt(created_at) -> Optional[datetime]:
+    """Normalize gambling_log.created_at for comparisons. BSON is usually datetime; legacy rows may be ISO strings."""
+    if created_at is None:
+        return None
+    if isinstance(created_at, datetime):
+        dt = created_at
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc)
+        return dt
+    if isinstance(created_at, str):
+        return _stats_parse_iso(created_at)
+    return None
+
+
 def _booze_stats(u: dict) -> dict:
     """Build booze stats dict. Uses get_rank_info and booze_run capacity logic."""
     from routers.money.booze_run import BOOZE_TYPES, BOOZE_CAPACITY_BASE_RANK1, BOOZE_CAPACITY_EXTRA_PER_RANK, BOOZE_CAPACITY_BONUS_MAX
@@ -576,12 +590,16 @@ def register(router):
         )
         u = u or {}
         _raw_gambling_reset = u.get("stats_gambling_reset_at")
-        stats_gambling_reset_at = (
-            _raw_gambling_reset.strip()
-            if isinstance(_raw_gambling_reset, str) and _raw_gambling_reset.strip()
-            else None
-        )
-        stats_gambling_reset_dt = _stats_parse_iso(stats_gambling_reset_at)
+        if isinstance(_raw_gambling_reset, datetime):
+            _rdt = _raw_gambling_reset
+            if _rdt.tzinfo is None:
+                _rdt = _rdt.replace(tzinfo=timezone.utc)
+            stats_gambling_reset_at = _rdt.isoformat()
+        elif isinstance(_raw_gambling_reset, str) and _raw_gambling_reset.strip():
+            stats_gambling_reset_at = _raw_gambling_reset.strip()
+        else:
+            stats_gambling_reset_at = None
+        stats_gambling_reset_dt = _stats_parse_iso(stats_gambling_reset_at) if stats_gambling_reset_at else None
 
         stock_trades = 0
         stock_profit = 0
@@ -675,7 +693,7 @@ def register(router):
             bucket = _gambling_analytics_bucket(gt, details)
             gambling_by_game_lt[bucket] = gambling_by_game_lt.get(bucket, 0) + profit
             gambling_total_lt += profit
-            entry_dt = _stats_parse_iso(entry.get("created_at") if isinstance(entry.get("created_at"), str) else None)
+            entry_dt = _gambling_log_entry_dt(entry.get("created_at"))
             if stats_gambling_reset_dt is None or (entry_dt is not None and entry_dt >= stats_gambling_reset_dt):
                 gambling_by_game_period[bucket] = gambling_by_game_period.get(bucket, 0) + profit
                 gambling_total_period += profit
