@@ -78,6 +78,7 @@ export default function Bodyguards() {
   const [hiringSlots, setHiringSlots] = useState(new Set());
   const [refreshing, setRefreshing] = useState(false);
   const [hireBanner, setHireBanner] = useState(null);
+  const [robotHireInFlight, setRobotHireInFlight] = useState(false);
   const claimedSlotsRef = useRef(new Set());
   const pendingHiresRef = useRef(0);
   /** Latest server-minted token for POST /bodyguards/hire (robot); set from GET /bodyguards. */
@@ -243,12 +244,16 @@ export default function Bodyguards() {
       }
     }
     pendingHiresRef.current += 1;
+    if (isRobot) setRobotHireInFlight(true);
     try {
       const hirePayload = { slot, is_robot: isRobot };
       if (isRobot && robotHireExecuteTokenRef.current) {
         hirePayload.execute_token = robotHireExecuteTokenRef.current;
       }
       const response = await api.post('/bodyguards/hire', hirePayload);
+      if (isRobot && response?.data?.robot_hire_execute_token) {
+        robotHireExecuteTokenRef.current = response.data.robot_hire_execute_token;
+      }
       showHireBanner('success', response?.data?.message ?? 'Bodyguard hired');
     } catch (error) {
       claimedSlotsRef.current.delete(slot);
@@ -270,6 +275,7 @@ export default function Bodyguards() {
     } finally {
       pendingHiresRef.current -= 1;
       if (pendingHiresRef.current === 0) {
+        setRobotHireInFlight(false);
         claimedSlotsRef.current.clear();
         refreshUser().catch(() => {});
         await fetchData();
@@ -645,8 +651,9 @@ export default function Bodyguards() {
           {activeCount < 4 && nextEmptySlot && !bodyguardFor?.owner_username && (
             <button
               onClick={() => hireBodyguard(true)}
+              disabled={robotHireInFlight}
               data-testid="hire-robot-next"
-              className="bg-primary/20 text-primary rounded px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation font-heading shrink-0"
+              className="bg-primary/20 text-primary rounded px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide border border-primary/40 hover:bg-primary/30 transition-all touch-manipulation font-heading shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {`🤖 Hire robot (${getHireCost(nextEmptySlot)} pts${nextHireInflationPct > 0 ? ` +${nextHireInflationPct}%` : ''})`}
             </button>

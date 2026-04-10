@@ -784,11 +784,27 @@ async def _do_hire_bodyguard(hire_request: BodyguardHireRequest, current_user: d
         "bodyguard"
     ))
     _invalidate_bodyguards_cache(current_user["id"])
-    await db.users.update_one({"id": current_user["id"]}, {"$unset": {f"{BG_ROBOT_TOKEN_FIELD}.hire": ""}})
+    occupied_after = occupied | {slot}
+    slots_remaining = 4 - len(occupied_after)
+    next_hire_token: Optional[str] = None
+    if is_robot and slots_remaining > 0:
+        next_hire_token = secrets.token_urlsafe(24)
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": {f"{BG_ROBOT_TOKEN_FIELD}.hire": next_hire_token}},
+        )
+    else:
+        await db.users.update_one({"id": current_user["id"]}, {"$unset": {f"{BG_ROBOT_TOKEN_FIELD}.hire": ""}})
     await log_activity(current_user["id"], current_user.get("username", "?"), "bodyguard_hire", {
         "slot": slot, "is_robot": is_robot, "cost": total_cost, "name": robot_name,
     })
-    return {"message": f"{'Robot bodyguard ' + robot_name if is_robot else 'Human bodyguard slot'} hired for {total_cost} points", "bodyguard_name": robot_name}
+    out = {
+        "message": f"{'Robot bodyguard ' + robot_name if is_robot else 'Human bodyguard slot'} hired for {total_cost} points",
+        "bodyguard_name": robot_name,
+    }
+    if next_hire_token:
+        out["robot_hire_execute_token"] = next_hire_token
+    return out
 
 
 def _weekday_name(weekday: int) -> str:
