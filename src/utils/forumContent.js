@@ -74,6 +74,15 @@ function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * alt= text for inline smiley <img>: must not contain raw ":" or ";" or later replace() passes
+ * will match shorter codes inside the tag (e.g. :p inside alt=":poggers:", ;); inside alt=";-)").
+ */
+function inlineSmileyAltForAttr(code) {
+  if (code == null || typeof code !== 'string') return '';
+  return escapeAttr(code).replace(/:/g, '&#58;').replace(/;/g, '&#59;');
+}
+
 /** CRA `PUBLIC_URL` (no trailing slash) so `/public` assets work on a subpath. */
 function getStaticAssetPrefix() {
   try {
@@ -101,8 +110,9 @@ function wrapForumUnicodeEmoji(emoji) {
 
 // ---------------------------------------------------------------------------
 // Image-based smileys — classic forum style (render as <img> tags)
-// IMPORTANT: Longer codes MUST come before shorter ones to avoid partial matches
-// e.g. :prayge: must come before :p, :sadge: must come before :s
+// IMPORTANT: Longer codes MUST come before shorter ones in user text — but also use
+// inlineSmileyAltForAttr() so alt="..." never contains raw substrings like :p or ;)
+// that later iterations would replace inside the tag HTML.
 // ---------------------------------------------------------------------------
 
 // Longer emoji codes that could conflict with short image smileys - process first as Unicode
@@ -822,7 +832,7 @@ export function parseForumContent(content, options = {}) {
   for (const [from, imgPath] of IMAGE_SMILEYS) {
     const src = escapeAttr(resolveSmileyImgSrc(imgPath));
     const px = FORUM_INLINE_SMILEY_PX;
-    const imgTag = `<img src="${src}" alt="${escapeAttr(from)}" class="inline-smiley" style="display:inline;vertical-align:middle;width:${px}px;height:${px}px;max-width:${px}px;max-height:${px}px;object-fit:contain;" />`;
+    const imgTag = `<img src="${src}" alt="${inlineSmileyAltForAttr(from)}" class="inline-smiley" style="display:inline;vertical-align:middle;width:${px}px;height:${px}px;max-width:${px}px;max-height:${px}px;object-fit:contain;" />`;
     s = s.replace(new RegExp(escapeRegex(from), 'g'), imgTag);
   }
   for (const [from, emoji] of SMILEYS) {

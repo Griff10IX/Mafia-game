@@ -151,16 +151,16 @@ def _match_odds(ra: int, rb: int) -> dict:
 # ── NPC Opponents ────────────────────────────────────────────────────────────
 
 NPCS: List[dict] = [
-    {"id": "npc_1",  "name": "Street Punk",           "power": 12, "speed": 14, "defense": 10, "stamina": 13, "reward": 5000,   "flavor": "Scrawny kid who thinks he's tough."},
-    {"id": "npc_2",  "name": "Bar Brawler",            "power": 18, "speed": 15, "defense": 14, "stamina": 16, "reward": 10000,  "flavor": "Throws haymakers after six beers."},
-    {"id": "npc_3",  "name": "Dock Worker",            "power": 22, "speed": 18, "defense": 19, "stamina": 20, "reward": 20000,  "flavor": "Arms like crane cables."},
-    {"id": "npc_4",  "name": "Club Bouncer",           "power": 26, "speed": 20, "defense": 24, "stamina": 22, "reward": 35000,  "flavor": "Gets paid to hurt people."},
-    {"id": "npc_5",  "name": "Ex-Con",                 "power": 30, "speed": 25, "defense": 28, "stamina": 26, "reward": 50000,  "flavor": "Learned to fight in the yard."},
-    {"id": "npc_6",  "name": "Pit Fighter",            "power": 35, "speed": 30, "defense": 32, "stamina": 30, "reward": 75000,  "flavor": "No rules, no refs, no mercy."},
-    {"id": "npc_7",  "name": "The Hammer",             "power": 42, "speed": 34, "defense": 36, "stamina": 35, "reward": 100000, "flavor": "One punch and the lights go out."},
-    {"id": "npc_8",  "name": "Iron Mike",              "power": 48, "speed": 40, "defense": 42, "stamina": 40, "reward": 150000, "flavor": "Former pro with nothing to lose."},
-    {"id": "npc_9",  "name": "The Butcher",            "power": 55, "speed": 46, "defense": 48, "stamina": 45, "reward": 200000, "flavor": "Leaves opponents unrecognizable."},
-    {"id": "npc_10", "name": "Underground Champion",   "power": 62, "speed": 55, "defense": 56, "stamina": 52, "reward": 500000, "flavor": "King of the pit. Nobody beats him. Yet."},
+    {"id": "npc_1",  "name": "Street Punk",           "power": 12, "speed": 14, "defense": 10, "stamina": 13, "reward": 7500,    "flavor": "Scrawny kid who thinks he's tough."},
+    {"id": "npc_2",  "name": "Bar Brawler",            "power": 18, "speed": 15, "defense": 14, "stamina": 16, "reward": 15000,  "flavor": "Throws haymakers after six beers."},
+    {"id": "npc_3",  "name": "Dock Worker",            "power": 22, "speed": 18, "defense": 19, "stamina": 20, "reward": 30000,  "flavor": "Arms like crane cables."},
+    {"id": "npc_4",  "name": "Club Bouncer",           "power": 26, "speed": 20, "defense": 24, "stamina": 22, "reward": 52500,  "flavor": "Gets paid to hurt people."},
+    {"id": "npc_5",  "name": "Ex-Con",                 "power": 30, "speed": 25, "defense": 28, "stamina": 26, "reward": 75000,  "flavor": "Learned to fight in the yard."},
+    {"id": "npc_6",  "name": "Pit Fighter",            "power": 35, "speed": 30, "defense": 32, "stamina": 30, "reward": 112500, "flavor": "No rules, no refs, no mercy."},
+    {"id": "npc_7",  "name": "The Hammer",             "power": 42, "speed": 34, "defense": 36, "stamina": 35, "reward": 150000, "flavor": "One punch and the lights go out."},
+    {"id": "npc_8",  "name": "Iron Mike",              "power": 48, "speed": 40, "defense": 42, "stamina": 40, "reward": 225000, "flavor": "Former pro with nothing to lose."},
+    {"id": "npc_9",  "name": "The Butcher",            "power": 55, "speed": 46, "defense": 48, "stamina": 45, "reward": 300000, "flavor": "Leaves opponents unrecognizable."},
+    {"id": "npc_10", "name": "Underground Champion",   "power": 62, "speed": 55, "defense": 56, "stamina": 52, "reward": 750000, "flavor": "King of the pit. Nobody beats him. Yet."},
 ]
 
 
@@ -459,7 +459,8 @@ async def boxing_opponents(current_user: dict = Depends(get_current_user)):
 NPC_FIGHT_COOLDOWN_SECONDS = 5 * 60
 NPC_MAX_FIGHTS_PER_HOUR = 10
 PVP_MAX_FIGHTS_PER_HOUR = 10
-NPC_WIN_PAYOUT_MULTIPLIER = 0.6
+# 1.0 = winner receives full NPC "reward" shown in UI (was 0.6).
+NPC_WIN_PAYOUT_MULTIPLIER = 1.0
 
 
 def _npc_win_reward(npc: dict) -> int:
