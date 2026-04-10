@@ -53,6 +53,48 @@ function betLabel(type, selection) {
   return String(selection ?? type).replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+/** Multi-line banner copy for a spin response (uses API fields only). */
+function buildRouletteSpinBannerMessage(data) {
+  const n = data.result;
+  const num = Number(n);
+  let toneWord = 'black';
+  let slot = String(n ?? '—');
+  if (num === 0) {
+    toneWord = 'green';
+    slot = '0';
+  } else if (RED.has(num)) {
+    toneWord = 'red';
+  }
+  const stake = Number(data.total_stake || 0);
+  const payout = Number(data.total_payout || 0);
+  const shortfall = Number(data.shortfall || 0);
+  const ownerCut = Number(data.owner_cut || 0);
+  const lines = [];
+  lines.push(`Ball landed on ${slot} (${toneWord}).`);
+  if (data.win) {
+    const net = payout - stake;
+    let line2 = `Paid out ${formatMoney(payout)} on ${formatMoney(stake)} wagered.`;
+    if (net > 0) line2 += ` Net gain ${formatMoney(net)}.`;
+    else if (net < 0) line2 += ` Net ${formatMoney(net)}.`;
+    else line2 += ' Break-even on this spin.';
+    lines.push(line2);
+    if (shortfall > 0) {
+      lines.push(
+        `The owner could not cover the full win — you still collected ${formatMoney(payout)} (${formatMoney(shortfall)} below the full payout).`,
+      );
+    }
+  } else {
+    lines.push(`No winning bets — ${formatMoney(stake)} stays with the house.`);
+    if (ownerCut > 0) {
+      lines.push(`State head / edge share: ${formatMoney(ownerCut)}.`);
+    }
+  }
+  if (data.ownership_transferred) {
+    lines.push('You seized this roulette table — the previous owner could not pay.');
+  }
+  return lines.join('\n');
+}
+
 function setBusyAnimationsFlag(isBusy) {
   if (typeof document === 'undefined') return;
   if (isBusy) {
@@ -367,6 +409,26 @@ export default function Rlt() {
     [],
   );
 
+  const [betBarWiggle, setBetBarWiggle] = useState(false);
+  const betWiggleTimeoutRef = useRef(null);
+
+  const triggerBetBarWiggle = useCallback(() => {
+    if (betWiggleTimeoutRef.current) {
+      clearTimeout(betWiggleTimeoutRef.current);
+      betWiggleTimeoutRef.current = null;
+    }
+    setBetBarWiggle(false);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setBetBarWiggle(true);
+        betWiggleTimeoutRef.current = setTimeout(() => {
+          betWiggleTimeoutRef.current = null;
+          setBetBarWiggle(false);
+        }, 450);
+      });
+    });
+  }, []);
+
   const fetchOwnership = () => {
     api.get('/casino/roulette/ownership').then((r) => {
       const data = r.data ?? null;
@@ -395,6 +457,7 @@ export default function Rlt() {
   useEffect(() => () => {
     if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current);
     if (busyClearTimeoutRef.current) clearTimeout(busyClearTimeoutRef.current);
+    if (betWiggleTimeoutRef.current) clearTimeout(betWiggleTimeoutRef.current);
     setBusyAnimationsFlag(false);
   }, []);
 
@@ -449,6 +512,7 @@ export default function Rlt() {
       return;
     }
     setBets((prev) => [...prev, { id: Date.now() + Math.random(), type, selection, amount: chipValue }]);
+    triggerBetBarWiggle();
   };
 
   const removeBet = (id) => setBets((prev) => prev.filter((b) => b.id !== id));
@@ -458,13 +522,7 @@ export default function Rlt() {
     setLastResult(data.result);
     const hid = ++historySeqRef.current;
     setRecentNumbers((prev) => [{ id: hid, n: data.result }, ...prev].slice(0, 12));
-    let bannerMsg = data.win
-      ? `Landed ${data.result}! Won ${formatMoney(data.total_payout)}`
-      : `Landed ${data.result}. Lost ${formatMoney(data.total_stake)}`;
-    if (data.ownership_transferred) {
-      bannerMsg += '\nYou won the casino!';
-    }
-    showRouletteBanner(data.win ? 'success' : 'error', bannerMsg);
+    showRouletteBanner(data.win ? 'success' : 'error', buildRouletteSpinBannerMessage(data));
     if (data.win) {
       setShowWin(true);
       setTimeout(() => setShowWin(false), 2200);
@@ -494,13 +552,7 @@ export default function Rlt() {
     const lead = completedSpinDataRef.current.get(maxSeq);
     if (lead && lead.result != null) setLastResult(lead.result);
 
-    let bannerMsgT = data.win
-      ? `Landed ${data.result}! Won ${formatMoney(data.total_payout)}`
-      : `Landed ${data.result}. Lost ${formatMoney(data.total_stake)}`;
-    if (data.ownership_transferred) {
-      bannerMsgT += '\nYou won the casino!';
-    }
-    showRouletteBanner(data.win ? 'success' : 'error', bannerMsgT);
+    showRouletteBanner(data.win ? 'success' : 'error', buildRouletteSpinBannerMessage(data));
     if (data.win) {
       setShowWin(true);
       setTimeout(() => setShowWin(false), 2200);
@@ -754,6 +806,33 @@ export default function Rlt() {
     finally { setOwnerLoading(false); }
   };
 
+  const renderRouletteBanner = (extraClassName = '') => {
+    if (!rouletteBanner) return null;
+    const variant = rouletteBanner.variant;
+    const vClass =
+      variant === 'success'
+        ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100'
+        : variant === 'error'
+          ? 'border-red-500/40 bg-red-500/10 text-red-100'
+          : 'border-primary/30 bg-primary/10 text-foreground';
+    return (
+      <div
+        className={`rounded-md border px-2.5 py-1.5 flex items-start justify-between gap-2 ${vClass} ${extraClassName}`.trim()}
+        role="status"
+      >
+        <p className="text-[10px] font-heading leading-snug whitespace-pre-line flex-1 min-w-0">{rouletteBanner.message}</p>
+        <button
+          type="button"
+          onClick={clearRouletteBanner}
+          className="shrink-0 leading-none px-1 py-0.5 rounded text-[11px] text-mutedForeground hover:text-foreground hover:bg-black/20 font-heading"
+          aria-label="Dismiss message"
+        >
+          ×
+        </button>
+      </div>
+    );
+  };
+
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="roulette-page">
       <style>{CG_STYLES}</style>
@@ -780,11 +859,18 @@ export default function Rlt() {
         .animate-result-pop { animation: result-number-pop 0.5s cubic-bezier(0.2, 0.8, 0.3, 1.1) forwards; }
         .animate-win-shower { animation: win-shower ease-in forwards; }
         .animate-spin-pulse { animation: spin-pulse 1s ease-in-out infinite; }
+        @keyframes rlt-bet-wiggle {
+          0%, 100% { transform: translateY(0); }
+          25% { transform: translateY(-6px); }
+          50% { transform: translateY(5px); }
+          75% { transform: translateY(-2px); }
+        }
+        .rlt-bet-wiggle { animation: rlt-bet-wiggle 0.42s ease-in-out; }
       `}</style>
 
       {/* Page header */}
-      <div className="relative cg-fade-in flex flex-wrap items-end justify-between gap-4">
-        <div>
+      <div className="relative cg-fade-in flex flex-wrap items-end justify-between gap-y-2 gap-x-4">
+        <div className="w-full min-w-0 sm:w-auto">
           <p className="text-[10px] text-zinc-500 font-heading italic">
             Playing in <span className="text-primary font-bold">{currentCity}</span>
             {ownership?.owner_name && !isOwner && (
@@ -817,30 +903,9 @@ export default function Rlt() {
               </span>
             )}
           </p>
-          {rouletteBanner && (
-            <div
-              className={`mt-1.5 max-w-xl rounded-md border px-2.5 py-1.5 flex items-start justify-between gap-2 ${
-                rouletteBanner.variant === 'success'
-                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100'
-                  : rouletteBanner.variant === 'error'
-                    ? 'border-red-500/40 bg-red-500/10 text-red-100'
-                    : 'border-primary/30 bg-primary/10 text-foreground'
-              }`}
-              role="status"
-            >
-              <p className="text-[10px] font-heading leading-snug whitespace-pre-line flex-1 min-w-0">{rouletteBanner.message}</p>
-              <button
-                type="button"
-                onClick={clearRouletteBanner}
-                className="shrink-0 leading-none px-1 py-0.5 rounded text-[11px] text-mutedForeground hover:text-foreground hover:bg-black/20 font-heading"
-                aria-label="Dismiss message"
-              >
-                ×
-              </button>
-            </div>
-          )}
+          {renderRouletteBanner('mt-1.5 max-w-xl hidden sm:flex')}
         </div>
-        <div className="flex items-center gap-3 text-xs font-heading">
+        <div className="flex w-full flex-wrap items-center justify-between gap-2 text-xs font-heading sm:w-auto sm:justify-end">
           {ownership?.owner_name ? (
             <span className="text-mutedForeground">Buy-back: <span className="text-primary font-bold">{Number(ownership.buy_back_reward ?? 0).toLocaleString()} pts</span></span>
           ) : null}
@@ -851,6 +916,7 @@ export default function Rlt() {
             </button>
           )}
         </div>
+        {renderRouletteBanner('mt-1 flex w-full sm:hidden')}
       </div>
 
       {/* Buy-back offer */}
@@ -941,8 +1007,8 @@ export default function Rlt() {
           <div style={{ height: 3, background: 'linear-gradient(90deg, #5a3e1b, var(--noir-primary-bright), #8b6914, var(--noir-primary-bright), #5a3e1b)' }} />
 
           <div className="p-3 sm:p-4">
-            {/* Bet info bar */}
-            <div className="flex items-center justify-between mb-3 px-1">
+            {/* Bet info bar — wiggles up/down when a chip is placed */}
+            <div className={`flex items-center justify-between mb-3 px-1 ${betBarWiggle ? 'rlt-bet-wiggle' : ''}`}>
               <span className="text-[10px] font-heading text-emerald-200/70 uppercase tracking-wider">Place your bets</span>
               <div className="flex items-center gap-3 text-[10px] font-heading">
                 <span className="text-emerald-200/60">Wager: <span className="text-white font-bold">{formatMoney(totalBet)}</span></span>
