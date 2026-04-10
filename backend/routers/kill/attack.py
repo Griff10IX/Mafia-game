@@ -4,6 +4,7 @@ from datetime import datetime, timezone, timedelta
 import math
 import random
 import re
+import secrets
 import uuid
 import os
 import sys
@@ -69,6 +70,39 @@ from routers.game.families import resolve_family_id
 from utils.staff_bot_client_alert import maybe_notify_staff_bot_attack_from_ua
 
 
+def _safe_compare_execute_token(stored: str, submitted: Optional[str]) -> bool:
+    """Constant-time compare for server-minted execute tokens."""
+    a = (stored or "").strip()
+    b = (submitted or "").strip()
+    if len(a) < 16 or len(a) != len(b):
+        return False
+    try:
+        return secrets.compare_digest(a.encode("utf-8"), b.encode("utf-8"))
+    except Exception:
+        return False
+
+
+async def _ensure_execute_token(attacker_id: str, attack_id: str) -> Optional[str]:
+    """
+    Mint a per-attack token when the client can execute (same location as target).
+    Lazy scripts that only POST /attack/execute never see this value until they poll list or status.
+    """
+    doc = await db.attacks.find_one({"id": attack_id, "attacker_id": attacker_id}, {"_id": 0, "execute_token": 1})
+    if not doc:
+        return None
+    t = doc.get("execute_token")
+    if isinstance(t, str) and len(t) >= 16:
+        return t
+    new_t = secrets.token_urlsafe(24)
+    await db.attacks.update_one(
+        {"id": attack_id, "attacker_id": attacker_id, "$or": [{"execute_token": {"$exists": False}}, {"execute_token": None}, {"execute_token": ""}]},
+        {"$set": {"execute_token": new_t}},
+    )
+    doc2 = await db.attacks.find_one({"id": attack_id, "attacker_id": attacker_id}, {"_id": 0, "execute_token": 1})
+    out = (doc2 or {}).get("execute_token")
+    return out if isinstance(out, str) and len(out) >= 16 else new_t
+
+
 def _parse_iso_datetime(val):
     """Parse datetime from DB string; return None if missing/invalid. Normalize to UTC if naive."""
     if val is None:
@@ -83,16 +117,12 @@ def _parse_iso_datetime(val):
         return None
 
 
-def _hunt_location_when_search_timer_fires(target_user: Optional[dict], attack: dict) -> str:
-    """City when a hunt becomes FOUND. Robot NPC bodyguards are fixed in place — never assign a random city for them."""
+def _hunt_location_when_search_timer_fires(target_user: Optional[dict], attack: dict) -> Optional[str]:
+    """City when a hunt becomes FOUND. Robot NPC bodyguards: only their users.current_state (no planned/random)."""
     tu = target_user or {}
     if tu.get("is_npc") and tu.get("is_bodyguard"):
-        if tu.get("current_state") in STATES:
-            return tu["current_state"]
-        pl = attack.get("planned_location_state")
-        if pl in STATES:
-            return pl
-        return random.choice(STATES) if STATES else "Chicago"
+        cs = (tu.get("current_state") or "").strip()
+        return cs if cs else None
     return (
         (tu.get("current_state") if tu.get("current_state") in STATES else None)
         or attack.get("planned_location_state")
@@ -101,17 +131,16 @@ def _hunt_location_when_search_timer_fires(target_user: Optional[dict], attack: 
 
 
 def _resolved_target_location(attack: dict, target_user: Optional[dict]) -> Optional[str]:
-    """For a FOUND hunt, use the target user's current_state when valid (robot bodyguards do not move)."""
+    """For a FOUND hunt, use the target user's current_state when valid. Robot bodyguards: only that field, never planned."""
     if not attack or attack.get("status") != "found":
         return attack.get("location_state") if attack else None
     tu = target_user or {}
+    if tu.get("is_npc") and tu.get("is_bodyguard"):
+        cs = (tu.get("current_state") or "").strip()
+        return cs if cs else None
     live = tu.get("current_state")
     if live and live in STATES:
         return live
-    if tu.get("is_npc") and tu.get("is_bodyguard"):
-        pl = attack.get("planned_location_state")
-        if pl in STATES:
-            return pl
     return attack.get("location_state") or attack.get("planned_location_state")
 
 
@@ -480,6 +509,7 @@ class AttackStatusResponse(BaseModel):
     can_travel: bool
     can_attack: bool
     message: str
+    execute_token: Optional[str] = None
 
 class AttackIdRequest(BaseModel):
     attack_id: str
@@ -493,6 +523,8 @@ class AttackExecuteRequest(BaseModel):
     make_public: bool = False
     bullets_to_use: Optional[int] = None
     use_molotovs: Optional[bool] = False
+    # Issued when GET /attack/list or GET /attack/status shows can_attack; required if the attack row has a token.
+    execute_token: Optional[str] = None
 
     @field_validator("bullets_to_use", mode="before")
     @classmethod
@@ -743,6 +775,12 @@ async def _build_active_attacks_list(attacker_id: str, attacker_current_state: s
             "message": msg,
             "target_is_npc": bool((users_map.get(tid or "") or {}).get("is_npc")) if tid else False,
         }
+        # Mint server-side token as soon as the hunt is "found" (any list refresh). Execute requires it once set,
+        # so scripts that only POST /execute without polling list fail. Only return the token to the client when can_attack.
+        if attack["status"] == "found":
+            tok = await _ensure_execute_token(attacker_id, attack["id"])
+            if can_attack and tok:
+                item["execute_token"] = tok
         if attack["status"] == "found" and tid:
             target_bgs = bgs_by_owner.get(tid) or []
             if target_bgs:
@@ -923,7 +961,11 @@ async def search_target(request: AttackSearchRequest, current_user: dict = Depen
     attack_id = str(uuid.uuid4())
     note = (request.note or "").strip()
     note = note[:80] if note else None
-    target_state = target.get("current_state") if target.get("current_state") in STATES else random.choice(STATES)
+    if target.get("is_npc") and target.get("is_bodyguard"):
+        # Robot bodyguard location always comes from their user doc only (not a random planned city).
+        target_state = (target.get("current_state") or "").strip() or None
+    else:
+        target_state = target.get("current_state") if target.get("current_state") in STATES else random.choice(STATES)
     target_username = (target.get("username") or "").strip() or "?"
     await db.attacks.insert_one({
         "id": attack_id,
@@ -1018,6 +1060,11 @@ async def get_attack_status(
         message = "Searching..."
     elif attack["status"] == "found":
         message = f"Target found in {attack['location_state']}! You are in the same location. Ready to attack!" if can_attack else f"Target found in {attack['location_state']}! Travel there to attack."
+    exec_tok = None
+    if attack["status"] == "found":
+        ensured = await _ensure_execute_token(current_user["id"], attack["id"])
+        if can_attack:
+            exec_tok = ensured
     return AttackStatusResponse(
         attack_id=attack["id"],
         status=attack["status"],
@@ -1025,7 +1072,8 @@ async def get_attack_status(
         location_state=attack.get("location_state"),
         can_travel=can_travel,
         can_attack=can_attack,
-        message=message
+        message=message,
+        execute_token=exec_tok,
     )
 
 async def list_attacks(current_user: dict = Depends(get_current_user)):
@@ -1175,6 +1223,19 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     if attacker_location != target_location:
         await _log_attack_error(current_user["id"], current_user.get("username"), "You must be in the target's location to attack or bodyguard-check. Travel there first.", req)
         raise HTTPException(status_code=400, detail="You must be in the target's location to attack or bodyguard-check. Travel there first.")
+    stored_tok = attack.get("execute_token")
+    if isinstance(stored_tok, str) and len(stored_tok) >= 16:
+        if not _safe_compare_execute_token(stored_tok, request.execute_token):
+            await _log_attack_error(
+                current_user["id"],
+                current_user.get("username"),
+                "Stale or missing execute token — refresh My Searches (or attack status) and try again.",
+                req,
+            )
+            raise HTTPException(
+                status_code=400,
+                detail="Stale or missing attack session. Refresh your searches and try again.",
+            )
     if await soft_launch_blocks_pvp_kill_on_target(db, target):
         await _log_attack_error(current_user["id"], current_user.get("username"), "Release soft-launch PvP block", req)
         raise HTTPException(status_code=403, detail=PVP_KILLS_DISABLED_DETAIL)

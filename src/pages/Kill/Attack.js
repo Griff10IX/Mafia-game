@@ -1266,6 +1266,7 @@ export default function Attack() {
             make_public: payload.makePublic || false,
             bullets_to_use: payload.bulletsToUse ?? 1,
             use_molotovs: payload.useMolotovs ?? false,
+            ...(best.execute_token ? { execute_token: best.execute_token } : {}),
           };
           const execRes = await api.post('/attack/execute', { attack_id: best.attack_id, ...extra });
           refreshUser();
@@ -1484,7 +1485,13 @@ export default function Attack() {
       toast.error('Enter how many bullets to use (at least 1).');
       return;
     }
-    const extra = { death_message: deathMessage, make_public: makePublic, bullets_to_use: bulletNum, use_molotovs: useMolotovs };
+    const extra = {
+      death_message: deathMessage,
+      make_public: makePublic,
+      bullets_to_use: bulletNum,
+      use_molotovs: useMolotovs,
+      ...(best.execute_token ? { execute_token: best.execute_token } : {}),
+    };
     try {
       sessionStorage.setItem('attack-last-submit', JSON.stringify({
         type: 'kill',

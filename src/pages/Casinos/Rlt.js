@@ -500,7 +500,8 @@ export default function Rlt() {
   const applyResult = (data) => {
     setLastResult(data.result);
     const hid = ++historySeqRef.current;
-    setRecentNumbers((prev) => [{ id: hid, n: data.result }, ...prev].slice(0, 12));
+    // Namespace key so it never collides with turbo `client_spin_id` (both count from 1) — duplicate React keys reused the wrong chip.
+    setRecentNumbers((prev) => [{ histKey: `a-${hid}`, n: data.result }, ...prev].slice(0, 12));
     showRouletteBanner(data.win ? 'success' : 'error', buildRouletteSpinBannerMessage(data));
     if (data.win) {
       setShowWin(true);
@@ -526,7 +527,7 @@ export default function Rlt() {
       if (k < hi - 150) completedSpinDataRef.current.delete(k);
     });
     const sorted = [...completedSpinDataRef.current.entries()].sort((a, b) => b[0] - a[0]).slice(0, 12);
-    setRecentNumbers(sorted.map(([s, d]) => ({ id: s, n: d.result })));
+    setRecentNumbers(sorted.map(([s, d]) => ({ histKey: `t-${s}`, n: d.result })));
     const maxSeq = sorted.length ? sorted[0][0] : seq;
     const lead = completedSpinDataRef.current.get(maxSeq);
     if (lead && lead.result != null) setLastResult(lead.result);
@@ -613,6 +614,8 @@ export default function Rlt() {
       });
       return;
     }
+
+    if (spinInFlightRef.current) return;
 
     const b = betsRef.current;
     const cfg = configRef.current;
@@ -794,10 +797,10 @@ export default function Rlt() {
           : 'border-primary/30 bg-primary/10 text-foreground';
     return (
       <div
-        className={`rounded-md border px-2.5 py-1.5 flex items-start justify-between gap-2 min-h-[5.5rem] max-h-[5.5rem] sm:min-h-[6rem] sm:max-h-[6rem] overflow-hidden ${vClass} ${extraClassName}`.trim()}
+        className={`rounded-md border px-2.5 py-1.5 flex items-start justify-between gap-2 ${vClass} ${extraClassName}`.trim()}
         role="status"
       >
-        <p className="text-[10px] font-heading leading-snug whitespace-pre-line flex-1 min-h-0 min-w-0 overflow-y-auto pr-0.5">
+        <p className="text-[10px] font-heading leading-snug whitespace-pre-line flex-1 min-w-0 max-h-[4.25rem] sm:max-h-[4.75rem] overflow-y-auto pr-1">
           {rouletteBanner.message}
         </p>
         <button
@@ -1002,7 +1005,7 @@ export default function Rlt() {
                 <div className={`rounded-full p-1 ${spinning && useAnimation ? 'animate-spin-pulse' : ''}`}>
                   <RouletteWheel
                     rotationDeg={wheelRotation}
-                    spinning={spinning && useAnimation}
+                    spinning={spinning}
                     lastResult={lastResult}
                     size={200}
                   />
@@ -1040,7 +1043,10 @@ export default function Rlt() {
                   <div className="flex gap-1 justify-center flex-wrap">
                     {recentNumbers.slice(0, 10).map((entry, i) => {
                       const n = typeof entry === 'object' && entry != null && 'n' in entry ? entry.n : entry;
-                      const key = typeof entry === 'object' && entry != null && entry.id != null ? entry.id : `${n}-${i}`;
+                      const key =
+                        typeof entry === 'object' && entry != null && entry.histKey != null
+                          ? entry.histKey
+                          : `${n}-${i}`;
                       return (
                         <div
                           key={key}
@@ -1086,7 +1092,7 @@ export default function Rlt() {
                 {/* Spin */}
                 <button
                   onClick={spin}
-                  disabled={!canSpin}
+                  disabled={!canSpin || spinning}
                   className="w-full max-w-[200px] rounded-lg px-6 py-2.5 text-sm font-heading font-bold uppercase tracking-wider border-2 disabled:opacity-40 disabled:cursor-not-allowed active:scale-95 transition-all"
                   style={{
                     background: 'linear-gradient(180deg, var(--noir-primary), #a08020, #8a6e18)',
@@ -1099,8 +1105,14 @@ export default function Rlt() {
                 </button>
 
                 {/* Animation toggle */}
-                <label className="flex items-center gap-1.5 cursor-pointer">
-                  <input type="checkbox" checked={useAnimation} onChange={(e) => setUseAnimation(e.target.checked)} className="w-3 h-3 rounded accent-primary" />
+                <label className={`flex items-center gap-1.5 ${spinning ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}>
+                  <input
+                    type="checkbox"
+                    checked={useAnimation}
+                    disabled={spinning}
+                    onChange={(e) => setUseAnimation(e.target.checked)}
+                    className="w-3 h-3 rounded accent-primary disabled:cursor-not-allowed"
+                  />
                   <span className="text-[10px] text-emerald-200/50 font-heading">Animation</span>
                 </label>
               </div>
