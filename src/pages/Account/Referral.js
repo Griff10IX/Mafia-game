@@ -1,9 +1,25 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { UserPlus, Copy, Crosshair, DollarSign, Car, Building2, BarChart3, Link2, Wine, KeyRound, Gift } from 'lucide-react';
-import api from '../../utils/api';
+import { UserPlus, Copy, Crosshair, DollarSign, Car, Building2, BarChart3, Link2, Wine, KeyRound, Gift, RefreshCw } from 'lucide-react';
+import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
+import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
+import AutoRefreshNote from '../../components/AutoRefreshNote';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
+
+const REF_CACHE_KEY = 'mafia_account_referral_v1';
+const REF_FETCH_TIMEOUT_MS = 25_000;
+
+/** Reject corrupt sessionStorage so we never stick on Loading with a silent refresh loop. */
+function isValidReferralCache(entry) {
+  if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return false;
+  const d = entry.data;
+  if (d == null || typeof d !== 'object' || Array.isArray(d)) return false;
+  if (typeof d.username !== 'string') return false;
+  if (!d.earnings || typeof d.earnings !== 'object' || Array.isArray(d.earnings)) return false;
+  if (!d.redeem_stats || typeof d.redeem_stats !== 'object' || Array.isArray(d.redeem_stats)) return false;
+  return true;
+}
 
 const REF_STYLES = `
   @keyframes ref-fade-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
@@ -43,22 +59,52 @@ const StatCard = ({ label, value, title, valueColor = 'text-foreground', icon: I
 );
 
 export default function Referral() {
-  const [data, setData] = useState(null);
-  const [error, setError] = useState(null);
+  const initialRef = readSessionJson(REF_CACHE_KEY);
+  const cacheOk = isValidReferralCache(initialRef);
+  const [data, setData] = useState(() => (cacheOk ? initialRef.data : null));
+  const [loading, setLoading] = useState(() => !cacheOk);
+  const [refreshing, setRefreshing] = useState(false);
   const [redeemCodeInput, setRedeemCodeInput] = useState('');
   const [redeemLoading, setRedeemLoading] = useState(false);
+  const intervalRef = useRef(null);
+  const fetchInFlightRef = useRef(false);
+
+  const fetchData = useCallback(async (mode = 'load') => {
+    if (mode === 'silent' && fetchInFlightRef.current) return;
+    fetchInFlightRef.current = true;
+    if (mode === 'load') setLoading(true);
+    if (mode === 'manual') setRefreshing(true);
+    const axiosOpts = { timeout: REF_FETCH_TIMEOUT_MS };
+    try {
+      const res = await api.get('/account/referral', axiosOpts);
+      setData(res.data);
+      writeSessionJson(REF_CACHE_KEY, { data: res.data });
+    } catch (error) {
+      const canceled = error?.code === 'ERR_CANCELED' || error?.name === 'CanceledError';
+      if (canceled) return;
+      if (mode === 'load') {
+        const msg =
+          error?.code === 'ECONNABORTED'
+            ? 'Referral data timed out. Check your connection and tap refresh.'
+            : getApiErrorMessage(error) || 'Failed to load referral data';
+        toast.error(msg);
+      }
+    } finally {
+      fetchInFlightRef.current = false;
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    api.get('/account/referral')
-      .then((res) => {
-        if (!cancelled) setData(res.data);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err.response?.data?.detail || 'Failed to load referral data');
-      });
-    return () => { cancelled = true; };
-  }, []);
+    const c = readSessionJson(REF_CACHE_KEY);
+    fetchData(isValidReferralCache(c) ? 'silent' : 'load');
+  }, [fetchData]);
+
+  useEffect(() => {
+    intervalRef.current = setInterval(() => fetchData('silent'), 60_000);
+    return () => clearInterval(intervalRef.current);
+  }, [fetchData]);
 
   const referralUrl = typeof window !== 'undefined' && data?.username
     ? `${window.location.origin}/?ref=${encodeURIComponent(data.username)}`
@@ -80,23 +126,30 @@ export default function Referral() {
     }
     setRedeemLoading(true);
     try {
-      const res = await api.post('/account/redeem', { code });
+      const res = await api.post('/account/redeem', { code }, { timeout: REF_FETCH_TIMEOUT_MS });
       const granted = res.data?.granted?.length ? res.data.granted.join(', ') : 'Rewards granted';
       toast.success(`Redeemed: ${granted}`);
       setRedeemCodeInput('');
+      await fetchData('manual');
+      refreshUser();
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Invalid or already used code');
+      const msg =
+        err?.code === 'ECONNABORTED'
+          ? 'Redeem request timed out. Try again.'
+          : err.response?.data?.detail || 'Invalid or already used code';
+      toast.error(msg);
     } finally {
       setRedeemLoading(false);
     }
   };
 
-  if (error) {
+  if (loading && !data) {
     return (
       <div className={`${styles.pageContent} mobile-page-root`}>
         <div className="flex flex-col items-center justify-center min-h-[40vh] gap-2">
-          <p className="text-destructive font-heading">{error}</p>
-          <Link to="/account/dashboard" className="text-primary font-heading underline">Back to Dashboard</Link>
+          <UserPlus size={22} className="text-primary/40 animate-pulse" />
+          <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" aria-hidden />
+          <span className="text-primary text-[9px] font-heading uppercase tracking-wider">Loading…</span>
         </div>
       </div>
     );
@@ -112,9 +165,21 @@ export default function Referral() {
     <div className={`${styles.pageContent} mobile-page-root`}>
       <style>{REF_STYLES}</style>
       <div className="max-w-2xl mx-auto space-y-2 sm:space-y-4 px-0 sm:px-4 py-2 sm:py-4">
-        <div className={`flex items-center gap-2 border-b ${styles.panelHeader} pb-2 px-2 sm:px-0`} style={{ borderBottomColor: 'var(--gm-border)' }}>
-          <UserPlus size={20} className="shrink-0" style={{ color: 'var(--gm-gold)' }} />
-          <h1 className={`text-sm sm:text-base font-heading font-bold ${styles.gmTitle}`}>Referral & Redeem</h1>
+        <div className={`relative flex flex-col gap-1 border-b ${styles.panelHeader} pb-2 px-2 sm:px-0`} style={{ borderBottomColor: 'var(--gm-border)' }}>
+          <div className="flex items-center gap-2 pr-10">
+            <UserPlus size={20} className="shrink-0" style={{ color: 'var(--gm-gold)' }} />
+            <h1 className={`text-sm sm:text-base font-heading font-bold ${styles.gmTitle}`}>Referral & Redeem</h1>
+          </div>
+          <AutoRefreshNote seconds={60} className="pl-0 sm:pl-0" />
+          <button
+            type="button"
+            onClick={() => fetchData('manual')}
+            disabled={refreshing}
+            className={`absolute top-0 right-0 sm:right-0 p-1.5 rounded-sm transition-colors ${styles.surface} ${styles.raisedHover} border border-primary/20`}
+            title="Refresh"
+          >
+            <RefreshCw size={14} className={`text-primary ${refreshing ? 'animate-spin' : ''}`} />
+          </button>
         </div>
 
         {/* Your link */}

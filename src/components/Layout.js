@@ -464,19 +464,21 @@ export default function Layout({ children }) {
         };
       }
       if (i.type === 'group' && i.id === 'combat') {
-        const wsBal = Math.max(0, Math.floor(Number(user?.witness_statements ?? 0)));
+        const wsRed = Math.max(0, Math.floor(Number(user?.witness_nav_red ?? 0)));
+        const wsGreen = Math.max(0, Math.floor(Number(user?.witness_nav_green ?? 0)));
         return {
           ...i,
-          items: i.items.map((sub) =>
-            sub.path === '/kill/witness-statements' && wsBal > 0
-              ? { ...sub, badge: wsBal, badgeTone: 'emerald' }
-              : sub
-          ),
+          items: i.items.map((sub) => {
+            if (sub.path !== '/kill/witness-statements') return sub;
+            if (wsRed > 0) return { ...sub, badge: wsRed };
+            if (wsGreen > 0) return { ...sub, badge: wsGreen, badgeTone: 'emerald' };
+            return sub;
+          }),
         };
       }
       return i;
     });
-  }, [isAdmin, isModerator, hasAdminEmail, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, user?.witness_statements]);
+  }, [isAdmin, isModerator, hasAdminEmail, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, user?.witness_nav_red, user?.witness_nav_green]);
 
   useEffect(() => onCooldownChange(setCooldownSeconds), []);
 
@@ -1153,10 +1155,16 @@ export default function Layout({ children }) {
           ].map((item, idx) => {
             const isActive = location.pathname === item.to;
             const Icon = item.Icon;
-            const wsBadge =
+            const wsRed =
               item.to === '/kill/witness-statements'
-                ? Math.max(0, Math.floor(Number(user?.witness_statements ?? 0)))
+                ? Math.max(0, Math.floor(Number(user?.witness_nav_red ?? 0)))
                 : 0;
+            const wsGreen =
+              item.to === '/kill/witness-statements'
+                ? Math.max(0, Math.floor(Number(user?.witness_nav_green ?? 0)))
+                : 0;
+            const wsBadge = wsRed > 0 ? wsRed : wsGreen;
+            const wsEmerald = wsRed <= 0 && wsGreen > 0;
             return (
               <Fragment key={item.to}>
                 {showSidebarDividers && idx > 0 && navDividerEl(`cb${idx}`)}
@@ -1164,9 +1172,15 @@ export default function Layout({ children }) {
                   <Icon size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
                   <span className="uppercase tracking-widest font-heading flex-1">{item.label}</span>
                   {wsBadge > 0 && (
-                    <span className="shrink-0 min-w-[16px] h-[16px] rounded-full border border-emerald-500/40 bg-emerald-600/30 text-[9px] font-bold text-emerald-200 flex items-center justify-center px-0.5 tabular-nums font-heading">
-                      {wsBadge > 99 ? '99+' : wsBadge}
-                    </span>
+                    wsEmerald ? (
+                      <span className="shrink-0 min-w-[16px] h-[16px] rounded-full border border-emerald-500/40 bg-emerald-600/30 text-[9px] font-bold text-emerald-200 flex items-center justify-center px-0.5 tabular-nums font-heading">
+                        {wsBadge > 99 ? '99+' : wsBadge}
+                      </span>
+                    ) : (
+                      <span className="shrink-0 min-w-[16px] h-[16px] rounded-full bg-red-600 text-[9px] font-bold text-white flex items-center justify-center px-0.5 tabular-nums font-heading">
+                        {wsBadge > 99 ? '99+' : wsBadge}
+                      </span>
+                    )
                   )}
                 </Link>
               </Fragment>

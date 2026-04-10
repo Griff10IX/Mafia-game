@@ -1734,7 +1734,16 @@ def register(router):
             family_id = u.get("family_id")
             ref_ids = normalize_referred_by_ids(u.get("referred_by"))
             _noop = lambda: asyncio.sleep(0, result=None)
-            admin_color_doc, weapon_doc, fam, bodyguard_count = await asyncio.gather(
+
+            async def _witness_nav_green_count():
+                uid = str(u["id"])
+                mq = {"status": "active", "seller_id": {"$ne": uid}}
+                cleared = u.get("witness_market_nav_cleared_at")
+                if cleared:
+                    mq["created_at"] = {"$gt": cleared}
+                return await db.witness_statement_listings.count_documents(mq)
+
+            admin_color_doc, weapon_doc, fam, bodyguard_count, witness_nav_green_n = await asyncio.gather(
                 db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1}),
                 db.weapons.find_one({"id": equipped_weapon_id}, {"_id": 0, "name": 1}) if equipped_weapon_id else _noop(),
                 db.families.find_one({"id": family_id}, {"_id": 0, "name": 1}) if family_id else _noop(),
@@ -1745,7 +1754,10 @@ def register(router):
                         {"is_robot": True},
                     ],
                 }),
+                _witness_nav_green_count(),
             )
+            witness_nav_red = _safe_int(u.get("witness_nav_red"), 0)
+            witness_nav_green = min(_safe_int(witness_nav_green_n, 0), 999)
             ref_users = []
             if ref_ids:
                 ref_users = await db.users.find(
@@ -1801,6 +1813,8 @@ def register(router):
                 bullets=_safe_int(u.get("bullets"), 0),
                 molotovs=_safe_int(u.get("molotovs"), 0),
                 witness_statements=_safe_int(u.get("witness_statements"), 0),
+                witness_nav_red=witness_nav_red,
+                witness_nav_green=witness_nav_green,
                 health=_safe_int(u.get("health"), DEFAULT_HEALTH),
                 armour_level=_safe_int(u.get("armour_level"), 0),
                 current_state=str(u.get("current_state") or ""),

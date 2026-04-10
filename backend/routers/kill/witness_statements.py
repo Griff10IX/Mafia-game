@@ -223,6 +223,19 @@ def register(router):
         ).sort("created_at", -1).limit(100).to_list(100)
         return {"items": rows}
 
+    @router.post("/witness-statements/nav-seen")
+    async def witness_statements_nav_seen(current_user: dict = Depends(get_current_user)):
+        """Clear sidebar badges: new witness count and market-since-visit reminder (opening Witness statements page)."""
+        uid = current_user.get("id") or ""
+        if not uid:
+            raise HTTPException(status_code=401, detail="Not logged in")
+        now = datetime.now(timezone.utc).isoformat()
+        await db.users.update_one(
+            {"id": uid},
+            {"$set": {"witness_nav_red": 0, "witness_market_nav_cleared_at": now}},
+        )
+        return {"ok": True}
+
     @router.post("/witness-statements/list")
     async def witness_list(req: WitnessListRequest, current_user: dict = Depends(get_current_user)):
         uid = current_user.get("id") or ""

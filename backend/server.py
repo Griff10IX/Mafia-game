@@ -655,6 +655,8 @@ class UserResponse(BaseModel):
     bullets: int
     molotovs: int = 0
     witness_statements: int = 0  # tradable; minted when receiving kill witness notifications
+    witness_nav_red: int = 0  # unread new witness inbox lines; cleared when opening Witness statements page
+    witness_nav_green: int = 0  # other players' listings created since last Witness page visit (market reminder)
     health: int
     armour_level: int
     current_state: str

@@ -47,6 +47,7 @@ export default function WitnessStatements() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
+      await api.post('/witness-statements/nav-seen').catch(() => {});
       const [meRes, listRes, recentRes] = await Promise.all([
         api.get('/auth/me'),
         api.get('/witness-statements/listings'),
@@ -65,7 +66,9 @@ export default function WitnessStatements() {
         });
         return next;
       });
+      refreshUser();
     } catch (e) {
+      refreshUser();
       toast.error(getApiErrorMessage(e, 'Failed to load'));
       setListings([]);
       setRecentLog([]);

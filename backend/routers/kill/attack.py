@@ -2146,7 +2146,10 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 for uid in random.sample(recipient_ids, to_send):
                     await send_notification(uid, "Witness statement", witness_msg, "attack", category="attacks")
                     try:
-                        await db.users.update_one({"id": uid}, {"$inc": {"witness_statements": 1}})
+                        await db.users.update_one(
+                            {"id": uid},
+                            {"$inc": {"witness_statements": 1, "witness_nav_red": 1}},
+                        )
                     except Exception:
                         pass
         killer_family_id = await resolve_family_id(killer_id) or current_user.get("family_id")

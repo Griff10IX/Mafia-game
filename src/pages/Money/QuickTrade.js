@@ -544,69 +544,57 @@ export default function QuickTrade() {
               </div>
             ) : (
               (() => {
-                const groupedOffers = sellOffers.reduce((acc, offer) => {
-                  const key = offer.group_key;
-                  if (!acc[key]) acc[key] = [];
-                  acc[key].push(offer);
-                  return acc;
-                }, {});
-
                 const sellPerPoint = (o) => (Number(o.money) || 0) / (Number(o.points) || 1);
+                // One row per distinct listing: same seller + same points + same total price merge as xN only.
+                const sellStacksFlat = Object.values(
+                  sellOffers.reduce((acc, offer) => {
+                    const key = `${offer.group_key}|${Number(offer.points)}|${Number(offer.money)}`;
+                    if (!acc[key]) {
+                      acc[key] = { ...offer, ids: [], count: 0 };
+                    }
+                    acc[key].ids.push(offer.id);
+                    acc[key].count++;
+                    return acc;
+                  }, {}),
+                ).sort((a, b) => {
+                  const ra = sellPerPoint(a);
+                  const rb = sellPerPoint(b);
+                  if (ra !== rb) return ra - rb;
+                  return (Number(a.money) || 0) - (Number(b.money) || 0);
+                });
+                const mySellIdsAll = sellOffers.filter((o) => o.is_own).map((o) => o.id);
 
-                const sellGroupsSorted = Object.values(groupedOffers)
-                  .map((userOffers) => {
-                    const stackedOffers = userOffers.reduce((acc, offer) => {
-                      const key = `${offer.points}-${offer.money}`;
-                      if (!acc[key]) {
-                        acc[key] = { ...offer, ids: [], count: 0 };
-                      }
-                      acc[key].ids.push(offer.id);
-                      acc[key].count++;
-                      return acc;
-                    }, {});
-                    const stacks = Object.values(stackedOffers).sort((a, b) => {
-                      const ra = sellPerPoint(a);
-                      const rb = sellPerPoint(b);
-                      if (ra !== rb) return ra - rb;
-                      return (Number(a.money) || 0) - (Number(b.money) || 0);
-                    });
-                    const bestRate = stacks.length ? sellPerPoint(stacks[0]) : Number.POSITIVE_INFINITY;
-                    return { userOffers, stacks, bestRate };
-                  })
-                  .sort((a, b) => a.bestRate - b.bestRate);
-
-                return sellGroupsSorted.map(({ userOffers, stacks }, groupIdx) => {
-                  const firstOffer = userOffers[0];
-                  const isMyOffer = firstOffer.is_own;
-                  const totalOffers = userOffers.length;
-
-                  const mySellIds = isMyOffer ? userOffers.map((o) => o.id) : [];
-                  return (
-                    <div key={firstOffer.group_key ?? groupIdx} className={`px-4 py-2 hover:bg-zinc-800/30 transition-colors ${isMyOffer ? 'bg-primary/5' : ''}`}>
-                      <div className="flex items-center justify-between gap-2 mb-1.5">
-                        <div className="flex items-center gap-1.5">
-                          <Users size={12} className="text-primary" />
-                          <span className="text-xs font-heading font-bold text-foreground">
-                            {renderQtTraderLabel(firstOffer, isMyOffer)}
-                          </span>
-                          {totalOffers > 1 && (
-                            <span className="text-[9px] bg-primary/20 text-primary px-1 py-0.5 rounded font-heading font-bold">{totalOffers}</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="space-y-1.5">
-                        {stacks.map((offer, offerIdx) => (
-                          <div key={offerIdx} className="flex items-start justify-between gap-3 pl-3 border-l-2 border-primary/20">
+                return (
+                  <>
+                    {sellStacksFlat.map((offer) => {
+                      const isMyOffer = offer.is_own;
+                      return (
+                        <div
+                          key={`sell-${offer.group_key}-${offer.points}-${offer.money}-${offer.ids[0]}`}
+                          className={`px-4 py-2 hover:bg-zinc-800/30 transition-colors ${isMyOffer ? 'bg-primary/5' : ''}`}
+                        >
+                          <div className="flex items-center justify-between gap-2 mb-1.5">
+                            <div className="flex items-center gap-1.5">
+                              <Users size={12} className="text-primary" />
+                              <span className="text-xs font-heading font-bold text-foreground">
+                                {renderQtTraderLabel(offer, isMyOffer)}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-start justify-between gap-3 pl-3 border-l-2 border-primary/20">
                             <div className="flex-1 min-w-0 text-[10px] text-mutedForeground space-y-0.5">
                               <div>Pts: <span className="text-primary font-bold">{formatNumber(offer.points)}</span></div>
                               <div>$: <span className="text-foreground font-bold">{formatNumber(offer.money)}</span></div>
-                              <div>Per: <span className="text-mutedForeground">${formatCurrency((offer.money || 0) / (offer.points || 1))}</span> {offer.count > 1 && <span className="text-primary font-bold">x{offer.count}</span>}</div>
+                              <div>
+                                Per: <span className="text-mutedForeground">${formatCurrency((offer.money || 0) / (offer.points || 1))}</span>{' '}
+                                {offer.count > 1 && <span className="text-primary font-bold">x{offer.count}</span>}
+                              </div>
                             </div>
                             <div className="flex flex-col gap-1 shrink-0 items-stretch">
                               {isMyOffer ? (
                                 <button
                                   type="button"
-                                  onClick={() => offer.ids.length === 1 ? handleCancelOffer(offer.ids[0], 'sell') : handleCancelAllOffers('sell', offer.ids)}
+                                  onClick={() => (offer.ids.length === 1 ? handleCancelOffer(offer.ids[0], 'sell') : handleCancelAllOffers('sell', offer.ids))}
                                   className={`px-2.5 py-1 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30 whitespace-nowrap min-h-[36px] sm:min-h-0 ${qtActionBtn}`}
                                 >
                                   Cancel{offer.ids.length > 1 ? ` (${offer.ids.length})` : ''}
@@ -625,18 +613,22 @@ export default function QuickTrade() {
                               )}
                             </div>
                           </div>
-                        ))}
-                      </div>
-                      {isMyOffer && mySellIds.length > 1 && (
-                        <div className="mt-2 pt-2 border-t border-zinc-700/30">
-                          <button type="button" onClick={() => handleCancelAllOffers('sell', mySellIds)} className={`text-[10px] font-heading text-red-400/90 hover:text-red-400 border border-red-700/30 hover:border-red-700/50 px-2 py-2 sm:py-1 rounded min-h-[40px] sm:min-h-0 ${qtActionBtn}`}>
-                            Cancel all
-                          </button>
                         </div>
-                      )}
-                    </div>
-                  );
-                });
+                      );
+                    })}
+                    {mySellIdsAll.length > 1 && (
+                      <div className="px-4 py-2 border-t border-zinc-700/30 bg-primary/5">
+                        <button
+                          type="button"
+                          onClick={() => handleCancelAllOffers('sell', mySellIdsAll)}
+                          className={`text-[10px] font-heading text-red-400/90 hover:text-red-400 border border-red-700/30 hover:border-red-700/50 px-2 py-2 sm:py-1 rounded min-h-[40px] sm:min-h-0 ${qtActionBtn}`}
+                        >
+                          Cancel all my sell listings ({mySellIdsAll.length})
+                        </button>
+                      </div>
+                    )}
+                  </>
+                );
               })()
             )}
           </div>
@@ -657,69 +649,56 @@ export default function QuickTrade() {
               </div>
             ) : (
               (() => {
-                const groupedOffers = buyOffers.reduce((acc, offer) => {
-                  const key = offer.group_key;
-                  if (!acc[key]) acc[key] = [];
-                  acc[key].push(offer);
-                  return acc;
-                }, {});
-
                 const buyPerPoint = (o) => (Number(o.cost) || 0) / (Number(o.points) || 1);
+                const buyStacksFlat = Object.values(
+                  buyOffers.reduce((acc, offer) => {
+                    const key = `${offer.group_key}|${Number(offer.points)}|${Number(offer.cost)}`;
+                    if (!acc[key]) {
+                      acc[key] = { ...offer, ids: [], count: 0 };
+                    }
+                    acc[key].ids.push(offer.id);
+                    acc[key].count++;
+                    return acc;
+                  }, {}),
+                ).sort((a, b) => {
+                  const ra = buyPerPoint(a);
+                  const rb = buyPerPoint(b);
+                  if (ra !== rb) return rb - ra;
+                  return (Number(b.cost) || 0) - (Number(a.cost) || 0);
+                });
+                const myBuyIdsAll = buyOffers.filter((o) => o.is_own).map((o) => o.id);
 
-                const buyGroupsSorted = Object.values(groupedOffers)
-                  .map((userOffers) => {
-                    const stackedOffers = userOffers.reduce((acc, offer) => {
-                      const key = `${offer.points}-${offer.cost}`;
-                      if (!acc[key]) {
-                        acc[key] = { ...offer, ids: [], count: 0 };
-                      }
-                      acc[key].ids.push(offer.id);
-                      acc[key].count++;
-                      return acc;
-                    }, {});
-                    const stacks = Object.values(stackedOffers).sort((a, b) => {
-                      const ra = buyPerPoint(a);
-                      const rb = buyPerPoint(b);
-                      if (ra !== rb) return rb - ra;
-                      return (Number(b.cost) || 0) - (Number(a.cost) || 0);
-                    });
-                    const bestRate = stacks.length ? buyPerPoint(stacks[0]) : 0;
-                    return { userOffers, stacks, bestRate };
-                  })
-                  .sort((a, b) => b.bestRate - a.bestRate);
-
-                return buyGroupsSorted.map(({ userOffers, stacks }, groupIdx) => {
-                  const firstOffer = userOffers[0];
-                  const isMyOffer = firstOffer.is_own;
-                  const totalOffers = userOffers.length;
-
-                  const myBuyIds = isMyOffer ? userOffers.map((o) => o.id) : [];
-                  return (
-                    <div key={firstOffer.group_key ?? groupIdx} className={`px-4 py-2 hover:bg-zinc-800/30 transition-colors ${isMyOffer ? 'bg-primary/5' : ''}`}>
-                      <div className="flex items-center justify-between gap-2 mb-1.5">
-                        <div className="flex items-center gap-1.5">
-                          <Users size={12} className="text-primary" />
-                          <span className="text-xs font-heading font-bold text-foreground">
-                            {renderQtTraderLabel(firstOffer, isMyOffer)}
-                          </span>
-                          {totalOffers > 1 && (
-                            <span className="text-[9px] bg-primary/20 text-primary px-1 py-0.5 rounded font-heading font-bold">{totalOffers}</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="space-y-1.5">
-                        {stacks.map((offer, offerIdx) => (
-                          <div key={offerIdx} className="flex items-start justify-between gap-3 pl-3 border-l-2 border-primary/20">
+                return (
+                  <>
+                    {buyStacksFlat.map((offer) => {
+                      const isMyOffer = offer.is_own;
+                      return (
+                        <div
+                          key={`buy-${offer.group_key}-${offer.points}-${offer.cost}-${offer.ids[0]}`}
+                          className={`px-4 py-2 hover:bg-zinc-800/30 transition-colors ${isMyOffer ? 'bg-primary/5' : ''}`}
+                        >
+                          <div className="flex items-center justify-between gap-2 mb-1.5">
+                            <div className="flex items-center gap-1.5">
+                              <Users size={12} className="text-primary" />
+                              <span className="text-xs font-heading font-bold text-foreground">
+                                {renderQtTraderLabel(offer, isMyOffer)}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-start justify-between gap-3 pl-3 border-l-2 border-primary/20">
                             <div className="flex-1 min-w-0 text-[10px] text-mutedForeground space-y-0.5">
                               <div>Pts: <span className="text-primary font-bold">{formatNumber(offer.points)}</span></div>
                               <div>Cost: <span className="text-foreground font-bold">${formatNumber(offer.cost)}</span></div>
-                              <div>Per: <span className="text-mutedForeground">${formatCurrency((offer.cost || 0) / (offer.points || 1))}</span> {offer.count > 1 && <span className="text-primary font-bold">x{offer.count}</span>}</div>
+                              <div>
+                                Per: <span className="text-mutedForeground">${formatCurrency((offer.cost || 0) / (offer.points || 1))}</span>{' '}
+                                {offer.count > 1 && <span className="text-primary font-bold">x{offer.count}</span>}
+                              </div>
                             </div>
                             <div className="flex flex-col gap-1 shrink-0 items-stretch">
                               {isMyOffer ? (
                                 <button
                                   type="button"
-                                  onClick={() => offer.ids.length === 1 ? handleCancelOffer(offer.ids[0], 'buy') : handleCancelAllOffers('buy', offer.ids)}
+                                  onClick={() => (offer.ids.length === 1 ? handleCancelOffer(offer.ids[0], 'buy') : handleCancelAllOffers('buy', offer.ids))}
                                   className={`px-2.5 py-1 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30 whitespace-nowrap min-h-[36px] sm:min-h-0 ${qtActionBtn}`}
                                 >
                                   Cancel{offer.ids.length > 1 ? ` (${offer.ids.length})` : ''}
@@ -738,18 +717,22 @@ export default function QuickTrade() {
                               )}
                             </div>
                           </div>
-                        ))}
-                      </div>
-                      {isMyOffer && myBuyIds.length > 1 && (
-                        <div className="mt-2 pt-2 border-t border-zinc-700/30">
-                          <button type="button" onClick={() => handleCancelAllOffers('buy', myBuyIds)} className={`text-[10px] font-heading text-red-400/90 hover:text-red-400 border border-red-700/30 hover:border-red-700/50 px-2 py-2 sm:py-1 rounded min-h-[40px] sm:min-h-0 ${qtActionBtn}`}>
-                            Cancel all
-                          </button>
                         </div>
-                      )}
-                    </div>
-                  );
-                });
+                      );
+                    })}
+                    {myBuyIdsAll.length > 1 && (
+                      <div className="px-4 py-2 border-t border-zinc-700/30 bg-primary/5">
+                        <button
+                          type="button"
+                          onClick={() => handleCancelAllOffers('buy', myBuyIdsAll)}
+                          className={`text-[10px] font-heading text-red-400/90 hover:text-red-400 border border-red-700/30 hover:border-red-700/50 px-2 py-2 sm:py-1 rounded min-h-[40px] sm:min-h-0 ${qtActionBtn}`}
+                        >
+                          Cancel all my buy listings ({myBuyIdsAll.length})
+                        </button>
+                      </div>
+                    )}
+                  </>
+                );
               })()
             )}
           </div>
