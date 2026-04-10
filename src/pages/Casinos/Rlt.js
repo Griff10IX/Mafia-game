@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import api, { refreshUser } from '../../utils/api';
@@ -335,6 +335,37 @@ export default function Rlt() {
   const [buyBackSecondsLeft, setBuyBackSecondsLeft] = useState(null);
   const [buyBackActionLoading, setBuyBackActionLoading] = useState(false);
   const buyBackFromGameRef = useRef(false);
+  const [rouletteBanner, setRouletteBannerState] = useState(null);
+  const rouletteBannerTimeoutRef = useRef(null);
+
+  const clearRouletteBanner = useCallback(() => {
+    if (rouletteBannerTimeoutRef.current) {
+      clearTimeout(rouletteBannerTimeoutRef.current);
+      rouletteBannerTimeoutRef.current = null;
+    }
+    setRouletteBannerState(null);
+  }, []);
+
+  const showRouletteBanner = useCallback((variant, message) => {
+    if (rouletteBannerTimeoutRef.current) {
+      clearTimeout(rouletteBannerTimeoutRef.current);
+      rouletteBannerTimeoutRef.current = null;
+    }
+    setRouletteBannerState({ variant, message: String(message || '') });
+    rouletteBannerTimeoutRef.current = setTimeout(() => {
+      rouletteBannerTimeoutRef.current = null;
+      setRouletteBannerState(null);
+    }, 7000);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (rouletteBannerTimeoutRef.current) {
+        clearTimeout(rouletteBannerTimeoutRef.current);
+      }
+    },
+    [],
+  );
 
   const fetchOwnership = () => {
     api.get('/casino/roulette/ownership').then((r) => {
@@ -409,8 +440,14 @@ export default function Rlt() {
   const betCountFor = (type, sel) => bets.filter((b) => b.type === type && String(b.selection) === String(sel)).length;
 
   const addBet = (type, selection) => {
-    if (!chipValue || chipValue <= 0) { toast.error('Select chip amount'); return; }
-    if (totalBet + chipValue > (config.max_bet || 0)) { toast.error(`Max bet ${formatMoney(config.max_bet)}`); return; }
+    if (!chipValue || chipValue <= 0) {
+      showRouletteBanner('error', 'Select chip amount');
+      return;
+    }
+    if (totalBet + chipValue > (config.max_bet || 0)) {
+      showRouletteBanner('error', `Max bet ${formatMoney(config.max_bet)}`);
+      return;
+    }
     setBets((prev) => [...prev, { id: Date.now() + Math.random(), type, selection, amount: chipValue }]);
   };
 
@@ -421,14 +458,17 @@ export default function Rlt() {
     setLastResult(data.result);
     const hid = ++historySeqRef.current;
     setRecentNumbers((prev) => [{ id: hid, n: data.result }, ...prev].slice(0, 12));
+    let bannerMsg = data.win
+      ? `Landed ${data.result}! Won ${formatMoney(data.total_payout)}`
+      : `Landed ${data.result}. Lost ${formatMoney(data.total_stake)}`;
+    if (data.ownership_transferred) {
+      bannerMsg += '\nYou won the casino!';
+    }
+    showRouletteBanner(data.win ? 'success' : 'error', bannerMsg);
     if (data.win) {
-      toast.success(`Landed ${data.result}! Won ${formatMoney(data.total_payout)}`);
       setShowWin(true);
       setTimeout(() => setShowWin(false), 2200);
-    } else {
-      toast.error(`Landed ${data.result}. Lost ${formatMoney(data.total_stake)}`);
     }
-    if (data.ownership_transferred) toast.success('You won the casino!');
     if (data.buy_back_offer) { setBuyBackOffer(data.buy_back_offer); buyBackFromGameRef.current = true; }
     refreshUser();
     fetchOwnership();
@@ -454,14 +494,17 @@ export default function Rlt() {
     const lead = completedSpinDataRef.current.get(maxSeq);
     if (lead && lead.result != null) setLastResult(lead.result);
 
+    let bannerMsgT = data.win
+      ? `Landed ${data.result}! Won ${formatMoney(data.total_payout)}`
+      : `Landed ${data.result}. Lost ${formatMoney(data.total_stake)}`;
+    if (data.ownership_transferred) {
+      bannerMsgT += '\nYou won the casino!';
+    }
+    showRouletteBanner(data.win ? 'success' : 'error', bannerMsgT);
     if (data.win) {
-      toast.success(`Landed ${data.result}! Won ${formatMoney(data.total_payout)}`);
       setShowWin(true);
       setTimeout(() => setShowWin(false), 2200);
-    } else {
-      toast.error(`Landed ${data.result}. Lost ${formatMoney(data.total_stake)}`);
     }
-    if (data.ownership_transferred) toast.success('You won the casino!');
     if (data.buy_back_offer) {
       setBuyBackOffer({ ...data.buy_back_offer, offer_id: data.buy_back_offer.offer_id || data.buy_back_offer.id });
       buyBackFromGameRef.current = true;
@@ -478,6 +521,7 @@ export default function Rlt() {
     const stake = b.reduce((s, x) => s + x.amount, 0);
     if (b.length === 0 || stake > (cfg.max_bet || 0)) return;
 
+    clearRouletteBanner();
     setBusyAnimationsFlag(true);
     setSpinning(true);
     setLastResult(null);
@@ -519,7 +563,8 @@ export default function Rlt() {
     } catch (e) {
       if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current);
       pendingResultRef.current = null;
-      toast.error(e.response?.data?.detail || 'Spin failed');
+      const d = e.response?.data?.detail;
+      showRouletteBanner('error', typeof d === 'string' ? d : d != null ? String(d) : 'Spin failed');
       setSpinning(false);
       setBusyAnimationsFlag(false);
       refreshUser();
@@ -552,6 +597,7 @@ export default function Rlt() {
     }));
 
     inFlightCountRef.current += 1;
+    clearRouletteBanner();
     setSpinning(true);
     setBusyAnimationsFlag(true);
     setWheelRotation(0);
@@ -584,10 +630,10 @@ export default function Rlt() {
           if (s.toLowerCase().includes('money') || s.toLowerCase().includes('enough')) {
             if (now - lastMoneyErrRef.current > 1200) {
               lastMoneyErrRef.current = now;
-              toast.error(s);
+              showRouletteBanner('error', s);
             }
           } else {
-            toast.error(s);
+            showRouletteBanner('error', s);
           }
           refreshUser();
         })
@@ -771,6 +817,28 @@ export default function Rlt() {
               </span>
             )}
           </p>
+          {rouletteBanner && (
+            <div
+              className={`mt-1.5 max-w-xl rounded-md border px-2.5 py-1.5 flex items-start justify-between gap-2 ${
+                rouletteBanner.variant === 'success'
+                  ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-100'
+                  : rouletteBanner.variant === 'error'
+                    ? 'border-red-500/40 bg-red-500/10 text-red-100'
+                    : 'border-primary/30 bg-primary/10 text-foreground'
+              }`}
+              role="status"
+            >
+              <p className="text-[10px] font-heading leading-snug whitespace-pre-line flex-1 min-w-0">{rouletteBanner.message}</p>
+              <button
+                type="button"
+                onClick={clearRouletteBanner}
+                className="shrink-0 leading-none px-1 py-0.5 rounded text-[11px] text-mutedForeground hover:text-foreground hover:bg-black/20 font-heading"
+                aria-label="Dismiss message"
+              >
+                ×
+              </button>
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-3 text-xs font-heading">
           {ownership?.owner_name ? (
