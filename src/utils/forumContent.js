@@ -74,6 +74,18 @@ function escapeRegex(str) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/** Longest codes first so :poggers: wins over :p and :pizza: over :p (avoids partial matches leaking text/HTML). */
+function sortSmileyPairsLongestFirst(entries) {
+  return entries
+    .map((entry, index) => ({ entry, index }))
+    .sort((a, b) => {
+      const dl = b.entry[0].length - a.entry[0].length;
+      if (dl !== 0) return dl;
+      return a.index - b.index;
+    })
+    .map((o) => o.entry);
+}
+
 /**
  * alt= text for inline smiley <img>: must not contain raw ":" or ";" or later replace() passes
  * will match shorter codes inside the tag (e.g. :p inside alt=":poggers:", ;); inside alt=";-)").
@@ -110,9 +122,9 @@ function wrapForumUnicodeEmoji(emoji) {
 
 // ---------------------------------------------------------------------------
 // Image-based smileys — classic forum style (render as <img> tags)
-// IMPORTANT: Longer codes MUST come before shorter ones in user text — but also use
-// inlineSmileyAltForAttr() so alt="..." never contains raw substrings like :p or ;)
-// that later iterations would replace inside the tag HTML.
+// Replacements run longest-first (sortSmileyPairsLongestFirst) so :poggers: beats :p.
+// inlineSmileyAltForAttr() keeps alt="..." free of raw ":" / ";" so later passes
+// do not match inside emitted <img> tags.
 // ---------------------------------------------------------------------------
 
 // Longer emoji codes that could conflict with short image smileys - process first as Unicode
@@ -816,7 +828,7 @@ export function parseForumContent(content, options = {}) {
   });
 
   // 6) Smileys - long emoji codes first, then image smileys, then text emojis
-  for (const [from, emoji] of LONG_EMOJI_CODES) {
+  for (const [from, emoji] of sortSmileyPairsLongestFirst(LONG_EMOJI_CODES)) {
     s = s.replace(new RegExp(escapeRegex(from), 'g'), wrapForumUnicodeEmoji(emoji));
   }
   if (options.dmUnicodeSmileys) {
@@ -825,17 +837,17 @@ export function parseForumContent(content, options = {}) {
       [';-)', '😉'],
       [';)', '😉'],
     ];
-    for (const [from, ch] of DM_WINK_UNICODE) {
+    for (const [from, ch] of sortSmileyPairsLongestFirst(DM_WINK_UNICODE)) {
       s = s.replace(new RegExp(escapeRegex(from), 'g'), wrapForumUnicodeEmoji(ch));
     }
   }
-  for (const [from, imgPath] of IMAGE_SMILEYS) {
+  for (const [from, imgPath] of sortSmileyPairsLongestFirst(IMAGE_SMILEYS)) {
     const src = escapeAttr(resolveSmileyImgSrc(imgPath));
     const px = FORUM_INLINE_SMILEY_PX;
     const imgTag = `<img src="${src}" alt="${inlineSmileyAltForAttr(from)}" class="inline-smiley" style="display:inline;vertical-align:middle;width:${px}px;height:${px}px;max-width:${px}px;max-height:${px}px;object-fit:contain;" />`;
     s = s.replace(new RegExp(escapeRegex(from), 'g'), imgTag);
   }
-  for (const [from, emoji] of SMILEYS) {
+  for (const [from, emoji] of sortSmileyPairsLongestFirst(SMILEYS)) {
     s = s.replace(new RegExp(escapeRegex(from), 'g'), wrapForumUnicodeEmoji(emoji));
   }
 
