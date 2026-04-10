@@ -34,8 +34,10 @@ def _staff_inbox_cooldown_sec() -> float:
 
 
 _ALERT_TTL_ATTACK_BOT_SEC = 3600.0
+_ALERT_TTL_EXECUTE_TOKEN_FAIL_SEC = 3600.0
 _last_blocked: dict[str, float] = {}
 _last_attack_bot: dict[str, float] = {}
+_last_execute_token_fail: dict[str, float] = {}
 _MAX_TRACK = 3000
 
 
@@ -373,3 +375,63 @@ async def maybe_notify_staff_bot_attack_from_ua(
                 logger.warning("staff bot attack notify %s: %s", uid, e)
     except Exception:
         logger.exception("maybe_notify_staff_bot_attack_from_ua failed")
+
+
+async def maybe_notify_staff_attack_execute_token_fail(
+    *,
+    db,
+    request,
+    attacker_id: str,
+    attacker_username: str,
+    target_username: str,
+    attack_id: str,
+    location_state: Optional[str],
+    client_signal: Optional[str],
+) -> None:
+    """Staff inbox when attack /execute is called without a valid session token (likely bot or replay). Throttled per attacker."""
+    now = time.monotonic()
+    aid = (attacker_id or "").strip()
+    if not aid:
+        return
+    key = f"atktok|{aid}"
+    if _last_execute_token_fail.get(key, 0) + _ALERT_TTL_EXECUTE_TOKEN_FAIL_SEC > now:
+        return
+    _last_execute_token_fail[key] = now
+    _prune(_last_execute_token_fail)
+
+    ip = client_ip_from_request(request)
+    ua = (request.headers.get("user-agent") or "").strip()
+    ua_short = (ua[:200] + "…") if len(ua) > 200 else ua
+    loc = f" · location {location_state}" if location_state else ""
+    lines = [
+        "— Attack execute: invalid / missing session token —",
+        "Likely automation (skipped GET /attack/list) or replayed POST without execute_token.",
+        f"Attacker: {attacker_username} (id {aid})",
+        f"Target: {(target_username or '?').strip()}{loc}",
+        f"Attack row id: {(attack_id or '')[:80]}",
+    ]
+    if client_signal:
+        lines.append(f"Client signal (tier): {client_signal}")
+    lines.append(f"IP: {ip or '—'}")
+    lines.append(f"User-Agent: {ua_short or '—'}")
+    lines.append("— Request metadata —")
+    lines.extend(_request_intel_lines(request))
+    acc = await _account_intel_lines(db, aid)
+    if acc:
+        lines.append("— Account —")
+        lines.extend(acc)
+
+    try:
+        from server import _get_staff_user_ids, send_notification
+
+        staff_ids = await _get_staff_user_ids()
+        title = "Attack: session token failed (possible bot)"
+        msg = "\n".join(lines)
+        extra = {"staff_alert_kind": "attack_execute_token_fail", "staff_alert_attacker_id": aid[:64]}
+        for uid in staff_ids:
+            try:
+                await send_notification(uid, title, msg, "staff_attack_integrity", **extra)
+            except Exception as e:
+                logger.warning("staff execute_token fail notify %s: %s", uid, e)
+    except Exception:
+        logger.exception("maybe_notify_staff_attack_execute_token_fail failed")

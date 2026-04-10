@@ -5075,6 +5075,8 @@ def register(router):
                 merged = list(raw)
                 if "admin-world-systems" not in merged:
                     merged.append("admin-world-systems")
+                if "admin-analytics-monitoring" not in merged:
+                    merged.append("admin-analytics-monitoring")
                 out["mod_visible_category_ids"] = merged
             else:
                 out["mod_visible_category_ids"] = list(MOD_VISIBLE_CATEGORY_IDS_DEFAULT)

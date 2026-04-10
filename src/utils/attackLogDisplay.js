@@ -27,6 +27,13 @@ export function formatAttackLogBotCell(row) {
   if (!row || typeof row !== 'object') {
     return { text: '—', className: 'text-mutedForeground', title: '' };
   }
+  if (row.execute_token_fail === true) {
+    return {
+      text: 'Token fail',
+      className: 'text-red-400 font-semibold',
+      title: 'Missing or invalid attack session token; staff were notified (possible bot)',
+    };
+  }
   const { bot: uaBot } = parseAttackLogUA(row.user_agent || '');
   const sig = row.attacker_client_signal;
   if (sig === 'automation' || sig === 'script') {

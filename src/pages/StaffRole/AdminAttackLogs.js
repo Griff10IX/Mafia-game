@@ -62,13 +62,12 @@ export default function AdminAttackLogs() {
       setAnalyticsError(msg);
       setAnalytics(null);
       if (e.response?.status === 403) {
-        toast.error('Admin or moderator access required');
-        navigate('/dashboard', { replace: true });
+        toast.error(msg || 'Admin or moderator access required');
       }
     } finally {
       setAnalyticsLoading(false);
     }
-  }, [accessChecked, navigate]);
+  }, [accessChecked]);
 
   useEffect(() => {
     if (accessChecked) fetchAnalytics();
