@@ -15,6 +15,9 @@ const QT_STYLES = `
 /** Scroll regions can steal taps on mobile; keep actions above row hit targets. */
 const qtActionBtn = 'relative z-[2] touch-manipulation';
 
+/** ~10 compact offer rows before scroll (was max-h-96 ≈4 rows with tall cards). */
+const qtOffersListScroll = 'max-h-[min(52rem,92vh)] overflow-y-auto';
+
 export default function QuickTrade() {
   const [hasLoaded, setHasLoaded] = useState(false);
   const [sellOffers, setSellOffers] = useState([]);
@@ -536,7 +539,7 @@ export default function QuickTrade() {
           <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
             <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Sell Offers</h3>
           </div>
-          <div className="divide-y divide-zinc-700/30 max-h-96 overflow-y-auto">
+          <div className={`divide-y divide-zinc-700/30 ${qtOffersListScroll}`}>
             {sellOffers.length === 0 ? (
               <div className="p-6 text-center">
                 <Coins size={28} className="mx-auto text-primary/30 mb-2" />
@@ -571,26 +574,30 @@ export default function QuickTrade() {
                       return (
                         <div
                           key={`sell-${offer.group_key}-${offer.points}-${offer.money}-${offer.ids[0]}`}
-                          className={`px-4 py-2 hover:bg-zinc-800/30 transition-colors ${isMyOffer ? 'bg-primary/5' : ''}`}
+                          className={`px-3 py-1.5 hover:bg-zinc-800/30 transition-colors ${isMyOffer ? 'bg-primary/5' : ''}`}
                         >
-                          <div className="flex items-center justify-between gap-2 mb-1.5">
-                            <div className="flex items-center gap-1.5">
-                              <Users size={12} className="text-primary" />
-                              <span className="text-xs font-heading font-bold text-foreground">
-                                {renderQtTraderLabel(offer, isMyOffer)}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="flex items-start justify-between gap-3 pl-3 border-l-2 border-primary/20">
-                            <div className="flex-1 min-w-0 text-[10px] text-mutedForeground space-y-0.5">
-                              <div>Pts: <span className="text-primary font-bold">{formatNumber(offer.points)}</span></div>
-                              <div>$: <span className="text-foreground font-bold">{formatNumber(offer.money)}</span></div>
-                              <div>
-                                Per: <span className="text-mutedForeground">${formatCurrency((offer.money || 0) / (offer.points || 1))}</span>{' '}
-                                {offer.count > 1 && <span className="text-primary font-bold">x{offer.count}</span>}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <Users size={11} className="text-primary shrink-0" />
+                                <span className="text-[11px] font-heading font-bold text-foreground truncate">
+                                  {renderQtTraderLabel(offer, isMyOffer)}
+                                </span>
+                              </div>
+                              <div className="mt-0.5 text-[9px] text-mutedForeground leading-snug">
+                                <span>Pts <span className="text-primary font-bold">{formatNumber(offer.points)}</span></span>
+                                <span className="text-zinc-600 mx-1">·</span>
+                                <span>$ <span className="text-foreground font-bold">{formatNumber(offer.money)}</span></span>
+                                <span className="text-zinc-600 mx-1">·</span>
+                                <span>
+                                  Per <span className="text-foreground">${formatCurrency((offer.money || 0) / (offer.points || 1))}</span>
+                                </span>
+                                {offer.count > 1 && (
+                                  <span className="text-primary font-bold ml-1">x{offer.count}</span>
+                                )}
                               </div>
                             </div>
-                            <div className="flex flex-col gap-1 shrink-0 items-stretch">
+                            <div className="flex flex-col gap-1 shrink-0 items-stretch pt-0.5">
                               {isMyOffer ? (
                                 <button
                                   type="button"
@@ -641,7 +648,7 @@ export default function QuickTrade() {
           <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
             <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Buy Offers</h3>
           </div>
-          <div className="divide-y divide-zinc-700/30 max-h-96 overflow-y-auto">
+          <div className={`divide-y divide-zinc-700/30 ${qtOffersListScroll}`}>
             {buyOffers.length === 0 ? (
               <div className="p-6 text-center">
                 <Coins size={28} className="mx-auto text-primary/30 mb-2" />
@@ -675,26 +682,30 @@ export default function QuickTrade() {
                       return (
                         <div
                           key={`buy-${offer.group_key}-${offer.points}-${offer.cost}-${offer.ids[0]}`}
-                          className={`px-4 py-2 hover:bg-zinc-800/30 transition-colors ${isMyOffer ? 'bg-primary/5' : ''}`}
+                          className={`px-3 py-1.5 hover:bg-zinc-800/30 transition-colors ${isMyOffer ? 'bg-primary/5' : ''}`}
                         >
-                          <div className="flex items-center justify-between gap-2 mb-1.5">
-                            <div className="flex items-center gap-1.5">
-                              <Users size={12} className="text-primary" />
-                              <span className="text-xs font-heading font-bold text-foreground">
-                                {renderQtTraderLabel(offer, isMyOffer)}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="flex items-start justify-between gap-3 pl-3 border-l-2 border-primary/20">
-                            <div className="flex-1 min-w-0 text-[10px] text-mutedForeground space-y-0.5">
-                              <div>Pts: <span className="text-primary font-bold">{formatNumber(offer.points)}</span></div>
-                              <div>Cost: <span className="text-foreground font-bold">${formatNumber(offer.cost)}</span></div>
-                              <div>
-                                Per: <span className="text-mutedForeground">${formatCurrency((offer.cost || 0) / (offer.points || 1))}</span>{' '}
-                                {offer.count > 1 && <span className="text-primary font-bold">x{offer.count}</span>}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <Users size={11} className="text-primary shrink-0" />
+                                <span className="text-[11px] font-heading font-bold text-foreground truncate">
+                                  {renderQtTraderLabel(offer, isMyOffer)}
+                                </span>
+                              </div>
+                              <div className="mt-0.5 text-[9px] text-mutedForeground leading-snug">
+                                <span>Pts <span className="text-primary font-bold">{formatNumber(offer.points)}</span></span>
+                                <span className="text-zinc-600 mx-1">·</span>
+                                <span>Cost <span className="text-foreground font-bold">${formatNumber(offer.cost)}</span></span>
+                                <span className="text-zinc-600 mx-1">·</span>
+                                <span>
+                                  Per <span className="text-foreground">${formatCurrency((offer.cost || 0) / (offer.points || 1))}</span>
+                                </span>
+                                {offer.count > 1 && (
+                                  <span className="text-primary font-bold ml-1">x{offer.count}</span>
+                                )}
                               </div>
                             </div>
-                            <div className="flex flex-col gap-1 shrink-0 items-stretch">
+                            <div className="flex flex-col gap-1 shrink-0 items-stretch pt-0.5">
                               {isMyOffer ? (
                                 <button
                                   type="button"
