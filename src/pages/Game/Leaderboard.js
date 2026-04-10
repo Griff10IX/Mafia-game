@@ -20,7 +20,16 @@ const EMPTY_BOARDS = {
 };
 
 const LB_CACHE_STORAGE_KEY = 'mafia_lb_top_v1';
+const LB_PERIOD_STORAGE_KEY = 'mafia_lb_period_v1';
 const LB_CACHE_MAX_KEYS = 12;
+
+function readPersistedPeriod() {
+  try {
+    const s = sessionStorage.getItem(LB_PERIOD_STORAGE_KEY);
+    if (s === 'weekly' || s === 'alltime') return s;
+  } catch (_) {}
+  return 'weekly';
+}
 
 function _weekStartUTCString() {
   const now = new Date();
@@ -166,23 +175,35 @@ function StatBoard({ title, icon: Icon, entries, valueLabel, topLabel, fetching 
 }
 
 export default function Leaderboard() {
-  const [period, setPeriod] = useState('weekly');
+  const [period, setPeriod] = useState(readPersistedPeriod);
   const [topLimit, setTopLimit] = useState(10);
   const [viewMode, setViewMode] = useState('alive');
   const [boards, setBoards] = useState(() => {
-    const c = readLbEntry('weekly', 10, false);
+    const p = readPersistedPeriod();
+    const c = readLbEntry(p, 10, false);
     const b = c?.boards;
     return b && typeof b === 'object' ? b : EMPTY_BOARDS;
   });
   const [refreshing, setRefreshing] = useState(false);
   const [fetchingBoards, setFetchingBoards] = useState(false);
   const [lastRewardWinners, setLastRewardWinners] = useState(
-    () => readLbEntry('weekly', 10, false)?.last_reward_winners ?? null,
+    () => readLbEntry(readPersistedPeriod(), 10, false)?.last_reward_winners ?? null,
   );
   const intervalRef = useRef(null);
+  /** Latest UI selection — compared after each fetch so stale in-flight responses cannot overwrite boards. */
+  const lbSelectionRef = useRef({ period: readPersistedPeriod(), topLimit: 10, viewMode: 'alive' });
+  lbSelectionRef.current = { period, topLimit, viewMode };
+
+  const setPeriodPersist = useCallback((p) => {
+    setPeriod(p);
+    try {
+      sessionStorage.setItem(LB_PERIOD_STORAGE_KEY, p);
+    } catch (_) {}
+  }, []);
 
   const fetchLeaderboard = useCallback(async (showRefreshSpin = false, silentError = false, background = false) => {
     const dead = viewMode === 'dead';
+    const requested = { period, topLimit, dead };
     if (!background) {
       const cached = readLbEntry(period, topLimit, dead);
       if (cached?.boards && typeof cached.boards === 'object') {
@@ -201,6 +222,11 @@ export default function Leaderboard() {
       const response = await api.get('/leaderboards/top', {
         params: { limit: topLimit, dead, period },
       });
+      const cur = lbSelectionRef.current;
+      const curDead = cur.viewMode === 'dead';
+      if (cur.period !== requested.period || cur.topLimit !== requested.topLimit || curDead !== requested.dead) {
+        return;
+      }
       const d = response.data || {};
       const { last_reward_winners, ...rest } = d;
       const nextBoards = Object.keys(rest).length ? rest : EMPTY_BOARDS;
@@ -263,7 +289,7 @@ export default function Leaderboard() {
           <span className="text-[10px] text-mutedForeground font-heading uppercase tracking-wider">Period:</span>
           <button
             type="button"
-            onClick={() => setPeriod('weekly')}
+            onClick={() => setPeriodPersist('weekly')}
             className={`flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] font-heading font-bold uppercase tracking-wider transition-colors ${
               period === 'weekly'
                 ? 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30'
@@ -274,7 +300,7 @@ export default function Leaderboard() {
           </button>
           <button
             type="button"
-            onClick={() => setPeriod('alltime')}
+            onClick={() => setPeriodPersist('alltime')}
             className={`flex items-center gap-1 px-2 py-1 rounded-sm text-[10px] font-heading font-bold uppercase tracking-wider transition-colors ${
               period === 'alltime'
                 ? 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30'

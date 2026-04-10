@@ -366,11 +366,107 @@ export default function MDGPage() {
             <PlusCircle size={14} /> New game
           </button>
         </div>
+        {createOpen && (
+          <div className="px-3 pb-3 border-b border-primary/15 bg-zinc-900/40">
+            <div className="rounded-lg overflow-hidden border border-primary/20 bg-secondary/20">
+              <div className="px-3 py-2 bg-primary/8 border-b border-primary/15">
+                <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Game options</h2>
+                <p className="text-[9px] text-mutedForeground font-heading mt-0.5">
+                  Fee (points and/or money), max players, auto-roll when N spots filled, optional extra pot. Max 3 open games. You are auto-joined.
+                </p>
+              </div>
+              <div className="p-3 space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1">Fee (points)</label>
+                    <FormattedNumberInput
+                      value={createFeePoints}
+                      onChange={setCreateFeePoints}
+                      placeholder="0"
+                      className="w-full px-2.5 py-1.5 rounded bg-secondary/50 border border-primary/20 text-foreground font-heading text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1">Fee (money)</label>
+                    <FormattedNumberInput
+                      value={createFeeMoney}
+                      onChange={setCreateFeeMoney}
+                      placeholder="0"
+                      className="w-full px-2.5 py-1.5 rounded bg-secondary/50 border border-primary/20 text-foreground font-heading text-sm"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1">Max players</label>
+                    <input
+                      type="number"
+                      min={2}
+                      max={100}
+                      value={createMaxPlayers}
+                      onChange={(e) => setCreateMaxPlayers(e.target.value)}
+                      className="w-full px-2.5 py-1.5 rounded bg-secondary/50 border border-primary/20 text-foreground font-heading text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1">Auto-roll after (spots filled)</label>
+                    <input
+                      type="number"
+                      min={2}
+                      max={100}
+                      value={createAutoRollAt}
+                      onChange={(e) => setCreateAutoRollAt(e.target.value)}
+                      placeholder="Optional"
+                      className="w-full px-2.5 py-1.5 rounded bg-secondary/50 border border-primary/20 text-foreground font-heading text-sm"
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1">Extra pot (points)</label>
+                    <FormattedNumberInput
+                      value={createExtraPotPoints}
+                      onChange={setCreateExtraPotPoints}
+                      placeholder="0"
+                      className="w-full px-2.5 py-1.5 rounded bg-secondary/50 border border-primary/20 text-foreground font-heading text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1">Extra pot (money)</label>
+                    <FormattedNumberInput
+                      value={createExtraPotMoney}
+                      onChange={setCreateExtraPotMoney}
+                      placeholder="0"
+                      className="w-full px-2.5 py-1.5 rounded bg-secondary/50 border border-primary/20 text-foreground font-heading text-sm"
+                    />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    disabled={creating}
+                    onClick={handleCreate}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded border border-primary/40 bg-primary/20 text-primary font-heading font-bold text-[10px] uppercase hover:bg-primary/30 disabled:opacity-50 transition-colors"
+                  >
+                    <Zap size={14} /> {creating ? 'Creating…' : 'Create game'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCreateOpen(false)}
+                    className="px-3 py-2 rounded border border-primary/20 text-mutedForeground font-heading text-[10px] uppercase hover:bg-primary/10 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
         <div className="p-2">
           {loading ? (
             <p className="text-[10px] text-mutedForeground font-heading py-4 text-center">Loading…</p>
           ) : playerGames.length === 0 ? (
-            <p className="text-[10px] text-mutedForeground font-heading py-4 text-center">No open player games. Create one above.</p>
+            <p className="text-[10px] text-mutedForeground font-heading py-4 text-center">No open player games. Use New game to create one.</p>
           ) : (
             <ul className="space-y-0 divide-y divide-primary/10">
               {playerGames.map((g, idx) => {
@@ -571,100 +667,6 @@ export default function MDGPage() {
                 className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-700"
                 style={{ width: `${((autoStats.player_wins ?? 0) / (autoStats.total_games || 1)) * 100}%` }}
               />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {createOpen && (
-        <div className={`relative ${styles.panel} mobile-panel rounded-lg overflow-hidden border border-primary/20 mdg-fade-in`}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
-            <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Game options</h2>
-            <p className="text-[9px] text-mutedForeground font-heading mt-0.5">Fee (points and/or money), max players, auto-roll when N spots filled, optional extra pot. Max 3 open games. You are auto-joined.</p>
-          </div>
-          <div className="p-3 space-y-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1">Fee (points)</label>
-                <FormattedNumberInput
-                  value={createFeePoints}
-                  onChange={setCreateFeePoints}
-                  placeholder="0"
-                  className="w-full px-2.5 py-1.5 rounded bg-secondary/50 border border-primary/20 text-foreground font-heading text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1">Fee (money)</label>
-                <FormattedNumberInput
-                  value={createFeeMoney}
-                  onChange={setCreateFeeMoney}
-                  placeholder="0"
-                  className="w-full px-2.5 py-1.5 rounded bg-secondary/50 border border-primary/20 text-foreground font-heading text-sm"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1">Max players</label>
-                <input
-                  type="number"
-                  min={2}
-                  max={100}
-                  value={createMaxPlayers}
-                  onChange={(e) => setCreateMaxPlayers(e.target.value)}
-                  className="w-full px-2.5 py-1.5 rounded bg-secondary/50 border border-primary/20 text-foreground font-heading text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1">Auto-roll after (spots filled)</label>
-                <input
-                  type="number"
-                  min={2}
-                  max={100}
-                  value={createAutoRollAt}
-                  onChange={(e) => setCreateAutoRollAt(e.target.value)}
-                  placeholder="Optional"
-                  className="w-full px-2.5 py-1.5 rounded bg-secondary/50 border border-primary/20 text-foreground font-heading text-sm"
-                />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div>
-                <label className="block text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1">Extra pot (points)</label>
-                <FormattedNumberInput
-                  value={createExtraPotPoints}
-                  onChange={setCreateExtraPotPoints}
-                  placeholder="0"
-                  className="w-full px-2.5 py-1.5 rounded bg-secondary/50 border border-primary/20 text-foreground font-heading text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1">Extra pot (money)</label>
-                <FormattedNumberInput
-                  value={createExtraPotMoney}
-                  onChange={setCreateExtraPotMoney}
-                  placeholder="0"
-                  className="w-full px-2.5 py-1.5 rounded bg-secondary/50 border border-primary/20 text-foreground font-heading text-sm"
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-2 pt-1">
-              <button
-                type="button"
-                disabled={creating}
-                onClick={handleCreate}
-                className="inline-flex items-center gap-1.5 px-3 py-2 rounded border border-primary/40 bg-primary/20 text-primary font-heading font-bold text-[10px] uppercase hover:bg-primary/30 disabled:opacity-50 transition-colors"
-              >
-                <Zap size={14} /> {creating ? 'Creating…' : 'Create game'}
-              </button>
-              <button
-                type="button"
-                onClick={() => setCreateOpen(false)}
-                className="px-3 py-2 rounded border border-primary/20 text-mutedForeground font-heading text-[10px] uppercase hover:bg-primary/10 transition-colors"
-              >
-                Cancel
-              </button>
             </div>
           </div>
         </div>

@@ -6,6 +6,30 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-10 12:00 UTC[/color][/b] — [b]Dice caps, sports & gambling “since reset”, profile kills rank[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Casino → Dice[/b] — maximum [b]nominal sides[/b] you can set is now [b]2,500[/b]. The die still gets the [b]5% extra faces[/b] for rolls, capped at [b]2,625[/b] faces (so your pick range matches what the table allows).[/color]
+[*][color=#888888][b]Fixed:[/b] [b]Casino → Sports betting[/b] — [b]Since reset[/b] / period stats now aggregate reliably whether bet times are stored as BSON dates or text, so wins, losses, profit, and counts match the period you expect.[/color]
+[*][color=#888888][b]Fixed:[/b] [b]Profile[/b] — [b]Honours[/b] [b]kills ranking[/b] uses the same [b]effective kill total[/b] as the rest of your profile (hitlist NPC rules unchanged; bodyguards still count).[/color]
+[*][color=#888888][b]Fixed:[/b] [b]Game → Stats[/b] — [b]Gambling[/b] totals for [b]since your last stats reset[/b] now respect reset times and log rows stored as BSON datetimes, not only ISO strings.[/color]
+[*][color=#888888][b]Player action:[/b] No setup needed. Reopen Dice, Sports betting stats, Profile, or Stats if you still see old cached numbers.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-04-09 15:30 UTC[/color][/b] — [b]Leaderboard: All-time vs Weekly after refresh[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] [b]Leaderboard[/b] — manual [b]Refresh[/b] and the background refresh no longer apply [b]stale[/b] results if you switched [b]Weekly[/b] / [b]All-time[/b] (or changed list size or Top Dead) while a request was still in flight — so All-time rankings no longer get replaced by weekly data by mistake.[/color]
+[*][color=#888888][b]Changed:[/b] Your [b]Weekly[/b] / [b]All-time[/b] choice is remembered for the session (browser storage) so returning to the page keeps the same tab.[/color]
+[*][color=#888888][b]Player action:[/b] No setup needed. Open [b]Leaderboard[/b] as usual; All-time stays consistent after refresh.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-09 14:00 UTC[/color][/b] — [b]Witness statements log & badge, private jail cell, Auto Rank jail[/b][/size]
 [quote]
 [list]
