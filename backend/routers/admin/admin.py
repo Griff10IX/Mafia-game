@@ -5075,6 +5075,8 @@ def register(router):
                 merged = list(raw)
                 if "admin-world-systems" not in merged:
                     merged.append("admin-world-systems")
+                if "admin-analytics-monitoring" not in merged:
+                    merged.append("admin-analytics-monitoring")
                 out["mod_visible_category_ids"] = merged
             else:
                 out["mod_visible_category_ids"] = list(MOD_VISIBLE_CATEGORY_IDS_DEFAULT)
@@ -7760,19 +7762,34 @@ def register(router):
 
     @router.get("/admin/attacks/logs")
     async def admin_attacks_logs(
-        username: str = Query(..., min_length=1),
+        username: Optional[str] = Query(
+            None,
+            description="If omitted or empty, return recent attempts for all players (newest first).",
+        ),
         limit: int = Query(500, ge=1, le=1000),
         since: Optional[str] = Query(None, description="ISO created_at; return only attempts after this (for live refresh)"),
         current_user: dict = Depends(get_current_user),
     ):
         """
-        Admin/moderator only. Return raw attack_attempts for a user (as attacker or target).
+        Admin/moderator only. Return raw attack_attempts for a user (as attacker or target),
+        or the most recent attempts globally when username is omitted.
         Full post data: who shot whom, outcome, bodyguard, bullets, location, etc.
         Use since= to fetch only new entries (e.g. for live refresh).
         """
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin or moderator access required")
         key = (username or "").strip()
+        if not key or key.lower() in ("*", "all"):
+            q: Dict[str, Any] = {}
+            if since:
+                q["created_at"] = {"$gt": since}
+            effective_limit = min(limit, 100) if since else limit
+            docs = (
+                await db.attack_attempts.find(q, {"_id": 0})
+                .sort("created_at", -1)
+                .to_list(effective_limit)
+            )
+            return {"username": None, "scope": "all", "logs": docs}
         user = await db.users.find_one(
             {"id": key},
             {"_id": 0, "id": 1, "username": 1},
@@ -7801,7 +7818,7 @@ def register(router):
             .sort("created_at", -1)
             .to_list(effective_limit)
         )
-        return {"username": user.get("username"), "logs": docs}
+        return {"username": user.get("username"), "scope": "user", "logs": docs}
 
     def _audit_iso(val: Any) -> str:
         if val is None:
