@@ -178,7 +178,7 @@ const ComposeModal = ({
                   className="p-1 rounded hover:bg-primary/20 active:scale-95 transition-all hover:scale-110"
                   title={code}
                 >
-                  <img src={`/images/smileys/${img}.png`} alt={code} className="w-4 h-4" />
+                  <img src={`/images/smileys/${img}.png`} alt={code} className="w-[15px] h-[15px] object-contain" />
                 </button>
               ))}
               {/* Modern emojis */}

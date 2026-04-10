@@ -287,7 +287,7 @@ export default function GraveRobber() {
       const res = await api.post('/grave-robber/attempt');
       setLatest(res.data?.attempt || null);
       if (res.data?.hitlist_event?.bounty_cash) {
-        toast.warning(`You were spotted and added to hitlist for ${formatMoney(res.data.hitlist_event.bounty_cash)}.`);
+        toast.warning(`You were spotted and added to the hitlist for ${formatMoney(res.data.hitlist_event.bounty_cash)}.`);
       }
       refreshUser();
       await fetchStatus(true);

@@ -1733,7 +1733,7 @@ export default function ForumTopic() {
                       <img 
                         src={`/images/smileys/${img}.png`}
                         alt={code}
-                        className="w-5 h-5"
+                        className="w-[15px] h-[15px] object-contain"
                       />
                     </button>
                   ))}

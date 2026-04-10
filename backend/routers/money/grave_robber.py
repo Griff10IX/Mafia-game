@@ -494,7 +494,7 @@ def register(router):
             await send_notification(
                 uid,
                 "⚠️ Graveyard retaliation",
-                f"A fallen gangster's family spotted you. You've been added to hitlist for ${bounty_cash:,}.",
+                f"A fallen gangster's family spotted you. You've been added to the hitlist for ${bounty_cash:,}.",
                 "system",
                 category="hitlist",
             )

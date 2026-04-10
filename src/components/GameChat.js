@@ -297,14 +297,14 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
            a small PNG can scale up to the full chat column (looks like a “big GIF”). */
         .game-chat-panel .game-chat-message-content .inline-smiley {
           display: inline !important;
-          width: 1.4em !important;
-          height: 1.4em !important;
-          max-width: 28px !important;
-          max-height: 28px !important;
+          width: 15px !important;
+          height: 15px !important;
+          max-width: 15px !important;
+          max-height: 15px !important;
           min-width: 0;
           min-height: 0;
           object-fit: contain;
-          vertical-align: -0.12em;
+          vertical-align: middle;
         }
         .game-chat-panel .game-chat-message-content .forum-content-media,
         .game-chat-panel .game-chat-message-content .forum-content-img,
@@ -645,7 +645,7 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
                 }}
                 title={code}
               >
-                <img src={`/images/smileys/${img}.png`} alt={code} className="w-5 h-5" />
+                <img src={`/images/smileys/${img}.png`} alt={code} className="w-[15px] h-[15px] object-contain" />
               </button>
             ))}
             {/* Modern emojis */}

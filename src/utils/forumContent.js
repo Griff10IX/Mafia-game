@@ -813,7 +813,7 @@ export function parseForumContent(content, options = {}) {
   }
   for (const [from, imgPath] of IMAGE_SMILEYS) {
     const src = escapeAttr(resolveSmileyImgSrc(imgPath));
-    const imgTag = `<img src="${src}" alt="${escapeAttr(from)}" class="inline-smiley" style="display:inline;vertical-align:middle;width:1.2em;height:1.2em;" />`;
+    const imgTag = `<img src="${src}" alt="${escapeAttr(from)}" class="inline-smiley" style="display:inline;vertical-align:middle;width:15px;height:15px;max-width:15px;max-height:15px;object-fit:contain;" />`;
     s = s.replace(new RegExp(escapeRegex(from), 'g'), imgTag);
   }
   for (const [from, emoji] of SMILEYS) {
