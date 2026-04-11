@@ -135,8 +135,9 @@ RANKS = [
     {"id": 8, "name": "Consigliere", "required_points": 85850},
     {"id": 9, "name": "Boss", "required_points": 191250},
     {"id": 10, "name": "Don", "required_points": 428400},
-    {"id": 11, "name": "Capo di tutti capi", "required_points": 958800},
-    {"id": 12, "name": "Boss of Bosses", "required_points": 989400},
+    # Don→Godfather split evenly (~197.2k per promotion); avoids tiny 30k sprints after a 530k cliff.
+    {"id": 11, "name": "Capo di tutti capi", "required_points": 625600},
+    {"id": 12, "name": "Boss of Bosses", "required_points": 822800},
     {"id": 13, "name": "Godfather", "required_points": 1020000},
 ]
 GODFATHER_RANK_ID = RANKS[-1]["id"]  # Top rank (prestige requires this)
@@ -1972,9 +1973,9 @@ async def check_and_process_rank_up(user_id: str, old_rank: int, new_rank: int, 
         new_rank_name = RANKS[new_rank - 1]["name"] if new_rank <= len(RANKS) else "Unknown"
 
         # Build reward message
-        reward_parts = [f"{total_bullets} bullets"]
+        reward_parts = [f"{total_bullets:,} bullets"]
         if total_respect > 0:
-            reward_parts.append(f"{total_respect} respect")
+            reward_parts.append(f"{total_respect:,} respect")
         reward_text = " and ".join(reward_parts)
 
         # Send notification
