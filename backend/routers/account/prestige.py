@@ -1,8 +1,6 @@
 # Prestige system: 5 levels unlocked after reaching Godfather, each harder than the last.
 from fastapi import Depends, HTTPException
 
-from utils.game_pass_micro_rewards import vip_game_pass_entitlement_active
-
 
 def _fmt_mult(x: float) -> str:
     """Short string for multipliers (drops trailing .0)."""
@@ -108,7 +106,9 @@ def register(router):
 
     @router.post("/prestige/activate")
     async def prestige_activate(current_user: dict = Depends(get_current_user)):
-        """Prestige the user: must be at Godfather. Resets rank_points to 0, increments prestige_level."""
+        """Prestige the user: must be at Godfather. Resets rank_points to 0, increments prestige_level.
+        Mission progress and Game Pass tier cursors / carry RP are preserved (rank XP is banked into
+        rank_xp_pass_prestige_carry_rp for everyone so pass UI and VIP math stay consistent)."""
         level = int(current_user.get("prestige_level") or 0)
         if level >= 5:
             raise HTTPException(status_code=400, detail="Already at maximum prestige (level 5)")
@@ -131,51 +131,25 @@ def register(router):
         new_cfg = PRESTIGE_CONFIGS[new_level]
         new_mult = new_cfg["threshold_mult"]
 
-        mission_reset_unset = {
-            "mission_1_crimes_baseline": "",
-            "mission_2_crimes_baseline": "",
-            "mission_2_jail_busts_baseline": "",
-            "mission_2_cars_melted_baseline": "",
-            "mission_3_crimes_baseline": "",
-            "mission_3_jail_busts_baseline": "",
-            "mission_3_gta_baseline": "",
-            "mission_3_booze_sells_baseline": "",
-            "mission_3_bullets_melted_baseline": "",
-            "mission_3_bullets_purchased_armoury_baseline": "",
-            "mission_3_uncommon_cars_scrapped_baseline": "",
-            "mission_baselines": "",
-            "first_mission_notification_sent": "",
-        }
-
-        fresh_gp = await db.users.find_one(
+        gp_row = await db.users.find_one(
             {"id": current_user["id"]},
-            {
-                "_id": 0,
-                "rank_xp_pass_rewards_granted": 1,
-                "rank_xp_pass_token_expires_at": 1,
-                "rank_xp_pass_prestige_carry_rp": 1,
-            },
+            {"_id": 0, "rank_xp_pass_prestige_carry_rp": 1},
         )
-        vip_pass_active = vip_game_pass_entitlement_active(fresh_gp or current_user)
+        prev_carry = int((gp_row or {}).get("rank_xp_pass_prestige_carry_rp") or 0)
 
         prestige_set = {
             "prestige_level": new_level,
             "prestige_rank_multiplier": new_mult,
             "rank_points": 0,
             "rank": 1,
-            "mission_completions": [],
+            # Bank RP into carry for all players (not only active VIP). Previously non-VIP prestiging
+            # zeroed carry + tier cursors, which looked like Game Pass reset and could break expired-VIP UI.
+            "rank_xp_pass_prestige_carry_rp": prev_carry + rank_points,
         }
-        if vip_pass_active:
-            prev_carry = int((fresh_gp or {}).get("rank_xp_pass_prestige_carry_rp") or 0)
-            prestige_set["rank_xp_pass_prestige_carry_rp"] = prev_carry + rank_points
-        else:
-            prestige_set["rank_xp_pass_last_granted_micro_tier"] = 0
-            prestige_set["rank_xp_pass_free_last_micro_tier_granted"] = 0
-            prestige_set["rank_xp_pass_prestige_carry_rp"] = 0
 
         await db.users.update_one(
             {"id": current_user["id"]},
-            {"$set": prestige_set, "$unset": mission_reset_unset},
+            {"$set": prestige_set},
         )
 
         benefits_line = _format_prestige_unlock_benefits(new_cfg)

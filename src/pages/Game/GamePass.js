@@ -472,8 +472,8 @@ export default function GamePass() {
     : passIsUnactivatedValid
       ? Number(user?.rank_xp_pass_pending_tier_snapshot ?? 0) // pending snapshot before activation
       : vipClaimed
-        ? microTierToThresholdRp(Number(user?.rank_xp_pass_last_granted_micro_tier ?? 0))
-        : Number(user?.rank_points ?? 0);
+        ? microTierToThresholdRp(Number(user?.rank_xp_pass_last_granted_micro_tier ?? 0)) // expired VIP: show progress from last granted tier
+        : Number(user?.rank_points ?? 0) + Number(user?.rank_xp_pass_prestige_carry_rp ?? 0); // free track: carry after prestige (matches server banking)
   const previewRankPoints = Math.max(0, Math.floor(previewRankPointsRaw));
 
   const microTierCurrent = Math.min(MAX_MICRO_TIER, Math.max(0, Math.floor((previewRankPoints / MAX_THRESHOLD_RP) * 100)));

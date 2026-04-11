@@ -142,10 +142,10 @@ RANKS = [
 GODFATHER_RANK_ID = RANKS[-1]["id"]  # Top rank (prestige requires this)
 CAPO_RANK_ID = 6  # Minimum rank to claim or hold casino/property; below-Capo owners have 3h grace then auto-relinquish
 
-# Prestige: 5 levels unlocked after reaching Godfather. Each level harder to rank through.
-# mission_reward_mult: mission payouts/rewards scale 0.5x (P1) .. 2.5x (P5) when redoing missions after prestige.
+# Prestige: 5 levels unlocked after reaching Godfather. Rank tier thresholds scale from prestige 1 (threshold_mult).
+# mission_reward_mult: mission payout multiplier at each prestige level (applies when claiming rewards).
 PRESTIGE_CONFIGS = {
-    1: {"threshold_mult": 1.0,  "crime_mult": 1.10, "oc_mult": 1.10, "gta_rare_boost": 0.5,  "npc_mult": 1.10, "name": "Made",             "godfather_req": 340_000, "mission_reward_mult": 0.5, "illegal_business_mult": 1.10},
+    1: {"threshold_mult": 1.25, "crime_mult": 1.10, "oc_mult": 1.10, "gta_rare_boost": 0.5,  "npc_mult": 1.10, "name": "Made",             "godfather_req": 340_000, "mission_reward_mult": 0.5, "illegal_business_mult": 1.10},
     2: {"threshold_mult": 1.5,  "crime_mult": 1.20, "oc_mult": 1.20, "gta_rare_boost": 1.0,  "npc_mult": 1.20, "name": "Earner",           "godfather_req": 510_000, "mission_reward_mult": 1.0, "illegal_business_mult": 1.20},
     3: {"threshold_mult": 2.25, "crime_mult": 1.30, "oc_mult": 1.30, "gta_rare_boost": 1.5,  "npc_mult": 1.30, "name": "Capo di Capi",     "godfather_req": 765_000, "mission_reward_mult": 1.5, "illegal_business_mult": 1.30},
     4: {"threshold_mult": 3.5,  "crime_mult": 1.40, "oc_mult": 1.40, "gta_rare_boost": 2.0,  "npc_mult": 1.40, "name": "The Don",          "godfather_req": 1_190_000, "mission_reward_mult": 2.0, "illegal_business_mult": 1.40},
@@ -1232,6 +1232,19 @@ async def get_current_user(
                         user["last_request_ip"] = update["last_request_ip"]
         except Exception:
             pass
+
+    # Keep prestige_rank_multiplier aligned with PRESTIGE_CONFIGS for the user's prestige_level (fixes stale DB values after balance changes).
+    try:
+        _pl = int(user.get("prestige_level") or 0)
+        _cfg = PRESTIGE_CONFIGS.get(_pl)
+        if _cfg is not None:
+            _expected_m = float(_cfg.get("threshold_mult") or 1.0)
+            _stored_m = float(user.get("prestige_rank_multiplier") or 1.0)
+            if abs(_stored_m - _expected_m) > 1e-9:
+                await db.users.update_one({"id": user_id}, {"$set": {"prestige_rank_multiplier": _expected_m}})
+                user["prestige_rank_multiplier"] = _expected_m
+    except Exception:
+        pass
 
     return user
 

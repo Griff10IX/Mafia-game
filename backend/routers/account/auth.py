@@ -1892,6 +1892,7 @@ def register(router):
                 rank_xp_pass_token_expires_at=u.get("rank_xp_pass_token_expires_at"),
                 rank_xp_pass_tier_snapshot=_safe_int(u.get("rank_xp_pass_tier_snapshot"), 0) if u.get("rank_xp_pass_tier_snapshot") is not None else None,
                 rank_xp_pass_last_granted_micro_tier=_safe_int(u.get("rank_xp_pass_last_granted_micro_tier"), 0),
+                rank_xp_pass_prestige_carry_rp=_safe_int(u.get("rank_xp_pass_prestige_carry_rp"), 0),
                 rank_xp_pass_rewards_granted=bool(u.get("rank_xp_pass_rewards_granted", False)),
                 shooting_range_bonus_plays=_safe_int(u.get("shooting_range_bonus_plays"), 0),
                 hitlist_npc_bonus_slots=_safe_int(u.get("hitlist_npc_bonus_slots"), 0),

@@ -161,6 +161,9 @@ export default function Prestige() {
   const nextColor = PRESTIGE_COLORS[level + 1] || PRESTIGE_COLORS[5];
   const godReq    = info.godfather_req;
   const effectiveRp = info.effective_rank_points;
+  const godReqNum = Number(godReq) || 0;
+  const effRpNum = Number(effectiveRp) || 0;
+  const prestigePathMet = godReqNum > 0 && effRpNum >= godReqNum;
 
   return (
     <div className={`space-y-3 md:space-y-4 ${styles.pageContent} mobile-page-root`}>
@@ -279,17 +282,26 @@ export default function Prestige() {
           </div>
           <div className="p-4 space-y-3">
             <div>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] font-heading text-zinc-500">Rank Points</span>
-                <span className="text-[10px] font-heading font-bold tabular-nums" style={{ color: nextColor }}>
-                  {(effectiveRp ?? 0).toLocaleString()} / {(godReq ?? 0).toLocaleString()}
+              <div className="flex items-center justify-between mb-1.5 gap-2">
+                <span className="text-[10px] font-heading text-zinc-500">Progress</span>
+                <span className="text-[10px] font-heading font-bold tabular-nums shrink-0" style={{ color: nextColor }}>
+                  {prestigePathMet
+                    ? '100%'
+                    : `${effRpNum.toLocaleString()} / ${godReqNum.toLocaleString()}`}
                 </span>
               </div>
-              <ProgressBar value={effectiveRp ?? 0} max={godReq ?? 0} color={nextColor} />
-              <p className="text-[9px] text-zinc-600 font-heading mt-1.5">
-                Reach Godfather ({(400_000).toLocaleString()} base pts ×{' '}
-                {((info.all_levels?.find(l => l.level === level + 1)?.godfather_req ?? 400_000) / 400_000).toFixed(1)}×) to unlock
-              </p>
+              <ProgressBar value={effRpNum} max={godReqNum || 1} color={nextColor} />
+              {prestigePathMet ? (
+                <p className="text-[9px] text-zinc-500 font-heading mt-1.5">
+                  Requirement met: {godReqNum.toLocaleString()} effective RP to prestige · you have{' '}
+                  {effRpNum.toLocaleString()}
+                </p>
+              ) : (
+                <p className="text-[9px] text-zinc-600 font-heading mt-1.5">
+                  Reach Godfather ({(400_000).toLocaleString()} base pts ×{' '}
+                  {((info.all_levels?.find(l => l.level === level + 1)?.godfather_req ?? 400_000) / 400_000).toFixed(1)}×) to unlock
+                </p>
+              )}
             </div>
 
             {/* Stat rows */}
@@ -586,7 +598,7 @@ export default function Prestige() {
                 </div>
                 <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl bg-emerald-500/5 border border-emerald-500/15">
                   <Check size={10} className="text-emerald-400 shrink-0" />
-                  <span>Money, cars, bullets, family and casino ownership are <strong className="text-emerald-400">kept</strong>.</span>
+                  <span>Money, cars, bullets, family, casino ownership, <strong className="text-emerald-400">Game Pass</strong> tier progress, and <strong className="text-emerald-400">mission progress</strong> (map / story) are <strong className="text-emerald-400">kept</strong>.</span>
                 </div>
                 <div
                   className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
