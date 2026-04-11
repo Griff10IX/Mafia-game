@@ -564,18 +564,13 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
             "property_portfolio_kill_income_boost_percent": 1,
         },
     )
-    ticked_heat, ticked_last = _properties_heat_tick(
+    ticked_heat, _ = _properties_heat_tick(
         float((heat_row or {}).get("properties_heat") or 0.0),
         (heat_row or {}).get("properties_heat_last_at"),
         now_utc,
     )
-    try:
-        await db.users.update_one(
-            {"id": user_id},
-            {"$set": {"properties_heat": ticked_heat, "properties_heat_last_at": ticked_last}},
-        )
-    except Exception:
-        pass
+    # Do not persist ticked heat on GET. A concurrent read (this request) plus write would race
+    # with bribe/collect: stale ticked values can overwrite a fresh bribe and make heat appear unchanged.
     user_row = heat_row or {"property_upkeep_paid_until": None}
     kill_pct = max(0, min(20, int((user_row or {}).get("property_portfolio_kill_income_boost_percent") or 0)))
     kill_mult = 1.0 + kill_pct / 100.0

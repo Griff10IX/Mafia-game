@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Trophy, Target, Flame, Car, Lock, RefreshCw, Medal, Award, Skull, History, DollarSign, Star, Zap, TrendingUp, Wine } from 'lucide-react';
 import api from '../../utils/api';
@@ -18,6 +18,15 @@ const LB_BOARD_KEYS = new Set([
   'rank_points', 'kills', 'crimes', 'gta', 'jail_busts', 'points_spent',
   'respect_points', 'bullets_melted', 'stock_market_profit', 'booze_run_profit',
 ]);
+
+/** Reject corrupt / legacy sessionStorage shapes so we show loading and refetch. */
+function boardsCacheLooksValid(boards) {
+  if (!boards || typeof boards !== 'object') return false;
+  for (const k of LB_BOARD_KEYS) {
+    if (!Array.isArray(boards[k])) return false;
+  }
+  return true;
+}
 
 const TOP_OPTIONS = [5, 10, 20, 50, 100];
 
@@ -197,7 +206,7 @@ export default function Leaderboard() {
     const p = readPersistedPeriod();
     const c = readLbEntry(p, 10, false);
     const b = c?.boards;
-    return b && typeof b === 'object' ? b : EMPTY_BOARDS;
+    return boardsCacheLooksValid(b) ? b : EMPTY_BOARDS;
   });
   const [refreshing, setRefreshing] = useState(false);
   const [fetchingBoards, setFetchingBoards] = useState(false);
@@ -207,6 +216,8 @@ export default function Leaderboard() {
   const intervalRef = useRef(null);
   const deepLinkConsumedRef = useRef(false);
   const [pendingHighlight, setPendingHighlight] = useState(null);
+  /** Monotonic id so an older in-flight request cannot clear loading or overwrite data after a newer fetch started. */
+  const fetchGenRef = useRef(0);
   /** Latest UI selection — compared after each fetch so stale in-flight responses cannot overwrite boards. */
   const lbSelectionRef = useRef({ period: readPersistedPeriod(), topLimit: 10, viewMode: 'alive' });
   lbSelectionRef.current = { period, topLimit, viewMode };
@@ -218,7 +229,7 @@ export default function Leaderboard() {
     } catch (_) {}
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (deepLinkConsumedRef.current) return;
     const board = (searchParams.get('board') || '').trim();
     const rankRaw = searchParams.get('rank');
@@ -235,9 +246,10 @@ export default function Leaderboard() {
   const fetchLeaderboard = useCallback(async (showRefreshSpin = false, silentError = false, background = false) => {
     const dead = viewMode === 'dead';
     const requested = { period, topLimit, dead };
+    const gen = ++fetchGenRef.current;
     if (!background) {
       const cached = readLbEntry(period, topLimit, dead);
-      if (cached?.boards && typeof cached.boards === 'object') {
+      if (cached?.boards && boardsCacheLooksValid(cached.boards)) {
         setBoards(cached.boards);
         setLastRewardWinners(cached.last_reward_winners ?? null);
       } else {
@@ -253,6 +265,7 @@ export default function Leaderboard() {
       const response = await api.get('/leaderboards/top', {
         params: { limit: topLimit, dead, period },
       });
+      if (gen !== fetchGenRef.current) return;
       const cur = lbSelectionRef.current;
       const curDead = cur.viewMode === 'dead';
       if (cur.period !== requested.period || cur.topLimit !== requested.topLimit || curDead !== requested.dead) {
@@ -260,7 +273,10 @@ export default function Leaderboard() {
       }
       const d = response.data || {};
       const { last_reward_winners, ...rest } = d;
-      const nextBoards = Object.keys(rest).length ? rest : EMPTY_BOARDS;
+      const nextBoards = { ...EMPTY_BOARDS };
+      for (const k of LB_BOARD_KEYS) {
+        if (Array.isArray(rest[k])) nextBoards[k] = rest[k];
+      }
       setLastRewardWinners(last_reward_winners ?? null);
       setBoards(nextBoards);
       writeLbEntry(period, topLimit, dead, nextBoards, last_reward_winners ?? null);
@@ -269,7 +285,7 @@ export default function Leaderboard() {
     } finally {
       if (timeoutId) clearTimeout(timeoutId);
       if (showRefreshSpin) setRefreshing(false);
-      if (!background) setFetchingBoards(false);
+      if (!background && gen === fetchGenRef.current) setFetchingBoards(false);
     }
   }, [topLimit, viewMode, period]);
 
@@ -286,11 +302,13 @@ export default function Leaderboard() {
     const dead = viewMode === 'dead';
     let cancelled = false;
     const prewarmTargets = [];
-    if (!readLbEntry(period, topLimit, !dead)?.boards) {
+    const flipDead = readLbEntry(period, topLimit, !dead)?.boards;
+    if (!boardsCacheLooksValid(flipDead)) {
       prewarmTargets.push({ limit: topLimit, dead: !dead, period });
     }
     const oppPeriod = period === 'weekly' ? 'alltime' : 'weekly';
-    if (!readLbEntry(oppPeriod, topLimit, dead)?.boards) {
+    const oppBoards = readLbEntry(oppPeriod, topLimit, dead)?.boards;
+    if (!boardsCacheLooksValid(oppBoards)) {
       prewarmTargets.push({ limit: topLimit, dead, period: oppPeriod });
     }
     if (!prewarmTargets.length) return;
@@ -302,7 +320,10 @@ export default function Leaderboard() {
           if (cancelled) return;
           const d = response.data || {};
           const { last_reward_winners, ...rest } = d;
-          const nextBoards = Object.keys(rest).length ? rest : EMPTY_BOARDS;
+          const nextBoards = { ...EMPTY_BOARDS };
+          for (const k of LB_BOARD_KEYS) {
+            if (Array.isArray(rest[k])) nextBoards[k] = rest[k];
+          }
           writeLbEntry(params.period, params.limit, params.dead, nextBoards, last_reward_winners ?? null);
         } catch {
           // Silent prewarm only.
