@@ -142,43 +142,43 @@ RANKS = [
 GODFATHER_RANK_ID = RANKS[-1]["id"]  # Top rank (prestige requires this)
 CAPO_RANK_ID = 6  # Minimum rank to claim or hold casino/property; below-Capo owners have 3h grace then auto-relinquish
 
-# Prestige: 5 levels after Godfather. threshold_mult scales street-rank tier thresholds (and prestige RP gates)
-# for that prestige level vs base RANKS (prestige 0 = ×1.0). Kept in sync on user as prestige_rank_multiplier.
+# Prestige: 5 levels after Godfather. Rank ladder uses the same RANKS shape; every tier scales by the same
+# factor so prestige gate and Capo (etc.) stay in lockstep (e.g. 2× gate ⇒ 2× each tier vs prestige 0).
+# prestige_rank_multiplier = get_rank_threshold_mult(prestige_level), synced on the user doc.
 # mission_reward_mult: mission payout multiplier at each prestige level (applies when claiming rewards).
 PRESTIGE_CONFIGS = {
-    1: {"threshold_mult": 1.10, "crime_mult": 1.10, "oc_mult": 1.10, "gta_rare_boost": 0.5,  "npc_mult": 1.10, "name": "Made",             "mission_reward_mult": 0.5, "illegal_business_mult": 1.10},
-    2: {"threshold_mult": 1.22, "crime_mult": 1.20, "oc_mult": 1.20, "gta_rare_boost": 1.0,  "npc_mult": 1.20, "name": "Earner",           "mission_reward_mult": 1.0, "illegal_business_mult": 1.20},
-    3: {"threshold_mult": 1.34, "crime_mult": 1.30, "oc_mult": 1.30, "gta_rare_boost": 1.5,  "npc_mult": 1.30, "name": "Capo di Capi",     "mission_reward_mult": 1.5, "illegal_business_mult": 1.30},
-    4: {"threshold_mult": 1.46, "crime_mult": 1.40, "oc_mult": 1.40, "gta_rare_boost": 2.0,  "npc_mult": 1.40, "name": "The Don",          "mission_reward_mult": 2.0, "illegal_business_mult": 1.40},
-    5: {"threshold_mult": 1.58, "crime_mult": 1.50, "oc_mult": 1.50, "gta_rare_boost": 2.5,  "npc_mult": 1.50, "name": "Godfather Legacy", "mission_reward_mult": 2.5, "illegal_business_mult": 1.50},
+    1: {"crime_mult": 1.10, "oc_mult": 1.10, "gta_rare_boost": 0.5,  "npc_mult": 1.10, "name": "Made",             "mission_reward_mult": 0.5, "illegal_business_mult": 1.10},
+    2: {"crime_mult": 1.20, "oc_mult": 1.20, "gta_rare_boost": 1.0,  "npc_mult": 1.20, "name": "Earner",           "mission_reward_mult": 1.0, "illegal_business_mult": 1.20},
+    3: {"crime_mult": 1.30, "oc_mult": 1.30, "gta_rare_boost": 1.5,  "npc_mult": 1.30, "name": "Capo di Capi",     "mission_reward_mult": 1.5, "illegal_business_mult": 1.30},
+    4: {"crime_mult": 1.40, "oc_mult": 1.40, "gta_rare_boost": 2.0,  "npc_mult": 1.40, "name": "The Don",          "mission_reward_mult": 2.0, "illegal_business_mult": 1.40},
+    5: {"crime_mult": 1.50, "oc_mult": 1.50, "gta_rare_boost": 2.5,  "npc_mult": 1.50, "name": "Godfather Legacy", "mission_reward_mult": 2.5, "illegal_business_mult": 1.50},
 }
 
 
-def get_rank_threshold_mult(prestige_level: int) -> float:
-    """Multiplier applied to each RANKS tier's required_points for this prestige (0 => 1.0)."""
+def get_prestige_gate_multiplier(prestige_level: int) -> int:
+    """Integer scale for this prestige's climb: next prestige gate is this × Godfather base (capped at 5)."""
     pl = int(prestige_level or 0)
     if pl <= 0:
-        return 1.0
-    cfg = PRESTIGE_CONFIGS.get(pl)
-    if not cfg:
-        return 1.0
-    try:
-        return float(cfg.get("threshold_mult") or 1.0)
-    except (TypeError, ValueError):
-        return 1.0
+        return 1
+    return min(pl + 1, 5)
+
+
+def get_rank_threshold_mult(prestige_level: int) -> float:
+    """Same factor applied to every RANKS tier; equals prestige_gate / godfather_base for your current prestige."""
+    return float(get_prestige_gate_multiplier(prestige_level))
 
 
 def get_prestige_requirement(current_level: int) -> int:
     """
     Raw rank_points required to prestige from current_level -> current_level+1.
 
-    Linear steps of one scaled Godfather threshold: (n+1) * godfather_base * threshold_mult(current_level).
+    Linear: (n+1) × Godfather base (1.02M, 2.04M, …, 5.10M). Street tiers use the same ratio:
+    get_rank_threshold_mult(prestige_level) = gate_multiplier so Capo etc. scale in lockstep.
     """
     if current_level < 0 or current_level >= 5:
         return 0
     step = int(RANKS[-1]["required_points"])
-    mult = get_rank_threshold_mult(current_level)
-    return int((current_level + 1) * step * mult)
+    return (current_level + 1) * step
 
 def get_prestige_bonus(user: dict) -> dict:
     """Return stacking benefit multipliers for a user based on their prestige_level."""

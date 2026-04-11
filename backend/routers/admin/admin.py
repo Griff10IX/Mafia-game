@@ -402,6 +402,7 @@ def register(router):
     RANKS = srv.RANKS
     STATES = srv.STATES
     PRESTIGE_CONFIGS = srv.PRESTIGE_CONFIGS
+    get_rank_threshold_mult = srv.get_rank_threshold_mult
     CARS = srv.CARS
     maybe_process_rank_up = srv.maybe_process_rank_up
     get_rank_info = srv.get_rank_info
@@ -582,7 +583,7 @@ def register(router):
         # Resolve prestige: use provided level or keep target's current
         if prestige_level is not None:
             new_prestige_level = prestige_level
-            new_prestige_mult = PRESTIGE_CONFIGS[new_prestige_level]["threshold_mult"] if new_prestige_level > 0 else 1.0
+            new_prestige_mult = float(get_rank_threshold_mult(new_prestige_level))
         else:
             new_prestige_level = int(target.get("prestige_level") or 0)
             new_prestige_mult = float(target.get("prestige_rank_multiplier") or 1.0)

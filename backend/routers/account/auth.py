@@ -786,13 +786,18 @@ def register(router):
                 user_doc["points"] = 15000
                 user_doc["money"] = 1000000000  # $1 billion
                 # Godfather rank and prestige 1 for beta signups
+                base_gf = 0
                 if RANKS:
                     gf = RANKS[-1]
                     user_doc["rank"] = gf["id"]
-                    user_doc["rank_points"] = int(gf.get("required_points") or 0)
+                    base_gf = int(gf.get("required_points") or 0)
+                    user_doc["rank_points"] = base_gf
                 if 1 in PRESTIGE_CONFIGS:
                     user_doc["prestige_level"] = 1
-                    user_doc["prestige_rank_multiplier"] = float(PRESTIGE_CONFIGS[1].get("threshold_mult") or 1.0)
+                    m = float(srv.get_rank_threshold_mult(1))
+                    user_doc["prestige_rank_multiplier"] = m
+                    if base_gf:
+                        user_doc["rank_points"] = int(base_gf * m)
                 # Give all consumable tokens (5 of each)
                 user_doc["xp_crimes_tokens"] = 5
                 user_doc["xp_gta_tokens"] = 5

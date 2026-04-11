@@ -9,8 +9,10 @@ def _fmt_mult(x: float) -> str:
     return str(x).rstrip("0").rstrip(".")
 
 
-def _format_prestige_unlock_benefits(cfg: dict) -> str:
+def _format_prestige_unlock_benefits(cfg: dict, unlocked_prestige_level: int) -> str:
     """Human-readable list of bonuses for the prestige level just unlocked (matches UI table + extra fields)."""
+    import server as srv
+
     parts: list[str] = []
     crime = float(cfg.get("crime_mult") or 1.0)
     if crime != 1.0:
@@ -29,9 +31,9 @@ def _format_prestige_unlock_benefits(cfg: dict) -> str:
     ib = float(cfg.get("illegal_business_mult") or 1.0)
     if ib != 1.0:
         parts.append(f"illegal business income +{round((ib - 1.0) * 100)}%")
-    thr = float(cfg.get("threshold_mult") or 1.0)
-    if thr != 1.0:
-        parts.append(f"rank tier thresholds ×{_fmt_mult(thr)} (steeper climb to Godfather)")
+    thr = srv.get_rank_threshold_mult(unlocked_prestige_level)
+    if thr > 1.0:
+        parts.append(f"rank tier thresholds ×{_fmt_mult(thr)} (same ladder shape, scaled to your prestige gate)")
     if not parts:
         return "See the Prestige page for details."
     out = ", ".join(parts)
@@ -136,7 +138,7 @@ def register(router):
 
         new_level = level + 1
         new_cfg = PRESTIGE_CONFIGS[new_level]
-        new_mult = new_cfg["threshold_mult"]
+        new_mult = srv.get_rank_threshold_mult(new_level)
 
         gp_row = await db.users.find_one(
             {"id": current_user["id"]},
@@ -162,7 +164,7 @@ def register(router):
             {"$set": prestige_set},
         )
 
-        benefits_line = _format_prestige_unlock_benefits(new_cfg)
+        benefits_line = _format_prestige_unlock_benefits(new_cfg, new_level)
         await srv.send_notification(
             current_user["id"],
             f"Prestige {new_level} — {new_cfg['name']}!",

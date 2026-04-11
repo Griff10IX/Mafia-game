@@ -31,6 +31,8 @@ async def get_rank_progress(current_user: dict = Depends(get_current_user)):
                 "rank_points_needed": needed,
                 "money_current": current_user["money"],
                 "rank_points_current": effective_points,
+                # Bar at Godfather = RP banked toward prestige gate, not "spread" across lower street ranks.
+                "progress_kind": "prestige",
             }
         progress = 100
         return {
@@ -44,6 +46,7 @@ async def get_rank_progress(current_user: dict = Depends(get_current_user)):
             "rank_points_needed": 0,
             "money_current": current_user["money"],
             "rank_points_current": raw_points,
+            "progress_kind": "max",
         }
 
     next_rank = RANKS[current_rank_id]
@@ -66,6 +69,7 @@ async def get_rank_progress(current_user: dict = Depends(get_current_user)):
         "rank_points_progress": rank_points_progress,
         "rank_points_needed": max(0, tier_ceiling - raw_points),
         "rank_points_current": raw_points,
+        "progress_kind": "street",
     }
 
 

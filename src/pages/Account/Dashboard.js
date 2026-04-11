@@ -52,6 +52,9 @@ const RankProgressCard = ({ rankProgress, hasPremiumBar }) => {
     ? Math.min(100, Math.max(0, pctFromApi))
     : (total > 0 ? Math.min(100, (current / total) * 100) : needed === 0 ? 100 : 0);
   const progressLabel = hasPremiumBar ? progressPct.toFixed(2) : progressPct.toFixed(0);
+  const progressKind = rankProgress.progress_kind || (rankProgress.next_rank ? 'street' : needed > 0 ? 'prestige' : 'max');
+  const isPrestigeBar = progressKind === 'prestige';
+  const showPremiumTotal = hasPremiumBar && (rankProgress.next_rank || (isPrestigeBar && needed > 0));
 
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 dash-scale-in mobile-panel`}>
@@ -59,7 +62,7 @@ const RankProgressCard = ({ rankProgress, hasPremiumBar }) => {
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between">
         <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
-          Rank Progress
+          {isPrestigeBar ? 'Prestige RP (Godfather)' : 'Rank Progress'}
         </h2>
         {!hasPremiumBar && (
           <Link
@@ -77,6 +80,11 @@ const RankProgressCard = ({ rankProgress, hasPremiumBar }) => {
             {rankProgress.next_rank && (
               <span className="text-mutedForeground"> → {rankProgress.next_rank_name}</span>
             )}
+            {isPrestigeBar && (
+              <span className="text-mutedForeground text-[10px] block mt-0.5 font-normal">
+                Bar is total RP for the next prestige gate (lower ranks already earned separately).
+              </span>
+            )}
           </p>
         </div>
         <div className="space-y-1">
@@ -84,7 +92,7 @@ const RankProgressCard = ({ rankProgress, hasPremiumBar }) => {
             <span className="text-mutedForeground">Rank Points</span>
             <span className="font-bold text-primary tabular-nums">
               {(rankProgress.rank_points_current || 0).toLocaleString()}
-              {hasPremiumBar && rankProgress.next_rank && (
+              {showPremiumTotal && (
                 <span className="text-mutedForeground">
                   {' / '}{((rankProgress.rank_points_current || 0) + (rankProgress.rank_points_needed || 0)).toLocaleString()}
                 </span>
@@ -104,7 +112,7 @@ const RankProgressCard = ({ rankProgress, hasPremiumBar }) => {
           </div>
           {hasPremiumBar && rankProgress.rank_points_needed > 0 && (
             <p className="text-[9px] font-heading text-mutedForeground text-right">
-              {rankProgress.rank_points_needed.toLocaleString()} RP to next rank
+              {rankProgress.rank_points_needed.toLocaleString()} RP {isPrestigeBar ? 'to next prestige' : 'to next rank'}
             </p>
           )}
         </div>

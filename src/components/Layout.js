@@ -1438,8 +1438,11 @@ export default function Layout({ children }) {
       const hasPremiumBar = !!user?.premium_rank_bar;
       const progressLabel = rankProgress ? (hasPremiumBar ? progress.toFixed(2) : progress.toFixed(0)) : '—';
       const rankName = rankProgress?.current_rank_name ?? 'Rank';
+      const pk = rankProgress?.progress_kind;
+      const needR = Number(rankProgress?.rank_points_needed) || 0;
+      const tipExtra = pk === 'prestige' && needR > 0 ? ` — ${needR.toLocaleString()} RP to next prestige` : '';
       return (
-        <div className={`${chipBase} gap-1 sm:gap-1.5 min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={rankProgress ? `${rankName}: ${progressLabel}%` : 'Rank progress'}>
+        <div className={`${chipBase} gap-1 sm:gap-1.5 min-w-0`} style={{ ...topBarChipStyle, minHeight: topBarChipMinHeight }} title={rankProgress ? `${rankName}: ${progressLabel}%${tipExtra}` : 'Rank progress'}>
           <TrendingUp size={topBarIconSizeEffectiveMobile} className="text-primary shrink-0" aria-hidden />
           {/* IMPROVEMENT 1: rank bar always visible (not just md+) */}
           <div className="flex flex-col flex-1 shrink-0 min-w-0" style={{ minWidth: isMobile ? 28 : rankColMinWidthPx }}>
