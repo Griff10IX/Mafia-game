@@ -43,6 +43,7 @@ from server import (
     get_current_user,
     get_current_user_verified,
     get_rank_info,
+    user_prestige_rank_mult,
     log_activity,
     log_respect_earned,
     maybe_process_rank_up,
@@ -607,7 +608,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
                 updates["$inc"]["money"] = bust_reward_cash
             await db.users.update_one({"id": current_user["id"]}, updates)
             try:
-                await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""))
+                await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""), user_prestige_rank_mult(current_user))
             except Exception as e:
                 logger.exception("Rank-up notification (jail NPC bust): %s", e)
             try:
@@ -729,7 +730,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
             {"$inc": {"rank_points": rank_points, "jail_busts": 1, "jail_bust_attempts": 1}, "$set": {"current_consecutive_busts": new_consec, "consecutive_busts_record": record}},
         )
         try:
-            await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""))
+            await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""), user_prestige_rank_mult(current_user))
         except Exception as e:
             logger.exception("Rank-up notification (jail player bust): %s", e)
         try:

@@ -7,11 +7,11 @@ from server import get_current_user, get_rank_info, get_wealth_rank, RANKS, WEAL
 async def get_rank_progress(current_user: dict = Depends(get_current_user)):
     raw_points = int(current_user.get("rank_points", 0) or 0)
     prestige_level = int(current_user.get("prestige_level") or 0)
+    mult = float(current_user.get("prestige_rank_multiplier") or 1.0)
 
-    # Rank ladder uses raw rank_points only; prestige gates use the same (threshold_mult is 1.0).
     effective_points = raw_points
 
-    current_rank_id, current_rank_name = get_rank_info(raw_points)
+    current_rank_id, current_rank_name = get_rank_info(raw_points, mult)
 
     if current_rank_id >= GODFATHER_RANK_ID:
         # At Godfather — show progress toward next prestige requirement so bar matches prestige %
@@ -49,8 +49,8 @@ async def get_rank_progress(current_user: dict = Depends(get_current_user)):
     next_rank = RANKS[current_rank_id]
     current_rank_req = RANKS[current_rank_id - 1]
 
-    tier_floor = int(current_rank_req["required_points"])
-    tier_ceiling = int(next_rank["required_points"])
+    tier_floor = int(current_rank_req["required_points"] * mult)
+    tier_ceiling = int(next_rank["required_points"] * mult)
 
     rank_points_progress = 0
     if tier_ceiling > tier_floor:

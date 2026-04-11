@@ -41,7 +41,7 @@ def _parse_iso_datetime(val):
 _backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _backend not in sys.path:
     sys.path.insert(0, _backend)
-from server import db, get_current_user, get_effective_event, log_activity, maybe_process_rank_up, send_notification
+from server import db, get_current_user, get_effective_event, log_activity, maybe_process_rank_up, send_notification, user_prestige_rank_mult
 from utils.point_provenance import log_points_event
 
 # Roles (team of 4)
@@ -632,7 +632,7 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
     if user_ids:
         users_raw = await db.users.find(
             {"id": {"$in": user_ids}},
-            {"_id": 0, "id": 1, "rank_points": 1, "username": 1},
+            {"_id": 0, "id": 1, "rank_points": 1, "username": 1, "prestige_rank_multiplier": 1},
         ).to_list(10)
         user_map = {u["id"]: u for u in users_raw}
     cash_each = rp_each = 0
@@ -662,6 +662,7 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
                     rp_before,
                     rp_add,
                     (user_map.get(user_id) or {}).get("username", ""),
+                    user_prestige_rank_mult(user_map.get(user_id)),
                 )
             except Exception as e:
                 logger.exception("Rank-up notification (team OC): %s", e)

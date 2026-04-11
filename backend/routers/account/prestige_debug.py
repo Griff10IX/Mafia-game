@@ -8,7 +8,6 @@ def register(router):
     get_current_user = srv.get_current_user
     get_rank_info = srv.get_rank_info
     RANKS = srv.RANKS
-    PRESTIGE_CONFIGS = srv.PRESTIGE_CONFIGS
     get_prestige_requirement = srv.get_prestige_requirement
     _is_admin = srv._is_admin
 
@@ -20,12 +19,10 @@ def register(router):
         out = []
         godfather_req = RANKS[-1]["required_points"]
         for level in range(0, 5):
-            cfg = PRESTIGE_CONFIGS.get(level)
-            mult = float(cfg["threshold_mult"]) if cfg else 1.0
+            mult = srv.get_rank_threshold_mult(level)
             next_req = get_prestige_requirement(level) if level < 5 else 0
-            # Rank ladder is raw RP only; mult is 1.0 so raw equals effective for both.
             raw_to_gf = int(godfather_req * mult)
-            raw_to_prestige = int(next_req * mult) if next_req else 0
+            raw_to_prestige = int(next_req) if next_req else 0
             extra_at_gf = max(0, raw_to_prestige - raw_to_gf)
             frac_at_gf = (extra_at_gf / raw_to_prestige) if raw_to_prestige > 0 else 0.0
             out.append({

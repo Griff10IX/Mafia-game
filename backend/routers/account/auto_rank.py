@@ -803,6 +803,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
 
     db = srv.db
     get_rank_info = srv.get_rank_info
+    user_prestige_rank_mult = srv.user_prestige_rank_mult
     now = datetime.now(timezone.utc)
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user:
@@ -864,7 +865,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                 break
             user_crimes = await db.user_crimes.find({"user_id": user_id}, {"_id": 0, "crime_id": 1, "cooldown_until": 1}).to_list(5000)
             cooldown_by_crime = {uc["crime_id"]: _parse_iso(uc.get("cooldown_until")) for uc in user_crimes}
-            rank_id, _ = get_rank_info(int(user.get("rank_points") or 0))
+            rank_id, _ = get_rank_info(int(user.get("rank_points") or 0), user_prestige_rank_mult(user))
             user_prestige = int(user.get("prestige_level") or 0)
             # Only crimes whose cooldown_until has passed (or never set); _commit_crime_impl will re-check and set next cooldown
             available = []
@@ -936,7 +937,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         cooldown_doc = await db.gta_cooldowns.find_one({"user_id": user_id}, {"_id": 0, "cooldown_until": 1})
         until = _parse_iso(cooldown_doc.get("cooldown_until")) if cooldown_doc else None
         if not (until and until > now):
-            rank_id, _ = get_rank_info(int(user.get("rank_points") or 0))
+            rank_id, _ = get_rank_info(int(user.get("rank_points") or 0), user_prestige_rank_mult(user))
             unlocked = [opt for opt in GTA_OPTIONS if rank_id >= opt["min_rank"]]
             allowed_gta_ids = user.get("auto_rank_gta_option_ids")
             if isinstance(allowed_gta_ids, list) and len(allowed_gta_ids) > 0:

@@ -410,6 +410,7 @@ from server import (
     get_current_user,
     get_current_user_verified,
     get_rank_info,
+    user_prestige_rank_mult,
     get_effective_event,
     log_activity,
     log_respect_earned,
@@ -428,7 +429,7 @@ async def get_crimes(current_user: dict = Depends(get_current_user)):
     if _crimes_cache is None:
         _crimes_cache = await db.crimes.find({}, {"_id": 0}).to_list(100)
     all_crimes = list(_crimes_cache) + PRESTIGE_CRIMES
-    user_rank, _ = get_rank_info(current_user.get("rank_points", 0))
+    user_rank, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
     user_prestige = int(current_user.get("prestige_level") or 0)
     user_crimes_list = await db.user_crimes.find(
         {"user_id": current_user["id"], "crime_id": {"$in": [c["id"] for c in all_crimes]}},
@@ -626,7 +627,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
         raise HTTPException(status_code=404, detail="Crime not found")
     if current_user.get("in_jail"):
         raise HTTPException(status_code=400, detail="You can't commit crimes while in jail.")
-    user_rank, _ = get_rank_info(current_user.get("rank_points", 0))
+    user_rank, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
     if crime["min_rank"] > user_rank:
         raise HTTPException(status_code=403, detail="Rank too low for this crime")
     prestige_required = crime.get("prestige_required")
@@ -892,7 +893,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
         await _award_crime_milestones(current_user["id"], new_total_crimes, claimed)
         respect_earned = max(0, int((respect_drop or 0) * RESPECT_FROM_CRIMES_MULT)) + max(0, int(milestone_respect * RESPECT_FROM_CRIMES_MULT))
         try:
-            await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""))
+            await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""), user_prestige_rank_mult(current_user))
         except Exception as e:
             logger.exception("Rank-up notification (crimes): %s", e)
         await db.crime_earnings.insert_one(

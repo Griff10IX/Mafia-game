@@ -13,7 +13,7 @@ from fastapi import Depends, HTTPException, Request, Body
 from pydantic import BaseModel, ConfigDict
 from bson.objectid import ObjectId
 
-from server import db, get_current_user, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, _family_in_active_war, CARS, _get_staff_user_ids, send_notification, log_activity, log_minigame_payout
+from server import db, get_current_user, get_effective_event, STATES, get_rank_info, user_prestige_rank_mult, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, _family_in_active_war, CARS, _get_staff_user_ids, send_notification, log_activity, log_minigame_payout
 from utils.point_provenance import log_points_event
 from utils.speakeasy_rewards import (
     SPEAKEASY_DAILY_BULLETS,
@@ -753,7 +753,7 @@ async def claim_bullet_factory(
     current_user: dict = Depends(get_current_user),
 ):
     """Pay to become the armoury owner in this state (bullets + armour + weapons). Max 1 property per player. Requires Capo or higher (or prestiged)."""
-    rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
+    rank_id, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
     prestige_level = int(current_user.get("prestige_level") or 0)
     if rank_id < CAPO_RANK_ID and prestige_level < 1:
         raise HTTPException(status_code=403, detail="You must be rank Capo or higher to claim the armoury. Reach Capo to hold one.")
@@ -1156,7 +1156,7 @@ async def bullet_factory_send_to_user(
     if await _user_owns_bullet_factory(target["id"]):
         raise HTTPException(status_code=400, detail="That user already owns an armoury")
     transfer_set = {"owner_id": target["id"], "owner_username": target.get("username", target_username), "total_earnings": 0}
-    if get_rank_info(target.get("rank_points", 0))[0] < CAPO_RANK_ID:
+    if get_rank_info(target.get("rank_points", 0), user_prestige_rank_mult(target))[0] < CAPO_RANK_ID:
         transfer_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
     await db.bullet_factory.update_one({"state": state}, {"$set": transfer_set})
     await log_activity(

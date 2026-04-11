@@ -19,6 +19,7 @@ from server import (
     db,
     get_current_user,
     get_rank_info,
+    user_prestige_rank_mult,
     STATES,
     _is_admin,
     log_activity,
@@ -259,7 +260,7 @@ def _booze_daily_estimate_rough(capacity: int, prices_map: dict, secs_per_leg: i
 
 
 def _booze_user_capacity(current_user: dict) -> int:
-    rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
+    rank_id, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
     capacity_from_rank = BOOZE_CAPACITY_BASE_RANK1 + (rank_id - 1) * BOOZE_CAPACITY_EXTRA_PER_RANK
     bonus = min(current_user.get("booze_capacity_bonus", 0), BOOZE_CAPACITY_BONUS_MAX)
     capacity = max(1, capacity_from_rank + bonus)
@@ -654,7 +655,7 @@ async def booze_run_config(current_user: dict = Depends(get_current_user)):
     loc_index = STATES.index(current_state) if current_state in STATES else 0
     prices_map = _booze_prices_for_rotation()
     carrying = current_user.get("booze_carrying") or {}
-    rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
+    rank_id, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
     capacity_from_rank = BOOZE_CAPACITY_BASE_RANK1 + (rank_id - 1) * BOOZE_CAPACITY_EXTRA_PER_RANK
     capacity = _booze_user_capacity(current_user)
     booze_until = _parse_iso_datetime(current_user.get("booze_until"))

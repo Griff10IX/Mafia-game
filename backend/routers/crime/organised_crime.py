@@ -21,6 +21,7 @@ from server import (
     get_current_user,
     get_current_user_verified,
     get_rank_info,
+    user_prestige_rank_mult,
     log_respect_earned,
     maybe_process_rank_up,
     maybe_respect_points_drop,
@@ -263,7 +264,7 @@ async def select_equipment(
 
 async def get_heist_jobs(current_user: dict = Depends(get_current_user)):
     """Get available heist jobs."""
-    user_rank, _ = get_rank_info(current_user.get("rank_points", 0))
+    user_rank, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
     
     # Get user's selected equipment for bonus calculation
     user_equipment = await db.user_organised_crime.find_one(
@@ -306,7 +307,7 @@ async def run_heist(
         raise HTTPException(status_code=404, detail="Heist job not found")
     
     # Check rank requirement
-    user_rank, _ = get_rank_info(current_user.get("rank_points", 0))
+    user_rank, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
     if user_rank < job["min_rank"]:
         raise HTTPException(
             status_code=403,
@@ -367,7 +368,7 @@ async def run_heist(
         if oc_inc.get("respect_points"):
             await log_respect_earned(current_user["id"], oc_inc["respect_points"], "oc")
         try:
-            await maybe_process_rank_up(current_user["id"], rp_before, rp_added, current_user.get("username", ""))
+            await maybe_process_rank_up(current_user["id"], rp_before, rp_added, current_user.get("username", ""), user_prestige_rank_mult(current_user))
         except Exception as e:
             logger.exception("Rank-up notification (OC): %s", e)
         

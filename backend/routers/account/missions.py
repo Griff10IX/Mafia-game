@@ -13,6 +13,7 @@ from server import (
     db,
     get_current_user,
     get_rank_info,
+    user_prestige_rank_mult,
     get_prestige_bonus,
     log_respect_earned,
     maybe_process_rank_up,
@@ -759,7 +760,7 @@ async def complete_mission(
     try:
         if reward_points:
             rp_before = int(current_user.get("rank_points") or 0)
-            await maybe_process_rank_up(user_id, rp_before, reward_points, current_user.get("username", ""))
+            await maybe_process_rank_up(user_id, rp_before, reward_points, current_user.get("username", ""), user_prestige_rank_mult(current_user))
     except Exception:
         pass
 

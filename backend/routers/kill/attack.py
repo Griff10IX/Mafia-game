@@ -37,6 +37,7 @@ from server import (
     CAPO_RANK_ID,
     GODFATHER_RANK_ID,
     get_rank_info,
+    user_prestige_rank_mult,
     get_effective_event,
     log_respect_earned,
     send_notification,
@@ -1147,8 +1148,8 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
         await apply_passive_health_regen(target["id"], target)
     if target.get("is_dead"):
         return _soft_err("Target is dead", 400)
-    attacker_rank_id, attacker_rank_name = get_rank_info(current_user.get("rank_points", 0))
-    target_rank_id, target_rank_name = get_rank_info(target.get("rank_points", 0))
+    attacker_rank_id, attacker_rank_name = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
+    target_rank_id, target_rank_name = get_rank_info(target.get("rank_points", 0), user_prestige_rank_mult(target))
     target_armour = int(target.get("armour_level", 0) or 0)
     inflation = await _apply_kill_inflation_decay(current_user["id"])
     best_damage, best_weapon_name = await _best_weapon_for_user(current_user["id"], current_user.get("equipped_weapon_id"))
@@ -1291,8 +1292,8 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         await _log_attack_error(current_user["id"], current_user.get("username"), "Target cannot be attacked", req)
         raise HTTPException(status_code=403, detail="Target cannot be attacked")
     target_armour = target.get("armour_level", 0)
-    attacker_rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
-    target_rank_id, _ = get_rank_info(target.get("rank_points", 0))
+    attacker_rank_id, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
+    target_rank_id, _ = get_rank_info(target.get("rank_points", 0), user_prestige_rank_mult(target))
     attacker_armour = int(current_user.get("armour_level") or 0)
     attacker_bullets = current_user.get("bullets", 0)
     attacker_molotovs = int(current_user.get("molotovs") or 0)
@@ -1556,7 +1557,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                         await log_respect_earned(killer_id, inc["respect_points"], "attack")
                     if rp_added > 0:
                         try:
-                            await maybe_process_rank_up(killer_id, rp_before, rp_added, current_user.get("username", ""))
+                            await maybe_process_rank_up(killer_id, rp_before, rp_added, current_user.get("username", ""), user_prestige_rank_mult(current_user))
                         except Exception as e:
                             logging.exception("Rank-up notification (hitlist NPC): %s", e)
                 car_id = (rewards.get("car_id") or "").strip()
@@ -1736,8 +1737,9 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 name = p["name"]
                 prop_name_counts[name] = prop_name_counts.get(name, 0) + 1
         prop_names = [f"{count}x {name}" if count > 1 else name for name, count in prop_name_counts.items()]
-        killer_doc = await db.users.find_one({"id": killer_id}, {"_id": 0, "rank_points": 1, "username": 1})
+        killer_doc = await db.users.find_one({"id": killer_id}, {"_id": 0, "rank_points": 1, "username": 1, "prestige_rank_multiplier": 1})
         killer_rp_before = int((killer_doc or {}).get("rank_points") or 0)
+        killer_pm = float((killer_doc or {}).get("prestige_rank_multiplier") or 1.0)
         kill_inc = {"money": cash_loot, "rank_points": rank_points}
         # Count kills vs real players and robot bodyguards; not vs hitlist NPCs (handled above) or other NPCs.
         if not target.get("is_npc") or target.get("is_bodyguard"):
@@ -1746,7 +1748,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             kill_inc["robot_bodyguard_kills"] = 1
         await db.users.update_one({"id": killer_id}, {"$inc": kill_inc})
         try:
-            await maybe_process_rank_up(killer_id, killer_rp_before, rank_points, (killer_doc or {}).get("username", ""))
+            await maybe_process_rank_up(killer_id, killer_rp_before, rank_points, (killer_doc or {}).get("username", ""), killer_pm)
         except Exception as e:
             logging.exception("Rank-up notification (kill): %s", e)
         # Transfer cars to killer; exclusive + loot-exclusive get a new id so old view-car links are dead

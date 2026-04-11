@@ -18,6 +18,7 @@ from server import (
     CARS,
     TRAVEL_TIMES,
     get_rank_info,
+    user_prestige_rank_mult,
     CAPO_RANK_ID,
 )
 from routers.money.booze_run import _booze_user_carrying_total
@@ -566,7 +567,7 @@ async def list_airports(current_user: dict = Depends(get_current_user)):
 
 async def claim_airport(req: AirportClaimRequest, current_user: dict = Depends(get_current_user)):
     from server import _user_owns_airport, maybe_auto_relinquish_below_capo  # lazy import to avoid circular dependency
-    rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
+    rank_id, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
     prestige_level = int(current_user.get("prestige_level") or 0)
     if rank_id < CAPO_RANK_ID and prestige_level < 1:
         raise HTTPException(status_code=403, detail="You must be rank Capo or higher to claim a property (airport). Reach Capo to hold one.")
@@ -649,7 +650,7 @@ async def airport_transfer(req: AirportTransferRequest, current_user: dict = Dep
     if await _user_owns_airport(target["id"]):
         raise HTTPException(status_code=400, detail="That user already owns an airport")
     airport_set = {"owner_id": target["id"], "owner_username": target.get("username", target_username), "total_earnings": 0}
-    if get_rank_info(target.get("rank_points", 0))[0] < CAPO_RANK_ID:
+    if get_rank_info(target.get("rank_points", 0), user_prestige_rank_mult(target))[0] < CAPO_RANK_ID:
         airport_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
     await db.airport_ownership.update_one(
         {"state": req.state, "slot": req.slot},

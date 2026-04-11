@@ -102,6 +102,7 @@ from server import (
     get_current_user_verified,
     _is_admin,
     get_rank_info,
+    user_prestige_rank_mult,
     get_effective_event,
     maybe_process_rank_up,
     maybe_respect_points_drop,
@@ -336,7 +337,7 @@ def _gta_progress_from_attempts(gta_attempts: int) -> int:
 
 async def get_gta_options(current_user: dict = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
-    user_rank, _ = get_rank_info(current_user.get("rank_points", 0))
+    user_rank, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
     option_ids = [o["id"] for o in GTA_OPTIONS]
     cooldown_doc, user_gta_list = await asyncio.gather(
         db.gta_cooldowns.find_one(
@@ -625,7 +626,7 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         await _award_gta_milestones(current_user.get("id") or "", new_total_gta, claimed, bonus_mult=_fm_gta)
         respect_earned = max(0, int((respect_drop or 0) * RESPECT_FROM_GTA_MULT * _fm_gta)) + max(0, int(milestone_respect * RESPECT_FROM_GTA_MULT * _fm_gta))
         try:
-            await maybe_process_rank_up(current_user.get("id") or "", rp_before, rp_granted, current_user.get("username", ""))
+            await maybe_process_rank_up(current_user.get("id") or "", rp_before, rp_granted, current_user.get("username", ""), user_prestige_rank_mult(current_user))
         except Exception as e:
             logger.exception("Rank-up notification (GTA): %s", e)
         try:
@@ -710,7 +711,7 @@ async def attempt_gta(
     option = next((o for o in GTA_OPTIONS if o["id"] == request.option_id), None)
     if not option:
         raise HTTPException(status_code=404, detail="Invalid GTA option")
-    rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
+    rank_id, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
     if rank_id < option["min_rank"]:
         rank_name = next(
             (r["name"] for r in RANKS if r["id"] == option["min_rank"]),

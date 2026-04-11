@@ -25,7 +25,7 @@ from .racing_lap_engine import (
 from pydantic import BaseModel
 from pymongo import UpdateOne
 
-from server import db, get_current_user_verified, get_current_user, maybe_process_rank_up, send_notification, log_gambling, _is_admin, _get_staff_user_ids
+from server import db, get_current_user_verified, get_current_user, maybe_process_rank_up, user_prestige_rank_mult, send_notification, log_gambling, _is_admin, _get_staff_user_ids
 from utils.minigame_captcha_gate import require_turnstile_for_minigame_start
 import pathlib as _pathlib
 
@@ -2859,8 +2859,9 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
                 )
                 if rp:
                     try:
-                        rp_before = int((await db.users.find_one({"id": uid}, {"rank_points": 1}) or {}).get("rank_points", 0)) - rp
-                        await maybe_process_rank_up(uid, rp_before, rp, entrant.get("username", ""))
+                        _ud = await db.users.find_one({"id": uid}, {"rank_points": 1, "prestige_rank_multiplier": 1}) or {}
+                        rp_before = int(_ud.get("rank_points", 0)) - rp
+                        await maybe_process_rank_up(uid, rp_before, rp, entrant.get("username", ""), user_prestige_rank_mult(_ud))
                     except Exception:
                         pass
                 from_crew = await _pay_driver_salary_from_user_then_crew(uid, driver_salary)

@@ -38,6 +38,7 @@ from server import (
     log_activity,
     send_notification,
     get_rank_info,
+    user_prestige_rank_mult,
     RANKS,
     STATES,
     get_password_hash,
@@ -294,14 +295,14 @@ async def get_bodyguards(current_user: dict = Depends(get_current_user)):
                     bg_user = guard_users_map.get(guard_id)
                     username_bg = bg_user.get("username", "Unknown") if bg_user else "Unknown"
                     if bg_user:
-                        _, rank_name = get_rank_info(int(bg_user.get("rank_points", 0) or 0))
+                        _, rank_name = get_rank_info(int(bg_user.get("rank_points", 0) or 0), user_prestige_rank_mult(bg_user))
                     armour_level = int(bg_user.get("armour_level", 0) or 0) if bg_user else 0
                 else:
                     if bg.get("bodyguard_user_id"):
                         bg_user = guard_users_map.get(bg["bodyguard_user_id"])
                         username_bg = bg_user.get("username") if bg_user else None
                         if bg_user:
-                            _, rank_name = get_rank_info(int(bg_user.get("rank_points", 0) or 0))
+                            _, rank_name = get_rank_info(int(bg_user.get("rank_points", 0) or 0), user_prestige_rank_mult(bg_user))
                     username_bg = username_bg or bg.get("robot_name") or f"Robot Guard #{i + 1}"
                     armour_level = int(bg.get("armour_level", 0) or 0)
                 result.append(BodyguardResponse(

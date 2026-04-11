@@ -54,12 +54,13 @@ def register(router):
         """Return the current user's prestige status and next-prestige requirements."""
         level = int(current_user.get("prestige_level") or 0)
         rank_points = int(current_user.get("rank_points") or 0)
-        rank_id, rank_name = get_rank_info(rank_points)
+        mult = float(current_user.get("prestige_rank_multiplier") or 1.0)
+        rank_id, rank_name = get_rank_info(rank_points, mult)
 
         at_max = level >= 5
         next_level = level + 1 if not at_max else None
         godfather_req = get_prestige_requirement(level) if next_level else None
-        godfather_effective_threshold = int(srv.RANKS[-1]["required_points"])
+        godfather_effective_threshold = int(srv.RANKS[-1]["required_points"] * mult)
         prestige_path_target_effective = None
         if next_level is not None and godfather_req is not None:
             # Bar must reflect the real climb: you cannot prestige below Godfather, and some gates exceed that RP.
@@ -122,8 +123,9 @@ def register(router):
         rank_points = int(current_user.get("rank_points") or 0)
         effective_rp = rank_points
         godfather_req = get_prestige_requirement(level)
+        mult = float(current_user.get("prestige_rank_multiplier") or 1.0)
 
-        rank_id, _ = get_rank_info(rank_points)
+        rank_id, _ = get_rank_info(rank_points, mult)
         if rank_id < GODFATHER_RANK_ID:
             raise HTTPException(status_code=400, detail="You must reach Godfather rank before prestiging")
         if godfather_req is None or godfather_req <= 0 or effective_rp < godfather_req:

@@ -20,6 +20,7 @@ from server import (
     get_current_user_verified,
     STATES,
     get_rank_info,
+    user_prestige_rank_mult,
     CAPO_RANK_ID,
     maybe_auto_relinquish_below_capo,
     CASINO_MIN_OWNER_MAX_BET,
@@ -193,7 +194,7 @@ async def _run_slots_draw_if_needed(state: str):
             winner = await db.users.find_one({"id": winner_id}, {"_id": 0, "username": 1, "rank_points": 1})
             winner_name = (winner.get("username") or "?") if winner else "?"
             expires_at = next_draw_iso
-            winner_rank_id, _ = get_rank_info((winner or {}).get("rank_points", 0))
+            winner_rank_id, _ = get_rank_info((winner or {}).get("rank_points", 0), user_prestige_rank_mult(winner))
             slots_set = {
                 "state": filter_state,
                 "owner_id": winner_id,
@@ -702,7 +703,7 @@ def register(router):
 
         if shortfall > 0:
             next_draw_iso = _next_draw_utc().isoformat()
-            spin_winner_rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
+            spin_winner_rank_id, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
             spin_owner_set = {"owner_id": current_user.get("id") or "", "owner_username": current_user.get("username"), "expires_at": next_draw_iso, "next_draw_at": next_draw_iso}
             if spin_winner_rank_id < CAPO_RANK_ID:
                 spin_owner_set["below_capo_acquired_at"] = datetime.now(timezone.utc)

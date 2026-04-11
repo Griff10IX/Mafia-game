@@ -300,7 +300,7 @@ export default function Prestige() {
                   {godReqNum > (info.godfather_effective_threshold ?? 0)
                     ? `; prestige gate ${godReqNum.toLocaleString()}`
                     : ''}
-                  ). Street ranks Rat→Godfather use the same raw RP ladder every run.
+                  ). Higher prestige makes each street rank (Rat→Godfather) require more RP than the last prestige.
                 </p>
               )}
             </div>

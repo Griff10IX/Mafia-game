@@ -15,6 +15,7 @@ from server import (
     get_current_user,
     log_respect_earned,
     maybe_process_rank_up,
+    user_prestige_rank_mult,
     send_notification,
     STATES,
     _is_admin,
@@ -711,7 +712,7 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
             await log_respect_earned(user_id, inc["respect_points"], "objectives_daily")
         if rp_added > 0:
             try:
-                await maybe_process_rank_up(user_id, rp_before, rp_added, user.get("username", ""))
+                await maybe_process_rank_up(user_id, rp_before, rp_added, user.get("username", ""), user_prestige_rank_mult(user))
             except Exception:
                 pass
         return {"claimed": True, "type": "daily", "reward": reward}
@@ -745,7 +746,7 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
             await log_respect_earned(user_id, inc["respect_points"], "objectives_weekly")
         if rp_added > 0:
             try:
-                await maybe_process_rank_up(user_id, rp_before, rp_added, user.get("username", ""))
+                await maybe_process_rank_up(user_id, rp_before, rp_added, user.get("username", ""), user_prestige_rank_mult(user))
             except Exception:
                 pass
         return {"claimed": True, "type": "weekly", "reward": reward}
@@ -779,7 +780,7 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
             await log_respect_earned(user_id, inc["respect_points"], "objectives_monthly")
         if rp_added > 0:
             try:
-                await maybe_process_rank_up(user_id, rp_before, rp_added, user.get("username", ""))
+                await maybe_process_rank_up(user_id, rp_before, rp_added, user.get("username", ""), user_prestige_rank_mult(user))
             except Exception:
                 pass
         return {"claimed": True, "type": "monthly", "reward": reward}

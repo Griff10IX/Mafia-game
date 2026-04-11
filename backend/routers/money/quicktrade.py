@@ -11,6 +11,7 @@ from server import (
     db,
     get_current_user,
     get_rank_info,
+    user_prestige_rank_mult,
     log_activity,
     CAPO_RANK_ID,
     _user_owns_airport,
@@ -946,7 +947,7 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
     _restore = lambda: db.properties.update_one({"_id": ObjectId(property_id)}, {"$set": {"for_sale": True}})
     prop_type = prop.get("type") or ""
     if prop_type.startswith("casino_") or prop_type == "airport" or prop_type == "bullet_factory":
-        rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
+        rank_id, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
         prestige_level = int(current_user.get("prestige_level") or 0)
         if rank_id < CAPO_RANK_ID and prestige_level < 1:
             await _restore()

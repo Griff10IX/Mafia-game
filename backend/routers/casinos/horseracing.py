@@ -20,6 +20,7 @@ from server import (
     get_current_user_verified,
     STATES,
     get_rank_info,
+    user_prestige_rank_mult,
     CAPO_RANK_ID,
     maybe_auto_relinquish_below_capo,
     CASINO_MIN_OWNER_MAX_BET,
@@ -276,7 +277,7 @@ def register(router):
 
     @router.post("/casino/horseracing/claim")
     async def casino_horseracing_claim(request: RouletteClaimRequest, current_user: dict = Depends(get_current_user_verified)):
-        rank_id, _ = get_rank_info(current_user.get("rank_points", 0))
+        rank_id, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
         prestige_level = int(current_user.get("prestige_level") or 0)
         if rank_id < CAPO_RANK_ID and prestige_level < 1:
             raise HTTPException(status_code=403, detail="You must be rank Capo or higher to claim a casino. Reach Capo to hold one.")
@@ -442,7 +443,7 @@ def register(router):
             "owner_username": target.get("username") or "",
             "max_bet": CASINO_MIN_OWNER_MAX_BET,
         }
-        if get_rank_info(target.get("rank_points", 0))[0] < CAPO_RANK_ID:
+        if get_rank_info(target.get("rank_points", 0), user_prestige_rank_mult(target))[0] < CAPO_RANK_ID:
             send_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
         await db.horseracing_ownership.update_one({"city": stored_city or city}, {"$set": send_set})
         await cancel_quicktrade_casino_listings_by_locations("casino_horseracing", stored_city or city, city)
@@ -579,7 +580,7 @@ def register(router):
                 if shortfall > 0:
                     ownership_transferred = True
                     hr_owner_set = {"owner_id": current_user.get("id") or "", "owner_username": current_user.get("username") or ""}
-                    if get_rank_info(current_user.get("rank_points", 0))[0] < CAPO_RANK_ID:
+                    if get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))[0] < CAPO_RANK_ID:
                         hr_owner_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
                     await db.horseracing_ownership.update_one({"city": stored_city or city}, {"$set": hr_owner_set})
                     await cancel_quicktrade_casino_listings_by_locations("casino_horseracing", stored_city or city, city)

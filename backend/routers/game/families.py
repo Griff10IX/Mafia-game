@@ -41,6 +41,7 @@ from server import (
     send_notification,
     send_notification_to_family,
     maybe_process_rank_up,
+    user_prestige_rank_mult,
     set_state_head,
     _get_active_war_between,
     _get_active_war_for_family,
@@ -3263,7 +3264,7 @@ async def families_crew_oc_commit(current_user: dict = Depends(get_current_user)
     accepted = await db.family_crew_oc_applications.find({"family_id": family_id, "status": "accepted"}, {"_id": 0, "user_id": 1}).to_list(50)
     accepted_ids = [a["user_id"] for a in accepted]
     roster_ids = list(dict.fromkeys(member_ids + accepted_ids))
-    living = await db.users.find({"id": {"$in": roster_ids}, "is_dead": {"$ne": True}}, {"_id": 0, "id": 1, "rank_points": 1, "username": 1}).to_list(100)
+    living = await db.users.find({"id": {"$in": roster_ids}, "is_dead": {"$ne": True}}, {"_id": 0, "id": 1, "rank_points": 1, "username": 1, "prestige_rank_multiplier": 1}).to_list(100)
     living_ids = [u["id"] for u in living]
     if not living_ids:
         raise HTTPException(status_code=400, detail="No living crew members")
@@ -3287,7 +3288,7 @@ async def families_crew_oc_commit(current_user: dict = Depends(get_current_user)
         if respect_roll:
             await log_respect_earned(uid, respect_roll, "crew_oc")
         try:
-            await maybe_process_rank_up(uid, rp_before, CREW_OC_REWARD_RP, u.get("username", ""))
+            await maybe_process_rank_up(uid, rp_before, CREW_OC_REWARD_RP, u.get("username", ""), user_prestige_rank_mult(u))
         except Exception:
             logging.exception("Rank-up notification (Crew OC)")
         await send_notification(
