@@ -149,6 +149,9 @@ def register(router):
             "prestige_rank_multiplier": new_mult,
             "rank_points": 0,
             "rank": 1,
+            # Rank-up bullets/respect use rank_up_rewarded_to_rank as idempotency; without reset, old
+            # Godfather-tier value makes every re-climb fire false "ranked up" notifications (e.g. Capo).
+            "rank_up_rewarded_to_rank": 1,
             # Bank RP into carry for all players (not only active VIP). Previously non-VIP prestiging
             # zeroed carry + tier cursors, which looked like Game Pass reset and could break expired-VIP UI.
             "rank_xp_pass_prestige_carry_rp": prev_carry + rank_points,
