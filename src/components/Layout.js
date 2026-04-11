@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, AlertTriangle, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb } from 'lucide-react';
+import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb } from 'lucide-react';
 import api, { getApiErrorMessage, onCooldownChange, invalidateApiCache } from '../utils/api';
 import { setCrimesPrefetch, getCrimesPrefetch } from '../utils/prefetchCache';
 import { toast } from 'sonner';
@@ -708,6 +708,12 @@ export default function Layout({ children }) {
     };
   }, [location.pathname, userId, mobileStatsDisplay]); // eslint-disable-line
 
+  // Refresh vendetta flag when opening family UI (war may have started; /families/war is cheap).
+  useEffect(() => {
+    const p = location.pathname;
+    if (p === '/game/family/list' || p.startsWith('/families')) fetchWarStatus();
+  }, [location.pathname]); // eslint-disable-line
+
   useEffect(() => {
     let intervalId;
     const deferred = setTimeout(() => { fetchWarStatus(); intervalId = setInterval(fetchWarStatus, 45000); }, 150);
@@ -1393,7 +1399,14 @@ export default function Layout({ children }) {
         >
           <Icon size={13} className="shrink-0" style={isFamiliesAtWar ? { color: '#f87171' } : { color: 'var(--noir-primary)' }} />
           <span className="uppercase tracking-widest text-[10px] font-heading flex-1 truncate">{item.label}</span>
-          {isFamiliesAtWar && <AlertTriangle size={14} className="shrink-0" style={{ color: '#f87171' }} aria-hidden />}
+          {isFamiliesAtWar && (
+            <span
+              className="text-[8px] font-heading font-bold uppercase tracking-tight text-red-400 bg-red-500/15 border border-red-500/35 rounded px-1 py-0.5 shrink-0 leading-none"
+              title="Your family has an active vendetta"
+            >
+              At war
+            </span>
+          )}
           {typeof item.countBadge === 'number' && (
             <span
               className="bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30 tabular-nums shrink-0"

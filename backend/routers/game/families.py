@@ -1319,10 +1319,15 @@ async def families_list(current_user: dict = Depends(get_current_user)):
     ).to_list(50)
     at_war_fids = set()
     for w in active_wars:
-        at_war_fids.add(w["family_a_id"])
-        at_war_fids.add(w["family_b_id"])
+        a = _norm_fid(w.get("family_a_id"))
+        b = _norm_fid(w.get("family_b_id"))
+        if a:
+            at_war_fids.add(a)
+        if b:
+            at_war_fids.add(b)
     for f in out:
-        if f["id"] in at_war_fids:
+        fid = _norm_fid(f.get("id"))
+        if fid and fid in at_war_fids:
             f["at_war"] = True
     return out
 
@@ -3620,7 +3625,7 @@ async def families_attack_racket(request: FamilyAttackRacketRequest, current_use
 
 async def families_war(current_user: dict = Depends(get_current_user)):
     """Lightweight: list active wars for current user's family (e.g. for sidebar badge)."""
-    my_family_id = current_user.get("family_id")
+    my_family_id = _norm_fid(current_user.get("family_id"))
     if not my_family_id:
         return {"wars": []}
     wars = await db.family_wars.find(

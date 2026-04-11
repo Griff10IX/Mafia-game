@@ -560,14 +560,14 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         else:
             damage_percent = _rng.randint(15, 77)
         rank_points_map = {
-            "common": 5,
-            "uncommon": 10,
-            "rare": 20,
-            "ultra_rare": 40,
-            "legendary": 100,
-            "exclusive": 100,
+            "common": 1,
+            "uncommon": 2,
+            "rare": 4,
+            "ultra_rare": 8,
+            "legendary": 20,
+            "exclusive": 20,
         }
-        rank_points = rank_points_map.get(car["rarity"], 5)
+        rank_points = rank_points_map.get(car["rarity"], 1)
         rank_points = int(rank_points * ev.get("rank_points", 1.0))
         now_utc = datetime.now(timezone.utc)
         rp_perk_until = _parse_iso_datetime(current_user.get("rp_perk_until"))

@@ -295,12 +295,12 @@ export default function Prestige() {
               <ProgressBar value={effRpNum} max={pathTargetNum || 1} color={nextColor} />
               {!prestigePathMet && (
                 <p className="text-[9px] text-zinc-600 font-heading mt-1.5">
-                  Target {pathTargetNum.toLocaleString()} effective RP (Godfather is{' '}
+                  Target {pathTargetNum.toLocaleString()} RP (Godfather tier is{' '}
                   {(info.godfather_effective_threshold ?? 0).toLocaleString()}
                   {godReqNum > (info.godfather_effective_threshold ?? 0)
                     ? `; prestige gate ${godReqNum.toLocaleString()}`
                     : ''}
-                  ).
+                  ). Street ranks Rat→Godfather use the same raw RP ladder every run.
                 </p>
               )}
             </div>
@@ -518,7 +518,7 @@ export default function Prestige() {
               <tr className="border-b border-zinc-800/60">
                 <th className="text-left px-4 py-2 text-zinc-600 font-bold uppercase tracking-widest">Level</th>
                 <th className="text-left px-3 py-2 text-zinc-600 font-bold uppercase tracking-widest">Title</th>
-                <th className="text-center px-3 py-2 text-zinc-600 font-bold uppercase tracking-widest">Req. RP</th>
+                <th className="text-center px-3 py-2 text-zinc-600 font-bold uppercase tracking-widest" title="Effective RP to prestige into this tier (not per street rank)">Prestige RP</th>
                 <th className="text-center px-3 py-2 text-zinc-600 font-bold uppercase tracking-widest">Crime</th>
                 <th className="text-center px-3 py-2 text-zinc-600 font-bold uppercase tracking-widest">OC</th>
                 <th className="text-center px-3 py-2 text-zinc-600 font-bold uppercase tracking-widest">GTA Rare</th>

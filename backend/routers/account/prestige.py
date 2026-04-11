@@ -53,9 +53,8 @@ def register(router):
     async def prestige_info(current_user: dict = Depends(get_current_user)):
         """Return the current user's prestige status and next-prestige requirements."""
         level = int(current_user.get("prestige_level") or 0)
-        mult = float(current_user.get("prestige_rank_multiplier") or 1.0)
         rank_points = int(current_user.get("rank_points") or 0)
-        rank_id, rank_name = get_rank_info(rank_points, mult)
+        rank_id, rank_name = get_rank_info(rank_points)
 
         at_max = level >= 5
         next_level = level + 1 if not at_max else None
@@ -66,7 +65,7 @@ def register(router):
             # Bar must reflect the real climb: you cannot prestige below Godfather, and some gates exceed that RP.
             prestige_path_target_effective = max(godfather_effective_threshold, int(godfather_req))
 
-        effective_rp = int(rank_points / mult) if mult > 1.0 else rank_points
+        effective_rp = rank_points
         can_prestige = (
             not at_max
             and rank_id >= GODFATHER_RANK_ID
@@ -120,12 +119,11 @@ def register(router):
         if level >= 5:
             raise HTTPException(status_code=400, detail="Already at maximum prestige (level 5)")
 
-        mult = float(current_user.get("prestige_rank_multiplier") or 1.0)
         rank_points = int(current_user.get("rank_points") or 0)
-        effective_rp = int(rank_points / mult) if mult > 1.0 else rank_points
+        effective_rp = rank_points
         godfather_req = get_prestige_requirement(level)
 
-        rank_id, _ = get_rank_info(rank_points, mult)
+        rank_id, _ = get_rank_info(rank_points)
         if rank_id < GODFATHER_RANK_ID:
             raise HTTPException(status_code=400, detail="You must reach Godfather rank before prestiging")
         if godfather_req is None or godfather_req <= 0 or effective_rp < godfather_req:

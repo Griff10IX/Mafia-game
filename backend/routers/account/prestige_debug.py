@@ -20,11 +20,11 @@ def register(router):
         out = []
         godfather_req = RANKS[-1]["required_points"]
         for level in range(0, 5):
-            mult = float(PRESTIGE_CONFIGS[level]["threshold_mult"]) if level in PRESTIGE_CONFIGS else 1.0 if level == 0 else 1.0
+            cfg = PRESTIGE_CONFIGS.get(level)
+            mult = float(cfg["threshold_mult"]) if cfg else 1.0
             next_req = get_prestige_requirement(level) if level < 5 else 0
-            # Raw rank points to first reach Godfather at this prestige
+            # Rank ladder is raw RP only; mult is 1.0 so raw equals effective for both.
             raw_to_gf = int(godfather_req * mult)
-            # Raw rank points to satisfy prestige requirement
             raw_to_prestige = int(next_req * mult) if next_req else 0
             extra_at_gf = max(0, raw_to_prestige - raw_to_gf)
             frac_at_gf = (extra_at_gf / raw_to_prestige) if raw_to_prestige > 0 else 0.0

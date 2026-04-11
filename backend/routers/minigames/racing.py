@@ -267,7 +267,7 @@ REWARD_BY_POSITION = [0.40, 0.25, 0.15, 0.10, 0.05, 0.03, 0.02, 0.00]
 RACING_BASE_CASH_POOL = 50_000
 # Crew bank debt limit: players can go this far negative when paying for essentials (repair, tyres)
 CREW_BANK_DEBT_LIMIT = -50_000
-RANK_POINTS_BY_POSITION = [15, 10, 6, 4, 2, 1, 0, 0]
+RANK_POINTS_BY_POSITION = [0, 0, 0, 0, 0, 0, 0, 0]
 RACING_REP_BY_POSITION = [5, 3, 2, 1, 0, 0, 0, 0]
 
 SPONSOR_TIERS = [
@@ -2850,17 +2850,19 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
                     driver_salary = int(hired_drv.get("salary_per_race", 0) or 0)
             crew_credit = int(cash) + sponsor_income
             if not is_dnf:
-                await db.users.update_one({"id": uid}, {"$inc": {"rank_points": rp}})
+                if rp:
+                    await db.users.update_one({"id": uid}, {"$inc": {"rank_points": rp}})
                 await db.racing_profiles.update_one(
                     {"user_id": uid},
                     {"$inc": {"racing_rep": rep, "races_completed": 1, "wins": 1 if position == 1 else 0, "crew_bank": crew_credit}},
                     upsert=True,
                 )
-                try:
-                    rp_before = int((await db.users.find_one({"id": uid}, {"rank_points": 1}) or {}).get("rank_points", 0)) - rp
-                    await maybe_process_rank_up(uid, rp_before, rp, entrant.get("username", ""))
-                except Exception:
-                    pass
+                if rp:
+                    try:
+                        rp_before = int((await db.users.find_one({"id": uid}, {"rank_points": 1}) or {}).get("rank_points", 0)) - rp
+                        await maybe_process_rank_up(uid, rp_before, rp, entrant.get("username", ""))
+                    except Exception:
+                        pass
                 from_crew = await _pay_driver_salary_from_user_then_crew(uid, driver_salary)
                 net_crew_bank = crew_credit - from_crew
             else:

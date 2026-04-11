@@ -2156,6 +2156,12 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         killer_family_id = str(killer_family_id).strip() if killer_family_id else None
         victim_family_id = await resolve_family_id(victim_id) or target.get("family_id")
         victim_family_id = str(victim_family_id).strip() if victim_family_id else None
+        # Start vendetta before recording stats so the kill that declares war is counted (was previously after stats).
+        if victim_family_id and killer_family_id and killer_family_id != victim_family_id:
+            try:
+                await _family_war_start(killer_family_id, victim_family_id)
+            except Exception as e:
+                logging.exception("Family war start on kill: %s", e)
         # Bodyguard war start is done earlier in the bodyguard loop (before recording) so the triggering kill is counted
         if victim_family_id:
             try:
@@ -2198,8 +2204,6 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     f"{target_name} was killed by {killer_name_for_notice}.",
                     "attack",
                 )
-                if killer_family_id:
-                    await _family_war_start(killer_family_id, victim_family_id)
                 await _family_war_check_wipe_and_award(victim_family_id, killer_family_id, killer_id)
             except Exception as e:
                 logging.exception("Family notify/war on kill: %s", e)

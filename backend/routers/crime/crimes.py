@@ -58,6 +58,18 @@ CRIME_SUCCESS_MESSAGES = [
     "Score. ${reward:,} and {rank_points} rank points.",
     "The take is yours. ${reward:,} and {rank_points} rank points.",
 ]
+CRIME_SUCCESS_MESSAGES_CASH_ONLY = [
+    "Success! You earned ${reward:,}.",
+    "Clean score. ${reward:,} in your pocket.",
+    "The job went smooth. You earned ${reward:,}.",
+    "Nice work. You made ${reward:,}.",
+    "No heat. You got away with ${reward:,}.",
+    "Smooth run. ${reward:,} earned.",
+    "Done. ${reward:,}.",
+    "Clean getaway. ${reward:,}.",
+    "Score. ${reward:,}.",
+    "The take is yours: ${reward:,}.",
+]
 # 75% harder to earn respect from crimes (award 25% of base/milestone)
 RESPECT_FROM_CRIMES_MULT = 0.25
 
@@ -697,10 +709,10 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
             r_max = r_min
         reward = _rng.randint(r_min, r_max)
         rank_points = (
-            3 if crime["crime_type"] == "petty"
-            else 7 if crime["crime_type"] == "medium"
-            else 25 if crime["crime_type"] == "prestige"
-            else 15
+            1 if crime["crime_type"] == "petty"
+            else 3 if crime["crime_type"] == "medium"
+            else 7 if crime["crime_type"] == "prestige"
+            else 5
         )
         ev = await get_effective_event()
         reward = int(reward * ev.get("kill_cash", 1.0))
@@ -893,7 +905,10 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
                 await update_objectives_progress(current_user["id"], "crimes_in_city", 1, city=city)
         except Exception:
             pass
-        message = _rng.choice(CRIME_SUCCESS_MESSAGES).format(reward=reward, rank_points=rank_points)
+        if rank_points:
+            message = _rng.choice(CRIME_SUCCESS_MESSAGES).format(reward=reward, rank_points=rank_points)
+        else:
+            message = _rng.choice(CRIME_SUCCESS_MESSAGES_CASH_ONLY).format(reward=reward)
     else:
         reward = None
         prestige_bonus_earned = None

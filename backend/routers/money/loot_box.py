@@ -488,6 +488,7 @@ async def open_loot_box(
                 merged_inc["points"] = merged_inc.get("points", 0) + amount
                 rewards.append({"type": "points", "amount": amount, "rarity": "standard"})
             elif chosen == "rank_points":
+                # Large vs per-activity RP after crime/GTA balance — revisit with global RP curve.
                 amount = _rng.randint(100, 5000)
                 merged_inc["rank_points"] = merged_inc.get("rank_points", 0) + amount
                 rewards.append({"type": "rank_points", "amount": amount, "rarity": "standard"})

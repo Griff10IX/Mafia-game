@@ -86,6 +86,23 @@ OC_HEIST_SUCCESS_MESSAGES = [
     "Perfect execution. ${reward:,} and {rank_points} rank points.",
     "The crew delivered. ${reward:,} and {rank_points} rank points.",
 ]
+OC_HEIST_SUCCESS_MESSAGES_CASH_ONLY = [
+    "Heist successful! You earned ${reward:,}!",
+    "Clean score. ${reward:,}.",
+    "The job went smooth. You earned ${reward:,}!",
+    "No heat. ${reward:,} in your pocket.",
+    "Done. ${reward:,} earned.",
+    "Smooth run. You got ${reward:,}!",
+    "The take is yours: ${reward:,}!",
+    "Heist successful. ${reward:,}.",
+    "Score. ${reward:,}.",
+    "You got away clean with ${reward:,}!",
+    "Like clockwork. ${reward:,}.",
+    "The vault was yours: ${reward:,}.",
+    "Nobody saw a thing. ${reward:,}.",
+    "Perfect execution. ${reward:,}.",
+    "The crew delivered. ${reward:,}.",
+]
 OC_HEIST_FAIL_CAUGHT_MESSAGES = [
     "Heist failed and you got caught! {jail_time}s jail (unbreakable for 60s).",
     "Busted! The heat was waiting. {jail_time}s in the slammer (unbreakable 60s).",
@@ -364,9 +381,12 @@ async def run_heist(
             upsert=True
         )
         
-        msg = _rng.choice(OC_HEIST_SUCCESS_MESSAGES).format(
-            reward=money_reward, rank_points=rp_added
-        )
+        if rp_added:
+            msg = _rng.choice(OC_HEIST_SUCCESS_MESSAGES).format(
+                reward=money_reward, rank_points=rp_added
+            )
+        else:
+            msg = _rng.choice(OC_HEIST_SUCCESS_MESSAGES_CASH_ONLY).format(reward=money_reward)
         return HeistResponse(
             success=True,
             message=msg,

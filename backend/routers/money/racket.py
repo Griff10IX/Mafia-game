@@ -77,7 +77,7 @@ async def extort_property(request: ProtectionRacketRequest, current_user: dict =
         target_money = int(target.get("money", 0) or 0)
         if target_money < extortion_amount:
             extortion_amount = target_money
-        rank_points = 10
+        rank_points = 0
         if extortion_amount > 0:
             result = await db.users.update_one(
                 {"id": target["id"], "money": {"$gte": extortion_amount}},
@@ -85,15 +85,17 @@ async def extort_property(request: ProtectionRacketRequest, current_user: dict =
             )
             if result.modified_count == 0:
                 extortion_amount = 0
-            rp_before = int(current_user.get("rank_points") or 0)
-            await db.users.update_one(
-                {"id": current_user["id"]},
-                {"$inc": {"money": extortion_amount, "rank_points": rank_points}}
-            )
-            try:
-                await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""))
-            except Exception:
-                pass
+            else:
+                rank_points = _rng.randint(2, 6)
+                rp_before = int(current_user.get("rank_points") or 0)
+                await db.users.update_one(
+                    {"id": current_user["id"]},
+                    {"$inc": {"money": extortion_amount, "rank_points": rank_points}}
+                )
+                try:
+                    await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""))
+                except Exception:
+                    pass
         await db.extortions.update_one(
             extortion_filter,
             {"$set": {"amount": extortion_amount}},

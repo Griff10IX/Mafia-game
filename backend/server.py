@@ -142,43 +142,27 @@ RANKS = [
 GODFATHER_RANK_ID = RANKS[-1]["id"]  # Top rank (prestige requires this)
 CAPO_RANK_ID = 6  # Minimum rank to claim or hold casino/property; below-Capo owners have 3h grace then auto-relinquish
 
-# Prestige: 5 levels unlocked after reaching Godfather. Rank tier thresholds scale from prestige 1 (threshold_mult).
+# Prestige: 5 levels after Godfather. threshold_mult is 1.0 — rank tiers use the same raw ladder each run;
+# difficulty scales only via effective RP needed to prestige (linear in Godfather threshold).
 # mission_reward_mult: mission payout multiplier at each prestige level (applies when claiming rewards).
 PRESTIGE_CONFIGS = {
-    1: {"threshold_mult": 1.25, "crime_mult": 1.10, "oc_mult": 1.10, "gta_rare_boost": 0.5,  "npc_mult": 1.10, "name": "Made",             "godfather_req": 340_000, "mission_reward_mult": 0.5, "illegal_business_mult": 1.10},
-    2: {"threshold_mult": 1.5,  "crime_mult": 1.20, "oc_mult": 1.20, "gta_rare_boost": 1.0,  "npc_mult": 1.20, "name": "Earner",           "godfather_req": 510_000, "mission_reward_mult": 1.0, "illegal_business_mult": 1.20},
-    3: {"threshold_mult": 2.25, "crime_mult": 1.30, "oc_mult": 1.30, "gta_rare_boost": 1.5,  "npc_mult": 1.30, "name": "Capo di Capi",     "godfather_req": 765_000, "mission_reward_mult": 1.5, "illegal_business_mult": 1.30},
-    4: {"threshold_mult": 3.5,  "crime_mult": 1.40, "oc_mult": 1.40, "gta_rare_boost": 2.0,  "npc_mult": 1.40, "name": "The Don",          "godfather_req": 1_190_000, "mission_reward_mult": 2.0, "illegal_business_mult": 1.40},
-    5: {"threshold_mult": 5.0,  "crime_mult": 1.50, "oc_mult": 1.50, "gta_rare_boost": 2.5,  "npc_mult": 1.50, "name": "Godfather Legacy", "godfather_req": 1_700_000, "mission_reward_mult": 2.5, "illegal_business_mult": 1.50},
+    1: {"threshold_mult": 1.0, "crime_mult": 1.10, "oc_mult": 1.10, "gta_rare_boost": 0.5,  "npc_mult": 1.10, "name": "Made",             "mission_reward_mult": 0.5, "illegal_business_mult": 1.10},
+    2: {"threshold_mult": 1.0, "crime_mult": 1.20, "oc_mult": 1.20, "gta_rare_boost": 1.0,  "npc_mult": 1.20, "name": "Earner",           "mission_reward_mult": 1.0, "illegal_business_mult": 1.20},
+    3: {"threshold_mult": 1.0, "crime_mult": 1.30, "oc_mult": 1.30, "gta_rare_boost": 1.5,  "npc_mult": 1.30, "name": "Capo di Capi",     "mission_reward_mult": 1.5, "illegal_business_mult": 1.30},
+    4: {"threshold_mult": 1.0, "crime_mult": 1.40, "oc_mult": 1.40, "gta_rare_boost": 2.0,  "npc_mult": 1.40, "name": "The Don",          "mission_reward_mult": 2.0, "illegal_business_mult": 1.40},
+    5: {"threshold_mult": 1.0, "crime_mult": 1.50, "oc_mult": 1.50, "gta_rare_boost": 2.5,  "npc_mult": 1.50, "name": "Godfather Legacy", "mission_reward_mult": 2.5, "illegal_business_mult": 1.50},
 }
 
 def get_prestige_requirement(current_level: int) -> int:
     """
     Effective rank points required to prestige from current_level -> current_level+1.
 
-    Uses PRESTIGE_CONFIGS godfather_req as the target but blends it with the
-    Godfather threshold so that most of the climb happens across all ranks and
-    only a shorter stretch is spent parked at Godfather.
+    Linear steps of one Godfather threshold each: 1.02M, 2.04M, 3.06M, 4.08M, 5.10M (from RANKS[-1]).
     """
     if current_level < 0 or current_level >= 5:
         return 0
-    next_level = current_level + 1
-    cfg = PRESTIGE_CONFIGS.get(next_level)
-    if not cfg:
-        return 0
-    base_req = int(cfg.get("godfather_req") or 0)
-    if base_req <= 0:
-        return 0
-    base_gf_req = RANKS[-1]["required_points"]  # Godfather threshold
-    if base_req <= base_gf_req:
-        return base_req
-    # Blend the original requirement with the Godfather threshold so that
-    # effective RP at first reaching Godfather already covers a large share
-    # of the requirement, and the extra needed at Godfather is a shorter stretch.
-    blended = int((base_req + base_gf_req) / 2)
-    # Always require at least a small amount above Godfather.
-    min_above_gf = base_gf_req + 21_250
-    return max(blended, min_above_gf)
+    step = int(RANKS[-1]["required_points"])
+    return (current_level + 1) * step
 
 def get_prestige_bonus(user: dict) -> dict:
     """Return stacking benefit multipliers for a user based on their prestige_level."""
@@ -1800,8 +1784,11 @@ async def _record_war_stats_player_kill(war_id: str, killer_id: str, killer_fami
     )
 
 def get_rank_info(rank_points: int, prestige_mult: float = 1.0):
-    """Get rank based on rank_points, optionally scaled by prestige multiplier."""
-    effective = int(rank_points / prestige_mult) if prestige_mult > 1.0 else rank_points
+    """Get rank tier from raw rank_points vs RANKS. prestige_mult is ignored (call-site compat only)."""
+    try:
+        effective = int(rank_points)
+    except (TypeError, ValueError):
+        effective = 0
     for i in range(len(RANKS) - 1, -1, -1):
         if effective >= RANKS[i]["required_points"]:
             return RANKS[i]["id"], RANKS[i]["name"]
@@ -1981,14 +1968,9 @@ async def maybe_process_rank_up(user_id: str, rank_points_before, rank_points_ad
         return
     if rank_points_added <= 0:
         return
-    # Use caller-provided prestige_mult when given; otherwise load from user so prestiged users get correct rank (and notification text)
-    if prestige_mult == 1.0:
-        user = await db.users.find_one({"id": user_id}, {"prestige_rank_multiplier": 1})
-        if user and (user.get("prestige_rank_multiplier") or 0) > 0:
-            prestige_mult = float(user["prestige_rank_multiplier"])
     new_total = rank_points_before + rank_points_added
-    old_rank_id, _ = get_rank_info(rank_points_before, prestige_mult)
-    new_rank_id, _ = get_rank_info(new_total, prestige_mult)
+    old_rank_id, _ = get_rank_info(int(rank_points_before))
+    new_rank_id, _ = get_rank_info(int(new_total))
     if new_rank_id > old_rank_id:
         await check_and_process_rank_up(user_id, old_rank_id, new_rank_id, username)
 

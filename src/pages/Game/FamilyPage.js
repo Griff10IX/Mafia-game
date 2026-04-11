@@ -148,6 +148,19 @@ function RaidNextRaidCountdown({ nextRaidAt }) {
   );
 }
 
+/** Compact nav hint under “Families” tab when this crew has an active vendetta. */
+function FamiliesNavWarHint({ activeWarCount }) {
+  if (!activeWarCount) return null;
+  return (
+    <span className="flex items-center gap-0.5 max-w-[5.5rem] sm:max-w-none whitespace-nowrap">
+      <Swords size={9} className="shrink-0 text-red-400/90" />
+      <span className="text-[8px] leading-none font-heading font-bold uppercase tracking-tight text-red-400/95">
+        At war{activeWarCount > 1 ? ` (${activeWarCount})` : ''}
+      </span>
+    </span>
+  );
+}
+
 /** Compact nav hint under “Crew OC” tab label. */
 function CrewOCNavCountdown({ isoUntil }) {
   const [, setTick] = useState(0);
@@ -2967,7 +2980,14 @@ export default function FamilyPage() {
                 <Tab active={activeTab === 'statehead'} onClick={() => setActiveTab('statehead')} icon={<MapPin size={10} />}>Head of state</Tab>
               )}
               <Tab active={activeTab === 'roster'} onClick={() => setActiveTab('roster')} icon={<Users size={10} />}>Made Men</Tab>
-              <Tab active={activeTab === 'families'} onClick={() => { setActiveTab('families'); fetchData(); }} icon={<Building2 size={10} />}>Families</Tab>
+              <Tab
+                active={activeTab === 'families'}
+                onClick={() => { setActiveTab('families'); fetchData(); }}
+                icon={<Building2 size={10} />}
+                subline={activeWars.length > 0 ? <FamiliesNavWarHint activeWarCount={activeWars.length} /> : undefined}
+              >
+                Families
+              </Tab>
               <Tab active={activeTab === 'history'} onClick={() => setActiveTab('history')} icon={<Trophy size={10} />}>Vendettas</Tab>
             </div>
 

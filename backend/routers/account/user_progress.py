@@ -1,18 +1,17 @@
 # User progress: rank progress, wealth ranks list, wealth progress
 from fastapi import Depends
 
-from server import get_current_user, get_rank_info, get_wealth_rank, RANKS, WEALTH_RANKS, PRESTIGE_CONFIGS, get_prestige_requirement, GODFATHER_RANK_ID
+from server import get_current_user, get_rank_info, get_wealth_rank, RANKS, WEALTH_RANKS, get_prestige_requirement, GODFATHER_RANK_ID
 
 
 async def get_rank_progress(current_user: dict = Depends(get_current_user)):
     raw_points = int(current_user.get("rank_points", 0) or 0)
-    prestige_mult = float(current_user.get("prestige_rank_multiplier") or 1.0)
     prestige_level = int(current_user.get("prestige_level") or 0)
 
-    # Effective rank points account for prestige multiplier (higher prestige = need more points per rank)
-    effective_points = int(raw_points / prestige_mult) if prestige_mult > 1.0 else raw_points
+    # Rank ladder uses raw rank_points only; prestige gates use the same (threshold_mult is 1.0).
+    effective_points = raw_points
 
-    current_rank_id, current_rank_name = get_rank_info(raw_points, prestige_mult)
+    current_rank_id, current_rank_name = get_rank_info(raw_points)
 
     if current_rank_id >= GODFATHER_RANK_ID:
         # At Godfather — show progress toward next prestige requirement so bar matches prestige %
@@ -50,14 +49,13 @@ async def get_rank_progress(current_user: dict = Depends(get_current_user)):
     next_rank = RANKS[current_rank_id]
     current_rank_req = RANKS[current_rank_id - 1]
 
-    # Scale thresholds by prestige multiplier so progress reflects the harder climb
-    scaled_current_req = int(current_rank_req["required_points"] * prestige_mult)
-    scaled_next_req = int(next_rank["required_points"] * prestige_mult)
+    tier_floor = int(current_rank_req["required_points"])
+    tier_ceiling = int(next_rank["required_points"])
 
     rank_points_progress = 0
-    if scaled_next_req > scaled_current_req:
-        points_range = scaled_next_req - scaled_current_req
-        points_current = raw_points - scaled_current_req
+    if tier_ceiling > tier_floor:
+        points_range = tier_ceiling - tier_floor
+        points_current = raw_points - tier_floor
         rank_points_progress = min(100, max(0, (points_current / points_range * 100)))
 
     return {
@@ -66,7 +64,7 @@ async def get_rank_progress(current_user: dict = Depends(get_current_user)):
         "next_rank": next_rank["id"],
         "next_rank_name": next_rank["name"],
         "rank_points_progress": rank_points_progress,
-        "rank_points_needed": max(0, scaled_next_req - raw_points),
+        "rank_points_needed": max(0, tier_ceiling - raw_points),
         "rank_points_current": raw_points,
     }
 
