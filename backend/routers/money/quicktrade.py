@@ -48,12 +48,12 @@ def _token_type_label(token_type: str) -> str:
     return (token_type or "").replace("_", " ").strip().title() or token_type
 
 
-async def _notify_quicktrade_seller(seller_id: Optional[str], title: str, message: str) -> None:
-    """Inbox the seller when a Quick Trade listing is bought or accepted."""
-    if not seller_id:
+async def _notify_quicktrade_inbox(user_id: Optional[str], title: str, message: str, notification_type: str = "quicktrade_sale") -> None:
+    """Deliver a Quick Trade message to the user's notification inbox (respects notification_preferences.quicktrade)."""
+    if not user_id:
         return
     try:
-        await send_notification(seller_id, title, message, "quicktrade_sale", category="system")
+        await send_notification(user_id, title, message, notification_type, category="quicktrade")
     except Exception:
         pass
 
@@ -301,7 +301,7 @@ async def accept_sell_offer(offer_id: str, current_user: dict = Depends(get_curr
         )
     except Exception:
         pass
-    await _notify_quicktrade_seller(
+    await _notify_quicktrade_inbox(
         offer["user_id"],
         "Quick Trade: points sold",
         f"{buyer_username} bought your points listing: {int(offer['points']):,} points for ${int(offer['cost']):,} cash.",
@@ -586,7 +586,7 @@ async def accept_token_offer(offer_id: str, current_user: dict = Depends(get_cur
                 "offer_id": offer_id,
             },
         )
-        await _notify_quicktrade_seller(
+        await _notify_quicktrade_inbox(
             offer["user_id"],
             "Quick Trade: tokens sold",
             f"{buyer_username} bought your listing: {int(offer['quantity']):,}× {_token_type_label(token_type)} for ${price_money:,} cash.",
@@ -629,7 +629,7 @@ async def accept_token_offer(offer_id: str, current_user: dict = Depends(get_cur
             "offer_id": offer_id,
         },
     )
-    await _notify_quicktrade_seller(
+    await _notify_quicktrade_inbox(
         offer["user_id"],
         "Quick Trade: tokens sold",
         f"{buyer_username} bought your listing: {int(offer['quantity']):,}× {_token_type_label(token_type)} for {price_points:,} points.",
@@ -830,11 +830,17 @@ async def accept_buy_offer(offer_id: str, current_user: dict = Depends(get_curre
         )
     except Exception:
         pass
-    buyer_name = "[Anonymous]" if offer.get("hide_name") else (offer.get("username") or "Unknown")
-    await _notify_quicktrade_seller(
-        seller_id,
+    buyer_disp = "[Anonymous]" if offer.get("hide_name") else (offer.get("username") or "Unknown")
+    await _notify_quicktrade_inbox(
+        offer["user_id"],
         "Quick Trade: buy offer filled",
-        f"{buyer_name} bought your points via their buy offer: {int(offer['points']):,} points for ${int(offer['offer']):,} cash.",
+        f"{seller_username} filled your buy offer. You received {int(offer['points']):,} points; they received your ${int(offer['offer']):,} cash.",
+        notification_type="quicktrade_buy_filled",
+    )
+    await _notify_quicktrade_inbox(
+        seller_id,
+        "Quick Trade: buy order completed",
+        f"You sold {int(offer['points']):,} points for ${int(offer['offer']):,} cash (filled {buyer_disp}'s buy offer).",
     )
     return {"message": "Trade completed successfully", "points_sold": offer["points"], "cash_received": offer["offer"]}
 
@@ -980,7 +986,7 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
             await log_points_event(db, user_id=prop["owner_id"], points=sale_price, event_type="quicktrade_property", meta={"property_id": property_id, "property_name": prop.get("name"), "buyer_id": buyer_id})
         loc = prop.get("location") or prop.get("state")
         loc_suffix = f" ({loc})" if loc else ""
-        await _notify_quicktrade_seller(
+        await _notify_quicktrade_inbox(
             prop["owner_id"],
             "Quick Trade: property sold",
             f"{buyer_username} bought your listing: {prop.get('name', 'Property')}{loc_suffix} for {sale_price:,} points.",

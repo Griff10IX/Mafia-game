@@ -292,6 +292,10 @@ MAX_INCOME_BOOST_PERCENT = 20
 INCOME_BOOST_PER_KILL_PERCENT = 2
 MODERATELY_UPGRADED_LEVEL = 2
 MODERATELY_UPGRADED_SECURITY = 1
+# Seized business takeover: one-time bump to stored hourly till rate (distillery/economy use same doc).
+KILL_TAKEOVER_INCOME_MULT = 1.05
+# Liquidate: pay this many hours of gross till-style income from the snapshot (before killer account buffs).
+KILL_REWARD_LIQUIDATION_HOURS = 168
 
 IBM_MISSIONS_CORE = [
     # Tier 1 — Getting Started
@@ -1174,6 +1178,35 @@ def _is_moderately_upgraded(business: dict) -> bool:
     return level >= MODERATELY_UPGRADED_LEVEL and (security_level >= MODERATELY_UPGRADED_SECURITY or upgrade_count >= 1)
 
 
+async def _kill_reward_liquidation_cash(business_snapshot: dict, killer_user: dict) -> int:
+    """Weekly-style cash from seized operation: base till rate x level mult x hours x event x prestige (no killer IBM % buff)."""
+    income_per_hour = int(business_snapshot.get("income_per_hour") or INCOME_PER_HOUR_BASE)
+    level = int(business_snapshot.get("level") or 1)
+    level_mult = 1.0 + 0.04 * max(0, level - 1)
+    gross = float(income_per_hour) * level_mult * float(KILL_REWARD_LIQUIDATION_HOURS)
+    ev = await get_effective_event()
+    prestige = get_prestige_bonus(killer_user)
+    mult = float(ev.get("racket_payout", 1.0)) * float(prestige.get("illegal_business_mult", 1.0))
+    return max(0, int(round(gross * mult)))
+
+
+async def _liquidation_preview_for_kill_entry(entry: dict, killer_user: dict) -> int:
+    if entry.get("business_snapshot"):
+        return await _kill_reward_liquidation_cash(entry["business_snapshot"], killer_user)
+    return max(0, int(entry.get("total_spent") or 0))
+
+
+async def _pending_kill_rewards_with_previews(pending: list, killer_user: dict) -> list:
+    out = []
+    for p in pending:
+        row = dict(p)
+        row["liquidation_preview"] = await _liquidation_preview_for_kill_entry(p, killer_user)
+        row.pop("business_snapshot", None)
+        row.pop("guards_snapshot", None)
+        out.append(row)
+    return out
+
+
 def _ordered_ibm_missions():
     return sorted(ILLEGAL_BUSINESS_MISSIONS, key=lambda x: x["order"])
 
@@ -1353,7 +1386,8 @@ class RaidRequest(BaseModel):
 
 class ClaimKillRewardRequest(BaseModel):
     victim_id: str
-    choice: str  # "cash" | "income_boost"
+    choice: str  # "takeover" | "liquidate"
+    new_name: Optional[str] = None
 
 
 class HireGuardRequest(BaseModel):
@@ -1494,9 +1528,38 @@ def _distillery_public_payload(distillery: dict, business: dict) -> dict:
 
 
 async def get_illegal_business(current_user: dict = Depends(get_current_user)):
-    business = await db.illegal_businesses.find_one({"user_id": current_user["id"]}, {"_id": 0})
+    user_id = current_user["id"]
+    business = await db.illegal_businesses.find_one({"user_id": user_id}, {"_id": 0})
+    now = datetime.now(timezone.utc)
+    today_key = now.strftime("%Y-%m-%d")
+    raid_date = current_user.get("illegal_business_raids_date")
+    raid_count = int(current_user.get("illegal_business_raids_today") or 0)
+    if raid_date != today_key:
+        raid_count = 0
+    raid_lim = _effective_raid_daily_limit(current_user)
+    u_pending = await db.users.find_one({"id": user_id}, {"_id": 0, "pending_illegal_business_rewards": 1})
+    pending_raw = list((u_pending or {}).get("pending_illegal_business_rewards") or [])
     if not business:
-        raise HTTPException(status_code=404, detail="You don't have an illegal business.")
+        if not pending_raw:
+            raise HTTPException(status_code=404, detail="You don't have an illegal business.")
+        pending_enriched = await _pending_kill_rewards_with_previews(pending_raw, current_user)
+        return {
+            "no_business": True,
+            "business": None,
+            "pending_take": 0.0,
+            "guards": [],
+            "type_info": {},
+            "missions_completed": [],
+            "missions": [],
+            "pending_kill_rewards": pending_enriched,
+            "available_types": ILLEGAL_BUSINESS_TYPES,
+            "security_upgrades_list": [],
+            "next_guard_slot_cost_cash": None,
+            "guard_hire_cost": GUARD_HIRE_COST_CASH,
+            "distillery": None,
+            "raid_daily_limit": raid_lim,
+            "raids_today": raid_count,
+        }
     distillery_payload = None
     if business.get("type_id") == "booze_making":
         now = _utc_now()
@@ -1514,7 +1577,7 @@ async def get_illegal_business(current_user: dict = Depends(get_current_user)):
     progress_user = await _ibm_load_user_with_mission_baselines(current_user["id"], current_user)
     completions = progress_user.get("illegal_business_mission_completions") or []
     completed_ids = {c.get("mission_id") for c in completions if c.get("mission_id")}
-    pending_rewards = current_user.get("pending_illegal_business_rewards") or []
+    pending_rewards = await _pending_kill_rewards_with_previews(pending_raw, current_user)
     type_info = next((t for t in ILLEGAL_BUSINESS_TYPES if t["id"] == business.get("type_id")), {})
     missions_progress = [
         _ibm_mission_progress_row(
@@ -1539,15 +1602,9 @@ async def get_illegal_business(current_user: dict = Depends(get_current_user)):
         next_guard_slot_cash = int(GUARD_SLOT_BASE_CASH * (GUARD_SLOT_MULT ** exp))
     else:
         next_guard_slot_cash = None
-    now = datetime.now(timezone.utc)
     pending_take, _ = await _illegal_business_pending_take_and_hours(business, current_user, now)
-    today_key = now.strftime("%Y-%m-%d")
-    raid_date = current_user.get("illegal_business_raids_date")
-    raid_count = int(current_user.get("illegal_business_raids_today") or 0)
-    if raid_date != today_key:
-        raid_count = 0
-    raid_lim = _effective_raid_daily_limit(current_user)
     return {
+        "no_business": False,
         "business": business,
         "pending_take": round(pending_take, 2),
         "guards": guards,
@@ -2835,17 +2892,28 @@ async def raid_random_illegal_business(current_user: dict = Depends(get_current_
 
 async def claim_kill_reward(req: ClaimKillRewardRequest, current_user: dict = Depends(get_current_user)):
     choice = (req.choice or "").strip().lower()
-    if choice not in ("cash", "income_boost"):
-        raise HTTPException(status_code=400, detail="Choice must be 'cash' or 'income_boost'.")
+    if choice not in ("takeover", "liquidate"):
+        raise HTTPException(status_code=400, detail="Choice must be 'takeover' or 'liquidate'.")
+    killer_id = current_user["id"]
     pending = current_user.get("pending_illegal_business_rewards") or []
     entry = next((p for p in pending if p.get("victim_id") == req.victim_id), None)
     if not entry:
         raise HTTPException(status_code=404, detail="No pending reward for this victim.")
-    moderately_upgraded = bool(entry.get("moderately_upgraded"))
-    if choice == "income_boost" and not moderately_upgraded:
-        raise HTTPException(status_code=400, detail="Victim's business was not moderately upgraded. Take cash instead.")
+    snap = entry.get("business_snapshot")
+    if choice == "takeover" and not snap:
+        raise HTTPException(
+            status_code=400,
+            detail="This reward is too old to take over (no business snapshot). Liquidate for cash instead.",
+        )
+    if choice == "takeover":
+        killer_row = await db.users.find_one({"id": killer_id}, {"_id": 0, "rank": 1})
+        if _user_rank_id(killer_row or current_user) < CAPO_RANK_ID:
+            raise HTTPException(
+                status_code=403,
+                detail="Only Capo or higher can take over an illegal business. Liquidate for cash instead.",
+            )
     old_user = await db.users.find_one_and_update(
-        {"id": current_user["id"], "pending_illegal_business_rewards.victim_id": req.victim_id},
+        {"id": killer_id, "pending_illegal_business_rewards.victim_id": req.victim_id},
         {"$pull": {"pending_illegal_business_rewards": {"victim_id": req.victim_id}}},
     )
     if not old_user:
@@ -2853,24 +2921,53 @@ async def claim_kill_reward(req: ClaimKillRewardRequest, current_user: dict = De
     reward_entry = next((p for p in old_user.get("pending_illegal_business_rewards", []) if p.get("victim_id") == req.victim_id), None)
     if not reward_entry:
         raise HTTPException(status_code=404, detail="No pending reward for this victim.")
+    snap = reward_entry.get("business_snapshot")
     total_spent = int(reward_entry.get("total_spent") or 0)
-    if choice == "cash":
+    if choice == "liquidate":
+        if snap:
+            cash = await _kill_reward_liquidation_cash(snap, current_user)
+        else:
+            cash = max(0, total_spent)
         await db.users.update_one(
-            {"id": current_user["id"]},
-            {"$inc": {"money": total_spent, "illegal_business_kill_rewards_claimed": 1}},
+            {"id": killer_id},
+            {"$inc": {"money": cash, "illegal_business_kill_rewards_claimed": 1}},
         )
-        return {"message": f"Took ${total_spent:,} from the late owner's operation.", "cash": total_spent, "income_boost": None}
-    else:
-        current_boost = int(current_user.get("illegal_business_income_boost_percent") or 0)
-        new_boost = min(MAX_INCOME_BOOST_PERCENT, current_boost + INCOME_BOOST_PER_KILL_PERCENT)
-        await db.users.update_one(
-            {"id": current_user["id"]},
-            {
-                "$set": {"illegal_business_income_boost_percent": new_boost},
-                "$inc": {"illegal_business_kill_rewards_claimed": 1},
-            },
-        )
-        return {"message": f"Income boost +{INCOME_BOOST_PER_KILL_PERCENT}%. Total: {new_boost}%.", "cash": 0, "income_boost": new_boost}
+        return {
+            "message": f"Liquidated the operation for ${cash:,}.",
+            "cash": cash,
+            "business_id": None,
+        }
+    # takeover
+    killer_old = await db.illegal_businesses.find_one({"user_id": killer_id}, {"_id": 0, "id": 1})
+    if killer_old:
+        await db.illegal_business_guards.delete_many({"business_id": killer_old["id"]})
+        await db.illegal_businesses.delete_one({"id": killer_old["id"]})
+    new_biz_id = str(uuid.uuid4())
+    biz_doc = dict(snap)
+    biz_doc.pop("_id", None)
+    iph = int(biz_doc.get("income_per_hour") or INCOME_PER_HOUR_BASE)
+    biz_doc["id"] = new_biz_id
+    biz_doc["user_id"] = killer_id
+    biz_doc["income_per_hour"] = int(round(iph * KILL_TAKEOVER_INCOME_MULT))
+    type_def = next((t for t in ILLEGAL_BUSINESS_TYPES if t["id"] == biz_doc.get("type_id")), {})
+    raw_name = (req.new_name or "").strip() if req.new_name is not None else ""
+    if raw_name:
+        biz_doc["name"] = raw_name[:80]
+    elif not (biz_doc.get("name") or "").strip():
+        biz_doc["name"] = (type_def.get("name") or "The Racket")[:80]
+    await db.illegal_businesses.insert_one(biz_doc)
+    for g in reward_entry.get("guards_snapshot") or []:
+        gd = {k: v for k, v in dict(g).items() if k != "_id"}
+        gd["id"] = str(uuid.uuid4())
+        gd["business_id"] = new_biz_id
+        gd["user_id"] = killer_id
+        await db.illegal_business_guards.insert_one(gd)
+    await db.users.update_one({"id": killer_id}, {"$inc": {"illegal_business_kill_rewards_claimed": 1}})
+    return {
+        "message": f"You took over the operation (+{int((KILL_TAKEOVER_INCOME_MULT - 1) * 100)}% income/hr).",
+        "cash": 0,
+        "business_id": new_biz_id,
+    }
 
 
 def register(router):

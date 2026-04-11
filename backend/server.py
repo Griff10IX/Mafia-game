@@ -1263,7 +1263,7 @@ async def get_current_user_verified(current_user: dict = Depends(get_current_use
 
 
 async def send_notification(user_id: str, title: str, message: str, notification_type: str, category: Optional[str] = None, **extra):
-    """Send a notification to user's inbox. If category is set, user's notification_preferences can mute it."""
+    """Send a notification to user's inbox. If category is set, user's notification_preferences can mute it (e.g. system, messages, quicktrade)."""
     if category:
         user = await db.users.find_one({"id": user_id}, {"_id": 0, "notification_preferences": 1})
         prefs = (user or {}).get("notification_preferences") or {}

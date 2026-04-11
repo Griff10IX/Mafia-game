@@ -231,7 +231,7 @@ def register(router):
         alive_users = await db.users.count_documents(alive_real_match)
         dead_users = max(0, total_users - alive_users)
 
-        # Totals only from real users; total_cash only from alive real users
+        # Totals only from real users; headline total_cash adds buy-offer escrow (see game_capital)
         # Game Capital "booze" = one number: sum of every non-NPC user's stored booze_profit_total (alive + dead + staff).
         totals = await db.users.aggregate([
             {"$match": real_user_match},
@@ -266,7 +266,7 @@ def register(router):
             {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$treasury", 0]}}}}
         ]).to_list(1)
         family_treasury_total = int(family_treasury_agg[0].get("total", 0) or 0) if family_treasury_agg else 0
-        # Total cash: alive real users only (not dead, not NPCs)
+        # Wallet cash: alive real users only (not dead, not NPCs). Public total_cash also adds quicktrade_cash.
         cash_agg = await db.users.aggregate([
             {"$match": alive_real_match},
             {"$group": {"_id": None, "money_total": {"$sum": {"$ifNull": ["$money", 0]}}}}
@@ -290,6 +290,7 @@ def register(router):
             {"$group": {"_id": None, "total": {"$sum": {"$ifNull": ["$offer", 0]}}}}
         ]).to_list(1)
         quicktrade_cash = int(quicktrade_agg[0].get("total", 0) or 0) if quicktrade_agg else 0
+        total_cash = total_cash_alive + quicktrade_cash
 
         non_staff_car_filter = {"user_id": {"$nin": staff_ids}} if staff_ids else {}
         total_vehicles = await db.user_cars.count_documents(non_staff_car_filter)
@@ -505,7 +506,7 @@ def register(router):
         return {
             "generated_at": now.isoformat(),
             "game_capital": {
-                "total_cash": total_cash_alive,
+                "total_cash": total_cash,
                 "swiss_total": int(totals_doc.get("swiss_total", 0) or 0),
                 "interest_bank_total": interest_bank_total,
                 "quicktrade_cash": quicktrade_cash,

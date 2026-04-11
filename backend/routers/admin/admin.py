@@ -11233,8 +11233,8 @@ def register(router):
         quicktrade_sell_points_escrow = int(qt_sell_doc.get("total_points") or 0)
         quicktrade_sell_offers = int(qt_sell_doc.get("offers") or 0)
 
-        # Same definitions as GET /stats/overview game_capital
-        public_total_cash = alive_sums["money"]
+        # Same definitions as GET /stats/overview game_capital (total_cash = wallets + buy-offer escrow)
+        public_total_cash = alive_sums["money"] + quicktrade_escrow
         swiss_rows = await db.users.aggregate(
             [
                 {"$match": real_user_match},
@@ -11265,7 +11265,7 @@ def register(router):
                 "id": "wallet_alive_players",
                 "label": "Cash on hand (alive players, excl. staff/NPC)",
                 "amount": alive_sums["money"],
-                "note": "Matches public Stats → Game capital → Total cash.",
+                "note": "Wallets only. Public Stats → Total cash = this plus Quick Trade buy-offer escrow (trade_buy_escrow bucket).",
             },
             {
                 "id": "bank_alive_players",

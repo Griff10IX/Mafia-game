@@ -28,6 +28,7 @@ DEFAULT_NOTIFICATION_PREFS = {
     "oc_invites": True,
     "attacks": True,
     "system": True,
+    "quicktrade": True,
     "messages": True,
     "forum_topic_reply": True,
     "forum_comment_reply": True,
@@ -42,6 +43,7 @@ class NotificationPreferencesRequest(BaseModel):
     oc_invites: Optional[bool] = None
     attacks: Optional[bool] = None
     system: Optional[bool] = None
+    quicktrade: Optional[bool] = None
     messages: Optional[bool] = None
     forum_topic_reply: Optional[bool] = None
     forum_comment_reply: Optional[bool] = None

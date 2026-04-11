@@ -149,6 +149,74 @@ const RACKET_STYLES = `
   .raid-fail { border-left: 3px solid #f87171; background: rgba(248,113,113,.06); }
 `;
 
+function KillRewardsBlock({ pendingRewards, saving, onClaim }) {
+  if (!pendingRewards?.length) return null;
+  return (
+    <div className={`${styles.panel} r-card border border-primary/25 rounded-md overflow-hidden mobile-panel`}>
+      <CardHead icon={Star} title="Seized operation — choose" />
+      <div className="p-3 space-y-3">
+        <p className="text-[10px] text-mutedForeground font-heading leading-snug">
+          Take over the whole racket (Capo+), rename it, and gain +5% passive income/hr — or liquidate for about one week of its till rate as cash.
+        </p>
+        {pendingRewards.map((p) => (
+          <KillRewardRow key={p.victim_id} p={p} saving={saving} onClaim={onClaim} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function KillRewardRow({ p, saving, onClaim }) {
+  const [takeoverName, setTakeoverName] = useState('');
+  const preview = Number(p.liquidation_preview ?? p.total_spent ?? 0);
+  const canTakeover = Boolean(p.has_snapshot);
+  return (
+    <div className="kill-reward-card flex flex-col gap-2 p-3 rounded">
+      <div className="min-w-0">
+        <div className="text-xs font-heading font-bold text-foreground">{p.victim_username}</div>
+        <div className="text-[10px] text-mutedForeground">
+          {canTakeover ? 'Full seizure — take over or liquidate.' : 'Legacy reward — liquidate for invested cash.'}
+        </div>
+        <div className="text-[10px] text-zinc-500 font-heading mt-0.5 tabular-nums">
+          Liquidate ≈ {formatMoney(preview)}
+        </div>
+      </div>
+      {canTakeover && (
+        <div>
+          <label className="block text-[9px] font-heading uppercase tracking-widest text-mutedForeground mb-1">New name (optional)</label>
+          <input
+            type="text"
+            value={takeoverName}
+            onChange={(e) => setTakeoverName(e.target.value)}
+            placeholder="Keep victim name if empty"
+            className="w-full px-2 py-1.5 bg-zinc-900/60 border border-zinc-700/50 rounded text-xs text-foreground placeholder:text-zinc-600 focus:border-primary/50 focus:outline-none"
+          />
+        </div>
+      )}
+      <div className="flex flex-wrap gap-2">
+        {canTakeover && (
+          <button
+            type="button"
+            onClick={() => onClaim(p.victim_id, 'takeover', takeoverName.trim() || undefined)}
+            disabled={saving}
+            className="px-3 py-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/28 rounded text-[10px] font-heading font-bold uppercase tracking-wider hover:bg-emerald-500/18 disabled:opacity-40 transition-all"
+          >
+            Take over (+5% / hr)
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => onClaim(p.victim_id, 'liquidate')}
+          disabled={saving}
+          className="px-3 py-1.5 bg-primary/15 text-primary border border-primary/35 rounded text-[10px] font-heading font-bold uppercase tracking-wider hover:bg-primary/25 disabled:opacity-40 transition-all"
+        >
+          Liquidate {formatMoney(preview)}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function CardHead({ icon: Icon, title, right }) {
   return (
     <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/15 flex items-center justify-between gap-2">
@@ -273,7 +341,7 @@ export default function IllegalBusiness() {
         nextData = { noBusiness: true };
         setData(nextData);
       } else if (res.data) {
-        nextData = res.data;
+        nextData = { ...res.data, noBusiness: Boolean(res.data.no_business) };
         setData(nextData);
       } else if (!silent) {
         toast.error(getApiErrorMessage(res));
@@ -381,10 +449,12 @@ export default function IllegalBusiness() {
     if (res.data?.loot_cash) refreshUser();
     fetchData();
   });
-  const handleClaimKillReward = withSave(async (victimId, choice) => {
-    const res = await api.post('/illegal-business/claim-kill-reward', { victim_id: victimId, choice });
+  const handleClaimKillReward = withSave(async (victimId, choice, newName) => {
+    const body = { victim_id: victimId, choice };
+    if (newName) body.new_name = newName;
+    const res = await api.post('/illegal-business/claim-kill-reward', body);
     toast.success(res.data?.message);
-    if (res.data?.cash) refreshUser();
+    refreshUser();
     fetchData();
   });
 
@@ -397,11 +467,15 @@ export default function IllegalBusiness() {
   }
 
   if (data?.noBusiness) {
+    const pendingNoBiz = data?.pending_kill_rewards || [];
     return (
       <div className={`${styles.pageContent} mobile-page-root`}>
         <style>{RACKET_STYLES}</style>
         <AutoRefreshNote seconds={30} className="mb-2" />
-        <StartScreen types={types} saving={saving} onStart={handleStart} />
+        <div className="space-y-4 max-w-lg mx-auto">
+          <KillRewardsBlock pendingRewards={pendingNoBiz} saving={saving} onClaim={handleClaimKillReward} />
+          <StartScreen types={types.length ? types : data?.available_types || []} saving={saving} onStart={handleStart} />
+        </div>
       </div>
     );
   }
@@ -495,34 +569,7 @@ export default function IllegalBusiness() {
           <ActiveTokenBadge tokenType="racket" untilIso={user.racket_until} />
         )}
 
-        {/* ── Kill rewards ── */}
-        {pendingRewards.length > 0 && (
-          <div className={`${styles.panel} r-card border border-primary/25 rounded-md overflow-hidden mobile-panel`}>
-            <CardHead icon={Star} title="Claim Your Reward" />
-            <div className="p-3 space-y-2">
-              {pendingRewards.map((p) => (
-                <div key={p.victim_id} className="kill-reward-card flex flex-wrap items-center gap-3 p-3 rounded">
-                  <div className="flex-1 min-w-0">
-                    <div className="text-xs font-heading font-bold text-foreground">{p.victim_username}</div>
-                    <div className="text-[10px] text-mutedForeground">had {formatMoney(p.total_spent)} invested</div>
-                  </div>
-                  <div className="flex gap-2 flex-wrap">
-                    <button onClick={() => handleClaimKillReward(p.victim_id, 'cash')} disabled={saving}
-                      className="px-3 py-1.5 bg-primary/15 text-primary border border-primary/35 rounded text-[10px] font-heading font-bold uppercase tracking-wider hover:bg-primary/25 disabled:opacity-40 transition-all">
-                      Take Cash
-                    </button>
-                    {p.moderately_upgraded && (
-                      <button onClick={() => handleClaimKillReward(p.victim_id, 'income_boost')} disabled={saving}
-                        className="px-3 py-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/28 rounded text-[10px] font-heading font-bold uppercase tracking-wider hover:bg-emerald-500/18 disabled:opacity-40 transition-all">
-                        +2% Income
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        <KillRewardsBlock pendingRewards={pendingRewards} saving={saving} onClaim={handleClaimKillReward} />
 
         {/* ── Vault ── */}
         <div className={`${styles.panel} r-card border border-primary/25 rounded-md overflow-hidden mobile-panel`}>

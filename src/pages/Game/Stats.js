@@ -313,10 +313,19 @@ const WipedFamiliesListView = ({ families }) => (
 function buildGameCapitalRows(data) {
   const gc = data?.game_capital;
   return [
-    { label: 'Total cash', value: formatMoney(gc?.total_cash) },
+    {
+      label: 'Total cash',
+      value: formatMoney(gc?.total_cash),
+      title:
+        'Alive players’ wallets (excl. staff/NPC) plus cash locked in active Quick Trade buy offers. Escrow is still in the game economy.',
+    },
     { label: 'Swiss bank cash', value: formatMoney(gc?.swiss_total) },
     { label: 'Interest bank cash', value: formatMoney(gc?.interest_bank_total) },
-    { label: 'Quick Trade cash', value: formatMoney(gc?.quicktrade_cash) },
+    {
+      label: 'Quick Trade buy-offer escrow',
+      value: formatMoney(gc?.quicktrade_cash),
+      title: 'Cash deducted from wallets for active “buy points” listings. This amount is already included in Total cash above (breakdown only).',
+    },
     {
       label: 'Booze run profit (all players)',
       value: formatMoney(gc?.booze_profit_total),

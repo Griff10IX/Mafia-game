@@ -84,6 +84,7 @@ class PropertiesListResponse(BaseModel):
     property_portfolio_upgrades: Optional[dict] = None
     properties_heat: Optional[dict] = None
     properties_heat_bribe_quote: Optional[dict] = None
+    property_portfolio_kill_income_boost_percent: int = 0
 
 
 class PropertiesHeatBribeRequest(BaseModel):
@@ -100,6 +101,14 @@ STACK_BONUS_PER_EXTRA = 0.25
 # Max properties of same type that can stack (extras are auto-sold)
 MAX_STACK_COUNT = 3  # Max +50% bonus
 
+# --- Portfolio businesses seized on player kill: permanent collect-income boost + cash overflow ---
+PROPERTY_KILL_BOOST_MAX = 20
+PROPERTY_KILL_BOOST_FULL_DEED = 2
+PROPERTY_KILL_BOOST_PARTIAL_DEED = 1
+PROPERTY_KILL_PROGRESS_PARTIAL_MIN = 0.5
+PROPERTY_KILL_OVERFLOW_CASH_MULT_FULL = 0.5
+PROPERTY_KILL_OVERFLOW_CASH_MULT_PARTIAL = 0.25
+
 
 def calculate_property_value(prop: dict, level: int) -> int:
     """Calculate total value of a property (base price + all upgrade costs).
@@ -111,6 +120,99 @@ def calculate_property_value(prop: dict, level: int) -> int:
         return base_price
     # Sum of 1 + 2 + 3 + ... + level = level * (level + 1) / 2
     return int(base_price * level * (level + 1) / 2)
+
+
+def _classify_portfolio_kill_deed(level: int, max_level: int) -> str:
+    """Return 'none', 'partial', or 'full' for kill rewards on one user_properties row."""
+    cap = int(max_level or 0)
+    if cap <= 0:
+        return "none"
+    lv = max(0, int(level or 0))
+    if lv >= cap:
+        return "full"
+    ratio = lv / cap
+    if ratio > PROPERTY_KILL_PROGRESS_PARTIAL_MIN:
+        return "partial"
+    return "none"
+
+
+async def process_portfolio_kill_rewards(killer_id: str, victim_id: str, victim_props_rows: list) -> dict:
+    """
+    Delete victim's progression portfolio rows and grant the killer +1%/+2% toward
+    property_portfolio_kill_income_boost_percent (cap 20), or cash when already at cap.
+    """
+    empty = {
+        "cash_from_portfolio": 0,
+        "boost_before": 0,
+        "boost_after": 0,
+        "boost_gained": 0,
+        "properties_cleared": 0,
+    }
+    if not victim_props_rows:
+        return empty
+
+    killer = await db.users.find_one(
+        {"id": killer_id},
+        {"_id": 0, "property_portfolio_kill_income_boost_percent": 1},
+    )
+    boost = int((killer or {}).get("property_portfolio_kill_income_boost_percent") or 0)
+    boost = max(0, min(PROPERTY_KILL_BOOST_MAX, boost))
+    boost_before = boost
+    total_cash = 0
+
+    rows = sorted(
+        victim_props_rows,
+        key=lambda r: (str(r.get("property_id") or ""), str(r.get("_id") or "")),
+    )
+    prop_ids = list({r.get("property_id") for r in rows if r.get("property_id")})
+    defs_by_id = {}
+    if prop_ids:
+        async for p in db.properties.find(
+            {"id": {"$in": prop_ids}},
+            {"_id": 0, "id": 1, "price": 1, "max_level": 1},
+        ):
+            pid = p.get("id")
+            if pid and p.get("max_level") is not None:
+                defs_by_id[pid] = p
+
+    for row in rows:
+        pid = row.get("property_id")
+        prop_def = defs_by_id.get(pid) if pid else None
+        if not prop_def:
+            continue
+        max_lv = int(prop_def["max_level"])
+        level = max(0, int(row.get("level") or 0))
+        kind = _classify_portfolio_kill_deed(level, max_lv)
+        if kind == "none":
+            continue
+        val_level = max(1, level)
+        if boost >= PROPERTY_KILL_BOOST_MAX:
+            mult = (
+                PROPERTY_KILL_OVERFLOW_CASH_MULT_FULL
+                if kind == "full"
+                else PROPERTY_KILL_OVERFLOW_CASH_MULT_PARTIAL
+            )
+            total_cash += int(mult * calculate_property_value(prop_def, val_level))
+        else:
+            add = PROPERTY_KILL_BOOST_FULL_DEED if kind == "full" else PROPERTY_KILL_BOOST_PARTIAL_DEED
+            boost = min(PROPERTY_KILL_BOOST_MAX, boost + add)
+
+    await db.user_properties.delete_many({"user_id": victim_id})
+    await db.users.update_one(
+        {"id": killer_id},
+        {
+            "$set": {"property_portfolio_kill_income_boost_percent": boost},
+            "$inc": {"money": int(total_cash)},
+        },
+    )
+
+    return {
+        "cash_from_portfolio": int(total_cash),
+        "boost_before": boost_before,
+        "boost_after": boost,
+        "boost_gained": boost - boost_before,
+        "properties_cleared": len(victim_props_rows),
+    }
 
 
 # Streak: +1% income per day collected, up to 7% bonus
@@ -454,7 +556,13 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
     now_utc = datetime.now(timezone.utc)
     heat_row = await db.users.find_one(
         {"id": user_id},
-        {"_id": 0, "property_upkeep_paid_until": 1, "properties_heat": 1, "properties_heat_last_at": 1},
+        {
+            "_id": 0,
+            "property_upkeep_paid_until": 1,
+            "properties_heat": 1,
+            "properties_heat_last_at": 1,
+            "property_portfolio_kill_income_boost_percent": 1,
+        },
     )
     ticked_heat, ticked_last = _properties_heat_tick(
         float((heat_row or {}).get("properties_heat") or 0.0),
@@ -469,6 +577,8 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
     except Exception:
         pass
     user_row = heat_row or {"property_upkeep_paid_until": None}
+    kill_pct = max(0, min(20, int((user_row or {}).get("property_portfolio_kill_income_boost_percent") or 0)))
+    kill_mult = 1.0 + kill_pct / 100.0
     upkeep_details = await _compute_property_upkeep_details(user_id)
     paid_until_dt = _parse_iso_datetime((user_row or {}).get("property_upkeep_paid_until"))
     weekly_amt = int(upkeep_details["weekly_amount"])
@@ -559,6 +669,9 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
         if owned and portfolio_mult > 1.0:
             available_income *= portfolio_mult
             effective_income_per_hour = int(effective_income_per_hour * portfolio_mult)
+        if owned and kill_mult > 1.0:
+            available_income *= kill_mult
+            effective_income_per_hour = int(round(effective_income_per_hour * kill_mult))
         streak_bonus_mult = 1.0 + min(MAX_STREAK_DAYS, max(0, streak_days)) * STREAK_BONUS_PER_DAY if owned else 1.0
         cap_single = int(prop["max_level"])
         max_total_level = cap_single * max(1, owned_count)
@@ -645,6 +758,7 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
         property_portfolio_upgrades=upgrades_block,
         properties_heat=heat_block,
         properties_heat_bribe_quote=_properties_heat_bribe_quote(ticked_heat),
+        property_portfolio_kill_income_boost_percent=kill_pct,
     )
 
 
@@ -879,6 +993,13 @@ async def collect_property_income(property_id: str, current_user: dict = Depends
     portfolio_mult = _portfolio_upgrade_mult_from_tier(purchased_tier)
     if portfolio_mult > 1.0:
         income *= portfolio_mult
+    u_kill = await db.users.find_one(
+        {"id": user_id},
+        {"_id": 0, "property_portfolio_kill_income_boost_percent": 1},
+    )
+    kill_pct = max(0, min(20, int((u_kill or {}).get("property_portfolio_kill_income_boost_percent") or 0)))
+    if kill_pct > 0:
+        income *= 1.0 + kill_pct / 100.0
     income *= founding_member_income_mult(current_user)
     await db.users.update_one(
         {"id": current_user["id"]},

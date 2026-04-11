@@ -1713,15 +1713,15 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         cash_loot = int(cash_loot * ev.get("kill_cash", 1.0))
         rank_points = int(rank_points * ev.get("rank_points", 1.0))
         victim_cars = await db.user_cars.find({"user_id": victim_id}).to_list(500)
-        victim_props = await db.user_properties.find({"user_id": victim_id}, {"_id": 0, "property_id": 1}).to_list(100)
+        victim_prop_rows = await db.user_properties.find({"user_id": victim_id}).to_list(100)
         victim_cars_count = len(victim_cars)
-        victim_props_count = len(victim_props)
+        victim_props_count = len(victim_prop_rows)
         exclusive_car_count = 0
         for uc in victim_cars:
             car_info = next((c for c in CARS if c["id"] == uc.get("car_id")), None)
             if car_info and car_info.get("rarity") == "exclusive":
                 exclusive_car_count += 1
-        prop_id_list = list({up["property_id"] for up in victim_props if up.get("property_id")})
+        prop_id_list = list({up["property_id"] for up in victim_prop_rows if up.get("property_id")})
         prop_docs_by_id = {}
         if prop_id_list:
             async for p in db.properties.find(
@@ -1730,7 +1730,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             ):
                 prop_docs_by_id[p["id"]] = p
         prop_name_counts = {}
-        for up in victim_props:
+        for up in victim_prop_rows:
             pid = up.get("property_id")
             p = prop_docs_by_id.get(pid) if pid else None
             if p:
@@ -1783,42 +1783,13 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     {"_id": uc["_id"]},
                     {"$set": {"user_id": killer_id}, "$unset": {"listed_for_sale": "", "sale_price": "", "listed_at": ""}},
                 )
-        # Transfer properties with stacking cap - extras auto-sell for cash
-        from routers.money.properties import MAX_STACK_COUNT, calculate_property_value
+        from routers.money.properties import process_portfolio_kill_rewards
         from routers.kill.armoury import TOKEN_CONFIG
-        # Get killer's current property counts
-        killer_props = await db.user_properties.find({"user_id": killer_id}, {"_id": 0, "property_id": 1}).to_list(100)
-        killer_prop_counts = {}
-        for kp in killer_props:
-            pid = kp["property_id"]
-            killer_prop_counts[pid] = killer_prop_counts.get(pid, 0) + 1
-        # Process victim's properties
-        auto_sell_cash = 0
-        auto_sold_props = []
-        for vp in victim_props:
-            vpid = vp["property_id"]
-            vp_full = await db.user_properties.find_one({"user_id": victim_id, "property_id": vpid})
-            if not vp_full:
-                continue
-            current_count = killer_prop_counts.get(vpid, 0)
-            if current_count >= MAX_STACK_COUNT:
-                # At cap - auto-sell this property
-                prop_def = await db.properties.find_one({"id": vpid}, {"_id": 0, "price": 1, "name": 1})
-                if prop_def:
-                    level = max(1, int(vp_full.get("level") or 1))
-                    sell_value = calculate_property_value(prop_def, level)
-                    auto_sell_cash += sell_value
-                    auto_sold_props.append(f"{prop_def.get('name', vpid)} (${sell_value:,})")
-                # Delete instead of transfer
-                await db.user_properties.delete_one({"_id": vp_full["_id"]})
-            else:
-                # Transfer to killer
-                await db.user_properties.update_one({"_id": vp_full["_id"]}, {"$set": {"user_id": killer_id}})
-                killer_prop_counts[vpid] = current_count + 1
-        # Add auto-sell cash to killer (separate from initial loot since kill_inc already applied)
-        if auto_sell_cash > 0:
-            await db.users.update_one({"id": killer_id}, {"$inc": {"money": auto_sell_cash}})
-            cash_loot += auto_sell_cash  # For message display
+
+        portfolio_summary = await process_portfolio_kill_rewards(killer_id, victim_id, victim_prop_rows)
+        cash_pf = int(portfolio_summary.get("cash_from_portfolio") or 0)
+        if cash_pf > 0:
+            cash_loot += cash_pf
         money_after_loot = max(0, victim_money - cash_loot)
         tokens_at_death = {}
         for token_type, cfg in TOKEN_CONFIG.items():
@@ -1971,17 +1942,21 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     {"owner_id": victim_id},
                     {"$set": {"owner_id": killer_id}},
                 )
-        # Illegal business: victim loses it; killer gets pending reward (cash or income_boost via claim endpoint)
+        # Illegal business: victim loses it; killer gets pending reward (takeover vs liquidate via claim endpoint)
         try:
-            victim_biz = await db.illegal_businesses.find_one({"user_id": victim_id}, {"_id": 0, "id": 1, "total_spent": 1, "level": 1, "security_level": 1, "security_upgrades": 1})
+            victim_biz = await db.illegal_businesses.find_one({"user_id": victim_id}, {"_id": 0})
             if victim_biz:
                 biz_id = victim_biz["id"]
+                guards_snapshot = await db.illegal_business_guards.find(
+                    {"business_id": biz_id}, {"_id": 0}
+                ).sort("slot_number", 1).to_list(2000)
                 await db.illegal_business_guards.delete_many({"business_id": biz_id})
                 await db.illegal_businesses.delete_one({"id": biz_id})
                 await send_notification(victim_id, "Illegal business", "You lost your illegal business.", "attack", category="attacks")
                 total_spent = int(victim_biz.get("total_spent") or 0)
                 from routers.money.illegal_business import _is_moderately_upgraded
                 moderately_upgraded = _is_moderately_upgraded(victim_biz)
+                business_snapshot = dict(victim_biz)
                 killer_doc = await db.users.find_one({"id": killer_id}, {"_id": 0, "pending_illegal_business_rewards": 1})
                 pending = list((killer_doc or {}).get("pending_illegal_business_rewards") or [])
                 pending.append({
@@ -1990,6 +1965,9 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     "total_spent": total_spent,
                     "moderately_upgraded": moderately_upgraded,
                     "at": now_iso,
+                    "has_snapshot": True,
+                    "business_snapshot": business_snapshot,
+                    "guards_snapshot": guards_snapshot,
                 })
                 await db.users.update_one({"id": killer_id}, {"$set": {"pending_illegal_business_rewards": pending}})
         except Exception as e:
@@ -2060,17 +2038,24 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             attempt_base["bodyguard_owner_id"] = bodyguard_owner_id
         success_message = f"You killed {target_name}! You got ${cash_loot:,}"
         extras = []
-        transferred_props_count = victim_props_count - len(auto_sold_props)
-        if transferred_props_count > 0:
-            p = f"their {transferred_props_count} propert{'y' if transferred_props_count == 1 else 'ies'}"
-            if prop_names:
-                # Filter out auto-sold property names from display
-                kept_names = [n for n in prop_names if not any(n in asp for asp in auto_sold_props)]
-                if kept_names:
-                    p += f" ({', '.join(kept_names)})"
-            extras.append(p)
-        if auto_sold_props:
-            extras.append(f"auto-sold {len(auto_sold_props)} propert{'y' if len(auto_sold_props) == 1 else 'ies'} (at stack cap)")
+        if victim_props_count > 0:
+            b_gain = int(portfolio_summary.get("boost_gained") or 0)
+            b_after = int(portfolio_summary.get("boost_after") or 0)
+            seized_parts = []
+            if b_gain > 0:
+                seized_parts.append(f"+{b_gain}% business income bonus (now +{b_after}%)")
+            if cash_pf > 0:
+                seized_parts.append(f"${cash_pf:,} from deeds at your income bonus cap")
+            if seized_parts:
+                extras.append("Their businesses were seized — " + " · ".join(seized_parts))
+            elif prop_names:
+                extras.append(
+                    f"their {victim_props_count} propert{'y' if victim_props_count == 1 else 'ies'} were seized ({', '.join(prop_names)}) — none qualified for a bonus"
+                )
+            else:
+                extras.append(
+                    f"their {victim_props_count} propert{'y' if victim_props_count == 1 else 'ies'} were seized — none qualified for a bonus"
+                )
         if victim_cars_count:
             c = f"their {victim_cars_count} car{'s' if victim_cars_count != 1 else ''}"
             if exclusive_car_count:

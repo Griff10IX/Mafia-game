@@ -198,6 +198,7 @@ JAIL_NPC_NAME_POOL = [
     "Bottles Capone", "Fats McCarthy", "Greasy Thumb Guzik", "Terrible Tommy",
     "The Enforcer", "Ice Pick Willie", "Slippery Sal", "Cement Charlie",
     "Razor Eddie", "Sticky Fingers Sal", "Cigar Box Tommy", "Mugsy Malone", "Black Hand Bruno",
+    "One-Eye Angie", "Gaspipe Greco", "Silvio the Weasel",
 ]
 
 # Failure messages when bust fails but user avoids the 30s jail penalty (e.g. jailbust token effect).
@@ -213,8 +214,12 @@ JAIL_BUST_FAIL_AVOID_JAIL_MESSAGES = [
 # Minimum seconds between bust attempts (same player, any target — manual + Auto Rank).
 JAIL_BUST_MIN_INTERVAL_SEC = 3
 
-# Jail bust difficulty: raw rates multiplied by this (1.0 = no penalty; was 0.9, raised slightly to make busting easier)
-JAIL_BUST_DIFFICULTY_MULT = 0.95
+# Jail bust difficulty: raw tier rates multiplied by this (<1.0 = harder).
+JAIL_BUST_DIFFICULTY_MULT = 0.90
+# Max global (shared) jail NPCs maintained by background spawner.
+JAIL_GLOBAL_NPC_CAP = 3
+# Each wake (60–120s), try to add this many NPCs, up to the cap.
+JAIL_NPC_SPAWN_PER_WAKE = 3
 # Rate can go down with failures but not below this floor
 JAIL_BUST_RATE_FLOOR = 0.04  # 4% minimum
 # Failure penalty: 0.1% per failure, capped so it doesn't drop by much
@@ -227,8 +232,8 @@ def _jail_bust_roll_rank_points_player() -> float:
 
 
 def _jail_bust_roll_rank_points_npc() -> float:
-    """Uniform rank XP for busting a jail NPC (before crime XP double)."""
-    return round(_rng.uniform(0.5, 5.0), 1)
+    """Fixed rank XP for busting a jail NPC (before crime XP double)."""
+    return 15.0
 
 
 def _rank_points_before_bust(user: dict) -> float:
@@ -265,7 +270,7 @@ def _player_bust_success_rate(total_attempts: int, total_successes: int = 0) -> 
     failures = max(0, total_attempts - total_successes)
     penalty = min(failures * JAIL_BUST_FAILURE_PENALTY_PER, JAIL_BUST_MAX_FAILURE_PENALTY)
     rate = max(JAIL_BUST_RATE_FLOOR, base - penalty)
-    return min(1.0, rate + 0.05)  # 5% easier: +5 pp success chance
+    return min(1.0, rate + 0.05)  # small flat bonus on top of experience curve
 
 
 def _global_jail_npc_filter() -> dict:
@@ -275,6 +280,34 @@ def _global_jail_npc_filter() -> dict:
 
 async def _count_global_jail_npcs() -> int:
     return await db.jail_npcs.count_documents(_global_jail_npc_filter())
+
+
+_RANK_NAMES_FOR_JAIL_NPC = [r["name"] for r in RANKS]
+_RANK_WEIGHTS_FOR_JAIL_NPC = [30, 25, 20, 15, 10, 7, 5, 3, 2, 1, 1, 1, 1]
+
+
+async def _try_insert_one_global_jail_npc() -> bool:
+    """Pick a random unused name; insert one global jail NPC. Returns True if inserted."""
+    for _ in range(30):
+        npc_name = _rng.choice(JAIL_NPC_NAME_POOL)
+        existing = await db.jail_npcs.find_one({"$and": [{"username": npc_name}, _global_jail_npc_filter()]})
+        if existing:
+            continue
+        rank_name = _rng.choices(_RANK_NAMES_FOR_JAIL_NPC, weights=_RANK_WEIGHTS_FOR_JAIL_NPC, k=1)[0]
+        rank_index = _RANK_NAMES_FOR_JAIL_NPC.index(rank_name) if rank_name in _RANK_NAMES_FOR_JAIL_NPC else 0
+        cash_min = 50 + rank_index * 30
+        cash_max = 150 + rank_index * 50
+        bust_reward_cash = _rng.randint(cash_min, cash_max)
+        await db.jail_npcs.insert_one(
+            {
+                "username": npc_name,
+                "rank_name": rank_name,
+                "bust_reward_cash": bust_reward_cash,
+                "spawned_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
+        return True
+    return False
 
 
 async def _count_personal_jail_npcs(user_id: str) -> int:
@@ -1189,29 +1222,14 @@ async def list_npcs_for_attack(current_user: dict = Depends(get_current_user)):
 
 
 async def spawn_jail_npcs():
-    """Background task to spawn NPCs in jail every 1-2 minutes. Call from app startup."""
+    """Background task: every 60–120s, add up to JAIL_NPC_SPAWN_PER_WAKE global NPCs until JAIL_GLOBAL_NPC_CAP."""
     while True:
         try:
             await asyncio.sleep(_rng.randint(60, 120))
-            current_global = await _count_global_jail_npcs()
-            if current_global < 10:
-                npc_name = _rng.choice(JAIL_NPC_NAME_POOL)
-                rank_names = [r["name"] for r in RANKS]
-                weights = [30, 25, 20, 15, 10, 7, 5, 3, 2, 1, 1, 1, 1]
-                existing = await db.jail_npcs.find_one({"$and": [{"username": npc_name}, _global_jail_npc_filter()]})
-                if not existing:
-                    rank_name = _rng.choices(rank_names, weights=weights, k=1)[0]
-                    # Cash reward scales with rank (low for beta - few hundred max)
-                    rank_index = rank_names.index(rank_name) if rank_name in rank_names else 0
-                    cash_min = 50 + rank_index * 30
-                    cash_max = 150 + rank_index * 50
-                    bust_reward_cash = _rng.randint(cash_min, cash_max)
-                    await db.jail_npcs.insert_one({
-                        "username": npc_name,
-                        "rank_name": rank_name,
-                        "bust_reward_cash": bust_reward_cash,
-                        "spawned_at": datetime.now(timezone.utc).isoformat(),
-                    })
+            for _ in range(JAIL_NPC_SPAWN_PER_WAKE):
+                if await _count_global_jail_npcs() >= JAIL_GLOBAL_NPC_CAP:
+                    break
+                await _try_insert_one_global_jail_npc()
         except Exception as e:
             logger.error(f"Error spawning jail NPC: {e}")
             await asyncio.sleep(60)

@@ -157,6 +157,7 @@ async def wipe_user_for_account_ban(db, user_id: str) -> Dict[str, Any]:
         "swiss_balance": 0,
         "casino_profit": 0,
         "property_profit": 0,
+        "property_portfolio_kill_income_boost_percent": 0,
         "loot_box_pieces": 0,
         "has_casino_or_property": False,
         "family_id": None,

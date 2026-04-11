@@ -85,6 +85,7 @@ def register(router):
     verify_password = srv.verify_password
     get_password_hash = srv.get_password_hash
     ADMIN_EMAILS = srv.ADMIN_EMAILS
+    _staff_exclude_user_filter = srv._staff_exclude_user_filter
     PRESTIGE_CONFIGS = srv.PRESTIGE_CONFIGS
     AvatarUpdateRequest = srv.AvatarUpdateRequest
     ThemePreferencesRequest = srv.ThemePreferencesRequest
@@ -543,6 +544,26 @@ def register(router):
             })
             return n_better + 1
 
+        async def _rank_for_total_rank_points_lifetime(total_value: int) -> int:
+            """Same ordering as leaderboard all-time rank_points board: current RP + prestige carry, alive players, staff excluded."""
+            if total_value is None:
+                total_value = 0
+            q = {
+                "is_dead": {"$ne": True},
+                "is_bodyguard": {"$ne": True},
+                "is_npc": {"$ne": True},
+            }
+            q.update(_staff_exclude_user_filter())
+            total_expr = {
+                "$add": [
+                    {"$ifNull": ["$rank_xp_pass_prestige_carry_rp", 0]},
+                    {"$ifNull": ["$rank_points", 0]},
+                ]
+            }
+            q["$expr"] = {"$gt": [total_expr, int(total_value)]}
+            n_better = await db.users.count_documents(q)
+            return n_better + 1
+
         async def _casinos_for_type(game_type: str, coll, location_key: str = "city"):
             out = []
             cursor = coll.find(
@@ -636,7 +657,9 @@ def register(router):
             _rank_for_field("total_crimes", int(user.get("total_crimes") or 0)),
             _rank_for_field("total_gta", int(user.get("total_gta") or 0)),
             _rank_for_field("jail_busts", int(user.get("jail_busts") or 0)),
-            _rank_for_field("rank_points", int(user.get("rank_points") or 0)),
+            _rank_for_total_rank_points_lifetime(
+                int(user.get("rank_points") or 0) + int(user.get("rank_xp_pass_prestige_carry_rp") or 0)
+            ),
             _rank_for_field("lifetime_points_spent", int(user.get("lifetime_points_spent") or 0)),
             _casinos_for_type("dice", db.dice_ownership),
             _casinos_for_type("roulette", db.roulette_ownership),

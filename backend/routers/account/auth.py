@@ -684,6 +684,7 @@ def register(router):
                 "tribute_bullets": 0,
                 "tribute_loot_box_pieces": 0,
                 "loot_box_pieces": 0,
+                "property_portfolio_kill_income_boost_percent": 0,
                 "garage_batch_limit": DEFAULT_GARAGE_BATCH_LIMIT,
                 "total_crimes": 0,
                 "crime_profit": 0,

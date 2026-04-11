@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Building, TrendingUp, DollarSign, Lock, Zap, Martini, Factory, Crown, AlertTriangle, Wallet } from 'lucide-react';
+import { Building, TrendingUp, DollarSign, Lock, Zap, Martini, Factory, Crown, AlertTriangle, Wallet, Skull } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -64,6 +64,9 @@ export default function Properties() {
   const [buyUpgradeLoading, setBuyUpgradeLoading] = useState(false);
   const [propertiesHeat, setPropertiesHeat] = useState(() => propertiesBoot.propertiesHeat ?? null);
   const [propertiesHeatQuote, setPropertiesHeatQuote] = useState(() => propertiesBoot.propertiesHeatQuote ?? null);
+  const [portfolioKillBoostPercent, setPortfolioKillBoostPercent] = useState(
+    () => Math.min(20, Math.max(0, Number(propertiesBoot.portfolioKillBoostPercent ?? 0) || 0)),
+  );
   const [bribeInput, setBribeInput] = useState('');
   const [bribing, setBribing] = useState(false);
 
@@ -78,6 +81,7 @@ export default function Properties() {
     setPortfolioUpgrades(cached.portfolioUpgrades ?? null);
     setPropertiesHeat(cached.propertiesHeat ?? null);
     setPropertiesHeatQuote(cached.propertiesHeatQuote ?? null);
+    setPortfolioKillBoostPercent(Math.min(20, Math.max(0, Number(cached.portfolioKillBoostPercent ?? 0) || 0)));
   }, []);
 
   useEffect(() => {
@@ -95,6 +99,7 @@ export default function Properties() {
         portfolioUpgrades,
         propertiesHeat,
         propertiesHeatQuote,
+        portfolioKillBoostPercent,
       });
       writeSessionJson('mafia_properties_v1', {
         properties,
@@ -105,6 +110,7 @@ export default function Properties() {
         portfolioUpgrades,
         propertiesHeat,
         propertiesHeatQuote,
+        portfolioKillBoostPercent,
       });
     }).catch(() => {});
   }, []);
@@ -119,12 +125,14 @@ export default function Properties() {
       const nextPortfolioUpgrades = data?.property_portfolio_upgrades ?? null;
       const nextPropertiesHeat = data?.properties_heat ?? null;
       const nextPropertiesHeatQuote = data?.properties_heat_bribe_quote ?? null;
+      const nextKillBoost = Math.min(20, Math.max(0, Number(data?.property_portfolio_kill_income_boost_percent ?? 0) || 0));
       setProperties(nextProperties);
       setPropertyIncomePerkUntil(nextPropertyIncomePerkUntil);
       setPropertyUpkeep(nextPropertyUpkeep);
       setPortfolioUpgrades(nextPortfolioUpgrades);
       setPropertiesHeat(nextPropertiesHeat);
       setPropertiesHeatQuote(nextPropertiesHeatQuote);
+      setPortfolioKillBoostPercent(nextKillBoost);
       setPropertiesPrefetch({
         properties: nextProperties,
         propertyIncomePerkUntil: nextPropertyIncomePerkUntil,
@@ -134,6 +142,7 @@ export default function Properties() {
         portfolioUpgrades: nextPortfolioUpgrades,
         propertiesHeat: nextPropertiesHeat,
         propertiesHeatQuote: nextPropertiesHeatQuote,
+        portfolioKillBoostPercent: nextKillBoost,
       });
       writeSessionJson('mafia_properties_v1', {
         properties: nextProperties,
@@ -144,6 +153,7 @@ export default function Properties() {
         portfolioUpgrades: nextPortfolioUpgrades,
         propertiesHeat: nextPropertiesHeat,
         propertiesHeatQuote: nextPropertiesHeatQuote,
+        portfolioKillBoostPercent: nextKillBoost,
       });
     } catch (error) {
       const detail = error.response?.data?.detail || error.message || 'Unknown error';
@@ -154,6 +164,7 @@ export default function Properties() {
       setPortfolioUpgrades(null);
       setPropertiesHeat(null);
       setPropertiesHeatQuote(null);
+      setPortfolioKillBoostPercent(0);
     }
   };
 
@@ -208,6 +219,7 @@ export default function Properties() {
         portfolioUpgrades,
         propertiesHeat,
         propertiesHeatQuote,
+        portfolioKillBoostPercent,
       });
       writeSessionJson('mafia_properties_v1', {
         properties,
@@ -218,6 +230,7 @@ export default function Properties() {
         portfolioUpgrades,
         propertiesHeat,
         propertiesHeatQuote,
+        portfolioKillBoostPercent,
       });
     } catch {
       setTargets([]);
@@ -421,6 +434,38 @@ export default function Properties() {
           </div>
         </div>
       )}
+
+      <div
+        className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 prop-fade-in mobile-panel`}
+      >
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-3 py-2 flex items-start gap-2">
+          <Skull className="text-primary/80 shrink-0 mt-0.5" size={16} />
+          <div className="min-w-0 space-y-0.5">
+            <p className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Portfolio kill bonus</p>
+            {portfolioKillBoostPercent > 0 ? (
+              <>
+                <p className="text-[11px] font-heading text-foreground">
+                  <span className="text-emerald-400/95 font-bold">+{portfolioKillBoostPercent}%</span> business income when you collect (max 20%).
+                </p>
+                <p className="text-[9px] text-mutedForeground font-heading">
+                  Earned from kills on players who owned upgraded businesses. Applies when you collect from any business.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-[10px] text-mutedForeground font-heading">
+                  None yet — you can earn up to <span className="text-foreground/90">+20%</span> extra business income when you collect.
+                </p>
+                <p className="text-[9px] text-zinc-500 font-heading">
+                  Kill players who own businesses more than half upgraded (or maxed) to gain bonus percent; at the cap you receive cash from further qualifying
+                  deeds instead.
+                </p>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
 
       <div className="relative prop-fade-in flex flex-wrap items-end justify-between gap-3">
         <div>
