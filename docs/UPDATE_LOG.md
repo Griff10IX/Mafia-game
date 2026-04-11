@@ -6,6 +6,38 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-10 23:45 UTC[/color][/b] — [b]Forum FAQ: kills vs Properties & Illegal Business (Distillery)[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Forum FAQ[/b] — [b]COMBAT[/b] now spells out what the [b]killer[/b] gets when the victim had [b]progression Properties[/b] ([b]Money → Properties[/b]) and/or an [b]illegal business[/b] (includes [b]Money → Distillery[/b]): portfolio [b]income boost[/b] or overflow [b]cash[/b], and a [b]pending takeover / liquidate[/b] reward. [b]What Happens When You Die[/b] notes losing your illegal business to the killer’s reward flow.[/color]
+[*][color=#888888][b]Player action:[/b] Open [b]FORUM_FAQ[/b] → [b]COMBAT[/b], or the FAQ question [b]What do I get when I kill someone with Properties or a Distillery?[/b][/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-04-10 22:30 UTC[/color][/b] — [b]Forum FAQ: Distillery & Properties[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Forum FAQ[/b] — [b]Money Making[/b] now includes a full [b]Distillery[/b] primer ([b]Money → Distillery[/b]: equipment tracks, workers, vault, maintenance, heat, aging/auto-sell). [b]Properties[/b] there now also covers [b]weekly upkeep[/b], [b]portfolio upgrades[/b], and the existing [b]Heat / bribe[/b] rules in one place.[/color]
+[*][color=#888888][b]Note:[/b] In-game cards still show exact per-level bonuses ([b]Best Next Upgrades[/b], equipment tooltips). The FAQ is the overview; numbers may be tuned per round.[/color]
+[*][color=#888888][b]Player action:[/b] See [b]FORUM_FAQ[/b] → [b]MONEY MAKING[/b] → [b]Distillery[/b] / [b]Properties[/b].[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-04-10 21:00 UTC[/color][/b] — [b]Properties: Heat / police bribe bar sync[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] [b]Money → Properties[/b] — [b]Heat[/b] no longer gets overwritten by a stale value when the page refreshes right after you [b]bribe[/b]. Previously, opening or refreshing Properties could race with the bribe save and make the meter look unchanged until you paid again.[/color]
+[*][color=#888888][b]Note:[/b] Bribes still only charge up to the [b]max needed to clear current heat[/b] (extra cash is not taken). The UI shows that cap next to the bribe buttons.[/color]
+[*][color=#888888][b]Player action:[/b] No setup needed. If heat looked stuck after paying, a normal refresh on [b]Properties[/b] should now match what the server saved.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-10 18:00 UTC[/color][/b] — [b]Rank ladder: top three promotions rebalanced[/b][/size]
 [quote]
 [list]

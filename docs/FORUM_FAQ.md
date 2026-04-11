@@ -33,12 +33,15 @@ Combat is the heart of the game. Attack other players to steal their cash and ea
 [*][color=#2ECC71]You gain respect points[/color]
 [*][color=#2ECC71]Kill is logged and counts toward stats/objectives[/color]
 [*][color=#2ECC71]Chance to loot items from their inventory[/color]
+[*][color=#2ECC71][b]Progression Properties[/b] ([b]Money → Properties[/b]): their buildings are [b]removed[/b] — you do [b]not[/b] take ownership of their portfolio. You earn a [b]Property Portfolio Kill[/b] bonus on [b]your own[/b] property income: [b]+1%[/b] per property above [b]half[/b] of its max level, [b]+2%[/b] per [b]maxed[/b] property, up to [b]20%[/b] total. If you are already at [b]20%[/b], you get [b]cash[/b] instead (a fraction of those properties’ values).[/color]
+[*][color=#2ECC71][b]Illegal business / Distillery[/b] ([b]Money → Distillery[/b] and the same system for other racket types): their business row is [b]deleted[/b] (vault, equipment, guards, etc.). You receive a [b]pending reward[/b] on [b]Illegal Business[/b] — [b]Take over[/b] ([b]Capo[/b] rank or higher) copies their operation to you, or [b]Liquidate[/b] for [b]cash[/b]. If you already had an illegal business, choosing [b]Take over[/b] [b]replaces[/b] yours with theirs.[/color]
 [/list]
 
 [b]What Happens When You Die:[/b]
 [list]
 [*][color=#FF6B6B]Lose all cash on hand (Swiss Bank is protected)[/color]
 [*][color=#FF6B6B]Lose all properties and their upgrades[/color]
+[*][color=#FF6B6B]Lose your [b]illegal business[/b] if you had one (includes [b]Distillery[/b] progress, vault, workers, guards) — removed from you; the killer gets a [b]takeover / liquidate[/b] pending reward[/color]
 [*][color=#FF6B6B]Lose all weapons and armour[/color]
 [*][color=#FF6B6B]Lose all cars in your garage[/color]
 [*][color=#FF6B6B]Your character is marked dead (permadeath for that account)[/color]
@@ -150,7 +153,23 @@ Own properties that generate passive income every hour. Names, prices, and incom
 [*][color=#888888]Must max current property before buying the next tier[/color]
 [*][color=#888888]Collect daily to build a streak bonus (up to +7%)[/color]
 [*][color=#888888]Reinvest option for +10% income boost per collection[/color]
+[*][color=#888888][b]Heat (police attention):[/b] Heat rises over time (net about [b]+2/hour[/b] toward a cap of [b]100[/b]). At [b]80+[/b], police [b]block property collections[/b] until you lower heat. Use [b]Bribe[/b] on the Properties page — cash reduces heat at [b]$100,000 per heat point[/b] (the page shows [b]max to clear[/b] and suggested amounts). If you pay more than needed, only the amount required to clear current heat is charged.[/color]
+[*][color=#888888][b]Weekly upkeep:[/b] Large portfolios owe [b]weekly property upkeep[/b] (shown on [b]Properties[/b]). If it is [b]overdue[/b], [b]collections are blocked[/b] until you pay from that page — separate from Heat; pay upkeep even when Heat is low.[/color]
+[*][color=#888888][b]Portfolio upgrades:[/b] [b]Property Portfolio Upgrades[/b] are permanent tiers you buy [b]in order[/b] on [b]Properties[/b] once unlocked; they boost income (and upkeep scales with your boosted portfolio — check the UI).[/color]
 [*][color=#888888]Properties are LOST on death - bank your profits![/color]
+[/list]
+
+[color=#2ECC71][b]Distillery[/b][/color]
+[i][b]Money → Distillery[/b] is your personal bootleg operation. This is separate from a family [b]Distillery[/b] [b]racket[/b] under Families — different screen, different rules.[/i]
+
+[b]Core loop:[/b]
+[list]
+[*][color=#888888]Buy [b]equipment[/b] in fixed lanes (stills, condensers, mash tun, barrels, bottling, tunnel, bribe office, fake labels, quality lab). Each lane has many levels; cards show [b]per-level[/b] effects (production, quality, cash bonuses, etc.).[/color]
+[*][color=#888888][b]Hire workers[/b] in four roles: [b]production[/b], [b]quality[/b], [b]security[/b], [b]sales[/b]. Total workers are capped; [b]Bribe Office[/b] levels raise max capacity (e.g. [b]+2[/b] workers per level — see in-game).[/color]
+[*][color=#888888]Most Distillery spends use your [b]vault[/b] balance on that page (not always cash on hand — check each action).[/color]
+[*][color=#888888][b]Maintenance[/b] slowly drops over time; very low maintenance risks [b]equipment downgrades[/b] or other bad outcomes. Pay to [b]recover[/b] maintenance from the UI.[/color]
+[*][color=#888888][b]Heat[/b] builds from selling/collecting and similar actions; it [b]decays[/b] over time and [b]security[/b] workers help. High heat [b]cuts output[/b] and can cause losses — use [b]risk actions[/b] (vault cost, cooldown) to cool down or bribe enforcement; worst case you can hit a temporary [b]shutdown[/b].[/color]
+[*][color=#888888][b]Aging batches[/b] and [b]auto-sell[/b] let you scale output and passive sales; [b]Best Next Upgrades[/b] and [b]Special Upgrade Tracks[/b] highlight what to buy next.[/color]
 [/list]
 
 [color=#2ECC71][b]Booze Runs[/b][/color]
@@ -1243,11 +1262,23 @@ If someone used your card without permission:
 [color=#3498DB][b]Q: How do I make money fast?[/b][/color]
 [color=#AAAAAA]A: Booze runs are the fastest early game. Check prices, buy low in one city, travel, sell high. Also do crimes, collect property income, and complete objectives.[/color]
 
+[color=#3498DB][b]Q: Why can't I collect property income? / What is Heat?[/b][/color]
+[color=#AAAAAA]A: [b]Heat[/b] on [b]Money → Properties[/b] is police attention. It climbs over time; at [b]80+[/b] your collections are blocked until you [b]bribe[/b]. Bribes cost [b]$100k per heat point[/b] to remove (the page shows the exact max and presets). Paying more than the max only charges the max — you are not charged the full preset if a smaller amount clears your heat.[/color]
+
+[color=#3498DB][b]Q: Why are property collections still blocked when Heat is low?[/b][/color]
+[color=#AAAAAA]A: Check [b]weekly property upkeep[/b] on the same page. If upkeep is [b]overdue[/b], collections stay blocked until you [b]pay upkeep[/b] — that gate is independent of Heat.[/color]
+
+[color=#3498DB][b]Q: How does the Distillery work?[/b][/color]
+[color=#AAAAAA]A: Open [b]Money → Distillery[/b]. Upgrade [b]equipment[/b] in order along each lane, hire [b]workers[/b] (production / quality / security / sales), keep [b]maintenance[/b] healthy, and manage [b]heat[/b] with risk actions so enforcement does not shut you down. Most costs pull from your Distillery [b]vault[/b]. See [b]MONEY MAKING → Distillery[/b] above for the full overview (family [b]Distillery rackets[/b] are a different feature).[/color]
+
 [color=#3498DB][b]Q: How do I get bullets?[/b][/color]
 [color=#AAAAAA]A: Melt cars from GTA (legendary cars give the most), buy from armouries with cash, or purchase with points from the store.[/color]
 
 [color=#3498DB][b]Q: What happens when I die?[/b][/color]
-[color=#AAAAAA]A: You lose cash on hand, properties, weapons, armour, and cars; [b]Swiss Bank[/b] and [b]unused points[/b] stay on the dead account. Use [b]Dead > Alive[/b] on a new login to recover most cash/points (one-time, dead password), [b]Revive[/b] (50k pts, same email), or see the full list under [b]COMBAT → What Happens When You Die[/b] above.[/color]
+[color=#AAAAAA]A: You lose cash on hand, properties, weapons, armour, and cars; if you had an [b]illegal business[/b] ([b]Distillery[/b] etc.), that is lost too and feeds the killer’s reward. [b]Swiss Bank[/b] and [b]unused points[/b] stay on the dead account. Use [b]Dead > Alive[/b] on a new login to recover most cash/points (one-time, dead password), [b]Revive[/b] (50k pts, same email), or see the full list under [b]COMBAT → What Happens When You Die[/b] above.[/color]
+
+[color=#3498DB][b]Q: What do I get when I kill someone with Properties or a Distillery?[/b][/color]
+[color=#AAAAAA]A: [b]Properties[/b] are wiped from them; you get a [b]portfolio kill income boost[/b] (or cash if your boost is already maxed) — you do [b]not[/b] inherit their property rows. [b]Distillery[/b] is part of their [b]illegal business[/b]: you get a [b]pending[/b] reward to [b]take over[/b] ([b]Capo[/b]+) or [b]liquidate[/b] for cash. Full detail: [b]COMBAT → What Happens When You Kill Someone[/b] above.[/color]
 
 [color=#3498DB][b]Q: How do I join a family?[/b][/color]
 [color=#AAAAAA]A: Visit the Families page and apply to open families, or wait for an invite. Check the forum for recruitment posts.[/color]
@@ -1300,6 +1331,9 @@ If someone used your card without permission:
 [list]
 [*][color=#FFD700][b]Always bank your cash[/b][/color] - Swiss Bank protects from death
 [*][color=#FFD700][b]Collect properties daily[/b][/color] - Streak bonuses add up to +7%
+[*][color=#FFD700][b]Watch property Heat[/b][/color] - At 80+ police block collects; bribe on Properties before you stack idle income
+[*][color=#FFD700][b]Pay property upkeep[/b][/color] - Overdue weekly upkeep also blocks collects; same page as Heat
+[*][color=#FFD700][b]Distillery: maintain & cool heat[/b][/color] - Low maintenance risks downgrades; high heat cuts output — use vault risk actions before it snowballs
 [*][color=#FFD700][b]Join a family ASAP[/b][/color] - Protection and Crew OC rewards
 [*][color=#FFD700][b]Train weapon mastery[/b][/color] - Saves bullets in combat
 [*][color=#FFD700][b]Check booze prices[/b][/color] - They change every 3 hours
