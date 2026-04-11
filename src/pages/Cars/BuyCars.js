@@ -58,6 +58,7 @@ export default function BuyCars() {
   const [sourceFilter, setSourceFilter] = useState('all'); // 'all' | 'dealer' | 'listing'
   const [selectedIds, setSelectedIds] = useState(new Set());
   const [buying, setBuying] = useState(false);
+  const [cancellingUserCarId, setCancellingUserCarId] = useState(null);
 
   const fetchAll = async () => {
     try {
@@ -218,6 +219,21 @@ export default function BuyCars() {
     setBuying(false);
   };
 
+  const handleCancelListing = async (userCarId) => {
+    if (!userCarId) return;
+    setCancellingUserCarId(userCarId);
+    try {
+      await api.post('/gta/delist-car', { user_car_id: userCarId });
+      toast.success('Listing cancelled');
+      refreshUser();
+      await fetchAll();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Could not cancel listing');
+    } finally {
+      setCancellingUserCarId(null);
+    }
+  };
+
   if (!hasLoaded) {
     return (
       <div className={`space-y-4 ${styles.pageContent} mobile-page-root`}>
@@ -311,7 +327,7 @@ export default function BuyCars() {
                 <th className="text-right py-1 px-2">Stock</th>
                 <th className="text-right py-1 px-2">Damage</th>
                 <th className="text-right py-1 px-2">Speed</th>
-                <th className="text-right py-1 px-2">Owner</th>
+                <th className="text-right py-1 px-2">Owner / action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -337,7 +353,7 @@ export default function BuyCars() {
                       )
                     ) : row.source === 'listing' ? (
                       row.isOwnListing ? (
-                        <span className="inline-block w-4" title="Your listing — use Sell Cars to delist" />
+                        <span className="inline-block w-4" title="Your listing — cancel in Owner column or Sell Cars" />
                       ) : row.canBuy ? (
                         <button type="button" onClick={() => toggleSelect(row.id)} className="p-0.5 rounded hover:bg-primary/10">
                           {selectedIds.has(row.id) ? (
@@ -383,7 +399,21 @@ export default function BuyCars() {
                     {row.source === 'dealer' ? '—' : `${row.damage_percent ?? 0}%`}
                   </td>
                   <td className="py-1 px-2 text-right text-mutedForeground font-heading">{row.speed} secs</td>
-                  <td className="py-1 px-2 text-right font-heading text-foreground">{row.owner}</td>
+                  <td className="py-1 px-2 text-right font-heading">
+                    <div className="flex flex-col items-end gap-0.5">
+                      <span className="text-foreground">{row.owner}</span>
+                      {row.isOwnListing && row.userCarId ? (
+                        <button
+                          type="button"
+                          disabled={cancellingUserCarId === row.userCarId}
+                          onClick={() => handleCancelListing(row.userCarId)}
+                          className="text-[9px] font-heading font-bold uppercase text-rose-400/90 hover:text-rose-300 border border-rose-500/40 rounded px-1 py-0.5 disabled:opacity-50"
+                        >
+                          {cancellingUserCarId === row.userCarId ? '…' : 'Cancel listing'}
+                        </button>
+                      ) : null}
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>

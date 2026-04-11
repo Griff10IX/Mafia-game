@@ -352,7 +352,7 @@ export default function SellCars() {
               onClick={handleStopSelling}
               className="px-2 py-1 rounded bg-secondary border border-border text-foreground font-heading font-bold uppercase text-[11px] hover:bg-secondary/80 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Stop Selling
+              {stopping ? '…' : 'Cancel listing'}
             </button>
           </div>
           <div className="flex items-center gap-1">
