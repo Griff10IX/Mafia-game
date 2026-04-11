@@ -6269,6 +6269,86 @@ def register(router):
         entries = await cursor.to_list(limit)
         return {"entries": entries, "count": len(entries)}
 
+    @router.get("/admin/mdg/games-log")
+    async def admin_mdg_games_log(
+        limit: int = Query(50, ge=1, le=300),
+        skip: int = Query(0, ge=0, le=100_000),
+        status: Optional[str] = Query(None, description="Filter: open | completed"),
+        automated: Optional[bool] = Query(None, description="True = house auto games only; False = player-created only"),
+        username: Optional[str] = Query(None, description="Creator, winner, or any entrant username (exact, case-insensitive)"),
+        game_id: Optional[str] = Query(None),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """MDG (pot game) rows from mdg_games: entrants, winner, roll, pots; plus mdg_house_stats summary."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+
+        clauses: List[Dict[str, Any]] = []
+        gid = (game_id or "").strip()
+        if gid:
+            clauses.append({"id": gid})
+        else:
+            st = (status or "").strip().lower()
+            if st in ("open", "completed"):
+                clauses.append({"status": st})
+            if automated is True:
+                clauses.append({"is_automated": True})
+            elif automated is False:
+                clauses.append({"$or": [{"is_automated": {"$exists": False}}, {"is_automated": False}]})
+            uname = (username or "").strip()
+            if uname:
+                pat = re.compile("^" + re.escape(uname) + "$", re.IGNORECASE)
+                clauses.append(
+                    {
+                        "$or": [
+                            {"created_by_username": pat},
+                            {"winner_username": pat},
+                            {"entries": {"$elemMatch": {"username": pat}}},
+                        ]
+                    }
+                )
+
+        query: Dict[str, Any] = {"$and": clauses} if len(clauses) > 1 else (clauses[0] if clauses else {})
+
+        lim = min(max(1, int(limit)), 300)
+        sk = min(max(0, int(skip)), 100_000)
+        total = await db.mdg_games.count_documents(query)
+        raw = await db.mdg_games.find(query, {"_id": 0}).sort("created_at", -1).skip(sk).limit(lim).to_list(lim)
+
+        def _enrich(g: Dict[str, Any]) -> Dict[str, Any]:
+            entries = list(g.get("entries") or [])
+            wid = g.get("winner_id")
+            st = str(g.get("status") or "")
+            house_won = wid == "__house__"
+            loser_count = 0
+            outcome = "open"
+            if st == "completed":
+                if house_won:
+                    outcome = "house_win"
+                    loser_count = len(entries)
+                elif wid:
+                    outcome = "player_win"
+                    loser_count = len([e for e in entries if e.get("user_id") != wid])
+                else:
+                    outcome = "closed"
+            return {
+                **g,
+                "entry_count": len(entries),
+                "loser_count": loser_count,
+                "outcome": outcome,
+                "house_won": bool(house_won) if st == "completed" else None,
+            }
+
+        games = [_enrich(dict(g)) for g in raw]
+        stats = await db.mdg_house_stats.find_one({"id": "global"}, {"_id": 0})
+        return {
+            "games": games,
+            "total": total,
+            "skip": sk,
+            "limit": lim,
+            "house_stats": stats,
+        }
+
     @router.get("/admin/casino-seizures")
     async def admin_casino_seizures(
         limit: int = Query(100, ge=1, le=500),

@@ -330,8 +330,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, quicktradeTool: true, toastNotifications: true, bankEconomy: true, ...parsed };
-  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, quicktradeTool: true, toastNotifications: true, bankEconomy: true }; }
+    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, bankEconomy: true, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, bankEconomy: true }; }
 }
 
 function saveCollapsed(state) {
@@ -918,6 +918,14 @@ export default function Admin() {
   const [casinoSeizuresUsername, setCasinoSeizuresUsername] = useState('');
   const [casinoSeizuresGameType, setCasinoSeizuresGameType] = useState('');
   const [casinoSeizuresLimit, setCasinoSeizuresLimit] = useState(100);
+  const [mdgGamesLog, setMdgGamesLog] = useState({ games: [], total: 0, house_stats: null });
+  const [mdgGamesLogLoading, setMdgGamesLogLoading] = useState(false);
+  const [mdgGamesLogStatus, setMdgGamesLogStatus] = useState('');
+  const [mdgGamesLogAutomated, setMdgGamesLogAutomated] = useState('');
+  const [mdgGamesLogUsername, setMdgGamesLogUsername] = useState('');
+  const [mdgGamesLogGameId, setMdgGamesLogGameId] = useState('');
+  const [mdgGamesLogLimit, setMdgGamesLogLimit] = useState(50);
+  const [mdgGamesLogSkip, setMdgGamesLogSkip] = useState(0);
   const [sportsBetsLedger, setSportsBetsLedger] = useState({ bets: [] });
   const [sportsBetsLedgerLoading, setSportsBetsLedgerLoading] = useState(false);
   const [sportsBetsUsername, setSportsBetsUsername] = useState('');
@@ -5463,6 +5471,28 @@ export default function Admin() {
       setGamblingLog({ entries: [] });
     } finally {
       setGamblingLogLoading(false);
+    }
+  };
+
+  const fetchMdgGamesLog = async (nextSkip) => {
+    const sk = typeof nextSkip === 'number' ? Math.max(0, nextSkip) : mdgGamesLogSkip;
+    setMdgGamesLogLoading(true);
+    try {
+      const lim = Math.max(1, Math.min(300, parseInt(String(mdgGamesLogLimit), 10) || 50));
+      const params = { limit: lim, skip: sk };
+      if (mdgGamesLogStatus === 'open' || mdgGamesLogStatus === 'completed') params.status = mdgGamesLogStatus;
+      if (mdgGamesLogAutomated === 'auto') params.automated = true;
+      if (mdgGamesLogAutomated === 'player') params.automated = false;
+      if (mdgGamesLogUsername.trim()) params.username = mdgGamesLogUsername.trim();
+      if (mdgGamesLogGameId.trim()) params.game_id = mdgGamesLogGameId.trim();
+      const res = await api.get('/admin/mdg/games-log', { params });
+      setMdgGamesLog(res.data || { games: [], total: 0, house_stats: null });
+      setMdgGamesLogSkip(sk);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load MDG games');
+      setMdgGamesLog({ games: [], total: 0, house_stats: null });
+    } finally {
+      setMdgGamesLogLoading(false);
     }
   };
 
@@ -15492,6 +15522,183 @@ export default function Admin() {
                 </BtnDanger>
               </div>
               {(gamblingLog.entries || []).length === 0 && !gamblingLogLoading && <p className="text-xs text-mutedForeground">Load to see all casino activity (dice, roulette, blackjack, slots, video poker, horseracing, sports, MDG).</p>}
+            </div>
+          )}
+        </div>
+
+        {/* MDG (Million Dollar Game) — full game ledger from mdg_games */}
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-violet-500/35 to-transparent" />
+          <SectionHeader
+            icon={Trophy}
+            title="MDG game log"
+            badge={
+              mdgGamesLog.total != null && (
+                <span className="text-[10px] font-heading text-mutedForeground">
+                  {(mdgGamesLog.games || []).length} / {mdgGamesLog.total} games
+                </span>
+              )
+            }
+            toolAnchor="mdgGamesLog"
+            isCollapsed={collapsed.mdgGamesLog}
+            onToggle={() => toggleSection('mdgGamesLog')}
+            color="text-violet-400"
+          />
+          {!collapsed.mdgGamesLog && (
+            <div className="p-3 space-y-2">
+              <p className="text-[10px] text-mutedForeground font-heading">
+                Player-created and automated house MDG pots. Each row is one game: entrants, final pot, winner (or House), roll, and outcome. Raw create/join/payout lines stay in the Betting Log with{' '}
+                <span className="text-violet-400/90">game_type mdg</span>.
+              </p>
+              {mdgGamesLog.house_stats && (
+                <div className="text-[10px] text-mutedForeground font-heading rounded border border-zinc-700/50 bg-zinc-900/40 px-2 py-1.5 space-y-0.5">
+                  <div>
+                    <span className="text-violet-400/90">Auto MDG house stats:</span> games {Number(mdgGamesLog.house_stats.total_games || 0).toLocaleString()} · house wins{' '}
+                    {Number(mdgGamesLog.house_stats.house_wins || 0).toLocaleString()} · player wins {Number(mdgGamesLog.house_stats.player_wins || 0).toLocaleString()}
+                  </div>
+                  <div>
+                    Pots created ${Number(mdgGamesLog.house_stats.total_pot_created || 0).toLocaleString()} · fees collected ${Number(mdgGamesLog.house_stats.total_fees_collected || 0).toLocaleString()} · paid to
+                    winners ${Number(mdgGamesLog.house_stats.total_paid_to_winners || 0).toLocaleString()}
+                  </div>
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={mdgGamesLogStatus}
+                  onChange={(e) => setMdgGamesLogStatus(e.target.value)}
+                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                >
+                  <option value="">All statuses</option>
+                  <option value="open">Open</option>
+                  <option value="completed">Completed</option>
+                </select>
+                <select
+                  value={mdgGamesLogAutomated}
+                  onChange={(e) => setMdgGamesLogAutomated(e.target.value)}
+                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                >
+                  <option value="">All games</option>
+                  <option value="auto">House (automated)</option>
+                  <option value="player">Player-created</option>
+                </select>
+                <input
+                  type="text"
+                  value={mdgGamesLogUsername}
+                  onChange={(e) => setMdgGamesLogUsername(e.target.value)}
+                  placeholder="Username (creator / entrant / winner)"
+                  className="min-w-[140px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                <input
+                  type="text"
+                  value={mdgGamesLogGameId}
+                  onChange={(e) => setMdgGamesLogGameId(e.target.value)}
+                  placeholder="Game ID"
+                  className="min-w-[100px] max-w-[200px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none font-mono"
+                />
+                <select
+                  value={String(mdgGamesLogLimit)}
+                  onChange={(e) => setMdgGamesLogLimit(parseInt(e.target.value, 10) || 50)}
+                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                >
+                  <option value="25">25</option>
+                  <option value="50">50</option>
+                  <option value="100">100</option>
+                  <option value="200">200</option>
+                </select>
+                <BtnPrimary
+                  onClick={() => {
+                    setMdgGamesLogSkip(0);
+                    fetchMdgGamesLog(0);
+                  }}
+                  disabled={mdgGamesLogLoading}
+                >
+                  {mdgGamesLogLoading ? '…' : 'Load'}
+                </BtnPrimary>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-[10px] text-mutedForeground">
+                <button
+                  type="button"
+                  className="text-primary hover:underline disabled:opacity-40"
+                  disabled={mdgGamesLogLoading || mdgGamesLogSkip <= 0}
+                  onClick={() => fetchMdgGamesLog(Math.max(0, mdgGamesLogSkip - mdgGamesLogLimit))}
+                >
+                  ← Prev page
+                </button>
+                <span>
+                  skip {mdgGamesLogSkip} · limit {mdgGamesLogLimit}
+                </span>
+                <button
+                  type="button"
+                  className="text-primary hover:underline disabled:opacity-40"
+                  disabled={mdgGamesLogLoading || mdgGamesLogSkip + (mdgGamesLog.games || []).length >= (mdgGamesLog.total || 0)}
+                  onClick={() => fetchMdgGamesLog(mdgGamesLogSkip + mdgGamesLogLimit)}
+                >
+                  Next page →
+                </button>
+              </div>
+              <div className="max-h-96 overflow-y-auto rounded border border-zinc-700/50">
+                <table className="w-full text-[10px] font-heading">
+                  <thead className="bg-zinc-800/50 sticky top-0">
+                    <tr>
+                      <th className="text-left p-2 text-mutedForeground uppercase">Created</th>
+                      <th className="text-left p-2 text-mutedForeground uppercase">Rolled</th>
+                      <th className="text-left p-2 text-mutedForeground uppercase">Type</th>
+                      <th className="text-left p-2 text-mutedForeground uppercase">St</th>
+                      <th className="text-left p-2 text-mutedForeground uppercase">Creator</th>
+                      <th className="text-right p-2 text-mutedForeground uppercase">Pl</th>
+                      <th className="text-right p-2 text-mutedForeground uppercase">Pot pts</th>
+                      <th className="text-right p-2 text-mutedForeground uppercase">Pot $</th>
+                      <th className="text-left p-2 text-mutedForeground uppercase">Winner</th>
+                      <th className="text-left p-2 text-mutedForeground uppercase">Outcome</th>
+                      <th className="text-right p-2 text-mutedForeground uppercase">Roll</th>
+                      <th className="text-left p-2 text-mutedForeground uppercase">Game id</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(mdgGamesLog.games || []).map((g) => {
+                      const auto = !!g.is_automated;
+                      const outcomeLabel =
+                        g.outcome === 'house_win'
+                          ? 'House won'
+                          : g.outcome === 'player_win'
+                            ? 'Player won'
+                            : g.outcome === 'open'
+                              ? '—'
+                              : g.outcome === 'closed'
+                                ? 'Closed'
+                                : g.outcome || '—';
+                      return (
+                        <tr key={g.id} className="border-t border-zinc-700/30 hover:bg-zinc-800/30 align-top">
+                          <td className="p-2 text-mutedForeground whitespace-nowrap">{g.created_at ? new Date(g.created_at).toLocaleString() : '—'}</td>
+                          <td className="p-2 text-mutedForeground whitespace-nowrap">{g.rolled_at ? new Date(g.rolled_at).toLocaleString() : '—'}</td>
+                          <td className="p-2">{auto ? <span className="text-violet-400">Auto</span> : 'Player'}</td>
+                          <td className="p-2">{g.status || '—'}</td>
+                          <td className="p-2 text-primary font-bold max-w-[100px] truncate" title={g.created_by_username || ''}>
+                            {g.created_by_username || '—'}
+                          </td>
+                          <td className="p-2 text-right">{g.entry_count != null ? g.entry_count : (g.entries || []).length}</td>
+                          <td className="p-2 text-right text-mutedForeground">{Number(g.pot_points || 0).toLocaleString()}</td>
+                          <td className="p-2 text-right text-mutedForeground">{formatAdminMoneyInt(g.pot_money)}</td>
+                          <td className="p-2 max-w-[100px] truncate" title={g.winner_username || ''}>
+                            {g.winner_username || '—'}
+                          </td>
+                          <td className="p-2 text-mutedForeground">
+                            {outcomeLabel}
+                            {g.loser_count > 0 ? <span className="block text-[9px] opacity-80">{g.loser_count} lost</span> : null}
+                          </td>
+                          <td className="p-2 text-right">{g.roll != null ? g.roll : '—'}</td>
+                          <td className="p-2 font-mono text-[9px] text-mutedForeground max-w-[120px] truncate" title={g.id}>
+                            {g.id || '—'}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {(mdgGamesLog.games || []).length === 0 && !mdgGamesLogLoading && (
+                <p className="text-xs text-mutedForeground">Click Load to query mdg_games. Use Betting Log with filter MDG for per-user fee/join/payout audit lines.</p>
+              )}
             </div>
           )}
         </div>

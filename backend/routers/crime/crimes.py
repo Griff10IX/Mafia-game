@@ -538,6 +538,9 @@ async def commit_all_crimes(current_user: dict = Depends(get_current_user_verifi
     errors: list[str] = []
     for crime_id in available_ids:
         try:
+            rp_sync = await db.users.find_one({"id": current_user["id"]}, {"rank_points": 1})
+            if rp_sync and "rank_points" in rp_sync:
+                current_user["rank_points"] = rp_sync.get("rank_points", 0)
             res = await commit_crime_locked(crime_id, current_user)
             if bool(getattr(res, "success", False)):
                 committed += 1

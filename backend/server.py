@@ -2001,10 +2001,18 @@ async def maybe_process_rank_up(user_id: str, rank_points_before, rank_points_ad
     if rank_points_added <= 0:
         return
     new_total = rank_points_before + rank_points_added
+    # Scale thresholds from prestige_level, not prestige_rank_multiplier alone. Denormalized multiplier
+    # can stay stale on users who never hit get_current_user() sync (e.g. Auto Rank background runs),
+    # which made prestiged players' computed rank not advance here → no rank-up inbox message.
     try:
-        pm = float(prestige_mult) if prestige_mult is not None else 1.0
-    except (TypeError, ValueError):
-        pm = 1.0
+        row = await db.users.find_one({"id": user_id}, {"prestige_level": 1})
+        pl = int((row or {}).get("prestige_level") or 0)
+        pm = float(get_rank_threshold_mult(pl))
+    except Exception:
+        try:
+            pm = float(prestige_mult) if prestige_mult is not None else 1.0
+        except (TypeError, ValueError):
+            pm = 1.0
     if pm < 1e-12:
         pm = 1.0
     old_rank_id, _ = get_rank_info(int(rank_points_before), pm)
