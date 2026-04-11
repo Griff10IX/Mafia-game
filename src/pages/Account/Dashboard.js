@@ -17,6 +17,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../utils/api';
+import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../../components/ui/sheet';
@@ -29,7 +30,6 @@ import EventOrStoreSlot from '../../components/dashboard/EventOrStoreSlot';
 import AutoRankStatusWidget from '../../components/dashboard/AutoRankStatusWidget';
 import BodyguardsWidget from '../../components/dashboard/BodyguardsWidget';
 import MyPropertiesWidget from '../../components/dashboard/MyPropertiesWidget';
-import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 
 const DASH_STYLES = `
   @keyframes dash-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -198,7 +198,6 @@ const DEFAULT_SECTION_ORDER = [
   'bodyguards_properties', 'auto_rank', 'at_a_glance', 'go_to',
 ];
 const DEFAULT_AT_A_GLANCE_STATS = ['money', 'rank', 'wealth', 'rp', 'location', 'kills'];
-const DASHBOARD_CACHE_KEY = 'mafia_dashboard_v1';
 const SECTION_LABELS = {
   rank_progress: 'Rank Progress',
   rewards_objectives: 'Rewards & Objectives',
@@ -217,19 +216,25 @@ const STAT_OPTIONS = [
   { id: 'kills', label: 'Kills' },
 ];
 
+const DASHBOARD_CACHE_KEY = 'mafia_dashboard_v1';
+
 export default function Dashboard() {
-  const dashboardBoot = readSessionJson(DASHBOARD_CACHE_KEY);
-  const [user, setUser] = useState(dashboardBoot?.user ?? null);
-  const [rankProgress, setRankProgress] = useState(dashboardBoot?.rankProgress ?? null);
-  const [preferences, setPreferences] = useState({
-    section_order: dashboardBoot?.preferences?.section_order || DEFAULT_SECTION_ORDER,
-    at_a_glance_visible: dashboardBoot?.preferences?.at_a_glance_visible !== false,
-    at_a_glance_stats: dashboardBoot?.preferences?.at_a_glance_stats || DEFAULT_AT_A_GLANCE_STATS,
+  const [user, setUser] = useState(() => readSessionJson(DASHBOARD_CACHE_KEY)?.user ?? null);
+  const [rankProgress, setRankProgress] = useState(() => readSessionJson(DASHBOARD_CACHE_KEY)?.rankProgress ?? null);
+  const [preferences, setPreferences] = useState(() => {
+    const p = readSessionJson(DASHBOARD_CACHE_KEY)?.preferences;
+    return {
+      section_order: p?.section_order || DEFAULT_SECTION_ORDER,
+      at_a_glance_visible: p?.at_a_glance_visible !== false,
+      at_a_glance_stats: p?.at_a_glance_stats || DEFAULT_AT_A_GLANCE_STATS,
+    };
   });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editPrefs, setEditPrefs] = useState(null);
-  const [civilianProtection, setCivilianProtection] = useState(null);
+  const [civilianProtection, setCivilianProtection] = useState(
+    () => readSessionJson(DASHBOARD_CACHE_KEY)?.civilianProtection ?? null
+  );
   const [cpPanelOpen, setCpPanelOpen] = useState(true);
   const [cpTick, setCpTick] = useState(0);
   const [cpTerminating, setCpTerminating] = useState(false);
@@ -246,31 +251,39 @@ export default function Dashboard() {
       setUser(userRes.data);
       setRankProgress(progressRes.data);
       setCivilianProtection(civRes?.data ?? null);
+      let storedPrefs = {
+        section_order: DEFAULT_SECTION_ORDER,
+        at_a_glance_visible: true,
+        at_a_glance_stats: [...DEFAULT_AT_A_GLANCE_STATS],
+      };
       if (dashRes?.data) {
-        setPreferences({
+        storedPrefs = {
           section_order: dashRes.data.section_order || DEFAULT_SECTION_ORDER,
           at_a_glance_visible: dashRes.data.at_a_glance_visible !== false,
           at_a_glance_stats: dashRes.data.at_a_glance_stats || DEFAULT_AT_A_GLANCE_STATS,
-        });
+        };
+        setPreferences(storedPrefs);
+      } else {
+        const prev = readSessionJson(DASHBOARD_CACHE_KEY);
+        if (prev?.preferences) {
+          storedPrefs = {
+            section_order: prev.preferences.section_order || DEFAULT_SECTION_ORDER,
+            at_a_glance_visible: prev.preferences.at_a_glance_visible !== false,
+            at_a_glance_stats: prev.preferences.at_a_glance_stats || DEFAULT_AT_A_GLANCE_STATS,
+          };
+        }
       }
-      const nextPreferences = dashRes?.data
-        ? {
-            section_order: dashRes.data.section_order || DEFAULT_SECTION_ORDER,
-            at_a_glance_visible: dashRes.data.at_a_glance_visible !== false,
-            at_a_glance_stats: dashRes.data.at_a_glance_stats || DEFAULT_AT_A_GLANCE_STATS,
-          }
-        : preferences;
       writeSessionJson(DASHBOARD_CACHE_KEY, {
         user: userRes.data,
         rankProgress: progressRes.data,
+        preferences: storedPrefs,
         civilianProtection: civRes?.data ?? null,
-        preferences: nextPreferences,
       });
     } catch (error) {
       if (!silentError) toast.error(getApiErrorMessage(error) || 'Failed to load profile');
       console.error('Error fetching dashboard data:', error);
     }
-  }, [preferences]);
+  }, []);
 
   useEffect(() => {
     fetchData({ silentError: false });
@@ -358,11 +371,16 @@ export default function Dashboard() {
         at_a_glance_visible: editPrefs.at_a_glance_visible,
         at_a_glance_stats: editPrefs.at_a_glance_stats,
       });
-      setPreferences({
+      const nextPrefs = {
         section_order: res.data.section_order,
         at_a_glance_visible: res.data.at_a_glance_visible,
         at_a_glance_stats: res.data.at_a_glance_stats,
-      });
+      };
+      setPreferences(nextPrefs);
+      const cur = readSessionJson(DASHBOARD_CACHE_KEY);
+      if (cur && typeof cur === 'object') {
+        writeSessionJson(DASHBOARD_CACHE_KEY, { ...cur, preferences: nextPrefs });
+      }
       toast.success('Dashboard layout saved');
       setSettingsOpen(false);
     } catch (e) {
@@ -399,22 +417,22 @@ export default function Dashboard() {
       case 'rewards_objectives':
         return (
           <div key={id} className="grid grid-cols-1 lg:grid-cols-2 gap-2 min-w-0">
-            <DailyRewardsWidget onRefresh={handleWidgetRefresh} />
-            <ObjectivesWidget onRefresh={handleWidgetRefresh} />
+            <DailyRewardsWidget userId={user?.id} onRefresh={handleWidgetRefresh} />
+            <ObjectivesWidget userId={user?.id} onRefresh={handleWidgetRefresh} />
           </div>
         );
       case 'notifications_event':
         return (
           <div key={id} className="grid grid-cols-1 lg:grid-cols-2 gap-2 min-w-0">
-            <NotificationsWidget onRefresh={handleWidgetRefresh} />
-            <EventOrStoreSlot user={user} />
+            <NotificationsWidget userId={user?.id} onRefresh={handleWidgetRefresh} />
+            <EventOrStoreSlot user={user} userId={user?.id} />
           </div>
         );
       case 'bodyguards_properties':
         return (
           <div key={id} className="grid grid-cols-1 lg:grid-cols-2 gap-2 min-w-0">
-            <BodyguardsWidget />
-            <MyPropertiesWidget />
+            <BodyguardsWidget userId={user?.id} />
+            <MyPropertiesWidget userId={user?.id} />
           </div>
         );
       case 'auto_rank':

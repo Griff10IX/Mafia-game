@@ -6,6 +6,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-10 18:00 UTC[/color][/b] — [b]Rank ladder: top three promotions rebalanced[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Street ranks[/b] — [b]Don → Godfather[/b] now uses [b]three similar-sized steps[/b] (~197,200 RP each) instead of one very large jump followed by two very short ones. [b]Capo di tutti capi[/b] is now [b]625,600[/b] RP; [b]Boss of Bosses[/b] is [b]822,800[/b] RP; [b]Godfather[/b] stays [b]1,020,000[/b] RP (prestige gates still use that cap).[/color]
+[*][color=#888888][b]Note:[/b] [b]Prestige[/b] still multiplies [b]every[/b] tier by the same factor, so the new gaps scale the same way on higher prestige runs.[/color]
+[*][color=#888888][b]Player action:[/b] No setup needed. [b]Forum FAQ[/b] rank table updated to match. If your rank name changes after a refresh, thresholds moved — you did not lose RP.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-10 12:00 UTC[/color][/b] — [b]Dice caps, sports & gambling “since reset”, profile kills rank[/b][/size]
 [quote]
 [list]

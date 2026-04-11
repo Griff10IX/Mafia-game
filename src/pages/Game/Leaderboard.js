@@ -430,7 +430,7 @@ export default function Leaderboard() {
           icon={Medal}
           entries={boards?.rank_points}
           valueLabel="XP"
-          topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (current total)`}
+          topLabel={`Top ${topLimit}${viewMode === 'dead' ? ' dead' : ''} (lifetime — current RP + banked on prestige)`}
           fetching={fetchingBoards}
         />
         <StatBoard

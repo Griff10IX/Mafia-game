@@ -2,7 +2,10 @@ import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Bot, ChevronRight } from 'lucide-react';
 import api from '../../utils/api';
+import { getDashboardWidget, setDashboardWidget } from '../../utils/dashboardWidgetCache';
 import styles from '../../styles/noir.module.css';
+
+const WIDGET_KEY = 'auto_rank_stats';
 
 function formatCountdown(seconds) {
   if (seconds == null || seconds <= 0) return null;
@@ -20,6 +23,7 @@ function secondsUntil(iso) {
 }
 
 export default function AutoRankStatusWidget({ user }) {
+  const userId = user?.id;
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [, setTick] = useState(0);
@@ -28,28 +32,53 @@ export default function AutoRankStatusWidget({ user }) {
 
   useEffect(() => {
     if (!hasAutoRank) {
+      setStats(null);
       setLoading(false);
       return;
     }
-    api.get('/auto-rank/stats')
-      .then((res) => setStats(res.data))
-      .catch(() => setStats(null))
+    if (!userId) {
+      setStats(null);
+      setLoading(true);
+      return;
+    }
+    const cached = getDashboardWidget(userId, WIDGET_KEY);
+    if (cached) {
+      setStats(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+    api
+      .get('/auto-rank/stats')
+      .then((res) => {
+        const d = res.data;
+        setStats(d);
+        if (d) setDashboardWidget(userId, WIDGET_KEY, d);
+      })
+      .catch(() => {})
       .finally(() => setLoading(false));
-  }, [hasAutoRank]);
+  }, [hasAutoRank, userId]);
 
   const lastRefetchRef = useRef(0);
   useEffect(() => {
-    if (!hasAutoRank || !stats) return;
+    if (!hasAutoRank || !stats || !userId) return;
     const id = setInterval(() => {
       setTick((t) => t + 1);
       const next = secondsUntil(stats?.auto_rank_next_run_at);
       if (next != null && next <= 0 && Date.now() - lastRefetchRef.current > 30_000) {
         lastRefetchRef.current = Date.now();
-        api.get('/auto-rank/stats').then((r) => setStats(r.data)).catch(() => {});
+        api
+          .get('/auto-rank/stats')
+          .then((r) => {
+            const d = r.data;
+            setStats(d);
+            if (d) setDashboardWidget(userId, WIDGET_KEY, d);
+          })
+          .catch(() => {});
       }
     }, 1000);
     return () => clearInterval(id);
-  }, [hasAutoRank, stats]);
+  }, [hasAutoRank, stats, userId]);
 
   if (!hasAutoRank || loading) return null;
 

@@ -199,6 +199,26 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!isAuthenticated) return undefined;
+    let idleId = null;
+    let timeoutId = null;
+    const warm = () => {
+      import("./pages/Account/Dashboard");
+    };
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      idleId = window.requestIdleCallback(warm, { timeout: 3000 });
+    } else {
+      timeoutId = window.setTimeout(warm, 500);
+    }
+    return () => {
+      if (idleId != null && typeof window !== "undefined" && "cancelIdleCallback" in window) {
+        window.cancelIdleCallback(idleId);
+      }
+      if (timeoutId != null) window.clearTimeout(timeoutId);
+    };
+  }, [isAuthenticated]);
+
+  useEffect(() => {
     const token = localStorage.getItem("token");
     if (token) {
       setIsAuthenticated(true);

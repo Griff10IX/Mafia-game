@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Mail, ChevronRight, Bell, Trophy, Shield, Skull, Gift, MessageCircle } from 'lucide-react';
 import api from '../../utils/api';
+import { getDashboardWidget, setDashboardWidget } from '../../utils/dashboardWidgetCache';
 import { NotificationMessage } from '../NotificationMessage';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -25,23 +26,42 @@ function getTimeAgo(dateString) {
   return `${Math.floor(seconds / 86400)}d ago`;
 }
 
-export default function NotificationsWidget({ onRefresh }) {
+const WIDGET_KEY = 'notifications';
+
+export default function NotificationsWidget({ onRefresh, userId }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [markingRead, setMarkingRead] = useState(false);
 
   const fetchNotifications = useCallback(async () => {
+    if (!userId) return;
     try {
       const res = await api.get('/notifications');
-      setData(res.data);
+      const d = res.data;
+      setData(d);
+      if (d) setDashboardWidget(userId, WIDGET_KEY, d);
     } catch {
       // Keep previous data on transient failures
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [userId]);
 
-  useEffect(() => { fetchNotifications(); }, [fetchNotifications]);
+  useEffect(() => {
+    if (!userId) {
+      setData(null);
+      setLoading(true);
+      return;
+    }
+    const cached = getDashboardWidget(userId, WIDGET_KEY);
+    if (cached) {
+      setData(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+    fetchNotifications();
+  }, [userId, fetchNotifications]);
 
   const handleMarkRead = async (notificationId) => {
     try {

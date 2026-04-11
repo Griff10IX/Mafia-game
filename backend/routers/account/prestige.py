@@ -164,6 +164,13 @@ def register(router):
             {"$set": prestige_set},
         )
 
+        try:
+            from routers.game.leaderboard import invalidate_leaderboard_cache
+
+            invalidate_leaderboard_cache()
+        except Exception:
+            pass
+
         benefits_line = _format_prestige_unlock_benefits(new_cfg, new_level)
         await srv.send_notification(
             current_user["id"],

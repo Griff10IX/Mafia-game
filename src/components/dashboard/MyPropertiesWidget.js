@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Building2, ChevronRight, Dice5, Plane, Factory } from 'lucide-react';
 import api from '../../utils/api';
+import { getDashboardWidget, setDashboardWidget } from '../../utils/dashboardWidgetCache';
 import styles from '../../styles/noir.module.css';
 
 const CASINO_LABELS = { dice: 'Dice', roulette: 'Roulette', blackjack: 'Blackjack', horseracing: 'Horse Racing', videopoker: 'Video Poker', slots: 'Slots' };
@@ -12,22 +13,41 @@ function formatMoney(n) {
   return `$${Math.trunc(num).toLocaleString()}`;
 }
 
-export default function MyPropertiesWidget() {
+const WIDGET_KEY = 'my_properties';
+
+export default function MyPropertiesWidget({ userId }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   const fetchProperties = useCallback(async () => {
+    if (!userId) return;
     try {
       const res = await api.get('/my-properties');
-      setData(res.data);
+      const d = res.data;
+      setData(d);
+      if (d) setDashboardWidget(userId, WIDGET_KEY, d);
     } catch {
-      setData(null);
+      // keep cached snapshot on failure
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [userId]);
 
-  useEffect(() => { fetchProperties(); }, [fetchProperties]);
+  useEffect(() => {
+    if (!userId) {
+      setData(null);
+      setLoading(true);
+      return;
+    }
+    const cached = getDashboardWidget(userId, WIDGET_KEY);
+    if (cached) {
+      setData(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+    fetchProperties();
+  }, [userId, fetchProperties]);
 
   if (loading) {
     return (

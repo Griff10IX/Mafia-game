@@ -770,8 +770,8 @@ Progress by earning rank points (RP). You need [b]Capo[/b] (rank 6) to hold a ca
 [*][color=#888888]Consigliere — 85,850[/color]
 [*][color=#888888]Boss — 191,250[/color]
 [*][color=#AAAAAA]Don — 428,400[/color]
-[*][color=#AAAAAA]Capo di tutti capi — 958,800[/color]
-[*][color=#CCCCCC]Boss of Bosses — 989,400[/color]
+[*][color=#AAAAAA]Capo di tutti capi — 625,600[/color]
+[*][color=#CCCCCC]Boss of Bosses — 822,800[/color]
 [*][color=#FFD700]Godfather — 1,020,000[/color]
 [/list]
 

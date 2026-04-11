@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Gift, ChevronRight } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../utils/api';
+import { getDashboardWidget, setDashboardWidget } from '../../utils/dashboardWidgetCache';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 
@@ -27,24 +28,43 @@ function formatNextPlay(iso) {
   } catch { return null; }
 }
 
-export default function DailyRewardsWidget({ onRefresh }) {
+const WIDGET_KEY = 'daily_rewards';
+
+export default function DailyRewardsWidget({ onRefresh, userId }) {
   const [info, setInfo] = useState(null);
   const [loading, setLoading] = useState(true);
   const [playing, setPlaying] = useState(false);
   const [result, setResult] = useState(null);
 
   const fetchInfo = useCallback(async () => {
+    if (!userId) return;
     try {
       const res = await api.get('/daily-rewards/info');
-      setInfo(res.data ?? null);
+      const d = res.data ?? null;
+      setInfo(d);
+      if (d) setDashboardWidget(userId, WIDGET_KEY, d);
     } catch {
-      setInfo(null);
+      // keep cached snapshot on failure
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [userId]);
 
-  useEffect(() => { fetchInfo(); }, [fetchInfo]);
+  useEffect(() => {
+    if (!userId) {
+      setInfo(null);
+      setLoading(true);
+      return;
+    }
+    const cached = getDashboardWidget(userId, WIDGET_KEY);
+    if (cached) {
+      setInfo(cached);
+      setLoading(false);
+    } else {
+      setLoading(true);
+    }
+    fetchInfo();
+  }, [userId, fetchInfo]);
 
   const play = async (choice) => {
     if (!info || info.plays_left <= 0 || playing) return;
@@ -53,10 +73,13 @@ export default function DailyRewardsWidget({ onRefresh }) {
     try {
       const res = await api.post('/daily-rewards/play', { choice });
       setResult(res.data);
-      setInfo(prev => prev
-        ? { ...prev, plays_left: res.data.plays_left, next_play_at: res.data.next_play_at }
-        : null
-      );
+      setInfo((prev) => {
+        const next = prev
+          ? { ...prev, plays_left: res.data.plays_left, next_play_at: res.data.next_play_at }
+          : null;
+        if (next && userId) setDashboardWidget(userId, WIDGET_KEY, next);
+        return next;
+      });
       if (res.data.result === 'win') {
         const parts = [`You win! ${formatMoney(res.data.money_won)}`];
         if (res.data.cars_won?.length) parts.push(res.data.cars_won.join(', '));

@@ -143,6 +143,48 @@ async def _top_by_field(field: str, current_user_id: str, limit: int, dead: bool
     return out
 
 
+async def _top_by_total_rank_points(current_user_id: str, limit: int, dead: bool = False) -> List[StatLeaderboardEntry]:
+    """Top users by lifetime rank points: current `rank_points` + `rank_xp_pass_prestige_carry_rp` (banked on each prestige).
+
+    Sorting by `rank_points` alone drops players to the bottom after prestige resets RP to 0; carry preserves their total.
+    """
+    limit = max(1, min(100, int(limit)))
+    if dead:
+        query = {"is_dead": True, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
+    else:
+        query = {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
+    query.update(_leaderboard_user_filter())
+    pipeline = [
+        {"$match": query},
+        {
+            "$addFields": {
+                "_lb_total_rp": {
+                    "$add": [
+                        {"$ifNull": ["$rank_xp_pass_prestige_carry_rp", 0]},
+                        {"$ifNull": ["$rank_points", 0]},
+                    ]
+                }
+            }
+        },
+        {"$sort": {"_lb_total_rp": -1}},
+        {"$limit": limit},
+        {"$project": {"_id": 0, "username": 1, "id": 1, "_lb_total_rp": 1}},
+    ]
+    cursor = db.users.aggregate(pipeline)
+    docs = await cursor.to_list(limit)
+    out: List[StatLeaderboardEntry] = []
+    for i, user in enumerate(docs):
+        out.append(
+            StatLeaderboardEntry(
+                rank=i + 1,
+                username=user["username"],
+                value=int(user.get("_lb_total_rp") or 0),
+                is_current_user=user["id"] == current_user_id,
+            )
+        )
+    return out
+
+
 async def _top_by_field_weekly(
     collection: str,
     user_field: str,
@@ -646,7 +688,7 @@ async def _fetch_top_boards_raw(limit: int, dead: bool, period: str) -> dict:
             _top_by_field_weekly("crime_events", "user_id", "at", False, dummy_uid, limit, dead, {"success": True}),
             _top_by_field_weekly("gta_events", "user_id", "at", False, dummy_uid, limit, dead, {"success": True}),
             _top_by_field_weekly("bust_events", "user_id", "at", False, dummy_uid, limit, dead, {"success": True}),
-            _top_by_field("rank_points", dummy_uid, limit, dead=dead),
+            _top_by_total_rank_points(dummy_uid, limit, dead=dead),
             _top_by_field_weekly_sum("stock_transactions", "user_id", "created_at", "profit_points", dummy_uid, limit, dead),
             _top_by_field_weekly_sum("economy_events", "user_id", "at", "profit", dummy_uid, limit, dead, {"type": "booze_run_sell"}),
             _top_by_field_weekly_sum(
@@ -667,7 +709,7 @@ async def _fetch_top_boards_raw(limit: int, dead: bool, period: str) -> dict:
             _top_by_field("total_crimes", dummy_uid, limit, dead=dead),
             _top_by_field("total_gta", dummy_uid, limit, dead=dead),
             _top_by_field("jail_busts", dummy_uid, limit, dead=dead),
-            _top_by_field("rank_points", dummy_uid, limit, dead=dead),
+            _top_by_total_rank_points(dummy_uid, limit, dead=dead),
             _top_by_field("lifetime_points_spent", dummy_uid, limit, dead=dead),
             _top_by_field("respect_points", dummy_uid, limit, dead=dead),
             _top_by_field("bullets_melted", dummy_uid, limit, dead=dead),

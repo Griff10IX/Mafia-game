@@ -186,8 +186,34 @@ GTA_EXCLUSIVE_POOL_CONFIG_ID = "gta_exclusive"
 GTA_EXCLUSIVE_DROP_WEIGHT_DEFAULT = 0.000006
 GTA_EXCLUSIVE_DROP_WEIGHT_MIN = 0.0000001
 GTA_EXCLUSIVE_DROP_WEIGHT_MAX = 0.05
+# When the heist pool includes legendary cars, this fraction of *successful* steals roll legendary (then uniform over those models).
+GTA_LEGENDARY_STEAL_CHANCE = 1 / 50
+# Non-legendary pool: base weights (rare / ultra_rare intentionally below common). Prestige/perk adds slope * rare_boost on top.
+GTA_NON_LEGENDARY_RARITY_BASE_WEIGHT = {
+    "common": 1.0,
+    "uncommon": 0.88,
+    "rare": 0.28,
+    "ultra_rare": 0.14,
+}
+GTA_NON_LEGENDARY_RARITY_BOOST_SLOPE = {
+    "common": 0.0,
+    "uncommon": 0.45,
+    "rare": 0.55,
+    "ultra_rare": 0.70,
+}
 REFERRED_USER_GTA_RARE_BOOST = 0.10  # GTA rare car weight boost for referred signups (pairs with ~10% copy)
 FOUNDING_MEMBER_GTA_RARE_BOOST = 0.025  # Founding Member: extra weight toward rarer cars
+
+
+def _gta_non_legendary_roll_weight(rarity: Optional[str], rare_boost: float) -> float:
+    r = (rarity or "common").strip() or "common"
+    base = GTA_NON_LEGENDARY_RARITY_BASE_WEIGHT.get(r)
+    if base is None:
+        base = 1.0
+    slope = GTA_NON_LEGENDARY_RARITY_BOOST_SLOPE.get(r, 0.0)
+    w = base + slope * max(rare_boost, 0.0)
+    return max(w, 0.001)
+
 
 # One-time respect_points rewards when total_gta crosses milestones (same progression as busts/crimes)
 GTA_MILESTONES = [
@@ -529,30 +555,20 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         gta_rare_perk = int(current_user.get("gta_rare_drop_perk_attempts_remaining") or 0)
         if gta_rare_perk > 0:
             _rare_boost = max(_rare_boost, 1.0)
-        # Scale exclusive weight by sum of non-exclusive weights so P(exclusive | success) = w/(1+w) for all tiers
-        if _rare_boost > 0:
-            _rarity_weights = {
-                "common": 1.0,
-                "uncommon": 1.0 + _rare_boost * 0.5,
-                "rare": 1.0 + _rare_boost,
-                "ultra_rare": 1.0 + _rare_boost * 1.5,
-                "legendary": 1.0 + _rare_boost * 2.0,
-            }
-            pool_weights = [_rarity_weights.get(c.get("rarity", "common"), 1.0) for c in pool_cars]
-            weight_sum = float(sum(pool_weights))
-            if exclusive_in_roll and weight_sum > 0:
-                ex_w = exclusive_drop_weight * weight_sum
-                car = _rng.choices(pool_cars + [exclusive_car], weights=pool_weights + [ex_w], k=1)[0]
-            else:
-                car = _rng.choices(pool_cars, weights=pool_weights, k=1)[0]
+        legendary_cars = [c for c in pool_cars if (c.get("rarity") or "") == "legendary"]
+        non_legendary_cars = [c for c in pool_cars if (c.get("rarity") or "") != "legendary"]
+        if legendary_cars and _rng.random() < GTA_LEGENDARY_STEAL_CHANCE:
+            car = _rng.choice(legendary_cars)
         else:
-            pool_weights = [1.0] * len(pool_cars)
+            base_pool = non_legendary_cars if non_legendary_cars else pool_cars
+            # Scale exclusive weight by sum of non-exclusive weights so P(exclusive | success) = w/(1+w) for all tiers
+            pool_weights = [_gta_non_legendary_roll_weight(c.get("rarity"), _rare_boost) for c in base_pool]
             weight_sum = float(sum(pool_weights))
             if exclusive_in_roll and weight_sum > 0:
                 ex_w = exclusive_drop_weight * weight_sum
-                car = _rng.choices(pool_cars + [exclusive_car], weights=pool_weights + [ex_w], k=1)[0]
+                car = _rng.choices(base_pool + [exclusive_car], weights=pool_weights + [ex_w], k=1)[0]
             else:
-                car = _rng.choice(pool_cars)
+                car = _rng.choices(base_pool, weights=pool_weights, k=1)[0]
         # Stolen car damage: custom/exclusive cars are always pristine.
         if _is_damage_immune_car(car.get("id"), car.get("rarity")):
             damage_percent = 0
@@ -561,14 +577,14 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         else:
             damage_percent = _rng.randint(15, 77)
         rank_points_map = {
-            "common": 1,
-            "uncommon": 2,
-            "rare": 4,
-            "ultra_rare": 8,
-            "legendary": 20,
-            "exclusive": 20,
+            "common": 3,
+            "uncommon": 8,
+            "rare": 18,
+            "ultra_rare": 35,
+            "legendary": 60,
+            "exclusive": 100,
         }
-        rank_points = rank_points_map.get(car["rarity"], 1)
+        rank_points = rank_points_map.get(car["rarity"], 3)
         rank_points = int(rank_points * ev.get("rank_points", 1.0))
         now_utc = datetime.now(timezone.utc)
         rp_perk_until = _parse_iso_datetime(current_user.get("rp_perk_until"))

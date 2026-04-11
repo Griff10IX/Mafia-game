@@ -710,9 +710,10 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
             r_max = r_min
         reward = _rng.randint(r_min, r_max)
         rank_points = (
-            1 if crime["crime_type"] == "petty"
-            else 3 if crime["crime_type"] == "medium"
-            else 7 if crime["crime_type"] == "prestige"
+            3 if crime["crime_type"] == "petty"
+            else 5 if crime["crime_type"] == "medium"
+            else 7 if crime["crime_type"] == "major"
+            else 10 if crime["crime_type"] == "prestige"
             else 5
         )
         ev = await get_effective_event()
