@@ -1550,9 +1550,10 @@ async def buy_car(
 
 # ----- Player-to-player car marketplace (list your car, buy other players' cars) -----
 async def get_marketplace_listings(current_user: dict = Depends(get_current_user)):
-    """List cars that other players have listed for sale (cash). Excludes current user's own listings."""
+    """List all listed player cars (cash). Includes your own listings so Buy Cars rarity filters stay accurate; you cannot buy your own listing (see buy_listed_car)."""
+    buyer_id = current_user.get("id") or ""
     cursor = db.user_cars.find(
-        {"listed_for_sale": True, "user_id": {"$ne": current_user.get("id") or ""}},
+        {"listed_for_sale": True},
         {"_id": 1, "id": 1, "user_id": 1, "car_id": 1, "car_name": 1, "custom_name": 1, "sale_price": 1, "listed_at": 1, "damage_percent": 1},
     ).sort("listed_at", -1)
     listings = await cursor.to_list(200)
@@ -1574,10 +1575,12 @@ async def get_marketplace_listings(current_user: dict = Depends(get_current_user
         listing_id = uc.get("id") or str(uc.get("_id", ""))
         car_id = uc.get("car_id")
         damage = 0 if _is_damage_immune_car(car_id, car_info.get("rarity")) else min(100, max(0, float(uc.get("damage_percent", 0))))
+        is_own = (uc.get("user_id") or "") == buyer_id
         # Public marketplace response: expose only seller_username, never raw seller_id
         out.append({
             "user_car_id": listing_id,
-            "seller_username": (seller or {}).get("username", "?"),
+            "seller_username": "You" if is_own else (seller or {}).get("username", "?"),
+            "is_own_listing": bool(is_own),
             "car_id": car_id,
             "name": display_name,
             "value": car_info.get("value", 0),

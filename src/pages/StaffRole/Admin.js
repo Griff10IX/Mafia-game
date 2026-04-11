@@ -345,6 +345,53 @@ function formatAdminMoneyInt(n) {
   return `$${x.toLocaleString()}`;
 }
 
+/** Human-readable cells for Betting Log when game_type is mdg (avoids raw JSON). */
+function formatMdgGamblingLogDetails(details) {
+  if (!details || typeof details !== 'object') return '—';
+  const d = details;
+  const action = String(d.action || '').toLowerCase();
+  const actionLabel =
+    action === 'create' ? 'Created game (host)' : action === 'join' ? 'Joined pot' : action === 'payout' ? 'Won pot (payout)' : action || '—';
+  const lines = [];
+  lines.push(['What', actionLabel]);
+  if (d.game_id) lines.push(['Game id', String(d.game_id)]);
+  const fp = Number(d.fee_points || 0);
+  const fm = Number(d.fee_money || 0);
+  if (fp || fm) {
+    const bits = [];
+    if (fp) bits.push(`${fp.toLocaleString()} pts`);
+    if (fm) bits.push(formatAdminMoneyInt(fm));
+    lines.push(['Entry fee paid', bits.join(' + ')]);
+  }
+  const ep = Number(d.extra_pot_points || 0);
+  const em = Number(d.extra_pot_money != null ? d.extra_pot_money : 0);
+  if (ep || em) {
+    const bits = [];
+    if (ep) bits.push(`${ep.toLocaleString()} pts to pot`);
+    if (em) bits.push(`${formatAdminMoneyInt(em)} to pot`);
+    lines.push(['Host extra pot', bits.join(', ')]);
+  }
+  if (d.players_after != null) lines.push(['Players after join', String(d.players_after)]);
+  const pp = Number(d.pot_points || 0);
+  const pm = Number(d.pot_money != null ? d.pot_money : 0);
+  if (action === 'payout' && (pp || pm)) {
+    const bits = [];
+    if (pp) bits.push(`${pp.toLocaleString()} pts`);
+    if (pm) bits.push(formatAdminMoneyInt(pm));
+    lines.push(['Pot taken', bits.join(' + ')]);
+  }
+  if (d.trigger) lines.push(['Trigger', String(d.trigger)]);
+  return (
+    <div className="space-y-0.5 text-[9px] leading-snug max-w-[280px]">
+      {lines.map(([k, v], idx) => (
+        <div key={idx}>
+          <span className="text-zinc-500">{k}:</span> <span className="text-zinc-200 break-all">{v}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** Live interest preview from draft term rows + principal (matches backend rounding). */
 function buildBankInterestPreviewRows(rows, principalRaw) {
   const principal = Math.max(0, parseInt(String(principalRaw).replace(/,/g, ''), 10) || 0);
@@ -15445,93 +15492,12 @@ export default function Admin() {
         )}
         </div>
 
-        {/* Betting Log — all casino and sports bets */}
-        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
-          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-          <SectionHeader
-            icon={Dice5}
-            title="Betting Log"
-            badge={gamblingLog.entries?.length != null && <span className="text-[10px] font-heading text-mutedForeground">{gamblingLog.entries.length} entries</span>}
-            toolAnchor="gamblingLog"
-            isCollapsed={collapsed.gamblingLog}
-            onToggle={() => toggleSection('gamblingLog')}
-          />
-          {!collapsed.gamblingLog && (
-            <div className="p-3 space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  type="text"
-                  value={gamblingLogUsername}
-                  onChange={(e) => setGamblingLogUsername(e.target.value)}
-                  placeholder="Filter by username"
-                  className="min-w-[100px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
-                />
-                <select
-                  value={gamblingLogGameType}
-                  onChange={(e) => setGamblingLogGameType(e.target.value)}
-                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
-                >
-                  <option value="">All games</option>
-                  <option value="dice">Dice</option>
-                  <option value="roulette">Roulette</option>
-                  <option value="blackjack">Blackjack</option>
-                  <option value="slots">Slots</option>
-                  <option value="videopoker">Video Poker</option>
-                  <option value="horseracing">Horse Racing</option>
-                  <option value="sports_bet">Sports</option>
-                  <option value="mdg">MDG (Pot)</option>
-                </select>
-                <BtnPrimary onClick={fetchGamblingLog} disabled={gamblingLogLoading}>
-                  {gamblingLogLoading ? '...' : 'Load'}
-                </BtnPrimary>
-              </div>
-              <div className="max-h-64 overflow-y-auto rounded border border-zinc-700/50">
-                <table className="w-full text-[10px] font-heading">
-                  <thead className="bg-zinc-800/50 sticky top-0">
-                    <tr>
-                      <th className="text-left p-2 text-mutedForeground uppercase">Time</th>
-                      <th className="text-left p-2 text-mutedForeground uppercase">User</th>
-                      <th className="text-left p-2 text-mutedForeground uppercase">Game</th>
-                      <th className="text-left p-2 text-mutedForeground uppercase">Details</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(gamblingLog.entries || []).map((e) => (
-                      <tr key={e.id} className="border-t border-zinc-700/30 hover:bg-zinc-800/30">
-                        <td className="p-2 text-mutedForeground whitespace-nowrap">{e.created_at ? new Date(e.created_at).toLocaleString() : '—'}</td>
-                        <td className="p-2 text-primary font-bold">{e.username || '—'}</td>
-                        <td className="p-2">{e.game_type || '—'}</td>
-                        <td className="p-2 text-mutedForeground max-w-[220px] truncate" title={JSON.stringify(e.details || {})}>{e.details ? JSON.stringify(e.details) : '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-zinc-700/30">
-                <span className="text-[10px] text-mutedForeground">Clear logs older than</span>
-                <input
-                  type="number"
-                  min={1}
-                  value={clearGamblingDays}
-                  onChange={(e) => setClearGamblingDays(parseInt(e.target.value) || 30)}
-                  className="w-14 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs"
-                />
-                <span className="text-[10px] text-mutedForeground">days</span>
-                <BtnDanger onClick={handleClearGamblingLog} disabled={clearGamblingLoading}>
-                  {clearGamblingLoading ? '...' : 'Clear old'}
-                </BtnDanger>
-              </div>
-              {(gamblingLog.entries || []).length === 0 && !gamblingLogLoading && <p className="text-xs text-mutedForeground">Load to see all casino activity (dice, roulette, blackjack, slots, video poker, horseracing, sports, MDG).</p>}
-            </div>
-          )}
-        </div>
-
         {/* MDG (Million Dollar Game) — full game ledger from mdg_games */}
-        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+        <div id="admin-mdg-games-log" className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel scroll-mt-4`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-violet-500/35 to-transparent" />
           <SectionHeader
             icon={Trophy}
-            title="MDG game log"
+            title="MDG games (readable log)"
             badge={
               mdgGamesLog.total != null && (
                 <span className="text-[10px] font-heading text-mutedForeground">
@@ -15547,8 +15513,7 @@ export default function Admin() {
           {!collapsed.mdgGamesLog && (
             <div className="p-3 space-y-2">
               <p className="text-[10px] text-mutedForeground font-heading">
-                Player-created and automated house MDG pots. Each row is one game: entrants, final pot, winner (or House), roll, and outcome. Raw create/join/payout lines stay in the Betting Log with{' '}
-                <span className="text-violet-400/90">game_type mdg</span>.
+                One card per game: host/creator, entrants in order with fees paid, final pot, winner, roll. The Betting Log (filter MDG) lists per-user create/join/payout audit lines in readable form.
               </p>
               {mdgGamesLog.house_stats && (
                 <div className="text-[10px] text-mutedForeground font-heading rounded border border-zinc-700/50 bg-zinc-900/40 px-2 py-1.5 space-y-0.5">
@@ -15636,69 +15601,179 @@ export default function Admin() {
                   Next page →
                 </button>
               </div>
-              <div className="max-h-96 overflow-y-auto rounded border border-zinc-700/50">
-                <table className="w-full text-[10px] font-heading">
-                  <thead className="bg-zinc-800/50 sticky top-0">
-                    <tr>
-                      <th className="text-left p-2 text-mutedForeground uppercase">Created</th>
-                      <th className="text-left p-2 text-mutedForeground uppercase">Rolled</th>
-                      <th className="text-left p-2 text-mutedForeground uppercase">Type</th>
-                      <th className="text-left p-2 text-mutedForeground uppercase">St</th>
-                      <th className="text-left p-2 text-mutedForeground uppercase">Creator</th>
-                      <th className="text-right p-2 text-mutedForeground uppercase">Pl</th>
-                      <th className="text-right p-2 text-mutedForeground uppercase">Pot pts</th>
-                      <th className="text-right p-2 text-mutedForeground uppercase">Pot $</th>
-                      <th className="text-left p-2 text-mutedForeground uppercase">Winner</th>
-                      <th className="text-left p-2 text-mutedForeground uppercase">Outcome</th>
-                      <th className="text-right p-2 text-mutedForeground uppercase">Roll</th>
-                      <th className="text-left p-2 text-mutedForeground uppercase">Game id</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(mdgGamesLog.games || []).map((g) => {
-                      const auto = !!g.is_automated;
-                      const outcomeLabel =
-                        g.outcome === 'house_win'
-                          ? 'House won'
-                          : g.outcome === 'player_win'
-                            ? 'Player won'
-                            : g.outcome === 'open'
-                              ? '—'
-                              : g.outcome === 'closed'
-                                ? 'Closed'
-                                : g.outcome || '—';
-                      return (
-                        <tr key={g.id} className="border-t border-zinc-700/30 hover:bg-zinc-800/30 align-top">
-                          <td className="p-2 text-mutedForeground whitespace-nowrap">{g.created_at ? new Date(g.created_at).toLocaleString() : '—'}</td>
-                          <td className="p-2 text-mutedForeground whitespace-nowrap">{g.rolled_at ? new Date(g.rolled_at).toLocaleString() : '—'}</td>
-                          <td className="p-2">{auto ? <span className="text-violet-400">Auto</span> : 'Player'}</td>
-                          <td className="p-2">{g.status || '—'}</td>
-                          <td className="p-2 text-primary font-bold max-w-[100px] truncate" title={g.created_by_username || ''}>
-                            {g.created_by_username || '—'}
-                          </td>
-                          <td className="p-2 text-right">{g.entry_count != null ? g.entry_count : (g.entries || []).length}</td>
-                          <td className="p-2 text-right text-mutedForeground">{Number(g.pot_points || 0).toLocaleString()}</td>
-                          <td className="p-2 text-right text-mutedForeground">{formatAdminMoneyInt(g.pot_money)}</td>
-                          <td className="p-2 max-w-[100px] truncate" title={g.winner_username || ''}>
-                            {g.winner_username || '—'}
-                          </td>
-                          <td className="p-2 text-mutedForeground">
-                            {outcomeLabel}
-                            {g.loser_count > 0 ? <span className="block text-[9px] opacity-80">{g.loser_count} lost</span> : null}
-                          </td>
-                          <td className="p-2 text-right">{g.roll != null ? g.roll : '—'}</td>
-                          <td className="p-2 font-mono text-[9px] text-mutedForeground max-w-[120px] truncate" title={g.id}>
-                            {g.id || '—'}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+              <div className="max-h-[32rem] space-y-2 overflow-y-auto rounded border border-zinc-700/50 p-2">
+                {(mdgGamesLog.games || []).map((g) => {
+                  const auto = !!g.is_automated;
+                  const entries = g.entries || [];
+                  const hostLabel = auto ? 'House (automated)' : g.created_by_username || '—';
+                  const outcomeLabel =
+                    g.outcome === 'house_win'
+                      ? 'House won'
+                      : g.outcome === 'player_win'
+                        ? 'Player won'
+                        : g.outcome === 'open'
+                          ? '—'
+                          : g.outcome === 'closed'
+                            ? 'Closed'
+                            : g.outcome || '—';
+                  return (
+                    <div key={g.id} className="rounded border border-zinc-700/60 bg-zinc-900/50 p-2 text-[10px] font-heading">
+                      <div className="flex flex-wrap items-baseline justify-between gap-1 border-b border-zinc-700/40 pb-1 mb-1">
+                        <span className="text-mutedForeground whitespace-nowrap">{g.created_at ? new Date(g.created_at).toLocaleString() : '—'}</span>
+                        <span className={auto ? 'text-violet-400 font-bold' : 'text-primary font-bold'}>{auto ? 'Auto MDG' : 'Player MDG'}</span>
+                        <span className="text-mutedForeground">{g.status || '—'}</span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500">Host / creator:</span>{' '}
+                        <span className="text-primary font-bold">{hostLabel}</span>
+                      </div>
+                      <div className="mt-1">
+                        <span className="text-zinc-500">In the pot ({entries.length}):</span>
+                        {entries.length > 0 ? (
+                          <ul className="mt-0.5 ml-3 list-disc text-zinc-300">
+                            {entries.map((ent, i) => {
+                              const pp = Number(ent.paid_points || 0);
+                              const pm = Number(ent.paid_money || 0);
+                              const paidBits = [];
+                              if (pp) paidBits.push(`${pp.toLocaleString()} pts`);
+                              if (pm) paidBits.push(formatAdminMoneyInt(pm));
+                              const paidStr = paidBits.length ? paidBits.join(', ') : '—';
+                              return (
+                                <li key={ent.user_id || i}>
+                                  <span className="text-primary font-bold">{ent.username || ent.user_id || '?'}</span>
+                                  <span className="text-zinc-500"> — paid {paidStr}</span>
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        ) : (
+                          <span className="text-zinc-500"> No entrants loaded</span>
+                        )}
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                        <span>
+                          <span className="text-zinc-500">Final pot:</span> {Number(g.pot_points || 0).toLocaleString()} pts · {formatAdminMoneyInt(g.pot_money)}
+                        </span>
+                        {auto && g.house_pot != null ? (
+                          <span className="text-zinc-500">House seed: {formatAdminMoneyInt(g.house_pot)}</span>
+                        ) : null}
+                      </div>
+                      <div className="mt-1">
+                        <span className="text-zinc-500">Winner:</span>{' '}
+                        <span className="font-bold text-emerald-400/90">
+                          {g.winner_username || (g.status === 'open' ? '— (not rolled)' : '—')}
+                        </span>
+                        {g.roll != null ? <span className="text-zinc-500"> · roll #{g.roll}</span> : null}
+                        {g.rolled_at ? <span className="text-zinc-500"> · rolled {new Date(g.rolled_at).toLocaleString()}</span> : null}
+                      </div>
+                      <div className="mt-0.5 text-mutedForeground">
+                        Outcome: {outcomeLabel}
+                        {g.loser_count > 0 ? <span className="ml-1 text-[9px] opacity-80">({g.loser_count} lost)</span> : null}
+                      </div>
+                      <div className="text-[9px] font-mono text-zinc-600 mt-1 break-all">id: {g.id}</div>
+                    </div>
+                  );
+                })}
               </div>
               {(mdgGamesLog.games || []).length === 0 && !mdgGamesLogLoading && (
                 <p className="text-xs text-mutedForeground">Click Load to query mdg_games. Use Betting Log with filter MDG for per-user fee/join/payout audit lines.</p>
               )}
+            </div>
+          )}
+        </div>
+
+        {/* Betting Log — all casino and sports bets */}
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={Dice5}
+            title="Betting Log"
+            badge={gamblingLog.entries?.length != null && <span className="text-[10px] font-heading text-mutedForeground">{gamblingLog.entries.length} entries</span>}
+            toolAnchor="gamblingLog"
+            isCollapsed={collapsed.gamblingLog}
+            onToggle={() => toggleSection('gamblingLog')}
+          />
+          {!collapsed.gamblingLog && (
+            <div className="p-3 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={gamblingLogUsername}
+                  onChange={(e) => setGamblingLogUsername(e.target.value)}
+                  placeholder="Filter by username"
+                  className="min-w-[100px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                <select
+                  value={gamblingLogGameType}
+                  onChange={(e) => setGamblingLogGameType(e.target.value)}
+                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                >
+                  <option value="">All games</option>
+                  <option value="dice">Dice</option>
+                  <option value="roulette">Roulette</option>
+                  <option value="blackjack">Blackjack</option>
+                  <option value="slots">Slots</option>
+                  <option value="videopoker">Video Poker</option>
+                  <option value="horseracing">Horse Racing</option>
+                  <option value="sports_bet">Sports</option>
+                  <option value="mdg">MDG (Pot)</option>
+                </select>
+                <BtnPrimary onClick={fetchGamblingLog} disabled={gamblingLogLoading}>
+                  {gamblingLogLoading ? '...' : 'Load'}
+                </BtnPrimary>
+              </div>
+              {gamblingLogGameType === 'mdg' && (
+                <p className="text-[10px] text-violet-300/90 rounded border border-violet-500/30 bg-violet-950/20 px-2 py-1.5 font-heading">
+                  Per-event audit lines below. For each <strong>whole game</strong> (host, everyone in the pot, winner, roll) use the{' '}
+                  <a href="#admin-mdg-games-log" className="underline font-bold text-violet-200">
+                    MDG games log
+                  </a>{' '}
+                  above.
+                </p>
+              )}
+              <div className="max-h-64 overflow-y-auto rounded border border-zinc-700/50">
+                <table className="w-full text-[10px] font-heading">
+                  <thead className="bg-zinc-800/50 sticky top-0">
+                    <tr>
+                      <th className="text-left p-2 text-mutedForeground uppercase">Time</th>
+                      <th className="text-left p-2 text-mutedForeground uppercase">User</th>
+                      <th className="text-left p-2 text-mutedForeground uppercase">Game</th>
+                      <th className="text-left p-2 text-mutedForeground uppercase">Details</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(gamblingLog.entries || []).map((e) => (
+                      <tr key={e.id} className="border-t border-zinc-700/30 hover:bg-zinc-800/30">
+                        <td className="p-2 text-mutedForeground whitespace-nowrap">{e.created_at ? new Date(e.created_at).toLocaleString() : '—'}</td>
+                        <td className="p-2 text-primary font-bold">{e.username || '—'}</td>
+                        <td className="p-2">{e.game_type || '—'}</td>
+                        <td className="p-2 text-mutedForeground align-top max-w-[min(100vw,280px)]">
+                          {(e.game_type || '').toLowerCase() === 'mdg' && e.details && typeof e.details === 'object'
+                            ? formatMdgGamblingLogDetails(e.details)
+                            : e.details
+                              ? JSON.stringify(e.details)
+                              : '—'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 pt-1 border-t border-zinc-700/30">
+                <span className="text-[10px] text-mutedForeground">Clear logs older than</span>
+                <input
+                  type="number"
+                  min={1}
+                  value={clearGamblingDays}
+                  onChange={(e) => setClearGamblingDays(parseInt(e.target.value) || 30)}
+                  className="w-14 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs"
+                />
+                <span className="text-[10px] text-mutedForeground">days</span>
+                <BtnDanger onClick={handleClearGamblingLog} disabled={clearGamblingLoading}>
+                  {clearGamblingLoading ? '...' : 'Clear old'}
+                </BtnDanger>
+              </div>
+              {(gamblingLog.entries || []).length === 0 && !gamblingLogLoading && <p className="text-xs text-mutedForeground">Load to see all casino activity (dice, roulette, blackjack, slots, video poker, horseracing, sports, MDG).</p>}
             </div>
           )}
         </div>

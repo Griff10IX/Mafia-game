@@ -125,6 +125,7 @@ export default function BuyCars() {
       });
     });
     marketplaceListings.forEach((l) => {
+      const own = !!l.is_own_listing;
       rows.push({
         id: `listing:${l.user_car_id}`,
         source: 'listing',
@@ -134,7 +135,8 @@ export default function BuyCars() {
         speed: TRAVEL_TIMES[l.rarity] ?? 45,
         owner: l.seller_username ?? '?',
         rarity: l.rarity || 'common',
-        canBuy: (userMoney ?? 0) >= (l.sale_price ?? 0),
+        isOwnListing: own,
+        canBuy: !own && (userMoney ?? 0) >= (l.sale_price ?? 0),
         damage_percent: l.damage_percent ?? 0,
       });
     });
@@ -314,7 +316,7 @@ export default function BuyCars() {
             </thead>
             <tbody className="divide-y divide-border">
               {filteredVehicles.map((row) => (
-                <tr key={row.id} className={`bc-row transition-colors ${!row.canBuy ? 'opacity-60' : ''}`}>
+                <tr key={row.id} className={`bc-row transition-colors ${!row.canBuy && !row.isOwnListing ? 'opacity-60' : ''}`}>
                   <td className="py-1 pl-1.5 pr-0">
                     {row.source === 'dealer' && (row.inStock ?? 0) > 0 ? (
                       row.canBuy ? (
@@ -334,7 +336,9 @@ export default function BuyCars() {
                         </span>
                       )
                     ) : row.source === 'listing' ? (
-                      row.canBuy ? (
+                      row.isOwnListing ? (
+                        <span className="inline-block w-4" title="Your listing — use Sell Cars to delist" />
+                      ) : row.canBuy ? (
                         <button type="button" onClick={() => toggleSelect(row.id)} className="p-0.5 rounded hover:bg-primary/10">
                           {selectedIds.has(row.id) ? (
                             <CheckSquare size={12} className="text-primary" />
