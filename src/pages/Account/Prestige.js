@@ -163,7 +163,9 @@ export default function Prestige() {
   const effectiveRp = info.effective_rank_points;
   const godReqNum = Number(godReq) || 0;
   const effRpNum = Number(effectiveRp) || 0;
-  const prestigePathMet = godReqNum > 0 && effRpNum >= godReqNum;
+  // Real climb: max(Godfather effective ladder, prestige RP gate) — not the smaller gate alone (e.g. 510k vs 1.02M).
+  const pathTargetNum = Number(info.prestige_path_target_effective ?? godReqNum) || 0;
+  const prestigePathMet = pathTargetNum > 0 && effRpNum >= pathTargetNum;
 
   return (
     <div className={`space-y-3 md:space-y-4 ${styles.pageContent} mobile-page-root`}>
@@ -287,19 +289,18 @@ export default function Prestige() {
                 <span className="text-[10px] font-heading font-bold tabular-nums shrink-0" style={{ color: nextColor }}>
                   {prestigePathMet
                     ? '100%'
-                    : `${effRpNum.toLocaleString()} / ${godReqNum.toLocaleString()}`}
+                    : `${effRpNum.toLocaleString()} / ${pathTargetNum.toLocaleString()}`}
                 </span>
               </div>
-              <ProgressBar value={effRpNum} max={godReqNum || 1} color={nextColor} />
-              {prestigePathMet ? (
-                <p className="text-[9px] text-zinc-500 font-heading mt-1.5">
-                  Requirement met: {godReqNum.toLocaleString()} effective RP to prestige · you have{' '}
-                  {effRpNum.toLocaleString()}
-                </p>
-              ) : (
+              <ProgressBar value={effRpNum} max={pathTargetNum || 1} color={nextColor} />
+              {!prestigePathMet && (
                 <p className="text-[9px] text-zinc-600 font-heading mt-1.5">
-                  Reach Godfather ({(400_000).toLocaleString()} base pts ×{' '}
-                  {((info.all_levels?.find(l => l.level === level + 1)?.godfather_req ?? 400_000) / 400_000).toFixed(1)}×) to unlock
+                  Target {pathTargetNum.toLocaleString()} effective RP (Godfather is{' '}
+                  {(info.godfather_effective_threshold ?? 0).toLocaleString()}
+                  {godReqNum > (info.godfather_effective_threshold ?? 0)
+                    ? `; prestige gate ${godReqNum.toLocaleString()}`
+                    : ''}
+                  ).
                 </p>
               )}
             </div>

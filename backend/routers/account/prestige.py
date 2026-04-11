@@ -60,6 +60,11 @@ def register(router):
         at_max = level >= 5
         next_level = level + 1 if not at_max else None
         godfather_req = get_prestige_requirement(level) if next_level else None
+        godfather_effective_threshold = int(srv.RANKS[-1]["required_points"])
+        prestige_path_target_effective = None
+        if next_level is not None and godfather_req is not None:
+            # Bar must reflect the real climb: you cannot prestige below Godfather, and some gates exceed that RP.
+            prestige_path_target_effective = max(godfather_effective_threshold, int(godfather_req))
 
         effective_rp = int(rank_points / mult) if mult > 1.0 else rank_points
         can_prestige = (
@@ -100,6 +105,8 @@ def register(router):
             "can_prestige": can_prestige,
             "at_max_prestige": at_max,
             "godfather_req": godfather_req,
+            "godfather_effective_threshold": godfather_effective_threshold,
+            "prestige_path_target_effective": prestige_path_target_effective,
             "current_benefits": current_benefits,
             "all_levels": all_levels,
         }
