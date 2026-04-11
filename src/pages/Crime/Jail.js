@@ -153,12 +153,11 @@ const AutoRankIcon = () => (
   </span>
 );
 
-/** Jail list rows: real inmates use rp_reward 15, NPC rows 25 (server contract; no is_npc on wire). */
-const rowIsJailNpc = (player) => (player?.rp_reward ?? 0) === 25;
-
 const JailedPlayerRow = ({ player, index, onBust, loading, userInJail, manualPlayDisabled, adminOnlineColor, modDefaultOnlineColor }) => {
-  const rp = player.rp_reward ?? (rowIsJailNpc(player) ? 25 : 15);
-  const isNpc = rowIsJailNpc(player);
+  const legacyNpcRp = [16, 25].includes(Number(player?.rp_reward));
+  const isNpc =
+    player.is_jail_list_npc === true ||
+    (player.is_jail_list_npc === undefined && legacyNpcRp);
   const adminColor = (adminOnlineColor && adminOnlineColor.trim()) || '#a78bfa';
   const modColor = (modDefaultOnlineColor && modDefaultOnlineColor.trim()) || DEFAULT_MOD_COLOR;
   // Match Users Online / admin settings: per-user online_color (mod custom colour), else global admin/mod defaults
@@ -269,10 +268,6 @@ const InfoSection = () => (
         <li className="flex items-start gap-1">
           <span className="text-primary shrink-0">•</span>
           <span>Success chance = your bust skill (more busts = higher %)</span>
-        </li>
-        <li className="flex items-start gap-1">
-          <span className="text-primary shrink-0">•</span>
-          <span>NPCs: 25 RP · Players: 15 RP (+ cash if they set a reward)</span>
         </li>
         <li className="flex items-start gap-1">
           <span className="text-primary shrink-0">•</span>

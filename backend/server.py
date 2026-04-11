@@ -1972,8 +1972,13 @@ async def check_and_process_rank_up(user_id: str, old_rank: int, new_rank: int, 
     return 0
 
 
-async def maybe_process_rank_up(user_id: str, rank_points_before: int, rank_points_added: int, username: str = "", prestige_mult: float = 1.0):
+async def maybe_process_rank_up(user_id: str, rank_points_before, rank_points_added, username: str = "", prestige_mult: float = 1.0):
     """If rank increased after adding rank_points_added to rank_points_before, grant rewards and send notification."""
+    try:
+        rank_points_added = float(rank_points_added)
+        rank_points_before = float(rank_points_before)
+    except (TypeError, ValueError):
+        return
     if rank_points_added <= 0:
         return
     # Use caller-provided prestige_mult when given; otherwise load from user so prestiged users get correct rank (and notification text)

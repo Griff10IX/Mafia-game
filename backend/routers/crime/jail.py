@@ -220,6 +220,23 @@ JAIL_BUST_RATE_FLOOR = 0.04  # 4% minimum
 JAIL_BUST_FAILURE_PENALTY_PER = 0.001  # 0.1% per failed attempt
 JAIL_BUST_MAX_FAILURE_PENALTY = 0.08   # cap total penalty at 8%
 
+def _jail_bust_roll_rank_points_player() -> float:
+    """Uniform rank XP for busting a real player (before RP perk / crime XP double)."""
+    return round(_rng.uniform(0.3, 3.0), 1)
+
+
+def _jail_bust_roll_rank_points_npc() -> float:
+    """Uniform rank XP for busting a jail NPC (before crime XP double)."""
+    return round(_rng.uniform(0.5, 5.0), 1)
+
+
+def _rank_points_before_bust(user: dict) -> float:
+    """Current rank_points as float (jail bust can grant fractional RP)."""
+    try:
+        return float(user.get("rank_points") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
 
 def _player_bust_success_rate(total_attempts: int, total_successes: int = 0) -> float:
     """Bust success rate from experience (attempts) and a small penalty for failures. Never goes below JAIL_BUST_RATE_FLOOR."""
@@ -413,7 +430,7 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
                 "username": username,
                 "rank_name": rank_name,
                 "is_self": player["id"] == current_user["id"],
-                "rp_reward": 15,
+                "is_jail_list_npc": False,
                 "bust_reward_cash": reward_cash,
                 **styling,
             }
@@ -423,7 +440,7 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
         row = {
             "username": npc["username"],
             "rank_name": npc.get("rank_name", "Goon"),
-            "rp_reward": 25,
+            "is_jail_list_npc": True,
             "bust_reward_cash": bust_reward_cash,
         }
         if npc.get("owner_user_id"):
@@ -560,7 +577,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
     )
     if npc:
         success = _rng.random() < player_success_rate
-        rank_points = 25
+        rank_points = _jail_bust_roll_rank_points_npc()
         now_utc = datetime.now(timezone.utc)
         xp_double_until = current_user.get("xp_double_until")
         if xp_double_until:
@@ -569,7 +586,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
                 if until.tzinfo is None:
                     until = until.replace(tzinfo=timezone.utc)
                 if now_utc < until:
-                    rank_points = rank_points * 2
+                    rank_points = round(rank_points * 2, 1)
             except Exception:
                 pass
         bust_reward_cash = _safe_int(npc.get("bust_reward_cash"), 0)
@@ -584,7 +601,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
                 return {"success": False, "message": "That inmate was already busted out.", "jail_time": 0}
             new_consec = _safe_int(current_user.get("current_consecutive_busts"), 0) + 1
             record = max(_safe_int(current_user.get("consecutive_busts_record"), 0), new_consec)
-            rp_before = _safe_int(current_user.get("rank_points"), 0)
+            rp_before = _rank_points_before_bust(current_user)
             updates = {"$inc": {"rank_points": rank_points, "jail_busts": 1, "jail_busts_npc": 1, "jail_bust_attempts": 1}, "$set": {"current_consecutive_busts": new_consec, "consecutive_busts_record": record}}
             if bust_reward_cash > 0:
                 updates["$inc"]["money"] = bust_reward_cash
@@ -652,7 +669,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
     effective_success_rate = player_success_rate / target_bust_mult
     success = _rng.random() < effective_success_rate
     if success:
-        rank_points = 15
+        rank_points = _jail_bust_roll_rank_points_player()
         now_utc = datetime.now(timezone.utc)
         rp_perk_until = current_user.get("rp_perk_until")
         if rp_perk_until:
@@ -661,7 +678,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
                 if until.tzinfo is None:
                     until = until.replace(tzinfo=timezone.utc)
                 if now_utc < until:
-                    rank_points = int(rank_points * 1.1)
+                    rank_points = round(rank_points * 1.1, 1)
             except Exception:
                 pass
         xp_double_until = current_user.get("xp_double_until")
@@ -671,7 +688,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
                 if until.tzinfo is None:
                     until = until.replace(tzinfo=timezone.utc)
                 if now_utc < until:
-                    rank_points = rank_points * 2
+                    rank_points = round(rank_points * 2, 1)
             except Exception:
                 pass
         released = await db.users.find_one_and_update(
@@ -706,7 +723,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
                 await db.users.update_one({"id": current_user["id"]}, {"$inc": {"money": cash_to_pay}})
         new_consec = _safe_int(current_user.get("current_consecutive_busts"), 0) + 1
         record = max(_safe_int(current_user.get("consecutive_busts_record"), 0), new_consec)
-        rp_before = _safe_int(current_user.get("rank_points"), 0)
+        rp_before = _rank_points_before_bust(current_user)
         await db.users.update_one(
             {"id": current_user["id"]},
             {"$inc": {"rank_points": rank_points, "jail_busts": 1, "jail_bust_attempts": 1}, "$set": {"current_consecutive_busts": new_consec, "consecutive_busts_record": record}},
