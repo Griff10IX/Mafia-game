@@ -6841,9 +6841,70 @@ def register(router):
             "anomalies": anomalies[:50],
         }
 
+    def _trade_events_since_filter(since: datetime, since_iso: str) -> Dict[str, Any]:
+        """Quick Trade logs use BSON Date for `at`; match both Date and legacy ISO strings."""
+        return {"$or": [{"at": {"$gte": since}}, {"at": {"$gte": since_iso}}]}
+
+    def _quicktrade_event_summary(e: Dict[str, Any]) -> str:
+        t = (e.get("type") or "").strip()
+        if t == "sell_offer_accepted":
+            b, s = e.get("buyer_username") or "?", e.get("seller_username") or "?"
+            pts, cash = int(e.get("points") or 0), int(e.get("money") or 0)
+            return (
+                f"{b} accepted {s}'s sell listing: {pts:,} pts for ${cash:,} cash "
+                f"(buyer pays cash and receives pts; seller receives cash)."
+            )
+        if t == "buy_offer_accepted":
+            slr, buy = e.get("seller_username") or "?", e.get("buyer_username") or "?"
+            pts, cash = int(e.get("points") or 0), int(e.get("money") or 0)
+            return (
+                f"{slr} filled {buy}'s buy order: {pts:,} pts for ${cash:,} cash "
+                f"(seller sends pts and receives cash; buyer receives pts from escrow)."
+            )
+        if t == "sell_offer_created":
+            u = e.get("username") or "?"
+            return f"{u} created sell listing: {int(e.get('points') or 0):,} pts asking ${int(e.get('money') or 0):,}."
+        if t == "buy_offer_created":
+            u = e.get("username") or "?"
+            return f"{u} created buy order (cash held): {int(e.get('points') or 0):,} pts for ${int(e.get('money') or 0):,}."
+        if t == "sell_offer_cancelled":
+            return f"Sell offer cancelled · lister {e.get('username') or '?'}"
+        if t == "buy_offer_cancelled":
+            return f"Buy order cancelled · buyer {e.get('username') or '?'}"
+        if t == "token_offer_accepted":
+            slr, buy = e.get("seller_username") or "?", e.get("buyer_username") or "?"
+            tt = (e.get("token_type") or "?").replace("_", " ")
+            q = int(e.get("quantity") or 0)
+            cur = (e.get("price_currency") or "points").strip().lower()
+            if cur == "money":
+                return f"{buy} bought {q}× {tt} from {slr} for ${int(e.get('money') or 0):,} cash."
+            return f"{buy} bought {q}× {tt} from {slr} for {int(e.get('points') or 0):,} points."
+        if t == "property_purchase":
+            b, s = e.get("buyer_username") or "?", e.get("seller_username") or "?"
+            nm = e.get("property_name") or "Property"
+            pts = int(e.get("points") or 0)
+            return f"{b} bought {nm} from {s} for {pts:,} points."
+        if t == "token_offer_cancelled":
+            return f"Token listing cancelled · seller {e.get('user_id') or '?'}"
+        if t == "property_listing_cancelled":
+            return f"Property listing cancelled · {e.get('property_name') or '—'}"
+        return t or "trade event"
+
+    def _trade_event_ledger_row(raw: Dict[str, Any]) -> Dict[str, Any]:
+        e = dict(raw)
+        at = e.get("at")
+        if hasattr(at, "isoformat"):
+            try:
+                e["at"] = at.isoformat()
+            except Exception:
+                e["at"] = str(at)
+        e["summary"] = _quicktrade_event_summary(e)
+        return e
+
     @router.get("/admin/trades/analytics/summary")
     async def admin_trades_analytics_summary(
         days: int = Query(7, ge=1, le=90),
+        ledger_limit: int = Query(250, ge=0, le=500),
         current_user: dict = Depends(get_current_user),
     ):
         """
@@ -6855,13 +6916,28 @@ def register(router):
         now = datetime.now(timezone.utc)
         since = now - timedelta(days=int(days))
         since_iso = since.isoformat()
+        tfilter = _trade_events_since_filter(since, since_iso)
 
-        cursor = db.trade_events.find(
-            {"at": {"$gte": since_iso}},
-            {"_id": 0},
-        )
-        stats = {}
+        def _trade_at_ts(val: Any) -> float:
+            if val is None:
+                return 0.0
+            if hasattr(val, "timestamp"):
+                try:
+                    return float(val.timestamp())
+                except Exception:
+                    return 0.0
+            if isinstance(val, str):
+                try:
+                    return datetime.fromisoformat(val.replace("Z", "+00:00")).timestamp()
+                except Exception:
+                    return 0.0
+            return 0.0
+
+        cursor = db.trade_events.find(tfilter, {"_id": 0})
+        stats: Dict[Tuple[str, str], Dict[str, Any]] = {}
+        raw_ledger: List[Dict[str, Any]] = []
         async for e in cursor:
+            raw_ledger.append(e)
             ev_type = (e.get("type") or "").strip() or "unknown"
             direction = (e.get("direction") or "").strip() or "unknown"
             key = (ev_type, direction)
@@ -6898,7 +6974,17 @@ def register(router):
                     "usage_share": usage_share,
                 }
             )
-        return {"generated_at": now.isoformat(), "days": days, "items": items}
+        ledger: List[Dict[str, Any]] = []
+        if ledger_limit > 0 and raw_ledger:
+            raw_ledger.sort(key=lambda r: _trade_at_ts(r.get("at")), reverse=True)
+            ledger = [_trade_event_ledger_row(r) for r in raw_ledger[: int(ledger_limit)]]
+        return {
+            "generated_at": now.isoformat(),
+            "days": days,
+            "items": items,
+            "ledger": ledger,
+            "ledger_limit": ledger_limit,
+        }
 
     @router.get("/admin/hitlist-bodyguards/analytics/summary")
     async def admin_hitlist_bodyguards_analytics_summary(

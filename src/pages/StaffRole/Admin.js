@@ -4476,7 +4476,9 @@ export default function Admin() {
   const handleFetchTradesAnalytics = async () => {
     setTradesAnalyticsLoading(true);
     try {
-      const res = await api.get('/admin/trades/analytics/summary', { params: { days: tradesAnalyticsDays } });
+      const res = await api.get('/admin/trades/analytics/summary', {
+        params: { days: tradesAnalyticsDays, ledger_limit: 250 },
+      });
       setTradesAnalytics(res.data || null);
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to load trades analytics');
@@ -13723,7 +13725,14 @@ export default function Admin() {
           <SectionHeader
             icon={BarChart3}
             title="Trades (Quicktrade) Analytics"
-            badge={tradesAnalytics?.items ? <span className="text-[10px] font-heading text-mutedForeground">{tradesAnalytics.items.length} types</span> : null}
+            badge={tradesAnalytics?.items ? (
+              <span className="text-[10px] font-heading text-mutedForeground">
+                {tradesAnalytics.items.length} types
+                {Array.isArray(tradesAnalytics.ledger) && tradesAnalytics.ledger.length > 0
+                  ? ` · ${tradesAnalytics.ledger.length} in ledger`
+                  : ''}
+              </span>
+            ) : null}
             toolAnchor="tradesAnalytics"
             isCollapsed={collapsed.tradesAnalytics}
             onToggle={() => toggleSection('tradesAnalytics')}
@@ -13740,7 +13749,7 @@ export default function Admin() {
                 <>
                   <p className="text-[10px] text-mutedForeground font-heading">Last {tradesAnalytics.days} day(s).</p>
                   <div className="overflow-x-auto max-h-72">
-                    {(!tradesAnalytics.items || tradesAnalytics.items.length === 0) ? <p className="text-[10px] text-mutedForeground font-heading">No trade events.</p> : (
+                    {(!tradesAnalytics.items || tradesAnalytics.items.length === 0) ? <p className="text-[10px] text-mutedForeground font-heading">No trade events in this window.</p> : (
                       <table className="w-full text-[10px] font-heading">
                         <thead><tr><th className="text-left p-1.5 text-mutedForeground">Type</th><th className="text-left p-1.5 text-mutedForeground">Direction</th><th className="text-right p-1.5 text-mutedForeground">Count</th><th className="text-right p-1.5 text-mutedForeground">Points</th><th className="text-right p-1.5 text-mutedForeground">Money</th><th className="text-right p-1.5 text-mutedForeground">Share</th></tr></thead>
                         <tbody>
@@ -13758,6 +13767,35 @@ export default function Admin() {
                       </table>
                     )}
                   </div>
+                  {Array.isArray(tradesAnalytics.ledger) && tradesAnalytics.ledger.length > 0 && (
+                    <div className="pt-2 space-y-1">
+                      <p className="text-[10px] font-heading text-primary uppercase tracking-wider">Recent trades (newest first)</p>
+                      <div className="overflow-x-auto max-h-96 overflow-y-auto rounded border border-zinc-700/40">
+                        <table className="w-full text-[10px] font-heading">
+                          <thead className="sticky top-0 bg-zinc-900/95 z-[1]">
+                            <tr>
+                              <th className="text-left p-1.5 text-mutedForeground whitespace-nowrap">When (UTC)</th>
+                              <th className="text-left p-1.5 text-mutedForeground">Type</th>
+                              <th className="text-left p-1.5 text-mutedForeground min-w-[14rem]">What happened</th>
+                              <th className="text-right p-1.5 text-mutedForeground">Pts</th>
+                              <th className="text-right p-1.5 text-mutedForeground">Cash</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {tradesAnalytics.ledger.map((row, idx) => (
+                              <tr key={idx} className="border-b border-zinc-700/30 align-top">
+                                <td className="py-1.5 pr-2 whitespace-nowrap text-mutedForeground">{row.at ? String(row.at).replace('T', ' ').slice(0, 19) : '—'}</td>
+                                <td className="py-1.5 pr-2 font-medium">{row.type || '—'}</td>
+                                <td className="py-1.5 pr-2 text-mutedForeground leading-snug">{row.summary || '—'}</td>
+                                <td className="py-1.5 text-right whitespace-nowrap">{row.points != null && Number(row.points) !== 0 ? Number(row.points).toLocaleString() : '—'}</td>
+                                <td className="py-1.5 text-right whitespace-nowrap">{row.money != null && Number(row.money) !== 0 ? `$${Number(row.money).toLocaleString()}` : '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
                 </>
               )}
             </div>

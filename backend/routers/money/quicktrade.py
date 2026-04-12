@@ -591,6 +591,26 @@ async def accept_token_offer(offer_id: str, current_user: dict = Depends(get_cur
             "Quick Trade: tokens sold",
             f"{buyer_username} bought your listing: {int(offer['quantity']):,}× {_token_type_label(token_type)} for ${price_money:,} cash.",
         )
+        try:
+            await db.trade_events.insert_one(
+                {
+                    "id": str(offer_id),
+                    "type": "token_offer_accepted",
+                    "direction": "token",
+                    "seller_id": offer["user_id"],
+                    "seller_username": offer.get("username"),
+                    "buyer_id": buyer_id,
+                    "buyer_username": buyer_username,
+                    "token_type": token_type,
+                    "quantity": int(offer["quantity"]),
+                    "price_currency": "money",
+                    "points": 0,
+                    "money": int(price_money),
+                    "at": datetime.now(timezone.utc),
+                }
+            )
+        except Exception:
+            pass
         return {
             "message": "Trade completed",
             "token_type": token_type,
@@ -634,6 +654,26 @@ async def accept_token_offer(offer_id: str, current_user: dict = Depends(get_cur
         "Quick Trade: tokens sold",
         f"{buyer_username} bought your listing: {int(offer['quantity']):,}× {_token_type_label(token_type)} for {price_points:,} points.",
     )
+    try:
+        await db.trade_events.insert_one(
+            {
+                "id": str(offer_id),
+                "type": "token_offer_accepted",
+                "direction": "token",
+                "seller_id": offer["user_id"],
+                "seller_username": offer.get("username"),
+                "buyer_id": buyer_id,
+                "buyer_username": buyer_username,
+                "token_type": token_type,
+                "quantity": int(offer["quantity"]),
+                "price_currency": "points",
+                "points": int(price_points),
+                "money": 0,
+                "at": datetime.now(timezone.utc),
+            }
+        )
+    except Exception:
+        pass
     return {
         "message": "Trade completed",
         "token_type": token_type,
@@ -1049,6 +1089,24 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
                 {"$set": {"owner_id": buyer_id, "owner_username": buyer_username}},
                 upsert=True
             )
+    try:
+        await db.trade_events.insert_one(
+            {
+                "id": str(property_id),
+                "type": "property_purchase",
+                "direction": "property",
+                "seller_id": prop.get("owner_id"),
+                "seller_username": prop.get("owner_username"),
+                "buyer_id": buyer_id,
+                "buyer_username": buyer_username,
+                "property_name": prop.get("name"),
+                "points": int(sale_price or 0),
+                "money": 0,
+                "at": datetime.now(timezone.utc),
+            }
+        )
+    except Exception:
+        pass
     await db.properties.delete_one({"_id": ObjectId(property_id)})
     _invalidate_trade_caches()
     await maybe_revoke_civilian_protection(db, buyer_id, "received_property_transfer")
