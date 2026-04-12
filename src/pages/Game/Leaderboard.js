@@ -2,6 +2,15 @@ import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react
 import { Link, useSearchParams } from 'react-router-dom';
 import { Trophy, Target, Flame, Car, Lock, RefreshCw, Medal, Award, Skull, History, DollarSign, Star, Zap, TrendingUp, Wine } from 'lucide-react';
 import api from '../../utils/api';
+import {
+  LB_BOARD_KEYS,
+  boardsCacheLooksValid,
+  EMPTY_BOARDS,
+  LB_PERIOD_STORAGE_KEY,
+  readPersistedPeriod,
+  readLbEntry,
+  writeLbEntry,
+} from '../../utils/leaderboardTopCache';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -14,91 +23,7 @@ const LB_STYLES = `
   @keyframes lb-highlight-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(234, 179, 8, 0); } 40% { box-shadow: 0 0 0 3px rgba(234, 179, 8, 0.45); } }
 `;
 
-const LB_BOARD_KEYS = new Set([
-  'rank_points', 'kills', 'crimes', 'gta', 'jail_busts', 'points_spent',
-  'respect_points', 'bullets_melted', 'stock_market_profit', 'booze_run_profit',
-]);
-
-/** Reject corrupt / legacy sessionStorage shapes so we show loading and refetch. */
-function boardsCacheLooksValid(boards) {
-  if (!boards || typeof boards !== 'object') return false;
-  for (const k of LB_BOARD_KEYS) {
-    if (!Array.isArray(boards[k])) return false;
-  }
-  return true;
-}
-
 const TOP_OPTIONS = [5, 10, 20, 50, 100];
-
-const EMPTY_BOARDS = {
-  rank_points: [],
-  kills: [], crimes: [], gta: [], jail_busts: [], points_spent: [],
-  respect_points: [], bullets_melted: [], stock_market_profit: [], booze_run_profit: [],
-};
-
-const LB_CACHE_STORAGE_KEY = 'mafia_lb_top_v1';
-const LB_PERIOD_STORAGE_KEY = 'mafia_lb_period_v1';
-const LB_CACHE_MAX_KEYS = 12;
-
-function readPersistedPeriod() {
-  try {
-    const s = sessionStorage.getItem(LB_PERIOD_STORAGE_KEY);
-    if (s === 'weekly' || s === 'alltime') return s;
-  } catch (_) {}
-  return 'weekly';
-}
-
-function _weekStartUTCString() {
-  const now = new Date();
-  // getUTCDay(): 0=Sunday ... 6=Saturday
-  const day = now.getUTCDay();
-  // Monday-based offset: Monday => 0, Tuesday => 1, ..., Sunday => 6
-  const diff = (day + 6) % 7;
-  const mondayUTC = new Date(Date.UTC(
-    now.getUTCFullYear(),
-    now.getUTCMonth(),
-    now.getUTCDate() - diff,
-    0, 0, 0, 0
-  ));
-  return mondayUTC.toISOString().slice(0, 10);
-}
-
-function _lbCacheKey(period, topLimit, dead) {
-  const p = (period || '').toLowerCase();
-  const weekStart = p === 'weekly' ? _weekStartUTCString() : '';
-  return `${p}|${weekStart}|${topLimit}|${dead ? '1' : '0'}`;
-}
-
-function readLbEntry(period, topLimit, dead) {
-  try {
-    const raw = sessionStorage.getItem(LB_CACHE_STORAGE_KEY);
-    if (!raw) return null;
-    const all = JSON.parse(raw);
-    if (!all || typeof all !== 'object') return null;
-    return all[_lbCacheKey(period, topLimit, dead)] || null;
-  } catch {
-    return null;
-  }
-}
-
-function writeLbEntry(period, topLimit, dead, boards, lastRewardWinners) {
-  try {
-    const raw = sessionStorage.getItem(LB_CACHE_STORAGE_KEY);
-    const all = raw ? JSON.parse(raw) : {};
-    if (!all || typeof all !== 'object') return;
-    all[_lbCacheKey(period, topLimit, dead)] = {
-      boards,
-      last_reward_winners: lastRewardWinners,
-      t: Date.now(),
-    };
-    const keys = Object.keys(all);
-    if (keys.length > LB_CACHE_MAX_KEYS) {
-      keys.sort((a, b) => (all[a]?.t || 0) - (all[b]?.t || 0));
-      for (let i = 0; i < keys.length - LB_CACHE_MAX_KEYS; i++) delete all[keys[i]];
-    }
-    sessionStorage.setItem(LB_CACHE_STORAGE_KEY, JSON.stringify(all));
-  } catch (_) {}
-}
 
 function StatBoard({ title, boardKey, icon: Icon, entries, valueLabel, topLabel, fetching }) {
   const list = entries || [];

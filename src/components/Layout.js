@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'rea
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb } from 'lucide-react';
 import api, { getApiErrorMessage, onCooldownChange, invalidateApiCache } from '../utils/api';
+import { warmLeaderboardCaches } from '../utils/leaderboardTopCache';
 import { setCrimesPrefetch, getCrimesPrefetch } from '../utils/prefetchCache';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
@@ -669,7 +670,25 @@ export default function Layout({ children }) {
 
   useEffect(() => { if (user) fetchAutoRankPrefs(); }, [user]); // eslint-disable-line
 
+  const prefetchMainLeaderboard = useCallback(() => {
+    warmLeaderboardCaches(api);
+  }, []);
+
   const userId = user?.id;
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    const run = () => {
+      if (!cancelled) warmLeaderboardCaches(api);
+    };
+    const t0 = setTimeout(run, 0);
+    const interval = setInterval(run, 60_000);
+    return () => {
+      cancelled = true;
+      clearTimeout(t0);
+      clearInterval(interval);
+    };
+  }, [userId]);
   const casinoPropertyFetchedRef = useRef(false);
   if (!userId) casinoPropertyFetchedRef.current = false;
   useEffect(() => {
@@ -1396,6 +1415,8 @@ export default function Layout({ children }) {
           className={`flex items-center gap-1 px-2 ${sizeClass} rounded-sm transition-smooth touch-manipulation ${isFamiliesAtWar ? (isActive ? 'bg-red-500/20 text-red-400 border-l-2 border-red-500' : 'text-red-400 hover:bg-red-500/10') : (isActive ? styles.navItemActivePage : styles.sidebarNavLink)}`}
           style={isFamiliesAtWar ? { color: '#f87171' } : isActive ? sidebarActiveStyle : undefined}
           onClick={() => setSidebarOpen(false)}
+          onMouseEnter={item.path === '/game/leaderboard' ? prefetchMainLeaderboard : undefined}
+          onFocus={item.path === '/game/leaderboard' ? prefetchMainLeaderboard : undefined}
         >
           <Icon size={13} className="shrink-0" style={isFamiliesAtWar ? { color: '#f87171' } : { color: 'var(--noir-primary)' }} />
           <span className="uppercase tracking-widest text-[10px] font-heading flex-1 truncate">{item.label}</span>
@@ -2203,6 +2224,8 @@ export default function Layout({ children }) {
 
               <div className="space-y-1 pt-1">
                 <Link to="/game/leaderboard" onClick={() => isMobileViewport && setRightSidebarOpen(false)}
+                  onMouseEnter={prefetchMainLeaderboard}
+                  onFocus={prefetchMainLeaderboard}
                   className="flex items-center gap-1.5 text-[10px] font-heading font-bold py-0.5 px-1 rounded-sm"
                   style={{ color: 'var(--noir-primary)' }}>
                   <Trophy size={12} /> Leaderboard
