@@ -2808,6 +2808,26 @@ async def startup_db():
                 logging.exception("Slots draw ticker: %s", e)
             await asyncio.sleep(5)
     asyncio.create_task(slots_draw_ticker())
+    # City lottery (Wed/Sun UTC): poll so draws run at closes_at without relying on external cron
+    lottery_draw_use_cron = (os.environ.get("LOTTERY_DRAW_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
+    _lottery_draw_ticker_raw = (os.environ.get("LOTTERY_DRAW_TICKER") or "").strip().lower()
+    lottery_draw_ticker_on = _lottery_draw_ticker_raw not in ("0", "false", "no", "off")
+    if lottery_draw_use_cron:
+        logging.getLogger(__name__).info(
+            "City lottery: ticker disabled (LOTTERY_DRAW_USE_CRON=1). Schedule POST /api/lottery/draw-cron with header X-Cron-Secret."
+        )
+    elif lottery_draw_ticker_on:
+        async def city_lottery_draw_ticker():
+            while True:
+                try:
+                    await lottery.lottery_draw_cron(True)
+                except Exception as e:
+                    logging.exception("City lottery draw ticker: %s", e)
+                await asyncio.sleep(30)
+        asyncio.create_task(city_lottery_draw_ticker())
+        logging.getLogger(__name__).info(
+            "City lottery: in-process draw ticker enabled (every 30s; LOTTERY_DRAW_USE_CRON=1 or LOTTERY_DRAW_TICKER=0 for external cron only). Multi-worker: prefer one worker or cron-only."
+        )
     # Missions: daily tribute deposit at configured UTC hour (e.g. 17:00); check every 60s
     from routers.account import missions as missions_router
     async def tribute_deposit_ticker():

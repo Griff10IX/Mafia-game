@@ -25,7 +25,7 @@ from .racing_lap_engine import (
 from pydantic import BaseModel
 from pymongo import UpdateOne
 
-from server import db, get_current_user_verified, get_current_user, maybe_process_rank_up, user_prestige_rank_mult, send_notification, log_gambling, _is_admin, _get_staff_user_ids
+from server import db, get_current_user_verified, get_current_user, maybe_process_rank_up, user_prestige_rank_mult, send_notification, log_gambling, _is_admin, _get_staff_user_ids, log_respect_delta
 from utils.minigame_captcha_gate import require_turnstile_for_minigame_start
 import pathlib as _pathlib
 
@@ -267,6 +267,9 @@ REWARD_BY_POSITION = [0.40, 0.25, 0.15, 0.10, 0.05, 0.03, 0.02, 0.00]
 RACING_BASE_CASH_POOL = 50_000
 # Crew bank debt limit: players can go this far negative when paying for essentials (repair, tyres)
 CREW_BANK_DEBT_LIMIT = -50_000
+# If crew bank cannot cover repair/tyres (e.g. debt cap), player may pay this many respect points instead — only when wallet cash is $0.
+RACING_RESPECT_FALLBACK_COST = 100
+CREW_BANK_WITHDRAW_COOLDOWN_HOURS = 6
 RANK_POINTS_BY_POSITION = [0, 0, 0, 0, 0, 0, 0, 0]
 RACING_REP_BY_POSITION = [5, 3, 2, 1, 0, 0, 0, 0]
 
@@ -438,6 +441,7 @@ DEFAULT_PROFILE = {
     "hired_driver_id": None,
     "rnd_researched": [],
     "rnd_active": None,
+    "crew_bank_last_withdraw_at": None,
 }
 for _suffix, _max, _ in CREW_EXTRA_TYPES:
     DEFAULT_PROFILE[f"{_suffix}_level"] = 0
@@ -610,6 +614,10 @@ class RndResearchRequest(BaseModel):
     node_id: str
 
 
+class CrewBankWithdrawRequest(BaseModel):
+    amount: int
+
+
 class AssignDriverRequest(BaseModel):
     driver_id: str
 
@@ -626,6 +634,26 @@ def _require_racing_team(prof: Optional[dict]) -> None:
             status_code=403,
             detail=f"Create a racing team first. Cost: ${RACING_TEAM_CREATE_COST:,}. Name your team and choose a colour.",
         )
+
+
+def _crew_bank_withdraw_cooldown_remaining_sec(prof: Optional[dict]) -> int:
+    """Seconds until crew bank withdraw is allowed; 0 if no cooldown."""
+    if not prof:
+        return 0
+    raw = prof.get("crew_bank_last_withdraw_at")
+    if not raw:
+        return 0
+    try:
+        last_dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+        if last_dt.tzinfo is None:
+            last_dt = last_dt.replace(tzinfo=timezone.utc)
+        else:
+            last_dt = last_dt.astimezone(timezone.utc)
+    except Exception:
+        return 0
+    need_sec = int(CREW_BANK_WITHDRAW_COOLDOWN_HOURS * 3600)
+    elapsed = (datetime.now(timezone.utc) - last_dt).total_seconds()
+    return max(0, need_sec - int(elapsed))
 
 
 def _total_crew_levels(prof: dict) -> int:
@@ -826,21 +854,76 @@ async def _deduct_crew_bank(user_id: str, cost: int, allow_debt: bool = False) -
     """
     if cost <= 0:
         return
+    if await _try_deduct_crew_bank(user_id, cost, allow_debt=allow_debt):
+        return
+    if allow_debt:
+        raise HTTPException(status_code=400, detail=f"Debt limit reached (${CREW_BANK_DEBT_LIMIT:,}). Win races to pay off debt.")
+    raise HTTPException(status_code=400, detail="Insufficient crew bank (race to earn more)")
+
+
+async def _try_deduct_crew_bank(user_id: str, cost: int, *, allow_debt: bool) -> bool:
+    """Atomically deduct crew bank if affordable. Returns True if deducted, False if not (caller may try respect fallback)."""
+    cost = int(cost)
+    if cost < 1:
+        return True
     if allow_debt:
         min_balance = CREW_BANK_DEBT_LIMIT + cost
         result = await db.racing_profiles.update_one(
             {"user_id": user_id, "crew_bank": {"$gte": min_balance}},
             {"$inc": {"crew_bank": -cost}},
         )
-        if result.modified_count == 0:
-            raise HTTPException(status_code=400, detail=f"Debt limit reached (${CREW_BANK_DEBT_LIMIT:,}). Win races to pay off debt.")
     else:
         result = await db.racing_profiles.update_one(
             {"user_id": user_id, "crew_bank": {"$gte": cost}},
             {"$inc": {"crew_bank": -cost}},
         )
-        if result.modified_count == 0:
-            raise HTTPException(status_code=400, detail="Insufficient crew bank (race to earn more)")
+    return result.modified_count == 1
+
+
+async def _pay_crew_bank_or_respect_fallback(
+    user_id: str, cost: int, *, allow_debt: bool, respect_source: str
+) -> dict:
+    """
+    Pay racing fee from crew bank if possible. If not, allow RACING_RESPECT_FALLBACK_COST respect — only when users.money < 1.
+    Returns {"crew_paid": int, "respect_paid": int}.
+    """
+    cost = int(cost)
+    if cost < 1:
+        return {"crew_paid": 0, "respect_paid": 0}
+    if await _try_deduct_crew_bank(user_id, cost, allow_debt=allow_debt):
+        return {"crew_paid": cost, "respect_paid": 0}
+    user = await db.users.find_one({"id": user_id}, {"_id": 0, "money": 1, "respect_points": 1})
+    cash = int((user or {}).get("money") or 0)
+    if cash >= 1:
+        raise HTTPException(
+            status_code=400,
+            detail="Crew bank cannot cover this (debt limit reached). Respect fallback is only when you have no cash on hand — spend or stash your wallet cash first, or refill the crew bank from races.",
+        )
+    rp = int((user or {}).get("respect_points") or 0)
+    if rp < RACING_RESPECT_FALLBACK_COST:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Crew bank cannot cover this. With no cash on hand you may pay {RACING_RESPECT_FALLBACK_COST} respect instead "
+                f"(you have {rp} respect)."
+            ),
+        )
+    res = await db.users.update_one(
+        {"id": user_id, "respect_points": {"$gte": RACING_RESPECT_FALLBACK_COST}},
+        {
+            "$inc": {
+                "respect_points": -RACING_RESPECT_FALLBACK_COST,
+                "lifetime_respect_points_spent": RACING_RESPECT_FALLBACK_COST,
+            }
+        },
+    )
+    if res.modified_count != 1:
+        raise HTTPException(status_code=400, detail="Not enough respect points.")
+    try:
+        await log_respect_delta(user_id, -RACING_RESPECT_FALLBACK_COST, respect_source)
+    except Exception:
+        pass
+    return {"crew_paid": 0, "respect_paid": RACING_RESPECT_FALLBACK_COST}
 
 
 async def _pay_driver_salary_from_user_then_crew(user_id: str, salary: int) -> int:
@@ -1561,6 +1644,7 @@ async def get_racing_tracks(current_user: dict = Depends(get_current_user)):
 
 async def get_racing_profile(current_user: dict = Depends(get_current_user_verified)):
     await _check_racing_week_and_season()
+    await _finalize_rnd_research_if_due(current_user["id"])
     prof = await _ensure_racing_profile(current_user["id"])
     meta = await _ensure_racing_meta()
     try:
@@ -1633,6 +1717,7 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
         o["effective_speed"] = round(s, 1)
         o["effective_grip"] = round(g * 100, 0)
         o["upgrade_levels_used"] = _total_upgrade_levels(upgrades.get(o["id"]) or {}, o)
+    user_wallet = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1, "respect_points": 1})
     result = {
         "profile": prof,
         "owned_cars": owned,
@@ -1675,6 +1760,11 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
         "engine_repair_cost_per_pct": ENGINE_REPAIR_COST_PER_PCT,
         "engine_replace_cost": ENGINE_REPLACE_COST,
         "crew_bank_debt_limit": CREW_BANK_DEBT_LIMIT,
+        "racing_respect_fallback_cost": RACING_RESPECT_FALLBACK_COST,
+        "user_money_on_hand": int((user_wallet or {}).get("money") or 0),
+        "user_respect_points": int((user_wallet or {}).get("respect_points") or 0),
+        "crew_bank_withdraw_cooldown_hours": CREW_BANK_WITHDRAW_COOLDOWN_HOURS,
+        "crew_bank_withdraw_cooldown_seconds_remaining": _crew_bank_withdraw_cooldown_remaining_sec(prof),
         "racing_team_create_cost": RACING_TEAM_CREATE_COST,
         "max_racing_teams": MAX_RACING_TEAMS,
         "racing_team_count": await db.racing_profiles.count_documents({"team_name": {"$exists": True, "$ne": None, "$ne": ""}}),
@@ -1969,6 +2059,7 @@ async def repair_engine(body: RepairEngineRequest, current_user: dict = Depends(
     free_used_season = prof.get("free_engine_repair_used_season_start_utc")
     free_repair_available = free_used_season != season_start
 
+    pay = {"crew_paid": 0, "respect_paid": 0}
     if free_repair_available:
         cost = 0
         await db.racing_profiles.update_one(
@@ -1976,13 +2067,25 @@ async def repair_engine(body: RepairEngineRequest, current_user: dict = Depends(
             {"$set": {"free_engine_repair_used_season_start_utc": season_start}},
         )
     else:
-        await _deduct_crew_bank(current_user["id"], cost, allow_debt=True)
+        pay = await _pay_crew_bank_or_respect_fallback(
+            current_user["id"],
+            cost,
+            allow_debt=True,
+            respect_source="racing:engine_repair",
+        )
 
     await db.user_racing_cars.update_one(
         {"user_id": current_user["id"], "id": instance_id},
         {"$set": {"engine_wear": round(target, 1)}},
     )
-    return {"message": "Engine repaired", "engine_wear": target, "cost": cost, "free_repair": free_repair_available}
+    return {
+        "message": "Engine repaired",
+        "engine_wear": target,
+        "cost": cost,
+        "free_repair": free_repair_available,
+        "crew_paid": pay.get("crew_paid", 0),
+        "respect_paid": pay.get("respect_paid", 0),
+    }
 
 
 async def replace_engine(body: ReplaceEngineRequest, current_user: dict = Depends(get_current_user_verified)):
@@ -2007,7 +2110,12 @@ async def buy_tyres(body: BuyTyresRequest, current_user: dict = Depends(get_curr
     quantity = max(1, min(20, int(body.quantity or 1)))
     cost_map = {"soft": TYRE_COST_SOFT, "medium": TYRE_COST_MEDIUM, "hard": TYRE_COST_HARD, "inter": TYRE_COST_INTER, "full_wet": TYRE_COST_FULL_WET}
     cost = cost_map[compound] * quantity
-    await _deduct_crew_bank(current_user["id"], cost, allow_debt=True)
+    pay = await _pay_crew_bank_or_respect_fallback(
+        current_user["id"],
+        cost,
+        allow_debt=True,
+        respect_source="racing:tyres_buy",
+    )
     await _ensure_racing_profile(current_user["id"])
     from pymongo import ReturnDocument
     updated = await db.racing_profiles.find_one_and_update(
@@ -2018,7 +2126,13 @@ async def buy_tyres(body: BuyTyresRequest, current_user: dict = Depends(get_curr
         projection={f"tyre_stock_{compound}": 1},
     )
     new_stock = int(updated.get(f"tyre_stock_{compound}") or 0)
-    return {"message": f"Bought {quantity} {compound} tyre set(s)", "tyre_stock": new_stock, "cost": cost}
+    return {
+        "message": f"Bought {quantity} {compound} tyre set(s)",
+        "tyre_stock": new_stock,
+        "cost": cost,
+        "crew_paid": pay.get("crew_paid", 0),
+        "respect_paid": pay.get("respect_paid", 0),
+    }
 
 
 async def create_racing_team(body: CreateRacingTeamRequest, current_user: dict = Depends(get_current_user_verified)):
@@ -4304,7 +4418,36 @@ async def get_race_live(
     }
 
 
+async def _finalize_rnd_research_if_due(user_id: str) -> None:
+    """Move completed rnd_active into rnd_researched. Idempotent; safe if called from tree + status."""
+    prof = await db.racing_profiles.find_one({"user_id": user_id}, {"_id": 0, "rnd_active": 1})
+    active = (prof or {}).get("rnd_active")
+    if not active or not active.get("completes_at") or not active.get("node_id"):
+        return
+    ca_raw = str(active["completes_at"])
+    try:
+        completes_at = datetime.fromisoformat(ca_raw.replace("Z", "+00:00"))
+    except Exception:
+        return
+    if completes_at.tzinfo is None:
+        completes_at = completes_at.replace(tzinfo=timezone.utc)
+    else:
+        completes_at = completes_at.astimezone(timezone.utc)
+    if datetime.now(timezone.utc) < completes_at:
+        return
+    node_id = active["node_id"]
+    await db.racing_profiles.update_one(
+        {
+            "user_id": user_id,
+            "rnd_active.node_id": node_id,
+            "rnd_active.completes_at": active["completes_at"],
+        },
+        {"$push": {"rnd_researched": node_id}, "$set": {"rnd_active": None}},
+    )
+
+
 async def get_rnd_tree(current_user: dict = Depends(get_current_user_verified)):
+    await _finalize_rnd_research_if_due(current_user["id"])
     prof = await _ensure_racing_profile(current_user["id"])
     researched = set(prof.get("rnd_researched") or [])
     active = prof.get("rnd_active")
@@ -4343,6 +4486,7 @@ async def get_rnd_tree(current_user: dict = Depends(get_current_user_verified)):
 
 
 async def start_rnd_research(body: RndResearchRequest, current_user: dict = Depends(get_current_user_verified)):
+    await _finalize_rnd_research_if_due(current_user["id"])
     prof = await _ensure_racing_profile(current_user["id"])
     _require_racing_team(prof)
 
@@ -4402,20 +4546,56 @@ async def start_rnd_research(body: RndResearchRequest, current_user: dict = Depe
     return {"ok": True, "rnd_active": rnd_active, "cost": cost}
 
 
+async def withdraw_crew_bank(body: CrewBankWithdrawRequest, current_user: dict = Depends(get_current_user_verified)):
+    """Move cash from racing crew bank to the player's wallet. One-way — cannot deposit back via this flow."""
+    uid = current_user["id"]
+    amount = int(body.amount)
+    if amount < 1:
+        raise HTTPException(status_code=400, detail="Amount must be at least $1")
+    prof = await _ensure_racing_profile(uid)
+    _require_racing_team(prof)
+    cd_rem = _crew_bank_withdraw_cooldown_remaining_sec(prof)
+    if cd_rem > 0:
+        mins = max(1, (cd_rem + 59) // 60)
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Crew bank withdrawals are limited to once every {CREW_BANK_WITHDRAW_COOLDOWN_HOURS} hours. "
+                f"Try again in {mins} minute(s)."
+            ),
+        )
+    bank_before = int(prof.get("crew_bank") or 0)
+    if amount > bank_before:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Insufficient crew bank (you have ${bank_before:,}, tried to withdraw ${amount:,}).",
+        )
+    dec = await db.racing_profiles.update_one(
+        {"user_id": uid, "crew_bank": {"$gte": amount}},
+        {"$inc": {"crew_bank": -amount}},
+    )
+    if dec.modified_count != 1:
+        raise HTTPException(status_code=400, detail="Insufficient crew bank (balance changed — try a lower amount).")
+    cred = await db.users.update_one({"id": uid}, {"$inc": {"money": amount}})
+    if cred.modified_count != 1:
+        await db.racing_profiles.update_one({"user_id": uid}, {"$inc": {"crew_bank": amount}})
+        raise HTTPException(status_code=400, detail="Withdrawal failed — try again.")
+    now_w = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    await db.racing_profiles.update_one({"user_id": uid}, {"$set": {"crew_bank_last_withdraw_at": now_w}})
+    bank_after = bank_before - amount
+    return {
+        "ok": True,
+        "withdrawn": amount,
+        "crew_bank": bank_after,
+        "crew_bank_withdraw_cooldown_seconds_remaining": int(CREW_BANK_WITHDRAW_COOLDOWN_HOURS * 3600),
+        "message": f"Withdrew ${amount:,} from crew bank to cash on hand.",
+    }
+
+
 async def get_rnd_status(current_user: dict = Depends(get_current_user_verified)):
+    await _finalize_rnd_research_if_due(current_user["id"])
     prof = await _ensure_racing_profile(current_user["id"])
     active = prof.get("rnd_active")
-
-    if active and active.get("completes_at"):
-        completes_at = datetime.fromisoformat(active["completes_at"].replace("Z", "+00:00"))
-        if datetime.now(timezone.utc) >= completes_at:
-            node_id = active["node_id"]
-            await db.racing_profiles.update_one(
-                {"user_id": current_user["id"]},
-                {"$push": {"rnd_researched": node_id}, "$set": {"rnd_active": None}},
-            )
-            active = None
-            prof = await db.racing_profiles.find_one({"user_id": current_user["id"]}, {"_id": 0})
 
     researched = prof.get("rnd_researched") or []
     bonuses = _get_rnd_bonuses(prof)
@@ -4515,6 +4695,7 @@ def register(router):
     router.add_api_route("/racing/rnd/tree", get_rnd_tree, methods=["GET"])
     router.add_api_route("/racing/rnd/research", start_rnd_research, methods=["POST"])
     router.add_api_route("/racing/rnd/status", get_rnd_status, methods=["GET"])
+    router.add_api_route("/racing/crew-bank/withdraw", withdraw_crew_bank, methods=["POST"])
     router.add_api_route("/racing/admin/clear-crew-bank-debt", admin_clear_crew_bank_debt, methods=["POST"])
     router.add_api_route("/racing/admin/wipe-all-teams", admin_wipe_all_teams, methods=["POST"])
 

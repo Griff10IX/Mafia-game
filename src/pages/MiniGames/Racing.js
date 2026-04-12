@@ -133,12 +133,21 @@ function Collapsible({ label, count, children, defaultOpen = false }) {
 
 function RndCountdown({ completes_at, onComplete }) {
   const [remaining, setRemaining] = useState("");
+  const completeFiredRef = useRef(false);
   useEffect(() => {
+    completeFiredRef.current = false;
     const tick = () => {
       const target = new Date(completes_at);
       const now = new Date();
       const diff = Math.max(0, target - now);
-      if (diff <= 0) { setRemaining("Complete!"); onComplete?.(); return; }
+      if (diff <= 0) {
+        setRemaining("Complete!");
+        if (!completeFiredRef.current) {
+          completeFiredRef.current = true;
+          onComplete?.();
+        }
+        return;
+      }
       const h = Math.floor(diff / 3600000);
       const m = Math.floor((diff % 3600000) / 60000);
       const s = Math.floor((diff % 60000) / 1000);
@@ -216,6 +225,10 @@ export default function Racing() {
   const [rndTree, setRndTree] = useState(null);
   const [rndActive, setRndActive] = useState(null);
   const [rndResearching, setRndResearching] = useState(false);
+  const [crewWithdrawOpen, setCrewWithdrawOpen] = useState(false);
+  const [crewWithdrawAmount, setCrewWithdrawAmount] = useState("");
+  const [crewWithdrawAck, setCrewWithdrawAck] = useState(false);
+  const [crewWithdrawLoading, setCrewWithdrawLoading] = useState(false);
   const [championship, setChampionship] = useState(null);
   const [champStandings, setChampStandings] = useState(null);
   const [champView, setChampView] = useState("calendar");
@@ -242,6 +255,11 @@ export default function Racing() {
       global_upgrade_cap: d.global_upgrade_cap ?? 26,
       free_engine_repair_available: !!d.free_engine_repair_available,
       crew_bank_debt_limit: d.crew_bank_debt_limit ?? -50000,
+      racing_respect_fallback_cost: d.racing_respect_fallback_cost ?? 100,
+      user_money_on_hand: d.user_money_on_hand ?? 0,
+      user_respect_points: d.user_respect_points ?? 0,
+      crew_bank_withdraw_cooldown_hours: d.crew_bank_withdraw_cooldown_hours ?? 6,
+      crew_bank_withdraw_cooldown_seconds_remaining: d.crew_bank_withdraw_cooldown_seconds_remaining ?? 0,
       crew_levels_used: d.crew_levels_used ?? 0,
       crew_global_cap: d.crew_global_cap ?? 24,
       crew_tradeoffs: d.crew_tradeoffs || null,
@@ -349,6 +367,11 @@ export default function Racing() {
       applyProfile(r.data || {});
     } catch (e) { toast.error(apiDetail(e)); }
   }, [applyProfile]);
+
+  const onRndResearchComplete = useCallback(async () => {
+    await fetchRndTree();
+    await fetchProfile();
+  }, [fetchRndTree, fetchProfile]);
 
   const fetchOpenRaces = useCallback(async () => {
     try { const r = await api.get("/racing/races/open"); setOpenRaces(r.data?.races || []); } catch {}
@@ -864,6 +887,37 @@ export default function Racing() {
     setRndResearching(false);
   };
 
+  const handleCrewBankWithdrawSubmit = async () => {
+    const raw = parseInt(String(crewWithdrawAmount).replace(/,/g, "").trim(), 10);
+    if (!Number.isFinite(raw) || raw < 1) {
+      toast.error("Enter a valid amount (at least $1).");
+      return;
+    }
+    if (!crewWithdrawAck) {
+      toast.error("Tick the box to confirm you understand the warnings.");
+      return;
+    }
+    const bank = profile?.crew_bank ?? 0;
+    if (raw > bank) {
+      toast.error("That amount is more than your crew bank balance.");
+      return;
+    }
+    setCrewWithdrawLoading(true);
+    try {
+      const { data } = await api.post("/racing/crew-bank/withdraw", { amount: raw });
+      toast.success(data?.message || "Withdrawn to cash on hand.");
+      setCrewWithdrawOpen(false);
+      setCrewWithdrawAmount("");
+      setCrewWithdrawAck(false);
+      await fetchProfile();
+      refreshUser();
+    } catch (e) {
+      toast.error(apiDetail(e));
+    } finally {
+      setCrewWithdrawLoading(false);
+    }
+  };
+
   const handleUpgradeCar = async (instanceId, upgradeType = "engine") => {
     try {
       await api.post("/racing/car/upgrade", { racing_car_instance_id: instanceId, upgrade_type: upgradeType });
@@ -876,7 +930,10 @@ export default function Racing() {
     try {
       const res = await api.post("/racing/engine/repair", { racing_car_instance_id: instanceId });
       await fetchProfile(); refreshUser();
-      toast.success(res.data?.free_repair ? "Engine repaired (free this season)" : "Engine repaired");
+      const rp = res.data?.respect_paid;
+      if (res.data?.free_repair) toast.success("Engine repaired (free this season)");
+      else if (rp) toast.success(`Engine repaired (${rp} respect — no crew bank charge)`);
+      else toast.success("Engine repaired");
     } catch (e) { toast.error(apiDetail(e)); }
   };
 
@@ -886,8 +943,13 @@ export default function Racing() {
   };
 
   const handleBuyTyres = async (compound, quantity = 1) => {
-    try { await api.post("/racing/tyres/buy", { compound, quantity }); await fetchProfile(); refreshUser(); toast.success(`Bought ${quantity} ${compound} tyre set(s)`); }
-    catch (e) { toast.error(apiDetail(e)); }
+    try {
+      const res = await api.post("/racing/tyres/buy", { compound, quantity });
+      await fetchProfile(); refreshUser();
+      const rp = res.data?.respect_paid;
+      if (rp) toast.success(`Bought ${quantity} ${compound} tyre set(s) (${rp} respect — no crew bank charge)`);
+      else toast.success(`Bought ${quantity} ${compound} tyre set(s)`);
+    } catch (e) { toast.error(apiDetail(e)); }
   };
 
   const handleEnterComp = async (compId, carInstanceId) => {
@@ -982,10 +1044,89 @@ export default function Racing() {
   ];
 
   const crewBankPct = Math.min(100, ((profile?.crew_bank ?? 0) / 10000000) * 100);
+  const respectFbCost = profile?.racing_respect_fallback_cost ?? 100;
+  const cashOnHandRacing = profile?.user_money_on_hand ?? 0;
+  const userRespectRacing = profile?.user_respect_points ?? 0;
+  const canRacingRespectFallback = cashOnHandRacing < 1 && userRespectRacing >= respectFbCost;
+  const crewWdCooldownSec = profile?.crew_bank_withdraw_cooldown_seconds_remaining ?? 0;
+  const crewWdCooldownHrs = profile?.crew_bank_withdraw_cooldown_hours ?? 6;
+  const crewWdOnCooldown = crewWdCooldownSec > 0;
+  const crewWdCooldownMins = crewWdOnCooldown ? Math.max(1, Math.ceil(crewWdCooldownSec / 60)) : 0;
 
   return (
     <div className={`${styles.pageContent} mobile-page-root overflow-x-hidden space-y-0`} style={{ minHeight: "100%", WebkitOverflowScrolling: "touch" }}>
       {captchaModal}
+      {crewWithdrawOpen && profile?.team_name && (
+        <div
+          className="fixed inset-0 z-[200] flex items-end sm:items-center justify-center p-3 sm:p-4 bg-black/75"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="crew-withdraw-title"
+          onClick={() => !crewWithdrawLoading && setCrewWithdrawOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-lg border border-[var(--noir-border)] bg-[var(--noir-bg)] shadow-xl p-4 max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="crew-withdraw-title" className="text-sm font-heading uppercase tracking-wider mb-2" style={{ color: "var(--noir-primary)" }}>
+              Withdraw from crew bank
+            </h2>
+            <p className="text-[10px] text-[var(--noir-muted)] mb-3 leading-relaxed">
+              Move cash from your <strong className="text-[var(--noir-foreground)]">Bootleg Runs crew bank</strong> to your personal <strong className="text-[var(--noir-foreground)]">cash on hand</strong>.
+            </p>
+            <ul className="text-[10px] text-amber-200/90 mb-3 space-y-1.5 list-disc pl-4">
+              <li>You <strong>cannot</strong> put this money back into the crew bank. Withdrawals are one-way.</li>
+              <li>Keep enough in the crew bank for <strong>garage repairs</strong>, engine work, tyres, crew upgrades, and R&amp;D — those costs are paid from the bank, not your wallet.</li>
+              <li>You can withdraw <strong>at most once every {crewWdCooldownHrs} hours</strong>.</li>
+            </ul>
+            {crewWdOnCooldown && (
+              <p className="text-[10px] text-amber-400 font-heading mb-3 p-2 rounded border border-amber-500/30 bg-amber-950/20">
+                Next withdrawal available in ~{crewWdCooldownMins} min. Refresh the page for an updated timer.
+              </p>
+            )}
+            <label className="block text-[9px] font-heading uppercase text-[var(--noir-muted)] mb-1" htmlFor="crew-withdraw-amt">Amount (max {formatMoney(profile?.crew_bank ?? 0)})</label>
+            <input
+              id="crew-withdraw-amt"
+              type="text"
+              inputMode="numeric"
+              className="w-full mb-3 px-2 py-2 rounded border border-[var(--noir-border)] bg-black/30 text-sm font-heading tabular-nums"
+              style={{ color: "var(--noir-primary)" }}
+              placeholder="e.g. 5000000"
+              value={crewWithdrawAmount}
+              onChange={(e) => setCrewWithdrawAmount(e.target.value)}
+              disabled={crewWithdrawLoading || crewWdOnCooldown}
+            />
+            <label className="flex items-start gap-2 text-[10px] text-[var(--noir-muted)] mb-4 cursor-pointer">
+              <input
+                type="checkbox"
+                className="mt-0.5 rounded border-[var(--noir-border)]"
+                checked={crewWithdrawAck}
+                onChange={(e) => setCrewWithdrawAck(e.target.checked)}
+                disabled={crewWithdrawLoading || crewWdOnCooldown}
+              />
+              <span>I understand withdrawals cannot be reversed and I am leaving enough in the crew bank for repairs and racing costs.</span>
+            </label>
+            <div className="flex gap-2 justify-end">
+              <button
+                type="button"
+                className="text-[10px] font-heading px-3 py-2 rounded border border-[var(--noir-border)] text-[var(--noir-muted)]"
+                disabled={crewWithdrawLoading}
+                onClick={() => { setCrewWithdrawOpen(false); setCrewWithdrawAck(false); }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className={styles.btnPrimary + " text-[10px] font-heading px-3 py-2"}
+                disabled={crewWithdrawLoading || !(profile?.crew_bank > 0) || crewWdOnCooldown}
+                onClick={handleCrewBankWithdrawSubmit}
+              >
+                {crewWithdrawLoading ? "Working…" : crewWdOnCooldown ? "On cooldown" : "Confirm withdrawal"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* ─── COMPACT HEADER ─── */}
       <div className="px-4 md:px-4 py-2.5 border-b border-[var(--noir-border)]" style={{ background: "rgba(201,164,96,.03)" }}>
         <div className="flex items-center justify-between gap-3">
@@ -1010,12 +1151,26 @@ export default function Racing() {
                 </button>
               </>
             )}
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 flex-wrap justify-end">
               <span className="text-[9px] text-[var(--noir-muted)]">Bank</span>
               <div className="w-16 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(201,164,96,.12)", border: "1px solid rgba(201,164,96,.15)" }}>
                 <div className="h-full rounded-full" style={{ width: `${crewBankPct}%`, background: "linear-gradient(90deg,#a87820,#e8c870)", transition: "width .5s" }} />
               </div>
               <span className="text-[10px] font-heading tabular-nums" style={{ color: "var(--noir-primary)" }}>{formatMoney(profile?.crew_bank ?? 0)}</span>
+              {profile?.team_name && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCrewWithdrawOpen(true);
+                    setCrewWithdrawAmount("");
+                    setCrewWithdrawAck(false);
+                    void fetchProfile();
+                  }}
+                  className="text-[8px] font-heading px-1.5 py-0.5 rounded border border-[var(--noir-border)] text-[var(--noir-primary)] hover:bg-[var(--noir-surface)] touch-manipulation min-h-[28px]"
+                >
+                  Withdraw
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1871,12 +2026,17 @@ export default function Racing() {
 
             {/* Tyre stock — inline badges */}
             <div className={styles.panel + " mobile-panel overflow-hidden mb-3"}>
-              <CardHead title="Tyre Stock" right={<span className="text-[9px] text-[var(--noir-muted)]">1 set / race · crew bank</span>} />
+              <CardHead title="Tyre Stock" right={<span className="text-[9px] text-[var(--noir-muted)]">1 set / race · crew bank{canRacingRespectFallback ? ` · $0 cash: ${respectFbCost} resp` : ""}</span>} />
               <div className="p-3 flex flex-wrap gap-2">
                 {["soft", "medium", "hard", "inter"].map((compound) => {
                   const stock = profile?.[`tyre_stock_${compound}`] ?? 0;
                   const cost = profile?.tyre_costs?.[compound] ?? 500;
                   const bank = profile?.crew_bank ?? 0;
+                  const debtFloor = profile?.crew_bank_debt_limit ?? -50000;
+                  const crew1 = bank - cost >= debtFloor;
+                  const crew5 = bank - cost * 5 >= debtFloor;
+                  const ok1 = crew1 || (canRacingRespectFallback && !crew1);
+                  const ok5 = crew5 || (canRacingRespectFallback && !crew5);
                   const name = compound === "inter" ? "Inter" : compound.charAt(0).toUpperCase() + compound.slice(1);
                   const col = TYRE_DEFS.find(t => t.id === compound)?.color || "#ccc";
                   return (
@@ -1884,8 +2044,8 @@ export default function Racing() {
                       <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: col }} />
                       <span className="text-[10px] font-heading" style={{ color: "var(--noir-primary)" }}>{name}</span>
                       <span className="text-xs font-heading tabular-nums">{stock}</span>
-                      <button type="button" className={styles.btnGoldDarkText + " text-[9px] px-1.5 py-0.5"} disabled={bank < cost} onClick={() => handleBuyTyres(compound, 1)}>+1</button>
-                      <button type="button" className={styles.btnGoldDarkText + " text-[9px] px-1.5 py-0.5"} disabled={bank < cost * 5} onClick={() => handleBuyTyres(compound, 5)}>+5</button>
+                      <button type="button" className={styles.btnGoldDarkText + " text-[9px] px-1.5 py-0.5"} disabled={!ok1} onClick={() => handleBuyTyres(compound, 1)}>+1</button>
+                      <button type="button" className={styles.btnGoldDarkText + " text-[9px] px-1.5 py-0.5"} disabled={!ok5} onClick={() => handleBuyTyres(compound, 5)}>+5</button>
                       <span className="text-[8px] text-[var(--noir-muted)]">{formatMoney(cost)}/ea</span>
                     </div>
                   );
@@ -1934,8 +2094,14 @@ export default function Racing() {
                 const repairCost = Math.round((c.engine_wear ?? 0) * (profile?.engine_repair_cost_per_pct ?? 400));
                 const replaceCost = profile?.engine_replace_cost ?? 75000;
                 const debtFloor = profile?.crew_bank_debt_limit ?? -50000;
-                const canRepairWithDebt = profile?.free_engine_repair_available || (bank - repairCost >= debtFloor);
+                const crewCanPayRepair = profile?.free_engine_repair_available || (bank - repairCost >= debtFloor);
+                const canRepairEngineBtn = crewCanPayRepair || (canRacingRespectFallback && !crewCanPayRepair);
                 const canReplaceWithDebt = bank - replaceCost >= debtFloor;
+                const repairBtnLabel = profile?.free_engine_repair_available
+                  ? "Free fix"
+                  : (!crewCanPayRepair && canRacingRespectFallback)
+                    ? `Fix (${respectFbCost} resp)`
+                    : `Fix ${formatMoney(repairCost)}`;
 
                 const getUpgradeCost = (key) => {
                   if (key === "engine" || key === "tires") return nextETCost ?? 0;
@@ -1983,9 +2149,9 @@ export default function Racing() {
                           {(c.engine_wear ?? 0) > 0 && (
                             <div className="flex gap-1 mt-1">
                               <button type="button" className={styles.btnGoldDarkText + " text-[8px] px-1 py-0.5"}
-                                disabled={!canRepairWithDebt}
+                                disabled={!canRepairEngineBtn}
                                 onClick={() => handleRepairEngine(c.id)}>
-                                {profile?.free_engine_repair_available ? "Free fix" : `Fix ${formatMoney(repairCost)}`}
+                                {repairBtnLabel}
                               </button>
                               <button type="button" className={styles.btnGoldDarkText + " text-[8px] px-1 py-0.5"}
                                 disabled={!canReplaceWithDebt}
@@ -2182,7 +2348,7 @@ export default function Racing() {
                     <p className="text-[10px] font-heading uppercase tracking-wider text-amber-400">Researching</p>
                     <p className="text-sm font-heading truncate" style={{ color: "var(--noir-primary)" }}>{rndActive.node_id?.replace(/_/g, " ")}</p>
                   </div>
-                  <RndCountdown completes_at={rndActive.completes_at} onComplete={fetchRndTree} />
+                  <RndCountdown completes_at={rndActive.completes_at} onComplete={onRndResearchComplete} />
                 </div>
               </div>
             )}
