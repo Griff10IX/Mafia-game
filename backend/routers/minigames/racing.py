@@ -400,6 +400,9 @@ RACING_TOP_TEAMS_GOOD_REWARDS = 5
 RACING_LEADERBOARD_WINNER_BONUS_PCT = 0.05
 RACING_LEADERBOARD_WINNER_BONUS_CAP_PCT = 0.20
 RACING_AUTOMATED_RACES_PER_DAY = 2  # morning + evening (cron/scheduler)
+# Player-initiated races that fill the grid with NPCs (not H2H, not automated server races).
+RACING_NPC_RACE_MAX_PER_24H = 15
+RACING_NPC_RACE_WINDOW_HOURS = 24
 
 # Tyre compounds: wear_mult (per lap), grip_mult (lap score)
 TYRE_COMPOUNDS = [
@@ -1617,6 +1620,74 @@ async def _get_next_championship_round() -> Optional[dict]:
     return None
 
 
+def _open_race_will_fill_npcs(race: dict) -> bool:
+    """True if starting this open race will add AI drivers (grid not full of humans)."""
+    if race.get("is_h2h") or race.get("is_automated"):
+        return False
+    participants = list(race.get("participants") or [])
+    humans = [p for p in participants if not p.get("is_npc")]
+    max_grid = int(race.get("max_grid") or MAX_GRID)
+    return max_grid > len(humans)
+
+
+async def _npc_vs_race_count_since(user_id: str, since: datetime) -> int:
+    try:
+        return int(
+            await db.racing_npc_race_starts.count_documents({"user_id": user_id, "at": {"$gte": since}})
+        )
+    except Exception:
+        return 0
+
+
+async def _assert_npc_race_24h_budget(race: dict, current_user_id: str) -> None:
+    if not _open_race_will_fill_npcs(race):
+        return
+    humans = [p for p in (race.get("participants") or []) if not p.get("is_npc")]
+    human_ids = [p.get("user_id") for p in humans if p.get("user_id")]
+    if current_user_id not in human_ids:
+        raise HTTPException(status_code=403, detail="Only race entrants can start this race.")
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(hours=RACING_NPC_RACE_WINDOW_HOURS)
+    for uid in human_ids:
+        n = await _npc_vs_race_count_since(uid, cutoff)
+        if n >= RACING_NPC_RACE_MAX_PER_24H:
+            if uid == current_user_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail=(
+                        f"NPC race limit: {RACING_NPC_RACE_MAX_PER_24H} per {RACING_NPC_RACE_WINDOW_HOURS} hours "
+                        "(rolling window). Try again later."
+                    ),
+                )
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "A driver in this lobby has reached their NPC race limit for the rolling "
+                    f"{RACING_NPC_RACE_WINDOW_HOURS}-hour window."
+                ),
+            )
+
+
+async def _record_npc_race_starts_if_vs_npcs(race: dict) -> None:
+    """One row per human entrant when the started race includes NPCs."""
+    if race.get("is_h2h") or race.get("is_automated"):
+        return
+    parts = list(race.get("participants") or [])
+    if not any(p.get("is_npc") for p in parts):
+        return
+    now = datetime.now(timezone.utc)
+    for p in parts:
+        if p.get("is_npc"):
+            continue
+        uid = p.get("user_id")
+        if not uid:
+            continue
+        try:
+            await db.racing_npc_race_starts.insert_one({"user_id": uid, "at": now})
+        except Exception:
+            pass
+
+
 async def _link_race_to_championship(race_id: str, round_num: int):
     """Link a created race to a championship calendar round."""
     champ = await db.racing_championships.find_one({"status": "active"})
@@ -1776,6 +1847,11 @@ async def get_racing_profile(current_user: dict = Depends(get_current_user_verif
         "sponsor_tiers": SPONSOR_TIERS,
         "championship_points": 0,
         "championship_position": None,
+        "npc_races_vs_used_24h": await _npc_vs_race_count_since(
+            current_user["id"],
+            datetime.now(timezone.utc) - timedelta(hours=RACING_NPC_RACE_WINDOW_HOURS),
+        ),
+        "npc_races_vs_limit_24h": RACING_NPC_RACE_MAX_PER_24H,
     }
     try:
         champ = await db.racing_championships.find_one({"status": "active"})
@@ -2599,7 +2675,9 @@ async def start_race(race_id: str, current_user: dict = Depends(get_current_user
     _require_racing_team(prof)
     if race.get("state") != "open":
         raise HTTPException(status_code=400, detail="Race already started or completed")
+    await _assert_npc_race_24h_budget(race, current_user["id"])
     race = await _start_race_internal(race_id)
+    await _record_npc_race_starts_if_vs_npcs(race)
     return {"message": "Race started — run it live", "race": race}
 
 

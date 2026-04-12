@@ -437,6 +437,11 @@ async def ensure_all_indexes(db):
         await db.racing_upgrades.create_index([("user_id", 1), ("racing_car_instance_id", 1)])
         await db.racing_championships.create_index([("status", 1)])
         await db.racing_meta.create_index("id", unique=True)
+        await db.racing_npc_race_starts.create_index([("user_id", 1), ("at", -1)])
+        try:
+            await db.racing_npc_race_starts.create_index([("at", 1)], expireAfterSeconds=3 * 24 * 3600)
+        except Exception as e:
+            logger.warning("racing_npc_race_starts TTL: %s", e)
         await db.racing_records.create_index([("track_id", 1), ("type", 1)])
         await db.racing_records.create_index([("track_id", 1), ("type", 1), ("user_id", 1)])
 

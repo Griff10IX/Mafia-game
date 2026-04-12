@@ -269,6 +269,8 @@ export default function Racing() {
       sponsor: d.sponsor || null,
       sponsor_tiers: d.sponsor_tiers || [],
       racing_rep: d.profile?.racing_rep ?? 0,
+      npc_races_vs_used_24h: d.npc_races_vs_used_24h ?? 0,
+      npc_races_vs_limit_24h: d.npc_races_vs_limit_24h ?? 15,
     };
     setProfile(p);
     setCars(d.owned_cars || []);
@@ -780,6 +782,7 @@ export default function Racing() {
       const started = r.data?.race;
       setActiveRace(started);
       refreshUser();
+      fetchProfile();
       const isInteractive = started?.mode === "interactive" || started?.interactive;
       toast.success(
         isInteractive
@@ -964,6 +967,13 @@ export default function Racing() {
   const selectedInstanceId = profile?.selected_racing_car_id;
   const isCreator = activeRace?.created_by != null && activeRace?.created_by === profile?.user_id;
   const canStartRace = activeRace?.state === "open" && isCreator;
+  const npcVsLimit = profile?.npc_races_vs_limit_24h ?? 15;
+  const npcVsUsed = profile?.npc_races_vs_used_24h ?? 0;
+  const npcVsRacesExhausted = npcVsUsed >= npcVsLimit;
+  const openRaceNeedsNpcFill =
+    activeRace?.state === "open" &&
+    Number(activeRace?.max_grid) > (activeRace?.participants?.length ?? 0);
+  const canStartNpcGridRace = canStartRace && !(npcVsRacesExhausted && openRaceNeedsNpcFill);
   const playerCarName = (() => {
     if (!selectedInstanceId) return "Racing Car";
     const c = cars.find((x) => x.id === selectedInstanceId);
@@ -1845,12 +1855,26 @@ export default function Racing() {
                     {creating ? "Creating…" : "Create race"}
                   </button>
                   <button type="button" className="min-h-[34px] text-xs touch-manipulation px-3 py-1 rounded border border-[var(--noir-primary)] bg-[var(--noir-primary)]/10 text-[var(--noir-primary)] hover:bg-[var(--noir-primary)]/20 font-heading"
-                    disabled={creating || !createForm.track_id || !selectedInstanceId || (cars.find((c) => c.id === selectedInstanceId)?.engine_wear ?? 0) >= 100 || (effectiveTyreStock(createForm.tyre_compound, profile) < 1)}
+                    disabled={
+                      creating ||
+                      npcVsRacesExhausted ||
+                      !createForm.track_id ||
+                      !selectedInstanceId ||
+                      (cars.find((c) => c.id === selectedInstanceId)?.engine_wear ?? 0) >= 100 ||
+                      (effectiveTyreStock(createForm.tyre_compound, profile) < 1)
+                    }
                     onClick={handleCreateAndRaceVsNpcs}
-                    title="Create a race and start immediately vs AI opponents">
+                    title={
+                      npcVsRacesExhausted
+                        ? `NPC grid races limited to ${npcVsLimit} per rolling 24 hours (${npcVsUsed} used).`
+                        : "Create a race and start immediately vs AI opponents"
+                    }>
                     {creating ? "Creating…" : "Create & race vs NPCs"}
                   </button>
                 </div>
+                <p className="text-[10px] text-[var(--noir-muted)] pt-1">
+                  NPC grid races (fill with AI): {npcVsUsed}/{npcVsLimit} in the last 24h (rolling). Daily automated races do not count.
+                </p>
                 {(cars.find((c) => c.id === selectedInstanceId)?.engine_wear ?? 0) >= 100 && (
                   <p className="text-[10px] text-amber-400">Engine at 100% wear — repair in Garage.</p>
                 )}
@@ -1873,6 +1897,12 @@ export default function Racing() {
                   </div>
                   {canStartRace && (
                     <button type="button" className={styles.btnPrimary + " text-xs min-h-[32px] touch-manipulation py-1 px-2"}
+                      disabled={!canStartNpcGridRace}
+                      title={
+                        !canStartNpcGridRace && openRaceNeedsNpcFill && npcVsRacesExhausted
+                          ? `NPC grid limit reached (${npcVsLimit}/24h).`
+                          : "Fill empty grid slots with AI and start"
+                      }
                       onClick={() => handleStartRace(activeRace)}>Start (fill NPCs)</button>
                   )}
                 </div>
