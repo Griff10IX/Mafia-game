@@ -23,6 +23,7 @@ import { initToastObservability } from "./components/ui/sonner";
 import "@/App.css";
 import { prefetchDashboardData } from "./utils/dashboardSessionCache";
 import { prefetchProfilePageData } from "./utils/profilePageWarm";
+import { prefetchForumSpecialTabsData } from "./utils/forumSpecialTabsWarm";
 
 // Lazy-load authenticated pages to shrink initial bundle
 // Account pages
@@ -200,13 +201,15 @@ function App() {
     initToastObservability();
   }, []);
 
-  // Preload dashboard + profile chunks and warm their API/session caches in the background after login.
+  // Preload dashboard + profile + forum chunks and warm their API/session caches in the background after login.
   useEffect(() => {
     if (!isAuthenticated) return undefined;
     import("./pages/Account/Dashboard");
     import("./pages/Account/Profile");
+    import("./pages/Social/Forum");
     prefetchDashboardData({ force: true });
     prefetchProfilePageData({ force: true });
+    prefetchForumSpecialTabsData({ force: true });
     return undefined;
   }, [isAuthenticated]);
 

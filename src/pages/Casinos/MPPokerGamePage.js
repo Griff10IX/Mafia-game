@@ -922,6 +922,7 @@ export default function MPPokerGamePage() {
   const myStack = myPlayer?.stack ?? 0;
   const showAllCards = street === 'showdown' || status === 'completed';
   const amIPlayer = myIndex >= 0;
+  const isSpectating = !isVsDealer && !amIPlayer;
   const amIReady = myPlayer?.ready || false;
   const activePlayers = players.filter((p) => p.status !== 'folded');
   const minPlayersRequired = game?.mode === 'tournament' ? 4 : 2;
@@ -1107,14 +1108,22 @@ export default function MPPokerGamePage() {
             <ArrowLeft size={16} />
           </Link>
           <div className="min-w-0">
-            <h1 className="text-base font-heading font-bold text-primary uppercase tracking-wider">
+            <h1 className="text-base font-heading font-bold text-primary uppercase tracking-wider flex flex-wrap items-center gap-2">
               {isVsDealer ? 'Vs Dealer' : 'Poker Table'}
+              {isSpectating && (
+                <span className="text-[8px] font-heading font-bold uppercase tracking-wider px-2 py-0.5 rounded-full border border-emerald-500/40 text-emerald-300 bg-emerald-500/10">
+                  Spectating
+                </span>
+              )}
             </h1>
             <p className="text-[9px] text-mutedForeground font-heading">
               {street ? <span className="text-yellow-400/80 font-bold">{STREET_LABELS[street] || street}</span> : 'Hold\'em'}
               {' · '}Pot <span className="text-primary font-bold">{formatMoneyFull(pot)}</span>
               {game?.hand_number > 0 && ` · Hand #${game.hand_number}`}
             </p>
+            {isSpectating && status === 'playing' && (phase === 'playing' || isVsDealer) && street && street !== 'showdown' && (
+              <p className="text-[8px] font-heading text-emerald-400/90 mt-0.5">Hole cards stay hidden until showdown.</p>
+            )}
             {isTournament && (
               <p className="text-[8px] sm:text-[9px] text-mutedForeground font-heading mt-0.5 max-w-[calc(100vw-4rem)] sm:max-w-none truncate sm:whitespace-normal sm:overflow-visible">
                 Tournament · {tournamentStatus || 'registration'}
@@ -1751,12 +1760,15 @@ export default function MPPokerGamePage() {
         );
       })()}
 
-      {/* ══ CHAT ══ */}
-      {!isVsDealer && amIPlayer && (
+      {/* ══ CHAT (seated players may send; spectators read-only) ══ */}
+      {!isVsDealer && (
         <div data-chat-surface="table" data-chat-game="poker" className={`${styles.panel} mobile-panel rounded-xl overflow-hidden border border-primary/20 animate-pkr-fade`}>
           <div data-chat-part="header" className="px-3 py-2 border-b border-primary/20 flex items-center gap-1.5" style={{ background: 'rgba(234,179,8,0.06)' }}>
             <MessageSquare size={11} className="text-primary" />
             <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">Table Chat</span>
+            {isSpectating && (
+              <span className="text-[8px] font-heading text-mutedForeground ml-auto">View only</span>
+            )}
           </div>
           <div data-chat-part="messages" className="max-h-[72px] sm:max-h-[120px] overflow-y-auto p-2 sm:p-2.5 space-y-1.5" style={{ background: 'rgba(0,0,0,0.2)' }}>
             {(game.chat || []).length === 0
@@ -1770,7 +1782,7 @@ export default function MPPokerGamePage() {
             }
             <div ref={chatEndRef} />
           </div>
-          {status !== 'completed' && (
+          {amIPlayer && status !== 'completed' && (
             <form onSubmit={sendChat} data-chat-part="composer" className="p-2 border-t border-primary/20 flex gap-1.5">
               <input type="text" data-chat-part="input" value={chatInput} onChange={(e) => setChatInput(e.target.value)}
                 placeholder="Say something…" maxLength={200}

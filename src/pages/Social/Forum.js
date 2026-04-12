@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { MessageSquare, Lock, Pin, AlertCircle, Plus, ChevronRight, Eye, MessageCircle, Dice5, Package, Users, Bold, Italic, Image, Palette, Puzzle } from 'lucide-react';
 import api from '../../utils/api';
+import { readForumSpecialTabsWarm } from '../../utils/forumSpecialTabsWarm';
 import { toast } from 'sonner';
 import GifPicker from '../../components/GifPicker';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
@@ -1115,7 +1116,8 @@ export default function Forum() {
   }, [activeTab, forumPage]);
 
   const fetchEntertainerGames = useCallback(async () => {
-    setGamesLoading(true);
+    if (!skipEntertainerGamesLoadSpinnerRef.current) setGamesLoading(true);
+    skipEntertainerGamesLoadSpinnerRef.current = false;
     try {
       const res = await api.get('/forum/entertainer/games');
       setEntertainerGames(res.data?.games ?? []);
@@ -1160,6 +1162,56 @@ export default function Forum() {
       if (!silent) setFindWordLoading(false);
     }
   }, []);
+
+  const defaultEntertainerConfig = useRef({
+    auto_create_enabled: false,
+    find_word_auto_enabled: false,
+    last_auto_create_at: null,
+    next_auto_create_at: null,
+    last_find_word_auto_at: null,
+  });
+  /** After session warm hydrate, skip one "Loading games…" flash while refetching. */
+  const skipEntertainerGamesLoadSpinnerRef = useRef(false);
+
+  useLayoutEffect(() => {
+    const warm = readForumSpecialTabsWarm();
+    if (!warm) return;
+    if (warm.adminCheck) {
+      setIsAdmin(!!warm.adminCheck.is_admin);
+      setIsModerator(!!warm.adminCheck.is_moderator);
+      setIsHdo(!!warm.adminCheck.is_help_desk_operator);
+    }
+    const special = ['entertainer', 'designer', 'game_ideas', 'crew_oc'];
+    if (special.includes(activeTab) && forumPage === 1) {
+      const pack = warm.topics?.[activeTab];
+      if (pack && Array.isArray(pack.topics)) {
+        setTopics(pack.topics);
+        setCanViewPage2(!!pack.can_view_page_2);
+        setHasLoaded(true);
+      }
+    }
+    if (activeTab === 'entertainer' && warm.entertainer) {
+      const e = warm.entertainer;
+      setEntertainerGames(e.games ?? []);
+      setEntertainerHistory(e.history ?? []);
+      setEntertainerPrizes(e.prizes ?? null);
+      setEntertainerConfig(e.config && typeof e.config === 'object' ? e.config : { ...defaultEntertainerConfig.current });
+      setFindWordActive(e.findWordActive && typeof e.findWordActive === 'object' ? e.findWordActive : { active: false });
+      setFindWordHistory(e.findWordHistory ?? []);
+      skipEntertainerGamesLoadSpinnerRef.current = true;
+    }
+    if (activeTab === 'designer' && warm.designer?.activeRes) {
+      const ar = warm.designer.activeRes;
+      setActiveDesignerComp(ar.competition ?? null);
+      setMyVoteEntryId(ar.my_vote_entry_id ?? null);
+      setMyEntryCommentId(ar.my_entry_comment_id ?? null);
+      if (warm.designer.entriesPack) {
+        setDesignerEntries(warm.designer.entriesPack.entries ?? []);
+        setMyVoteEntryId(warm.designer.entriesPack.my_vote_entry_id ?? ar.my_vote_entry_id ?? null);
+        setCanWithdrawVote(!!warm.designer.entriesPack.can_withdraw_vote);
+      }
+    }
+  }, [activeTab, forumPage]);
 
   const fetchEntertainerConfig = useCallback(async () => {
     try {

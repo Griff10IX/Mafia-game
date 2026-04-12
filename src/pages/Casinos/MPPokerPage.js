@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { PlusCircle, User, Users, Clock, DollarSign, Trophy, ShieldCheck } from 'lucide-react';
+import { PlusCircle, User, Users, Clock, DollarSign, Trophy, ShieldCheck, Eye } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
@@ -727,6 +727,10 @@ export default function MPPokerPage() {
               const isCreator = t.creator_id === myUserId;
               const full = (t.player_count || 0) >= (t.max_players || 9);
               const canJoin = t.approval_status === 'approved' && t.tournament_status === 'registration' && !isIn && !full;
+              const canSpectateTournament = t.approval_status !== 'denied'
+                && (t.tournament_status === 'running'
+                  || t.tournament_status === 'completed'
+                  || (t.status === 'playing' && t.tournament_status !== 'denied'));
               const statusText = t.approval_status === 'pending'
                 ? 'Pending Approval'
                 : t.approval_status === 'denied'
@@ -819,6 +823,12 @@ export default function MPPokerPage() {
                         <button type="button" onClick={() => navigate(`/casino/mp-poker/game/${t.id}`)}
                           className="inline-flex items-center gap-1 rounded-lg border border-primary/30 bg-primary/10 px-2.5 py-1.5 font-heading font-bold text-[9px] uppercase tracking-wider hover:bg-primary/20 active:scale-[0.97] transition-all text-primary">
                           <ShieldCheck size={11} /> Open
+                        </button>
+                      )}
+                      {canSpectateTournament && !isIn && !isCreator && (
+                        <button type="button" onClick={() => navigate(`/casino/mp-poker/game/${t.id}`)}
+                          className="inline-flex items-center gap-1 rounded-lg border border-emerald-500/35 bg-emerald-500/10 px-2.5 py-1.5 font-heading font-bold text-[9px] uppercase tracking-wider hover:bg-emerald-500/15 active:scale-[0.97] transition-all text-emerald-300">
+                          <Eye size={11} /> Spectate
                         </button>
                       )}
                       {(isCreator || canManageTournaments)

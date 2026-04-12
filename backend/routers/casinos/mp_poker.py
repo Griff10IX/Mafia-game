@@ -299,6 +299,26 @@ def _enrich_players_current_hand(g: dict) -> None:
         p["current_hand_name"] = _hand_rank_name(cat)
 
 
+def _redact_mp_poker_hole_cards_for_spectators(g: Optional[dict], viewer_uid: Optional[str]) -> None:
+    """Non-seated users must not receive hole cards mid-hand (API must not leak for spectators)."""
+    if not g:
+        return
+    players = list(g.get("players") or [])
+    vid = str(viewer_uid or "").strip()
+    seated = {str(p.get("user_id") or "").strip() for p in players if p.get("user_id")}
+    if vid and vid in seated:
+        return
+    street = g.get("street")
+    status = g.get("status")
+    phase = g.get("phase")
+    if street == "showdown" or status == "completed" or phase == "settled":
+        return
+    for p in players:
+        p["hole_cards"] = []
+        p.pop("current_hand_name", None)
+    g["players"] = players
+
+
 class PokerCreateRequest(BaseModel):
     max_players: int = 6
     buy_in: int = 100_000
@@ -1376,6 +1396,7 @@ def register(router):
             await _mp_poker_run_showdown(game_id)
             g = await db.mp_poker_games.find_one({"id": game_id})
         _enrich_players_current_hand(g)
+        _redact_mp_poker_hole_cards_for_spectators(g, current_user.get("id"))
         return {k: v for k, v in (g or {}).items() if k != "_id"}
 
     @router.post("/casino/mp-poker/tournaments/{game_id}/remind-inactive")
@@ -1843,6 +1864,7 @@ def register(router):
                 await _mp_poker_run_showdown(game_id)
                 g = await db.mp_poker_games.find_one({"id": game_id})
         _enrich_players_current_hand(g)
+        _redact_mp_poker_hole_cards_for_spectators(g, current_user.get("id"))
         return {k: v for k, v in (g or {}).items() if k != "_id"}
 
     @router.post("/casino/mp-poker/games/{game_id}/join")
@@ -2557,11 +2579,9 @@ def register(router):
         turn_started = _parse_iso_utc(g.get("turn_started_at"))
         elapsed = (datetime.now(timezone.utc) - turn_started).total_seconds() if turn_started else 0
         timed_out = elapsed >= MP_POKER_TURN_SECONDS
-        is_participant = any((p.get("user_id") or "") == requester_id for p in players)
         if not timed_out and turn_user_id != requester_id:
             return {k: v for k, v in g.items() if k != "_id"}
-        if timed_out and not (is_participant or _is_admin(current_user)):
-            return {k: v for k, v in g.items() if k != "_id"}
+        # When the clock has expired, any poll (including spectators) may apply the auto-fold.
         # If current player is all-in they cannot fold by timeout; run out/advance street instead.
         if players[turn_idx].get("status") == "all_in" and g.get("street") in ("preflop", "flop", "turn", "river"):
             await _mp_poker_advance_street(game_id)
@@ -2603,6 +2623,12 @@ def register(router):
         g = await db.mp_poker_games.find_one({"id": game_id})
         if not g:
             raise HTTPException(status_code=404, detail="Game not found")
+        uid = str(current_user.get("id") or "").strip()
+        players = list(g.get("players") or [])
+        if g.get("mode") in ("vs_players", "tournament") and not any(
+            str(p.get("user_id") or "").strip() == uid for p in players
+        ):
+            raise HTTPException(status_code=403, detail="Only seated players can chat")
         chat = list(g.get("chat") or [])
         chat.append({"user_id": current_user.get("id") or "", "username": current_user.get("username") or "Player", "message": msg, "at": datetime.now(timezone.utc).isoformat()})
         await db.mp_poker_games.update_one({"id": game_id}, {"$set": {"chat": chat[-50:]}})
