@@ -2160,6 +2160,7 @@ def register(router):
             p["current_bet"] = 0
             p["acted_this_street"] = False
         button = int(g.get("button_index") or 0)
+        bb = int(g.get("big_blind") or 2)
         if street == "preflop":
             if deck:
                 deck.pop()  # burn
@@ -2170,13 +2171,13 @@ def register(router):
             if players[first].get("status") in ("folded", "all_in"):
                 await db.mp_poker_games.update_one(
                     {"id": game_id},
-                    {"$set": {"street": "flop", "board": board, "deck": deck, "players": players, "to_call": 0}},
+                    {"$set": {"street": "flop", "board": board, "deck": deck, "players": players, "to_call": 0, "min_raise": bb}},
                 )
                 await _mp_poker_advance_street(game_id)
             else:
                 await db.mp_poker_games.update_one(
                     {"id": game_id},
-                    {"$set": {"street": "flop", "board": board, "deck": deck, "players": players, "current_turn_index": first, "first_turn_index_this_street": first, "to_call": 0, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
+                    {"$set": {"street": "flop", "board": board, "deck": deck, "players": players, "current_turn_index": first, "first_turn_index_this_street": first, "to_call": 0, "min_raise": bb, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
                 )
         elif street == "flop":
             if deck:
@@ -2187,13 +2188,13 @@ def register(router):
             if players[first].get("status") in ("folded", "all_in"):
                 await db.mp_poker_games.update_one(
                     {"id": game_id},
-                    {"$set": {"street": "turn", "board": board, "deck": deck, "players": players, "to_call": 0}},
+                    {"$set": {"street": "turn", "board": board, "deck": deck, "players": players, "to_call": 0, "min_raise": bb}},
                 )
                 await _mp_poker_advance_street(game_id)
             else:
                 await db.mp_poker_games.update_one(
                     {"id": game_id},
-                    {"$set": {"street": "turn", "board": board, "deck": deck, "players": players, "current_turn_index": first, "first_turn_index_this_street": first, "to_call": 0, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
+                    {"$set": {"street": "turn", "board": board, "deck": deck, "players": players, "current_turn_index": first, "first_turn_index_this_street": first, "to_call": 0, "min_raise": bb, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
                 )
         elif street == "turn":
             if deck:
@@ -2204,13 +2205,13 @@ def register(router):
             if players[first].get("status") in ("folded", "all_in"):
                 await db.mp_poker_games.update_one(
                     {"id": game_id},
-                    {"$set": {"street": "river", "board": board, "deck": deck, "players": players, "to_call": 0}},
+                    {"$set": {"street": "river", "board": board, "deck": deck, "players": players, "to_call": 0, "min_raise": bb}},
                 )
                 await _mp_poker_advance_street(game_id)
             else:
                 await db.mp_poker_games.update_one(
                     {"id": game_id},
-                    {"$set": {"street": "river", "board": board, "deck": deck, "players": players, "current_turn_index": first, "first_turn_index_this_street": first, "to_call": 0, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
+                    {"$set": {"street": "river", "board": board, "deck": deck, "players": players, "current_turn_index": first, "first_turn_index_this_street": first, "to_call": 0, "min_raise": bb, "turn_started_at": datetime.now(timezone.utc).isoformat()}},
                 )
         elif street == "river":
             await db.mp_poker_games.update_one(
@@ -2271,13 +2272,13 @@ def register(router):
             if "acted_this_street" not in x:
                 x["acted_this_street"] = False
         to_call = int(g.get("to_call") or 0)
-        min_raise = int(g.get("min_raise") or g.get("big_blind", 1))
+        bb = max(1, int(g.get("big_blind") or 1))
         pot = int(g.get("pot") or 0)
         stack = int(p.get("stack") or 0)
         current_bet = int(p.get("current_bet") or 0)
         need_to_call = to_call - current_bet
         prev_max_bet = max(int(x.get("current_bet") or 0) for x in players)
-        min_raise_updated = min_raise
+        min_raise_updated = bb
         if action == "fold":
             p["status"] = "folded"
             p["last_action"] = {"action": "fold"}
@@ -2319,8 +2320,8 @@ def register(router):
             if effective == "bet":
                 if to_call > 0:
                     raise HTTPException(status_code=400, detail="Cannot open bet — call, raise, or fold")
-                if amt < stack and amt < min_raise:
-                    raise HTTPException(status_code=400, detail=f"Bet must be at least {min_raise:,}")
+                if amt < stack and amt < bb:
+                    raise HTTPException(status_code=400, detail=f"Bet must be at least {bb:,}")
             else:
                 new_bet = current_bet + amt
                 if new_bet < to_call:
@@ -2330,10 +2331,10 @@ def register(router):
                             detail=f"Must match the current bet ({to_call:,}) or go all-in",
                         )
                 elif new_bet > to_call:
-                    if amt < stack and new_bet < to_call + min_raise:
+                    if amt < stack and new_bet < to_call + bb:
                         raise HTTPException(
                             status_code=400,
-                            detail=f"Minimum total bet to raise is {to_call + min_raise:,} (or go all-in)",
+                            detail=f"Minimum total bet to raise is {to_call + bb:,} (or go all-in)",
                         )
             p["stack"] = stack - amt
             p["current_bet"] = current_bet + amt
@@ -2348,7 +2349,7 @@ def register(router):
             if max_bet_amt > prev_max_bet:
                 _reset_acted_this_street_for_raise(players, turn_idx)
                 p["acted_this_street"] = True
-                min_raise_updated = max(min_raise, max_bet_amt - prev_max_bet)
+                min_raise_updated = bb
         elif action == "all_in":
             amt = stack
             p["stack"] = 0
@@ -2362,7 +2363,7 @@ def register(router):
             if max_bet_amt > prev_max_bet:
                 _reset_acted_this_street_for_raise(players, turn_idx)
                 p["acted_this_street"] = True
-                min_raise_updated = max(min_raise, max_bet_amt - prev_max_bet)
+                min_raise_updated = bb
         else:
             raise HTTPException(status_code=400, detail="Invalid action")
         max_bet = max(int(x.get("current_bet") or 0) for x in players)

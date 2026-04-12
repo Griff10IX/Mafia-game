@@ -147,6 +147,18 @@ const PKR_GOLD_BAR = {
   boxShadow: '0 1px 0 rgba(255,255,255,0.12) inset',
 };
 
+/** Must match backend/routers/casinos/mp_poker.py MP_POKER_TOURNAMENT_LEVEL_SECONDS */
+const MP_POKER_TOURNAMENT_LEVEL_SECONDS = 300;
+
+const PKR_TABLE_HUD_PILL_STYLE = {
+  background: 'rgba(0,0,0,0.52)',
+  border: '1px solid rgba(212,175,55,0.38)',
+  color: 'var(--noir-primary)',
+  backdropFilter: 'blur(8px)',
+  WebkitBackdropFilter: 'blur(8px)',
+  boxShadow: '0 2px 12px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)',
+};
+
 /** Shared showdown / winner banner (cash table settled or tournament last_hand_showdown). */
 function MpPokerHandOutcomePanel({
   results,
@@ -888,7 +900,8 @@ export default function MPPokerGamePage() {
   const toCall = game?.to_call ?? 0;
   const myCurrentBet = myPlayer?.current_bet ?? 0;
   const needToCall = Math.max(0, toCall - myCurrentBet);
-  const minRaise = game?.min_raise ?? game?.big_blind ?? 1;
+  const bigBlind = Number(game?.big_blind) || 1;
+  const minRaise = bigBlind;
   const myStack = myPlayer?.stack ?? 0;
   const showAllCards = street === 'showdown' || status === 'completed';
   const amIPlayer = myIndex >= 0;
@@ -900,9 +913,12 @@ export default function MPPokerGamePage() {
   const isTournament = game?.mode === 'tournament';
   const blindLevelIndex = Number(game?.blind_level_index || 0);
   const blindLevelStartedAt = game?.blind_level_started_at ? new Date(game.blind_level_started_at).getTime() : null;
-  const blindLevelSecondsLeft = blindLevelStartedAt
-    ? Math.max(0, 300 - Math.floor((Date.now() - blindLevelStartedAt) / 1000))
-    : null;
+  const blindLevelSecondsLeft = (() => {
+    if (blindLevelStartedAt == null) return null;
+    const elapsedSec = Math.max(0, Math.floor((Date.now() - blindLevelStartedAt) / 1000));
+    const secInLevel = elapsedSec % MP_POKER_TOURNAMENT_LEVEL_SECONDS;
+    return secInLevel === 0 ? MP_POKER_TOURNAMENT_LEVEL_SECONDS : MP_POKER_TOURNAMENT_LEVEL_SECONDS - secInLevel;
+  })();
   const tournamentStatus = game?.tournament_status || null;
   const prizePool = Number(game?.prize_pool || 0);
   const buttonIndex = game?.button_index ?? 0;
@@ -1340,21 +1356,17 @@ export default function MPPokerGamePage() {
                 )}
                 <div
                   className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full font-heading font-bold ${compactUi ? 'text-[8px]' : 'text-[9px]'}`}
-                  style={{
-                    background: 'rgba(0,0,0,0.52)',
-                    border: '1px solid rgba(212,175,55,0.38)',
-                    color: 'var(--noir-primary)',
-                    backdropFilter: 'blur(8px)',
-                    WebkitBackdropFilter: 'blur(8px)',
-                    boxShadow: '0 2px 12px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)',
-                  }}
+                  style={PKR_TABLE_HUD_PILL_STYLE}
                 >
                   {street ? `${STREET_LABELS[street] || street} · ` : ''}Pot {formatMoneyFull(pot)}
                 </div>
-                {myPlayer?.current_hand_name && board.length >= 3 && myPlayer?.status !== 'folded' && !compactUi && (
-                  <p className="text-[9px] font-heading font-bold" style={{ color: 'var(--noir-primary)' }}>
+                {myPlayer?.current_hand_name && board.length >= 3 && myPlayer?.status !== 'folded' && (
+                  <div
+                    className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full font-heading font-bold text-center max-w-[min(100%,260px)] leading-tight ${compactUi ? 'text-[8px]' : 'text-[9px]'}`}
+                    style={PKR_TABLE_HUD_PILL_STYLE}
+                  >
                     Your hand: {myPlayer.current_hand_name}
-                  </p>
+                  </div>
                 )}
                 {status === 'playing' && (phase === 'playing' || isVsDealer) && currentTurnIndex >= 0 && (
                   <div
