@@ -950,7 +950,7 @@ export default function MPPokerPage() {
             'All players must ready up before cards are dealt',
             'Best 5-card hand from 7 wins the pot',
             'Fold, check, call, raise, or go all-in',
-            '60s per turn — auto-fold on timeout',
+            '30s per turn — auto-fold on timeout',
           ].map((rule) => (
             <div key={rule} className="flex items-start gap-1.5 text-[9px] font-heading text-mutedForeground">
               <span className="text-primary mt-0.5 shrink-0">♠</span>{rule}

@@ -2565,7 +2565,7 @@ def register(router):
         return {k: v for k, v in (g or {}).items() if k != "_id"}
 
     @router.post("/casino/mp-poker/games/{game_id}/timeout")
-    async def game_timeout(game_id: str, current_user: dict = Depends(get_current_user_verified)):
+    async def game_timeout(game_id: str, _current_user: dict = Depends(get_current_user_verified)):
         """Auto-fold on turn timeout. For vs_dealer, if current player is all-in, run out the board instead of folding."""
         g = await db.mp_poker_games.find_one({"id": game_id})
         if not g or g.get("status") != "playing":
@@ -2574,12 +2574,12 @@ def register(router):
         players = list(g.get("players") or [])
         if turn_idx < 0 or turn_idx >= len(players):
             return {k: v for k, v in g.items() if k != "_id"}
-        turn_user_id = players[turn_idx].get("user_id")
-        requester_id = current_user.get("id")
         turn_started = _parse_iso_utc(g.get("turn_started_at"))
         elapsed = (datetime.now(timezone.utc) - turn_started).total_seconds() if turn_started else 0
         timed_out = elapsed >= MP_POKER_TURN_SECONDS
-        if not timed_out and turn_user_id != requester_id:
+        # Never fold / advance on timeout until server clock says the turn actually expired.
+        # (Previously: current player could POST before 30s and still fold — client timer + skew vs UTC.)
+        if not timed_out:
             return {k: v for k, v in g.items() if k != "_id"}
         # When the clock has expired, any poll (including spectators) may apply the auto-fold.
         # If current player is all-in they cannot fold by timeout; run out/advance street instead.
