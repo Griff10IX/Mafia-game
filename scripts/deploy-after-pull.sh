@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Run on the server from /opt/mafia-app after git reset (used by push-live*.bat).
-# Builds the React app into a temp output dir, then swaps into build/ in one step so nginx
-# keeps serving the previous bundle for the whole compile (avoids "frontend down" during npm run build).
+# Builds into build.next while leaving build/ untouched so nginx keeps serving the old bundle
+# for the whole compile. Only after a successful build do we rotate build/ → build.prev → new.
 #
 # Usage:
 #   bash scripts/deploy-after-pull.sh              # reload nginx only
@@ -18,27 +18,27 @@ fi
 
 rm -rf build.next
 
-if [ -d build ]; then
-  rm -rf build.prev
-  mv build build.prev
-else
-  rm -rf build.prev
-fi
-
-restore_on_fail() {
+cleanup_failed_build() {
   rm -rf build.next
-  if [ ! -d build ] && [ -d build.prev ]; then
-    mv build.prev build
-  fi
 }
-trap restore_on_fail ERR
+trap cleanup_failed_build ERR
 
-# react-scripts 4+ respects BUILD_PATH; output never touches live "build/" until mv below
+# react-scripts 4+ respects BUILD_PATH; live build/ is not touched until swap below
 export BUILD_PATH=build.next
 npm run build
 
+if [ ! -f build.next/index.html ]; then
+  echo "deploy-after-pull.sh: build.next/index.html missing after npm run build" >&2
+  exit 1
+fi
+
 trap - ERR
 
+# Swap new bundle in (sub-second gap between mvs; old bundle served until this point)
+rm -rf build.prev
+if [ -d build ]; then
+  mv build build.prev
+fi
 mv build.next build
 rm -rf build.prev
 
@@ -46,4 +46,5 @@ sudo systemctl reload nginx
 
 if [ "$restart_backend" -eq 1 ]; then
   sudo systemctl restart mafia-backend
+  # If the API fails to start, nginx may still return 5xx — check: journalctl -u mafia-backend -e
 fi

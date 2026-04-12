@@ -3,7 +3,6 @@ import asyncio
 import base64
 import logging
 import os
-import time
 import re
 import secrets
 from datetime import datetime, timezone, timedelta
@@ -31,48 +30,6 @@ from utils.notepad_color import (
 )
 
 logger = logging.getLogger(__name__)
-
-# Honour ranks use up to six users.count_documents (two with $expr — full scans). Cache briefly so
-# repeat profile views and prefetch revalidation stay cheap while other players' stats can move ranks.
-_HONOURS_RANKS_CACHE: dict = {}
-_HONOURS_RANKS_TTL_SEC = 60.0
-_HONOURS_RANKS_MAX_KEYS = 2500
-
-
-def _honours_ranks_cache_key(user_id: str, is_dead: bool, user: dict, effective_kills: int) -> tuple:
-    rp = int(user.get("rank_points") or 0) + int(user.get("rank_xp_pass_prestige_carry_rp") or 0)
-    return (
-        user_id,
-        is_dead,
-        int(user.get("total_crimes") or 0),
-        int(user.get("total_gta") or 0),
-        int(user.get("jail_busts") or 0),
-        rp,
-        int(user.get("lifetime_points_spent") or 0),
-        effective_kills,
-    )
-
-
-def _honours_ranks_cache_get(key: tuple):
-    now = time.monotonic()
-    ent = _HONOURS_RANKS_CACHE.get(key)
-    if ent is None:
-        return None
-    ts, vals = ent
-    if now - ts > _HONOURS_RANKS_TTL_SEC:
-        try:
-            del _HONOURS_RANKS_CACHE[key]
-        except KeyError:
-            pass
-        return None
-    return vals
-
-
-def _honours_ranks_cache_set(key: tuple, vals: tuple):
-    if len(_HONOURS_RANKS_CACHE) >= _HONOURS_RANKS_MAX_KEYS:
-        _HONOURS_RANKS_CACHE.clear()
-    _HONOURS_RANKS_CACHE[key] = (time.monotonic(), vals)
-
 
 SPOTIFY_ALLOWED_TYPES = {"track", "album", "playlist", "artist", "episode", "show"}
 SPOTIFY_ID_RE = re.compile(r"^[A-Za-z0-9]{22}$")
@@ -581,30 +538,46 @@ def register(router):
             return n_better + 1
 
         async def _rank_for_effective_kills(effective_value: int, *, subject_dead: bool) -> int:
-            """Rank by the same kill total shown on profile (not raw total_kills)."""
+            """Same ordering as GET /leaderboards/top all-time kills (effective kills, not raw total_kills)."""
             if effective_value is None:
                 effective_value = 0
-            eff_expr = mongodb_effective_kill_count_expr()
             q = _honours_liveness_match(subject_dead)
             q.update(_staff_exclude_user_filter())
-            q["$expr"] = {"$gt": [eff_expr, int(effective_value)]}
-            n_better = await db.users.count_documents(q)
+            ev = int(effective_value)
+            pipeline = [
+                {"$match": q},
+                {"$addFields": {"_lb_eff_kills": mongodb_effective_kill_count_expr()}},
+                {"$match": {"_lb_eff_kills": {"$gt": ev}}},
+                {"$count": "n"},
+            ]
+            cur = await db.users.aggregate(pipeline).to_list(1)
+            n_better = int(cur[0].get("n", 0)) if cur else 0
             return n_better + 1
 
         async def _rank_for_total_rank_points_lifetime(total_value: int, *, subject_dead: bool) -> int:
-            """Same ordering as leaderboard rank_points board: RP + prestige carry; pool = alive XOR dead like /leaderboards/top."""
+            """Same pipeline fields as leaderboard rank_points board: _lb_total_rp then $gt; pool matches /leaderboards/top."""
             if total_value is None:
                 total_value = 0
             q = _honours_liveness_match(subject_dead)
             q.update(_staff_exclude_user_filter())
-            total_expr = {
-                "$add": [
-                    {"$ifNull": ["$rank_xp_pass_prestige_carry_rp", 0]},
-                    {"$ifNull": ["$rank_points", 0]},
-                ]
-            }
-            q["$expr"] = {"$gt": [total_expr, int(total_value)]}
-            n_better = await db.users.count_documents(q)
+            tv = int(total_value)
+            pipeline = [
+                {"$match": q},
+                {
+                    "$addFields": {
+                        "_lb_total_rp": {
+                            "$add": [
+                                {"$ifNull": ["$rank_xp_pass_prestige_carry_rp", 0]},
+                                {"$ifNull": ["$rank_points", 0]},
+                            ]
+                        }
+                    }
+                },
+                {"$match": {"_lb_total_rp": {"$gt": tv}}},
+                {"$count": "n"},
+            ]
+            cur = await db.users.aggregate(pipeline).to_list(1)
+            n_better = int(cur[0].get("n", 0)) if cur else 0
             return n_better + 1
 
         async def _casinos_for_type(game_type: str, coll, location_key: str = "city"):
@@ -679,26 +652,17 @@ def register(router):
             return received, sent
 
         eff_kills = effective_player_kill_count(user)
-        _hr_key = _honours_ranks_cache_key(user_id, is_dead, user, eff_kills)
-        _cached_ranks = _honours_ranks_cache_get(_hr_key)
-        if _cached_ranks is not None:
-            kills_rank, crimes_rank, gta_rank, jail_rank, rank_points_rank, points_spent_rank = _cached_ranks
-        else:
-            kills_rank, crimes_rank, gta_rank, jail_rank, rank_points_rank, points_spent_rank = await asyncio.gather(
-                _rank_for_effective_kills(eff_kills, subject_dead=is_dead),
-                _rank_for_field("total_crimes", int(user.get("total_crimes") or 0), subject_dead=is_dead),
-                _rank_for_field("total_gta", int(user.get("total_gta") or 0), subject_dead=is_dead),
-                _rank_for_field("jail_busts", int(user.get("jail_busts") or 0), subject_dead=is_dead),
-                _rank_for_total_rank_points_lifetime(
-                    int(user.get("rank_points") or 0) + int(user.get("rank_xp_pass_prestige_carry_rp") or 0),
-                    subject_dead=is_dead,
-                ),
-                _rank_for_field("lifetime_points_spent", int(user.get("lifetime_points_spent") or 0), subject_dead=is_dead),
-            )
-            _honours_ranks_cache_set(
-                _hr_key,
-                (kills_rank, crimes_rank, gta_rank, jail_rank, rank_points_rank, points_spent_rank),
-            )
+        kills_rank, crimes_rank, gta_rank, jail_rank, rank_points_rank, points_spent_rank = await asyncio.gather(
+            _rank_for_effective_kills(eff_kills, subject_dead=is_dead),
+            _rank_for_field("total_crimes", int(user.get("total_crimes") or 0), subject_dead=is_dead),
+            _rank_for_field("total_gta", int(user.get("total_gta") or 0), subject_dead=is_dead),
+            _rank_for_field("jail_busts", int(user.get("jail_busts") or 0), subject_dead=is_dead),
+            _rank_for_total_rank_points_lifetime(
+                int(user.get("rank_points") or 0) + int(user.get("rank_xp_pass_prestige_carry_rp") or 0),
+                subject_dead=is_dead,
+            ),
+            _rank_for_field("lifetime_points_spent", int(user.get("lifetime_points_spent") or 0), subject_dead=is_dead),
+        )
 
         (
             family_name_tag,

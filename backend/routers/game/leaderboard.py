@@ -15,6 +15,7 @@ from server import (
     _staff_exclude_user_filter,
     send_notification,
     effective_player_kill_count,
+    mongodb_effective_kill_count_expr,
 )
 
 _lb_cache: dict = {}
@@ -179,6 +180,36 @@ async def _top_by_total_rank_points(current_user_id: str, limit: int, dead: bool
                 rank=i + 1,
                 username=user["username"],
                 value=int(user.get("_lb_total_rp") or 0),
+                is_current_user=user["id"] == current_user_id,
+            )
+        )
+    return out
+
+
+async def _top_by_effective_kills(current_user_id: str, limit: int, dead: bool = False) -> List[StatLeaderboardEntry]:
+    """Top users by the same kill total as profile / honours (not raw total_kills)."""
+    limit = max(1, min(100, int(limit)))
+    if dead:
+        query = {"is_dead": True, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
+    else:
+        query = {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
+    query.update(_leaderboard_user_filter())
+    pipeline = [
+        {"$match": query},
+        {"$addFields": {"_lb_eff_kills": mongodb_effective_kill_count_expr()}},
+        {"$sort": {"_lb_eff_kills": -1}},
+        {"$limit": limit},
+        {"$project": {"_id": 0, "username": 1, "id": 1, "_lb_eff_kills": 1}},
+    ]
+    cursor = db.users.aggregate(pipeline)
+    docs = await cursor.to_list(limit)
+    out: List[StatLeaderboardEntry] = []
+    for i, user in enumerate(docs):
+        out.append(
+            StatLeaderboardEntry(
+                rank=i + 1,
+                username=user["username"],
+                value=int(user.get("_lb_eff_kills") or 0),
                 is_current_user=user["id"] == current_user_id,
             )
         )
@@ -705,7 +736,7 @@ async def _fetch_top_boards_raw(limit: int, dead: bool, period: str) -> dict:
         )
     else:
         kills, crimes, gta, jail_busts, rank_points, points_spent, respect_points, bullets_melted, stock_market_profit, booze_run_profit = await asyncio.gather(
-            _top_by_field("total_kills", dummy_uid, limit, dead=dead),
+            _top_by_effective_kills(dummy_uid, limit, dead=dead),
             _top_by_field("total_crimes", dummy_uid, limit, dead=dead),
             _top_by_field("total_gta", dummy_uid, limit, dead=dead),
             _top_by_field("jail_busts", dummy_uid, limit, dead=dead),

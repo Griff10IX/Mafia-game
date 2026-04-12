@@ -78,6 +78,37 @@ def _make_deck() -> List[dict]:
     return [{"suit": s, "value": v} for s in MP_POKER_SUITS for v in MP_POKER_VALUES]
 
 
+def _mp_poker_last_hand_showdown_snapshot(
+    g: dict, players: List[dict], board: List[dict], pot: int, results: List[dict]
+) -> dict:
+    """Snapshot after a tournament hand completes; clients show winners after immediate re-deal clears live results."""
+    snap_players: List[dict] = []
+    for p in players:
+        hc = p.get("hole_cards") or []
+        cards: List[dict] = []
+        for c in hc:
+            cards.append(dict(c) if isinstance(c, dict) else c)
+        snap_players.append(
+            {
+                "user_id": p.get("user_id"),
+                "username": p.get("username"),
+                "is_bot": bool(p.get("is_bot")),
+                "hole_cards": cards,
+            }
+        )
+    bd = board or []
+    board_out: List[dict] = []
+    for c in bd:
+        board_out.append(dict(c) if isinstance(c, dict) else c)
+    return {
+        "hand_number": int(g.get("hand_number") or 0),
+        "pot": int(pot or 0),
+        "board": board_out,
+        "results": [dict(r) for r in results],
+        "players": snap_players,
+    }
+
+
 def _card_rank(card: dict) -> int:
     """Numeric rank 2-14 (A=14)."""
     v = (card or {}).get("value")
@@ -1945,6 +1976,7 @@ def register(router):
                     "payout": winner_payouts.get(uid, 0),
                     "hand": winner_hand_names.get(uid) if uid in winner_payouts else None,
                 })
+        last_snap = _mp_poker_last_hand_showdown_snapshot(g, players, board, pot, results) if is_tournament else None
         if is_tournament:
             # Tournament hand: pot is returned to winner stack(s), not paid out to wallet.
             for p in players:
@@ -1965,7 +1997,10 @@ def register(router):
                 p["hole_cards"] = []
             players = _tournament_survivors(players)
             if len(players) <= 1:
-                await db.mp_poker_games.update_one({"id": game_id}, {"$set": {"players": players, "pot": 0, "results": results}})
+                await db.mp_poker_games.update_one(
+                    {"id": game_id},
+                    {"$set": {"players": players, "pot": 0, "results": results, "last_hand_showdown": last_snap}},
+                )
                 await _tournament_finalize_if_done(game_id)
                 return
             next_button = (int(g.get("button_index") or 0) + 1) % len(players)
@@ -1980,6 +2015,7 @@ def register(router):
                         "deck": [],
                         "pot": 0,
                         "results": results,
+                        "last_hand_showdown": last_snap,
                         "players": players,
                         "all_ready_at": None,
                         "button_index": next_button,
@@ -2082,26 +2118,29 @@ def register(router):
             first_act = _first_actor_after_advance(players, (button_index + 3) % n)
         preflop_to_call = max(int(x.get("current_bet") or 0) for x in players)
         now_iso = datetime.now(timezone.utc).isoformat()
+        set_deal: Dict[str, Any] = {
+            "status": "playing",
+            "phase": "playing",
+            "tournament_status": "running" if is_tournament else g.get("tournament_status"),
+            "street": "preflop",
+            "players": players,
+            "deck": deck,
+            "board": [],
+            "pot": pot,
+            "current_turn_index": first_act,
+            "first_turn_index_this_street": first_act,
+            "turn_started_at": now_iso,
+            "to_call": preflop_to_call,
+            "min_raise": bb,
+            "hand_number": int(g.get("hand_number") or 0) + 1,
+            "blind_level_started_at": g.get("blind_level_started_at") or now_iso if is_tournament else g.get("blind_level_started_at"),
+            "all_ready_at": None,
+        }
+        if is_tournament:
+            set_deal["results"] = None
         await db.mp_poker_games.update_one(
             {"id": game_id},
-            {"$set": {
-                "status": "playing",
-                "phase": "playing",
-                "tournament_status": "running" if is_tournament else g.get("tournament_status"),
-                "street": "preflop",
-                "players": players,
-                "deck": deck,
-                "board": [],
-                "pot": pot,
-                "current_turn_index": first_act,
-                "first_turn_index_this_street": first_act,
-                "turn_started_at": now_iso,
-                "to_call": preflop_to_call,
-                "min_raise": bb,
-                "hand_number": int(g.get("hand_number") or 0) + 1,
-                "blind_level_started_at": g.get("blind_level_started_at") or now_iso if is_tournament else g.get("blind_level_started_at"),
-                "all_ready_at": None,
-            }},
+            {"$set": set_deal},
         )
         if players[first_act].get("status") in ("folded", "all_in"):
             await _mp_poker_advance_street(game_id)
