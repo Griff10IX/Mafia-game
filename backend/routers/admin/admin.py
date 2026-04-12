@@ -2963,6 +2963,171 @@ def register(router):
             )
         return {"rounds": out, "ticket_price": lottery_audit_mod.TICKET_PRICE, "pot_tax_percent": lottery_audit_mod.POT_TAX_PERCENT}
 
+    @router.get("/admin/racing/crew-banks")
+    async def admin_racing_crew_banks(
+        page: int = 1,
+        limit: int = 50,
+        sort: str = "crew_bank",
+        sort_dir: str = Query("desc", alias="dir"),
+        has_team_only: bool = True,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Admin: racing crew bank vs wallet cash (join users). Paginated."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        lim = max(1, min(int(limit or 50), 200))
+        pg = max(1, int(page or 1))
+        skip = (pg - 1) * lim
+        sort_key = (sort or "crew_bank").strip().lower()
+        direction = -1 if (sort_dir or "desc").strip().lower() == "desc" else 1
+        if sort_key not in ("crew_bank", "money", "username"):
+            sort_key = "crew_bank"
+        match: Dict[str, Any] = {}
+        if has_team_only:
+            match["team_name"] = {"$exists": True, "$nin": [None, ""]}
+
+        total_count = await db.racing_profiles.count_documents(match)
+        sum_pipeline = [
+            {"$match": match},
+            {"$group": {"_id": None, "total_crew_bank": {"$sum": {"$ifNull": ["$crew_bank", 0]}}}},
+        ]
+        sum_rows = await db.racing_profiles.aggregate(sum_pipeline).to_list(1)
+        total_crew_bank_sum = int((sum_rows[0] or {}).get("total_crew_bank") or 0) if sum_rows else 0
+
+        sort_field = {"crew_bank": "crew_bank", "money": "wallet_money", "username": "sort_username"}[sort_key]
+        pipeline = [
+            {"$match": match},
+            {
+                "$lookup": {
+                    "from": "users",
+                    "localField": "user_id",
+                    "foreignField": "id",
+                    "as": "u",
+                }
+            },
+            {"$unwind": {"path": "$u", "preserveNullAndEmptyArrays": True}},
+            {
+                "$addFields": {
+                    "wallet_money": {"$ifNull": ["$u.money", 0]},
+                    "sort_username": {"$toLower": {"$ifNull": ["$u.username", ""]}},
+                }
+            },
+            {"$sort": {sort_field: direction, "user_id": 1}},
+            {"$skip": skip},
+            {"$limit": lim},
+            {
+                "$project": {
+                    "_id": 0,
+                    "user_id": 1,
+                    "team_name": 1,
+                    "crew_bank": {"$ifNull": ["$crew_bank", 0]},
+                    "races_completed": {"$ifNull": ["$races_completed", 0]},
+                    "wins": {"$ifNull": ["$wins", 0]},
+                    "racing_rep": {"$ifNull": ["$racing_rep", 0]},
+                    "wallet_money": 1,
+                    "username": {"$ifNull": ["$u.username", ""]},
+                }
+            },
+        ]
+        rows = await db.racing_profiles.aggregate(pipeline).to_list(lim)
+        for r in rows:
+            if not (r.get("username") or "").strip():
+                r["username"] = r.get("user_id") or "?"
+            r["wallet_money"] = int(r.get("wallet_money") or 0)
+            r["crew_bank"] = int(r.get("crew_bank") or 0)
+            r["races_completed"] = int(r.get("races_completed") or 0)
+            r["wins"] = int(r.get("wins") or 0)
+            r["racing_rep"] = int(r.get("racing_rep") or 0)
+        return {
+            "rows": rows,
+            "page": pg,
+            "limit": lim,
+            "total_count": total_count,
+            "total_crew_bank_sum": total_crew_bank_sum,
+            "has_team_only": has_team_only,
+        }
+
+    @router.get("/admin/racing/completed-races")
+    async def admin_racing_completed_races(
+        limit: int = 50,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Admin: recent completed Bootleg Runs with per-entrant payout breakdown from stored rewards."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        lim = max(1, min(int(limit or 50), 100))
+        cursor = db.racing_races.find(
+            {"state": "completed"},
+            {
+                "_id": 0,
+                "id": 1,
+                "completed_at": 1,
+                "track_id": 1,
+                "track_name": 1,
+                "mode": 1,
+                "automated": 1,
+                "entry_fee": 1,
+                "participants": 1,
+                "rewards": 1,
+            },
+        ).sort("completed_at", -1).limit(lim)
+        raw = await cursor.to_list(lim)
+        races_out: List[Dict[str, Any]] = []
+        for race in raw:
+            participants = race.get("participants") or []
+            entrant_to_p: Dict[str, dict] = {}
+            for p in participants:
+                if not isinstance(p, dict):
+                    continue
+                eid = p.get("user_id") or p.get("id")
+                if eid is not None:
+                    entrant_to_p[str(eid)] = p
+            entrants: List[Dict[str, Any]] = []
+            for rw in race.get("rewards") or []:
+                if not isinstance(rw, dict):
+                    continue
+                eid = rw.get("entrant_id")
+                if eid is None:
+                    continue
+                eid_str = str(eid)
+                p = entrant_to_p.get(eid_str)
+                is_npc = bool(p.get("is_npc")) if p else True
+                uid = (p or {}).get("user_id")
+                uname = (p or {}).get("username")
+                if not uname and is_npc:
+                    uname = f"NPC ({eid_str})"
+                elif not uname:
+                    uname = uid or "?"
+                entrants.append(
+                    {
+                        "entrant_id": eid_str,
+                        "user_id": uid,
+                        "username": uname,
+                        "is_npc": is_npc,
+                        "position": int(rw.get("position") or 0),
+                        "dnf": bool(rw.get("dnf")),
+                        "prize_to_crew": int(rw.get("cash") or 0),
+                        "sponsor_to_crew": int(rw.get("sponsor_income") or 0),
+                        "driver_salary": int(rw.get("driver_salary") or 0),
+                        "net_crew_bank": int(rw.get("net_crew_bank") or 0),
+                        "rank_points": int(rw.get("rank_points") or 0),
+                        "racing_rep": int(rw.get("racing_rep") or 0),
+                    }
+                )
+            races_out.append(
+                {
+                    "race_id": race.get("id"),
+                    "completed_at": race.get("completed_at"),
+                    "track_id": race.get("track_id"),
+                    "track_name": race.get("track_name"),
+                    "mode": race.get("mode"),
+                    "automated": bool(race.get("automated")),
+                    "entry_fee": int(race.get("entry_fee") or 0),
+                    "entrants": entrants,
+                }
+            )
+        return {"races": races_out}
+
     @router.get("/admin/lottery/round/{round_id}/money-trail")
     async def admin_lottery_round_money_trail(round_id: str, current_user: dict = Depends(get_current_user)):
         """Admin: where pot / tax / payouts went for one round; recompute from tickets vs stored doc."""
@@ -6868,9 +7033,11 @@ def register(router):
             u = e.get("username") or "?"
             return f"{u} created buy order (cash held): {int(e.get('points') or 0):,} pts for ${int(e.get('money') or 0):,}."
         if t == "sell_offer_cancelled":
-            return f"Sell offer cancelled · lister {e.get('username') or '?'}"
+            u = e.get("username") or e.get("user_id") or "?"
+            return f"Sell offer cancelled · lister {u}"
         if t == "buy_offer_cancelled":
-            return f"Buy order cancelled · buyer {e.get('username') or '?'}"
+            u = e.get("username") or e.get("user_id") or "?"
+            return f"Buy order cancelled · buyer {u}"
         if t == "token_offer_accepted":
             slr, buy = e.get("seller_username") or "?", e.get("buyer_username") or "?"
             tt = (e.get("token_type") or "?").replace("_", " ")

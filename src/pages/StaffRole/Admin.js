@@ -214,6 +214,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Presence simulator', categoryId: 'admin-gameworld', collapseKey: 'presenceSimulator', keywords: ['presence', 'simulator', 'online', 'active', 'fake', 'last_seen'], adminOnly: true },
   { label: 'Slots Draw', categoryId: 'admin-gameworld', collapseKey: 'slotsDraw', keywords: ['slots', 'draw', 'lottery'] },
   { label: 'Lottery money trail', categoryId: 'admin-gameworld', collapseKey: 'lotteryMoneyTrail', keywords: ['lottery', 'money', 'payout', 'winner', 'pot', 'audit', 'trail', 'twice', 'wed', 'sun'], adminOnly: true },
+  { label: 'Bootleg Runs economy', categoryId: 'admin-gameworld', collapseKey: 'racingEconomy', keywords: ['racing', 'bootleg', 'crew', 'bank', 'payout', 'wallet', 'runs', 'audit'], adminOnly: true },
   { label: 'Crack the Safe jackpot', categoryId: 'admin-gameworld', collapseKey: 'crackSafeJackpot', keywords: ['crack', 'safe', 'jackpot', 'pot', 'lower'] },
   { label: 'State Heads', categoryId: 'admin-gameworld', collapseKey: 'stateHeads', keywords: ['state', 'heads', 'family', 'territory'] },
   { label: 'Release soft-launch', categoryId: 'admin-gameworld', collapseKey: 'releaseSoftLaunch', keywords: ['release', 'soft', 'launch', 'pvp', 'kill', 'game pass'], adminOnly: true },
@@ -526,6 +527,14 @@ export default function Admin() {
   const [lotteryMoneyTrailLoading, setLotteryMoneyTrailLoading] = useState(false);
   const [lotteryMoneyTrailRoundsLoading, setLotteryMoneyTrailRoundsLoading] = useState(false);
   const [lotteryRepairLoading, setLotteryRepairLoading] = useState(false);
+  const [racingEconomyPage, setRacingEconomyPage] = useState(1);
+  const [racingEconomySort, setRacingEconomySort] = useState('crew_bank');
+  const [racingEconomyDir, setRacingEconomyDir] = useState('desc');
+  const [racingEconomyTeamOnly, setRacingEconomyTeamOnly] = useState(true);
+  const [racingEconomyCrewData, setRacingEconomyCrewData] = useState(null);
+  const [racingEconomyCrewLoading, setRacingEconomyCrewLoading] = useState(false);
+  const [racingEconomyRaces, setRacingEconomyRaces] = useState(null);
+  const [racingEconomyRacesLoading, setRacingEconomyRacesLoading] = useState(false);
   const [ranks, setRanks] = useState([]);
   const [cars, setCars] = useState([]);
   const [bgTestCount, setBgTestCount] = useState(2);
@@ -2320,6 +2329,42 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed to repair lottery rounds');
     } finally {
       setLotteryRepairLoading(false);
+    }
+  };
+
+  const fetchRacingEconomyCrewBanks = async (overrides = {}) => {
+    const page = overrides.page !== undefined ? overrides.page : racingEconomyPage;
+    const sort = overrides.sort !== undefined ? overrides.sort : racingEconomySort;
+    const dir = overrides.dir !== undefined ? overrides.dir : racingEconomyDir;
+    const has_team_only = overrides.has_team_only !== undefined ? overrides.has_team_only : racingEconomyTeamOnly;
+    setRacingEconomyCrewLoading(true);
+    try {
+      const res = await api.get('/admin/racing/crew-banks', {
+        params: { page, limit: 50, sort, dir, has_team_only },
+      });
+      setRacingEconomyCrewData(res.data);
+      setRacingEconomyPage(page);
+      setRacingEconomySort(sort);
+      setRacingEconomyDir(dir);
+      setRacingEconomyTeamOnly(has_team_only);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load racing crew banks');
+      setRacingEconomyCrewData(null);
+    } finally {
+      setRacingEconomyCrewLoading(false);
+    }
+  };
+
+  const fetchRacingEconomyRaces = async () => {
+    setRacingEconomyRacesLoading(true);
+    try {
+      const res = await api.get('/admin/racing/completed-races', { params: { limit: 50 } });
+      setRacingEconomyRaces(res.data?.races || []);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load completed races');
+      setRacingEconomyRaces(null);
+    } finally {
+      setRacingEconomyRacesLoading(false);
     }
   };
 
@@ -10086,6 +10131,190 @@ export default function Admin() {
                 </div>
               );
             })()}
+          </div>
+        )}
+        </div>
+        )}
+
+        {isAdmin && (
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Car}
+          title="Bootleg Runs economy"
+          badge={<span className="text-[10px] text-mutedForeground font-heading">Crew bank + recent payouts</span>}
+          toolAnchor="racingEconomy"
+          isCollapsed={!!collapsed.racingEconomy}
+          onToggle={() => {
+            toggleSection('racingEconomy');
+            if (collapsed.racingEconomy) {
+              fetchRacingEconomyCrewBanks();
+              fetchRacingEconomyRaces();
+            }
+          }}
+        />
+        {!collapsed.racingEconomy && (
+          <div className="p-3 space-y-4">
+            <p className="text-[10px] text-mutedForeground font-heading">
+              Crew bank and wallet cash per racing profile (joined to users). Per-race columns come from stored{' '}
+              <code className="text-[9px] bg-zinc-800/80 px-0.5 rounded">racing_races.rewards</code> after each completed Bootleg Run (prize share + sponsor to crew; net after driver salary; rank points credited to the player).
+              Head-to-head stakes and championship payouts are separate and not listed here.
+            </p>
+
+            <div>
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <span className="text-[9px] text-mutedForeground font-heading uppercase">Crew banks vs wallet</span>
+                <label className="flex items-center gap-1.5 text-[10px] text-foreground cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="rounded border-zinc-600"
+                    checked={racingEconomyTeamOnly}
+                    onChange={(e) => fetchRacingEconomyCrewBanks({ has_team_only: e.target.checked, page: 1 })}
+                  />
+                  Teams only (named team)
+                </label>
+                <BtnSecondary type="button" onClick={() => fetchRacingEconomyCrewBanks()} disabled={racingEconomyCrewLoading}>
+                  {racingEconomyCrewLoading ? 'Loading…' : 'Refresh'}
+                </BtnSecondary>
+              </div>
+              {racingEconomyCrewData && (() => {
+                const lim = racingEconomyCrewData.limit || 50;
+                const total = racingEconomyCrewData.total_count || 0;
+                const maxPage = Math.max(1, Math.ceil(total / lim));
+                return (
+                  <p className="text-[9px] text-mutedForeground font-mono mb-1">
+                    Rows {racingEconomyCrewData.rows?.length ?? 0} (page {racingEconomyCrewData.page} of {maxPage}) · total matching: {total.toLocaleString()} · Σ crew bank (filter): {formatAdminMoneyInt(racingEconomyCrewData.total_crew_bank_sum)}
+                  </p>
+                );
+              })()}
+              {racingEconomyCrewLoading && !racingEconomyCrewData ? (
+                <p className="text-xs text-mutedForeground">Loading…</p>
+              ) : racingEconomyCrewData?.rows ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[9px] font-mono border-collapse">
+                    <thead>
+                      <tr className="text-left text-mutedForeground border-b border-zinc-700/50">
+                        <th className="py-0.5 pr-2">
+                          <button type="button" className="text-left uppercase font-heading hover:text-primary" onClick={() => {
+                            if (racingEconomySort === 'username') fetchRacingEconomyCrewBanks({ sort: 'username', dir: racingEconomyDir === 'desc' ? 'asc' : 'desc', page: 1 });
+                            else fetchRacingEconomyCrewBanks({ sort: 'username', dir: 'asc', page: 1 });
+                          }}>
+                            User{racingEconomySort === 'username' ? (racingEconomyDir === 'desc' ? ' ▼' : ' ▲') : ''}
+                          </button>
+                        </th>
+                        <th className="py-0.5 pr-2">Team</th>
+                        <th className="py-0.5 pr-2">
+                          <button type="button" className="text-left uppercase font-heading hover:text-primary" onClick={() => {
+                            if (racingEconomySort === 'crew_bank') fetchRacingEconomyCrewBanks({ sort: 'crew_bank', dir: racingEconomyDir === 'desc' ? 'asc' : 'desc', page: 1 });
+                            else fetchRacingEconomyCrewBanks({ sort: 'crew_bank', dir: 'desc', page: 1 });
+                          }}>
+                            Crew bank{racingEconomySort === 'crew_bank' ? (racingEconomyDir === 'desc' ? ' ▼' : ' ▲') : ''}
+                          </button>
+                        </th>
+                        <th className="py-0.5 pr-2">
+                          <button type="button" className="text-left uppercase font-heading hover:text-primary" onClick={() => {
+                            if (racingEconomySort === 'money') fetchRacingEconomyCrewBanks({ sort: 'money', dir: racingEconomyDir === 'desc' ? 'asc' : 'desc', page: 1 });
+                            else fetchRacingEconomyCrewBanks({ sort: 'money', dir: 'desc', page: 1 });
+                          }}>
+                            Wallet{racingEconomySort === 'money' ? (racingEconomyDir === 'desc' ? ' ▼' : ' ▲') : ''}
+                          </button>
+                        </th>
+                        <th className="py-0.5 pr-2">Races</th>
+                        <th className="py-0.5 pr-2">Wins</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {racingEconomyCrewData.rows.map((row) => (
+                        <tr key={row.user_id} className="border-b border-zinc-800/80 text-foreground/90">
+                          <td className="py-0.5 pr-2 break-all">{row.username}</td>
+                          <td className="py-0.5 pr-2 truncate max-w-[120px]" title={row.team_name}>{row.team_name || '—'}</td>
+                          <td className="py-0.5 pr-2">{formatAdminMoneyInt(row.crew_bank)}</td>
+                          <td className="py-0.5 pr-2">{formatAdminMoneyInt(row.wallet_money)}</td>
+                          <td className="py-0.5 pr-2">{Number(row.races_completed || 0).toLocaleString()}</td>
+                          <td className="py-0.5 pr-2">{Number(row.wins || 0).toLocaleString()}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : null}
+              {racingEconomyCrewData && racingEconomyCrewData.total_count > (racingEconomyCrewData.limit || 50) && (() => {
+                const lim = racingEconomyCrewData.limit || 50;
+                const maxPage = Math.max(1, Math.ceil((racingEconomyCrewData.total_count || 0) / lim));
+                return (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    <BtnSecondary type="button" disabled={racingEconomyPage <= 1 || racingEconomyCrewLoading} onClick={() => fetchRacingEconomyCrewBanks({ page: racingEconomyPage - 1 })}>Previous</BtnSecondary>
+                    <BtnSecondary type="button" disabled={racingEconomyPage >= maxPage || racingEconomyCrewLoading} onClick={() => fetchRacingEconomyCrewBanks({ page: racingEconomyPage + 1 })}>Next</BtnSecondary>
+                  </div>
+                );
+              })()}
+            </div>
+
+            <div>
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <span className="text-[9px] text-mutedForeground font-heading uppercase">Recent completed races (stored rewards)</span>
+                <BtnSecondary type="button" onClick={() => fetchRacingEconomyRaces()} disabled={racingEconomyRacesLoading}>
+                  {racingEconomyRacesLoading ? 'Loading…' : 'Refresh'}
+                </BtnSecondary>
+              </div>
+              {racingEconomyRacesLoading && racingEconomyRaces == null ? (
+                <p className="text-xs text-mutedForeground">Loading…</p>
+              ) : Array.isArray(racingEconomyRaces) ? (
+                <div className="space-y-3">
+                  {racingEconomyRaces.length === 0 ? (
+                    <p className="text-[10px] text-mutedForeground">No completed races in DB.</p>
+                  ) : (
+                    racingEconomyRaces.map((race, rIdx) => (
+                      <div key={race.race_id || `race-${rIdx}`} className="border border-zinc-700/50 rounded p-2 bg-zinc-950/50">
+                        <div className="text-[10px] font-heading text-foreground mb-1">
+                          {(race.completed_at && new Date(race.completed_at).toLocaleString()) || '—'}
+                          {' · '}
+                          {race.track_name || race.track_id || 'Track'}
+                          {race.mode ? ` · ${race.mode}` : ''}
+                          {race.automated ? ' · auto' : ''}
+                          {' · entry '}
+                          {formatAdminMoneyInt(race.entry_fee)}
+                          {' · '}
+                          <code className="text-[9px]">{race.race_id}</code>
+                        </div>
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-[9px] font-mono border-collapse">
+                            <thead>
+                              <tr className="text-left text-mutedForeground border-b border-zinc-700/50">
+                                <th className="py-0.5 pr-1">P</th>
+                                <th className="py-0.5 pr-2">Driver</th>
+                                <th className="py-0.5 pr-2">Prize→crew</th>
+                                <th className="py-0.5 pr-2">Sponsor→crew</th>
+                                <th className="py-0.5 pr-2">Salary</th>
+                                <th className="py-0.5 pr-2">Net crew Δ</th>
+                                <th className="py-0.5 pr-2">RP</th>
+                                <th className="py-0.5 pr-2">Rep</th>
+                                <th className="py-0.5 pr-2">DNF</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(race.entrants || []).map((e, idx) => (
+                                <tr key={`${race.race_id}-${e.entrant_id}-${idx}`} className={`border-b border-zinc-800/80 ${e.is_npc ? 'text-zinc-500' : 'text-foreground/90'}`}>
+                                  <td className="py-0.5 pr-1">{e.position}</td>
+                                  <td className="py-0.5 pr-2 break-all">{e.username}{e.is_npc ? '' : ` (${e.user_id})`}</td>
+                                  <td className="py-0.5 pr-2">{formatAdminMoneyInt(e.prize_to_crew)}</td>
+                                  <td className="py-0.5 pr-2">{formatAdminMoneyInt(e.sponsor_to_crew)}</td>
+                                  <td className="py-0.5 pr-2">{formatAdminMoneyInt(e.driver_salary)}</td>
+                                  <td className="py-0.5 pr-2">{formatAdminMoneyInt(e.net_crew_bank)}</td>
+                                  <td className="py-0.5 pr-2">{e.rank_points}</td>
+                                  <td className="py-0.5 pr-2">{e.racing_rep}</td>
+                                  <td className="py-0.5 pr-2">{e.dnf ? 'yes' : ''}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              ) : null}
+            </div>
           </div>
         )}
         </div>

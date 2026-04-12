@@ -264,7 +264,8 @@ DEFAULT_HEALTH = 100
 HEALTH_REGEN_FULL_SECONDS = 7200  # 2 hours
 MIN_BULLETS_TO_KILL = 5000
 MAX_BULLETS_TO_KILL = 100000
-ARMOUR_BASE_BULLETS = {0: 5000, 1: 25000, 2: 45000, 3: 65000, 4: 85000, 5: 100000, 6: 120000}  # 6 = loot-exclusive Steel Plate Vest (1922)
+# Base bullets before rank/weapon/gap factors; high tiers tuned down (was up to 120k @ 6).
+ARMOUR_BASE_BULLETS = {0: 5000, 1: 14000, 2: 25000, 3: 36000, 4: 47000, 5: 55000, 6: 66000}  # 6 = loot-exclusive Steel Plate Vest (1922)
 KILL_CASH_PERCENT = 0.25  # killer gets 25% of victim's cash
 DEAD_ALIVE_PERCENT = 0.9995  # 0.05% tax to state head: you receive 99.95% of dead account's money and points when using Dead > Alive (one-time)
 
