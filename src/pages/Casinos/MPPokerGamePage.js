@@ -96,7 +96,12 @@ function Card({ card, hidden, index = 0, total = 1, small = false, medium = fals
     : 'w-[48px] h-[68px] sm:w-[54px] sm:h-[76px]';
   const fan = total > 1 ? (index - (total - 1) / 2) * 4 : 0;
   const offsetX = total > 1 ? (index - (total - 1) / 2) * 3 : 0;
-  const style = { transform: `rotate(${fan}deg) translateX(${offsetX}px)`, animationDelay: `${index * 0.08}s`, boxShadow: '0 3px 12px rgba(0,0,0,0.55)', flexShrink: 0 };
+  const style = {
+    transform: `rotate(${fan}deg) translateX(${offsetX}px)`,
+    animationDelay: `${index * 0.08}s`,
+    boxShadow: '0 4px 14px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.06) inset',
+    flexShrink: 0,
+  };
   const textSz = small ? 'text-[8px]' : medium ? 'text-[10px]' : 'text-[11px]';
   const symSz = small ? 'text-[7px]' : medium ? 'text-[9px]' : 'text-[10px]';
   const iconSz = small ? 'text-sm' : medium ? 'text-lg' : 'text-2xl';
@@ -104,10 +109,10 @@ function Card({ card, hidden, index = 0, total = 1, small = false, medium = fals
   if (hidden) {
     return (
       <div className={`relative ${w} rounded-md overflow-hidden animate-pkr-deal`} style={style}>
-        <div className="absolute inset-0 rounded-md" style={{ background: 'linear-gradient(135deg,#1a3a7a,#0d2255)', border: '2px solid #2a4a9a' }}>
-          <div className="absolute inset-1 rounded" style={{ backgroundImage: 'repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(255,255,255,0.03) 3px,rgba(255,255,255,0.03) 6px)' }}>
-            <div className="absolute inset-1.5 rounded border border-yellow-500/20 flex items-center justify-center">
-              <span className="text-yellow-500/25 text-sm">♠</span>
+        <div className="absolute inset-0 rounded-md" style={{ background: 'linear-gradient(145deg,#1e3d6e 0%,#0c1f45 50%,#152a5c 100%)', border: '2px solid rgba(212,175,55,0.35)' }}>
+          <div className="absolute inset-1 rounded" style={{ backgroundImage: 'repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(255,255,255,0.04) 3px,rgba(255,255,255,0.04) 6px)' }}>
+            <div className="absolute inset-1.5 rounded border border-yellow-500/30 flex items-center justify-center shadow-[inset_0_0_12px_rgba(0,0,0,0.35)]">
+              <span className="text-yellow-500/40 text-sm drop-shadow-[0_0_6px_rgba(212,175,55,0.35)]">♠</span>
             </div>
           </div>
         </div>
@@ -118,7 +123,7 @@ function Card({ card, hidden, index = 0, total = 1, small = false, medium = fals
   const isRed = card?.suit === 'H' || card?.suit === 'D';
   return (
     <div className={`relative ${w} rounded-md overflow-hidden animate-pkr-deal`} style={style}>
-      <div className="absolute inset-0 rounded-md" style={{ background: 'linear-gradient(180deg,#fff,#f4f4f4)', border: `2px solid ${isRed ? '#fca5a5' : '#c4c4c8'}` }}>
+      <div className="absolute inset-0 rounded-md" style={{ background: 'linear-gradient(165deg,#ffffff 0%,#f0f0f2 45%,#e8e8ec 100%)', border: `2px solid ${isRed ? '#e85d5d' : '#b8b8c0'}`, boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.85), inset 0 -2px 6px rgba(0,0,0,0.06)' }}>
         <div className="absolute top-0.5 left-1 leading-none" style={{ color: s.color }}>
           <div className={`${textSz} font-black`}>{card?.value}</div>
           <div className={`${symSz} -mt-0.5`}>{s.sym}</div>
@@ -135,7 +140,12 @@ function Card({ card, hidden, index = 0, total = 1, small = false, medium = fals
   );
 }
 
-const PKR_GOLD_BAR = { height: 3, background: 'linear-gradient(90deg,#5a3e1b,var(--noir-primary-bright),#8b6914,var(--noir-primary-bright),#5a3e1b)' };
+const PKR_GOLD_BAR = {
+  height: 4,
+  background:
+    'linear-gradient(90deg,#3d2a12 0%,#5a3e1b 18%,var(--noir-primary-bright) 50%,#8b6914 82%,#3d2a12 100%)',
+  boxShadow: '0 1px 0 rgba(255,255,255,0.12) inset',
+};
 
 /** Shared showdown / winner banner (cash table settled or tournament last_hand_showdown). */
 function MpPokerHandOutcomePanel({
@@ -277,6 +287,59 @@ function MpPokerHandOutcomePanel({
   );
 }
 
+/** Small floating card on the felt: last tournament hand winner (~5s). */
+function MpPokerTournamentHandToast({ snapshot, myUserId, visible }) {
+  if (!visible || !snapshot?.results?.length) return null;
+  const results = snapshot.results;
+  const players = snapshot.players || [];
+  const winner = results.find((r) => r.result === 'win');
+  if (!winner) return null;
+  const winnerName =
+    winner.user_id === myUserId
+      ? 'You'
+      : players.find((p) => p.user_id === winner.user_id)?.username ?? 'Winner';
+  const wp = players.find((p) => p.user_id === winner.user_id);
+  const hole = wp?.hole_cards || [];
+  const hand = winner.hand;
+  const pot = Number(snapshot.pot ?? winner.payout ?? 0);
+
+  return (
+    <div
+      className="pointer-events-none absolute left-1/2 top-[40%] z-[25] -translate-x-1/2 -translate-y-1/2 w-[min(90vw,260px)] animate-pkr-fade rounded-lg border px-2.5 py-2 shadow-2xl"
+      style={{
+        borderColor: 'rgba(212,175,55,0.6)',
+        background: 'linear-gradient(165deg,rgba(15,23,42,0.92),rgba(0,0,0,0.88))',
+        backdropFilter: 'blur(10px)',
+        WebkitBackdropFilter: 'blur(10px)',
+        boxShadow: '0 20px 56px rgba(0,0,0,0.8), 0 0 0 1px rgba(212,175,55,0.15), 0 0 32px rgba(212,175,55,0.14)',
+      }}
+    >
+      <p className="text-[6px] font-heading uppercase tracking-[0.2em] text-center" style={{ color: 'rgba(255,255,255,0.4)' }}>
+        Hand #{snapshot.hand_number} winner
+      </p>
+      <p
+        className="text-center text-[13px] sm:text-sm font-heading font-black uppercase tracking-wide mt-0.5 truncate px-1"
+        style={{ color: 'var(--noir-primary-bright)' }}
+      >
+        {winnerName}
+      </p>
+      {hand && <p className="text-[8px] font-heading text-center font-semibold text-white/65 leading-tight px-1">{hand}</p>}
+      {hole.length > 0 && (
+        <div className="flex justify-center gap-0.5 mt-1">
+          {hole.map((c, i) => (
+            <Card key={i} card={c} hidden={false} index={i} total={2} small />
+          ))}
+        </div>
+      )}
+      {pot > 0 && (
+        <p className="text-[7px] font-heading text-center mt-1" style={{ color: 'rgba(110,231,183,0.8)' }}>
+          Pot <span className="font-bold text-emerald-400">{formatMoneyFull(pot)}</span>
+        </p>
+      )}
+    </div>
+  );
+}
+
 /* ─── Chip Stack ─── */
 function ChipStack({ amount, small = false }) {
   if (!amount || amount <= 0) return null;
@@ -289,7 +352,7 @@ function ChipStack({ amount, small = false }) {
           style={{
             width: small ? 12 : 16, height: small ? 4 : 5,
             background: colors[i % colors.length],
-            boxShadow: `0 1px 2px rgba(0,0,0,0.4)`,
+            boxShadow: '0 2px 3px rgba(0,0,0,0.45), 0 0 0 0.5px rgba(0,0,0,0.25)',
             transform: `translateY(${i * (small ? 1 : 1.5)}px)`,
           }} />
       ))}
@@ -303,22 +366,25 @@ function ChipStack({ amount, small = false }) {
 }
 
 /* ─── Turn Timer Arc ─── */
-function TurnTimer({ seconds, isMyTurn }) {
+function TurnTimer({ seconds, isMyTurn, compact = false }) {
   const pct = Math.max(0, seconds / TURN_SECONDS);
-  const r = 16;
+  const r = compact ? 13 : 16;
+  const c = compact ? 16 : 19;
+  const svgSz = compact ? 32 : 38;
   const circ = 2 * Math.PI * r;
   const dash = pct * circ;
   const urgent = seconds <= 10;
   const color = urgent ? '#f87171' : isMyTurn ? 'var(--noir-primary)' : 'rgba(255,255,255,0.4)';
+  const fs = compact ? 8 : 10;
   return (
-    <svg width="38" height="38" style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}>
-      <circle cx="19" cy="19" r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="2.5" />
-      <circle cx="19" cy="19" r={r} fill="none" stroke={color} strokeWidth="2.5"
+    <svg width={svgSz} height={svgSz} style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}>
+      <circle cx={c} cy={c} r={r} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="2.5" />
+      <circle cx={c} cy={c} r={r} fill="none" stroke={color} strokeWidth="2.5"
         strokeDasharray={`${dash} ${circ}`} strokeLinecap="round"
         style={{ transition: 'stroke-dasharray 0.9s linear, stroke 0.3s' }} />
-      <text x="19" y="19" textAnchor="middle" dominantBaseline="central"
-        fill={color} fontSize="10" fontWeight="700" fontFamily="Cinzel, serif"
-        transform="rotate(90,19,19)">{seconds}</text>
+      <text x={c} y={c} textAnchor="middle" dominantBaseline="central"
+        fill={color} fontSize={fs} fontWeight="700" fontFamily="Cinzel, serif"
+        transform={`rotate(90,${c},${c})`}>{seconds}</text>
     </svg>
   );
 }
@@ -348,7 +414,7 @@ function StartCountdown({ seconds }) {
 }
 
 /* ─── Player Seat (oval layout) ─── */
-function PlayerSeat({ p, isMe, isCurrent, showHole, isDealer, seatPos, totalSeats }) {
+function PlayerSeat({ p, isMe, isCurrent, showHole, isDealer, seatPos, totalSeats, compact = false }) {
   const hole = p.hole_cards || [];
   const folded = p.status === 'folded';
   const allIn = p.status === 'all_in';
@@ -371,45 +437,49 @@ function PlayerSeat({ p, isMe, isCurrent, showHole, isDealer, seatPos, totalSeat
   else if (waiting && ready) statusBadge = { label: '✓ Ready', color: '#34d399' };
   else if (waiting) statusBadge = { label: 'Waiting', color: '#6b7280' };
 
+  const cardMedium = !compact && hole.length > 0;
   return (
-    <div className="flex flex-col items-center gap-1" style={{ opacity: folded ? 0.45 : 1, transition: 'opacity 0.3s' }}>
+    <div className={`flex flex-col items-center ${compact ? 'gap-0.5' : 'gap-1'}`} style={{ opacity: folded ? 0.45 : 1, transition: 'opacity 0.3s' }}>
       {/* Cards above/beside seat */}
-      <div className="flex items-center gap-0.5 mb-0.5" style={{ minHeight: 56 }}>
+      <div className="flex items-center gap-0.5 mb-0.5" style={{ minHeight: compact ? 44 : 56 }}>
         {hole.length === 0
-          ? <div className="w-[38px] h-[54px] rounded border border-white/5" style={{ background: 'rgba(0,0,0,0.2)' }} />
+          ? <div className={`rounded border border-white/5 ${compact ? 'w-[28px] h-[40px]' : 'w-[38px] h-[54px]'}`} style={{ background: 'rgba(0,0,0,0.2)' }} />
           : hole.map((c, i) => (
-              <Card key={i} card={c} hidden={!showHole} index={i} total={hole.length} medium />
+              <Card key={i} card={c} hidden={!showHole} index={i} total={hole.length} small={compact || !cardMedium} medium={cardMedium} />
             ))
         }
       </div>
 
       {/* Seat chip */}
-      <div className="relative rounded-xl border-2 transition-all duration-300 px-2 py-1.5"
+      <div className={`relative rounded-xl border-2 transition-all duration-300 ${compact ? 'px-1.5 py-1' : 'px-2 py-1.5'}`}
         style={{
-          borderColor, boxShadow: glow,
+          borderColor,
+          boxShadow: glow === 'none' ? '0 4px 14px rgba(0,0,0,0.35)' : `${glow}, 0 4px 14px rgba(0,0,0,0.35)`,
+          backdropFilter: 'blur(8px)',
+          WebkitBackdropFilter: 'blur(8px)',
           background: isCurrent
-            ? 'linear-gradient(180deg,rgba(212,175,55,0.1),rgba(0,0,0,0.4))'
-            : 'rgba(0,0,0,0.4)',
-          minWidth: 70, maxWidth: 90,
+            ? 'linear-gradient(180deg,rgba(212,175,55,0.16),rgba(0,0,0,0.55))'
+            : 'linear-gradient(180deg,rgba(0,0,0,0.5),rgba(0,0,0,0.38))',
+          minWidth: compact ? 62 : 70, maxWidth: compact ? 78 : 90,
         }}>
         {isDealer && (
-          <div className="absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center text-[7px] font-black z-10"
+          <div className={`absolute rounded-full flex items-center justify-center font-black z-10 ${compact ? '-top-1 -right-1 w-4 h-4 text-[6px]' : '-top-2 -right-2 w-5 h-5 text-[7px]'}`}
             style={{ background: 'var(--noir-primary)', color: '#1a1200', border: '1.5px solid #1a1200' }}>D</div>
         )}
         <div className="text-center">
-          <div className="text-[9px] font-heading font-bold truncate"
-            style={{ color: isMe ? 'var(--noir-primary)' : 'rgba(255,255,255,0.85)', maxWidth: 80 }}>
+          <div className={`font-heading font-bold truncate ${compact ? 'text-[8px]' : 'text-[9px]'}`}
+            style={{ color: isMe ? 'var(--noir-primary)' : 'rgba(255,255,255,0.85)', maxWidth: compact ? 72 : 80 }}>
             {p.username}{isMe ? ' ★' : ''}
           </div>
-          <div className="text-[8px] font-heading" style={{ color: 'rgba(110,231,183,0.6)' }}>
+          <div className={`font-heading ${compact ? 'text-[7px]' : 'text-[8px]'}`} style={{ color: 'rgba(110,231,183,0.6)' }}>
             {formatMoney(stack)}
           </div>
           {statusBadge && (
-            <div className="text-[7px] font-heading font-bold mt-0.5" style={{ color: statusBadge.color }}>
+            <div className={`font-heading font-bold mt-0.5 ${compact ? 'text-[6px]' : 'text-[7px]'}`} style={{ color: statusBadge.color }}>
               {statusBadge.label}
             </div>
           )}
-          {lastActionText && (
+          {lastActionText && !compact && (
             <div className="text-[7px] font-heading mt-0.5 italic" style={{ color: 'rgba(255,255,255,0.5)' }}>
               {lastActionText}
             </div>
@@ -423,7 +493,7 @@ function PlayerSeat({ p, isMe, isCurrent, showHole, isDealer, seatPos, totalSeat
           <ChipStack amount={bet} small />
         </div>
       )}
-      {isMe && p.current_hand_name && (
+      {isMe && p.current_hand_name && !compact && (
         <div className="text-[8px] font-heading font-bold mt-0.5" style={{ color: 'var(--noir-primary)' }}>
           {p.current_hand_name}
         </div>
@@ -433,9 +503,17 @@ function PlayerSeat({ p, isMe, isCurrent, showHole, isDealer, seatPos, totalSeat
 }
 
 /* ─── Oval Table positions ─── */
-function getTablePositions(totalSeats) {
+function getTablePositions(totalSeats, compact = false) {
   // Returns array of {x, y} as percentages for seat container positioning
   // Arranged around an oval: x 10-90%, y 5-85%
+  if (compact && totalSeats === 4) {
+    return [
+      { x: 50, y: 86 },
+      { x: 14, y: 48 },
+      { x: 50, y: 12 },
+      { x: 86, y: 48 },
+    ];
+  }
   const positions = {
     2: [{ x: 50, y: 82 }, { x: 50, y: 8 }],
     3: [{ x: 50, y: 82 }, { x: 10, y: 30 }, { x: 90, y: 30 }],
@@ -473,6 +551,9 @@ export default function MPPokerGamePage() {
   const [remindLoading, setRemindLoading] = useState(false);
   const [canStaffTournamentRemind, setCanStaffTournamentRemind] = useState(false);
   const [remindCooldownTick, setRemindCooldownTick] = useState(0);
+  const [compactUi, setCompactUi] = useState(false);
+  const [tournamentToast, setTournamentToast] = useState({ visible: false, snap: null });
+  const toastShownHandsRef = useRef(new Set());
   const startTriggeredRef = useRef(false);
   const timeoutTriggeredRef = useRef(null);
   const chatEndRef = useRef(null);
@@ -490,6 +571,32 @@ export default function MPPokerGamePage() {
       myUserIdRef.current = id;
     }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const apply = () => setCompactUi(mq.matches);
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
+
+  useEffect(() => {
+    toastShownHandsRef.current.clear();
+    setTournamentToast({ visible: false, snap: null });
+  }, [gameId]);
+
+  useEffect(() => {
+    const hn = game?.last_hand_showdown?.hand_number;
+    if (game?.mode !== 'tournament' || game?.status !== 'playing' || hn == null) return;
+    const lh = game.last_hand_showdown;
+    if (!lh?.results?.length) return;
+    const n = Number(hn);
+    if (toastShownHandsRef.current.has(n)) return;
+    toastShownHandsRef.current.add(n);
+    setTournamentToast({ visible: true, snap: lh });
+    const id = setTimeout(() => setTournamentToast((prev) => ({ ...prev, visible: false })), 5000);
+    return () => clearTimeout(id);
+  }, [game?.mode, game?.status, game?.last_hand_showdown?.hand_number]);
 
   useEffect(() => {
     if (game?.mode !== 'tournament') {
@@ -831,7 +938,7 @@ export default function MPPokerGamePage() {
 
   // Seat positions on oval table
   const maxSeats = game?.max_players || players.length || 6;
-  const tablePositions = getTablePositions(Math.min(9, Math.max(2, players.length || maxSeats)));
+  const tablePositions = getTablePositions(Math.min(9, Math.max(2, players.length || maxSeats)), compactUi);
 
   // Turn status message for "what's happening" (multiplayer + vs dealer/AI)
   const currentTurnPlayer = currentTurnIndex >= 0 && currentTurnIndex < players.length ? players[currentTurnIndex] : null;
@@ -902,14 +1009,14 @@ export default function MPPokerGamePage() {
     );
   }
 
-  const goldBar = { height: 3, background: 'linear-gradient(90deg,#5a3e1b,var(--noir-primary-bright),#8b6914,var(--noir-primary-bright),#5a3e1b)' };
   const feltBg = {
-    background: 'radial-gradient(ellipse 90% 70% at 50% 50%, #0d7a35 0%, #0a5e2a 50%, #0c3d1a 100%)',
-    boxShadow: 'inset 0 0 80px rgba(0,0,0,0.4), 0 4px 24px rgba(0,0,0,0.5)',
+    background:
+      'radial-gradient(ellipse 95% 72% at 50% 42%, #12a34a 0%, #0d7a38 38%, #085c28 72%, #052818 100%)',
+    boxShadow: 'inset 0 0 100px rgba(0,0,0,0.45), inset 0 -30px 60px rgba(0,0,0,0.2), 0 6px 28px rgba(0,0,0,0.55)',
   };
 
   return (
-    <div className={`space-y-3 ${styles.pageContent} mobile-page-root`} data-testid="mp-poker-game-page">
+    <div className={`pkr-mp-root space-y-2 sm:space-y-3 ${styles.pageContent} mobile-page-root`} data-testid="mp-poker-game-page">
       <style>{`
         @keyframes pkr-deal {
           0%   { transform: translateY(-20px) scale(0.85); opacity: 0; }
@@ -941,18 +1048,32 @@ export default function MPPokerGamePage() {
         .animate-pkr-pulse   { animation: pkr-pulse 1.4s ease-in-out infinite; }
         .animate-pkr-ready   { animation: pkr-ready-pulse 2s ease-in-out infinite; }
         .animate-pkr-chip    { animation: pkr-chip-bounce 1.2s ease-in-out infinite; }
+        .pkr-mp-root {
+          background:
+            radial-gradient(ellipse 100% 70% at 50% -15%, rgba(212,175,55,0.09), transparent 55%),
+            radial-gradient(ellipse 80% 50% at 100% 50%, rgba(34,197,94,0.04), transparent 45%),
+            radial-gradient(ellipse 80% 50% at 0% 50%, rgba(34,197,94,0.04), transparent 45%);
+        }
       `}</style>
 
       <WinParticles active={showWin} />
 
       {/* ── Header ── */}
-      <div className="flex flex-wrap items-center justify-between gap-2 animate-pkr-fade">
-        <div className="flex items-center gap-2">
+      <div
+        className="flex flex-wrap items-center justify-between gap-2 animate-pkr-fade rounded-xl border border-primary/15 px-2 py-2 sm:px-3 sm:py-2.5"
+        style={{
+          background: 'linear-gradient(180deg,rgba(0,0,0,0.45),rgba(0,0,0,0.28))',
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.25), inset 0 1px 0 rgba(255,255,255,0.04)',
+        }}
+      >
+        <div className="flex items-center gap-2 min-w-0">
           <Link to="/casino/mp-poker"
-            className="p-1.5 rounded border border-primary/20 text-primary hover:bg-primary/10 transition-colors">
+            className="p-1.5 rounded-lg border border-primary/25 text-primary hover:bg-primary/12 transition-colors shrink-0">
             <ArrowLeft size={16} />
           </Link>
-          <div>
+          <div className="min-w-0">
             <h1 className="text-base font-heading font-bold text-primary uppercase tracking-wider">
               {isVsDealer ? 'Vs Dealer' : 'Poker Table'}
             </h1>
@@ -962,13 +1083,15 @@ export default function MPPokerGamePage() {
               {game?.hand_number > 0 && ` · Hand #${game.hand_number}`}
             </p>
             {isTournament && (
-              <p className="text-[9px] text-mutedForeground font-heading mt-0.5">
+              <p className="text-[8px] sm:text-[9px] text-mutedForeground font-heading mt-0.5 max-w-[calc(100vw-4rem)] sm:max-w-none truncate sm:whitespace-normal sm:overflow-visible">
                 Tournament · {tournamentStatus || 'registration'}
                 {' · '}Prize <span className="text-emerald-400 font-bold">{formatMoneyFull(prizePool)}</span>
                 {' · '}Blinds <span className="text-primary/80 font-bold">{formatMoneyFull(game?.small_blind || 0)}/{formatMoneyFull(game?.big_blind || 0)}</span>
-                {' · '}Level {blindLevelIndex + 1}
+                <span className="hidden sm:inline">{' · '}Level {blindLevelIndex + 1}</span>
                 {blindLevelSecondsLeft !== null && tournamentStatus === 'running' && (
-                  <> · Next level in <span className="text-amber-300 font-bold">{formatDurationShort(blindLevelSecondsLeft)}</span></>
+                  <span className="hidden sm:inline">
+                    {' · '}Next level in <span className="text-amber-300 font-bold">{formatDurationShort(blindLevelSecondsLeft)}</span>
+                  </span>
                 )}
               </p>
             )}
@@ -976,7 +1099,14 @@ export default function MPPokerGamePage() {
         </div>
         {/* My hole cards condensed in header when game is active */}
         {myPlayer && (street === 'preflop' || street === 'flop' || street === 'turn' || street === 'river') && (
-          <div className="flex items-center gap-1 px-2 py-1 rounded-lg" style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(212,175,55,0.2)' }}>
+          <div
+            className="flex items-center gap-1 px-2 py-1 rounded-lg shrink-0"
+            style={{
+              background: 'rgba(0,0,0,0.35)',
+              border: '1px solid rgba(212,175,55,0.28)',
+              boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05)',
+            }}
+          >
             <span className="text-[8px] font-heading text-primary/60 mr-1">You</span>
             {(myPlayer.hole_cards || []).map((c, i) => (
               <Card key={i} card={c} hidden={false} index={i} total={2} small />
@@ -985,23 +1115,13 @@ export default function MPPokerGamePage() {
         )}
       </div>
 
-      {/* Last tournament hand winner (table re-deals immediately; live pot is new blinds) */}
-      {isTournament && status === 'playing' && game?.last_hand_showdown?.results?.length > 0 && (
-        <MpPokerHandOutcomePanel
-          results={game.last_hand_showdown.results}
-          players={game.last_hand_showdown.players || []}
-          pot={game.last_hand_showdown.pot ?? 0}
-          myUserId={myUserId}
-          subtitle={`Hand #${game.last_hand_showdown.hand_number} complete`}
-          tournamentFooter
-          board={game.last_hand_showdown.board || []}
-        />
-      )}
-
       {/* ══ LOBBY ══ */}
       {phase === 'lobby' && status === 'open' && (
-        <div className="rounded-xl overflow-hidden border-2 animate-pkr-fade" style={{ borderColor: '#5a3e1b' }}>
-          <div style={goldBar} />
+        <div
+          className="rounded-xl overflow-hidden border-2 animate-pkr-fade"
+          style={{ borderColor: '#5a3e1b', boxShadow: '0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(212,175,55,0.08)' }}
+        >
+          <div style={PKR_GOLD_BAR} />
           <div className="p-5" style={feltBg}>
             <div className="text-center space-y-4">
               <p className="text-sm font-heading font-bold uppercase tracking-[0.2em]"
@@ -1050,14 +1170,17 @@ export default function MPPokerGamePage() {
               </div>
             </div>
           </div>
-          <div style={goldBar} />
+          <div style={PKR_GOLD_BAR} />
         </div>
       )}
 
       {/* ══ READY PHASE ══ */}
       {phase === 'ready' && (
-        <div className="rounded-xl overflow-hidden border-2 animate-pkr-fade" style={{ borderColor: '#5a3e1b' }}>
-          <div style={goldBar} />
+        <div
+          className="rounded-xl overflow-hidden border-2 animate-pkr-fade"
+          style={{ borderColor: '#5a3e1b', boxShadow: '0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(212,175,55,0.08)' }}
+        >
+          <div style={PKR_GOLD_BAR} />
           <div className="p-5 space-y-5" style={feltBg}>
             <div className="text-center space-y-1">
               <p className="text-sm font-heading font-bold uppercase tracking-[0.2em]"
@@ -1156,64 +1279,106 @@ export default function MPPokerGamePage() {
               </div>
             )}
           </div>
-          <div style={goldBar} />
+          <div style={PKR_GOLD_BAR} />
         </div>
       )}
 
       {/* ══ LIVE TABLE (playing + completed) ══ */}
       {(status === 'playing' || status === 'completed') && phase !== 'ready' && (
-        <div className="rounded-xl border-2 animate-pkr-fade" style={{ borderColor: '#5a3e1b', overflow: 'visible' }}>
-          <div style={goldBar} />
+        <div
+          className="rounded-xl border-2 animate-pkr-fade"
+          style={{
+            borderColor: '#5a3e1b',
+            overflow: 'visible',
+            boxShadow: '0 10px 40px rgba(0,0,0,0.45), 0 0 0 1px rgba(212,175,55,0.1), 0 0 48px rgba(13,122,53,0.08)',
+          }}
+        >
+          <div style={PKR_GOLD_BAR} />
 
           {/* Felt table with oval player layout */}
-          <div className="relative" style={{ ...feltBg, minHeight: players.length <= 2 ? 360 : 480, overflow: 'visible', paddingBottom: 16 }}>
+          <div
+            className={`relative overflow-visible ${compactUi ? 'min-h-[280px] pb-3' : players.length <= 2 ? 'min-h-[340px] sm:min-h-[360px] pb-4' : 'min-h-[360px] sm:min-h-[440px] md:min-h-[480px] pb-4'}`}
+            style={feltBg}
+          >
+            {isTournament && (
+              <MpPokerTournamentHandToast
+                snapshot={tournamentToast.snap}
+                myUserId={myUserId}
+                visible={tournamentToast.visible}
+              />
+            )}
+
             {/* Table felt oval */}
-            <div className="absolute inset-6 rounded-[50%]"
+            <div
+              className="absolute inset-3 sm:inset-5 md:inset-6 rounded-[50%]"
               style={{
-                background: 'radial-gradient(ellipse at 50% 50%, #0f8a3e 0%, #0a6b2e 60%, #085c26 100%)',
-                border: '6px solid #5a3e1b',
-                boxShadow: 'inset 0 0 40px rgba(0,0,0,0.35), 0 0 0 2px var(--noir-primary-bright)',
-              }} />
+                background:
+                  'radial-gradient(ellipse 100% 85% at 50% 38%, #14b356 0%, #0f8a3e 42%, #0a6b2e 78%, #064422 100%)',
+                border: compactUi ? '4px solid #4a3418' : '6px solid #4a3418',
+                boxShadow:
+                  'inset 0 0 50px rgba(0,0,0,0.38), inset 0 12px 40px rgba(255,255,255,0.06), 0 0 0 2px var(--noir-primary-bright), 0 4px 20px rgba(0,0,0,0.35)',
+              }}
+            />
 
             {/* Pot display in center */}
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ zIndex: 5 }}>
-              <div className="flex flex-col items-center gap-1.5">
+              <div className={`flex flex-col items-center ${compactUi ? 'gap-1' : 'gap-1.5'} max-w-[min(100%,280px)] sm:max-w-none px-1`}>
                 {board.length > 0 && (
-                  <div className="flex items-center gap-1 flex-wrap justify-center">
+                  <div className="flex items-center gap-0.5 sm:gap-1 flex-wrap justify-center scale-[0.92] sm:scale-100 origin-center">
                     {board.map((c, i) => (
-                      <Card key={i} card={c} hidden={false} index={i} total={board.length} medium={players.length > 4} />
+                      <Card
+                        key={i}
+                        card={c}
+                        hidden={false}
+                        index={i}
+                        total={board.length}
+                        small={compactUi || players.length <= 4}
+                        medium={!compactUi && players.length > 4}
+                      />
                     ))}
                   </div>
                 )}
-                <div className="px-3 py-1 rounded-full text-[9px] font-heading font-bold"
-                  style={{ background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(212,175,55,0.3)', color: 'var(--noir-primary)' }}>
+                <div
+                  className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full font-heading font-bold ${compactUi ? 'text-[8px]' : 'text-[9px]'}`}
+                  style={{
+                    background: 'rgba(0,0,0,0.52)',
+                    border: '1px solid rgba(212,175,55,0.38)',
+                    color: 'var(--noir-primary)',
+                    backdropFilter: 'blur(8px)',
+                    WebkitBackdropFilter: 'blur(8px)',
+                    boxShadow: '0 2px 12px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)',
+                  }}
+                >
                   {street ? `${STREET_LABELS[street] || street} · ` : ''}Pot {formatMoneyFull(pot)}
                 </div>
-                {myPlayer?.current_hand_name && board.length >= 3 && myPlayer?.status !== 'folded' && (
+                {myPlayer?.current_hand_name && board.length >= 3 && myPlayer?.status !== 'folded' && !compactUi && (
                   <p className="text-[9px] font-heading font-bold" style={{ color: 'var(--noir-primary)' }}>
                     Your hand: {myPlayer.current_hand_name}
                   </p>
                 )}
                 {status === 'playing' && (phase === 'playing' || isVsDealer) && currentTurnIndex >= 0 && (
                   <div
-                    className="relative flex flex-col items-center gap-0.5 mt-1 px-3 py-2 rounded-lg"
-                    style={{ zIndex: 15, background: 'rgba(0,0,0,0.5)' }}
+                    className={`relative flex flex-col items-center gap-0.5 mt-0.5 sm:mt-1 rounded-xl ${compactUi ? 'px-2 py-1' : 'px-3 py-2'}`}
+                    style={{
+                      zIndex: 15,
+                      background: 'rgba(0,0,0,0.42)',
+                      backdropFilter: 'blur(10px)',
+                      WebkitBackdropFilter: 'blur(10px)',
+                      border: '1px solid rgba(212,175,55,0.15)',
+                      boxShadow: '0 4px 16px rgba(0,0,0,0.35)',
+                    }}
                   >
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 sm:gap-2">
                       {turnSecondsLeft != null && currentTurnPlayer?.status !== 'all_in' && (
-                        <TurnTimer seconds={turnSecondsLeft} isMyTurn={isMyTurn} />
+                        <TurnTimer seconds={turnSecondsLeft} isMyTurn={isMyTurn} compact={compactUi} />
                       )}
-                      <span className="text-[9px] font-heading font-bold animate-pkr-pulse"
-                        style={{ color: isMyTurn ? 'var(--noir-primary)' : 'rgba(255,255,255,0.5)' }}>
-                        {isMyTurn ? '🎴 Your Turn' : `${currentTurnPlayer?.is_bot ? 'Dealer' : (currentTurnPlayer?.username ?? '?')}'s turn`}
+                      <span
+                        className={`font-heading font-bold animate-pkr-pulse text-center leading-tight ${compactUi ? 'text-[8px] max-w-[140px]' : 'text-[9px]'}`}
+                        style={{ color: isMyTurn ? 'var(--noir-primary)' : 'rgba(255,255,255,0.55)' }}
+                      >
+                        {isMyTurn ? '🎴 Your turn' : `${currentTurnPlayer?.is_bot ? 'Dealer' : (currentTurnPlayer?.username ?? '?')}'s turn`}
                       </span>
                     </div>
-                    {turnStatusMessage && (
-                      <p className="text-[8px] font-heading text-center max-w-[220px] leading-tight"
-                        style={{ color: 'rgba(255,255,255,0.9)' }}>
-                        {turnStatusMessage}
-                      </p>
-                    )}
                   </div>
                 )}
               </div>
@@ -1244,21 +1409,33 @@ export default function MPPokerGamePage() {
                     isDealer={isVsDealer ? p.is_bot : isDealer}
                     seatPos={pos}
                     totalSeats={players.length}
+                    compact={compactUi}
                   />
                 </div>
               );
             })}
           </div>
 
-          <div style={goldBar} />
+          <div style={PKR_GOLD_BAR} />
         </div>
       )}
 
-      {/* ══ TURN STATUS STRIP (when playing, so you always know what's happening) ══ */}
+      {/* ══ TURN STATUS (full detail here — avoids duplicating the long message on the felt) ══ */}
       {status === 'playing' && (phase === 'playing' || isVsDealer) && turnStatusMessage && street !== 'showdown' && (
-        <div className="rounded-lg px-3 py-2 text-center border border-primary/20"
-          style={{ background: 'rgba(0,0,0,0.35)' }}>
-          <p className="text-[9px] font-heading" style={{ color: 'rgba(212,175,55,0.85)' }}>
+        <div
+          className="rounded-xl px-2.5 sm:px-3 py-1.5 sm:py-2 text-center border border-primary/25"
+          style={{
+            background: 'rgba(0,0,0,0.42)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+            boxShadow: '0 2px 14px rgba(0,0,0,0.2)',
+            borderLeft: '3px solid rgba(212,175,55,0.55)',
+          }}
+        >
+          <p
+            className="text-[8px] sm:text-[9px] font-heading leading-snug line-clamp-4 sm:line-clamp-none"
+            style={{ color: 'rgba(212,175,55,0.88)' }}
+          >
             {turnStatusMessage}
           </p>
         </div>
@@ -1266,9 +1443,19 @@ export default function MPPokerGamePage() {
 
       {/* ══ ACTION BAR ══ */}
       {status === 'playing' && (phase === 'playing' || isVsDealer) && isMyTurn && myPlayer?.status !== 'folded' && myPlayer?.status !== 'all_in' && (
-        <div className="rounded-xl overflow-hidden border-2 animate-pkr-fade" style={{ borderColor: '#5a3e1b' }}>
-          <div style={goldBar} />
-          <div className="p-3 space-y-3" style={{ background: 'rgba(0,0,0,0.5)' }}>
+        <div
+          className="rounded-xl overflow-hidden border-2 animate-pkr-fade"
+          style={{ borderColor: '#5a3e1b', boxShadow: '0 8px 28px rgba(0,0,0,0.35)' }}
+        >
+          <div style={PKR_GOLD_BAR} />
+          <div
+            className="p-2.5 sm:p-3 space-y-2 sm:space-y-3"
+            style={{
+              background: 'linear-gradient(180deg,rgba(0,0,0,0.58),rgba(0,0,0,0.46))',
+              backdropFilter: 'blur(6px)',
+              WebkitBackdropFilter: 'blur(6px)',
+            }}
+          >
             <div className="flex items-center justify-between">
               <span className="text-[9px] font-heading text-primary/60 uppercase tracking-wider">Your Action</span>
               <span className="text-[9px] font-heading text-mutedForeground">
@@ -1365,15 +1552,25 @@ export default function MPPokerGamePage() {
               </>
             )}
           </div>
-          <div style={goldBar} />
+          <div style={PKR_GOLD_BAR} />
         </div>
       )}
 
       {/* ══ ALL-IN WAITING STATE ══ */}
       {status === 'playing' && myPlayer?.status === 'all_in' && street !== 'showdown' && street !== 'completed' && (
-        <div className="rounded-xl overflow-hidden border-2 animate-pkr-fade" style={{ borderColor: '#5a3e1b' }}>
-          <div style={goldBar} />
-          <div className="p-4 text-center space-y-3" style={{ background: 'rgba(0,0,0,0.55)' }}>
+        <div
+          className="rounded-xl overflow-hidden border-2 animate-pkr-fade"
+          style={{ borderColor: '#5a3e1b', boxShadow: '0 8px 28px rgba(0,0,0,0.35)' }}
+        >
+          <div style={PKR_GOLD_BAR} />
+          <div
+            className="p-4 text-center space-y-3"
+            style={{
+              background: 'linear-gradient(180deg,rgba(0,0,0,0.6),rgba(0,0,0,0.48))',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+            }}
+          >
             <div className="flex justify-center">
               <div className="w-10 h-10 rounded-full border-2 border-primary/40 flex items-center justify-center animate-pkr-pulse"
                 style={{ background: 'rgba(212,175,55,0.1)' }}>
@@ -1406,7 +1603,7 @@ export default function MPPokerGamePage() {
               </div>
             )}
           </div>
-          <div style={goldBar} />
+          <div style={PKR_GOLD_BAR} />
         </div>
       )}
 
@@ -1531,7 +1728,7 @@ export default function MPPokerGamePage() {
             <MessageSquare size={11} className="text-primary" />
             <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider">Table Chat</span>
           </div>
-          <div data-chat-part="messages" className="max-h-[120px] overflow-y-auto p-2.5 space-y-1.5" style={{ background: 'rgba(0,0,0,0.2)' }}>
+          <div data-chat-part="messages" className="max-h-[72px] sm:max-h-[120px] overflow-y-auto p-2 sm:p-2.5 space-y-1.5" style={{ background: 'rgba(0,0,0,0.2)' }}>
             {(game.chat || []).length === 0
               ? <p className="text-[9px] font-heading text-center py-2" style={{ color: 'rgba(255,255,255,0.15)' }}>No messages yet…</p>
               : (game.chat || []).slice(-30).map((c, i) => (
