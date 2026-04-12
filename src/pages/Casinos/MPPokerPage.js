@@ -8,6 +8,8 @@ import styles from '../../styles/noir.module.css';
 
 const VS_DEALER_MAX_SMALL_BLIND = 25000;
 const TOURNAMENT_REMINDER_COOLDOWN_MS = 600 * 1000;
+/** Server cap for points-denominated tournament buy-in (see mp_poker.MP_POKER_TOURNAMENT_MAX_POINTS_BUY_IN). */
+const TOURNAMENT_MAX_POINTS_BUY_IN = 1000;
 
 function tournamentListReminderCooldownMs(sentAtIso) {
   if (!sentAtIso) return 0;
@@ -178,6 +180,10 @@ export default function MPPokerPage() {
   const handleCreateTournament = async () => {
     const buyIn = parseInt(String(tournamentBuyIn).replace(/\D/g, ''), 10) || 0;
     if (buyIn <= 0) { toast.error('Tournament buy-in must be positive'); return; }
+    if (tournamentBuyInCurrency === 'points' && buyIn > TOURNAMENT_MAX_POINTS_BUY_IN) {
+      toast.error(`Points buy-in cannot exceed ${TOURNAMENT_MAX_POINTS_BUY_IN.toLocaleString()} pts`);
+      return;
+    }
     setTournamentCreating(true);
     try {
       const res = await api.post('/casino/mp-poker/tournaments', {
@@ -588,7 +594,7 @@ export default function MPPokerPage() {
             <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center gap-1.5">
               <Trophy size={12} /> Poker Tournaments
             </h2>
-            <p className="text-[9px] text-mutedForeground font-heading mt-0.5">4–9 players · freezeout · escalating blinds · cash or points buy-in</p>
+            <p className="text-[9px] text-mutedForeground font-heading mt-0.5">4–9 players · freezeout · escalating blinds · cash or points buy-in (points max {TOURNAMENT_MAX_POINTS_BUY_IN.toLocaleString()} pts)</p>
           </div>
           <button
             type="button"
@@ -611,17 +617,35 @@ export default function MPPokerPage() {
               <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-20 shrink-0">Buy-in</label>
               <select
                 value={tournamentBuyInCurrency}
-                onChange={(e) => setTournamentBuyInCurrency(e.target.value)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setTournamentBuyInCurrency(v);
+                  if (v === 'points') {
+                    const n = parseInt(String(tournamentBuyIn).replace(/\D/g, ''), 10) || 0;
+                    if (n > TOURNAMENT_MAX_POINTS_BUY_IN) {
+                      setTournamentBuyIn(String(TOURNAMENT_MAX_POINTS_BUY_IN));
+                    }
+                  }
+                }}
                 className="mp-poker-select shrink-0 px-2 py-1.5 rounded-lg font-heading text-xs focus:outline-none"
                 style={selectStyle}
               >
                 <option value="money">Cash ($)</option>
-                <option value="points">Points</option>
+                <option value="points">Points (max {TOURNAMENT_MAX_POINTS_BUY_IN})</option>
               </select>
               <FormattedNumberInput
                 value={tournamentBuyIn}
-                onChange={setTournamentBuyIn}
-                placeholder={tournamentBuyInCurrency === 'points' ? '2,000' : '100,000'}
+                onChange={(v) => {
+                  if (tournamentBuyInCurrency === 'points') {
+                    const n = parseInt(String(v).replace(/\D/g, ''), 10) || 0;
+                    if (n > TOURNAMENT_MAX_POINTS_BUY_IN) {
+                      setTournamentBuyIn(String(TOURNAMENT_MAX_POINTS_BUY_IN));
+                      return;
+                    }
+                  }
+                  setTournamentBuyIn(v);
+                }}
+                placeholder={tournamentBuyInCurrency === 'points' ? '1,000' : '100,000'}
                 className="flex-1 min-w-0 px-2 py-1.5 rounded-lg font-heading text-sm focus:outline-none"
                 style={inputStyle}
               />

@@ -7,7 +7,7 @@ _rng = secrets.SystemRandom()
 import uuid
 import itertools
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 from fastapi import Depends, HTTPException, Body
 
 from server import db, get_current_user, get_current_user_verified, log_gambling, _is_admin, _is_moderator, send_notification
@@ -36,6 +36,7 @@ MP_POKER_VS_DEALER_MAX_SMALL_BLIND = 25_000  # Hard cap for vs-dealer small blin
 MP_POKER_VS_DEALER_MAX_BLIND_DEFAULT = 2_500_000
 MP_POKER_TOURNAMENT_MIN_PLAYERS = 4
 MP_POKER_TOURNAMENT_MAX_PLAYERS = 9
+MP_POKER_TOURNAMENT_MAX_POINTS_BUY_IN = 1000
 MP_POKER_TOURNAMENT_STARTING_STACK = 7_500
 MP_POKER_TOURNAMENT_LEVEL_SECONDS = 300
 MP_POKER_TOURNAMENT_REMINDER_COOLDOWN_SECONDS = 600
@@ -317,12 +318,19 @@ class PokerTournamentCreateRequest(BaseModel):
             raise ValueError(f"max_players must be {MP_POKER_TOURNAMENT_MIN_PLAYERS}-{MP_POKER_TOURNAMENT_MAX_PLAYERS}")
         return v
 
-    @field_validator("buy_in")
-    @classmethod
-    def validate_buy_in(cls, v: int) -> int:
-        if v < 1 or v > MP_POKER_MAX_BUY_IN:
-            raise ValueError(f"buy_in must be 1-{MP_POKER_MAX_BUY_IN:,}")
-        return v
+    @model_validator(mode="after")
+    def validate_buy_in_for_currency(self):
+        bi = int(self.buy_in)
+        if bi < 1:
+            raise ValueError("buy_in must be at least 1")
+        if self.buy_in_currency == "points":
+            if bi > MP_POKER_TOURNAMENT_MAX_POINTS_BUY_IN:
+                raise ValueError(
+                    f"Points tournament buy-in cannot exceed {MP_POKER_TOURNAMENT_MAX_POINTS_BUY_IN} points"
+                )
+        elif bi > MP_POKER_MAX_BUY_IN:
+            raise ValueError(f"buy_in must be at most {MP_POKER_MAX_BUY_IN:,}")
+        return self
 
 
 class PokerTournamentDecisionRequest(BaseModel):
