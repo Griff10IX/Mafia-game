@@ -21,6 +21,22 @@ const JAIL_BACKGROUND_IMAGE =
   process.env.REACT_APP_JAIL_BACKGROUND_IMAGE ||
   `${(process.env.PUBLIC_URL || '')}/jail-background.png`;
 
+/** Keep in sync with `JAIL_BUST_MIN_INTERVAL_SEC` in backend `routers/crime/jail.py`. */
+const JAIL_BUST_MIN_INTERVAL_SEC = 3;
+
+function parseBustWaitSecondsFromDetail(detail) {
+  const s =
+    typeof detail === 'string'
+      ? detail
+      : detail && typeof detail === 'object' && detail.message != null
+        ? String(detail.message)
+        : '';
+  const m = s.match(/Wait (\d+)s/i);
+  if (!m) return null;
+  const n = parseInt(m[1], 10);
+  return Number.isFinite(n) && n >= 1 ? n : null;
+}
+
 const JailStatusCard = ({ 
   inJail, 
   secondsRemaining, 
@@ -153,7 +169,17 @@ const AutoRankIcon = () => (
   </span>
 );
 
-const JailedPlayerRow = ({ player, index, onBust, loading, userInJail, manualPlayDisabled, adminOnlineColor, modDefaultOnlineColor }) => {
+const JailedPlayerRow = ({
+  player,
+  index,
+  onBust,
+  loading,
+  userInJail,
+  manualPlayDisabled,
+  bustCooldownActive,
+  adminOnlineColor,
+  modDefaultOnlineColor,
+}) => {
   const legacyNpcRp = [16, 25].includes(Number(player?.rp_reward));
   const isNpc =
     player.is_jail_list_npc === true ||
@@ -224,7 +250,7 @@ const JailedPlayerRow = ({ player, index, onBust, loading, userInJail, manualPla
       </div>
 
       {/* Action */}
-      <div className="shrink-0">
+      <div className="shrink-0 min-w-[4.5rem] flex justify-end">
         {player.is_self ? (
           <span className="text-[10px] text-mutedForeground w-10 text-center inline-block">—</span>
         ) : manualPlayDisabled ? (
@@ -235,7 +261,7 @@ const JailedPlayerRow = ({ player, index, onBust, loading, userInJail, manualPla
           >
             Locked
           </button>
-        ) : (
+        ) : bustCooldownActive ? null : (
           <button
             type="button"
             onClick={() => onBust(player.username)}
@@ -315,6 +341,7 @@ export default function Jail() {
   });
   const [privateCellLoading, setPrivateCellLoading] = useState(false);
   const [privateCellCooldownRemaining, setPrivateCellCooldownRemaining] = useState(0);
+  const [bustCooldownRemaining, setBustCooldownRemaining] = useState(0);
   const [user, setUser] = useState(null);
   const [staffListColors, setStaffListColors] = useState({
     admin_online_color: '#a78bfa',
@@ -422,6 +449,19 @@ export default function Jail() {
     return () => clearInterval(id);
   }, [privateCellCooldownRemaining > 0]);
 
+  const startBustCooldown = (seconds) => {
+    const n = Math.floor(Number(seconds));
+    setBustCooldownRemaining(Math.max(1, Number.isFinite(n) ? n : JAIL_BUST_MIN_INTERVAL_SEC));
+  };
+
+  useEffect(() => {
+    if (bustCooldownRemaining <= 0) return undefined;
+    const id = window.setInterval(() => {
+      setBustCooldownRemaining((s) => Math.max(0, s - 1));
+    }, 1000);
+    return () => clearInterval(id);
+  }, [bustCooldownRemaining > 0]);
+
   useEffect(() => {
     if (bustRewardInput === '' && (jailStatus.bust_reward_cash ?? 0) > 0) {
       setBustRewardInput(String(jailStatus.bust_reward_cash));
@@ -450,6 +490,9 @@ export default function Jail() {
     setLoading(true);
     try {
       const response = await api.post('/jail/bust', { target_username: username });
+      if (response.status === 200) {
+        startBustCooldown(JAIL_BUST_MIN_INTERVAL_SEC);
+      }
       if (response.data.success) {
         let msg = response.data.message;
         if (response.data.cash_reward > 0) {
@@ -467,7 +510,16 @@ export default function Jail() {
       }
       await fetchJailData();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to bust out');
+      const detail = error.response?.data?.detail;
+      const waitSec = parseBustWaitSecondsFromDetail(detail);
+      startBustCooldown(waitSec ?? JAIL_BUST_MIN_INTERVAL_SEC);
+      const msg =
+        typeof detail === 'string'
+          ? detail
+          : detail && typeof detail === 'object' && detail.message != null
+            ? String(detail.message)
+            : 'Failed to bust out';
+      toast.error(msg);
     } finally {
       setLoading(false);
     }
@@ -736,6 +788,7 @@ export default function Jail() {
                 loading={loading}
                 userInJail={jailStatus.in_jail}
                 manualPlayDisabled={autoRankJailDisabled}
+                bustCooldownActive={bustCooldownRemaining > 0}
                 adminOnlineColor={staffListColors.admin_online_color}
                 modDefaultOnlineColor={staffListColors.mod_default_online_color}
               />
