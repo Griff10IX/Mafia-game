@@ -3,6 +3,7 @@ import asyncio
 import base64
 import logging
 import os
+import time
 import re
 import secrets
 from datetime import datetime, timezone, timedelta
@@ -31,6 +32,47 @@ from utils.notepad_color import (
 
 logger = logging.getLogger(__name__)
 
+# Honour ranks use up to six users.count_documents (two with $expr — full scans). Cache briefly so
+# repeat profile views and prefetch revalidation stay cheap while other players' stats can move ranks.
+_HONOURS_RANKS_CACHE: dict = {}
+_HONOURS_RANKS_TTL_SEC = 60.0
+_HONOURS_RANKS_MAX_KEYS = 2500
+
+
+def _honours_ranks_cache_key(user_id: str, is_dead: bool, user: dict, effective_kills: int) -> tuple:
+    rp = int(user.get("rank_points") or 0) + int(user.get("rank_xp_pass_prestige_carry_rp") or 0)
+    return (
+        user_id,
+        is_dead,
+        int(user.get("total_crimes") or 0),
+        int(user.get("total_gta") or 0),
+        int(user.get("jail_busts") or 0),
+        rp,
+        int(user.get("lifetime_points_spent") or 0),
+        effective_kills,
+    )
+
+
+def _honours_ranks_cache_get(key: tuple):
+    now = time.monotonic()
+    ent = _HONOURS_RANKS_CACHE.get(key)
+    if ent is None:
+        return None
+    ts, vals = ent
+    if now - ts > _HONOURS_RANKS_TTL_SEC:
+        try:
+            del _HONOURS_RANKS_CACHE[key]
+        except KeyError:
+            pass
+        return None
+    return vals
+
+
+def _honours_ranks_cache_set(key: tuple, vals: tuple):
+    if len(_HONOURS_RANKS_CACHE) >= _HONOURS_RANKS_MAX_KEYS:
+        _HONOURS_RANKS_CACHE.clear()
+    _HONOURS_RANKS_CACHE[key] = (time.monotonic(), vals)
+
 
 SPOTIFY_ALLOWED_TYPES = {"track", "album", "playlist", "artist", "episode", "show"}
 SPOTIFY_ID_RE = re.compile(r"^[A-Za-z0-9]{22}$")
@@ -58,8 +100,9 @@ async def ensure_profile_indexes(db):
         # casino ownership: list by owner_id (dice, roulette, blackjack, horseracing, videopoker)
         for coll_name in ("dice_ownership", "roulette_ownership", "blackjack_ownership", "horseracing_ownership", "videopoker_ownership", "slots_ownership"):
             await db[coll_name].create_index("owner_id")
-        # notifications: count by user_id
+        # notifications: count by user_id + type (profile inbox/sent aggregation)
         await db.notifications.create_index("user_id")
+        await db.notifications.create_index([("user_id", 1), ("notification_type", 1)])
         logger.info("Profile indexes ensured.")
     except Exception as e:
         logger.warning("ensure_profile_indexes: %s", e)
@@ -522,37 +565,37 @@ def register(router):
         wealth_range = get_wealth_rank_range(user.get("money", 0))
         user_id = user["id"]
 
-        async def _rank_for_field(field: str, value: int) -> int:
+        def _honours_liveness_match(subject_dead: bool) -> dict:
+            """Same alive/dead pool as GET /leaderboards/top (StatLeaderboard boards)."""
+            if subject_dead:
+                return {"is_dead": True, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
+            return {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
+
+        async def _rank_for_field(field: str, value: int, *, subject_dead: bool) -> int:
             if value is None:
                 value = 0
-            n_better = await db.users.count_documents({
-                "is_dead": {"$ne": True},
-                "is_bodyguard": {"$ne": True},
-                field: {"$gt": value},
-            })
+            q = _honours_liveness_match(subject_dead)
+            q.update(_staff_exclude_user_filter())
+            q[field] = {"$gt": value}
+            n_better = await db.users.count_documents(q)
             return n_better + 1
 
-        async def _rank_for_effective_kills(effective_value: int) -> int:
+        async def _rank_for_effective_kills(effective_value: int, *, subject_dead: bool) -> int:
             """Rank by the same kill total shown on profile (not raw total_kills)."""
             if effective_value is None:
                 effective_value = 0
             eff_expr = mongodb_effective_kill_count_expr()
-            n_better = await db.users.count_documents({
-                "is_dead": {"$ne": True},
-                "is_bodyguard": {"$ne": True},
-                "$expr": {"$gt": [eff_expr, int(effective_value)]},
-            })
+            q = _honours_liveness_match(subject_dead)
+            q.update(_staff_exclude_user_filter())
+            q["$expr"] = {"$gt": [eff_expr, int(effective_value)]}
+            n_better = await db.users.count_documents(q)
             return n_better + 1
 
-        async def _rank_for_total_rank_points_lifetime(total_value: int) -> int:
-            """Same ordering as leaderboard all-time rank_points board: current RP + prestige carry, alive players, staff excluded."""
+        async def _rank_for_total_rank_points_lifetime(total_value: int, *, subject_dead: bool) -> int:
+            """Same ordering as leaderboard rank_points board: RP + prestige carry; pool = alive XOR dead like /leaderboards/top."""
             if total_value is None:
                 total_value = 0
-            q = {
-                "is_dead": {"$ne": True},
-                "is_bodyguard": {"$ne": True},
-                "is_npc": {"$ne": True},
-            }
+            q = _honours_liveness_match(subject_dead)
             q.update(_staff_exclude_user_filter())
             total_expr = {
                 "$add": [
@@ -615,31 +658,50 @@ def register(router):
                 None if pid else fam.get("avatar_url"),
             )
 
-        async def _badge_stat_fields():
-            """Stats only — used for ranking badges on profile (same for self and visitors)."""
-            return await db.users.find_one(
-                {"id": user_id},
+        async def _inbox_sent_message_counts():
+            pipeline = [
                 {
-                    "_id": 0,
-                    "total_crimes": 1,
-                    "total_gta": 1,
-                    "jail_busts": 1,
-                    "total_kills": 1,
-                    "total_oc_heists": 1,
-                    "bullets_melted": 1,
-                    "booze_runs_count": 1,
-                    "hitlist_npc_kills": 1,
+                    "$match": {
+                        "user_id": user_id,
+                        "notification_type": {"$in": ["user_message", "user_message_sent"]},
+                    }
                 },
+                {"$group": {"_id": "$notification_type", "n": {"$sum": 1}}},
+            ]
+            received, sent = 0, 0
+            async for doc in db.notifications.aggregate(pipeline):
+                tid = doc.get("_id")
+                n = int(doc.get("n") or 0)
+                if tid == "user_message":
+                    received = n
+                elif tid == "user_message_sent":
+                    sent = n
+            return received, sent
+
+        eff_kills = effective_player_kill_count(user)
+        _hr_key = _honours_ranks_cache_key(user_id, is_dead, user, eff_kills)
+        _cached_ranks = _honours_ranks_cache_get(_hr_key)
+        if _cached_ranks is not None:
+            kills_rank, crimes_rank, gta_rank, jail_rank, rank_points_rank, points_spent_rank = _cached_ranks
+        else:
+            kills_rank, crimes_rank, gta_rank, jail_rank, rank_points_rank, points_spent_rank = await asyncio.gather(
+                _rank_for_effective_kills(eff_kills, subject_dead=is_dead),
+                _rank_for_field("total_crimes", int(user.get("total_crimes") or 0), subject_dead=is_dead),
+                _rank_for_field("total_gta", int(user.get("total_gta") or 0), subject_dead=is_dead),
+                _rank_for_field("jail_busts", int(user.get("jail_busts") or 0), subject_dead=is_dead),
+                _rank_for_total_rank_points_lifetime(
+                    int(user.get("rank_points") or 0) + int(user.get("rank_xp_pass_prestige_carry_rp") or 0),
+                    subject_dead=is_dead,
+                ),
+                _rank_for_field("lifetime_points_spent", int(user.get("lifetime_points_spent") or 0), subject_dead=is_dead),
+            )
+            _honours_ranks_cache_set(
+                _hr_key,
+                (kills_rank, crimes_rank, gta_rank, jail_rank, rank_points_rank, points_spent_rank),
             )
 
         (
             family_name_tag,
-            kills_rank,
-            crimes_rank,
-            gta_rank,
-            jail_rank,
-            rank_points_rank,
-            points_spent_rank,
             dice_casinos,
             roulette_casinos,
             blackjack_casinos,
@@ -647,20 +709,10 @@ def register(router):
             slots_casinos,
             videopoker_casinos,
             property_,
-            messages_received,
-            messages_sent_count,
+            message_counts,
             top_cars,
-            badge_stat_fields,
         ) = await asyncio.gather(
             _family_name_and_tag(),
-            _rank_for_effective_kills(effective_player_kill_count(user)),
-            _rank_for_field("total_crimes", int(user.get("total_crimes") or 0)),
-            _rank_for_field("total_gta", int(user.get("total_gta") or 0)),
-            _rank_for_field("jail_busts", int(user.get("jail_busts") or 0)),
-            _rank_for_total_rank_points_lifetime(
-                int(user.get("rank_points") or 0) + int(user.get("rank_xp_pass_prestige_carry_rp") or 0)
-            ),
-            _rank_for_field("lifetime_points_spent", int(user.get("lifetime_points_spent") or 0)),
             _casinos_for_type("dice", db.dice_ownership),
             _casinos_for_type("roulette", db.roulette_ownership),
             _casinos_for_type("blackjack", db.blackjack_ownership),
@@ -668,12 +720,7 @@ def register(router):
             _casinos_for_type("slots", db.slots_ownership, "state"),
             _casinos_for_type("videopoker", db.videopoker_ownership),
             _user_owns_any_property(user_id),
-            # Messages received: direct messages delivered to this user's inbox
-            db.notifications.count_documents({"user_id": user_id, "notification_type": "user_message"}),
-            # Messages sent: sender's outbox copy only (same as GET /notifications/sent)
-            db.notifications.count_documents(
-                {"user_id": user_id, "notification_type": "user_message_sent"}
-            ),
+            _inbox_sent_message_counts(),
             _top_cars_for_profile(
                 user_id,
                 5,
@@ -682,8 +729,8 @@ def register(router):
                     [user.get("profile_featured_car_id")] if user.get("profile_featured_car_id") else []
                 ),
             ),
-            _badge_stat_fields(),
         )
+        messages_received, messages_sent_count = message_counts
 
         family_name, family_tag, family_emblem_preset_id, family_emblem_avatar_url = family_name_tag or (None, None, None, None)
 
@@ -701,10 +748,7 @@ def register(router):
 
         if property_ and user_id != current_user.get("id") and property_.get("type") == "airport":
             property_ = {k: v for k, v in property_.items() if k != "total_earnings"}
-        if isinstance(messages_sent_count, list):
-            messages_sent = 0
-        else:
-            messages_sent = int(messages_sent_count or 0)
+        messages_sent = int(messages_sent_count or 0)
 
         # Own profile only if the requested profile is the current user (by id and by URL username)
         requested_username_norm = (username or "").strip().lower()
