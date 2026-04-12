@@ -2,6 +2,8 @@ import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'rea
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb } from 'lucide-react';
 import api, { getApiErrorMessage, onCooldownChange, invalidateApiCache } from '../utils/api';
+import { readSessionJson } from '../utils/sessionPageCache';
+import { DASHBOARD_SESSION_CACHE_KEY } from '../utils/dashboardSessionCache';
 import { warmLeaderboardCaches } from '../utils/leaderboardTopCache';
 import { setCrimesPrefetch, getCrimesPrefetch } from '../utils/prefetchCache';
 import { toast } from 'sonner';
@@ -18,6 +20,12 @@ import GameChat from './GameChat';
 import DeathScreen from './DeathScreen';
 import FamilyEmblem from './FamilyEmblem';
 import styles from '../styles/noir.module.css';
+
+function readLayoutBootFromDashboardCache() {
+  const row = readSessionJson(DASHBOARD_SESSION_CACHE_KEY);
+  if (!row?.user?.id) return { user: null, rankProgress: null };
+  return { user: row.user, rankProgress: row.rankProgress ?? null };
+}
 
 /** Bottom bar: 6 icons. Rank = crimes/rank; Misc = everything that doesn't fit elsewhere. */
 function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
@@ -291,8 +299,12 @@ function SidebarCatHeader({ label, classic }) {
 }
 
 export default function Layout({ children }) {
-  const [user, setUser] = useState(null);
-  const [rankProgress, setRankProgress] = useState(null);
+  const layoutBootRef = useRef(null);
+  if (layoutBootRef.current === null) {
+    layoutBootRef.current = readLayoutBootFromDashboardCache();
+  }
+  const [user, setUser] = useState(() => layoutBootRef.current.user);
+  const [rankProgress, setRankProgress] = useState(() => layoutBootRef.current.rankProgress);
   const [unreadCount, setUnreadCount] = useState(0);
   const [helpDeskOpenCount, setHelpDeskOpenCount] = useState(0);
   /** Sidebar: total from GET /users/online (null = unknown / failed). */
@@ -789,19 +801,25 @@ export default function Layout({ children }) {
 
   const fetchData = async () => {
     try {
+      const sinkProgress = (p) => {
+        p.catch(() => {});
+      };
+      const progressPromise = api.get('/user/rank-progress');
       const userRes = await api.get('/auth/me');
       if (userRes.data?.account_locked) {
+        sinkProgress(progressPromise);
         if (window.location.pathname !== '/locked') {
           window.location.replace('/locked');
         }
         return;
       }
       if (!userRes.data?.rules_accepted && location.pathname !== '/account/rules-acceptance') {
+        sinkProgress(progressPromise);
         setUser((prev) => ({ ...userRes.data, ...prev }));
         navigate('/account/rules-acceptance', { replace: true });
         return;
       }
-      const progressRes = await api.get('/user/rank-progress');
+      const progressRes = await progressPromise;
       setUser((prev) => ({
         ...userRes.data,
         casino_profit: prev?.casino_profit ?? userRes.data.casino_profit,
@@ -1743,7 +1761,7 @@ export default function Layout({ children }) {
       )}
 
       {/* ── TOP BAR ─────────────────────────────────────────────────────────── */}
-      <div data-layout="topbar" className={`fixed top-0 right-0 left-0 safe-area-pt ${!isLandscapeCompactLayout ? (themeVariant === 'modern' ? 'md:left-40' : 'md:left-48') : ''} min-h-[36px] md:min-h-0 md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-2 py-1 md:px-3 md:py-0 gap-1 md:gap-2 ${mobileStatsDisplay === 'right_sidebar' && !isLandscapeCompactLayout ? 'md:right-52' : ''}`}>
+      <div data-layout="topbar" className={`fixed top-0 right-0 left-0 safe-area-pt ${!isLandscapeCompactLayout ? (themeVariant === 'modern' ? 'md:left-40' : 'md:left-48') : ''} min-h-[36px] md:min-h-0 md:h-12 ${styles.topBar} backdrop-blur-md z-30 flex flex-col md:flex-row md:items-center px-2 py-1 md:px-3 md:py-0 gap-1 md:gap-2 ${user && mobileStatsDisplay === 'right_sidebar' && !isLandscapeCompactLayout ? (themeVariant === 'modern' ? 'md:right-60' : 'md:right-52') : ''}`}>
         <div className="flex items-center gap-1 md:gap-2 flex-1 min-w-0 overflow-hidden md:justify-end">
           {mobileNavStyle !== 'bottom' && (
             <button onClick={() => setSidebarOpen(!sidebarOpen)} data-testid="mobile-menu-toggle"
@@ -2020,7 +2038,7 @@ export default function Layout({ children }) {
       </div>
 
       {/* ── MAIN CONTENT ─────────────────────────────────────────────────────── */}
-      <main data-layout="main" className={`${!isLandscapeCompactLayout ? (themeVariant === 'modern' ? 'md:ml-40' : 'md:ml-48') : ''} mt-main-below-topbar min-h-screen p-4 md:p-6 overflow-x-hidden ${mobileNavStyle === 'bottom' ? 'pb-safe-bottom-nav md:pb-6' : ''} ${(isMobileViewport || isLandscapeCompactLayout) && mobileStatsDisplay === 'top_bar' && (flashNews.length > 0 || (user && hasCasinoOrProperty)) && mobileNavStyle !== 'bottom' ? 'pb-16 md:pb-6' : ''} ${mobileStatsDisplay === 'right_sidebar' && !isLandscapeCompactLayout ? (themeVariant === 'modern' ? 'md:mr-60' : 'md:mr-52') : ''}`}>
+      <main data-layout="main" className={`${!isLandscapeCompactLayout ? (themeVariant === 'modern' ? 'md:ml-40' : 'md:ml-48') : ''} mt-main-below-topbar min-h-screen p-4 md:p-6 overflow-x-hidden ${mobileNavStyle === 'bottom' ? 'pb-safe-bottom-nav md:pb-6' : ''} ${(isMobileViewport || isLandscapeCompactLayout) && mobileStatsDisplay === 'top_bar' && (flashNews.length > 0 || (user && hasCasinoOrProperty)) && mobileNavStyle !== 'bottom' ? 'pb-16 md:pb-6' : ''} ${user && mobileStatsDisplay === 'right_sidebar' && !isLandscapeCompactLayout ? (themeVariant === 'modern' ? 'md:mr-60' : 'md:mr-52') : ''}`}>
         <ActiveEventBanner fetchEnabled={!!user} />
         {needsEmailVerification && (
           <div className="mb-3 px-3 py-2 rounded-sm flex items-center gap-2 flex-wrap" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.15)', border: '1px solid rgba(var(--noir-primary-rgb), 0.4)' }}>
