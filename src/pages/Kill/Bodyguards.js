@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { Shield, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api, { refreshUser } from '../../utils/api';
+import { readBodyguardsPageWarm, writeBodyguardsPageWarm } from '../../utils/bodyguardsPageWarm';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 
@@ -93,6 +94,25 @@ export default function Bodyguards() {
     { value: 6, label: 'Sunday' },
   ];
 
+  useLayoutEffect(() => {
+    const w = readBodyguardsPageWarm();
+    if (!w) return;
+    const bgData = w.main;
+    setBodyguards(Array.isArray(bgData) ? bgData : (bgData?.bodyguards ?? []));
+    setBodyguardFor(bgData?.bodyguard_for ?? null);
+    setBodyguardProfit(bgData?.bodyguard_profit ?? null);
+    setBodyguardLastDropAt(bgData?.bodyguard_last_drop_at ?? null);
+    if (w.user) setUser(w.user);
+    setEvent(w.event ?? null);
+    setEventsEnabled(!!w.eventsEnabled);
+    const infl = w.inflation || {};
+    setNextHireInflationPct(infl.next_hire_inflation_pct ?? 0);
+    setInflationWindowEndsAt(infl.inflation_window_ends_at ?? null);
+    setBgStats(w.stats ?? null);
+    setInvites(w.invites ?? { sent: [], received: [] });
+    setHasLoaded(true);
+  }, []);
+
   useEffect(() => {
     fetchData();
   }, []);
@@ -175,6 +195,16 @@ export default function Bodyguards() {
       setInflationWindowEndsAt(inflationRes.data?.inflation_window_ends_at ?? null);
       setBgStats(statsRes.data ?? null);
       setInvites(invitesRes.data ?? { sent: [], received: [] });
+      writeBodyguardsPageWarm({
+        userId: userRes.data?.id,
+        main: bgData,
+        user: userRes.data,
+        event: eventsRes.data?.event ?? null,
+        eventsEnabled: !!eventsRes.data?.events_enabled,
+        inflation: inflationRes.data ?? null,
+        stats: statsRes.data ?? null,
+        invites: invitesRes.data ?? { sent: [], received: [] },
+      });
     } catch (error) {
       const status = error.response?.status;
       const detail = error.response?.data?.detail ?? error.response?.data?.message ?? error.message;

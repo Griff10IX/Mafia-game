@@ -19,6 +19,7 @@ import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
+import { GTA_SESSION_CACHE_KEY, DEFAULT_GTA_STATS } from '../../utils/gtaPageWarm';
 
 const GTA_STYLES = `
   @keyframes gta-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -38,8 +39,6 @@ const GTA_STYLES = `
 // Constants
 const TICK_INTERVAL = 1000;
 const RECENT_STOLEN_COLLAPSED_KEY = 'gta_recent_stolen_collapsed';
-const GTA_CACHE_KEY = 'mafia_gta_v1';
-
 // Utility functions
 function formatCooldown(isoUntil) {
   if (!isoUntil) return null;
@@ -384,12 +383,12 @@ const InfoSection = () => (
 
 // Main component
 export default function GTA() {
-  const gtaBoot = readSessionJson(GTA_CACHE_KEY);
+  const gtaBoot = readSessionJson(GTA_SESSION_CACHE_KEY);
   const [options, setOptions] = useState(() => gtaBoot?.options ?? []);
   const [recentStolen, setRecentStolen] = useState(() => gtaBoot?.recentStolen ?? []);
-  const [gtaStats, setGtaStats] = useState({
-    count_today: 0, count_week: 0, success_today: 0, success_week: 0,
-    profit_today: 0, profit_24h: 0, profit_week: 0,
+  const [gtaStats, setGtaStats] = useState(() => {
+    const gs = gtaBoot?.gtaStats;
+    return gs && typeof gs === 'object' ? { ...DEFAULT_GTA_STATS, ...gs } : { ...DEFAULT_GTA_STATS };
   });
   const [attemptingOptionId, setAttemptingOptionId] = useState(null);
   const [event, setEvent] = useState(() => gtaBoot?.event ?? null);
@@ -422,6 +421,7 @@ export default function GTA() {
     let nextAutoRankGtaDisabled = autoRankGtaDisabled;
     let nextActiveLootPerks = activeLootPerks;
     let nextUser = user;
+    let nextGtaStats = gtaStats;
     try {
       const [optionsRes, recentStolenRes, eventsRes, statsRes, autoRankRes, lootStatusRes, meRes] = await Promise.allSettled([
         api.get('/gta/options'),
@@ -441,8 +441,9 @@ export default function GTA() {
           toast.error('Failed to load GTA options');
         }
       }
-      if (statsRes.status === 'fulfilled' && statsRes.value?.data) {
-        setGtaStats(statsRes.value.data);
+      if (statsRes.status === 'fulfilled' && statsRes.value?.data && typeof statsRes.value.data === 'object') {
+        nextGtaStats = { ...DEFAULT_GTA_STATS, ...statsRes.value.data };
+        setGtaStats(nextGtaStats);
       }
       
       if (recentStolenRes.status === 'fulfilled' && recentStolenRes.value?.data) {
@@ -472,11 +473,12 @@ export default function GTA() {
         nextUser = meRes.value.data;
         setUser(nextUser);
       }
-      writeSessionJson(GTA_CACHE_KEY, {
+      writeSessionJson(GTA_SESSION_CACHE_KEY, {
         options: nextOptions,
         recentStolen: nextRecentStolen,
         event: nextEvent,
         eventsEnabled: nextEventsEnabled,
+        gtaStats: nextGtaStats,
         autoRankGtaDisabled: nextAutoRankGtaDisabled,
         activeLootPerks: nextActiveLootPerks,
         user: nextUser,
@@ -487,7 +489,7 @@ export default function GTA() {
         console.error('Error fetching GTA data:', error);
       }
     }
-  }, [options, recentStolen, event, eventsEnabled, autoRankGtaDisabled, activeLootPerks, user]);
+  }, [options, recentStolen, gtaStats, event, eventsEnabled, autoRankGtaDisabled, activeLootPerks, user]);
 
   useEffect(() => {
     fetchData({ silent: !!gtaBoot?.options?.length });
