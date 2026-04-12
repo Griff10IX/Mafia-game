@@ -29,7 +29,7 @@
 |----------|---------|------|
 | `ENDPOINT_RL_BURST_TOKENS` | 35 | Token bucket cap (refill target; empty bucket does not 429). |
 | `ENDPOINT_RL_SUSTAIN_WINDOW_SEC` | 30 | Rolling window for violation count + span. |
-| `ENDPOINT_RL_SUSTAIN_MIN_COUNT` | 60 | Minimum sub-interval violations in that window to consider hard lockout. |
+| `ENDPOINT_RL_SUSTAIN_MIN_COUNT` | 100 | Minimum sub-interval violations in that window to consider hard lockout. |
 | `ENDPOINT_RL_SUSTAIN_MIN_SPAN_SEC` | 26 | First→last violation in the window must span at least this many seconds (brief rapid bursts do not qualify). |
 
 ## Per-endpoint vs global vs “disable all”
@@ -59,5 +59,5 @@
 
 1. Enable **GLOBAL_RATE_LIMITS_ENABLED**, **SECURITY_MIDDLEWARE_ENABLED**, and one endpoint with a short interval (e.g. 300 ms).
 2. **Bucket empty:** Requests **still succeed** (no 429); **`endpoint_rl_violations`** still receives entries when spacing is sub-interval.
-3. **Sustained:** Sub-interval violations spread over **≥26 s** with **≥60** in **30 s** → hard lockout response with long **`cooldown_seconds`** and **`endpoint_rate_limit_hard`** true. A few quick clicks or a short burst should **not** meet both count and span.
+3. **Sustained:** Sub-interval violations spread over **≥26 s** with **≥100** in **30 s** → hard lockout response with long **`cooldown_seconds`** and **`endpoint_rate_limit_hard`** true. A few quick clicks or a short burst should **not** meet both count and span.
 4. **Multi-worker:** Hard state on **`users.rate_limit_hard_until`**; metering uses **`rate_limit_clicks`** / DB when available.

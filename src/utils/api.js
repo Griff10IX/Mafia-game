@@ -80,11 +80,28 @@ export const SERVER_UNAVAILABLE_EVENT = 'app:server-unavailable';
 let _lastServerUnavailableDispatch = 0;
 const _SERVER_UNAVAILABLE_THROTTLE_MS = 30_000; // Only dispatch once per 30s to avoid overlay + toast spam
 
+// Full reload / tab close / external navigation tears down in-flight XHRs; those often look like
+// "network" errors (no response) and must not trigger the server-unavailable overlay.
+let _pageUnloading = false;
+if (typeof window !== 'undefined') {
+  const markUnloading = () => {
+    _pageUnloading = true;
+  };
+  window.addEventListener('pagehide', markUnloading);
+  window.addEventListener('beforeunload', markUnloading);
+  window.addEventListener('pageshow', (e) => {
+    if (e.persisted) _pageUnloading = false;
+  });
+}
+
 function isRequestCanceled(error) {
   if (!error) return false;
   if (axios.isCancel?.(error)) return true;
   if (error.code === 'ERR_CANCELED') return true;
-  if (error.name === 'CanceledError') return true;
+  if (error.name === 'CanceledError' || error.name === 'AbortError') return true;
+  try {
+    if (error.config?.signal?.aborted) return true;
+  } catch (_) {}
   const msg = typeof error.message === 'string' ? error.message.toLowerCase() : '';
   return msg.includes('canceled') || msg.includes('cancelled');
 }
@@ -222,7 +239,12 @@ api.interceptors.response.use(
     // Show full-screen overlay for server-down scenarios (skip 401/403 — those redirect)
     // Throttle: only dispatch once per 30s to avoid overlay + toast spam when many requests fail at once
     const status = error.response?.status;
-    if ((status === 0 || isServerUnavailable(status)) && typeof window !== 'undefined' && !isPublicPath()) {
+    if (
+      (status === 0 || isServerUnavailable(status)) &&
+      typeof window !== 'undefined' &&
+      !isPublicPath() &&
+      !_pageUnloading
+    ) {
       const now = Date.now();
       if (now - _lastServerUnavailableDispatch >= _SERVER_UNAVAILABLE_THROTTLE_MS) {
         _lastServerUnavailableDispatch = now;

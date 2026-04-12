@@ -3394,7 +3394,7 @@ def register(router):
                 "burst_tokens": getattr(security_module, "ENDPOINT_RL_BURST_TOKENS", 25),
                 "sustain_window_sec": getattr(security_module, "ENDPOINT_RL_SUSTAIN_WINDOW_SEC", 30),
                 "sustain_min_span_sec": getattr(security_module, "ENDPOINT_RL_SUSTAIN_MIN_SPAN_SEC", 26),
-                "sustain_min_violations": getattr(security_module, "ENDPOINT_RL_SUSTAIN_MIN_COUNT", 60),
+                "sustain_min_violations": getattr(security_module, "ENDPOINT_RL_SUSTAIN_MIN_COUNT", 100),
                 "hard_cooldown_sec_range": [
                     getattr(security_module, "ENDPOINT_RL_HARD_COOLDOWN_MIN_SEC", 15),
                     getattr(security_module, "ENDPOINT_RL_HARD_COOLDOWN_MAX_SEC", 30),
