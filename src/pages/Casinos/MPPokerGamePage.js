@@ -39,6 +39,17 @@ function formatMoneyFull(n) {
   return `$${Math.trunc(num).toLocaleString()}`;
 }
 
+function isPointsTournamentGame(game) {
+  return String(game?.buy_in_currency || 'money').toLowerCase() === 'points';
+}
+
+function formatTournamentPrizeLike(n, game) {
+  const num = Number(n ?? 0);
+  if (Number.isNaN(num)) return isPointsTournamentGame(game) ? '0 pts' : '$0';
+  if (isPointsTournamentGame(game)) return `${Math.trunc(num).toLocaleString()} pts`;
+  return formatMoneyFull(n);
+}
+
 function formatDurationShort(totalSeconds) {
   const s = Math.max(0, Math.floor(Number(totalSeconds) || 0));
   const m = Math.floor(s / 60);
@@ -168,6 +179,7 @@ function MpPokerHandOutcomePanel({
   subtitle,
   tournamentFooter,
   board = [],
+  payoutPoints = false,
 }) {
   if (!results?.length) return null;
   const myResult = results.find((r) => r.user_id === myUserId);
@@ -223,7 +235,12 @@ function MpPokerHandOutcomePanel({
           )}
           {potLabel > 0 && (
             <p className="text-[10px] font-heading mt-1" style={{ color: 'rgba(110,231,183,0.6)' }}>
-              Pot: <span className="font-bold text-green-400">{formatMoneyFull(potLabel)}</span>
+              {payoutPoints ? 'Prize' : 'Pot'}:{' '}
+              <span className="font-bold text-green-400">
+                {payoutPoints
+                  ? `${Math.trunc(potLabel).toLocaleString()} pts`
+                  : formatMoneyFull(potLabel)}
+              </span>
             </p>
           )}
         </div>
@@ -1101,7 +1118,7 @@ export default function MPPokerGamePage() {
             {isTournament && (
               <p className="text-[8px] sm:text-[9px] text-mutedForeground font-heading mt-0.5 max-w-[calc(100vw-4rem)] sm:max-w-none truncate sm:whitespace-normal sm:overflow-visible">
                 Tournament · {tournamentStatus || 'registration'}
-                {' · '}Prize <span className="text-emerald-400 font-bold">{formatMoneyFull(prizePool)}</span>
+                {' · '}Prize <span className="text-emerald-400 font-bold">{formatTournamentPrizeLike(prizePool, game)}</span>
                 {' · '}Blinds <span className="text-primary/80 font-bold">{formatMoneyFull(game?.small_blind || 0)}/{formatMoneyFull(game?.big_blind || 0)}</span>
                 <span className="hidden sm:inline">{' · '}Level {blindLevelIndex + 1}</span>
                 {blindLevelSecondsLeft !== null && tournamentStatus === 'running' && (
@@ -1628,6 +1645,7 @@ export default function MPPokerGamePage() {
           myUserId={myUserId}
           tournamentFooter={false}
           board={board}
+          payoutPoints={isTournament && isPointsTournamentGame(game)}
         />
       )}
 

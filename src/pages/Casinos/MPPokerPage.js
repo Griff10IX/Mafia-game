@@ -22,6 +22,22 @@ function formatMoney(n) {
   return `$${Math.trunc(num).toLocaleString()}`;
 }
 
+function formatPoints(n) {
+  const num = Number(n ?? 0);
+  if (Number.isNaN(num)) return '0 pts';
+  return `${Math.trunc(num).toLocaleString()} pts`;
+}
+
+function tournamentPrizeLabel(buyIn, maxPlayers, currency) {
+  const bi = Number(buyIn) || 0;
+  const cap = Number(maxPlayers) || 0;
+  if (bi <= 0 || cap <= 0) return null;
+  const full = bi * cap;
+  return currency === 'points'
+    ? `If full (${cap} players), prize pool ${full.toLocaleString()} pts`
+    : `If full (${cap} players), prize pool ${formatMoney(full)}`;
+}
+
 export default function MPPokerPage() {
   const navigate = useNavigate();
   const [games, setGames] = useState([]);
@@ -38,6 +54,7 @@ export default function MPPokerPage() {
   const [tournamentCreateOpen, setTournamentCreateOpen] = useState(false);
   const [tournamentMaxPlayers, setTournamentMaxPlayers] = useState(6);
   const [tournamentBuyIn, setTournamentBuyIn] = useState('100000');
+  const [tournamentBuyInCurrency, setTournamentBuyInCurrency] = useState('money');
   const [tournamentCreating, setTournamentCreating] = useState(false);
   const [joiningTournamentId, setJoiningTournamentId] = useState(null);
   const [vsDealerOpen, setVsDealerOpen] = useState(false);
@@ -166,6 +183,7 @@ export default function MPPokerPage() {
       const res = await api.post('/casino/mp-poker/tournaments', {
         max_players: Math.max(4, Math.min(9, tournamentMaxPlayers)),
         buy_in: buyIn,
+        buy_in_currency: tournamentBuyInCurrency === 'points' ? 'points' : 'money',
       });
       await refreshUser();
       const approvalStatus = res.data?.game?.approval_status;
@@ -570,7 +588,7 @@ export default function MPPokerPage() {
             <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center gap-1.5">
               <Trophy size={12} /> Poker Tournaments
             </h2>
-            <p className="text-[9px] text-mutedForeground font-heading mt-0.5">4–9 players · freezeout · escalating blinds</p>
+            <p className="text-[9px] text-mutedForeground font-heading mt-0.5">4–9 players · freezeout · escalating blinds · cash or points buy-in</p>
           </div>
           <button
             type="button"
@@ -590,10 +608,35 @@ export default function MPPokerPage() {
               </select>
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-20 shrink-0">Buy-in ($)</label>
-              <FormattedNumberInput value={tournamentBuyIn} onChange={setTournamentBuyIn} placeholder="100,000"
-                className="flex-1 px-2 py-1.5 rounded-lg font-heading text-sm focus:outline-none" style={inputStyle} />
+              <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-20 shrink-0">Buy-in</label>
+              <select
+                value={tournamentBuyInCurrency}
+                onChange={(e) => setTournamentBuyInCurrency(e.target.value)}
+                className="mp-poker-select shrink-0 px-2 py-1.5 rounded-lg font-heading text-xs focus:outline-none"
+                style={selectStyle}
+              >
+                <option value="money">Cash ($)</option>
+                <option value="points">Points</option>
+              </select>
+              <FormattedNumberInput
+                value={tournamentBuyIn}
+                onChange={setTournamentBuyIn}
+                placeholder={tournamentBuyInCurrency === 'points' ? '2,000' : '100,000'}
+                className="flex-1 min-w-0 px-2 py-1.5 rounded-lg font-heading text-sm focus:outline-none"
+                style={inputStyle}
+              />
             </div>
+            {(() => {
+              const hint = tournamentPrizeLabel(
+                parseInt(String(tournamentBuyIn).replace(/\D/g, ''), 10) || 0,
+                tournamentMaxPlayers,
+                tournamentBuyInCurrency,
+              );
+              if (!hint) return null;
+              return (
+                <p className="text-[8px] font-heading text-mutedForeground pl-[5.5rem]">{hint}</p>
+              );
+            })()}
             <button type="button" onClick={handleCreateTournament} disabled={tournamentCreating}
               className="w-full py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase disabled:opacity-50 active:scale-[0.97] transition-all mt-1"
               style={{ background: 'linear-gradient(180deg,var(--noir-primary),#a08020)', borderColor: 'var(--noir-primary-bright)', color: '#1a1200' }}>
@@ -654,6 +697,8 @@ export default function MPPokerPage() {
             </div>
           ) : (
             tournaments.map((t, idx) => {
+              const isPointsTournament = String(t.buy_in_currency || 'money').toLowerCase() === 'points';
+              const fmtEntry = (n) => (isPointsTournament ? formatPoints(n) : formatMoney(n));
               const isIn = (t.player_ids || []).includes(myUserId);
               const isCreator = t.creator_id === myUserId;
               const full = (t.player_count || 0) >= (t.max_players || 9);
@@ -680,8 +725,8 @@ export default function MPPokerPage() {
                         </span>
                       </div>
                       <div className="text-[9px] text-mutedForeground font-heading mt-0.5 flex items-center gap-3 flex-wrap">
-                        <span>Buy-in <span className="text-primary font-bold">{formatMoney(t.buy_in)}</span></span>
-                        <span>Prize <span className="text-primary font-bold">{formatMoney(t.prize_pool)}</span></span>
+                        <span>Buy-in <span className="text-primary font-bold">{fmtEntry(t.buy_in)}</span></span>
+                        <span>Prize <span className="text-primary font-bold">{fmtEntry(t.prize_pool)}</span></span>
                         <span>Blinds <span className="text-primary/80">{formatMoney(t.small_blind)}/{formatMoney(t.big_blind)}</span></span>
                         <span>{t.player_count}/{t.max_players}</span>
                       </div>

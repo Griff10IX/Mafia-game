@@ -1,7 +1,7 @@
 # Multiplayer Poker (Texas Hold'em): vs dealer (1v1 bot) and vs players (create/join tables)
 # Real rules: blinds, preflop, flop, turn, river, betting rounds, showdown
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Literal, Optional, Tuple
 import secrets
 _rng = secrets.SystemRandom()
 import uuid
@@ -11,6 +11,7 @@ from pydantic import BaseModel, field_validator
 from fastapi import Depends, HTTPException, Body
 
 from server import db, get_current_user, get_current_user_verified, log_gambling, _is_admin, _is_moderator, send_notification
+from utils.point_provenance import log_points_event
 from routers.casinos.mp_poker_flow import (
     classify_player_action as _classify_player_action,
     is_betting_round_complete as _is_betting_round_complete,
@@ -307,6 +308,7 @@ class PokerCreateRequest(BaseModel):
 class PokerTournamentCreateRequest(BaseModel):
     max_players: int = 6
     buy_in: int = 100_000
+    buy_in_currency: Literal["money", "points"] = "money"
 
     @field_validator("max_players")
     @classmethod
@@ -366,6 +368,30 @@ def _parse_iso_utc(value: Any) -> Optional[datetime]:
 
 def _is_tournament_game(g: dict) -> bool:
     return (g or {}).get("mode") == "tournament"
+
+
+def _tournament_buy_in_currency(g: Optional[dict]) -> str:
+    """Stored on tournament doc: 'money' (default) or 'points'."""
+    if not g:
+        return "money"
+    raw = g.get("buy_in_currency") or g.get("buy_in_type") or "money"
+    s = str(raw).strip().lower()
+    if s in ("points", "point", "pts"):
+        return "points"
+    return "money"
+
+
+async def _tournament_refund_user(uid: str, amount: int, currency: str) -> None:
+    if not uid or amount <= 0:
+        return
+    if currency == "points":
+        await db.users.update_one({"id": uid}, {"$inc": {"points": amount}})
+        try:
+            await log_points_event(db, user_id=uid, points=amount, event_type="mp_poker_tournament_refund", meta={"amount": amount})
+        except Exception:
+            pass
+    else:
+        await db.users.update_one({"id": uid}, {"$inc": {"money": amount}})
 
 
 def _safe_tournament_blind(level_idx: int) -> Tuple[int, int]:
@@ -949,8 +975,22 @@ def register(router):
         now_iso = datetime.now(timezone.utc).isoformat()
         winner_uid = (winner or {}).get("user_id")
         winner_name = (winner or {}).get("username")
+        currency = _tournament_buy_in_currency(g)
         if winner_uid and prize_pool > 0:
-            await db.users.update_one({"id": winner_uid}, {"$inc": {"money": prize_pool}})
+            if currency == "points":
+                await db.users.update_one({"id": winner_uid}, {"$inc": {"points": prize_pool}})
+                try:
+                    await log_points_event(
+                        db,
+                        user_id=winner_uid,
+                        points=prize_pool,
+                        event_type="mp_poker_tournament_payout",
+                        meta={"game_id": game_id, "mode": "tournament"},
+                    )
+                except Exception:
+                    pass
+            else:
+                await db.users.update_one({"id": winner_uid}, {"$inc": {"money": prize_pool}})
             await log_gambling(
                 winner_uid,
                 winner_name or "?",
@@ -960,6 +1000,7 @@ def register(router):
                     "mode": "tournament",
                     "game_id": game_id,
                     "winnings": prize_pool,
+                    "buy_in_currency": currency,
                 },
             )
             bonus_cfg = g.get("admin_bonus_reward") if isinstance(g.get("admin_bonus_reward"), dict) else {}
@@ -1059,6 +1100,7 @@ def register(router):
                 "creator_username": 1,
                 "max_players": 1,
                 "buy_in": 1,
+                "buy_in_currency": 1,
                 "player_count": 1,
                 "players": 1,
                 "status": 1,
@@ -1087,6 +1129,7 @@ def register(router):
                     "creator_username": g.get("creator_username"),
                     "max_players": g.get("max_players"),
                     "buy_in": g.get("buy_in"),
+                    "buy_in_currency": _tournament_buy_in_currency(g),
                     "player_count": len(players),
                     "player_ids": [p.get("user_id") for p in players if p.get("user_id")],
                     "status": g.get("status"),
@@ -1143,6 +1186,9 @@ def register(router):
         username = current_user.get("username") or "Player"
         buy_in = int(request.buy_in)
         max_players = int(request.max_players)
+        currency = str(request.buy_in_currency or "money").strip().lower()
+        if currency not in ("money", "points"):
+            currency = "money"
         settings = await _get_tournament_settings()
         start_iso, end_iso = _today_utc_iso_bounds()
         created_today = await db.mp_poker_games.count_documents(
@@ -1150,12 +1196,20 @@ def register(router):
         )
         if created_today >= int(settings.get("tournament_limit_per_day") or 10):
             raise HTTPException(status_code=400, detail="Daily tournament limit reached")
-        deduct = await db.users.update_one(
-            {"id": uid, "money": {"$gte": buy_in}},
-            {"$inc": {"money": -buy_in}},
-        )
-        if deduct.modified_count == 0:
-            raise HTTPException(status_code=400, detail="Insufficient funds")
+        if currency == "points":
+            deduct = await db.users.update_one(
+                {"id": uid, "points": {"$gte": buy_in}},
+                {"$inc": {"points": -buy_in}},
+            )
+            if deduct.modified_count == 0:
+                raise HTTPException(status_code=400, detail="Insufficient points")
+        else:
+            deduct = await db.users.update_one(
+                {"id": uid, "money": {"$gte": buy_in}},
+                {"$inc": {"money": -buy_in}},
+            )
+            if deduct.modified_count == 0:
+                raise HTTPException(status_code=400, detail="Insufficient funds")
         game_id = str(uuid.uuid4())
         now_iso = datetime.now(timezone.utc).isoformat()
         sb, bb = _safe_tournament_blind(0)
@@ -1167,6 +1221,7 @@ def register(router):
             "creator_username": username,
             "max_players": max_players,
             "buy_in": buy_in,
+            "buy_in_currency": currency,
             "extra_prize": 0,
             "prize_pool": buy_in,
             "pot": 0,
@@ -1207,8 +1262,24 @@ def register(router):
             "chat": [],
             "admin_bonus_reward": None,
         }
-        await log_gambling(uid, username, "mp_poker", {"action": "create", "game_id": game_id, "buy_in": buy_in, "mode": "tournament"})
+        await log_gambling(
+            uid,
+            username,
+            "mp_poker",
+            {"action": "create", "game_id": game_id, "buy_in": buy_in, "mode": "tournament", "buy_in_currency": currency},
+        )
         await db.mp_poker_games.insert_one(doc)
+        if currency == "points":
+            try:
+                await log_points_event(
+                    db,
+                    user_id=uid,
+                    points=-buy_in,
+                    event_type="mp_poker_tournament_buy_in",
+                    meta={"action": "create", "game_id": game_id},
+                )
+            except Exception:
+                pass
         return {"game_id": game_id, "game": {k: v for k, v in doc.items() if k != "_id"}}
 
     @router.post("/casino/mp-poker/tournaments/{game_id}/join")
@@ -1222,12 +1293,21 @@ def register(router):
             raise HTTPException(status_code=400, detail="Tournament is not open for registration")
         max_players = int(g.get("max_players") or MP_POKER_TOURNAMENT_MAX_PLAYERS)
         buy_in = int(g.get("buy_in") or 0)
-        deduct = await db.users.update_one(
-            {"id": uid, "money": {"$gte": buy_in}},
-            {"$inc": {"money": -buy_in}},
-        )
-        if deduct.modified_count == 0:
-            raise HTTPException(status_code=400, detail="Insufficient funds")
+        currency = _tournament_buy_in_currency(g)
+        if currency == "points":
+            deduct = await db.users.update_one(
+                {"id": uid, "points": {"$gte": buy_in}},
+                {"$inc": {"points": -buy_in}},
+            )
+            if deduct.modified_count == 0:
+                raise HTTPException(status_code=400, detail="Insufficient points")
+        else:
+            deduct = await db.users.update_one(
+                {"id": uid, "money": {"$gte": buy_in}},
+                {"$inc": {"money": -buy_in}},
+            )
+            if deduct.modified_count == 0:
+                raise HTTPException(status_code=400, detail="Insufficient funds")
         new_player = {
             "user_id": uid,
             "username": username,
@@ -1250,7 +1330,7 @@ def register(router):
             {"$push": {"players": new_player}, "$inc": {"prize_pool": buy_in}},
         )
         if join_result.modified_count == 0:
-            await db.users.update_one({"id": uid}, {"$inc": {"money": buy_in}})
+            await _tournament_refund_user(uid, buy_in, currency)
             raise HTTPException(status_code=400, detail="Could not join (tournament full, already registered, or closed)")
         g = await db.mp_poker_games.find_one({"id": game_id})
         players = list(g.get("players") or [])
@@ -1258,7 +1338,23 @@ def register(router):
             p["seat_index"] = i
         phase = "ready" if len(players) >= MP_POKER_TOURNAMENT_MIN_PLAYERS else "lobby"
         await db.mp_poker_games.update_one({"id": game_id}, {"$set": {"players": players, "phase": phase}})
-        await log_gambling(uid, username, "mp_poker", {"action": "join", "game_id": game_id, "buy_in": buy_in, "mode": "tournament"})
+        await log_gambling(
+            uid,
+            username,
+            "mp_poker",
+            {"action": "join", "game_id": game_id, "buy_in": buy_in, "mode": "tournament", "buy_in_currency": currency},
+        )
+        if currency == "points":
+            try:
+                await log_points_event(
+                    db,
+                    user_id=uid,
+                    points=-buy_in,
+                    event_type="mp_poker_tournament_buy_in",
+                    meta={"action": "join", "game_id": game_id},
+                )
+            except Exception:
+                pass
         g = await db.mp_poker_games.find_one({"id": game_id})
         return {k: v for k, v in (g or {}).items() if k != "_id"}
 
@@ -1316,10 +1412,12 @@ def register(router):
             raise HTTPException(status_code=400, detail="No inactive players to remind (everyone is ready, or only you are seated)")
         host_name = (g.get("creator_username") or "The host").strip() or "The host"
         buy_in = int(g.get("buy_in") or 0)
+        cur = _tournament_buy_in_currency(g)
+        buy_label = f"{buy_in:,} pts" if cur == "points" else f"${buy_in:,}"
         title = "Poker tournament — ready up"
         msg = (
             f"{host_name} is waiting: open Casinos → MP Poker → this tournament and tap I'm Ready so play can start. "
-            f"Buy-in ${buy_in:,}."
+            f"Buy-in {buy_label}."
         )
         for p in targets:
             await send_notification(p.get("user_id"), title, msg, "system", category="casino")
@@ -1413,10 +1511,11 @@ def register(router):
             raise HTTPException(status_code=400, detail="Tournament is not pending")
         players = list(g.get("players") or [])
         buy_in = int(g.get("buy_in") or 0)
+        currency = _tournament_buy_in_currency(g)
         for p in players:
             uid = (p.get("user_id") or "").strip()
             if uid and buy_in > 0:
-                await db.users.update_one({"id": uid}, {"$inc": {"money": buy_in}})
+                await _tournament_refund_user(uid, buy_in, currency)
         await db.mp_poker_games.update_one(
             {"id": game_id},
             {
@@ -1586,6 +1685,7 @@ def register(router):
             raise HTTPException(status_code=400, detail="Tournament is already closed")
         players = list(g.get("players") or [])
         buy_in = int(g.get("buy_in") or 0)
+        currency = _tournament_buy_in_currency(g)
         refunded_users = []
         seen = set()
         if buy_in > 0:
@@ -1594,7 +1694,7 @@ def register(router):
                 if not uid or uid in seen:
                     continue
                 seen.add(uid)
-                await db.users.update_one({"id": uid}, {"$inc": {"money": buy_in}})
+                await _tournament_refund_user(uid, buy_in, currency)
                 refunded_users.append(uid)
         now_iso = datetime.now(timezone.utc).isoformat()
         await db.mp_poker_games.update_one(
@@ -1751,12 +1851,21 @@ def register(router):
         max_players = g.get("max_players", 6)
         buy_in = int(g.get("buy_in") or 0)
         is_tournament = _is_tournament_game(g)
-        join_deduct = await db.users.update_one(
-            {"id": uid, "money": {"$gte": buy_in}},
-            {"$inc": {"money": -buy_in}},
-        )
-        if join_deduct.modified_count == 0:
-            raise HTTPException(status_code=400, detail="Insufficient funds")
+        currency = _tournament_buy_in_currency(g) if is_tournament else "money"
+        if is_tournament and currency == "points":
+            join_deduct = await db.users.update_one(
+                {"id": uid, "points": {"$gte": buy_in}},
+                {"$inc": {"points": -buy_in}},
+            )
+            if join_deduct.modified_count == 0:
+                raise HTTPException(status_code=400, detail="Insufficient points")
+        else:
+            join_deduct = await db.users.update_one(
+                {"id": uid, "money": {"$gte": buy_in}},
+                {"$inc": {"money": -buy_in}},
+            )
+            if join_deduct.modified_count == 0:
+                raise HTTPException(status_code=400, detail="Insufficient funds")
         new_player = {
             "user_id": uid,
             "username": username,
@@ -1782,7 +1891,10 @@ def register(router):
             join_update,
         )
         if join_result.modified_count == 0:
-            await db.users.update_one({"id": uid}, {"$inc": {"money": buy_in}})
+            if is_tournament:
+                await _tournament_refund_user(uid, buy_in, currency)
+            else:
+                await db.users.update_one({"id": uid}, {"$inc": {"money": buy_in}})
             raise HTTPException(status_code=400, detail="Could not join (game full, already joined, or closed)")
         g = await db.mp_poker_games.find_one({"id": game_id})
         players = list(g.get("players") or [])
@@ -1791,7 +1903,29 @@ def register(router):
         min_players = MP_POKER_TOURNAMENT_MIN_PLAYERS if is_tournament else 2
         phase = "ready" if len(players) >= min_players else "lobby"
         await db.mp_poker_games.update_one({"id": game_id}, {"$set": {"players": players, "phase": phase}})
-        await log_gambling(uid, username, "mp_poker", {"action": "join", "game_id": game_id, "buy_in": buy_in, "mode": "tournament" if is_tournament else "vs_players"})
+        await log_gambling(
+            uid,
+            username,
+            "mp_poker",
+            {
+                "action": "join",
+                "game_id": game_id,
+                "buy_in": buy_in,
+                "mode": "tournament" if is_tournament else "vs_players",
+                **({"buy_in_currency": currency} if is_tournament else {}),
+            },
+        )
+        if is_tournament and currency == "points":
+            try:
+                await log_points_event(
+                    db,
+                    user_id=uid,
+                    points=-buy_in,
+                    event_type="mp_poker_tournament_buy_in",
+                    meta={"action": "join", "game_id": game_id},
+                )
+            except Exception:
+                pass
         g = await db.mp_poker_games.find_one({"id": game_id})
         return {k: v for k, v in g.items() if k != "_id"}
 

@@ -21,6 +21,7 @@ import ServerUnavailableOverlay from "./components/ServerUnavailableOverlay";
 import { ThemeProvider } from "./context/ThemeContext";
 import { initToastObservability } from "./components/ui/sonner";
 import "@/App.css";
+import { prefetchDashboardData } from "./utils/dashboardSessionCache";
 
 // Lazy-load authenticated pages to shrink initial bundle
 // Account pages
@@ -198,24 +199,12 @@ function App() {
     initToastObservability();
   }, []);
 
+  // Preload dashboard chunk + same API bundle the page uses, so first visit is mostly cache + cached JS.
   useEffect(() => {
     if (!isAuthenticated) return undefined;
-    let idleId = null;
-    let timeoutId = null;
-    const warm = () => {
-      import("./pages/Account/Dashboard");
-    };
-    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
-      idleId = window.requestIdleCallback(warm, { timeout: 3000 });
-    } else {
-      timeoutId = window.setTimeout(warm, 500);
-    }
-    return () => {
-      if (idleId != null && typeof window !== "undefined" && "cancelIdleCallback" in window) {
-        window.cancelIdleCallback(idleId);
-      }
-      if (timeoutId != null) window.clearTimeout(timeoutId);
-    };
+    import("./pages/Account/Dashboard");
+    prefetchDashboardData({ force: true });
+    return undefined;
   }, [isAuthenticated]);
 
   useEffect(() => {

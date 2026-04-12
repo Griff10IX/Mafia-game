@@ -18,6 +18,12 @@ import {
 } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../utils/api';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
+import {
+  DASHBOARD_SESSION_CACHE_KEY,
+  DEFAULT_AT_A_GLANCE_STATS,
+  DEFAULT_SECTION_ORDER,
+  mergeDashboardPreferences,
+} from '../../utils/dashboardSessionCache';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '../../components/ui/sheet';
@@ -193,11 +199,6 @@ const QUICK_LINKS = [
   { to: '/account/autorank', icon: Bot, label: 'Auto Rank' },
 ];
 
-const DEFAULT_SECTION_ORDER = [
-  'rank_progress', 'rewards_objectives', 'notifications_event',
-  'bodyguards_properties', 'auto_rank', 'at_a_glance', 'go_to',
-];
-const DEFAULT_AT_A_GLANCE_STATS = ['money', 'rank', 'wealth', 'rp', 'location', 'kills'];
 const SECTION_LABELS = {
   rank_progress: 'Rank Progress',
   rewards_objectives: 'Rewards & Objectives',
@@ -216,13 +217,11 @@ const STAT_OPTIONS = [
   { id: 'kills', label: 'Kills' },
 ];
 
-const DASHBOARD_CACHE_KEY = 'mafia_dashboard_v1';
-
 export default function Dashboard() {
-  const [user, setUser] = useState(() => readSessionJson(DASHBOARD_CACHE_KEY)?.user ?? null);
-  const [rankProgress, setRankProgress] = useState(() => readSessionJson(DASHBOARD_CACHE_KEY)?.rankProgress ?? null);
+  const [user, setUser] = useState(() => readSessionJson(DASHBOARD_SESSION_CACHE_KEY)?.user ?? null);
+  const [rankProgress, setRankProgress] = useState(() => readSessionJson(DASHBOARD_SESSION_CACHE_KEY)?.rankProgress ?? null);
   const [preferences, setPreferences] = useState(() => {
-    const p = readSessionJson(DASHBOARD_CACHE_KEY)?.preferences;
+    const p = readSessionJson(DASHBOARD_SESSION_CACHE_KEY)?.preferences;
     return {
       section_order: p?.section_order || DEFAULT_SECTION_ORDER,
       at_a_glance_visible: p?.at_a_glance_visible !== false,
@@ -233,7 +232,7 @@ export default function Dashboard() {
   const [saving, setSaving] = useState(false);
   const [editPrefs, setEditPrefs] = useState(null);
   const [civilianProtection, setCivilianProtection] = useState(
-    () => readSessionJson(DASHBOARD_CACHE_KEY)?.civilianProtection ?? null
+    () => readSessionJson(DASHBOARD_SESSION_CACHE_KEY)?.civilianProtection ?? null
   );
   const [cpPanelOpen, setCpPanelOpen] = useState(true);
   const [cpTick, setCpTick] = useState(0);
@@ -251,29 +250,12 @@ export default function Dashboard() {
       setUser(userRes.data);
       setRankProgress(progressRes.data);
       setCivilianProtection(civRes?.data ?? null);
-      let storedPrefs = {
-        section_order: DEFAULT_SECTION_ORDER,
-        at_a_glance_visible: true,
-        at_a_glance_stats: [...DEFAULT_AT_A_GLANCE_STATS],
-      };
+      const prev = readSessionJson(DASHBOARD_SESSION_CACHE_KEY);
+      const storedPrefs = mergeDashboardPreferences(dashRes?.data ?? null, prev);
       if (dashRes?.data) {
-        storedPrefs = {
-          section_order: dashRes.data.section_order || DEFAULT_SECTION_ORDER,
-          at_a_glance_visible: dashRes.data.at_a_glance_visible !== false,
-          at_a_glance_stats: dashRes.data.at_a_glance_stats || DEFAULT_AT_A_GLANCE_STATS,
-        };
         setPreferences(storedPrefs);
-      } else {
-        const prev = readSessionJson(DASHBOARD_CACHE_KEY);
-        if (prev?.preferences) {
-          storedPrefs = {
-            section_order: prev.preferences.section_order || DEFAULT_SECTION_ORDER,
-            at_a_glance_visible: prev.preferences.at_a_glance_visible !== false,
-            at_a_glance_stats: prev.preferences.at_a_glance_stats || DEFAULT_AT_A_GLANCE_STATS,
-          };
-        }
       }
-      writeSessionJson(DASHBOARD_CACHE_KEY, {
+      writeSessionJson(DASHBOARD_SESSION_CACHE_KEY, {
         user: userRes.data,
         rankProgress: progressRes.data,
         preferences: storedPrefs,
@@ -377,9 +359,9 @@ export default function Dashboard() {
         at_a_glance_stats: res.data.at_a_glance_stats,
       };
       setPreferences(nextPrefs);
-      const cur = readSessionJson(DASHBOARD_CACHE_KEY);
+      const cur = readSessionJson(DASHBOARD_SESSION_CACHE_KEY);
       if (cur && typeof cur === 'object') {
-        writeSessionJson(DASHBOARD_CACHE_KEY, { ...cur, preferences: nextPrefs });
+        writeSessionJson(DASHBOARD_SESSION_CACHE_KEY, { ...cur, preferences: nextPrefs });
       }
       toast.success('Dashboard layout saved');
       setSettingsOpen(false);
