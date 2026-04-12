@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import { MapPin, User, Clock, Coins, LogIn } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
+import { removeCasinoBuyBack } from '../../utils/removeCasinoBuyBack';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
 
@@ -450,6 +451,24 @@ export default function SlotsPage() {
     }
   };
 
+  const removeBuyBackReward = async () => {
+    const state = config?.current_state;
+    if (!state || ownerActionLoading) return;
+    if (Number(ownership?.buy_back_reward ?? 0) <= 0) return;
+    setOwnerActionLoading(true);
+    try {
+      await removeCasinoBuyBack('slots', { state });
+      toast.success('Buy-back removed. Held points were returned to your balance.');
+      setOwnerBuyBack('0');
+      fetchOwnership();
+      refreshUser();
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || 'Failed');
+    } finally {
+      setOwnerActionLoading(false);
+    }
+  };
+
   const relinquish = async () => {
     if (!window.confirm('Give up the slots here? You will not be able to enter the next draw for 3 hours.')) return;
     setOwnerActionLoading(true);
@@ -626,9 +645,10 @@ export default function SlotsPage() {
                   value={ownerBuyBack}
                   onChange={setOwnerBuyBack}
                   placeholder="0"
-                  className="w-20 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs font-heading text-foreground focus:border-primary/50 focus:outline-none"
+                  className="w-20 min-w-[5rem] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs font-heading text-foreground focus:border-primary/50 focus:outline-none"
                 />
-                <button type="button" onClick={setBuyBackReward} disabled={ownerActionLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50">Set</button>
+                <button type="button" onClick={setBuyBackReward} disabled={ownerActionLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 shrink-0">Set</button>
+                <button type="button" onClick={removeBuyBackReward} disabled={ownerActionLoading || Number(ownership?.buy_back_reward ?? 0) <= 0} className="bg-zinc-800/80 text-zinc-300 rounded px-2 py-1 text-[10px] font-bold uppercase border border-zinc-600 hover:bg-zinc-800 disabled:opacity-50 shrink-0" title="Return held points">Remove</button>
               </div>
               <div className="flex gap-2">
                 <button type="button" onClick={resetProfit} disabled={ownerActionLoading} className="text-[10px] font-heading text-amber-400 hover:text-amber-300 border border-amber-500/40 rounded px-2 py-1">Reset Profit</button>

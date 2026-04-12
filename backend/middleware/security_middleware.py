@@ -115,7 +115,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         username = current_user.get("username", "Unknown")
         
         try:
-            # 1. Check for request spam (10+ req/sec)
+            # 1. Check for request spam (mutating only; threshold in security.MAX_REQUESTS_PER_SECOND)
             referer = request.headers.get("referer") or request.headers.get("referrer") or ""
             if await self.check_request_spam(
                 user_id, username, self.db,
@@ -149,34 +149,23 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                                 "cooldown_seconds": cooldown,
                             }
                         )
-            # 3. Endpoint rate limits: soft block has no short punitive cooldown; only hard lockout uses long 15–30s
+            # 3. Endpoint rate limits: only hard lockout (rate_limit_hard_until) returns 429; empty bucket does not block
             if request.method not in ("GET", "HEAD", "OPTIONS"):
                 rl_out = await self.check_endpoint_rate_limit(path, user_id, username, self.db)
                 if rl_out.blocked:
                     cd = rl_out.cooldown_seconds
-                    hard = rl_out.is_hard_cooldown_response
                     logger.warning(
-                        "RATE LIMIT: %s - %s (cooldown %ss%s)",
+                        "RATE LIMIT (hard): %s - %s (cooldown %ss)",
                         username,
                         path,
                         cd,
-                        ", hard lockout" if hard else "",
                     )
-                    if hard:
-                        msg = f"Too many repeated rate limits. Please wait {cd} seconds."
-                        content = {
-                            "detail": msg,
-                            "is_cooldown": True,
-                            "cooldown_seconds": cd,
-                            "endpoint_rate_limit_hard": True,
-                        }
-                    else:
-                        content = {
-                            "detail": "Rate limit exceeded. Please slow down.",
-                            "is_cooldown": False,
-                            "cooldown_seconds": 0,
-                            "endpoint_rate_limit_hard": False,
-                        }
+                    content = {
+                        "detail": f"Too many repeated rate limits. Please wait {cd} seconds.",
+                        "is_cooldown": True,
+                        "cooldown_seconds": cd,
+                        "endpoint_rate_limit_hard": True,
+                    }
                     return JSONResponse(status_code=429, content=content)
 
         except Exception as e:

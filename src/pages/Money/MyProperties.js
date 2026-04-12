@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Building2, Dice5, CircleDot, Spade, Trophy, Plane, Factory, Link as LinkIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import api from '../../utils/api';
+import api, { refreshUser } from '../../utils/api';
+import { removeCasinoBuyBack } from '../../utils/removeCasinoBuyBack';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -146,6 +147,24 @@ export default function MyProperties() {
       await api.post(`/casino/${c.type}/set-buy-back-reward`, payload);
       toast.success('Buy-back reward updated');
       fetchMyProperties();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCasinoRemoveBuyBack = async () => {
+    const c = data.casino;
+    if (!c || saving || !CASINO_TYPES_WITH_BUY_BACK.includes(c.type)) return;
+    if (Number(c.buy_back_reward ?? 0) <= 0) return;
+    setSaving(true);
+    try {
+      await removeCasinoBuyBack(c.type, c.type === 'slots' ? { state: c.city } : { city: c.city });
+      toast.success('Buy-back removed. Held points were returned to your balance.');
+      setCasinoBuyBack('0');
+      fetchMyProperties();
+      refreshUser();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed');
     } finally {
@@ -443,12 +462,15 @@ export default function MyProperties() {
                         placeholder="0"
                         className="flex-1 min-w-20 px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-sm"
                       />
-                      <button type="button" onClick={handleCasinoSetBuyBack} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading uppercase disabled:opacity-50">
+                      <button type="button" onClick={handleCasinoSetBuyBack} disabled={saving} className="px-2 py-1 rounded bg-primary/20 border border-primary/50 text-primary text-xs font-heading uppercase disabled:opacity-50 shrink-0">
                         {saving ? '...' : 'Set'}
+                      </button>
+                      <button type="button" onClick={handleCasinoRemoveBuyBack} disabled={saving || Number(data.casino.buy_back_reward ?? 0) <= 0} className="px-2 py-1 rounded bg-zinc-800/80 border border-zinc-600 text-zinc-300 text-xs font-heading uppercase hover:bg-zinc-800 disabled:opacity-50 shrink-0" title="Return held points">
+                        Remove
                       </button>
                     </div>
                     <p className="text-[10px] text-zinc-500 mt-1 ml-[4.5rem]">
-                      Your points: {(Number(data.points) || 0).toLocaleString()} — buy-back cannot exceed balance.
+                      Your points: {(Number(data.points) || 0).toLocaleString()} — buy-back cannot exceed balance. Use Remove to clear buy-back and return held points.
                     </p>
                   </div>
                 )}

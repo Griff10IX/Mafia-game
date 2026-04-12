@@ -47,13 +47,13 @@ TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', '')
 TELEGRAM_ENABLED = bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID)
 
 # Security thresholds - FOCUS ON SPAM & EXPLOITS, NOT LEGITIMATE HIGH ACTIVITY
-MAX_REQUESTS_PER_SECOND = 10  # Spam detection: 10+ requests per second
+MAX_REQUESTS_PER_SECOND = 20  # Spam detection: more than this many mutating requests in 1s
 MAX_FAILED_ATTACKS_PER_MINUTE = 20  # Bot-like failed attack spam
 MAX_SAME_ACTION_PER_SECOND = 3  # Same endpoint hit 3+ times in 1 second = bot
 
 # Burst detection - catches rapid clicking (e.g. autoclickers or macros)
 BURST_WINDOW_SECONDS = 0.5  # Time window for burst detection
-BURST_MAX_REQUESTS = 10  # Max requests allowed in burst window (10 clicks in 0.5s = 20 clicks/sec)
+BURST_MAX_REQUESTS = 20  # Max mutating requests in burst window (>= this in 0.5s triggers burst_spam)
 
 # Cap per-user request/burst log length (must exceed thresholds above; avoids unbounded memory)
 _SPAM_LOG_MAX = 50
@@ -662,6 +662,14 @@ async def flag_user_suspicious(db, user_id: str, username: str, flag_type: str, 
         logger.exception(f"Failed to flag user {username}: {e}")
 
 
+def _is_auto_rank_control_path(path: str) -> bool:
+    """User-facing Auto Rank prefs/start/stop; do not count toward spam/duplicate (cron uses no JWT)."""
+    p = (path or "")[:400]
+    if not p.startswith("/api"):
+        p = "/api" + p if p.startswith("/") else "/api/" + p
+    return p.startswith("/api/auto-rank/")
+
+
 # Spam detection (not gameplay limits)
 async def check_request_spam(
     user_id: str,
@@ -671,12 +679,14 @@ async def check_request_spam(
     path: str = "",
     referer: Optional[str] = None,
 ) -> bool:
-    """Detect spam: 10+ mutating requests in 1 second OR burst (10+ in 0.5s). GET/HEAD/OPTIONS are skipped so login hydration bursts do not false-positive."""
+    """Detect spam: more than MAX_REQUESTS_PER_SECOND mutating requests in 1s OR burst (>= BURST_MAX_REQUESTS in 0.5s). GET/HEAD/OPTIONS skipped."""
     now = datetime.now(timezone.utc)
     m = (method or "?").upper()[:16]
     if m in ("GET", "HEAD", "OPTIONS"):
         return False
     p = (path or "")[:400]
+    if _is_auto_rank_control_path(p):
+        return False
     ref = (referer or "").strip()[:500]
     entry: Tuple[datetime, str, str, str] = (now, m, p, ref)
 
@@ -746,6 +756,8 @@ async def check_request_spam(
 async def check_duplicate_request(user_id: str, path: str, params_hash: str, db, username: str) -> bool:
     """Detect duplicate requests within configurable window (200-500ms) to reduce false positives from double-clicks."""
     if not DETECT_DUPLICATE_REQUESTS:
+        return False
+    if _is_auto_rank_control_path(path):
         return False
 
     window_sec = DUPLICATE_REQUEST_WINDOW_MS / 1000.0
@@ -847,7 +859,7 @@ GLOBAL_RATE_LIMITS_ENABLED = False
 
 # Token bucket + strict inter-arrival sustain + hard cooldown (endpoint RL; see security_middleware).
 # docs/RATE_LIMITS.md
-ENDPOINT_RL_BURST_TOKENS = 25
+ENDPOINT_RL_BURST_TOKENS = 35
 ENDPOINT_RL_SUSTAIN_WINDOW_SEC = 30
 ENDPOINT_RL_SUSTAIN_MIN_SPAN_SEC = 26
 ENDPOINT_RL_SUSTAIN_MIN_COUNT = 60
@@ -963,7 +975,7 @@ endpoint_rl_bucket_memory: Dict[tuple, dict] = {}
 
 @dataclass
 class EndpointRateLimitOutcome:
-    """Endpoint RL: blocked + cooldown_seconds. Hard lockout only uses long 15–30s; soft blocks use cooldown_seconds=0."""
+    """Endpoint RL: blocked + cooldown_seconds. Only hard lockout (rate_limit_hard_until) returns blocked=True."""
 
     blocked: bool = False
     cooldown_seconds: int = 0
@@ -1009,7 +1021,7 @@ async def _endpoint_rl_memory_consume(
     min_interval_sec: float,
     now: datetime,
 ) -> EndpointRateLimitOutcome:
-    """In-memory token bucket with strict inter-arrival metering. Soft blocks return cooldown_seconds=0 (no short punitive wait)."""
+    """In-memory token bucket + inter-arrival metering. Empty bucket does not 429; sustain violations still feed hard lockout."""
     mem_key = (user_id, key)
     cap = float(ENDPOINT_RL_BURST_TOKENS)
     st = endpoint_rl_bucket_memory.get(mem_key)
@@ -1049,7 +1061,7 @@ async def _endpoint_rl_memory_consume(
         if hu and now < hu:
             cd = max(1, int(math.ceil((hu - now).total_seconds())))
             return EndpointRateLimitOutcome(blocked=True, cooldown_seconds=cd, is_hard_cooldown_response=True)
-    return EndpointRateLimitOutcome(blocked=True, cooldown_seconds=0, is_hard_cooldown_response=False)
+    return EndpointRateLimitOutcome()
 
 
 async def _endpoint_rl_record_violation_and_maybe_arm_hard(
@@ -1187,15 +1199,15 @@ async def _endpoint_rl_consume_db(
         if hu and now < hu:
             cd = max(1, int(math.ceil((hu - now).total_seconds())))
             return EndpointRateLimitOutcome(blocked=True, cooldown_seconds=cd, is_hard_cooldown_response=True)
-        return EndpointRateLimitOutcome(blocked=True, cooldown_seconds=0, is_hard_cooldown_response=False)
+        return EndpointRateLimitOutcome()
 
     return await _endpoint_rl_memory_consume(db, user_id, username, path, key, min_interval_sec, now)
 
 
 async def check_endpoint_rate_limit(path: str, user_id: str, username: str, db) -> EndpointRateLimitOutcome:
     """
-    Per-endpoint token-bucket rate limit (DB-backed). Sub-interval arrivals feed sustain violations;
-    soft blocks use cooldown_seconds=0 (no short punitive wait); hard lockout is 15–30s only.
+    Per-endpoint token-bucket metering (DB-backed). Sub-interval arrivals feed sustain violations.
+    Empty bucket allows the request; only active hard lockout (rate_limit_hard_until) returns HTTP block from this layer.
     """
     if not GLOBAL_RATE_LIMITS_ENABLED:
         return EndpointRateLimitOutcome()
@@ -1271,12 +1283,7 @@ async def rate_limit_dependency(request, current_user: Dict, db):
     
     rl = await check_endpoint_rate_limit(path, user_id, username, db)
     if rl.blocked:
-        if rl.is_hard_cooldown_response:
-            detail = f"Too many repeated rate limits. Please wait {rl.cooldown_seconds} seconds."
-        elif rl.cooldown_seconds > 0:
-            detail = f"Rate limit exceeded. Please wait {rl.cooldown_seconds} seconds."
-        else:
-            detail = "Rate limit exceeded. Please slow down."
+        detail = f"Too many repeated rate limits. Please wait {rl.cooldown_seconds} seconds."
         raise FastAPIHTTPException(status_code=429, detail=detail)
 
 

@@ -32,6 +32,7 @@ Use this when updating [FORUM_FAQ.md](FORUM_FAQ.md) so numbers stay aligned with
 | Dead > Alive, revive, reveal killer | `backend/routers/game/dead_alive.py` → `DEAD_ALIVE_PERCENT`, `TOKEN_RESTORE_PERCENT`, `REVIVE_COST`, `REVEAL_KILLER_COST` |
 | Booze types, capacity, jail on bust | `backend/routers/money/booze_run.py` → `BOOZE_TYPES`, `BOOZE_CAPACITY_*`, `BOOZE_RUN_JAIL_*` |
 | Regular crimes list & ranks | `backend/routers/crime/crimes.py` → crime dicts (`crime1`…`crime8`, prestige crimes) |
+| Prestige crime bonus ranges (in-game cards) | `src/pages/Crime/Crimes.js` → `describePrestigeBonusLines` (mirrors `prestige_bonus` in `crimes.py`) |
 | Organised crime (OC) | `backend/routers/crime/oc.py` → `OC_COOLDOWN_HOURS`, `OC_COOLDOWN_HOURS_REDUCED`, `OC_EQUIPMENT_BY_ID`, `OC_SUCCESS_RATE`, `OC_JAIL_*`, jobs, roles |
 | Crew / family OC cooldown | `backend/routers/game/families.py` → `CREW_OC_COOLDOWN_HOURS`, `CREW_OC_COOLDOWN_HOURS_REDUCED` |
 | GTA options | `backend/routers/cars/gta.py` → `GTA_OPTIONS` (cooldown seconds, jail seconds, success rates) |

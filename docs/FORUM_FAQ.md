@@ -814,6 +814,18 @@ After reaching [b]Godfather[/b], you can prestige up to [b]5 times[/b]. Each lev
 [*][color=#888888]Prestige badge / bragging rights[/color]
 [/list]
 
+[b]Prestige crimes (Crimes page)[/b]
+Open [b]Crime → Crimes[/b]; each prestige level adds one exclusive job (you can run all jobs at or below your prestige). The in-game card lists [b]base cash[/b] (already includes the +10% crime payout on the main roll), [b]10 rank points[/b] on success before perks, and every [b]possible prestige bonus[/b] with ranges.
+
+[list]
+[*][color=#888888][b]P1 — The Syndicate Run[/b] (30m cooldown): [b]30%[/b] chance on success for extra: [b]$125–500[/b] cash, [b]5–20[/b] respect, [b]1–3[/b] moonshine (+10% on that bonus cash)[/color]
+[*][color=#888888][b]P2 — Contraband Courier[/b] (1h): [b]30%[/b] chance for extra: [b]2–5[/b] moonshine, [b]6–19[/b] bullets[/color]
+[*][color=#888888][b]P3 — Black Market Deal[/b] (2h): [b]30%[/b] chance for extra: [b]2–5[/b] moonshine, [b]6–19[/b] bullets, [b]1[/b] molotov — [b]no[/b] store points on this tier[/color]
+[*][color=#888888][b]P4 — The Commission's Work[/b] (4h): [b]Guaranteed[/b] every success; bonus amounts use [b]×0.5[/b] on the table: extra cash [b]~$156–625[/b], respect [b]5–15[/b], moonshine [b]1–4[/b], bullets [b]5–12[/b], [b]store points 1–2[/b], [b]1[/b] molotov (bonus cash also gets +10%)[/color]
+[*][color=#888888][b]P5 — Godfather's Orders[/b] (8h): [b]Guaranteed[/b] every success at [b]×1.0[/b]: extra cash [b]$313–1,250[/b], respect [b]10–30[/b], moonshine [b]3–8[/b], bullets [b]10–25[/b], [b]store points 2–5[/b], [b]2–3[/b] molotovs[/color]
+[/list]
+[color=#888888]Like all crimes, prestige jobs can still roll the global rare extras (e.g. higher loot-piece chance than normal crimes, molotov, ultra-rare token). [b]Store points[/b] from the prestige bonus table are only on [b]P4 and P5[/b].[/color]
+
 [color=#FFD700][b]Missions[/b][/color]
 Story-based challenges with requirements and rewards.
 

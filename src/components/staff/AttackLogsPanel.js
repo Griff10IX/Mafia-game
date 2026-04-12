@@ -36,6 +36,7 @@ export default function AttackLogsPanel({
   const [attackLogsData, setAttackLogsData] = useState(null);
   const [attackLogsLoading, setAttackLogsLoading] = useState(false);
   const [attackLogsLive, setAttackLogsLive] = useState(false);
+  const [attackLogsExcludeNpc, setAttackLogsExcludeNpc] = useState(false);
   const attackLogsDataRef = useRef(null);
   attackLogsDataRef.current = attackLogsData;
   const [attackLogViewRow, setAttackLogViewRow] = useState(null);
@@ -58,6 +59,7 @@ export default function AttackLogsPanel({
     try {
       const params = { limit: attackLogsLimit };
       if (un) params.username = un;
+      if (attackLogsExcludeNpc) params.exclude_target_npc = true;
       const res = await api.get('/admin/attacks/logs', { params });
       const payload = res.data || null;
       setAttackLogsData(payload);
@@ -81,6 +83,7 @@ export default function AttackLogsPanel({
         const params = { limit: since ? 100 : limit };
         if (un) params.username = un;
         if (since) params.since = since;
+        if (attackLogsExcludeNpc) params.exclude_target_npc = true;
         const res = await api.get('/admin/attacks/logs', { params });
         const data = res.data;
         if (!data) return;
@@ -101,7 +104,7 @@ export default function AttackLogsPanel({
     const t = setInterval(run, 5000);
     run();
     return () => clearInterval(t);
-  }, [attackLogsLive, attackLogsUsername, attackLogsLimit]);
+  }, [attackLogsLive, attackLogsUsername, attackLogsLimit, attackLogsExcludeNpc]);
 
   useEffect(() => {
     if (!attackLogViewRow?.id || !attackLogsData?.logs?.length) return;
@@ -141,6 +144,18 @@ export default function AttackLogsPanel({
           />
           Live
         </label>
+        <label
+          className="flex items-center gap-1.5 text-[10px] font-heading text-mutedForeground cursor-pointer"
+          title="Hide hitlist and other NPC targets so the table focuses on PvP. Reload after toggling if data is already loaded."
+        >
+          <input
+            type="checkbox"
+            checked={attackLogsExcludeNpc}
+            onChange={(e) => setAttackLogsExcludeNpc(e.target.checked)}
+            className="rounded border border-input"
+          />
+          Hide NPC / hitlist
+        </label>
         {attackLogsLive && (
           <span className="text-[9px] text-primary font-heading">Refreshing every 5s</span>
         )}
@@ -150,11 +165,13 @@ export default function AttackLogsPanel({
           <p className="text-[10px] font-heading text-primary mb-1">
             {attackLogsData.scope === 'all' || attackLogsData.username == null ? (
               <>
-                Showing: <strong>All players</strong> (most recent first, limit {attackLogsLimit})
+                Showing: <strong>All players</strong> (most recent first, limit {attackLogsLimit}
+                {attackLogsData.exclude_target_npc ? ', NPC/hitlist targets excluded' : ''})
               </>
             ) : (
               <>
                 Attack log for: <strong>{attackLogsData.username}</strong>
+                {attackLogsData.exclude_target_npc ? ' (NPC/hitlist targets excluded)' : ''}
               </>
             )}
           </p>

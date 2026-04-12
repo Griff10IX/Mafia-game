@@ -98,36 +98,67 @@ api.interceptors.response.use(
     }
 
     // ── 429 Rate Limit → global cooldown overlay (NEVER log out) ──
-    // Some endpoints (e.g. boxing fight throttle) return 429 with suppress_global_cooldown so the game rule still applies but we don't show the app-wide "clicking too fast" modal.
+    // Soft endpoint RL returns cooldown_seconds: 0, is_cooldown: false — do not coerce to 15 or show overlay.
+    // Boxing etc. use detail.suppress_global_cooldown with nested message/cooldown_seconds.
     if (error.response?.status === 429) {
       const data = error.response.data || {};
       const rawDetail = data.detail;
       let suppressOverlay = false;
-      let detailStr;
-      let seconds = data.cooldown_seconds != null ? Number(data.cooldown_seconds) : 15;
-      if (seconds < 1 || Number.isNaN(seconds)) seconds = 15;
       if (rawDetail && typeof rawDetail === 'object' && !Array.isArray(rawDetail)) {
         suppressOverlay = Boolean(rawDetail.suppress_global_cooldown);
-        detailStr = typeof rawDetail.message === 'string'
-          ? rawDetail.message
-          : `Rate limited. Please wait ${seconds} seconds.`;
-        if (rawDetail.cooldown_seconds != null) {
+      }
+      const isSoftEndpointRl =
+        data.is_cooldown === false && data.endpoint_rate_limit_hard !== true;
+
+      let seconds;
+      if (isSoftEndpointRl) {
+        seconds = data.cooldown_seconds != null ? Number(data.cooldown_seconds) : 0;
+        if (Number.isNaN(seconds)) seconds = 0;
+      } else {
+        seconds = data.cooldown_seconds != null ? Number(data.cooldown_seconds) : 15;
+        if (rawDetail && typeof rawDetail === 'object' && !Array.isArray(rawDetail) && rawDetail.cooldown_seconds != null) {
           const s = Number(rawDetail.cooldown_seconds);
           if (s >= 1 && !Number.isNaN(s)) seconds = s;
         }
+        if (Number.isNaN(seconds) || seconds < 1) {
+          seconds = suppressOverlay ? 0 : 15;
+        }
+      }
+
+      let detailStr;
+      if (rawDetail && typeof rawDetail === 'object' && !Array.isArray(rawDetail)) {
+        const waitFallback = seconds >= 1 ? seconds : 15;
+        detailStr = typeof rawDetail.message === 'string'
+          ? rawDetail.message
+          : `Rate limited. Please wait ${waitFallback} seconds.`;
       } else if (typeof rawDetail === 'string') {
         detailStr = rawDetail;
       } else {
-        detailStr = `Rate limited. Please wait ${seconds} seconds.`;
+        detailStr =
+          seconds >= 1
+            ? `Rate limited. Please wait ${seconds} seconds.`
+            : isSoftEndpointRl
+              ? 'Rate limit exceeded. Please slow down.'
+              : 'Rate limited. Please wait 15 seconds.';
       }
-      if (!suppressOverlay) {
+
+      const shouldStartGlobalCooldown =
+        !suppressOverlay && !isSoftEndpointRl && seconds >= 1;
+      if (shouldStartGlobalCooldown) {
         _startCooldown(seconds);
       }
+
+      let outCooldown = seconds;
+      if (!shouldStartGlobalCooldown && rawDetail && typeof rawDetail === 'object' && !Array.isArray(rawDetail) && rawDetail.cooldown_seconds != null) {
+        const cs = Number(rawDetail.cooldown_seconds);
+        if (!Number.isNaN(cs)) outCooldown = cs;
+      }
+
       error.response.data = {
         ...data,
         detail: detailStr,
-        is_cooldown: !suppressOverlay,
-        cooldown_seconds: seconds,
+        is_cooldown: shouldStartGlobalCooldown,
+        cooldown_seconds: outCooldown,
       };
       return Promise.reject(error);
     }

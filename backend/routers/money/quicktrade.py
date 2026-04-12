@@ -14,10 +14,13 @@ from server import (
     user_prestige_rank_mult,
     log_activity,
     CAPO_RANK_ID,
+    CASINO_MIN_OWNER_MAX_BET,
     _user_owns_airport,
     _user_owns_bullet_factory,
     send_notification,
     _is_admin,
+    refund_casino_buy_back_escrow_points,
+    refund_and_delete_buy_back_offers_matching,
 )
 from routers.kill.armoury import TOKEN_CONFIG, TOKEN_TYPES
 from utils.point_provenance import log_points_event
@@ -1036,45 +1039,146 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
             f"{buyer_username} bought your listing: {prop.get('name', 'Property')}{loc_suffix} for {sale_price:,} points.",
         )
     prop_type = prop.get("type")
+    seller_id = prop.get("owner_id")
     if prop_type == "casino_dice":
         city = prop.get("location")
         if city:
+            if seller_id:
+                sdoc = await db.dice_ownership.find_one({"city": city}, {"buy_back_points_held": 1})
+                held = int((sdoc or {}).get("buy_back_points_held") or 0)
+                await refund_casino_buy_back_escrow_points(
+                    seller_id, held, event_type="casino_dice", meta={"city": city, "reason": "quicktrade_sale"}
+                )
+                await refund_and_delete_buy_back_offers_matching(
+                    "dice_buy_back_offers",
+                    {"city": city},
+                    points_event_type="casino_dice",
+                    meta_base={"city": city, "reason": "quicktrade_sale"},
+                )
             await db.dice_ownership.update_one(
                 {"city": city},
-                {"$set": {"owner_id": buyer_id, "owner_username": buyer_username}},
-                upsert=True
+                {
+                    "$set": {
+                        "owner_id": buyer_id,
+                        "owner_username": buyer_username,
+                        "max_bet": CASINO_MIN_OWNER_MAX_BET,
+                        "buy_back_reward": 0,
+                        "buy_back_points_held": 0,
+                    }
+                },
+                upsert=True,
             )
     elif prop_type == "casino_rlt":
         city = prop.get("location")
         if city:
+            if seller_id:
+                sdoc = await db.roulette_ownership.find_one({"city": city}, {"buy_back_points_held": 1})
+                held = int((sdoc or {}).get("buy_back_points_held") or 0)
+                await refund_casino_buy_back_escrow_points(
+                    seller_id, held, event_type="casino_roulette", meta={"city": city, "reason": "quicktrade_sale"}
+                )
+                await refund_and_delete_buy_back_offers_matching(
+                    "roulette_buy_back_offers",
+                    {"city": city},
+                    points_event_type="casino_roulette",
+                    meta_base={"city": city, "reason": "quicktrade_sale"},
+                )
             await db.roulette_ownership.update_one(
                 {"city": city},
-                {"$set": {"owner_id": buyer_id, "owner_username": buyer_username}},
-                upsert=True
+                {
+                    "$set": {
+                        "owner_id": buyer_id,
+                        "owner_username": buyer_username,
+                        "max_bet": CASINO_MIN_OWNER_MAX_BET,
+                        "buy_back_reward": 0,
+                        "buy_back_points_held": 0,
+                    }
+                },
+                upsert=True,
             )
     elif prop_type == "casino_blackjack":
         city = prop.get("location")
         if city:
+            if seller_id:
+                sdoc = await db.blackjack_ownership.find_one({"city": city}, {"buy_back_points_held": 1})
+                held = int((sdoc or {}).get("buy_back_points_held") or 0)
+                await refund_casino_buy_back_escrow_points(
+                    seller_id, held, event_type="casino_blackjack", meta={"city": city, "reason": "quicktrade_sale"}
+                )
+                await refund_and_delete_buy_back_offers_matching(
+                    "blackjack_buy_back_offers",
+                    {"city": city},
+                    points_event_type="casino_blackjack",
+                    meta_base={"city": city, "reason": "quicktrade_sale"},
+                )
             await db.blackjack_ownership.update_one(
                 {"city": city},
-                {"$set": {"owner_id": buyer_id, "owner_username": buyer_username}},
-                upsert=True
+                {
+                    "$set": {
+                        "owner_id": buyer_id,
+                        "owner_username": buyer_username,
+                        "max_bet": CASINO_MIN_OWNER_MAX_BET,
+                        "buy_back_reward": 0,
+                        "buy_back_points_held": 0,
+                    }
+                },
+                upsert=True,
             )
     elif prop_type == "casino_horseracing":
         city = prop.get("location")
         if city:
+            if seller_id:
+                sdoc = await db.horseracing_ownership.find_one({"city": city}, {"buy_back_points_held": 1})
+                held = int((sdoc or {}).get("buy_back_points_held") or 0)
+                await refund_casino_buy_back_escrow_points(
+                    seller_id, held, event_type="casino_horseracing", meta={"city": city, "reason": "quicktrade_sale"}
+                )
+                await refund_and_delete_buy_back_offers_matching(
+                    "horseracing_buy_back_offers",
+                    {"city": city},
+                    points_event_type="casino_horseracing",
+                    meta_base={"city": city, "reason": "quicktrade_sale"},
+                )
             await db.horseracing_ownership.update_one(
                 {"city": city},
-                {"$set": {"owner_id": buyer_id, "owner_username": buyer_username}},
-                upsert=True
+                {
+                    "$set": {
+                        "owner_id": buyer_id,
+                        "owner_username": buyer_username,
+                        "max_bet": CASINO_MIN_OWNER_MAX_BET,
+                        "buy_back_reward": 0,
+                        "buy_back_points_held": 0,
+                    }
+                },
+                upsert=True,
             )
     elif prop_type == "casino_videopoker":
         city = prop.get("location")
         if city:
+            if seller_id:
+                sdoc = await db.videopoker_ownership.find_one({"city": city}, {"buy_back_points_held": 1})
+                held = int((sdoc or {}).get("buy_back_points_held") or 0)
+                await refund_casino_buy_back_escrow_points(
+                    seller_id, held, event_type="casino_video_poker", meta={"city": city, "reason": "quicktrade_sale"}
+                )
+                await refund_and_delete_buy_back_offers_matching(
+                    "videopoker_buy_back_offers",
+                    {"city": city},
+                    points_event_type="casino_video_poker",
+                    meta_base={"city": city, "reason": "quicktrade_sale"},
+                )
             await db.videopoker_ownership.update_one(
                 {"city": city},
-                {"$set": {"owner_id": buyer_id, "owner_username": buyer_username}},
-                upsert=True
+                {
+                    "$set": {
+                        "owner_id": buyer_id,
+                        "owner_username": buyer_username,
+                        "max_bet": CASINO_MIN_OWNER_MAX_BET,
+                        "buy_back_reward": 0,
+                        "buy_back_points_held": 0,
+                    }
+                },
+                upsert=True,
             )
     elif prop_type == "airport":
         state = prop.get("state")

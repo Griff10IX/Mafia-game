@@ -38,14 +38,58 @@ const PRESTIGE_COLORS = {
 
 const PRESTIGE_ROMAN = { 1: 'I', 2: 'II', 3: 'III', 4: 'IV', 5: 'V' };
 
-// Reward pills shown on prestige crime rows
-const PRESTIGE_BONUS_LABELS = {
-  1: ['Cash', 'Respect', 'Booze'],
-  2: ['Booze', 'Bullets'],
-  3: ['Booze', 'Bullets', 'Points'],
-  4: ['Cash', 'Respect', 'Booze', 'Bullets', 'Points'],
-  5: ['Cash', 'Respect', 'Booze', 'Bullets', 'Points'],
-};
+/** Human-readable extra-reward lines from API `prestige_bonus` (matches backend _apply_prestige_bonus). */
+function describePrestigeBonusLines(crime) {
+  const pb = crime?.prestige_bonus;
+  if (!pb || typeof pb !== 'object') return [];
+  const lines = [];
+  const mult = pb.multiplier != null ? Number(pb.multiplier) : null;
+  const roll = (lo, hi) => {
+    const x = Number(lo);
+    const y = Number(hi);
+    if (mult != null) {
+      const a = Math.max(1, Math.floor(x * mult));
+      const b = Math.max(a, Math.floor(y * mult));
+      return [a, b];
+    }
+    const a = Math.max(1, Math.floor(x));
+    const b = Math.max(a, Math.floor(y));
+    return [a, b];
+  };
+
+  if (pb.rare_chance != null) {
+    lines.push(`${Math.round(Number(pb.rare_chance) * 100)}% chance on success for the bonus bundle below`);
+  } else if (mult != null) {
+    lines.push(`Guaranteed every success (bonus rolls ×${mult})`);
+  }
+
+  if (Array.isArray(pb.cash) && pb.cash.length >= 2) {
+    const [a, b] = roll(pb.cash[0], pb.cash[1]);
+    lines.push(`+$${a.toLocaleString()}–$${b.toLocaleString()} extra cash (+10% crime payout on bonus cash)`);
+  }
+  if (Array.isArray(pb.respect_points) && pb.respect_points.length >= 2) {
+    const [a, b] = roll(pb.respect_points[0], pb.respect_points[1]);
+    lines.push(`+${a.toLocaleString()}–${b.toLocaleString()} respect`);
+  }
+  if (pb.booze && pb.booze.min != null && pb.booze.max != null) {
+    const [a, b] = roll(pb.booze.min, pb.booze.max);
+    const label = pb.booze.id === 'moonshine' ? 'Moonshine' : String(pb.booze.id || 'booze');
+    lines.push(`+${a}–${b} ${label}`);
+  }
+  if (Array.isArray(pb.bullets) && pb.bullets.length >= 2) {
+    const [a, b] = roll(pb.bullets[0], pb.bullets[1]);
+    lines.push(`+${a.toLocaleString()}–${b.toLocaleString()} bullets`);
+  }
+  if (Array.isArray(pb.points) && pb.points.length >= 2) {
+    const [a, b] = roll(pb.points[0], pb.points[1]);
+    lines.push(`+${a.toLocaleString()}–${b.toLocaleString()} points`);
+  }
+  if (Array.isArray(pb.molotovs) && pb.molotovs.length >= 2) {
+    const [a, b] = roll(pb.molotovs[0], pb.molotovs[1]);
+    lines.push(`+${a}–${b} molotovs`);
+  }
+  return lines;
+}
 
 const TICK_INTERVAL = 1000;
 
@@ -280,7 +324,7 @@ const PrestigeCrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
   const isLocked = crime.unlocked === false;
   const onCooldown = !crime.can_commit && crime.remaining && crime.remaining > 0;
   const isGuaranteed = level >= 4;
-  const rewardLabels = PRESTIGE_BONUS_LABELS[level] || [];
+  const bonusLines = describePrestigeBonusLines(crime);
 
   return (
     <div
@@ -324,9 +368,8 @@ const PrestigeCrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
       {/* Description (now only in tooltip on the title to keep row compact) */}
       <div className="hidden">{crime.description}</div>
 
-      {/* Bottom row: drop type + reward pills + cooldown + button */}
+      {/* Bottom row: drop type + cooldown + button */}
       <div className="flex items-center gap-2 flex-wrap">
-        {/* Drop type chip */}
         {!isLocked && (
           <span
             className="shrink-0 inline-flex items-center gap-0.5 text-[8px] font-heading font-bold uppercase px-1.5 py-0.5 rounded border"
@@ -338,17 +381,6 @@ const PrestigeCrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
             {isGuaranteed ? `Guaranteed ×${level === 4 ? '0.5' : '1'}` : '30% Rare Drop'}
           </span>
         )}
-
-        {/* Reward pills */}
-        {!isLocked && rewardLabels.map((label) => (
-          <span
-            key={label}
-            className="shrink-0 inline-flex items-center text-[8px] font-heading px-1.5 py-0.5 rounded"
-            style={{ color: color + 'cc', backgroundColor: color + '0f', border: `1px solid ${color}20` }}
-          >
-            {label}
-          </span>
-        ))}
 
         {/* Spacer */}
         <div className="flex-1" />
@@ -386,6 +418,25 @@ const PrestigeCrimeRow = ({ crime, onCommit, manualPlayDisabled }) => {
           )}
         </div>
       </div>
+
+      {/* Possible rewards — from server prestige_bonus + base payout */}
+      {!isLocked && (
+        <div className="pl-0.5 space-y-0.5 border-t border-zinc-700/30 pt-1 mt-0.5">
+          <p className="text-[8px] font-heading text-zinc-500 leading-tight">
+            Base (success): ${Number(crime.reward_min || 0).toLocaleString()}–${Number(crime.reward_max || 0).toLocaleString()} cash · 10 rank points (more with perks / events / badges / prestige mult)
+          </p>
+          {bonusLines.length > 0 && (
+            <ul className="text-[8px] font-heading text-zinc-400 list-disc list-inside space-y-0.5 leading-snug">
+              {bonusLines.map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ul>
+          )}
+          <p className="text-[7px] font-heading text-zinc-600 italic leading-tight">
+            Same global extras as other crimes: ~0.15% loot piece (vs ~0.05%), ~0.1% molotov, ~1/100k random token.
+          </p>
+        </div>
+      )}
     </div>
   );
 };

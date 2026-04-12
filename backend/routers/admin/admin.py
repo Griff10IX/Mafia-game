@@ -3399,7 +3399,7 @@ def register(router):
                     getattr(security_module, "ENDPOINT_RL_HARD_COOLDOWN_MIN_SEC", 15),
                     getattr(security_module, "ENDPOINT_RL_HARD_COOLDOWN_MAX_SEC", 30),
                 ],
-                "summary": "Sub-interval spacing feeds sustain; soft 429 has no short punitive cooldown; 15–30s hard lockout only after mass sustained abuse (DB). Spam/burst counts POST/PUT/PATCH/DELETE only.",
+                "summary": "Sub-interval spacing feeds sustain; empty bucket does not 429; 15–30s hard lockout only after mass sustained abuse (DB). Spam/burst counts POST/PUT/PATCH/DELETE only.",
             },
         }
 
@@ -8092,6 +8092,26 @@ def register(router):
             "recent_as_target": recent_target,
         }
 
+    def _attack_attempts_query_exclude_hitlist_npcs(base: Dict[str, Any]) -> Dict[str, Any]:
+        """Omit hitlist / NPC targets (PvP-only log). Uses flags + legacy target_username '(NPC)'."""
+        npc_name_pat = re.compile(r"\(NPC\)", re.IGNORECASE)
+        non_npc: Dict[str, Any] = {
+            "$and": [
+                {"$or": [{"target_is_npc": {"$ne": True}}, {"target_is_npc": {"$exists": False}}]},
+                {"$or": [{"is_npc_kill": {"$ne": True}}, {"is_npc_kill": {"$exists": False}}]},
+                {
+                    "$or": [
+                        {"target_username": {"$exists": False}},
+                        {"target_username": None},
+                        {"target_username": {"$not": npc_name_pat}},
+                    ]
+                },
+            ]
+        }
+        if not base:
+            return non_npc
+        return {"$and": [base, non_npc]}
+
     @router.get("/admin/attacks/logs")
     async def admin_attacks_logs(
         username: Optional[str] = Query(
@@ -8100,6 +8120,10 @@ def register(router):
         ),
         limit: int = Query(500, ge=1, le=1000),
         since: Optional[str] = Query(None, description="ISO created_at; return only attempts after this (for live refresh)"),
+        exclude_target_npc: bool = Query(
+            False,
+            description="If true, exclude hitlist/NPC targets (target_is_npc, is_npc_kill, or '(NPC)' in target_username).",
+        ),
         current_user: dict = Depends(get_current_user),
     ):
         """
@@ -8115,13 +8139,15 @@ def register(router):
             q: Dict[str, Any] = {}
             if since:
                 q["created_at"] = {"$gt": since}
+            if exclude_target_npc:
+                q = _attack_attempts_query_exclude_hitlist_npcs(q)
             effective_limit = min(limit, 100) if since else limit
             docs = (
                 await db.attack_attempts.find(q, {"_id": 0})
                 .sort("created_at", -1)
                 .to_list(effective_limit)
             )
-            return {"username": None, "scope": "all", "logs": docs}
+            return {"username": None, "scope": "all", "logs": docs, "exclude_target_npc": exclude_target_npc}
         user = await db.users.find_one(
             {"id": key},
             {"_id": 0, "id": 1, "username": 1},
@@ -8144,13 +8170,15 @@ def register(router):
         q = {"$or": [{"attacker_id": uid}, {"target_id": uid}]}
         if since:
             q["created_at"] = {"$gt": since}
+        if exclude_target_npc:
+            q = _attack_attempts_query_exclude_hitlist_npcs(q)
         effective_limit = min(limit, 100) if since else limit
         docs = (
             await db.attack_attempts.find(q, {"_id": 0})
             .sort("created_at", -1)
             .to_list(effective_limit)
         )
-        return {"username": user.get("username"), "scope": "user", "logs": docs}
+        return {"username": user.get("username"), "scope": "user", "logs": docs, "exclude_target_npc": exclude_target_npc}
 
     def _audit_iso(val: Any) -> str:
         if val is None:

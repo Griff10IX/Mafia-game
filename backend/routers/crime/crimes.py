@@ -279,7 +279,7 @@ CASINO_HEIST_BUST_DIFFICULTY_MULT = 2.0
 # ---------------------------------------------------------------------------
 
 # Prestige-exclusive crimes — one per level, unlocked cumulatively (P3 can do P1, P2, P3)
-# P1-P3: 30% rare bonus drop on top of cash; P4-P5: guaranteed all reward types × multiplier
+# P1-P3: 30% rare bonus drop on top of cash; P4-P5: guaranteed all reward types × multiplier (store points only P4–P5)
 PRESTIGE_CRIMES = [
     {
         "id": "prestige_crime_1", "name": "The Syndicate Run",
@@ -316,7 +316,6 @@ PRESTIGE_CRIMES = [
             "rare_chance": 0.30,
             "booze": {"id": "moonshine", "min": 2, "max": 5},
             "bullets": [6, 19],
-            "points": [1, 4],
             "molotovs": [1, 1],
         },
     },

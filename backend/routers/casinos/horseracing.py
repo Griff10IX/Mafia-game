@@ -30,7 +30,11 @@ from server import (
     _username_pattern,
     get_head_family_id_for_state,
     get_casino_caps,
-    assert_casino_buy_back_within_points_balance,
+    adjust_casino_buy_back_escrow,
+    refund_casino_buy_back_escrow_points,
+    refund_and_delete_buy_back_offers_matching,
+    assert_casino_clear_of_buy_back_for_listing,
+    assert_casino_clear_of_buy_back_for_relinquish,
     _ownership_display_profit,
     bump_user_biggest_casino_payout,
     get_wealth_rank,
@@ -196,7 +200,7 @@ def register(router):
             cc = await load_claim_costs(db)
             return {**entry["data"], "claim_cost": cc["horseracing"]}
         now = datetime.now(timezone.utc)
-        await cleanup_expired_buyback_offers_for_user(db, "horseracing_buy_back_offers", user_id, now.isoformat())
+        await cleanup_expired_buyback_offers_for_user(db, "horseracing_buy_back_offers", user_id, now.isoformat(), "casino_horseracing")
         raw = (current_user.get("current_state") or "").strip()
         city = _normalize_city_for_horseracing(raw) if raw else (STATES[0] if STATES else "Chicago")
         display_city = city or raw or "Chicago"
@@ -299,7 +303,7 @@ def register(router):
             raise HTTPException(status_code=400, detail=f"You need ${claim_cost:,} to claim")
         res = await db.horseracing_ownership.update_one(
             {"city": stored_city or city, "owner_id": None},
-            {"$set": {"owner_id": current_user.get("id") or "", "owner_username": current_user.get("username") or "", "max_bet": HORSERACING_MAX_BET, "buy_back_reward": 0}},
+            {"$set": {"owner_id": current_user.get("id") or "", "owner_username": current_user.get("username") or "", "max_bet": HORSERACING_MAX_BET, "buy_back_reward": 0, "buy_back_points_held": 0}},
             upsert=True,
         )
         if not res.modified_count and not res.upserted_id:
@@ -318,15 +322,34 @@ def register(router):
         stored_city, doc = await _get_horseracing_ownership_doc(city)
         if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this track")
+        assert_casino_clear_of_buy_back_for_relinquish(doc)
+        loc = stored_city or city
+        await refund_and_delete_buy_back_offers_matching(
+            "horseracing_buy_back_offers",
+            {"city": loc},
+            points_event_type="casino_horseracing",
+            meta_base={"city": loc, "reason": "relinquish_table"},
+        )
+        held = int((doc or {}).get("buy_back_points_held") or 0)
+        await refund_casino_buy_back_escrow_points(
+            current_user.get("id") or "",
+            held,
+            event_type="casino_horseracing",
+            meta={"city": loc, "reason": "relinquish"},
+        )
         await db.horseracing_ownership.update_one(
-            {"city": stored_city or city},
-            {"$set": {"owner_id": None, "owner_username": None, "max_bet": CASINO_MIN_OWNER_MAX_BET}},
+            {"city": loc},
+            {
+                "$set": {
+                    "owner_id": None,
+                    "owner_username": None,
+                    "max_bet": CASINO_MIN_OWNER_MAX_BET,
+                    "buy_back_reward": 0,
+                    "buy_back_points_held": 0,
+                }
+            },
         )
-        # Remove pending buy-back offers for this holder/city after relinquish.
-        await db.horseracing_buy_back_offers.delete_many(
-            {"city": stored_city or city, "to_user_id": current_user.get("id") or ""}
-        )
-        await cancel_quicktrade_casino_listings_by_locations("casino_horseracing", stored_city or city, city)
+        await cancel_quicktrade_casino_listings_by_locations("casino_horseracing", loc, city)
         return {"message": "Ownership relinquished."}
 
     @router.post("/casino/horseracing/reset-profit")
@@ -368,8 +391,18 @@ def register(router):
             raise HTTPException(status_code=403, detail="You do not own this track")
         _, buyback_cap = await get_casino_caps()
         amount = max(0, min(int(request.amount), buyback_cap))
-        await assert_casino_buy_back_within_points_balance(current_user["id"], amount)
-        await db.horseracing_ownership.update_one({"city": stored_city or city}, {"$set": {"buy_back_reward": amount}})
+        old_held = int((doc or {}).get("buy_back_points_held") or 0)
+        await adjust_casino_buy_back_escrow(
+            current_user["id"],
+            old_held,
+            amount,
+            event_type="casino_horseracing",
+            meta={"city": stored_city or city},
+        )
+        await db.horseracing_ownership.update_one(
+            {"city": stored_city or city},
+            {"$set": {"buy_back_reward": amount, "buy_back_points_held": amount}},
+        )
         return {"message": "Buy-back reward updated."}
 
     @router.post("/casino/horseracing/buy-back/accept")
@@ -395,17 +428,12 @@ def register(router):
         from_user = await db.users.find_one({"id": from_owner_id}, {"_id": 0, "points": 1, "username": 1})
         if not from_user:
             raise HTTPException(status_code=400, detail="Previous owner not found")
-        deduct_res = await db.users.find_one_and_update(
-            {"id": from_owner_id, "points": {"$gte": points_offered}},
-            {"$inc": {"points": -points_offered}},
-        )
-        if not deduct_res:
-            raise HTTPException(status_code=400, detail="Previous owner does not have enough points")
-        await log_points_event(db, user_id=from_owner_id, points=-points_offered, event_type="casino_horseracing", event_ref=f"buyback:{request.offer_id}", meta={"action": "buyback_deduct", "city": city, "offer_id": request.offer_id})
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"points": points_offered}})
         await log_points_event(db, user_id=current_user.get("id") or "", points=points_offered, event_type="casino_horseracing", event_ref=f"buyback:{request.offer_id}", meta={"action": "buyback_credit", "city": city, "offer_id": request.offer_id})
-        # Reset max_bet to 0 when ownership returns - owner must set it again
-        await db.horseracing_ownership.update_one({"city": city}, {"$set": {"owner_id": from_owner_id, "owner_username": from_user.get("username"), "max_bet": 0}})
+        await db.horseracing_ownership.update_one(
+            {"city": city},
+            {"$set": {"owner_id": from_owner_id, "owner_username": from_user.get("username"), "max_bet": 0, "buy_back_reward": 0, "buy_back_points_held": 0}},
+        )
         cnorm = _normalize_city_for_horseracing(str(city or "").strip()) if city else ""
         await cancel_quicktrade_casino_listings_by_locations("casino_horseracing", city, cnorm or None)
         _invalidate_ownership_cache(current_user.get("id") or "")
@@ -416,10 +444,16 @@ def register(router):
     @router.post("/casino/horseracing/buy-back/reject")
     async def casino_horseracing_buy_back_reject(request: HorseRacingBuyBackRejectRequest, current_user: dict = Depends(get_current_user_verified)):
         """Reject a buy-back offer: keep ownership."""
-        offer = await db.horseracing_buy_back_offers.find_one({"id": request.offer_id}, {"_id": 0, "to_user_id": 1})
+        offer = await db.horseracing_buy_back_offers.find_one({"id": request.offer_id}, {"_id": 0, "to_user_id": 1, "from_owner_id": 1, "points_offered": 1, "city": 1})
         if not offer or offer.get("to_user_id") != current_user.get("id") or "":
             raise HTTPException(status_code=404, detail="Offer not found")
         await db.horseracing_buy_back_offers.delete_one({"id": request.offer_id})
+        await refund_casino_buy_back_escrow_points(
+            str(offer.get("from_owner_id") or ""),
+            int(offer.get("points_offered") or 0),
+            event_type="casino_horseracing",
+            meta={"city": offer.get("city"), "offer_id": request.offer_id, "reason": "reject"},
+        )
         _invalidate_ownership_cache(current_user.get("id") or "")
         await resolve_gambling_log_buy_back(request.offer_id, "rejected", 0)
         await maybe_revoke_civilian_protection(db, current_user.get("id") or "", "casino_buyback_reject")
@@ -438,10 +472,25 @@ def register(router):
         target = await db.users.find_one({"username": target_username_pattern}, {"_id": 0, "id": 1, "username": 1, "rank_points": 1})
         if not target or (target.get("id") or "") == (current_user.get("id") or ""):
             raise HTTPException(status_code=400, detail="Invalid target user")
+        held = int((doc or {}).get("buy_back_points_held") or 0)
+        await refund_casino_buy_back_escrow_points(
+            current_user.get("id") or "",
+            held,
+            event_type="casino_horseracing",
+            meta={"city": stored_city or city, "reason": "send_to_user"},
+        )
+        await refund_and_delete_buy_back_offers_matching(
+            "horseracing_buy_back_offers",
+            {"city": stored_city or city},
+            points_event_type="casino_horseracing",
+            meta_base={"city": stored_city or city, "reason": "send_to_user"},
+        )
         send_set = {
             "owner_id": target.get("id") or "",
             "owner_username": target.get("username") or "",
             "max_bet": CASINO_MIN_OWNER_MAX_BET,
+            "buy_back_reward": 0,
+            "buy_back_points_held": 0,
         }
         if get_rank_info(target.get("rank_points", 0), user_prestige_rank_mult(target))[0] < CAPO_RANK_ID:
             send_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
@@ -470,6 +519,7 @@ def register(router):
         stored_city, doc = await _get_horseracing_ownership_doc(city)
         if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this track")
+        assert_casino_clear_of_buy_back_for_listing(doc)
         listing_id = ObjectId()
         casino_property = {
             "_id": listing_id,
@@ -579,7 +629,12 @@ def register(router):
                 points_offered = int((doc or {}).get("buy_back_reward") or 0)
                 if shortfall > 0:
                     ownership_transferred = True
-                    hr_owner_set = {"owner_id": current_user.get("id") or "", "owner_username": current_user.get("username") or ""}
+                    hr_owner_set = {
+                        "owner_id": current_user.get("id") or "",
+                        "owner_username": current_user.get("username") or "",
+                        "buy_back_reward": 0,
+                        "buy_back_points_held": 0,
+                    }
                     if get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))[0] < CAPO_RANK_ID:
                         hr_owner_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
                     await db.horseracing_ownership.update_one({"city": stored_city or city}, {"$set": hr_owner_set})

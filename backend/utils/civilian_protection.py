@@ -100,15 +100,25 @@ async def cleanup_expired_buyback_offers_for_user(
     collection_name: str,
     to_user_id: str,
     now_iso: str,
+    points_event_type: str,
 ) -> None:
-    """Delete expired buy-back offers for this winner and revoke civilian protection if any were removed."""
+    """Refund former owners' escrow for expired buy-backs, delete offers, maybe revoke civilian protection."""
     if not to_user_id:
         return
+    from server import refund_casino_buy_back_escrow_points
+
     coll = db[collection_name]
     q = {"to_user_id": to_user_id, "expires_at": {"$lt": now_iso}}
-    n = await coll.count_documents(q)
-    if n <= 0:
+    offers = await coll.find(q, {"_id": 0, "id": 1, "from_owner_id": 1, "points_offered": 1}).to_list(500)
+    if not offers:
         return
+    for off in offers:
+        await refund_casino_buy_back_escrow_points(
+            str(off.get("from_owner_id") or ""),
+            int(off.get("points_offered") or 0),
+            event_type=points_event_type,
+            meta={"reason": "expired", "offer_id": off.get("id")},
+        )
     await maybe_revoke_civilian_protection(db, to_user_id, "casino_buyback_expired")
     await coll.delete_many(q)
 

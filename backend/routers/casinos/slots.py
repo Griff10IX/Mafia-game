@@ -28,7 +28,10 @@ from server import (
     resolve_gambling_log_buy_back,
     get_head_family_id_for_state,
     get_casino_caps,
-    assert_casino_buy_back_within_points_balance,
+    assert_casino_clear_of_buy_back_for_relinquish,
+    adjust_casino_buy_back_escrow,
+    refund_casino_buy_back_escrow_points,
+    refund_and_delete_buy_back_offers_matching,
     _ownership_display_profit,
     bump_user_biggest_casino_payout,
     notify_casino_seizure,
@@ -201,6 +204,7 @@ async def _run_slots_draw_if_needed(state: str):
                 "owner_username": winner_name,
                 "max_bet": SLOTS_MAX_BET,
                 "buy_back_reward": 0,
+                "buy_back_points_held": 0,
                 "expires_at": expires_at,
                 "next_draw_at": next_draw_iso,
             }
@@ -453,15 +457,34 @@ def register(router):
         stored_state, doc = await _get_slots_ownership_doc(state)
         if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own the slots here")
+        assert_casino_clear_of_buy_back_for_relinquish(doc)
         cooldown_until = (datetime.now(timezone.utc) + timedelta(hours=SLOTS_OWNERSHIP_HOURS)).isoformat()
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$set": {"slots_cooldown_until": cooldown_until}})
-        await db.slots_ownership.update_one(
-            {"state": stored_state or state},
-            {"$set": {"owner_id": None, "owner_username": None, "max_bet": CASINO_MIN_OWNER_MAX_BET}},
+        loc = stored_state or state
+        await refund_and_delete_buy_back_offers_matching(
+            "slots_buy_back_offers",
+            {"state": loc},
+            points_event_type="casino_slots",
+            meta_base={"state": loc, "reason": "relinquish_table"},
         )
-        # Remove pending buy-back offers for this holder/state after relinquish.
-        await db.slots_buy_back_offers.delete_many(
-            {"state": stored_state or state, "to_user_id": current_user.get("id") or ""}
+        held = int((doc or {}).get("buy_back_points_held") or 0)
+        await refund_casino_buy_back_escrow_points(
+            current_user.get("id") or "",
+            held,
+            event_type="casino_slots",
+            meta={"state": loc, "reason": "relinquish"},
+        )
+        await db.slots_ownership.update_one(
+            {"state": loc},
+            {
+                "$set": {
+                    "owner_id": None,
+                    "owner_username": None,
+                    "max_bet": CASINO_MIN_OWNER_MAX_BET,
+                    "buy_back_reward": 0,
+                    "buy_back_points_held": 0,
+                }
+            },
         )
         return {"message": "You have relinquished the slots. You cannot enter the next draw for 3 hours."}
 
@@ -505,8 +528,18 @@ def register(router):
             raise HTTPException(status_code=403, detail="You do not own the slots here")
         _, buyback_cap = await get_casino_caps()
         amount = max(0, min(int(request.amount), buyback_cap))
-        await assert_casino_buy_back_within_points_balance(current_user["id"], amount)
-        await db.slots_ownership.update_one({"state": stored_state or state}, {"$set": {"buy_back_reward": amount}})
+        old_held = int((doc or {}).get("buy_back_points_held") or 0)
+        await adjust_casino_buy_back_escrow(
+            current_user["id"],
+            old_held,
+            amount,
+            event_type="casino_slots",
+            meta={"state": stored_state or state},
+        )
+        await db.slots_ownership.update_one(
+            {"state": stored_state or state},
+            {"$set": {"buy_back_reward": amount, "buy_back_points_held": amount}},
+        )
         return {"message": "Buy-back reward updated."}
 
     @router.post("/casino/slots/buy-back/accept")
@@ -532,21 +565,23 @@ def register(router):
         from_user = await db.users.find_one({"id": from_owner_id}, {"_id": 0, "points": 1, "username": 1})
         if not from_user:
             raise HTTPException(status_code=400, detail="Previous owner not found")
-        deduct_res = await db.users.find_one_and_update(
-            {"id": from_owner_id, "points": {"$gte": points_offered}},
-            {"$inc": {"points": -points_offered}},
-        )
-        if not deduct_res:
-            raise HTTPException(status_code=400, detail="Previous owner does not have enough points")
-        await log_points_event(db, user_id=from_owner_id, points=-points_offered, event_type="casino_slots", event_ref=f"buyback:{request.offer_id}", meta={"action": "buyback_deduct", "state": state, "offer_id": request.offer_id})
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"points": points_offered}})
         await log_points_event(db, user_id=current_user.get("id") or "", points=points_offered, event_type="casino_slots", event_ref=f"buyback:{request.offer_id}", meta={"action": "buyback_credit", "state": state, "offer_id": request.offer_id})
         stored_state, _ = await _get_slots_ownership_doc(state)
         next_draw_iso = _next_draw_utc().isoformat()
-        # Reset max_bet to 0 when ownership returns - owner must set it again
         await db.slots_ownership.update_one(
             {"state": stored_state or state},
-            {"$set": {"owner_id": from_owner_id, "owner_username": from_user.get("username"), "expires_at": next_draw_iso, "next_draw_at": next_draw_iso, "max_bet": 0}},
+            {
+                "$set": {
+                    "owner_id": from_owner_id,
+                    "owner_username": from_user.get("username"),
+                    "expires_at": next_draw_iso,
+                    "next_draw_at": next_draw_iso,
+                    "max_bet": 0,
+                    "buy_back_reward": 0,
+                    "buy_back_points_held": 0,
+                }
+            },
         )
         _invalidate_slots_ownership_cache(current_user.get("id") or "")
         _invalidate_slots_ownership_cache(from_owner_id)
@@ -556,10 +591,16 @@ def register(router):
     @router.post("/casino/slots/buy-back/reject")
     async def casino_slots_buy_back_reject(request: SlotsBuyBackRejectRequest, current_user: dict = Depends(get_current_user_verified)):
         """Reject buy-back: keep ownership."""
-        offer = await db.slots_buy_back_offers.find_one({"id": request.offer_id}, {"_id": 0, "to_user_id": 1})
+        offer = await db.slots_buy_back_offers.find_one({"id": request.offer_id}, {"_id": 0, "to_user_id": 1, "from_owner_id": 1, "points_offered": 1, "state": 1})
         if not offer or offer.get("to_user_id") != current_user.get("id") or "":
             raise HTTPException(status_code=404, detail="Offer not found")
         await db.slots_buy_back_offers.delete_one({"id": request.offer_id})
+        await refund_casino_buy_back_escrow_points(
+            str(offer.get("from_owner_id") or ""),
+            int(offer.get("points_offered") or 0),
+            event_type="casino_slots",
+            meta={"state": offer.get("state"), "offer_id": request.offer_id, "reason": "reject"},
+        )
         _invalidate_slots_ownership_cache(current_user.get("id") or "")
         await resolve_gambling_log_buy_back(request.offer_id, "rejected", 0)
         await maybe_revoke_civilian_protection(db, current_user.get("id") or "", "casino_buyback_reject")
@@ -704,7 +745,14 @@ def register(router):
         if shortfall > 0:
             next_draw_iso = _next_draw_utc().isoformat()
             spin_winner_rank_id, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
-            spin_owner_set = {"owner_id": current_user.get("id") or "", "owner_username": current_user.get("username"), "expires_at": next_draw_iso, "next_draw_at": next_draw_iso}
+            spin_owner_set = {
+                "owner_id": current_user.get("id") or "",
+                "owner_username": current_user.get("username"),
+                "expires_at": next_draw_iso,
+                "next_draw_at": next_draw_iso,
+                "buy_back_reward": 0,
+                "buy_back_points_held": 0,
+            }
             if spin_winner_rank_id < CAPO_RANK_ID:
                 spin_owner_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
             if points_offered <= 0:

@@ -4,30 +4,30 @@
 
 **Strict inter-arrival sustain:** For each endpoint key (`user_id` + pattern), the server records **consecutive request arrival times**. If the gap between the **previous** and **current** request is **less than** `min_interval_sec` (e.g. 300 ms → `0.3`), that request adds a row to `endpoint_rl_violations`. This applies **whether or not** the token bucket still **allows** the action (burst), so fast spacing is measured on **every** attempt.
 
-**No short punitive cooldown:** A normal over-limit block (bucket empty) returns **HTTP 429** with **`cooldown_seconds`: 0**, **`is_cooldown`: false**, and a generic message (“Please slow down”). The **only** long player-facing cooldown from endpoint RL is the **15–30 s** hard lockout (`users.rate_limit_hard_until`, **`endpoint_rate_limit_hard`** in the JSON when applicable).
+**No soft endpoint 429:** When the token bucket is empty, the request is **still allowed** (no HTTP 429 from this layer). **Sub-interval** spacing still records **`endpoint_rl_violations`**. The **only** endpoint-RL **HTTP 429** from middleware is the **15–30 s** hard lockout (`users.rate_limit_hard_until`, JSON includes **`endpoint_rate_limit_hard`**: true).
 
 ## Semantics: 300 ms example vs hard penalty
 
 | Idea | Behavior |
 |------|----------|
 | 200 ms between clicks vs 300 ms limit | **Too fast** for metering: each such consecutive pair (after the first request) records a violation when the gap is under `min_interval_sec`. |
-| Burst | Still allows up to **`ENDPOINT_RL_BURST_TOKENS`** successful actions when tokens refill; **does not** hide sub-interval spacing from the sustain meter. |
+| Token bucket | Refills over time; a token is consumed when the bucket has **≥1** after refill. **Empty bucket does not block** the request. Sub-interval spacing is still measured on **every** attempt. |
 | 15–30 s hard lockout + staff flag | **≥ `ENDPOINT_RL_SUSTAIN_MIN_COUNT`** violations in **`ENDPOINT_RL_SUSTAIN_WINDOW_SEC`**, with time from **first** to **last** violation in that window **≥ `ENDPOINT_RL_SUSTAIN_MIN_SPAN_SEC`**. Lockout length is random **15–30 s** on `rate_limit_hard_until`. Sustained abuse is counted with **`count_documents`** plus first/last timestamps (no row cap). |
 
 ## Behavior
 
 - **Defaults:** [`RATE_LIMIT_CONFIG`](../backend/middleware/security.py) uses **300 ms** (`0.3` s) between clicks for every pattern when an admin enables limits (per-endpoint toggles stay off in code until you turn them on).
 - **Per-endpoint** spacing comes from that config. Each pattern shares one **token bucket** row in `rate_limit_clicks` (`user_id` + `endpoint_key`), with **`last_arrival_at`** for inter-arrival checks (legacy rows fall back to `last_at` until migrated).
-- **Token bucket:** `ENDPOINT_RL_BURST_TOKENS` (default **25**); refill rate `1 / min_interval_sec` per second, capped at burst size.
-- **Sub-interval:** gap under `min_interval_sec` → append `endpoint_rl_violations`; then bucket allow/deny as before.
-- **Soft block:** 429, no short **`cooldown_seconds`** (see above). **Hard block:** long **`cooldown_seconds`** until `rate_limit_hard_until` expires; **`endpoint_rate_limit_hard`** in response when that lockout applies.
+- **Token bucket:** `ENDPOINT_RL_BURST_TOKENS` (default **35**); refill rate `1 / min_interval_sec` per second, capped at burst size.
+- **Sub-interval:** gap under `min_interval_sec` → append `endpoint_rl_violations`; then token consume if possible; **never** return 429 solely for an empty bucket.
+- **Hard block:** **HTTP 429** with long **`cooldown_seconds`** until `rate_limit_hard_until` expires; **`endpoint_rate_limit_hard`**: true.
 - **PyMongo:** Allow path uses `modified_count` / insert success, not `upserted_count`.
 
 ### Default sustain / burst constants (code source of truth)
 
 | Constant | Default | Role |
 |----------|---------|------|
-| `ENDPOINT_RL_BURST_TOKENS` | 25 | Token bucket cap (soft 429 when empty). |
+| `ENDPOINT_RL_BURST_TOKENS` | 35 | Token bucket cap (refill target; empty bucket does not 429). |
 | `ENDPOINT_RL_SUSTAIN_WINDOW_SEC` | 30 | Rolling window for violation count + span. |
 | `ENDPOINT_RL_SUSTAIN_MIN_COUNT` | 60 | Minimum sub-interval violations in that window to consider hard lockout. |
 | `ENDPOINT_RL_SUSTAIN_MIN_SPAN_SEC` | 26 | First→last violation in the window must span at least this many seconds (brief rapid bursts do not qualify). |
@@ -43,8 +43,13 @@
 
 ## Spam / duplicate requests
 
-- **`check_request_spam`** (1 s and burst windows) counts **only mutating** methods: **POST**, **PUT**, **PATCH**, **DELETE**, etc. **GET**, **HEAD**, and **OPTIONS** are **not** counted, so normal post-login **GET** bursts do not trigger spam 429s.
+- **`check_request_spam`** (1 s and burst windows) counts **only mutating** methods: **POST**, **PUT**, **PATCH**, **DELETE**, etc. **GET**, **HEAD**, and **OPTIONS** are **not** counted, so normal post-login **GET** bursts do not trigger spam 429s. Thresholds (see [`security.py`](../backend/middleware/security.py)): **more than `MAX_REQUESTS_PER_SECOND` (20)** in 1 s, or **≥ `BURST_MAX_REQUESTS` (20)** in **0.5 s**.
+- **Auto Rank control traffic:** Paths under **`/api/auto-rank/`** (e.g. `PATCH /api/auto-rank/me`, `POST /api/auto-rank/start`) are **exempt** from spam counting and from **`check_duplicate_request`**. Background Auto Rank (crimes/GTA/etc.) runs **in-process** and never hits this middleware anyway. Cron routes (`POST /api/auto-rank/cron`, …) use **`X-Cron-Secret`** and typically have **no** user JWT, so user spam checks are skipped.
 - **`check_duplicate_request`** and **`_get_cooldown_seconds`** in [`security_middleware.py`](../backend/middleware/security_middleware.py) behave as before when spam/duplicate detection fires.
+
+## Client 429 handling
+
+- Endpoint RL from middleware **no longer** emits soft (`is_cooldown`: false / zero cooldown) responses. The 429 handler in [`src/utils/api.js`](../src/utils/api.js) still treats that shape safely if other endpoints return it.
 
 ## Login
 
@@ -53,6 +58,6 @@
 ## Verification (manual)
 
 1. Enable **GLOBAL_RATE_LIMITS_ENABLED**, **SECURITY_MIDDLEWARE_ENABLED**, and one endpoint with a short interval (e.g. 300 ms).
-2. **Burst:** Rapid requests within burst may **succeed**; **`endpoint_rl_violations`** still receives entries when spacing is sub-interval; soft 429 has **no** short cooldown in JSON.
+2. **Bucket empty:** Requests **still succeed** (no 429); **`endpoint_rl_violations`** still receives entries when spacing is sub-interval.
 3. **Sustained:** Sub-interval violations spread over **≥26 s** with **≥60** in **30 s** → hard lockout response with long **`cooldown_seconds`** and **`endpoint_rate_limit_hard`** true. A few quick clicks or a short burst should **not** meet both count and span.
 4. **Multi-worker:** Hard state on **`users.rate_limit_hard_until`**; metering uses **`rate_limit_clicks`** / DB when available.

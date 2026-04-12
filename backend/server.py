@@ -14,7 +14,7 @@ import logging.handlers
 import asyncio
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr, field_validator
-from typing import List, Optional, Dict, Union
+from typing import Any, List, Optional, Dict, Union
 import uuid
 from datetime import datetime, timezone, timedelta
 from utils.ban_user_wipe import user_has_active_account_ban
@@ -2395,7 +2395,7 @@ async def get_casino_caps():
 
 
 async def assert_casino_buy_back_within_points_balance(user_id: str, amount: int) -> None:
-    """Buy-back offers deduct points from the owner when accepted; amount cannot exceed current balance."""
+    """Legacy check: full buy-back amount vs balance. Prefer adjust_casino_buy_back_escrow for real holds."""
     if amount <= 0:
         return
     row = await db.users.find_one({"id": user_id}, {"points": 1})
@@ -2405,6 +2405,123 @@ async def assert_casino_buy_back_within_points_balance(user_id: str, amount: int
             status_code=400,
             detail=f"Buy-back reward cannot exceed your points balance ({balance:,}).",
         )
+
+
+async def adjust_casino_buy_back_escrow(
+    user_id: str,
+    old_held: int,
+    new_held: int,
+    *,
+    event_type: str,
+    meta: Dict[str, Any],
+) -> None:
+    """
+    Move points in/out of the owner's wallet for casino buy-back escrow.
+    old_held / new_held come from ownership doc buy_back_points_held (0 if missing).
+    """
+    if not user_id:
+        return
+    old_a = max(0, int(old_held or 0))
+    new_a = max(0, int(new_held or 0))
+    delta = new_a - old_a
+    if delta == 0:
+        return
+    if delta > 0:
+        res = await db.users.find_one_and_update(
+            {"id": user_id, "points": {"$gte": delta}},
+            {"$inc": {"points": -delta}},
+        )
+        if not res:
+            raise HTTPException(
+                status_code=400,
+                detail=f"You need {delta:,} more points to increase buy-back (those points are held until you lower buy-back, lose the casino, or the buy-back offer is resolved).",
+            )
+        await log_points_event(
+            db,
+            user_id=user_id,
+            points=-delta,
+            event_type=event_type,
+            event_ref="buyback_hold",
+            meta={"action": "buyback_hold", **meta, "from_held": old_a, "to_held": new_a},
+        )
+    else:
+        refund = -delta
+        await db.users.update_one({"id": user_id}, {"$inc": {"points": refund}})
+        await log_points_event(
+            db,
+            user_id=user_id,
+            points=refund,
+            event_type=event_type,
+            event_ref="buyback_release",
+            meta={"action": "buyback_release", **meta, "from_held": old_a, "to_held": new_a},
+        )
+
+
+async def refund_casino_buy_back_escrow_points(
+    user_id: str,
+    amount: int,
+    *,
+    event_type: str,
+    meta: Dict[str, Any],
+) -> None:
+    pts = max(0, int(amount or 0))
+    if not user_id or pts <= 0:
+        return
+    await db.users.update_one({"id": user_id}, {"$inc": {"points": pts}})
+    await log_points_event(
+        db,
+        user_id=user_id,
+        points=pts,
+        event_type=event_type,
+        event_ref="buyback_refund",
+        meta={"action": "buyback_refund", **meta, "amount": pts},
+    )
+
+
+async def refund_and_delete_buy_back_offers_matching(
+    collection_name: str,
+    match: Dict[str, Any],
+    *,
+    points_event_type: str,
+    meta_base: Dict[str, Any],
+) -> int:
+    """Refund escrow to each offer's from_owner_id, then delete those offers. Returns number of offers removed."""
+    coll = db[collection_name]
+    offers = await coll.find(match, {"_id": 0, "id": 1, "from_owner_id": 1, "points_offered": 1}).to_list(500)
+    for off in offers:
+        await refund_casino_buy_back_escrow_points(
+            str(off.get("from_owner_id") or ""),
+            int(off.get("points_offered") or 0),
+            event_type=points_event_type,
+            meta={**meta_base, "offer_id": off.get("id")},
+        )
+    ids = [o["id"] for o in offers if o.get("id")]
+    if ids:
+        await coll.delete_many({"id": {"$in": ids}})
+    return len(offers)
+
+
+def _assert_casino_has_no_buy_back_escrow(ownership_doc: Optional[Dict[str, Any]], *, detail: str) -> None:
+    r = int((ownership_doc or {}).get("buy_back_reward") or 0)
+    h = int((ownership_doc or {}).get("buy_back_points_held") or 0)
+    if r > 0 or h > 0:
+        raise HTTPException(status_code=400, detail=detail)
+
+
+def assert_casino_clear_of_buy_back_for_listing(ownership_doc: Optional[Dict[str, Any]]) -> None:
+    """Casino Quick Trade listings require buy-back cleared so held points are released first."""
+    _assert_casino_has_no_buy_back_escrow(
+        ownership_doc,
+        detail="Remove buy-back before listing this casino on Quick Trade (releases your held points).",
+    )
+
+
+def assert_casino_clear_of_buy_back_for_relinquish(ownership_doc: Optional[Dict[str, Any]]) -> None:
+    """Relinquish is blocked until buy-back is cleared (owner must release held points first)."""
+    _assert_casino_has_no_buy_back_escrow(
+        ownership_doc,
+        detail="Remove buy-back before relinquishing this casino (releases your held points).",
+    )
 
 
 async def _user_owns_any_casino(user_id: str):

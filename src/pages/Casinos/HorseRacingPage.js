@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import api, { refreshUser } from '../../utils/api';
+import { removeCasinoBuyBack } from '../../utils/removeCasinoBuyBack';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
 import styles from '../../styles/noir.module.css';
@@ -462,6 +463,21 @@ export default function HorseRacingPage() {
     finally { setOwnerLoading(false); }
   };
 
+  const handleRemoveBuyBack = async () => {
+    const city = ownership?.current_city;
+    if (!city || ownerLoading) return;
+    if (Number(ownership?.buy_back_reward ?? 0) <= 0) return;
+    setOwnerLoading(true);
+    try {
+      await removeCasinoBuyBack('horseracing', { city });
+      toast.success('Buy-back removed. Held points were returned to your balance.');
+      setOwnerBuyBack('0');
+      fetchConfigAndOwnership();
+      refreshUser();
+    } catch (e) { toast.error(apiErrorDetail(e, 'Failed')); }
+    finally { setOwnerLoading(false); }
+  };
+
   const handleTransfer = async () => {
     const city = ownership?.current_city;
     if (!city || !transferUsername.trim() || ownerLoading) return;
@@ -756,10 +772,11 @@ export default function HorseRacingPage() {
               <FormattedNumberInput placeholder="e.g. 10,000,000" value={newMaxBet} onChange={setNewMaxBet} className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none" />
               <button onClick={handleSetMaxBet} disabled={ownerLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 font-heading">Set</button>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <span className="text-[10px] text-mutedForeground w-20 shrink-0">Buy-back</span>
-              <FormattedNumberInput placeholder="Points offered if taken" value={ownerBuyBack} onChange={setOwnerBuyBack} className="flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none" />
-              <button onClick={handleSetBuyBack} disabled={ownerLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 font-heading">Set</button>
+              <FormattedNumberInput placeholder="Points offered if taken" value={ownerBuyBack} onChange={setOwnerBuyBack} className="flex-1 min-w-[6rem] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none" />
+              <button type="button" onClick={handleSetBuyBack} disabled={ownerLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 font-heading shrink-0">Set</button>
+              <button type="button" onClick={handleRemoveBuyBack} disabled={ownerLoading || Number(ownership?.buy_back_reward ?? 0) <= 0} className="bg-zinc-800/80 text-zinc-300 rounded px-2 py-1 text-[10px] font-bold uppercase border border-zinc-600 hover:bg-zinc-800 disabled:opacity-50 font-heading shrink-0" title="Return held points">Remove</button>
             </div>
             <div className="flex items-center gap-2">
               <span className="text-[10px] text-mutedForeground w-20 shrink-0">Transfer</span>
