@@ -13,6 +13,7 @@ import { BadgeShield, BADGE_STYLES as RANKING_BADGE_STYLES, CATEGORY_LABELS } fr
 import StaffUserDetailsPanel from '../../components/StaffUserDetailsPanel';
 import FamilyEmblem from '../../components/FamilyEmblem';
 import { getProfilePrefetch, setProfilePrefetch } from '../../utils/prefetchCache';
+import { getProfileEditWarm } from '../../utils/profilePageWarm';
 import { fileToCompressedDataUrl, validateSafeImageFile } from '../../utils/fileToCompressedDataUrl';
 
 const PROFILE_STYLES = `
@@ -1375,17 +1376,32 @@ export default function Profile() {
   };
   useEffect(() => {
     if (isMe && !viewPublic && profile) {
+      const warm = getProfileEditWarm(me?.id);
+      if (warm) {
+        if (warm.notification_preferences && typeof warm.notification_preferences === 'object') {
+          setPrefs(warm.notification_preferences);
+        }
+        setTelegramChatId(warm.telegram_chat_id ?? '');
+        setTelegramBotToken(warm.telegram_bot_token ?? '');
+        setSpotifyStatus(warm.spotifyStatus ?? null);
+        setSpotifyUrlInput(warm.spotify_url || '');
+        setCensorProfanity(warm.censor_profanity === true);
+        setProfileAutoplayVideo(warm.profile_autoplay_video !== false);
+        setHideKillsOnProfile(warm.hide_kills_on_profile === true);
+        setHideJailbustsOnProfile(warm.hide_jailbusts_on_profile === true);
+      } else {
+        setProfileAutoplayVideo(me?.profile_autoplay_video !== false);
+        setHideKillsOnProfile(profile?.hide_kills_on_profile === true);
+        setHideJailbustsOnProfile(profile?.hide_jailbusts_on_profile === true);
+      }
       fetchPrefs();
       fetchTelegram();
       fetchSpotifyStatus();
-      setProfileAutoplayVideo(me?.profile_autoplay_video !== false);
-      setHideKillsOnProfile(profile?.hide_kills_on_profile === true);
-      setHideJailbustsOnProfile(profile?.hide_jailbusts_on_profile === true);
       api.get('/profile/censor-profanity').then((res) => {
         setCensorProfanity(res.data?.censor_profanity === true);
       }).catch(() => {});
     }
-  }, [isMe, viewPublic, profile, profile?.hide_kills_on_profile, profile?.hide_jailbusts_on_profile, me?.profile_autoplay_video]);
+  }, [isMe, viewPublic, profile, profile?.hide_kills_on_profile, profile?.hide_jailbusts_on_profile, me?.profile_autoplay_video, me?.id]);
 
   useEffect(() => {
     if (!isMe || viewPublic || !spotifyStatus?.spotify_connected || !spotifyStatus?.feature_enabled) {

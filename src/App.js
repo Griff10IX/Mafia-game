@@ -22,6 +22,7 @@ import { ThemeProvider } from "./context/ThemeContext";
 import { initToastObservability } from "./components/ui/sonner";
 import "@/App.css";
 import { prefetchDashboardData } from "./utils/dashboardSessionCache";
+import { prefetchProfilePageData } from "./utils/profilePageWarm";
 
 // Lazy-load authenticated pages to shrink initial bundle
 // Account pages
@@ -199,11 +200,13 @@ function App() {
     initToastObservability();
   }, []);
 
-  // Preload dashboard chunk + same API bundle the page uses, so first visit is mostly cache + cached JS.
+  // Preload dashboard + profile chunks and warm their API/session caches in the background after login.
   useEffect(() => {
     if (!isAuthenticated) return undefined;
     import("./pages/Account/Dashboard");
+    import("./pages/Account/Profile");
     prefetchDashboardData({ force: true });
+    prefetchProfilePageData({ force: true });
     return undefined;
   }, [isAuthenticated]);
 
