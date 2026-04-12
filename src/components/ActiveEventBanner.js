@@ -3,10 +3,13 @@ import { X, Zap } from 'lucide-react';
 import api from '../utils/api';
 import styles from '../styles/noir.module.css';
 
-const STORAGE_PREFIX = 'active_event_banner_dismissed_v2';
+const STORAGE_PREFIX = 'active_event_banner_dismissed_v3';
 
-function dismissStorageKey(eventIds) {
-  return `${STORAGE_PREFIX}_${(eventIds || []).join('_')}`;
+/** Stable per rotation: sorted ids + expiry so order from API cannot break dismiss; new rotation = new key = banner shows again. */
+function dismissStorageKey(eventIds, expiresAt) {
+  const sorted = [...(eventIds || [])].sort().join('|');
+  const exp = expiresAt ? String(expiresAt) : '';
+  return `${STORAGE_PREFIX}_${sorted}@${encodeURIComponent(exp)}`;
 }
 
 function formatCountdown(expiresAt) {
@@ -53,18 +56,19 @@ export default function ActiveEventBanner({ fetchEnabled }) {
     };
   }, [fetchEnabled, load]);
 
+  const eventDismissSig =
+    data?.events_enabled && data?.event && data.event.id !== 'none' && (data.active_event_ids || []).length > 0
+      ? dismissStorageKey(data.active_event_ids, data.expires_at)
+      : '';
+
   useEffect(() => {
-    const ids = data?.active_event_ids;
-    if (!ids || ids.length === 0 || !data?.event || data.event.id === 'none') {
-      setDismissed(false);
-      return;
-    }
+    if (!eventDismissSig) return;
     try {
-      setDismissed(localStorage.getItem(dismissStorageKey(ids)) === '1');
+      setDismissed(localStorage.getItem(eventDismissSig) === '1');
     } catch {
       setDismissed(false);
     }
-  }, [data?.active_event_ids, data?.event]);
+  }, [eventDismissSig]);
 
   useEffect(() => {
     if (!data?.expires_at) return undefined;
@@ -84,7 +88,7 @@ export default function ActiveEventBanner({ fetchEnabled }) {
 
   const onDismiss = () => {
     try {
-      localStorage.setItem(dismissStorageKey(data.active_event_ids || []), '1');
+      localStorage.setItem(dismissStorageKey(data.active_event_ids || [], data.expires_at), '1');
     } catch {
       /* ignore */
     }

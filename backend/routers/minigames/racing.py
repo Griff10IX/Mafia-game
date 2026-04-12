@@ -320,8 +320,6 @@ RELIABILITY_POWER_PENALTY_PER_LEVEL = 0.0006  # was 0.02 * 3 / 100
 WINS_FOR_AERO_RELIABILITY = 1
 WINS_FOR_CHAMPIONSHIP_UPGRADE = 3
 CHAMPIONSHIP_UPGRADE_COST = 350000
-# 13 upgradable car stats total; all can be upgraded to 100 — global cap allows full max
-RACING_UPGRADE_GLOBAL_CAP = 1300  # 13 * 100
 MAX_CREW_LEVEL = 100  # mechanic, pit
 # 12 crew upgrades total; all can be upgraded to 100
 RACING_CREW_GLOBAL_CAP = 1200  # 12 * 100
@@ -368,6 +366,8 @@ ACCELERATION_TOP_SPEED_PENALTY_PER_LEVEL = 0.00045  # was 0.015 * 3
 ACCELERATION_BONUS_PER_LEVEL = 0.0006  # was 0.02 * 3
 WINS_FOR_ACCELERATION = 1
 ACCELERATION_COST_BASE = 33000
+# Sum of all numeric upgrade levels on one car at max (12 lines × 100) + championship purchase (counts as 1)
+RACING_UPGRADE_GLOBAL_CAP = 12 * MAX_CAR_UPGRADE_LEVEL + 1  # 1201
 # New stats: brakes +grip -power, gearbox +speed -grip, cooling -engine wear, weight +speed +grip, fuel +power, suspension, overtaking, acceleration (all scaled for max 100)
 BRAKES_GRIP_PER_LEVEL = 0.0008   # was 0.02 * 4
 BRAKES_POWER_PENALTY_PER_LEVEL = 0.0004  # was 0.01 * 4

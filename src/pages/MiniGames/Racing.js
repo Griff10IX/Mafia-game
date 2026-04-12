@@ -100,6 +100,9 @@ const UPGRADE_META = [
   { key: "cooling", label: "Cooling", color: "#0891b2" },
   { key: "weight", label: "Weight", color: "#64748b", winsNeeded: 2 },
   { key: "fuel", label: "Fuel", color: "#ca8a04" },
+  { key: "suspension", label: "Susp", color: "#9333ea", winsNeeded: 1 },
+  { key: "overtaking", label: "Pass", color: "#db2777", winsNeeded: 1 },
+  { key: "acceleration", label: "Accel", color: "#16a34a", winsNeeded: 1 },
 ];
 
 // ─── Module-level cache ───
@@ -2070,24 +2073,37 @@ export default function Racing() {
                 const cooling = up.cooling_level ?? 0;
                 const weight = up.weight_level ?? 0;
                 const fuel = up.fuel_level ?? 0;
+                const suspension = up.suspension_level ?? 0;
+                const overtaking = up.overtaking_level ?? 0;
+                const acceleration = up.acceleration_level ?? 0;
                 const championship = up.championship_upgrade || false;
                 const wins = profile?.wins ?? 0;
                 const globalCap = profile?.global_upgrade_cap ?? 26;
-                const levelsUsed = c.upgrade_levels_used ?? (engine + tires + aero + reliability + (championship ? 1 : 0) + brakes + gearbox + cooling + weight + fuel);
+                const levelsUsed = c.upgrade_levels_used ?? (
+                  engine + tires + aero + reliability + (championship ? 1 : 0)
+                  + brakes + gearbox + cooling + weight + fuel
+                  + suspension + overtaking + acceleration
+                );
                 const atGlobalCap = levelsUsed >= globalCap;
                 const bank = profile?.crew_bank ?? 0;
 
-                const levelMap = { engine, tires, aero, reliability, brakes, gearbox, cooling, weight, fuel };
+                const levelMap = {
+                  engine, tires, aero, reliability, brakes, gearbox, cooling, weight, fuel,
+                  suspension, overtaking, acceleration,
+                };
                 const maxMap = {
-                  engine: upgradeTradeoffs?.engine?.max ?? 5,
-                  tires: upgradeTradeoffs?.tires?.max ?? 5,
-                  aero: upgradeTradeoffs?.aero?.max ?? 3,
-                  reliability: upgradeTradeoffs?.reliability?.max ?? 3,
-                  brakes: upgradeTradeoffs?.brakes?.max ?? 4,
-                  gearbox: upgradeTradeoffs?.gearbox?.max ?? 4,
-                  cooling: upgradeTradeoffs?.cooling?.max ?? 3,
-                  weight: upgradeTradeoffs?.weight?.max ?? 3,
-                  fuel: upgradeTradeoffs?.fuel?.max ?? 3,
+                  engine: upgradeTradeoffs?.engine?.max ?? 100,
+                  tires: upgradeTradeoffs?.tires?.max ?? 100,
+                  aero: upgradeTradeoffs?.aero?.max ?? 100,
+                  reliability: upgradeTradeoffs?.reliability?.max ?? 100,
+                  brakes: upgradeTradeoffs?.brakes?.max ?? 100,
+                  gearbox: upgradeTradeoffs?.gearbox?.max ?? 100,
+                  cooling: upgradeTradeoffs?.cooling?.max ?? 100,
+                  weight: upgradeTradeoffs?.weight?.max ?? 100,
+                  fuel: upgradeTradeoffs?.fuel?.max ?? 100,
+                  suspension: upgradeTradeoffs?.suspension?.max ?? 100,
+                  overtaking: upgradeTradeoffs?.overtaking?.max ?? 100,
+                  acceleration: upgradeTradeoffs?.acceleration?.max ?? 100,
                 };
 
                 const nextETCost = carUpgradeCosts[engine + tires + 1] ?? carUpgradeCosts[carUpgradeCosts.length - 1];
