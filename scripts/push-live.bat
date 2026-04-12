@@ -35,9 +35,9 @@ echo.
 
 echo [5/6] Deploying on server (SSH)...
 echo      - Fetching latest from origin (Mafia-Game-2)
-echo      - Building frontend, restarting backend
+echo      - Atomic frontend build then restart backend + nginx reload
 echo      - Uploading maintenance page
-plink -pw "%SSH_PASSWORD%" root@178.128.38.68 "cd /opt/mafia-app && ([ -f backend/.env ] && cp backend/.env /tmp/env-backup); git fetch origin && git reset --hard origin/MAfiaGame2 && ([ -f /tmp/env-backup ] && cp /tmp/env-backup backend/.env); mkdir -p /var/www/html && cp maintenance.html /var/www/html/maintenance.html 2>/dev/null || true; npm run build && sudo systemctl restart mafia-backend && sudo systemctl reload nginx"
+plink -pw "%SSH_PASSWORD%" root@178.128.38.68 "cd /opt/mafia-app && ([ -f backend/.env ] && cp backend/.env /tmp/env-backup); git fetch origin && git reset --hard origin/MAfiaGame2 && ([ -f /tmp/env-backup ] && cp /tmp/env-backup backend/.env); mkdir -p /var/www/html && cp maintenance.html /var/www/html/maintenance.html 2>/dev/null || true; bash scripts/deploy-after-pull.sh --restart-backend"
 echo.
 echo [6/6] Pushed and deployed.
 echo.

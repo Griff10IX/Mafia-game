@@ -36,9 +36,10 @@ echo.
 
 echo [5/6] Deploying on server (SSH)...
 echo      - Fetching latest from origin (Mafia-Game-2)
-echo      - Building frontend, reloading nginx (backend NOT restarted)
+echo      - Atomic frontend build: keep old site until new bundle is ready, then nginx reload
+echo      - Backend service NOT restarted
 echo      - Uploading maintenance page
-plink -pw "%SSH_PASSWORD%" root@178.128.38.68 "cd /opt/mafia-app && ([ -f backend/.env ] && cp backend/.env /tmp/env-backup); git fetch origin && git reset --hard origin/MAfiaGame2 && ([ -f /tmp/env-backup ] && cp /tmp/env-backup backend/.env); mkdir -p /var/www/html && cp maintenance.html /var/www/html/maintenance.html 2>/dev/null || true; npm run build && sudo systemctl reload nginx"
+plink -pw "%SSH_PASSWORD%" root@178.128.38.68 "cd /opt/mafia-app && ([ -f backend/.env ] && cp backend/.env /tmp/env-backup); git fetch origin && git reset --hard origin/MAfiaGame2 && ([ -f /tmp/env-backup ] && cp /tmp/env-backup backend/.env); mkdir -p /var/www/html && cp maintenance.html /var/www/html/maintenance.html 2>/dev/null || true; bash scripts/deploy-after-pull.sh"
 echo.
 echo [6/6] Pushed and deployed (backend still running previous process).
 echo.
