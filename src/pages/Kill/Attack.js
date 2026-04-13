@@ -1247,7 +1247,11 @@ export default function Attack() {
             use_molotovs: payload.useMolotovs ?? false,
             ...(best.execute_token ? { execute_token: best.execute_token } : {}),
           };
-          const execRes = await api.post('/attack/execute', { attack_id: best.attack_id, ...extra });
+          const execBody =
+            best.execute_token && String(best.execute_token).trim().length >= 16
+              ? extra
+              : { attack_id: best.attack_id, ...extra };
+          const execRes = await api.post('/attack/execute', execBody);
           refreshUser();
           fetchBullets();
           await refreshAttacks();
@@ -1380,7 +1384,9 @@ export default function Attack() {
   const executeAttack = async (attackId, extra = null) => {
     setLoading(true);
     try {
-      const payload = extra ? { attack_id: attackId, ...extra } : { attack_id: attackId };
+      const tok = extra && typeof extra.execute_token === 'string' ? extra.execute_token.trim() : '';
+      const payload =
+        tok.length >= 16 ? { ...extra } : extra ? { attack_id: attackId, ...extra } : { attack_id: attackId };
       const response = await api.post('/attack/execute', payload);
       setLoading(false);
       if (response.data.success) {

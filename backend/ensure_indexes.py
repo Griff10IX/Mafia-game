@@ -145,6 +145,10 @@ async def ensure_all_indexes(db):
         await db.attacks.create_index([("attacker_id", 1), ("expires_at", 1)])
         await db.attacks.create_index("id")
         await db.attacks.create_index([("attacker_id", 1), ("id", 1)])
+        await db.attacks.create_index(
+            [("attacker_id", 1), ("status", 1), ("execute_token", 1)],
+            sparse=True,
+        )
         await db.attacks.create_index("target_id")
         await db.attack_attempts.create_index([("attacker_id", 1), ("created_at", -1)])
         await db.attack_attempts.create_index([("target_id", 1), ("created_at", -1)])

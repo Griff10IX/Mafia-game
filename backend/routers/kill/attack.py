@@ -10,7 +10,7 @@ import os
 import sys
 import logging
 from fastapi import Depends, HTTPException, Request, Query
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 from pymongo import UpdateOne
 
 logger = logging.getLogger(__name__)
@@ -83,10 +83,37 @@ def _safe_compare_execute_token(stored: str, submitted: Optional[str]) -> bool:
         return False
 
 
+async def _resolve_attack_row_for_execute(
+    attacker_id: str,
+    attack_id: Optional[str],
+    execute_token: Optional[str],
+) -> Optional[dict]:
+    """
+    Prefer lookup by execute_token (opaque, not a UUID) so POST /attack/execute need not expose attack row id.
+    Falls back to attack_id for legacy rows without a token.
+    """
+    etok = (execute_token or "").strip()
+    aid = (attack_id or "").strip()
+    if len(etok) >= 16:
+        row = await db.attacks.find_one(
+            {"attacker_id": attacker_id, "status": "found", "execute_token": etok},
+            {"_id": 0},
+        )
+        if row:
+            return row
+    if aid:
+        return await db.attacks.find_one(
+            {"attacker_id": attacker_id, "status": "found", "id": aid},
+            {"_id": 0},
+        )
+    return None
+
+
 async def _ensure_execute_token(attacker_id: str, attack_id: str) -> Optional[str]:
     """
     Mint a per-attack token when the client can execute (same location as target).
     Lazy scripts that only POST /attack/execute never see this value until they poll list or status.
+    Clients may send only this token on execute (no attack UUID in the JSON body).
     """
     doc = await db.attacks.find_one({"id": attack_id, "attacker_id": attacker_id}, {"_id": 0, "execute_token": 1})
     if not doc:
@@ -531,13 +558,22 @@ class AttackDeleteRequest(BaseModel):
     attack_ids: List[str]
 
 class AttackExecuteRequest(BaseModel):
-    attack_id: str
+    # Optional when execute_token is sent (preferred — avoids scrapeable UUID in request body).
+    attack_id: Optional[str] = None
     death_message: Optional[str] = None
     make_public: bool = False
     bullets_to_use: Optional[int] = None
     use_molotovs: Optional[bool] = False
     # Issued when GET /attack/list or GET /attack/status shows can_attack; required if the attack row has a token.
     execute_token: Optional[str] = None
+
+    @model_validator(mode="after")
+    def _require_attack_handle(self):
+        aid = (self.attack_id or "").strip()
+        etok = (self.execute_token or "").strip()
+        if len(etok) >= 16 or aid:
+            return self
+        raise ValueError("Provide execute_token (from My Searches when you can attack) or attack_id")
 
     @field_validator("bullets_to_use", mode="before")
     @classmethod
@@ -1230,9 +1266,10 @@ async def get_attack_inflation(current_user: dict = Depends(get_current_user)):
 
 async def execute_attack(request: AttackExecuteRequest, req: Request, current_user: dict = Depends(get_current_user_verified)):
   try:
-    attack = await db.attacks.find_one(
-        {"attacker_id": current_user["id"], "status": "found", "id": request.attack_id},
-        {"_id": 0}
+    attack = await _resolve_attack_row_for_execute(
+        current_user["id"],
+        request.attack_id,
+        request.execute_token,
     )
     if not attack:
         await _log_attack_error(current_user["id"], current_user.get("username"), "No active attack to execute", req)
@@ -1262,7 +1299,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 req,
                 extra={
                     "integrity_violation": "execute_token",
-                    "attack_id": request.attack_id,
+                    "attack_id": attack.get("id"),
                     "location_state": target_location,
                 },
             )
@@ -1274,7 +1311,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     attacker_username=current_user.get("username") or "?",
                     target_id=str(target.get("id") or ""),
                     target_username=(target.get("username") or "").strip() or "?",
-                    attack_id=request.attack_id,
+                    attack_id=attack.get("id"),
                     location_state=target_location,
                 )
             except Exception:
@@ -1294,7 +1331,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         await _log_attack_error(current_user["id"], current_user.get("username"), "Target under civilian protection", req)
         raise HTTPException(status_code=403, detail=CIVILIAN_PROTECTION_KILL_BLOCKED_DETAIL)
     if target.get("is_dead"):
-        await db.attacks.delete_one({"id": request.attack_id, "attacker_id": current_user["id"]})
+        await db.attacks.delete_one({"id": attack["id"], "attacker_id": current_user["id"]})
         await _log_attack_error(current_user["id"], current_user.get("username"), "Target is already dead", req)
         raise HTTPException(
             status_code=400,
@@ -2283,7 +2320,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     uname = current_user.get("username", "?") if current_user else "?"
     logger.exception(
         "execute_attack UNHANDLED ERROR user=%s (%s) attack_id=%s: %s",
-        uname, uid, getattr(request, "attack_id", "?"), e,
+        uname, uid, (getattr(request, "attack_id", None) or "?"), e,
     )
     raise HTTPException(
         status_code=500,
