@@ -27,7 +27,16 @@ const PROFILE_STYLES = `
   .prof-row { transition: all 0.2s ease; }
   .prof-row:hover { background-color: rgba(var(--noir-primary-rgb), 0.04); }
   .prof-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
-  .prof-banner-content .forum-content-media { max-width: 100% !important; height: auto !important; border-radius: 8px; margin: 0.25em 0; display: block; }
+  /* Forum BBCode [img]/[gif] use inline max-height 300–400px — tall art shrinks to a narrow strip; override on profile only */
+  .prof-banner-content .forum-content-media {
+    max-width: 100% !important;
+    max-height: min(92vh, 1080px) !important;
+    width: auto !important;
+    height: auto !important;
+    border-radius: 8px;
+    margin: 0.35em auto;
+    display: block;
+  }
   .prof-banner-content .forum-content-ytube { position: relative; width: 100%; max-width: 560px; margin: 0.5em auto; padding-bottom: 56.25%; }
   .prof-banner-content .forum-content-ytube-iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: 0; border-radius: 8px; }
 `;
@@ -383,7 +392,7 @@ const ProfileInfoCard = ({
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="px-2.5 py-1.5 md:px-3 md:py-2 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-1.5">
         <div className="flex items-center gap-2 min-w-0">
-          <div className="w-9 h-9 md:w-11 md:h-11 rounded-md overflow-hidden border border-primary/30 bg-secondary flex items-center justify-center shrink-0">
+          <div className="w-11 h-11 sm:w-12 sm:h-12 md:w-14 md:h-14 rounded-md overflow-hidden border border-primary/30 bg-secondary flex items-center justify-center shrink-0">
             {profile?.avatar_url ? (
               onAvatarPreview ? (
                 <button
@@ -398,7 +407,7 @@ const ProfileInfoCard = ({
                 <img src={profile.avatar_url} alt={`${profile.username} avatar`} className="w-full h-full object-cover" />
               )
             ) : (
-              <UserIcon size={18} className="text-mutedForeground" />
+              <UserIcon size={22} className="text-mutedForeground" />
             )}
           </div>
           <h2 className="text-[10px] md:text-xs font-heading font-bold text-primary uppercase tracking-[0.12em] truncate">
