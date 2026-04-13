@@ -2474,11 +2474,6 @@ export default function Profile() {
               <div className="rounded-lg overflow-hidden border border-border/60 bg-black/20">
                 <img src={avatarLightbox.url} alt="" className="w-full h-auto max-h-[min(70vh,520px)] object-contain" />
               </div>
-              <p className="mt-3 text-center text-[10px] text-mutedForeground font-heading">
-                Click outside or press{' '}
-                <kbd className="px-1.5 py-0.5 rounded border border-border bg-secondary text-[9px] font-mono text-foreground">Esc</kbd>
-                {' '}to close
-              </p>
             </div>
           </div>
         </div>
