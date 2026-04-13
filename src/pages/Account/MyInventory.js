@@ -15,19 +15,6 @@ const INV_STYLES = `
 let _cachedInventory = null;
 let _invLastFetch = 0;
 const INV_REFRESH = 30_000;
-/** Bumped when client merge/normalize changes; drops stale module cache (avoids stuck empty UI). */
-const INV_CLIENT_CACHE_REV = 2;
-if (_cachedInventory != null && _cachedInventory._invRev !== INV_CLIENT_CACHE_REV) {
-  _cachedInventory = null;
-  _invLastFetch = 0;
-}
-
-/** Matches backend STORE_TOKEN_MAX_HELD — max unactivated tokens per type (recipient cap). */
-const STORE_TOKEN_MAX_HELD = 15;
-const INVENTORY_TOKEN_TYPES = [
-  'xp_crimes', 'xp_gta', 'auto_rank_2h', 'melt', 'oc_reduced', 'booze', 'racket', 'travel', 'properties', 'jailbust_bonus', 'rank_xp_pass',
-];
-const GIFTABLE_TOKEN_KEYS = INVENTORY_TOKEN_TYPES.filter((k) => k !== 'rank_xp_pass');
 
 export default function MyInventory() {
   const [hasLoaded, setHasLoaded] = useState(Boolean(_cachedInventory));
@@ -36,82 +23,30 @@ export default function MyInventory() {
   const [usingToken, setUsingToken] = useState(null);
   const [collectingSpeakeasy, setCollectingSpeakeasy] = useState(false);
   const [exchangingAutoRank, setExchangingAutoRank] = useState(false);
-  const [giftTargetUsername, setGiftTargetUsername] = useState('');
-  const [giftTokenType, setGiftTokenType] = useState('');
-  const [giftAmount, setGiftAmount] = useState(1);
-  const [gifting, setGifting] = useState(false);
-
-  const normalizeInventoryPayload = (d) => {
-    if (!d || typeof d !== 'object' || Array.isArray(d)) return null;
-    const armourIn = d.armour;
-    const armour =
-      armourIn && typeof armourIn === 'object' && !Array.isArray(armourIn)
-        ? { ...armourIn, options: Array.isArray(armourIn.options) ? armourIn.options : [] }
-        : { options: [] };
-    const tok = d.tokens;
-    const tokens =
-      tok && typeof tok === 'object' && !Array.isArray(tok) ? tok : {};
-    const loot =
-      d.loot_exclusives && typeof d.loot_exclusives === 'object' && !Array.isArray(d.loot_exclusives)
-        ? d.loot_exclusives
-        : {};
-    return {
-      ...d,
-      weapons: Array.isArray(d.weapons) ? d.weapons : [],
-      armour,
-      loot_exclusives: loot,
-      tokens,
-    };
-  };
 
   const fetchInventory = (silent = false) => {
     api
       .get('/inventory')
       .then((res) => {
-        const normalized = normalizeInventoryPayload(res?.data);
-        if (normalized) {
-          const withRev = { ...normalized, _invRev: INV_CLIENT_CACHE_REV };
-          _cachedInventory = withRev;
+        if (res?.data) {
+          _cachedInventory = res.data;
           _invLastFetch = Date.now();
-          setData(withRev);
+          setData(res.data);
         }
       })
       .catch(() => {
-        if (!silent) {
-          setData((prev) => prev || { weapons: [], armour: { options: [] }, loot_exclusives: {}, tokens: {} });
-        }
+        if (!silent) setData({ weapons: [], armour: { options: [] }, loot_exclusives: {}, tokens: {} });
       })
       .finally(() => { setHasLoaded(true); });
   };
 
   useEffect(() => {
-    fetchInventory(false);
+    const stale = Date.now() - _invLastFetch > INV_REFRESH;
+    if (!_cachedInventory) fetchInventory(false);
+    else if (stale) fetchInventory(true);
     const id = setInterval(() => fetchInventory(true), INV_REFRESH);
     return () => clearInterval(id);
   }, []);
-
-  useEffect(() => {
-    const tok = data?.tokens;
-    if (!tok || typeof tok !== 'object') return;
-    const inStock = GIFTABLE_TOKEN_KEYS.filter((k) => (tok[k]?.count ?? 0) > 0);
-    setGiftTokenType((cur) => {
-      if (inStock.includes(cur)) return cur;
-      return inStock[0] || '';
-    });
-  }, [data]);
-
-  useEffect(() => {
-    const tok = data?.tokens;
-    if (!tok || typeof tok !== 'object') return;
-    const tokenGiftDaily = data.token_gift_daily || { sent_today: 0, limit: 20 };
-    const giftDailyRemaining = Math.max(0, (tokenGiftDaily.limit ?? 20) - (tokenGiftDaily.sent_today ?? 0));
-    const selGiftCount = giftTokenType ? (tok[giftTokenType]?.count ?? 0) : 0;
-    const maxG = Math.max(0, Math.min(selGiftCount, giftDailyRemaining, STORE_TOKEN_MAX_HELD));
-    setGiftAmount((a) => {
-      if (maxG <= 0) return 1;
-      return Math.min(Math.max(1, a), maxG);
-    });
-  }, [data, giftTokenType]);
 
   const equipWeapon = async (weaponId) => {
     setEquipping((e) => ({ ...e, weapon: weaponId }));
@@ -230,6 +165,7 @@ export default function MyInventory() {
     }
   };
 
+  const TOKEN_TYPES = ['xp_crimes', 'xp_gta', 'auto_rank_2h', 'melt', 'oc_reduced', 'booze', 'racket', 'travel', 'properties', 'jailbust_bonus', 'rank_xp_pass'];
   const tokenLabels = {
     xp_crimes: { name: 'Crimes XP', icon: Zap, desc: 'Double XP from crimes, 1h per token (stack up to 24h)' },
     xp_gta: { name: 'GTA XP', icon: Zap, desc: 'Double XP from GTA, 1h per token (stack up to 24h)' },
@@ -243,12 +179,6 @@ export default function MyInventory() {
     jailbust_bonus: { name: 'Jailbust bonus', icon: Target, desc: '+10% jail bust success, less chance of jail on fail, 1h per token (stack up to 24h)' },
     rank_xp_pass: { name: 'Game Pass', icon: Package, desc: 'Activate in Armoury/My Inventory to claim one-time Game Pass rewards. Expires in 1 month if unused.' },
   };
-
-  const tokenGiftDaily = data.token_gift_daily || { sent_today: 0, limit: 20 };
-  const giftDailyRemaining = Math.max(0, (tokenGiftDaily.limit ?? 20) - (tokenGiftDaily.sent_today ?? 0));
-  const giftableInStock = GIFTABLE_TOKEN_KEYS.filter((k) => (tokens[k]?.count ?? 0) > 0);
-  const selGiftCount = giftTokenType ? (tokens[giftTokenType]?.count ?? 0) : 0;
-  const maxGift = Math.max(0, Math.min(selGiftCount, giftDailyRemaining, STORE_TOKEN_MAX_HELD));
 
   const exchangeAutoRank = async () => {
     setExchangingAutoRank(true);
@@ -273,121 +203,13 @@ export default function MyInventory() {
     }
   };
 
-  const sendGiftPerks = async () => {
-    const uname = giftTargetUsername.trim();
-    if (!uname) {
-      toast.error('Enter a username');
-      return;
-    }
-    if (!giftTokenType || maxGift < 1) {
-      toast.error('No giftable perks available');
-      return;
-    }
-    const amt = Math.min(Math.max(1, giftAmount), maxGift);
-    setGifting(true);
-    try {
-      const res = await api.post('/inventory/tokens/gift', {
-        target_username: uname,
-        token_type: giftTokenType,
-        amount: amt,
-      });
-      if (res?.data?.tokens) {
-        setData((d) => {
-          if (!d) return d;
-          const next = { ...d, tokens: res.data.tokens };
-          if (res.data.token_gift_daily) next.token_gift_daily = res.data.token_gift_daily;
-          return next;
-        });
-      }
-      toast.success(res?.data?.message || 'Gift sent.');
-      setGiftTargetUsername('');
-      refreshUser();
-      fetchInventory();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to send gift');
-    } finally {
-      setGifting(false);
-    }
-  };
-
   return (
     <div className={`${styles.pageContent} p-3 sm:p-4 mobile-page-root`}>
       <style>{INV_STYLES}</style>
       <div className="max-w-4xl mx-auto space-y-4">
         <p className="text-[10px] sm:text-xs text-mutedForeground font-heading inv-fade-in" style={{ animationDelay: '0.05s' }}>
-          <span className="text-foreground font-medium">You → My Inventory</span>
-          {' — '}
-          Equip armour and weapons, use consumables, and send unactivated perk tokens to another player in <span className="text-foreground">Gift perks</span> (first panel below). Loot exclusives are listed further down.
+          Equip your armour and weapons. View your loot-exclusive items.
         </p>
-
-        {/* Gift unactivated perk tokens (UTC daily cap on sender) — at top so it is easy to find */}
-        <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 inv-fade-in mobile-panel`} style={{ animationDelay: '0.08s' }}>
-          <div className="px-2.5 py-2 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
-            <Gift size={14} className="text-primary" />
-            <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Gift perks</h2>
-          </div>
-          <div className="p-2.5 space-y-2">
-            <p className="text-[8px] text-mutedForeground font-heading leading-snug">
-              Enter their <span className="text-foreground">exact in-game username</span>, choose a perk you hold, amount, then <span className="text-foreground">Send gift</span>. Game Pass tokens cannot be gifted. Recipients can hold at most {STORE_TOKEN_MAX_HELD} of each type. Daily send limit (UTC):{' '}
-              <span className="text-foreground font-medium">
-                {tokenGiftDaily.sent_today ?? 0}/{tokenGiftDaily.limit ?? 20}
-              </span>
-              {giftDailyRemaining <= 0 && <span className="text-amber-400"> — limit reached today</span>}
-            </p>
-            <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 items-stretch sm:items-end">
-              <label className="flex flex-col gap-0.5 min-w-0 flex-1 sm:max-w-[11rem]">
-                <span className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground">Their username</span>
-                <input
-                  type="text"
-                  value={giftTargetUsername}
-                  onChange={(e) => setGiftTargetUsername(e.target.value)}
-                  placeholder="Player name"
-                  autoComplete="off"
-                  className="px-2 py-1 rounded border border-zinc-600/50 bg-background text-[10px] font-heading text-foreground placeholder:text-mutedForeground"
-                />
-              </label>
-              <label className="flex flex-col gap-0.5 min-w-0 flex-1 sm:max-w-[14rem]">
-                <span className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground">Perk to send</span>
-                <select
-                  value={giftTokenType}
-                  onChange={(e) => setGiftTokenType(e.target.value)}
-                  disabled={giftableInStock.length === 0}
-                  className="px-2 py-1 rounded border border-zinc-600/50 bg-background text-[10px] font-heading text-foreground disabled:opacity-50"
-                >
-                  {giftableInStock.length === 0 ? (
-                    <option value="">None in inventory</option>
-                  ) : (
-                    giftableInStock.map((k) => (
-                      <option key={k} value={k}>
-                        {(tokenLabels[k]?.name || k)} ×{tokens[k]?.count ?? 0}
-                      </option>
-                    ))
-                  )}
-                </select>
-              </label>
-              <label className="flex flex-col gap-0.5 w-full sm:w-20">
-                <span className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground">Amount</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={Math.max(1, maxGift)}
-                  value={maxGift <= 0 ? 1 : Math.min(giftAmount, maxGift)}
-                  onChange={(e) => setGiftAmount(Math.max(1, parseInt(e.target.value, 10) || 1))}
-                  disabled={maxGift <= 0}
-                  className="px-2 py-1 rounded border border-zinc-600/50 bg-background text-[10px] font-heading text-foreground disabled:opacity-50 w-full"
-                />
-              </label>
-              <button
-                type="button"
-                disabled={gifting || maxGift < 1 || giftDailyRemaining < 1 || !giftTargetUsername.trim()}
-                onClick={sendGiftPerks}
-                className="px-3 py-1.5 rounded text-[9px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50 sm:shrink-0"
-              >
-                {gifting ? '…' : 'Send gift'}
-              </button>
-            </div>
-          </div>
-        </div>
 
         {/* Stack when .mobile-panel uses negative margins (≤1024px in noir.module.css); two columns only above that so panels do not overlap */}
         <div className="grid grid-cols-1 min-[1025px]:grid-cols-2 gap-3 inv-fade-in" style={{ animationDelay: '0.1s' }}>
@@ -482,7 +304,7 @@ export default function MyInventory() {
         )}
 
         {/* Consumables / Tokens */}
-        {INVENTORY_TOKEN_TYPES.some((k) => (tokens[k]?.count ?? 0) > 0 || tokens[k]?.active_until) && (
+        {TOKEN_TYPES.some((k) => (tokens[k]?.count ?? 0) > 0 || tokens[k]?.active_until) && (
           <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 inv-fade-in mobile-panel`} style={{ animationDelay: '0.18s' }}>
             <div className="px-2.5 py-2 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
               <Zap size={14} className="text-primary" />
@@ -492,7 +314,7 @@ export default function MyInventory() {
               <p className="text-[8px] text-mutedForeground font-heading leading-snug border-b border-zinc-700/30 pb-2 mb-1">
                 Use all only spends tokens that add a full token duration toward this row&apos;s max stack (or until you run out). Tiny leftover headroom is not filled, and extra tokens stay in your inventory.
               </p>
-              {INVENTORY_TOKEN_TYPES.filter((key) => (tokens[key]?.count ?? 0) > 0 || tokens[key]?.active_until).map((key) => {
+              {TOKEN_TYPES.filter((key) => (tokens[key]?.count ?? 0) > 0 || tokens[key]?.active_until).map((key) => {
                 const t = tokens[key] || { count: 0, active_until: null, expires_at: null };
                 const { name, icon: Icon, desc } = tokenLabels[key] || { name: key, icon: Zap, desc: '' };
                 // Game Pass is now one-time tier rewards (no 24h "active until" window).
