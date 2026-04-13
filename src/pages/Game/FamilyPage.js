@@ -662,9 +662,6 @@ const TreasuryTab = ({
 
     <div className="bg-zinc-800/30 rounded-lg border border-zinc-700/30 p-2.5 sm:p-3">
       <p className="text-[10px] text-zinc-500 font-heading uppercase tracking-[0.15em] mb-2">Melt rewards (configured)</p>
-      <p className="text-[9px] text-zinc-500 mb-2 leading-snug">
-        Counts each member’s family-bullet share from melts over time; when it reaches a tier threshold they get paid (smaller melts add up).
-      </p>
       {(meltRewardTiers && meltRewardTiers.length > 0) ? (
         <div className="space-y-1.5">
           {meltRewardTiers.map((t) => (
@@ -1083,8 +1080,7 @@ const RosterTab = ({
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-[9px] text-zinc-500 font-heading">Reward tiers (across melts)</label>
-            <p className="text-[9px] text-zinc-600 mb-1 leading-snug">Progress carries between melts until each threshold is reached; not only when one melt hits the full amount at once.</p>
+            <label className="block text-[9px] text-zinc-500 font-heading">Reward tiers (stack on melt)</label>
             {(meltRewardTiers || []).length > 0 ? (
               <div className="space-y-1">
                 {(meltRewardTiers || []).map((t) => (

@@ -30,7 +30,7 @@ from utils.game_pass_micro_rewards import (
     MAX_MICRO_TIER,
     vip_rewards_after_free_dedupe,
 )
-from routers.game.store import _store_cost_inc, STORE_TOKEN_MAX_HELD, _token_count_lte_atom_filter
+from routers.game.store import _store_cost_inc
 from routers.minigames.minigame_leaderboard import log_minigame_play
 from utils.minigame_run_session import (
     claim_minigame_run_session,
@@ -195,11 +195,6 @@ AUTO_RANK_EXCHANGE_POOL = (
     "jailbust_bonus",
 )
 AUTO_RANK_EXCHANGE_TOKEN_COUNT = 2
-
-# My Inventory: gift unactivated boost tokens to other players (UTC day cap per sender).
-TOKEN_GIFT_DAILY_MAX = 20
-# Game Pass tokens are excluded (paid / one-time claim flow).
-GIFTABLE_TOKEN_TYPES = tuple(t for t in TOKEN_TYPES if t != "rank_xp_pass")
 
 async def _try_grant_rank_xp_pass_micro_tier(
     db,
@@ -395,12 +390,6 @@ class StateOptionalBody(BaseModel):
 class UseTokenRequest(BaseModel):
     token_type: str  # one of TOKEN_TYPES (xp_crimes, xp_gta, melt, oc_reduced, booze, racket, travel, properties, jailbust_bonus)
     use_all: bool = False  # if True, use as many tokens as needed to reach max stack (or until count runs out)
-
-
-class GiftTokenRequest(BaseModel):
-    target_username: str
-    token_type: str
-    amount: int = 1
 
 
 class ExchangeAutoRankRequest(BaseModel):
@@ -1641,7 +1630,6 @@ async def get_weapons(request: Request, current_user: dict = Depends(get_current
     weapons_dict = {w["id"]: w for w in weapons}
     weapon_stock = {}
     unowned_armoury = False
-    factory = None
     if state:
         factory = await get_armoury_for_state(state)
         if factory:
@@ -2617,146 +2605,6 @@ async def exchange_auto_rank_tokens(req: ExchangeAutoRankRequest, current_user: 
     }
 
 
-def _token_gifts_sent_today_count(user_doc: dict, today_utc: str) -> int:
-    if (user_doc or {}).get("token_gifts_sent_utc_date") != today_utc:
-        return 0
-    return int((user_doc or {}).get("token_gifts_sent_count") or 0)
-
-
-async def gift_inventory_token(body: GiftTokenRequest, current_user: dict = Depends(get_current_user)):
-    """Gift unactivated consumable tokens to another player. Max TOKEN_GIFT_DAILY_MAX total tokens sent per UTC day."""
-    tt = (body.token_type or "").strip()
-    if tt not in GIFTABLE_TOKEN_TYPES:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Cannot gift this token type. Giftable: {list(GIFTABLE_TOKEN_TYPES)}",
-        )
-    amt = int(body.amount or 0)
-    if amt < 1:
-        raise HTTPException(status_code=400, detail="Amount must be at least 1")
-    target_username = (body.target_username or "").strip()
-    if not target_username:
-        raise HTTPException(status_code=400, detail="Enter a username")
-
-    target_pattern = _username_pattern(target_username)
-    target = await db.users.find_one(
-        {"username": target_pattern},
-        {"_id": 0, "id": 1, "username": 1},
-    )
-    if not target:
-        raise HTTPException(status_code=404, detail="User not found")
-    rid = target["id"]
-    sid = current_user["id"]
-    if rid == sid:
-        raise HTTPException(status_code=400, detail="Cannot gift to yourself")
-
-    cfg = TOKEN_CONFIG[tt]
-    count_field = cfg["count_field"]
-
-    sender = await db.users.find_one(
-        {"id": sid},
-        {"_id": 0, count_field: 1, "token_gifts_sent_utc_date": 1, "token_gifts_sent_count": 1},
-    )
-    if not sender:
-        raise HTTPException(status_code=400, detail="Sender not found")
-    have = int(sender.get(count_field) or 0)
-    if have < amt:
-        raise HTTPException(status_code=400, detail="Not enough tokens to gift")
-
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    sent_today = _token_gifts_sent_today_count(sender, today)
-    if sent_today + amt > TOKEN_GIFT_DAILY_MAX:
-        rem = max(0, TOKEN_GIFT_DAILY_MAX - sent_today)
-        raise HTTPException(
-            status_code=400,
-            detail=f"Daily gift limit is {TOKEN_GIFT_DAILY_MAX} tokens (UTC). You can gift {rem} more today.",
-        )
-
-    recipient = await db.users.find_one({"id": rid}, {"_id": 0, count_field: 1})
-    if not recipient:
-        raise HTTPException(status_code=404, detail="Recipient not found")
-    r_have = int(recipient.get(count_field) or 0)
-    if r_have + amt > STORE_TOKEN_MAX_HELD:
-        raise HTTPException(
-            status_code=400,
-            detail=f"They can hold at most {STORE_TOKEN_MAX_HELD} of this token (they have {r_have}).",
-        )
-
-    res_r = await db.users.update_one(
-        {"id": rid, **_token_count_lte_atom_filter(count_field, STORE_TOKEN_MAX_HELD - amt)},
-        {"$inc": {count_field: amt}},
-    )
-    if res_r.modified_count == 0:
-        raise HTTPException(
-            status_code=400,
-            detail=f"They can hold at most {STORE_TOKEN_MAX_HELD} of this token.",
-        )
-
-    filter_same = {
-        "id": sid,
-        count_field: {"$gte": amt},
-        "token_gifts_sent_utc_date": today,
-        "$or": [
-            {"token_gifts_sent_count": {"$lte": TOKEN_GIFT_DAILY_MAX - amt}},
-            {"token_gifts_sent_count": {"$exists": False}},
-        ],
-    }
-    update_same = {"$inc": {count_field: -amt, "token_gifts_sent_count": amt}}
-    res_s = await db.users.update_one(filter_same, update_same)
-    if res_s.modified_count == 0:
-        filter_new = {
-            "id": sid,
-            count_field: {"$gte": amt},
-            "$or": [
-                {"token_gifts_sent_utc_date": {"$ne": today}},
-                {"token_gifts_sent_utc_date": {"$exists": False}},
-            ],
-        }
-        update_new = {
-            "$inc": {count_field: -amt},
-            "$set": {"token_gifts_sent_utc_date": today, "token_gifts_sent_count": amt},
-        }
-        res_s = await db.users.update_one(filter_new, update_new)
-
-    if res_s.modified_count == 0:
-        await db.users.update_one({"id": rid}, {"$inc": {count_field: -amt}})
-        raise HTTPException(
-            status_code=400,
-            detail="Could not complete gift (tokens or daily limit). Try again.",
-        )
-
-    sname = (current_user.get("username") or "").strip() or "Someone"
-    tname = (target.get("username") or "").strip() or target_username
-    try:
-        await send_notification(
-            rid,
-            "Perk gift",
-            f"{sname} sent you {amt}× {tt.replace('_', ' ')} token(s). Check My Inventory.",
-            "inventory_token_gift",
-            category="social",
-        )
-    except Exception:
-        pass
-    await log_activity(
-        sid,
-        sname,
-        "inventory_token_gift",
-        {"token_type": tt, "amount": amt, "to_user_id": rid, "to_username": tname},
-    )
-
-    fresh = await db.users.find_one({"id": sid}, {"_id": 0})
-    tokens = _tokens_from_user(fresh or {})
-    new_sent = _token_gifts_sent_today_count(fresh or {}, today)
-    return {
-        "message": f"Gifted {amt}× {tt.replace('_', ' ')} to {tname}.",
-        "tokens": tokens,
-        "token_gift_daily": {
-            "sent_today": new_sent,
-            "limit": TOKEN_GIFT_DAILY_MAX,
-        },
-    }
-
-
 async def get_inventory(request: Request, current_user: dict = Depends(get_current_user)):
     """Aggregate weapons, armour, loot exclusives, and consumable tokens for the My Inventory page."""
     weapons = await get_weapons(request, current_user)
@@ -2798,12 +2646,6 @@ async def get_inventory(request: Request, current_user: dict = Depends(get_curre
             "last_collected_at": last_collected,
         }
     tokens = _tokens_from_user(current_user)
-    gift_meta = await db.users.find_one(
-        {"id": uid},
-        {"_id": 0, "token_gifts_sent_utc_date": 1, "token_gifts_sent_count": 1},
-    )
-    gift_today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    gift_sent = _token_gifts_sent_today_count(gift_meta or {}, gift_today)
     return {
         "weapons": [w.model_dump() if hasattr(w, "model_dump") else w for w in weapons],
         "armour": armour,
@@ -2813,7 +2655,6 @@ async def get_inventory(request: Request, current_user: dict = Depends(get_curre
             "speakeasy": speakeasy_info,
         },
         "tokens": tokens,
-        "token_gift_daily": {"sent_today": gift_sent, "limit": TOKEN_GIFT_DAILY_MAX},
     }
 
 
@@ -2854,4 +2695,3 @@ def register(router):
     router.add_api_route("/inventory", get_inventory, methods=["GET"])
     router.add_api_route("/inventory/tokens/use", use_consumable_token, methods=["POST"])
     router.add_api_route("/inventory/tokens/exchange-auto-rank", exchange_auto_rank_tokens, methods=["POST"])
-    router.add_api_route("/inventory/tokens/gift", gift_inventory_token, methods=["POST"])

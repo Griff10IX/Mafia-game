@@ -5,7 +5,7 @@ import secrets
 from datetime import datetime, timezone, timedelta
 _rng = secrets.SystemRandom()
 import uuid
-from typing import List, Optional, Dict, Any, Tuple
+from typing import List, Optional, Dict, Any
 from fastapi import Depends, HTTPException, Query, Request
 from bson.objectid import ObjectId
 from pydantic import BaseModel
@@ -986,65 +986,6 @@ def _parse_melt_cooldown(iso_str):
         return None
 
 
-def _normalize_family_melt_tier_progress(raw: Any) -> dict:
-    """Stable shape for per-tier bullet remainders toward family melt cash rewards."""
-    if not isinstance(raw, dict):
-        return {"family_id": None, "remainders": {}}
-    fid = raw.get("family_id")
-    if fid is not None and str(fid).strip() != "":
-        fid = str(fid).strip()
-    else:
-        fid = None
-    r0 = raw.get("remainders")
-    if not isinstance(r0, dict):
-        r0 = {}
-    rem: Dict[str, int] = {}
-    for k, v in r0.items():
-        try:
-            rem[str(int(k))] = int(v)
-        except (TypeError, ValueError):
-            continue
-    return {"family_id": fid, "remainders": rem}
-
-
-def _family_melt_reward_progress_apply(
-    family_id: Optional[str],
-    family_cut: int,
-    valid_tiers: list,
-    old_norm: dict,
-) -> Tuple[list, dict]:
-    """
-    Add this melt's family bullet cut to each tier's remainder (tiers are independent, same as old
-    floor(cut/threshold) per tier). Returns (list of cash reward amounts owed, new progress doc).
-    """
-    fc = int(family_cut)
-    if fc <= 0 or not valid_tiers:
-        return [], old_norm
-    fid = (family_id or "").strip() or None
-    old_fid = old_norm.get("family_id")
-    if old_fid is not None and str(old_fid).strip() != "":
-        old_fid = str(old_fid).strip()
-    else:
-        old_fid = None
-    new_rem = dict(old_norm.get("remainders") or {})
-    if fid != old_fid:
-        new_rem = {}
-    individual_rewards: list = []
-    for t in valid_tiers:
-        tb = int(t["threshold_bullets"])
-        rm = int(t["reward_money"])
-        if tb <= 0 or rm <= 0:
-            continue
-        key = str(tb)
-        cur = int(new_rem.get(key) or 0) + fc
-        hits = cur // tb
-        new_rem[key] = cur % tb
-        for _ in range(hits):
-            individual_rewards.append(rm)
-    new_prog = {"family_id": fid, "remainders": new_rem}
-    return individual_rewards, new_prog
-
-
 async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_garage: bool = False):
     """Core melt logic. Returns dict with success/melted_count/etc. On bullets cooldown returns {success: False, cooldown: True, detail: ...}."""
     now = datetime.now(timezone.utc)
@@ -1187,7 +1128,6 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
             melt_reward_hits_paid = 0
             melt_pct_applied = 0
             family_treasury_bullets_after = None
-            new_tier_progress = None
             if family_id:
                 fam = await db.families.find_one(
                     {"id": family_id, "wiped": {"$ne": True}},
@@ -1209,19 +1149,14 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
                     if configured_pct > 0 and base_total_bullets > 0 and valid_tiers:
                         projected_family_cut = (base_total_bullets * configured_pct) // 100
                         if projected_family_cut > 0:
-                            uprog = await db.users.find_one(
-                                {"id": user["id"]},
-                                {"_id": 0, "family_melt_tier_progress": 1},
-                            )
-                            prev_norm = _normalize_family_melt_tier_progress(
-                                (uprog or {}).get("family_melt_tier_progress")
-                            )
-                            individual_rewards, new_tier_progress = _family_melt_reward_progress_apply(
-                                family_id,
-                                projected_family_cut,
-                                valid_tiers,
-                                prev_norm,
-                            )
+                            individual_rewards = []
+                            for t in valid_tiers:
+                                tb = int(t["threshold_bullets"])
+                                rm = int(t["reward_money"])
+                                if tb > 0:
+                                    hits = projected_family_cut // tb
+                                    for _ in range(hits):
+                                        individual_rewards.append(rm)
                             melt_reward_hits_due = len(individual_rewards)
                             melt_reward_due = sum(individual_rewards)
                     if melt_reward_due > 0:
@@ -1267,9 +1202,6 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
                                 {"_id": 0, "treasury_bullets": 1},
                             )
                             family_treasury_bullets_after = int((fam_after or {}).get("treasury_bullets") or 0)
-            set_after_melt = {"melt_bullets_cooldown_until": cooldown_until.isoformat()}
-            if new_tier_progress is not None:
-                set_after_melt["family_melt_tier_progress"] = new_tier_progress
             await db.users.update_one(
                 {"id": user["id"]},
                 {
@@ -1283,7 +1215,7 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
                         "cars_melted": deleted_count,
                         "uncommon_cars_scrapped": uncommon_count,
                     },
-                    "$set": set_after_melt,
+                    "$set": {"melt_bullets_cooldown_until": cooldown_until.isoformat()},
                 },
             )
             await log_melt_event(user["id"], player_bullets)
