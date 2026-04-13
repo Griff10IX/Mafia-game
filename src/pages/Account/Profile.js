@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import React from 'react';
 import { useNavigate, useParams, useSearchParams, Link } from 'react-router-dom';
-import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, ChevronDown, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd, Radio, Award, Music2, Play, Pause, SkipBack, SkipForward, ExternalLink } from 'lucide-react';
+import { User as UserIcon, Search, Shield, Trophy, Building2, Mail, Skull, Users as UsersIcon, Ghost, Settings, Plane, Factory, DollarSign, MessageCircle, Car, Youtube, Bold, Italic, Image, Palette, AlignCenter, ChevronDown, Target, Lock, Unlock, Heart, Volume2, FileText, Dices, Activity, GalleryVerticalEnd, Radio, Award, Music2, Play, Pause, SkipBack, SkipForward, ExternalLink, X } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
@@ -15,7 +15,7 @@ import StaffUserDetailsPanel from '../../components/StaffUserDetailsPanel';
 import FamilyEmblem from '../../components/FamilyEmblem';
 import { getProfilePrefetch, setProfilePrefetch } from '../../utils/prefetchCache';
 import { getProfileEditWarm } from '../../utils/profilePageWarm';
-import { fileToCompressedDataUrl, validateSafeImageFile } from '../../utils/fileToCompressedDataUrl';
+import { fileToAvatarDataUrl, validateSafeImageFile } from '../../utils/fileToCompressedDataUrl';
 
 const PROFILE_STYLES = `
   @keyframes prof-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -254,6 +254,7 @@ const ProfileInfoCard = ({
   setStaffDetailsOpen,
   achievementBadges = [],
   censorProfanity = false,
+  onAvatarPreview,
 }) => {
   const isAdminProfile = profile.rank_name === 'Admin';
   const isModeratorProfile = profile.rank_name === 'Moderator';
@@ -384,7 +385,18 @@ const ProfileInfoCard = ({
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-9 h-9 md:w-11 md:h-11 rounded-md overflow-hidden border border-primary/30 bg-secondary flex items-center justify-center shrink-0">
             {profile?.avatar_url ? (
-              <img src={profile.avatar_url} alt={`${profile.username} avatar`} className="w-full h-full object-cover" />
+              onAvatarPreview ? (
+                <button
+                  type="button"
+                  onClick={() => onAvatarPreview(profile.avatar_url)}
+                  className="w-full h-full p-0 border-0 bg-transparent cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-md"
+                  aria-label={`View ${profile.username} profile picture`}
+                >
+                  <img src={profile.avatar_url} alt="" className="w-full h-full object-cover pointer-events-none" />
+                </button>
+              ) : (
+                <img src={profile.avatar_url} alt={`${profile.username} avatar`} className="w-full h-full object-cover" />
+              )
             ) : (
               <UserIcon size={18} className="text-mutedForeground" />
             )}
@@ -1214,6 +1226,7 @@ export default function Profile() {
   /** When true, we're viewing our own profile as a visitor would (no settings, no avatar edit, etc.). */
   const isPublicView = isMe && viewPublic;
   const [savingAvatar, setSavingAvatar] = useState(false);
+  const [avatarLightbox, setAvatarLightbox] = useState(null);
   const spotifyPlayerRef = React.useRef(null);
   const profileRequestIdRef = useRef(0);
 
@@ -1258,12 +1271,16 @@ export default function Profile() {
     }
     setSavingAvatar(true);
     try {
-      const dataUrl = await fileToCompressedDataUrl(file);
-      if (!dataUrl) {
-        toast.error('Please choose an image file.');
+      const result = await fileToAvatarDataUrl(file);
+      if (!result.ok) {
+        if (result.reason === 'gif_too_large') {
+          toast.error('That GIF is too large for an avatar (max ~250KB when encoded). Try a smaller or shorter GIF.');
+        } else {
+          toast.error('Please choose a valid image file.');
+        }
         return;
       }
-      await api.post('/profile/avatar', { avatar_data: dataUrl });
+      await api.post('/profile/avatar', { avatar_data: result.dataUrl });
       toast.success('Avatar updated');
       await refetchMe();
       await refetchProfile();
@@ -1287,6 +1304,15 @@ export default function Profile() {
       setSavingAvatar(false);
     }
   };
+
+  useEffect(() => {
+    if (!avatarLightbox) return undefined;
+    const onKey = (e) => {
+      if (e.key === 'Escape') setAvatarLightbox(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [avatarLightbox]);
 
   useEffect(() => {
     const run = async () => {
@@ -1854,14 +1880,21 @@ export default function Profile() {
               <div className="p-3 flex items-center gap-3">
                 <div className="w-14 h-14 rounded-md overflow-hidden border border-primary/25 bg-secondary flex items-center justify-center shrink-0">
                   {me?.avatar_url ? (
-                    <img src={me.avatar_url} alt="avatar" className="w-full h-full object-cover" />
+                    <button
+                      type="button"
+                      onClick={() => setAvatarLightbox({ url: me.avatar_url, username: me.username })}
+                      className="w-full h-full p-0 border-0 bg-transparent cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-md"
+                      aria-label="View profile picture"
+                    >
+                      <img src={me.avatar_url} alt="" className="w-full h-full object-cover pointer-events-none" />
+                    </button>
                   ) : (
                     <UserIcon size={22} className="text-mutedForeground" />
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[11px] text-mutedForeground font-heading">
-                    Upload a picture for your profile preview.
+                    Upload a picture for your profile preview. GIFs stay animated; max ~250KB.
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <label className={`inline-flex items-center justify-center px-3 py-1.5 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-xs hover:bg-primary/30 cursor-pointer ${savingAvatar ? 'opacity-60 cursor-not-allowed' : ''}`}>
@@ -2393,6 +2426,7 @@ export default function Profile() {
               setStaffDetailsOpen={setStaffDetailsOpen}
               achievementBadges={Array.isArray(profile.achievement_badges) ? profile.achievement_badges : []}
               censorProfanity={me?.censor_profanity}
+              onAvatarPreview={(url) => setAvatarLightbox({ url, username: profile.username })}
             />
 
             {!isMe && profile.admin_stats && (
@@ -2402,6 +2436,53 @@ export default function Profile() {
           </>
         )}
       </div>
+
+      {avatarLightbox ? (
+        <div
+          className="fixed inset-0 z-[300] flex items-center justify-center p-4 bg-black/85"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="avatar-lightbox-title"
+          onClick={() => setAvatarLightbox(null)}
+        >
+          <div
+            className={`relative w-full max-w-lg ${styles.panel} rounded-xl border border-primary/30 shadow-2xl overflow-hidden prof-scale-in`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-3 py-2.5 md:px-4 md:py-3 bg-primary/8 border-b border-primary/20 flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary/20 border border-primary/35 text-primary">
+                  <UserIcon size={18} aria-hidden />
+                </span>
+                <div className="min-w-0">
+                  <p id="avatar-lightbox-title" className="text-sm md:text-base font-heading font-bold text-foreground truncate">
+                    {avatarLightbox.username}
+                  </p>
+                  <p className="text-[10px] md:text-[11px] text-mutedForeground font-heading">Profile picture</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAvatarLightbox(null)}
+                className="shrink-0 inline-flex h-8 w-8 items-center justify-center rounded-full border border-border/80 bg-secondary text-mutedForeground hover:text-foreground hover:border-primary/40 transition-colors"
+                aria-label="Close"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="p-3 md:p-4">
+              <div className="rounded-lg overflow-hidden border border-border/60 bg-black/20">
+                <img src={avatarLightbox.url} alt="" className="w-full h-auto max-h-[min(70vh,520px)] object-contain" />
+              </div>
+              <p className="mt-3 text-center text-[10px] text-mutedForeground font-heading">
+                Click outside or press{' '}
+                <kbd className="px-1.5 py-0.5 rounded border border-border bg-secondary text-[9px] font-mono text-foreground">Esc</kbd>
+                {' '}to close
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

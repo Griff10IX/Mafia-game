@@ -21,17 +21,17 @@ const ObjectiveRow = ({ obj }) => {
   const progressPct = obj.target > 0 ? Math.min(100, (obj.current / obj.target) * 100) : 0;
   return (
     <div
-      className={`grid gap-x-2 gap-y-1.5 px-2.5 py-1.5 rounded border min-w-0 max-sm:grid-cols-[auto_1fr] sm:grid-cols-[auto_minmax(0,1fr)_4rem_minmax(7rem,11rem)] sm:items-center ${
+      className={`grid gap-x-2 gap-y-1.5 px-2.5 py-1.5 rounded border min-w-0 max-sm:grid-cols-[4rem_1fr] sm:grid-cols-[auto_minmax(0,1fr)_5.5rem_12rem] sm:items-center ${
         obj.done ? 'bg-primary/10 border-primary/30' : 'bg-zinc-800/20 border-zinc-700/30'
       }`}
     >
-      <span className="shrink-0 max-sm:row-start-1 max-sm:col-start-1 sm:row-start-1 sm:col-start-1 pt-0.5 sm:pt-0">
+      <span className="shrink-0 max-sm:row-start-1 max-sm:col-start-1 sm:row-start-1 sm:col-start-1 flex justify-center sm:justify-start pt-0.5 sm:pt-0">
         {obj.done ? <CheckCircle2 className="w-4 h-4 text-primary" /> : <Circle className="w-4 h-4 text-mutedForeground" />}
       </span>
       <p className="text-[11px] font-heading text-foreground min-w-0 break-words line-clamp-3 max-sm:row-start-1 max-sm:col-start-2 sm:row-start-1 sm:col-start-2">
         {obj.label}
       </p>
-      <div className="relative h-1.5 w-full max-w-16 bg-secondary rounded-full overflow-hidden border border-primary/20 shrink-0 max-sm:row-start-2 max-sm:col-start-1 sm:row-start-1 sm:col-start-3 sm:max-w-none">
+      <div className="relative h-1.5 w-full max-w-16 sm:max-w-none bg-secondary rounded-full overflow-hidden border border-primary/20 shrink-0 max-sm:row-start-2 max-sm:col-start-1 sm:row-start-1 sm:col-start-3 self-center">
         <div
           className="absolute top-0 left-0 h-full rounded-full transition-all duration-300"
           style={{
@@ -45,7 +45,7 @@ const ObjectiveRow = ({ obj }) => {
           aria-valuemax={obj.target}
         />
       </div>
-      <span className="text-[10px] font-heading font-bold text-primary tabular-nums text-right min-w-0 max-sm:row-start-2 max-sm:col-start-2 sm:row-start-1 sm:col-start-4 sm:whitespace-nowrap">
+      <span className="text-[10px] font-heading font-bold text-primary tabular-nums text-right w-full justify-self-end max-sm:row-start-2 max-sm:col-start-2 sm:row-start-1 sm:col-start-4 sm:whitespace-nowrap">
         {Number(obj.current).toLocaleString()}/{Number(obj.target).toLocaleString()}
       </span>
     </div>
