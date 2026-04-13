@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, User, Target, Building2, Plane, Factory, Mail, Radio, Clock, CalendarDays, CalendarRange, Globe } from 'lucide-react';
+import { Users, User, Target, Building2, Plane, Factory, Mail, Radio, Clock, CalendarDays, CalendarRange } from 'lucide-react';
 import api from '../../utils/api';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
 import { toast } from 'sonner';
 import { HoverCard, HoverCardTrigger, HoverCardPortal, HoverCardContent } from "@/components/ui/hover-card";
 import PrestigeBadge from '../../components/PrestigeBadge';
+import CountryFlagThumb from '../../components/CountryFlagThumb';
 import FamilyEmblem from '../../components/FamilyEmblem';
 import styles from '../../styles/noir.module.css';
 
@@ -49,34 +50,6 @@ function countryDisplayName(code) {
   } catch {
     return code;
   }
-}
-
-/** Small flag image (not “GB” text) — PNG for consistent rendering on Windows vs emoji regional indicators. */
-function CountryFlagThumb({ code }) {
-  const c = (code || '').trim().toLowerCase();
-  if (!c || c.length !== 2 || !/^[a-z]{2}$/.test(c)) {
-    /* Emoji white flag renders poorly on Windows; match flag thumb size/border. */
-    return (
-      <span
-        className="inline-flex h-3 w-4 shrink-0 items-center justify-center rounded-[1px] border border-zinc-600/50 bg-zinc-800/70 text-mutedForeground"
-        aria-hidden
-      >
-        <Globe size={10} strokeWidth={2.25} className="opacity-90" />
-      </span>
-    );
-  }
-  return (
-    <img
-      alt=""
-      src={`https://flagcdn.com/16x12/${c}.png`}
-      srcSet={`https://flagcdn.com/32x24/${c}.png 2x`}
-      width={16}
-      height={12}
-      loading="lazy"
-      decoding="async"
-      className="h-3 w-4 object-cover rounded-[1px] shrink-0 border border-zinc-600/50"
-    />
-  );
 }
 
 /** Sits on the same row as the big count (to the right), not stacked under the caption. */

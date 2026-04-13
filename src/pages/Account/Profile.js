@@ -6,6 +6,7 @@ import api, { getApiErrorMessage } from '../../utils/api';
 import { toast } from 'sonner';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../../components/ui/tooltip';
 import PrestigeBadge from '../../components/PrestigeBadge';
+import CountryFlagThumb from '../../components/CountryFlagThumb';
 import { parseForumContent, insertAtCursor } from '../../utils/forumContent';
 import { filterProfanity } from '../../utils/profanityFilter';
 import styles from '../../styles/noir.module.css';
@@ -86,15 +87,6 @@ function formatDateTime(iso) {
     minute: '2-digit',
     hour12: false,
   });
-}
-
-/** ISO 3166-1 alpha-2 → regional-indicator flag emoji (from edge-detected `last_seen_country`). */
-function countryCodeToFlagEmoji(code) {
-  if (!code || typeof code !== 'string') return '';
-  const u = code.trim().toUpperCase();
-  if (!/^[A-Z]{2}$/.test(u)) return '';
-  const base = 0x1f1e6;
-  return String.fromCodePoint(base + u.charCodeAt(0) - 65, base + u.charCodeAt(1) - 65);
 }
 
 /** Profile honours match main leaderboard boards; API may send `board` or we fall back by label. */
@@ -417,11 +409,11 @@ const ProfileInfoCard = ({
         <div className="flex items-center gap-1.5 md:gap-2 shrink-0 flex-wrap justify-end">
           {profile.profile_country_code ? (
             <span
-              className="text-lg md:text-xl leading-none select-none"
+              className="inline-flex shrink-0 items-center leading-none"
               title={`Region ${profile.profile_country_code}`}
-              aria-label={`Country flag ${profile.profile_country_code}`}
+              aria-label={`Country ${profile.profile_country_code}`}
             >
-              {countryCodeToFlagEmoji(profile.profile_country_code)}
+              <CountryFlagThumb code={profile.profile_country_code} />
             </span>
           ) : null}
           {profile.prestige_level > 0 && (
@@ -2123,7 +2115,11 @@ export default function Profile() {
                     </button>
                   </div>
                   {profile?.last_seen_country ? (
-                    <p className="text-[10px] text-mutedForeground">Detected region: <span className="font-mono text-foreground">{profile.last_seen_country}</span>{showCountryFlagOnProfile ? ` ${countryCodeToFlagEmoji(profile.last_seen_country)}` : ''}</p>
+                    <p className="text-[10px] text-mutedForeground flex flex-wrap items-center gap-1.5">
+                      <span>Detected region:</span>
+                      <span className="font-mono text-foreground">{profile.last_seen_country}</span>
+                      {showCountryFlagOnProfile ? <CountryFlagThumb code={profile.last_seen_country} /> : null}
+                    </p>
                   ) : (
                     <p className="text-[10px] text-mutedForeground">No region detected yet — browse the site and try again after your next request.</p>
                   )}
