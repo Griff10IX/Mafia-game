@@ -718,8 +718,21 @@ def register(router):
                 "retrieval_used": False,
                 "last_seen": datetime.now(timezone.utc).isoformat(),
                 "created_at": datetime.now(timezone.utc).isoformat(),
-                "registration_ip": _client_ip(request),
-                "login_ips": [_client_ip(request)] if _client_ip(request) else [],
+                "registration_ip": client_ip,
+                "login_ips": [client_ip] if client_ip else [],
+                "login_history": (
+                    [
+                        {
+                            "at": datetime.now(timezone.utc).isoformat(),
+                            "ip": client_ip or "",
+                            "device_type": _device_type_from_user_agent(request.headers.get("User-Agent") or "") or "",
+                            "ua_short": (request.headers.get("User-Agent") or "").strip()[:120],
+                            "source": "register",
+                        }
+                    ]
+                    if client_ip
+                    else []
+                ),
                 "email_verified": not require_verification,
                 "rules_accepted": False,
                 "rules_accepted_at": None,
@@ -1368,6 +1381,21 @@ def register(router):
                 {"id": user_id},
                 {"$push": {"sessions": {"$each": [session_entry], "$position": 0, "$slice": 10}}},
             )
+        if ip:
+            hist_entry = {
+                "at": now_iso,
+                "ip": ip,
+                "device_type": device_type or "",
+                "ua_short": ua[:120] if ua else "",
+                "source": "staff_login" if staff_route else "login",
+            }
+            try:
+                await db.users.update_one(
+                    {"id": user_id},
+                    {"$push": {"login_history": {"$each": [hist_entry], "$position": 0, "$slice": 200}}},
+                )
+            except Exception:
+                logging.exception("login_history push failed user_id=%s", user_id)
         token = create_access_token({
             "sub": user_id,
             "v": int(user.get("token_version") or 0),

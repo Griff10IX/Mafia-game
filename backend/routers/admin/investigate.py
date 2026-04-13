@@ -10,6 +10,12 @@ from fastapi import Depends, HTTPException, Query
 logger = logging.getLogger(__name__)
 
 from utils.staff_bot_client_alert import BOT_CLIENT_BLOCK_COLLECTION as BOT_BLOCK_COLLECTION
+from utils.ip_enrichment import (
+    analyze_login_carrier_shifts,
+    get_or_fetch_ip_geodata,
+    network_label,
+    normalize_ip,
+)
 
 
 def register(router):
@@ -228,3 +234,185 @@ def register(router):
         cur = db[BOT_BLOCK_COLLECTION].find(q, {"_id": 0}).sort("created_at", -1).limit(limit)
         rows = await cur.to_list(limit)
         return {"events": rows, "count": len(rows)}
+
+    MAX_IP_GEO_LOOKUPS = 40
+
+    @router.get("/admin/investigate/user-ip-check")
+    async def admin_investigate_user_ip_check(
+        user_id: Optional[str] = Query(None, description="Exact user id"),
+        username: Optional[str] = Query(None, description="Exact username (case-insensitive)"),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Admin/mod: unique sign-in IPs, per-IP ISP/mobile/hosting (ip-api.com, cached 7d), chronological login_history,
+        session IPs, and heuristics (e.g. shift between mobile carriers).
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin or moderator access required")
+        uid = (user_id or "").strip()
+        uname = (username or "").strip()
+        if not uid and not uname:
+            raise HTTPException(status_code=400, detail="Provide user_id or username")
+        q: Dict[str, Any] = {}
+        if uid:
+            q["id"] = uid
+        else:
+            q["username"] = re.compile("^" + re.escape(uname) + "$", re.IGNORECASE)
+        proj = {
+            "_id": 0,
+            "id": 1,
+            "username": 1,
+            "registration_ip": 1,
+            "last_login_ip": 1,
+            "last_request_ip": 1,
+            "login_ips": 1,
+            "login_history": 1,
+            "sessions": 1,
+            "last_user_agent": 1,
+            "last_device_type": 1,
+        }
+        user = await db.users.find_one(q, proj)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        uid = user["id"]
+        uname = user.get("username") or ""
+
+        ips_ordered: List[str] = []
+        seen_ip: set = set()
+
+        def add_ip(raw: Any) -> None:
+            n = normalize_ip(str(raw) if raw is not None else "")
+            if not n or n in seen_ip:
+                return
+            seen_ip.add(n)
+            ips_ordered.append(n)
+
+        hist_raw = user.get("login_history")
+        if not isinstance(hist_raw, list):
+            hist_raw = []
+
+        def _hk(h: Dict[str, Any]) -> datetime:
+            return _parse_ts(h.get("at")) or datetime.min.replace(tzinfo=timezone.utc)
+
+        hist_chrono = sorted(
+            [h for h in hist_raw if isinstance(h, dict)],
+            key=_hk,
+        )
+        for h in hist_chrono:
+            add_ip(h.get("ip"))
+
+        for ip_key in (
+            user.get("registration_ip"),
+            user.get("last_login_ip"),
+            user.get("last_request_ip"),
+        ):
+            add_ip(ip_key)
+        lip = user.get("login_ips")
+        if isinstance(lip, list):
+            for x in lip:
+                add_ip(x)
+        for s in user.get("sessions") or []:
+            if isinstance(s, dict):
+                add_ip(s.get("ip"))
+
+        all_ips = list(seen_ip)
+        truncated = False
+        lookup_ips = ips_ordered[:]
+        if len(lookup_ips) > MAX_IP_GEO_LOOKUPS:
+            truncated = True
+            lookup_ips = lookup_ips[:MAX_IP_GEO_LOOKUPS]
+
+        geodata_by_ip: Dict[str, Dict[str, Any]] = {}
+        for ip_one in lookup_ips:
+            geodata_by_ip[ip_one] = await get_or_fetch_ip_geodata(db, ip_one)
+
+        enriched_timeline: List[Dict[str, Any]] = []
+        for h in hist_chrono:
+            if not isinstance(h, dict):
+                continue
+            ipn = normalize_ip(h.get("ip"))
+            g = geodata_by_ip.get(ipn, {})
+            enriched_timeline.append(
+                {
+                    "at": h.get("at"),
+                    "ip": ipn,
+                    "source": h.get("source"),
+                    "device_type": h.get("device_type"),
+                    "ua_short": h.get("ua_short"),
+                    "countryCode": g.get("countryCode"),
+                    "isp": g.get("isp"),
+                    "org": g.get("org"),
+                    "mobile": g.get("mobile"),
+                    "hosting": g.get("hosting"),
+                    "proxy": g.get("proxy"),
+                    "geo_ok": g.get("ok"),
+                    "geo_error": g.get("error"),
+                }
+            )
+
+        risks = analyze_login_carrier_shifts(hist_chrono, geodata_by_ip)
+
+        ip_summary: List[Dict[str, Any]] = []
+        for ip_one in sorted(all_ips):
+            g = geodata_by_ip.get(ip_one)
+            if g is None:
+                ip_summary.append(
+                    {
+                        "ip": ip_one,
+                        "lookup": "not_fetched_this_run"
+                        if truncated and ip_one not in geodata_by_ip
+                        else "missing",
+                    }
+                )
+            else:
+                ip_summary.append(
+                    {
+                        "ip": ip_one,
+                        "network": network_label(g),
+                        "countryCode": g.get("countryCode"),
+                        "isp": g.get("isp"),
+                        "org": g.get("org"),
+                        "mobile": g.get("mobile"),
+                        "hosting": g.get("hosting"),
+                        "proxy": g.get("proxy"),
+                        "geo_ok": g.get("ok"),
+                        "from_cache": g.get("from_cache"),
+                        "geo_error": g.get("error"),
+                    }
+                )
+
+        sessions_out: List[Dict[str, Any]] = []
+        for s in (user.get("sessions") or [])[:12]:
+            if not isinstance(s, dict):
+                continue
+            ipn = normalize_ip(s.get("ip"))
+            g = geodata_by_ip.get(ipn, {})
+            sessions_out.append(
+                {
+                    "session_id": s.get("id"),
+                    "ip": ipn,
+                    "device_type": s.get("device_type"),
+                    "created_at": s.get("created_at"),
+                    "last_used_at": s.get("last_used_at"),
+                    "network": network_label(g) if g.get("ok") else None,
+                    "mobile": g.get("mobile"),
+                }
+            )
+
+        return {
+            "user": {"id": uid, "username": uname},
+            "meta": {
+                "unique_ip_count": len(all_ips),
+                "looked_up_ips": len(lookup_ips),
+                "truncated_geo_lookups": truncated,
+                "data_source": "ip-api.com (cached 7d in ip_geodata_cache)",
+            },
+            "last_user_agent": user.get("last_user_agent"),
+            "last_device_type": user.get("last_device_type"),
+            "login_ips_stored": user.get("login_ips") if isinstance(user.get("login_ips"), list) else [],
+            "login_timeline": enriched_timeline,
+            "sessions": sessions_out,
+            "ip_summary": sorted(ip_summary, key=lambda x: x.get("ip") or ""),
+            "risks": risks,
+        }

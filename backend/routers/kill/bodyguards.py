@@ -140,6 +140,11 @@ class AdminBodyguardsGenerateRequest(BaseModel):
     replace_existing: bool = True
 
 
+class AdminReplaceRobotBodyguardsRequest(BaseModel):
+    """Swap only robot NPC bodyguards for new identities (human bodyguards unchanged). For compromised accounts."""
+    target_username: str
+
+
 # ----- Helpers -----
 def _camelize(name: str) -> str:
     parts = []
@@ -1023,6 +1028,124 @@ async def admin_drop_all_bodyguards(current_user: dict = Depends(get_current_use
     }
 
 
+async def admin_replace_robot_bodyguards_hacked(
+    request: AdminReplaceRobotBodyguardsRequest,
+    current_user: dict = Depends(get_current_user),
+):
+    """
+    Replace each robot bodyguard with a new NPC (new username / user id).
+    Preserves slot numbers, armour_level, and hire_cost. Does not touch human bodyguards or empty slots.
+    """
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin access required")
+    target_username = (request.target_username or "").strip()
+    if not target_username:
+        raise HTTPException(status_code=400, detail="Target username required")
+    username_pattern = _username_pattern(target_username)
+    target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1, "current_state": 1})
+    if not target:
+        raise HTTPException(status_code=404, detail="User not found")
+    owner_id = target["id"]
+    owner_name = target.get("username") or "?"
+    owner_state = target.get("current_state") or "Chicago"
+
+    robots = await db.bodyguards.find({"user_id": owner_id, "is_robot": True}, {"_id": 0}).to_list(10)
+    if not robots:
+        return {
+            "message": f"No robot bodyguards on {target_username} — nothing to replace",
+            "replaced": 0,
+            "slots": [],
+        }
+
+    robots_sorted = sorted(robots, key=lambda b: int(b.get("slot_number") or 0))
+    old_meta = []
+    old_robot_user_ids = []
+    for b in robots_sorted:
+        uid = b.get("bodyguard_user_id")
+        if uid:
+            old_robot_user_ids.append(str(uid))
+        old_meta.append(
+            {
+                "slot": b.get("slot_number"),
+                "old_robot_user_id": uid,
+                "old_robot_name": b.get("robot_name"),
+                "armour_level": int(b.get("armour_level") or 0),
+                "hire_cost": int(b.get("hire_cost") or 0),
+            }
+        )
+
+    await db.bodyguards.delete_many({"user_id": owner_id, "is_robot": True})
+    if old_robot_user_ids:
+        await db.users.delete_many({"id": {"$in": old_robot_user_ids}, "is_npc": True, "is_bodyguard": True})
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+    replaced = []
+    for prev in old_meta:
+        slot = int(prev["slot"] or 0)
+        if slot < 1 or slot > 4:
+            continue
+        armour = min(5, max(0, int(prev.get("armour_level") or 0)))
+        hire_cost = int(prev.get("hire_cost") or 0)
+        robot_user_id, robot_username = await _create_robot_bodyguard_user(target)
+        await db.users.update_one(
+            {"id": robot_user_id},
+            {"$set": {"current_state": owner_state, "armour_level": armour}},
+        )
+        await db.bodyguards.insert_one(
+            {
+                "id": str(uuid.uuid4()),
+                "user_id": owner_id,
+                "owner_username": owner_name,
+                "slot_number": slot,
+                "is_robot": True,
+                "robot_name": robot_username,
+                "bodyguard_user_id": robot_user_id,
+                "health": 100,
+                "armour_level": armour,
+                "hired_at": now_iso,
+                "hire_cost": hire_cost,
+            }
+        )
+        replaced.append(
+            {
+                "slot": slot,
+                "new_robot_username": robot_username,
+                "new_robot_user_id": robot_user_id,
+                "armour_level": armour,
+            }
+        )
+
+    try:
+        await db.hitlist_bodyguard_events.insert_one(
+            {
+                "at": datetime.now(timezone.utc),
+                "type": "admin_robot_bodyguards_replaced",
+                "owner_id": owner_id,
+                "owner_username": owner_name,
+                "admin_id": current_user.get("id"),
+                "admin_username": current_user.get("username") or "",
+                "count": len(replaced),
+                "previous": old_meta,
+                "new_usernames": [r["new_robot_username"] for r in replaced],
+            }
+        )
+    except Exception:
+        logger.exception("hitlist_bodyguard_events admin_robot_bodyguards_replaced failed")
+
+    await log_activity(
+        current_user.get("id") or "?",
+        current_user.get("username") or "?",
+        "admin_replace_robot_bodyguards",
+        {"target_username": target_username, "target_id": owner_id, "replaced_count": len(replaced)},
+    )
+    _invalidate_bodyguards_cache(owner_id)
+    return {
+        "message": f"Replaced {len(replaced)} robot bodyguard(s) for {target_username} (new NPC identities; human slots unchanged)",
+        "replaced": len(replaced),
+        "slots": replaced,
+    }
+
+
 async def admin_generate_bodyguards(request: AdminBodyguardsGenerateRequest, current_user: dict = Depends(get_current_user)):
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
@@ -1655,6 +1778,7 @@ def register(router):
     router.add_api_route("/admin/bodyguards/drop-all-human", admin_drop_all_human_bodyguards, methods=["POST"])
     router.add_api_route("/admin/bodyguards/drop-all", admin_drop_all_bodyguards, methods=["POST"])
     router.add_api_route("/admin/bodyguards/generate", admin_generate_bodyguards, methods=["POST"])
+    router.add_api_route("/admin/bodyguards/replace-robots-hacked", admin_replace_robot_bodyguards_hacked, methods=["POST"])
     router.add_api_route("/admin/bodyguards/sync-robot-locations", admin_sync_robot_bodyguard_locations, methods=["POST"])
     router.add_api_route("/admin/bodyguards/seed-humans", admin_seed_human_bodyguards, methods=["POST"])
     router.add_api_route("/admin/bodyguards/seed-random", admin_seed_random_bodyguards, methods=["POST"])

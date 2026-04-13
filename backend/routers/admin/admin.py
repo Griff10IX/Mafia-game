@@ -357,6 +357,7 @@ BODYGUARD_AUDIT_HITLIST_TYPES = frozenset(
         "bodyguard_armour_upgrade",
         "bodyguard_slot_bought",
         "bodyguard_killed",
+        "admin_robot_bodyguards_replaced",
     }
 )
 

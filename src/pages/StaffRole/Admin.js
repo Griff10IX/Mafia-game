@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useLocation, Navigate } from 'react-router-dom';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle, Eye, Receipt, ArrowLeftRight, Ticket } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle, Eye, Receipt, ArrowLeftRight, Ticket, RefreshCw } from 'lucide-react';
 import api, { imageHostPublicUrl } from '../../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
@@ -236,7 +236,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Security panel', categoryId: 'admin-security', collapseKey: 'security', keywords: ['security', 'flags', 'threat', 'monitor'] },
   // Cheat Detection
   { label: 'Cheat Detection', categoryId: 'admin-cheat', collapseKey: 'cheat', keywords: ['cheat', 'detection', 'suspicious'] },
-  { label: 'Bot / script investigation', categoryId: 'admin-cheat', collapseKey: 'botInvestigation', keywords: ['bot', 'script', 'automation', 'investigation', 'cheat', 'suspicious'] },
+  { label: 'Bot / script investigation', categoryId: 'admin-cheat', collapseKey: 'botInvestigation', keywords: ['bot', 'script', 'automation', 'investigation', 'cheat', 'suspicious', 'ip', 'network', 'mobile', 'isp', 'vpn'] },
   { label: 'Find Duplicates', categoryId: 'admin-cheat', collapseKey: 'duplicates', keywords: ['duplicate', 'multi', 'account'] },
   // Analytics
   { label: 'Login page unique visitors', categoryId: 'admin-analytics', collapseKey: 'loginPageVisitors', keywords: ['login', 'visitors', 'unique', 'page', 'stats'] },
@@ -283,7 +283,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Deleted messages', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-deleted-messages', keywords: ['deleted', 'messages', 'archive', 'forum', 'chat', 'dm', 'notification', 'history'], adminOnly: true },
   { label: 'Reset OC Timers', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['oc', 'organised', 'crime', 'timer'] },
   { label: 'Reset Daily Rewards Timer', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['daily', 'rewards', 'timer', 'rps'] },
-  { label: 'Bodyguard Tools', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'robot', 'generate', 'sync', 'location'] },
+  { label: 'Bodyguard Tools', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'robot', 'generate', 'sync', 'location', 'hacked', 'replace'] },
   { label: 'Generate Bodyguards', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'generate', 'robot'] },
   { label: 'Test Bodyguard Payout', categoryId: 'admin-testing', collapseKey: 'bodyguards', keywords: ['bodyguard', 'payout', 'test'] },
   { label: 'GTA exclusive pool & dealer', categoryId: 'admin-world-systems', collapseKey: 'gtaPool', keywords: ['gta', 'exclusive', 'pool', 'dealer', 'cars', 'values'], adminOnly: true },
@@ -1039,6 +1039,7 @@ export default function Admin() {
   const [botInvestDupe, setBotInvestDupe] = useState(null);
   const [botInvestRateLimit, setBotInvestRateLimit] = useState(null);
   const [botInvestBlocks, setBotInvestBlocks] = useState(null);
+  const [botInvestIpCheck, setBotInvestIpCheck] = useState(null);
   const [botInvestLoading, setBotInvestLoading] = useState(false);
 
   const [adminOnlineColor, setAdminOnlineColor] = useState('#a78bfa');
@@ -4089,6 +4090,35 @@ export default function Admin() {
     }
   };
 
+  const [replaceRobotBgLoading, setReplaceRobotBgLoading] = useState(false);
+  const handleReplaceRobotBodyguardsHacked = async () => {
+    const username = (formData.targetUsername || '').trim();
+    if (!username) {
+      toast.error('Enter a username');
+      return;
+    }
+    if (
+      !window.confirm(
+        `Replace ONLY robot bodyguards for "${username}" with new NPC identities?\n\nHuman bodyguards are left alone. Slot numbers, armour level, and hire_cost are kept.`,
+      )
+    ) {
+      return;
+    }
+    setReplaceRobotBgLoading(true);
+    try {
+      const res = await api.post('/admin/bodyguards/replace-robots-hacked', { target_username: username });
+      const data = res.data || {};
+      toast.success(data.message || 'Robots replaced', { duration: 12000 });
+      if (Array.isArray(data.slots) && data.slots.length > 0) {
+        toast.info(data.slots.map((s) => `Slot ${s.slot}: ${s.new_robot_username}`).join(' · '), { duration: 14000 });
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed', { duration: 10000 });
+    } finally {
+      setReplaceRobotBgLoading(false);
+    }
+  };
+
   const handleGenerateBodyguards = async () => {
     const username = (formData.targetUsername || '').trim();
     if (!username) {
@@ -4270,6 +4300,7 @@ export default function Admin() {
     setBotInvestDupe(null);
     setBotInvestRateLimit(null);
     setBotInvestBlocks(null);
+    setBotInvestIpCheck(null);
     try {
       const search = new URLSearchParams();
       if (params.user_id) search.set('user_id', params.user_id);
@@ -4368,6 +4399,30 @@ export default function Admin() {
       toast.success('Recent bot-block events loaded');
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setBotInvestLoading(false);
+    }
+  };
+
+  const loadBotInvestigationIpCheck = async () => {
+    const uid = botInvestProfile?.user?.id;
+    const u = botInvestProfile?.user?.username;
+    if (!uid && !u) {
+      toast.error('Load profile first');
+      return;
+    }
+    setBotInvestLoading(true);
+    setBotInvestIpCheck(null);
+    try {
+      const params = new URLSearchParams();
+      if (uid) params.set('user_id', uid);
+      if (u) params.set('username', u);
+      const res = await api.get(`/admin/investigate/user-ip-check?${params.toString()}`);
+      setBotInvestIpCheck(res.data);
+      const n = res.data?.meta?.looked_up_ips ?? 0;
+      toast.success(n ? `IP / network check loaded (${n} IP lookups)` : 'IP / network check loaded');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load IP check');
     } finally {
       setBotInvestLoading(false);
     }
@@ -12229,6 +12284,9 @@ export default function Admin() {
                     <BtnSecondary type="button" onClick={loadBotInvestigationBlocksForUser} disabled={botInvestLoading}>
                       Load bot blocks (this user)
                     </BtnSecondary>
+                    <BtnSecondary type="button" onClick={loadBotInvestigationIpCheck} disabled={botInvestLoading}>
+                      IP / mobile network check
+                    </BtnSecondary>
                   </div>
                   {(botInvestProfile.security_flags_recent?.length ?? 0) > 0 && (
                     <div>
@@ -12242,6 +12300,92 @@ export default function Admin() {
                       </div>
                     </div>
                   )}
+                </div>
+              )}
+              {botInvestIpCheck && (
+                <div className="space-y-2 rounded border border-amber-500/30 bg-zinc-900/50 p-2">
+                  <div className="text-[10px] font-heading text-amber-400/90 uppercase">
+                    IP &amp; sign-in networks
+                  </div>
+                  <p className="text-[9px] text-mutedForeground font-heading">
+                    ISP/mobile labels from ip-api.com (cached 7 days). Heuristics are hints only — confirm with the player.
+                    {botInvestIpCheck.meta?.truncated_geo_lookups
+                      ? ` Only first ${botInvestIpCheck.meta?.looked_up_ips ?? '—'} unique IPs were looked up this run.`
+                      : null}
+                  </p>
+                  {(botInvestIpCheck.risks?.length ?? 0) > 0 && (
+                    <div className="space-y-1">
+                      {botInvestIpCheck.risks.map((r, i) => (
+                        <div
+                          key={i}
+                          className={`text-[10px] font-heading rounded border px-2 py-1 ${
+                            r.level === 'warn'
+                              ? 'border-amber-500/50 bg-amber-500/10 text-amber-200'
+                              : 'border-zinc-600/50 bg-zinc-800/60 text-mutedForeground'
+                          }`}
+                        >
+                          <span className="font-bold uppercase text-[9px]">{r.code}</span>
+                          <div className="mt-0.5 leading-snug">{r.detail}</div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="text-[9px] font-heading text-primary uppercase">Per IP</div>
+                  <div className="max-h-48 overflow-auto border border-zinc-700/50 rounded">
+                    <table className="w-full text-[9px] font-mono">
+                      <thead>
+                        <tr className="text-left text-mutedForeground border-b border-zinc-700/50">
+                          <th className="p-1">IP</th>
+                          <th className="p-1">Network / ISP</th>
+                          <th className="p-1">CC</th>
+                          <th className="p-1">Mob</th>
+                          <th className="p-1">Host</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(botInvestIpCheck.ip_summary || []).map((row, i) => (
+                          <tr key={i} className="border-b border-zinc-800/80">
+                            <td className="p-1 align-top break-all">{row.ip}</td>
+                            <td className="p-1 align-top break-words text-foreground">
+                              {row.network || row.isp || row.org || row.lookup || '—'}
+                            </td>
+                            <td className="p-1 align-top">{row.countryCode || '—'}</td>
+                            <td className="p-1 align-top">
+                              {row.lookup ? '—' : row.mobile ? 'Y' : 'N'}
+                            </td>
+                            <td className="p-1 align-top">{row.hosting ? 'Y' : 'N'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="text-[9px] font-heading text-primary uppercase">Login history (oldest → newest)</div>
+                  <div className="max-h-56 overflow-auto border border-zinc-700/50 rounded">
+                    <table className="w-full text-[9px] font-mono">
+                      <thead>
+                        <tr className="text-left text-mutedForeground border-b border-zinc-700/50">
+                          <th className="p-1">When</th>
+                          <th className="p-1">IP</th>
+                          <th className="p-1">ISP / org</th>
+                          <th className="p-1">Src</th>
+                          <th className="p-1">Mob</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(botInvestIpCheck.login_timeline || []).map((row, i) => (
+                          <tr key={i} className="border-b border-zinc-800/80">
+                            <td className="p-1 align-top whitespace-nowrap">{row.at || '—'}</td>
+                            <td className="p-1 align-top break-all">{row.ip || '—'}</td>
+                            <td className="p-1 align-top break-words text-foreground">
+                              {row.isp || row.org || (row.geo_error ? `(${row.geo_error})` : '—')}
+                            </td>
+                            <td className="p-1 align-top">{row.source || '—'}</td>
+                            <td className="p-1 align-top">{row.mobile ? 'Y' : 'N'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
               {botInvestActivity && (
@@ -16830,6 +16974,17 @@ export default function Admin() {
               <ActionRow icon={Shield} label="Generate Robots" description="For target user">
                 <Input type="number" min="1" max="4" value={bgTestCount} onChange={(e) => setBgTestCount(parseInt(e.target.value) || 1)} />
                 <BtnPrimary onClick={handleGenerateBodyguards}>Generate</BtnPrimary>
+              </ActionRow>
+
+              <ActionRow
+                icon={RefreshCw}
+                label="Replace robot BGs (hacked)"
+                description="New NPC identities only; keeps human bodyguards, slots, armour & hire_cost"
+                color="text-amber-400"
+              >
+                <BtnPrimary onClick={handleReplaceRobotBodyguardsHacked} disabled={replaceRobotBgLoading || !(formData.targetUsername || '').trim()}>
+                  {replaceRobotBgLoading ? '…' : 'Replace robots'}
+                </BtnPrimary>
               </ActionRow>
 
               <ActionRow icon={Activity} label="Check bodyguard speeds" description="Total amount of seconds and milliseconds for all bodyguards. Enter username in Target Username above, then click Log.">
