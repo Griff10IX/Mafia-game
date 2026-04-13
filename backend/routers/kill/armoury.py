@@ -10,7 +10,7 @@ from typing import Optional, List, Tuple, Dict
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import Depends, HTTPException, Request, Body
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from bson.objectid import ObjectId
 
 from server import db, get_current_user, get_effective_event, STATES, get_rank_info, user_prestige_rank_mult, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, _family_in_active_war, CARS, _get_staff_user_ids, send_notification, log_activity, log_minigame_payout
@@ -30,7 +30,7 @@ from utils.game_pass_micro_rewards import (
     MAX_MICRO_TIER,
     vip_rewards_after_free_dedupe,
 )
-from routers.game.store import _store_cost_inc
+from routers.game.store import _store_cost_inc, STORE_TOKEN_MAX_HELD
 from routers.minigames.minigame_leaderboard import log_minigame_play
 from utils.minigame_run_session import (
     claim_minigame_run_session,
@@ -195,6 +195,18 @@ AUTO_RANK_EXCHANGE_POOL = (
     "jailbust_bonus",
 )
 AUTO_RANK_EXCHANGE_TOKEN_COUNT = 2
+
+# Gift perks: sum of token amounts sent per UTC day (Game Pass / rank_xp_pass not giftable).
+TOKEN_GIFT_DAILY_UNITS_MAX = 20
+GIFTABLE_TOKEN_TYPES = tuple(t for t in TOKEN_TYPES if t != "rank_xp_pass")
+
+
+def _token_gift_daily_from_user(user: dict) -> dict:
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    sent = 0
+    if user.get("token_gift_sent_utc_date") == today:
+        sent = int(user.get("token_gift_sent_units_today") or 0)
+    return {"sent": sent, "limit": TOKEN_GIFT_DAILY_UNITS_MAX}
 
 async def _try_grant_rank_xp_pass_micro_tier(
     db,
@@ -394,6 +406,12 @@ class UseTokenRequest(BaseModel):
 
 class ExchangeAutoRankRequest(BaseModel):
     count: int = 1  # v1: must be 1 (one Auto Rank token consumed per exchange)
+
+
+class GiftTokenRequest(BaseModel):
+    target_username: str
+    token_type: str
+    amount: int = Field(default=1, ge=1, le=STORE_TOKEN_MAX_HELD)
 
 
 class ShootingRangeTrainRequest(BaseModel):
@@ -2605,6 +2623,124 @@ async def exchange_auto_rank_tokens(req: ExchangeAutoRankRequest, current_user: 
     }
 
 
+async def gift_inventory_tokens(req: GiftTokenRequest, current_user: dict = Depends(get_current_user)):
+    """Send unactivated boost tokens to another player (Game Pass tokens excluded)."""
+    tt = (req.token_type or "").strip()
+    if tt not in GIFTABLE_TOKEN_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail="That perk cannot be gifted. Game Pass tokens cannot be gifted.",
+        )
+    amt = int(req.amount)
+    raw_un = (req.target_username or "").strip()
+    if not raw_un:
+        raise HTTPException(status_code=400, detail="Enter their exact in-game username.")
+
+    uid = current_user["id"]
+    uname = current_user.get("username", "?")
+    pat = _username_pattern(raw_un)
+    if not pat:
+        raise HTTPException(status_code=400, detail="Enter their exact in-game username.")
+
+    cfg = TOKEN_CONFIG[tt]
+    count_field = cfg["count_field"]
+    recipient = await db.users.find_one({"username": pat}, {"_id": 0, "id": 1, "username": 1, count_field: 1})
+    if not recipient:
+        raise HTTPException(status_code=404, detail="No player found with that username.")
+    rid = recipient["id"]
+    if rid == uid:
+        raise HTTPException(status_code=400, detail="You cannot gift perks to yourself.")
+
+    sender = await db.users.find_one({"id": uid})
+    if not sender:
+        raise HTTPException(status_code=401, detail="Session expired. Log in again.")
+
+    sender_count = int(sender.get(count_field) or 0)
+    if sender_count < amt:
+        raise HTTPException(status_code=400, detail="You do not have enough of that token to send.")
+
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    sent_today = 0
+    if sender.get("token_gift_sent_utc_date") == today:
+        sent_today = int(sender.get("token_gift_sent_units_today") or 0)
+    if sent_today + amt > TOKEN_GIFT_DAILY_UNITS_MAX:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"Daily send limit reached ({TOKEN_GIFT_DAILY_UNITS_MAX} token units per UTC day; "
+                f"already sent {sent_today})."
+            ),
+        )
+
+    rec_count = int(recipient.get(count_field) or 0)
+    if rec_count + amt > STORE_TOKEN_MAX_HELD:
+        raise HTTPException(
+            status_code=400,
+            detail=f"They can hold at most {STORE_TOKEN_MAX_HELD} unactivated tokens of that type (they have {rec_count}).",
+        )
+
+    r1 = await db.users.update_one({"id": uid, count_field: {"$gte": amt}}, {"$inc": {count_field: -amt}})
+    if r1.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Could not remove tokens. Try again.")
+
+    r2 = await db.users.update_one(
+        {
+            "id": rid,
+            "$expr": {
+                "$lte": [{"$add": [{"$ifNull": [f"${count_field}", 0]}, amt]}, STORE_TOKEN_MAX_HELD],
+            },
+        },
+        {"$inc": {count_field: amt}},
+    )
+    if r2.modified_count == 0:
+        await db.users.update_one({"id": uid}, {"$inc": {count_field: amt}})
+        raise HTTPException(
+            status_code=400,
+            detail=f"They cannot accept that many (max {STORE_TOKEN_MAX_HELD} of each type).",
+        )
+
+    await db.users.update_one(
+        {"id": uid},
+        [
+            {
+                "$set": {
+                    "token_gift_sent_utc_date": today,
+                    "token_gift_sent_units_today": {
+                        "$cond": [
+                            {"$eq": ["$token_gift_sent_utc_date", today]},
+                            {"$add": [{"$toLong": {"$ifNull": ["$token_gift_sent_units_today", 0]}}, amt]},
+                            {"$toLong": amt},
+                        ]
+                    },
+                }
+            }
+        ],
+    )
+
+    r_display = recipient.get("username") or raw_un
+    label = tt.replace("_", " ")
+    await log_activity(
+        uid,
+        uname,
+        "inventory_token_gift",
+        {"to_username": r_display, "token_type": tt, "amount": amt},
+    )
+    await send_notification(
+        rid,
+        "Gift: boost tokens",
+        f"{uname} sent you {amt}× {label}.",
+        "token_gift",
+        category="economic",
+    )
+
+    fresh = await db.users.find_one({"id": uid}, {"_id": 0})
+    return {
+        "message": f"Sent {amt}× {label} to {r_display}.",
+        "tokens": _tokens_from_user(fresh or {}),
+        "token_gift_daily": _token_gift_daily_from_user(fresh or sender),
+    }
+
+
 async def get_inventory(request: Request, current_user: dict = Depends(get_current_user)):
     """Aggregate weapons, armour, loot exclusives, and consumable tokens for the My Inventory page."""
     weapons = await get_weapons(request, current_user)
@@ -2645,7 +2781,9 @@ async def get_inventory(request: Request, current_user: dict = Depends(get_curre
             "next_collect_at": next_collect_at,
             "last_collected_at": last_collected,
         }
-    tokens = _tokens_from_user(current_user)
+    fresh_user = await db.users.find_one({"id": uid}, {"_id": 0})
+    udoc = fresh_user or current_user
+    tokens = _tokens_from_user(udoc)
     return {
         "weapons": [w.model_dump() if hasattr(w, "model_dump") else w for w in weapons],
         "armour": armour,
@@ -2655,6 +2793,7 @@ async def get_inventory(request: Request, current_user: dict = Depends(get_curre
             "speakeasy": speakeasy_info,
         },
         "tokens": tokens,
+        "token_gift_daily": _token_gift_daily_from_user(udoc),
     }
 
 
@@ -2695,3 +2834,4 @@ def register(router):
     router.add_api_route("/inventory", get_inventory, methods=["GET"])
     router.add_api_route("/inventory/tokens/use", use_consumable_token, methods=["POST"])
     router.add_api_route("/inventory/tokens/exchange-auto-rank", exchange_auto_rank_tokens, methods=["POST"])
+    router.add_api_route("/inventory/tokens/gift", gift_inventory_tokens, methods=["POST"])

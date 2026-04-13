@@ -5,7 +5,7 @@ import secrets
 from datetime import datetime, timezone, timedelta
 _rng = secrets.SystemRandom()
 import uuid
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict, Any, Tuple
 from fastapi import Depends, HTTPException, Query, Request
 from bson.objectid import ObjectId
 from pydantic import BaseModel
@@ -1128,6 +1128,7 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
             melt_reward_hits_paid = 0
             melt_pct_applied = 0
             family_treasury_bullets_after = None
+            melt_progress_user_set: Dict[str, object] = {}
             if family_id:
                 fam = await db.families.find_one(
                     {"id": family_id, "wiped": {"$ne": True}},
@@ -1135,6 +1136,9 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
                 )
                 if fam:
                     individual_rewards = []
+                    projected_family_cut = 0
+                    payout_entries: List[Tuple[int, int]] = []
+                    prog_map: Dict[str, int] = {}
                     configured_pct = max(0, min(50, int(fam.get("melt_treasury_pct") or 0)))
                     tiers_raw = fam.get("melt_reward_tiers") or []
                     valid_tiers = []
@@ -1150,13 +1154,33 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
                         projected_family_cut = (base_total_bullets * configured_pct) // 100
                         if projected_family_cut > 0:
                             individual_rewards = []
+                            prog_user = await db.users.find_one(
+                                {"id": user["id"]},
+                                {"_id": 0, "family_melt_tier_progress": 1, "family_melt_progress_family_id": 1},
+                            )
+                            prog_map = {}
+                            if (prog_user or {}).get("family_melt_progress_family_id") == family_id:
+                                raw_p = (prog_user or {}).get("family_melt_tier_progress") or {}
+                                if isinstance(raw_p, dict):
+                                    for k, v in raw_p.items():
+                                        try:
+                                            prog_map[str(k)] = int(v)
+                                        except Exception:
+                                            pass
+                            # Per tier: carry remainder across melts; this melt adds projected_family_cut toward each tier's threshold.
+                            payout_entries = []
                             for t in valid_tiers:
                                 tb = int(t["threshold_bullets"])
                                 rm = int(t["reward_money"])
-                                if tb > 0:
-                                    hits = projected_family_cut // tb
-                                    for _ in range(hits):
-                                        individual_rewards.append(rm)
+                                if tb <= 0 or rm <= 0:
+                                    continue
+                                key = str(tb)
+                                old_p = int(prog_map.get(key, 0) or 0)
+                                total_b = old_p + projected_family_cut
+                                hits = total_b // tb
+                                for _ in range(hits):
+                                    payout_entries.append((tb, rm))
+                            individual_rewards = [rm for (_tb, rm) in payout_entries]
                             melt_reward_hits_due = len(individual_rewards)
                             melt_reward_due = sum(individual_rewards)
                     if melt_reward_due > 0:
@@ -1188,6 +1212,35 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
                                 break
                         if melt_reward_paid < melt_reward_due:
                             await db.families.update_one({"id": family_id}, {"$set": {"melt_treasury_pct": 0}})
+                    paid_by_tb: Dict[int, int] = {}
+                    if melt_reward_paid > 0 and payout_entries:
+                        rem_pay = int(melt_reward_paid)
+                        for tb_hit, rm_hit in payout_entries:
+                            if rem_pay >= rm_hit:
+                                rem_pay -= rm_hit
+                                paid_by_tb[tb_hit] = paid_by_tb.get(tb_hit, 0) + 1
+                            else:
+                                break
+                    if (
+                        configured_pct > 0
+                        and base_total_bullets > 0
+                        and valid_tiers
+                        and projected_family_cut > 0
+                    ):
+                        new_prog: Dict[str, int] = {}
+                        for t in valid_tiers:
+                            tb = int(t["threshold_bullets"])
+                            if tb <= 0:
+                                continue
+                            key = str(tb)
+                            old_p = int(prog_map.get(key, 0) or 0)
+                            total_b = old_p + projected_family_cut
+                            hpaid = paid_by_tb.get(tb, 0)
+                            new_prog[key] = total_b - hpaid * tb
+                        melt_progress_user_set = {
+                            "family_melt_tier_progress": new_prog,
+                            "family_melt_progress_family_id": family_id,
+                        }
                     if configured_pct > 0 and base_total_bullets > 0:
                         melt_pct_applied = configured_pct
                         family_cut = (base_total_bullets * configured_pct) // 100
@@ -1215,7 +1268,10 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
                         "cars_melted": deleted_count,
                         "uncommon_cars_scrapped": uncommon_count,
                     },
-                    "$set": {"melt_bullets_cooldown_until": cooldown_until.isoformat()},
+                    "$set": {
+                        "melt_bullets_cooldown_until": cooldown_until.isoformat(),
+                        **melt_progress_user_set,
+                    },
                 },
             )
             await log_melt_event(user["id"], player_bullets)

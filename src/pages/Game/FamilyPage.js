@@ -1080,7 +1080,7 @@ const RosterTab = ({
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-[9px] text-zinc-500 font-heading">Reward tiers (stack on melt)</label>
+            <label className="block text-[9px] text-zinc-500 font-heading">Reward tiers (progress adds up across melts)</label>
             {(meltRewardTiers || []).length > 0 ? (
               <div className="space-y-1">
                 {(meltRewardTiers || []).map((t) => (

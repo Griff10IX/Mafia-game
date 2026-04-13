@@ -16,6 +16,24 @@ let _cachedInventory = null;
 let _invLastFetch = 0;
 const INV_REFRESH = 30_000;
 
+const TOKEN_TYPES = ['xp_crimes', 'xp_gta', 'auto_rank_2h', 'melt', 'oc_reduced', 'booze', 'racket', 'travel', 'properties', 'jailbust_bonus', 'rank_xp_pass'];
+const GIFTABLE_TOKEN_TYPES = TOKEN_TYPES.filter((k) => k !== 'rank_xp_pass');
+const TOKEN_GIFT_DAILY_DEFAULT = { sent: 0, limit: 20 };
+
+const tokenLabels = {
+  xp_crimes: { name: 'Crimes XP', icon: Zap, desc: 'Double XP from crimes, 1h per token (stack up to 24h)' },
+  xp_gta: { name: 'GTA XP', icon: Zap, desc: 'Double XP from GTA, 1h per token (stack up to 24h)' },
+  auto_rank_2h: { name: 'Auto Rank (2h)', icon: Zap, desc: 'Temporary Auto Rank access, 2h per token (stack up to 24h)' },
+  melt: { name: 'Melt', icon: Zap, desc: 'Reduced melt (bullets) cooldown, 1h per token (stack up to 24h)' },
+  oc_reduced: { name: 'OC Reduced', icon: Zap, desc: 'Reduced OC cooldown, setup cost & higher payout, 1h per token (stack up to 24h)' },
+  booze: { name: 'Booze', icon: Zap, desc: 'Booze costs less to buy, 1h per token (stack up to 24h)' },
+  racket: { name: 'Racket', icon: Zap, desc: 'Increased racket (illegal business) profit, 1h per token (stack up to 24h)' },
+  travel: { name: 'Travel', icon: Zap, desc: 'Lower airport cost & 2% car travel time reduction, 1h per token (stack up to 24h)' },
+  properties: { name: 'Properties', icon: Building2, desc: '3× property income, 1h per token (stack up to 24h)' },
+  jailbust_bonus: { name: 'Jailbust bonus', icon: Target, desc: '+10% jail bust success, less chance of jail on fail, 1h per token (stack up to 24h)' },
+  rank_xp_pass: { name: 'Game Pass', icon: Package, desc: 'Activate in Armoury/My Inventory to claim one-time Game Pass rewards. Expires in 1 month if unused.' },
+};
+
 export default function MyInventory() {
   const [hasLoaded, setHasLoaded] = useState(Boolean(_cachedInventory));
   const [data, setData] = useState(_cachedInventory);
@@ -23,6 +41,10 @@ export default function MyInventory() {
   const [usingToken, setUsingToken] = useState(null);
   const [collectingSpeakeasy, setCollectingSpeakeasy] = useState(false);
   const [exchangingAutoRank, setExchangingAutoRank] = useState(false);
+  const [giftUsername, setGiftUsername] = useState('');
+  const [giftTokenType, setGiftTokenType] = useState('');
+  const [giftAmount, setGiftAmount] = useState(1);
+  const [gifting, setGifting] = useState(false);
 
   const fetchInventory = (silent = false) => {
     api
@@ -47,6 +69,20 @@ export default function MyInventory() {
     const id = setInterval(() => fetchInventory(true), INV_REFRESH);
     return () => clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    const tok = data?.tokens;
+    if (!tok) return;
+    const withStock = GIFTABLE_TOKEN_TYPES.filter((k) => (tok[k]?.count ?? 0) > 0);
+    if (withStock.length === 0) {
+      setGiftTokenType('');
+      return;
+    }
+    setGiftTokenType((cur) => {
+      if (!cur || (tok[cur]?.count ?? 0) < 1) return withStock[0];
+      return cur;
+    });
+  }, [data?.tokens]);
 
   const equipWeapon = async (weaponId) => {
     setEquipping((e) => ({ ...e, weapon: weaponId }));
@@ -133,6 +169,41 @@ export default function MyInventory() {
     }
   };
 
+  const sendGift = async () => {
+    const un = giftUsername.trim();
+    if (!un || !giftTokenType || !data?.tokens) return;
+    const held = data.tokens[giftTokenType]?.count ?? 0;
+    const sent = data.token_gift_daily?.sent ?? 0;
+    const lim = data.token_gift_daily?.limit ?? 20;
+    const rem = Math.max(0, lim - sent);
+    const amt = Math.max(1, Math.min(15, held, rem, parseInt(String(giftAmount), 10) || 1));
+    if (held < 1 || rem < 1) return;
+    setGifting(true);
+    try {
+      const res = await api.post('/inventory/tokens/gift', {
+        target_username: un,
+        token_type: giftTokenType,
+        amount: amt,
+      });
+      if (res?.data) {
+        setData((d) => (d ? {
+          ...d,
+          ...(res.data.tokens ? { tokens: res.data.tokens } : {}),
+          ...(res.data.token_gift_daily ? { token_gift_daily: res.data.token_gift_daily } : {}),
+        } : d));
+      }
+      toast.success(res?.data?.message || 'Gift sent.');
+      setGiftUsername('');
+      refreshUser();
+      fetchInventory();
+    } catch (e) {
+      const d = e.response?.data?.detail;
+      toast.error(Array.isArray(d) ? d.map((x) => x.msg || JSON.stringify(x)).join(', ') : (d || 'Failed to send gift'));
+    } finally {
+      setGifting(false);
+    }
+  };
+
   if (!hasLoaded) return <div className={`${styles.pageContent} p-4 mobile-page-root`}><style>{INV_STYLES}</style></div>;
   if (!data) {
     return (
@@ -165,20 +236,17 @@ export default function MyInventory() {
     }
   };
 
-  const TOKEN_TYPES = ['xp_crimes', 'xp_gta', 'auto_rank_2h', 'melt', 'oc_reduced', 'booze', 'racket', 'travel', 'properties', 'jailbust_bonus', 'rank_xp_pass'];
-  const tokenLabels = {
-    xp_crimes: { name: 'Crimes XP', icon: Zap, desc: 'Double XP from crimes, 1h per token (stack up to 24h)' },
-    xp_gta: { name: 'GTA XP', icon: Zap, desc: 'Double XP from GTA, 1h per token (stack up to 24h)' },
-    auto_rank_2h: { name: 'Auto Rank (2h)', icon: Zap, desc: 'Temporary Auto Rank access, 2h per token (stack up to 24h)' },
-    melt: { name: 'Melt', icon: Zap, desc: 'Reduced melt (bullets) cooldown, 1h per token (stack up to 24h)' },
-    oc_reduced: { name: 'OC Reduced', icon: Zap, desc: 'Reduced OC cooldown, setup cost & higher payout, 1h per token (stack up to 24h)' },
-    booze: { name: 'Booze', icon: Zap, desc: 'Booze costs less to buy, 1h per token (stack up to 24h)' },
-    racket: { name: 'Racket', icon: Zap, desc: 'Increased racket (illegal business) profit, 1h per token (stack up to 24h)' },
-    travel: { name: 'Travel', icon: Zap, desc: 'Lower airport cost & 2% car travel time reduction, 1h per token (stack up to 24h)' },
-    properties: { name: 'Properties', icon: Building2, desc: '3× property income, 1h per token (stack up to 24h)' },
-    jailbust_bonus: { name: 'Jailbust bonus', icon: Target, desc: '+10% jail bust success, less chance of jail on fail, 1h per token (stack up to 24h)' },
-    rank_xp_pass: { name: 'Game Pass', icon: Package, desc: 'Activate in Armoury/My Inventory to claim one-time Game Pass rewards. Expires in 1 month if unused.' },
-  };
+  const tokenGiftDaily = data.token_gift_daily || TOKEN_GIFT_DAILY_DEFAULT;
+  const giftableWithStock = GIFTABLE_TOKEN_TYPES.filter((k) => (tokens[k]?.count ?? 0) > 0);
+  const heldForGift = giftTokenType ? (tokens[giftTokenType]?.count ?? 0) : 0;
+  const dailyRemaining = Math.max(0, (tokenGiftDaily.limit ?? 20) - (tokenGiftDaily.sent ?? 0));
+  const sendAmount = Math.max(1, Math.min(15, parseInt(String(giftAmount), 10) || 1));
+  const canSendGift =
+    Boolean(giftUsername.trim())
+    && Boolean(giftTokenType)
+    && heldForGift >= sendAmount
+    && sendAmount <= dailyRemaining
+    && !gifting;
 
   const exchangeAutoRank = async () => {
     setExchangingAutoRank(true);
@@ -302,6 +370,76 @@ export default function MyInventory() {
             </div>
           </div>
         )}
+
+        {/* Gift perks (boost tokens only; not Game Pass) */}
+        <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 inv-fade-in mobile-panel`} style={{ animationDelay: '0.17s' }}>
+          <div className="px-2.5 py-2 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
+            <Gift size={14} className="text-primary shrink-0" />
+            <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Gift perks</h2>
+          </div>
+          <div className="p-2.5 space-y-3">
+            <p className="text-[8px] text-mutedForeground font-heading leading-relaxed">
+              Enter their <span className="text-foreground font-bold">exact in-game username</span>, choose a perk you hold, amount, then{' '}
+              <span className="text-foreground font-bold">Send gift</span>. Game Pass tokens cannot be gifted. Recipients can hold at most{' '}
+              <span className="text-foreground font-bold">15</span> of each type. Daily send limit (UTC):{' '}
+              <span className="text-foreground font-bold">
+                {tokenGiftDaily.sent ?? 0}/{tokenGiftDaily.limit ?? 20}
+              </span>
+            </p>
+            <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-end gap-2">
+              <label className="flex flex-col gap-0.5 min-w-0 flex-1 sm:min-w-[140px]">
+                <span className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground">Their username</span>
+                <input
+                  type="text"
+                  autoComplete="off"
+                  placeholder="Player name"
+                  value={giftUsername}
+                  onChange={(ev) => setGiftUsername(ev.target.value)}
+                  className="w-full rounded border border-primary/30 bg-background/80 px-2 py-1.5 text-[10px] font-heading text-foreground placeholder:text-mutedForeground/60 focus:outline-none focus:ring-1 focus:ring-primary/50"
+                />
+              </label>
+              <label className="flex flex-col gap-0.5 min-w-0 flex-1 sm:min-w-[160px]">
+                <span className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground">Perk to send</span>
+                <select
+                  value={giftTokenType}
+                  onChange={(ev) => setGiftTokenType(ev.target.value)}
+                  disabled={giftableWithStock.length === 0}
+                  className="w-full rounded border border-primary/30 bg-background/80 px-2 py-1.5 text-[10px] font-heading text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 disabled:opacity-50"
+                >
+                  {giftableWithStock.length === 0 ? (
+                    <option value="">None in inventory</option>
+                  ) : (
+                    giftableWithStock.map((k) => (
+                      <option key={k} value={k}>
+                        {tokenLabels[k]?.name || k} (×{tokens[k]?.count ?? 0})
+                      </option>
+                    ))
+                  )}
+                </select>
+              </label>
+              <label className="flex flex-col gap-0.5 w-full sm:w-24 shrink-0">
+                <span className="text-[8px] font-heading uppercase tracking-wider text-mutedForeground">Amount</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={Math.min(15, heldForGift || 15, dailyRemaining || 15)}
+                  value={giftAmount}
+                  onChange={(ev) => setGiftAmount(ev.target.value)}
+                  disabled={giftableWithStock.length === 0}
+                  className="w-full rounded border border-primary/30 bg-background/80 px-2 py-1.5 text-[10px] font-heading text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50 disabled:opacity-50"
+                />
+              </label>
+              <button
+                type="button"
+                disabled={!canSendGift}
+                onClick={sendGift}
+                className="w-full sm:w-auto px-3 py-2 sm:py-1.5 rounded text-[9px] font-heading font-bold border border-primary/50 bg-primary/15 text-primary hover:bg-primary/25 disabled:opacity-50 shrink-0"
+              >
+                {gifting ? '…' : 'Send gift'}
+              </button>
+            </div>
+          </div>
+        </div>
 
         {/* Consumables / Tokens */}
         {TOKEN_TYPES.some((k) => (tokens[k]?.count ?? 0) > 0 || tokens[k]?.active_until) && (
