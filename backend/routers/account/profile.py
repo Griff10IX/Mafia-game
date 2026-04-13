@@ -731,6 +731,10 @@ def register(router):
         else:
             is_bodyguard_visible = bool(user.get("is_bodyguard"))
 
+        _raw_cc = (user.get("last_seen_country") or "").strip().upper()
+        _profile_cc = _raw_cc if len(_raw_cc) == 2 and _raw_cc.isalpha() else None
+        _show_country_flag = bool(user.get("show_country_flag_on_profile", False))
+
         out = {
             "id": user_id,
             "username": user["username"],
@@ -743,6 +747,7 @@ def register(router):
             "wealth_rank_name": wealth_name,
             "wealth_rank_color": wealth_color,
             "wealth_rank_range": wealth_range,
+            "profile_country_code": _profile_cc if _show_country_flag and _profile_cc else None,
             "hide_kills_on_profile": bool(user.get("hide_kills_on_profile", False)),
             "hide_jailbusts_on_profile": bool(user.get("hide_jailbusts_on_profile", False)),
             "kills": None if user.get("hide_kills_on_profile") else effective_player_kill_count(user),
@@ -793,6 +798,9 @@ def register(router):
             if "Rat" not in b:
                 b.append("Rat")
             out["badges"] = b
+        if is_own_profile:
+            out["show_country_flag_on_profile"] = _show_country_flag
+            out["last_seen_country"] = _profile_cc
         if not is_own_profile:
             for key in (
                 "last_seen",
@@ -1626,6 +1634,7 @@ def register(router):
         current_user: dict = Depends(get_current_user),
         hide_kills_on_profile: Optional[bool] = Body(None, embed=True),
         hide_jailbusts_on_profile: Optional[bool] = Body(None, embed=True),
+        show_country_flag_on_profile: Optional[bool] = Body(None, embed=True),
     ):
         """Hide kills and/or jailbusts from your profile (for everyone including yourself)."""
         updates = {}
@@ -1633,18 +1642,25 @@ def register(router):
             updates["hide_kills_on_profile"] = hide_kills_on_profile
         if hide_jailbusts_on_profile is not None:
             updates["hide_jailbusts_on_profile"] = hide_jailbusts_on_profile
+        if show_country_flag_on_profile is not None:
+            updates["show_country_flag_on_profile"] = show_country_flag_on_profile
         if not updates:
             return {
                 "message": "No visibility changes",
                 "hide_kills_on_profile": bool(current_user.get("hide_kills_on_profile", False)),
                 "hide_jailbusts_on_profile": bool(current_user.get("hide_jailbusts_on_profile", False)),
+                "show_country_flag_on_profile": bool(current_user.get("show_country_flag_on_profile", False)),
             }
         await db.users.update_one({"id": current_user["id"]}, {"$set": updates})
-        doc = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "hide_kills_on_profile": 1, "hide_jailbusts_on_profile": 1})
+        doc = await db.users.find_one(
+            {"id": current_user["id"]},
+            {"_id": 0, "hide_kills_on_profile": 1, "hide_jailbusts_on_profile": 1, "show_country_flag_on_profile": 1},
+        )
         return {
             "message": "Profile visibility updated",
             "hide_kills_on_profile": bool(doc.get("hide_kills_on_profile", False)),
             "hide_jailbusts_on_profile": bool(doc.get("hide_jailbusts_on_profile", False)),
+            "show_country_flag_on_profile": bool(doc.get("show_country_flag_on_profile", False)),
         }
 
     @router.get("/profile/censor-profanity")

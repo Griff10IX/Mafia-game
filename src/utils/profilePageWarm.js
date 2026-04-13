@@ -55,6 +55,7 @@ export async function prefetchProfilePageData(options = {}) {
       profile_autoplay_video: meRes.data?.profile_autoplay_video !== false,
       hide_kills_on_profile: profRes.data?.hide_kills_on_profile === true,
       hide_jailbusts_on_profile: profRes.data?.hide_jailbusts_on_profile === true,
+      show_country_flag_on_profile: profRes.data?.show_country_flag_on_profile === true,
     });
   } catch {
     /* Profile page loads normally */

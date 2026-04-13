@@ -88,6 +88,15 @@ function formatDateTime(iso) {
   });
 }
 
+/** ISO 3166-1 alpha-2 → regional-indicator flag emoji (from edge-detected `last_seen_country`). */
+function countryCodeToFlagEmoji(code) {
+  if (!code || typeof code !== 'string') return '';
+  const u = code.trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(u)) return '';
+  const base = 0x1f1e6;
+  return String.fromCodePoint(base + u.charCodeAt(0) - 65, base + u.charCodeAt(1) - 65);
+}
+
 /** Profile honours match main leaderboard boards; API may send `board` or we fall back by label. */
 const HONOUR_BOARD_FALLBACK = {
   'Most Rank Points Earned': 'rank_points',
@@ -406,6 +415,15 @@ const ProfileInfoCard = ({
           )}
         </div>
         <div className="flex items-center gap-1.5 md:gap-2 shrink-0 flex-wrap justify-end">
+          {profile.profile_country_code ? (
+            <span
+              className="text-lg md:text-xl leading-none select-none"
+              title={`Region ${profile.profile_country_code}`}
+              aria-label={`Country flag ${profile.profile_country_code}`}
+            >
+              {countryCodeToFlagEmoji(profile.profile_country_code)}
+            </span>
+          ) : null}
           {profile.prestige_level > 0 && (
             <PrestigeBadge level={profile.prestige_level} size="icon" showLabel />
           )}
@@ -1187,6 +1205,7 @@ export default function Profile() {
   const [profileAutoplayVideo, setProfileAutoplayVideo] = useState(true);
   const [hideKillsOnProfile, setHideKillsOnProfile] = useState(false);
   const [hideJailbustsOnProfile, setHideJailbustsOnProfile] = useState(false);
+  const [showCountryFlagOnProfile, setShowCountryFlagOnProfile] = useState(false);
   const [savingVisibility, setSavingVisibility] = useState(false);
   const [savingAutoplay, setSavingAutoplay] = useState(false);
   const [censorProfanity, setCensorProfanity] = useState(false);
@@ -1389,10 +1408,12 @@ export default function Profile() {
         setProfileAutoplayVideo(warm.profile_autoplay_video !== false);
         setHideKillsOnProfile(warm.hide_kills_on_profile === true);
         setHideJailbustsOnProfile(warm.hide_jailbusts_on_profile === true);
+        setShowCountryFlagOnProfile(warm.show_country_flag_on_profile === true);
       } else {
         setProfileAutoplayVideo(me?.profile_autoplay_video !== false);
         setHideKillsOnProfile(profile?.hide_kills_on_profile === true);
         setHideJailbustsOnProfile(profile?.hide_jailbusts_on_profile === true);
+        setShowCountryFlagOnProfile(profile?.show_country_flag_on_profile === true);
       }
       fetchPrefs();
       fetchTelegram();
@@ -1401,7 +1422,7 @@ export default function Profile() {
         setCensorProfanity(res.data?.censor_profanity === true);
       }).catch(() => {});
     }
-  }, [isMe, viewPublic, profile, profile?.hide_kills_on_profile, profile?.hide_jailbusts_on_profile, me?.profile_autoplay_video, me?.id]);
+  }, [isMe, viewPublic, profile, profile?.hide_kills_on_profile, profile?.hide_jailbusts_on_profile, profile?.show_country_flag_on_profile, me?.profile_autoplay_video, me?.id]);
 
   useEffect(() => {
     if (!isMe || viewPublic || !spotifyStatus?.spotify_connected || !spotifyStatus?.feature_enabled) {
@@ -1586,6 +1607,7 @@ export default function Profile() {
       await api.patch('/profile/visibility', {
         hide_kills_on_profile: hideKillsOnProfile,
         hide_jailbusts_on_profile: hideJailbustsOnProfile,
+        show_country_flag_on_profile: showCountryFlagOnProfile,
       });
       toast.success('Profile visibility saved');
       await refetchProfile({ silent: true, usernameOverride: me?.username });
@@ -2091,6 +2113,20 @@ export default function Profile() {
                       <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow transition-transform ${hideJailbustsOnProfile ? 'translate-x-5' : 'translate-x-0.5'}`} />
                     </button>
                   </div>
+                  <div className="flex items-center justify-between gap-3 py-1">
+                    <div className="min-w-0 pr-2">
+                      <span className="text-sm text-foreground block">Show country flag</span>
+                      <span className="text-[10px] text-mutedForeground">Uses your last detected region (from site visits). Shown next to your prestige badge.</span>
+                    </div>
+                    <button type="button" role="switch" aria-checked={showCountryFlagOnProfile} disabled={savingVisibility} onClick={() => setShowCountryFlagOnProfile((v) => !v)} className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 transition-colors focus:outline-none focus:ring-2 focus:ring-primary/50 ${showCountryFlagOnProfile ? 'bg-primary border-primary/50' : 'bg-secondary border-zinc-600'} ${savingVisibility ? 'opacity-60' : ''}`}>
+                      <span className={`pointer-events-none inline-block h-5 w-5 rounded-full bg-background shadow transition-transform ${showCountryFlagOnProfile ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                    </button>
+                  </div>
+                  {profile?.last_seen_country ? (
+                    <p className="text-[10px] text-mutedForeground">Detected region: <span className="font-mono text-foreground">{profile.last_seen_country}</span>{showCountryFlagOnProfile ? ` ${countryCodeToFlagEmoji(profile.last_seen_country)}` : ''}</p>
+                  ) : (
+                    <p className="text-[10px] text-mutedForeground">No region detected yet — browse the site and try again after your next request.</p>
+                  )}
                   <button type="button" onClick={saveVisibility} disabled={savingVisibility} className="mt-2 px-3 py-2 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-sm hover:bg-primary/30 disabled:opacity-50">{savingVisibility ? 'Saving…' : 'Save'}</button>
                 </div>
                 <p className="text-[10px] text-mutedForeground">To show a car on your profile, open it from your <Link to="/cars/garage" className="text-primary hover:underline">Garage</Link> and use the <strong>Profile</strong> section on that page.</p>
