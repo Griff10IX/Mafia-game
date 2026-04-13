@@ -411,7 +411,7 @@ def register(router):
         if all_user_ids:
             users_list = await db.users.find(
                 {"id": {"$in": list(all_user_ids)}},
-                {"_id": 0, "id": 1, "is_npc": 1, "rank_points": 1, "username": 1, "is_bodyguard": 1},
+                {"_id": 0, "id": 1, "is_npc": 1, "rank_points": 1, "username": 1, "is_bodyguard": 1, "bodyguard_owner_id": 1},
             ).to_list(None)
             users_batch = {u["id"]: u for u in users_list}
 
@@ -468,12 +468,20 @@ def register(router):
                 continue
 
             tid = a.get("target_id")
+            # Slot row in `bodyguards` is deleted when a guard dies; use attempt snapshot + user doc fallbacks.
             owner_raw = bodyguard_owner_by_target.get(str(tid)) if tid is not None else None
+            if owner_raw is None:
+                owner_raw = a.get("bodyguard_owner_id")
+            if owner_raw is None and victim:
+                owner_raw = victim.get("bodyguard_owner_id")
+            victim_was_bodyguard = bool(
+                (victim and victim.get("is_bodyguard"))
+                or a.get("is_bodyguard_kill")
+            )
             victim_is_your_bodyguard = bool(
-                victim
-                and victim.get("is_bodyguard")
-                and owner_raw is not None
+                owner_raw is not None
                 and str(owner_raw) == viewer_id
+                and victim_was_bodyguard
             )
 
             recent_kills.append({

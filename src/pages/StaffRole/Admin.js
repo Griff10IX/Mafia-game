@@ -16966,7 +16966,7 @@ export default function Admin() {
               className="w-full px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading resize-y"
             />
             <div className="flex flex-wrap items-center gap-2">
-              <select value={bulkAction} onChange={(e) => setBulkAction(e.target.value)} className="px-2 py-1 rounded border border-input bg-transparent text-[11px] font-heading">
+              <select value={bulkAction} onChange={(e) => setBulkAction(e.target.value)} className="px-2 py-1 rounded border border-input bg-zinc-900/80 text-foreground text-[11px] font-heading [color-scheme:dark] focus:outline-none focus:ring-1 focus:ring-primary/40">
                 <option value="give_points">Give Points</option>
                 <option value="give_money">Give Money</option>
                 <option value="lock">Lock Accounts</option>
@@ -17035,8 +17035,8 @@ export default function Admin() {
               <div>
                 <label className="text-[10px] text-mutedForeground font-heading uppercase block mb-1">Cars</label>
                 <p className="text-[9px] text-mutedForeground/90 mb-1.5">Hold Ctrl (Windows) or Cmd (Mac) to select multiple.</p>
-                <select multiple value={redeemForm.cars} onChange={(e) => setRedeemForm((p) => ({ ...p, cars: Array.from(e.target.selectedOptions, (o) => o.value) }))} className="w-full px-2 py-1.5 rounded-md border border-input bg-transparent text-xs font-heading max-h-32 overflow-y-auto">
-                  {cars.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                <select multiple value={redeemForm.cars} onChange={(e) => setRedeemForm((p) => ({ ...p, cars: Array.from(e.target.selectedOptions, (o) => o.value) }))} className="w-full px-2 py-1.5 rounded-md border border-input bg-zinc-900/80 text-foreground text-xs font-heading max-h-32 overflow-y-auto [color-scheme:dark] focus:outline-none focus:ring-1 focus:ring-primary/40">
+                  {cars.map((c) => <option key={c.id} value={c.id} className="bg-zinc-900 text-foreground">{c.name}</option>)}
                 </select>
               </div>
               <div>
@@ -17068,8 +17068,12 @@ export default function Admin() {
                       <div key={`redeem-token-${i}`} className="grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_7rem_auto] gap-2 items-center rounded-md border border-input/60 bg-black/30 px-2 py-2">
                         <div>
                           <span className="text-[9px] text-mutedForeground uppercase font-heading block mb-0.5 sm:hidden">Type</span>
-                          <select value={entry.type} onChange={(e) => setRedeemForm((p) => ({ ...p, tokenEntries: p.tokenEntries.map((t, j) => (j === i ? { ...t, type: e.target.value } : t)) }))} className="w-full px-2 py-1.5 rounded-md border border-input bg-transparent text-[11px] font-heading">
-                            {opts.map((tt) => <option key={tt} value={tt}>{tt.replace(/_/g, ' ')}</option>)}
+                          <select value={entry.type} onChange={(e) => setRedeemForm((p) => ({ ...p, tokenEntries: p.tokenEntries.map((t, j) => (j === i ? { ...t, type: e.target.value } : t)) }))} className="w-full px-2 py-1.5 rounded-md border border-input bg-zinc-900/80 text-foreground text-[11px] font-heading [color-scheme:dark] focus:outline-none focus:ring-1 focus:ring-primary/40">
+                            {opts.map((tt) => (
+                              <option key={tt} value={tt} className="bg-zinc-900 text-foreground">
+                                {tt.replace(/_/g, ' ')}
+                              </option>
+                            ))}
                           </select>
                         </div>
                         <div>
@@ -17287,7 +17291,7 @@ export default function Admin() {
                 <select
                   value={deleteFamilyId}
                   onChange={(e) => setDeleteFamilyId(e.target.value)}
-                  className="flex-1 min-w-[160px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                  className="flex-1 min-w-[160px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground [color-scheme:dark] focus:border-primary/50 focus:outline-none"
                 >
                   <option value="">Select family...</option>
                   {adminFamiliesList.map((f) => (
