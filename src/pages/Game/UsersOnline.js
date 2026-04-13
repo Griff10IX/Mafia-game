@@ -51,59 +51,73 @@ function countryDisplayName(code) {
   }
 }
 
-function flagEmojiFromCountryCode(code) {
-  if (!code || typeof code !== 'string' || code.length !== 2) return '';
-  const up = code.toUpperCase();
-  if (!/^[A-Z]{2}$/.test(up)) return '';
-  const A = 0x1f1e6;
-  return String.fromCodePoint(A + up.charCodeAt(0) - 65, A + up.charCodeAt(1) - 65);
+/** Small flag image (not “GB” text) — PNG for consistent rendering on Windows vs emoji regional indicators. */
+function CountryFlagThumb({ code }) {
+  const c = (code || '').trim().toLowerCase();
+  if (!c || c.length !== 2 || !/^[a-z]{2}$/.test(c)) {
+    return <span className="text-[11px] leading-none shrink-0" aria-hidden>🏳️</span>;
+  }
+  return (
+    <img
+      alt=""
+      src={`https://flagcdn.com/16x12/${c}.png`}
+      srcSet={`https://flagcdn.com/32x24/${c}.png 2x`}
+      width={16}
+      height={12}
+      loading="lazy"
+      decoding="async"
+      className="h-3 w-4 object-cover rounded-[1px] shrink-0 border border-zinc-600/50"
+    />
+  );
 }
 
-function SnapshotCountryLines({ rows }) {
+/** Sits on the same row as the big count (to the right), not stacked under the caption. */
+function SnapshotCountryInline({ rows }) {
   if (!rows || rows.length === 0) {
     return (
-      <p className="text-[7px] text-mutedForeground/80 font-heading leading-tight mt-1 pt-1 border-t border-primary/10">
-        Country % shown when requests send location (e.g. Cloudflare). Play a bit and refresh.
-      </p>
+      <span className="text-[7px] text-mutedForeground/75 font-heading leading-snug flex-1 min-w-0 self-center">
+        Country % when location headers are present (e.g. Cloudflare).
+      </span>
     );
   }
   return (
-    <ul className="mt-1 pt-1 border-t border-primary/10 space-y-0.5 max-h-[4.5rem] overflow-y-auto pr-0.5">
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 flex-1 min-w-0 self-center pl-1.5 ml-0.5 border-l border-zinc-600/35">
       {rows.map((row, idx) => {
-        const code = row.code || '';
+        const code = (row.code || '').trim();
         const label = countryDisplayName(code || undefined);
-        const flag = flagEmojiFromCountryCode(code) || '🏳️';
         const pct = Number(row.pct);
         const pctStr = Number.isFinite(pct) ? `${pct}%` : '—';
         return (
-          <li
+          <span
             key={`${code || 'unk'}-${idx}`}
-            className="flex items-center gap-1 text-[7px] font-heading text-mutedForeground leading-tight"
+            className="inline-flex items-center gap-1 text-[8px] font-heading text-foreground/90 tabular-nums leading-none"
             title={`${label} · ${row.count ?? 0} accounts`}
           >
-            <span className="text-[10px] leading-none shrink-0" aria-hidden>{flag}</span>
-            <span className="text-foreground/90 tabular-nums shrink-0 w-[26px]">{pctStr}</span>
-            <span className="truncate min-w-0">{label}</span>
-          </li>
+            <CountryFlagThumb code={code} />
+            <span>{pctStr}</span>
+          </span>
         );
       })}
-    </ul>
+    </div>
   );
 }
 
 const snapshotTile = (Icon, label, value, caption, accentClass, countryRows) => (
   <div
-    className={`rounded-md border border-primary/15 bg-black/20 px-2 py-1.5 flex flex-col gap-0.5 min-h-[6.5rem] sm:min-h-[7rem] ${accentClass || ''}`}
+    className={`rounded-md border border-primary/15 bg-black/20 px-2 py-1.5 flex flex-col gap-0.5 min-h-[5.25rem] sm:min-h-[5.5rem] ${accentClass || ''}`}
   >
     <div className="flex items-center gap-1.5 text-mutedForeground">
       <Icon size={14} className="shrink-0 text-primary/85" aria-hidden />
       <span className="text-[9px] font-heading uppercase tracking-wide leading-tight">{label}</span>
     </div>
-    <div className="text-lg md:text-xl font-heading font-bold text-foreground tabular-nums leading-none mt-0.5">
-      {value}
+    {/* nowrap so the count never sits alone on a row above the flags; chips wrap inside the right column */}
+    <div className="flex flex-nowrap items-center gap-x-2 mt-0.5 min-w-0">
+      <div className="text-lg md:text-xl font-heading font-bold text-foreground tabular-nums leading-none shrink-0">
+        {value}
+      </div>
+      <SnapshotCountryInline rows={countryRows} />
     </div>
-    <div className="text-[9px] text-mutedForeground font-heading">{caption}</div>
-    <SnapshotCountryLines rows={countryRows} />
+    <div className="text-[9px] text-mutedForeground font-heading mt-auto pt-0.5">{caption}</div>
   </div>
 );
 
