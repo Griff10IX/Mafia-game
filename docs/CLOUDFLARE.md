@@ -41,6 +41,9 @@ Default should **not** be “cache the whole site as static.”
    - Add a rule: for paths that are **not** static assets, **Respect origin** / short edge TTL.  
    Practical minimum: **no Page Rule** like “Cache Level: Cache Everything” for `*mafiawars.co.uk/*`.
 
+3. **Origin request body size (avoids HTTP 413 on uploads)**  
+   Nginx’s default **`client_max_body_size`** is **1m**. Avatar or other large JSON bodies can exceed that and fail with **413** before FastAPI runs. Set something like **`client_max_body_size 10M;`** in your HTTPS `server` block (see `scripts/nginx-mafia-https.conf.example`), then `sudo nginx -t && sudo systemctl reload nginx`.
+
 **After deploy**
 
 - **Caching → Purge Cache → Purge Everything** (or purge by prefix) once nginx/build are updated.

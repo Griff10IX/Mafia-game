@@ -20,6 +20,9 @@ server {
     include /etc/letsencrypt/options-ssl-nginx.conf;
     ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
 
+    # Default nginx is 1m; avatar data URLs (~1.2MB+) otherwise get HTTP 413 before the API runs.
+    client_max_body_size 10M;
+
     root /opt/mafia-app/build;
     index index.html;
 

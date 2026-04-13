@@ -46,6 +46,8 @@ export async function fileToCompressedDataUrl(file, maxDim = 160, quality = 0.82
   canvas.height = ch;
   const ctx = canvas.getContext('2d');
   if (!ctx) return String(dataUrl);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(img, 0, 0, cw, ch);
   const jpeg = canvas.toDataURL('image/jpeg', quality);
   return jpeg && jpeg.startsWith('data:image/') ? jpeg : canvas.toDataURL('image/png');
@@ -55,10 +57,11 @@ export async function fileToCompressedDataUrl(file, maxDim = 160, quality = 0.82
 export const AVATAR_MAX_DATA_URL_CHARS = Math.floor(1.2 * 1024 * 1024);
 
 /**
- * Avatar upload: JPEG/PNG/WebP are resized to JPEG via canvas; GIF is kept as-is so animation works.
+ * Avatar upload: JPEG/PNG/WebP are resized to JPEG via canvas (larger than emblem presets so lightbox/profile stay sharp).
+ * GIF is kept as-is so animation works.
  * @returns {{ ok: true, dataUrl: string } | { ok: false, reason: 'invalid' | 'gif_too_large' }}
  */
-export async function fileToAvatarDataUrl(file, maxDim = 160, quality = 0.82) {
+export async function fileToAvatarDataUrl(file, maxDim = 512, quality = 0.88) {
   if (!file) return { ok: false, reason: 'invalid' };
   const valid = validateSafeImageFile(file);
   if (!valid.ok) return { ok: false, reason: 'invalid' };
