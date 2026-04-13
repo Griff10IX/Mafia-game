@@ -1106,6 +1106,20 @@ async def delete_attacks(request: AttackDeleteRequest, current_user: dict = Depe
     return {"message": f"Deleted {res.deleted_count} search(es)", "deleted": res.deleted_count}
 
 async def travel_to_target(request: AttackIdRequest, current_user: dict = Depends(get_current_user_verified)):
+    from routers.casinos.blackjack import user_has_blocking_singleplayer_blackjack
+    from routers.casinos.mp_blackjack import user_in_active_mp_blackjack_game
+
+    uid = current_user.get("id")
+    if await user_has_blocking_singleplayer_blackjack(uid):
+        raise HTTPException(
+            status_code=400,
+            detail="Finish your blackjack hand before traveling.",
+        )
+    if await user_in_active_mp_blackjack_game(uid):
+        raise HTTPException(
+            status_code=400,
+            detail="Finish or leave your multiplayer blackjack game before traveling.",
+        )
     attack = await db.attacks.find_one(
         {"attacker_id": current_user["id"], "status": "found", "id": request.attack_id},
         {"_id": 0}

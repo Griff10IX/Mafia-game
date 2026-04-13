@@ -413,6 +413,22 @@ export default function Travel() {
     setTraveling(true);
     setSelectedDest(destination);
     try {
+      const [bjRes, mpBjRes] = await Promise.all([
+        api.get('/casino/blackjack/current-game').catch(() => ({ data: {} })),
+        api.get('/casino/mp-blackjack/active-participation').catch(() => ({ data: { in_game: false } })),
+      ]);
+      if (mpBjRes.data?.in_game && mpBjRes.data?.game_id) {
+        setBjTravelBlock({ kind: 'mp', gameId: String(mpBjRes.data.game_id) });
+        toast.error('Finish or leave your multiplayer blackjack game before traveling.');
+        setTraveling(false);
+        return;
+      }
+      if (bjRes.data?.hasGame) {
+        setBjTravelBlock({ kind: 'single' });
+        toast.error('Finish your blackjack hand before traveling.');
+        setTraveling(false);
+        return;
+      }
       const payload = { destination, travel_method: method };
       if (method === 'airport' && airportSlot != null) payload.airport_slot = airportSlot;
       const response = await api.post('/travel', payload);

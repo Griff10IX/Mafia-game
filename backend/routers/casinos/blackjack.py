@@ -373,7 +373,14 @@ def register(router):
     @router.get("/casino/blackjack/current-game")
     async def casino_blackjack_current_game(current_user: dict = Depends(get_current_user_verified)):
         """Return in-progress game so the UI can show it; if game is older than timeout, auto-stand and return hasGame: false."""
-        game = await db.blackjack_games.find_one({"user_id": current_user.get("id") or ""})
+        uid = current_user.get("id") or ""
+        bj_ids = [uid, str(uid)]
+        if isinstance(uid, str) and uid.isdigit():
+            try:
+                bj_ids.append(int(uid))
+            except ValueError:
+                pass
+        game = await db.blackjack_games.find_one({"user_id": {"$in": list(dict.fromkeys(bj_ids))}})
         if not game:
             return {"hasGame": False}
         if _blackjack_game_is_stale(game):
