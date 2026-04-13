@@ -275,6 +275,8 @@ export default function Store() {
   const [storePayWith, setStorePayWith] = useState('points');
   const [cashPricePerPoint, setCashPricePerPoint] = useState(0);
   const [cashPriceAvailable, setCashPriceAvailable] = useState(false);
+  const [cashPriceUsesQtAvg, setCashPriceUsesQtAvg] = useState(false);
+  const [cashMinPricePerPoint, setCashMinPricePerPoint] = useState(150_000);
   const [cashPurchasesToday, setCashPurchasesToday] = useState(0);
   const [cashPurchasesLimit, setCashPurchasesLimit] = useState(25);
 
@@ -287,13 +289,16 @@ export default function Store() {
   useEffect(() => {
     if (activeTab === 'tokens' && storePayWith === 'cash') {
       api.get('/store/token-cash-price').then(({ data }) => {
-        setCashPriceAvailable(data.available);
+        setCashPriceAvailable(!!data.available);
         setCashPricePerPoint(data.price_per_point || 0);
+        setCashPriceUsesQtAvg(!!data.used_qt_average);
+        setCashMinPricePerPoint(Number(data.min_price_per_point) || 150_000);
         setCashPurchasesToday(data.cash_purchases_today || 0);
         setCashPurchasesLimit(data.cash_purchases_limit || 25);
       }).catch(() => {
         setCashPriceAvailable(false);
         setCashPricePerPoint(0);
+        setCashPriceUsesQtAvg(false);
       });
     }
   }, [activeTab, storePayWith]);
@@ -988,14 +993,18 @@ export default function Store() {
                 <>
                   <span className="text-[9px] font-heading text-zinc-500">
                     Price per point: <span className="text-primary font-bold">${Math.round(cashPricePerPoint).toLocaleString()}</span>
-                    <span className="text-zinc-600 ml-1">(avg of top {cashPriceAvailable ? '≤3' : '0'} QT sell offers)</span>
+                    <span className="text-zinc-600 ml-1">
+                      {cashPriceUsesQtAvg
+                        ? `(avg of cheapest 3 QT sell offers; min $${Math.round(cashMinPricePerPoint).toLocaleString()}/pt)`
+                        : `($${Math.round(cashMinPricePerPoint).toLocaleString()}/pt — fewer than 3 QT sell offers)`}
+                    </span>
                   </span>
                   <span className="text-[9px] font-heading text-zinc-500">
                     Daily: <span className={`font-bold ${cashPurchasesToday >= cashPurchasesLimit ? 'text-red-400' : 'text-primary'}`}>{cashPurchasesToday}/{cashPurchasesLimit}</span> used
                   </span>
                 </>
               ) : (
-                <span className="text-[9px] font-heading text-red-400/80">No active sell offers on Quick Trade — cash purchase unavailable.</span>
+                <span className="text-[9px] font-heading text-red-400/80">Could not load cash price — try again.</span>
               )}
             </div>
           )}

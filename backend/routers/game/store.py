@@ -792,28 +792,34 @@ async def buy_hitlist_npc_bonus_slot(
 
 
 TOKEN_CASH_DAILY_LIMIT = 25
+# Store token cash buys: never below this $/point; if <3 valid QT sell offers, use this floor only.
+TOKEN_CASH_MIN_PRICE_PER_POINT = 150_000
+TOKEN_CASH_AVG_SELL_OFFER_COUNT = 3
 
 
 async def _get_cash_price_per_point() -> tuple:
-    """Return (available: bool, price_per_point: float, offer_count: int) from top-3 QT sell offers."""
+    """Return (available, price_per_point, offers_used_in_avg).
+
+    Price = max(TOKEN_CASH_MIN_PRICE_PER_POINT, mean(cheapest 3 $/pt rates)) when at least 3 valid
+    active sell offers exist; otherwise TOKEN_CASH_MIN_PRICE_PER_POINT (still available).
+    """
     try:
-        offers = await db.trade_sell_offers.find(
-            {"status": "active"},
-        ).sort("created_at", -1).to_list(3)
+        offers = await db.trade_sell_offers.find({"status": "active"}).to_list(500)
     except Exception:
-        return False, 0, 0
-    if not offers:
-        return False, 0, 0
-    per_points = []
+        return True, float(TOKEN_CASH_MIN_PRICE_PER_POINT), 0
+    rates = []
     for o in offers:
         pts = int(o.get("points") or 0)
         cost = int(o.get("cost") or 0)
         if pts > 0 and cost > 0:
-            per_points.append(cost / pts)
-    if not per_points:
-        return False, 0, 0
-    avg = sum(per_points) / len(per_points)
-    return True, avg, len(per_points)
+            rates.append(cost / pts)
+    rates.sort()
+    top = rates[:TOKEN_CASH_AVG_SELL_OFFER_COUNT]
+    if len(top) >= TOKEN_CASH_AVG_SELL_OFFER_COUNT:
+        avg = sum(top) / TOKEN_CASH_AVG_SELL_OFFER_COUNT
+        price = max(float(TOKEN_CASH_MIN_PRICE_PER_POINT), avg)
+        return True, price, TOKEN_CASH_AVG_SELL_OFFER_COUNT
+    return True, float(TOKEN_CASH_MIN_PRICE_PER_POINT), len(top)
 
 
 def _cash_purchases_today(user: dict) -> int:
@@ -825,12 +831,14 @@ def _cash_purchases_today(user: dict) -> int:
 
 
 async def get_token_cash_price(current_user: dict = Depends(get_current_user)):
-    available, price_per_point, offer_count = await _get_cash_price_per_point()
+    available, price_per_point, offers_in_avg = await _get_cash_price_per_point()
     used = _cash_purchases_today(current_user)
     return {
         "available": available,
         "price_per_point": round(price_per_point, 2) if available else 0,
-        "offer_count": offer_count,
+        "offer_count": offers_in_avg,
+        "min_price_per_point": TOKEN_CASH_MIN_PRICE_PER_POINT,
+        "used_qt_average": offers_in_avg >= TOKEN_CASH_AVG_SELL_OFFER_COUNT,
         "cash_purchases_today": used,
         "cash_purchases_limit": TOKEN_CASH_DAILY_LIMIT,
     }
@@ -862,9 +870,9 @@ async def buy_store_token_cash(
     if used + amt > TOKEN_CASH_DAILY_LIMIT:
         raise HTTPException(status_code=400, detail=f"Daily cash purchase limit reached ({TOKEN_CASH_DAILY_LIMIT}/day).")
 
-    available, price_per_point, _ = await _get_cash_price_per_point()
-    if not available:
-        raise HTTPException(status_code=400, detail="Cash purchase unavailable — no active sell offers on Quick Trade.")
+    _available, price_per_point, _ = await _get_cash_price_per_point()
+    if price_per_point <= 0:
+        raise HTTPException(status_code=400, detail="Cash price unavailable. Try again.")
 
     unit_pts = TOKEN_STORE_UNIT_PRICE_POINTS[tt]
     cash_cost = round(unit_pts * amt * price_per_point)
@@ -920,9 +928,9 @@ async def buy_store_token_bundle_cash(
     if used + 1 > TOKEN_CASH_DAILY_LIMIT:
         raise HTTPException(status_code=400, detail=f"Daily cash purchase limit reached ({TOKEN_CASH_DAILY_LIMIT}/day).")
 
-    available, price_per_point, _ = await _get_cash_price_per_point()
-    if not available:
-        raise HTTPException(status_code=400, detail="Cash purchase unavailable — no active sell offers on Quick Trade.")
+    _available, price_per_point, _ = await _get_cash_price_per_point()
+    if price_per_point <= 0:
+        raise HTTPException(status_code=400, detail="Cash price unavailable. Try again.")
 
     cash_cost = round(cost_pts * price_per_point)
     if cash_cost <= 0:
