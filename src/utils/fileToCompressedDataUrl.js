@@ -52,7 +52,7 @@ export async function fileToCompressedDataUrl(file, maxDim = 160, quality = 0.82
 }
 
 /** Must match backend `AVATAR_MAX_BYTES` in profile router (data URL string length). */
-export const AVATAR_MAX_DATA_URL_CHARS = 250_000;
+export const AVATAR_MAX_DATA_URL_CHARS = Math.floor(1.2 * 1024 * 1024);
 
 /**
  * Avatar upload: JPEG/PNG/WebP are resized to JPEG via canvas; GIF is kept as-is so animation works.

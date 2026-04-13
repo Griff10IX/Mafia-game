@@ -1274,7 +1274,7 @@ export default function Profile() {
       const result = await fileToAvatarDataUrl(file);
       if (!result.ok) {
         if (result.reason === 'gif_too_large') {
-          toast.error('That GIF is too large for an avatar (max ~250KB when encoded). Try a smaller or shorter GIF.');
+          toast.error('That GIF is too large for an avatar (max ~1.2MB when encoded). Try a smaller or shorter GIF.');
         } else {
           toast.error('Please choose a valid image file.');
         }
@@ -1894,7 +1894,7 @@ export default function Profile() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="text-[11px] text-mutedForeground font-heading">
-                    Upload a picture for your profile preview. GIFs stay animated; max ~250KB.
+                    Upload a picture for your profile preview. GIFs stay animated; max ~1.2MB (encoded size).
                   </div>
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <label className={`inline-flex items-center justify-center px-3 py-1.5 rounded-md bg-primary/20 border border-primary/50 text-primary font-heading font-bold text-xs hover:bg-primary/30 cursor-pointer ${savingAvatar ? 'opacity-60 cursor-not-allowed' : ''}`}>

@@ -989,7 +989,7 @@ def register(router):
 
     # Allowed image MIME types for avatars (NO SVG - can contain XSS)
     AVATAR_ALLOWED_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
-    AVATAR_MAX_BYTES = 250_000
+    AVATAR_MAX_BYTES = int(1.2 * 1024 * 1024)  # data URL string length (~1.2 MiB)
 
     def _validate_avatar_data_url(data_url: str) -> tuple[bool, str]:
         """
@@ -1070,7 +1070,7 @@ def register(router):
 
         # Size check first (before expensive validation)
         if len(avatar) > AVATAR_MAX_BYTES:
-            raise HTTPException(status_code=400, detail="Avatar too large. Use a smaller image (max ~180KB).")
+            raise HTTPException(status_code=400, detail="Avatar too large. Use a smaller image (max ~1.2MB).")
 
         # Security validation
         is_valid, error_msg = _validate_avatar_data_url(avatar)

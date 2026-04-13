@@ -1800,7 +1800,7 @@ async def families_create(request: FamilyCreateRequest, current_user: dict = Dep
         emblem_key = ek
     elif raw_custom:
         if len(raw_custom) > FAMILY_AVATAR_MAX_BYTES:
-            raise HTTPException(status_code=400, detail="Emblem image too large (max ~180KB).")
+            raise HTTPException(status_code=400, detail="Emblem image too large (max ~1.2MB).")
         is_valid, err_msg = _validate_family_avatar(raw_custom)
         if not is_valid:
             raise HTTPException(status_code=400, detail=err_msg)
@@ -3039,7 +3039,7 @@ async def families_update_profile_text(request: FamilyProfileTextRequest, curren
     }
 
 
-FAMILY_AVATAR_MAX_BYTES = 250_000  # same as user avatar
+FAMILY_AVATAR_MAX_BYTES = int(1.2 * 1024 * 1024)  # same cap as user avatar data URL
 FAMILY_AVATAR_ALLOWED_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
 
 
@@ -3146,7 +3146,7 @@ async def families_update_avatar(request: FamilyAvatarRequest, current_user: dic
 
     if avatar:
         if len(avatar) > FAMILY_AVATAR_MAX_BYTES:
-            raise HTTPException(status_code=400, detail="Image too large. Use a smaller image (max ~180KB).")
+            raise HTTPException(status_code=400, detail="Image too large. Use a smaller image (max ~1.2MB).")
         is_valid, error_msg = _validate_family_avatar(avatar)
         if not is_valid:
             raise HTTPException(status_code=400, detail=error_msg)

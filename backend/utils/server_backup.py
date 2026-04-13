@@ -1182,8 +1182,8 @@ async def update_avatar(request: AvatarUpdateRequest, current_user: dict = Depen
     avatar = (request.avatar_data or "").strip()
     if not avatar.startswith("data:image/"):
         raise HTTPException(status_code=400, detail="Avatar must be an image data URL (data:image/...)")
-    if len(avatar) > 250_000:
-        raise HTTPException(status_code=400, detail="Avatar too large. Use a smaller image.")
+    if len(avatar) > int(1.2 * 1024 * 1024):
+        raise HTTPException(status_code=400, detail="Avatar too large. Use a smaller image (max ~1.2MB).")
 
     await db.users.update_one(
         {"id": current_user["id"]},
