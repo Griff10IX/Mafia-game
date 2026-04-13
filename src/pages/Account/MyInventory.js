@@ -16,6 +16,13 @@ let _cachedInventory = null;
 let _invLastFetch = 0;
 const INV_REFRESH = 30_000;
 
+/** Matches backend STORE_TOKEN_MAX_HELD — max unactivated tokens per type (recipient cap). */
+const STORE_TOKEN_MAX_HELD = 15;
+const INVENTORY_TOKEN_TYPES = [
+  'xp_crimes', 'xp_gta', 'auto_rank_2h', 'melt', 'oc_reduced', 'booze', 'racket', 'travel', 'properties', 'jailbust_bonus', 'rank_xp_pass',
+];
+const GIFTABLE_TOKEN_KEYS = INVENTORY_TOKEN_TYPES.filter((k) => k !== 'rank_xp_pass');
+
 export default function MyInventory() {
   const [hasLoaded, setHasLoaded] = useState(Boolean(_cachedInventory));
   const [data, setData] = useState(_cachedInventory);
@@ -51,6 +58,29 @@ export default function MyInventory() {
     const id = setInterval(() => fetchInventory(true), INV_REFRESH);
     return () => clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    const tok = data?.tokens;
+    if (!tok || typeof tok !== 'object') return;
+    const inStock = GIFTABLE_TOKEN_KEYS.filter((k) => (tok[k]?.count ?? 0) > 0);
+    setGiftTokenType((cur) => {
+      if (inStock.includes(cur)) return cur;
+      return inStock[0] || '';
+    });
+  }, [data]);
+
+  useEffect(() => {
+    const tok = data?.tokens;
+    if (!tok || typeof tok !== 'object') return;
+    const tokenGiftDaily = data.token_gift_daily || { sent_today: 0, limit: 20 };
+    const giftDailyRemaining = Math.max(0, (tokenGiftDaily.limit ?? 20) - (tokenGiftDaily.sent_today ?? 0));
+    const selGiftCount = giftTokenType ? (tok[giftTokenType]?.count ?? 0) : 0;
+    const maxG = Math.max(0, Math.min(selGiftCount, giftDailyRemaining, STORE_TOKEN_MAX_HELD));
+    setGiftAmount((a) => {
+      if (maxG <= 0) return 1;
+      return Math.min(Math.max(1, a), maxG);
+    });
+  }, [data, giftTokenType]);
 
   const equipWeapon = async (weaponId) => {
     setEquipping((e) => ({ ...e, weapon: weaponId }));
@@ -169,8 +199,6 @@ export default function MyInventory() {
     }
   };
 
-  const TOKEN_TYPES = ['xp_crimes', 'xp_gta', 'auto_rank_2h', 'melt', 'oc_reduced', 'booze', 'racket', 'travel', 'properties', 'jailbust_bonus', 'rank_xp_pass'];
-  const GIFTABLE_TOKEN_KEYS = TOKEN_TYPES.filter((k) => k !== 'rank_xp_pass');
   const tokenLabels = {
     xp_crimes: { name: 'Crimes XP', icon: Zap, desc: 'Double XP from crimes, 1h per token (stack up to 24h)' },
     xp_gta: { name: 'GTA XP', icon: Zap, desc: 'Double XP from GTA, 1h per token (stack up to 24h)' },
@@ -185,27 +213,11 @@ export default function MyInventory() {
     rank_xp_pass: { name: 'Game Pass', icon: Package, desc: 'Activate in Armoury/My Inventory to claim one-time Game Pass rewards. Expires in 1 month if unused.' },
   };
 
-  /** Matches backend STORE_TOKEN_MAX_HELD — max unactivated tokens per type (recipient cap). */
-  const STORE_TOKEN_MAX_HELD = 15;
   const tokenGiftDaily = data.token_gift_daily || { sent_today: 0, limit: 20 };
   const giftDailyRemaining = Math.max(0, (tokenGiftDaily.limit ?? 20) - (tokenGiftDaily.sent_today ?? 0));
   const giftableInStock = GIFTABLE_TOKEN_KEYS.filter((k) => (tokens[k]?.count ?? 0) > 0);
   const selGiftCount = giftTokenType ? (tokens[giftTokenType]?.count ?? 0) : 0;
   const maxGift = Math.max(0, Math.min(selGiftCount, giftDailyRemaining, STORE_TOKEN_MAX_HELD));
-
-  useEffect(() => {
-    setGiftTokenType((cur) => {
-      if (giftableInStock.includes(cur)) return cur;
-      return giftableInStock[0] || '';
-    });
-  }, [tokens]);
-
-  useEffect(() => {
-    setGiftAmount((a) => {
-      if (maxGift <= 0) return 1;
-      return Math.min(Math.max(1, a), maxGift);
-    });
-  }, [maxGift]);
 
   const exchangeAutoRank = async () => {
     setExchangingAutoRank(true);
@@ -439,7 +451,7 @@ export default function MyInventory() {
         )}
 
         {/* Consumables / Tokens */}
-        {TOKEN_TYPES.some((k) => (tokens[k]?.count ?? 0) > 0 || tokens[k]?.active_until) && (
+        {INVENTORY_TOKEN_TYPES.some((k) => (tokens[k]?.count ?? 0) > 0 || tokens[k]?.active_until) && (
           <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20 inv-fade-in mobile-panel`} style={{ animationDelay: '0.18s' }}>
             <div className="px-2.5 py-2 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
               <Zap size={14} className="text-primary" />
@@ -449,7 +461,7 @@ export default function MyInventory() {
               <p className="text-[8px] text-mutedForeground font-heading leading-snug border-b border-zinc-700/30 pb-2 mb-1">
                 Use all only spends tokens that add a full token duration toward this row&apos;s max stack (or until you run out). Tiny leftover headroom is not filled, and extra tokens stay in your inventory.
               </p>
-              {TOKEN_TYPES.filter((key) => (tokens[key]?.count ?? 0) > 0 || tokens[key]?.active_until).map((key) => {
+              {INVENTORY_TOKEN_TYPES.filter((key) => (tokens[key]?.count ?? 0) > 0 || tokens[key]?.active_until).map((key) => {
                 const t = tokens[key] || { count: 0, active_until: null, expires_at: null };
                 const { name, icon: Icon, desc } = tokenLabels[key] || { name: key, icon: Zap, desc: '' };
                 // Game Pass is now one-time tier rewards (no 24h "active until" window).
