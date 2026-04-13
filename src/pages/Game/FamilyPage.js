@@ -2082,7 +2082,16 @@ const STATE_HEAD_INCOME_KEYS = [
   { key: 'dead_alive_tax', label: 'Dead > Alive (0.05% tax)', themeLabel: true },
 ];
 
-const StateHeadTab = ({ headOfState, stateHeadIncome, stateHeadCasinoWeekStats = {} }) => {
+const StateHeadTab = ({
+  headOfState,
+  stateHeadIncome,
+  stateHeadCasinoWeekStats = {},
+  canRelinquish,
+  headOfStateRelinquished,
+  relinquishLoading,
+  onRelinquish,
+}) => {
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const income = stateHeadIncome || {};
   const weekStats = stateHeadCasinoWeekStats || {};
   const total = STATE_HEAD_INCOME_KEYS.reduce((sum, { key }) => sum + (Number(income[key]) || 0), 0);
@@ -2130,6 +2139,51 @@ const StateHeadTab = ({ headOfState, stateHeadIncome, stateHeadCasinoWeekStats =
           <span className="text-sm font-heading font-bold text-primary tabular-nums">{formatMoneyFull(total)}</span>
         </div>
       </div>
+
+      {headOfStateRelinquished ? (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-950/20 px-3 py-2 text-[10px] text-amber-200/90 font-heading leading-relaxed">
+          This crew already used its one-time <span className="font-bold text-amber-300">relinquish head of state</span> option. If you need to step down again, staff must update the state map.
+        </div>
+      ) : canRelinquish ? (
+        <div className="rounded-lg border border-red-500/25 bg-red-950/15 p-3 space-y-2">
+          <p className="text-[10px] text-zinc-400 font-heading leading-relaxed">
+            <span className="text-red-400 font-bold">Relinquish head of state</span> — your crew gives up {headOfState}. The state becomes unclaimed (any family can contest it).{' '}
+            <span className="text-foreground font-bold">This can only be done once per crew.</span>
+          </p>
+          {!confirmOpen ? (
+            <button
+              type="button"
+              disabled={relinquishLoading}
+              onClick={() => setConfirmOpen(true)}
+              className="px-3 py-2 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider border border-red-500/50 bg-red-500/15 text-red-300 hover:bg-red-500/25 disabled:opacity-50 transition-colors"
+            >
+              Relinquish head of state…
+            </button>
+          ) : (
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <span className="text-[10px] text-red-300 font-heading font-bold">Confirm?</span>
+              <button
+                type="button"
+                disabled={relinquishLoading}
+                onClick={() => setConfirmOpen(false)}
+                className="px-2.5 py-1.5 rounded-lg text-[10px] font-heading font-bold border border-zinc-600 text-zinc-300 hover:bg-zinc-800/80 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={relinquishLoading}
+                onClick={() => { void onRelinquish?.(); }}
+                className="px-2.5 py-1.5 rounded-lg text-[10px] font-heading font-bold border border-red-500/60 bg-red-600/25 text-red-200 hover:bg-red-600/35 disabled:opacity-50"
+              >
+                {relinquishLoading ? '…' : 'Yes, relinquish'}
+              </button>
+            </div>
+          )}
+        </div>
+      ) : (
+        <p className="text-[10px] text-zinc-500 font-heading">Only the Don or Underboss can relinquish head of state.</p>
+      )}
     </div>
   );
 };
@@ -2330,6 +2384,7 @@ export default function FamilyPage() {
   const [crewOCAdvertiseLoading, setCrewOCAdvertiseLoading] = useState(false);
   const [detailsWarId, setDetailsWarId] = useState(null);
   const [stateTakeoverLoading, setStateTakeoverLoading] = useState(false);
+  const [relinquishHoSLoading, setRelinquishHoSLoading] = useState(false);
   const [vaultTransactions, setVaultTransactions] = useState([]);
   const [vaultTxTotal, setVaultTxTotal] = useState(0);
 
@@ -2358,6 +2413,7 @@ export default function FamilyPage() {
   const canUpgradeRacket = ['boss', 'underboss', 'consigliere'].includes(myRole);
   const vaultAndRacketsLocked = !!myFamily?.vault_and_rackets_locked;
   const canManageCrewOC = ['boss', 'underboss', 'capo'].includes(myRole);
+  const canRelinquishHeadOfState = ['boss', 'don', 'underboss'].includes(myRole || '') && !family?.head_of_state_relinquished;
   const activeWars = warStats?.wars ?? [];
 
   const readyRackets = rackets.filter((r) => r.level > 0 && isRacketReadyAt(r.next_collect_at)).length;
@@ -2455,6 +2511,20 @@ export default function FamilyPage() {
     try { const res = await api.get('/families/racket-attack-targets', { params: { _: Date.now() } }); setRacketAttackTargets(res.data?.targets ?? []); }
     catch { setRacketAttackTargets([]); } finally { setTargetsRefreshing(false); }
   }, [myFamily?.family]);
+
+  const handleRelinquishHeadOfState = useCallback(async () => {
+    try {
+      setRelinquishHoSLoading(true);
+      const res = await api.post('/families/head-of-state/relinquish');
+      toast.success(res.data?.message || 'Head of state relinquished.');
+      setActiveTab((t) => (t === 'statehead' ? 'rackets' : t));
+      await fetchData();
+    } catch (e) {
+      toast.error(apiDetail(e));
+    } finally {
+      setRelinquishHoSLoading(false);
+    }
+  }, [fetchData]);
 
   // Handlers — all preserved exactly
   const handleCreate = async (e) => {
@@ -3073,7 +3143,15 @@ export default function FamilyPage() {
                 vaultTxTotal={vaultTxTotal}
               />}
               {activeTab === 'statehead' && family?.head_of_state && (
-                <StateHeadTab headOfState={family.head_of_state} stateHeadIncome={family.state_head_income} stateHeadCasinoWeekStats={myFamily?.state_head_casino_week_stats} />
+                <StateHeadTab
+                  headOfState={family.head_of_state}
+                  stateHeadIncome={family.state_head_income}
+                  stateHeadCasinoWeekStats={myFamily?.state_head_casino_week_stats}
+                  canRelinquish={canRelinquishHeadOfState}
+                  headOfStateRelinquished={!!family.head_of_state_relinquished}
+                  relinquishLoading={relinquishHoSLoading}
+                  onRelinquish={handleRelinquishHeadOfState}
+                />
               )}
               {activeTab === 'roster' && (
                 <RosterTab

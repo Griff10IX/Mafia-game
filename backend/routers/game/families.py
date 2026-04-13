@@ -43,6 +43,7 @@ from server import (
     maybe_process_rank_up,
     user_prestige_rank_mult,
     set_state_head,
+    get_head_family_id_for_state,
     _get_active_war_between,
     _get_active_war_for_family,
     _family_in_active_war,
@@ -1569,6 +1570,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             "emblem_preset_id": fam.get("emblem_preset_id"),
             "racket_income_bonus_percent": float((fam.get("racket_income_bonus_percent") or 0) or 0),
             "head_of_state": head_of_state,
+            "head_of_state_relinquished": bool(fam.get("head_of_state_relinquished")),
             "state_head_income": fam.get("state_head_income") or {},
             "pending_state_takeover": fam.get("pending_state_takeover"),
             "pending_state_takeover_at": fam.get("pending_state_takeover_at"),
@@ -4111,6 +4113,69 @@ async def state_takeover_accept(current_user: dict = Depends(get_current_user)):
     }
 
 
+async def relinquish_head_of_state(current_user: dict = Depends(get_current_user)):
+    """Voluntarily release this state's head-of-state slot. One use per family (flag on family doc)."""
+    member = await db.family_members.find_one({"user_id": current_user["id"]}, {"_id": 0, "family_id": 1, "role": 1})
+    if not member:
+        raise HTTPException(status_code=400, detail="You are not in a family")
+    _mr = str(member.get("role") or "").strip().lower()
+    if _mr not in ("boss", "don", "underboss"):
+        raise HTTPException(status_code=403, detail="Only the Don or Underboss can relinquish head of state")
+
+    family_id = member["family_id"]
+    fam = await db.families.find_one(
+        {"id": family_id},
+        {"_id": 0, "head_of_state": 1, "head_of_state_relinquished": 1, "name": 1},
+    )
+    if not fam:
+        raise HTTPException(status_code=404, detail="Family not found")
+    if fam.get("head_of_state_relinquished"):
+        raise HTTPException(
+            status_code=400,
+            detail="This family has already used relinquish head of state.",
+        )
+
+    state = (fam.get("head_of_state") or "").strip()
+    if not state:
+        raise HTTPException(status_code=400, detail="Your family is not head of any state.")
+
+    head_fid = await get_head_family_id_for_state(state)
+    if head_fid != family_id:
+        await db.families.update_one({"id": family_id}, {"$set": {"head_of_state": None}})
+        raise HTTPException(
+            status_code=400,
+            detail="State assignment mismatch. Your family's head-of-state flag was cleared; refresh the page.",
+        )
+
+    err = await set_state_head(state, None)
+    if err:
+        raise HTTPException(status_code=400, detail=err)
+
+    await db.families.update_one(
+        {"id": family_id, "head_of_state_relinquished": {"$ne": True}},
+        {"$set": {"head_of_state_relinquished": True}},
+    )
+
+    mems = await db.family_members.find({"family_id": family_id}, {"_id": 0, "user_id": 1}).to_list(200)
+    for m in mems:
+        uid = m.get("user_id")
+        if uid is not None:
+            _invalidate_my_cache(str(uid))
+    _invalidate_list_cache()
+
+    await log_activity(
+        current_user["id"],
+        current_user.get("username") or "?",
+        "family_relinquish_head_of_state",
+        {"family_id": family_id, "state": state},
+    )
+
+    return {
+        "message": f"Your family is no longer Head of {state}. The state is unclaimed.",
+        "released_state": state,
+    }
+
+
 async def state_takeover_reject(current_user: dict = Depends(get_current_user)):
     """Reject a pending state takeover offer. The conquered state remains unclaimed."""
     member = await db.family_members.find_one({"user_id": current_user["id"]}, {"_id": 0, "family_id": 1, "role": 1})
@@ -4197,5 +4262,6 @@ def register(router):
     router.add_api_route("/families/wars/history", families_wars_history, methods=["GET"])
     router.add_api_route("/families/state-takeover/accept", state_takeover_accept, methods=["POST"])
     router.add_api_route("/families/state-takeover/reject", state_takeover_reject, methods=["POST"])
+    router.add_api_route("/families/head-of-state/relinquish", relinquish_head_of_state, methods=["POST"])
     router.add_api_route("/families/cron/treasury-bullets-hourly", families_cron_treasury_bullets_hourly, methods=["POST"])
     router.add_api_route("/families/airport-crew-perk", families_set_airport_crew_perk, methods=["PATCH"])
