@@ -40,9 +40,60 @@ function formatDateTime(iso) {
   });
 }
 
-const snapshotTile = (Icon, label, value, caption, accentClass) => (
+let _regionNamesEn;
+function countryDisplayName(code) {
+  if (!code) return 'Unknown';
+  try {
+    _regionNamesEn = _regionNamesEn || new Intl.DisplayNames(['en'], { type: 'region' });
+    return _regionNamesEn.of(code) || code;
+  } catch {
+    return code;
+  }
+}
+
+function flagEmojiFromCountryCode(code) {
+  if (!code || typeof code !== 'string' || code.length !== 2) return '';
+  const up = code.toUpperCase();
+  if (!/^[A-Z]{2}$/.test(up)) return '';
+  const A = 0x1f1e6;
+  return String.fromCodePoint(A + up.charCodeAt(0) - 65, A + up.charCodeAt(1) - 65);
+}
+
+function SnapshotCountryLines({ rows }) {
+  if (!rows || rows.length === 0) {
+    return (
+      <p className="text-[7px] text-mutedForeground/80 font-heading leading-tight mt-1 pt-1 border-t border-primary/10">
+        Country % shown when requests send location (e.g. Cloudflare). Play a bit and refresh.
+      </p>
+    );
+  }
+  return (
+    <ul className="mt-1 pt-1 border-t border-primary/10 space-y-0.5 max-h-[4.5rem] overflow-y-auto pr-0.5">
+      {rows.map((row, idx) => {
+        const code = row.code || '';
+        const label = countryDisplayName(code || undefined);
+        const flag = flagEmojiFromCountryCode(code) || '🏳️';
+        const pct = Number(row.pct);
+        const pctStr = Number.isFinite(pct) ? `${pct}%` : '—';
+        return (
+          <li
+            key={`${code || 'unk'}-${idx}`}
+            className="flex items-center gap-1 text-[7px] font-heading text-mutedForeground leading-tight"
+            title={`${label} · ${row.count ?? 0} accounts`}
+          >
+            <span className="text-[10px] leading-none shrink-0" aria-hidden>{flag}</span>
+            <span className="text-foreground/90 tabular-nums shrink-0 w-[26px]">{pctStr}</span>
+            <span className="truncate min-w-0">{label}</span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+const snapshotTile = (Icon, label, value, caption, accentClass, countryRows) => (
   <div
-    className={`rounded-md border border-primary/15 bg-black/20 px-2 py-1.5 flex flex-col gap-0.5 min-h-[4.5rem] ${accentClass || ''}`}
+    className={`rounded-md border border-primary/15 bg-black/20 px-2 py-1.5 flex flex-col gap-0.5 min-h-[6.5rem] sm:min-h-[7rem] ${accentClass || ''}`}
   >
     <div className="flex items-center gap-1.5 text-mutedForeground">
       <Icon size={14} className="shrink-0 text-primary/85" aria-hidden />
@@ -51,11 +102,21 @@ const snapshotTile = (Icon, label, value, caption, accentClass) => (
     <div className="text-lg md:text-xl font-heading font-bold text-foreground tabular-nums leading-none mt-0.5">
       {value}
     </div>
-    <div className="text-[9px] text-mutedForeground font-heading mt-auto">{caption}</div>
+    <div className="text-[9px] text-mutedForeground font-heading">{caption}</div>
+    <SnapshotCountryLines rows={countryRows} />
   </div>
 );
 
-const ActivitySnapshotCard = ({ totalOnline, activeHour, activeDay, activeWeek }) => (
+const ActivitySnapshotCard = ({
+  totalOnline,
+  activeHour,
+  activeDay,
+  activeWeek,
+  countriesRoster = [],
+  countriesHour = [],
+  countriesDay = [],
+  countriesWeek = [],
+}) => (
   <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-card uo-fade-in mobile-panel`}>
     <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
@@ -67,6 +128,7 @@ const ActivitySnapshotCard = ({ totalOnline, activeHour, activeDay, activeWeek }
       <p className="text-[9px] text-mutedForeground font-heading mb-2 leading-snug">
         Live list below; the tiles count anyone with <span className="text-foreground/90">last seen</span> in that window, or{' '}
         <span className="text-foreground/90">auto-rank on</span> (not idle), or <span className="text-foreground/90">forced online</span> — same idea as the roster (staff in ghost mode excluded).
+        Flags use the last known country from your connection (usually Cloudflare).
       </p>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {snapshotTile(
@@ -74,11 +136,12 @@ const ActivitySnapshotCard = ({ totalOnline, activeHour, activeDay, activeWeek }
           'Right now',
           totalOnline,
           'On live roster',
-          'ring-1 ring-emerald-500/20 bg-emerald-500/5'
+          'ring-1 ring-emerald-500/20 bg-emerald-500/5',
+          countriesRoster,
         )}
-        {snapshotTile(Clock, 'Past hour', activeHour, 'Accounts')}
-        {snapshotTile(CalendarDays, 'Past day', activeDay, 'Accounts')}
-        {snapshotTile(CalendarRange, 'Past week', activeWeek, 'Accounts')}
+        {snapshotTile(Clock, 'Past hour', activeHour, 'Accounts', undefined, countriesHour)}
+        {snapshotTile(CalendarDays, 'Past day', activeDay, 'Accounts', undefined, countriesDay)}
+        {snapshotTile(CalendarRange, 'Past week', activeWeek, 'Accounts', undefined, countriesWeek)}
       </div>
     </div>
     <div className="uo-art-line text-primary mx-2.5" />
@@ -394,6 +457,10 @@ export default function UsersOnline() {
   const [activeHour, setActiveHour] = useState(() => bootCache?.active_last_hour ?? 0);
   const [activeDay, setActiveDay] = useState(() => bootCache?.active_last_day ?? 0);
   const [activeWeek, setActiveWeek] = useState(() => bootCache?.active_last_week ?? 0);
+  const [countriesRoster, setCountriesRoster] = useState(() => bootCache?.countries_roster ?? []);
+  const [countriesHour, setCountriesHour] = useState(() => bootCache?.countries_hour ?? []);
+  const [countriesDay, setCountriesDay] = useState(() => bootCache?.countries_day ?? []);
+  const [countriesWeek, setCountriesWeek] = useState(() => bootCache?.countries_week ?? []);
   const [users, setUsers] = useState(() => (Array.isArray(bootCache?.users) ? bootCache.users : []));
   const [adminOnlineColor, setAdminOnlineColor] = useState(() => bootCache?.admin_online_color ?? '#a78bfa');
   const [modDefaultOnlineColor, setModDefaultOnlineColor] = useState(() => bootCache?.mod_default_online_color ?? DEFAULT_MOD_COLOR);
@@ -420,6 +487,10 @@ export default function UsersOnline() {
       setActiveHour(response.data.active_last_hour ?? 0);
       setActiveDay(response.data.active_last_day ?? 0);
       setActiveWeek(response.data.active_last_week ?? 0);
+      setCountriesRoster(Array.isArray(response.data.countries_roster) ? response.data.countries_roster : []);
+      setCountriesHour(Array.isArray(response.data.countries_hour) ? response.data.countries_hour : []);
+      setCountriesDay(Array.isArray(response.data.countries_day) ? response.data.countries_day : []);
+      setCountriesWeek(Array.isArray(response.data.countries_week) ? response.data.countries_week : []);
       setUsers(response.data.users || []);
       if (response.data.admin_online_color != null) setAdminOnlineColor(response.data.admin_online_color);
       if (response.data.mod_default_online_color != null) setModDefaultOnlineColor(response.data.mod_default_online_color);
@@ -429,6 +500,10 @@ export default function UsersOnline() {
         active_last_hour: response.data.active_last_hour ?? 0,
         active_last_day: response.data.active_last_day ?? 0,
         active_last_week: response.data.active_last_week ?? 0,
+        countries_roster: response.data.countries_roster ?? [],
+        countries_hour: response.data.countries_hour ?? [],
+        countries_day: response.data.countries_day ?? [],
+        countries_week: response.data.countries_week ?? [],
         users: response.data.users || [],
         admin_online_color: response.data.admin_online_color,
         mod_default_online_color: response.data.mod_default_online_color,
@@ -503,6 +578,10 @@ export default function UsersOnline() {
         activeHour={activeHour}
         activeDay={activeDay}
         activeWeek={activeWeek}
+        countriesRoster={countriesRoster}
+        countriesHour={countriesHour}
+        countriesDay={countriesDay}
+        countriesWeek={countriesWeek}
       />
 
       {users.length === 0 ? (

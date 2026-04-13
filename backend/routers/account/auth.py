@@ -22,6 +22,7 @@ from utils.staff_bot_client_alert import maybe_notify_staff_bot_client_blocked
 from utils.referral_ids import normalize_referred_by_ids, user_has_referrers
 from utils.login_turnstile_gate import login_turnstile_effective_config, require_turnstile_for_login
 from middleware.security import is_proxy_or_vpn, get_ip_info
+from utils.geo_country import country_code_from_request_headers
 
 
 class UserRegister(BaseModel):
@@ -1712,6 +1713,9 @@ def register(router):
                 update["last_path"] = path[:500]
             if client_ip:
                 update["last_request_ip"] = client_ip
+            cc = country_code_from_request_headers(request)
+            if cc:
+                update["last_seen_country"] = cc
             await db.users.update_one(
                 {"id": current_user["id"]},
                 {"$set": update}

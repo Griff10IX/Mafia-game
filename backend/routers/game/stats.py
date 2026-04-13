@@ -411,9 +411,25 @@ def register(router):
         if all_user_ids:
             users_list = await db.users.find(
                 {"id": {"$in": list(all_user_ids)}},
-                {"_id": 0, "id": 1, "is_npc": 1, "rank_points": 1, "username": 1},
+                {"_id": 0, "id": 1, "is_npc": 1, "rank_points": 1, "username": 1, "is_bodyguard": 1},
             ).to_list(None)
             users_batch = {u["id"]: u for u in users_list}
+
+        bg_target_ids = [u["id"] for u in users_batch.values() if u.get("is_bodyguard")]
+        bodyguard_owner_by_target: dict = {}
+        if bg_target_ids:
+            async for bg in db.bodyguards.find(
+                {"bodyguard_user_id": {"$in": bg_target_ids}},
+                {"_id": 0, "bodyguard_user_id": 1, "user_id": 1},
+            ):
+                tid_bg = bg.get("bodyguard_user_id")
+                if tid_bg is None:
+                    continue
+                k = str(tid_bg)
+                if k not in bodyguard_owner_by_target:
+                    bodyguard_owner_by_target[k] = bg.get("user_id")
+
+        viewer_id = str(current_user.get("id") or "")
 
         recent_kills = []
         seen_kills = set()
@@ -451,11 +467,21 @@ def register(router):
             if not victim_username:
                 continue
 
+            tid = a.get("target_id")
+            owner_raw = bodyguard_owner_by_target.get(str(tid)) if tid is not None else None
+            victim_is_your_bodyguard = bool(
+                victim
+                and victim.get("is_bodyguard")
+                and owner_raw is not None
+                and str(owner_raw) == viewer_id
+            )
+
             recent_kills.append({
                 "id": a.get("id") or a.get("attack_id") or str(uuid.uuid4()),
                 "victim_username": victim_username,
                 "victim_rank_name": victim_rank_name,
                 "victim_is_npc": victim_is_npc,
+                "victim_is_your_bodyguard": victim_is_your_bodyguard,
                 "killer_username": killer_username,
                 "is_public": is_public,
                 "created_at": a.get("created_at"),

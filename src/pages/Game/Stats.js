@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Skull } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../../utils/api';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
@@ -149,8 +150,11 @@ const KillsListView = ({ kills }) => {
               key={k.id}
               className="stat-row grid grid-cols-12 gap-1 px-2 py-1.5 text-[10px] font-heading"
             >
-              <div className="col-span-4 text-foreground font-bold truncate">
-                <Link to={`/profile/${encodeURIComponent(k.victim_username)}`} className="text-primary hover:underline truncate block">{k.victim_username}</Link>
+              <div className="col-span-4 text-foreground font-bold min-w-0 flex items-center gap-1">
+                <Link to={`/profile/${encodeURIComponent(k.victim_username)}`} className="text-primary hover:underline truncate min-w-0">{k.victim_username}</Link>
+                {k.victim_is_your_bodyguard ? (
+                  <Skull size={12} className="shrink-0 text-red-500 drop-shadow-[0_0_6px_rgba(239,68,68,0.45)]" title="Your robot bodyguard" aria-label="Your robot bodyguard" />
+                ) : null}
               </div>
               <div className="col-span-3 text-mutedForeground truncate">{k.victim_rank_name || '—'}</div>
               <div className="col-span-3 text-mutedForeground truncate">
@@ -180,8 +184,11 @@ const KillsListView = ({ kills }) => {
           <div key={k.id} className="stat-row p-2 space-y-1">
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0">
-                <div className="text-[10px] font-heading font-bold text-foreground truncate">
-                  <Link to={`/profile/${encodeURIComponent(k.victim_username)}`} className="text-primary hover:underline">{k.victim_username}</Link>
+                <div className="text-[10px] font-heading font-bold text-foreground flex items-center gap-1 min-w-0">
+                  <Link to={`/profile/${encodeURIComponent(k.victim_username)}`} className="text-primary hover:underline truncate min-w-0">{k.victim_username}</Link>
+                  {k.victim_is_your_bodyguard ? (
+                    <Skull size={12} className="shrink-0 text-red-500 drop-shadow-[0_0_6px_rgba(239,68,68,0.45)]" title="Your robot bodyguard" aria-label="Your robot bodyguard" />
+                  ) : null}
                 </div>
                 <div className="text-[9px] text-mutedForeground mt-0.5">
                   {k.victim_rank_name || '—'}

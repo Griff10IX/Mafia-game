@@ -19,6 +19,7 @@ import uuid
 from datetime import datetime, timezone, timedelta
 from utils.ban_user_wipe import user_has_active_account_ban
 from utils.ip_ban_check import raise_http_if_ip_banned, client_ip_from_request
+from utils.geo_country import country_code_from_request_headers
 from utils.game_pass_micro_rewards import (
     micro_tier_from_rank_points,
     rewards_for_micro_tier,
@@ -846,6 +847,13 @@ class CustomCarImageUpdate(BaseModel):
     image_url: Optional[str] = None  # URL for picture; empty or null to clear
 
 
+class ActivityCountryShare(BaseModel):
+    """Share of accounts in an activity cohort by last known proxy country (CF-IPCountry)."""
+    code: str = ""  # ISO 3166-1 alpha-2; empty = unknown / not captured yet
+    count: int = 0
+    pct: float = 0.0
+
+
 class OnlineUsersResponse(BaseModel):
     total_online: int
     users: List[Dict]
@@ -856,6 +864,11 @@ class OnlineUsersResponse(BaseModel):
     active_last_hour: int = 0
     active_last_day: int = 0
     active_last_week: int = 0
+    # Country mix (from last_seen_country on user docs; populated when requests include CF-IPCountry)
+    countries_roster: List[ActivityCountryShare] = Field(default_factory=list)
+    countries_hour: List[ActivityCountryShare] = Field(default_factory=list)
+    countries_day: List[ActivityCountryShare] = Field(default_factory=list)
+    countries_week: List[ActivityCountryShare] = Field(default_factory=list)
 
 # Helper functions
 def get_password_hash(password: str) -> str:
@@ -1226,6 +1239,9 @@ async def get_current_user(
                         update["last_path"] = (request.url.path or "")[:500]
                     if client_ip:
                         update["last_request_ip"] = client_ip
+                    cc = country_code_from_request_headers(request)
+                    if cc:
+                        update["last_seen_country"] = cc
                     await db.users.update_one({"id": user_id}, {"$set": update})
                     user["last_seen"] = now_iso
                     if "last_path" in update:

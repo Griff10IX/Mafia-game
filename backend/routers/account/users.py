@@ -1,5 +1,6 @@
 # Users: online list, search (all users incl. offline/dead)
 from datetime import datetime, timezone, timedelta
+from collections import Counter
 import asyncio
 import re
 
@@ -17,6 +18,7 @@ def register(router):
     ADMIN_EMAILS = srv.ADMIN_EMAILS
     PRESTIGE_CONFIGS = srv.PRESTIGE_CONFIGS
     OnlineUsersResponse = srv.OnlineUsersResponse
+    ActivityCountryShare = srv.ActivityCountryShare
     MOD_ONLINE_COLOR_DEFAULT = "#1e3a5f"
     HDO_ONLINE_COLOR = "#166534"  # dark green for Help Desk Operators
 
@@ -27,6 +29,51 @@ def register(router):
             return MOD_ONLINE_COLOR_DEFAULT
         raw = raw.strip()
         return raw if raw.startswith("#") and len(raw) <= 9 else MOD_ONLINE_COLOR_DEFAULT
+
+    async def _aggregate_country_breakdown(match: dict, limit: int = 8):
+        """Group users in match by last_seen_country (2-letter) or '__' for unknown."""
+        pipeline = [
+            {"$match": match},
+            {
+                "$addFields": {
+                    "_cc": {
+                        "$let": {
+                            "vars": {"u": {"$toUpper": {"$ifNull": ["$last_seen_country", ""]}}},
+                            "in": {
+                                "$cond": [
+                                    {"$eq": [{"$strLenCP": "$$u"}, 2]},
+                                    "$$u",
+                                    "__",
+                                ]
+                            },
+                        }
+                    },
+                },
+            },
+            {"$group": {"_id": "$_cc", "count": {"$sum": 1}}},
+            {"$sort": {"count": -1}},
+        ]
+        rows = await db.users.aggregate(pipeline).to_list(250)
+        total = sum(int(r.get("count") or 0) for r in rows) or 0
+        if total <= 0:
+            return []
+        out = []
+        for r in rows[:limit]:
+            cid = r.get("_id") or "__"
+            code = "" if cid == "__" else str(cid)
+            cnt = int(r.get("count") or 0)
+            out.append(ActivityCountryShare(code=code, count=cnt, pct=round(100.0 * cnt / total, 1)))
+        return out
+
+    def _country_shares_from_counter(ct: Counter, limit: int = 8):
+        total = sum(ct.values()) or 0
+        if total <= 0:
+            return []
+        out = []
+        for key, count in ct.most_common(limit):
+            code = "" if key == "__" else key
+            out.append(ActivityCountryShare(code=code, count=int(count), pct=round(100.0 * int(count) / total, 1)))
+        return out
 
     @router.get("/users/online", response_model=OnlineUsersResponse)
     async def get_online_users(current_user: dict = Depends(get_current_user)):
@@ -49,6 +96,7 @@ def register(router):
 
         users_data = []
         id_to_user = {}
+        roster_country_counter: Counter = Counter()
         for user in users:
             if not (user.get("username") or "").strip():
                 continue
@@ -124,6 +172,8 @@ def register(router):
                 "online_color": online_color,
                 "status": user_status,
             }
+            raw_cc = (user.get("last_seen_country") or "").strip().upper()
+            roster_country_counter[raw_cc if len(raw_cc) == 2 and raw_cc.isalpha() else "__"] += 1
             users_data.append(item)
             if uid:
                 id_to_user[uid] = item
@@ -205,10 +255,23 @@ def register(router):
         hour_ago = (now - timedelta(hours=1)).isoformat()
         day_ago = (now - timedelta(days=1)).isoformat()
         week_ago = (now - timedelta(days=7)).isoformat()
-        active_hour, active_day, active_week = await asyncio.gather(
-            db.users.count_documents(_activity_snapshot_match(hour_ago)),
-            db.users.count_documents(_activity_snapshot_match(day_ago)),
-            db.users.count_documents(_activity_snapshot_match(week_ago)),
+        hour_match = _activity_snapshot_match(hour_ago)
+        day_match = _activity_snapshot_match(day_ago)
+        week_match = _activity_snapshot_match(week_ago)
+        (
+            active_hour,
+            active_day,
+            active_week,
+            countries_hour,
+            countries_day,
+            countries_week,
+        ) = await asyncio.gather(
+            db.users.count_documents(hour_match),
+            db.users.count_documents(day_match),
+            db.users.count_documents(week_match),
+            _aggregate_country_breakdown(hour_match),
+            _aggregate_country_breakdown(day_match),
+            _aggregate_country_breakdown(week_match),
         )
 
         return OnlineUsersResponse(
@@ -220,6 +283,10 @@ def register(router):
             active_last_hour=active_hour,
             active_last_day=active_day,
             active_last_week=active_week,
+            countries_roster=_country_shares_from_counter(roster_country_counter),
+            countries_hour=countries_hour,
+            countries_day=countries_day,
+            countries_week=countries_week,
         )
 
     @router.get("/users/search")
