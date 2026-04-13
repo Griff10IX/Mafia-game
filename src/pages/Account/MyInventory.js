@@ -15,6 +15,12 @@ const INV_STYLES = `
 let _cachedInventory = null;
 let _invLastFetch = 0;
 const INV_REFRESH = 30_000;
+/** Bumped when client merge/normalize changes; drops stale module cache (avoids stuck empty UI). */
+const INV_CLIENT_CACHE_REV = 2;
+if (_cachedInventory != null && _cachedInventory._invRev !== INV_CLIENT_CACHE_REV) {
+  _cachedInventory = null;
+  _invLastFetch = 0;
+}
 
 /** Matches backend STORE_TOKEN_MAX_HELD — max unactivated tokens per type (recipient cap). */
 const STORE_TOKEN_MAX_HELD = 15;
@@ -35,25 +41,39 @@ export default function MyInventory() {
   const [giftAmount, setGiftAmount] = useState(1);
   const [gifting, setGifting] = useState(false);
 
+  const normalizeInventoryPayload = (d) => {
+    if (!d || typeof d !== 'object' || Array.isArray(d)) return null;
+    const armourIn = d.armour;
+    const armour =
+      armourIn && typeof armourIn === 'object' && !Array.isArray(armourIn)
+        ? { ...armourIn, options: Array.isArray(armourIn.options) ? armourIn.options : [] }
+        : { options: [] };
+    const tok = d.tokens;
+    const tokens =
+      tok && typeof tok === 'object' && !Array.isArray(tok) ? tok : {};
+    const loot =
+      d.loot_exclusives && typeof d.loot_exclusives === 'object' && !Array.isArray(d.loot_exclusives)
+        ? d.loot_exclusives
+        : {};
+    return {
+      ...d,
+      weapons: Array.isArray(d.weapons) ? d.weapons : [],
+      armour,
+      loot_exclusives: loot,
+      tokens,
+    };
+  };
+
   const fetchInventory = (silent = false) => {
     api
       .get('/inventory')
       .then((res) => {
-        const d = res?.data;
-        if (
-          d &&
-          Array.isArray(d.weapons) &&
-          d.armour &&
-          typeof d.armour === 'object' &&
-          Array.isArray(d.armour.options) &&
-          d.tokens &&
-          typeof d.tokens === 'object'
-        ) {
-          _cachedInventory = d;
+        const normalized = normalizeInventoryPayload(res?.data);
+        if (normalized) {
+          const withRev = { ...normalized, _invRev: INV_CLIENT_CACHE_REV };
+          _cachedInventory = withRev;
           _invLastFetch = Date.now();
-          setData(d);
-        } else if (!silent && d) {
-          console.warn('MyInventory: unexpected /inventory shape', d);
+          setData(withRev);
         }
       })
       .catch(() => {
