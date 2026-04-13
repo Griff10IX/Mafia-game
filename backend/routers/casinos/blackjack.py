@@ -46,6 +46,7 @@ from server import (
 from routers.casinos.roulette import RouletteClaimRequest, RouletteSetMaxBetRequest, RouletteSendToUserRequest
 from routers.casinos.dice import DiceSellOnTradeRequest
 from utils.quicktrade_casino_cleanup import cancel_quicktrade_casino_listings_by_locations
+from utils.user_mid_travel import raise_if_user_mid_travel
 
 # ----- Constants -----
 BLACKJACK_MAX_BET = 50_000_000
@@ -754,6 +755,10 @@ def register(router):
 
     @router.post("/casino/blackjack/start")
     async def casino_blackjack_start(request: BlackjackStartRequest, current_user: dict = Depends(get_current_user_verified)):
+        raise_if_user_mid_travel(
+            current_user,
+            detail="You are still traveling. Wait until you arrive before playing blackjack.",
+        )
         _invalidate_ownership_cache(current_user.get("id") or "")
         raw = (current_user.get("current_state") or (STATES[0] if STATES else "") or "").strip()
         city = _normalize_city_for_blackjack(raw) if raw else (STATES[0] if STATES else "")

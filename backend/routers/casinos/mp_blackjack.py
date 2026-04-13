@@ -14,6 +14,7 @@ from pydantic import BaseModel, field_validator
 from fastapi import Depends, HTTPException
 
 from server import db, get_current_user, get_current_user_verified, log_gambling, _is_admin, _is_moderator
+from utils.user_mid_travel import raise_if_user_mid_travel
 
 MP_BJ_SUITS = ["H", "D", "C", "S"]
 MP_BJ_VALUES = ["A", "2", "3", "4", "5", "6", "7", "8", "9", "10", "J", "Q", "K"]
@@ -681,6 +682,10 @@ def register(router):
     @router.post("/casino/mp-blackjack/games")
     async def mp_bj_create(request: MPCreateRequest, current_user: dict = Depends(get_current_user_verified)):
         """Create a new multiplayer blackjack game. Creator is first player; pays buy_in + extra_prize."""
+        raise_if_user_mid_travel(
+            current_user,
+            detail="You are still traveling. Wait until you arrive before starting a multiplayer blackjack game.",
+        )
         uid = current_user.get("id") or ""
         username = (current_user.get("username") or "?").strip()
         max_players = max(MP_BJ_MIN_PLAYERS, min(MP_BJ_MAX_PLAYERS, request.max_players))
@@ -863,6 +868,10 @@ def register(router):
     @router.post("/casino/mp-blackjack/games/{game_id}/join")
     async def mp_bj_join(game_id: str, current_user: dict = Depends(get_current_user_verified)):
         """Join an open game. Pay buy_in. Game moves to ready phase when full."""
+        raise_if_user_mid_travel(
+            current_user,
+            detail="You are still traveling. Wait until you arrive before joining a multiplayer blackjack game.",
+        )
         uid = current_user.get("id") or ""
         username = (current_user.get("username") or "?").strip()
         game = await db.mp_blackjack_games.find_one({"id": game_id})
