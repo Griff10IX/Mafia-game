@@ -1641,6 +1641,7 @@ async def get_weapons(request: Request, current_user: dict = Depends(get_current
     weapons_dict = {w["id"]: w for w in weapons}
     weapon_stock = {}
     unowned_armoury = False
+    factory = None
     if state:
         factory = await get_armoury_for_state(state)
         if factory:

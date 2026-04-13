@@ -39,22 +39,33 @@ export default function MyInventory() {
     api
       .get('/inventory')
       .then((res) => {
-        if (res?.data) {
-          _cachedInventory = res.data;
+        const d = res?.data;
+        if (
+          d &&
+          Array.isArray(d.weapons) &&
+          d.armour &&
+          typeof d.armour === 'object' &&
+          Array.isArray(d.armour.options) &&
+          d.tokens &&
+          typeof d.tokens === 'object'
+        ) {
+          _cachedInventory = d;
           _invLastFetch = Date.now();
-          setData(res.data);
+          setData(d);
+        } else if (!silent && d) {
+          console.warn('MyInventory: unexpected /inventory shape', d);
         }
       })
       .catch(() => {
-        if (!silent) setData({ weapons: [], armour: { options: [] }, loot_exclusives: {}, tokens: {} });
+        if (!silent) {
+          setData((prev) => prev || { weapons: [], armour: { options: [] }, loot_exclusives: {}, tokens: {} });
+        }
       })
       .finally(() => { setHasLoaded(true); });
   };
 
   useEffect(() => {
-    const stale = Date.now() - _invLastFetch > INV_REFRESH;
-    if (!_cachedInventory) fetchInventory(false);
-    else if (stale) fetchInventory(true);
+    fetchInventory(false);
     const id = setInterval(() => fetchInventory(true), INV_REFRESH);
     return () => clearInterval(id);
   }, []);
