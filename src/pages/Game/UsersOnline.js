@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, User, Target, Building2, Plane, Factory, Mail, Radio, Clock, CalendarDays, CalendarRange } from 'lucide-react';
+import { Users, User, Target, Building2, Plane, Factory, Mail, Radio, Clock, CalendarDays, CalendarRange, Globe } from 'lucide-react';
 import api from '../../utils/api';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
@@ -55,7 +55,15 @@ function countryDisplayName(code) {
 function CountryFlagThumb({ code }) {
   const c = (code || '').trim().toLowerCase();
   if (!c || c.length !== 2 || !/^[a-z]{2}$/.test(c)) {
-    return <span className="text-[11px] leading-none shrink-0" aria-hidden>🏳️</span>;
+    /* Emoji white flag renders poorly on Windows; match flag thumb size/border. */
+    return (
+      <span
+        className="inline-flex h-3 w-4 shrink-0 items-center justify-center rounded-[1px] border border-zinc-600/50 bg-zinc-800/70 text-mutedForeground"
+        aria-hidden
+      >
+        <Globe size={10} strokeWidth={2.25} className="opacity-90" />
+      </span>
+    );
   }
   return (
     <img
