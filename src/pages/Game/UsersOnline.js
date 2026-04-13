@@ -3,7 +3,6 @@ import { Link } from 'react-router-dom';
 import { Users, User, Target, Building2, Plane, Factory, Mail, Radio, Clock, CalendarDays, CalendarRange } from 'lucide-react';
 import api from '../../utils/api';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
-import AutoRefreshNote from '../../components/AutoRefreshNote';
 import { toast } from 'sonner';
 import { HoverCard, HoverCardTrigger, HoverCardPortal, HoverCardContent } from "@/components/ui/hover-card";
 import PrestigeBadge from '../../components/PrestigeBadge';
@@ -120,11 +119,6 @@ const ActivitySnapshotCard = ({
       </h2>
     </div>
     <div className="p-2">
-      <p className="text-[9px] text-mutedForeground font-heading mb-2 leading-snug">
-        Live list below; the tiles count anyone with <span className="text-foreground/90">last seen</span> in that window, or{' '}
-        <span className="text-foreground/90">auto-rank on</span> (not idle), or <span className="text-foreground/90">forced online</span> — same idea as the roster (staff in ghost mode excluded).
-        Flags use the last known country from your connection (usually Cloudflare).
-      </p>
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         {snapshotTile(
           Radio,
@@ -556,17 +550,6 @@ export default function UsersOnline() {
   return (
     <div className={`space-y-2 ${styles.pageContent} mobile-page-root`} data-testid="users-online-page">
       <style>{UO_STYLES}</style>
-
-      <div className="relative uo-fade-in">
-        <p className="text-[9px] text-zinc-500 font-heading italic">
-          {profileHoverEnabled
-            ? "Who's active now — hover a name for an instant profile preview."
-            : "Who's active now — tap a name to open their profile."}
-        </p>
-        <AutoRefreshNote seconds={30}>
-          Automatically refreshes every 30 seconds, when you focus this window, and in the background.
-        </AutoRefreshNote>
-      </div>
 
       <ActivitySnapshotCard
         totalOnline={totalOnline}
