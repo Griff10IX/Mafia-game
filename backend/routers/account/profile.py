@@ -18,7 +18,7 @@ _VALID_TOPBAR_STAT_IDS = frozenset(
 _CHIP_SCALE_MIN, _CHIP_SCALE_MAX = 20, 100
 
 import httpx
-from fastapi import Body, Depends, HTTPException
+from fastapi import Body, Depends, File, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from utils.civilian_protection import civilian_protection_status_payload, maybe_revoke_civilian_protection
@@ -990,6 +990,21 @@ def register(router):
     # Allowed image MIME types for avatars (NO SVG - can contain XSS)
     AVATAR_ALLOWED_TYPES = {"image/jpeg", "image/png", "image/gif", "image/webp"}
     AVATAR_MAX_BYTES = int(1.2 * 1024 * 1024)  # data URL string length (~1.2 MiB)
+    # Raw multipart body stays under typical nginx default client_max_body_size (1m) including boundaries.
+    AVATAR_RAW_UPLOAD_MAX_BYTES = (1024 * 1024) - 65_536
+
+    def _sniff_image_mime_from_bytes(data: bytes) -> Optional[str]:
+        if len(data) < 12:
+            return None
+        if data.startswith(b"\xff\xd8\xff"):
+            return "image/jpeg"
+        if data.startswith(b"\x89PNG\r\n\x1a\n"):
+            return "image/png"
+        if data.startswith(b"GIF87a") or data.startswith(b"GIF89a"):
+            return "image/gif"
+        if data.startswith(b"RIFF") and b"WEBP" in data[:12]:
+            return "image/webp"
+        return None
 
     def _validate_avatar_data_url(data_url: str) -> tuple[bool, str]:
         """
@@ -1080,6 +1095,48 @@ def register(router):
         await db.users.update_one(
             {"id": current_user.get("id") or ""},
             {"$set": {"avatar_url": avatar}}
+        )
+        return {"message": "Avatar updated"}
+
+    @router.post("/profile/avatar/file")
+    async def update_avatar_file(
+        file: UploadFile = File(...),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Upload avatar as raw image bytes (multipart). Prefer this for GIFs: JSON+base64 inflates the
+        body past typical nginx client_max_body_size (1m) and returns 413 before the API runs.
+        Stored value is still a validated data URL on the user document.
+        """
+        raw = await file.read()
+        if not raw:
+            raise HTTPException(status_code=400, detail="No file uploaded")
+        if len(raw) > AVATAR_RAW_UPLOAD_MAX_BYTES:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"File too large for this upload method (max about {AVATAR_RAW_UPLOAD_MAX_BYTES // 1024}KB raw). "
+                    "Try a smaller image, or ask the host to raise nginx client_max_body_size."
+                ),
+            )
+        mime = _sniff_image_mime_from_bytes(raw)
+        if mime is None or mime not in AVATAR_ALLOWED_TYPES:
+            raise HTTPException(status_code=400, detail="Invalid image type. Use JPEG, PNG, GIF, or WEBP.")
+        if mime != "image/gif":
+            raise HTTPException(
+                status_code=400,
+                detail="This upload path is only for GIF avatars. Use the normal image upload for JPEG, PNG, or WEBP.",
+            )
+        b64 = base64.b64encode(raw).decode("ascii")
+        avatar = f"data:{mime};base64,{b64}"
+        if len(avatar) > AVATAR_MAX_BYTES:
+            raise HTTPException(status_code=400, detail="Avatar too large after encoding. Use a smaller GIF (max ~1.2MB).")
+        is_valid, error_msg = _validate_avatar_data_url(avatar)
+        if not is_valid:
+            raise HTTPException(status_code=400, detail=error_msg)
+        await db.users.update_one(
+            {"id": current_user.get("id") or ""},
+            {"$set": {"avatar_url": avatar}},
         )
         return {"message": "Avatar updated"}
 

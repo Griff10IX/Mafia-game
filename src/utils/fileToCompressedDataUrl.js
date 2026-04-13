@@ -56,6 +56,9 @@ export async function fileToCompressedDataUrl(file, maxDim = 160, quality = 0.82
 /** Must match backend `AVATAR_MAX_BYTES` in profile router (data URL string length). */
 export const AVATAR_MAX_DATA_URL_CHARS = Math.floor(1.2 * 1024 * 1024);
 
+/** Must match backend `AVATAR_RAW_UPLOAD_MAX_BYTES` (GIF multipart upload; under default nginx 1m). */
+export const AVATAR_RAW_UPLOAD_MAX_BYTES = (1024 * 1024) - 65_536;
+
 /**
  * Avatar upload: JPEG/PNG/WebP are resized to JPEG via canvas (larger than emblem presets so lightbox/profile stay sharp).
  * GIF is kept as-is so animation works.

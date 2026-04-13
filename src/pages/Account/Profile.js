@@ -15,7 +15,7 @@ import StaffUserDetailsPanel from '../../components/StaffUserDetailsPanel';
 import FamilyEmblem from '../../components/FamilyEmblem';
 import { getProfilePrefetch, setProfilePrefetch } from '../../utils/prefetchCache';
 import { getProfileEditWarm } from '../../utils/profilePageWarm';
-import { fileToAvatarDataUrl, validateSafeImageFile } from '../../utils/fileToCompressedDataUrl';
+import { fileToAvatarDataUrl, validateSafeImageFile, AVATAR_RAW_UPLOAD_MAX_BYTES } from '../../utils/fileToCompressedDataUrl';
 
 const PROFILE_STYLES = `
   @keyframes prof-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -1271,21 +1271,37 @@ export default function Profile() {
     }
     setSavingAvatar(true);
     try {
-      const result = await fileToAvatarDataUrl(file);
-      if (!result.ok) {
-        if (result.reason === 'gif_too_large') {
-          toast.error('That GIF is too large for an avatar (max ~1.2MB when encoded). Try a smaller or shorter GIF.');
-        } else {
-          toast.error('Please choose a valid image file.');
+      const mime = String(file.type || '').toLowerCase();
+      if (mime === 'image/gif') {
+        if (file.size > AVATAR_RAW_UPLOAD_MAX_BYTES) {
+          toast.error(
+            `That GIF file is too large for upload (max about ${Math.floor(AVATAR_RAW_UPLOAD_MAX_BYTES / 1024)}KB). Try a shorter GIF or ask the host to raise nginx limits.`,
+          );
+          return;
         }
-        return;
+        const formData = new FormData();
+        formData.append('file', file, file.name || 'avatar.gif');
+        await api.post('/profile/avatar/file', formData);
+      } else {
+        const result = await fileToAvatarDataUrl(file);
+        if (!result.ok) {
+          toast.error('Please choose a valid image file.');
+          return;
+        }
+        await api.post('/profile/avatar', { avatar_data: result.dataUrl });
       }
-      await api.post('/profile/avatar', { avatar_data: result.dataUrl });
       toast.success('Avatar updated');
       await refetchMe();
       await refetchProfile();
     } catch (e) {
-      toast.error(getApiErrorMessage(e) || 'Failed to update avatar');
+      const st = e.response?.status;
+      if (st === 413) {
+        toast.error(
+          'Upload was blocked as too large (HTTP 413). Try a smaller image, or ask the host to raise nginx client_max_body_size for /api.',
+        );
+      } else {
+        toast.error(getApiErrorMessage(e) || 'Failed to update avatar');
+      }
     } finally {
       setSavingAvatar(false);
     }
