@@ -25,6 +25,7 @@ _my_cache_max_entries = 2000
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import Depends, HTTPException, Body, Header, Query
 from pydantic import BaseModel
+from bson.objectid import ObjectId
 
 from utils.notepad_color import notepad_color_for_api_response, normalize_notepad_color_for_set
 from utils.point_provenance import log_points_event
@@ -34,6 +35,7 @@ from utils.civilian_protection import maybe_revoke_civilian_protection
 from server import (
     db,
     get_current_user,
+    get_current_user_verified,
     get_effective_event,
     log_activity,
     log_respect_earned,
@@ -307,6 +309,10 @@ class FamilyJoinApplicationActionRequest(BaseModel):
 
 class FamilyKickRequest(BaseModel):
     user_id: str
+
+
+class FamilySellOnTradeRequest(BaseModel):
+    points: int
 
 
 class FamilyRoleRequest(BaseModel):
@@ -1365,14 +1371,14 @@ async def families_my(current_user: dict = Depends(get_current_user)):
         return entry[0]
     family_id = current_user.get("family_id")
     if not family_id:
-        return {"family": None, "members": [], "rackets": [], "my_role": None}
+        return {"family": None, "members": [], "rackets": [], "my_role": None, "quicktrade_family_listing_id": None}
     fam = await db.families.find_one({"id": family_id}, {"_id": 0})
     if not fam:
         await db.users.update_one(
             _user_id_filter_for_users_collection(current_user["id"]),
             {"$set": {"family_id": None, "family_role": None, **_family_melt_stats_reset_fields()}},
         )
-        return {"family": None, "members": [], "rackets": [], "my_role": None}
+        return {"family": None, "members": [], "rackets": [], "my_role": None, "quicktrade_family_listing_id": None}
     members_docs = await db.family_members.find({"family_id": family_id}, {"_id": 0}).to_list(100)
     my_role = current_user.get("family_role")
     my_member = next((m for m in members_docs if m["user_id"] == current_user["id"]), None)
@@ -1551,6 +1557,15 @@ async def families_my(current_user: dict = Depends(get_current_user)):
             "summary_lines": [],
         }
 
+    quicktrade_family_listing_id = None
+    if my_role == "boss" and not fam.get("wiped"):
+        _qt_row = await db.properties.find_one(
+            {"for_sale": True, "type": "family", "family_id": family_id},
+            {"_id": 1},
+        )
+        if _qt_row and _qt_row.get("_id") is not None:
+            quicktrade_family_listing_id = str(_qt_row["_id"])
+
     payload = {
         "family": {
             "id": fam["id"], "name": fam["name"], "tag": fam["tag"],
@@ -1594,6 +1609,7 @@ async def families_my(current_user: dict = Depends(get_current_user)):
         "my_compound_loot_pieces": my_compound_loot_pieces, "my_compound_cars": my_compound_cars,
         "returning_members_with_balance": returning_members_with_balance,
         "state_head_casino_week_stats": state_head_casino_week_stats,
+        "quicktrade_family_listing_id": quicktrade_family_listing_id,
     }
     if len(_my_cache) >= _my_cache_max_entries:
         _my_cache.clear()
@@ -2189,6 +2205,150 @@ async def families_kick(request: FamilyKickRequest, current_user: dict = Depends
     return {"message": "Member kicked"}
 
 
+def _invalidate_quicktrade_property_cache() -> None:
+    try:
+        from routers.money import quicktrade as _qt
+
+        _qt._invalidate_trade_caches()
+    except Exception:
+        logger.exception("invalidate quicktrade caches from families")
+
+
+async def remove_family_quicktrade_listings_for_war_families(family_a_id: str, family_b_id: str) -> None:
+    """When a war starts, remove Quick Trade listings for both crews (cannot sell while at war)."""
+    ids = list(dict.fromkeys([x for x in (family_a_id, family_b_id) if x and str(x).strip()]))
+    if not ids:
+        return
+    res = await db.properties.delete_many({"for_sale": True, "type": "family", "family_id": {"$in": ids}})
+    if res.deleted_count:
+        _invalidate_quicktrade_property_cache()
+        _invalidate_list_cache()
+        for fid in ids:
+            fam = await db.families.find_one({"id": fid}, {"_id": 0, "boss_id": 1})
+            bid = (fam or {}).get("boss_id")
+            if bid:
+                _invalidate_my_cache(bid)
+
+
+async def validate_family_quicktrade_buy(prop: dict, buyer_doc: dict) -> None:
+    """Raises HTTPException if this family Quick Trade listing cannot be purchased."""
+    fid = (prop.get("family_id") or "").strip()
+    if not fid:
+        raise HTTPException(status_code=400, detail="Invalid family listing")
+    if buyer_doc.get("family_id"):
+        raise HTTPException(status_code=400, detail="Leave your current family before buying a crew on Quick Trade.")
+    fam = await db.families.find_one({"id": fid}, {"_id": 0, "boss_id": 1, "wiped": 1})
+    if not fam or fam.get("wiped"):
+        raise HTTPException(status_code=400, detail="This crew is no longer available.")
+    if _uid_str(fam.get("boss_id")) != _uid_str(prop.get("owner_id")):
+        raise HTTPException(status_code=400, detail="This listing is no longer valid.")
+    if await _family_in_active_war(fid):
+        raise HTTPException(status_code=400, detail="This crew is at war and cannot be purchased on Quick Trade right now.")
+
+
+async def complete_family_quicktrade_sale(
+    *,
+    family_id: str,
+    seller_id: str,
+    buyer_id: str,
+    buyer_username: str,
+) -> None:
+    """Transfer Don to buyer; seller leaves crew. Members and treasury stay on the family doc."""
+    fid = (family_id or "").strip()
+    if not fid:
+        raise HTTPException(status_code=400, detail="Invalid family")
+    fam = await db.families.find_one({"id": fid}, {"_id": 0, "boss_id": 1, "wiped": 1})
+    if not fam or fam.get("wiped"):
+        raise HTTPException(status_code=400, detail="This crew is no longer available.")
+    if _uid_str(fam.get("boss_id")) != _uid_str(seller_id):
+        raise HTTPException(status_code=400, detail="This listing is no longer valid.")
+    if await _family_in_active_war(fid):
+        raise HTTPException(status_code=400, detail="This crew is at war and cannot be transferred on Quick Trade right now.")
+    melt_reset = _family_melt_stats_reset_fields()
+    s_var = _user_id_variants_for_family_members(seller_id)
+    if s_var:
+        await db.family_members.delete_many({"family_id": fid, "user_id": {"$in": s_var}})
+    await db.users.update_one(
+        _user_id_filter_for_users_collection(seller_id),
+        {"$set": {"family_id": None, "family_role": None, **melt_reset}},
+    )
+    await _delete_family_memberships_for_user(buyer_id)
+    now_iso = datetime.now(timezone.utc).isoformat()
+    await db.family_members.insert_one(
+        {
+            "id": str(uuid.uuid4()),
+            "family_id": fid,
+            "user_id": buyer_id,
+            "role": "boss",
+            "joined_at": now_iso,
+        }
+    )
+    await db.users.update_one(
+        _user_id_filter_for_users_collection(buyer_id),
+        {"$set": {"family_id": fid, "family_role": "boss", **melt_reset}},
+    )
+    await db.families.update_one({"id": fid}, {"$set": {"boss_id": buyer_id}})
+    _invalidate_list_cache()
+    _invalidate_my_cache(seller_id)
+    _invalidate_my_cache(buyer_id)
+
+
+async def families_sell_on_trade(
+    request: FamilySellOnTradeRequest,
+    current_user: dict = Depends(get_current_user_verified),
+):
+    """List the crew on Quick Trade for points (Don only, not during war)."""
+    pts = int(request.points or 0)
+    if pts <= 0:
+        raise HTTPException(status_code=400, detail="Points must be positive")
+    family_id = current_user.get("family_id")
+    if not family_id:
+        raise HTTPException(status_code=400, detail="You are not in a family")
+    my_role = (current_user.get("family_role") or "").strip().lower()
+    if my_role != "boss":
+        raise HTTPException(status_code=403, detail="Only the Don can list the family on Quick Trade")
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "id": 1, "name": 1, "tag": 1, "boss_id": 1, "wiped": 1})
+    if not fam or fam.get("wiped"):
+        raise HTTPException(status_code=400, detail="Family not found")
+    if _uid_str(fam.get("boss_id")) != _uid_str(current_user["id"]):
+        raise HTTPException(status_code=403, detail="Only the sitting Don can list the crew")
+    if await _family_in_active_war(family_id):
+        raise HTTPException(status_code=400, detail="You cannot list your family on Quick Trade during a war")
+    existing = await db.properties.find_one(
+        {"for_sale": True, "type": "family", "family_id": family_id},
+        {"_id": 1},
+    )
+    if existing:
+        raise HTTPException(status_code=400, detail="This family is already listed on Quick Trade. Cancel the listing first.")
+    tag = (fam.get("tag") or "").strip() or "?"
+    name = (fam.get("name") or "").strip() or "Crew"
+    listing_id = ObjectId()
+    await db.properties.insert_one(
+        {
+            "_id": listing_id,
+            "id": str(listing_id),
+            "type": "family",
+            "family_id": family_id,
+            "location": tag,
+            "name": f"Family: [{tag}] {name}",
+            "owner_id": current_user["id"],
+            "owner_username": current_user.get("username", "Unknown"),
+            "for_sale": True,
+            "sale_price": pts,
+            "created_at": datetime.now(timezone.utc),
+        }
+    )
+    _invalidate_quicktrade_property_cache()
+    _invalidate_my_cache(current_user["id"])
+    await log_activity(
+        current_user["id"],
+        current_user.get("username") or "?",
+        "family_quicktrade_list",
+        {"family_id": family_id, "points": pts},
+    )
+    return {"message": f"Crew listed for {pts:,} points on Quick Trade", "listing_id": str(listing_id)}
+
+
 async def families_assign_role(request: FamilyRoleRequest, current_user: dict = Depends(get_current_user)):
     my_role = (current_user.get("family_role") or "").strip().lower()
     if my_role not in ("boss", "underboss"):
@@ -2226,6 +2386,9 @@ async def families_assign_role(request: FamilyRoleRequest, current_user: dict = 
         await db.families.update_one({"id": family_id}, {"$set": {"boss_id": request.user_id}})
         await db.family_members.update_one({"family_id": family_id, "user_id": current_user["id"]}, {"$set": {"role": "underboss"}})
         await db.users.update_one({"id": current_user["id"]}, {"$set": {"family_role": "underboss"}})
+        qdel = await db.properties.delete_many({"for_sale": True, "type": "family", "family_id": family_id})
+        if qdel.deleted_count:
+            _invalidate_quicktrade_property_cache()
     _invalidate_my_cache(current_user["id"])
     _invalidate_my_cache(request.user_id)
     return {"message": "Role updated"}
@@ -4223,6 +4386,7 @@ def register(router):
     router.add_api_route("/families/join-applications/{application_id}/deny", families_join_application_deny, methods=["POST"])
     router.add_api_route("/families/join-settings", families_join_settings, methods=["PATCH"])
     router.add_api_route("/families/melt-settings", families_melt_settings, methods=["PATCH"])
+    router.add_api_route("/families/sell-on-trade", families_sell_on_trade, methods=["POST"])
     router.add_api_route("/families/leave", families_leave, methods=["POST"])
     router.add_api_route("/families/kick", families_kick, methods=["POST"])
     router.add_api_route("/families/assign-role", families_assign_role, methods=["POST"])

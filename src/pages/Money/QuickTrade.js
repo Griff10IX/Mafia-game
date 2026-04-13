@@ -356,6 +356,10 @@ export default function QuickTrade() {
   const sellAfterFee = sellPoints ? parseFloat(sellPoints) - sellFee : 0;
   const buyAfterFee = buyPoints ? parseFloat(buyPoints) - buyFee : 0;
 
+  const isFamilyQtListing = (p) => String(p?.property_name || '').startsWith('Family:');
+  const regularProperties = properties.filter((p) => !isFamilyQtListing(p));
+  const familyProperties = properties.filter(isFamilyQtListing);
+
   const sellTokBal = tokenBalances[tokenType];
   const sellFoundingRaw = sellTokBal ? Number(sellTokBal.founding || 0) : 0;
   const sellFoundingLock =
@@ -936,7 +940,7 @@ export default function QuickTrade() {
         </section>
       </div>
 
-      {/* Properties for Sale */}
+      {/* Properties for sale (casinos, airports, armouries) */}
       <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
@@ -957,7 +961,7 @@ export default function QuickTrade() {
               </tr>
             </thead>
             <tbody className="divide-y divide-zinc-700/30">
-              {properties.length === 0 ? (
+              {regularProperties.length === 0 ? (
                 <tr>
                   <td colSpan="5" className="px-4 py-6 text-center">
                     <Building2 size={28} className="mx-auto text-primary/30 mb-2" />
@@ -965,8 +969,8 @@ export default function QuickTrade() {
                   </td>
                 </tr>
               ) : (
-                properties.map((prop, idx) => (
-                  <tr key={idx} className="hover:bg-zinc-800/30 transition-colors">
+                regularProperties.map((prop, idx) => (
+                  <tr key={prop.id || idx} className="hover:bg-zinc-800/30 transition-colors">
                     <td className="px-4 py-2 font-heading text-xs text-foreground">{prop.location}</td>
                     <td className="px-4 py-2 font-heading text-xs text-foreground">{prop.property_name}</td>
                     <td className="px-4 py-2 font-heading text-xs text-foreground">{prop.owner}</td>
@@ -989,14 +993,14 @@ export default function QuickTrade() {
           </table>
         </div>
         <div className="md:hidden divide-y divide-zinc-700/30">
-          {properties.length === 0 ? (
+          {regularProperties.length === 0 ? (
             <div className="p-6 text-center">
               <Building2 size={28} className="mx-auto text-primary/30 mb-2" />
               <p className="text-[10px] text-mutedForeground font-heading">No properties for sale</p>
             </div>
           ) : (
-            properties.map((prop, idx) => (
-              <div key={idx} className="p-4 hover:bg-zinc-800/30 transition-colors">
+            regularProperties.map((prop, idx) => (
+              <div key={prop.id || idx} className="p-4 hover:bg-zinc-800/30 transition-colors">
                 <div className="space-y-1.5">
                   <div className="flex justify-between items-start gap-2">
                     <span className="text-xs font-heading font-bold text-foreground">{prop.property_name}</span>
@@ -1013,6 +1017,94 @@ export default function QuickTrade() {
                   ) : (
                     <button type="button" onClick={() => handleAcceptOffer(prop.id, 'property')} className={`w-full mt-2 px-3 py-2.5 sm:py-1.5 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 min-h-[44px] sm:min-h-0 ${qtActionBtn}`}>
                       Buy Property
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+        <div className="qt-art-line text-primary mx-3" />
+      </section>
+
+      {/* Families for sale — bottom of Quick Trade */}
+      <section className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="px-4 py-2.5 bg-primary/8 border-b border-primary/20">
+          <div className="flex items-center gap-2">
+            <Users className="w-5 h-5 text-primary" />
+            <h3 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Families for Sale</h3>
+          </div>
+          <p className="text-[9px] text-mutedForeground font-heading mt-1 leading-snug">Points only. Buyer becomes Don; crew vault and roster stay with the family.</p>
+        </div>
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="bg-zinc-800/30 border-b border-zinc-700/30">
+                <th className="px-4 py-2 text-left font-heading text-[10px] text-mutedForeground uppercase tracking-wider">Tag</th>
+                <th className="px-4 py-2 text-left font-heading text-[10px] text-mutedForeground uppercase tracking-wider">Family</th>
+                <th className="px-4 py-2 text-left font-heading text-[10px] text-mutedForeground uppercase tracking-wider">Seller</th>
+                <th className="px-4 py-2 text-right font-heading text-[10px] text-mutedForeground uppercase tracking-wider">Points</th>
+                <th className="px-4 py-2 text-center font-heading text-[10px] text-mutedForeground uppercase tracking-wider">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-zinc-700/30">
+              {familyProperties.length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="px-4 py-6 text-center">
+                    <Users size={28} className="mx-auto text-primary/30 mb-2" />
+                    <p className="text-xs text-mutedForeground font-heading">No families listed</p>
+                  </td>
+                </tr>
+              ) : (
+                familyProperties.map((prop, idx) => (
+                  <tr key={prop.id || idx} className="hover:bg-zinc-800/30 transition-colors">
+                    <td className="px-4 py-2 font-heading text-xs text-foreground">{prop.location}</td>
+                    <td className="px-4 py-2 font-heading text-xs text-foreground">{prop.property_name}</td>
+                    <td className="px-4 py-2 font-heading text-xs text-foreground">{prop.owner}</td>
+                    <td className="px-4 py-2 text-right font-heading text-xs text-primary font-bold">{formatNumber(prop.points)}</td>
+                    <td className="px-4 py-2 text-center">
+                      {prop.is_own ? (
+                        <button type="button" onClick={() => handleCancelPropertyListing(prop.id)} className={`px-2.5 py-1 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30 min-h-[36px] sm:min-h-0 ${qtActionBtn}`}>
+                          Cancel
+                        </button>
+                      ) : (
+                        <button type="button" onClick={() => handleAcceptOffer(prop.id, 'property')} className={`px-2.5 py-1 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 min-h-[36px] sm:min-h-0 ${qtActionBtn}`}>
+                          Buy
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="md:hidden divide-y divide-zinc-700/30">
+          {familyProperties.length === 0 ? (
+            <div className="p-6 text-center">
+              <Users size={28} className="mx-auto text-primary/30 mb-2" />
+              <p className="text-[10px] text-mutedForeground font-heading">No families listed</p>
+            </div>
+          ) : (
+            familyProperties.map((prop, idx) => (
+              <div key={prop.id || idx} className="p-4 hover:bg-zinc-800/30 transition-colors">
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-start gap-2">
+                    <span className="text-xs font-heading font-bold text-foreground">{prop.property_name}</span>
+                    <span className="text-xs font-heading text-primary font-bold">{formatNumber(prop.points)} pts</span>
+                  </div>
+                  <div className="text-[10px] text-mutedForeground space-y-0.5">
+                    <div>Tag: <span className="text-foreground">{prop.location}</span></div>
+                    <div>Seller: <span className="text-foreground">{prop.owner}</span></div>
+                  </div>
+                  {prop.is_own ? (
+                    <button type="button" onClick={() => handleCancelPropertyListing(prop.id)} className={`w-full mt-2 px-3 py-2.5 sm:py-1.5 bg-red-900/20 border border-red-700/30 text-red-400 text-[10px] font-heading font-bold rounded hover:bg-red-900/30 min-h-[44px] sm:min-h-0 ${qtActionBtn}`}>
+                      Cancel Listing
+                    </button>
+                  ) : (
+                    <button type="button" onClick={() => handleAcceptOffer(prop.id, 'property')} className={`w-full mt-2 px-3 py-2.5 sm:py-1.5 rounded bg-primary/20 text-primary text-[10px] font-heading font-bold border border-primary/40 hover:bg-primary/30 min-h-[44px] sm:min-h-0 ${qtActionBtn}`}>
+                      Buy family
                     </button>
                   )}
                 </div>

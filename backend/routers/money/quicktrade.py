@@ -1009,6 +1009,14 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
     if not buyer:
         await _restore()
         raise HTTPException(status_code=404, detail="User not found")
+    if (prop.get("type") or "") == "family":
+        from routers.game.families import validate_family_quicktrade_buy
+
+        try:
+            await validate_family_quicktrade_buy(prop, buyer)
+        except HTTPException:
+            await _restore()
+            raise
     sale_price = prop.get("sale_price", 0)
     if prop.get("type") == "airport":
         if await _user_owns_airport(buyer_id):
@@ -1197,6 +1205,15 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
                 {"$set": {"owner_id": buyer_id, "owner_username": buyer_username}},
                 upsert=True
             )
+    elif prop_type == "family":
+        from routers.game.families import complete_family_quicktrade_sale
+
+        await complete_family_quicktrade_sale(
+            family_id=str(prop.get("family_id") or ""),
+            seller_id=str(seller_id or ""),
+            buyer_id=buyer_id,
+            buyer_username=buyer_username,
+        )
     try:
         await db.trade_events.insert_one(
             {
@@ -1223,12 +1240,21 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
 
 async def cancel_property_listing(property_id: str, current_user: dict = Depends(get_current_user)):
     user_id = current_user["id"]
-    prop = await db.properties.find_one_and_update(
-        {"_id": ObjectId(property_id), "owner_id": user_id, "for_sale": True},
-        {"$set": {"for_sale": False, "cancelled_at": datetime.now(timezone.utc)}, "$unset": {"sale_price": 1}},
-    )
+    oid = ObjectId(property_id)
+    prop = await db.properties.find_one({"_id": oid, "for_sale": True})
     if not prop:
         raise HTTPException(status_code=404, detail="Property listing not found or already cancelled")
+    allowed = _same_user_id(prop.get("owner_id"), user_id)
+    if not allowed and prop.get("type") == "family" and prop.get("family_id"):
+        fam = await db.families.find_one({"id": prop["family_id"]}, {"_id": 0, "boss_id": 1})
+        if fam and _same_user_id(fam.get("boss_id"), user_id):
+            allowed = True
+    if not allowed:
+        raise HTTPException(status_code=404, detail="Property listing not found or already cancelled")
+    await db.properties.update_one(
+        {"_id": oid},
+        {"$set": {"for_sale": False, "cancelled_at": datetime.now(timezone.utc)}, "$unset": {"sale_price": 1}},
+    )
     _invalidate_trade_caches()
     return {"message": "Property listing cancelled", "property_name": prop.get("name", "Property")}
 

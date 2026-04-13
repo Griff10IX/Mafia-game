@@ -1463,6 +1463,12 @@ async def _family_war_start(family_a_id: str, family_b_id: str):
     )
     if not result.upserted_id:
         return
+    try:
+        from routers.game.families import remove_family_quicktrade_listings_for_war_families
+
+        await remove_family_quicktrade_listings_for_war_families(family_a_id, family_b_id)
+    except Exception:
+        logging.exception("remove_family_quicktrade_listings_for_war_families failed")
     await send_notification_to_family(
         family_a_id,
         "⚠️ Family War",

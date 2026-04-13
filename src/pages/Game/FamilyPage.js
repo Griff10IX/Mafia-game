@@ -446,35 +446,6 @@ const TreasuryTab = ({
       </p>
     </div>
 
-    <div className="bg-zinc-800/30 rounded-lg border border-zinc-700/30 p-2.5 sm:p-3 fam-fade-in" style={{ animationDelay: '0.05s' }}>
-      <p className="text-[10px] text-zinc-500 font-heading uppercase tracking-[0.15em] mb-2 flex items-center gap-1.5">
-        <Clock size={10} /> Recent vault activity
-      </p>
-      {(!vaultTransactions || vaultTransactions.length === 0) ? (
-        <p className="text-[10px] text-zinc-600">No transactions yet — deposits, melts, rackets, and raids show up here.</p>
-      ) : (
-        <ul className="space-y-2 max-h-64 overflow-y-auto pr-1 text-left">
-          {vaultTransactions.map((tx) => {
-            const sub = vaultTxSubtitle(tx);
-            const when = tx.at ? new Date(tx.at).toLocaleString() : '';
-            return (
-              <li key={tx.id} className="text-[10px] border-b border-zinc-700/30 pb-2 last:border-0 last:pb-0">
-                <div className="flex justify-between gap-2 items-start">
-                  <span className="font-heading font-bold text-zinc-200">{VAULT_TX_KIND_LABELS[tx.kind] || tx.kind}</span>
-                  <span className="text-zinc-500 shrink-0 font-mono text-[9px]">{when}</span>
-                </div>
-                <div className="text-primary/90 font-heading mt-0.5">{formatVaultTxDeltas(tx)}</div>
-                {sub && <div className="text-zinc-500 mt-0.5 leading-snug">{sub}</div>}
-              </li>
-            );
-          })}
-        </ul>
-      )}
-      {vaultTxTotal > (vaultTransactions?.length || 0) && (
-        <p className="text-[9px] text-zinc-600 mt-2">Showing {vaultTransactions.length} of {vaultTxTotal} entries.</p>
-      )}
-    </div>
-
     {/* Deposit */}
     <div className={`bg-zinc-800/30 rounded-lg border border-zinc-700/30 p-2.5 sm:p-3 fam-fade-in ${vaultAndRacketsLocked ? 'opacity-60 pointer-events-none' : ''}`} style={{ animationDelay: '0.1s' }}>
       <p className="text-[10px] text-zinc-500 font-heading uppercase tracking-[0.15em] mb-2 flex items-center gap-1.5">
@@ -694,6 +665,35 @@ const TreasuryTab = ({
         <p className="text-[10px] text-zinc-500">No member data.</p>
       )}
     </div>
+
+    <div className="bg-zinc-800/30 rounded-lg border border-zinc-700/30 p-2.5 sm:p-3 fam-fade-in" style={{ animationDelay: '0.2s' }}>
+      <p className="text-[10px] text-zinc-500 font-heading uppercase tracking-[0.15em] mb-2 flex items-center gap-1.5">
+        <Clock size={10} /> Recent vault activity
+      </p>
+      {(!vaultTransactions || vaultTransactions.length === 0) ? (
+        <p className="text-[10px] text-zinc-600">No transactions yet — deposits, melts, rackets, and raids show up here.</p>
+      ) : (
+        <ul className="space-y-2 max-h-64 overflow-y-auto pr-1 text-left">
+          {vaultTransactions.map((tx) => {
+            const sub = vaultTxSubtitle(tx);
+            const when = tx.at ? new Date(tx.at).toLocaleString() : '';
+            return (
+              <li key={tx.id} className="text-[10px] border-b border-zinc-700/30 pb-2 last:border-0 last:pb-0">
+                <div className="flex justify-between gap-2 items-start">
+                  <span className="font-heading font-bold text-zinc-200">{VAULT_TX_KIND_LABELS[tx.kind] || tx.kind}</span>
+                  <span className="text-zinc-500 shrink-0 font-mono text-[9px]">{when}</span>
+                </div>
+                <div className="text-primary/90 font-heading mt-0.5">{formatVaultTxDeltas(tx)}</div>
+                {sub && <div className="text-zinc-500 mt-0.5 leading-snug">{sub}</div>}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {vaultTxTotal > (vaultTransactions?.length || 0) && (
+        <p className="text-[9px] text-zinc-600 mt-2">Showing {vaultTransactions.length} of {vaultTxTotal} entries.</p>
+      )}
+    </div>
   </div>
 );
 
@@ -839,6 +839,7 @@ const RosterTab = ({
   members, fallen, canManage, myRole, config, onKick, onAssignRole, joinApplications, joinMode, joinAutoAccept, joinAutoAcceptRankMin,
   onAcceptJoinApplication, onDenyJoinApplication, onJoinSettingsUpdate, meltTreasuryPct, meltRewardTiers, onMeltSettingsUpdate,
   airportCrewPerk, onAirportCrewPerkUpdate,
+  quicktradeFamilyListingId, vaultAndRacketsLocked, onFamilyQuickTradeList, onFamilyQuickTradeCancel,
 }) => {
   const [assignUserId, setAssignUserId] = useState('');
   const [assignRole, setAssignRole] = useState('associate');
@@ -848,6 +849,8 @@ const RosterTab = ({
   const [meltPctInput, setMeltPctInput] = useState(String(meltTreasuryPct ?? 0));
   const [tierThresholdInput, setTierThresholdInput] = useState('');
   const [tierRewardInput, setTierRewardInput] = useState('');
+  const [familySellPoints, setFamilySellPoints] = useState('');
+  const [familySellLoading, setFamilySellLoading] = useState(false);
 
   useEffect(() => {
     setJoinModeSetting(joinMode ?? 'open');
@@ -1031,6 +1034,73 @@ const RosterTab = ({
               </>
             )}
           </div>
+        </div>
+      )}
+
+      {/* ── Quick Trade: sell crew for points (Don only) ── */}
+      {myRole === 'boss' && (
+        <div className={`pt-3 border-t border-zinc-700/30 space-y-2 ${vaultAndRacketsLocked ? 'opacity-50 pointer-events-none' : ''}`}>
+          <p className="text-[9px] text-zinc-500 font-heading uppercase tracking-[0.2em]">Quick Trade — sell crew</p>
+          <p className="text-[10px] text-zinc-500 leading-snug">
+            List the whole family for points. The buyer becomes Don; vault, rackets, and members stay. You leave the crew and receive the points when someone buys.
+            {' '}
+            You cannot list during a family war. If a war starts while listed, the listing is removed automatically.
+          </p>
+          {quicktradeFamilyListingId ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[10px] text-primary font-heading font-bold">Listed on Quick Trade</span>
+              <Link to="/money/quick-trade" className="text-[10px] text-zinc-400 hover:text-primary font-heading underline">
+                View marketplace
+              </Link>
+              <button
+                type="button"
+                disabled={!!vaultAndRacketsLocked}
+                onClick={() => {
+                  if (!window.confirm('Cancel this listing?')) return;
+                  onFamilyQuickTradeCancel(quicktradeFamilyListingId);
+                }}
+                className="px-2 py-1 rounded text-[10px] font-heading font-bold uppercase border border-zinc-600 text-zinc-300 hover:bg-zinc-800 disabled:opacity-50"
+              >
+                Cancel listing
+              </button>
+            </div>
+          ) : (
+            <form
+              className="flex flex-wrap gap-2 items-end"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (vaultAndRacketsLocked) return;
+                const p = parseInt(String(familySellPoints).replace(/\D/g, ''), 10);
+                if (!Number.isFinite(p) || p < 1) {
+                  toast.error('Enter a positive points price');
+                  return;
+                }
+                setFamilySellLoading(true);
+                try {
+                  await onFamilyQuickTradeList(p);
+                  setFamilySellPoints('');
+                } catch (err) {
+                  toast.error(apiDetail(err));
+                } finally {
+                  setFamilySellLoading(false);
+                }
+              }}
+            >
+              <FormattedNumberInput
+                value={familySellPoints}
+                onChange={setFamilySellPoints}
+                placeholder="Asking price (points)"
+                className="flex-1 min-w-[140px] bg-zinc-900/80 border border-zinc-600/40 rounded-lg px-3 py-2 text-xs text-foreground font-heading focus:border-primary/50 focus:outline-none"
+              />
+              <button
+                type="submit"
+                disabled={familySellLoading || !!vaultAndRacketsLocked}
+                className="px-3 py-2 rounded-lg text-[10px] font-heading font-bold uppercase tracking-wider bg-primary/20 border border-primary/50 text-primary hover:bg-primary/30 disabled:opacity-50 min-h-[44px] sm:min-h-0"
+              >
+                {familySellLoading ? '…' : 'List on Quick Trade'}
+              </button>
+            </form>
+          )}
         </div>
       )}
 
@@ -2598,6 +2668,22 @@ export default function FamilyPage() {
   };
   const handleDenyJoinApplication = async (applicationId) => { try { await api.post(`/families/join-applications/${applicationId}/deny`); toast.success('Application denied'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const handleJoinSettingsUpdate = async (payload) => { try { await api.patch('/families/join-settings', payload); toast.success('Join settings updated'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
+  const handleFamilyQuickTradeList = async (points) => {
+    await api.post('/families/sell-on-trade', { points: Math.floor(Number(points)) });
+    toast.success('Crew listed on Quick Trade');
+    refreshUser();
+    await fetchData();
+  };
+  const handleFamilyQuickTradeCancel = async (listingId) => {
+    if (!listingId) return;
+    try {
+      await api.post(`/trade/property/${listingId}/cancel`);
+      toast.success('Quick Trade listing cancelled');
+      await fetchData();
+    } catch (e) {
+      toast.error(apiDetail(e));
+    }
+  };
   const handleMeltSettingsUpdate = async (payload) => { try { await api.patch('/families/melt-settings', payload); toast.success('Melt settings updated'); fetchData(); } catch (e) { toast.error(apiDetail(e)); } };
   const handleAirportCrewPerkUpdate = async (airport_crew_perk) => {
     try {
@@ -3174,6 +3260,10 @@ export default function FamilyPage() {
                   onMeltSettingsUpdate={handleMeltSettingsUpdate}
                   airportCrewPerk={family?.airport_crew_perk ?? 'none'}
                   onAirportCrewPerkUpdate={handleAirportCrewPerkUpdate}
+                  quicktradeFamilyListingId={myFamily?.quicktrade_family_listing_id ?? null}
+                  vaultAndRacketsLocked={vaultAndRacketsLocked}
+                  onFamilyQuickTradeList={handleFamilyQuickTradeList}
+                  onFamilyQuickTradeCancel={handleFamilyQuickTradeCancel}
                 />
               )}
               {activeTab === 'families' && <FamiliesTab families={families} myFamilyId={family?.id} />}
