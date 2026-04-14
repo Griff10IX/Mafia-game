@@ -229,7 +229,18 @@ def register(router):
 
         total_users = await db.users.count_documents(real_user_match)
         alive_users = await db.users.count_documents(alive_real_match)
-        dead_users = max(0, total_users - alive_users)
+        # "Dead" for public stats: in-game deaths only — exclude modkills / staff kills (death_by_staff),
+        # and legacy staff kills with no killer attribution (no killed_by_* on victim).
+        dead_users = await db.users.count_documents({
+            **real_user_match,
+            "is_dead": True,
+            "$nor": [{"death_by_staff": True}],
+            "$or": [
+                {"killed_by_user_id": {"$exists": True, "$nin": [None, ""]}},
+                {"killed_by_username": {"$exists": True, "$nin": [None, ""]}},
+                {"death_by_staff": False},
+            ],
+        })
 
         # Totals only from real users; headline total_cash adds buy-offer escrow (see game_capital)
         # Game Capital "booze" = one number: sum of every non-NPC user's stored booze_profit_total (alive + dead + staff).

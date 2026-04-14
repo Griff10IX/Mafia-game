@@ -191,7 +191,7 @@ class AdminSettingsUpdate(BaseModel):
     casino_buyback_max_points: Optional[int] = None  # Max points for buy-back reward (default 15000)
     mp_poker_max_blind: Optional[int] = None  # Max MP poker small blind cap (default 2.5M)
     mod_visible_category_ids: Optional[List[str]] = None  # Admin Tool category ids visible to moderators
-    bank_swiss_default_limit: Optional[int] = None  # Default Swiss bank cap for new users & bank meta (game_settings)
+    bank_swiss_default_limit: Optional[int] = None  # Swiss cap default in game_settings: new signups, bank fallback, apply-to-all source
     bank_interest_max_unclaimed_principal: Optional[int] = None  # Max total $ in unclaimed interest deposits per user
     bank_interest_options: Optional[List[AdminBankInterestOptionIn]] = None  # Term structure: hours + rate (fractional, e.g. 0.025 = 2.5%)
 
@@ -4755,6 +4755,7 @@ def register(router):
             {"$set": {
                 "is_dead": True,
                 "dead_at": now_iso,
+                "death_by_staff": True,
                 "points_at_death": int(target.get("points", 0) or 0),
                 "money_at_death": int(target.get("money", 0) or 0),
                 "tokens_at_death": tokens_at_death,
@@ -4861,6 +4862,7 @@ def register(router):
                     "killed_by_username": "",
                     "killed_by_user_id": "",
                     "killed_by_family_name": "",
+                    "death_by_staff": "",
                     "points_at_death": "",
                     "money_at_death": "",
                     "tokens_at_death": "",

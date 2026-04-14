@@ -1750,6 +1750,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 "money": 0,
                 "health": 0,
                 "health_regen_last_at": now_iso,
+                "death_by_staff": False,
                 "killed_by_username": current_user.get("username"),
                 "killed_by_user_id": current_user["id"],
                 "killed_by_family_name": (killer_family_doc or {}).get("name"),

@@ -472,6 +472,49 @@ def _auto_rank_telegram_notify(user: Optional[dict]) -> bool:
     return user.get("auto_rank_telegram_notify", True) is not False
 
 
+def _format_crime_prestige_bonus_telegram(bonus: Optional[dict]) -> Optional[str]:
+    """One short line for Telegram: prestige crime extras (cash, booze, bullets, etc.)."""
+    if not bonus or not isinstance(bonus, dict):
+        return None
+    parts: list[str] = []
+    if bonus.get("cash"):
+        try:
+            parts.append(f"${int(bonus['cash']):,} bonus cash")
+        except (TypeError, ValueError):
+            pass
+    if bonus.get("respect_points") is not None:
+        try:
+            parts.append(f"+{int(bonus['respect_points'])} respect")
+        except (TypeError, ValueError):
+            pass
+    if bonus.get("bullets") is not None:
+        try:
+            parts.append(f"+{int(bonus['bullets'])} bullets")
+        except (TypeError, ValueError):
+            pass
+    if bonus.get("points") is not None:
+        try:
+            parts.append(f"+{int(bonus['points'])} points")
+        except (TypeError, ValueError):
+            pass
+    if bonus.get("molotovs") is not None:
+        try:
+            parts.append(f"+{int(bonus['molotovs'])} molotovs")
+        except (TypeError, ValueError):
+            pass
+    if bonus.get("loot_box_pieces") is not None:
+        try:
+            parts.append(f"+{int(bonus['loot_box_pieces'])} loot piece(s)")
+        except (TypeError, ValueError):
+            pass
+    bo = bonus.get("booze")
+    if isinstance(bo, dict) and bo.get("amount"):
+        parts.append(f"+{bo.get('amount')} {bo.get('id', 'booze')}")
+    if bonus.get("token"):
+        parts.append(f"token: {bonus['token']}")
+    return " · ".join(parts) if parts else None
+
+
 async def _send_jail_notification(
     telegram_chat_id: str,
     username: str,
@@ -830,27 +873,30 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     # --- Crimes: only those off cooldown (same rules as manual play; _commit_crime_impl also enforces) ---
     if run_crimes:
         if crimes is None or (isinstance(crimes, list) and len(crimes) == 0):
-            # Include prestige crimes as well (those are not guaranteed to exist in db.crimes).
             crimes = await db.crimes.find(
                 {},
                 {"_id": 0, "id": 1, "name": 1, "min_rank": 1, "prestige_required": 1, "crime_type": 1},
             ).to_list(100)
-            try:
-                from routers.crime.crimes import PRESTIGE_CRIMES
-                existing_ids = {c.get("id") for c in crimes if c.get("id")}
-                for pc in (PRESTIGE_CRIMES or []):
-                    if pc.get("id") and pc.get("id") not in existing_ids:
-                        crimes.append(
-                            {
-                                "id": pc.get("id"),
-                                "name": pc.get("name"),
-                                "min_rank": pc.get("min_rank", 1),
-                                "prestige_required": pc.get("prestige_required"),
-                                "crime_type": pc.get("crime_type", "prestige"),
-                            }
-                        )
-            except Exception:
-                pass
+        else:
+            # Cron/batch passes a preloaded list (often id+name+min_rank only) — still need a mutable copy + prestige merge.
+            crimes = list(crimes)
+        # Prestige crimes are code-defined; DB may omit them. Cron must merge too (non-empty batch list skipped the old branch).
+        try:
+            from routers.crime.crimes import PRESTIGE_CRIMES
+            existing_ids = {c.get("id") for c in crimes if c.get("id")}
+            for pc in (PRESTIGE_CRIMES or []):
+                if pc.get("id") and pc.get("id") not in existing_ids:
+                    crimes.append(
+                        {
+                            "id": pc.get("id"),
+                            "name": pc.get("name"),
+                            "min_rank": pc.get("min_rank", 1),
+                            "prestige_required": pc.get("prestige_required"),
+                            "crime_type": pc.get("crime_type", "prestige"),
+                        }
+                    )
+        except Exception:
+            pass
         allowed_crime_ids = user.get("auto_rank_crime_ids")
         if isinstance(allowed_crime_ids, list) and len(allowed_crime_ids) > 0:
             allowed_set = set(allowed_crime_ids)
@@ -859,6 +905,8 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         crime_fail_count = 0
         crime_total_cash = 0
         crime_total_rp = 0
+        crime_names: list[str] = []
+        crime_extra_summaries: list[str] = []
         while True:
             user = await db.users.find_one({"id": user_id}, {"_id": 0})
             if not user or user.get("in_jail"):
@@ -890,22 +938,36 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                 if until is not None and until > now:
                     continue
                 available.append(c)
-            # Prefer lower-rank crimes first (e.g. Pickpocket before Mug)
+            # Prestige crimes first when ready (same min_rank as petty; old sort used id so "crime1" always beat "prestige_crime_1").
+            # Within prestige: lower prestige tier first; within normal: lower min_rank then id.
             def _crime_sort_key(x):
+                is_p = str(x.get("crime_type") or "").lower() == "prestige"
                 try:
-                    r = int(x.get("min_rank") or 1)
+                    min_r = int(x.get("min_rank") or 1)
                 except (TypeError, ValueError):
-                    r = 1
-                return (r, x.get("id") or "")
+                    min_r = 1
+                pr = x.get("prestige_required")
+                try:
+                    pr_i = int(pr) if pr is not None else 0
+                except (TypeError, ValueError):
+                    pr_i = 0
+                if is_p:
+                    return (0, pr_i, min_r, x.get("id") or "")
+                return (1, min_r, 0, x.get("id") or "")
             available.sort(key=_crime_sort_key)
             if not available:
                 break
             try:
-                out = await commit_crime_locked(available[0]["id"], user, via_auto_rank=True)
+                chosen = available[0]
+                out = await commit_crime_locked(chosen["id"], user, via_auto_rank=True)
                 if out.success:
                     crime_success_count += 1
                     crime_total_cash += out.reward if out.reward is not None else 0
-                    crime_total_rp += 3
+                    crime_total_rp += int(getattr(out, "rank_points_earned", 0) or 0)
+                    crime_names.append(str(chosen.get("name") or chosen.get("id") or "?"))
+                    extra = _format_crime_prestige_bonus_telegram(getattr(out, "prestige_bonus_earned", None))
+                    if extra:
+                        crime_extra_summaries.append(extra)
                 else:
                     crime_fail_count += 1
             except HTTPException:
@@ -919,7 +981,23 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
             has_success = True
             await _update_auto_rank_stats_crimes(db, user_id, crime_success_count, crime_total_cash, now)
             await _set_last_activity(db, user_id, "crimes", now)
-            lines.append(f"**Crimes** — Committed {crime_success_count} crime(s). earned ${crime_total_cash:,} and {crime_total_rp} RP.")
+            names_part = ""
+            if crime_names:
+                disp = ", ".join(crime_names[:6])
+                if len(crime_names) > 6:
+                    disp += f" (+{len(crime_names) - 6} more)"
+                names_part = f" — {disp}"
+            lines.append(
+                f"**Crimes** — Committed {crime_success_count} crime(s){names_part}. "
+                f"Earned ${crime_total_cash:,} and {crime_total_rp} rank points."
+            )
+            if crime_extra_summaries:
+                uniq = []
+                for s in crime_extra_summaries:
+                    if s and s not in uniq:
+                        uniq.append(s)
+                if uniq:
+                    lines.append("**Crime bonuses** — " + " | ".join(uniq[:8]))
         if crime_fail_count > 0:
             await _inc_failed_today(db, user_id, "auto_rank_failed_crimes_today", "auto_rank_failed_crimes_date", now, crime_fail_count)
         if run_crimes and crime_success_count == 0 and crime_fail_count == 0:
@@ -1296,7 +1374,10 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None, cycle_
     users = active_users
     if users:
         logger.info("Auto rank: running cycle for %d due user(s) (crimes/GTA/booze)", len(users))
-    crimes = await db.crimes.find({}, {"_id": 0, "id": 1, "name": 1, "min_rank": 1}).to_list(50)
+    crimes = await db.crimes.find(
+        {},
+        {"_id": 0, "id": 1, "name": 1, "min_rank": 1, "prestige_required": 1, "crime_type": 1},
+    ).to_list(100)
     if not crimes:
         logger.warning("Auto rank: crimes collection empty; each user will try to load crimes in-run")
 

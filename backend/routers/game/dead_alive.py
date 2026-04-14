@@ -357,6 +357,7 @@ def register(router):
                         "killed_by_username": "",
                         "killed_by_user_id": "",
                         "killed_by_family_name": "",
+                        "death_by_staff": "",
                         "points_at_death": "",
                         "money_at_death": "",
                         "tokens_at_death": "",
@@ -375,6 +376,7 @@ def register(router):
                     "$set": {
                         "is_dead": True,
                         "dead_at": now_iso,
+                        "death_by_staff": False,
                         "points_at_death": reviver_points_after,
                         "money_at_death": reviver_money,
                         "money": 0,

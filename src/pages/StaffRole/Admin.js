@@ -11056,12 +11056,14 @@ export default function Admin() {
         {!collapsed.bankEconomy && (
           <div className="p-3 space-y-3">
             <p className="text-[10px] text-mutedForeground font-heading">
-              Default Swiss cap for new accounts; interest bank terms (hours and rate as a decimal fraction, e.g. 0.025 = 2.5%).
-              Max unclaimed principal limits how much can remain in the interest bank before players must claim.
+              Swiss deposit cap: each player has <span className="text-foreground/90">swiss_limit</span> on their account. This field is the
+              server-wide default (also used for new signups and if a user record is missing a cap). Saving does not change existing players until
+              you use <span className="text-foreground/90">Apply Swiss default to all users</span> below. Interest terms: hours and rate as a decimal
+              (e.g. 0.025 = 2.5%). Max unclaimed principal limits how much can remain in the interest bank before players must claim.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <label className="block text-[10px] font-heading uppercase tracking-wider text-mutedForeground">
-                Swiss default cap
+                Swiss default cap (economy + new signups)
                 <input
                   type="number"
                   min={1000}

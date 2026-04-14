@@ -241,6 +241,7 @@ class CommitCrimeResponse(BaseModel):
     progress_after: Optional[int] = None
     respect_points: int = 0
     prestige_bonus_earned: Optional[dict] = None
+    rank_points_earned: int = 0  # RP granted this commit (prestige crimes = 10 base before perks); 0 on fail
 
 
 class CommitAllCrimesResponse(BaseModel):
@@ -688,6 +689,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
         progress_max = max(progress, _progress_from_attempts(crime_attempts))
     success_rate = (progress / 100.0) * CRIME_DIFFICULTY_MULT
     success = _rng.random() < success_rate
+    rank_points_earned_out = 0
 
     if success:
         gain = _rng.randint(CRIME_PROGRESS_GAIN_MIN, CRIME_PROGRESS_GAIN_MAX)
@@ -764,6 +766,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
         reward = int(reward * pass_mult)
         rank_points = int(rank_points * pass_mult)
         reward = int(reward * CRIME_CASH_PAYOUT_MULT)
+        rank_points_earned_out = int(rank_points)
         rp_before = int(current_user.get("rank_points") or 0)
         # Racket / illegal-business missions: crimes in the business's state (doc.state set at start)
         ib_crimes_in_state_inc = 0
@@ -986,6 +989,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
         progress_after=progress_after,
         respect_points=respect_earned if success else 0,
         prestige_bonus_earned=prestige_bonus_earned if success else None,
+        rank_points_earned=rank_points_earned_out,
     )
 
 
