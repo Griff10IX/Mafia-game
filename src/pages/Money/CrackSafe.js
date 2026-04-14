@@ -83,6 +83,46 @@ function formatDuration(totalSec) {
   return `${h}h ${m}m ${sec}s`;
 }
 
+/** Post-win 24h lock: pay to skip (shown under jackpot so mobile users do not miss it below the tumblers). */
+function PaidSkipPanel({ info, isAdmin, lockSecondsLeft, unlocking, onUnlock }) {
+  if (!info?.win_locked || isAdmin) return null;
+  const replayCost = info?.replay_cost ?? 15_000_000;
+  const maxDay = info?.replay_max_per_day ?? 3;
+  const slotsLeft = info?.replay_slots_remaining ?? 0;
+  return (
+    <div
+      id="crack-safe-paid-skip"
+      className="w-full space-y-2 rounded-lg border-2 border-amber-500/50 bg-amber-950/40 p-3 shadow-[0_0_24px_rgba(245,158,11,0.12)]"
+    >
+      <div className="flex items-center gap-2 text-amber-200">
+        <Lock size={16} className="shrink-0 text-amber-400" />
+        <span className="text-[11px] sm:text-xs font-heading font-bold uppercase tracking-[0.1em]">
+          Post-win cooldown — pay to play again
+        </span>
+      </div>
+      <p className="text-[11px] sm:text-sm text-zinc-300 font-heading leading-snug">
+        Free play again in <span className="text-amber-300 font-semibold tabular-nums">{formatDuration(lockSecondsLeft)}</span>
+        {slotsLeft > 0
+          ? ` — or pay ${formatMoney(replayCost)} to skip (up to ${maxDay} paid skips per UTC day). Each guess still costs ${formatMoney(info?.entry_cost ?? 250_000)}.`
+          : ' — paid skips for today are used up; wait for the timer.'}
+      </p>
+      <button
+        type="button"
+        onClick={onUnlock}
+        disabled={unlocking || slotsLeft <= 0 || !info?.can_afford_replay}
+        className="w-full py-3 rounded-lg font-heading font-bold text-sm uppercase tracking-widest transition-all border border-amber-500/60 bg-amber-500/25 text-amber-100 hover:bg-amber-500/35 disabled:opacity-45 disabled:cursor-not-allowed"
+      >
+        {unlocking
+          ? 'Processing…'
+          : `Pay ${formatMoney(replayCost)} — skip cooldown`}
+      </button>
+      {!info?.can_afford_replay && slotsLeft > 0 && (
+        <p className="text-[10px] text-center text-red-400/90 font-heading">Not enough cash for a paid skip.</p>
+      )}
+    </div>
+  );
+}
+
 /* ─── SVG Combination Dial ─── */
 function SafeDial({ dialAngle, won }) {
   const CX = 90, CY = 90, OUTER_R = 78, TICK_OUTER = 76, NUM_R = 59;
@@ -552,6 +592,14 @@ export default function CrackSafe() {
         <div className="h-0.5 bg-gradient-to-r from-transparent via-yellow-500/20 to-transparent" />
       </div>
 
+      <PaidSkipPanel
+        info={info}
+        isAdmin={isAdmin}
+        lockSecondsLeft={lockSecondsLeft}
+        unlocking={unlocking}
+        onUnlock={handleUnlockReplay}
+      />
+
       {/* Main two-column */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
 
@@ -640,37 +688,10 @@ export default function CrackSafe() {
               </div>
             )}
 
-            {/* Paid skip: only after you won the jackpot — server sets win_locked for 24h */}
             {info?.win_locked && !isAdmin && (
-              <div className="w-full space-y-2 rounded-lg border border-amber-600/35 bg-amber-950/20 p-3">
-                <div className="flex items-center gap-2 text-amber-300">
-                  <Lock size={14} className="shrink-0" />
-                  <span className="text-[10px] font-heading font-bold uppercase tracking-[0.12em]">Cooldown after your win</span>
-                </div>
-                <p className="text-[11px] text-zinc-400 font-heading leading-snug">
-                  Free play again in <span className="text-amber-400 font-semibold tabular-nums">{formatDuration(lockSecondsLeft)}</span>
-                  {info?.replay_slots_remaining > 0
-                    ? ` — or pay ${formatMoney(info?.replay_cost ?? 15_000_000)} to skip (up to ${info?.replay_max_per_day ?? 3} paid skips per UTC day).`
-                    : ' — paid skips for today are used up; wait for the timer.'}
-                </p>
-                <button
-                  type="button"
-                  onClick={handleUnlockReplay}
-                  disabled={
-                    unlocking
-                    || (info?.replay_slots_remaining ?? 0) <= 0
-                    || !info?.can_afford_replay
-                  }
-                  className="w-full py-2.5 rounded-lg font-heading font-bold text-[11px] uppercase tracking-widest transition-all border border-amber-600/50 bg-amber-500/15 text-amber-200 hover:bg-amber-500/25 disabled:opacity-45 disabled:cursor-not-allowed"
-                >
-                  {unlocking
-                    ? 'Processing…'
-                    : `Pay ${formatMoney(info?.replay_cost ?? 15_000_000)} — play again now`}
-                </button>
-                {!info?.can_afford_replay && (info?.replay_slots_remaining ?? 0) > 0 && (
-                  <p className="text-[10px] text-center text-red-400/90 font-heading">Not enough cash for a paid skip.</p>
-                )}
-              </div>
+              <p className="text-[10px] text-center text-amber-500/90 font-heading">
+                You are on post-win cooldown — use <span className="text-amber-300 font-semibold">Pay to skip</span> under the jackpot above.
+              </p>
             )}
           </div>
         </div>
@@ -691,7 +712,7 @@ export default function CrackSafe() {
             <div className="p-2.5 space-y-1 text-xs font-heading" style={{ lineHeight: 1.6 }}>
               <p className="text-zinc-400">Enter 5 numbers between 1 and 9 to crack the safe!</p>
               <p className="text-zinc-400">Each attempt costs <span className="text-primary font-semibold">{formatMoney(info?.entry_cost ?? 1_000_000)}</span>. As many attempts as you can afford until you win.</p>
-              <p className="text-zinc-400">After a jackpot win: <span className="text-amber-400 font-semibold">24h cooldown</span>, or pay <span className="text-amber-400 font-semibold">{formatMoney(info?.replay_cost ?? 15_000_000)}</span> to skip (max <span className="text-amber-400 font-semibold">{info?.replay_max_per_day ?? 3}</span> paid skips per UTC day). Entry fee still applies each guess.</p>
+              <p className="text-zinc-400">After a jackpot win: <span className="text-amber-400 font-semibold">24h cooldown</span>, or pay <span className="text-amber-400 font-semibold">{formatMoney(info?.replay_cost ?? 15_000_000)}</span> to skip (max <span className="text-amber-400 font-semibold">{info?.replay_max_per_day ?? 3}</span> paid skips per UTC day). Entry fee still applies each guess. <span className="text-amber-500/90">Use the amber <span className="font-semibold text-amber-300">Pay to skip</span> panel directly under the jackpot.</span></p>
               <p className="text-zinc-400">Current Jackpot: <span className="text-yellow-400 font-bold">{formatMoney(info?.jackpot ?? 0)}</span></p>
               <p className="text-zinc-400">Total attempts: <span className="text-primary font-semibold">{(info?.total_attempts ?? 0).toLocaleString()}</span></p>
               <p className="text-zinc-400">Previous Winner: <span className="text-primary font-semibold">{info?.last_winner_username ?? 'None yet'}</span></p>
