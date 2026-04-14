@@ -5398,14 +5398,14 @@ async def init_game_data():
     # Update crimes with new cooldowns (seconds instead of minutes for faster gameplay)
     await db.crimes.delete_many({})
     crimes = [
-        {"id": "crime1", "name": "Pickpocket", "description": "Steal from unsuspecting citizens - quick cash", "min_rank": 1, "reward_min": 50, "reward_max": 200, "cooldown_seconds": 15, "cooldown_minutes": 0.25, "crime_type": "petty"},
-        {"id": "crime2", "name": "Mug a Pedestrian", "description": "Rob someone on the street", "min_rank": 1, "reward_min": 100, "reward_max": 400, "cooldown_seconds": 30, "cooldown_minutes": 0.5, "crime_type": "petty"},
-        {"id": "crime3", "name": "Bootlegging", "description": "Smuggle illegal alcohol", "min_rank": 2, "reward_min": 500, "reward_max": 1500, "cooldown_seconds": 120, "cooldown_minutes": 2, "crime_type": "medium"},
-        {"id": "crime4", "name": "Armed Robbery", "description": "Rob a local store at gunpoint", "min_rank": 3, "reward_min": 2000, "reward_max": 5000, "cooldown_seconds": 300, "cooldown_minutes": 5, "crime_type": "medium"},
-        {"id": "crime5", "name": "Extortion", "description": "Shake down local businesses", "min_rank": 4, "reward_min": 5000, "reward_max": 12000, "cooldown_seconds": 600, "cooldown_minutes": 10, "crime_type": "medium"},
-        {"id": "crime6", "name": "Jewelry Heist", "description": "Rob a jewelry store", "min_rank": 5, "reward_min": 10000, "reward_max": 25000, "cooldown_seconds": 900, "cooldown_minutes": 15, "crime_type": "major"},
-        {"id": "crime7", "name": "Bank Heist", "description": "Rob a bank vault - high risk, high reward", "min_rank": 7, "reward_min": 50000, "reward_max": 150000, "cooldown_seconds": 1800, "cooldown_minutes": 30, "crime_type": "major"},
-        {"id": "crime8", "name": "Casino Heist", "description": "Rob a casino - the big score", "min_rank": 9, "reward_min": 200000, "reward_max": 500000, "cooldown_seconds": 3600, "cooldown_minutes": 60, "crime_type": "major"}
+        {"id": "crime1", "name": "Pickpocket", "description": "Steal from unsuspecting citizens - quick cash", "min_rank": 1, "reward_min": 100, "reward_max": 400, "cooldown_seconds": 15, "cooldown_minutes": 0.25, "crime_type": "petty"},
+        {"id": "crime2", "name": "Mug a Pedestrian", "description": "Rob someone on the street", "min_rank": 1, "reward_min": 300, "reward_max": 800, "cooldown_seconds": 30, "cooldown_minutes": 0.5, "crime_type": "petty"},
+        {"id": "crime3", "name": "Bootlegging", "description": "Smuggle illegal alcohol", "min_rank": 2, "reward_min": 1000, "reward_max": 2000, "cooldown_seconds": 120, "cooldown_minutes": 2, "crime_type": "medium"},
+        {"id": "crime4", "name": "Armed Robbery", "description": "Rob a local store at gunpoint", "min_rank": 3, "reward_min": 2000, "reward_max": 3000, "cooldown_seconds": 300, "cooldown_minutes": 5, "crime_type": "medium"},
+        {"id": "crime5", "name": "Extortion", "description": "Shake down local businesses", "min_rank": 4, "reward_min": 3000, "reward_max": 4000, "cooldown_seconds": 600, "cooldown_minutes": 10, "crime_type": "medium"},
+        {"id": "crime6", "name": "Jewelry Heist", "description": "Rob a jewelry store", "min_rank": 5, "reward_min": 4000, "reward_max": 5000, "cooldown_seconds": 900, "cooldown_minutes": 15, "crime_type": "major"},
+        {"id": "crime7", "name": "Bank Heist", "description": "Rob a bank vault - high risk, high reward", "min_rank": 7, "reward_min": 5000, "reward_max": 6000, "cooldown_seconds": 1800, "cooldown_minutes": 30, "crime_type": "major"},
+        {"id": "crime8", "name": "Casino Heist", "description": "Rob a casino - the big score", "min_rank": 9, "reward_min": 7000, "reward_max": 9000, "cooldown_seconds": 3600, "cooldown_minutes": 60, "crime_type": "major"}
     ]
     await db.crimes.insert_many(crimes)
     
