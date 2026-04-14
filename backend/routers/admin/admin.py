@@ -6897,7 +6897,14 @@ def register(router):
     async def admin_casinos_ownership_profits(
         current_user: dict = Depends(get_current_user),
     ):
-        """Aggregate profit/earnings from all casino ownership collections."""
+        """
+        Aggregate per-table profit and lifetime net from all casino ownership collections.
+
+        * **profit** — resettable owner P/L (same as in-game owner panel).
+        * **total_earnings** — cumulative lifetime net for that table (every player win reduces it,
+          same deltas as profit; not cleared by reset-profit). Dice/Slots now mirror profit on each
+          bet; older rows may still show 0 lifetime until new play occurs.
+        """
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
 

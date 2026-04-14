@@ -618,9 +618,10 @@ def register(router):
                 owner_take = max(0, total_stake - (edge if head_family_id else 0))
                 if owner_take > 0:
                     await db.users.update_one({"id": owner_id}, {"$inc": {"money": owner_take}})
+                # Lifetime total_earnings tracks net house P/L (same as profit), not gross stakes
                 await db.roulette_ownership.update_one(
                     {"city": stored_city or city},
-                    {"$inc": {"total_earnings": total_stake, "profit": owner_take}},
+                    {"$inc": {"total_earnings": owner_take, "profit": owner_take}},
                 )
                 _invalidate_ownership_cache(owner_id)
         elif not owner_id:

@@ -620,9 +620,10 @@ def register(router):
                 if head_family_id and edge > 0:
                     await db.families.update_one({"id": head_family_id}, {"$inc": {"treasury": edge, "state_head_income.horseracing": edge}})
                     await db.users.update_one({"id": owner_id}, {"$inc": {"money": -edge}})
+                hr_net = (bet - actual_payout) - (edge if head_family_id else 0)
                 await db.horseracing_ownership.update_one(
                     {"city": stored_city or city},
-                    {"$inc": {"profit": (bet - actual_payout) - (edge if head_family_id else 0)}}
+                    {"$inc": {"profit": hr_net, "total_earnings": hr_net}},
                 )
                 _invalidate_ownership_cache(owner_id)
                 new_money = user_money - bet + actual_payout
@@ -702,7 +703,7 @@ def register(router):
                         await db.users.update_one({"id": owner_id}, {"$inc": {"money": owner_take}})
                     await db.horseracing_ownership.update_one(
                         {"city": stored_city or city},
-                        {"$inc": {"total_earnings": bet, "profit": owner_take}}
+                        {"$inc": {"total_earnings": owner_take, "profit": owner_take}},
                     )
                     _invalidate_ownership_cache(owner_id)
         history_entry = {

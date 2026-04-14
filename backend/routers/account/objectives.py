@@ -73,7 +73,7 @@ MONTHLY_REWARD_MULTIPLIER = 15
 OBJECTIVE_TYPES_LIFETIME = [
     {"id": "crimes", "label": "Commit 1,000,000 crimes", "target": 1_000_000, "progress_key": "total_crimes"},
     {"id": "gta", "label": "Complete 500,000 GTAs", "target": 500_000, "progress_key": "total_gta"},
-    {"id": "oc", "label": "Complete 100,000 Organised Crimes", "target": 100_000, "progress_key": "total_oc_heists"},
+    {"id": "oc", "label": "Complete 1,000 Organised Crimes", "target": 1_000, "progress_key": "total_oc_heists"},
     {"id": "busts", "label": "Bust 1,000,000 players/NPCs from jail", "target": 1_000_000, "progress_key": "jail_busts"},
     {"id": "melt", "label": "Melt 5,000,000 bullets", "target": 5_000_000, "progress_key": "bullets_melted"},
     {"id": "crime_profit", "label": "Earn $1,500,000,000 from crimes", "target": 1_500_000_000, "progress_key": "crime_profit"},

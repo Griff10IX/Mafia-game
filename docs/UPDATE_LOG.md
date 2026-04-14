@@ -6,6 +6,42 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-11 18:00 UTC[/color][/b] — [b]“Completed it” lifetime objectives — target changes[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Account → Objectives[/b] — [b]Completed it[/b] (lifetime) goals were retuned so the grind matches current pacing:[/color]
+[*][color=#888888]• [b]Crime profit:[/b] [b]$1,500,000,000[/b] (was $5,000,000,000)[/color]
+[*][color=#888888]• [b]Total crimes:[/b] [b]1,000,000[/b] (was 15,000,000)[/color]
+[*][color=#888888]• [b]Total GTAs:[/b] [b]500,000[/b] (was 1,000,000)[/color]
+[*][color=#888888]• [b]Respect earned (lifetime):[/b] [b]250,000[/b] (was 15,000)[/color]
+[*][color=#888888]• [b]Hitlist NPC kills:[/b] [b]1,000[/b] (was 5,000)[/color]
+[*][color=#888888][b]Player action:[/b] Progress on your account is unchanged; only the goals and labels moved. If you already exceeded a new target, that line shows complete after a refresh.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-04-11 16:00 UTC[/color][/b] — [b]Objectives page layout & Distillery maintenance notice[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Fixed:[/b] [b]Account → Objectives[/b] — Objective [b]titles[/b] stay visible on all screen sizes (they could disappear beside the progress block on narrow layouts). Progress, numbers, and rewards stay readable on a second row where needed.[/color]
+[*][color=#888888][b]New:[/b] [b]Money → Distillery[/b] — The [b]Maintenance failures[/b] alert has a [b]dismiss (×)[/b] control so you can clear it until new failures occur.[/color]
+[*][color=#888888][b]Player action:[/b] Reopen [b]Objectives[/b] or [b]Distillery[/b] as usual; no setup required.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-04-11 14:00 UTC[/color][/b] — [b]Game Stats: Alive / Dead headline[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Game → Stats[/b] — The public [b]Dead[/b] count lists players who died through normal in-game deaths (e.g. combat). Deaths that only exist as account-level enforcement kills are [b]not[/b] counted in that headline (those accounts can still be dead for login).[/color]
+[*][color=#888888][b]Player action:[/b] No setup needed. [b]Alive[/b] is unchanged; if the [b]Dead[/b] number looks lower than before, it’s the new counting rule.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-10 23:45 UTC[/color][/b] — [b]Forum FAQ: kills vs Properties & Illegal Business (Distillery)[/b][/size]
 [quote]
 [list]
