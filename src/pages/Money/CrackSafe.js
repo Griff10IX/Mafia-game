@@ -634,9 +634,42 @@ export default function CrackSafe() {
               </button>
             )}
 
-            {!info?.can_guess && !isAdmin && (
+            {!info?.can_guess && !isAdmin && !info?.win_locked && (
               <div className="w-full py-2.5 rounded-lg text-center border border-zinc-700/30 bg-zinc-900/30">
                 <p className="text-xs font-heading text-zinc-400">You need {formatMoney(info?.entry_cost ?? 1_000_000)} to attempt</p>
+              </div>
+            )}
+
+            {/* Paid skip: only after you won the jackpot — server sets win_locked for 24h */}
+            {info?.win_locked && !isAdmin && (
+              <div className="w-full space-y-2 rounded-lg border border-amber-600/35 bg-amber-950/20 p-3">
+                <div className="flex items-center gap-2 text-amber-300">
+                  <Lock size={14} className="shrink-0" />
+                  <span className="text-[10px] font-heading font-bold uppercase tracking-[0.12em]">Cooldown after your win</span>
+                </div>
+                <p className="text-[11px] text-zinc-400 font-heading leading-snug">
+                  Free play again in <span className="text-amber-400 font-semibold tabular-nums">{formatDuration(lockSecondsLeft)}</span>
+                  {info?.replay_slots_remaining > 0
+                    ? ` — or pay ${formatMoney(info?.replay_cost ?? 15_000_000)} to skip (up to ${info?.replay_max_per_day ?? 3} paid skips per UTC day).`
+                    : ' — paid skips for today are used up; wait for the timer.'}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleUnlockReplay}
+                  disabled={
+                    unlocking
+                    || (info?.replay_slots_remaining ?? 0) <= 0
+                    || !info?.can_afford_replay
+                  }
+                  className="w-full py-2.5 rounded-lg font-heading font-bold text-[11px] uppercase tracking-widest transition-all border border-amber-600/50 bg-amber-500/15 text-amber-200 hover:bg-amber-500/25 disabled:opacity-45 disabled:cursor-not-allowed"
+                >
+                  {unlocking
+                    ? 'Processing…'
+                    : `Pay ${formatMoney(info?.replay_cost ?? 15_000_000)} — play again now`}
+                </button>
+                {!info?.can_afford_replay && (info?.replay_slots_remaining ?? 0) > 0 && (
+                  <p className="text-[10px] text-center text-red-400/90 font-heading">Not enough cash for a paid skip.</p>
+                )}
               </div>
             )}
           </div>

@@ -21,10 +21,9 @@ SAFE_TOKEN_REWARD_MAX_TYPES = 1
 SAFE_TOKEN_REWARD_MIN_AMOUNT = 1  # 1–2 total tokens
 SAFE_TOKEN_REWARD_MAX_AMOUNT = 2
 
-# 75% reduction for beta
 SAFE_ENTRY_COST = 250_000
-SAFE_JACKPOT_SEED = 250_000
-SAFE_JACKPOT_PER_ATTEMPT = 250_000  # Jackpot increases by exactly 250K per attempt
+SAFE_JACKPOT_SEED = 25_000_000
+SAFE_JACKPOT_PER_ATTEMPT = 250_000  # Each wrong guess adds this to the jackpot (entry fee stays separate)
 SAFE_DIGITS = 5
 SAFE_MIN = 1
 SAFE_MAX = 9
@@ -69,6 +68,10 @@ class SafeGuessRequest(BaseModel):
 
 async def _get_or_create_safe():
     safe = await db.safe_game.find_one({})
+    # One-time bump: legacy seed was $250k; migrate that exact value to the new floor.
+    if safe and int(safe.get("jackpot") or 0) == 250_000:
+        await db.safe_game.update_one({"_id": safe["_id"]}, {"$set": {"jackpot": SAFE_JACKPOT_SEED}})
+        safe = await db.safe_game.find_one({})
     if not safe:
         combo = [_rng.randint(SAFE_MIN, SAFE_MAX) for _ in range(SAFE_DIGITS)]
         doc = {
