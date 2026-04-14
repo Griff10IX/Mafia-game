@@ -23,7 +23,7 @@ from server import (
     RANKS,
     CAPO_RANK_ID,
 )
-from routers.kill.armoury import TOKEN_CONFIG, TOKEN_TYPES
+from routers.kill.armoury import TOKEN_CONFIG, TOKEN_TYPES, TOKEN_TYPES_GLOBAL_RANDOM_DROP
 from utils.point_provenance import log_points_event
 
 logger = logging.getLogger(__name__)
@@ -1780,7 +1780,7 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
         inc["loot_box_pieces"] = loot_pieces_earned
     # Ultra-rare token drop (0.001% = 1 in 100,000) - same as crimes
     if _rng.random() < 0.00001:
-        token_type = _rng.choice(TOKEN_TYPES)
+        token_type = _rng.choice(TOKEN_TYPES_GLOBAL_RANDOM_DROP)
         field = TOKEN_CONFIG[token_type]["count_field"]
         inc[field] = inc.get(field, 0) + 1
     booze_earned = 0
@@ -2389,7 +2389,7 @@ async def complete_illegal_business_mission(mission_id: str, current_user: dict 
     rewards = mission.get("rewards") or {}
     now = datetime.now(timezone.utc).isoformat()
     user_updates = {"$push": {"illegal_business_mission_completions": {"mission_id": mission_id, "completed_at": now}}}
-    for token_type in TOKEN_TYPES:
+    for token_type in TOKEN_TYPES_GLOBAL_RANDOM_DROP:
         field = TOKEN_CONFIG[token_type]["count_field"]
         if rewards.get(field):
             user_updates["$inc"] = user_updates.get("$inc") or {}

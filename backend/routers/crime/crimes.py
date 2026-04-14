@@ -420,7 +420,7 @@ from server import (
     RANKS,
 )
 from routers.account.objectives import update_objectives_progress
-from routers.kill.armoury import TOKEN_TYPES, TOKEN_CONFIG
+from routers.kill.armoury import TOKEN_CONFIG, TOKEN_TYPES, TOKEN_TYPES_GLOBAL_RANDOM_DROP
 from utils.point_provenance import log_points_event
 
 
@@ -808,7 +808,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
                 prestige_bonus_earned["loot_box_pieces"] = prestige_bonus_earned.get("loot_box_pieces", 0) + LOOT_PIECE_AMOUNT
         # Ultra-rare random token drop (1 in 100,000)
         if _rng.random() < TOKEN_GLOBAL_DROP_CHANCE:
-            token_type = _rng.choice(TOKEN_TYPES)
+            token_type = _rng.choice(TOKEN_TYPES_GLOBAL_RANDOM_DROP)
             token_field = TOKEN_CONFIG[token_type]["count_field"]
             inc[token_field] = inc.get(token_field, 0) + 1
             if prestige_bonus_earned is None:

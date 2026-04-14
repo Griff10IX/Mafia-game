@@ -2114,6 +2114,8 @@ def register(router):
         if rewards.get("loot_box_pieces"):
             inc["loot_box_pieces"] = int(rewards["loot_box_pieces"])
         for token_type, amount in (rewards.get("tokens") or {}).items():
+            if token_type == "rank_xp_pass":
+                continue
             cfg = TOKEN_CONFIG.get(token_type)
             if cfg and amount:
                 inc[cfg["count_field"]] = int(amount)
@@ -2122,7 +2124,11 @@ def register(router):
         inc["redeem_stats_total_respect_points"] = int(rewards.get("respect_points") or 0)
         inc["redeem_stats_total_loot_box_pieces"] = int(rewards.get("loot_box_pieces") or 0)
         inc["redeem_stats_total_cars"] = len(rewards.get("cars") or [])
-        inc["redeem_stats_total_tokens"] = sum(int(a) for a in (rewards.get("tokens") or {}).values())
+        inc["redeem_stats_total_tokens"] = sum(
+            int(a)
+            for tt, a in (rewards.get("tokens") or {}).items()
+            if tt != "rank_xp_pass"
+        )
         if inc:
             await db.users.update_one({"id": user_id}, {"$inc": inc})
         if inc.get("points", 0) > 0:
@@ -2154,6 +2160,8 @@ def register(router):
         if inc.get("loot_box_pieces"):
             granted.append(f"{inc['loot_box_pieces']} loot pieces")
         for token_type, amount in (rewards.get("tokens") or {}).items():
+            if token_type == "rank_xp_pass":
+                continue
             if amount:
                 granted.append(f"{amount} {token_type.replace('_', ' ')} token(s)")
         for car_id in (rewards.get("cars") or []):

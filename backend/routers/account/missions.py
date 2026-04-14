@@ -24,7 +24,7 @@ from server import (
     founding_member_income_mult,
 )
 from routers.money.booze_run import BOOZE_TYPES
-from routers.kill.armoury import TOKEN_TYPES, TOKEN_CONFIG
+from routers.kill.armoury import TOKEN_CONFIG
 from utils.missions_extended import build_missions, MISSION_RANDOM_TOKEN_TYPES
 import random
 
@@ -725,7 +725,7 @@ async def complete_mission(
                 k = TOKEN_CONFIG[tt]["count_field"]
                 inc_tok[k] = inc_tok.get(k, 0) + 1
             token_awarded = tokens_awarded_list[0] if tokens_awarded_list else None
-        elif reward_token in TOKEN_TYPES:
+        elif reward_token in MISSION_RANDOM_TOKEN_TYPES:
             token_awarded = reward_token
             token_field = TOKEN_CONFIG[token_awarded]["count_field"]
             inc_tok[token_field] = inc_tok.get(token_field, 0) + 1

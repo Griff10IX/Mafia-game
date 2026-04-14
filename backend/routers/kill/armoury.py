@@ -200,6 +200,9 @@ AUTO_RANK_EXCHANGE_TOKEN_COUNT = 2
 TOKEN_GIFT_DAILY_UNITS_MAX = 20
 GIFTABLE_TOKEN_TYPES = tuple(t for t in TOKEN_TYPES if t != "rank_xp_pass")
 
+# Ultra-rare RNG drops (e.g. crimes, illegal business collect) must not grant Game Pass — purchase/admin only.
+TOKEN_TYPES_GLOBAL_RANDOM_DROP = tuple(t for t in TOKEN_TYPES if t != "rank_xp_pass")
+
 
 def _token_gift_daily_from_user(user: dict) -> dict:
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
