@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Flame, Users, Wrench, BarChart3, Clock3, ShieldAlert, TrendingUp, Layers, AlertTriangle, ChevronLeft, ChevronRight, Zap, CircleHelp } from 'lucide-react';
+import { Flame, Users, Wrench, BarChart3, Clock3, ShieldAlert, TrendingUp, Layers, AlertTriangle, ChevronLeft, ChevronRight, Zap, CircleHelp, X } from 'lucide-react';
 import api, { getApiErrorMessage } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -368,6 +368,12 @@ export default function Distillery() {
   }, [heat]);
 
   const recentFailures = Array.isArray(dist?.recent_failures) ? dist.recent_failures : [];
+  const failuresSig = useMemo(
+    () => recentFailures.map((f) => `${f.at}|${f.type}|${f.item}|${f.maintenance}`).join(';;'),
+    [recentFailures]
+  );
+  const [dismissedFailuresSig, setDismissedFailuresSig] = useState(null);
+  const showFailuresBanner = recentFailures.length > 0 && failuresSig !== dismissedFailuresSig;
   const maintenanceWarn = maintenancePct < 35;
 
   // ── Loading / Error / Empty ────────────────────────────────────────────────
@@ -733,9 +739,19 @@ export default function Distillery() {
         <div className="dist-body">
 
           {/* ── Failures banner ─────────────────────────────────────────────── */}
-          {recentFailures.length > 0 && (
+          {showFailuresBanner && (
             <div className="dist-panel dist-panel-danger">
-              <SectionHead icon={AlertTriangle} title="Maintenance Failures" />
+              <SectionHead icon={AlertTriangle} title="Maintenance Failures">
+                <button
+                  type="button"
+                  onClick={() => setDismissedFailuresSig(failuresSig)}
+                  className="flex h-7 w-7 items-center justify-center rounded border border-red-500/35 bg-red-900/25 text-red-300/90 transition-colors hover:bg-red-900/45 hover:text-red-100"
+                  aria-label="Dismiss maintenance failures"
+                  title="Dismiss"
+                >
+                  <X size={14} strokeWidth={2.25} />
+                </button>
+              </SectionHead>
               <p style={{ fontSize: 12, color: 'var(--danger)', fontStyle: 'italic', marginBottom: 10 }}>
                 Low maintenance can break upgrade tiers. Broken tiers must be repurchased.
               </p>
