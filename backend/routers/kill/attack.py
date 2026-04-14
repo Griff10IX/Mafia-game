@@ -5,6 +5,7 @@ import math
 import random
 import re
 import secrets
+from urllib.parse import urlparse
 import uuid
 import os
 import sys
@@ -172,7 +173,78 @@ def _resolved_target_location(attack: dict, target_user: Optional[dict]) -> Opti
     return attack.get("location_state") or attack.get("planned_location_state")
 
 
-_CLIENT_SIGNAL_DETAIL_MAX = 80
+_CLIENT_SIGNAL_DETAIL_MAX = 200
+# Optional audit rows for /attack/search (header snapshot + client classification).
+ATTACK_CLIENT_AUDIT_COLLECTION = "attack_client_audit"
+
+
+def _hdr_trim(request: Request, header_name: str, max_len: int) -> Optional[str]:
+    v = request.headers.get(header_name) or ""
+    if not isinstance(v, str):
+        v = str(v)
+    v = v.strip()
+    if not v:
+        return None
+    if len(v) > max_len:
+        return v[:max_len] + "…"
+    return v
+
+
+def _client_header_snapshot(request: Optional[Request]) -> Dict[str, Any]:
+    """Non-secret header bundle for UA-spoof / client forensics (staff-only in player APIs)."""
+    if not request:
+        return {}
+    ref = _hdr_trim(request, "referer", 512) or _hdr_trim(request, "Referer", 512)
+    ref_host = None
+    if ref:
+        try:
+            ref_host = (urlparse(ref).hostname or "")[:120] or None
+        except Exception:
+            ref_host = None
+    snap: Dict[str, Any] = {
+        "sec_fetch_mode": _hdr_trim(request, "sec-fetch-mode", 40),
+        "sec_fetch_site": _hdr_trim(request, "sec-fetch-site", 40),
+        "sec_fetch_dest": _hdr_trim(request, "sec-fetch-dest", 40),
+        "sec_ch_ua": _hdr_trim(request, "sec-ch-ua", 200),
+        "sec_ch_ua_mobile": _hdr_trim(request, "sec-ch-ua-mobile", 24),
+        "accept": _hdr_trim(request, "accept", 200),
+        "accept_language": _hdr_trim(request, "accept-language", 120),
+        "origin": _hdr_trim(request, "origin", 160),
+        "referer_host": ref_host,
+    }
+    cfs = _hdr_trim(request, "cf-bot-score", 16) or _hdr_trim(request, "CF-Bot-Score", 16)
+    if cfs:
+        snap["cf_bot_score"] = cfs
+    cvb = _hdr_trim(request, "cf-verified-bot", 12) or _hdr_trim(request, "CF-Verified-Bot", 12)
+    if cvb:
+        snap["cf_verified_bot"] = cvb
+    return {k: v for k, v in snap.items() if v is not None}
+
+
+def _chrome_major_version(ua: str) -> Optional[int]:
+    m = re.search(r"Chrome/(\d+)", ua or "", re.I)
+    if not m:
+        return None
+    try:
+        return int(m.group(1))
+    except ValueError:
+        return None
+
+
+def _compute_client_risk_score(meta: Dict[str, Any]) -> int:
+    """0–100 soft risk from classification + anomaly flag count (not a ban decision)."""
+    score = 0
+    if meta.get("attacker_is_bot"):
+        score += 62
+    sig = meta.get("attacker_client_signal") or ""
+    if sig == "suspicious":
+        score += 28
+    elif sig in ("automation", "script"):
+        score += 8
+    flags = meta.get("client_anomaly_flags")
+    if isinstance(flags, list) and flags:
+        score += min(35, len(flags) * 7)
+    return min(100, int(score))
 
 
 def _is_automation_ua(user_agent: str) -> bool:
@@ -301,14 +373,20 @@ def _classify_attack_client(request: Optional[Request]) -> Dict[str, Any]:
     """
     Tiered client classification for staff logs. Staff alerts still use attacker_is_bot True only
     (script + automation). Suspicious uses header/UA heuristics and may false-positive if proxies strip Sec-Fetch-*.
+
+    Env (all optional, default off except built-in chrome_like_no_sec_fetch_mode when UA looks like Chrome):
+    - ATTACK_STRICT_SEC_FETCH_SITE=1 — flag Chrome-like UA with empty Sec-Fetch-Site.
+    - ATTACK_STRICT_SEC_CH_UA=1 — flag Chrome-like UA missing Sec-CH-UA when Chrome/ major >= ATTACK_STRICT_SEC_CH_UA_MIN_CHROME (default 100).
+    - ATTACK_STRICT_ACCEPT_JSON=1 — flag when Accept does not include application/json.
     """
     if not request:
         return {}
-    ua_raw = (request.headers.get("user-agent") or "").strip()
-    ua_l = ua_raw.lower()
 
     def cap_detail(s: str) -> str:
         return (s or "")[:_CLIENT_SIGNAL_DETAIL_MAX]
+
+    ua_raw = (request.headers.get("user-agent") or "").strip()
+    ua_l = ua_raw.lower()
 
     if ua_raw and _is_automation_ua(ua_raw):
         lab = _automation_label_from_ua(ua_raw)
@@ -316,6 +394,7 @@ def _classify_attack_client(request: Optional[Request]) -> Dict[str, Any]:
             "attacker_client_signal": "automation",
             "attacker_is_bot": True,
             "attacker_bot_label": lab[:120],
+            "client_anomaly_flags": ["automation_ua"],
         }
     if ua_raw and _is_script_http_client_ua(ua_raw):
         label = _script_label_from_ua(ua_raw) or "Script / HTTP client"
@@ -323,45 +402,70 @@ def _classify_attack_client(request: Optional[Request]) -> Dict[str, Any]:
             "attacker_client_signal": "script",
             "attacker_is_bot": True,
             "attacker_bot_label": label[:120],
+            "client_anomaly_flags": ["script_http_client_ua"],
         }
 
-    suspicious_reason: Optional[str] = None
+    reasons: List[str] = []
     if len(ua_raw) < 12:
-        suspicious_reason = "empty_or_short_ua"
+        reasons.append("empty_or_short_ua")
     elif "mozilla" in ua_l and "chrome" in ua_l:
-        # Browsers sending credentialed XHR/fetch to API usually include Sec-Fetch-Mode; many spoofed scripts omit it.
-        if not request.headers.get("sec-fetch-mode"):
-            suspicious_reason = "chrome_like_no_sec_fetch_mode"
-    if suspicious_reason:
+        if not (request.headers.get("sec-fetch-mode") or "").strip():
+            reasons.append("chrome_like_no_sec_fetch_mode")
+        if os.environ.get("ATTACK_STRICT_SEC_FETCH_SITE", "").strip() == "1":
+            if not (request.headers.get("sec-fetch-site") or "").strip():
+                reasons.append("chrome_like_no_sec_fetch_site")
+        if os.environ.get("ATTACK_STRICT_SEC_CH_UA", "").strip() == "1":
+            try:
+                min_maj = int(os.environ.get("ATTACK_STRICT_SEC_CH_UA_MIN_CHROME", "100") or 100)
+            except ValueError:
+                min_maj = 100
+            maj = _chrome_major_version(ua_raw)
+            if maj is not None and maj >= min_maj:
+                if len((request.headers.get("sec-ch-ua") or "").strip()) < 3:
+                    reasons.append("chrome_like_missing_sec_ch_ua")
+        if os.environ.get("ATTACK_STRICT_ACCEPT_JSON", "").strip() == "1":
+            acc = (request.headers.get("accept") or "").lower()
+            if "application/json" not in acc:
+                reasons.append("accept_missing_application_json")
+
+    if reasons:
+        uniq = list(dict.fromkeys(reasons))
         return {
             "attacker_client_signal": "suspicious",
             "attacker_is_bot": False,
-            "attacker_client_signal_detail": cap_detail(suspicious_reason),
+            "attacker_client_signal_detail": cap_detail(",".join(uniq)),
+            "client_anomaly_flags": uniq,
         }
 
     return {
         "attacker_client_signal": "browser",
         "attacker_is_bot": False,
+        "client_anomaly_flags": [],
     }
 
 
 def _request_meta(request: Optional[Request]) -> dict:
-    """Build dict for attack attempt logging: UA, IP, tiered client classification."""
+    """Build dict for attack attempt logging: UA, IP, client classification, header snapshot, risk score."""
     out: Dict[str, Any] = {}
-    if request:
-        ua_full = (request.headers.get("user-agent") or "").strip()
-        if ua_full:
-            out["user_agent"] = ua_full[:500]
-        out.update(_classify_attack_client(request))
-        cf_ip = (request.headers.get("cf-connecting-ip") or "").strip()
-        if cf_ip:
-            out["client_ip"] = cf_ip[:45]
-        else:
-            forwarded = (request.headers.get("x-forwarded-for") or "").strip()
-            if forwarded:
-                out["client_ip"] = forwarded.split(",")[0].strip()[:45]
-            elif getattr(request, "client", None) and getattr(request.client, "host", None):
-                out["client_ip"] = str(request.client.host)[:45]
+    if not request:
+        return out
+    ua_full = (request.headers.get("user-agent") or "").strip()
+    if ua_full:
+        out["user_agent"] = ua_full[:500]
+    out.update(_classify_attack_client(request))
+    snap = _client_header_snapshot(request)
+    if snap:
+        out["client_header_snapshot"] = snap
+    out["client_risk_score"] = _compute_client_risk_score(out)
+    cf_ip = (request.headers.get("cf-connecting-ip") or "").strip()
+    if cf_ip:
+        out["client_ip"] = cf_ip[:45]
+    else:
+        forwarded = (request.headers.get("x-forwarded-for") or "").strip()
+        if forwarded:
+            out["client_ip"] = forwarded.split(",")[0].strip()[:45]
+        elif getattr(request, "client", None) and getattr(request.client, "host", None):
+            out["client_ip"] = str(request.client.host)[:45]
     return out
 
 
@@ -628,6 +732,9 @@ _PLAYER_ATTACK_ATTEMPT_META_KEYS = frozenset(
         "attacker_bot_label",
         "attacker_client_signal",
         "attacker_client_signal_detail",
+        "client_header_snapshot",
+        "client_anomaly_flags",
+        "client_risk_score",
         "integrity_violation",
         "attack_id",
     }
@@ -955,10 +1062,10 @@ async def _exclusive_car_bullet_defense_multiplier(target: dict) -> float:
 # Route handlers
 # ---------------------------------------------------------------------------
 
-async def search_target(request: AttackSearchRequest, current_user: dict = Depends(get_current_user_verified)):
+async def search_target(payload: AttackSearchRequest, req: Request, current_user: dict = Depends(get_current_user_verified)):
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     await db.attacks.delete_many({"attacker_id": current_user["id"], "search_started": {"$lte": cutoff.isoformat()}})
-    user_filter = _find_user_by_username_case_insensitive(request.target_username)
+    user_filter = _find_user_by_username_case_insensitive(payload.target_username)
     if not user_filter:
         raise HTTPException(status_code=400, detail="Target username required")
     target = await db.users.find_one(user_filter, {"_id": 0})
@@ -1010,7 +1117,7 @@ async def search_target(request: AttackSearchRequest, current_user: dict = Depen
     found_at = now + timedelta(minutes=search_duration)
     expires_at = now + timedelta(hours=24)
     attack_id = str(uuid.uuid4())
-    note = (request.note or "").strip()
+    note = (payload.note or "").strip()
     note = note[:80] if note else None
     if target.get("is_npc") and target.get("is_bodyguard"):
         # Robot bodyguard location always comes from their user doc only (not a random planned city).
@@ -1034,10 +1141,26 @@ async def search_target(request: AttackSearchRequest, current_user: dict = Depen
         "result": None,
         "rewards": None
     })
+    try:
+        meta = _request_meta(req)
+        await db[ATTACK_CLIENT_AUDIT_COLLECTION].insert_one(
+            {
+                "id": str(uuid.uuid4()),
+                "event": "attack_search",
+                "user_id": current_user["id"],
+                "username": current_user.get("username") or "?",
+                "target_username": (payload.target_username or "").strip()[:64],
+                "attack_id": attack_id,
+                "created_at": datetime.now(timezone.utc),
+                **meta,
+            }
+        )
+    except Exception:
+        pass
     return AttackSearchResponse(
         attack_id=attack_id,
         status="searching",
-        message=f"Searching for {request.target_username}...",
+        message=f"Searching for {payload.target_username}...",
         estimated_completion=found_at.isoformat()
     )
 
@@ -1304,6 +1427,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 },
             )
             try:
+                _tok_meta = _request_meta(req)
                 await maybe_notify_staff_attack_execute_token_fail(
                     db=db,
                     request=req,
@@ -1313,6 +1437,9 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                     target_username=(target.get("username") or "").strip() or "?",
                     attack_id=attack.get("id"),
                     location_state=target_location,
+                    client_risk_score=_tok_meta.get("client_risk_score"),
+                    attacker_client_signal=_tok_meta.get("attacker_client_signal"),
+                    client_anomaly_flags=_tok_meta.get("client_anomaly_flags"),
                 )
             except Exception:
                 pass

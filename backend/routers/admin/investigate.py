@@ -416,3 +416,99 @@ def register(router):
             "ip_summary": sorted(ip_summary, key=lambda x: x.get("ip") or ""),
             "risks": risks,
         }
+
+    ATTACK_CLIENT_AUDIT = "attack_client_audit"
+
+    @router.get("/admin/investigate/attack-client-spoof-report")
+    async def admin_attack_client_spoof_report(
+        hours: int = Query(24, ge=1, le=168),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Summarize execute_token integrity failures plus client signal / IP / user correlation.
+        Optional: counts rows in attack_client_audit (search starts) in the same window.
+        Admin or moderator.
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin or moderator access required")
+        now = datetime.now(timezone.utc)
+        since = now - timedelta(hours=hours)
+        since_iso = since.isoformat()
+        time_or = {"$or": [{"created_at": {"$gte": since}}, {"created_at": {"$gte": since_iso}}]}
+
+        token_q: Dict[str, Any] = {
+            "outcome": "error",
+            "integrity_violation": "execute_token",
+            **time_or,
+        }
+        token_fail_count = await db.attack_attempts.count_documents(token_q)
+
+        top_ips = await db.attack_attempts.aggregate(
+            [
+                {"$match": token_q},
+                {"$group": {"_id": "$client_ip", "count": {"$sum": 1}}},
+                {"$sort": {"count": -1}},
+                {"$limit": 25},
+            ]
+        ).to_list(25)
+
+        top_attackers = await db.attack_attempts.aggregate(
+            [
+                {"$match": token_q},
+                {"$group": {"_id": "$attacker_id", "username": {"$max": "$attacker_username"}, "count": {"$sum": 1}}},
+                {"$sort": {"count": -1}},
+                {"$limit": 25},
+            ]
+        ).to_list(25)
+
+        signal_breakdown = await db.attack_attempts.aggregate(
+            [
+                {"$match": token_q},
+                {"$group": {"_id": "$attacker_client_signal", "count": {"$sum": 1}}},
+            ]
+        ).to_list(12)
+
+        samples = (
+            await db.attack_attempts.find(
+                token_q,
+                {
+                    "_id": 0,
+                    "id": 1,
+                    "created_at": 1,
+                    "attacker_id": 1,
+                    "attacker_username": 1,
+                    "client_ip": 1,
+                    "attacker_client_signal": 1,
+                    "client_risk_score": 1,
+                    "client_anomaly_flags": 1,
+                    "player_message": 1,
+                },
+            )
+            .sort("created_at", -1)
+            .limit(12)
+            .to_list(12)
+        )
+
+        audit_q = {"$or": [{"created_at": {"$gte": since}}, {"created_at": {"$gte": since_iso}}]}
+        try:
+            search_audit_count = await db[ATTACK_CLIENT_AUDIT].count_documents(audit_q)
+        except Exception:
+            search_audit_count = None
+
+        return {
+            "window_hours": hours,
+            "since": since_iso,
+            "execute_token_failures": token_fail_count,
+            "top_ips": [{"client_ip": (x.get("_id") or "—"), "count": x.get("count", 0)} for x in top_ips],
+            "top_attackers": [
+                {"attacker_id": x.get("_id"), "username": x.get("username"), "count": x.get("count", 0)}
+                for x in top_attackers
+            ],
+            "client_signal_breakdown_on_token_fails": [
+                {"signal": (x.get("_id") or "unknown"), "count": x.get("count", 0)} for x in signal_breakdown
+            ],
+            "recent_token_fail_samples": samples,
+            "attack_search_audit_rows_in_window": search_audit_count,
+            "note": "Strict header checks are opt-in via ATTACK_STRICT_* env vars in attack router. "
+            "attack_client_audit logs each successful /attack/search with client_header_snapshot.",
+        }

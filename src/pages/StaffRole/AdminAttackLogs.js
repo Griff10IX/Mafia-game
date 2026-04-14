@@ -126,7 +126,9 @@ export default function AdminAttackLogs() {
           <div className="min-w-0">
             <h1 className="text-lg font-heading font-bold text-foreground truncate">Attack logs</h1>
             <p className="text-[10px] text-mutedForeground font-heading">
-              Per-user raw attack attempts, bodyguard roster and merged hire/kill/payout timeline. Game-wide KPIs below are from the last 7 days.
+              Per-user raw attack attempts, bodyguard roster and merged hire/kill/payout timeline. Game-wide KPIs below are from the last 7 days. For{' '}
+              <span className="text-amber-200/80">execute_token</span> failure correlation and search header audits, use main{' '}
+              <strong className="text-foreground">Admin → Cheat Detection</strong> → Kill / attack — UA spoof telemetry → Load spoof report.
             </p>
           </div>
         </div>

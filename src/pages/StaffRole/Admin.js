@@ -236,7 +236,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Security panel', categoryId: 'admin-security', collapseKey: 'security', keywords: ['security', 'flags', 'threat', 'monitor'] },
   // Cheat Detection
   { label: 'Cheat Detection', categoryId: 'admin-cheat', collapseKey: 'cheat', keywords: ['cheat', 'detection', 'suspicious'] },
-  { label: 'Bot / script investigation', categoryId: 'admin-cheat', collapseKey: 'botInvestigation', keywords: ['bot', 'script', 'automation', 'investigation', 'cheat', 'suspicious', 'ip', 'network', 'mobile', 'isp', 'vpn'] },
+  { label: 'Bot / script investigation', categoryId: 'admin-cheat', collapseKey: 'botInvestigation', keywords: ['bot', 'script', 'automation', 'investigation', 'cheat', 'suspicious', 'ip', 'network', 'mobile', 'isp', 'vpn', 'attack', 'execute_token', 'spoof', 'ua', 'kill'] },
   { label: 'Find Duplicates', categoryId: 'admin-cheat', collapseKey: 'duplicates', keywords: ['duplicate', 'multi', 'account'] },
   // Analytics
   { label: 'Login page unique visitors', categoryId: 'admin-analytics', collapseKey: 'loginPageVisitors', keywords: ['login', 'visitors', 'unique', 'page', 'stats'] },
@@ -1041,6 +1041,9 @@ export default function Admin() {
   const [botInvestBlocks, setBotInvestBlocks] = useState(null);
   const [botInvestIpCheck, setBotInvestIpCheck] = useState(null);
   const [botInvestLoading, setBotInvestLoading] = useState(false);
+  const [attackClientSpoofReport, setAttackClientSpoofReport] = useState(null);
+  const [attackClientSpoofHours, setAttackClientSpoofHours] = useState(24);
+  const [attackClientSpoofLoading, setAttackClientSpoofLoading] = useState(false);
 
   const [adminOnlineColor, setAdminOnlineColor] = useState('#a78bfa');
   const [modDefaultOnlineColor, setModDefaultOnlineColor] = useState('#1e3a5f');
@@ -4425,6 +4428,23 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed to load IP check');
     } finally {
       setBotInvestLoading(false);
+    }
+  };
+
+  const loadAttackClientSpoofReport = async () => {
+    const h = Math.max(1, Math.min(168, parseInt(String(attackClientSpoofHours), 10) || 24));
+    setAttackClientSpoofLoading(true);
+    setAttackClientSpoofReport(null);
+    try {
+      const res = await api.get('/admin/investigate/attack-client-spoof-report', { params: { hours: h } });
+      setAttackClientSpoofReport(res.data);
+      const n = res.data?.execute_token_failures ?? 0;
+      toast.success(n ? `Spoof report: ${n} execute_token failure(s) in last ${h}h` : `Spoof report: no token failures in last ${h}h`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load attack client spoof report');
+      setAttackClientSpoofReport(null);
+    } finally {
+      setAttackClientSpoofLoading(false);
     }
   };
 
@@ -12228,6 +12248,34 @@ export default function Admin() {
               <p className="text-[10px] text-mutedForeground font-heading">
                 One place to review automation signals: aggregated profile, activity, intelligent dupe check, rate limits, and script-client block history. Moderators can use all actions here.
               </p>
+              <div className="rounded border border-amber-500/25 bg-amber-500/5 p-2 space-y-2">
+                <div className="text-[10px] font-heading font-bold text-amber-200/90 uppercase tracking-wide">
+                  Kill / attack — execute_token failures (UA spoof telemetry)
+                </div>
+                <p className="text-[9px] text-mutedForeground font-heading leading-snug">
+                  Correlates <code className="text-[8px]">integrity_violation: execute_token</code> rows with client signal, risk score, and IPs. Includes{' '}
+                  <code className="text-[8px]">attack_client_audit</code> search-start counts (header snapshots). Staff notifications for token fails already include risk/flags when available.
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] text-mutedForeground font-heading">Window (hours)</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={168}
+                    value={attackClientSpoofHours}
+                    onChange={(e) => setAttackClientSpoofHours(Math.max(1, Math.min(168, parseInt(e.target.value, 10) || 24)))}
+                    className="w-16 px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono"
+                  />
+                  <BtnSecondary type="button" onClick={loadAttackClientSpoofReport} disabled={attackClientSpoofLoading}>
+                    {attackClientSpoofLoading ? 'Loading…' : 'Load spoof report'}
+                  </BtnSecondary>
+                </div>
+                {attackClientSpoofReport && (
+                  <pre className="text-[9px] font-mono text-foreground whitespace-pre-wrap break-words max-h-80 overflow-y-auto rounded border border-zinc-700/40 bg-zinc-950/60 p-2">
+                    {JSON.stringify(attackClientSpoofReport, null, 2)}
+                  </pre>
+                )}
+              </div>
               <div className="flex flex-wrap items-center gap-2">
                 <input
                   type="text"

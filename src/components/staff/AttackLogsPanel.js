@@ -24,6 +24,7 @@ function BtnPrimary({ children, ...props }) {
 /**
  * Staff attack log viewer: /admin/attacks/logs + optional live merge.
  * Used from Admin.js (embedded) and AdminAttackLogs.js (standalone page section).
+ * Related: Admin → Cheat Detection → "Load spoof report" (execute_token failures + client risk / header snapshot telemetry).
  */
 export default function AttackLogsPanel({
   introText = "Leave username empty to load recent attempts for all players (newest first, up to your limit). Enter a username to filter to that player as attacker or target. Turn on Live to refresh every 5s and prepend new rows.",
@@ -160,6 +161,10 @@ export default function AttackLogsPanel({
           <span className="text-[9px] text-primary font-heading">Refreshing every 5s</span>
         )}
       </div>
+      <p className="text-[9px] text-mutedForeground font-heading">
+        Token-fail correlation + search header audits: Admin → Cheat Detection →{' '}
+        <span className="text-amber-200/80">Kill / attack — execute_token failures (UA spoof telemetry)</span> → Load spoof report.
+      </p>
       {attackLogsData && (
         <div className={`overflow-x-auto overflow-y-auto ${tableMaxHeightClass}`}>
           <p className="text-[10px] font-heading text-primary mb-1">
@@ -375,6 +380,30 @@ export default function AttackLogsPanel({
                 </div>
                 <p className="text-foreground font-mono text-[9px] break-all">{attackLogViewRow.user_agent ?? '—'}</p>
               </div>
+              {attackLogViewRow.client_risk_score != null && attackLogViewRow.client_risk_score !== undefined && (
+                <div>
+                  <span className="text-mutedForeground">Client risk (soft):</span>{' '}
+                  <span className="text-foreground font-mono">{Number(attackLogViewRow.client_risk_score)}</span>
+                </div>
+              )}
+              {Array.isArray(attackLogViewRow.client_anomaly_flags) && attackLogViewRow.client_anomaly_flags.length > 0 && (
+                <div className="col-span-2">
+                  <span className="text-mutedForeground">Anomaly flags:</span>{' '}
+                  <span className="text-foreground font-mono text-[9px]">
+                    {attackLogViewRow.client_anomaly_flags.join(', ')}
+                  </span>
+                </div>
+              )}
+              {attackLogViewRow.client_header_snapshot && typeof attackLogViewRow.client_header_snapshot === 'object' && (
+                <div className="col-span-2">
+                  <div className="text-mutedForeground font-bold uppercase tracking-wider border-b border-zinc-700/50 pb-0.5 mb-1">
+                    Header snapshot
+                  </div>
+                  <pre className="text-foreground font-mono text-[9px] whitespace-pre-wrap break-words max-h-40 overflow-y-auto">
+                    {JSON.stringify(attackLogViewRow.client_header_snapshot, null, 2)}
+                  </pre>
+                </div>
+              )}
               {attackLogViewRow.first_bodyguard && (
                 <div>
                   <div className="text-mutedForeground font-bold uppercase tracking-wider border-b border-zinc-700/50 pb-0.5 mb-1">

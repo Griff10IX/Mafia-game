@@ -389,6 +389,9 @@ async def maybe_notify_staff_attack_execute_token_fail(
     target_username: str,
     attack_id: str,
     location_state: Optional[str] = None,
+    client_risk_score: Optional[int] = None,
+    attacker_client_signal: Optional[str] = None,
+    client_anomaly_flags: Optional[List[str]] = None,
 ) -> None:
     """Staff inbox when execute fails anti-bot session token (throttled per attacker)."""
     now = time.monotonic()
@@ -414,8 +417,14 @@ async def maybe_notify_staff_attack_execute_token_fail(
         f"Attack row id: {attack_id}",
         f"IP: {ip or '—'}",
         f"User-Agent: {ua_short or '—'}",
-        "— Request metadata —",
     ]
+    if client_risk_score is not None:
+        lines.append(f"Client risk score (soft): {int(client_risk_score)}")
+    if attacker_client_signal:
+        lines.append(f"Client signal: {attacker_client_signal}")
+    if isinstance(client_anomaly_flags, list) and client_anomaly_flags:
+        lines.append(f"Anomaly flags: {', '.join(str(x) for x in client_anomaly_flags[:20])}")
+    lines.append("— Request metadata —")
     lines.extend(_request_intel_lines(request))
     acc = await _account_intel_lines(db, aid)
     if acc:
