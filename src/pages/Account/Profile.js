@@ -1254,11 +1254,18 @@ export default function Profile() {
     setProfileLoading(true);
     setProfileLoadError('');
     try {
-      const res = await api.get(`/users/${encodeURIComponent(targetUsername)}/profile`);
+      const [profileRes, honoursRes] = await Promise.all([
+        api.get(`/users/${encodeURIComponent(targetUsername)}/profile`, { params: { include_honours: false } }),
+        api.get(`/users/${encodeURIComponent(targetUsername)}/profile/honours`).catch(() => ({ data: { honours: [] } })),
+      ]);
       if (reqId !== profileRequestIdRef.current) return null;
-      setProfile(res.data);
-      setProfilePrefetch(targetUsername, res.data);
-      return res.data;
+      const merged = {
+        ...profileRes.data,
+        honours: honoursRes.data?.honours ?? [],
+      };
+      setProfile(merged);
+      setProfilePrefetch(targetUsername, merged);
+      return merged;
     } catch (e) {
       if (reqId === profileRequestIdRef.current && !silent) {
         setProfileLoadError(e.response?.data?.detail || 'Failed to load profile');

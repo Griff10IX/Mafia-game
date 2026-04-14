@@ -18,7 +18,7 @@ _VALID_TOPBAR_STAT_IDS = frozenset(
 _CHIP_SCALE_MIN, _CHIP_SCALE_MAX = 20, 100
 
 import httpx
-from fastapi import Body, Depends, File, HTTPException, UploadFile
+from fastapi import Body, Depends, File, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
 from utils.civilian_protection import civilian_protection_status_payload, maybe_revoke_civilian_protection
@@ -318,6 +318,97 @@ def register(router):
                 return cand[0]
         return None
 
+    async def _build_profile_honours(user: dict, is_dead: bool) -> list:
+        """Honour ranks (expensive DB work); callable from full profile or GET .../profile/honours."""
+
+        def _honours_liveness_match(subject_dead: bool) -> dict:
+            """Same alive/dead pool as GET /leaderboards/top (StatLeaderboard boards)."""
+            if subject_dead:
+                return {"is_dead": True, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
+            return {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
+
+        async def _rank_for_field(field: str, value: int, *, subject_dead: bool) -> int:
+            if value is None:
+                value = 0
+            q = _honours_liveness_match(subject_dead)
+            q.update(_staff_exclude_user_filter())
+            q[field] = {"$gt": value}
+            n_better = await db.users.count_documents(q)
+            return n_better + 1
+
+        async def _rank_for_effective_kills(effective_value: int, *, subject_dead: bool) -> int:
+            """Same ordering as GET /leaderboards/top all-time kills (effective kills, not raw total_kills)."""
+            if effective_value is None:
+                effective_value = 0
+            q = _honours_liveness_match(subject_dead)
+            q.update(_staff_exclude_user_filter())
+            ev = int(effective_value)
+            pipeline = [
+                {"$match": q},
+                {"$addFields": {"_lb_eff_kills": mongodb_effective_kill_count_expr()}},
+                {"$match": {"_lb_eff_kills": {"$gt": ev}}},
+                {"$count": "n"},
+            ]
+            cur = await db.users.aggregate(pipeline).to_list(1)
+            n_better = int(cur[0].get("n", 0)) if cur else 0
+            return n_better + 1
+
+        async def _rank_for_total_rank_points_lifetime(total_value: int, *, subject_dead: bool) -> int:
+            """Same pipeline fields as leaderboard rank_points board: _lb_total_rp then $gt; pool matches /leaderboards/top."""
+            if total_value is None:
+                total_value = 0
+            q = _honours_liveness_match(subject_dead)
+            q.update(_staff_exclude_user_filter())
+            tv = int(total_value)
+            pipeline = [
+                {"$match": q},
+                {
+                    "$addFields": {
+                        "_lb_total_rp": {
+                            "$add": [
+                                {"$ifNull": ["$rank_xp_pass_prestige_carry_rp", 0]},
+                                {"$ifNull": ["$rank_points", 0]},
+                            ]
+                        }
+                    }
+                },
+                {"$match": {"_lb_total_rp": {"$gt": tv}}},
+                {"$count": "n"},
+            ]
+            cur = await db.users.aggregate(pipeline).to_list(1)
+            n_better = int(cur[0].get("n", 0)) if cur else 0
+            return n_better + 1
+
+        eff_kills = effective_player_kill_count(user)
+        kills_rank, crimes_rank, gta_rank, jail_rank, rank_points_rank, points_spent_rank = await asyncio.gather(
+            _rank_for_effective_kills(eff_kills, subject_dead=is_dead),
+            _rank_for_field("total_crimes", int(user.get("total_crimes") or 0), subject_dead=is_dead),
+            _rank_for_field("total_gta", int(user.get("total_gta") or 0), subject_dead=is_dead),
+            _rank_for_field("jail_busts", int(user.get("jail_busts") or 0), subject_dead=is_dead),
+            _rank_for_total_rank_points_lifetime(
+                int(user.get("rank_points") or 0) + int(user.get("rank_xp_pass_prestige_carry_rp") or 0),
+                subject_dead=is_dead,
+            ),
+            _rank_for_field("lifetime_points_spent", int(user.get("lifetime_points_spent") or 0), subject_dead=is_dead),
+        )
+        return [
+            {"rank": rank_points_rank, "label": "Most Rank Points Earned", "board": "rank_points"},
+            {"rank": kills_rank, "label": "Most Kills", "board": "kills"},
+            {"rank": crimes_rank, "label": "Most Crimes Committed", "board": "crimes"},
+            {"rank": gta_rank, "label": "Most GTAs Committed", "board": "gta"},
+            {"rank": jail_rank, "label": "Most Jail Busts", "board": "jail_busts"},
+            {"rank": points_spent_rank, "label": "Most Points Spent", "board": "points_spent"},
+        ]
+
+    @router.get("/users/{username}/profile/honours")
+    async def get_user_profile_honours(username: str, current_user: dict = Depends(get_current_user)):
+        """Honour ranks only (same numbers as full profile); use with GET .../profile?include_honours=0 for faster first paint."""
+        user = await _find_user_by_profile_username(username, {"_id": 0, "password_hash": 0})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        is_dead = bool(user.get("is_dead"))
+        return {"honours": await _build_profile_honours(user, is_dead)}
+
     @router.get("/users/{username}/profile-preview")
     async def get_user_profile_preview(username: str, current_user: dict = Depends(get_current_user)):
         """Minimal profile data for hover previews (e.g. Users Online). Only returns public-safe fields."""
@@ -444,8 +535,12 @@ def register(router):
         }
 
     @router.get("/users/{username}/profile")
-    async def get_user_profile(username: str, current_user: dict = Depends(get_current_user)):
-        """View a user's profile (requires auth)."""
+    async def get_user_profile(
+        username: str,
+        include_honours: bool = Query(True),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """View a user's profile (requires auth). Pass include_honours=0 with GET .../profile/honours for faster parallel loads."""
         user = await _find_user_by_profile_username(username, {"_id": 0, "password_hash": 0})
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
@@ -522,63 +617,10 @@ def register(router):
         wealth_range = get_wealth_rank_range(user.get("money", 0))
         user_id = user["id"]
 
-        def _honours_liveness_match(subject_dead: bool) -> dict:
-            """Same alive/dead pool as GET /leaderboards/top (StatLeaderboard boards)."""
-            if subject_dead:
-                return {"is_dead": True, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
-            return {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
-
-        async def _rank_for_field(field: str, value: int, *, subject_dead: bool) -> int:
-            if value is None:
-                value = 0
-            q = _honours_liveness_match(subject_dead)
-            q.update(_staff_exclude_user_filter())
-            q[field] = {"$gt": value}
-            n_better = await db.users.count_documents(q)
-            return n_better + 1
-
-        async def _rank_for_effective_kills(effective_value: int, *, subject_dead: bool) -> int:
-            """Same ordering as GET /leaderboards/top all-time kills (effective kills, not raw total_kills)."""
-            if effective_value is None:
-                effective_value = 0
-            q = _honours_liveness_match(subject_dead)
-            q.update(_staff_exclude_user_filter())
-            ev = int(effective_value)
-            pipeline = [
-                {"$match": q},
-                {"$addFields": {"_lb_eff_kills": mongodb_effective_kill_count_expr()}},
-                {"$match": {"_lb_eff_kills": {"$gt": ev}}},
-                {"$count": "n"},
-            ]
-            cur = await db.users.aggregate(pipeline).to_list(1)
-            n_better = int(cur[0].get("n", 0)) if cur else 0
-            return n_better + 1
-
-        async def _rank_for_total_rank_points_lifetime(total_value: int, *, subject_dead: bool) -> int:
-            """Same pipeline fields as leaderboard rank_points board: _lb_total_rp then $gt; pool matches /leaderboards/top."""
-            if total_value is None:
-                total_value = 0
-            q = _honours_liveness_match(subject_dead)
-            q.update(_staff_exclude_user_filter())
-            tv = int(total_value)
-            pipeline = [
-                {"$match": q},
-                {
-                    "$addFields": {
-                        "_lb_total_rp": {
-                            "$add": [
-                                {"$ifNull": ["$rank_xp_pass_prestige_carry_rp", 0]},
-                                {"$ifNull": ["$rank_points", 0]},
-                            ]
-                        }
-                    }
-                },
-                {"$match": {"_lb_total_rp": {"$gt": tv}}},
-                {"$count": "n"},
-            ]
-            cur = await db.users.aggregate(pipeline).to_list(1)
-            n_better = int(cur[0].get("n", 0)) if cur else 0
-            return n_better + 1
+        if include_honours:
+            honours = await _build_profile_honours(user, is_dead)
+        else:
+            honours = []
 
         async def _casinos_for_type(game_type: str, coll, location_key: str = "city"):
             out = []
@@ -651,19 +693,6 @@ def register(router):
                     sent = n
             return received, sent
 
-        eff_kills = effective_player_kill_count(user)
-        kills_rank, crimes_rank, gta_rank, jail_rank, rank_points_rank, points_spent_rank = await asyncio.gather(
-            _rank_for_effective_kills(eff_kills, subject_dead=is_dead),
-            _rank_for_field("total_crimes", int(user.get("total_crimes") or 0), subject_dead=is_dead),
-            _rank_for_field("total_gta", int(user.get("total_gta") or 0), subject_dead=is_dead),
-            _rank_for_field("jail_busts", int(user.get("jail_busts") or 0), subject_dead=is_dead),
-            _rank_for_total_rank_points_lifetime(
-                int(user.get("rank_points") or 0) + int(user.get("rank_xp_pass_prestige_carry_rp") or 0),
-                subject_dead=is_dead,
-            ),
-            _rank_for_field("lifetime_points_spent", int(user.get("lifetime_points_spent") or 0), subject_dead=is_dead),
-        )
-
         (
             family_name_tag,
             dice_casinos,
@@ -698,14 +727,6 @@ def register(router):
 
         family_name, family_tag, family_emblem_preset_id, family_emblem_avatar_url = family_name_tag or (None, None, None, None)
 
-        honours = [
-            {"rank": rank_points_rank, "label": "Most Rank Points Earned", "board": "rank_points"},
-            {"rank": kills_rank, "label": "Most Kills", "board": "kills"},
-            {"rank": crimes_rank, "label": "Most Crimes Committed", "board": "crimes"},
-            {"rank": gta_rank, "label": "Most GTAs Committed", "board": "gta"},
-            {"rank": jail_rank, "label": "Most Jail Busts", "board": "jail_busts"},
-            {"rank": points_spent_rank, "label": "Most Points Spent", "board": "points_spent"},
-        ]
         from routers.game.achievements import compute_profile_badges
         achievement_badges = compute_profile_badges(user)
         owned_casinos = dice_casinos + roulette_casinos + blackjack_casinos + horseracing_casinos + slots_casinos + videopoker_casinos

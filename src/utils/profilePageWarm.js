@@ -33,15 +33,19 @@ export async function prefetchProfilePageData(options = {}) {
     const u = String(meRes.data?.username || '').trim();
     if (!uid || !u) return;
 
-    const [profRes, prefRes, telRes, spotRes, censRes] = await Promise.all([
-      api.get(`/users/${encodeURIComponent(u)}/profile`),
+    const [profRes, honRes, prefRes, telRes, spotRes, censRes] = await Promise.all([
+      api.get(`/users/${encodeURIComponent(u)}/profile`, { params: { include_honours: false } }),
+      api.get(`/users/${encodeURIComponent(u)}/profile/honours`).catch(() => ({ data: { honours: [] } })),
       api.get('/profile/preferences').catch(() => ({ data: null })),
       api.get('/profile/telegram').catch(() => ({ data: null })),
       api.get('/profile/spotify/status').catch(() => ({ data: null })),
       api.get('/profile/censor-profanity').catch(() => ({ data: null })),
     ]);
 
-    setProfilePrefetch(u, profRes.data);
+    setProfilePrefetch(u, {
+      ...profRes.data,
+      honours: honRes.data?.honours ?? [],
+    });
 
     writeSessionJson(PROFILE_EDIT_WARM_KEY, {
       userId: uid,
