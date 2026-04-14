@@ -34,6 +34,11 @@ AUTO_MDG_EARLY_ROLL_MINUTES = 10
 _logger = logging.getLogger(__name__)
 
 
+def _mdg_roll_pool(entries: list) -> list:
+    """Ordered list of entrants used for winner selection — every player who paid has one equal slot."""
+    return list(entries or [])
+
+
 class MDGCreateRequest(BaseModel):
     fee_points: int = 0
     fee_money: float = 0
@@ -121,19 +126,10 @@ async def _roll_automated_game(game: dict) -> None:
         )
         return
 
-    # Build pool: players (alive only if possible) + 1 house slot
-    entry_ids = [e["user_id"] for e in entries]
-    alive_users = await db.users.find(
-        {"id": {"$in": entry_ids}, "is_dead": {"$ne": True}},
-        {"_id": 0, "id": 1},
-    ).to_list(len(entry_ids))
-    alive_ids = {u["id"] for u in alive_users}
-    alive_entries = [e for e in entries if e["user_id"] in alive_ids]
-    player_pool = alive_entries if alive_entries else entries
-
-    # +1 for house slot — house is the last slot
+    # Every fee-paying entrant gets one equal slot; +1 for house (last slot).
+    player_pool = _mdg_roll_pool(entries)
     total_slots = len(player_pool) + 1
-    roll = _rng.randint(1, total_slots)
+    roll = _rng.randrange(1, total_slots + 1)
     now_iso = datetime.now(timezone.utc).isoformat()
 
     house_won = roll == total_slots  # last slot = house
@@ -481,16 +477,9 @@ def register(router):
                     }
                 return {"message": "Joined", "players": len(new_entries), "pot_points": new_pot_pts, "pot_money": new_pot_money}
 
-            # Regular (non-automated) game roll
-            entry_ids = [e["user_id"] for e in new_entries]
-            alive_users = await db.users.find(
-                {"id": {"$in": entry_ids}, "is_dead": {"$ne": True}},
-                {"_id": 0, "id": 1},
-            ).to_list(len(entry_ids))
-            alive_ids = {u["id"] for u in alive_users}
-            alive_entries = [e for e in new_entries if e["user_id"] in alive_ids]
-            pool = alive_entries if alive_entries else new_entries
-            roll = _rng.randint(1, len(pool))
+            # Regular (non-automated) game roll — uniform over all entrants
+            pool = _mdg_roll_pool(new_entries)
+            roll = _rng.randrange(1, len(pool) + 1)
             winner_entry = pool[roll - 1]
             winner_id = winner_entry["user_id"]
             winner_user = await db.users.find_one({"id": winner_id}, {"_id": 0, "username": 1})
@@ -534,17 +523,9 @@ def register(router):
         if len(entries) < 1:
             raise HTTPException(status_code=400, detail="No players in game")
 
-        # Roll between 1 and number of players; winner is the player at that position (1=creator, 2=first joiner, etc.)
-        entry_ids = [e["user_id"] for e in entries]
-        alive_users = await db.users.find(
-            {"id": {"$in": entry_ids}, "is_dead": {"$ne": True}},
-            {"_id": 0, "id": 1},
-        ).to_list(len(entry_ids))
-        alive_ids = {u["id"] for u in alive_users}
-        # Build pool preserving order, only alive players
-        alive_entries = [e for e in entries if e["user_id"] in alive_ids]
-        pool = alive_entries if alive_entries else entries
-        roll = _rng.randint(1, len(pool))
+        # Uniform over all entrants (order preserved: 1 = first in entries list, etc.)
+        pool = _mdg_roll_pool(entries)
+        roll = _rng.randrange(1, len(pool) + 1)
         winner_entry = pool[roll - 1]  # roll is 1-indexed, list is 0-indexed
         winner_id = winner_entry["user_id"]
         winner_user = await db.users.find_one({"id": winner_id}, {"_id": 0, "username": 1})
