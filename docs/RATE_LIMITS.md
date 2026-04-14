@@ -55,6 +55,20 @@
 
 - Successful **login** clears **`rate_limit_hard_until`** on the user so a new session is not blocked by an old endpoint RL hard lockout.
 
+## Verification (automated)
+
+From the **backend** directory with the same `.env` as the API (`MONGO_URL`, `DB_NAME`, `JWT_SECRET_KEY`):
+
+```bash
+python scripts/audit_rate_limit_routes.py
+```
+
+Exit **0** when every mutating `/api/...` route (except paths skipped by [`security_middleware.py`](../backend/middleware/security_middleware.py) such as `/api/auth/` and `/api/admin/`) matches at least one key in `RATE_LIMIT_CONFIG`. Exit **2** if any route is missing a pattern.
+
+## Config coverage (inventory)
+
+`RATE_LIMIT_CONFIG` keys are the **storage keys** for endpoint RL (prefix rows end with `/` and use `startswith`; others are exact paths). Major areas include: bank, attack, crimes, hitlist, store, weapons, armour, properties, racket, bodyguards, all casino games (dice, roulette, blackjack, slots, videopoker, mdg, mp-poker, mp-blackjack, **horseracing**, **mp-8ball**), sports betting, loot box, crack safe, jail, GTA, entertainer, gauntlet, minigames (including **`/api/minigames/`** plus the explicit run-session row), boxing, snake, shooting range, whack-a-copper, **travel** (`/api/travel` and `/api/travel/`), booze run, families (including exact **`/api/families`**), notifications (exact **`/api/notifications`** and prefix **`/api/notifications/`**), admin, auth login/register/me, **account** paths on the auth router (`/api/account/…`, account-locked), meta, users, leaderboard, daily rewards, prestige, game chat, help desk, stock market, OC, **organised crime**, inventory, profile, racing, trade, illegal business (path + trailing subpaths), lottery, forum, bullet factory, airports, grave robber, witness statements, missions, objectives, payments, webhooks, family run, auto rank, states, stats, death / dead-alive, image host, minesweeper, battleships, the getaway, mafia RPG.
+
 ## Verification (manual)
 
 1. Enable **GLOBAL_RATE_LIMITS_ENABLED**, **SECURITY_MIDDLEWARE_ENABLED**, and one endpoint with a short interval (e.g. 300 ms).

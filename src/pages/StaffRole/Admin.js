@@ -11904,9 +11904,17 @@ export default function Admin() {
 
             {rateLimits && rateLimits.rate_limits && (
               <div className="mt-2 p-3 rounded bg-zinc-900/50 border border-zinc-700/50 space-y-2">
-                <div className="text-[10px] font-heading text-mutedForeground uppercase mb-2">Rate limit (ms between clicks):</div>
-                <div className="max-h-64 overflow-y-auto space-y-1.5">
-                  {Object.entries(rateLimits.rate_limits).map(([endpoint, val]) => {
+                <div className="text-[10px] font-heading text-mutedForeground uppercase mb-2">
+                  Rate limit (ms between clicks)
+                  {rateLimits.pattern_count != null
+                    ? ` — ${rateLimits.pattern_count} patterns`
+                    : ` — ${Object.keys(rateLimits.rate_limits).length} patterns`}
+                  :
+                </div>
+                <div className="max-h-[28rem] overflow-y-auto space-y-1.5">
+                  {[...Object.entries(rateLimits.rate_limits)]
+                    .sort(([a], [b]) => a.localeCompare(b))
+                    .map(([endpoint, val]) => {
                     const minIntervalMs = Array.isArray(val) ? val[0] : (val?.min_interval_ms ?? 1000);
                     const enabled = Array.isArray(val) ? val[1] : (val?.enabled ?? false);
                     const editValue = rateLimitEdits[endpoint] !== undefined ? rateLimitEdits[endpoint] : minIntervalMs;

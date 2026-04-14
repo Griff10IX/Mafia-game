@@ -886,9 +886,8 @@ RATE_LIMIT_CONFIG = {
     # Crimes
     "/api/crimes/": (0.3, False),
 
-    # Hitlist
-    "/api/hitlist/add": (0.3, False),
-    "/api/hitlist/buy-off": (0.3, False),
+    # Hitlist (all mutating paths under /api/hitlist/)
+    "/api/hitlist/": (0.3, False),
 
     # Store purchases
     "/api/store/": (0.3, False),
@@ -911,6 +910,8 @@ RATE_LIMIT_CONFIG = {
     "/api/casino/mdg/": (0.3, False),
     "/api/casino/mp-poker/": (0.3, False),
     "/api/casino/mp-blackjack/": (0.3, False),
+    "/api/casino/horseracing/": (0.3, False),
+    "/api/casino/mp-8ball/": (0.3, False),
     "/api/sports-betting/": (0.3, False),
 
     # Minigames & activities
@@ -922,22 +923,26 @@ RATE_LIMIT_CONFIG = {
     "/api/entertainer/": (0.3, False),
     "/api/gauntlet/": (0.3, False),
     "/api/minigames/run-session/start": (0.3, False),
+    "/api/minigames/": (0.3, False),
     "/api/boxing/": (0.3, False),
     "/api/snake/": (0.3, False),
     "/api/shooting-range/train": (0.3, False),
     "/api/shooting-range/score": (0.3, False),
     "/api/whack-a-copper/": (0.3, False),
 
-    # Travel & Booze Run
+    # Travel & Booze Run (/api/travel exact + /api/travel/* e.g. buy-airmiles)
     "/api/travel": (0.3, False),
+    "/api/travel/": (0.3, False),
     "/api/booze-run/": (0.3, False),
 
-    # Families
+    # Families (POST /api/families create is exact path, no trailing slash)
     "/api/families/attack-racket": (0.3, False),
     "/api/families/": (0.3, False),
+    "/api/families": (0.3, False),
 
-    # Notifications
-    "/api/notifications/send": (0.3, False),
+    # Notifications (bulk DELETE /api/notifications + subpaths)
+    "/api/notifications": (0.3, False),
+    "/api/notifications/": (0.3, False),
 
     # Admin endpoints
     "/api/admin/": (0.3, False),
@@ -946,6 +951,10 @@ RATE_LIMIT_CONFIG = {
     "/api/auth/login": (0.3, False),
     "/api/auth/register": (0.3, False),
     "/api/auth/me": (0.3, False),
+    # Auth router: redeem, locked flow, civilian protection (not under /api/auth/)
+    "/api/account/": (0.3, False),
+    "/api/account-locked": (0.3, False),
+    "/api/account-locked-reply": (0.3, False),
 
     # Meta & read-only
     "/api/meta/": (0.3, False),
@@ -965,9 +974,43 @@ RATE_LIMIT_CONFIG = {
 
     # Activities
     "/api/oc/": (0.3, False),
+    "/api/organised-crime/": (0.3, False),
     "/api/inventory/": (0.3, False),
     "/api/profile/": (0.3, False),
+
+    # Racing, trading, missions, forum (incl. designer auctions & competitions)
+    "/api/racing/": (0.3, False),
+    "/api/trade/": (0.3, False),
+    "/api/illegal-business/": (0.3, False),
+    "/api/illegal-business": (0.3, False),
+    "/api/lottery/": (0.3, False),
+    "/api/forum/": (0.3, False),
+    "/api/bullet-factory/": (0.3, False),
+    "/api/airports/": (0.3, False),
+    "/api/grave-robber/": (0.3, False),
+    "/api/witness-statements/": (0.3, False),
+    "/api/missions/": (0.3, False),
+    "/api/objectives/": (0.3, False),
+    "/api/payments/": (0.3, False),
+    "/api/webhook/": (0.3, False),
+    "/api/family-run/": (0.3, False),
+    "/api/auto-rank/": (0.3, False),
+    "/api/states/": (0.3, False),
+    "/api/stats/": (0.3, False),
+    "/api/death/": (0.3, False),
+    "/api/dead-alive/": (0.3, False),
+    "/api/image-host/": (0.3, False),
+    "/api/minesweeper/": (0.3, False),
+    "/api/battleships/": (0.3, False),
+    "/api/the-getaway/": (0.3, False),
+    "/api/mafia-rpg/": (0.3, False),
 }
+
+
+def iter_rate_limit_config_sorted() -> List[Tuple[str, Tuple[float, bool]]]:
+    """Alphabetical (pattern, (interval, enabled)) for admin tools — same keys as RATE_LIMIT_CONFIG."""
+    return sorted(RATE_LIMIT_CONFIG.items(), key=lambda x: x[0])
+
 
 # In-memory token bucket when DB path fails: (user_id, endpoint_key) -> {"tokens": float, "last_refill": datetime}
 endpoint_rl_bucket_memory: Dict[tuple, dict] = {}
@@ -1348,7 +1391,11 @@ async def get_security_summary(db, limit: int = 100, flag_type: str = None) -> d
         "recent_flags": flags,
         "telegram_enabled": TELEGRAM_ENABLED,
         "telegram_configured": bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID),
-        "rate_limit_config": {path: {"min_interval_ms": round(interval * 1000, 1), "enabled": enabled} for path, (interval, enabled) in RATE_LIMIT_CONFIG.items()}
+        "rate_limit_config": {
+            path: {"min_interval_ms": round(interval * 1000, 1), "enabled": enabled}
+            for path, (interval, enabled) in iter_rate_limit_config_sorted()
+        },
+        "rate_limit_pattern_count": len(RATE_LIMIT_CONFIG),
     }
 
 

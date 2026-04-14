@@ -3383,11 +3383,13 @@ def register(router):
             middleware_enabled = getattr(sm_module, "SECURITY_MIDDLEWARE_ENABLED", False)
         except ImportError:
             middleware_enabled = False
-        rl_ms = {}
-        for ep, (interval_sec, enabled) in security_module.RATE_LIMIT_CONFIG.items():
-            rl_ms[ep] = (round(interval_sec * 1000, 1), enabled)
+        rl_ms = {
+            ep: (round(interval_sec * 1000, 1), enabled)
+            for ep, (interval_sec, enabled) in security_module.iter_rate_limit_config_sorted()
+        }
         return {
             "rate_limits": rl_ms,
+            "pattern_count": len(rl_ms),
             "global_enabled": getattr(security_module, "GLOBAL_RATE_LIMITS_ENABLED", False),
             "security_middleware_enabled": middleware_enabled,
             "note": "Values are in milliseconds. All security middleware is OFF by default.",
