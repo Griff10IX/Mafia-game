@@ -585,12 +585,17 @@ async def _booze_sell_impl(user: dict, booze_id: str, amount: int, *, via_auto_r
     }
     if is_run:
         updates["$inc"] = updates.get("$inc", {})
-        updates["$inc"]["booze_profit_today"] = profit
         updates["$inc"]["booze_profit_total"] = profit
         updates["$inc"]["booze_run_profit_total"] = profit
         updates["$inc"]["booze_runs_count"] = 1
         updates["$inc"][f"booze_profit_by_type.{booze_id}"] = profit
-        updates["$set"] = {"booze_profit_today_date": today_utc}
+        # New UTC day: must set today's counter in DB — $inc alone never cleared the field, so it matched lifetime total.
+        day_fields = {"booze_profit_today_date": today_utc}
+        if profit_today_date != today_utc:
+            day_fields["booze_profit_today"] = profit
+        else:
+            updates["$inc"]["booze_profit_today"] = profit
+        updates["$set"] = day_fields
     if new_val == 0:
         updates.setdefault("$unset", {})[f"booze_carrying.{booze_id}"] = ""
         updates["$unset"][f"booze_carrying_cost.{booze_id}"] = ""
