@@ -233,7 +233,14 @@ def register(router):
                 _, owner_wealth_rank_name, owner_wealth_rank_color = get_wealth_rank(int((owner.get("money") or 0) or 0))
                 owner_wealth_rank_range = get_wealth_rank_range(int((owner.get("money") or 0) or 0))
         is_owner = owner_id == current_user.get("id") or ""
-        max_bet = doc.get("max_bet", ROULETTE_DEFAULT_MAX_BET)
+        raw_mb = doc.get("max_bet")
+        if raw_mb is None:
+            max_bet = ROULETTE_DEFAULT_MAX_BET
+        else:
+            try:
+                max_bet = int(raw_mb)
+            except (TypeError, ValueError):
+                max_bet = ROULETTE_DEFAULT_MAX_BET
         total_earnings = doc.get("total_earnings", 0)
         profit = _ownership_display_profit(doc)
         buy_back_reward = doc.get("buy_back_reward")
@@ -562,7 +569,17 @@ def register(router):
         city = _normalize_city_for_roulette(current_user.get("current_state", ""))
         stored_city, ownership_doc = await _get_roulette_ownership_doc(city) if city else (city, None)
         owner_id = ownership_doc.get("owner_id") if ownership_doc else None
-        max_bet = ownership_doc.get("max_bet", ROULETTE_DEFAULT_MAX_BET) if ownership_doc else ROULETTE_DEFAULT_MAX_BET
+        if ownership_doc:
+            raw_mb = ownership_doc.get("max_bet")
+            if raw_mb is None:
+                max_bet = ROULETTE_DEFAULT_MAX_BET
+            else:
+                try:
+                    max_bet = int(raw_mb)
+                except (TypeError, ValueError):
+                    max_bet = ROULETTE_DEFAULT_MAX_BET
+        else:
+            max_bet = ROULETTE_DEFAULT_MAX_BET
         if owner_id and owner_id == current_user.get("id"):
             raise HTTPException(status_code=400, detail="You cannot gamble at your own roulette table")
         total_stake = 0
@@ -587,6 +604,11 @@ def register(router):
                 raise HTTPException(status_code=400, detail=f"Unknown bet type: {bet_type}")
             total_stake += amount
             validated_bets.append({"type": bet_type, "selection": selection, "amount": amount})
+        if max_bet <= 0 and total_stake > 0:
+            raise HTTPException(
+                status_code=400,
+                detail="This table is not accepting bets yet — the owner must set a max bet above $0.",
+            )
         if total_stake > max_bet:
             raise HTTPException(status_code=400, detail=f"Total bet exceeds max of ${max_bet:,}")
         debit_res = await db.users.find_one_and_update(

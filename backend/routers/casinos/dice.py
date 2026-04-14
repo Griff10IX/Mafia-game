@@ -268,6 +268,11 @@ def register(router):
             owner_id = doc.get("owner_id")
         if owner_id and owner_id == current_user.get("id"):
             raise HTTPException(status_code=400, detail="You cannot play at your own table")
+        if max_bet <= 0 and stake > 0:
+            raise HTTPException(
+                status_code=400,
+                detail="This table is not accepting bets yet — the owner must set a max bet above $0.",
+            )
         if stake > max_bet:
             raise HTTPException(status_code=400, detail=f"Stake exceeds max bet ({max_bet})")
         debit_result = await db.users.find_one_and_update(
@@ -618,8 +623,7 @@ def register(router):
             raise HTTPException(status_code=400, detail="Previous owner not found")
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"points": points_offered}})
         await log_points_event(db, user_id=current_user.get("id") or "", points=points_offered, event_type="casino_dice", event_ref=f"buyback:{request.offer_id}", meta={"action": "buyback_credit", "city": city, "offer_id": request.offer_id})
-        # Reset max_bet to 0 when ownership returns; former owner's buy-back points stay held (already deducted at set time).
-        # Escrow was consumed paying the winner; returning owner must set buy-back again to hold new points.
+        # Reset max_bet to 0 when ownership returns; returning owner sets max bet again before play.
         await db.dice_ownership.update_one(
             {"city": city},
             {

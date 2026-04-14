@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import api, { refreshUser } from '../../utils/api';
@@ -343,7 +343,7 @@ function NumCell({ num, onClick, betCount }) {
    Main Page
    ═══════════════════════════════════════════════════════ */
 export default function Rlt() {
-  const [config, setConfig] = useState({ max_bet: 50_000_000 });
+  const [config, setConfig] = useState({ claim_cost: 250_000_000 });
   const [ownership, setOwnership] = useState(null);
   const [selectedChip, setSelectedChip] = useState(1_000_000);
   const [customChip, setCustomChip] = useState('');
@@ -370,6 +370,15 @@ export default function Rlt() {
   betsRef.current = bets;
   configRef.current = config;
   useAnimationRef.current = useAnimation;
+
+  /** Per-table cap from ownership (0 after buy-back win = closed until owner sets max). Not global /config max. */
+  const effectiveMaxBet = useMemo(() => {
+    if (!ownership) return 50_000_000;
+    if (ownership.max_bet != null) return Number(ownership.max_bet);
+    return 50_000_000;
+  }, [ownership]);
+  const effectiveMaxBetRef = useRef(effectiveMaxBet);
+  effectiveMaxBetRef.current = effectiveMaxBet;
 
   const [newMaxBet, setNewMaxBet] = useState('');
   const [ownerBuyBack, setOwnerBuyBack] = useState('');
@@ -415,7 +424,6 @@ export default function Rlt() {
     api.get('/casino/roulette/ownership').then((r) => {
       const data = r.data ?? null;
       setOwnership(data);
-      if (data?.max_bet) setConfig((prev) => ({ ...prev, max_bet: data.max_bet }));
       if (data?.buy_back_reward != null) setOwnerBuyBack(String(data.buy_back_reward));
       if (data?.buy_back_offer) {
         setBuyBackOffer({ ...data.buy_back_offer, offer_id: data.buy_back_offer.offer_id || data.buy_back_offer.id });
@@ -430,9 +438,14 @@ export default function Rlt() {
   };
 
   useEffect(() => {
-    api.get('/casino/roulette/config').then((r) => setConfig(r.data ?? { max_bet: 50_000_000 })).catch(() => {
-      setConfig({ max_bet: 50_000_000 });
-    });
+    api.get('/casino/roulette/config').then((r) => {
+      const d = r.data ?? {};
+      setConfig((prev) => ({
+        ...prev,
+        claim_cost: d.claim_cost ?? prev.claim_cost ?? 250_000_000,
+        house_edge_percent: d.house_edge_percent ?? prev.house_edge_percent,
+      }));
+    }).catch(() => {});
     fetchOwnership();
   }, []);
 
@@ -477,7 +490,7 @@ export default function Rlt() {
   const chipValue = customChip ? (parseInt(String(customChip).replace(/\D/g, ''), 10) || 0) : selectedChip;
   const totalBet = bets.reduce((s, b) => s + b.amount, 0);
   const totalReturns = bets.reduce((s, b) => s + getPayout(b.type, b.selection, b.amount), 0);
-  const canSpin = bets.length > 0 && totalBet <= (config.max_bet || 0);
+  const canSpin = bets.length > 0 && totalBet <= (effectiveMaxBet || 0);
   const isOwner = !!ownership?.is_owner;
   const canClaim = ownership?.is_unclaimed && !ownership?.owner_id;
   const currentCity = ownership?.current_city || '—';
@@ -489,8 +502,8 @@ export default function Rlt() {
       showRouletteBanner('error', 'Select chip amount');
       return;
     }
-    if (totalBet + chipValue > (config.max_bet || 0)) {
-      showRouletteBanner('error', `Max bet ${formatMoney(config.max_bet)}`);
+    if (totalBet + chipValue > (effectiveMaxBet || 0)) {
+      showRouletteBanner('error', `Max bet ${formatMoney(effectiveMaxBet)}`);
       return;
     }
     setBets((prev) => [...prev, { id: Date.now() + Math.random(), type, selection, amount: chipValue }]);
@@ -551,10 +564,9 @@ export default function Rlt() {
   /** One spin end-to-end (async). Caller must ensure only one instance runs at a time via spinInFlightRef. */
   const runSingleSpin = async () => {
     const b = betsRef.current;
-    const cfg = configRef.current;
     const anim = useAnimationRef.current;
     const stake = b.reduce((s, x) => s + x.amount, 0);
-    if (b.length === 0 || stake > (cfg.max_bet || 0)) return;
+    if (b.length === 0 || stake > (effectiveMaxBetRef.current || 0)) return;
 
     setBusyAnimationsFlag(true);
     setSpinning(true);
@@ -621,9 +633,8 @@ export default function Rlt() {
     if (spinInFlightRef.current) return;
 
     const b = betsRef.current;
-    const cfg = configRef.current;
     const stake = b.reduce((s, x) => s + x.amount, 0);
-    if (b.length === 0 || stake > (cfg.max_bet || 0)) return;
+    if (b.length === 0 || stake > (effectiveMaxBetRef.current || 0)) return;
 
     const seq = ++spinSeqRef.current;
     const payload = b.map((bet) => ({
@@ -718,9 +729,8 @@ export default function Rlt() {
     if (!val || val < 50_000) { toast.error('Min $50,000'); return; }
     setOwnerLoading(true);
     try {
-      const res = await api.post('/casino/roulette/set-max-bet', { city: ownership.current_city, max_bet: val });
-      toast.success(res.data?.message || 'Updated');
-      if (res.data?.max_bet) setConfig((prev) => ({ ...prev, max_bet: res.data.max_bet }));
+      await api.post('/casino/roulette/set-max-bet', { city: ownership.current_city, max_bet: val });
+      toast.success('Updated');
       fetchOwnership();
       setNewMaxBet('');
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
@@ -909,7 +919,7 @@ export default function Rlt() {
           {ownership?.owner_name ? (
             <span className="text-mutedForeground">Buy-back: <span className="text-primary font-bold">{Number(ownership.buy_back_reward ?? 0).toLocaleString()} pts</span></span>
           ) : null}
-          <span className="text-mutedForeground">Max: <span className="text-primary font-bold">{formatMoney(config.max_bet)}</span></span>
+          <span className="text-mutedForeground">Max: <span className="text-primary font-bold">{formatMoney(effectiveMaxBet)}</span></span>
           {canClaim && (
             <button onClick={handleClaim} disabled={ownerLoading} className="bg-primary/20 text-primary rounded px-2 py-1 text-[10px] font-bold uppercase border border-primary/40 hover:bg-primary/30 disabled:opacity-50 font-heading">
               Claim ({formatMoney(config.claim_cost ?? 250_000_000)})
