@@ -2255,7 +2255,7 @@ def expand_user_ids_for_mongo_nin(raw_ids) -> list:
 
 async def _get_staff_user_ids(database=None) -> list:
     """Return user IDs of all admin and moderator accounts (for excluding from non-users collections)."""
-    d = database or db
+    d = db if database is None else database
     mod_ids = [u["id"] for u in await d.users.find({"is_moderator": True}, {"_id": 0, "id": 1}).to_list(500)]
     admin_ids = await _get_admin_user_ids(d)
     out: list = []
@@ -2272,14 +2272,14 @@ async def honours_stat_excluded_user_ids(database=None) -> list:
 
     Includes BSON type variants so ``$nin`` cannot miss staff rows when ``users.id`` is int vs str.
     """
-    d = database or db
+    d = db if database is None else database
     raw = await _get_staff_user_ids(d)
     return expand_user_ids_for_mongo_nin(raw)
 
 
 async def stat_leaderboard_users_match(*, dead: bool, database=None) -> dict:
     """Single Mongo match dict for public stat leaderboards and profile honours (same player pool)."""
-    d = database or db
+    d = db if database is None else database
     if dead:
         m: dict = {"is_dead": True, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
     else:
@@ -2293,7 +2293,7 @@ async def stat_leaderboard_users_match(*, dead: bool, database=None) -> dict:
 
 async def _get_admin_user_ids(database=None) -> list:
     """Return user IDs for accounts in ADMIN_EMAILS (game admins only)."""
-    d = database or db
+    d = db if database is None else database
     admin_emails = [e.strip().lower() for e in (ADMIN_EMAILS or []) if e and str(e).strip()]
     if not admin_emails:
         return []
