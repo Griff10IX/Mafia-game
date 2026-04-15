@@ -85,9 +85,8 @@ def register(router):
     verify_password = srv.verify_password
     get_password_hash = srv.get_password_hash
     ADMIN_EMAILS = srv.ADMIN_EMAILS
-    _staff_exclude_user_filter = srv._staff_exclude_user_filter
     _user_excluded_from_stat_leaderboards = srv._user_excluded_from_stat_leaderboards
-    honours_stat_excluded_user_ids = srv.honours_stat_excluded_user_ids
+    stat_leaderboard_users_match = srv.stat_leaderboard_users_match
     user_has_admin_list_email = srv.user_has_admin_list_email
     PRESTIGE_CONFIGS = srv.PRESTIGE_CONFIGS
     AvatarUpdateRequest = srv.AvatarUpdateRequest
@@ -326,29 +325,16 @@ def register(router):
         if _user_excluded_from_stat_leaderboards(user):
             return []
 
-        excluded_ids = await honours_stat_excluded_user_ids(db)
         uid = user.get("id")
         fresh = await db.users.find_one({"id": uid}, {"_id": 0, "password_hash": 0}) if uid else None
         u = {**user, **(fresh or {})}
 
-        def _honours_liveness_match(subject_dead: bool) -> dict:
-            """Same alive/dead pool as GET /leaderboards/top (StatLeaderboard boards)."""
-            if subject_dead:
-                return {"is_dead": True, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
-            return {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
-
-        def _honours_base_q(subject_dead: bool) -> dict:
-            q = _honours_liveness_match(subject_dead)
-            q.update(_staff_exclude_user_filter())
-            if excluded_ids:
-                q["id"] = {"$nin": excluded_ids}
-            return q
+        base_q = await stat_leaderboard_users_match(dead=is_dead, database=db)
 
         async def _rank_for_field(field: str, value: int, *, subject_dead: bool) -> int:
             if value is None:
                 value = 0
-            q = _honours_base_q(subject_dead)
-            q[field] = {"$gt": value}
+            q = {**base_q, field: {"$gt": value}}
             n_better = await db.users.count_documents(q)
             return n_better + 1
 
@@ -356,7 +342,7 @@ def register(router):
             """Same ordering as GET /leaderboards/top all-time kills (effective kills, not raw total_kills)."""
             if effective_value is None:
                 effective_value = 0
-            q = _honours_base_q(subject_dead)
+            q = dict(base_q)
             ev = int(effective_value)
             pipeline = [
                 {"$match": q},
@@ -372,7 +358,7 @@ def register(router):
             """Same pipeline fields as leaderboard rank_points board: _lb_total_rp then $gt; pool matches /leaderboards/top."""
             if total_value is None:
                 total_value = 0
-            q = _honours_base_q(subject_dead)
+            q = dict(base_q)
             tv = int(total_value)
             pipeline = [
                 {"$match": q},

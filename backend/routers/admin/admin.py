@@ -201,9 +201,10 @@ class AdminSettingsUpdate(BaseModel):
 
 
 class AdminMissionProgressSetRequest(BaseModel):
-    """1-based ladder index of the next mission to complete (same order as in-game missions UI). 101 = all 100 done. Does not grant mission rewards."""
+    """1-based ladder index of the next mission to complete (same order as in-game missions UI). 101 = all 100 done."""
 
     next_mission_display: int
+    grant_skipped_rewards: bool = True  # When advancing, grant normal completion rewards for each newly completed mission
 
 
 class AdminClaimCostsPatch(BaseModel):
@@ -1042,13 +1043,21 @@ def register(router):
             raise HTTPException(status_code=404, detail="User not found")
         from routers.account import missions as missions_mod
 
-        out = await missions_mod.admin_apply_mission_progress(u["id"], int(body.next_mission_display))
+        out = await missions_mod.admin_apply_mission_progress(
+            u["id"],
+            int(body.next_mission_display),
+            grant_skipped_rewards=bool(body.grant_skipped_rewards),
+        )
         try:
             await srv.log_activity(
                 current_user.get("id") or "",
                 current_user.get("username") or "?",
                 "admin_mission_progress_set",
-                {"target_user_id": u.get("id"), "next_mission_display": int(body.next_mission_display)},
+                {
+                    "target_user_id": u.get("id"),
+                    "next_mission_display": int(body.next_mission_display),
+                    "grant_skipped_rewards": bool(body.grant_skipped_rewards),
+                },
             )
         except Exception:
             pass

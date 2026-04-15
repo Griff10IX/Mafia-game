@@ -11,11 +11,12 @@ from pydantic import BaseModel
 from utils.game_timezone import game_week_range_utc, game_week_start_date_str, game_week_start_utc
 
 from server import (
-    ADMIN_EMAILS,
     db,
     get_current_user,
     _staff_exclude_user_filter,
+    honours_stat_excluded_user_ids,
     send_notification,
+    stat_leaderboard_users_match,
     effective_player_kill_count,
     mongodb_effective_kill_count_expr,
 )
@@ -31,6 +32,18 @@ _last_reward_winners_cache: dict = {}
 _LAST_WINNERS_CACHE_TTL = 300
 
 _leaderboard_user_filter = _staff_exclude_user_filter
+
+
+async def _users_query_id_in_with_staff_filters(database, id_list: list) -> dict:
+    """users.find / $lookup filter: id $in list + staff exclusions (same pool as profile honours)."""
+    staff = _leaderboard_user_filter()
+    in_part = {"id": {"$in": id_list}}
+    nin_ids = await honours_stat_excluded_user_ids(database)
+    if nin_ids:
+        return {"$and": [in_part, staff, {"id": {"$nin": nin_ids}}]}
+    q = dict(in_part)
+    q.update(staff)
+    return q
 
 
 def _weekly_agg_candidate_limit(limit: int) -> int:
@@ -118,11 +131,7 @@ class StatLeaderboardEntry(BaseModel):
 
 async def _top_by_field(field: str, current_user_id: str, limit: int, dead: bool = False) -> List[StatLeaderboardEntry]:
     limit = max(1, min(100, int(limit)))
-    if dead:
-        query = {"is_dead": True, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
-    else:
-        query = {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
-    query.update(_leaderboard_user_filter())
+    query = await stat_leaderboard_users_match(dead=dead, database=db)
     users = await db.users.find(
         query,
         {"_id": 0, "username": 1, "id": 1, field: 1}
@@ -144,11 +153,7 @@ async def _top_by_total_rank_points(current_user_id: str, limit: int, dead: bool
     Sorting by `rank_points` alone drops players to the bottom after prestige resets RP to 0; carry preserves their total.
     """
     limit = max(1, min(100, int(limit)))
-    if dead:
-        query = {"is_dead": True, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
-    else:
-        query = {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
-    query.update(_leaderboard_user_filter())
+    query = await stat_leaderboard_users_match(dead=dead, database=db)
     pipeline = [
         {"$match": query},
         {
@@ -183,11 +188,7 @@ async def _top_by_total_rank_points(current_user_id: str, limit: int, dead: bool
 async def _top_by_effective_kills(current_user_id: str, limit: int, dead: bool = False) -> List[StatLeaderboardEntry]:
     """Top users by the same kill total as profile / honours (not raw total_kills)."""
     limit = max(1, min(100, int(limit)))
-    if dead:
-        query = {"is_dead": True, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
-    else:
-        query = {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
-    query.update(_leaderboard_user_filter())
+    query = await stat_leaderboard_users_match(dead=dead, database=db)
     pipeline = [
         {"$match": query},
         {"$addFields": {"_lb_eff_kills": mongodb_effective_kill_count_expr()}},
@@ -244,8 +245,7 @@ async def _top_by_field_weekly(
         return []
     user_ids = [d["_id"] for d in docs if d.get("_id")]
     id_list = _expand_user_ids_for_lookup(user_ids)
-    q = {"id": {"$in": id_list}}
-    q.update(_leaderboard_user_filter())
+    q = await _users_query_id_in_with_staff_filters(db, id_list)
     users_map = await db.users.find(
         q,
         {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "is_bodyguard": 1, "is_npc": 1}
@@ -309,8 +309,7 @@ async def _top_by_field_weekly_sum(
         return []
     user_ids = [d["_id"] for d in docs if d.get("_id")]
     id_list = _expand_user_ids_for_lookup(user_ids)
-    q = {"id": {"$in": id_list}}
-    q.update(_leaderboard_user_filter())
+    q = await _users_query_id_in_with_staff_filters(db, id_list)
     users_map = await db.users.find(
         q,
         {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "is_bodyguard": 1, "is_npc": 1}
@@ -373,19 +372,19 @@ async def _top_by_field_for_week(
     if not docs:
         return []
     user_ids = [d["_id"] for d in docs if d.get("_id")]
-    q = {"id": {"$in": user_ids}}
-    q.update(_leaderboard_user_filter())
+    id_list = _expand_user_ids_for_lookup(user_ids)
+    q = await _users_query_id_in_with_staff_filters(database, id_list)
     users_map = await database.users.find(
         q,
         {"_id": 0, "id": 1, "username": 1, "is_dead": 1, "is_bodyguard": 1, "is_npc": 1},
-    ).to_list(len(user_ids) + 1)
+    ).to_list(len(id_list) + 1)
     users_by_id = {u["id"]: u for u in users_map}
     filtered = []
     for d in docs:
         uid = d.get("_id")
         if not uid:
             continue
-        u = users_by_id.get(uid)
+        u = _user_from_leaderboard_map(users_by_id, uid)
         if not u:
             continue
         if u.get("is_dead"):
@@ -645,8 +644,7 @@ async def run_weekly_leaderboard_payout(database, test_run: bool = False):
 
 async def get_leaderboard(current_user: dict = Depends(get_current_user)):
     """Single leaderboard: top 10 by money (alive, non-bodyguard, non-npc)."""
-    query = {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
-    query.update(_leaderboard_user_filter())
+    query = await stat_leaderboard_users_match(dead=False, database=db)
     users = await db.users.find(
         query,
         {

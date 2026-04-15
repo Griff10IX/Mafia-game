@@ -2227,10 +2227,37 @@ def _user_excluded_from_stat_leaderboards(user: dict) -> bool:
     return user_has_admin_list_email(user)
 
 
-async def _get_staff_user_ids() -> list:
+def expand_user_ids_for_mongo_nin(raw_ids) -> list:
+    """Dedupe user ids and add int/str variants so ``$nin`` matches ``users.id`` whether stored as string or int."""
+    out: list = []
+    seen = set()
+
+    def _push(x):
+        if x is None or x in seen:
+            return
+        seen.add(x)
+        out.append(x)
+
+    for uid in raw_ids or []:
+        _push(uid)
+        if isinstance(uid, str) and uid.strip().lstrip("-").isdigit():
+            try:
+                _push(int(uid.strip(), 10))
+            except ValueError:
+                pass
+        elif isinstance(uid, (int, float)) and not isinstance(uid, bool):
+            try:
+                _push(str(int(uid)))
+            except (ValueError, TypeError, OverflowError):
+                pass
+    return out
+
+
+async def _get_staff_user_ids(database=None) -> list:
     """Return user IDs of all admin and moderator accounts (for excluding from non-users collections)."""
-    mod_ids = [u["id"] for u in await db.users.find({"is_moderator": True}, {"_id": 0, "id": 1}).to_list(500)]
-    admin_ids = await _get_admin_user_ids()
+    d = database or db
+    mod_ids = [u["id"] for u in await d.users.find({"is_moderator": True}, {"_id": 0, "id": 1}).to_list(500)]
+    admin_ids = await _get_admin_user_ids(d)
     out: list = []
     seen = set()
     for uid in mod_ids + admin_ids:
@@ -2240,18 +2267,38 @@ async def _get_staff_user_ids() -> list:
     return out
 
 
-async def honours_stat_excluded_user_ids(db) -> list:
-    """User ids excluded from profile honour rank counts (mods + admin emails, case-insensitive). Matches public leaderboards."""
-    return await _get_staff_user_ids()
+async def honours_stat_excluded_user_ids(database=None) -> list:
+    """User ids excluded from profile honour rank counts and public stat boards (mods + ADMIN_EMAILS).
+
+    Includes BSON type variants so ``$nin`` cannot miss staff rows when ``users.id`` is int vs str.
+    """
+    d = database or db
+    raw = await _get_staff_user_ids(d)
+    return expand_user_ids_for_mongo_nin(raw)
 
 
-async def _get_admin_user_ids() -> list:
+async def stat_leaderboard_users_match(*, dead: bool, database=None) -> dict:
+    """Single Mongo match dict for public stat leaderboards and profile honours (same player pool)."""
+    d = database or db
+    if dead:
+        m: dict = {"is_dead": True, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
+    else:
+        m = {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
+    m.update(_staff_exclude_user_filter())
+    ex = await honours_stat_excluded_user_ids(d)
+    if ex:
+        m["id"] = {"$nin": ex}
+    return m
+
+
+async def _get_admin_user_ids(database=None) -> list:
     """Return user IDs for accounts in ADMIN_EMAILS (game admins only)."""
+    d = database or db
     admin_emails = [e.strip().lower() for e in (ADMIN_EMAILS or []) if e and str(e).strip()]
     if not admin_emails:
         return []
     or_clauses = [{"email": re.compile("^" + re.escape(e) + "$", re.IGNORECASE)} for e in admin_emails]
-    cursor = db.users.find({"$or": or_clauses}, {"_id": 0, "id": 1})
+    cursor = d.users.find({"$or": or_clauses}, {"_id": 0, "id": 1})
     return [u["id"] for u in await cursor.to_list(200)]
 
 

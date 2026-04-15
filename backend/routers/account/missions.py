@@ -628,38 +628,25 @@ class CompleteMissionRequest(BaseModel):
     mission_id: str
 
 
-async def complete_mission(
-    request: CompleteMissionRequest = Body(...),
-    current_user: dict = Depends(get_current_user),
-):
-    """Check requirements and mark mission complete, granting rewards."""
-    mission_id = (request.mission_id or "").strip()
-    if not mission_id:
-        raise HTTPException(status_code=400, detail="mission_id required")
-    mission = next((m for m in MISSIONS if m["id"] == mission_id), None)
-    if not mission:
-        raise HTTPException(status_code=404, detail="Mission not found")
-    unlocked = _user_unlocked_cities(current_user)
-    if mission["city"] not in unlocked:
-        raise HTTPException(status_code=403, detail="City not unlocked")
-    completed_ids = _user_completed_mission_ids(current_user)
-    if mission_id in completed_ids:
-        raise HTTPException(status_code=400, detail="Mission already completed")
-    met, _ = _check_mission_requirements(current_user, mission)
-    if not met:
-        raise HTTPException(status_code=400, detail="Requirements not met")
-    if not _mission_unlocked_by_previous(mission, completed_ids):
-        prev = _previous_mission(mission)
-        prev_title = prev.get("title", "the previous mission") if prev else "the previous mission"
-        raise HTTPException(status_code=400, detail=f"Complete {prev_title} first")
-
-    user_id = current_user["id"]
+def _mission_completion_reward_mult(current_user: dict) -> float:
     from server import rank_xp_pass_multiplier
-    mult = (
+
+    return (
         float(get_prestige_bonus(current_user).get("mission_reward_mult") or 1.0)
         * founding_member_income_mult(current_user)
         * float(rank_xp_pass_multiplier(current_user))
     )
+
+
+def _build_mission_completion_reward_update(
+    current_user: dict,
+    mission_id: str,
+    mission: dict,
+    mult: float,
+    *,
+    include_mission_completion_push: bool,
+    include_next_mission_baseline: bool,
+) -> tuple[dict, dict]:
     reward_money = int((mission.get("reward_money") or 0) * mult)
     reward_cash_immediate = int((mission.get("reward_cash_immediate") or 0) * mult)
     reward_points = int((mission.get("reward_points") or 0) * mult)
@@ -676,13 +663,16 @@ async def complete_mission(
 
     tribute_bank_inc = reward_money + reward_tribute
 
-    completion_doc = {"mission_id": mission_id, "completed_at": datetime.now(timezone.utc).isoformat()}
-    update = {"$push": {"mission_completions": completion_doc}}
-    nxt = _next_mission_same_city(mission)
-    if nxt and nxt["id"] not in (FIRST_MISSION_ID, SECOND_MISSION_ID, THIRD_MISSION_ID):
-        snap = _baseline_snapshot_for_mission(current_user, nxt)
-        if snap:
-            update.setdefault("$set", {})[f"mission_baselines.{nxt['id']}"] = snap
+    update: Dict[str, Any] = {}
+    if include_mission_completion_push:
+        completion_doc = {"mission_id": mission_id, "completed_at": datetime.now(timezone.utc).isoformat()}
+        update["$push"] = {"mission_completions": completion_doc}
+    if include_next_mission_baseline:
+        nxt = _next_mission_same_city(mission)
+        if nxt and nxt["id"] not in (FIRST_MISSION_ID, SECOND_MISSION_ID, THIRD_MISSION_ID):
+            snap = _baseline_snapshot_for_mission(current_user, nxt)
+            if snap:
+                update.setdefault("$set", {})[f"mission_baselines.{nxt['id']}"] = snap
     if mission_id == FIRST_MISSION_ID:
         update.setdefault("$set", {})["mission_2_crimes_baseline"] = int(current_user.get("total_crimes") or 0)
         update.setdefault("$set", {})["mission_2_jail_busts_baseline"] = int(current_user.get("jail_busts") or 0)
@@ -733,15 +723,40 @@ async def complete_mission(
     if unlocks_city:
         update.setdefault("$set", {})["unlocked_maps_up_to"] = unlocks_city
 
-    result = await db.users.update_one(
-        {"id": user_id, "mission_completions.mission_id": {"$ne": mission_id}},
-        update,
-    )
-    if result.modified_count == 0:
-        raise HTTPException(status_code=400, detail="Mission already completed")
+    granted_car_ids: List[str] = []
+    if reward_car_id:
+        granted_car_ids.append(reward_car_id)
+    for cid in reward_car_ids:
+        if isinstance(cid, str) and cid and cid not in granted_car_ids:
+            granted_car_ids.append(cid)
+
+    meta = {
+        "reward_money": reward_money,
+        "reward_cash_immediate": reward_cash_immediate,
+        "reward_points": reward_points,
+        "reward_respect": reward_respect,
+        "reward_tribute": reward_tribute,
+        "reward_car_id": reward_car_id,
+        "reward_car_ids": reward_car_ids,
+        "reward_booze": reward_booze if isinstance(reward_booze, dict) else None,
+        "reward_bullets": reward_bullets,
+        "reward_loot_box_pieces": reward_loot_box_pieces,
+        "reward_auto_rank_2h": reward_auto_rank_2h,
+        "unlocks_city": unlocks_city,
+        "token_awarded": token_awarded,
+        "tokens_awarded_list": tokens_awarded_list,
+        "granted_car_ids": granted_car_ids,
+    }
+    return update, meta
+
+
+async def _run_mission_completion_side_effects(user_id: str, current_user: dict, mission_id: str, meta: dict) -> None:
+    reward_respect = int(meta.get("reward_respect") or 0)
     if reward_respect:
         await log_respect_earned(user_id, reward_respect, "missions")
 
+    reward_car_id = meta.get("reward_car_id")
+    reward_car_ids = meta.get("reward_car_ids") or []
     if reward_car_id and next((c for c in CARS if c.get("id") == reward_car_id), None):
         await db.user_cars.insert_one({
             "id": str(uuid.uuid4()),
@@ -758,13 +773,21 @@ async def complete_mission(
                 "acquired_at": datetime.now(timezone.utc).isoformat(),
             })
 
+    reward_points = int(meta.get("reward_points") or 0)
     try:
         if reward_points:
             rp_before = int(current_user.get("rank_points") or 0)
-            await maybe_process_rank_up(user_id, rp_before, reward_points, current_user.get("username", ""), user_prestige_rank_mult(current_user))
+            await maybe_process_rank_up(
+                user_id,
+                rp_before,
+                reward_points,
+                current_user.get("username", ""),
+                user_prestige_rank_mult(current_user),
+            )
     except Exception:
         pass
 
+    unlocks_city = meta.get("unlocks_city")
     if unlocks_city:
         await send_notification(
             user_id,
@@ -774,30 +797,68 @@ async def complete_mission(
             category="missions",
         )
 
-    granted_car_ids: List[str] = []
-    if reward_car_id:
-        granted_car_ids.append(reward_car_id)
-    for cid in reward_car_ids:
-        if isinstance(cid, str) and cid and cid not in granted_car_ids:
-            granted_car_ids.append(cid)
-    reward_car_names = [_car_display_name(cid) for cid in granted_car_ids]
+
+async def complete_mission(
+    request: CompleteMissionRequest = Body(...),
+    current_user: dict = Depends(get_current_user),
+):
+    """Check requirements and mark mission complete, granting rewards."""
+    mission_id = (request.mission_id or "").strip()
+    if not mission_id:
+        raise HTTPException(status_code=400, detail="mission_id required")
+    mission = next((m for m in MISSIONS if m["id"] == mission_id), None)
+    if not mission:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    unlocked = _user_unlocked_cities(current_user)
+    if mission["city"] not in unlocked:
+        raise HTTPException(status_code=403, detail="City not unlocked")
+    completed_ids = _user_completed_mission_ids(current_user)
+    if mission_id in completed_ids:
+        raise HTTPException(status_code=400, detail="Mission already completed")
+    met, _ = _check_mission_requirements(current_user, mission)
+    if not met:
+        raise HTTPException(status_code=400, detail="Requirements not met")
+    if not _mission_unlocked_by_previous(mission, completed_ids):
+        prev = _previous_mission(mission)
+        prev_title = prev.get("title", "the previous mission") if prev else "the previous mission"
+        raise HTTPException(status_code=400, detail=f"Complete {prev_title} first")
+
+    user_id = current_user["id"]
+    mult = _mission_completion_reward_mult(current_user)
+    update, meta = _build_mission_completion_reward_update(
+        current_user,
+        mission_id,
+        mission,
+        mult,
+        include_mission_completion_push=True,
+        include_next_mission_baseline=True,
+    )
+    result = await db.users.update_one(
+        {"id": user_id, "mission_completions.mission_id": {"$ne": mission_id}},
+        update,
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Mission already completed")
+    await _run_mission_completion_side_effects(user_id, current_user, mission_id, meta)
+
+    reward_car_names = [_car_display_name(cid) for cid in meta["granted_car_ids"]]
 
     return {
         "completed": True,
         "mission_id": mission_id,
-        "reward_money": reward_money,
-        "reward_cash_immediate": reward_cash_immediate,
-        "reward_points": reward_points,
-        "reward_respect": reward_respect,
-        "reward_tribute": reward_tribute,
-        "reward_car_id": reward_car_id,
-        "reward_car_ids": reward_car_ids,
+        "reward_money": meta["reward_money"],
+        "reward_cash_immediate": meta["reward_cash_immediate"],
+        "reward_points": meta["reward_points"],
+        "reward_respect": meta["reward_respect"],
+        "reward_tribute": meta["reward_tribute"],
+        "reward_car_id": meta["reward_car_id"],
+        "reward_car_ids": meta["reward_car_ids"],
         "reward_car_names": reward_car_names,
-        "reward_booze": reward_booze if isinstance(reward_booze, dict) else None,
-        "reward_bullets": reward_bullets,
-        "reward_loot_box_pieces": reward_loot_box_pieces,
-        "reward_auto_rank_2h": reward_auto_rank_2h,
-        "unlocked_city": unlocks_city,
+        "reward_booze": meta["reward_booze"],
+        "reward_bullets": meta["reward_bullets"],
+        "reward_loot_box_pieces": meta["reward_loot_box_pieces"],
+        "reward_auto_rank_2h": meta["reward_auto_rank_2h"],
+        "unlocked_city": meta["unlocks_city"],
     }
 
 
@@ -1202,19 +1263,54 @@ async def admin_missions_payload_for_user(user: dict) -> Dict[str, Any]:
     }
 
 
-async def admin_apply_mission_progress(user_id: str, next_mission_display: int) -> Dict[str, Any]:
+async def admin_apply_mission_progress(
+    user_id: str,
+    next_mission_display: int,
+    *,
+    grant_skipped_rewards: bool = True,
+) -> Dict[str, Any]:
     """
     Set ladder progress so the next mission to complete is `next_mission_display` (1..100),
-    or 101 when all missions should be marked complete. Does not grant mission rewards.
+    or 101 when all missions should be marked complete. When advancing the ladder, optionally
+    grants the same completion rewards as normal play for each newly completed mission
+    (`grant_skipped_rewards`, default True). Going backward does not remove granted rewards.
     """
     if next_mission_display < 1 or next_mission_display > 101:
         raise HTTPException(status_code=400, detail="next_mission_display must be 1-101 (101 = all missions complete)")
+    user_before = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not user_before:
+        raise HTTPException(status_code=404, detail="User not found")
+    old_completed = _user_completed_mission_ids(user_before)
     ladder = mission_ladder_missions()
     now_iso = datetime.now(timezone.utc).isoformat()
     if next_mission_display <= 100:
         to_complete = ladder[: next_mission_display - 1]
     else:
         to_complete = ladder[:]
+    new_completed_ids = {m["id"] for m in to_complete}
+    newly_ordered = [m["id"] for m in ladder if m["id"] in new_completed_ids and m["id"] not in old_completed]
+
+    if grant_skipped_rewards and newly_ordered:
+        for mid in newly_ordered:
+            mission = next((m for m in MISSIONS if m["id"] == mid), None)
+            if not mission:
+                continue
+            u = await db.users.find_one({"id": user_id}, {"_id": 0})
+            if not u:
+                raise HTTPException(status_code=404, detail="User not found")
+            mult = _mission_completion_reward_mult(u)
+            update, meta = _build_mission_completion_reward_update(
+                u,
+                mid,
+                mission,
+                mult,
+                include_mission_completion_push=False,
+                include_next_mission_baseline=False,
+            )
+            if update:
+                await db.users.update_one({"id": user_id}, update)
+            await _run_mission_completion_side_effects(user_id, u, mid, meta)
+
     new_completions = [{"mission_id": m["id"], "completed_at": now_iso} for m in to_complete]
     await db.users.update_one(
         {"id": user_id},

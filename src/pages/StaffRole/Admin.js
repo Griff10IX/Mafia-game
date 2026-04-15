@@ -194,6 +194,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Clear pool cue upgrades', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-user-adjust-hub', keywords: ['pool', '8-ball', '8 ball', 'cue', 'upgrades', 'reset', 'minigame'] },
   { label: 'Founding Member', categoryId: 'admin-players', collapseKey: 'founding', keywords: ['founding', 'member', 'badge', 'founder'] },
   { label: 'Add Money', categoryId: 'admin-players', collapseKey: 'money', keywords: ['money', 'cash', 'add', 'give'] },
+  { label: 'Remove money (user)', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-user-adjust-hub', keywords: ['remove', 'money', 'cash', 'take', 'deduct', 'subtract', 'wallet'] },
   { label: 'Add Bullets', categoryId: 'admin-players', collapseKey: 'bullets', keywords: ['bullets', 'ammo', 'add'] },
   { label: 'Give Car', categoryId: 'admin-players', collapseKey: 'cars', keywords: ['car', 'vehicle', 'give'] },
   { label: 'Ghost Mode', categoryId: 'admin-players', collapseKey: 'ghost', keywords: ['ghost', 'invisible', 'hide'] },
@@ -743,11 +744,13 @@ export default function Admin() {
   const [userLbAdjustDryRun, setUserLbAdjustDryRun] = useState(false);
   const [userLbAdjustLoading, setUserLbAdjustLoading] = useState(false);
   const [userHubMoneyDelta, setUserHubMoneyDelta] = useState(0);
+  const [userHubMoneyRemove, setUserHubMoneyRemove] = useState(0);
   const [userHubMoneyLoading, setUserHubMoneyLoading] = useState(false);
   const [missionAdminData, setMissionAdminData] = useState(null);
   const [missionAdminLoading, setMissionAdminLoading] = useState(false);
   const [missionAdminSaving, setMissionAdminSaving] = useState(false);
   const [missionAdminNextDisplay, setMissionAdminNextDisplay] = useState('');
+  const [missionAdminGrantSkippedRewards, setMissionAdminGrantSkippedRewards] = useState(true);
   const [gamePassInspectList, setGamePassInspectList] = useState(null);
   const [gamePassInspectLoading, setGamePassInspectLoading] = useState(false);
   const [gamePassInspectQuery, setGamePassInspectQuery] = useState('');
@@ -4015,17 +4018,37 @@ export default function Admin() {
       return;
     }
     const amt = parseInt(String(userHubMoneyDelta), 10);
-    if (!Number.isFinite(amt) || amt === 0) {
-      toast.error('Enter a non-zero dollar amount (negative removes)');
+    if (!Number.isFinite(amt) || amt <= 0) {
+      toast.error('Enter a positive dollar amount to add');
       return;
     }
-    const label = amt < 0
-      ? `Remove $${Math.abs(amt).toLocaleString()} from ${username}?`
-      : `Add $${amt.toLocaleString()} to ${username}?`;
-    if (!window.confirm(label)) return;
+    if (!window.confirm(`Add $${amt.toLocaleString()} to ${username}?`)) return;
     setUserHubMoneyLoading(true);
     try {
       const res = await api.post(`/admin/adjust-money?target_username=${encodeURIComponent(username)}&amount=${amt}`);
+      toast.success(res.data?.message || 'Done');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed');
+    } finally {
+      setUserHubMoneyLoading(false);
+    }
+  };
+
+  const handleUserHubRemoveMoney = async () => {
+    const username = (formData.targetUsername || '').trim();
+    if (!username) {
+      toast.error('Enter target username');
+      return;
+    }
+    const amt = Math.max(0, parseInt(String(userHubMoneyRemove), 10) || 0);
+    if (amt <= 0) {
+      toast.error('Enter a positive dollar amount to remove');
+      return;
+    }
+    if (!window.confirm(`Remove $${amt.toLocaleString()} from ${username}? (Cannot remove more than they have.)`)) return;
+    setUserHubMoneyLoading(true);
+    try {
+      const res = await api.post(`/admin/adjust-money?target_username=${encodeURIComponent(username)}&amount=${-amt}`);
       toast.success(res.data?.message || 'Done');
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed');
@@ -4067,9 +4090,12 @@ export default function Admin() {
       toast.error('Next mission # must be 1–101 (101 = all missions complete)');
       return;
     }
+    const rewardNote = missionAdminGrantSkippedRewards
+      ? 'Normal mission completion rewards will be granted for each newly completed ladder step (same as in-game completion).'
+      : 'Mission completion rewards will not be granted (ladder + baselines only).';
     if (
       !window.confirm(
-        `Set ${username} so their next mission ladder step is #${n}? This rewrites mission_completions and baselines. Mission rewards are not granted.`,
+        `Set ${username} so their next mission ladder step is #${n}? This rewrites mission_completions and baselines. ${rewardNote}`,
       )
     ) {
       return;
@@ -4078,6 +4104,7 @@ export default function Admin() {
     try {
       const res = await api.patch(`/admin/missions/user/${encodeURIComponent(username)}`, {
         next_mission_display: n,
+        grant_skipped_rewards: missionAdminGrantSkippedRewards,
       });
       setMissionAdminData(res.data);
       if (res.data?.next_mission_display != null) {
@@ -7138,7 +7165,7 @@ export default function Admin() {
           {!collapsed.userAdjustHub && (
             <div className="p-3 space-y-4">
               <p className="text-[9px] text-mutedForeground font-heading">
-                Shared <span className="text-foreground font-bold">target username</span> for this panel (syncs with the command bar). Preview main-board metrics, partially remove oldest event rows, strip full categories, and run common money/points/bullet tools without opening the dossier.
+                Shared <span className="text-foreground font-bold">target username</span> for this panel (syncs with the command bar). Preview main-board metrics, partially remove oldest event rows, strip full categories, and run common add/remove cash, points, bullets, and respect tools without opening the dossier.
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider">Username</span>
@@ -7154,17 +7181,32 @@ export default function Admin() {
               <div className="rounded-md border border-primary/25 bg-primary/5 p-3 space-y-2">
                 <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Quick give / take</div>
                 <div className="flex flex-wrap items-center gap-2 text-[10px] font-heading">
-                  <span className="text-mutedForeground shrink-0">Money ($)</span>
+                  <span className="text-mutedForeground shrink-0">Money add ($)</span>
                   <input
                     type="number"
+                    min={0}
                     value={userHubMoneyDelta}
-                    onChange={(e) => setUserHubMoneyDelta(parseInt(e.target.value, 10) || 0)}
-                    placeholder="e.g. -50000"
+                    onChange={(e) => setUserHubMoneyDelta(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                    placeholder="e.g. 50000"
                     className="w-28 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs"
                   />
                   <BtnPrimary type="button" onClick={handleUserHubAdjustMoney} disabled={userHubMoneyLoading || !(formData.targetUsername || '').trim()}>
-                    {userHubMoneyLoading ? '…' : userHubMoneyDelta < 0 ? 'Remove' : 'Add'}
+                    {userHubMoneyLoading ? '…' : 'Add'}
                   </BtnPrimary>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-[10px] font-heading">
+                  <span className="text-mutedForeground shrink-0">Money remove ($)</span>
+                  <input
+                    type="number"
+                    min={0}
+                    value={userHubMoneyRemove}
+                    onChange={(e) => setUserHubMoneyRemove(Math.max(0, parseInt(e.target.value, 10) || 0))}
+                    placeholder="e.g. 50000"
+                    className="w-28 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs"
+                  />
+                  <BtnSecondary type="button" onClick={handleUserHubRemoveMoney} disabled={userHubMoneyLoading || !(formData.targetUsername || '').trim()}>
+                    {userHubMoneyLoading ? '…' : 'Remove cash'}
+                  </BtnSecondary>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 text-[10px] font-heading">
                   <span className="text-mutedForeground shrink-0">Points</span>
@@ -7192,9 +7234,9 @@ export default function Admin() {
                 <p className="text-[9px] text-mutedForeground font-heading leading-snug">
                   Uses the same <span className="text-foreground font-bold">target username</span> as above. Ladder step{' '}
                   <span className="text-foreground font-mono">1</span> = first mission … <span className="text-foreground font-mono">100</span> = last;{' '}
-                  <span className="text-foreground font-mono">101</span> = all marked complete. Apply only rewrites{' '}
-                  <code className="text-[8px] bg-muted px-1 rounded">mission_completions</code> and baselines — it does{' '}
-                  <span className="text-amber-300/90">not</span> grant mission rewards.
+                  <span className="text-foreground font-mono">101</span> = all marked complete. Apply rewrites{' '}
+                  <code className="text-[8px] bg-muted px-1 rounded">mission_completions</code> and baselines. When moving{' '}
+                  <span className="text-foreground">forward</span> on the ladder, completion rewards for skipped missions are granted by default (uncheck to disable).
                 </p>
                 <div className="flex flex-wrap items-center gap-2">
                   <BtnPrimary
@@ -7270,6 +7312,15 @@ export default function Admin() {
                         className="w-20 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs font-mono"
                         placeholder="14"
                       />
+                      <label className="flex items-center gap-1.5 text-[9px] text-zinc-300 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={missionAdminGrantSkippedRewards}
+                          onChange={(e) => setMissionAdminGrantSkippedRewards(e.target.checked)}
+                          className="rounded border-zinc-600"
+                        />
+                        Grant rewards for skipped missions
+                      </label>
                       <BtnPrimary
                         type="button"
                         onClick={handleMissionAdminApply}
