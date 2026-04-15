@@ -65,3 +65,17 @@ export const ADMIN_ROUTE_GROUP_MAP = ADMIN_ROUTE_GROUPS.reduce((acc, item) => {
   acc[item.id] = item;
   return acc;
 }, {});
+
+/** Short labels for AdminShell mobile route strip (touch-friendly). */
+export const ADMIN_ROUTE_GROUP_MOBILE_SHORT = {
+  overview: 'Home',
+  players: 'Players',
+  moderation: 'Mod',
+  commerce: 'Commerce',
+  liveops: 'LiveOps',
+  safety: 'Safety',
+  analytics: 'Stats',
+  logs: 'Logs',
+  staff: 'Staff',
+  engineering: 'Eng',
+};

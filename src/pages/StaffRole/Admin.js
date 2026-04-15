@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Link, useLocation, Navigate } from 'react-router-dom';
+import { Link, useLocation, Navigate, useParams } from 'react-router-dom';
 import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle, Eye, Receipt, ArrowLeftRight, Ticket, RefreshCw } from 'lucide-react';
 import api, { imageHostPublicUrl } from '../../utils/api';
 import { toast } from 'sonner';
@@ -9,6 +9,7 @@ import styles from '../../styles/noir.module.css';
 import {
   ADMIN_CATEGORIES,
   ADMIN_CATEGORY_MOBILE_SHORT,
+  ADMIN_ROUTE_GROUP_MAP,
   LEGACY_CATEGORY_MAP,
   LEGACY_CATEGORY_SECTION_ID,
   MOD_ONLY_CATEGORY_IDS,
@@ -438,16 +439,16 @@ function SectionHeader({ icon: Icon, title, badge, isCollapsed, onToggle, color 
       type="button"
       data-admin-tool={toolAnchor || undefined}
       onClick={onToggle}
-      className="admin-hud-bar w-full px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between hover:bg-primary/12 transition-colors scroll-mt-24"
+      className="admin-hud-bar w-full min-h-[44px] md:min-h-0 px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between hover:bg-primary/12 transition-colors scroll-mt-24 touch-manipulation"
     >
-      <div className="flex items-center gap-2">
-        <Icon size={14} className={color} />
-        <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">{title}</span>
+      <div className="flex items-center gap-2 min-w-0">
+        <Icon size={14} className={`shrink-0 ${color}`} />
+        <span className="text-xs md:text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] truncate">{title}</span>
       </div>
       <div className="flex items-center gap-2">
         {badge}
-        <span className="text-primary/80">
-          {isCollapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+        <span className="text-primary/80 shrink-0">
+          {isCollapsed ? <ChevronRight size={18} className="md:w-4 md:h-4" /> : <ChevronDown size={18} className="md:w-4 md:h-4" />}
         </span>
       </div>
     </button>
@@ -493,6 +494,7 @@ function BtnSecondary({ children, ...props }) {
 
 export default function Admin() {
   const location = useLocation();
+  const params = useParams();
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
   const staffCanAccessWorldSystems = isAdmin || isModerator;
@@ -610,15 +612,29 @@ export default function Admin() {
   const [modVisibleCategoryIds, setModVisibleCategoryIds] = useState(() => [...MOD_ONLY_CATEGORY_IDS]);
   const visibleCategories = isAdmin ? ADMIN_CATEGORIES : ADMIN_CATEGORIES.filter((c) => modVisibleCategoryIds.includes(c.id));
   useEffect(() => {
-    const hRaw = (typeof window !== 'undefined' && window.location.hash) ? window.location.hash.slice(1) : '';
-    const h = normalizeCategoryId(hRaw);
     const visible = isAdmin ? ADMIN_CATEGORIES : ADMIN_CATEGORIES.filter((c) => modVisibleCategoryIds.includes(c.id));
-    if (h && ADMIN_CATEGORIES.some((c) => c.id === h) && visible.some((c) => c.id === h)) {
-      setActiveCategoryId(h);
-      return;
+    const sec = (params.section || 'overview').toLowerCase();
+    const routeGroup = ADMIN_ROUTE_GROUP_MAP[sec] || ADMIN_ROUTE_GROUP_MAP.overview;
+    const fromRouteCategory = routeGroup?.categoryId;
+
+    const hRaw = (location.hash || '').replace(/^#/, '').trim();
+    const normalized = normalizeCategoryId(hRaw);
+
+    let next = null;
+    if (hRaw && ADMIN_CATEGORIES.some((c) => c.id === hRaw)) {
+      next = hRaw;
+    } else if (normalized && ADMIN_CATEGORIES.some((c) => c.id === normalized)) {
+      next = normalized;
+    } else if (fromRouteCategory && ADMIN_CATEGORIES.some((c) => c.id === fromRouteCategory)) {
+      next = fromRouteCategory;
     }
-    if (!isAdmin && visible.length > 0) setActiveCategoryId(visible[0].id);
-  }, [isAdmin, modVisibleCategoryIds]);
+
+    if (!next || !visible.some((c) => c.id === next)) {
+      next = visible[0]?.id ?? 'admin-operations';
+    }
+
+    setActiveCategoryId((prev) => (prev === next ? prev : next));
+  }, [location.hash, location.pathname, params.section, isAdmin, modVisibleCategoryIds]);
 
   useEffect(() => {
     try {
@@ -6368,7 +6384,7 @@ export default function Admin() {
                 onFocus={() => setToolSearchFocused(true)}
                 onBlur={() => setTimeout(() => setToolSearchFocused(false), 150)}
                 placeholder="Search tools… (Enter = first match)"
-                className="w-full pl-8 pr-3 py-2 md:py-1.5 rounded-md border border-primary/30 bg-zinc-900/80 text-[11px] font-heading text-foreground placeholder:text-mutedForeground focus:border-primary/60 focus:outline-none"
+                className="w-full min-h-[44px] md:min-h-0 pl-8 pr-3 py-2 md:py-1.5 rounded-md border border-primary/30 bg-zinc-900/80 text-sm md:text-[11px] font-heading text-foreground placeholder:text-mutedForeground focus:border-primary/60 focus:outline-none"
               />
               {toolSearch && (
                 <button
@@ -6380,7 +6396,7 @@ export default function Admin() {
                 </button>
               )}
               {toolSearchFocused && filteredTools.length > 0 && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-zinc-900 border border-primary/30 rounded-md shadow-lg max-h-64 overflow-y-auto z-30">
+                <div className="absolute top-full left-0 right-0 mt-1 bg-zinc-900 border border-primary/30 rounded-md shadow-lg max-h-[min(50dvh,16rem)] md:max-h-64 overflow-y-auto z-30">
                   {filteredTools.map((tool, idx) => {
                     const category = ADMIN_CATEGORIES.find(c => c.id === tool.categoryId);
                     return (
@@ -6406,44 +6422,6 @@ export default function Admin() {
                 </div>
               )}
             </div>
-            <div className="md:hidden">
-              <label htmlFor="admin-category-jump" className="sr-only">Jump to admin section</label>
-              <select
-                id="admin-category-jump"
-                value={activeCategoryId}
-                onChange={(e) => {
-                  const id = e.target.value;
-                  setActiveCategoryId(id);
-                  if (typeof window !== 'undefined') window.location.hash = id;
-                }}
-                className="w-full px-2 py-2 rounded-md border border-primary/30 bg-zinc-900/90 text-[11px] font-heading font-bold text-foreground"
-              >
-                {visibleCategories.map(({ id, label }) => (
-                  <option key={id} value={id}>{label}</option>
-                ))}
-              </select>
-            </div>
-            <div className="flex md:hidden gap-1.5 overflow-x-auto pb-1 snap-x snap-mandatory mx-0 px-0 touch-pan-x">
-              {visibleCategories.map(({ id, icon: Icon }) => {
-                const shortLabel = ADMIN_CATEGORY_MOBILE_SHORT[id] || id.replace(/^admin-/, '');
-                const active = activeCategoryId === id;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => { setActiveCategoryId(id); if (typeof window !== 'undefined') window.location.hash = id; }}
-                    className={`snap-center shrink-0 flex items-center gap-1.5 px-2.5 py-2 min-h-[40px] rounded-md text-[10px] font-heading font-bold uppercase tracking-wide border transition-colors ${
-                      active
-                        ? 'border-primary bg-primary/25 text-primary'
-                        : 'border-primary/30 bg-primary/10 text-primary/90 hover:bg-primary/20'
-                    }`}
-                  >
-                    <Icon size={14} className="shrink-0 opacity-90" />
-                    <span className="whitespace-nowrap">{shortLabel}</span>
-                  </button>
-                );
-              })}
-            </div>
           </div>
           <nav className="hidden md:flex flex-col gap-1">
             {visibleCategories.map(({ id, label, icon: Icon }) => (
@@ -6465,18 +6443,18 @@ export default function Admin() {
         </aside>
 
         {/* Main: target username + scrollable tools (mobile); desktop unchanged scroll */}
-        <main className="flex-1 min-w-0 min-h-0 flex flex-col overflow-visible md:block md:overflow-y-auto md:max-h-[min(100vh-10rem,100dvh-10rem)] md:overflow-x-hidden md:space-y-4">
+        <main className="flex-1 min-w-0 min-h-0 flex flex-col overflow-visible max-md:pb-[5.75rem] md:block md:overflow-y-auto md:max-h-[min(100vh-10rem,100dvh-10rem)] md:overflow-x-hidden md:space-y-4 md:pb-0">
           <div id="admin-target-username" className={`shrink-0 z-10 relative admin-module admin-focus-block ${styles.panel} rounded-lg overflow-hidden border border-primary/20 bg-background/95 backdrop-blur mobile-panel md:sticky md:top-0 scroll-mt-24`}>
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <button
               type="button"
-              className="md:pointer-events-none w-full px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2 text-left"
+              className="md:pointer-events-none w-full min-h-[44px] md:min-h-0 px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2 text-left touch-manipulation"
               onClick={() => setAdminMobileTargetOpen((o) => !o)}
               aria-expanded={adminMobileTargetOpen}
             >
-              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Target Username</span>
+              <span className="text-xs md:text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Target Username</span>
               <span className="md:hidden text-primary/80 shrink-0" aria-hidden>
-                {adminMobileTargetOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                {adminMobileTargetOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
               </span>
             </button>
             {!adminMobileTargetOpen && (
@@ -18030,6 +18008,36 @@ export default function Admin() {
       )}
 
         </main>
+
+        <nav
+          className="md:hidden fixed bottom-0 left-0 right-0 z-40 border-t border-primary/35 bg-zinc-950/95 backdrop-blur-md pt-1 px-1 pb-[max(0.35rem,env(safe-area-inset-bottom))] shadow-[0_-10px_28px_rgba(0,0,0,0.5)]"
+          aria-label="Admin category"
+        >
+          <div className="flex gap-1 max-w-[100vw] mx-auto">
+            {visibleCategories.map(({ id, icon: Icon }) => {
+              const short = ADMIN_CATEGORY_MOBILE_SHORT[id] || 'Cat';
+              const active = activeCategoryId === id;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  onClick={() => {
+                    setActiveCategoryId(id);
+                    if (typeof window !== 'undefined') window.location.hash = id;
+                  }}
+                  className={`flex-1 min-w-0 flex flex-col items-center justify-center gap-0.5 min-h-[48px] rounded-lg border px-0.5 py-1 text-[10px] font-heading font-bold uppercase tracking-wide transition-colors touch-manipulation ${
+                    active
+                      ? 'border-primary/70 bg-primary/25 text-primary'
+                      : 'border-zinc-700/70 bg-zinc-900/80 text-mutedForeground active:bg-zinc-800'
+                  }`}
+                >
+                  <Icon size={18} className="shrink-0 opacity-95" />
+                  <span className="leading-tight truncate w-full text-center">{short}</span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
       </div>
     </div>
   );
