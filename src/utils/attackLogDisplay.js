@@ -1,7 +1,21 @@
-import { formatGameDateTimeWithMilliseconds } from './gameDateTime';
+import { ADMIN_TIME_ZONE } from './adminDateTime';
 
 export function formatAttackLogTime(iso) {
-  return formatGameDateTimeWithMilliseconds(iso);
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  const ms = d.getMilliseconds();
+  const base = d.toLocaleString('en-GB', {
+    timeZone: ADMIN_TIME_ZONE,
+    hour12: false,
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  });
+  return `${base}.${String(ms).padStart(3, '0')}`;
 }
 
 export function parseAttackLogUA(ua) {

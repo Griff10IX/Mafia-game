@@ -90,7 +90,7 @@ export default function AdminShell() {
               <h1 className="font-heading text-primary text-base sm:text-lg md:text-xl tracking-wide uppercase truncate">
                 Admin Command Center
               </h1>
-              <p className="hidden sm:block text-xs text-mutedForeground">
+              <p className="text-[10px] sm:text-xs text-mutedForeground">
                 Route-based tooling with consolidated sections and legacy-compatible anchors. Timestamps use UK time (GMT / BST).
               </p>
             </div>
