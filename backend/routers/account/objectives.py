@@ -8,6 +8,7 @@ from typing import Optional
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.point_provenance import log_points_event
+from utils.game_timezone import game_month_start_date_str, game_today_date_str, game_week_start_date_str
 from fastapi import Depends, HTTPException, Body
 from pydantic import BaseModel
 from server import (
@@ -103,28 +104,14 @@ def _date_seed(date_str: str) -> int:
     return int(hashlib.sha256(date_str.encode()).hexdigest()[:8], 16)
 
 
-def _week_start(dt: datetime) -> datetime:
-    """Monday 00:00 UTC as start of week."""
-    d = dt.date()
-    days_since_monday = (d.weekday()) % 7
-    start = d - timedelta(days=days_since_monday)
-    return datetime(start.year, start.month, start.day, tzinfo=timezone.utc)
-
-
-def _month_start(dt: datetime) -> datetime:
-    """First day of month 00:00 UTC."""
-    d = dt.date()
-    return datetime(d.year, d.month, 1, tzinfo=timezone.utc)
-
-
 async def update_objectives_progress(user_id: str, objective_type: str, amount: int = 1, city: Optional[str] = None):
     """Increment daily/weekly/monthly objectives progress. Call after crimes, GTA, busts, booze sell, interest deposit, hitlist NPC kill.
     objective_type: crimes, gta, busts, booze_runs, crimes_in_city, deposit_interest, hitlist_npc_kills.
     For crimes_in_city pass city= (e.g. Chicago). For deposit_interest pass amount= dollars deposited."""
     now = datetime.now(timezone.utc)
-    today_str = now.strftime("%Y-%m-%d")
-    week_start_str = _week_start(now).strftime("%Y-%m-%d")
-    month_start_str = _month_start(now).strftime("%Y-%m-%d")
+    today_str = game_today_date_str(now)
+    week_start_str = game_week_start_date_str(now)
+    month_start_str = game_month_start_date_str(now)
     user = await db.users.find_one(
         {"id": user_id},
         {"_id": 0, "objectives_daily_date": 1, "objectives_daily_progress": 1,
@@ -455,11 +442,9 @@ async def _get_objectives_admin_stats(today_str: str, week_start_str: str, month
 async def get_objectives(current_user: dict = Depends(get_current_user)):
     """Get today's, this week's, and this month's objectives and user progress. Use POST /objectives/claim to claim rewards when all complete."""
     now = datetime.now(timezone.utc)
-    today_str = now.strftime("%Y-%m-%d")
-    week_start = _week_start(now)
-    week_start_str = week_start.strftime("%Y-%m-%d")
-    month_start = _month_start(now)
-    month_start_str = month_start.strftime("%Y-%m-%d")
+    today_str = game_today_date_str(now)
+    week_start_str = game_week_start_date_str(now)
+    month_start_str = game_month_start_date_str(now)
 
     user_id = current_user["id"]
     user = await db.users.find_one(
@@ -625,11 +610,9 @@ async def claim_objectives(body: ObjectivesClaimRequest = Body(...), current_use
         raise HTTPException(status_code=400, detail="type must be daily, weekly, monthly, or lifetime")
 
     now = datetime.now(timezone.utc)
-    today_str = now.strftime("%Y-%m-%d")
-    week_start = _week_start(now)
-    week_start_str = week_start.strftime("%Y-%m-%d")
-    month_start = _month_start(now)
-    month_start_str = month_start.strftime("%Y-%m-%d")
+    today_str = game_today_date_str(now)
+    week_start_str = game_week_start_date_str(now)
+    month_start_str = game_month_start_date_str(now)
 
     user_id = current_user["id"]
     user = await db.users.find_one(

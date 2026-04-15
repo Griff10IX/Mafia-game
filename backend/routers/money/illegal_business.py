@@ -24,6 +24,7 @@ from server import (
     CAPO_RANK_ID,
 )
 from routers.kill.armoury import TOKEN_CONFIG, TOKEN_TYPES, TOKEN_TYPES_GLOBAL_RANDOM_DROP
+from utils.game_timezone import game_today_date_str
 from utils.point_provenance import log_points_event
 
 logger = logging.getLogger(__name__)
@@ -1531,7 +1532,7 @@ async def get_illegal_business(current_user: dict = Depends(get_current_user)):
     user_id = current_user["id"]
     business = await db.illegal_businesses.find_one({"user_id": user_id}, {"_id": 0})
     now = datetime.now(timezone.utc)
-    today_key = now.strftime("%Y-%m-%d")
+    today_key = game_today_date_str(now)
     raid_date = current_user.get("illegal_business_raids_date")
     raid_count = int(current_user.get("illegal_business_raids_today") or 0)
     if raid_date != today_key:
@@ -2702,7 +2703,7 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
                 raise HTTPException(status_code=400, detail=f"Raid cooldown. Try again in {RAID_COOLDOWN_HOURS}h.")
         except Exception:
             pass
-    today_key = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today_key = game_today_date_str()
     now = datetime.now(timezone.utc).isoformat()
     cooldowns_new = dict(cooldowns)
     cooldowns_new[target_id] = now
@@ -2840,7 +2841,7 @@ async def raid_illegal_business(req: RaidRequest, current_user: dict = Depends(g
 async def raid_random_illegal_business(current_user: dict = Depends(get_current_user)):
     """Pick a random eligible target (has business, not self) and run the same raid flow. Cooldown and daily limit apply."""
     # Daily limit check first
-    today_key = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today_key = game_today_date_str()
     raid_count_today = int(current_user.get("illegal_business_raids_today") or 0)
     raid_date = current_user.get("illegal_business_raids_date")
     if raid_date != today_key:

@@ -8,6 +8,7 @@ from pydantic import BaseModel
 
 from fastapi import Depends, HTTPException, Request
 
+from utils.game_timezone import game_today_date_str
 from utils.referral_ids import (
     apply_referrer_referral_increment,
     normalize_referred_by_ids,
@@ -326,7 +327,7 @@ def _booze_confiscation_profit_updates(user: dict) -> tuple[dict, dict, int]:
     total = sum(int(v) for v in carrying_cost.values())
     if total <= 0:
         return {}, {}, 0
-    today_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today_utc = game_today_date_str()
     profit_today = int(user.get("booze_profit_today") or 0)
     if user.get("booze_profit_today_date") != today_utc:
         profit_today = 0
@@ -563,7 +564,7 @@ async def _booze_sell_impl(user: dict, booze_id: str, amount: int, *, via_auto_r
         revenue = cost_of_sold + profit
     new_val = have - amount
     booze_name = BOOZE_TYPES[booze_index]["name"]
-    today_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today_utc = game_today_date_str()
     profit_today = user.get("booze_profit_today", 0)
     profit_today_date = user.get("booze_profit_today_date")
     if profit_today_date != today_utc:
@@ -690,7 +691,7 @@ async def booze_run_config(current_user: dict = Depends(get_current_user)):
             }
             for b in range(len(BOOZE_TYPES))
         ]
-    today_utc = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today_utc = game_today_date_str()
     profit_today = current_user.get("booze_profit_today", 0)
     profit_today_date = current_user.get("booze_profit_today_date")
     if profit_today_date != today_utc:

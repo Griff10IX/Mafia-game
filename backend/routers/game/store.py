@@ -8,6 +8,7 @@ from pydantic import BaseModel, field_validator
 
 from fastapi import Depends, HTTPException, Query
 
+from utils.game_timezone import game_today_date_str
 from utils.profanity import contains_profanity
 
 
@@ -834,7 +835,7 @@ async def _get_cash_price_per_point() -> tuple:
 
 def _cash_purchases_today(user: dict) -> int:
     """Return how many cash token purchases the user has made today (UTC)."""
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = game_today_date_str()
     if user.get("token_cash_purchases_date") != today:
         return 0
     return int(user.get("token_cash_purchases_today") or 0)
@@ -893,7 +894,7 @@ async def buy_store_token_cash(
     if money_balance < cash_cost:
         raise HTTPException(status_code=400, detail=f"Insufficient cash. Need ${cash_cost:,.0f}, have ${money_balance:,.0f}.")
 
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = game_today_date_str()
     filt = {
         "id": current_user["id"],
         "money": {"$gte": cash_cost},
@@ -950,7 +951,7 @@ async def buy_store_token_bundle_cash(
     if money_balance < cash_cost:
         raise HTTPException(status_code=400, detail=f"Insufficient cash. Need ${cash_cost:,.0f}, have ${money_balance:,.0f}.")
 
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = game_today_date_str()
     inc = {"money": -cash_cost, "token_cash_purchases_today": 1, "token_cash_spent": cash_cost}
     gte = {"money": {"$gte": cash_cost}}
     for field, add in field_inc.items():

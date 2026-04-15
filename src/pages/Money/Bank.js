@@ -8,6 +8,7 @@ import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache'
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
 import styles from '../../styles/noir.module.css';
+import { formatGameDateTimeShort as formatDateTime } from '../../utils/gameDateTime';
 
 const BANK_CACHE_KEY = 'mafia_bank_v1';
 
@@ -36,18 +37,6 @@ function formatNumber(n) {
   const num = Number(n ?? 0);
   if (Number.isNaN(num)) return '0';
   return Math.trunc(num).toLocaleString();
-}
-
-function formatDateTime(iso) {
-  if (!iso) return '-';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString('en-US', { 
-    month: 'short', 
-    day: 'numeric', 
-    hour: '2-digit', 
-    minute: '2-digit' 
-  });
 }
 
 function timeLeft(iso) {

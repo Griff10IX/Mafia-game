@@ -5,6 +5,7 @@ import { TrendingUp, BarChart3, History } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
+import { formatGameDateTimeShort as formatDateTime } from '../../utils/gameDateTime';
 
 const STOCK_STYLES = `
   @keyframes stock-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -17,16 +18,6 @@ function formatPrice(n) {
   if (Number.isNaN(num)) return '0';
   if (num >= 1000) return num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
   return num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 3 });
-}
-
-function formatDateTime(iso) {
-  if (!iso) return '—';
-  try {
-    const d = new Date(iso);
-    return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
-  } catch {
-    return iso;
-  }
 }
 
 function ChangeCell({ value }) {

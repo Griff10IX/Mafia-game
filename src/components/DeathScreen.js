@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import api from '../utils/api';
+import { formatGameTimeWeekday } from '../utils/gameDateTime';
 
 const DEATH_STYLES = `
   @keyframes ds-fadeIn    { from { opacity: 0 } to { opacity: 1 } }
@@ -45,10 +46,7 @@ function formatDate(iso) {
 }
 
 function formatTime(iso) {
-  if (!iso) return '—';
-  try {
-    return new Date(iso).toLocaleString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true, weekday: 'long' });
-  } catch { return '—'; }
+  return formatGameTimeWeekday(iso);
 }
 
 export default function DeathScreen({ user, onLogout }) {

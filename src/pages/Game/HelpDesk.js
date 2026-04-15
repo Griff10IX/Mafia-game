@@ -5,6 +5,7 @@ import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache'
 import AutoRefreshNote from '../../components/AutoRefreshNote';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
+import { formatGameDateTime as formatDateTime } from '../../utils/gameDateTime';
 
 function hdTicketsCacheKey(statusFilter) {
   return `mafia_helpdesk_tickets_${statusFilter === '' || statusFilter == null ? 'all' : statusFilter}`;
@@ -16,13 +17,6 @@ const HD_STYLES = `
   .hd-row:hover { background: rgba(var(--noir-primary-rgb), 0.06); }
   .hd-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 `;
-
-function formatDateTime(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-}
 
 const ROLE_LABELS = { user: 'User', admin: 'Admin', mod: 'Mod', hdo: 'HDO' };
 

@@ -5,6 +5,7 @@ import api, { getApiErrorMessage } from '../../utils/api';
 import { copyTextToClipboard } from '../../utils/copyToClipboard';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
+import { formatGameDateTime as formatDateTime } from '../../utils/gameDateTime';
 
 const ATTEMPTS_STYLES = `
   @keyframes atmp-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -19,18 +20,6 @@ const ATTEMPTS_STYLES = `
   .atmp-row:hover { background-color: rgba(var(--noir-primary-rgb), 0.04); }
   .atmp-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 `;
-
-function formatDateTime(iso) {
-  if (!iso) return '-';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString('en-US', { 
-    month: 'short', 
-    day: 'numeric', 
-    hour: '2-digit', 
-    minute: '2-digit' 
-  });
-}
 
 function money(n) {
   if (n == null) return '—';
@@ -61,12 +50,12 @@ function buildAttemptCopySummary(attempt) {
     parts.push(`bodyguard for ${attempt.bodyguard_owner_username}`);
   }
   if (attempt.death_message) parts.push(`"${String(attempt.death_message).slice(0, 200)}"`);
-  if (attempt.created_at) parts.push(new Date(attempt.created_at).toLocaleString());
+  if (attempt.created_at) parts.push(formatDateTime(attempt.created_at));
   return parts.join(' · ');
 }
 
 function buildTimelineEventCopySummary(ev) {
-  const when = ev.occurred_at ? new Date(ev.occurred_at).toLocaleString() : '';
+  const when = ev.occurred_at ? formatDateTime(ev.occurred_at) : '';
   const parts = [
     when,
     ev.event_type ? String(ev.event_type).replace(/_/g, ' ') : '',

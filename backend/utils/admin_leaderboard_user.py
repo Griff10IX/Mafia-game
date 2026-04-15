@@ -1,7 +1,7 @@
 # Admin preview and partial adjust for main /leaderboards/top inputs (one user).
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from pymongo import ASCENDING
@@ -10,13 +10,11 @@ MAX_REMOVE_COUNT = 50_000
 
 
 def _week_bounds(now: Optional[datetime] = None) -> Tuple[datetime, datetime]:
-    """Monday 00:00 UTC through next Monday; matches routers.game.leaderboard._week_start."""
-    from routers.game.leaderboard import _week_start
+    """Monday 00:00 Europe/London through next Monday (UTC instants)."""
+    from utils.game_timezone import game_week_range_utc
 
     n = now or datetime.now(timezone.utc)
-    ws = _week_start(n)
-    we = ws + timedelta(days=7)
-    return ws, we
+    return game_week_range_utc(n)
 
 
 async def _aggregate_count_week(

@@ -27,6 +27,7 @@ from fastapi import Depends, HTTPException, Body, Header, Query
 from pydantic import BaseModel
 from bson.objectid import ObjectId
 
+from utils.game_timezone import game_week_range_utc
 from utils.notepad_color import notepad_color_for_api_response, normalize_notepad_color_for_set
 from utils.point_provenance import log_points_event
 from utils.family_vault_log import log_family_vault_tx
@@ -178,14 +179,14 @@ async def count_families_toward_player_cap() -> int:
 
 
 async def _state_head_casino_week_stats(state_name: str):
-    """Aggregate gambling_log for the current week (Monday 00:00 UTC) in the given state. Returns { game_type: { wins, losses } }."""
+    """Aggregate gambling_log for the current week (Monday 00:00 Europe/London) in the given state. Returns { game_type: { wins, losses } }."""
     if not state_name or not state_name.strip():
         return {}
     state = (state_name or "").strip()
     now = datetime.now(timezone.utc)
-    days_since_monday = (now.isoweekday() - 1) % 7
-    week_start = (now - timedelta(days=days_since_monday)).replace(hour=0, minute=0, second=0, microsecond=0)
-    week_start_iso = week_start.isoformat()
+    week_start, week_end = game_week_range_utc(now)
+    week_start_iso = week_start.isoformat().replace("+00:00", "Z")
+    week_end_iso = week_end.isoformat().replace("+00:00", "Z")
     result = {gt: {"wins": 0, "losses": 0} for gt in STATE_HEAD_CASINO_GAMES}
 
     def _is_win(game_type: str, details: dict) -> bool:
@@ -210,7 +211,7 @@ async def _state_head_casino_week_stats(state_name: str):
 
     try:
         cursor = db.gambling_log.find(
-            {"created_at": {"$gte": week_start_iso}, "game_type": {"$in": STATE_HEAD_CASINO_GAMES}},
+            {"created_at": {"$gte": week_start_iso, "$lt": week_end_iso}, "game_type": {"$in": STATE_HEAD_CASINO_GAMES}},
             {"_id": 0, "game_type": 1, "details": 1},
         )
         async for entry in cursor:

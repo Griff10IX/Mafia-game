@@ -3811,7 +3811,7 @@ def register(router):
     class AdminMinigameLbStripBody(BaseModel):
         target_username: str = Field(..., min_length=1)
         remove_weekly_plays: bool = True
-        weekly_scope: str = Field("current", description="'current' = this Mon UTC week only; 'all' = every minigame_plays row")
+        weekly_scope: str = Field("current", description="'current' = this Mon 00:00 UK week only; 'all' = every minigame_plays row")
         remove_per_game_scores: bool = True
         games: Optional[List[str]] = Field(
             None,
@@ -3908,7 +3908,7 @@ def register(router):
         target_username: str = Field(..., min_length=1)
         scope: str = Field(
             "current",
-            description="'current' = this Mon UTC week only (matches /leaderboards/top?period=weekly); 'all' = full history for selected categories",
+            description="'current' = this Mon 00:00 UK week only (matches /leaderboards/top?period=weekly); 'all' = full history for selected categories",
         )
         respect_events: bool = Field(True, description="Respect points earned (weekly board)")
         melt_events: bool = Field(True, description="Bullets melted (weekly board)")
@@ -3988,7 +3988,7 @@ def register(router):
         target_username: str = Query(..., min_length=1, description="Exact or case-insensitive username match"),
         current_user: dict = Depends(get_current_user),
     ):
-        """Preview weekly (Mon UTC) vs all-time values that feed /leaderboards/top for one user. Admin only."""
+        """Preview weekly (Mon 00:00 UK) vs all-time values that feed /leaderboards/top for one user. Admin only."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         from utils.admin_leaderboard_user import get_user_leaderboard_scores
@@ -4069,20 +4069,21 @@ def register(router):
     async def admin_reset_weekly_booze_profit(current_user: dict = Depends(get_current_user)):
         """
         Zero this week's booze-run leaderboard inputs for ALL users by setting
-        economy_events.profit = 0 on type=booze_run_sell rows in the current Mon UTC week.
+        economy_events.profit = 0 on type=booze_run_sell rows in the current Mon 00:00 UK week.
         """
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
 
+        from utils.game_timezone import game_week_range_utc
+
         now = datetime.now(timezone.utc)
-        week_start = now - timedelta(days=now.weekday())
-        week_start = week_start.replace(hour=0, minute=0, second=0, microsecond=0)
+        week_start, week_end = game_week_range_utc(now)
 
         match = {
             "type": "booze_run_sell",
             "$expr": {"$and": [
                 {"$gte": [{"$toDate": "$at"}, week_start]},
-                {"$lt": [{"$toDate": "$at"}, week_start + timedelta(days=7)]},
+                {"$lt": [{"$toDate": "$at"}, week_end]},
             ]},
         }
 
@@ -4094,7 +4095,7 @@ def register(router):
         leaderboard_module.invalidate_leaderboard_cache()
         return {
             "message": f"Reset weekly booze-run profit rows to 0 (modified {int(res.modified_count or 0)} rows).",
-            "week_start_utc": week_start.strftime("%Y-%m-%d"),
+            "week_start_utc": week_start.isoformat().replace("+00:00", "Z"),
             "modified": int(res.modified_count or 0),
         }
 

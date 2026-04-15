@@ -4,21 +4,9 @@ import { Users, RefreshCw, ShieldAlert, ExternalLink } from 'lucide-react';
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
+import { formatGameDateTime as formatDateTime } from '../../utils/gameDateTime';
 
 const ABUSEIPDB_CHECK_URL = 'https://www.abuseipdb.com/check/';
-
-function formatDateTime(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-}
 
 export default function AdminUsersOnline() {
   const navigate = useNavigate();

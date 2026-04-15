@@ -21,6 +21,7 @@ import api, { getApiErrorMessage } from '../utils/api';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from './ui/sheet';
 import { toast } from 'sonner';
 import styles from '../styles/noir.module.css';
+import { formatGameDateTime as formatDateTime } from '../utils/gameDateTime';
 
 const TOKEN_OPTIONS = [
   { value: 'xp_crimes', label: 'Crime XP' },
@@ -33,19 +34,6 @@ const TOKEN_OPTIONS = [
   { value: 'properties', label: 'Properties' },
   { value: 'jailbust_bonus', label: 'Jailbust Bonus' },
 ];
-
-function formatDateTime(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return String(iso);
-  return d.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
 
 function Section({ title, children }) {
   return (

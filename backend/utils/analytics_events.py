@@ -4,6 +4,8 @@ from datetime import datetime, timedelta, timezone
 from hashlib import sha1
 from typing import Any, Dict, Optional
 
+from utils.game_timezone import game_day_start_utc, game_month_start_utc, game_week_start_utc
+
 
 VALID_BUCKETS = ("realtime_5m", "daily", "weekly", "monthly")
 
@@ -12,29 +14,18 @@ def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def week_start_utc(dt: datetime) -> datetime:
-    d = dt.astimezone(timezone.utc)
-    day = d.date()
-    monday = day - timedelta(days=day.weekday())
-    return datetime(monday.year, monday.month, monday.day, tzinfo=timezone.utc)
-
-
-def month_start_utc(dt: datetime) -> datetime:
-    d = dt.astimezone(timezone.utc)
-    return datetime(d.year, d.month, 1, tzinfo=timezone.utc)
-
-
 def bucket_start(dt: datetime, bucket: str) -> datetime:
+    """Calendar buckets (daily/weekly/monthly) use Europe/London; realtime_5m stays UTC wall clock."""
     d = dt.astimezone(timezone.utc)
     if bucket == "realtime_5m":
         floored_minute = (d.minute // 5) * 5
         return datetime(d.year, d.month, d.day, d.hour, floored_minute, tzinfo=timezone.utc)
     if bucket == "daily":
-        return datetime(d.year, d.month, d.day, tzinfo=timezone.utc)
+        return game_day_start_utc(d)
     if bucket == "weekly":
-        return week_start_utc(d)
+        return game_week_start_utc(d)
     if bucket == "monthly":
-        return month_start_utc(d)
+        return game_month_start_utc(d)
     raise ValueError(f"Unsupported bucket: {bucket}")
 
 

@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict
 from typing import Optional
 
 from server import db, get_current_user, log_activity, log_minigame_payout, log_respect_earned, _get_staff_user_ids, _is_admin
+from utils.game_timezone import game_week_range_utc
 from utils.minigame_captcha_gate import require_turnstile_for_minigame_start
 from routers.minigames.minigame_leaderboard import log_minigame_play
 from utils.minigame_run_session import (
@@ -118,7 +119,7 @@ def register(router):
 
     @router.get("/gauntlet/leaderboard")
     async def gauntlet_leaderboard(
-        period: str = Query("weekly", description="weekly (Mon UTC) or alltime"),
+        period: str = Query("weekly", description="weekly (Mon 00:00 UK) or alltime"),
         current_user: dict = Depends(get_current_user),
     ):
         p = (period or "weekly").lower()
@@ -126,10 +127,8 @@ def register(router):
         staff_ids = await _get_staff_user_ids()
         staff_match = {"user_id": {"$nin": staff_ids}} if staff_ids else {}
         if p == "weekly":
-            d = now_dt.date()
-            days_since_monday = (d.weekday()) % 7
-            week_start = datetime(d.year, d.month, d.day, tzinfo=timezone.utc) - timedelta(days=days_since_monday)
-            match = {"_ts": {"$gte": week_start}, **staff_match}
+            ws, we = game_week_range_utc(now_dt)
+            match = {"_ts": {"$gte": ws, "$lt": we}, **staff_match}
             pipeline = [
                 {"$addFields": {"_ts": {"$toDate": "$at"}}},
                 {"$match": match},

@@ -1,6 +1,6 @@
 # Mini Games Weekly Leaderboard - Combined leaderboard for Snake, Gauntlet, and Shooting Range
 # Points: 10 base + score/100 (capped at 50) per play
-# Top 5 rewarded every Monday midnight UTC
+# Top 5 rewarded every Monday 00:00 Europe/London (payout uses previous week window).
 
 import logging
 import os
@@ -11,6 +11,7 @@ from fastapi import Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict
 
 from server import db, get_current_user, ADMIN_EMAILS, _get_staff_user_ids, _is_admin, send_notification
+from utils.game_timezone import game_week_start_date_str, game_week_start_utc
 from utils.minigame_captcha_gate import require_turnstile_for_minigame_start
 from utils.minigame_run_session import start_minigame_run, get_plays_left, GAME_HOURLY_LIMITS
 
@@ -43,18 +44,9 @@ DEFAULT_REWARDS = {
 }
 
 
-def _week_start(dt: datetime) -> datetime:
-    """Monday 00:00 UTC as start of week for mini games leaderboard."""
-    d = dt.date()
-    days_since_monday = (d.weekday()) % 7
-    start = d - timedelta(days=days_since_monday)
-    return datetime(start.year, start.month, start.day, tzinfo=timezone.utc)
-
-
 def _next_monday_midnight(dt: datetime) -> datetime:
-    """Next Monday 00:00 UTC (payout time)."""
-    week_start = _week_start(dt)
-    return week_start + timedelta(days=7)
+    """Next Monday 00:00 Europe/London as UTC (end of current London week)."""
+    return game_week_start_utc(dt) + timedelta(days=7)
 
 
 def _calculate_points(score: int) -> int:
@@ -68,7 +60,7 @@ async def log_minigame_play(user_id: str, username: str, game: str, score: int):
     if game not in VALID_GAMES:
         return
     now = datetime.now(timezone.utc)
-    week_start = _week_start(now)
+    week_start = game_week_start_utc(now)
     points = _calculate_points(score)
     doc = {
         "user_id": user_id,
@@ -188,7 +180,7 @@ def register(router):
     async def get_minigame_leaderboard(current_user: dict = Depends(get_current_user)):
         """Get the top 5 mini games leaderboard for the current week plus user's stats."""
         now = datetime.now(timezone.utc)
-        week_start = _week_start(now)
+        week_start = game_week_start_utc(now)
         week_start_iso = week_start.isoformat().replace("+00:00", "Z")
         next_payout = _next_monday_midnight(now)
         next_payout_iso = next_payout.isoformat().replace("+00:00", "Z")
@@ -255,7 +247,7 @@ def register(router):
     async def get_my_minigame_stats(current_user: dict = Depends(get_current_user)):
         """Get current user's mini game stats breakdown for the current week."""
         now = datetime.now(timezone.utc)
-        week_start = _week_start(now)
+        week_start = game_week_start_utc(now)
         week_start_iso = week_start.isoformat().replace("+00:00", "Z")
         next_payout = _next_monday_midnight(now)
         next_payout_iso = next_payout.isoformat().replace("+00:00", "Z")
@@ -331,15 +323,15 @@ def register(router):
 
 async def run_minigame_weekly_payout(database, test_run: bool = False):
     """
-    Run weekly mini games leaderboard payout for the previous week (Monday to Monday UTC).
+    Run weekly mini games leaderboard payout for the previous week (Monday to Monday, Europe/London).
     Uses game_config id minigame_weekly_leaderboard with last_payout_week_start for idempotency.
     Rewards top 5 with cash, respect, loot pieces, and bullets.
     """
     log = logging.getLogger(__name__)
     now = datetime.now(timezone.utc)
-    this_week_start = _week_start(now)
+    this_week_start = game_week_start_utc(now)
     last_week_start = this_week_start - timedelta(days=7)
-    last_week_start_str = last_week_start.strftime("%Y-%m-%d")
+    last_week_start_str = game_week_start_date_str(last_week_start)
     last_week_start_iso = last_week_start.isoformat().replace("+00:00", "Z")
 
     cfg = await database.game_config.find_one(

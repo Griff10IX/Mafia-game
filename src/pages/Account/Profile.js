@@ -16,6 +16,7 @@ import FamilyEmblem from '../../components/FamilyEmblem';
 import { getProfilePrefetch, setProfilePrefetch } from '../../utils/prefetchCache';
 import { getProfileEditWarm } from '../../utils/profilePageWarm';
 import { fileToAvatarDataUrl, validateSafeImageFile, AVATAR_RAW_UPLOAD_MAX_BYTES } from '../../utils/fileToCompressedDataUrl';
+import { formatGameDateTime as formatDateTime } from '../../utils/gameDateTime';
 
 const PROFILE_STYLES = `
   @keyframes prof-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -83,20 +84,6 @@ const formatCasinoCompactLine = (c) => {
   const buyBackPart = buyBack > 0 ? ` · Buy back ${buyBack.toLocaleString()} pts` : '';
   return `${c?.city || '—'} ${casinoTypeShortLabel(c?.type)} · Max bet ${maxBet}${buyBackPart}`;
 };
-
-function formatDateTime(iso) {
-  if (!iso) return '-';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString(undefined, {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
-}
 
 /** Profile honours match main leaderboard boards; API may send `board` or we fall back by label. */
 const HONOUR_BOARD_FALLBACK = {

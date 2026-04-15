@@ -5,19 +5,7 @@ import api from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import AttackLogsPanel from '../../components/staff/AttackLogsPanel';
-
-function formatDateTime(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  });
-}
+import { formatGameDateTime as formatDateTime } from '../../utils/gameDateTime';
 
 export default function AdminAttackLogs() {
   const navigate = useNavigate();

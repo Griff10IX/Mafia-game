@@ -6,6 +6,7 @@ import api from '../../utils/api';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
 import { getStatsOverview, setStatsOverview } from '../../utils/statsCache';
 import styles from '../../styles/noir.module.css';
+import { formatGameDateTime as formatDateTime } from '../../utils/gameDateTime';
 
 const STATS_STYLES = `
   @keyframes stat-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -34,18 +35,6 @@ function formatMoney(n) {
   const num = Number(n);
   if (Number.isNaN(num)) return '—';
   return `$${num.toLocaleString()}`;
-}
-
-function formatDateTime(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '—';
-  return d.toLocaleString('en-US', { 
-    month: 'short', 
-    day: 'numeric', 
-    hour: '2-digit', 
-    minute: '2-digit' 
-  });
 }
 
 const STAT_CARD_BODY_MIN_H = 140;

@@ -9,6 +9,7 @@ from fastapi import Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from server import db, get_current_user_verified, get_current_user, log_gambling, _get_staff_user_ids, _is_admin, send_notification
+from utils.game_timezone import game_week_start_date_str, game_week_start_utc
 from utils.minigame_captcha_gate import require_turnstile_for_minigame_start
 from utils.minigame_run_session import utc_rate_limit_window, RATE_LIMIT_PERIOD_HOURS
 
@@ -67,12 +68,6 @@ async def _find_user_by_username_for_challenge(raw_name: str) -> Optional[dict]:
             detail="Multiple accounts match that name; type the username exactly as shown on their profile.",
         )
     return matches[0]
-
-
-def _week_start(dt: datetime) -> datetime:
-    d = dt.date()
-    start = d - timedelta(days=d.weekday())
-    return datetime(start.year, start.month, start.day, tzinfo=timezone.utc)
 
 
 # ── Stats & Profile ──────────────────────────────────────────────────────────
@@ -1040,7 +1035,7 @@ async def boxing_leaderboard(period: str = "weekly", current_user: dict = Depend
     staff_ids = await _get_staff_user_ids()
     staff_match = {"user_id": {"$nin": staff_ids}} if staff_ids else {}
     if p == "weekly":
-        ws = _week_start(now)
+        ws = game_week_start_utc(now)
         pipeline = [
             {"$addFields": {"_ts": {"$toDate": "$at"}}},
             {"$match": {"_ts": {"$gte": ws}, **staff_match}},
@@ -1129,9 +1124,9 @@ async def expire_stale_challenges(database):
 
 async def run_weekly_boxing_league_payout(database, test_run: bool = False):
     now = datetime.now(timezone.utc)
-    this_week_start = _week_start(now)
+    this_week_start = game_week_start_utc(now)
     last_week_start = this_week_start - timedelta(days=7)
-    last_week_start_str = last_week_start.strftime("%Y-%m-%d")
+    last_week_start_str = game_week_start_date_str(last_week_start)
     cfg = await database.game_config.find_one(
         {"id": BOXING_PAYOUT_CONFIG_ID},
         {"_id": 0, "last_run_week_start": 1, "top1_points": 1, "top2_points": 1, "top3_points": 1, "top4_10_points": 1},

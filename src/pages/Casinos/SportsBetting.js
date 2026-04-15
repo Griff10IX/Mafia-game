@@ -6,6 +6,7 @@ import { refreshUser } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
 import { getSportsBettingPrefetch, setSportsBettingPrefetch } from '../../utils/prefetchCache';
 import { Popover, PopoverContent, PopoverTrigger } from '../../components/ui/popover';
+import { formatGameDateTime } from '../../utils/gameDateTime';
 
 const BOARD_EVENTS_FILTER_STORAGE_KEY = 'sb-events-board-filter';
 
@@ -40,18 +41,7 @@ function formatMoney(n) {
 }
 
 function formatDateTime(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  // Do not mix dateStyle/timeStyle with timeZoneName — ECMA-402 throws RangeError ("Invalid option : option").
-  return d.toLocaleString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZoneName: 'short',
-  });
+  return formatGameDateTime(iso, { timeZoneName: 'short' });
 }
 
 /** For `<input type="datetime-local" />` in the user's local timezone. */

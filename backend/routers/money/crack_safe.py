@@ -1,5 +1,5 @@
 # Crack the Safe: jackpot game. Each attempt costs SAFE_ENTRY_COST. After a win, 24h lock unless you pay
-# SAFE_REPLAY_COST (max SAFE_REPLAY_MAX_PER_DAY per UTC day). Admins unlimited / no win lock.
+# SAFE_REPLAY_COST (max SAFE_REPLAY_MAX_PER_DAY per UK calendar day). Admins unlimited / no win lock.
 # Reward pool: cash jackpot (always) + 25% chance for 1 bonus token (Crimes XP, GTA XP, Melt, etc.)
 from datetime import datetime, timedelta, timezone
 import secrets
@@ -10,6 +10,7 @@ from pydantic import BaseModel, field_validator
 from fastapi import Depends, HTTPException
 
 from server import db, get_current_user, get_current_user_verified, _is_admin, log_activity
+from utils.game_timezone import game_today_date_str
 
 # Token types that can drop as bonus reward (matches armoury TOKEN_TYPES)
 SAFE_TOKEN_REWARD_TYPES = (
@@ -160,7 +161,7 @@ def register(router):
         win_locked = bool(not is_admin and win_lock_dt and win_lock_dt > now)
         win_lock_until_iso = win_lock_dt.isoformat() if win_locked else None
 
-        day_key = now.strftime("%Y-%m-%d")
+        day_key = game_today_date_str(now)
         replay_day = user.get("crack_safe_replay_day")
         replay_count_stored = int(user.get("crack_safe_replay_count") or 0)
         replays_today = replay_count_stored if replay_day == day_key else 0
@@ -199,7 +200,7 @@ def register(router):
             return {"ok": True, "message": "Admins are not locked out."}
         uid = user.get("id") or ""
         now = datetime.now(timezone.utc)
-        day_key = now.strftime("%Y-%m-%d")
+        day_key = game_today_date_str(now)
         # Atomic: money, active win lock, replay cap (UTC day) — avoids double-spend / over-count races
         replay_filter = {
             "id": uid,

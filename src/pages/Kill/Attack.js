@@ -6,6 +6,7 @@ import { formatReleaseUnlockLine } from '../../utils/releaseSoftLaunchDisplay';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
+import { formatGameDateTimeShort as formatDateTime } from '../../utils/gameDateTime';
 
 const ATTACK_STYLES = `
   @keyframes atk-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -20,18 +21,6 @@ const ATTACK_STYLES = `
   .atk-row:hover { background-color: rgba(var(--noir-primary-rgb), 0.04); }
   .atk-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 `;
-
-function formatDateTime(iso) {
-  if (!iso) return '-';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString('en-US', { 
-    month: 'short', 
-    day: 'numeric', 
-    hour: '2-digit', 
-    minute: '2-digit' 
-  });
-}
 
 /** Live countdown to expiry: "23h 59m 45s" → "0:00" when expired. Include seconds for live tick. */
 function formatCountdown(expiresAtIso) {

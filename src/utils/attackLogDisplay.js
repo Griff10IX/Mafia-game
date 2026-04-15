@@ -1,8 +1,7 @@
+import { formatGameDateTimeWithMilliseconds } from './gameDateTime';
+
 export function formatAttackLogTime(iso) {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  const ms = d.getMilliseconds();
-  return d.toLocaleString() + '.' + String(ms).padStart(3, '0');
+  return formatGameDateTimeWithMilliseconds(iso);
 }
 
 export function parseAttackLogUA(ua) {

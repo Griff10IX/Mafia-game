@@ -9,6 +9,7 @@ import PrestigeBadge from '../../components/PrestigeBadge';
 import CountryFlagThumb from '../../components/CountryFlagThumb';
 import FamilyEmblem from '../../components/FamilyEmblem';
 import styles from '../../styles/noir.module.css';
+import { formatGameDateTime as formatDateTime } from '../../utils/gameDateTime';
 
 const UO_STYLES = `
   @keyframes uo-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -27,18 +28,6 @@ const UO_STYLES = `
   .uo-hitlist:hover { box-shadow: 0 0 20px rgba(220, 38, 38, 0.65), 0 4px 16px rgba(0,0,0,0.3), inset 0 0 0 1px rgba(220, 38, 38, 0.4); }
   .uo-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 `;
-
-function formatDateTime(iso) {
-  if (!iso) return '-';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleString('en-US', { 
-    month: 'short', 
-    day: 'numeric', 
-    hour: '2-digit', 
-    minute: '2-digit' 
-  });
-}
 
 let _regionNamesEn;
 function countryDisplayName(code) {

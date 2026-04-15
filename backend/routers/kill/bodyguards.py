@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from fastapi import Depends, HTTPException, Query
 from pymongo import UpdateOne
+from utils.game_timezone import game_local_now
 from utils.point_provenance import log_points_event
 
 logger = logging.getLogger(__name__)
@@ -125,7 +126,7 @@ class BodyguardInviteRequest(BaseModel):
     target_username: str
     payment_points: int = 0  # points per week to bodyguard
     payment_money: int = 0   # money per week to bodyguard (in-game $)
-    payout_weekday: int = 0  # 0=Monday, 6=Sunday; pay runs on this day each week (UTC)
+    payout_weekday: int = 0  # 0=Monday, 6=Sunday; pay runs on this day each week (Europe/London)
     duration_hours: int = 168  # contract length (default 1 week); 0 = indefinite
 
 
@@ -1558,8 +1559,9 @@ async def run_bodyguard_weekly_payout(database, test_run: bool = False):
     import logging
     log = logging.getLogger(__name__)
     now = datetime.now(timezone.utc)
-    today_str = now.date().isoformat()
-    weekday = now.weekday()  # 0=Monday, 6=Sunday
+    loc = game_local_now(now)
+    today_str = loc.date().isoformat()
+    weekday = loc.weekday()  # 0=Monday, 6=Sunday (London calendar)
     query = {
         "is_robot": False,
         "bodyguard_user_id": {"$exists": True, "$ne": None},

@@ -334,7 +334,9 @@ async def _update_auto_rank_stats_melt(db, user_id: str, melted_count: int = 0, 
 
 
 def _today_utc(now: datetime) -> str:
-    return now.strftime("%Y-%m-%d")
+    from utils.game_timezone import game_today_date_str
+
+    return game_today_date_str(now)
 
 
 async def _inc_failed_today(db, user_id: str, field: str, date_field: str, now: datetime, count: int = 1):

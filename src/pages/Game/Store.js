@@ -13,6 +13,7 @@ import {
   SILVER_PACK_POINTS,
   SILVER_PACK_PRICE_GBP,
 } from '../../constants/gamePassPricing';
+import { formatGameDateTime, formatGameDateTimeShort, formatGameDateOnly } from '../../utils/gameDateTime';
 
 const STORE_STYLES = `
   .store-fade-in { animation: store-fade-in 0.4s ease-out both; }
@@ -106,7 +107,7 @@ const UPGRADES = [
 
 function StorePointsTransferRow({ t, compact }) {
   const amt = Number(t.amount).toLocaleString();
-  const when = t.created_at ? new Date(t.created_at).toLocaleString() : '';
+  const when = t.created_at ? formatGameDateTime(t.created_at) : '';
   const summary = `${amt} pts: ${t.from_username} → ${t.to_username}${when ? ` · ${when}` : ''}`;
   const onCopy = async (e) => {
     e.preventDefault();
@@ -425,20 +426,12 @@ export default function Store() {
         fetchPaymentTransactions();
       } else if (res.data.payment_status === 'paid') {
         if (res.data.manual_credit_pending || res.data.status === 'manual_credit_pending') {
-          const eta = res.data.manual_credit_eta
-            ? new Date(res.data.manual_credit_eta).toLocaleString('en-GB', {
-                day: 'numeric',
-                month: 'short',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              })
-            : null;
+          const eta = res.data.manual_credit_eta ? formatGameDateTimeShort(res.data.manual_credit_eta) : null;
           toast.success(
             `Payment received. ${Number(res.data.points_added || 0).toLocaleString()} points will be added manually by staff${eta ? ` (around ${eta})` : ''}.`,
           );
         } else if (res.data.preorder) {
-          const releaseDate = res.data.preorder_release_date ? new Date(res.data.preorder_release_date).toLocaleDateString() : 'launch';
+          const releaseDate = res.data.preorder_release_date ? formatGameDateOnly(res.data.preorder_release_date) : 'launch';
           toast.success(`Payment received. ${res.data.points_added} points will be credited on ${releaseDate}.`);
         } else {
           const pts = Number(res.data.points_added || 0);
@@ -569,13 +562,7 @@ export default function Store() {
                   {' '}
                   Planned crediting window:{' '}
                   <span className="text-sky-400 font-bold">
-                    {new Date(manualCreditEta).toLocaleString('en-GB', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
+                    {formatGameDateTimeShort(manualCreditEta)}
                   </span>
                 </>
               ) : null}
@@ -584,13 +571,7 @@ export default function Store() {
                   {' '}
                   On or after{' '}
                   <span className="text-zinc-300 font-semibold">
-                    {new Date(preorderReleaseDate).toLocaleString('en-GB', {
-                      day: 'numeric',
-                      month: 'short',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
+                    {formatGameDateTimeShort(preorderReleaseDate)}
                   </span>
                   , new point purchases are credited <span className="text-emerald-400/90">automatically as soon as payment succeeds</span>.
                 </>
@@ -619,7 +600,7 @@ export default function Store() {
             <p className="text-[10px] text-zinc-400 font-heading mt-1">
               Points purchased now will be credited on{' '}
               <span className="text-amber-400 font-bold">
-                {preorderReleaseDate ? new Date(preorderReleaseDate).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'launch date'}
+                {preorderReleaseDate ? formatGameDateTimeShort(preorderReleaseDate) : 'launch date'}
               </span>
               . Purchases on or after that time are credited <span className="text-emerald-400/90">automatically as soon as payment succeeds</span>.
             </p>
@@ -1177,7 +1158,7 @@ export default function Store() {
           <p className="text-[10px] text-zinc-500 font-heading italic">
             Payments via Stripe.{' '}
             {!storePointsAutoCredit
-              ? `Pre-order point purchases are added manually by staff${manualCreditEta ? ` (planned around ${new Date(manualCreditEta).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}).` : '.'} ${preorderReleaseDate ? `From ${new Date(preorderReleaseDate).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })} onward, new point purchases credit automatically when payment completes.` : 'After release, new point purchases credit automatically when payment completes.'}`
+              ? `Pre-order point purchases are added manually by staff${manualCreditEta ? ` (planned around ${formatGameDateTimeShort(manualCreditEta)}).` : '.'} ${preorderReleaseDate ? `From ${formatGameDateTimeShort(preorderReleaseDate)} onward, new point purchases credit automatically when payment completes.` : 'After release, new point purchases credit automatically when payment completes.'}`
               : preorderActive
                 ? 'Pre-order points credit on the release date above; purchases on or after that date credit automatically when payment completes.'
                 : 'Point purchases are credited automatically when payment completes.'}
@@ -1216,7 +1197,7 @@ export default function Store() {
                           : t.payment_status || 'Pending';
                 return (
                   <div key={t.session_id || i} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 px-2 py-1.5 text-[10px] font-heading border-b border-zinc-800/50 last:border-0">
-                    <span className="text-mutedForeground truncate" title={t.created_at}>{t.created_at ? new Date(t.created_at).toLocaleString() : '—'}</span>
+                    <span className="text-mutedForeground truncate" title={t.created_at}>{t.created_at ? formatGameDateTime(t.created_at) : '—'}</span>
                     <span className="capitalize">{t.package_id || '—'}</span>
                     <span className="text-right font-mono">+{Number(t.points || 0).toLocaleString()}</span>
                     <span className={statusClass}>{statusText}</span>

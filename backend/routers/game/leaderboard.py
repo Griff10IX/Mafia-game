@@ -8,6 +8,8 @@ from typing import List, Optional
 from fastapi import Depends, Query
 from pydantic import BaseModel
 
+from utils.game_timezone import game_week_range_utc, game_week_start_date_str, game_week_start_utc
+
 from server import (
     ADMIN_EMAILS,
     db,
@@ -94,14 +96,6 @@ _ATTACK_WEEKLY_PLAYER_KILL_MATCH = {
         {"$and": [{"is_bodyguard_kill": True}, {"is_npc_kill": {"$ne": True}}]},
     ],
 }
-
-
-def _week_start(dt: datetime) -> datetime:
-    """Monday 00:00 UTC as start of week."""
-    d = dt.date()
-    days_since_monday = (d.weekday()) % 7
-    start = d - timedelta(days=days_since_monday)
-    return datetime(start.year, start.month, start.day, tzinfo=timezone.utc)
 
 
 class LeaderboardEntry(BaseModel):
@@ -230,8 +224,7 @@ async def _top_by_field_weekly(
     Normalizes time field to date so both BSON Date and ISO string storage work."""
     limit = max(1, min(100, int(limit)))
     now = datetime.now(timezone.utc)
-    week_start = _week_start(now)
-    week_end = week_start + timedelta(days=7)
+    week_start, week_end = game_week_range_utc(now)
     match_stage = {"_lb_ts": {"$gte": week_start, "$lt": week_end}}
     if extra_match:
         match_stage.update(extra_match)
@@ -297,8 +290,7 @@ async def _top_by_field_weekly_sum(
     Used for weekly stock market profit and booze run profit."""
     limit = max(1, min(100, int(limit)))
     now = datetime.now(timezone.utc)
-    week_start = _week_start(now)
-    week_end = week_start + timedelta(days=7)
+    week_start, week_end = game_week_range_utc(now)
     match_stage = {"_lb_ts": {"$gte": week_start, "$lt": week_end}}
     if extra_match:
         match_stage.update(extra_match)
@@ -408,7 +400,7 @@ async def _top_by_field_for_week(
 async def _get_last_reward_winners(database) -> dict:
     """Last paid-out week's top 10 per category (kills, crimes, gta, jail_busts) with usernames for display."""
     now = datetime.now(timezone.utc)
-    this_week_start = _week_start(now)
+    this_week_start = game_week_start_utc(now)
     last_week_start = this_week_start - timedelta(days=7)
     kills, crimes, gta, jail_busts = await asyncio.gather(
         _top_by_field_for_week(
@@ -462,16 +454,16 @@ DEFAULT_TOP4_10_POINTS = 1500
 
 async def run_weekly_leaderboard_payout(database, test_run: bool = False):
     """
-    Run weekly leaderboard payout for the previous week (Monday 00:00 UTC to next Monday 00:00 UTC).
+    Run weekly leaderboard payout for the previous week (Monday 00:00 Europe/London to next Monday 00:00 London).
     Uses game_config id leaderboard_weekly_payout with last_run_week_start (YYYY-MM-DD) for idempotency.
     Rewards are read from game_config: top1_points, top2_points, top3_points, top4_10_points (defaults 3000, 1500, 750, 1500).
     Pays respect_points to top 10 per category (kills, crimes, gta, jail_busts) from database event collections.
     """
     log = logging.getLogger(__name__)
     now = datetime.now(timezone.utc)
-    this_week_start = _week_start(now)
+    this_week_start = game_week_start_utc(now)
     last_week_start = this_week_start - timedelta(days=7)
-    last_week_start_str = last_week_start.strftime("%Y-%m-%d")
+    last_week_start_str = game_week_start_date_str(last_week_start)
 
     cfg = await database.game_config.find_one(
         {"id": LEADERBOARD_PAYOUT_CONFIG_ID},
@@ -772,7 +764,7 @@ async def _fetch_top_boards_raw(limit: int, dead: bool, period: str) -> dict:
 async def get_top_leaderboards(
     limit: int = Query(10, ge=1, le=100, description="Top N (5, 10, 20, 50, 100)"),
     dead: bool = Query(False, description="If true, show top dead accounts instead of alive"),
-    period: str = Query("alltime", description="weekly = this week (Mon UTC), alltime = lifetime stats"),
+    period: str = Query("alltime", description="weekly = this week (Mon 00:00 UK), alltime = lifetime stats"),
     current_user: dict = Depends(get_current_user),
 ):
     """Top N leaderboards per stat. Results are cached briefly to keep background refreshes fast."""
@@ -783,7 +775,7 @@ async def get_top_leaderboards(
     # If we key only by period, "weekly" would reuse the previous week's cached data
     # until TTL expires. Include week_start so Monday reset becomes immediate.
     if period_l == "weekly":
-        week_start = _week_start(datetime.now(timezone.utc)).strftime("%Y-%m-%d")
+        week_start = game_week_start_date_str(datetime.now(timezone.utc))
         cache_key = f"{cache_key}:{week_start}"
     def _add_last_winners(resp: dict) -> dict:
         lrw = _last_reward_winners_cache.get("data")

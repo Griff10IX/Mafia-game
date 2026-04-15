@@ -25,13 +25,13 @@ PER_GAME_SIMPLE_SCORE_GAMES = frozenset(
 
 
 def current_week_start_iso() -> str:
-    from routers.minigames.minigame_leaderboard import _week_start
+    from utils.game_timezone import game_week_start_utc
 
-    return _week_start(datetime.now(timezone.utc)).isoformat().replace("+00:00", "Z")
+    return game_week_start_utc(datetime.now(timezone.utc)).isoformat().replace("+00:00", "Z")
 
 
 async def delete_minigame_weekly_plays_for_user(db, *, user_id: str, scope: str) -> int:
-    """scope: 'current' (this Mon UTC week) or 'all'."""
+    """scope: 'current' (this Mon 00:00 UK week) or 'all'."""
     if scope == "current":
         q = {"user_id": user_id, "week_start": current_week_start_iso()}
     else:

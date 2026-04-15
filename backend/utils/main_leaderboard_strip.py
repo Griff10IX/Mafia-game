@@ -1,20 +1,14 @@
 # Strip user rows that feed /leaderboards/top weekly (and optional all-time event history).
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Dict, Optional
 
-
-def _week_start(dt: datetime) -> datetime:
-    """Monday 00:00 UTC — must match routers.game.leaderboard._week_start."""
-    d = dt.date()
-    days_since_monday = (d.weekday()) % 7
-    start = d - timedelta(days=days_since_monday)
-    return datetime(start.year, start.month, start.day, tzinfo=timezone.utc)
+from utils.game_timezone import game_week_start_utc
 
 
 def _week_start_dt() -> datetime:
-    return _week_start(datetime.now(timezone.utc))
+    return game_week_start_utc(datetime.now(timezone.utc))
 
 
 def _expr_time_gte(time_field: str, week_start: datetime) -> dict:
@@ -45,7 +39,7 @@ async def strip_user_main_leaderboard_inputs(
     jail_busts: bool,
 ) -> Dict[str, object]:
     """
-    scope: 'current' = Mon UTC week only (matches in-game weekly boards); 'all' = entire history for selected categories.
+    scope: 'current' = Mon 00:00 UK week only (matches in-game weekly boards); 'all' = entire history for selected categories.
     stock_profit_rows: zeros profit_points on matching stock_transactions and adjusts users.stock_market_profit_total.
     booze_run_events: zeros profit on matching economy_events (type booze_run_sell) and adjusts users.booze_run_profit_total.
     """

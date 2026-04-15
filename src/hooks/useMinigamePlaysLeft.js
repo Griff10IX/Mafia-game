@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { getMinigamePlaysLeft } from "../utils/minigameRunSession";
 
 /**
- * Track remaining plays for a minigame (server rate-limit window, typically 10 per 2h UTC).
+ * Track remaining plays for a minigame (server rate-limit window, typically 10 per 2h; server uses UTC instants).
  * Fetches on mount; use `refresh` for GET /minigames/plays-left, `updateFromStart` after
  * POST .../run-session/start (or equivalent) to reserve one play in the UI, and
  * `applyPlaysLeftPayload` after submit/claim responses that include plays_left.
