@@ -75,7 +75,7 @@ function PreviewCard({ presetId, label, buttonLabel, onChoose }) {
 export default function FirstTimeThemeModal({ open, onClose, onChoose }) {
   if (!open) return null;
 
-  const handleSkip = () => {
+  const dismissChosen = () => {
     try {
       localStorage.setItem('app_initial_theme_chosen', '1');
     } catch (_) {}
@@ -85,7 +85,7 @@ export default function FirstTimeThemeModal({ open, onClose, onChoose }) {
   return (
     <div
       className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
-      onClick={onClose}
+      onClick={dismissChosen}
       role="dialog"
       aria-modal="true"
       aria-labelledby="first-time-theme-title"
@@ -119,7 +119,7 @@ export default function FirstTimeThemeModal({ open, onClose, onChoose }) {
         <div className="px-5 py-3 border-t border-primary/10 flex justify-center">
           <button
             type="button"
-            onClick={handleSkip}
+            onClick={dismissChosen}
             className="text-[11px] font-heading uppercase tracking-wider text-mutedForeground hover:text-foreground transition-colors"
           >
             Skip for now

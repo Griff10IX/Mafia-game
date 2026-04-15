@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'rea
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb } from 'lucide-react';
 import api, { getApiErrorMessage, onCooldownChange, invalidateApiCache } from '../utils/api';
+import { getThemeUiPlatform } from '../utils/themePlatform';
 import { readSessionJson } from '../utils/sessionPageCache';
 import { DASHBOARD_SESSION_CACHE_KEY } from '../utils/dashboardSessionCache';
 import { warmLeaderboardCaches } from '../utils/leaderboardTopCache';
@@ -202,7 +203,7 @@ function schedulePatchTopBarStatOrder(order) {
   if (topBarStatOrderPatchTimer) clearTimeout(topBarStatOrderPatchTimer);
   topBarStatOrderPatchTimer = setTimeout(() => {
     topBarStatOrderPatchTimer = null;
-    api.patch('/profile/theme', { top_bar_stat_order: order }).catch(() => {});
+    api.patch('/profile/theme', { top_bar_stat_order: order, theme_platform: getThemeUiPlatform() }).catch(() => {});
   }, TOPBAR_STAT_ORDER_PATCH_MS);
 }
 
@@ -395,16 +396,24 @@ export default function Layout({ children }) {
     setToastTextColour,
     setMobileNavStyle,
     setThemeVariant,
+    themeServerHydrated,
   } = useTheme();
   const closeRightSidebar = useCallback(() => {
     setRightSidebarOpen(false);
   }, []);
 
   useEffect(() => {
-    if (!user || typeof localStorage === 'undefined') return;
-    if (localStorage.getItem('app_initial_theme_chosen') === '1') return;
+    if (!user || typeof localStorage === 'undefined') {
+      setShowInitialThemeModal(false);
+      return;
+    }
+    if (!themeServerHydrated) return;
+    if (localStorage.getItem('app_initial_theme_chosen') === '1') {
+      setShowInitialThemeModal(false);
+      return;
+    }
     setShowInitialThemeModal(true);
-  }, [user]);
+  }, [user, themeServerHydrated]);
 
   useEffect(() => {
     if (!showInitialThemeModal) return;
@@ -1852,26 +1861,26 @@ export default function Layout({ children }) {
             const setTopBarGapPersist = (v) => {
               try { localStorage.setItem(TOPBAR_GAP_KEY, v); } catch (_) {}
               window.dispatchEvent(new Event('topbar-prefs-changed'));
-              api.patch('/profile/theme', { top_bar_gap: v }).catch(() => {});
+              api.patch('/profile/theme', { top_bar_gap: v, theme_platform: getThemeUiPlatform() }).catch(() => {});
             };
             const setTopBarSizePersist = (v) => {
               try { localStorage.setItem(TOPBAR_SIZE_KEY, v); } catch (_) {}
               window.dispatchEvent(new Event('topbar-prefs-changed'));
-              api.patch('/profile/theme', { top_bar_size: v }).catch(() => {});
+              api.patch('/profile/theme', { top_bar_size: v, theme_platform: getThemeUiPlatform() }).catch(() => {});
             };
             const setTopBarChipWidthScalePersist = (v) => {
               const n = Math.max(CHIP_SCALE_MIN, Math.min(CHIP_SCALE_MAX, Number(v)));
               try { localStorage.setItem(TOPBAR_CHIP_WIDTH_SCALE_KEY, String(n)); } catch (_) {}
               setTopBarChipWidthScale(n);
               window.dispatchEvent(new Event('topbar-prefs-changed'));
-              api.patch('/profile/theme', { top_bar_chip_width_scale: n }).catch(() => {});
+              api.patch('/profile/theme', { top_bar_chip_width_scale: n, theme_platform: getThemeUiPlatform() }).catch(() => {});
             };
             const setTopBarChipHeightScalePersist = (v) => {
               const n = Math.max(CHIP_SCALE_MIN, Math.min(CHIP_SCALE_MAX, Number(v)));
               try { localStorage.setItem(TOPBAR_CHIP_HEIGHT_SCALE_KEY, String(n)); } catch (_) {}
               setTopBarChipHeightScale(n);
               window.dispatchEvent(new Event('topbar-prefs-changed'));
-              api.patch('/profile/theme', { top_bar_chip_height_scale: n }).catch(() => {});
+              api.patch('/profile/theme', { top_bar_chip_height_scale: n, theme_platform: getThemeUiPlatform() }).catch(() => {});
             };
 
             const topBarGapClass = topBarGap === 'compact' ? 'gap-1 md:gap-2' : topBarGap === 'spread' ? 'gap-2 md:gap-4' : 'gap-1 md:gap-2';
@@ -2524,6 +2533,7 @@ export default function Layout({ children }) {
                   try { localStorage.setItem(NOTIFICATION_BALL_POSITION_KEY, JSON.stringify({ x: r.lastX, y: r.lastY })); } catch (_) {}
                   api.patch('/profile/theme', {
                     notification_ball_position: { x: Math.round(r.lastX), y: Math.round(r.lastY) },
+                    theme_platform: getThemeUiPlatform(),
                   }).catch(() => {});
                 }
                 else { openNotificationPanel(); }

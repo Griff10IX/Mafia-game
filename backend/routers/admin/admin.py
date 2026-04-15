@@ -4039,7 +4039,7 @@ def register(router):
 
     class AdminLeaderboardAdjustBody(BaseModel):
         target_username: str = Field(..., min_length=1)
-        metric: str = Field(..., description="crimes | gta | jail_busts | kills")
+        metric: str = Field(..., description="crimes | gta | jail_busts | kills | respect")
         period: str = Field(..., description="weekly | alltime")
         remove_count: int = Field(..., ge=1, le=50_000)
         dry_run: bool = Field(False)

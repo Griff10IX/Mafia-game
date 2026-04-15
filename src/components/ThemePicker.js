@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import api from '../utils/api';
+import { getThemeUiPlatform } from '../utils/themePlatform';
 import {
   Palette, X, RotateCcw, MousePointer2, Minus, LayoutGrid, Plus, Trash2,
   Type, Square, Sparkles, AlignLeft, Box, PanelLeft, PanelRight,
@@ -279,57 +280,57 @@ export default function ThemePicker({ open, onClose }) {
     const n = Math.max(CHIP_MIN, Math.min(CHIP_MAX, v));
     setChipW(n);
     lsSet(KEYS.chipW, n, 'topbar-prefs-changed');
-    api.patch('/profile/theme', { top_bar_chip_width_scale: n }).catch(() => {});
+    api.patch('/profile/theme', { top_bar_chip_width_scale: n, theme_platform: getThemeUiPlatform() }).catch(() => {});
   };
   const setChipHP = (v) => {
     const n = Math.max(CHIP_MIN, Math.min(CHIP_MAX, v));
     setChipH(n);
     lsSet(KEYS.chipH, n, 'topbar-prefs-changed');
-    api.patch('/profile/theme', { top_bar_chip_height_scale: n }).catch(() => {});
+    api.patch('/profile/theme', { top_bar_chip_height_scale: n, theme_platform: getThemeUiPlatform() }).catch(() => {});
   };
   const setGap = (v) => {
     lsSet(KEYS.gap, v, 'topbar-prefs-changed');
-    api.patch('/profile/theme', { top_bar_gap: v }).catch(() => {});
+    api.patch('/profile/theme', { top_bar_gap: v, theme_platform: getThemeUiPlatform() }).catch(() => {});
   };
   const setSize = (v) => {
     lsSet(KEYS.size, v, 'topbar-prefs-changed');
-    api.patch('/profile/theme', { top_bar_size: v }).catch(() => {});
+    api.patch('/profile/theme', { top_bar_size: v, theme_platform: getThemeUiPlatform() }).catch(() => {});
   };
   const setStatsDisplay = (v) => {
     lsSet(KEYS.statsDisplay, v, 'mobile-stats-display-changed');
-    api.patch('/profile/theme', { mobile_stats_display: v }).catch(() => {});
+    api.patch('/profile/theme', { mobile_stats_display: v, theme_platform: getThemeUiPlatform() }).catch(() => {});
   };
   const setSidebarDividers = (v) => {
     lsSet(KEYS.sidebarDividers, v ? 'true' : 'false', 'sidebar-dividers-changed');
-    api.patch('/profile/theme', { sidebar_show_dividers: v }).catch(() => {});
+    api.patch('/profile/theme', { sidebar_show_dividers: v, theme_platform: getThemeUiPlatform() }).catch(() => {});
   };
   const setDividerStyle = (v) => {
     lsSet(KEYS.dividerStyle, v, 'sidebar-layout-changed');
-    api.patch('/profile/theme', { sidebar_divider_style: v }).catch(() => {});
+    api.patch('/profile/theme', { sidebar_divider_style: v, theme_platform: getThemeUiPlatform() }).catch(() => {});
   };
   const setSidebarSpacing = (v) => {
     lsSet(KEYS.sidebarSpacing, v, 'sidebar-layout-changed');
-    api.patch('/profile/theme', { sidebar_spacing: v }).catch(() => {});
+    api.patch('/profile/theme', { sidebar_spacing: v, theme_platform: getThemeUiPlatform() }).catch(() => {});
   };
   const setSidebarLayout = (v) => {
     lsSet(KEYS.sidebarLayout, v, 'sidebar-layout-changed');
-    api.patch('/profile/theme', { sidebar_layout: v }).catch(() => {});
+    api.patch('/profile/theme', { sidebar_layout: v, theme_platform: getThemeUiPlatform() }).catch(() => {});
   };
   const setToastPosition = (v) => {
     lsSet(KEYS.toastPosition, v, 'toast-prefs-changed');
-    api.patch('/profile/theme', { toast_position: v }).catch(() => {});
+    api.patch('/profile/theme', { toast_position: v, theme_platform: getThemeUiPlatform() }).catch(() => {});
   };
   const setToastCloseButton = (v) => {
     lsSet(KEYS.toastCloseButton, v ? 'true' : 'false', 'toast-prefs-changed');
-    api.patch('/profile/theme', { toast_close_button: v }).catch(() => {});
+    api.patch('/profile/theme', { toast_close_button: v, theme_platform: getThemeUiPlatform() }).catch(() => {});
   };
   const setKillToastStyle = (v) => {
     lsSet(KEYS.killToastStyle, v, 'kill-toast-style-changed');
-    api.patch('/profile/theme', { kill_toast_style: v }).catch(() => {});
+    api.patch('/profile/theme', { kill_toast_style: v, theme_platform: getThemeUiPlatform() }).catch(() => {});
   };
   const setBottomDividers = (v) => {
     lsSet(KEYS.bottomDividers, v ? 'true' : 'false', 'bottom-nav-dividers-changed');
-    api.patch('/profile/theme', { bottom_nav_show_dividers: v }).catch(() => {});
+    api.patch('/profile/theme', { bottom_nav_show_dividers: v, theme_platform: getThemeUiPlatform() }).catch(() => {});
   };
 
   /* ── data ── */
@@ -375,7 +376,7 @@ export default function ThemePicker({ open, onClose }) {
     if (p.themeVariant != null) setThemeVariant(p.themeVariant);
     if (p.mobileStatsDisplay != null) {
       lsSet(KEYS.statsDisplay, p.mobileStatsDisplay, 'mobile-stats-display-changed');
-      api.patch('/profile/theme', { mobile_stats_display: p.mobileStatsDisplay }).catch(() => {});
+      api.patch('/profile/theme', { mobile_stats_display: p.mobileStatsDisplay, theme_platform: getThemeUiPlatform() }).catch(() => {});
     }
   };
 

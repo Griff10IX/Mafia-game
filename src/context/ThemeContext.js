@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { getThemeColour, getThemeTexture, getThemeFont, getThemeButtonStyle, getThemeWritingColour, getThemeTextStyle, DEFAULT_COLOUR_ID, DEFAULT_TEXTURE_ID, DEFAULT_FONT_ID, DEFAULT_BUTTON_STYLE_ID, DEFAULT_WRITING_COLOUR_ID, DEFAULT_TEXT_STYLE_ID, DEFAULT_THEME_VARIANT } from '../constants/themes';
 import api from '../utils/api';
+import { getThemeUiPlatform } from '../utils/themePlatform';
 
 const STORAGE_KEY_COLOUR = 'app_theme_colour';
 const STORAGE_KEY_TEXTURE = 'app_theme_texture';
@@ -403,6 +404,8 @@ const ThemeContext = createContext(null);
 
 export function ThemeProvider({ children }) {
   const themeSourceRef = useRef('local'); // 'server' = just loaded from API, skip next persist
+  /** True after first GET /profile/theme settles (success or failure). Used to avoid first-visit theme modal racing server prefs. */
+  const [themeServerHydrated, setThemeServerHydrated] = useState(false);
   const [colourId, setColourIdState] = useState(() => {
     try {
       return localStorage.getItem(STORAGE_KEY_COLOUR) || DEFAULT_COLOUR_ID;
@@ -611,83 +614,76 @@ export function ThemeProvider({ children }) {
   }, [themeVariant, modernVisualQuality]);
 
   const themeLoadedRef = useRef(false);
-  useEffect(() => {
-    api.get('/profile/theme').then((res) => {
-      const prefs = res.data?.theme_preferences;
-      if (!prefs || typeof prefs !== 'object' || Object.keys(prefs).length === 0) {
-        try {
-          localStorage.setItem(STORAGE_KEY_FONT, DEFAULT_FONT_ID);
-          setFontIdState(DEFAULT_FONT_ID);
-        } catch (_) {}
-        themeLoadedRef.current = true;
-        return;
-      }
-      themeSourceRef.current = 'server';
-      try {
-        if (prefs.sidebarLayout != null && (prefs.sidebarLayout === 'default' || prefs.sidebarLayout === 'categorized' || prefs.sidebarLayout === 'categorized_classic')) {
-          localStorage.setItem('sidebar_layout', prefs.sidebarLayout);
-          window.dispatchEvent(new Event('sidebar-layout-changed'));
-        }
-        if (prefs.colourId != null) { localStorage.setItem(STORAGE_KEY_COLOUR, prefs.colourId); setColourIdState(prefs.colourId); }
-        if (prefs.textureId != null) { localStorage.setItem(STORAGE_KEY_TEXTURE, prefs.textureId); setTextureIdState(prefs.textureId); }
-        if (prefs.buttonColourId !== undefined) { localStorage.setItem(STORAGE_KEY_BUTTON, prefs.buttonColourId || ''); setButtonColourIdState(prefs.buttonColourId || null); }
-        if (prefs.accentLineColourId !== undefined) { localStorage.setItem(STORAGE_KEY_ACCENT_LINE, prefs.accentLineColourId || ''); setAccentLineColourIdState(prefs.accentLineColourId || null); }
-        if (prefs.fontId != null && prefs.fontId !== '') {
-          localStorage.setItem(STORAGE_KEY_FONT, prefs.fontId);
-          setFontIdState(prefs.fontId);
-        } else {
-          localStorage.setItem(STORAGE_KEY_FONT, DEFAULT_FONT_ID);
-          setFontIdState(DEFAULT_FONT_ID);
-        }
-        if (prefs.buttonStyleId != null) { localStorage.setItem(STORAGE_KEY_BUTTON_STYLE, prefs.buttonStyleId); setButtonStyleIdState(prefs.buttonStyleId); }
-        if (prefs.writingColourId != null) { localStorage.setItem(STORAGE_KEY_WRITING, prefs.writingColourId); setWritingColourIdState(prefs.writingColourId); }
-        if (prefs.mutedWritingColourId !== undefined) { localStorage.setItem(STORAGE_KEY_MUTED_WRITING, prefs.mutedWritingColourId || ''); setMutedWritingColourIdState(prefs.mutedWritingColourId || null); }
-        if (prefs.toastTextColourId !== undefined) { localStorage.setItem(STORAGE_KEY_TOAST_TEXT, prefs.toastTextColourId || ''); setToastTextColourIdState(prefs.toastTextColourId || null); }
-        if (prefs.textStyleId != null) { localStorage.setItem(STORAGE_KEY_TEXT_STYLE, prefs.textStyleId); setTextStyleIdState(prefs.textStyleId); }
-        const loadedThemeVariant = (prefs.themeVariant === 'modern' || prefs.themeVariant === 'classic')
-          ? prefs.themeVariant
-          : (prefs.theme_variant === 'modern' || prefs.theme_variant === 'classic')
-          ? prefs.theme_variant
-          : (prefs.textureId === 'modern-soft' ? 'modern' : DEFAULT_THEME_VARIANT);
-        localStorage.setItem(STORAGE_KEY_THEME_VARIANT, loadedThemeVariant);
-        setThemeVariantState(loadedThemeVariant);
-        if (Array.isArray(prefs.customThemes)) { localStorage.setItem(STORAGE_KEY_CUSTOM_THEMES, JSON.stringify(prefs.customThemes)); setCustomThemesState(prefs.customThemes); }
-        if (prefs.mobileNavStyle === 'bottom' || prefs.mobileNavStyle === 'sidebar') {
-          localStorage.setItem(STORAGE_KEY_MOBILE_NAV, prefs.mobileNavStyle);
-          setMobileNavStyleState(prefs.mobileNavStyle);
-        }
-        if (prefs.mobileStatsDisplay != null && ['top_bar', 'touch_ball', 'right_sidebar'].includes(prefs.mobileStatsDisplay)) {
-          try {
-            localStorage.setItem(MOBILE_STATS_DISPLAY_LS, prefs.mobileStatsDisplay);
-            window.dispatchEvent(new Event('mobile-stats-display-changed'));
-          } catch (_) {}
-        }
-        if (prefs.buttonShapeId != null) { localStorage.setItem(STORAGE_KEY_BUTTON_SHAPE, prefs.buttonShapeId); setButtonShapeIdState(prefs.buttonShapeId); }
-        applyLayoutPrefsFromServerToLS(prefs).forEach((ev) => {
-          try { window.dispatchEvent(new Event(ev)); } catch (_) {}
-        });
-        if (prefs.colourId != null || prefs.theme_variant != null || prefs.themeVariant != null) {
-          try {
-            localStorage.setItem('app_initial_theme_chosen', '1');
-            if (typeof window !== 'undefined') window.dispatchEvent(new Event('app-initial-theme-chosen'));
-          } catch (_) {}
-        }
-      } catch (_) {}
-    }).catch(() => {}).finally(() => { themeLoadedRef.current = true; });
-  }, []);
+  const serverThemePcRef = useRef(null);
+  const serverThemeMobileRef = useRef(null);
+  const themeViewportBucketRef = useRef(null);
 
-  useEffect(() => {
-    if (!themeLoadedRef.current) return;
-    if (themeSourceRef.current === 'server') {
-      themeSourceRef.current = 'local';
+  const applyThemePreferencesFromServer = useCallback((prefs) => {
+    if (!prefs || typeof prefs !== 'object' || Object.keys(prefs).length === 0) {
+      try {
+        localStorage.setItem(STORAGE_KEY_FONT, DEFAULT_FONT_ID);
+        setFontIdState(DEFAULT_FONT_ID);
+      } catch (_) {}
       return;
     }
+    themeSourceRef.current = 'server';
+    try {
+      if (prefs.sidebarLayout != null && (prefs.sidebarLayout === 'default' || prefs.sidebarLayout === 'categorized' || prefs.sidebarLayout === 'categorized_classic')) {
+        localStorage.setItem('sidebar_layout', prefs.sidebarLayout);
+        window.dispatchEvent(new Event('sidebar-layout-changed'));
+      }
+      if (prefs.colourId != null) { localStorage.setItem(STORAGE_KEY_COLOUR, prefs.colourId); setColourIdState(prefs.colourId); }
+      if (prefs.textureId != null) { localStorage.setItem(STORAGE_KEY_TEXTURE, prefs.textureId); setTextureIdState(prefs.textureId); }
+      if (prefs.buttonColourId !== undefined) { localStorage.setItem(STORAGE_KEY_BUTTON, prefs.buttonColourId || ''); setButtonColourIdState(prefs.buttonColourId || null); }
+      if (prefs.accentLineColourId !== undefined) { localStorage.setItem(STORAGE_KEY_ACCENT_LINE, prefs.accentLineColourId || ''); setAccentLineColourIdState(prefs.accentLineColourId || null); }
+      if (prefs.fontId != null && prefs.fontId !== '') {
+        localStorage.setItem(STORAGE_KEY_FONT, prefs.fontId);
+        setFontIdState(prefs.fontId);
+      } else {
+        localStorage.setItem(STORAGE_KEY_FONT, DEFAULT_FONT_ID);
+        setFontIdState(DEFAULT_FONT_ID);
+      }
+      if (prefs.buttonStyleId != null) { localStorage.setItem(STORAGE_KEY_BUTTON_STYLE, prefs.buttonStyleId); setButtonStyleIdState(prefs.buttonStyleId); }
+      if (prefs.writingColourId != null) { localStorage.setItem(STORAGE_KEY_WRITING, prefs.writingColourId); setWritingColourIdState(prefs.writingColourId); }
+      if (prefs.mutedWritingColourId !== undefined) { localStorage.setItem(STORAGE_KEY_MUTED_WRITING, prefs.mutedWritingColourId || ''); setMutedWritingColourIdState(prefs.mutedWritingColourId || null); }
+      if (prefs.toastTextColourId !== undefined) { localStorage.setItem(STORAGE_KEY_TOAST_TEXT, prefs.toastTextColourId || ''); setToastTextColourIdState(prefs.toastTextColourId || null); }
+      if (prefs.textStyleId != null) { localStorage.setItem(STORAGE_KEY_TEXT_STYLE, prefs.textStyleId); setTextStyleIdState(prefs.textStyleId); }
+      const loadedThemeVariant = (prefs.themeVariant === 'modern' || prefs.themeVariant === 'classic')
+        ? prefs.themeVariant
+        : (prefs.theme_variant === 'modern' || prefs.theme_variant === 'classic')
+        ? prefs.theme_variant
+        : (prefs.textureId === 'modern-soft' ? 'modern' : DEFAULT_THEME_VARIANT);
+      localStorage.setItem(STORAGE_KEY_THEME_VARIANT, loadedThemeVariant);
+      setThemeVariantState(loadedThemeVariant);
+      if (Array.isArray(prefs.customThemes)) { localStorage.setItem(STORAGE_KEY_CUSTOM_THEMES, JSON.stringify(prefs.customThemes)); setCustomThemesState(prefs.customThemes); }
+      if (prefs.mobileNavStyle === 'bottom' || prefs.mobileNavStyle === 'sidebar') {
+        localStorage.setItem(STORAGE_KEY_MOBILE_NAV, prefs.mobileNavStyle);
+        setMobileNavStyleState(prefs.mobileNavStyle);
+      }
+      if (prefs.mobileStatsDisplay != null && ['top_bar', 'touch_ball', 'right_sidebar'].includes(prefs.mobileStatsDisplay)) {
+        try {
+          localStorage.setItem(MOBILE_STATS_DISPLAY_LS, prefs.mobileStatsDisplay);
+          window.dispatchEvent(new Event('mobile-stats-display-changed'));
+        } catch (_) {}
+      }
+      if (prefs.buttonShapeId != null) { localStorage.setItem(STORAGE_KEY_BUTTON_SHAPE, prefs.buttonShapeId); setButtonShapeIdState(prefs.buttonShapeId); }
+      applyLayoutPrefsFromServerToLS(prefs).forEach((ev) => {
+        try { window.dispatchEvent(new Event(ev)); } catch (_) {}
+      });
+      try {
+        localStorage.setItem('app_initial_theme_chosen', '1');
+        if (typeof window !== 'undefined') window.dispatchEvent(new Event('app-initial-theme-chosen'));
+      } catch (_) {}
+    } catch (_) {}
+  }, []);
+
+  const buildThemePatchPayload = useCallback(() => {
     let mobile_stats_display = null;
     try {
       const msd = typeof localStorage !== 'undefined' ? localStorage.getItem(MOBILE_STATS_DISPLAY_LS) : null;
       if (msd === 'top_bar' || msd === 'touch_ball' || msd === 'right_sidebar') mobile_stats_display = msd;
     } catch (_) {}
-    const payload = {
+    return {
       colour_id: colourId,
       texture_id: textureId,
       button_colour_id: buttonColourId || null,
@@ -706,10 +702,61 @@ export function ThemeProvider({ children }) {
       button_shape_id: buttonShapeId || null,
       ...readLayoutSnapshotForPatch(),
     };
+  }, [colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, mutedWritingColourId, toastTextColourId, textStyleId, customThemes, themeVariant, mobileNavStyle, buttonShapeId]);
+
+  useEffect(() => {
+    api.get('/profile/theme').then((res) => {
+      const pc = res.data?.theme_preferences_pc ?? res.data?.theme_preferences ?? {};
+      const mobile = res.data?.theme_preferences_mobile ?? res.data?.theme_preferences ?? {};
+      serverThemePcRef.current = pc;
+      serverThemeMobileRef.current = mobile;
+      themeViewportBucketRef.current = getThemeUiPlatform();
+      const prefs = getThemeUiPlatform() === 'mobile' ? mobile : pc;
+      applyThemePreferencesFromServer(prefs);
+    }).catch(() => {}).finally(() => {
+      themeLoadedRef.current = true;
+      setThemeServerHydrated(true);
+    });
+  }, [applyThemePreferencesFromServer]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const mq = window.matchMedia('(max-width: 767px)');
+    const onViewportThemeBucketChange = async () => {
+      const next = getThemeUiPlatform();
+      const prev = themeViewportBucketRef.current;
+      if (prev == null || next === prev) return;
+      if (!themeLoadedRef.current) return;
+      themeViewportBucketRef.current = next;
+      const payload = { ...buildThemePatchPayload(), theme_platform: prev };
+      try {
+        await api.patch('/profile/theme', payload);
+      } catch (_) {}
+      try {
+        const res = await api.get('/profile/theme');
+        const npc = res.data?.theme_preferences_pc ?? res.data?.theme_preferences ?? {};
+        const nmo = res.data?.theme_preferences_mobile ?? res.data?.theme_preferences ?? {};
+        serverThemePcRef.current = npc;
+        serverThemeMobileRef.current = nmo;
+        const toApply = next === 'mobile' ? nmo : npc;
+        applyThemePreferencesFromServer(toApply);
+      } catch (_) {}
+    };
+    mq.addEventListener('change', onViewportThemeBucketChange);
+    return () => mq.removeEventListener('change', onViewportThemeBucketChange);
+  }, [applyThemePreferencesFromServer, buildThemePatchPayload]);
+
+  useEffect(() => {
+    if (!themeLoadedRef.current) return;
+    if (themeSourceRef.current === 'server') {
+      themeSourceRef.current = 'local';
+      return;
+    }
+    const payload = { ...buildThemePatchPayload(), theme_platform: getThemeUiPlatform() };
     api.patch('/profile/theme', payload).then(() => {
       try { window.dispatchEvent(new CustomEvent('theme-saved')); } catch (_) {}
     }).catch(() => {});
-  }, [colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, mutedWritingColourId, toastTextColourId, textStyleId, customThemes, themeVariant, mobileNavStyle, buttonShapeId]);
+  }, [colourId, textureId, buttonColourId, accentLineColourId, fontId, buttonStyleId, writingColourId, mutedWritingColourId, toastTextColourId, textStyleId, customThemes, themeVariant, mobileNavStyle, buttonShapeId, buildThemePatchPayload]);
 
   const setColour = useCallback((id) => {
     setColourIdState(id);
@@ -880,6 +927,7 @@ export function ThemeProvider({ children }) {
     setThemeVariant,
     modernVisualQuality,
     setModernVisualQuality,
+    themeServerHydrated,
   };
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

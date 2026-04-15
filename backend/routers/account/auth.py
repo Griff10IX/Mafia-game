@@ -661,6 +661,15 @@ def register(router):
                 )
 
             user_id = str(uuid.uuid4())
+            _default_theme_prefs = {
+                "colourId": "sky",
+                "textureId": "modern-soft",
+                "themeVariant": "modern",
+                "sidebarLayout": "categorized_classic",
+                "mobileNavStyle": "bottom",
+                "mobileStatsDisplay": "touch_ball",
+                "fontId": "clean",
+            }
             user_doc = {
                 "id": user_id,
                 "email": str(user_data.email.strip().lower()),
@@ -748,15 +757,9 @@ def register(router):
                 "auto_rank_enabled": False,
                 "mission_completions": [],
                 "unlocked_maps_up_to": "Chicago",
-                "theme_preferences": {
-                    "colourId": "sky",
-                    "textureId": "modern-soft",
-                    "themeVariant": "modern",
-                    "sidebarLayout": "categorized_classic",
-                    "mobileNavStyle": "bottom",
-                    "mobileStatsDisplay": "touch_ball",
-                    "fontId": "clean",
-                },
+                "theme_preferences": _default_theme_prefs,
+                "theme_preferences_pc": dict(_default_theme_prefs),
+                "theme_preferences_mobile": dict(_default_theme_prefs),
                 "founding_member": False,
                 "founding_rewards_claimed": False,
                 "badges": [],
@@ -1040,7 +1043,10 @@ def register(router):
         # Theme/dashboard sync via GET /profile/theme and /profile/dashboard — omit here to slim login JSON.
         skip = {
             "password_hash", "is_dead", "dead_at", "points_at_death", "retrieval_used",
-            "theme_preferences", "dashboard_preferences",
+            "theme_preferences",
+            "theme_preferences_pc",
+            "theme_preferences_mobile",
+            "dashboard_preferences",
         }
         out = {}
         for k, v in user.items():

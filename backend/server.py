@@ -691,7 +691,9 @@ class UserResponse(BaseModel):
     casino_profit: int = 0  # $ from owned casino table
     property_profit: int = 0  # points from owned property (e.g. airport)
     has_casino_or_property: bool = False  # true if user owns a casino or property (airport, bullet factory, armory) — for menu visibility
-    theme_preferences: Optional[Dict] = None  # saved theme (colour, font, etc.) for cross-device sync
+    theme_preferences: Optional[Dict] = None  # legacy single bucket; PC/mobile use theme_preferences_pc / theme_preferences_mobile
+    theme_preferences_pc: Optional[Dict] = None
+    theme_preferences_mobile: Optional[Dict] = None
     dashboard_preferences: Optional[Dict] = None  # dashboard layout (section order, at_a_glance visibility/stats)
     account_locked: bool = False  # under investigation: only /locked page and one comment allowed
     account_locked_at: Optional[str] = None
@@ -789,6 +791,7 @@ class NotificationBallPositionRequest(BaseModel):
 
 class ThemePreferencesRequest(BaseModel):
     """Theme preferences (all optional). Omitted keys are left unchanged; send full object to replace."""
+    theme_platform: Optional[str] = None  # "pc" | "mobile" — which bucket to update; omitted defaults to pc (back-compat)
     colour_id: Optional[str] = None
     texture_id: Optional[str] = None
     button_colour_id: Optional[str] = None

@@ -6,7 +6,7 @@ import os
 import re
 import secrets
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import Any, Dict, Optional
 from urllib.parse import urlencode, urlparse
 
 _VALID_TOAST_POSITIONS = frozenset(
@@ -16,6 +16,30 @@ _VALID_TOPBAR_STAT_IDS = frozenset(
     ("rank", "health", "bullets", "kills", "money", "points", "respect_points", "notifications", "property")
 )
 _CHIP_SCALE_MIN, _CHIP_SCALE_MAX = 20, 100
+
+
+def _theme_legacy_prefs(user: Dict[str, Any]) -> Dict[str, Any]:
+    t = user.get("theme_preferences")
+    return dict(t) if isinstance(t, dict) else {}
+
+
+def _theme_bucket_prefs(user: Dict[str, Any], *, platform_pc: bool) -> Dict[str, Any]:
+    key = "theme_preferences_pc" if platform_pc else "theme_preferences_mobile"
+    raw = user.get(key)
+    if isinstance(raw, dict):
+        return dict(raw)
+    return _theme_legacy_prefs(user)
+
+
+def _theme_response_payload(user: Dict[str, Any]) -> Dict[str, Any]:
+    pc = _theme_bucket_prefs(user, platform_pc=True)
+    mobile = _theme_bucket_prefs(user, platform_pc=False)
+    return {
+        "theme_preferences_pc": pc,
+        "theme_preferences_mobile": mobile,
+        "theme_preferences": pc,
+    }
+
 
 import httpx
 from fastapi import Body, Depends, File, HTTPException, Query, UploadFile
@@ -1162,16 +1186,22 @@ def register(router):
 
     @router.get("/profile/theme")
     async def get_profile_theme(current_user: dict = Depends(get_current_user)):
-        """Get current user's theme preferences (for cross-device sync). Returns defaults if never set."""
-        prefs = current_user.get("theme_preferences") or {}
-        return {"theme_preferences": prefs}
+        """Get current user's theme preferences (PC vs mobile stored separately; legacy theme_preferences is fallback)."""
+        return _theme_response_payload(current_user)
 
     @router.patch("/profile/theme")
     async def update_profile_theme(request: ThemePreferencesRequest, current_user: dict = Depends(get_current_user)):
         """Save theme preferences to DB so they sync across devices. Only provided keys are updated. Null = clear."""
         updates = request.model_dump(exclude_unset=True)
+        theme_platform_raw = updates.pop("theme_platform", None)
+        if theme_platform_raw is None:
+            platform = "pc"
+        else:
+            platform = str(theme_platform_raw).strip().lower()
+            if platform not in ("pc", "mobile"):
+                raise HTTPException(status_code=400, detail="theme_platform must be 'pc' or 'mobile'")
         if not updates:
-            return {"message": "No theme updates", "theme_preferences": current_user.get("theme_preferences") or {}}
+            return {"message": "No theme updates", **_theme_response_payload(current_user)}
         key_map = {
             "colour_id": "colourId",
             "texture_id": "textureId",
@@ -1254,12 +1284,16 @@ def register(router):
         msd = stored.get("mobileStatsDisplay")
         if msd is not None and msd not in ("top_bar", "touch_ball", "right_sidebar"):
             raise HTTPException(status_code=400, detail="Invalid mobile_stats_display")
-        new_prefs = {**(current_user.get("theme_preferences") or {}), **stored}
+        field = "theme_preferences_pc" if platform == "pc" else "theme_preferences_mobile"
+        base = _theme_bucket_prefs(current_user, platform_pc=(platform == "pc"))
+        new_prefs = {**base, **stored}
         await db.users.update_one(
             {"id": current_user["id"]},
-            {"$set": {"theme_preferences": new_prefs}},
+            {"$set": {field: new_prefs}},
         )
-        return {"message": "Theme saved", "theme_preferences": new_prefs}
+        merged_user = dict(current_user)
+        merged_user[field] = new_prefs
+        return {"message": "Theme saved", "theme_platform": platform, **_theme_response_payload(merged_user)}
 
     DEFAULT_SECTION_ORDER = [
         "rank_progress", "rewards_objectives", "notifications_event",

@@ -7384,7 +7384,9 @@ export default function Admin() {
               <div className="rounded-md border border-amber-600/30 bg-amber-950/20 p-3 space-y-2">
                 <div className="text-[10px] font-heading font-bold text-amber-200/90 uppercase tracking-wider">Partial remove (oldest rows first)</div>
                 <p className="text-[9px] text-mutedForeground font-heading">
-                  Crimes / GTA: user totals decrement only for deleted rows with <code className="text-[8px] bg-zinc-800/80 px-1 rounded">success: true</code>. Cap 50,000 per request.
+                  Crimes / GTA: user totals decrement only for deleted rows with <code className="text-[8px] bg-zinc-800/80 px-1 rounded">success: true</code>. Respect: deletes oldest{' '}
+                  <code className="text-[8px] bg-zinc-800/80 px-1 rounded">respect_events</code> rows;{' '}
+                  <code className="text-[8px] bg-zinc-800/80 px-1 rounded">respect_points</code> changes by the negated sum of removed row amounts (weekly = positive-earn rows in the week, same as the board). Cap 50,000 per request.
                 </p>
                 <div className="flex flex-wrap items-center gap-2 text-[10px] font-heading">
                   <AdminSelect value={userLbAdjustMetric} onChange={(e) => setUserLbAdjustMetric(e.target.value)}>
@@ -7392,6 +7394,7 @@ export default function Admin() {
                     <option value="gta">gta</option>
                     <option value="jail_busts">jail_busts</option>
                     <option value="kills">kills</option>
+                    <option value="respect">respect</option>
                   </AdminSelect>
                   <AdminSelect value={userLbAdjustPeriod} onChange={(e) => setUserLbAdjustPeriod(e.target.value)}>
                     <option value="weekly">weekly (Mon UTC)</option>

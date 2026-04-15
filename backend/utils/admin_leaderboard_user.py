@@ -297,8 +297,28 @@ async def adjust_user_leaderboard_metric(
         if n:
             user_inc["total_kills"] = -n
 
+    elif m == "respect":
+        # Weekly board sums positive respect_events only; all-time removes oldest rows by time (any amount).
+        if p == "weekly":
+            base: Dict[str, Any] = dict(_week_match_for_user(user_id, "at", week_start, week_end))
+            base["amount"] = {"$gt": 0}
+        else:
+            base = {"user_id": user_id}
+        docs = await _fetch_oldest_ids(
+            db,
+            collection="respect_events",
+            match=base,
+            sort_field="at",
+            limit=remove_count,
+            projection={"_id": 1, "amount": 1},
+        )
+        deleted_ids = [d["_id"] for d in docs]
+        delta = sum(int(d.get("amount") or 0) for d in docs)
+        if delta:
+            user_inc["respect_points"] = -delta
+
     else:
-        raise ValueError(f"Unsupported metric '{metric}'. Use: crimes, gta, jail_busts, kills")
+        raise ValueError(f"Unsupported metric '{metric}'. Use: crimes, gta, jail_busts, kills, respect")
 
     result: Dict[str, Any] = {
         "metric": m,
@@ -322,6 +342,7 @@ async def adjust_user_leaderboard_metric(
         "gta": "gta_events",
         "jail_busts": "bust_events",
         "kills": "attack_attempts",
+        "respect": "respect_events",
     }[m]
     res = await getattr(db, coll_name).delete_many({"_id": {"$in": deleted_ids}})
     result["deleted_count"] = int(res.deleted_count or 0)
