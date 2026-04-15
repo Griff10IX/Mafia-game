@@ -717,12 +717,11 @@ export default function ForumTopic() {
         toast.error('Set reward cash, points, or both for manual games.');
         return;
       }
-      const multiplier = createGameType === 'gbox' ? parsedMaxPlayers : 1;
-      const reserveMoney = rewardMoney * multiplier;
-      const reservePoints = rewardPoints * multiplier;
+      const reserveMoney = rewardMoney;
+      const reservePoints = rewardPoints;
       const totalMoney = parsedPot + reserveMoney;
       const rewardNote = createGameType === 'gbox'
-        ? `\nThis gbox pays each player, so rewards are x${multiplier}.`
+        ? '\nGbox: reward cash and points are total pools split randomly among everyone who joined.'
         : '';
       const ok = window.confirm(
         `Create game and deduct now?\n\n` +
@@ -1346,7 +1345,7 @@ export default function ForumTopic() {
             <span className="text-xs font-heading font-bold text-primary uppercase tracking-widest">🎲 Create Game</span>
           </div>
           <div className="p-3">
-            <p className="text-xs text-mutedForeground mb-3">Start a dice or gbox game linked to this topic. Manual games use rewards you set here (cash, points, or both).</p>
+            <p className="text-xs text-mutedForeground mb-3">Link a dice or gbox game to this topic. Manual dice: winner gets the full rewards below. Manual gbox: reward cash and points are totals split randomly among joiners. You can also start a game from Entertainer Forum (New Game) without a topic.</p>
             <form onSubmit={createGameInTopic} className="space-y-3">
               <div>
                 <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Type</label>

@@ -644,12 +644,11 @@ const CreateGameModal = ({ isOpen, onClose, onCreated, me }) => {
       return;
     }
     if (manualRoll) {
-      const multiplier = gameType === 'gbox' ? parsedMaxPlayers : 1;
-      const reserveMoney = parsedRewardMoney * multiplier;
-      const reservePoints = parsedRewardPoints * multiplier;
+      const reserveMoney = parsedRewardMoney;
+      const reservePoints = parsedRewardPoints;
       const totalMoney = parsedPot + reserveMoney;
       const rewardNote = gameType === 'gbox'
-        ? `\nThis gbox pays each player, so rewards are x${multiplier}.`
+        ? '\nGbox: reward cash and points are total pools split randomly among everyone who joined.'
         : '';
       const ok = window.confirm(
         `Create game and deduct now?\n\n` +
@@ -709,7 +708,11 @@ const CreateGameModal = ({ isOpen, onClose, onCreated, me }) => {
                 <Package size={14} /> Gbox
               </button>
             </div>
-            <p className="text-[10px] text-mutedForeground mt-1">Manual games use rewards you set: cash, points, or both.</p>
+            <p className="text-[10px] text-mutedForeground mt-1">
+              {gameType === 'gbox'
+                ? 'Gbox: set total reward cash and/or points — split randomly among joiners when you roll.'
+                : 'Dice: winner gets the full reward cash and points you set below.'}
+            </p>
           </div>
           <div>
             <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Players (1–10)</label>
@@ -1683,7 +1686,7 @@ export default function Forum() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {activeTab === 'entertainer' && !isAdmin && (
+          {activeTab === 'entertainer' && (
             <button
               onClick={() => setGameModalOpen(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/20 border border-primary/50 text-primary text-xs font-heading font-bold uppercase rounded hover:bg-primary/30 transition-all"
@@ -2200,14 +2203,23 @@ export default function Forum() {
 
           <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-fade-in mobile-panel`}>
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between flex-wrap gap-1">
+            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex flex-wrap items-center justify-between gap-2">
               <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">🎲 Auto games</span>
-              <span className="text-[10px] text-mutedForeground">Free to join · Win random: cash, bullets, tokens, cars · Rolls when full or 20 mins before next batch</span>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setGameModalOpen(true)}
+                  className="flex items-center gap-1 px-2 py-1 bg-primary/20 border border-primary/50 text-primary text-[10px] font-heading font-bold uppercase rounded hover:bg-primary/30 shrink-0"
+                >
+                  <Dice5 size={12} /> Create manual game
+                </button>
+                <span className="text-[10px] text-mutedForeground">Free to join · Win random: cash, bullets, tokens, cars · Rolls when full or 20 mins before next batch</span>
+              </div>
             </div>
             {gamesLoading ? (
               <div className="p-4 text-center text-xs text-mutedForeground">Loading games...</div>
             ) : openGames.length === 0 ? (
-              <div className="p-4 text-center text-xs text-mutedForeground">No open games. Create one above{entertainerConfig.auto_create_enabled ? ' or wait for the next batch (every 3h)' : ''}.</div>
+              <div className="p-4 text-center text-xs text-mutedForeground">No open games. Use <strong className="text-foreground">New Game</strong> or <strong className="text-foreground">Create manual game</strong> (no topic needed){entertainerConfig.auto_create_enabled ? ', or wait for the next batch (every 3h)' : ''}.</div>
             ) : (
               <div className="divide-y divide-zinc-700/30">
                 {openGames.map((g) => {

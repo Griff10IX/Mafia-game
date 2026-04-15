@@ -961,6 +961,13 @@ RATE_LIMIT_CONFIG = {
     # Format: "endpoint_pattern": (min_interval_sec, enabled)
     # NOTE: Paths must include /api/ prefix to match actual request paths
 
+    # Entertainer forum games — synthetic paths (handlers pass these to check_endpoint_rate_limit only).
+    # Enabled + ignore_global_toggle so limits apply even when GLOBAL_RATE_LIMITS_ENABLED is false (same idea as jail bust).
+    "/api/forum-entertainer-rl/join": (1.5, True),
+    "/api/forum-entertainer-rl/guess": (0.4, True),
+    "/api/forum-entertainer-rl/roll": (1.2, True),
+    "/api/forum-entertainer-rl/find-word-claim": (2.0, True),
+
     # Money & economy
     "/api/bank/transfer": (0.3, False),
     "/api/bank/interest/deposit": (0.3, False),
@@ -1093,6 +1100,17 @@ RATE_LIMIT_CONFIG = {
     "/api/the-getaway/": (0.3, False),
     "/api/mafia-rpg/": (0.3, False),
 }
+
+# Keys allowed through check_endpoint_rate_limit(..., ignore_global_toggle=True) when GLOBAL_RATE_LIMITS_ENABLED is false.
+_RL_FORCE_KEYS_WHEN_GLOBAL_RATE_LIMITS_OFF = frozenset(
+    {
+        "/api/jail/bust",
+        "/api/forum-entertainer-rl/join",
+        "/api/forum-entertainer-rl/guess",
+        "/api/forum-entertainer-rl/roll",
+        "/api/forum-entertainer-rl/find-word-claim",
+    }
+)
 
 
 def iter_rate_limit_config_sorted() -> List[Tuple[str, Tuple[float, bool]]]:
@@ -1341,13 +1359,13 @@ async def check_endpoint_rate_limit(
     """
     Per-endpoint token-bucket metering (DB-backed). Sub-interval arrivals feed sustain violations.
     Empty bucket allows the request; only active hard lockout (rate_limit_hard_until) returns HTTP block from this layer.
-    When ignore_global_toggle is True, only the /api/jail/bust pattern may run while GLOBAL_RATE_LIMITS_ENABLED is off.
+    When ignore_global_toggle is True, selected patterns may still rate-limit while GLOBAL_RATE_LIMITS_ENABLED is off (jail bust, entertainer forum game actions).
     """
     min_interval_sec, enabled, key = get_rate_limit_for_path(path)
     if not enabled or min_interval_sec <= 0:
         return EndpointRateLimitOutcome()
     if not GLOBAL_RATE_LIMITS_ENABLED:
-        if not (ignore_global_toggle and key == "/api/jail/bust"):
+        if not (ignore_global_toggle and key in _RL_FORCE_KEYS_WHEN_GLOBAL_RATE_LIMITS_OFF):
             return EndpointRateLimitOutcome()
 
     now = datetime.now(timezone.utc)

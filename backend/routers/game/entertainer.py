@@ -11,12 +11,34 @@ from pymongo import ReturnDocument
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from server import db, get_current_user, send_notification, send_notification_to_all, _is_admin, CARS
+from server import db, get_current_user, get_current_user_verified, send_notification, send_notification_to_all, _is_admin, CARS
+from middleware.security import check_endpoint_rate_limit
 from routers.kill.armoury import TOKEN_TYPES, TOKEN_CONFIG
 from utils.point_provenance import log_points_event
 
 # E-Games prizes: Rank-XP Pass is shop-only (not listed in "what you can win" and never rolled here).
 ENTERTAINER_TOKEN_TYPES = tuple(t for t in TOKEN_TYPES if t != "rank_xp_pass")
+
+# Synthetic paths for check_endpoint_rate_limit (must match RATE_LIMIT_CONFIG in middleware.security).
+_RL_ENTERTAINER_JOIN = "/api/forum-entertainer-rl/join"
+_RL_ENTERTAINER_GUESS = "/api/forum-entertainer-rl/guess"
+_RL_ENTERTAINER_ROLL = "/api/forum-entertainer-rl/roll"
+_RL_ENTERTAINER_FIND_WORD_CLAIM = "/api/forum-entertainer-rl/find-word-claim"
+
+
+async def _entertainer_rl_or_raise(rl_path: str, user_id: str, username: str) -> None:
+    rl = await check_endpoint_rate_limit(
+        rl_path,
+        user_id,
+        (username or "?").strip() or "?",
+        db,
+        ignore_global_toggle=True,
+    )
+    if rl.blocked:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Slow down — try again in {rl.cooldown_seconds}s.",
+        )
 
 # Auto-create runs every 3 hours; open games roll 20 mins before the next batch (so plenty of time to join)
 AUTO_CREATE_INTERVAL_SECONDS = 3 * 3600   # 3 hours between batches
@@ -602,8 +624,8 @@ class CreateGameRequest(BaseModel):
     join_fee: int = 0  # entry fee per player (added to pot when they join)
     pot: int = 0  # creator-funded pot (deducted from creator on create)
     manual_roll: bool = False  # if True, creator rolls when ready (no auto-settle by time)
-    reward_money: int = 0  # manual games: fixed cash reward
-    reward_points: int = 0  # manual games: fixed points reward
+    reward_money: int = 0  # manual dice: winner gets this cash; manual gbox: total cash pool split randomly among joiners
+    reward_points: int = 0  # manual dice: winner gets this many points; manual gbox: total points pool split randomly among joiners
     topic_id: Optional[str] = None  # optional; when created from a topic
 
 
@@ -790,8 +812,8 @@ async def _run_hangman_payout(game: dict):
 
 
 async def _run_gbox_payout(game: dict, cash_pot: int):
-    """One cash pot split randomly among all participants.
-    Manual games use fixed cash/points rewards per participant.
+    """Cash pot split randomly among all participants.
+    Manual mode: reward_money / reward_points are totals split randomly (same as pot), not per-player.
     """
     participants = game.get("participants") or []
     if not participants:
@@ -801,34 +823,41 @@ async def _run_gbox_payout(game: dict, cash_pot: int):
         return None
     uids = [r[0] for r in rows]
     n = len(uids)
-    shares = _random_partition(int(cash_pot or 0), n)
-    _rng.shuffle(shares)
+    pot_shares = _random_partition(int(cash_pot or 0), n)
+    _rng.shuffle(pot_shares)
     rewards_by_user = {}
     manual_reward = game.get("manual_reward") or {}
     reward_money = max(0, int(manual_reward.get("money") or 0))
     reward_points = max(0, int(manual_reward.get("points") or 0))
     manual_mode = bool(game.get("manual_roll")) and (reward_money > 0 or reward_points > 0)
+    rm_shares = _random_partition(reward_money, n) if (manual_mode and reward_money > 0) else [0] * n
+    rp_shares = _random_partition(reward_points, n) if (manual_mode and reward_points > 0) else [0] * n
+    if manual_mode and reward_money > 0:
+        _rng.shuffle(rm_shares)
+    if manual_mode and reward_points > 0:
+        _rng.shuffle(rp_shares)
     for i, uid in enumerate(uids):
-        share = shares[i] if i < len(shares) else 0
+        pot_part = int(pot_shares[i]) if i < len(pot_shares) else 0
+        rm = int(rm_shares[i]) if i < len(rm_shares) else 0
+        rp = int(rp_shares[i]) if i < len(rp_shares) else 0
         inc = {}
-        if share:
-            inc["money"] = int(share)
+        total_m = pot_part + rm
+        if total_m:
+            inc["money"] = total_m
+        if rp:
+            inc["points"] = rp
         if manual_mode:
-            if reward_money > 0:
-                inc["money"] = int(inc.get("money", 0)) + reward_money
-            if reward_points > 0:
-                inc["points"] = int(inc.get("points", 0)) + reward_points
             reward_desc = {
                 "reward_type": "manual",
-                "money": int(share) + reward_money,
-                "points": reward_points,
+                "money": total_m,
+                "points": rp,
                 "bullets": 0,
                 "cars": [],
                 "tokens": {},
             }
         else:
             reward_desc = await _give_random_reward(uid, exclude_cash=True)
-            reward_desc["money"] = int(share)
+            reward_desc["money"] = int(pot_part)
         if inc:
             await db.users.update_one({"id": uid}, {"$inc": inc})
         if int(inc.get("points", 0)) > 0:
@@ -953,7 +982,7 @@ async def get_game(game_id: str, current_user: dict = Depends(get_current_user))
 
 async def create_game(
     request: CreateGameRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_verified),
 ):
     """Create a dice or gbox game. Non-admin users can only create manual-roll games."""
     is_admin = _is_admin(current_user)
@@ -971,9 +1000,9 @@ async def create_game(
     manual_roll = bool(request.manual_roll) if is_admin else True
     if manual_roll and reward_money <= 0 and reward_points <= 0:
         raise HTTPException(status_code=400, detail="Manual games must include a cash reward, points reward, or both.")
-    reward_multiplier = max_players if request.game_type == "gbox" else 1
-    reserve_money = (reward_money * reward_multiplier) if manual_roll else 0
-    reserve_points = (reward_points * reward_multiplier) if manual_roll else 0
+    # Manual gbox: reward_money / reward_points are totals (split randomly at payout), not per-player.
+    reserve_money = reward_money if manual_roll else 0
+    reserve_points = reward_points if manual_roll else 0
     total_money_needed = int(pot + reserve_money)
     # Creator must fully fund creator pot + manual rewards at create time.
     if total_money_needed > 0 or reserve_points > 0:
@@ -1025,8 +1054,9 @@ async def create_game(
     return {"id": game_id, "message": "Game created", "game": _with_public_hangman({**doc, "participants": participants}, current_user.get("id"))}
 
 
-async def join_game(game_id: str, current_user: dict = Depends(get_current_user)):
+async def join_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
     """Join an open game. Pay join_fee if set (added to pot). If full after join, run payout automatically."""
+    await _entertainer_rl_or_raise(_RL_ENTERTAINER_JOIN, current_user["id"], current_user.get("username") or "?")
     game = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -1073,13 +1103,14 @@ async def join_game(game_id: str, current_user: dict = Depends(get_current_user)
 async def guess_hangman(
     game_id: str,
     body: HangmanGuessRequest,
-    current_user: dict = Depends(get_current_user),
+    current_user: dict = Depends(get_current_user_verified),
 ):
     """Submit a single-letter Hangman guess. Shared board across all participants.
     Correct: reveals letter positions in pattern.
     Wrong: increments wrong_count — game auto-settles at MAX_HANGMAN_WRONG.
     Word fully revealed: game auto-settles immediately.
     """
+    await _entertainer_rl_or_raise(_RL_ENTERTAINER_GUESS, current_user["id"], current_user.get("username") or "?")
     game = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -1161,8 +1192,9 @@ async def guess_hangman(
 
 
 # ---------- Manual roll: admin or creator (for manual_roll games) ----------
-async def admin_roll_game(game_id: str, current_user: dict = Depends(get_current_user)):
+async def admin_roll_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
     """Force settle (roll) an open game now. Admin can always roll; creator can roll if game is manual_roll."""
+    await _entertainer_rl_or_raise(_RL_ENTERTAINER_ROLL, current_user["id"], current_user.get("username") or "?")
     game = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -1566,7 +1598,8 @@ class FindWordClaimBody(BaseModel):
     round_id: str = Field(..., min_length=8, max_length=80)
 
 
-async def find_word_claim(body: FindWordClaimBody, current_user: dict = Depends(get_current_user)):
+async def find_word_claim(body: FindWordClaimBody, current_user: dict = Depends(get_current_user_verified)):
+    await _entertainer_rl_or_raise(_RL_ENTERTAINER_FIND_WORD_CLAIM, current_user["id"], current_user.get("username") or "?")
     rid = (body.round_id or "").strip()
     if not rid:
         raise HTTPException(status_code=400, detail="round_id required")
