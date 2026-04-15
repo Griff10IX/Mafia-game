@@ -281,11 +281,27 @@ async def accept_sell_offer(offer_id: str, current_user: dict = Depends(get_curr
         await log_points_event(db, user_id=buyer_id, points=offer["points"], event_type="quicktrade_buy", meta={"offer_id": offer_id, "direction": "sell_offer_accepted", "cost_cash": offer["cost"]})
     await db.users.update_one({"id": offer["user_id"]}, {"$inc": {"money": offer["cost"]}})
     _invalidate_trade_caches()
+    _seller_u = (offer.get("username") or "Unknown").strip() or "Unknown"
+    _pts = int(offer.get("points") or 0)
+    _cash = int(offer.get("cost") or 0)
+    _admin_summary = f"{buyer_username} bought {_seller_u}'s sell listing for ${_cash:,} cash → {_pts:,} points."
     await log_activity(
         buyer_id,
         buyer_username,
         "quicktrade_accept_sell",
-        {"seller_id": offer["user_id"], "points_received": offer["points"], "cost_paid": offer["cost"], "offer_id": offer_id},
+        {
+            "seller_id": offer["user_id"],
+            "seller_username": _seller_u,
+            "buyer_username": buyer_username,
+            "points": _pts,
+            "cash": _cash,
+            "points_received": _pts,
+            "cost_paid": _cash,
+            "offer_id": offer_id,
+            "seller_listed_anonymous": bool(offer.get("hide_name")),
+            "admin_summary": _admin_summary,
+            "audit_cash": _cash,
+        },
     )
     try:
         await db.trade_events.insert_one(
@@ -852,11 +868,28 @@ async def accept_buy_offer(offer_id: str, current_user: dict = Depends(get_curre
     if offer["points"] != 0:
         await log_points_event(db, user_id=offer["user_id"], points=offer["points"], event_type="quicktrade_buy", meta={"offer_id": offer_id, "direction": "buy_offer_fulfilled"})
     _invalidate_trade_caches()
+    _buyer_real = (offer.get("username") or "Unknown").strip() or "Unknown"
+    _buyer_disp = "[Anonymous]" if offer.get("hide_name") else _buyer_real
+    _b_pts = int(offer.get("points") or 0)
+    _b_cash = int(offer.get("offer") or 0)
+    _buy_admin_summary = f"{seller_username} sold {_b_pts:,} points into {_buyer_disp}'s buy order for ${_b_cash:,} cash."
     await log_activity(
         seller_id,
         seller_username,
         "quicktrade_accept_buy",
-        {"buyer_id": offer["user_id"], "points_sold": offer["points"], "cash_received": offer["offer"], "offer_id": offer_id},
+        {
+            "buyer_id": offer["user_id"],
+            "buyer_username": _buyer_real,
+            "buyer_display": _buyer_disp,
+            "seller_username": seller_username,
+            "points": _b_pts,
+            "cash": _b_cash,
+            "points_sold": _b_pts,
+            "cash_received": _b_cash,
+            "offer_id": offer_id,
+            "admin_summary": _buy_admin_summary,
+            "audit_cash": _b_cash,
+        },
     )
     try:
         await db.trade_events.insert_one(

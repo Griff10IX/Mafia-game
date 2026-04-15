@@ -32,6 +32,7 @@ from server import (
     adjust_casino_buy_back_escrow,
     refund_casino_buy_back_escrow_points,
     refund_and_delete_buy_back_offers_matching,
+    log_casino_buyback_credit_points,
     _ownership_display_profit,
     bump_user_biggest_casino_payout,
     notify_casino_seizure,
@@ -566,7 +567,13 @@ def register(router):
         if not from_user:
             raise HTTPException(status_code=400, detail="Previous owner not found")
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"points": points_offered}})
-        await log_points_event(db, user_id=current_user.get("id") or "", points=points_offered, event_type="casino_slots", event_ref=f"buyback:{request.offer_id}", meta={"action": "buyback_credit", "state": state, "offer_id": request.offer_id})
+        await log_casino_buyback_credit_points(
+            current_user.get("id") or "",
+            points_offered,
+            "casino_slots",
+            request.offer_id,
+            {"state": state},
+        )
         stored_state, _ = await _get_slots_ownership_doc(state)
         next_draw_iso = _next_draw_utc().isoformat()
         await db.slots_ownership.update_one(

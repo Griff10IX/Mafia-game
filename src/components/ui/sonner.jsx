@@ -50,6 +50,21 @@ function normalizeToastText(value) {
   return "";
 }
 
+function sanitizeToastMetadata(meta) {
+  if (!meta || typeof meta !== "object") return null;
+  const out = {};
+  for (const [k, v] of Object.entries(meta)) {
+    const ks = String(k).slice(0, 80);
+    if (!ks) continue;
+    if (v === null || typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
+      out[ks] = typeof v === "string" ? v.slice(0, 300) : v;
+    } else {
+      out[ks] = String(v).slice(0, 300);
+    }
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 function sanitizeToastPayload(payload) {
   const p = payload || {};
   const message = normalizeToastText(p.message).slice(0, 500);
@@ -66,12 +81,13 @@ function sanitizeToastPayload(payload) {
     route_path: routePath || null,
     duration_ms: Number.isFinite(Number(p.durationMs)) ? Number(p.durationMs) : null,
     client_created_at: new Date().toISOString(),
-    metadata: p.metadata && typeof p.metadata === "object" ? p.metadata : null,
+    metadata: sanitizeToastMetadata(p.metadata),
   };
 }
 
 function shouldSuppressDuplicate(payload) {
-  const sig = `${payload.toast_type}|${payload.message}|${payload.description || ""}|${payload.route_path || ""}`;
+  const metaKey = payload.metadata && typeof payload.metadata === "object" ? JSON.stringify(payload.metadata) : "";
+  const sig = `${payload.toast_type}|${payload.message}|${payload.description || ""}|${payload.route_path || ""}|${metaKey}`;
   const now = Date.now();
   // Prevent accidental double logs from strict/dev double-run or duplicate invocations.
   if (_lastToastSignature === sig && (now - _lastToastAt) < 250) return true;
@@ -87,6 +103,7 @@ function captureToast(kind, messageLike, optionsMaybe) {
     message: messageLike,
     description: options.description,
     durationMs: options.duration,
+    metadata: options.metadata,
   });
   if (!payload.message && !payload.description) return;
   if (shouldSuppressDuplicate(payload)) return;

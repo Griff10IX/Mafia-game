@@ -2458,24 +2458,43 @@ async def adjust_casino_buy_back_escrow(
                 status_code=400,
                 detail=f"You need {delta:,} more points to increase buy-back (those points are held until you lower buy-back, lose the casino, or the buy-back offer is resolved).",
             )
+        bal_before = int(res.get("points") or 0)
+        bal_after = bal_before - delta
         await log_points_event(
             db,
             user_id=user_id,
             points=-delta,
             event_type=event_type,
             event_ref="buyback_hold",
-            meta={"action": "buyback_hold", **meta, "from_held": old_a, "to_held": new_a},
+            meta={
+                "action": "buyback_hold",
+                **meta,
+                "from_held": old_a,
+                "to_held": new_a,
+                "wallet_balance_before": bal_before,
+                "wallet_balance_after": bal_after,
+            },
         )
     else:
         refund = -delta
+        u0 = await db.users.find_one({"id": user_id}, {"points": 1})
+        bal_before = int((u0 or {}).get("points") or 0)
         await db.users.update_one({"id": user_id}, {"$inc": {"points": refund}})
+        bal_after = bal_before + refund
         await log_points_event(
             db,
             user_id=user_id,
             points=refund,
             event_type=event_type,
             event_ref="buyback_release",
-            meta={"action": "buyback_release", **meta, "from_held": old_a, "to_held": new_a},
+            meta={
+                "action": "buyback_release",
+                **meta,
+                "from_held": old_a,
+                "to_held": new_a,
+                "wallet_balance_before": bal_before,
+                "wallet_balance_after": bal_after,
+            },
         )
 
 
@@ -2489,14 +2508,52 @@ async def refund_casino_buy_back_escrow_points(
     pts = max(0, int(amount or 0))
     if not user_id or pts <= 0:
         return
+    u0 = await db.users.find_one({"id": user_id}, {"points": 1})
+    bal_before = int((u0 or {}).get("points") or 0)
     await db.users.update_one({"id": user_id}, {"$inc": {"points": pts}})
+    bal_after = bal_before + pts
     await log_points_event(
         db,
         user_id=user_id,
         points=pts,
         event_type=event_type,
         event_ref="buyback_refund",
-        meta={"action": "buyback_refund", **meta, "amount": pts},
+        meta={
+            "action": "buyback_refund",
+            **meta,
+            "amount": pts,
+            "wallet_balance_before": bal_before,
+            "wallet_balance_after": bal_after,
+        },
+    )
+
+
+async def log_casino_buyback_credit_points(
+    user_id: str,
+    points_offered: int,
+    event_type: str,
+    offer_id: str,
+    meta: Optional[Dict[str, Any]] = None,
+) -> None:
+    """After wallet credit for accepting a prior owner's buy-back, log with wallet before/after (caller must have applied $inc already)."""
+    pts = int(points_offered or 0)
+    if not user_id or pts <= 0:
+        return
+    u = await db.users.find_one({"id": user_id}, {"points": 1})
+    bal_after = int((u or {}).get("points") or 0)
+    bal_before = bal_after - pts
+    m = dict(meta or {})
+    m.setdefault("offer_id", offer_id)
+    m["action"] = "buyback_credit"
+    m["wallet_balance_before"] = bal_before
+    m["wallet_balance_after"] = bal_after
+    await log_points_event(
+        db,
+        user_id=user_id,
+        points=pts,
+        event_type=event_type,
+        event_ref=f"buyback:{offer_id}",
+        meta=m,
     )
 
 

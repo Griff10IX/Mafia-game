@@ -135,7 +135,18 @@ export default function QuickTrade() {
         });
         created++;
       }
-      toast.success(created === 1 ? 'Sell offer created!' : `${created} sell offers created!`);
+      const sellDesc = `${parsedSellPoints.toLocaleString()} pts at $${formatCurrency(perPoint)}/pt · ~$${formatCurrency(sellTotal)} listed${count > 1 ? ` · ${count} offers` : ''}`;
+      toast.success(created === 1 ? 'Sell offer created!' : `${created} sell offers created!`, {
+        description: sellDesc,
+        metadata: {
+          action: 'quicktrade_sell_offer',
+          points: parsedSellPoints,
+          cost_per_point: perPoint,
+          total_cash: sellTotal,
+          offers_created: count,
+          hide_name: !!hideNameSell,
+        },
+      });
       setSellPoints('');
       setSellCost('');
       fetchTrades();
@@ -180,7 +191,18 @@ export default function QuickTrade() {
         });
         created++;
       }
-      toast.success(created === 1 ? 'Buy offer created!' : `${created} buy offers created!`);
+      const buyDesc = `${parsedBuyPoints.toLocaleString()} pts at $${formatCurrency(perPoint)}/pt bid · ~$${formatCurrency(buyTotal)} max pay${count > 1 ? ` · ${count} offers` : ''}`;
+      toast.success(created === 1 ? 'Buy offer created!' : `${created} buy offers created!`, {
+        description: buyDesc,
+        metadata: {
+          action: 'quicktrade_buy_offer',
+          points: parsedBuyPoints,
+          offer_per_point: perPoint,
+          total_cash: buyTotal,
+          offers_created: count,
+          hide_name: !!hideNameBuy,
+        },
+      });
       setBuyPoints('');
       setBuyOffer('');
       fetchTrades();

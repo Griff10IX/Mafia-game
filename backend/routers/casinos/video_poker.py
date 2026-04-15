@@ -35,6 +35,7 @@ from server import (
     adjust_casino_buy_back_escrow,
     refund_casino_buy_back_escrow_points,
     refund_and_delete_buy_back_offers_matching,
+    log_casino_buyback_credit_points,
     assert_casino_clear_of_buy_back_for_listing,
     assert_casino_clear_of_buy_back_for_relinquish,
     _ownership_display_profit,
@@ -608,7 +609,13 @@ def register(router):
         if not from_user:
             raise HTTPException(status_code=400, detail="Previous owner not found")
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"points": points_offered}})
-        await log_points_event(db, user_id=current_user.get("id") or "", points=points_offered, event_type="casino_video_poker", event_ref=f"buyback:{request.offer_id}", meta={"action": "buyback_credit", "city": city, "offer_id": request.offer_id})
+        await log_casino_buyback_credit_points(
+            current_user.get("id") or "",
+            points_offered,
+            "casino_video_poker",
+            request.offer_id,
+            {"city": city},
+        )
         await db.videopoker_ownership.update_one(
             {"city": city},
             {"$set": {"owner_id": from_owner_id, "owner_username": from_user.get("username"), "max_bet": 0, "buy_back_reward": 0, "buy_back_points_held": 0}},

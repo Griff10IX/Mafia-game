@@ -347,6 +347,13 @@ async def bank_transfer(request: MoneyTransferRequest, req: Request, current_use
         await db.users.update_one({"id": sender_id}, {"$inc": {"money": amount}})
         raise HTTPException(status_code=400, detail="Transfer failed — recipient account unavailable.")
 
+    sender_u = await db.users.find_one({"id": sender_id}, {"_id": 0, "money": 1})
+    recipient_u = await db.users.find_one({"id": recipient_id}, {"_id": 0, "money": 1})
+    sender_after = int((sender_u or {}).get("money") or 0)
+    recipient_after = int((recipient_u or {}).get("money") or 0)
+    sender_before = sender_after + int(amount)
+    recipient_before = recipient_after - int(amount)
+
     transfer_doc = {
         "id": transfer_id,
         "from_user_id": sender_id,
@@ -355,6 +362,10 @@ async def bank_transfer(request: MoneyTransferRequest, req: Request, current_use
         "to_username": recipient.get("username", ""),
         "amount": int(amount),
         "created_at": now_iso,
+        "sender_money_before": sender_before,
+        "sender_money_after": sender_after,
+        "recipient_money_before": recipient_before,
+        "recipient_money_after": recipient_after,
     }
     await db.money_transfers.insert_one(transfer_doc)
     sender_display = (current_user.get("username") or "").strip() or "?"

@@ -81,6 +81,8 @@ async def ensure_all_indexes(db):
         await db.bank_deposits.create_index([("user_id", 1), ("claimed_at", 1)])
         await db.money_transfers.create_index([("from_user_id", 1), ("created_at", -1)])
         await db.money_transfers.create_index([("to_user_id", 1), ("created_at", -1)])
+        await db.points_transfers.create_index([("from_user_id", 1), ("created_at", -1)])
+        await db.points_transfers.create_index([("to_user_id", 1), ("created_at", -1)])
         await db.bank_deposits.create_index([("id", 1), ("user_id", 1)])
         await db.bank_deposits.create_index("id")
 
@@ -360,6 +362,7 @@ async def ensure_all_indexes(db):
         await db.point_lots.create_index([("origin_ref", 1)])
         await db.point_ledger_events.create_index("id", unique=True)
         await db.point_ledger_events.create_index([("user_id", 1), ("created_at", -1)])
+        await db.point_ledger_events.create_index([("user_id", 1), ("event_type", 1), ("created_at", -1)])
         await db.point_ledger_events.create_index([("root_purchase_ref", 1), ("created_at", -1)])
         await db.point_ledger_events.create_index([("origin_ref", 1), ("created_at", -1)])
 
@@ -522,6 +525,7 @@ async def ensure_all_indexes(db):
         await db.gambling_log.create_index([("user_id", 1), ("created_at", -1)])
         await db.gambling_log.create_index([("username", 1), ("created_at", -1)])
         await db.gambling_log.create_index([("game_type", 1), ("created_at", -1)])
+        await db.gambling_log.create_index([("user_id", 1), ("game_type", 1), ("created_at", -1)])
         await db.analytics_events.create_index([("created_at", -1)])
         await db.analytics_events.create_index([("domain", 1), ("created_at", -1)])
         await db.analytics_events.create_index([("domain", 1), ("metric", 1), ("created_at", -1)])

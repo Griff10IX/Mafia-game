@@ -254,6 +254,15 @@ class DropUserCasinoRequest(BaseModel):
     location: str   # city for most, state for slots
 
 
+class TakeoverUserCasinoRequest(BaseModel):
+    """Reassign a casino from one player to another (default: acting admin). Admin only."""
+
+    user_id: str  # current owner (from)
+    game_type: str
+    location: str  # city for most, state for slots
+    to_username: Optional[str] = None  # if blank/None, new owner is current admin user
+
+
 class DropUserCasinosPropertiesRequest(BaseModel):
     user_id: str
 
@@ -6214,6 +6223,8 @@ def register(router):
         for r in rows:
             if isinstance(r.get("created_at"), datetime):
                 r["created_at"] = r["created_at"].isoformat()
+            if isinstance(r.get("client_created_at"), datetime):
+                r["client_created_at"] = r["client_created_at"].isoformat()
         return {"entries": rows, "count": len(rows)}
 
     @router.get("/admin/activity-feed")
@@ -6284,14 +6295,22 @@ def register(router):
             return False
 
         async def _read_activity_rows():
-            query: dict = _ts_filter("created_at")
+            parts: List[dict] = [_ts_filter("created_at")]
             if uname:
                 if username_contains:
-                    query["username"] = re.compile(re.escape(uname), re.IGNORECASE)
+                    pat = re.compile(re.escape(uname), re.IGNORECASE)
                 else:
-                    query["username"] = re.compile("^" + re.escape(uname) + "$", re.IGNORECASE)
+                    pat = re.compile("^" + re.escape(uname) + "$", re.IGNORECASE)
+                parts.append({
+                    "$or": [
+                        {"username": pat},
+                        {"details.seller_username": pat},
+                        {"details.buyer_username": pat},
+                    ]
+                })
             if action_filter:
-                query["action"] = re.compile(re.escape(action_filter), re.IGNORECASE)
+                parts.append({"action": re.compile(re.escape(action_filter), re.IGNORECASE)})
+            query: dict = parts[0] if len(parts) == 1 else {"$and": parts}
             return await db.activity_log.find(query, {"_id": 0}).sort("created_at", -1).limit(source_limit).to_list(source_limit)
 
         async def _read_gambling_rows():
@@ -6326,6 +6345,12 @@ def register(router):
                 if exclude_auto_rank and _activity_row_is_auto_rank(row.get("action"), details):
                     continue
                 amount = int(details.get("amount") or 0)
+                act_lc = str(row.get("action") or "").lower()
+                if amount == 0 and act_lc.startswith("quicktrade_"):
+                    amount = max(
+                        int(details.get("audit_cash") or details.get("cost_paid") or details.get("cash_received") or details.get("offer") or 0),
+                        int(details.get("points_received") or details.get("points_sold") or details.get("points") or 0),
+                    )
                 category = "bank_transfer" if (
                     "bank" in str(row.get("action") or "").lower()
                     or "transfer" in str(row.get("action") or "").lower()
@@ -6587,6 +6612,126 @@ def register(router):
                 }
             )
         return {"entries": out, "count": len(out)}
+
+    @router.get("/admin/casino-buyback-history")
+    async def admin_casino_buyback_history(
+        username: str = Query(..., min_length=1, max_length=80),
+        limit: int = Query(200, ge=1, le=500),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Admin/moderator: point ledger rows for casino buy-back (escrow hold/release/refund, seizure-offer credit)
+        plus any pending buy-back offers involving this user (as former owner or acquirer).
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        key = (username or "").strip()
+        user = await db.users.find_one({"id": key}, {"_id": 0, "id": 1, "username": 1, "points": 1})
+        if not user:
+            user = await db.users.find_one(
+                {"username": re.compile("^" + re.escape(key) + "$", re.IGNORECASE)},
+                {"_id": 0, "id": 1, "username": 1, "points": 1},
+            )
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = str(user["id"])
+        cap = min(max(1, int(limit)), 500)
+        ledger_q: Dict[str, Any] = {
+            "user_id": uid,
+            "$or": [
+                {"origin_ref": {"$in": ["buyback_hold", "buyback_release", "buyback_refund"]}},
+                {"origin_ref": {"$regex": r"^buyback:"}},
+                {"meta.action": {"$in": ["buyback_hold", "buyback_release", "buyback_refund", "buyback_credit"]}},
+            ],
+        }
+        raw_rows = await (
+            db.point_ledger_events.find(ledger_q, {"_id": 0}).sort("created_at", -1).limit(cap).to_list(cap)
+        )
+
+        def _summarize(ev: Dict[str, Any]) -> str:
+            m = ev.get("meta") if isinstance(ev.get("meta"), dict) else {}
+            act = str((m or {}).get("action") or "").strip()
+            et = str(ev.get("event_type") or "").strip().replace("casino_", "").replace("_", " ")
+            loc = str((m or {}).get("city") or (m or {}).get("state") or "—")
+            pts = int(ev.get("points") or 0)
+            if act == "buyback_hold":
+                return f"Raised buy-back escrow ({et} @ {loc}). Wallet Δ {pts:,} pts; escrow held {m.get('from_held', '—')} → {m.get('to_held', '—')}."
+            if act == "buyback_release":
+                return f"Lowered/removed buy-back escrow ({et} @ {loc}). Wallet +{pts:,} pts; escrow held {m.get('from_held', '—')} → {m.get('to_held', '—')}."
+            if act == "buyback_refund":
+                rsn = str((m or {}).get("reason") or "").strip() or "refund"
+                return f"Buy-back refund ({et} @ {loc}). Wallet +{pts:,} pts ({rsn})."
+            if act == "buyback_credit":
+                return f"Buy-back offer accepted — points credited ({et} @ {loc}). Wallet +{pts:,} pts."
+            return str(act or ev.get("origin_ref") or "buy-back")
+
+        ledger_out: List[Dict[str, Any]] = []
+        for r in raw_rows:
+            m = r.get("meta") if isinstance(r.get("meta"), dict) else {}
+            ledger_out.append(
+                {
+                    "id": r.get("id"),
+                    "created_at": r.get("created_at"),
+                    "event_type": r.get("event_type"),
+                    "origin_ref": r.get("origin_ref"),
+                    "points_delta": r.get("points"),
+                    "summary": _summarize(r),
+                    "wallet_balance_before": m.get("wallet_balance_before"),
+                    "wallet_balance_after": m.get("wallet_balance_after"),
+                    "from_held": m.get("from_held"),
+                    "to_held": m.get("to_held"),
+                    "city": m.get("city"),
+                    "state": m.get("state"),
+                    "offer_id": m.get("offer_id"),
+                    "reason": m.get("reason"),
+                }
+            )
+
+        offer_specs = [
+            ("dice", "dice_buy_back_offers"),
+            ("roulette", "roulette_buy_back_offers"),
+            ("blackjack", "blackjack_buy_back_offers"),
+            ("horseracing", "horseracing_buy_back_offers"),
+            ("videopoker", "videopoker_buy_back_offers"),
+            ("slots", "slots_buy_back_offers"),
+        ]
+        pending: List[Dict[str, Any]] = []
+        for game, coll in offer_specs:
+            try:
+                offers = await db[coll].find(
+                    {"$or": [{"from_owner_id": uid}, {"to_user_id": uid}]},
+                    {"_id": 0},
+                ).limit(50).to_list(50)
+            except Exception:
+                offers = []
+            for o in offers or []:
+                pending.append(
+                    {
+                        "game": game,
+                        "offer_id": o.get("id"),
+                        "from_owner_id": o.get("from_owner_id"),
+                        "from_owner_username": o.get("from_owner_username"),
+                        "to_user_id": o.get("to_user_id"),
+                        "to_username": o.get("to_username"),
+                        "points_offered": int(o.get("points_offered") or 0),
+                        "amount_shortfall": o.get("amount_shortfall"),
+                        "owner_paid": o.get("owner_paid"),
+                        "city": o.get("city"),
+                        "state": o.get("state"),
+                        "expires_at": o.get("expires_at"),
+                    }
+                )
+
+        return {
+            "user": {
+                "id": uid,
+                "username": user.get("username"),
+                "points_current": int(user.get("points") or 0),
+            },
+            "ledger": ledger_out,
+            "ledger_count": len(ledger_out),
+            "pending_buy_back_offers": pending,
+        }
 
     @router.get("/admin/respect-points-log")
     async def admin_respect_points_log(
@@ -7028,15 +7173,15 @@ def register(router):
             b, s = e.get("buyer_username") or "?", e.get("seller_username") or "?"
             pts, cash = int(e.get("points") or 0), int(e.get("money") or 0)
             return (
-                f"{b} accepted {s}'s sell listing: {pts:,} pts for ${cash:,} cash "
-                f"(buyer pays cash and receives pts; seller receives cash)."
+                f"{b} bought {s}'s points for ${cash:,} cash ({pts:,} pts). "
+                f"Buyer paid cash and received points; seller received the cash."
             )
         if t == "buy_offer_accepted":
             slr, buy = e.get("seller_username") or "?", e.get("buyer_username") or "?"
             pts, cash = int(e.get("points") or 0), int(e.get("money") or 0)
             return (
-                f"{slr} filled {buy}'s buy order: {pts:,} pts for ${cash:,} cash "
-                f"(seller sends pts and receives cash; buyer receives pts from escrow)."
+                f"{slr} sold {pts:,} pts into {buy}'s buy order for ${cash:,} cash. "
+                f"Seller sent points and took the cash; buyer's escrow funded the trade."
             )
         if t == "sell_offer_created":
             u = e.get("username") or "?"
@@ -8561,6 +8706,336 @@ def register(router):
             "username": user.get("username"),
             "transfers": transfers,
             "deposits": deposits,
+        }
+
+    @router.get("/admin/wallet-activity")
+    async def admin_wallet_activity(
+        username: str = Query(..., min_length=1, max_length=80),
+        limit: int = Query(200, ge=1, le=500),
+        kind: str = Query("all", description="Filter: all | cash_transfer | points_transfer | bank_interest | mdg | point_ledger"),
+        since: Optional[str] = None,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Admin/moderator. Unified chronological feed: cash transfers, points transfers, bank interest
+        deposits/claims, MDG gambling rows, and curated point_ledger_events (no duplicate P2P ledger legs).
+        """
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        key = (username or "").strip()
+        user = await db.users.find_one({"id": key}, {"_id": 0, "id": 1, "username": 1, "money": 1, "points": 1})
+        if not user:
+            pattern = re.compile("^" + re.escape(key) + "$", re.IGNORECASE)
+            user = await db.users.find_one({"username": pattern}, {"_id": 0, "id": 1, "username": 1, "money": 1, "points": 1})
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = str(user["id"])
+        cap = min(max(1, int(limit)), 500)
+        per_source = min(300, max(cap, 120))
+        since_raw = (since or "").strip()
+        since_dt: Optional[datetime] = None
+        since_iso = ""
+        if since_raw:
+            try:
+                since_dt = datetime.fromisoformat(since_raw.replace("Z", "+00:00"))
+                if since_dt.tzinfo is None:
+                    since_dt = since_dt.replace(tzinfo=timezone.utc)
+                since_iso = since_dt.isoformat()
+            except Exception:
+                since_dt = None
+
+        def _row_ts(created: Any) -> float:
+            if created is None:
+                return 0.0
+            if isinstance(created, datetime):
+                try:
+                    return created.timestamp()
+                except Exception:
+                    return 0.0
+            if isinstance(created, str):
+                try:
+                    return datetime.fromisoformat(created.replace("Z", "+00:00")).timestamp()
+                except Exception:
+                    return 0.0
+            return 0.0
+
+        def _iso(created: Any) -> str:
+            if created is None:
+                return ""
+            if isinstance(created, datetime):
+                try:
+                    return created.isoformat()
+                except Exception:
+                    return str(created)
+            return str(created)
+
+        def _passes_since(created: Any) -> bool:
+            if since_dt is None:
+                return True
+            return _row_ts(created) >= since_dt.timestamp()
+
+        async def _fetch_money():
+            q: Dict[str, Any] = {"$or": [{"from_user_id": uid}, {"to_user_id": uid}]}
+            if since_iso:
+                q["created_at"] = {"$gte": since_iso}
+            return await db.money_transfers.find(q, {"_id": 0}).sort("created_at", -1).limit(per_source).to_list(per_source)
+
+        async def _fetch_points():
+            q: Dict[str, Any] = {"$or": [{"from_user_id": uid}, {"to_user_id": uid}]}
+            if since_iso:
+                q["created_at"] = {"$gte": since_iso}
+            return await db.points_transfers.find(q, {"_id": 0}).sort("created_at", -1).limit(per_source).to_list(per_source)
+
+        async def _fetch_deposits():
+            q: Dict[str, Any] = {"user_id": uid}
+            if since_iso:
+                q["created_at"] = {"$gte": since_iso}
+            return await db.bank_deposits.find(q, {"_id": 0}).sort("created_at", -1).limit(per_source).to_list(per_source)
+
+        async def _fetch_mdg_gambling():
+            # created_at may be datetime or legacy string — filter with _passes_since after fetch
+            q: Dict[str, Any] = {"user_id": uid, "game_type": "mdg"}
+            return await db.gambling_log.find(q, {"_id": 0}).sort("created_at", -1).limit(per_source).to_list(per_source)
+
+        ple_types = (
+            "casino_mdg",
+            "quicktrade_buy",
+            "quicktrade_sell",
+            "quicktrade_create",
+            "quicktrade_cancel",
+            "quicktrade_property",
+            "quicktrade_item_shop",
+            "buy_game_pass_points",
+            "spend_store",
+        )
+
+        async def _fetch_ple():
+            q: Dict[str, Any] = {"user_id": uid, "event_type": {"$in": list(ple_types)}}
+            if since_iso:
+                q["created_at"] = {"$gte": since_iso}
+            return await db.point_ledger_events.find(q, {"_id": 0}).sort("created_at", -1).limit(per_source).to_list(per_source)
+
+        money_rows, points_rows, dep_rows, mdg_rows, ple_rows = await asyncio.gather(
+            _fetch_money(),
+            _fetch_points(),
+            _fetch_deposits(),
+            _fetch_mdg_gambling(),
+            _fetch_ple(),
+        )
+
+        merged: List[Dict[str, Any]] = []
+
+        for doc in money_rows:
+            if not _passes_since(doc.get("created_at")):
+                continue
+            amt = int(doc.get("amount") or 0)
+            is_sender = doc.get("from_user_id") == uid
+            other = (doc.get("to_username") if is_sender else doc.get("from_username")) or "?"
+            merged.append(
+                {
+                    "id": str(doc.get("id") or ""),
+                    "source": "cash_transfer",
+                    "kind_label": "Cash",
+                    "created_at": _iso(doc.get("created_at")),
+                    "created_ts": _row_ts(doc.get("created_at")),
+                    "title": "Cash sent" if is_sender else "Cash received",
+                    "summary": f"${amt:,} {'to' if is_sender else 'from'} {other}",
+                    "cash_delta": -amt if is_sender else amt,
+                    "points_delta": None,
+                    "wallet_cash_before": (doc.get("sender_money_before") if is_sender else doc.get("recipient_money_before")),
+                    "wallet_cash_after": (doc.get("sender_money_after") if is_sender else doc.get("recipient_money_after")),
+                    "wallet_points_before": None,
+                    "wallet_points_after": None,
+                    "counterparty": other,
+                    "raw": doc,
+                }
+            )
+
+        for doc in points_rows:
+            if not _passes_since(doc.get("created_at")):
+                continue
+            amt = int(doc.get("amount") or 0)
+            is_sender = doc.get("from_user_id") == uid
+            other = (doc.get("to_username") if is_sender else doc.get("from_username")) or "?"
+            merged.append(
+                {
+                    "id": str(doc.get("id") or ""),
+                    "source": "points_transfer",
+                    "kind_label": "Points",
+                    "created_at": _iso(doc.get("created_at")),
+                    "created_ts": _row_ts(doc.get("created_at")),
+                    "title": "Points sent" if is_sender else "Points received",
+                    "summary": f"{amt:,} pts {'to' if is_sender else 'from'} {other}",
+                    "cash_delta": None,
+                    "points_delta": -amt if is_sender else amt,
+                    "wallet_cash_before": None,
+                    "wallet_cash_after": None,
+                    "wallet_points_before": (doc.get("sender_points_before") if is_sender else doc.get("recipient_points_before")),
+                    "wallet_points_after": (doc.get("sender_points_after") if is_sender else doc.get("recipient_points_after")),
+                    "counterparty": other,
+                    "raw": doc,
+                }
+            )
+
+        for doc in dep_rows:
+            if not _passes_since(doc.get("created_at")):
+                continue
+            principal = int(doc.get("principal") or 0)
+            interest_amt = int(doc.get("interest_amount") or 0)
+            hours = int(doc.get("duration_hours") or 0)
+            dep_id = str(doc.get("id") or "")
+            merged.append(
+                {
+                    "id": f"bd-open-{dep_id}",
+                    "source": "bank_interest",
+                    "kind_label": "Bank",
+                    "created_at": _iso(doc.get("created_at")),
+                    "created_ts": _row_ts(doc.get("created_at")),
+                    "title": "Interest deposit opened",
+                    "summary": f"Locked ${principal:,} principal · est. +${interest_amt:,} interest · {hours}h",
+                    "cash_delta": -principal,
+                    "points_delta": None,
+                    "wallet_cash_before": None,
+                    "wallet_cash_after": None,
+                    "wallet_points_before": None,
+                    "wallet_points_after": None,
+                    "counterparty": None,
+                    "raw": doc,
+                }
+            )
+            claimed = doc.get("claimed_at")
+            if claimed and _passes_since(claimed):
+                total = principal + interest_amt
+                merged.append(
+                    {
+                        "id": f"bd-claim-{dep_id}",
+                        "source": "bank_interest",
+                        "kind_label": "Bank",
+                        "created_at": _iso(claimed),
+                        "created_ts": _row_ts(claimed),
+                        "title": "Interest deposit claimed",
+                        "summary": f"Returned ${principal:,} + ${interest_amt:,} interest = ${total:,}",
+                        "cash_delta": total,
+                        "points_delta": None,
+                        "wallet_cash_before": None,
+                        "wallet_cash_after": None,
+                        "wallet_points_before": None,
+                        "wallet_points_after": None,
+                        "counterparty": None,
+                        "raw": doc,
+                    }
+                )
+
+        for row in mdg_rows:
+            if not _passes_since(row.get("created_at")):
+                continue
+            d = row.get("details") if isinstance(row.get("details"), dict) else {}
+            act = str(d.get("action") or "").lower()
+            game_id = str(d.get("game_id") or "")
+            fee_pts = int(d.get("fee_points") or 0)
+            fee_money = float(d.get("fee_money") or 0)
+            extra_pts = int(d.get("extra_pot_points") or 0)
+            extra_money = float(d.get("extra_pot_money") or 0)
+            pot_pts = int(d.get("pot_points") or 0)
+            pot_money = float(d.get("pot_money") or 0)
+            trig = str(d.get("trigger") or "")
+            if act == "create":
+                sm = (
+                    f"Created MDG game {game_id}: fee {fee_pts:,} pts + ${fee_money:,.0f} cash"
+                    + (f"; extra pot {extra_pts:,} pts + ${extra_money:,.0f}" if (extra_pts or extra_money) else "")
+                    + "."
+                )
+            elif act == "join":
+                sm = f"Joined MDG {game_id}: paid {fee_pts:,} pts + ${fee_money:,.0f} cash. Players after: {d.get('players_after', '?')}."
+            elif act == "payout":
+                sm = (
+                    f"MDG payout {game_id}: pot {pot_pts:,} pts + ${pot_money:,.0f} cash"
+                    + (f" ({trig})" if trig else "")
+                    + "."
+                )
+            else:
+                sm = f"MDG {act or 'event'} {game_id}".strip()
+            stake = int(d.get("stake") or d.get("bet") or d.get("buy_in") or 0)
+            payout = int(d.get("payout") or d.get("winnings") or 0)
+            if act == "create":
+                pts_d = -(fee_pts + extra_pts)
+                cash_d = -int(round(fee_money + extra_money))
+            elif act == "join":
+                pts_d = -fee_pts
+                cash_d = -int(round(fee_money)) if fee_money else None
+            elif act == "payout":
+                pts_d = pot_pts
+                cash_d = int(round(pot_money))
+            else:
+                pts_d = None
+                cash_d = None
+            merged.append(
+                {
+                    "id": str(row.get("id") or ""),
+                    "source": "mdg",
+                    "kind_label": "MDG",
+                    "created_at": _iso(row.get("created_at")),
+                    "created_ts": _row_ts(row.get("created_at")),
+                    "title": f"MDG · {act or 'event'}",
+                    "summary": sm,
+                    "cash_delta": cash_d,
+                    "points_delta": pts_d,
+                    "wallet_cash_before": None,
+                    "wallet_cash_after": None,
+                    "wallet_points_before": None,
+                    "wallet_points_after": None,
+                    "counterparty": game_id or None,
+                    "raw": {"gambling_log": row, "stake": stake, "payout": payout},
+                }
+            )
+
+        for doc in ple_rows:
+            if not _passes_since(doc.get("created_at")):
+                continue
+            et = str(doc.get("event_type") or "")
+            pts = int(doc.get("points") or 0)
+            meta = doc.get("meta") if isinstance(doc.get("meta"), dict) else {}
+            merged.append(
+                {
+                    "id": str(doc.get("id") or ""),
+                    "source": "point_ledger",
+                    "kind_label": "Points",
+                    "created_at": _iso(doc.get("created_at")),
+                    "created_ts": _row_ts(doc.get("created_at")),
+                    "title": et,
+                    "summary": f"{pts:+,} pts · {doc.get('origin_ref') or '—'}" + (f" · {meta.get('action')}" if meta.get("action") else ""),
+                    "cash_delta": None,
+                    "points_delta": pts,
+                    "wallet_cash_before": None,
+                    "wallet_cash_after": None,
+                    "wallet_points_before": None,
+                    "wallet_points_after": None,
+                    "counterparty": str(meta.get("to_username") or meta.get("offer_id") or "") or None,
+                    "raw": doc,
+                }
+            )
+
+        merged.sort(key=lambda x: float(x.get("created_ts") or 0), reverse=True)
+        kind_lc = (kind or "all").strip().lower()
+        allowed_kinds = {"all", "cash_transfer", "points_transfer", "bank_interest", "mdg", "point_ledger"}
+        if kind_lc not in allowed_kinds:
+            kind_lc = "all"
+        if kind_lc != "all":
+            merged = [e for e in merged if str(e.get("source") or "") == kind_lc]
+        merged = merged[:cap]
+        for e in merged:
+            e.pop("created_ts", None)
+
+        return {
+            "user": {
+                "id": uid,
+                "username": user.get("username"),
+                "money_current": int(user.get("money") or 0),
+                "points_current": int(user.get("points") or 0),
+            },
+            "entries": merged,
+            "count": len(merged),
+            "applied_filters": {"username": key, "kind": kind_lc, "since": since_raw or None, "limit": cap},
         }
 
     @router.get("/admin/stock/logs")
@@ -10197,6 +10672,155 @@ def register(router):
         if res.matched_count == 0:
             raise HTTPException(status_code=404, detail=f"No {game_type} casino in {location} owned by this user")
         return {"message": f"Dropped {game_type} casino ({location}) from user", "matched": res.matched_count, "modified": res.modified_count}
+
+    @router.post("/admin/takeover-user-casino")
+    async def admin_takeover_user_casino(body: TakeoverUserCasinoRequest, current_user: dict = Depends(get_current_user)):
+        """Assign a player's casino to you or another user (support / recovery). Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        import importlib
+
+        from server import CAPO_RANK_ID, _user_owns_any_casino, user_prestige_rank_mult
+        from utils.quicktrade_casino_cleanup import cancel_quicktrade_casino_listings_by_locations
+
+        game_type = (body.game_type or "").strip().lower()
+        location = (body.location or "").strip()
+        from_uid = (body.user_id or "").strip()
+        if not location:
+            raise HTTPException(status_code=400, detail="location is required")
+        if not from_uid:
+            raise HTTPException(status_code=400, detail="user_id is required")
+
+        coll_map = {
+            "dice": (db.dice_ownership, "city"),
+            "roulette": (db.roulette_ownership, "city"),
+            "blackjack": (db.blackjack_ownership, "city"),
+            "horseracing": (db.horseracing_ownership, "city"),
+            "videopoker": (db.videopoker_ownership, "city"),
+            "slots": (db.slots_ownership, "state"),
+        }
+        qt_type_map = {
+            "dice": "casino_dice",
+            "roulette": "casino_rlt",
+            "blackjack": "casino_blackjack",
+            "horseracing": "casino_horseracing",
+            "videopoker": "casino_videopoker",
+        }
+        if game_type not in coll_map:
+            raise HTTPException(
+                status_code=400,
+                detail="Invalid game_type; use dice, roulette, blackjack, horseracing, videopoker, or slots",
+            )
+
+        victim = await db.users.find_one({"id": from_uid}, {"_id": 0, "id": 1, "username": 1})
+        if not victim:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        to_username_raw = (body.to_username or "").strip()
+        if to_username_raw:
+            to_user = await db.users.find_one(
+                {"username": {"$regex": f"^{re.escape(to_username_raw)}$", "$options": "i"}},
+                {"_id": 0, "id": 1, "username": 1, "rank_points": 1, "prestige_level": 1},
+            )
+            if not to_user:
+                raise HTTPException(status_code=404, detail=f"No user with username {to_username_raw!r}")
+        else:
+            to_user = await db.users.find_one(
+                {"id": current_user.get("id") or ""},
+                {"_id": 0, "id": 1, "username": 1, "rank_points": 1, "prestige_level": 1},
+            )
+            if not to_user:
+                raise HTTPException(status_code=400, detail="Could not resolve acting admin user")
+
+        to_uid = str(to_user.get("id") or "")
+        to_un = str(to_user.get("username") or "").strip() or "?"
+        if to_uid == from_uid:
+            raise HTTPException(status_code=400, detail="Source and destination user are the same")
+
+        coll, loc_key = coll_map[game_type]
+        doc = await coll.find_one({loc_key: location, "owner_id": from_uid})
+        if not doc:
+            raise HTTPException(status_code=404, detail=f"No {game_type} casino at {location!r} owned by this user")
+
+        if int(doc.get("buy_back_reward") or 0) > 0 or int(doc.get("buy_back_points_held") or 0) > 0:
+            raise HTTPException(
+                status_code=400,
+                detail="This casino has an active buy-back (reward or held points). Clear buy-back in-game before takeover.",
+            )
+
+        owned_other = await _user_owns_any_casino(to_uid)
+        if owned_other:
+            otype = owned_other.get("type")
+            ocity = owned_other.get("city")
+            if otype != game_type or str(ocity or "") != str(location):
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Destination user already owns a casino ({otype} · {ocity}). They may only hold one.",
+                )
+
+        rank_id, _ = get_rank_info(int(to_user.get("rank_points") or 0), user_prestige_rank_mult(to_user))
+        set_doc: Dict[str, Any] = {"owner_id": to_uid, "owner_username": to_un}
+        if rank_id < CAPO_RANK_ID:
+            set_doc["below_capo_acquired_at"] = datetime.now(timezone.utc)
+        update_op: Dict[str, Any] = {"$set": set_doc}
+        if rank_id >= CAPO_RANK_ID:
+            update_op["$unset"] = {"below_capo_acquired_at": ""}
+
+        res = await coll.update_one({loc_key: location, "owner_id": from_uid}, update_op)
+        if not res.modified_count:
+            raise HTTPException(status_code=500, detail="Casino takeover did not apply; try again")
+
+        qt = qt_type_map.get(game_type)
+        if qt:
+            stored_loc = doc.get(loc_key) or location
+            try:
+                await cancel_quicktrade_casino_listings_by_locations(qt, stored_loc, location)
+            except Exception:
+                logging.exception("takeover-user-casino: quicktrade cleanup failed game=%s loc=%s", game_type, location)
+
+        casino_modules = (
+            "routers.casinos.dice",
+            "routers.casinos.roulette",
+            "routers.casinos.blackjack",
+            "routers.casinos.horseracing",
+            "routers.casinos.video_poker",
+            "routers.casinos.slots",
+        )
+        for uid in (from_uid, to_uid):
+            if not uid:
+                continue
+            for mod_path in casino_modules:
+                try:
+                    mod = importlib.import_module(mod_path)
+                    inv = getattr(mod, "_invalidate_ownership_cache", None)
+                    if callable(inv):
+                        inv(uid)
+                except Exception:
+                    pass
+
+        try:
+            await db.users.update_one({"id": from_uid}, {"$inc": {"casinos_lost": 1}})
+            await db.users.update_one({"id": to_uid}, {"$inc": {"casinos_seized": 1}})
+        except Exception:
+            logging.exception("takeover-user-casino: stats increment failed")
+
+        logging.info(
+            "Admin casino takeover: %s %s from user_id=%s to user_id=%s (%s) by %s",
+            game_type,
+            location,
+            from_uid,
+            to_uid,
+            to_un,
+            current_user.get("email") or current_user.get("username"),
+        )
+        return {
+            "message": f"Assigned {game_type} casino ({location}) to {to_un}",
+            "game_type": game_type,
+            "location": location,
+            "from_user_id": from_uid,
+            "to_user_id": to_uid,
+            "to_username": to_un,
+        }
 
     _CASINO_PROPERTY_COLLECTIONS = [
         (db.dice_ownership, "dice_ownership"),

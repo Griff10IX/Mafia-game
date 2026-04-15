@@ -2310,14 +2310,17 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             if recipient_ids:
                 to_send = min(number_to_send, len(recipient_ids))
                 for uid in random.sample(recipient_ids, to_send):
-                    await send_notification(uid, "Witness statement", witness_msg, "attack", category="attacks")
-                    try:
-                        await db.users.update_one(
-                            {"id": uid},
-                            {"$inc": {"witness_statements": 1, "witness_nav_red": 1}},
-                        )
-                    except Exception:
-                        pass
+                    # Do not use category="attacks": muted "Kills & attack alerts" would skip the inbox row
+                    # while witness_statements still incremented — log and balance must stay in sync.
+                    notif = await send_notification(uid, "Witness statement", witness_msg, "attack", category=None)
+                    if notif:
+                        try:
+                            await db.users.update_one(
+                                {"id": uid},
+                                {"$inc": {"witness_statements": 1, "witness_nav_red": 1}},
+                            )
+                        except Exception:
+                            pass
         killer_family_id = await resolve_family_id(killer_id) or current_user.get("family_id")
         killer_family_id = str(killer_family_id).strip() if killer_family_id else None
         victim_family_id = await resolve_family_id(victim_id) or target.get("family_id")

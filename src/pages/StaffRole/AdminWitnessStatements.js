@@ -24,6 +24,9 @@ export default function AdminWitnessStatements() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [accessChecked, setAccessChecked] = useState(false);
+  const [reconcileUsername, setReconcileUsername] = useState('');
+  const [reconcileBusy, setReconcileBusy] = useState(false);
+  const [reconcileResult, setReconcileResult] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -66,6 +69,36 @@ export default function AdminWitnessStatements() {
   useEffect(() => {
     if (accessChecked) fetchOverview();
   }, [accessChecked, fetchOverview]);
+
+  const runReconcile = async (dryRun) => {
+    const u = reconcileUsername.trim();
+    if (!u) {
+      toast.error('Enter a username');
+      return;
+    }
+    setReconcileBusy(true);
+    setReconcileResult(null);
+    try {
+      const res = await api.post('/admin/witness-statements-reconcile', {
+        username: u,
+        dry_run: dryRun,
+      });
+      setReconcileResult(res.data);
+      if (dryRun) {
+        toast.message('Preview ready');
+      } else if (res.data?.applied) {
+        toast.success('Balance updated');
+        fetchOverview();
+      } else {
+        toast.message(res.data?.message || 'No change');
+      }
+    } catch (e) {
+      const msg = e.response?.data?.detail || e.message || 'Request failed';
+      toast.error(typeof msg === 'string' ? msg : 'Request failed');
+    } finally {
+      setReconcileBusy(false);
+    }
+  };
 
   if (!accessChecked || (loading && !data)) {
     return (
@@ -133,6 +166,78 @@ export default function AdminWitnessStatements() {
       </div>
 
       <p className="text-[9px] text-mutedForeground font-heading">Snapshot: {formatDateTime(data?.generated_at)}</p>
+
+      <section className="rounded border border-amber-500/30 bg-amber-500/5 overflow-hidden">
+        <div className="px-2 py-1.5 bg-amber-500/10 border-b border-border text-[10px] font-heading font-bold uppercase tracking-wider text-amber-200">
+          Reconcile stored balance
+        </div>
+        <div className="px-2 py-2 space-y-2 text-[11px] font-heading text-mutedForeground">
+          <p>
+            Sets <span className="text-foreground">witness_statements</span> to match witness inbox rows minus lines
+            held in <strong className="text-foreground">active</strong> listings (escrow). Use when the UI shows a balance
+            but the witness log is empty (e.g. historical attack-mute bug or deleted inbox rows). Preview first, then apply.
+          </p>
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="flex flex-col gap-0.5 min-w-[160px] flex-1">
+              <span className="text-[9px] uppercase tracking-wider text-mutedForeground">Username</span>
+              <input
+                type="text"
+                value={reconcileUsername}
+                onChange={(e) => setReconcileUsername(e.target.value)}
+                placeholder="Player username"
+                className="w-full rounded border border-border bg-background px-2 py-1.5 text-foreground text-sm"
+                autoComplete="off"
+              />
+            </label>
+            <button
+              type="button"
+              disabled={reconcileBusy}
+              onClick={() => runReconcile(true)}
+              className="px-3 py-1.5 rounded border border-border bg-secondary hover:bg-secondary/80 text-[10px] uppercase tracking-wider disabled:opacity-50"
+            >
+              Preview
+            </button>
+            <button
+              type="button"
+              disabled={
+                reconcileBusy
+                || !reconcileResult
+                || !reconcileResult.dry_run
+                || (reconcileResult.delta === 0
+                  && reconcileResult.witness_nav_red_before === reconcileResult.witness_nav_red_after)
+              }
+              onClick={() => runReconcile(false)}
+              className="px-3 py-1.5 rounded border border-amber-600/50 bg-amber-600/20 hover:bg-amber-600/30 text-[10px] uppercase tracking-wider text-amber-100 disabled:opacity-40"
+            >
+              Apply fix
+            </button>
+          </div>
+          {reconcileResult && (
+            <div className="rounded border border-border bg-card/40 px-2 py-2 text-[10px] space-y-1 text-foreground">
+              <div className="font-mono text-[9px] text-mutedForeground">{reconcileResult.user_id}</div>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 tabular-nums">
+                <div>
+                  <span className="text-mutedForeground block">Stored → new</span>
+                  {reconcileResult.witness_statements_before} → {reconcileResult.witness_statements_after}
+                </div>
+                <div>
+                  <span className="text-mutedForeground block">Inbox total</span>
+                  {reconcileResult.witness_notifications_total}
+                </div>
+                <div>
+                  <span className="text-mutedForeground block">In escrow</span>
+                  {reconcileResult.witness_notifications_in_escrow}
+                </div>
+                <div>
+                  <span className="text-mutedForeground block">Nav red before → after</span>
+                  {reconcileResult.witness_nav_red_before} → {reconcileResult.witness_nav_red_after}
+                </div>
+              </div>
+              <p className="text-mutedForeground pt-1 border-t border-border">{reconcileResult.message}</p>
+            </div>
+          )}
+        </div>
+      </section>
 
       <section className="rounded border border-border overflow-hidden">
         <div className="px-2 py-1.5 bg-primary/10 border-b border-border text-[10px] font-heading font-bold uppercase tracking-wider text-primary">

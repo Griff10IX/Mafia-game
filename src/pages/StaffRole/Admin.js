@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Fragment, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useLocation, Navigate, useParams } from 'react-router-dom';
 import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle, Eye, Receipt, ArrowLeftRight, Ticket, RefreshCw } from 'lucide-react';
 import api, { imageHostPublicUrl } from '../../utils/api';
@@ -205,6 +205,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Respect points log', categoryId: 'admin-players', collapseKey: 'respectPointsLog', keywords: ['respect', 'points', 'log', 'earned', 'audit', 'player'] },
   { label: 'Gambling Log', categoryId: 'admin-logs', collapseKey: 'gamblingLog', keywords: ['gambling', 'log', 'casino', 'bet'] },
   { label: 'Casino seizures', categoryId: 'admin-logs', collapseKey: 'casinoSeizures', keywords: ['casino', 'seizure', 'won', 'ownership', 'transfer'] },
+  { label: 'Casino buy-back history', categoryId: 'admin-logs', collapseKey: 'casinoBuybackHistory', keywords: ['buyback', 'buy-back', 'casino', 'escrow', 'points', 'held', 'offer'] },
   { label: 'Sports bets ledger', categoryId: 'admin-logs', collapseKey: 'sportsBetsLedger', keywords: ['sports', 'betting', 'bets', 'football', 'ledger'] },
   { label: 'Activity Log', categoryId: 'admin-logs', collapseKey: 'activityLog', keywords: ['activity', 'log', 'history'] },
   // Donations
@@ -263,6 +264,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Player compare', categoryId: 'admin-analytics-monitoring', collapseKey: 'playerCompare', keywords: ['compare', 'players', 'side by side'] },
   // Logs
   { label: 'Toast notifications', categoryId: 'admin-logs', collapseKey: 'toastNotifications', keywords: ['toast', 'notifications', 'popup', 'message', 'error', 'success'] },
+  { label: 'Wallet activity', categoryId: 'admin-logs', collapseKey: 'walletActivity', keywords: ['wallet', 'money', 'points', 'cash', 'transfer', 'mdg', 'bank', 'ledger'] },
   { label: 'Live Activity Feed', categoryId: 'admin-logs', collapseKey: 'activityFeed', keywords: ['activity', 'feed', 'live', 'real-time', 'actions', 'gambling', 'bank', 'transfer'] },
   { label: 'Minigame Payouts', categoryId: 'admin-logs', collapseKey: 'minigamePayouts', keywords: ['minigame', 'payout', 'reward', 'cash', 'mini', 'game'] },
   { label: 'Weekly Leaderboard Payouts', categoryId: 'admin-logs', collapseKey: 'weeklyLeaderboardPayouts', keywords: ['leaderboard', 'weekly', 'payout', 'respect', 'points', 'top 10', 'fix', 'deduction', 'negative points'] },
@@ -337,8 +339,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, bankEconomy: true, ...parsed };
-  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, bankEconomy: true }; }
+    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true }; }
 }
 
 function saveCollapsed(state) {
@@ -789,6 +791,7 @@ export default function Admin() {
   const [sendingMessageTo, setSendingMessageTo] = useState(null);
   const [userDetailData, setUserDetailData] = useState(null);
   const [userDetailLoading, setUserDetailLoading] = useState(false);
+  const [takeoverCasinoAssignUsername, setTakeoverCasinoAssignUsername] = useState('');
   const [exclusiveLootOwners, setExclusiveLootOwners] = useState(null);
   const [exclusiveLootLoading, setExclusiveLootLoading] = useState(false);
 
@@ -942,8 +945,16 @@ export default function Admin() {
   const [toastEventsType, setToastEventsType] = useState('');
   const [toastEventsContains, setToastEventsContains] = useState('');
   const [toastEventsLimit, setToastEventsLimit] = useState(200);
+  const [toastExpandId, setToastExpandId] = useState(null);
   const [toastEventsLive, setToastEventsLive] = useState(false);
   const [toastEventsSinceMinutes, setToastEventsSinceMinutes] = useState(15);
+  const [walletActivity, setWalletActivity] = useState(null);
+  const [walletActivityLoading, setWalletActivityLoading] = useState(false);
+  const [walletActivityUsername, setWalletActivityUsername] = useState('');
+  const [walletActivityKind, setWalletActivityKind] = useState('all');
+  const [walletActivityLimit, setWalletActivityLimit] = useState(200);
+  const [walletActivitySince, setWalletActivitySince] = useState('');
+  const [walletExpandId, setWalletExpandId] = useState(null);
   const [activityFeed, setActivityFeed] = useState(null);
   const [activityFeedLoading, setActivityFeedLoading] = useState(false);
   const [activityFeedMinutes, setActivityFeedMinutes] = useState(60);
@@ -995,6 +1006,10 @@ export default function Admin() {
   const [casinoSeizuresUsername, setCasinoSeizuresUsername] = useState('');
   const [casinoSeizuresGameType, setCasinoSeizuresGameType] = useState('');
   const [casinoSeizuresLimit, setCasinoSeizuresLimit] = useState(100);
+  const [casinoBuybackHistory, setCasinoBuybackHistory] = useState(null);
+  const [casinoBuybackHistoryLoading, setCasinoBuybackHistoryLoading] = useState(false);
+  const [casinoBuybackHistoryUsername, setCasinoBuybackHistoryUsername] = useState('');
+  const [casinoBuybackHistoryLimit, setCasinoBuybackHistoryLimit] = useState(200);
   const [mdgGamesLog, setMdgGamesLog] = useState({ games: [], total: 0, house_stats: null });
   const [mdgGamesLogLoading, setMdgGamesLogLoading] = useState(false);
   const [mdgGamesLogStatus, setMdgGamesLogStatus] = useState('');
@@ -5503,6 +5518,30 @@ export default function Admin() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toastEventsLive, toastEventsUsername, toastEventsType, toastEventsContains, toastEventsLimit, toastEventsSinceMinutes]);
 
+  const fetchWalletActivity = async () => {
+    const u = walletActivityUsername.trim();
+    if (!u) {
+      toast.error('Enter a username or user id');
+      return;
+    }
+    setWalletActivityLoading(true);
+    try {
+      const params = {
+        username: u,
+        limit: Math.max(1, Math.min(500, parseInt(String(walletActivityLimit), 10) || 200)),
+      };
+      if (walletActivityKind && walletActivityKind !== 'all') params.kind = walletActivityKind;
+      if (walletActivitySince.trim()) params.since = walletActivitySince.trim();
+      const res = await api.get('/admin/wallet-activity', { params });
+      setWalletActivity(res.data || null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load wallet activity');
+      setWalletActivity(null);
+    } finally {
+      setWalletActivityLoading(false);
+    }
+  };
+
   const fetchMinigamePayouts = async () => {
     setMinigamePayoutsLoading(true);
     try {
@@ -5700,6 +5739,25 @@ export default function Admin() {
       setCasinoSeizures({ entries: [] });
     } finally {
       setCasinoSeizuresLoading(false);
+    }
+  };
+
+  const fetchCasinoBuybackHistory = async () => {
+    const q = casinoBuybackHistoryUsername.trim();
+    if (!q) {
+      toast.error('Enter a username or user id');
+      return;
+    }
+    setCasinoBuybackHistoryLoading(true);
+    try {
+      const lim = Math.max(1, Math.min(500, parseInt(String(casinoBuybackHistoryLimit), 10) || 200));
+      const res = await api.get('/admin/casino-buyback-history', { params: { username: q, limit: lim } });
+      setCasinoBuybackHistory(res.data || null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load buy-back history');
+      setCasinoBuybackHistory(null);
+    } finally {
+      setCasinoBuybackHistoryLoading(false);
     }
   };
 
@@ -6983,11 +7041,55 @@ export default function Admin() {
                 </Section>
                 {(userDetailData.casinos_owned?.length > 0 || userDetailData.user?.id) && (
                   <Section title="Casinos & properties">
+                    {isAdmin && (userDetailData.casinos_owned?.length > 0) && (
+                      <div className="mb-3 space-y-1">
+                        <p className="text-[10px] text-mutedForeground leading-snug">
+                          Take over moves this player&apos;s casino to your account, or to the username below. Destination must own no other casino; buy-back must be cleared first.
+                        </p>
+                        <input
+                          type="text"
+                          value={takeoverCasinoAssignUsername}
+                          onChange={(e) => setTakeoverCasinoAssignUsername(e.target.value)}
+                          placeholder="New owner username (blank = your account)"
+                          className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                        />
+                      </div>
+                    )}
                     {(userDetailData.casinos_owned?.length > 0) && (
                       <ul className="text-foreground space-y-1 mb-2">
                         {userDetailData.casinos_owned.map((c, i) => (
-                          <li key={i} className="flex items-center justify-between gap-2">
-                            <span className="font-mono text-[11px]">{c.game_type} · {c.location}</span>
+                          <li key={i} className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="font-mono text-[11px] min-w-0">{c.game_type} · {c.location}</span>
+                            <div className="flex flex-wrap items-center gap-1 shrink-0">
+                            {isAdmin && (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const assign = takeoverCasinoAssignUsername.trim();
+                                  const msg = assign
+                                    ? `Assign ${c.game_type} (${c.location}) from ${userDetailData.user?.username || '?'} to @${assign}?`
+                                    : `Assign ${c.game_type} (${c.location}) to your admin account?`;
+                                  if (!window.confirm(msg)) return;
+                                  try {
+                                    const payload = {
+                                      user_id: userDetailData.user?.id,
+                                      game_type: c.game_type,
+                                      location: c.location,
+                                    };
+                                    if (assign) payload.to_username = assign;
+                                    await api.post('/admin/takeover-user-casino', payload);
+                                    toast.success('Casino reassigned');
+                                    setTakeoverCasinoAssignUsername('');
+                                    if (userDetailData?.user?.id) openUserDetail({ id: userDetailData.user.id });
+                                  } catch (e) {
+                                    toast.error(e.response?.data?.detail || 'Takeover failed');
+                                  }
+                                }}
+                                className="px-2 py-0.5 text-[10px] font-heading uppercase border border-primary/50 text-primary hover:bg-primary/10 rounded"
+                              >
+                                Take over
+                              </button>
+                            )}
                             <button
                               type="button"
                               onClick={async () => {
@@ -7004,6 +7106,7 @@ export default function Admin() {
                             >
                               Drop
                             </button>
+                            </div>
                           </li>
                         ))}
                       </ul>
@@ -15042,9 +15145,11 @@ export default function Admin() {
 
               {toastEvents?.entries?.length > 0 ? (
                 <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
+                  <p className="text-[9px] text-mutedForeground mb-1">Click a row to show server time, client time, duration, and structured metadata (e.g. Quick Trade amounts).</p>
                   <table className="w-full text-[10px] font-heading">
                     <thead className="sticky top-0 bg-zinc-900/90">
                       <tr className="text-left text-mutedForeground">
+                        <th className="p-2 w-8" aria-label="Expand" />
                         <th className="p-2">Time</th>
                         <th className="p-2">User</th>
                         <th className="p-2">Type</th>
@@ -15054,18 +15159,94 @@ export default function Admin() {
                       </tr>
                     </thead>
                     <tbody>
-                      {toastEvents.entries.map((e) => (
-                        <tr key={e.id || `${e.user_id || ''}-${e.created_at || ''}-${e.message || ''}`} className="border-t border-zinc-700/30 hover:bg-zinc-800/30">
-                          <td className="p-2 whitespace-nowrap text-mutedForeground">{e.created_at ? new Date(e.created_at).toLocaleString() : '—'}</td>
-                          <td className="p-2">{e.username || '—'}</td>
-                          <td className="p-2">
-                            <span className="px-1.5 py-0.5 rounded bg-zinc-800/70 border border-zinc-600/60 uppercase text-[9px]">{e.toast_type || 'default'}</span>
-                          </td>
-                          <td className="p-2 break-words max-w-[260px]">{e.message || '—'}</td>
-                          <td className="p-2 break-words max-w-[260px] text-mutedForeground">{e.description || '—'}</td>
-                          <td className="p-2 break-all text-mutedForeground">{e.route_path || '—'}</td>
-                        </tr>
-                      ))}
+                      {toastEvents.entries.map((e) => {
+                        const rowKey = e.id || `${e.user_id || ''}-${e.created_at || ''}-${e.message || ''}`;
+                        const expanded = toastExpandId === rowKey;
+                        const hasDetail =
+                          (e.metadata && typeof e.metadata === 'object' && Object.keys(e.metadata).length > 0) ||
+                          e.client_created_at ||
+                          e.duration_ms != null;
+                        return (
+                          <Fragment key={rowKey}>
+                            <tr
+                              role="button"
+                              tabIndex={0}
+                              aria-expanded={expanded}
+                              onClick={() => setToastExpandId((cur) => (cur === rowKey ? null : rowKey))}
+                              onKeyDown={(ev) => {
+                                if (ev.key === 'Enter' || ev.key === ' ') {
+                                  ev.preventDefault();
+                                  setToastExpandId((cur) => (cur === rowKey ? null : rowKey));
+                                }
+                              }}
+                              className={`border-t border-zinc-700/30 hover:bg-zinc-800/30 cursor-pointer ${expanded ? 'bg-zinc-800/40' : ''}`}
+                            >
+                              <td className="p-2 text-center text-mutedForeground select-none" aria-hidden>
+                                {hasDetail ? (expanded ? <ChevronDown size={14} className="inline" /> : <ChevronRight size={14} className="inline" />) : '·'}
+                              </td>
+                              <td className="p-2 whitespace-nowrap text-mutedForeground">{e.created_at ? new Date(e.created_at).toLocaleString() : '—'}</td>
+                              <td className="p-2">{e.username || '—'}</td>
+                              <td className="p-2">
+                                <span className="px-1.5 py-0.5 rounded bg-zinc-800/70 border border-zinc-600/60 uppercase text-[9px]">{e.toast_type || 'default'}</span>
+                              </td>
+                              <td className="p-2 break-words max-w-[260px]">{e.message || '—'}</td>
+                              <td className="p-2 break-words max-w-[260px] text-mutedForeground">{e.description || '—'}</td>
+                              <td className="p-2 break-all text-mutedForeground">{e.route_path || '—'}</td>
+                            </tr>
+                            {expanded && (
+                              <tr className="bg-zinc-950/80 border-t border-primary/20">
+                                <td colSpan={7} className="p-3 align-top">
+                                  <div className="space-y-2 text-[10px] font-heading">
+                                    <div>
+                                      <span className="text-mutedForeground uppercase tracking-wider">Server received</span>
+                                      <div className="text-foreground font-mono mt-0.5">
+                                        {e.created_at ? new Date(e.created_at).toLocaleString() : '—'}
+                                        {e.created_at ? <span className="text-mutedForeground ml-2">({e.created_at})</span> : null}
+                                      </div>
+                                    </div>
+                                    {e.client_created_at ? (
+                                      <div>
+                                        <span className="text-mutedForeground uppercase tracking-wider">Client (browser) time</span>
+                                        <div className="text-foreground font-mono mt-0.5">
+                                          {(() => {
+                                            try {
+                                              return new Date(e.client_created_at).toLocaleString();
+                                            } catch {
+                                              return String(e.client_created_at);
+                                            }
+                                          })()}
+                                          <span className="text-mutedForeground ml-2">({String(e.client_created_at)})</span>
+                                        </div>
+                                      </div>
+                                    ) : null}
+                                    {e.duration_ms != null ? (
+                                      <div>
+                                        <span className="text-mutedForeground uppercase tracking-wider">Toast duration</span>
+                                        <div className="text-foreground mt-0.5">{Number(e.duration_ms).toLocaleString()} ms</div>
+                                      </div>
+                                    ) : null}
+                                    {e.metadata && typeof e.metadata === 'object' && Object.keys(e.metadata).length > 0 ? (
+                                      <div>
+                                        <span className="text-mutedForeground uppercase tracking-wider">Metadata</span>
+                                        <dl className="mt-1 grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 font-mono text-[10px]">
+                                          {Object.entries(e.metadata).map(([k, v]) => (
+                                            <Fragment key={k}>
+                                              <dt className="text-primary/90 shrink-0">{k}</dt>
+                                              <dd className="text-foreground break-all">{v === null || v === undefined ? '—' : typeof v === 'number' ? v.toLocaleString() : String(v)}</dd>
+                                            </Fragment>
+                                          ))}
+                                        </dl>
+                                      </div>
+                                    ) : (
+                                      <p className="text-mutedForeground italic">No structured metadata for this toast.</p>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -15075,6 +15256,170 @@ export default function Admin() {
             </div>
           )}
         </div>
+
+        {/* Wallet activity — merged cash/points/MDG/bank/point ledger */}
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-emerald-500/25 to-transparent" />
+          <SectionHeader
+            icon={DollarSign}
+            title="Wallet activity"
+            badge={walletActivity?.entries?.length != null ? (
+              <span className="text-[10px] font-heading text-emerald-300/90">{walletActivity.count} events</span>
+            ) : null}
+            toolAnchor="walletActivity"
+            isCollapsed={collapsed.walletActivity}
+            onToggle={() => toggleSection('walletActivity')}
+            color="text-emerald-300"
+          />
+          {!collapsed.walletActivity && (
+            <div className="p-3 space-y-2">
+              <p className="text-[10px] text-mutedForeground font-heading leading-snug">
+                Server-side feed: bank cash sends, points sends (wallet before/after on new transfers), interest deposits/claims, MDG gambling rows, and curated point ledger (Quick Trade, store spends, MDG point legs). Older rows may omit balance snapshots.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={walletActivityUsername}
+                  onChange={(e) => setWalletActivityUsername(e.target.value)}
+                  placeholder="Username or user id"
+                  className="min-w-[140px] flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                <select
+                  value={walletActivityKind}
+                  onChange={(e) => setWalletActivityKind(e.target.value)}
+                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                >
+                  <option value="all">All kinds</option>
+                  <option value="cash_transfer">Cash transfer</option>
+                  <option value="points_transfer">Points transfer</option>
+                  <option value="bank_interest">Bank / interest</option>
+                  <option value="mdg">MDG</option>
+                  <option value="point_ledger">Point ledger</option>
+                </select>
+                <input
+                  type="text"
+                  value={walletActivitySince}
+                  onChange={(e) => setWalletActivitySince(e.target.value)}
+                  placeholder="Since ISO (optional)"
+                  className="min-w-[160px] flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs font-mono text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                <input
+                  type="number"
+                  min={1}
+                  max={500}
+                  value={walletActivityLimit}
+                  onChange={(e) => setWalletActivityLimit(Math.max(1, Math.min(500, parseInt(e.target.value, 10) || 200)))}
+                  className="w-20 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs font-mono text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                <BtnPrimary onClick={fetchWalletActivity} disabled={walletActivityLoading}>
+                  {walletActivityLoading ? 'Loading…' : 'Load'}
+                </BtnPrimary>
+              </div>
+              {walletActivity?.user && (
+                <div className="text-[10px] font-heading rounded border border-zinc-700/40 bg-zinc-900/40 px-2 py-1.5 flex flex-wrap gap-x-3 gap-y-1">
+                  <span className="text-primary font-bold">{walletActivity.user.username || '—'}</span>
+                  <span className="text-mutedForeground font-mono text-[9px]">{walletActivity.user.id}</span>
+                  <span className="text-mutedForeground">Cash: <span className="text-foreground">${Number(walletActivity.user.money_current ?? 0).toLocaleString()}</span></span>
+                  <span className="text-mutedForeground">Points: <span className="text-foreground">{(walletActivity.user.points_current ?? 0).toLocaleString()}</span></span>
+                </div>
+              )}
+              {walletActivity?.entries?.length > 0 ? (
+                <div className="overflow-x-auto max-h-[480px] overflow-y-auto">
+                  <p className="text-[9px] text-mutedForeground mb-1">Click a row to expand raw payload. Deltas are from this user&apos;s perspective where applicable.</p>
+                  <table className="w-full text-[10px] font-heading">
+                    <thead className="sticky top-0 bg-zinc-900/95 z-[1]">
+                      <tr className="text-left text-mutedForeground">
+                        <th className="p-1.5 w-7" aria-label="Expand" />
+                        <th className="p-1.5 whitespace-nowrap">Time (UTC)</th>
+                        <th className="p-1.5">Kind</th>
+                        <th className="p-1.5 text-right">Δ Cash</th>
+                        <th className="p-1.5 text-right">Δ Pts</th>
+                        <th className="p-1.5">Cash before → after</th>
+                        <th className="p-1.5">Pts before → after</th>
+                        <th className="p-1.5 min-w-[10rem]">Summary</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {walletActivity.entries.map((row) => {
+                        const rk = row.id || `${row.created_at}-${row.source}`;
+                        const ex = walletExpandId === rk;
+                        const src = row.source || '';
+                        const badge =
+                          src === 'cash_transfer' ? 'bg-emerald-900/50 text-emerald-300 border-emerald-600/50'
+                            : src === 'points_transfer' ? 'bg-violet-900/45 text-violet-200 border-violet-600/45'
+                              : src === 'mdg' ? 'bg-amber-900/45 text-amber-200 border-amber-600/45'
+                                : src === 'bank_interest' ? 'bg-sky-900/40 text-sky-200 border-sky-600/45'
+                                  : 'bg-zinc-800 text-zinc-300 border-zinc-600/50';
+                        const fmtCash = (n) => (n == null || Number.isNaN(Number(n)) ? '—' : `$${Number(n).toLocaleString()}`);
+                        const fmtPts = (n) => (n == null || Number.isNaN(Number(n)) ? '—' : `${Number(n).toLocaleString()}`);
+                        const cd = row.cash_delta;
+                        const pd = row.points_delta;
+                        const cb = row.wallet_cash_before;
+                        const ca = row.wallet_cash_after;
+                        const pb = row.wallet_points_before;
+                        const pa = row.wallet_points_after;
+                        return (
+                          <Fragment key={rk}>
+                            <tr
+                              role="button"
+                              tabIndex={0}
+                              aria-expanded={ex}
+                              onClick={() => setWalletExpandId((cur) => (cur === rk ? null : rk))}
+                              onKeyDown={(ev) => {
+                                if (ev.key === 'Enter' || ev.key === ' ') {
+                                  ev.preventDefault();
+                                  setWalletExpandId((cur) => (cur === rk ? null : rk));
+                                }
+                              }}
+                              className={`border-t border-zinc-700/30 hover:bg-zinc-800/30 cursor-pointer align-top ${ex ? 'bg-zinc-800/40' : ''}`}
+                            >
+                              <td className="p-1.5 text-center text-mutedForeground select-none" aria-hidden>
+                                {ex ? <ChevronDown size={14} className="inline" /> : <ChevronRight size={14} className="inline" />}
+                              </td>
+                              <td className="p-1.5 text-mutedForeground whitespace-nowrap">{row.created_at ? String(row.created_at).replace('T', ' ').slice(0, 19) : '—'}</td>
+                              <td className="p-1.5">
+                                <span className={`px-1.5 py-0.5 rounded border text-[9px] uppercase font-bold ${badge}`}>{row.kind_label || row.source}</span>
+                              </td>
+                              <td className={`p-1.5 text-right whitespace-nowrap font-mono ${cd > 0 ? 'text-emerald-400' : cd < 0 ? 'text-red-400/90' : 'text-mutedForeground'}`}>
+                                {cd == null ? '—' : `${cd > 0 ? '+' : ''}${Number(cd).toLocaleString()}`}
+                              </td>
+                              <td className={`p-1.5 text-right whitespace-nowrap font-mono ${pd > 0 ? 'text-violet-300' : pd < 0 ? 'text-orange-300/90' : 'text-mutedForeground'}`}>
+                                {pd == null ? '—' : `${pd > 0 ? '+' : ''}${Number(pd).toLocaleString()}`}
+                              </td>
+                              <td className="p-1.5 text-mutedForeground whitespace-nowrap text-[9px]">
+                                {cb != null && ca != null ? `${fmtCash(cb)} → ${fmtCash(ca)}` : '—'}
+                              </td>
+                              <td className="p-1.5 text-mutedForeground whitespace-nowrap text-[9px]">
+                                {pb != null && pa != null ? `${fmtPts(pb)} → ${fmtPts(pa)}` : '—'}
+                              </td>
+                              <td className="p-1.5 text-foreground leading-snug">
+                                <div className="font-medium text-[10px]">{row.title || '—'}</div>
+                                <div className="text-mutedForeground text-[9px]">{row.summary || ''}</div>
+                                {row.counterparty ? <div className="text-[9px] text-primary/80 mt-0.5">↳ {row.counterparty}</div> : null}
+                              </td>
+                            </tr>
+                            {ex && (
+                              <tr className="bg-zinc-950/85 border-t border-primary/15">
+                                <td colSpan={8} className="p-2 align-top">
+                                  <pre className="text-[9px] font-mono text-mutedForeground overflow-x-auto max-h-48 overflow-y-auto whitespace-pre-wrap break-all">{JSON.stringify(row.raw ?? row, null, 2)}</pre>
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                walletActivity && !walletActivityLoading ? (
+                  <p className="text-[10px] text-mutedForeground font-heading">No entries for this filter.</p>
+                ) : null
+              )}
+            </div>
+          )}
+        </div>
+
         {/* Live Activity Feed */}
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -15198,11 +15543,26 @@ export default function Admin() {
                             </td>
                             <td className="p-1.5 font-medium">{e.username || '—'}</td>
                             <td className="p-1.5">{e.action || '—'}</td>
-                            <td className="p-1.5 text-mutedForeground max-w-xs truncate">
+                            <td className="p-1.5 text-mutedForeground max-w-md break-words whitespace-normal">
                               {e.details ? (() => {
                                 const d = e.details;
                                 if (e.source === 'minigame') {
                                   return `${d.game || 'game'} | score ${Number(d.score || 0).toLocaleString()} | cash $${Number(d.cash || 0).toLocaleString()} | respect ${Number(d.respect || 0).toLocaleString()} | points ${Number(d.points || 0).toLocaleString()}`;
+                                }
+                                const act = String(e.action || '').toLowerCase();
+                                if (e.source === 'activity' && act.startsWith('quicktrade')) {
+                                  if (d.admin_summary) return d.admin_summary;
+                                  if (act === 'quicktrade_accept_sell' && d.buyer_username && d.seller_username) {
+                                    const pts = Number(d.points_received ?? d.points ?? 0);
+                                    const cash = Number(d.cost_paid ?? d.cash ?? 0);
+                                    return `${d.buyer_username} bought ${d.seller_username}'s listing for $${cash.toLocaleString()} cash → ${pts.toLocaleString()} points`;
+                                  }
+                                  if (act === 'quicktrade_accept_buy' && d.seller_username) {
+                                    const pts = Number(d.points_sold ?? d.points ?? 0);
+                                    const cash = Number(d.cash_received ?? d.cash ?? 0);
+                                    const who = d.buyer_display || d.buyer_username || '?';
+                                    return `${d.seller_username} sold ${pts.toLocaleString()} pts into ${who}'s buy order for $${cash.toLocaleString()} cash`;
+                                  }
                                 }
                                 if (d.stake != null && d.payout != null) return `Stake: $${Number(d.stake).toLocaleString()} → Payout: $${Number(d.payout).toLocaleString()}`;
                                 if (d.amount != null && d.recipient) return `$${Number(d.amount).toLocaleString()} → ${d.recipient}`;
@@ -16321,6 +16681,132 @@ export default function Admin() {
               </div>
               {(casinoSeizures.entries || []).length === 0 && !casinoSeizuresLoading && (
                 <p className="text-xs text-mutedForeground">Click <span className="text-primary font-bold">Load seizures</span> to query the log.</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Casino buy-back — point ledger (escrow) + pending seizure offers */}
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-violet-500/30 to-transparent" />
+          <SectionHeader
+            icon={HandCoins}
+            title="Casino buy-back history"
+            badge={casinoBuybackHistory?.ledger?.length != null ? (
+              <span className="text-[10px] font-heading text-violet-300/90">{casinoBuybackHistory.ledger_count ?? casinoBuybackHistory.ledger.length} ledger rows</span>
+            ) : null}
+            toolAnchor="casinoBuybackHistory"
+            isCollapsed={collapsed.casinoBuybackHistory}
+            onToggle={() => toggleSection('casinoBuybackHistory')}
+            color="text-violet-300"
+          />
+          {!collapsed.casinoBuybackHistory && (
+            <div className="p-3 space-y-3">
+              <p className="text-[10px] text-mutedForeground font-heading leading-snug">
+                Owner buy-back escrow (points moved from wallet into <span className="text-foreground/90">held</span> on the venue), releases when they lower/remove buy-back, refunds on reject/transfer, and points credited when someone <span className="text-foreground/90">accepts</span> a post-seizure buy-back offer. Rows come from <code className="text-[9px] bg-zinc-800/80 px-0.5 rounded">point_ledger_events</code>.
+                Wallet before/after is recorded for new events; older rows may only show escrow <span className="font-mono text-[9px]">from_held → to_held</span> and the points delta.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={casinoBuybackHistoryUsername}
+                  onChange={(e) => setCasinoBuybackHistoryUsername(e.target.value)}
+                  placeholder="Username or user id"
+                  className="min-w-[140px] flex-1 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                />
+                <select
+                  value={String(casinoBuybackHistoryLimit)}
+                  onChange={(e) => setCasinoBuybackHistoryLimit(parseInt(e.target.value, 10) || 200)}
+                  className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                >
+                  <option value="100">100 rows</option>
+                  <option value="200">200 rows</option>
+                  <option value="300">300 rows</option>
+                  <option value="500">500 rows</option>
+                </select>
+                <BtnPrimary onClick={fetchCasinoBuybackHistory} disabled={casinoBuybackHistoryLoading}>
+                  {casinoBuybackHistoryLoading ? '…' : 'Load history'}
+                </BtnPrimary>
+              </div>
+              {casinoBuybackHistory?.user && (
+                <div className="text-[10px] font-heading rounded border border-zinc-700/40 bg-zinc-900/40 px-2 py-1.5">
+                  <span className="text-primary font-bold">{casinoBuybackHistory.user.username || '—'}</span>
+                  <span className="text-mutedForeground ml-2 font-mono text-[9px]">{casinoBuybackHistory.user.id}</span>
+                  <span className="text-mutedForeground ml-2">Current wallet points: {(casinoBuybackHistory.user.points_current ?? 0).toLocaleString()}</span>
+                </div>
+              )}
+              {Array.isArray(casinoBuybackHistory?.pending_buy_back_offers) && casinoBuybackHistory.pending_buy_back_offers.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-heading text-amber-300/90 uppercase tracking-wider mb-1">Pending buy-back offers (involving this user)</p>
+                  <div className="max-h-40 overflow-y-auto rounded border border-amber-900/30">
+                    <table className="w-full text-[10px] font-heading">
+                      <thead className="bg-zinc-800/50 sticky top-0">
+                        <tr>
+                          <th className="text-left p-1.5 text-mutedForeground">Game</th>
+                          <th className="text-left p-1.5 text-mutedForeground">Location</th>
+                          <th className="text-right p-1.5 text-mutedForeground">Offered pts</th>
+                          <th className="text-left p-1.5 text-mutedForeground">From → To</th>
+                          <th className="text-left p-1.5 text-mutedForeground">Expires</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {casinoBuybackHistory.pending_buy_back_offers.map((o) => (
+                          <tr key={`${o.game}-${o.offer_id}`} className="border-t border-zinc-700/30">
+                            <td className="p-1.5">{o.game}</td>
+                            <td className="p-1.5 text-mutedForeground">{o.state || o.city || '—'}</td>
+                            <td className="p-1.5 text-right">{(o.points_offered ?? 0).toLocaleString()}</td>
+                            <td className="p-1.5 text-mutedForeground leading-tight">
+                              {(o.from_owner_username || o.from_owner_id || '?').toString().slice(0, 18)}
+                              {' → '}
+                              {(o.to_username || o.to_user_id || '?').toString().slice(0, 18)}
+                            </td>
+                            <td className="p-1.5 text-mutedForeground whitespace-nowrap">{o.expires_at ? String(o.expires_at).replace('T', ' ').slice(0, 19) : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+              {casinoBuybackHistory?.ledger?.length > 0 && (
+                <div className="max-h-[28rem] overflow-y-auto rounded border border-zinc-700/50">
+                  <table className="w-full text-[10px] font-heading">
+                    <thead className="bg-zinc-800/50 sticky top-0 z-[1]">
+                      <tr>
+                        <th className="text-left p-1.5 text-mutedForeground">Time (UTC)</th>
+                        <th className="text-left p-1.5 text-mutedForeground">Kind</th>
+                        <th className="text-right p-1.5 text-mutedForeground">Δ pts</th>
+                        <th className="text-right p-1.5 text-mutedForeground">Wallet before</th>
+                        <th className="text-right p-1.5 text-mutedForeground">Wallet after</th>
+                        <th className="text-right p-1.5 text-mutedForeground">Held</th>
+                        <th className="text-left p-1.5 text-mutedForeground min-w-[12rem]">Summary</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {casinoBuybackHistory.ledger.map((row) => {
+                        const ref = String(row.origin_ref || '');
+                        const kind = ref === 'buyback_hold' ? 'Hold' : ref === 'buyback_release' ? 'Release' : ref === 'buyback_refund' ? 'Refund' : ref.startsWith('buyback:') ? 'Credit' : (row.event_type || '').replace('casino_', '');
+                        const held = (row.from_held != null || row.to_held != null)
+                          ? `${row.from_held ?? '—'}→${row.to_held ?? '—'}`
+                          : '—';
+                        return (
+                          <tr key={row.id || `${row.created_at}-${ref}`} className="border-t border-zinc-700/30 align-top">
+                            <td className="p-1.5 text-mutedForeground whitespace-nowrap">{row.created_at ? String(row.created_at).replace('T', ' ').slice(0, 19) : '—'}</td>
+                            <td className="p-1.5 font-medium">{kind}</td>
+                            <td className="p-1.5 text-right whitespace-nowrap">{row.points_delta != null ? Number(row.points_delta).toLocaleString() : '—'}</td>
+                            <td className="p-1.5 text-right whitespace-nowrap">{row.wallet_balance_before != null ? Number(row.wallet_balance_before).toLocaleString() : '—'}</td>
+                            <td className="p-1.5 text-right whitespace-nowrap">{row.wallet_balance_after != null ? Number(row.wallet_balance_after).toLocaleString() : '—'}</td>
+                            <td className="p-1.5 text-right text-mutedForeground text-[9px]">{held}</td>
+                            <td className="p-1.5 text-mutedForeground leading-snug">{row.summary || '—'}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {casinoBuybackHistory && (!casinoBuybackHistory.ledger || casinoBuybackHistory.ledger.length === 0) && !casinoBuybackHistoryLoading && (
+                <p className="text-[10px] text-mutedForeground">No buy-back ledger rows for this user (or none in the row limit).</p>
               )}
             </div>
           )}

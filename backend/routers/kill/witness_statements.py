@@ -1,15 +1,20 @@
 # Witness statements: P2P cash market (list / cancel / buy). Balance minted when players receive kill witness notifications.
 import uuid
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
-from server import db, get_current_user
+from server import db, get_current_user, _username_pattern
 
 
 WITNESS_MAX_QTY_PER_LISTING = 10_000
 WITNESS_MAX_ACTIVE_LISTINGS = 5
+
+# Inbox + witness log match (case/spacing tolerant; must match send_notification title from kills).
+_WITNESS_INBOX_TITLE = {"title": {"$regex": r"^\s*Witness\s+statement\s*$", "$options": "i"}}
+_NOT_LISTED = {"$or": [{"listed_listing_id": {"$exists": False}}, {"listed_listing_id": None}]}
 
 
 def redact_witness_killer_for_market(message: str) -> str:
@@ -46,6 +51,14 @@ class WitnessListRequest(BaseModel):
 
 class WitnessListingIdRequest(BaseModel):
     listing_id: str
+
+
+class WitnessStatementReconcileRequest(BaseModel):
+    """Staff: set witness_statements to match inbox + active listing escrow (fixes mute/delete desync)."""
+
+    username: Optional[str] = None
+    user_id: Optional[str] = None
+    dry_run: bool = True
 
 
 def register(router):
@@ -114,7 +127,7 @@ def register(router):
             for r in listings
         ]
         notif_rows = await db.notifications.find(
-            {"title": "Witness statement"},
+            _WITNESS_INBOX_TITLE,
             {"_id": 0, "id": 1, "user_id": 1, "message": 1, "created_at": 1},
         ).sort("created_at", -1).limit(50).to_list(50)
         nuids = list({n.get("user_id") for n in notif_rows if n.get("user_id")})
@@ -145,6 +158,136 @@ def register(router):
             "top_holders": top_holders,
             "active_listings": active_listings,
             "recent_witness_notifications": recent_notifications,
+        }
+
+    @router.post("/admin/witness-statements-reconcile")
+    async def admin_witness_statements_reconcile(
+        req: WitnessStatementReconcileRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        Set a player's witness_statements to the count of witness inbox rows not held in
+        active Quick Trade escrow (matches list/cancel/buy invariants). Fixes ghost balance
+        from muted attack notifications (historical) or deleted witness inbox rows.
+        """
+        from server import _is_admin, _is_moderator
+
+        if not (_is_admin(current_user) or _is_moderator(current_user)):
+            raise HTTPException(status_code=403, detail="Admin or moderator access required")
+
+        uid_in = (req.user_id or "").strip()
+        uname_in = (req.username or "").strip()
+        if not uid_in and not uname_in:
+            raise HTTPException(status_code=400, detail="Provide user_id or username")
+
+        if uid_in:
+            target = await db.users.find_one(
+                {"id": uid_in},
+                {"_id": 0, "id": 1, "username": 1, "witness_statements": 1, "witness_nav_red": 1, "is_npc": 1, "is_bodyguard": 1},
+            )
+        else:
+            pat = _username_pattern(uname_in)
+            if not pat:
+                raise HTTPException(status_code=404, detail="User not found")
+            target = await db.users.find_one(
+                {"username": pat},
+                {"_id": 0, "id": 1, "username": 1, "witness_statements": 1, "witness_nav_red": 1, "is_npc": 1, "is_bodyguard": 1},
+            )
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = target["id"]
+        if target.get("is_npc") or target.get("is_bodyguard"):
+            raise HTTPException(status_code=400, detail="Cannot reconcile NPC or bodyguard accounts")
+
+        witness_base = {"user_id": uid, **_WITNESS_INBOX_TITLE}
+        total_notifications = await db.notifications.count_documents(witness_base)
+
+        escrow_ids: list[str] = []
+        listing_rows = await db.witness_statement_listings.find(
+            {"status": "active", "seller_id": uid},
+            {"_id": 0, "notification_ids": 1},
+        ).to_list(WITNESS_MAX_ACTIVE_LISTINGS + 2)
+        for row in listing_rows:
+            for nid in row.get("notification_ids") or []:
+                s = str(nid).strip()
+                if s:
+                    escrow_ids.append(s)
+        escrow_set = list(dict.fromkeys(escrow_ids))
+        in_escrow = 0
+        if escrow_set:
+            in_escrow = await db.notifications.count_documents({**witness_base, "id": {"$in": escrow_set}})
+
+        expected = max(0, int(total_notifications) - int(in_escrow))
+        before = int(target.get("witness_statements") or 0)
+        nav_before = int(target.get("witness_nav_red") or 0)
+        delta = expected - before
+        nav_after = min(nav_before, expected)
+
+        staff_name = current_user.get("username") or current_user.get("id") or "?"
+        msg = (
+            f"Witness balance for {target.get('username') or '?'}: stored {before}, "
+            f"expected {expected} ({total_notifications} inbox lines, {in_escrow} in active listing escrow)."
+        )
+
+        if req.dry_run:
+            return {
+                "dry_run": True,
+                "applied": False,
+                "user_id": uid,
+                "username": target.get("username") or "?",
+                "witness_statements_before": before,
+                "witness_statements_after": expected,
+                "witness_nav_red_before": nav_before,
+                "witness_nav_red_after": nav_after,
+                "delta": delta,
+                "witness_notifications_total": total_notifications,
+                "witness_notifications_in_escrow": in_escrow,
+                "expected_balance": expected,
+                "message": msg + " Dry run — no changes written.",
+            }
+
+        if delta == 0 and nav_after == nav_before:
+            return {
+                "dry_run": False,
+                "applied": False,
+                "user_id": uid,
+                "username": target.get("username") or "?",
+                "witness_statements_before": before,
+                "witness_statements_after": before,
+                "witness_nav_red_before": nav_before,
+                "witness_nav_red_after": nav_before,
+                "delta": 0,
+                "witness_notifications_total": total_notifications,
+                "witness_notifications_in_escrow": in_escrow,
+                "expected_balance": expected,
+                "message": msg + " Already in sync.",
+            }
+
+        await db.users.update_one(
+            {"id": uid},
+            {"$set": {"witness_statements": expected, "witness_nav_red": nav_after}},
+        )
+        try:
+            from routers.game.notifications import _invalidate_list_cache
+
+            _invalidate_list_cache(uid)
+        except Exception:
+            pass
+
+        return {
+            "dry_run": False,
+            "applied": True,
+            "user_id": uid,
+            "username": target.get("username") or "?",
+            "witness_statements_before": before,
+            "witness_statements_after": expected,
+            "witness_nav_red_before": nav_before,
+            "witness_nav_red_after": nav_after,
+            "delta": delta,
+            "witness_notifications_total": total_notifications,
+            "witness_notifications_in_escrow": in_escrow,
+            "expected_balance": expected,
+            "message": f"{msg} Updated by staff ({staff_name}).",
         }
 
     @router.get("/witness-statements/listings")
@@ -218,7 +361,7 @@ def register(router):
         if not uid:
             raise HTTPException(status_code=401, detail="Not logged in")
         rows = await db.notifications.find(
-            {"user_id": uid, "title": "Witness statement"},
+            {"user_id": uid, **_WITNESS_INBOX_TITLE},
             {"_id": 0, "id": 1, "message": 1, "created_at": 1, "read": 1, "listed_listing_id": 1},
         ).sort("created_at", -1).limit(100).to_list(100)
         return {"items": rows}
@@ -259,13 +402,12 @@ def register(router):
         )
         if conflict:
             raise HTTPException(status_code=400, detail="One or more statements are already listed on the market.")
-        not_listed = {"$or": [{"listed_listing_id": {"$exists": False}}, {"listed_listing_id": None}]}
         eligible = await db.notifications.find(
             {
                 "id": {"$in": ids},
                 "user_id": uid,
-                "title": "Witness statement",
-                **not_listed,
+                **_WITNESS_INBOX_TITLE,
+                **_NOT_LISTED,
             },
             {"_id": 0, "id": 1},
         ).to_list(qty + 1)
@@ -302,8 +444,8 @@ def register(router):
             {
                 "id": {"$in": ids},
                 "user_id": uid,
-                "title": "Witness statement",
-                **not_listed,
+                **_WITNESS_INBOX_TITLE,
+                **_NOT_LISTED,
             },
             {"$set": {"listed_listing_id": listing_id}},
         )

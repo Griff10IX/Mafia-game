@@ -593,6 +593,12 @@ async def send_points(request: SendPointsRequest, current_user: dict = Depends(g
         except Exception:
             logger.exception("point provenance rollback failed transfer_id=%s", transfer_id)
         raise HTTPException(status_code=500, detail="Transfer failed. No points were sent; please retry.")
+    sender_u = await db.users.find_one({"id": sender_id}, {"_id": 0, "points": 1})
+    recipient_u = await db.users.find_one({"id": recipient["id"]}, {"_id": 0, "points": 1})
+    sender_pts_after = int((sender_u or {}).get("points") or 0)
+    recipient_pts_after = int((recipient_u or {}).get("points") or 0)
+    sender_pts_before = sender_pts_after + int(amount)
+    recipient_pts_before = recipient_pts_after - int(amount)
     await db.points_transfers.insert_one({
         "id": transfer_id,
         "from_user_id": sender_id,
@@ -601,6 +607,10 @@ async def send_points(request: SendPointsRequest, current_user: dict = Depends(g
         "to_username": recipient_username,
         "amount": amount,
         "created_at": now,
+        "sender_points_before": sender_pts_before,
+        "sender_points_after": sender_pts_after,
+        "recipient_points_before": recipient_pts_before,
+        "recipient_points_after": recipient_pts_after,
     })
     await send_notification(
         recipient["id"],

@@ -241,6 +241,15 @@ export default function WitnessStatements() {
               Inbox
             </Link>
             .
+            {balance > 0 && (
+              <p className="mt-4 max-w-lg mx-auto text-[10px] text-amber-400/95 font-heading leading-relaxed border border-amber-700/40 rounded-md px-3 py-2 bg-amber-950/30">
+                Your account shows <strong className="text-amber-200">{balance}</strong> tradable statement(s), but there are no saved log lines.
+                That usually means <strong className="text-amber-200">Attack / kill alerts</strong> were turned off in{' '}
+                <Link to="/account/profile" className="text-primary hover:underline">Profile → notification settings</Link>
+                {' '}before a fix: witness inbox rows were skipped while your balance still increased. New witness drops always save here now.
+                If you still cannot list or use them, ask staff to reconcile your balance.
+              </p>
+            )}
           </div>
         ) : (
           <div className="overflow-x-auto">
