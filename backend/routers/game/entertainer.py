@@ -14,6 +14,15 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from server import db, get_current_user, get_current_user_verified, send_notification, send_notification_to_all, _is_admin, CARS
 from routers.kill.armoury import TOKEN_TYPES, TOKEN_CONFIG
 from utils.point_provenance import log_points_event
+from utils.sustained_page_ratelimit import PAGE_KEY_ENTERTAINER, check_sustained_page_rl
+
+
+async def _entertainer_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_ENTERTAINER)
+
+
+async def _entertainer_sustained_rl_verified(current_user: dict = Depends(get_current_user_verified)):
+    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_ENTERTAINER)
 
 # E-Games prizes: Rank-XP Pass is shop-only (not listed in "what you can win" and never rolled here).
 ENTERTAINER_TOKEN_TYPES = tuple(t for t in TOKEN_TYPES if t != "rank_xp_pass")
@@ -1684,17 +1693,19 @@ async def _try_auto_create_find_word_round():
 
 
 def register(router):
-    router.add_api_route("/forum/entertainer/find-word/active", find_word_active, methods=["GET"])
-    router.add_api_route("/forum/entertainer/find-word/history", find_word_history, methods=["GET"])
-    router.add_api_route("/forum/entertainer/find-word/claim", find_word_claim, methods=["POST"])
+    _ent_rl_u = [Depends(_entertainer_sustained_rl_user)]
+    _ent_rl_v = [Depends(_entertainer_sustained_rl_verified)]
+    router.add_api_route("/forum/entertainer/find-word/active", find_word_active, methods=["GET"], dependencies=_ent_rl_u)
+    router.add_api_route("/forum/entertainer/find-word/history", find_word_history, methods=["GET"], dependencies=_ent_rl_u)
+    router.add_api_route("/forum/entertainer/find-word/claim", find_word_claim, methods=["POST"], dependencies=_ent_rl_v)
     router.add_api_route("/forum/entertainer/find-word/admin/start", find_word_admin_start, methods=["POST"])
-    router.add_api_route("/forum/entertainer/prizes", get_prizes, methods=["GET"])
-    router.add_api_route("/forum/entertainer/games", list_games, methods=["GET"])
-    router.add_api_route("/forum/entertainer/games", create_game, methods=["POST"])
-    router.add_api_route("/forum/entertainer/games/history", games_history, methods=["GET"])
-    router.add_api_route("/forum/entertainer/games/{game_id}", get_game, methods=["GET"])
-    router.add_api_route("/forum/entertainer/games/{game_id}/join", join_game, methods=["POST"])
-    router.add_api_route("/forum/entertainer/games/{game_id}/guess", guess_hangman, methods=["POST"])
+    router.add_api_route("/forum/entertainer/prizes", get_prizes, methods=["GET"], dependencies=_ent_rl_u)
+    router.add_api_route("/forum/entertainer/games", list_games, methods=["GET"], dependencies=_ent_rl_u)
+    router.add_api_route("/forum/entertainer/games", create_game, methods=["POST"], dependencies=_ent_rl_v)
+    router.add_api_route("/forum/entertainer/games/history", games_history, methods=["GET"], dependencies=_ent_rl_u)
+    router.add_api_route("/forum/entertainer/games/{game_id}", get_game, methods=["GET"], dependencies=_ent_rl_u)
+    router.add_api_route("/forum/entertainer/games/{game_id}/join", join_game, methods=["POST"], dependencies=_ent_rl_v)
+    router.add_api_route("/forum/entertainer/games/{game_id}/guess", guess_hangman, methods=["POST"], dependencies=_ent_rl_v)
     router.add_api_route("/forum/entertainer/games/{game_id}/roll", admin_roll_game, methods=["POST"])
     router.add_api_route("/forum/entertainer/admin/config", get_entertainer_config, methods=["GET"])
     router.add_api_route("/forum/entertainer/admin/config", update_entertainer_config, methods=["PATCH"])

@@ -14,6 +14,11 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from server import db, get_current_user, _is_admin, _is_moderator, _is_hdo, log_activity, send_notification, ADMIN_EMAILS
 from utils.text import strip_emoji
+from utils.sustained_page_ratelimit import PAGE_KEY_FORUM, check_sustained_page_rl
+
+
+async def _forum_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_FORUM)
 
 
 def _parse_iso_datetime(s):
@@ -1333,18 +1338,19 @@ async def delete_comment(
 
 
 def register(router):
-    router.add_api_route("/forum/topics", get_topics, methods=["GET"])
-    router.add_api_route("/forum/topics", create_topic, methods=["POST"])
-    router.add_api_route("/forum/topics/{topic_id}", get_topic, methods=["GET"])
-    router.add_api_route("/forum/topics/{topic_id}/comments", add_comment, methods=["POST"])
-    router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/reactions/users", list_comment_emoji_reaction_users, methods=["GET"])
-    router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/reactions", set_comment_emoji_reaction, methods=["POST"])
-    router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/like", like_comment, methods=["POST"])
-    router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/dislike", dislike_comment, methods=["POST"])
-    router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/likes", list_comment_like_users, methods=["GET"])
-    router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/dislikes", list_comment_dislike_users, methods=["GET"])
-    router.add_api_route("/forum/topics/{topic_id}/reactions/users", list_topic_emoji_reaction_users, methods=["GET"])
-    router.add_api_route("/forum/topics/{topic_id}/reactions", set_topic_emoji_reaction, methods=["POST"])
-    router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}", delete_comment, methods=["DELETE"])
-    router.add_api_route("/forum/topics/{topic_id}", update_topic, methods=["PATCH"])
-    router.add_api_route("/forum/topics/{topic_id}", delete_topic, methods=["DELETE"])
+    _forum_rl = [Depends(_forum_sustained_rl_user)]
+    router.add_api_route("/forum/topics", get_topics, methods=["GET"], dependencies=_forum_rl)
+    router.add_api_route("/forum/topics", create_topic, methods=["POST"], dependencies=_forum_rl)
+    router.add_api_route("/forum/topics/{topic_id}", get_topic, methods=["GET"], dependencies=_forum_rl)
+    router.add_api_route("/forum/topics/{topic_id}/comments", add_comment, methods=["POST"], dependencies=_forum_rl)
+    router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/reactions/users", list_comment_emoji_reaction_users, methods=["GET"], dependencies=_forum_rl)
+    router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/reactions", set_comment_emoji_reaction, methods=["POST"], dependencies=_forum_rl)
+    router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/like", like_comment, methods=["POST"], dependencies=_forum_rl)
+    router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/dislike", dislike_comment, methods=["POST"], dependencies=_forum_rl)
+    router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/likes", list_comment_like_users, methods=["GET"], dependencies=_forum_rl)
+    router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}/dislikes", list_comment_dislike_users, methods=["GET"], dependencies=_forum_rl)
+    router.add_api_route("/forum/topics/{topic_id}/reactions/users", list_topic_emoji_reaction_users, methods=["GET"], dependencies=_forum_rl)
+    router.add_api_route("/forum/topics/{topic_id}/reactions", set_topic_emoji_reaction, methods=["POST"], dependencies=_forum_rl)
+    router.add_api_route("/forum/topics/{topic_id}/comments/{comment_id}", delete_comment, methods=["DELETE"], dependencies=_forum_rl)
+    router.add_api_route("/forum/topics/{topic_id}", update_topic, methods=["PATCH"], dependencies=_forum_rl)
+    router.add_api_route("/forum/topics/{topic_id}", delete_topic, methods=["DELETE"], dependencies=_forum_rl)

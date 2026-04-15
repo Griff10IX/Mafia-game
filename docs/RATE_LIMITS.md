@@ -12,8 +12,19 @@ Admin routes that previously toggled RL (`/admin/security/rate-limits*`, page-vi
 
 Legacy Mongo collections (`rate_limit_clicks`, `endpoint_rl_violations`) and indexes may still exist from older deployments; they are unused by the current no-op `check_endpoint_rate_limit`.
 
-## Jail sustained pacing (optional)
+## Sustained page pacing (optional)
 
-- **Behavior:** [`backend/utils/sustained_page_ratelimit.py`](../backend/utils/sustained_page_ratelimit.py) — per-user gap-based streak on jail API routes only (see [`backend/routers/crime/jail.py`](../backend/routers/crime/jail.py)). When `game_settings._id: "main".sustained_page_rl_jail_enabled` is true, consecutive requests spaced **under 500ms** for **~15s wall time** trigger a **random 10–15s** cooldown (`429`, `Retry-After`, JSON `cooldown_seconds`).
-- **State:** Mongo collection `sustained_page_rl_state` (document `_id` = `{user_id}:jail`).
-- **Admin:** Admin Tools → Settings (anti-bot area) — **Enable** / **Disable** jail pacing; same flag is included when saving **Save settings** (`PATCH /admin/settings` field `sustained_page_rl_jail_enabled`). Default **off** when unset.
+- **Behavior:** [`backend/utils/sustained_page_ratelimit.py`](../backend/utils/sustained_page_ratelimit.py) — per-user, per-scope gap-based streak. When enabled for a scope, consecutive authenticated requests spaced **under the scope’s max gap** for **~15s wall time** trigger a **random 10–15s** cooldown (`429`, `Retry-After`, JSON `cooldown_seconds`). Scopes are independent (separate state per user per scope). Default max gap is **500ms**; **kill / attack** uses **100ms** (stricter).
+- **Not triggered by normal jail browsing or F5:** the jail UI refreshes `/jail/status` about every **1s** and `/jail/players` about every **3s** (see `src/pages/Crime/Jail.js`). Any gap **≥ 500ms** resets the “fast” chain, so typical polling and full page reloads stay under the threshold. This feature is aimed at **very fast repeated API calls** (scripts / autoclickers), not at limiting refresh or the built-in poll interval.
+- **Scopes & wiring:**
+  - **Jail** — [`backend/routers/crime/jail.py`](../backend/routers/crime/jail.py) (player jail actions).
+  - **Forum** — [`backend/routers/social/forum.py`](../backend/routers/social/forum.py) (`/forum/topics…` routes).
+  - **Entertainer** — [`backend/routers/game/entertainer.py`](../backend/routers/game/entertainer.py) (player entertainer APIs under `/forum/entertainer/…` except staff **`/forum/entertainer/admin/*`**, **`/forum/entertainer/find-word/admin/start`**, and **`/forum/entertainer/games/{id}/roll`**).
+  - **Kill / attack** — [`backend/routers/kill/attack.py`](../backend/routers/kill/attack.py) (all **`/attack/*`** routes: search, status, list, travel, execute, timeline, etc.). **100ms** max gap (not 500ms).
+- **State:** Mongo collection `sustained_page_rl_state` (document `_id` = `{user_id}:{page_key}` with `page_key` one of `jail`, `forum`, `entertainer`, `kill`).
+- **Settings:** `game_settings` document `_id: "main"` — booleans (default off when unset):
+  - `sustained_page_rl_jail_enabled`
+  - `sustained_page_rl_forum_enabled`
+  - `sustained_page_rl_entertainer_enabled`
+  - `sustained_page_rl_kill_enabled`
+- **Admin:** Admin Tools → **Sustained page pacing** (Game World). Enable/disable per scope; same flags are included in **Save settings** (`PATCH /admin/settings`).

@@ -70,6 +70,15 @@ from routers.account.objectives import update_objectives_progress
 from routers.kill.armoury import _best_weapon_for_user, _get_weapon_mastery_pct, MASTERY_MAX_BULLET_REDUCTION_PCT
 from routers.game.families import resolve_family_id
 from utils.staff_bot_client_alert import maybe_notify_staff_bot_attack_from_ua, maybe_notify_staff_attack_execute_token_fail
+from utils.sustained_page_ratelimit import PAGE_KEY_KILL, check_sustained_page_rl
+
+
+async def _kill_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_KILL)
+
+
+async def _kill_sustained_rl_verified(current_user: dict = Depends(get_current_user_verified)):
+    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_KILL)
 
 
 def _safe_compare_execute_token(stored: str, submitted: Optional[str]) -> bool:
@@ -2632,13 +2641,15 @@ async def get_attack_attempts(current_user: dict = Depends(get_current_user)):
 
 
 def register(router):
-    router.add_api_route("/attack/search", search_target, methods=["POST"], response_model=AttackSearchResponse)
-    router.add_api_route("/attack/status", get_attack_status, methods=["GET"], response_model=AttackStatusResponse)
-    router.add_api_route("/attack/list", list_attacks, methods=["GET"])
-    router.add_api_route("/attack/delete", delete_attacks, methods=["POST"])
-    router.add_api_route("/attack/travel", travel_to_target, methods=["POST"])
-    router.add_api_route("/attack/bullets/calc", calc_bullets, methods=["POST"])
-    router.add_api_route("/attack/inflation", get_attack_inflation, methods=["GET"])
-    router.add_api_route("/attack/execute", execute_attack, methods=["POST"], response_model=AttackExecuteResponse)
-    router.add_api_route("/attack/attempts", get_attack_attempts, methods=["GET"])
-    router.add_api_route("/attack/timeline", get_attack_timeline, methods=["GET"])
+    _kill_rl_u = [Depends(_kill_sustained_rl_user)]
+    _kill_rl_v = [Depends(_kill_sustained_rl_verified)]
+    router.add_api_route("/attack/search", search_target, methods=["POST"], response_model=AttackSearchResponse, dependencies=_kill_rl_v)
+    router.add_api_route("/attack/status", get_attack_status, methods=["GET"], response_model=AttackStatusResponse, dependencies=_kill_rl_u)
+    router.add_api_route("/attack/list", list_attacks, methods=["GET"], dependencies=_kill_rl_u)
+    router.add_api_route("/attack/delete", delete_attacks, methods=["POST"], dependencies=_kill_rl_v)
+    router.add_api_route("/attack/travel", travel_to_target, methods=["POST"], dependencies=_kill_rl_v)
+    router.add_api_route("/attack/bullets/calc", calc_bullets, methods=["POST"], dependencies=_kill_rl_v)
+    router.add_api_route("/attack/inflation", get_attack_inflation, methods=["GET"], dependencies=_kill_rl_u)
+    router.add_api_route("/attack/execute", execute_attack, methods=["POST"], response_model=AttackExecuteResponse, dependencies=_kill_rl_v)
+    router.add_api_route("/attack/attempts", get_attack_attempts, methods=["GET"], dependencies=_kill_rl_u)
+    router.add_api_route("/attack/timeline", get_attack_timeline, methods=["GET"], dependencies=_kill_rl_u)

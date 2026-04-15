@@ -1,6 +1,6 @@
 import { Fragment, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useLocation, Navigate, useParams } from 'react-router-dom';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle, Eye, Receipt, ArrowLeftRight, Ticket, RefreshCw } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle, Eye, Receipt, ArrowLeftRight, Ticket, RefreshCw, MessagesSquare } from 'lucide-react';
 import api, { imageHostPublicUrl } from '../../utils/api';
 import { formatAdminDateTime, formatAdminDateOnly, formatAdminTimeOnly } from '../../utils/adminDateTime';
 import { toast } from 'sonner';
@@ -231,6 +231,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Claim costs (casino, airport, armoury)', categoryId: 'admin-gameworld', collapseKey: 'claimCosts', keywords: ['claim', 'cost', 'casino', 'airport', 'armoury', 'bullet', 'factory', 'dice', 'roulette'], adminOnly: true },
   { label: 'Casino per-game max bets', categoryId: 'admin-gameworld', collapseKey: 'casinoMaxBets', keywords: ['casino', 'max bet', 'per game', 'slots', 'blackjack', 'roulette'] },
   { label: 'Admin display & signup', categoryId: 'admin-gameworld', collapseKey: 'adminDisplay', keywords: ['admin', 'display', 'colour', 'color', 'online', 'email', 'verification', 'vpn', 'proxy', 'user agent', 'signup'], adminOnly: true },
+  { label: 'Sustained page pacing (jail, forum, entertainer, kill)', categoryId: 'admin-gameworld', collapseKey: 'sustainedPageRl', keywords: ['sustained', 'pacing', 'rate', 'forum', 'entertainer', 'jail', 'kill', 'attack', '429', 'cooldown', 'bot'], adminOnly: true },
   { label: 'Swiss & interest bank limits', categoryId: 'admin-gameworld', collapseKey: 'bankEconomy', keywords: ['swiss', 'interest', 'bank', 'limit', 'deposit', 'maturity', 'principal'], adminOnly: true },
   { label: 'Launch & login lock', categoryId: 'admin-gameworld', collapseKey: 'launchSettings', keywords: ['login', 'lock', 'launch', 'store', 'preorder', 'preregister', 'banner', 'landing'], adminOnly: true },
   { label: 'Maintenance banner', categoryId: 'admin-gameworld', collapseKey: 'maintenanceBanner', keywords: ['maintenance', 'banner', 'downtime'] },
@@ -340,8 +341,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, ...parsed };
-  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true }; }
+    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true }; }
 }
 
 function saveCollapsed(state) {
@@ -1090,7 +1091,13 @@ export default function Admin() {
   const [minigameTurnstileSiteKey, setMinigameTurnstileSiteKey] = useState('');
   const [loginTurnstileEnabled, setLoginTurnstileEnabled] = useState(false);
   const [sustainedPageRlJailEnabled, setSustainedPageRlJailEnabled] = useState(false);
+  const [sustainedPageRlEntEnabled, setSustainedPageRlEntEnabled] = useState(false);
+  const [sustainedPageRlForumEnabled, setSustainedPageRlForumEnabled] = useState(false);
+  const [sustainedPageRlKillEnabled, setSustainedPageRlKillEnabled] = useState(false);
   const [sustainedJailRlSaving, setSustainedJailRlSaving] = useState(false);
+  const [sustainedEntRlSaving, setSustainedEntRlSaving] = useState(false);
+  const [sustainedForumRlSaving, setSustainedForumRlSaving] = useState(false);
+  const [sustainedKillRlSaving, setSustainedKillRlSaving] = useState(false);
   const [captchaFailModalOpen, setCaptchaFailModalOpen] = useState(false);
   const [captchaFailRows, setCaptchaFailRows] = useState([]);
   const [captchaFailTotal, setCaptchaFailTotal] = useState(0);
@@ -1696,6 +1703,9 @@ export default function Admin() {
       setMinigameTurnstileSiteKey((res.data?.minigame_turnstile_site_key ?? '').trim());
       setLoginTurnstileEnabled(!!res.data?.login_turnstile_enabled);
       setSustainedPageRlJailEnabled(!!res.data?.sustained_page_rl_jail_enabled);
+      setSustainedPageRlEntEnabled(!!res.data?.sustained_page_rl_entertainer_enabled);
+      setSustainedPageRlForumEnabled(!!res.data?.sustained_page_rl_forum_enabled);
+      setSustainedPageRlKillEnabled(!!res.data?.sustained_page_rl_kill_enabled);
       setSpotifyFeatureEnabled(!!res.data?.spotify_feature_enabled);
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
       setLandingBannerMessage(res.data?.landing_banner_message ?? '');
@@ -1766,6 +1776,9 @@ export default function Admin() {
       setMinigameTurnstileSiteKey('');
       setLoginTurnstileEnabled(false);
       setSustainedPageRlJailEnabled(false);
+      setSustainedPageRlEntEnabled(false);
+      setSustainedPageRlForumEnabled(false);
+      setSustainedPageRlKillEnabled(false);
       setSpotifyFeatureEnabled(false);
       setLandingBannerMessage('');
       setStockMarketMaxPoints(3000);
@@ -1898,6 +1911,9 @@ export default function Admin() {
         minigame_turnstile_site_key: minigameTurnstileSiteKey.trim(),
         login_turnstile_enabled: loginTurnstileEnabled,
         sustained_page_rl_jail_enabled: sustainedPageRlJailEnabled,
+        sustained_page_rl_entertainer_enabled: sustainedPageRlEntEnabled,
+        sustained_page_rl_forum_enabled: sustainedPageRlForumEnabled,
+        sustained_page_rl_kill_enabled: sustainedPageRlKillEnabled,
         spotify_feature_enabled: spotifyFeatureEnabled,
         landing_banner_enabled: landingBannerEnabled,
         landing_banner_message: landingBannerMessage,
@@ -1929,6 +1945,15 @@ export default function Admin() {
       setLoginTurnstileEnabled(!!res.data?.login_turnstile_enabled);
       if (res.data?.sustained_page_rl_jail_enabled !== undefined) {
         setSustainedPageRlJailEnabled(!!res.data.sustained_page_rl_jail_enabled);
+      }
+      if (res.data?.sustained_page_rl_entertainer_enabled !== undefined) {
+        setSustainedPageRlEntEnabled(!!res.data.sustained_page_rl_entertainer_enabled);
+      }
+      if (res.data?.sustained_page_rl_forum_enabled !== undefined) {
+        setSustainedPageRlForumEnabled(!!res.data.sustained_page_rl_forum_enabled);
+      }
+      if (res.data?.sustained_page_rl_kill_enabled !== undefined) {
+        setSustainedPageRlKillEnabled(!!res.data.sustained_page_rl_kill_enabled);
       }
       setSpotifyFeatureEnabled(!!res.data?.spotify_feature_enabled);
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
@@ -2002,6 +2027,51 @@ export default function Admin() {
       toast.error(e.response?.data?.detail ?? 'Failed to update');
     } finally {
       setSustainedJailRlSaving(false);
+    }
+  };
+
+  const applySustainedPageRlEnt = async (enabled) => {
+    setSustainedEntRlSaving(true);
+    try {
+      const res = await api.patch('/admin/settings', { sustained_page_rl_entertainer_enabled: !!enabled });
+      if (res.data?.sustained_page_rl_entertainer_enabled !== undefined) {
+        setSustainedPageRlEntEnabled(!!res.data.sustained_page_rl_entertainer_enabled);
+      }
+      toast.success(enabled ? 'Entertainer pacing limiter enabled' : 'Entertainer pacing limiter disabled');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to update');
+    } finally {
+      setSustainedEntRlSaving(false);
+    }
+  };
+
+  const applySustainedPageRlForum = async (enabled) => {
+    setSustainedForumRlSaving(true);
+    try {
+      const res = await api.patch('/admin/settings', { sustained_page_rl_forum_enabled: !!enabled });
+      if (res.data?.sustained_page_rl_forum_enabled !== undefined) {
+        setSustainedPageRlForumEnabled(!!res.data.sustained_page_rl_forum_enabled);
+      }
+      toast.success(enabled ? 'Forum pacing limiter enabled' : 'Forum pacing limiter disabled');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to update');
+    } finally {
+      setSustainedForumRlSaving(false);
+    }
+  };
+
+  const applySustainedPageRlKill = async (enabled) => {
+    setSustainedKillRlSaving(true);
+    try {
+      const res = await api.patch('/admin/settings', { sustained_page_rl_kill_enabled: !!enabled });
+      if (res.data?.sustained_page_rl_kill_enabled !== undefined) {
+        setSustainedPageRlKillEnabled(!!res.data.sustained_page_rl_kill_enabled);
+      }
+      toast.success(enabled ? 'Kill / attack pacing limiter enabled' : 'Kill / attack pacing limiter disabled');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to update');
+    } finally {
+      setSustainedKillRlSaving(false);
     }
   };
 
@@ -10860,33 +10930,6 @@ export default function Admin() {
                   {blockScriptGameActionsSaving ? '…' : 'Disable gameplay blocking'}
                 </button>
               </div>
-              <div className="space-y-1 pt-2 border-t border-zinc-700/40">
-                <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Jail — sustained pacing</p>
-                <p className="text-[10px] text-mutedForeground font-heading leading-relaxed max-w-3xl">
-                  When on, jail API calls (any method) that stay faster than ~500ms apart for ~15s straight get a random 10–15s cooldown (429). Off by default.
-                </p>
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={sustainedJailRlSaving || sustainedPageRlJailEnabled}
-                    onClick={() => applySustainedPageRlJail(true)}
-                    className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {sustainedJailRlSaving ? '…' : 'Enable'}
-                  </button>
-                  <button
-                    type="button"
-                    disabled={sustainedJailRlSaving || !sustainedPageRlJailEnabled}
-                    onClick={() => applySustainedPageRlJail(false)}
-                    className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {sustainedJailRlSaving ? '…' : 'Disable'}
-                  </button>
-                  <span className="text-[10px] text-mutedForeground font-heading">
-                    Current: {sustainedPageRlJailEnabled ? 'on' : 'off'} — also saved with &quot;Save settings&quot; below.
-                  </span>
-                </div>
-              </div>
               <label className="flex items-start gap-2 cursor-pointer text-sm font-heading pt-1">
                 <input
                   type="checkbox"
@@ -11021,6 +11064,134 @@ export default function Admin() {
             <BtnPrimary onClick={handleSaveAdminSettings} disabled={adminSettingsSaving}>
               {adminSettingsSaving ? 'Saving...' : 'Save settings'}
             </BtnPrimary>
+          </div>
+        )}
+        </div>
+        )}
+
+        {isAdmin && (
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={MessagesSquare}
+          title="Sustained page pacing"
+          badge={
+            <span className="text-[10px] font-heading text-mutedForeground">
+              Jail · Forum · Entertainer · Kill (optional anti-script bursts)
+            </span>
+          }
+          toolAnchor="sustainedPageRl"
+          isCollapsed={collapsed.sustainedPageRl}
+          onToggle={() => toggleSection('sustainedPageRl')}
+        />
+        {!collapsed.sustainedPageRl && (
+          <div className="p-3 space-y-4">
+            <p className="text-[10px] text-mutedForeground font-heading leading-relaxed max-w-3xl">
+              When a scope is on, that area&apos;s authenticated API calls that stay <span className="text-foreground/90">more than ~2 per second</span> (gaps under ~500ms) for ~15s wall-clock straight get a random 10–15s cooldown (HTTP 429, Retry-After). Each scope is independent. Off by default. Toggles apply immediately and are included when you use Save settings in Admin display.
+            </p>
+            <p className="text-[10px] text-amber-400/90 font-heading leading-relaxed max-w-3xl rounded border border-amber-500/25 bg-amber-500/5 px-2 py-1.5">
+              <span className="font-bold">Jail page / F5:</span> the in-game jail screen polls the API about every 1–3s and full reloads are slower than that, so the chain keeps resetting — spamming refresh will usually <span className="italic">not</span> trigger this. It targets scripted or click-spam bursts, not normal browsing.
+            </p>
+            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
+              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Jail</p>
+              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+                Player jail routes (list, status, bust, snitch, private cell, etc.). Same sub-500ms / ~15s rule as above.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={sustainedJailRlSaving || sustainedPageRlJailEnabled}
+                  onClick={() => applySustainedPageRlJail(true)}
+                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedJailRlSaving ? '…' : 'Enable'}
+                </button>
+                <button
+                  type="button"
+                  disabled={sustainedJailRlSaving || !sustainedPageRlJailEnabled}
+                  onClick={() => applySustainedPageRlJail(false)}
+                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedJailRlSaving ? '…' : 'Disable'}
+                </button>
+                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlJailEnabled ? 'on' : 'off'}</span>
+              </div>
+            </div>
+            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
+              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Forum</p>
+              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+                All <code className="text-[9px] bg-muted px-1 rounded">/forum/topics…</code> routes (topics, comments, likes, reactions).
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={sustainedForumRlSaving || sustainedPageRlForumEnabled}
+                  onClick={() => applySustainedPageRlForum(true)}
+                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedForumRlSaving ? '…' : 'Enable'}
+                </button>
+                <button
+                  type="button"
+                  disabled={sustainedForumRlSaving || !sustainedPageRlForumEnabled}
+                  onClick={() => applySustainedPageRlForum(false)}
+                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedForumRlSaving ? '…' : 'Disable'}
+                </button>
+                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlForumEnabled ? 'on' : 'off'}</span>
+              </div>
+            </div>
+            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
+              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Entertainer</p>
+              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+                Player entertainer forum APIs (games, find-word, prizes, history). Staff <code className="text-[9px] bg-muted px-1 rounded">/forum/entertainer/admin/*</code> and manual roll are not throttled here.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={sustainedEntRlSaving || sustainedPageRlEntEnabled}
+                  onClick={() => applySustainedPageRlEnt(true)}
+                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedEntRlSaving ? '…' : 'Enable'}
+                </button>
+                <button
+                  type="button"
+                  disabled={sustainedEntRlSaving || !sustainedPageRlEntEnabled}
+                  onClick={() => applySustainedPageRlEnt(false)}
+                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedEntRlSaving ? '…' : 'Disable'}
+                </button>
+                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlEntEnabled ? 'on' : 'off'}</span>
+              </div>
+            </div>
+            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
+              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Kill / attack</p>
+              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+                All <code className="text-[9px] bg-muted px-1 rounded">/attack/*</code> routes (search, status, list, travel, execute, timeline, etc.). Uses a <span className="text-foreground/90">100ms</span> gap threshold (other scopes use ~500ms).
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={sustainedKillRlSaving || sustainedPageRlKillEnabled}
+                  onClick={() => applySustainedPageRlKill(true)}
+                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedKillRlSaving ? '…' : 'Enable'}
+                </button>
+                <button
+                  type="button"
+                  disabled={sustainedKillRlSaving || !sustainedPageRlKillEnabled}
+                  onClick={() => applySustainedPageRlKill(false)}
+                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedKillRlSaving ? '…' : 'Disable'}
+                </button>
+                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlKillEnabled ? 'on' : 'off'}</span>
+              </div>
+            </div>
           </div>
         )}
         </div>
