@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Lock, RefreshCw, MessageSquare, Unlock } from 'lucide-react';
 import api from '../../utils/api';
+import { formatAdminDateTime } from '../../utils/adminDateTime';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 
@@ -139,9 +140,9 @@ export default function AdminLocked() {
                   </div>
                   {u.account_locked_at && (
                     <div className="text-zinc-500 text-[10px] mb-2">
-                      Locked: {new Date(u.account_locked_at).toLocaleString()}
+                      Locked: {formatAdminDateTime(u.account_locked_at)}
                       {u.account_locked_until && (
-                        <span className="ml-2"> · Test lock until {new Date(u.account_locked_until).toLocaleString()}</span>
+                        <span className="ml-2"> · Test lock until {formatAdminDateTime(u.account_locked_until)}</span>
                       )}
                     </div>
                   )}
@@ -151,7 +152,7 @@ export default function AdminLocked() {
                       <>
                         <p className="text-foreground whitespace-pre-wrap mt-0.5">{u.account_locked_comment}</p>
                         {u.account_locked_comment_at && (
-                          <p className="text-zinc-500 text-[9px] mt-0.5">{new Date(u.account_locked_comment_at).toLocaleString()}</p>
+                          <p className="text-zinc-500 text-[9px] mt-0.5">{formatAdminDateTime(u.account_locked_comment_at)}</p>
                         )}
                       </>
                     ) : (
@@ -163,7 +164,7 @@ export default function AdminLocked() {
                       <span className="text-primary font-bold uppercase tracking-wider text-[9px]">Your message</span>
                       <p className="text-foreground whitespace-pre-wrap mt-0.5">{u.account_locked_admin_message}</p>
                       {u.account_locked_admin_message_at && (
-                        <p className="text-zinc-500 text-[9px] mt-0.5">{new Date(u.account_locked_admin_message_at).toLocaleString()}</p>
+                        <p className="text-zinc-500 text-[9px] mt-0.5">{formatAdminDateTime(u.account_locked_admin_message_at)}</p>
                       )}
                     </div>
                   )}
@@ -172,7 +173,7 @@ export default function AdminLocked() {
                       <span className="text-emerald-400 font-bold uppercase tracking-wider text-[9px]">Their reply</span>
                       <p className="text-foreground whitespace-pre-wrap mt-0.5">{u.account_locked_user_reply}</p>
                       {u.account_locked_user_reply_at && (
-                        <p className="text-zinc-500 text-[9px] mt-0.5">{new Date(u.account_locked_user_reply_at).toLocaleString()}</p>
+                        <p className="text-zinc-500 text-[9px] mt-0.5">{formatAdminDateTime(u.account_locked_user_reply_at)}</p>
                       )}
                     </div>
                   )}

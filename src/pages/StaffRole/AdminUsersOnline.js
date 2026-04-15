@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Users, RefreshCw, ShieldAlert, ExternalLink } from 'lucide-react';
 import api from '../../utils/api';
+import { formatAdminDateTime } from '../../utils/adminDateTime';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import { formatGameDateTime as formatDateTime } from '../../utils/gameDateTime';
@@ -141,7 +142,7 @@ export default function AdminUsersOnline() {
                       </Link>
                     </td>
                     <td className="py-2 px-3 text-mutedForeground whitespace-nowrap">
-                      {formatDateTime(u.last_seen)}
+                      {formatAdminDateTime(u.last_seen)}
                     </td>
                     <td className="py-2 px-3 text-foreground font-mono text-[10px] max-w-[180px] truncate" title={u.last_path || '—'}>
                       {u.last_path || '—'}

@@ -91,7 +91,7 @@ export default function AdminShell() {
                 Admin Command Center
               </h1>
               <p className="hidden sm:block text-xs text-mutedForeground">
-                Route-based tooling with consolidated sections and legacy-compatible anchors.
+                Route-based tooling with consolidated sections and legacy-compatible anchors. Timestamps use UK time (GMT / BST).
               </p>
             </div>
             <div className="hidden md:block shrink-0 text-[10px] text-mutedForeground font-heading uppercase tracking-wider">

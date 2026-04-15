@@ -2,9 +2,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { FileText, RefreshCw } from 'lucide-react';
 import api from '../../utils/api';
+import { formatAdminDateTime } from '../../utils/adminDateTime';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
-import { formatGameDateTime as formatDateTime } from '../../utils/gameDateTime';
 
 export default function AdminWitnessStatements() {
   const navigate = useNavigate();
@@ -153,7 +153,7 @@ export default function AdminWitnessStatements() {
         </div>
       </div>
 
-      <p className="text-[9px] text-mutedForeground font-heading">Snapshot: {formatDateTime(data?.generated_at)}</p>
+      <p className="text-[9px] text-mutedForeground font-heading">Snapshot: {formatAdminDateTime(data?.generated_at)}</p>
 
       <section className="rounded border border-amber-500/30 bg-amber-500/5 overflow-hidden">
         <div className="px-2 py-1.5 bg-amber-500/10 border-b border-border text-[10px] font-heading font-bold uppercase tracking-wider text-amber-200">
@@ -253,7 +253,7 @@ export default function AdminWitnessStatements() {
                 </div>
                 <div className="md:col-span-2 md:text-right tabular-nums text-foreground">{row.balance.toLocaleString()}</div>
                 <div className="md:col-span-2 text-mutedForeground">{row.is_dead ? 'Yes' : 'No'}</div>
-                <div className="md:col-span-4 text-mutedForeground tabular-nums text-[10px]">{formatDateTime(row.last_seen)}</div>
+                <div className="md:col-span-4 text-mutedForeground tabular-nums text-[10px]">{formatAdminDateTime(row.last_seen)}</div>
               </div>
             ))
           )}
@@ -284,7 +284,7 @@ export default function AdminWitnessStatements() {
                 </div>
                 <div className="md:col-span-2 md:text-right tabular-nums">{L.quantity.toLocaleString()}</div>
                 <div className="md:col-span-3 md:text-right tabular-nums">${L.price_cash.toLocaleString()}</div>
-                <div className="md:col-span-4 text-mutedForeground tabular-nums text-[10px]">{formatDateTime(L.created_at)}</div>
+                <div className="md:col-span-4 text-mutedForeground tabular-nums text-[10px]">{formatAdminDateTime(L.created_at)}</div>
               </div>
             ))
           )}
@@ -311,7 +311,7 @@ export default function AdminWitnessStatements() {
                     {r.username}
                   </Link>
                 </div>
-                <div className="md:col-span-2 text-mutedForeground tabular-nums whitespace-nowrap">{formatDateTime(r.created_at)}</div>
+                <div className="md:col-span-2 text-mutedForeground tabular-nums whitespace-nowrap">{formatAdminDateTime(r.created_at)}</div>
                 <div className="md:col-span-7 text-mutedForeground break-words">{r.message_preview}</div>
               </div>
             ))

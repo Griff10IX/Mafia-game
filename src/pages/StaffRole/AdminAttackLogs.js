@@ -2,10 +2,10 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Crosshair, RefreshCw, Shield } from 'lucide-react';
 import api from '../../utils/api';
+import { formatAdminDateTime } from '../../utils/adminDateTime';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import AttackLogsPanel from '../../components/staff/AttackLogsPanel';
-import { formatGameDateTime as formatDateTime } from '../../utils/gameDateTime';
 
 export default function AdminAttackLogs() {
   const navigate = useNavigate();
@@ -158,7 +158,7 @@ export default function AdminAttackLogs() {
         </div>
       </div>
       <p className="text-[9px] text-mutedForeground font-heading">
-        Analytics snapshot: {formatDateTime(analytics?.generated_at)}
+        Analytics snapshot: {formatAdminDateTime(analytics?.generated_at)}
       </p>
 
       <section className="rounded border border-border overflow-hidden">

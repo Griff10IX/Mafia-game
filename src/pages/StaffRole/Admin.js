@@ -2,7 +2,7 @@ import { Fragment, useState, useEffect, useRef, useMemo, useCallback } from 'rea
 import { Link, useLocation, Navigate, useParams } from 'react-router-dom';
 import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle, Eye, Receipt, ArrowLeftRight, Ticket, RefreshCw } from 'lucide-react';
 import api, { imageHostPublicUrl } from '../../utils/api';
-import { formatGameDateTime } from '../../utils/gameDateTime';
+import { formatAdminDateTime, formatAdminDateOnly, formatAdminTimeOnly } from '../../utils/adminDateTime';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import AttackLogsPanel from '../../components/staff/AttackLogsPanel';
@@ -6580,7 +6580,7 @@ export default function Admin() {
                         <td className="py-1.5 pr-2 text-foreground font-medium">{u.username ?? '—'}</td>
                         <td className="py-1.5 pr-2 text-mutedForeground truncate max-w-[180px]">{u.email ?? '—'}</td>
                         <td className="py-1.5 pr-2">{u.is_dead ? <span className="text-red-400">Yes</span> : 'No'}</td>
-                        <td className="py-1.5 pr-2 text-mutedForeground">{u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}</td>
+                        <td className="py-1.5 pr-2 text-mutedForeground">{u.created_at ? formatAdminDateOnly(u.created_at) : '—'}</td>
                         <td className="py-1.5 flex flex-wrap gap-1">
                           <button type="button" onClick={() => openUserDetail(u)} disabled={userDetailLoading} className="px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-zinc-500/50 bg-zinc-700/40 text-zinc-200 hover:bg-zinc-600/50 disabled:opacity-50 flex items-center gap-0.5" title="View full user details">
                             <Info size={10} /> Details
@@ -6699,7 +6699,7 @@ export default function Admin() {
                       <tbody>
                         {(respectLogData.events || []).map((ev, idx) => (
                           <tr key={`${ev.at}-${idx}`} className="border-t border-zinc-700/30">
-                            <td className="p-2 text-mutedForeground whitespace-nowrap">{ev.at ? formatGameDateTime(ev.at) : '—'}</td>
+                            <td className="p-2 text-mutedForeground whitespace-nowrap">{ev.at ? formatAdminDateTime(ev.at) : '—'}</td>
                             <td className="p-2 text-foreground font-mono text-[9px] break-all">{ev.source ?? '—'}</td>
                             <td className="p-2 text-right text-primary font-bold">{Number(ev.amount ?? 0).toLocaleString()}</td>
                           </tr>
@@ -6785,7 +6785,7 @@ export default function Admin() {
                         <td className="py-1.5 pr-2">{u.email_verified === false ? <span className="text-amber-400">No</span> : <span className="text-emerald-400">Yes</span>}</td>
                         <td className="py-1.5 pr-2">{u.is_dead ? <span className="text-red-400">Yes</span> : 'No'}</td>
                         <td className="py-1.5 pr-2">{(u.is_npc || u.is_bodyguard) ? <span className="text-amber-400">Yes</span> : 'No'}</td>
-                        <td className="py-1.5 pr-2 text-mutedForeground">{u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}</td>
+                        <td className="py-1.5 pr-2 text-mutedForeground">{u.created_at ? formatAdminDateOnly(u.created_at) : '—'}</td>
                         <td className="py-1.5 flex flex-wrap gap-1">
                           <button type="button" onClick={() => openUserDetail(u)} disabled={userDetailLoading} className="px-2 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-zinc-500/50 bg-zinc-700/40 text-zinc-200 hover:bg-zinc-600/50 disabled:opacity-50 flex items-center gap-0.5" title="View full user details">
                             <Info size={10} /> Details
@@ -6809,7 +6809,7 @@ export default function Admin() {
       {/* User detail modal */}
       {userDetailData && (() => {
         const u = userDetailData.user || {};
-        const fmtDate = (v) => formatGameDateTime(v);
+        const fmtDate = (v) => (v ? formatAdminDateTime(v) : '—');
         const fmtNum = (v) => {
           if (v == null || v === '') return '—';
           const n = Number(v);
@@ -7542,7 +7542,7 @@ export default function Admin() {
                           <div key={r.user_id} className="flex flex-wrap items-center gap-x-2 gap-y-0">
                             <Link to={`/profile/${encodeURIComponent(r.username)}`} className="text-primary hover:underline">{r.username}</Link>
                             <span className="text-mutedForeground">{r.email || '—'}</span>
-                            <span className="text-zinc-500">{r.created_at ? formatGameDateTime(r.created_at) : '—'}</span>
+                            <span className="text-zinc-500">{r.created_at ? formatAdminDateTime(r.created_at) : '—'}</span>
                             <button
                               type="button"
                               className="text-[9px] font-heading uppercase tracking-wide px-1.5 py-0.5 rounded border border-destructive/40 text-destructive/90 hover:bg-destructive/10 disabled:opacity-40"
@@ -7809,7 +7809,7 @@ export default function Admin() {
                 <div><span className="text-mutedForeground">Username:</span> {viewRegistrationInfo.username ?? '—'}</div>
                 <div><span className="text-mutedForeground">Email:</span> {viewRegistrationInfo.email ?? '—'}</div>
                 <div><span className="text-mutedForeground">User ID:</span> {viewRegistrationInfo.id ?? '—'}</div>
-                <div><span className="text-mutedForeground">Created:</span> {viewRegistrationInfo.created_at ? formatGameDateTime(viewRegistrationInfo.created_at) : '—'}</div>
+                <div><span className="text-mutedForeground">Created:</span> {viewRegistrationInfo.created_at ? formatAdminDateTime(viewRegistrationInfo.created_at) : '—'}</div>
                 <div><span className="text-mutedForeground">Registration IP:</span> {viewRegistrationInfo.registration_ip || '—'}</div>
                 <div><span className="text-mutedForeground">Last login IP:</span> {viewRegistrationInfo.last_login_ip || '—'}</div>
                 {viewRegistrationInfo.is_dead && <div className="text-red-400 font-bold">Account is dead</div>}
@@ -8216,7 +8216,7 @@ export default function Admin() {
                           (currencySpendAuditData.respect_spent_events || []).map((ev, idx) => (
                             <tr key={`r-spend-${idx}`} className="border-b border-zinc-800/50">
                               <td className="p-1 text-mutedForeground whitespace-nowrap">
-                                {ev.at ? formatGameDateTime(ev.at) : '—'}
+                                {ev.at ? formatAdminDateTime(ev.at) : '—'}
                               </td>
                               <td className="p-1 font-mono break-all">{ev.source ?? '—'}</td>
                               <td className="p-1 text-right font-bold">{Number(ev.amount ?? 0).toLocaleString()}</td>
@@ -8243,7 +8243,7 @@ export default function Admin() {
                         {(currencySpendAuditData.points_ledger_recent || []).map((row, i) => (
                           <tr key={row.id || `ledger-${i}`} className="border-b border-zinc-800/50">
                             <td className="p-1 text-mutedForeground whitespace-nowrap">
-                              {row.created_at ? formatGameDateTime(row.created_at) : '—'}
+                              {row.created_at ? formatAdminDateTime(row.created_at) : '—'}
                             </td>
                             <td className="p-1 font-mono">{row.event_type ?? '—'}</td>
                             <td className="p-1">{(row.points ?? 0).toLocaleString()}</td>
@@ -8336,11 +8336,11 @@ export default function Admin() {
                             : <span style={{ color: '#666' }}>--</span>}
                         </td>
                         <td style={{ padding: '6px 8px', color: '#aaa', fontSize: 12 }}>
-                          {t.active_until ? formatGameDateTime(t.active_until) : '--'}
+                          {t.active_until ? formatAdminDateTime(t.active_until) : '--'}
                         </td>
                         {tokenInspectData.tokens.some(tok => tok.token_expires_at) && (
                           <td style={{ padding: '6px 8px', fontSize: 12, color: t.token_expired ? '#f87171' : '#aaa' }}>
-                            {t.token_expires_at ? formatGameDateTime(t.token_expires_at) : '--'}
+                            {t.token_expires_at ? formatAdminDateTime(t.token_expires_at) : '--'}
                             {t.token_expired && ' (expired)'}
                           </td>
                         )}
@@ -8371,7 +8371,7 @@ export default function Admin() {
                           <span style={{ color: '#60a5fa' }}>Purchase</span>{' '}
                           {ev.event_ref?.replace('buy-token:', '') || '?'}{' '}
                           <span style={{ color: '#f87171' }}>-{Math.abs(ev.points || 0)} pts</span>{' '}
-                          <span style={{ color: '#666', fontSize: 11 }}>{ev.created_at ? formatGameDateTime(ev.created_at) : ''}</span>
+                          <span style={{ color: '#666', fontSize: 11 }}>{ev.created_at ? formatAdminDateTime(ev.created_at) : ''}</span>
                         </div>
                       ))}
                       {(tokenInspectData.recent_token_activity || []).map((ev, i) => (
@@ -8380,7 +8380,7 @@ export default function Admin() {
                           {ev.details?.item || ev.action}{' '}
                           {ev.details?.amount ? `x${ev.details.amount}` : ''}{' '}
                           {ev.details?.cost ? <span style={{ color: '#f87171' }}>-{ev.details.cost} pts</span> : ''}
-                          {' '}<span style={{ color: '#666', fontSize: 11 }}>{ev.created_at ? formatGameDateTime(ev.created_at) : ''}</span>
+                          {' '}<span style={{ color: '#666', fontSize: 11 }}>{ev.created_at ? formatAdminDateTime(ev.created_at) : ''}</span>
                         </div>
                       ))}
                       {(!tokenInspectData.recent_token_purchases?.length && !tokenInspectData.recent_token_activity?.length) && (
@@ -8507,12 +8507,12 @@ export default function Admin() {
                             <td className="p-1 font-mono text-violet-200/90">{row.game_pass_status ?? '—'}</td>
                             <td className="p-1 font-mono text-[8px] max-w-[120px] truncate" title={row.last_stripe_pass_entitled_at || ''}>
                               {row.last_stripe_pass_entitled_at
-                                ? formatGameDateTime(row.last_stripe_pass_entitled_at)
+                                ? formatAdminDateTime(row.last_stripe_pass_entitled_at)
                                 : '—'}
                             </td>
                             <td className="p-1 font-mono text-[8px] max-w-[120px] truncate" title={row.points_game_pass_purchase_at || ''}>
                               {row.points_game_pass_purchase_at
-                                ? formatGameDateTime(row.points_game_pass_purchase_at)
+                                ? formatAdminDateTime(row.points_game_pass_purchase_at)
                                 : '—'}
                             </td>
                             <td className="p-1 font-mono text-[8px] text-amber-200/90" title="points_ledger = matched points spend; unattributed = no Stripe row and no buy_game_pass_points ledger">
@@ -8653,7 +8653,7 @@ export default function Admin() {
                                   'bg-zinc-500/20 text-zinc-300'
                                 }`}>{m.source}</span>
                               </td>
-                              <td className="px-2 py-1 whitespace-nowrap">{m.deleted_at ? formatGameDateTime(m.deleted_at) : '—'}</td>
+                              <td className="px-2 py-1 whitespace-nowrap">{m.deleted_at ? formatAdminDateTime(m.deleted_at) : '—'}</td>
                               <td className="px-2 py-1">{m.deleted_by_username || '—'}</td>
                               <td className="px-2 py-1">{m.reason || '—'}</td>
                               <td className="px-2 py-1 max-w-xs truncate" title={m.content_preview}>{m.content_preview || '—'}</td>
@@ -8738,7 +8738,7 @@ export default function Admin() {
                       <span className="text-foreground">{s.ip || '—'}</span>
                       <span className="text-mutedForeground">{s.device_type || '—'}</span>
                       <span className="text-mutedForeground">
-                        Last used: {s.last_used_at ? formatGameDateTime(s.last_used_at) : '—'}
+                        Last used: {s.last_used_at ? formatAdminDateTime(s.last_used_at) : '—'}
                       </span>
                       <button
                         type="button"
@@ -8828,21 +8828,21 @@ export default function Admin() {
                         <span className="font-bold text-amber-400">{u.username}</span>
                         <button type="button" onClick={() => handleUnlockAccount(u.username)} className="px-1.5 py-0.5 rounded text-[9px] font-heading font-bold uppercase border border-emerald-500/40 bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30">Unlock</button>
                       </div>
-                      {u.account_locked_at && <div className="text-zinc-500 mt-0.5">Locked: {formatGameDateTime(u.account_locked_at)}</div>}
+                      {u.account_locked_at && <div className="text-zinc-500 mt-0.5">Locked: {formatAdminDateTime(u.account_locked_at)}</div>}
                       {u.account_locked_comment ? <div className="mt-1 text-foreground whitespace-pre-wrap">{u.account_locked_comment}</div> : <div className="mt-1 text-zinc-500 italic">No comment yet.</div>}
-                      {u.account_locked_comment_at && <div className="text-zinc-500 text-[9px]">Submitted: {formatGameDateTime(u.account_locked_comment_at)}</div>}
+                      {u.account_locked_comment_at && <div className="text-zinc-500 text-[9px]">Submitted: {formatAdminDateTime(u.account_locked_comment_at)}</div>}
                       {u.account_locked_admin_message && (
                         <div className="mt-2 pt-2 border-t border-zinc-600/50">
                           <span className="text-primary font-bold">Staff message:</span>
                           <div className="text-foreground whitespace-pre-wrap mt-0.5">{u.account_locked_admin_message}</div>
-                          {u.account_locked_admin_message_at && <div className="text-zinc-500 text-[9px]">{formatGameDateTime(u.account_locked_admin_message_at)}</div>}
+                          {u.account_locked_admin_message_at && <div className="text-zinc-500 text-[9px]">{formatAdminDateTime(u.account_locked_admin_message_at)}</div>}
                         </div>
                       )}
                       {u.account_locked_user_reply && (
                         <div className="mt-1">
                           <span className="text-emerald-400 font-bold">Their reply:</span>
                           <div className="text-foreground whitespace-pre-wrap mt-0.5">{u.account_locked_user_reply}</div>
-                          {u.account_locked_user_reply_at && <div className="text-zinc-500 text-[9px]">{formatGameDateTime(u.account_locked_user_reply_at)}</div>}
+                          {u.account_locked_user_reply_at && <div className="text-zinc-500 text-[9px]">{formatAdminDateTime(u.account_locked_user_reply_at)}</div>}
                         </div>
                       )}
                       <div className="mt-2 pt-2 border-t border-zinc-600/50">
@@ -9173,7 +9173,7 @@ export default function Admin() {
                         const lotId = row.provenance_lot_id || (row.session_id ? `purchase:${row.session_id}` : '—');
                         return (
                           <tr key={row.session_id || idx} className="border-b border-zinc-700/30">
-                            <td className="py-1 pr-1 text-mutedForeground" title={row.created_at}>{row.created_at ? formatGameDateTime(row.created_at) : '—'}</td>
+                            <td className="py-1 pr-1 text-mutedForeground" title={row.created_at}>{row.created_at ? formatAdminDateTime(row.created_at) : '—'}</td>
                             <td className="py-1 pr-1 font-mono text-[8px] align-top break-all whitespace-normal min-w-[12rem] max-w-[28rem]" title={sessionId}>{sessionId}</td>
                             <td className="py-1 pr-1 font-mono text-[8px] align-top break-all whitespace-normal min-w-[12rem] max-w-[28rem]" title={lotId}>{lotId}</td>
                             <td className="py-1 pr-1">{row.username ?? row.user_id ?? '—'}</td>
@@ -9525,7 +9525,7 @@ export default function Admin() {
                 </p>
                 {eventsExpiresAt && (
                   <p className="text-[10px] text-mutedForeground">
-                    Duration: {eventsDurationHours.toFixed(1)}h · Expires: {formatGameDateTime(eventsExpiresAt)}
+                    Duration: {eventsDurationHours.toFixed(1)}h · Expires: {formatAdminDateTime(eventsExpiresAt)}
                   </p>
                 )}
               </div>
@@ -10047,7 +10047,7 @@ export default function Admin() {
                 </div>
                 <p className="text-[9px] text-mutedForeground">
                   Ticks: {presenceSim.ticks_total ?? 0}
-                  {presenceSim.last_tick_at ? ` · last ${formatGameDateTime(presenceSim.last_tick_at)}` : ''}
+                  {presenceSim.last_tick_at ? ` · last ${formatAdminDateTime(presenceSim.last_tick_at)}` : ''}
                 </p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10px] font-heading">
                   <label className="flex flex-col gap-0.5">
@@ -10184,7 +10184,7 @@ export default function Admin() {
                   <option value="">Select round…</option>
                   {lotteryMoneyTrailRounds.map((r) => (
                     <option key={r.round_id} value={r.round_id}>
-                      {(r.drawn_at && formatGameDateTime(r.drawn_at)) || r.closes_at || r.round_id}
+                      {(r.drawn_at && formatAdminDateTime(r.drawn_at)) || r.closes_at || r.round_id}
                       {' · '}
                       {r.status}
                       {r.payout != null ? ` · net $${Number(r.payout).toLocaleString()}` : ''}
@@ -10429,7 +10429,7 @@ export default function Admin() {
                     racingEconomyRaces.map((race, rIdx) => (
                       <div key={race.race_id || `race-${rIdx}`} className="border border-zinc-700/50 rounded p-2 bg-zinc-950/50">
                         <div className="text-[10px] font-heading text-foreground mb-1">
-                          {(race.completed_at && formatGameDateTime(race.completed_at)) || '—'}
+                          {(race.completed_at && formatAdminDateTime(race.completed_at)) || '—'}
                           {' · '}
                           {race.track_name || race.track_id || 'Track'}
                           {race.mode ? ` · ${race.mode}` : ''}
@@ -10760,7 +10760,7 @@ export default function Admin() {
               <p className="text-[10px] font-heading font-bold text-amber-400 uppercase tracking-wider">Lock buying points (Points tab only) until</p>
               <div className="flex flex-wrap items-center gap-2">
                 <input type="datetime-local" value={pageLockUnlockAt} onChange={(e) => setPageLockUnlockAt(e.target.value)} className="bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs font-mono" />
-                <BtnPrimary onClick={() => handlePageLockToggle('/store/points', true, pageLockUnlockAt ? `Points purchase closed until ${formatGameDateTime(pageLockUnlockAt)}` : 'Points purchase temporarily unavailable', pageLockUnlockAt ? new Date(pageLockUnlockAt).toISOString() : null)} disabled={pageLockSaving || !pageLockUnlockAt}>Lock until date</BtnPrimary>
+                <BtnPrimary onClick={() => handlePageLockToggle('/store/points', true, pageLockUnlockAt ? `Points purchase closed until ${formatAdminDateTime(pageLockUnlockAt)}` : 'Points purchase temporarily unavailable', pageLockUnlockAt ? new Date(pageLockUnlockAt).toISOString() : null)} disabled={pageLockSaving || !pageLockUnlockAt}>Lock until date</BtnPrimary>
                 {pageLocks['/store/points'] && (
                   <BtnSecondary onClick={() => handlePageLockToggle('/store/points', false)} disabled={pageLockSaving}>Unlock now</BtnSecondary>
                 )}
@@ -10837,7 +10837,7 @@ export default function Admin() {
                   <div key={path} className="flex flex-wrap items-center gap-2 px-2 py-1.5 rounded bg-zinc-800/30 border border-transparent hover:border-primary/20">
                     <span className="text-[11px] font-heading font-mono min-w-[140px]">{path}</span>
                     {isLocked && <span className="text-[10px] text-mutedForeground truncate max-w-[200px]" title={msg}>{msg || 'Down for maintenance'}</span>}
-                    {unlockAt && <span className="text-[9px] text-amber-400">until {formatGameDateTime(unlockAt)}</span>}
+                    {unlockAt && <span className="text-[9px] text-amber-400">until {formatAdminDateTime(unlockAt)}</span>}
                     <div className="flex gap-1 ml-auto">
                       {isLocked ? (
                         <BtnSecondary onClick={() => handlePageLockToggle(path, false)} disabled={pageLockSaving}>Unlock</BtnSecondary>
@@ -11874,7 +11874,7 @@ export default function Admin() {
                     <div key={row.id || i} className="text-[10px] p-2 rounded bg-zinc-800/50 border border-zinc-700/30">
                       <div className="flex justify-between gap-2 mb-1">
                         <span className="font-bold text-foreground">@{row.username || row.user_id || '?'}</span>
-                        <span className="text-mutedForeground">{row.created_at ? formatGameDateTime(row.created_at) : ''}</span>
+                        <span className="text-mutedForeground">{row.created_at ? formatAdminDateTime(row.created_at) : ''}</span>
                       </div>
                       <div className="text-amber-400 font-mono break-all">{row.error}</div>
                       {row.traceback && (
@@ -11900,7 +11900,7 @@ export default function Admin() {
                           {row.username && <span>@{row.username}</span>}
                           <span>Failed: {row.failed_count}</span>
                           {row.still_locked && <span className="text-amber-400 font-bold">Locked</span>}
-                          {row.locked_until && <span>Until: {formatGameDateTime(row.locked_until)}</span>}
+                          {row.locked_until && <span>Until: {formatAdminDateTime(row.locked_until)}</span>}
                         </div>
                       </div>
                       <button
@@ -12126,7 +12126,7 @@ export default function Admin() {
                                 <span className="text-amber-400 font-mono">{u.count} violation{u.count !== 1 ? 's' : ''}</span>
                               </div>
                               <div className="text-[9px] text-mutedForeground mb-1">
-                                First: {u.first_at ? formatGameDateTime(u.first_at) : '—'} · Last: {u.last_at ? formatGameDateTime(u.last_at) : '—'}
+                                First: {u.first_at ? formatAdminDateTime(u.first_at) : '—'} · Last: {u.last_at ? formatAdminDateTime(u.last_at) : '—'}
                               </div>
                               <div className="flex flex-wrap gap-1">
                                 {Object.entries(u.endpoints || {}).map(([ep, cnt]) => (
@@ -12151,7 +12151,7 @@ export default function Admin() {
                           <div key={i} className="text-[9px] py-1.5 px-2 rounded bg-zinc-900/50 border border-zinc-700/30">
                             <div className="flex items-center justify-between gap-2 mb-0.5">
                               <span className="font-bold text-primary">{e.username}</span>
-                              <span className="text-mutedForeground">{e.created_at ? formatGameDateTime(e.created_at) : '—'}</span>
+                              <span className="text-mutedForeground">{e.created_at ? formatAdminDateTime(e.created_at) : '—'}</span>
                             </div>
                             <div className="text-foreground mb-0.5">{e.reason}</div>
                             {e.details && (
@@ -12602,8 +12602,8 @@ export default function Admin() {
                       <div className="text-mutedForeground">Email: {u.email ?? '—'}</div>
                       <div>Cash: ${formatWholeCash(u.money)} · Bank: ${formatWholeCash(u.bank_balance)}</div>
                       <div>Points: {(u.points ?? 0).toLocaleString()} · Prestige: {u.prestige ?? 0}</div>
-                      <div className="text-mutedForeground">Registered: {u.created_at ? formatGameDateTime(u.created_at) : '—'}</div>
-                      <div className="text-mutedForeground">Last login: {u.last_login ? formatGameDateTime(u.last_login) : '—'}</div>
+                      <div className="text-mutedForeground">Registered: {u.created_at ? formatAdminDateTime(u.created_at) : '—'}</div>
+                      <div className="text-mutedForeground">Last login: {u.last_login ? formatAdminDateTime(u.last_login) : '—'}</div>
                       <div className="font-mono text-[9px]">Reg IP: {u.registration_ip ?? '—'}</div>
                       <div className="font-mono text-[9px]">Login IP: {u.last_login_ip ?? '—'}</div>
                       <div className="font-mono text-[9px] truncate" title={u.device_fingerprint ?? ''}>Device: {u.device_fingerprint ? u.device_fingerprint.substring(0, 24) + '...' : '—'}</div>
@@ -12750,7 +12750,7 @@ export default function Admin() {
                             <div className="space-y-0.5">
                               {(g.dead_accounts || []).slice(0, 8).map((d, j) => (
                                 <div key={j} className="text-[10px] pl-1 text-mutedForeground">
-                                  {d.username ?? d.id}{d.dead_at && <span className="text-zinc-500"> · {formatGameDateTime(d.dead_at)}</span>}
+                                  {d.username ?? d.id}{d.dead_at && <span className="text-zinc-500"> · {formatAdminDateTime(d.dead_at)}</span>}
                                 </div>
                               ))}
                             </div>
@@ -12802,7 +12802,7 @@ export default function Admin() {
                             {(g.accounts || []).slice(0, 6).map((a, j) => (
                               <div key={j} className="text-[10px] pl-1 flex flex-wrap items-center gap-x-2">
                                 <span className="font-bold">{a.username}</span>
-                                <span className="text-mutedForeground">{a.created_at && formatGameDateTime(a.created_at)}</span>
+                                <span className="text-mutedForeground">{a.created_at && formatAdminDateTime(a.created_at)}</span>
                                 <button type="button" onClick={() => handleViewUserFromCheat(a.username)} className="shrink-0 bg-primary/20 hover:bg-primary/30 text-primary rounded px-1.5 py-0.5 text-[9px] font-bold">View</button>
                               </div>
                             ))}
@@ -13276,7 +13276,7 @@ export default function Admin() {
                       <div key={idx} className="p-2 rounded bg-zinc-900/60 border border-red-500/30 text-[10px] font-heading">
                         <div className="flex justify-between gap-2 flex-wrap mb-1">
                           <span className="text-amber-400">IP: {e.ip}</span>
-                          <span className="text-zinc-500">{e.at && formatGameDateTime(e.at)}</span>
+                          <span className="text-zinc-500">{e.at && formatAdminDateTime(e.at)}</span>
                         </div>
                         <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-zinc-400">
                           {e.username && <span>Username: <span className="text-foreground font-bold">{e.username}</span></span>}
@@ -13870,7 +13870,7 @@ export default function Admin() {
                                 {item.usage_share != null ? `${(item.usage_share * 100).toFixed(1)}%` : '—'}
                               </td>
                               <td className="py-1.5">
-                                {item.last_at ? formatGameDateTime(item.last_at) : '—'}
+                                {item.last_at ? formatAdminDateTime(item.last_at) : '—'}
                               </td>
                             </tr>
                           ))}
@@ -14033,7 +14033,7 @@ export default function Admin() {
               </div>
               {crimeAnalytics && (
                 <p className="text-[10px] text-mutedForeground font-heading">
-                  Generated at {crimeAnalytics.generated_at ? formatGameDateTime(crimeAnalytics.generated_at) : '—'} for last {crimeAnalytics.days} day(s).
+                  Generated at {crimeAnalytics.generated_at ? formatAdminDateTime(crimeAnalytics.generated_at) : '—'} for last {crimeAnalytics.days} day(s).
                 </p>
               )}
               <div className="overflow-x-auto max-h-72">
@@ -14074,7 +14074,7 @@ export default function Admin() {
                             {item.usage_share != null ? `${(item.usage_share * 100).toFixed(1)}%` : '—'}
                           </td>
                           <td className="py-1.5">
-                            {item.last_at ? formatGameDateTime(item.last_at) : '—'}
+                            {item.last_at ? formatAdminDateTime(item.last_at) : '—'}
                           </td>
                         </tr>
                       ))}
@@ -14116,7 +14116,7 @@ export default function Admin() {
               </div>
               {casinoAnalytics && (
                 <>
-                  <p className="text-[10px] text-mutedForeground font-heading">Generated at {casinoAnalytics.generated_at ? formatGameDateTime(casinoAnalytics.generated_at) : '—'} for last {casinoAnalytics.days} day(s).</p>
+                  <p className="text-[10px] text-mutedForeground font-heading">Generated at {casinoAnalytics.generated_at ? formatAdminDateTime(casinoAnalytics.generated_at) : '—'} for last {casinoAnalytics.days} day(s).</p>
                   {casinoAnalytics.totals && (
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                       <div className="bg-zinc-800/60 rounded p-2 border border-zinc-700/40">
@@ -14767,7 +14767,7 @@ export default function Admin() {
                           <tbody>
                             {boozeRunUserProfile.booze_run_history.map((h, i) => (
                               <tr key={i} className="border-b border-zinc-700/20">
-                                <td className="py-1 pr-1 whitespace-nowrap">{h.at ? formatGameDateTime(h.at) : '—'}</td>
+                                <td className="py-1 pr-1 whitespace-nowrap">{h.at ? formatAdminDateTime(h.at) : '—'}</td>
                                 <td className="py-1 pr-1">{h.action || '—'}{h.is_run ? ' (run)' : ''}</td>
                                 <td className="py-1 pr-1">{h.booze_name || '—'}</td>
                                 <td className="py-1 text-right">{h.amount != null ? h.amount.toLocaleString() : '—'}</td>
@@ -14796,7 +14796,7 @@ export default function Admin() {
                           <tbody>
                             {boozeRunUserProfile.recent_events.map((ev, i) => (
                               <tr key={i} className="border-b border-zinc-700/20">
-                                <td className="py-1 pr-1 whitespace-nowrap">{ev.at ? formatGameDateTime(ev.at) : '—'}</td>
+                                <td className="py-1 pr-1 whitespace-nowrap">{ev.at ? formatAdminDateTime(ev.at) : '—'}</td>
                                 <td className="py-1 pr-1">{ev.type || '—'}</td>
                                 <td className="py-1 text-right">{ev.profit != null ? ev.profit.toLocaleString() : '—'}</td>
                                 <td className="py-1 text-right">{ev.revenue != null ? ev.revenue.toLocaleString() : '—'}</td>
@@ -15035,7 +15035,7 @@ export default function Admin() {
                               <td className="p-1.5 text-right">{Number(s.total_points_spent || 0).toLocaleString()}</td>
                               <td className="p-1.5 text-right text-mutedForeground">{Number(s.spend_count || 0).toLocaleString()}</td>
                               <td className="p-1.5 text-right text-mutedForeground whitespace-nowrap">
-                                {s.last_at ? formatGameDateTime(s.last_at) : '—'}
+                                {s.last_at ? formatAdminDateTime(s.last_at) : '—'}
                               </td>
                               <td className="p-1.5 text-right">
                                 <button
@@ -15185,7 +15185,7 @@ export default function Admin() {
                               <td className="p-2 text-center text-mutedForeground select-none" aria-hidden>
                                 {hasDetail ? (expanded ? <ChevronDown size={14} className="inline" /> : <ChevronRight size={14} className="inline" />) : '·'}
                               </td>
-                              <td className="p-2 whitespace-nowrap text-mutedForeground">{e.created_at ? formatGameDateTime(e.created_at) : '—'}</td>
+                              <td className="p-2 whitespace-nowrap text-mutedForeground">{e.created_at ? formatAdminDateTime(e.created_at) : '—'}</td>
                               <td className="p-2">{e.username || '—'}</td>
                               <td className="p-2">
                                 <span className="px-1.5 py-0.5 rounded bg-zinc-800/70 border border-zinc-600/60 uppercase text-[9px]">{e.toast_type || 'default'}</span>
@@ -15201,7 +15201,7 @@ export default function Admin() {
                                     <div>
                                       <span className="text-mutedForeground uppercase tracking-wider">Server received</span>
                                       <div className="text-foreground font-mono mt-0.5">
-                                        {e.created_at ? formatGameDateTime(e.created_at) : '—'}
+                                        {e.created_at ? formatAdminDateTime(e.created_at) : '—'}
                                         {e.created_at ? <span className="text-mutedForeground ml-2">({e.created_at})</span> : null}
                                       </div>
                                     </div>
@@ -15211,7 +15211,7 @@ export default function Admin() {
                                         <div className="text-foreground font-mono mt-0.5">
                                           {(() => {
                                             try {
-                                              return formatGameDateTime(e.client_created_at);
+                                              return formatAdminDateTime(e.client_created_at);
                                             } catch {
                                               return String(e.client_created_at);
                                             }
@@ -15512,7 +15512,7 @@ export default function Admin() {
               {activityFeed && (
                 <div className="overflow-x-auto max-h-[500px]">
                   <div className="mb-2 flex flex-wrap items-center gap-2 text-[10px] font-heading">
-                    <span className="text-mutedForeground">Window: {activityFeed?.window_start ? new Date(activityFeed.window_start).toLocaleTimeString() : '—'} - {activityFeed?.window_end ? new Date(activityFeed.window_end).toLocaleTimeString() : '—'}</span>
+                    <span className="text-mutedForeground">Window: {activityFeed?.window_start ? formatAdminTimeOnly(activityFeed.window_start) : '—'} - {activityFeed?.window_end ? formatAdminTimeOnly(activityFeed.window_end) : '—'}</span>
                     <span className="px-1.5 py-0.5 rounded bg-zinc-800/60 border border-zinc-700/40 text-primary">{activityFeed?.count ?? 0} total</span>
                     <span className="px-1.5 py-0.5 rounded bg-blue-900/30 border border-blue-700/40 text-blue-300">Actions: {activityFeed?.counts_by_source?.activity ?? 0}</span>
                     <span className="px-1.5 py-0.5 rounded bg-amber-900/30 border border-amber-700/40 text-amber-300">Casino: {activityFeed?.counts_by_source?.gambling ?? 0}</span>
@@ -15536,7 +15536,7 @@ export default function Admin() {
                       <tbody>
                         {activityFeed.entries.map((e, idx) => (
                           <tr key={idx} className="border-b border-zinc-700/30 hover:bg-zinc-800/30">
-                            <td className="p-1.5 text-mutedForeground whitespace-nowrap">{e.created_at ? new Date(e.created_at).toLocaleTimeString() : '—'}</td>
+                            <td className="p-1.5 text-mutedForeground whitespace-nowrap">{e.created_at ? formatAdminTimeOnly(e.created_at) : '—'}</td>
                             <td className="p-1.5">
                               <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${e.source === 'gambling' ? 'bg-amber-900/40 text-amber-400' : e.source === 'minigame' ? 'bg-emerald-900/40 text-emerald-400' : 'bg-blue-900/40 text-blue-400'}`}>
                                 {e.source === 'gambling' ? 'CASINO' : e.source === 'minigame' ? 'MINIGAME' : (e.category === 'bank_transfer' ? 'BANK/TRANSFER' : 'ACTION')}
@@ -15648,7 +15648,7 @@ export default function Admin() {
                         const other = Object.entries(r).filter(([k]) => k !== 'money' && k !== 'respect_points' && k !== 'missions').filter(([, v]) => v > 0).map(([k, v]) => `${k}: ${v}`).join(', ');
                         return (
                           <tr key={e.id} className="border-t border-zinc-700/30 hover:bg-zinc-800/30">
-                            <td className="p-2 text-mutedForeground whitespace-nowrap">{e.created_at ? formatGameDateTime(e.created_at) : '—'}</td>
+                            <td className="p-2 text-mutedForeground whitespace-nowrap">{e.created_at ? formatAdminDateTime(e.created_at) : '—'}</td>
                             <td className="p-2 text-foreground">{e.username}</td>
                             <td className="p-2 text-primary">{e.game}</td>
                             <td className="p-2 text-foreground">{Number(e.score).toLocaleString()}</td>
@@ -16077,7 +16077,7 @@ export default function Admin() {
                         );
                         return (
                           <tr key={`${e.week_start || 'w'}:${e.paid_at || 't'}:${e.category || 'c'}:${e.user_id || 'u'}:${e.rank || 0}`} className="border-t border-zinc-700/30 hover:bg-zinc-800/30">
-                            <td className="p-2 text-mutedForeground whitespace-nowrap">{e.paid_at ? formatGameDateTime(e.paid_at) : '—'}</td>
+                            <td className="p-2 text-mutedForeground whitespace-nowrap">{e.paid_at ? formatAdminDateTime(e.paid_at) : '—'}</td>
                             <td className="p-2 text-mutedForeground whitespace-nowrap">{e.week_start || '—'}</td>
                             <td className="p-2 text-foreground">{e.username}</td>
                             <td className="p-2 text-primary">{catLabel}</td>
@@ -16291,7 +16291,7 @@ export default function Admin() {
                 <tbody>
                   {(activityLog.entries || []).map((e) => (
                     <tr key={e.id} className="border-t border-zinc-700/30 hover:bg-zinc-800/30">
-                      <td className="p-2 text-mutedForeground whitespace-nowrap">{e.created_at ? formatGameDateTime(e.created_at) : '—'}</td>
+                      <td className="p-2 text-mutedForeground whitespace-nowrap">{e.created_at ? formatAdminDateTime(e.created_at) : '—'}</td>
                       <td className="p-2 text-primary font-bold">{e.username || '—'}</td>
                       <td className="p-2">{e.action || '—'}</td>
                       <td className="p-2 text-mutedForeground max-w-[200px] truncate" title={JSON.stringify(e.details || {})}>{e.details ? JSON.stringify(e.details) : '—'}</td>
@@ -16432,7 +16432,7 @@ export default function Admin() {
                   return (
                     <div key={g.id} className="rounded border border-zinc-700/60 bg-zinc-900/50 p-2 text-[10px] font-heading">
                       <div className="flex flex-wrap items-baseline justify-between gap-1 border-b border-zinc-700/40 pb-1 mb-1">
-                        <span className="text-mutedForeground whitespace-nowrap">{g.created_at ? formatGameDateTime(g.created_at) : '—'}</span>
+                        <span className="text-mutedForeground whitespace-nowrap">{g.created_at ? formatAdminDateTime(g.created_at) : '—'}</span>
                         <span className={auto ? 'text-violet-400 font-bold' : 'text-primary font-bold'}>{auto ? 'Auto MDG' : 'Player MDG'}</span>
                         <span className="text-mutedForeground">{g.status || '—'}</span>
                       </div>
@@ -16477,7 +16477,7 @@ export default function Admin() {
                           {g.winner_username || (g.status === 'open' ? '— (not rolled)' : '—')}
                         </span>
                         {g.roll != null ? <span className="text-zinc-500"> · roll #{g.roll}</span> : null}
-                        {g.rolled_at ? <span className="text-zinc-500"> · rolled {formatGameDateTime(g.rolled_at)}</span> : null}
+                        {g.rolled_at ? <span className="text-zinc-500"> · rolled {formatAdminDateTime(g.rolled_at)}</span> : null}
                       </div>
                       <div className="mt-0.5 text-mutedForeground">
                         Outcome: {outcomeLabel}
@@ -16557,7 +16557,7 @@ export default function Admin() {
                   <tbody>
                     {(gamblingLog.entries || []).map((e) => (
                       <tr key={e.id} className="border-t border-zinc-700/30 hover:bg-zinc-800/30">
-                        <td className="p-2 text-mutedForeground whitespace-nowrap">{e.created_at ? formatGameDateTime(e.created_at) : '—'}</td>
+                        <td className="p-2 text-mutedForeground whitespace-nowrap">{e.created_at ? formatAdminDateTime(e.created_at) : '—'}</td>
                         <td className="p-2 text-primary font-bold">{e.username || '—'}</td>
                         <td className="p-2">{e.game_type || '—'}</td>
                         <td className="p-2 text-mutedForeground align-top max-w-[min(100vw,280px)]">
@@ -16662,7 +16662,7 @@ export default function Admin() {
                   <tbody>
                     {(casinoSeizures.entries || []).map((e) => (
                       <tr key={e.id || `${e.created_at}-${e.winner_username}`} className="border-t border-zinc-700/30 hover:bg-zinc-800/30">
-                        <td className="p-2 text-mutedForeground whitespace-nowrap">{e.created_at ? formatGameDateTime(e.created_at) : '—'}</td>
+                        <td className="p-2 text-mutedForeground whitespace-nowrap">{e.created_at ? formatAdminDateTime(e.created_at) : '—'}</td>
                         <td className="p-2 text-primary font-bold">{e.winner_username || '—'}</td>
                         <td className="p-2">{casinoSeizureGameLabel(e.game_type)}</td>
                         <td className="p-2 text-mutedForeground">{e.location || '—'}</td>
@@ -16936,7 +16936,7 @@ export default function Admin() {
                       <tbody>
                         {(sportsUnsettledEvents.events || []).map((ev) => (
                           <tr key={ev.id} className="border-t border-zinc-700/30 hover:bg-zinc-800/30">
-                            <td className="p-2 text-mutedForeground whitespace-nowrap">{ev.start_time ? formatGameDateTime(ev.start_time) : '—'}</td>
+                            <td className="p-2 text-mutedForeground whitespace-nowrap">{ev.start_time ? formatAdminDateTime(ev.start_time) : '—'}</td>
                             <td className="p-2 text-foreground">{ev.name || '—'}</td>
                             <td className="p-2 text-mutedForeground whitespace-nowrap">{ev.category || '—'}</td>
                             <td className="p-2 text-right text-amber-300 whitespace-nowrap">{Number(ev.open_bets || 0).toLocaleString()}</td>
@@ -16986,7 +16986,7 @@ export default function Admin() {
                   <tbody>
                     {(sportsBetsLedger.bets || []).map((b) => (
                       <tr key={b.id} className="border-t border-zinc-700/30 hover:bg-zinc-800/30">
-                        <td className="p-2 text-mutedForeground whitespace-nowrap align-top">{b.created_at ? formatGameDateTime(b.created_at) : '—'}</td>
+                        <td className="p-2 text-mutedForeground whitespace-nowrap align-top">{b.created_at ? formatAdminDateTime(b.created_at) : '—'}</td>
                         <td className="p-2 text-primary font-bold align-top whitespace-nowrap">{b.username || '—'}</td>
                         <td className="p-2 align-top max-w-[200px]">
                           <span className="text-foreground">{b.event_name || '—'}</span>
@@ -17075,7 +17075,7 @@ export default function Admin() {
                             <td className="py-1 pr-1">{row.success ? <span className="text-emerald-400">Yes</span> : <span className="text-amber-400">No</span>}</td>
                             <td className="py-1 pr-1">{row.profit != null ? `$${Number(row.profit).toLocaleString()}` : '—'}</td>
                             <td className="py-1 pr-1 text-mutedForeground">{row.city ?? '—'}</td>
-                            <td className="py-1 text-mutedForeground">{row.at ? formatGameDateTime(row.at) : '—'}</td>
+                            <td className="py-1 text-mutedForeground">{row.at ? formatAdminDateTime(row.at) : '—'}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -17181,7 +17181,7 @@ export default function Admin() {
                       <tbody>
                         {gtaLogsData.logs.map((row, idx) => (
                           <tr key={idx} className="border-b border-zinc-700/30">
-                            <td className="py-1 pr-1 text-mutedForeground">{row.at ? formatGameDateTime(row.at) : '—'}</td>
+                            <td className="py-1 pr-1 text-mutedForeground">{row.at ? formatAdminDateTime(row.at) : '—'}</td>
                             <td className="py-1 pr-1">{row.option_name ?? row.option_id ?? '—'}</td>
                             <td className="py-1 pr-1">{row.success ? <span className="text-emerald-400">Yes</span> : <span className="text-amber-400">No</span>}</td>
                             <td className="py-1 pr-1">{row.car_name ?? row.car_id ?? '—'}</td>
@@ -17238,7 +17238,7 @@ export default function Admin() {
                       <tbody>
                         {jailLogsData.logs.map((row, idx) => (
                           <tr key={idx} className="border-b border-zinc-700/30">
-                            <td className="py-1 pr-1 text-mutedForeground">{row.at ? formatGameDateTime(row.at) : '—'}</td>
+                            <td className="py-1 pr-1 text-mutedForeground">{row.at ? formatAdminDateTime(row.at) : '—'}</td>
                             <td className="py-1 pr-1">{row.target_username ?? '—'}</td>
                             <td className="py-1 pr-1">{row.is_npc ? 'Yes' : 'No'}</td>
                             <td className="py-1 pr-1">{row.success ? <span className="text-emerald-400">Yes</span> : <span className="text-amber-400">No</span>}</td>
@@ -17285,7 +17285,7 @@ export default function Admin() {
                           <tbody>
                             {bankLogsData.transfers.map((row, idx) => (
                               <tr key={idx} className="border-b border-zinc-700/30">
-                                <td className="py-1 pr-1 text-mutedForeground">{row.created_at ? formatGameDateTime(row.created_at) : '—'}</td>
+                                <td className="py-1 pr-1 text-mutedForeground">{row.created_at ? formatAdminDateTime(row.created_at) : '—'}</td>
                                 <td className="py-1 pr-1">{row.direction === 'sent' ? <span className="text-amber-400">Sent</span> : <span className="text-emerald-400">Received</span>}</td>
                                 <td className="py-1 pr-1">{row.from_username ?? '—'}</td>
                                 <td className="py-1 pr-1">{row.to_username ?? '—'}</td>
@@ -17306,12 +17306,12 @@ export default function Admin() {
                           <tbody>
                             {bankLogsData.deposits.map((row, idx) => (
                               <tr key={idx} className="border-b border-zinc-700/30">
-                                <td className="py-1 pr-1 text-mutedForeground">{row.created_at ? formatGameDateTime(row.created_at) : '—'}</td>
+                                <td className="py-1 pr-1 text-mutedForeground">{row.created_at ? formatAdminDateTime(row.created_at) : '—'}</td>
                                 <td className="py-1 pr-1">${row.principal != null ? Number(row.principal).toLocaleString() : '—'}</td>
                                 <td className="py-1 pr-1">{row.duration_hours ?? '—'}</td>
                                 <td className="py-1 pr-1">${row.interest_amount != null ? Number(row.interest_amount).toLocaleString() : '—'}</td>
-                                <td className="py-1 pr-1">{row.matures_at ? formatGameDateTime(row.matures_at) : '—'}</td>
-                                <td className="py-1">{row.claimed_at ? formatGameDateTime(row.claimed_at) : '—'}</td>
+                                <td className="py-1 pr-1">{row.matures_at ? formatAdminDateTime(row.matures_at) : '—'}</td>
+                                <td className="py-1">{row.claimed_at ? formatAdminDateTime(row.claimed_at) : '—'}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -17368,7 +17368,7 @@ export default function Admin() {
                       <tbody>
                         {stockLogsData.logs.map((row, idx) => (
                           <tr key={idx} className="border-b border-zinc-700/30">
-                            <td className="py-1 pr-1 text-mutedForeground">{row.created_at ? formatGameDateTime(row.created_at) : '—'}</td>
+                            <td className="py-1 pr-1 text-mutedForeground">{row.created_at ? formatAdminDateTime(row.created_at) : '—'}</td>
                             <td className="py-1 pr-1">{row.type ?? '—'}</td>
                             <td className="py-1 pr-1">{row.stock_name ?? row.stock_id ?? '—'}</td>
                             <td className="py-1 pr-1">{row.side ?? '—'}</td>
