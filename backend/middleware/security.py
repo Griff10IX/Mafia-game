@@ -64,7 +64,8 @@ PAGE_SPAM_ENABLED = _page_spam_en_raw in ("1", "true", "yes", "")
 _page_ws_raw = (os.environ.get("PAGE_SPAM_WINDOW_SEC") or "").strip()
 PAGE_SPAM_WINDOW_SEC = float(_page_ws_raw) if _page_ws_raw else 30.0
 _page_max_raw = (os.environ.get("PAGE_SPAM_MAX_REQUESTS") or "").strip()
-PAGE_SPAM_MAX_REQUESTS = int(_page_max_raw) if _page_max_raw.isdigit() else 100
+# Default 130: heavy SPA pages issue many parallel GETs; 100 could false-positive (see docs/RATE_LIMITS.md).
+PAGE_SPAM_MAX_REQUESTS = int(_page_max_raw) if _page_max_raw.isdigit() else 130
 user_page_request_counts: Dict[Tuple[str, str], List[datetime]] = defaultdict(list)
 
 

@@ -17,7 +17,10 @@ logger = logging.getLogger(__name__)
 
 # When False: skip spam / duplicate-request / page-visit rate limits only.
 # IP bans (ip_bans collection) are always enforced so admin bans take effect in production.
-SECURITY_MIDDLEWARE_ENABLED = False
+# Boot default on so GET (incl. F5 / polling) is covered by page-visit spam; set SECURITY_MIDDLEWARE_ENABLED=0/false/no to disable.
+# Admin can still toggle the running process without restart.
+_smw_raw = (os.environ.get("SECURITY_MIDDLEWARE_ENABLED") or "1").strip().lower()
+SECURITY_MIDDLEWARE_ENABLED = _smw_raw in ("1", "true", "yes", "")
 
 # Track consecutive 429 hits per user for escalating cooldowns (10-30s)
 _user_429_hits: dict[str, list[float]] = defaultdict(list)

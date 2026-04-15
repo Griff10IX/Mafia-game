@@ -31,6 +31,17 @@ const MELT_VALUE_MULTIPLIER_DEN = 100;
 const MELT_BULLETS_TOTAL_PAYOUT_MULT_NUM = 125;
 const MELT_BULLETS_TOTAL_PAYOUT_MULT_DEN = 100;
 const ALL_RARITIES = ['common', 'uncommon', 'rare', 'ultra_rare', 'legendary', 'custom', 'loot_exclusive', 'exclusive'];
+/** Match SellCars / BuyCars labels for rarity pills */
+const RARITY_LABELS = {
+  common: 'Common',
+  uncommon: 'Uncommon',
+  rare: 'Rare',
+  ultra_rare: 'Ultra Rare',
+  legendary: 'Legendary',
+  custom: 'Customs',
+  loot_exclusive: 'Loot Exclusive',
+  exclusive: 'Exclusives',
+};
 
 function normalizeCarRarity(rarity) {
   const raw = String(rarity || '').trim().toLowerCase();
@@ -104,7 +115,7 @@ const EmptyGarageCard = () => (
   </div>
 );
 
-const FiltersSortCard = ({ sortBy, setSortBy, filterRarity, setFilterRarity }) => (
+const FiltersSortCard = ({ sortBy, setSortBy, filterRarity, setFilterRarity, raritySummary }) => (
   <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 gar-fade-in mobile-panel`}>
     <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
     <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
@@ -113,44 +124,66 @@ const FiltersSortCard = ({ sortBy, setSortBy, filterRarity, setFilterRarity }) =
         Sort & Filter
       </h2>
     </div>
+    {/* By rarity: same pill pattern as Sell Cars */}
+    <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex flex-wrap items-center gap-x-3 gap-y-1">
+      <span className="text-[10px] font-heading text-mutedForeground uppercase">By rarity:</span>
+      {raritySummary.length === 0 ? (
+        <span className="text-[10px] text-mutedForeground">No cars</span>
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={() => setFilterRarity('all')}
+            className={`text-[11px] font-heading font-bold py-0.5 px-1 rounded transition-colors ${
+              filterRarity === 'all'
+                ? 'bg-primary/20 text-primary border border-primary/50'
+                : 'border border-transparent hover:bg-secondary/50 text-mutedForeground hover:text-foreground'
+            }`}
+          >
+            All
+          </button>
+          {raritySummary.map((row) => (
+            <button
+              key={row.rarity}
+              type="button"
+              onClick={() => setFilterRarity(filterRarity === row.rarity ? 'all' : row.rarity)}
+              className={`text-[11px] font-heading font-bold py-0.5 px-1 rounded transition-colors ${
+                filterRarity === row.rarity
+                  ? 'bg-primary/20 text-primary border border-primary/50'
+                  : `border border-transparent hover:bg-secondary/50 ${RARITY_COLORS[row.rarity] || 'text-foreground'}`
+              }`}
+            >
+              {row.label} ({row.count})
+            </button>
+          ))}
+          {filterRarity !== 'all' && (
+            <button
+              type="button"
+              onClick={() => setFilterRarity('all')}
+              className="text-[10px] font-heading text-mutedForeground hover:text-primary"
+            >
+              Show all
+            </button>
+          )}
+        </>
+      )}
+    </div>
     <div className="p-3">
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">
-            Sort By
-          </label>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            className="w-full bg-input border border-border rounded px-2 py-1.5 text-xs font-heading text-foreground focus:border-primary/50 focus:outline-none transition-colors"
-          >
-            <option value="newest">Newest First</option>
-            <option value="oldest">Oldest First</option>
-            <option value="value-high">Highest Value</option>
-            <option value="value-low">Lowest Value</option>
-            <option value="rarity">Rarity</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">
-            Filter Rarity
-          </label>
-          <select
-            value={filterRarity}
-            onChange={(e) => setFilterRarity(e.target.value)}
-            className="w-full bg-input border border-border rounded px-2 py-1.5 text-xs font-heading text-foreground focus:border-primary/50 focus:outline-none transition-colors"
-          >
-            <option value="all">All Rarities</option>
-            <option value="common">Common</option>
-            <option value="uncommon">Uncommon</option>
-            <option value="rare">Rare</option>
-            <option value="ultra_rare">Ultra Rare</option>
-            <option value="legendary">Legendary</option>
-            <option value="custom">Custom</option>
-            <option value="loot_exclusive">Loot Exclusive</option>
-            <option value="exclusive">Exclusive</option>
-          </select>
-        </div>
+      <div>
+        <label className="block text-[10px] text-mutedForeground font-heading uppercase tracking-wider mb-1">
+          Sort By
+        </label>
+        <select
+          value={sortBy}
+          onChange={(e) => setSortBy(e.target.value)}
+          className="w-full max-w-xs bg-input border border-border rounded px-2 py-1.5 text-xs font-heading text-foreground focus:border-primary/50 focus:outline-none transition-colors"
+        >
+          <option value="newest">Newest First</option>
+          <option value="oldest">Oldest First</option>
+          <option value="value-high">Highest Value</option>
+          <option value="value-low">Lowest Value</option>
+          <option value="rarity">Rarity</option>
+        </select>
       </div>
     </div>
     <div className="gar-art-line text-primary mx-3" />
@@ -576,6 +609,19 @@ export default function Garage() {
     return filtered;
   }, [cars, filterRarity, sortBy]);
 
+  const raritySummary = useMemo(() => {
+    const counts = {};
+    cars.forEach((c) => {
+      const r = c.rarity || 'common';
+      counts[r] = (counts[r] || 0) + 1;
+    });
+    return ALL_RARITIES.filter((r) => (counts[r] || 0) > 0).map((r) => ({
+      rarity: r,
+      label: RARITY_LABELS[r] || r,
+      count: counts[r] || 0,
+    }));
+  }, [cars]);
+
   const totalCount = allFilteredCars.length;
   const totalPages = Math.max(1, Math.ceil(totalCount / DEFAULT_VISIBLE));
   const safePage = Math.min(Math.max(0, garagePage), totalPages - 1);
@@ -804,6 +850,7 @@ export default function Garage() {
             setSortBy={setSortBy}
             filterRarity={filterRarity}
             setFilterRarity={setFilterRarity}
+            raritySummary={raritySummary}
           />
 
           <ActionsBar

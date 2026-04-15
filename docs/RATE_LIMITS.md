@@ -8,7 +8,7 @@ When **`SECURITY_MIDDLEWARE_ENABLED`** is on, authenticated API traffic is check
 
 - **Key:** `(user_id, normalized_spa_path)` where `normalized_spa_path` comes from the **`X-Current-Path`** request header (strip, collapse repeated `/`, max **500** characters). If the header is missing or empty after normalization, the server uses **`/`** as the bucket so behaviour stays defined; for accurate buckets the browser should send the header on every call (see [`src/utils/api.js`](../src/utils/api.js)).
 - **Window:** Default **30** seconds (`PAGE_SPAM_WINDOW_SEC`).
-- **Threshold:** Default **more than 100** requests in that window (`PAGE_SPAM_MAX_REQUESTS`) → **HTTP 429** with the same cooldown payload as mutating spam (`is_cooldown`, `cooldown_seconds`). Tune **N** upward (e.g. 120–150) if heavy pages with many parallel GETs false-positive.
+- **Threshold:** Default **more than 130** requests in that window (`PAGE_SPAM_MAX_REQUESTS`) → **HTTP 429** with the same cooldown payload as mutating spam (`is_cooldown`, `cooldown_seconds`). Tune **N** upward (e.g. 150–200) if heavy pages with many parallel GETs still false-positive; lower for stricter caps.
 - **Methods:** **GET** is counted (so aggressive polling is covered). **HEAD** and **OPTIONS** are skipped.
 - **Auto Rank:** Requests whose API path matches **`/api/auto-rank/`** (same rule as mutating spam) are **not** counted toward the page window.
 - **Toggle:** Set **`PAGE_SPAM_ENABLED`** to `0` or `false` in env to disable on boot, or use **Admin → Page visit rate limit** (`POST /admin/security/page-visit-rate-limit` with query `enabled`, `window_sec`, `max_requests`) to change the running process (in-memory; restart re-applies env unless you set env too).
@@ -19,7 +19,7 @@ When **`SECURITY_MIDDLEWARE_ENABLED`** is on, authenticated API traffic is check
 |----------|---------|------|
 | `PAGE_SPAM_ENABLED` | on (`1` / `true` / `yes`) | Master switch for page-visit window. |
 | `PAGE_SPAM_WINDOW_SEC` | 30 | Sliding window length (seconds). |
-| `PAGE_SPAM_MAX_REQUESTS` | 100 | Block when count in window **exceeds** this value. |
+| `PAGE_SPAM_MAX_REQUESTS` | 130 | Block when count in window **exceeds** this value. |
 
 Staff flags use **`page_visit_spam`** with throttled Telegram handling (same family as request/burst spam).
 

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Lock, ThumbsUp, ThumbsDown, Send, Pin, AlertCircle, Trash2, ArrowLeft, MessageCircle, Eye, Clock, Dice5, Package, UserPlus, Bold, Italic, Image, Palette, Pencil, X, Plus } from 'lucide-react';
 import api from '../../utils/api';
+import { confirmEntertainerGameCreatorDeduction } from '../../utils/entertainerGameCreateConfirm';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
 import GifPicker from '../../components/GifPicker';
@@ -712,25 +713,17 @@ export default function ForumTopic() {
     const parsedPot = Math.max(0, parseInt(String(createGamePot).replace(/\D/g, ''), 10) || 0);
     const rewardMoney = Math.max(0, parseInt(String(createGameRewardMoney).replace(/\D/g, ''), 10) || 0);
     const rewardPoints = Math.max(0, parseInt(String(createGameRewardPoints).replace(/\D/g, ''), 10) || 0);
-    if (createGameManualRoll) {
-      if (rewardMoney <= 0 && rewardPoints <= 0) {
-        toast.error('Set reward cash, points, or both for manual games.');
-        return;
-      }
-      const reserveMoney = rewardMoney;
-      const reservePoints = rewardPoints;
-      const totalMoney = parsedPot + reserveMoney;
-      const rewardNote = createGameType === 'gbox'
-        ? '\nGbox: reward cash and points are total pools split randomly among everyone who joined.'
-        : '';
-      const ok = window.confirm(
-        `Create game and deduct now?\n\n` +
-        `From your account:\n` +
-        `- Cash: $${totalMoney.toLocaleString()} (${parsedPot.toLocaleString()} pot + ${reserveMoney.toLocaleString()} rewards)\n` +
-        `- Points: ${reservePoints.toLocaleString()}\n` +
-        `${rewardNote}`
-      );
-      if (!ok) return;
+    const prep = confirmEntertainerGameCreatorDeduction({
+      isAdmin: !!isAdmin,
+      manualRoll: createGameManualRoll,
+      parsedPot,
+      rewardMoney,
+      rewardPoints,
+      gameType: createGameType,
+    });
+    if (!prep.allowed) {
+      if (prep.toastMessage) toast.error(prep.toastMessage);
+      return;
     }
     setCreateGameSubmitting(true);
     try {

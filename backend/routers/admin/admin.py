@@ -3616,7 +3616,7 @@ def register(router):
             "pattern_count": len(rl_ms),
             "global_enabled": getattr(security_module, "GLOBAL_RATE_LIMITS_ENABLED", False),
             "security_middleware_enabled": middleware_enabled,
-            "note": "Values are in milliseconds. All security middleware is OFF by default.",
+            "note": "Values are in milliseconds. Security middleware defaults ON at boot (env SECURITY_MIDDLEWARE_ENABLED); admin toggles are in-memory until restart.",
             "endpoint_rl_policy": {
                 "burst_tokens": getattr(security_module, "ENDPOINT_RL_BURST_TOKENS", 25),
                 "sustain_window_sec": getattr(security_module, "ENDPOINT_RL_SUSTAIN_WINDOW_SEC", 30),
@@ -3631,7 +3631,7 @@ def register(router):
             "page_visit_rate_limit": {
                 "enabled": bool(getattr(security_module, "PAGE_SPAM_ENABLED", True)),
                 "window_sec": float(getattr(security_module, "PAGE_SPAM_WINDOW_SEC", 30.0)),
-                "max_requests": int(getattr(security_module, "PAGE_SPAM_MAX_REQUESTS", 100)),
+                "max_requests": int(getattr(security_module, "PAGE_SPAM_MAX_REQUESTS", 130)),
                 "summary": "Per (user, X-Current-Path) sliding window; includes GET. Runs when security middleware is ON.",
             },
         }
@@ -3806,7 +3806,7 @@ def register(router):
             "page_visit_rate_limit": {
                 "enabled": bool(getattr(security_module, "PAGE_SPAM_ENABLED", True)),
                 "window_sec": float(getattr(security_module, "PAGE_SPAM_WINDOW_SEC", 30.0)),
-                "max_requests": int(getattr(security_module, "PAGE_SPAM_MAX_REQUESTS", 100)),
+                "max_requests": int(getattr(security_module, "PAGE_SPAM_MAX_REQUESTS", 130)),
             },
         }
 

@@ -2,6 +2,7 @@ import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { MessageSquare, Lock, Pin, AlertCircle, Plus, ChevronRight, Eye, MessageCircle, Dice5, Package, Users, Bold, Italic, Image, Palette, Puzzle } from 'lucide-react';
 import api from '../../utils/api';
+import { confirmEntertainerGameCreatorDeduction } from '../../utils/entertainerGameCreateConfirm';
 import { readForumSpecialTabsWarm } from '../../utils/forumSpecialTabsWarm';
 import { toast } from 'sonner';
 import GifPicker from '../../components/GifPicker';
@@ -639,25 +640,17 @@ const CreateGameModal = ({ isOpen, onClose, onCreated, me }) => {
     const parsedPot = Math.max(0, parseInt(String(pot).replace(/\D/g, ''), 10) || 0);
     const parsedRewardMoney = Math.max(0, parseInt(String(rewardMoney).replace(/\D/g, ''), 10) || 0);
     const parsedRewardPoints = Math.max(0, parseInt(String(rewardPoints).replace(/\D/g, ''), 10) || 0);
-    if (manualRoll && parsedRewardMoney <= 0 && parsedRewardPoints <= 0) {
-      toast.error('Set reward cash, points, or both for manual games.');
+    const prep = confirmEntertainerGameCreatorDeduction({
+      isAdmin: !!me?.is_admin,
+      manualRoll,
+      parsedPot,
+      rewardMoney: parsedRewardMoney,
+      rewardPoints: parsedRewardPoints,
+      gameType,
+    });
+    if (!prep.allowed) {
+      if (prep.toastMessage) toast.error(prep.toastMessage);
       return;
-    }
-    if (manualRoll) {
-      const reserveMoney = parsedRewardMoney;
-      const reservePoints = parsedRewardPoints;
-      const totalMoney = parsedPot + reserveMoney;
-      const rewardNote = gameType === 'gbox'
-        ? '\nGbox: reward cash and points are total pools split randomly among everyone who joined.'
-        : '';
-      const ok = window.confirm(
-        `Create game and deduct now?\n\n` +
-        `From your account:\n` +
-        `- Cash: $${totalMoney.toLocaleString()} (${parsedPot.toLocaleString()} pot + ${reserveMoney.toLocaleString()} rewards)\n` +
-        `- Points: ${reservePoints.toLocaleString()}\n` +
-        `${rewardNote}`
-      );
-      if (!ok) return;
     }
     setSubmitting(true);
     try {
