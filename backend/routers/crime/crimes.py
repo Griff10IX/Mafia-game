@@ -388,7 +388,11 @@ def _load_crimes_seed():
 
 
 async def init_crimes_data(db_instance):
-    """Initialize crimes from DB: if collection is empty, seed from data/crimes.json (or fallback). Does not overwrite existing DB data."""
+    """Initialize crimes from DB: if collection is empty, seed from data/crimes.json (or fallback).
+
+    Standard crimes (crime1–crime8): always sync reward_min/reward_max from the same seed so
+    editing backend/data/crimes.json takes effect without a manual Mongo migration.
+    """
     global _crimes_cache
     _crimes_cache = None  # invalidate cache so next request gets fresh data
     logger.info("🔄 Initializing crimes data...")
@@ -400,6 +404,36 @@ async def init_crimes_data(db_instance):
             logger.info("Seeded %d crimes from data/crimes.json (or fallback)", len(seed))
     else:
         logger.info("Crimes already in DB (%d docs); skipping seed", crimes_count)
+
+    seed = _load_crimes_seed()
+    if seed:
+        synced = 0
+        for c in seed:
+            cid = c.get("id")
+            if cid not in {
+                "crime1",
+                "crime2",
+                "crime3",
+                "crime4",
+                "crime5",
+                "crime6",
+                "crime7",
+                "crime8",
+            }:
+                continue
+            rmin = int(c.get("reward_min", 0) or 0)
+            rmax = int(c.get("reward_max", 0) or 0)
+            res = await db_instance.crimes.update_one(
+                {"id": cid},
+                {"$set": {"reward_min": rmin, "reward_max": rmax}},
+            )
+            if res.matched_count:
+                synced += 1
+        if synced:
+            logger.info(
+                "Synced reward_min/reward_max from crimes seed for %d standard crime(s)",
+                synced,
+            )
 
 
 _backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
