@@ -29,6 +29,7 @@ MIN_BUST_INTERVAL_SECONDS = 1
 DEFAULT_BUST_INTERVAL_SECONDS = 5  # jail bust loop: run every 5 seconds
 BUST_EVERY_5SEC_INTERVAL = 5  # fallback when config not used (do not change without updating UI labels)
 LOOP_WAKE_SECONDS = 2  # frequent wake so booze arrivals (and sells) processed within ~2s; only remaining delay = travel time
+AUTO_RANK_CRIME_COMMIT_INTERVAL_SEC = 5  # pause between consecutive auto-rank crime commits (same user, one cycle)
 MIN_OC_INTERVAL_SECONDS = 10
 DEFAULT_OC_INTERVAL_SECONDS = 63  # was 60; 5% slower
 OC_LOOP_INTERVAL_SECONDS = 63  # fallback when config not used
@@ -831,6 +832,7 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
 # Auto rank abides the same timer rules as manual play:
 # - Crimes: only commits crimes whose user_crimes.cooldown_until has passed (per-crime cooldown from crimes collection).
 #   commit_crime_locked serializes per user; _commit_crime_impl enforces cooldown and sets cooldown_until.
+#   Consecutive crimes in one cycle wait AUTO_RANK_CRIME_COMMIT_INTERVAL_SEC between commits.
 # - GTA: only runs when gta_cooldowns shows no active cooldown. attempt_gta_locked serializes; impl sets
 #   cooldown_until from the attempted option's cooldown (one attempt = all options on cooldown).
 # - OC: run_oc_heist_npc_only checks oc_cooldown_until and returns without running if on cooldown.
@@ -909,6 +911,7 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         crime_total_rp = 0
         crime_names: list[str] = []
         crime_extra_summaries: list[str] = []
+        _first_crime_in_cycle = True
         while True:
             user = await db.users.find_one({"id": user_id}, {"_id": 0})
             if not user or user.get("in_jail"):
@@ -960,6 +963,9 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
             if not available:
                 break
             try:
+                if not _first_crime_in_cycle:
+                    await asyncio.sleep(AUTO_RANK_CRIME_COMMIT_INTERVAL_SEC)
+                _first_crime_in_cycle = False
                 chosen = available[0]
                 out = await commit_crime_locked(chosen["id"], user, via_auto_rank=True)
                 if out.success:

@@ -804,6 +804,7 @@ export default function Admin() {
   const [profileLoadErrors, setProfileLoadErrors] = useState(null);
   const [profileLoadErrorsLoading, setProfileLoadErrorsLoading] = useState(false);
   const [rateLimits, setRateLimits] = useState(null);
+  const [pageVisitDraft, setPageVisitDraft] = useState({ window_sec: '', max_requests: '' });
   const [rateLimitEdits, setRateLimitEdits] = useState({});
   const [rateLimitLog, setRateLimitLog] = useState(null);
   const [rateLimitLogLoading, setRateLimitLogLoading] = useState(false);
@@ -1408,6 +1409,13 @@ export default function Admin() {
       try {
         const response = await api.get('/admin/security/rate-limits');
         setRateLimits(response.data);
+        const pv = response.data.page_visit_rate_limit;
+        if (pv) {
+          setPageVisitDraft({
+            window_sec: String(pv.window_sec ?? ''),
+            max_requests: String(pv.max_requests ?? ''),
+          });
+        }
       } catch (e) {
         // Silent fail - just don't show status
       }
@@ -5976,6 +5984,13 @@ export default function Admin() {
     try {
       const response = await api.get('/admin/security/rate-limits');
       setRateLimits(response.data);
+      const pv = response.data.page_visit_rate_limit;
+      if (pv) {
+        setPageVisitDraft({
+          window_sec: String(pv.window_sec ?? ''),
+          max_requests: String(pv.max_requests ?? ''),
+        });
+      }
       setRateLimitEdits({});
       toast.success('Rate limits loaded');
     } catch (e) { 
@@ -5983,6 +5998,44 @@ export default function Admin() {
       setRateLimits(null);
     }
     finally { setSecurityLoading(false); }
+  };
+
+  const handleTogglePageVisitRateLimit = async () => {
+    const cur = rateLimits?.page_visit_rate_limit?.enabled;
+    if (cur === undefined) {
+      toast.error('Load rate limits first (Refresh)');
+      return;
+    }
+    try {
+      await api.post(`/admin/security/page-visit-rate-limit?enabled=${!cur}`);
+      toast.success(cur ? 'Page visit limit disabled' : 'Page visit limit enabled');
+      await handleViewRateLimits();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to toggle page visit limit');
+    }
+  };
+
+  const handleSavePageVisitRateLimit = async () => {
+    const w = Number(pageVisitDraft.window_sec);
+    const m = Number(pageVisitDraft.max_requests);
+    if (Number.isNaN(w) || w < 5 || w > 600) {
+      toast.error('Window must be 5–600 seconds');
+      return;
+    }
+    if (Number.isNaN(m) || m < 10 || m > 5000) {
+      toast.error('Max requests must be 10–5000');
+      return;
+    }
+    setSecurityLoading(true);
+    try {
+      await api.post('/admin/security/page-visit-rate-limit', null, { params: { window_sec: w, max_requests: m } });
+      toast.success('Page visit limits saved');
+      await handleViewRateLimits();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to save page visit limits');
+    } finally {
+      setSecurityLoading(false);
+    }
   };
 
   const handleToggleRateLimit = async (endpoint, currentEnabled) => {
@@ -11988,6 +12041,69 @@ export default function Admin() {
                     {securityLoading ? '...' : 'Enable'}
                   </BtnPrimary>
                 )}
+              </div>
+            </ActionRow>
+
+            <ActionRow
+              icon={Shield}
+              label="Page visit rate limit"
+              description={
+                rateLimits?.page_visit_rate_limit?.summary ||
+                'Sliding window per SPA path (X-Current-Path), includes GET. Requires security middleware ON.'
+              }
+            >
+              <div className="flex flex-col gap-2 items-stretch sm:items-end min-w-[12rem]">
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                  <span
+                    className={`text-xs font-bold ${
+                      rateLimits?.page_visit_rate_limit?.enabled ? 'text-green-400' : 'text-red-400'
+                    }`}
+                  >
+                    {rateLimits?.page_visit_rate_limit
+                      ? rateLimits.page_visit_rate_limit.enabled
+                        ? 'ON'
+                        : 'OFF'
+                      : '—'}
+                  </span>
+                  <BtnPrimary
+                    type="button"
+                    disabled={securityLoading || !rateLimits?.page_visit_rate_limit}
+                    onClick={handleTogglePageVisitRateLimit}
+                  >
+                    {rateLimits?.page_visit_rate_limit?.enabled ? 'Disable' : 'Enable'}
+                  </BtnPrimary>
+                </div>
+                <div className="flex flex-wrap items-end gap-2 text-[10px]">
+                  <label className="flex flex-col gap-0.5">
+                    <span className="text-mutedForeground">Window (sec)</span>
+                    <input
+                      type="number"
+                      min={5}
+                      max={600}
+                      step={1}
+                      value={pageVisitDraft.window_sec}
+                      onChange={(e) => setPageVisitDraft((d) => ({ ...d, window_sec: e.target.value }))}
+                      className="w-20 bg-zinc-900/70 border border-zinc-700/50 rounded px-2 py-1 text-foreground"
+                      disabled={securityLoading}
+                    />
+                  </label>
+                  <label className="flex flex-col gap-0.5">
+                    <span className="text-mutedForeground">Max requests</span>
+                    <input
+                      type="number"
+                      min={10}
+                      max={5000}
+                      step={1}
+                      value={pageVisitDraft.max_requests}
+                      onChange={(e) => setPageVisitDraft((d) => ({ ...d, max_requests: e.target.value }))}
+                      className="w-24 bg-zinc-900/70 border border-zinc-700/50 rounded px-2 py-1 text-foreground"
+                      disabled={securityLoading}
+                    />
+                  </label>
+                  <BtnSecondary type="button" disabled={securityLoading} onClick={handleSavePageVisitRateLimit}>
+                    Save limits
+                  </BtnSecondary>
+                </div>
               </div>
             </ActionRow>
 

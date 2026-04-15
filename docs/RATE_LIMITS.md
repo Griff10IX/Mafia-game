@@ -1,59 +1,60 @@
-# Endpoint rate limits (security middleware)
+# Rate limiting and abuse detection
 
-## Product decision
+## Page-visit rate limiting (security middleware)
 
-**Strict inter-arrival sustain:** For each endpoint key (`user_id` + pattern), the server records **consecutive request arrival times**. If the gap between the **previous** and **current** request is **less than** `min_interval_sec` (e.g. 300 ms → `0.3`), that request adds a row to `endpoint_rl_violations`. This applies **whether or not** the token bucket still **allows** the action (burst), so fast spacing is measured on **every** attempt.
+When **`SECURITY_MIDDLEWARE_ENABLED`** is on, authenticated API traffic is checked against a **sliding-window limit per user and SPA route**, not per API endpoint pattern.
 
-**No soft endpoint 429:** When the token bucket is empty, the request is **still allowed** (no HTTP 429 from this layer). **Sub-interval** spacing still records **`endpoint_rl_violations`**. The **only** endpoint-RL **HTTP 429** from middleware is the **15–30 s** hard lockout (`users.rate_limit_hard_until`, JSON includes **`endpoint_rate_limit_hard`**: true).
+### How it works
 
-## Semantics: 300 ms example vs hard penalty
+- **Key:** `(user_id, normalized_spa_path)` where `normalized_spa_path` comes from the **`X-Current-Path`** request header (strip, collapse repeated `/`, max **500** characters). If the header is missing or empty after normalization, the server uses **`/`** as the bucket so behaviour stays defined; for accurate buckets the browser should send the header on every call (see [`src/utils/api.js`](../src/utils/api.js)).
+- **Window:** Default **30** seconds (`PAGE_SPAM_WINDOW_SEC`).
+- **Threshold:** Default **more than 100** requests in that window (`PAGE_SPAM_MAX_REQUESTS`) → **HTTP 429** with the same cooldown payload as mutating spam (`is_cooldown`, `cooldown_seconds`). Tune **N** upward (e.g. 120–150) if heavy pages with many parallel GETs false-positive.
+- **Methods:** **GET** is counted (so aggressive polling is covered). **HEAD** and **OPTIONS** are skipped.
+- **Auto Rank:** Requests whose API path matches **`/api/auto-rank/`** (same rule as mutating spam) are **not** counted toward the page window.
+- **Toggle:** Set **`PAGE_SPAM_ENABLED`** to `0` or `false` in env to disable on boot, or use **Admin → Page visit rate limit** (`POST /admin/security/page-visit-rate-limit` with query `enabled`, `window_sec`, `max_requests`) to change the running process (in-memory; restart re-applies env unless you set env too).
 
-| Idea | Behavior |
-|------|----------|
-| 200 ms between clicks vs 300 ms limit | **Too fast** for metering: each such consecutive pair (after the first request) records a violation when the gap is under `min_interval_sec`. |
-| Token bucket | Refills over time; a token is consumed when the bucket has **≥1** after refill. **Empty bucket does not block** the request. Sub-interval spacing is still measured on **every** attempt. |
-| 15–30 s hard lockout + staff flag | **≥ `ENDPOINT_RL_SUSTAIN_MIN_COUNT`** violations in **`ENDPOINT_RL_SUSTAIN_WINDOW_SEC`**, with time from **first** to **last** violation in that window **≥ `ENDPOINT_RL_SUSTAIN_MIN_SPAN_SEC`**. Lockout length is random **15–30 s** on `rate_limit_hard_until`. Sustained abuse is counted with **`count_documents`** plus first/last timestamps (no row cap). |
+### Environment (code source of truth: [`security.py`](../backend/middleware/security.py))
 
-## Behavior
-
-- **Defaults:** [`RATE_LIMIT_CONFIG`](../backend/middleware/security.py) uses **300 ms** (`0.3` s) between clicks for every pattern when an admin enables limits (per-endpoint toggles stay off in code until you turn them on).
-- **Per-endpoint** spacing comes from that config. Each pattern shares one **token bucket** row in `rate_limit_clicks` (`user_id` + `endpoint_key`), with **`last_arrival_at`** for inter-arrival checks (legacy rows fall back to `last_at` until migrated).
-- **Token bucket:** `ENDPOINT_RL_BURST_TOKENS` (default **35**); refill rate `1 / min_interval_sec` per second, capped at burst size.
-- **Sub-interval:** gap under `min_interval_sec` → append `endpoint_rl_violations`; then token consume if possible; **never** return 429 solely for an empty bucket.
-- **Hard block:** **HTTP 429** with long **`cooldown_seconds`** until `rate_limit_hard_until` expires; **`endpoint_rate_limit_hard`**: true.
-- **PyMongo:** Allow path uses `modified_count` / insert success, not `upserted_count`.
-
-### Default sustain / burst constants (code source of truth)
-
-| Constant | Default | Role |
+| Variable | Default | Role |
 |----------|---------|------|
-| `ENDPOINT_RL_BURST_TOKENS` | 35 | Token bucket cap (refill target; empty bucket does not 429). |
-| `ENDPOINT_RL_SUSTAIN_WINDOW_SEC` | 30 | Rolling window for violation count + span. |
-| `ENDPOINT_RL_SUSTAIN_MIN_COUNT` | 100 | Minimum sub-interval violations in that window to consider hard lockout. |
-| `ENDPOINT_RL_SUSTAIN_MIN_SPAN_SEC` | 26 | First→last violation in the window must span at least this many seconds (brief rapid bursts do not qualify). |
+| `PAGE_SPAM_ENABLED` | on (`1` / `true` / `yes`) | Master switch for page-visit window. |
+| `PAGE_SPAM_WINDOW_SEC` | 30 | Sliding window length (seconds). |
+| `PAGE_SPAM_MAX_REQUESTS` | 100 | Block when count in window **exceeds** this value. |
 
-## Per-endpoint vs global vs “disable all”
+Staff flags use **`page_visit_spam`** with throttled Telegram handling (same family as request/burst spam).
 
-- **Per-pattern:** `POST /admin/security/rate-limits/toggle` with `endpoint` = exact `RATE_LIMIT_CONFIG` key and `enabled`. Limits match URL path **prefixes** under `/api/...`, not React routes.
-- **Global:** `POST /admin/security/rate-limits/global-toggle` — when **off**, no endpoint RL runs regardless of per-row flags.
-- **Disable ALL (nuclear):** `POST /admin/security/rate-limits/disable-all` sets **global OFF**, turns **security middleware OFF**, and disables every pattern. Use only when you intend to drop middleware entirely.
-- **All rows OFF, global unchanged:** `POST /admin/security/rate-limits/disable-all-endpoints-only` sets **every** pattern to `enabled=False` but does **not** change `GLOBAL_RATE_LIMITS_ENABLED` or `SECURITY_MIDDLEWARE_ENABLED`. Typical workflow: global **ON** → disable-all-endpoints-only → toggle **ON** for one pattern (e.g. `/api/loot-box/`).
+### Middleware skips (unchanged)
 
-**Persistence:** toggles mutate in-memory `RATE_LIMIT_CONFIG` until process restart unless you persist elsewhere.
+Exact **`/`**, **`/docs`**, **`/openapi.json`**, and prefixes **`/api/auth/`**, **`/api/admin/`**, **`/admin/`** skip page spam and other user checks. **IP bans** apply to all paths before these gates.
 
-## Spam / duplicate requests
+---
 
-- **`check_request_spam`** (1 s and burst windows) counts **only mutating** methods: **POST**, **PUT**, **PATCH**, **DELETE**, etc. **GET**, **HEAD**, and **OPTIONS** are **not** counted, so normal post-login **GET** bursts do not trigger spam 429s. Thresholds (see [`security.py`](../backend/middleware/security.py)): **more than `MAX_REQUESTS_PER_SECOND` (20)** in 1 s, or **≥ `BURST_MAX_REQUESTS` (20)** in **0.5 s**.
-- **Auto Rank control traffic:** Paths under **`/api/auto-rank/`** (e.g. `PATCH /api/auto-rank/me`, `POST /api/auto-rank/start`) are **exempt** from spam counting and from **`check_duplicate_request`**. Background Auto Rank (crimes/GTA/etc.) runs **in-process** and never hits this middleware anyway. Cron routes (`POST /api/auto-rank/cron`, …) use **`X-Cron-Secret`** and typically have **no** user JWT, so user spam checks are skipped.
+## Per-endpoint `RATE_LIMIT_CONFIG` (legacy in middleware)
+
+**`check_endpoint_rate_limit` is no longer called from [`security_middleware.py`](../backend/middleware/security_middleware.py).** Admin toggles and `RATE_LIMIT_CONFIG` still exist for:
+
+- Optional use via **`security_check_request`** / **`rate_limit_dependency`** on specific routes, and
+- Admin UI routes under **`/admin/security/rate-limits`**.
+
+They do **not** gate ordinary traffic through the global security middleware until wired again or removed in a follow-up.
+
+Prior documentation for inter-arrival sustain, token buckets, and hard lockouts on **`endpoint_rl_violations`** / **`rate_limit_hard_until`** still describes that subsystem for any code paths that continue to call **`check_endpoint_rate_limit`**.
+
+---
+
+## Mutating spam and duplicate requests
+
+- **`check_request_spam`** (1 s and burst windows) counts **only mutating** methods: **POST**, **PUT**, **PATCH**, **DELETE**, etc. **GET**, **HEAD**, and **OPTIONS** are **not** counted. Thresholds: **more than `MAX_REQUESTS_PER_SECOND` (20)** in 1 s, or **≥ `BURST_MAX_REQUESTS` (20)** in **0.5 s**.
+- **Auto Rank control traffic:** Paths under **`/api/auto-rank/`** are exempt from mutating spam and from **`check_duplicate_request`**. Cron routes use **`X-Cron-Secret`** and typically have no user JWT, so user checks are skipped.
 - **`check_duplicate_request`** and **`_get_cooldown_seconds`** in [`security_middleware.py`](../backend/middleware/security_middleware.py) behave as before when spam/duplicate detection fires.
 
 ## Client 429 handling
 
-- Endpoint RL from middleware **no longer** emits soft (`is_cooldown`: false / zero cooldown) responses. The 429 handler in [`src/utils/api.js`](../src/utils/api.js) still treats that shape safely if other endpoints return it.
+The 429 handler in [`src/utils/api.js`](../src/utils/api.js) treats **`is_cooldown`** and **`cooldown_seconds`** for cooldown UX. **`endpoint_rate_limit_hard`** may still appear from **`rate_limit_dependency`** or other callers of **`check_endpoint_rate_limit`**, not from the global middleware path.
 
 ## Login
 
-- Successful **login** clears **`rate_limit_hard_until`** on the user so a new session is not blocked by an old endpoint RL hard lockout.
+Successful **login** clears **`rate_limit_hard_until`** on the user so a new session is not blocked by an old endpoint-RL hard lockout.
 
 ## Verification (automated)
 
@@ -63,15 +64,8 @@ From the **backend** directory with the same `.env` as the API (`MONGO_URL`, `DB
 python scripts/audit_rate_limit_routes.py
 ```
 
-Exit **0** when every mutating `/api/...` route (except paths skipped by [`security_middleware.py`](../backend/middleware/security_middleware.py) such as `/api/auth/` and `/api/admin/`) matches at least one key in `RATE_LIMIT_CONFIG`. Exit **2** if any route is missing a pattern.
+This script inventories **`RATE_LIMIT_CONFIG`** coverage for routes that opt into endpoint checks; it does not assert middleware wiring for page-visit limits.
 
 ## Config coverage (inventory)
 
-`RATE_LIMIT_CONFIG` keys are the **storage keys** for endpoint RL (prefix rows end with `/` and use `startswith`; others are exact paths). Major areas include: bank, attack, crimes, hitlist, store, weapons, armour, properties, racket, bodyguards, all casino games (dice, roulette, blackjack, slots, videopoker, mdg, mp-poker, mp-blackjack, **horseracing**, **mp-8ball**), sports betting, loot box, crack safe, jail, GTA, entertainer, gauntlet, minigames (including **`/api/minigames/`** plus the explicit run-session row), boxing, snake, shooting range, whack-a-copper, **travel** (`/api/travel` and `/api/travel/`), booze run, families (including exact **`/api/families`**), notifications (exact **`/api/notifications`** and prefix **`/api/notifications/`**), admin, auth login/register/me, **account** paths on the auth router (`/api/account/…`, account-locked), meta, users, leaderboard, daily rewards, prestige, game chat, help desk, stock market, OC, **organised crime**, inventory, profile, racing, trade, illegal business (path + trailing subpaths), lottery, forum, bullet factory, airports, grave robber, witness statements, missions, objectives, payments, webhooks, family run, auto rank, states, stats, death / dead-alive, image host, minesweeper, battleships, the getaway, mafia RPG.
-
-## Verification (manual)
-
-1. Enable **GLOBAL_RATE_LIMITS_ENABLED**, **SECURITY_MIDDLEWARE_ENABLED**, and one endpoint with a short interval (e.g. 300 ms).
-2. **Bucket empty:** Requests **still succeed** (no 429); **`endpoint_rl_violations`** still receives entries when spacing is sub-interval.
-3. **Sustained:** Sub-interval violations spread over **≥26 s** with **≥100** in **30 s** → hard lockout response with long **`cooldown_seconds`** and **`endpoint_rate_limit_hard`** true. A few quick clicks or a short burst should **not** meet both count and span.
-4. **Multi-worker:** Hard state on **`users.rate_limit_hard_until`**; metering uses **`rate_limit_clicks`** / DB when available.
+`RATE_LIMIT_CONFIG` keys remain the **storage keys** for optional per-endpoint metering (prefix rows end with `/` and use `startswith`; others are exact paths). Major areas include: bank, attack, crimes, hitlist, store, weapons, armour, properties, racket, bodyguards, casino games, sports betting, loot box, crack safe, jail, GTA, entertainer, gauntlet, minigames, boxing, snake, shooting range, whack-a-copper, travel, booze run, families, notifications, admin, auth, account, meta, users, leaderboard, daily rewards, prestige, game chat, help desk, stock market, OC, organised crime, inventory, profile, racing, trade, illegal business, lottery, forum, bullet factory, airports, grave robber, witness statements, missions, objectives, payments, webhooks, family run, auto rank, states, stats, death / dead-alive, image host, minesweeper, battleships, the getaway, mafia RPG.

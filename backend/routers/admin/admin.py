@@ -3628,6 +3628,12 @@ def register(router):
                 ],
                 "summary": "Sub-interval spacing feeds sustain; empty bucket does not 429; 15–30s hard lockout only after mass sustained abuse (DB). Spam/burst counts POST/PUT/PATCH/DELETE only.",
             },
+            "page_visit_rate_limit": {
+                "enabled": bool(getattr(security_module, "PAGE_SPAM_ENABLED", True)),
+                "window_sec": float(getattr(security_module, "PAGE_SPAM_WINDOW_SEC", 30.0)),
+                "max_requests": int(getattr(security_module, "PAGE_SPAM_MAX_REQUESTS", 100)),
+                "summary": "Per (user, X-Current-Path) sliding window; includes GET. Runs when security middleware is ON.",
+            },
         }
 
     @router.post("/admin/security/rate-limits/toggle")
@@ -3768,6 +3774,40 @@ def register(router):
             "message": f"Disabled {count} per-endpoint rate limit rows only; global rate limits remain {'ON' if global_enabled else 'OFF'}",
             "count": count,
             "global_enabled": global_enabled,
+        }
+
+    @router.post("/admin/security/page-visit-rate-limit")
+    async def admin_set_page_visit_rate_limit(
+        enabled: Optional[bool] = Query(None),
+        window_sec: Optional[float] = Query(None),
+        max_requests: Optional[int] = Query(None),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Runtime toggle / tune page-visit sliding window (middleware.security PAGE_SPAM_*). Process-only until restart if you rely on env."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        if enabled is None and window_sec is None and max_requests is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Provide at least one query param: enabled, window_sec, max_requests",
+            )
+        if window_sec is not None:
+            if window_sec < 5.0 or window_sec > 600.0:
+                raise HTTPException(status_code=400, detail="window_sec must be between 5 and 600")
+            security_module.PAGE_SPAM_WINDOW_SEC = float(window_sec)
+        if max_requests is not None:
+            if max_requests < 10 or max_requests > 5000:
+                raise HTTPException(status_code=400, detail="max_requests must be between 10 and 5000")
+            security_module.PAGE_SPAM_MAX_REQUESTS = int(max_requests)
+        if enabled is not None:
+            security_module.PAGE_SPAM_ENABLED = bool(enabled)
+        return {
+            "message": "Page visit rate limit updated",
+            "page_visit_rate_limit": {
+                "enabled": bool(getattr(security_module, "PAGE_SPAM_ENABLED", True)),
+                "window_sec": float(getattr(security_module, "PAGE_SPAM_WINDOW_SEC", 30.0)),
+                "max_requests": int(getattr(security_module, "PAGE_SPAM_MAX_REQUESTS", 100)),
+            },
         }
 
     @router.post("/admin/security/middleware-toggle")

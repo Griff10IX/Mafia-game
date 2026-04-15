@@ -15,7 +15,7 @@ from utils.ip_ban_check import client_ip_from_request, json_response_if_ip_banne
 
 logger = logging.getLogger(__name__)
 
-# When False: skip spam / duplicate-request / per-endpoint rate limits only.
+# When False: skip spam / duplicate-request / page-visit rate limits only.
 # IP bans (ip_bans collection) are always enforced so admin bans take effect in production.
 SECURITY_MIDDLEWARE_ENABLED = False
 
@@ -49,8 +49,8 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.db = db
         # Import here to avoid circular dependency
-        from middleware.security import check_endpoint_rate_limit, check_request_spam, check_duplicate_request
-        self.check_endpoint_rate_limit = check_endpoint_rate_limit
+        from middleware.security import check_page_request_spam, check_request_spam, check_duplicate_request
+        self.check_page_request_spam = check_page_request_spam
         self.check_request_spam = check_request_spam
         self.check_duplicate_request = check_duplicate_request
 
@@ -115,8 +115,29 @@ class SecurityMiddleware(BaseHTTPMiddleware):
         username = current_user.get("username", "Unknown")
         
         try:
-            # 1. Check for request spam (mutating only; threshold in security.MAX_REQUESTS_PER_SECOND)
             referer = request.headers.get("referer") or request.headers.get("referrer") or ""
+            spa_header = request.headers.get("x-current-path") or request.headers.get("X-Current-Path")
+            # 1. Page-visit spam (sliding window per SPA path + user; includes GET)
+            if await self.check_page_request_spam(
+                user_id,
+                username,
+                self.db,
+                api_path=path,
+                spa_path_header=spa_header,
+                method=request.method,
+                referer=referer,
+            ):
+                cooldown = _get_cooldown_seconds(user_id)
+                logger.warning(f"PAGE SPAM BLOCKED: {username} - {path} spa={spa_header!r} (cooldown {cooldown}s)")
+                return JSONResponse(
+                    status_code=429,
+                    content={
+                        "detail": f"Too many requests. Please wait {cooldown} seconds.",
+                        "is_cooldown": True,
+                        "cooldown_seconds": cooldown,
+                    },
+                )
+            # 2. Request spam (mutating only; threshold in security.MAX_REQUESTS_PER_SECOND)
             if await self.check_request_spam(
                 user_id, username, self.db,
                 method=request.method,
@@ -133,7 +154,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                         "cooldown_seconds": cooldown,
                     }
                 )
-            # 2. Check duplicate requests (when enabled - reduces double-click exploits)
+            # 3. Check duplicate requests (when enabled - reduces double-click exploits)
             if request.method not in ("GET", "HEAD", "OPTIONS"):
                 import middleware.security as security_mod
                 if getattr(security_mod, "DETECT_DUPLICATE_REQUESTS", False):
@@ -149,25 +170,6 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                                 "cooldown_seconds": cooldown,
                             }
                         )
-            # 3. Endpoint rate limits: only hard lockout (rate_limit_hard_until) returns 429; empty bucket does not block
-            if request.method not in ("GET", "HEAD", "OPTIONS"):
-                rl_out = await self.check_endpoint_rate_limit(path, user_id, username, self.db)
-                if rl_out.blocked:
-                    cd = rl_out.cooldown_seconds
-                    logger.warning(
-                        "RATE LIMIT (hard): %s - %s (cooldown %ss)",
-                        username,
-                        path,
-                        cd,
-                    )
-                    content = {
-                        "detail": f"Too many repeated rate limits. Please wait {cd} seconds.",
-                        "is_cooldown": True,
-                        "cooldown_seconds": cd,
-                        "endpoint_rate_limit_hard": True,
-                    }
-                    return JSONResponse(status_code=429, content=content)
-
         except Exception as e:
             logger.exception(f"Security middleware error: {e}")
         

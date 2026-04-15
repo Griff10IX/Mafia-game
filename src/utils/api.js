@@ -54,8 +54,9 @@ api.interceptors.request.use((config) => {
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
-  if (typeof window !== 'undefined' && window.location?.pathname && config.url?.includes('/auth/me')) {
-    config.headers['X-Current-Path'] = window.location.pathname || '/';
+  if (typeof window !== 'undefined') {
+    const p = (window.location?.pathname || '/').replace(/\/+/g, '/');
+    config.headers['X-Current-Path'] = p.length > 500 ? p.slice(0, 500) : p;
   }
   return config;
 });

@@ -58,6 +58,20 @@ BURST_MAX_REQUESTS = 20  # Max mutating requests in burst window (>= this in 0.5
 # Cap per-user request/burst log length (must exceed thresholds above; avoids unbounded memory)
 _SPAM_LOG_MAX = 50
 
+# Page-visit spam: (user_id, SPA path from X-Current-Path) sliding window; counts GETs too (polling).
+_page_spam_en_raw = (os.environ.get("PAGE_SPAM_ENABLED") or "1").strip().lower()
+PAGE_SPAM_ENABLED = _page_spam_en_raw in ("1", "true", "yes", "")
+_page_ws_raw = (os.environ.get("PAGE_SPAM_WINDOW_SEC") or "").strip()
+PAGE_SPAM_WINDOW_SEC = float(_page_ws_raw) if _page_ws_raw else 30.0
+_page_max_raw = (os.environ.get("PAGE_SPAM_MAX_REQUESTS") or "").strip()
+PAGE_SPAM_MAX_REQUESTS = int(_page_max_raw) if _page_max_raw.isdigit() else 100
+user_page_request_counts: Dict[Tuple[str, str], List[datetime]] = defaultdict(list)
+
+
+def _page_spam_deque_cap() -> int:
+    """Max timestamps kept per (user, spa_path); scales when admin raises PAGE_SPAM_MAX_REQUESTS."""
+    return max(PAGE_SPAM_MAX_REQUESTS + 50, 150)
+
 # Throttle repeated Telegram alerts for the same user (spam burst/request flags)
 _SPAM_TELEGRAM_COOLDOWN_SEC = 300
 _last_spam_telegram_at: Dict[str, float] = {}
@@ -570,7 +584,12 @@ def _referer_page_hint(referer: str) -> str:
 
 
 def _format_spam_flag_message(username: str, user_id: str, flag_type: str, reason: str, details: Dict) -> str:
-    title = "Burst spam (rapid-fire)" if flag_type == "burst_spam" else "Request spam (per-second)"
+    if flag_type == "burst_spam":
+        title = "Burst spam (rapid-fire)"
+    elif flag_type == "page_visit_spam":
+        title = "Page visit spam (sustained same-route traffic)"
+    else:
+        title = "Request spam (per-second)"
     lines = [
         title,
         f"User: {username}",
@@ -585,7 +604,10 @@ def _format_spam_flag_message(username: str, user_id: str, flag_type: str, reaso
     if ab:
         lines += ["", "What they were doing:", ab]
     lm, lp = details.get("last_method"), details.get("last_path")
-    if lp:
+    spa = details.get("spa_path")
+    if spa and flag_type == "page_visit_spam":
+        lines += ["", "SPA path (X-Current-Path):", f"  {spa}", f"Last API: {lm} {details.get('api_path', '')}"]
+    elif lp:
         lines += ["", "Request that tripped it:", f"  {lm} {lp}"]
     ps = details.get("path_summary")
     if ps:
@@ -630,7 +652,7 @@ async def flag_user_suspicious(db, user_id: str, username: str, flag_type: str, 
                 msg += f"\n**Details:** {str(details)[:200]}"
             await send_telegram_alert(msg, "exploit")
             await flush_telegram_alerts()  # Send immediately
-        elif flag_type in ("request_spam", "burst_spam"):
+        elif flag_type in ("request_spam", "burst_spam", "page_visit_spam"):
             if _spam_telegram_in_cooldown(user_id):
                 logger.info(
                     "Spam flag recorded for %s (%s); Telegram alert suppressed (cooldown %.0fs)",
@@ -668,6 +690,18 @@ def _is_auto_rank_control_path(path: str) -> bool:
     if not p.startswith("/api"):
         p = "/api" + p if p.startswith("/") else "/api/" + p
     return p.startswith("/api/auto-rank/")
+
+
+def _normalize_spa_path_from_header(raw: Optional[str]) -> str:
+    """Normalize X-Current-Path for page-spam keying (strip, collapse slashes, cap length)."""
+    s = (raw or "").strip()
+    if not s:
+        return "/"
+    while "//" in s:
+        s = s.replace("//", "/")
+    if not s.startswith("/"):
+        s = "/" + s
+    return s[:500]
 
 
 # Spam detection (not gameplay limits)
@@ -750,6 +784,60 @@ async def check_request_spam(
         )
         return True
 
+    return False
+
+
+async def check_page_request_spam(
+    user_id: str,
+    username: str,
+    db,
+    *,
+    api_path: str,
+    spa_path_header: Optional[str],
+    method: str,
+    referer: Optional[str] = None,
+) -> bool:
+    """Too many authenticated requests (including GET) for same SPA route within sliding window → 429 cooldown."""
+    if not PAGE_SPAM_ENABLED:
+        return False
+    m = (method or "").upper()[:16]
+    if m in ("HEAD", "OPTIONS"):
+        return False
+    ap = (api_path or "")[:400]
+    if _is_auto_rank_control_path(ap):
+        return False
+    spa = _normalize_spa_path_from_header(spa_path_header)
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(seconds=PAGE_SPAM_WINDOW_SEC)
+    key = (user_id, spa)
+    dq = user_page_request_counts[key]
+    dq[:] = [t for t in dq if t > cutoff]
+    dq.append(now)
+    cap = _page_spam_deque_cap()
+    if len(dq) > cap:
+        del dq[: len(dq) - cap]
+    count = len(dq)
+    if count > PAGE_SPAM_MAX_REQUESTS:
+        ref = (referer or "").strip()[:500]
+        details = {
+            "count": count,
+            "threshold": PAGE_SPAM_MAX_REQUESTS,
+            "window_sec": PAGE_SPAM_WINDOW_SEC,
+            "spa_path": spa,
+            "last_method": m,
+            "api_path": ap,
+            "referer_hint": _referer_page_hint(ref),
+            "api_area_hint": _api_area_hint(ap),
+        }
+        await flag_user_suspicious(
+            db,
+            user_id,
+            username,
+            "page_visit_spam",
+            f"{count} requests in {PAGE_SPAM_WINDOW_SEC}s on same page (limit {PAGE_SPAM_MAX_REQUESTS}).",
+            details,
+        )
+        return True
     return False
 
 
