@@ -7,12 +7,21 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-async def log_points_event(db, *, user_id: str, points: int, event_type: str,
-                           event_ref: Optional[str] = None, meta: Optional[Dict] = None):
+async def log_points_event(
+    db,
+    *,
+    user_id: str,
+    points: int,
+    event_type: str,
+    event_ref: Optional[str] = None,
+    meta: Optional[Dict] = None,
+    wallet_points_before: Optional[int] = None,
+    wallet_points_after: Optional[int] = None,
+):
     """Lightweight audit log for any point change that doesn't need FIFO lot tracking."""
     if not user_id or points == 0:
         return
-    await db.point_ledger_events.insert_one({
+    doc: Dict = {
         "id": str(uuid.uuid4()),
         "event_type": event_type,
         "user_id": user_id,
@@ -22,7 +31,12 @@ async def log_points_event(db, *, user_id: str, points: int, event_type: str,
         "root_purchase_ref": None,
         "meta": meta or {},
         "created_at": _now_iso(),
-    })
+    }
+    if wallet_points_before is not None:
+        doc["wallet_points_before"] = int(wallet_points_before)
+    if wallet_points_after is not None:
+        doc["wallet_points_after"] = int(wallet_points_after)
+    await db.point_ledger_events.insert_one(doc)
 
 
 async def ensure_user_legacy_seed_lot(db, user_id: str, balance: Optional[int] = None) -> int:

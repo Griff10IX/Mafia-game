@@ -15275,7 +15275,7 @@ export default function Admin() {
           {!collapsed.walletActivity && (
             <div className="p-3 space-y-2">
               <p className="text-[10px] text-mutedForeground font-heading leading-snug">
-                Server-side feed: bank cash sends, points sends (wallet before/after on new transfers), interest deposits/claims, MDG gambling rows, and curated point ledger (Quick Trade, store spends, MDG point legs). Older rows may omit balance snapshots.
+                Server-side feed: bank cash sends, points sends (wallet before/after on new transfers), interest deposits/claims, MDG, and curated point ledger. MDG merges duplicate ledger lines into one row, adds host/lobby/winner context from the game record, and shows points before→after when logged (new MDG events onward).
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <input

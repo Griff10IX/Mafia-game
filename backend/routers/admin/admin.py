@@ -371,6 +371,221 @@ BODYGUARD_AUDIT_HITLIST_TYPES = frozenset(
 )
 
 
+def _wallet_mdg_parse_origin_ref(ref: str) -> Tuple[Optional[str], Optional[str]]:
+    if not ref or ":" not in ref:
+        return None, None
+    act, gid = ref.split(":", 1)
+    act = act.strip().lower()
+    gid = gid.strip()
+    if act in ("create", "join", "payout", "refund") and gid:
+        return act, gid
+    return None, None
+
+
+def _wallet_mdg_ref_from_gambling_details(d: Dict[str, Any]) -> Optional[str]:
+    if not isinstance(d, dict):
+        return None
+    act = str(d.get("action") or "").strip().lower()
+    gid = str(d.get("game_id") or "").strip()
+    if act in ("create", "join", "payout", "refund") and gid:
+        return f"{act}:{gid}"
+    return None
+
+
+def _wallet_mdg_collect_game_ids_from_merged(merged: List[Dict[str, Any]]) -> List[str]:
+    out: List[str] = []
+    seen: Set[str] = set()
+    for e in merged:
+        src = e.get("source")
+        gid = ""
+        if src == "mdg":
+            gl = (e.get("raw") or {}).get("gambling_log") or {}
+            det = gl.get("details") if isinstance(gl.get("details"), dict) else {}
+            gid = str(det.get("game_id") or "").strip()
+        elif src == "point_ledger":
+            raw = e.get("raw") or {}
+            if str(raw.get("event_type") or "") != "casino_mdg":
+                continue
+            meta = raw.get("meta") if isinstance(raw.get("meta"), dict) else {}
+            gid = str(meta.get("game_id") or "").strip()
+            if not gid:
+                _, g2 = _wallet_mdg_parse_origin_ref(str(raw.get("origin_ref") or ""))
+                gid = (g2 or "").strip()
+        if gid and gid not in seen:
+            seen.add(gid)
+            out.append(gid)
+    return out
+
+
+def _wallet_mdg_collapse_ledger_pairs(merged: List[Dict[str, Any]], viewer_uid: str) -> None:
+    """Fold casino_mdg point_ledger legs into the sibling gambling_log row (same origin_ref); drop duplicate ledger rows."""
+    absorb: Set[int] = set()
+    for i, e in enumerate(merged):
+        if e.get("source") != "mdg":
+            continue
+        raw_gl = (e.get("raw") or {}).get("gambling_log") or {}
+        det = raw_gl.get("details") if isinstance(raw_gl.get("details"), dict) else {}
+        ref = _wallet_mdg_ref_from_gambling_details(det)
+        if not ref:
+            continue
+        ts = float(e.get("created_ts") or 0)
+        for j, e2 in enumerate(merged):
+            if j == i or j in absorb or e2.get("source") != "point_ledger":
+                continue
+            r2 = e2.get("raw") or {}
+            if str(r2.get("event_type") or "") != "casino_mdg":
+                continue
+            if str(r2.get("user_id") or "") != str(viewer_uid):
+                continue
+            if str(r2.get("origin_ref") or "") != ref:
+                continue
+            if abs(float(e2.get("created_ts") or 0) - ts) > 25.0:
+                continue
+            wb = r2.get("wallet_points_before")
+            wa = r2.get("wallet_points_after")
+            if wb is not None:
+                merged[i]["wallet_points_before"] = wb
+            if wa is not None:
+                merged[i]["wallet_points_after"] = wa
+            absorb.add(j)
+            break
+    if absorb:
+        merged[:] = [e for k, e in enumerate(merged) if k not in absorb]
+
+
+def _wallet_mdg_narrative(viewer_id: str, game: Dict[str, Any], det: Dict[str, Any], act: str) -> Tuple[str, str, str]:
+    """Return (title, summary, counterparty) for an MDG wallet row."""
+    gid_short = str(det.get("game_id") or "")[:8] or "?"
+    creator = str(game.get("created_by_username") or "?")
+    max_p = game.get("max_players")
+    max_s = str(max_p) if max_p is not None else "?"
+    status = str(game.get("status") or "")
+    winner_id = str(game.get("winner_id") or "")
+    winner_name = str(game.get("winner_username") or "?")
+    fee_pts = int(det.get("fee_points") or 0)
+    fee_money = float(det.get("fee_money") or 0)
+    extra_pts = int(det.get("extra_pot_points") or 0)
+    extra_money = float(det.get("extra_pot_money") or 0)
+    players_after = det.get("players_after")
+    if players_after is None and isinstance(game.get("entries"), list):
+        players_after = len(game.get("entries") or [])
+    pa_s = str(players_after) if players_after is not None else "?"
+    pot_pts = int(det.get("pot_points") or 0)
+    pot_money = float(det.get("pot_money") or 0)
+    trig = str(det.get("trigger") or "")
+
+    outcome = ""
+    if status == "completed" and winner_id:
+        if viewer_id == winner_id:
+            outcome = " Result: you won this game."
+        else:
+            outcome = f" Result: you did not win (winner: {winner_name})."
+    elif status == "open":
+        outcome = " Result: table still open in DB snapshot."
+    elif not game:
+        outcome = ""
+
+    counterparty = f"{creator} · …{gid_short}" if gid_short != "?" else creator
+
+    if act == "create":
+        title = "MDG · you created a table"
+        bits = ["You opened a new MDG table (you are the host)."]
+        bits.append(f"Entry cost **{fee_pts:,}** pts" + (f" + **${fee_money:,.0f}** cash" if fee_money else "") + ".")
+        if extra_pts or extra_money:
+            bits.append(f"Extra pot **{extra_pts:,}** pts" + (f" + **${extra_money:,.0f}** cash" if extra_money else "") + ".")
+        bits.append(f"Max **{max_s}** players; you count as player 1.")
+        return title, "".join(bits) + outcome, counterparty
+
+    if act == "join":
+        title = f"MDG · joined {creator}'s table"
+        bits = [
+            f"You joined **{creator}'s** MDG.",
+            f" Lobby had **{pa_s}** player(s) after you joined (max **{max_s}**).",
+            f" Paid **{fee_pts:,}** pts" + (f" + **${fee_money:,.0f}** cash" if fee_money else "") + " to enter.",
+        ]
+        return title, "".join(bits) + outcome, counterparty
+
+    if act == "payout":
+        title = "MDG · you won the pot"
+        bits = [
+            f"You **won** the MDG pot created by **{creator}**.",
+            f" Payout **+{pot_pts:,}** pts" + (f" + **${pot_money:,.0f}** cash" if pot_money else "") + ".",
+        ]
+        if trig:
+            bits.append(f" Roll trigger: **{trig}**.")
+        return title, "".join(bits), counterparty
+
+    if act == "refund":
+        title = "MDG · join fee refunded"
+        summary = (
+            f"Your join fee (**{fee_pts:,}** pts) was refunded — the table was full or your join raced another request."
+            + outcome
+        )
+        return title, summary, counterparty
+
+    return f"MDG · {act or 'event'}", f"Game …{gid_short} · action {act}" + outcome, counterparty
+
+
+def _wallet_mdg_enrich_merged_entries(merged: List[Dict[str, Any]], viewer_id: str, games_by_id: Dict[str, Any]) -> None:
+    for e in merged:
+        src = e.get("source")
+        det: Dict[str, Any] = {}
+        gid = ""
+        act = ""
+        if src == "mdg":
+            gl = (e.get("raw") or {}).get("gambling_log") or {}
+            det = dict(gl.get("details") or {}) if isinstance(gl.get("details"), dict) else {}
+            gid = str(det.get("game_id") or "").strip()
+            act = str(det.get("action") or "").strip().lower()
+        elif src == "point_ledger":
+            raw = e.get("raw") or {}
+            if str(raw.get("event_type") or "") != "casino_mdg":
+                continue
+            meta = raw.get("meta") if isinstance(raw.get("meta"), dict) else {}
+            act, gid = _wallet_mdg_parse_origin_ref(str(raw.get("origin_ref") or ""))
+            if not act:
+                act = str(meta.get("action") or "").lower()
+            if not gid:
+                gid = str(meta.get("game_id") or "").strip()
+            pts_raw = int(raw.get("points") or 0)
+            det: Dict[str, Any] = {"action": act, "game_id": gid}
+            oref = str(raw.get("origin_ref") or "")
+            if oref.startswith("payout:") or act == "winner_payout":
+                det["action"] = "payout"
+                act = "payout"
+                det["pot_points"] = pts_raw if pts_raw > 0 else int(meta.get("pot_points") or 0)
+                det["pot_money"] = float(meta.get("pot_money") or 0)
+                det["trigger"] = str(meta.get("trigger") or "")
+            elif oref.startswith("refund:") or act == "join_refund":
+                det["action"] = "refund"
+                act = "refund"
+                det["fee_points"] = int(meta.get("fee_points") or abs(pts_raw))
+            elif oref.startswith("join:") or act == "join_fee":
+                det["action"] = "join"
+                act = "join"
+                det["fee_points"] = int(meta.get("fee_points") or (abs(pts_raw) if pts_raw < 0 else pts_raw))
+                det["fee_money"] = float(meta.get("fee_money") or 0)
+            elif oref.startswith("create:") or act == "create_fee":
+                det["action"] = "create"
+                act = "create"
+                det["fee_points"] = int(meta.get("fee_points") or 0)
+                det["extra_pot_points"] = int(meta.get("extra_pot_points") or 0)
+                if det["fee_points"] == 0 and pts_raw < 0:
+                    det["fee_points"] = abs(pts_raw)
+            else:
+                det["fee_points"] = abs(pts_raw)
+        else:
+            continue
+        if not gid:
+            continue
+        game = games_by_id.get(gid) or {}
+        title, summary, cp = _wallet_mdg_narrative(viewer_id, game, det, act)
+        e["title"] = title
+        e["summary"] = summary
+        if cp:
+            e["counterparty"] = cp
+
+
 def register(router):
     """Register admin routes. Dependencies from server to avoid circular imports."""
     import server as srv
@@ -9009,14 +9224,21 @@ def register(router):
                     "points_delta": pts,
                     "wallet_cash_before": None,
                     "wallet_cash_after": None,
-                    "wallet_points_before": None,
-                    "wallet_points_after": None,
+                    "wallet_points_before": doc.get("wallet_points_before"),
+                    "wallet_points_after": doc.get("wallet_points_after"),
                     "counterparty": str(meta.get("to_username") or meta.get("offer_id") or "") or None,
                     "raw": doc,
                 }
             )
 
         merged.sort(key=lambda x: float(x.get("created_ts") or 0), reverse=True)
+        mdg_game_ids = _wallet_mdg_collect_game_ids_from_merged(merged)
+        games_by_id: Dict[str, Any] = {}
+        if mdg_game_ids:
+            game_docs = await db.mdg_games.find({"id": {"$in": mdg_game_ids[:300]}}, {"_id": 0}).to_list(300)
+            games_by_id = {str(g.get("id")): g for g in game_docs if g.get("id")}
+        _wallet_mdg_collapse_ledger_pairs(merged, uid)
+        _wallet_mdg_enrich_merged_entries(merged, uid, games_by_id)
         kind_lc = (kind or "all").strip().lower()
         allowed_kinds = {"all", "cash_transfer", "points_transfer", "bank_interest", "mdg", "point_ledger"}
         if kind_lc not in allowed_kinds:
