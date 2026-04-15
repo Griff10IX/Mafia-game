@@ -1047,3 +1047,188 @@ MISSION_3_DAILY_BULLETS = int(_def_m3.get("reward_tribute_bullets_daily") or 0)
 MISSION_4_DAILY_CASH = int(_def_m4.get("reward_tribute_daily") or 0)
 MISSION_4_DAILY_RESPECT = int(_def_m4.get("reward_respect_daily") or 0)
 MISSION_4_DAILY_BULLETS = int(_def_m4.get("reward_tribute_bullets_daily") or 0)
+
+
+def mission_ladder_missions() -> List[Dict[str, Any]]:
+    """Linear ladder order (matches unlock chain within Start)."""
+    return sorted(
+        MISSIONS,
+        key=lambda m: (
+            CITY_ORDER.index(m["city"]) if m.get("city") in CITY_ORDER else 999,
+            1 if m.get("is_boss") else 0,
+            m.get("order", 0),
+        ),
+    )
+
+
+def infer_next_mission_display_index(completed_ids: set) -> int:
+    """1-based index of next incomplete mission, or 101 if all 100 are done."""
+    for i, m in enumerate(mission_ladder_missions(), start=1):
+        if m["id"] not in completed_ids:
+            return i
+    return 101
+
+
+def display_index_for_mission_id(mid: str) -> Optional[int]:
+    for i, m in enumerate(mission_ladder_missions(), start=1):
+        if m["id"] == mid:
+            return i
+    return None
+
+
+async def ensure_mission_chain_baselines(user: dict) -> None:
+    """Ensure mission_1..3 canned baselines exist (same rules as get_missions / map)."""
+    uid = user.get("id")
+    if not uid:
+        return
+    completed_ids = _user_completed_mission_ids(user)
+    mset: Dict[str, Any] = {}
+    if FIRST_MISSION_ID not in completed_ids and user.get("mission_1_crimes_baseline") is None:
+        mset["mission_1_crimes_baseline"] = int(user.get("total_crimes") or 0)
+    if FIRST_MISSION_ID in completed_ids and user.get("mission_2_crimes_baseline") is None:
+        mset["mission_2_crimes_baseline"] = int(user.get("total_crimes") or 0)
+        mset["mission_2_jail_busts_baseline"] = int(user.get("jail_busts") or 0)
+        mset["mission_2_cars_melted_baseline"] = int(user.get("cars_melted") or 0)
+    if SECOND_MISSION_ID in completed_ids and user.get("mission_3_crimes_baseline") is None:
+        mset["mission_3_crimes_baseline"] = int(user.get("total_crimes") or 0)
+        mset["mission_3_jail_busts_baseline"] = int(user.get("jail_busts") or 0)
+        mset["mission_3_gta_baseline"] = int(user.get("total_gta") or 0)
+        mset["mission_3_booze_sells_baseline"] = int(user.get("booze_runs_count") or 0)
+        mset["mission_3_bullets_melted_baseline"] = int(user.get("bullets_melted") or 0)
+        mset["mission_3_bullets_purchased_armoury_baseline"] = int(user.get("bullets_purchased_from_armoury") or 0)
+        mset["mission_3_uncommon_cars_scrapped_baseline"] = int(user.get("uncommon_cars_scrapped") or 0)
+    if mset:
+        await db.users.update_one({"id": uid}, {"$set": mset})
+        user.update(mset)
+
+
+async def _admin_tribute_snapshot(user: dict, completed_ids: set) -> Dict[str, Any]:
+    tribute_doc = await db.game_config.find_one({"id": TRIBUTE_DEPOSIT_CONFIG_ID}, {"_id": 0, "deposit_utc_hour": 1})
+    deposit_hour = int(tribute_doc.get("deposit_utc_hour") or TRIBUTE_DEPOSIT_UTC_HOUR) % 24 if tribute_doc else TRIBUTE_DEPOSIT_UTC_HOUR
+    next_deposit_iso, deposit_time_label = _next_tribute_deposit_utc(deposit_hour)
+    has_mission_1 = FIRST_MISSION_ID in completed_ids
+    has_mission_2 = SECOND_MISSION_ID in completed_ids
+    has_mission_3 = THIRD_MISSION_ID in completed_ids
+    has_mission_4 = FOURTH_MISSION_ID in completed_ids
+    daily_tokens_total = 0
+    daily_auto_rank_2h_tokens_total = 0
+    daily_cash_total = DAILY_TRIBUTE_AMOUNT
+    daily_bullets_total = 0
+    daily_respect_total = 0
+    daily_loot_total = DAILY_TRIBUTE_LOOT_BOX_PIECES
+    for mid in completed_ids:
+        m = next((x for x in MISSIONS if x["id"] == mid), None)
+        if not m:
+            continue
+        daily_tokens_total += int(m.get("reward_tribute_tokens_daily") or 0)
+        daily_auto_rank_2h_tokens_total += int(m.get("reward_tribute_auto_rank_2h_daily") or 0)
+        daily_cash_total += int(m.get("reward_tribute_daily") or 0)
+        daily_bullets_total += int(m.get("reward_tribute_bullets_daily") or 0)
+        daily_respect_total += int(m.get("reward_respect_daily") or 0)
+        if mid == SECOND_MISSION_ID:
+            daily_loot_total += MISSION_2_DAILY_LOOT_BOX_PIECES
+    return {
+        "tribute_bank": int(user.get("tribute_bank") or 0),
+        "tribute_bullets": int(user.get("tribute_bullets") or 0),
+        "tribute_loot_box_pieces": int(user.get("tribute_loot_box_pieces") or 0),
+        "tribute_respect": int(user.get("tribute_respect") or 0),
+        "tribute_tokens": int(user.get("tribute_tokens") or 0),
+        "tribute_deposit_daily_at": deposit_time_label,
+        "next_tribute_deposit_at": next_deposit_iso,
+        "daily_tribute_cash_base": DAILY_TRIBUTE_AMOUNT,
+        "daily_tribute_loot_box_pieces_base": DAILY_TRIBUTE_LOOT_BOX_PIECES,
+        "daily_tribute_cash_total": daily_cash_total,
+        "daily_tribute_bullets_total": daily_bullets_total,
+        "daily_tribute_respect_total": daily_respect_total,
+        "daily_tribute_loot_box_pieces_total": daily_loot_total,
+        "daily_tribute_tokens_total": daily_tokens_total,
+        "daily_tribute_auto_rank_2h_tokens_total": daily_auto_rank_2h_tokens_total,
+        "completed_it_daily_tokens_perk": bool(user.get("completed_it_daily_tokens")),
+        "has_mission_1_bonus": has_mission_1,
+        "has_mission_2_bonus": has_mission_2,
+        "has_mission_3_bonus": has_mission_3,
+        "has_mission_4_bonus": has_mission_4,
+    }
+
+
+async def admin_missions_payload_for_user(user: dict) -> Dict[str, Any]:
+    """Read-only summary for staff tools (caller enforces admin)."""
+    await ensure_mission_chain_baselines(user)
+    await _ensure_extended_mission_baselines(user)
+    completed_ids = _user_completed_mission_ids(user)
+    ladder = mission_ladder_missions()
+    next_idx = infer_next_mission_display_index(completed_ids)
+    completions_out = []
+    raw_comp = user.get("mission_completions") or []
+    for row in raw_comp:
+        mid = row.get("mission_id")
+        if not mid:
+            continue
+        disp = display_index_for_mission_id(mid)
+        completions_out.append(
+            {
+                "mission_id": mid,
+                "display_index": disp,
+                "title": MISSION_ID_TO_TITLE.get(mid, mid),
+                "completed_at": row.get("completed_at"),
+            }
+        )
+    completions_out.sort(key=lambda x: (x["display_index"] is None, x["display_index"] or 0))
+    active = None
+    if 1 <= next_idx <= 100:
+        m = ladder[next_idx - 1]
+        met, progress = _check_mission_requirements(user, m)
+        mission_unlocked = _mission_unlocked_by_previous(m, completed_ids)
+        active = {
+            "display_index": next_idx,
+            "id": m["id"],
+            "title": m.get("title"),
+            "order": m.get("order"),
+            "difficulty": m.get("difficulty"),
+            "requirements_met": met and mission_unlocked,
+            "unlocked": mission_unlocked,
+            "progress": progress,
+        }
+    tribute = await _admin_tribute_snapshot(user, completed_ids)
+    return {
+        "user_id": user.get("id"),
+        "username": user.get("username"),
+        "missions_completed_count": len(completed_ids),
+        "next_mission_display": next_idx,
+        "all_missions_complete": next_idx == 101,
+        "active_mission": active,
+        "completions": completions_out,
+        "tribute": tribute,
+    }
+
+
+async def admin_apply_mission_progress(user_id: str, next_mission_display: int) -> Dict[str, Any]:
+    """
+    Set ladder progress so the next mission to complete is `next_mission_display` (1..100),
+    or 101 when all missions should be marked complete. Does not grant mission rewards.
+    """
+    if next_mission_display < 1 or next_mission_display > 101:
+        raise HTTPException(status_code=400, detail="next_mission_display must be 1-101 (101 = all missions complete)")
+    ladder = mission_ladder_missions()
+    now_iso = datetime.now(timezone.utc).isoformat()
+    if next_mission_display <= 100:
+        to_complete = ladder[: next_mission_display - 1]
+    else:
+        to_complete = ladder[:]
+    new_completions = [{"mission_id": m["id"], "completed_at": now_iso} for m in to_complete]
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"mission_completions": new_completions}, "$unset": {"mission_baselines": ""}},
+    )
+    fresh = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not fresh:
+        raise HTTPException(status_code=404, detail="User not found")
+    await ensure_mission_chain_baselines(fresh)
+    fresh = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not fresh:
+        raise HTTPException(status_code=404, detail="User not found")
+    await _ensure_extended_mission_baselines(fresh)
+    fresh = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not fresh:
+        raise HTTPException(status_code=404, detail="User not found")
+    return await admin_missions_payload_for_user(fresh)

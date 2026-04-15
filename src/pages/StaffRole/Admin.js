@@ -202,6 +202,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Revive Player', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['revive', 'resurrect', 'alive'] },
   { label: 'User Details', categoryId: 'admin-players', collapseKey: 'userDetails', keywords: ['user', 'details', 'info', 'profile', 'jail', 'bust', 'reward'] },
   { label: 'User give / take & leaderboards', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['leaderboard', 'adjust', 'strip', 'username', 'crimes', 'scores', 'gta', 'busts', 'kills', 'minigame', 'money', 'points', 'respect', 'bullets', 'weekly', 'alltime', 'preview', 'partial'] },
+  { label: 'Missions & tribute (user)', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-missions-ladder', keywords: ['mission', 'tribute', 'ladder', 'progress', 'daily tribute', 'm_first', 'story'] },
   { label: 'Referrals & prereg heal', categoryId: 'admin-players', collapseKey: 'referralsReport', keywords: ['referral', 'referrer', 'referee', 'invite', 'earnings', 'ref', 'heal', 'prereg', 'backfill', 'manual', 'assign', 'link', 'remove', 'unlink', 'clear'] },
   { label: 'Respect points log', categoryId: 'admin-players', collapseKey: 'respectPointsLog', keywords: ['respect', 'points', 'log', 'earned', 'audit', 'player'] },
   { label: 'Gambling Log', categoryId: 'admin-logs', collapseKey: 'gamblingLog', keywords: ['gambling', 'log', 'casino', 'bet'] },
@@ -743,6 +744,10 @@ export default function Admin() {
   const [userLbAdjustLoading, setUserLbAdjustLoading] = useState(false);
   const [userHubMoneyDelta, setUserHubMoneyDelta] = useState(0);
   const [userHubMoneyLoading, setUserHubMoneyLoading] = useState(false);
+  const [missionAdminData, setMissionAdminData] = useState(null);
+  const [missionAdminLoading, setMissionAdminLoading] = useState(false);
+  const [missionAdminSaving, setMissionAdminSaving] = useState(false);
+  const [missionAdminNextDisplay, setMissionAdminNextDisplay] = useState('');
   const [gamePassInspectList, setGamePassInspectList] = useState(null);
   const [gamePassInspectLoading, setGamePassInspectLoading] = useState(false);
   const [gamePassInspectQuery, setGamePassInspectQuery] = useState('');
@@ -4029,6 +4034,63 @@ export default function Admin() {
     }
   };
 
+  const fetchMissionAdminForTarget = async () => {
+    const username = (formData.targetUsername || '').trim();
+    if (!username) {
+      toast.error('Enter target username');
+      return;
+    }
+    setMissionAdminLoading(true);
+    try {
+      const res = await api.get(`/admin/missions/user/${encodeURIComponent(username)}`);
+      setMissionAdminData(res.data);
+      if (res.data?.next_mission_display != null) {
+        setMissionAdminNextDisplay(String(res.data.next_mission_display));
+      }
+      toast.success('Loaded mission / tribute');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || error.message || 'Failed');
+      setMissionAdminData(null);
+    } finally {
+      setMissionAdminLoading(false);
+    }
+  };
+
+  const handleMissionAdminApply = async () => {
+    const username = (formData.targetUsername || '').trim();
+    if (!username) {
+      toast.error('Enter target username');
+      return;
+    }
+    const n = parseInt(String(missionAdminNextDisplay).trim(), 10);
+    if (!Number.isFinite(n) || n < 1 || n > 101) {
+      toast.error('Next mission # must be 1–101 (101 = all missions complete)');
+      return;
+    }
+    if (
+      !window.confirm(
+        `Set ${username} so their next mission ladder step is #${n}? This rewrites mission_completions and baselines. Mission rewards are not granted.`,
+      )
+    ) {
+      return;
+    }
+    setMissionAdminSaving(true);
+    try {
+      const res = await api.patch(`/admin/missions/user/${encodeURIComponent(username)}`, {
+        next_mission_display: n,
+      });
+      setMissionAdminData(res.data);
+      if (res.data?.next_mission_display != null) {
+        setMissionAdminNextDisplay(String(res.data.next_mission_display));
+      }
+      toast.success('Mission progress updated');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || error.message || 'Failed');
+    } finally {
+      setMissionAdminSaving(false);
+    }
+  };
+
   const handleResetWeeklyBoozeProfit = async () => {
     if (!window.confirm('Reset THIS WEEK booze-run leaderboard profit for ALL users to 0?')) return;
     setMainLbResetBoozeLoading(true);
@@ -7123,6 +7185,101 @@ export default function Admin() {
                   <AdminInput type="number" value={formData.respectRemove} onChange={(e) => setFormData((p) => ({ ...p, respectRemove: parseInt(e.target.value, 10) || 0 }))} className="w-20" />
                   <BtnSecondary type="button" onClick={handleRemoveRespectPoints}>Remove</BtnSecondary>
                 </div>
+              </div>
+
+              <div id="admin-missions-ladder" className="rounded-md border border-emerald-500/25 bg-emerald-500/5 p-3 space-y-2 scroll-mt-24">
+                <div className="text-[10px] font-heading font-bold text-emerald-300/90 uppercase tracking-wider">Missions & tribute</div>
+                <p className="text-[9px] text-mutedForeground font-heading leading-snug">
+                  Uses the same <span className="text-foreground font-bold">target username</span> as above. Ladder step{' '}
+                  <span className="text-foreground font-mono">1</span> = first mission … <span className="text-foreground font-mono">100</span> = last;{' '}
+                  <span className="text-foreground font-mono">101</span> = all marked complete. Apply only rewrites{' '}
+                  <code className="text-[8px] bg-muted px-1 rounded">mission_completions</code> and baselines — it does{' '}
+                  <span className="text-amber-300/90">not</span> grant mission rewards.
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <BtnPrimary
+                    type="button"
+                    onClick={fetchMissionAdminForTarget}
+                    disabled={missionAdminLoading || !(formData.targetUsername || '').trim()}
+                  >
+                    {missionAdminLoading ? '…' : 'Load mission / tribute'}
+                  </BtnPrimary>
+                </div>
+                {missionAdminData && (
+                  <div className="space-y-2 text-[10px] font-heading text-zinc-200">
+                    <div>
+                      User: <span className="text-foreground font-mono">{missionAdminData.username}</span>{' '}
+                      <span className="text-zinc-500">({missionAdminData.user_id})</span>
+                    </div>
+                    <div>
+                      Completions:{' '}
+                      <span className="text-foreground tabular-nums">{missionAdminData.missions_completed_count}</span>
+                      {' — '}
+                      Next ladder #{' '}
+                      <span className="text-emerald-300 font-bold tabular-nums">{missionAdminData.next_mission_display}</span>
+                      {missionAdminData.all_missions_complete ? (
+                        <span className="text-zinc-400"> (all done)</span>
+                      ) : null}
+                    </div>
+                    {missionAdminData.active_mission && (
+                      <div className="rounded border border-zinc-700/50 p-2 space-y-1">
+                        <div className="text-[9px] text-mutedForeground uppercase">Active mission</div>
+                        <div className="font-bold text-foreground">{missionAdminData.active_mission.title}</div>
+                        <div className="text-[9px] text-zinc-400 font-mono">
+                          {missionAdminData.active_mission.id} · difficulty {missionAdminData.active_mission.difficulty}
+                        </div>
+                        <div className="text-[9px]">
+                          Unlocked: {missionAdminData.active_mission.unlocked ? 'yes' : 'no'} · Req met:{' '}
+                          {missionAdminData.active_mission.requirements_met ? 'yes' : 'no'}
+                        </div>
+                        {missionAdminData.active_mission.progress?.description != null && (
+                          <div className="text-[9px] text-zinc-300 leading-snug">
+                            {String(missionAdminData.active_mission.progress.description)}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {missionAdminData.tribute && (
+                      <div className="rounded border border-zinc-700/50 p-2 space-y-0.5 text-[9px]">
+                        <div className="text-mutedForeground uppercase font-bold">Daily tribute snapshot</div>
+                        <div>
+                          Cash/day (missions + base): $
+                          {Number(missionAdminData.tribute.daily_tribute_cash_total || 0).toLocaleString()}
+                        </div>
+                        <div>Bullets/day: {Number(missionAdminData.tribute.daily_tribute_bullets_total || 0).toLocaleString()}</div>
+                        <div>Respect/day: {Number(missionAdminData.tribute.daily_tribute_respect_total || 0).toLocaleString()}</div>
+                        <div>Token credits/day: {Number(missionAdminData.tribute.daily_tribute_tokens_total || 0).toLocaleString()}</div>
+                        <div>
+                          Tribute bank: ${Number(missionAdminData.tribute.tribute_bank || 0).toLocaleString()} · Stored bullets:{' '}
+                          {Number(missionAdminData.tribute.tribute_bullets || 0).toLocaleString()}
+                        </div>
+                        <div className="text-zinc-500">
+                          Deposit wall time: {missionAdminData.tribute.tribute_deposit_daily_at || '—'} · Next:{' '}
+                          {missionAdminData.tribute.next_tribute_deposit_at || '—'}
+                        </div>
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                      <span className="text-[9px] text-mutedForeground">Set next ladder #</span>
+                      <input
+                        type="number"
+                        min={1}
+                        max={101}
+                        value={missionAdminNextDisplay}
+                        onChange={(e) => setMissionAdminNextDisplay(e.target.value)}
+                        className="w-20 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs font-mono"
+                        placeholder="14"
+                      />
+                      <BtnPrimary
+                        type="button"
+                        onClick={handleMissionAdminApply}
+                        disabled={missionAdminSaving || !(formData.targetUsername || '').trim()}
+                      >
+                        {missionAdminSaving ? '…' : 'Apply'}
+                      </BtnPrimary>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="rounded-md border border-cyan-500/25 bg-cyan-500/5 p-3 space-y-2">

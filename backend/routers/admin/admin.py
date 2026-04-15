@@ -200,6 +200,12 @@ class AdminSettingsUpdate(BaseModel):
     bank_interest_options: Optional[List[AdminBankInterestOptionIn]] = None  # Term structure: hours + rate (fractional, e.g. 0.025 = 2.5%)
 
 
+class AdminMissionProgressSetRequest(BaseModel):
+    """1-based ladder index of the next mission to complete (same order as in-game missions UI). 101 = all 100 done. Does not grant mission rewards."""
+
+    next_mission_display: int
+
+
 class AdminClaimCostsPatch(BaseModel):
     """Partial update for property/casino claim costs (cash/points in dollars / whole points)."""
 
@@ -999,6 +1005,54 @@ def register(router):
             {"_id": 0, "id": 1, "event_type": 1, "points": 1, "origin_ref": 1, "root_purchase_ref": 1, "created_at": 1},
         ).sort("created_at", -1).limit(200).to_list(200)
         return {"user": u, "lots": lots, "ledger": ledger}
+
+    @router.get("/admin/missions/user/{user_id_or_username}")
+    async def admin_get_missions_user(user_id_or_username: str, current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        raw = (user_id_or_username or "").strip()
+        if not raw:
+            raise HTTPException(status_code=400, detail="User id or username required")
+        u = await db.users.find_one({"id": raw}, {"_id": 0})
+        if not u:
+            username_pattern = _username_pattern(raw)
+            u = await db.users.find_one({"username": username_pattern}, {"_id": 0})
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        from routers.account import missions as missions_mod
+
+        return await missions_mod.admin_missions_payload_for_user(u)
+
+    @router.patch("/admin/missions/user/{user_id_or_username}")
+    async def admin_set_missions_user(
+        user_id_or_username: str,
+        body: AdminMissionProgressSetRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        raw = (user_id_or_username or "").strip()
+        if not raw:
+            raise HTTPException(status_code=400, detail="User id or username required")
+        u = await db.users.find_one({"id": raw}, {"_id": 0, "id": 1})
+        if not u:
+            username_pattern = _username_pattern(raw)
+            u = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1})
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
+        from routers.account import missions as missions_mod
+
+        out = await missions_mod.admin_apply_mission_progress(u["id"], int(body.next_mission_display))
+        try:
+            await srv.log_activity(
+                current_user.get("id") or "",
+                current_user.get("username") or "?",
+                "admin_mission_progress_set",
+                {"target_user_id": u.get("id"), "next_mission_display": int(body.next_mission_display)},
+            )
+        except Exception:
+            pass
+        return out
 
     @router.get("/admin/points/sources/{user_id_or_username}")
     async def admin_points_sources(user_id_or_username: str, current_user: dict = Depends(get_current_user)):
