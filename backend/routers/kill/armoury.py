@@ -202,6 +202,10 @@ GIFTABLE_TOKEN_TYPES = tuple(t for t in TOKEN_TYPES if t != "rank_xp_pass")
 
 # Ultra-rare RNG drops (e.g. crimes, illegal business collect) must not grant Game Pass — purchase/admin only.
 TOKEN_TYPES_GLOBAL_RANDOM_DROP = tuple(t for t in TOKEN_TYPES if t != "rank_xp_pass")
+# Shared: random token drop chance and amount (crimes commit, illegal business collect extras, etc.)
+TOKEN_GLOBAL_DROP_CHANCE = 1 / 250
+TOKEN_GLOBAL_DROP_AMOUNT_MIN = 1
+TOKEN_GLOBAL_DROP_AMOUNT_MAX = 3
 
 
 def _token_gift_daily_from_user(user: dict) -> dict:

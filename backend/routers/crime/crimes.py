@@ -267,9 +267,6 @@ LOOT_PIECE_CHANCE_NORMAL = 0.0005
 LOOT_PIECE_CHANCE_PRESTIGE = 0.0015
 LOOT_PIECE_AMOUNT = 1
 
-# Ultra-rare token drop from any successful crime
-# 0.001% = 1 in 100,000 successful crimes
-TOKEN_GLOBAL_DROP_CHANCE = 0.00001
 CASINO_HEIST_ID = "crime8"
 CASINO_HEIST_FAIL_JAIL_SECONDS = 90
 CASINO_HEIST_BUST_DIFFICULTY_MULT = 2.0
@@ -454,7 +451,13 @@ from server import (
     RANKS,
 )
 from routers.account.objectives import update_objectives_progress
-from routers.kill.armoury import TOKEN_CONFIG, TOKEN_TYPES, TOKEN_TYPES_GLOBAL_RANDOM_DROP
+from routers.kill.armoury import (
+    TOKEN_CONFIG,
+    TOKEN_TYPES_GLOBAL_RANDOM_DROP,
+    TOKEN_GLOBAL_DROP_AMOUNT_MAX,
+    TOKEN_GLOBAL_DROP_AMOUNT_MIN,
+    TOKEN_GLOBAL_DROP_CHANCE,
+)
 from utils.point_provenance import log_points_event
 
 
@@ -840,15 +843,17 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
                 prestige_bonus_earned = {"loot_box_pieces": LOOT_PIECE_AMOUNT}
             else:
                 prestige_bonus_earned["loot_box_pieces"] = prestige_bonus_earned.get("loot_box_pieces", 0) + LOOT_PIECE_AMOUNT
-        # Ultra-rare random token drop (1 in 100,000)
+        # Random armoury token drop (1 in 250); 1–3 of one type
         if _rng.random() < TOKEN_GLOBAL_DROP_CHANCE:
             token_type = _rng.choice(TOKEN_TYPES_GLOBAL_RANDOM_DROP)
             token_field = TOKEN_CONFIG[token_type]["count_field"]
-            inc[token_field] = inc.get(token_field, 0) + 1
+            token_amt = _rng.randint(TOKEN_GLOBAL_DROP_AMOUNT_MIN, TOKEN_GLOBAL_DROP_AMOUNT_MAX)
+            inc[token_field] = inc.get(token_field, 0) + token_amt
             if prestige_bonus_earned is None:
-                prestige_bonus_earned = {"token": token_type}
+                prestige_bonus_earned = {"token": token_type, "token_amount": token_amt}
             else:
                 prestige_bonus_earned["token"] = token_type
+                prestige_bonus_earned["token_amount"] = token_amt
         await db.users.update_one(
             {"id": current_user["id"]},
             {"$inc": inc},

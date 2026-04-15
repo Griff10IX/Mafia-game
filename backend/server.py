@@ -2203,10 +2203,15 @@ def _is_hdo(user: dict) -> bool:
 
 
 def _staff_exclude_user_filter() -> dict:
-    """Mongo match dict to exclude admin/mod accounts from queries on the users collection."""
-    q = {"is_moderator": {"$ne": True}}
-    if ADMIN_EMAILS:
-        q["email"] = {"$nin": list(ADMIN_EMAILS)}
+    """Mongo match dict to exclude admin/mod accounts from queries on the users collection.
+
+    Used by profile honours, /leaderboards/top, stats, etc. Admin emails must match case-insensitively
+    (same as _is_admin / lottery); raw $nin missed mixed-case emails in the DB.
+    """
+    q: dict = {"is_moderator": {"$ne": True}}
+    admin_emails = [e.strip().lower() for e in (ADMIN_EMAILS or []) if e and str(e).strip()]
+    if admin_emails:
+        q["$nor"] = [{"email": re.compile("^" + re.escape(e) + "$", re.IGNORECASE)} for e in admin_emails]
     return q
 
 

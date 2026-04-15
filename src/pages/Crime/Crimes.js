@@ -532,6 +532,11 @@ export default function Crimes() {
           if (bonus.loot_box_pieces) {
             parts.push(`${bonus.loot_box_pieces} loot piece${bonus.loot_box_pieces === 1 ? '' : 's'}`);
           }
+          if (bonus.token) {
+            const amt = Math.max(1, Number(bonus.token_amount) || 1);
+            const tokLabel = String(bonus.token).replace(/_/g, ' ');
+            parts.push(`${amt}× ${tokLabel} token${amt === 1 ? '' : 's'}`);
+          }
           if (bonus.points) parts.push(`${bonus.points} pts`);
           if (parts.length > 0) msg += ` ★ Bonus: ${parts.join(', ')}`;
         }

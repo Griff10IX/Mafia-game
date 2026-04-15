@@ -23,7 +23,14 @@ from server import (
     RANKS,
     CAPO_RANK_ID,
 )
-from routers.kill.armoury import TOKEN_CONFIG, TOKEN_TYPES, TOKEN_TYPES_GLOBAL_RANDOM_DROP
+from routers.kill.armoury import (
+    TOKEN_CONFIG,
+    TOKEN_TYPES,
+    TOKEN_TYPES_GLOBAL_RANDOM_DROP,
+    TOKEN_GLOBAL_DROP_AMOUNT_MAX,
+    TOKEN_GLOBAL_DROP_AMOUNT_MIN,
+    TOKEN_GLOBAL_DROP_CHANCE,
+)
 from utils.game_timezone import game_today_date_str
 from utils.point_provenance import log_points_event
 
@@ -1779,11 +1786,12 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
         inc["points"] = points_earned
     if loot_pieces_earned > 0:
         inc["loot_box_pieces"] = loot_pieces_earned
-    # Ultra-rare token drop (0.001% = 1 in 100,000) - same as crimes
-    if _rng.random() < 0.00001:
+    # Random token drop (1 in 250, 1–3) — same constants as crimes
+    if _rng.random() < TOKEN_GLOBAL_DROP_CHANCE:
         token_type = _rng.choice(TOKEN_TYPES_GLOBAL_RANDOM_DROP)
         field = TOKEN_CONFIG[token_type]["count_field"]
-        inc[field] = inc.get(field, 0) + 1
+        token_amt = _rng.randint(TOKEN_GLOBAL_DROP_AMOUNT_MIN, TOKEN_GLOBAL_DROP_AMOUNT_MAX)
+        inc[field] = inc.get(field, 0) + token_amt
     booze_earned = 0
     auto_sold_units = 0
     auto_sell_cash = 0

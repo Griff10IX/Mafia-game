@@ -194,8 +194,11 @@ def _booze_prices_for_rotation():
     out = {}
     for loc_i in range(n_locs):
         for booze_i in range(n_booze):
-            base = 200 + (loc_i * 85) + (booze_i * 72) + (idx % 19) * 23
-            base += ((idx * 7 + loc_i * 11 + booze_i * 13) % 67) - 33
+            # Stable spine by city + product; small per-window drift only (avoids huge jumps when idx ticks).
+            spine = 200 + (loc_i * 85) + (booze_i * 72)
+            slow = ((idx * 13 + loc_i * 29 + booze_i * 37) % 53) - 26  # about ±26
+            micro = ((idx * 3 + loc_i * 5 + booze_i * 7) % 17) - 8  # about ±8
+            base = spine + slow + micro
             price = min(2000, max(100, base))
             out[(loc_i, booze_i)] = price
     unordered_pairs = [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)]
