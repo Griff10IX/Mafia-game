@@ -98,8 +98,6 @@ app = FastAPI()
 
 # Security monitoring (imported after app creation)
 from middleware.security import (
-    check_request_spam,
-    check_duplicate_request,
     check_negative_balance,
     check_impossible_wealth_gain,
     check_failed_attack_spam,

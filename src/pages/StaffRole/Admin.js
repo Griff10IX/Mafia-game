@@ -803,12 +803,6 @@ export default function Admin() {
   const [loginIssuesLoading, setLoginIssuesLoading] = useState(false);
   const [profileLoadErrors, setProfileLoadErrors] = useState(null);
   const [profileLoadErrorsLoading, setProfileLoadErrorsLoading] = useState(false);
-  const [rateLimits, setRateLimits] = useState(null);
-  const [pageVisitDraft, setPageVisitDraft] = useState({ window_sec: '', max_requests: '' });
-  const [rateLimitEdits, setRateLimitEdits] = useState({});
-  const [rateLimitLog, setRateLimitLog] = useState(null);
-  const [rateLimitLogLoading, setRateLimitLogLoading] = useState(false);
-  const [rateLimitLogUsername, setRateLimitLogUsername] = useState('');
   const [ipBans, setIpBans] = useState([]);
   const [ipBansLoading, setIpBansLoading] = useState(false);
   const [ipBanUsername, setIpBanUsername] = useState('');
@@ -1075,7 +1069,6 @@ export default function Admin() {
   const [botInvestProfile, setBotInvestProfile] = useState(null);
   const [botInvestActivity, setBotInvestActivity] = useState(null);
   const [botInvestDupe, setBotInvestDupe] = useState(null);
-  const [botInvestRateLimit, setBotInvestRateLimit] = useState(null);
   const [botInvestBlocks, setBotInvestBlocks] = useState(null);
   const [botInvestIpCheck, setBotInvestIpCheck] = useState(null);
   const [botInvestLoading, setBotInvestLoading] = useState(false);
@@ -1401,26 +1394,6 @@ export default function Admin() {
       api.get('/admin/families-list').then((res) => setAdminFamiliesList(res.data?.families || [])).catch(() => {});
     }
   }, [activeCategoryId, isAdmin]);
-
-  // Auto-load rate limit status for admin
-  useEffect(() => {
-    if (!isAdmin) return;
-    (async () => {
-      try {
-        const response = await api.get('/admin/security/rate-limits');
-        setRateLimits(response.data);
-        const pv = response.data.page_visit_rate_limit;
-        if (pv) {
-          setPageVisitDraft({
-            window_sec: String(pv.window_sec ?? ''),
-            max_requests: String(pv.max_requests ?? ''),
-          });
-        }
-      } catch (e) {
-        // Silent fail - just don't show status
-      }
-    })();
-  }, [isAdmin]);
 
   // When navigating from Profile staff buttons with state (e.g. activity log / gambling log / target user)
   useEffect(() => {
@@ -4403,24 +4376,6 @@ export default function Admin() {
     }
   };
 
-  const loadBotInvestigationRateLimit = async () => {
-    const uid = botInvestProfile?.user?.id;
-    if (!uid) {
-      toast.error('Load profile first');
-      return;
-    }
-    setBotInvestLoading(true);
-    try {
-      const res = await api.get(`/admin/rate-limit-log?user_id=${encodeURIComponent(uid)}&limit=100`);
-      setBotInvestRateLimit(res.data);
-      toast.success('Rate limit log loaded');
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed');
-    } finally {
-      setBotInvestLoading(false);
-    }
-  };
-
   const loadBotInvestigationBlocksForUser = async () => {
     const uid = botInvestProfile?.user?.id;
     if (!uid) {
@@ -5977,187 +5932,6 @@ export default function Admin() {
       toast.success(res.data.message || 'Updated');
     } catch (e) { toast.error(e.response?.data?.detail || 'Failed'); }
     finally { setCheatDetectionConfigLoading(false); }
-  };
-
-  const handleViewRateLimits = async () => {
-    setSecurityLoading(true);
-    try {
-      const response = await api.get('/admin/security/rate-limits');
-      setRateLimits(response.data);
-      const pv = response.data.page_visit_rate_limit;
-      if (pv) {
-        setPageVisitDraft({
-          window_sec: String(pv.window_sec ?? ''),
-          max_requests: String(pv.max_requests ?? ''),
-        });
-      }
-      setRateLimitEdits({});
-      toast.success('Rate limits loaded');
-    } catch (e) { 
-      toast.error(e.response?.data?.detail || 'Failed to fetch rate limits'); 
-      setRateLimits(null);
-    }
-    finally { setSecurityLoading(false); }
-  };
-
-  const handleTogglePageVisitRateLimit = async () => {
-    const cur = rateLimits?.page_visit_rate_limit?.enabled;
-    if (cur === undefined) {
-      toast.error('Load rate limits first (Refresh)');
-      return;
-    }
-    try {
-      await api.post(`/admin/security/page-visit-rate-limit?enabled=${!cur}`);
-      toast.success(cur ? 'Page visit limit disabled' : 'Page visit limit enabled');
-      await handleViewRateLimits();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to toggle page visit limit');
-    }
-  };
-
-  const handleSavePageVisitRateLimit = async () => {
-    const w = Number(pageVisitDraft.window_sec);
-    const m = Number(pageVisitDraft.max_requests);
-    if (Number.isNaN(w) || w < 5 || w > 600) {
-      toast.error('Window must be 5–600 seconds');
-      return;
-    }
-    if (Number.isNaN(m) || m < 10 || m > 5000) {
-      toast.error('Max requests must be 10–5000');
-      return;
-    }
-    setSecurityLoading(true);
-    try {
-      await api.post('/admin/security/page-visit-rate-limit', null, { params: { window_sec: w, max_requests: m } });
-      toast.success('Page visit limits saved');
-      await handleViewRateLimits();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to save page visit limits');
-    } finally {
-      setSecurityLoading(false);
-    }
-  };
-
-  const handleToggleRateLimit = async (endpoint, currentEnabled) => {
-    try {
-      const response = await api.post(`/admin/security/rate-limits/toggle?endpoint=${encodeURIComponent(endpoint)}&enabled=${!currentEnabled}`);
-      toast.success(response.data.message);
-      // Refresh the rate limits
-      await handleViewRateLimits();
-    } catch (e) { 
-      toast.error(e.response?.data?.detail || 'Failed to toggle rate limit'); 
-    }
-  };
-
-  const handleUpdateRateLimit = async (endpoint, newLimitMs) => {
-    const num = Number(newLimitMs);
-    if (Number.isNaN(num) || num < 0 || num > 60000) {
-      toast.error('Limit must be between 0 and 60000 ms');
-      return;
-    }
-    try {
-      const response = await api.post(`/admin/security/rate-limits/update?endpoint=${encodeURIComponent(endpoint)}&min_interval_ms=${num}`);
-      toast.success(response.data.message);
-      await handleViewRateLimits();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to update rate limit');
-    }
-  };
-
-  const handleDisableAllLimits = async () => {
-    if (!window.confirm('⚠️ Disable ALL rate limits? This removes all protection against spam and exploits.')) return;
-    setSecurityLoading(true);
-    try {
-      const response = await api.post('/admin/security/rate-limits/disable-all');
-      toast.success(response.data.message);
-      // Refresh the rate limits
-      await handleViewRateLimits();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to disable rate limits');
-    }
-    finally { setSecurityLoading(false); }
-  };
-
-  const handleEnableAllLimits = async () => {
-    if (!window.confirm('Enable ALL rate limits? This will turn on protection for all endpoints.')) return;
-    setSecurityLoading(true);
-    try {
-      const response = await api.post('/admin/security/rate-limits/enable-all');
-      toast.success(response.data.message);
-      await handleViewRateLimits();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to enable rate limits');
-    }
-    finally { setSecurityLoading(false); }
-  };
-
-  const handleSetAllRateLimitInterval = async (intervalMs) => {
-    if (!window.confirm(`Set ALL endpoints to ${intervalMs}ms between clicks?`)) return;
-    setSecurityLoading(true);
-    try {
-      const response = await api.post(`/admin/security/rate-limits/set-all-interval?min_interval_ms=${intervalMs}`);
-      toast.success(response.data.message);
-      await handleViewRateLimits();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to set rate limits');
-    }
-    finally { setSecurityLoading(false); }
-  };
-
-  const handleDisableAllEndpointTogglesOnly = async () => {
-    if (
-      !window.confirm(
-        'Turn OFF every per-endpoint rate limit row?\n\nGlobal rate limits stay as they are (ON/OFF unchanged). This is NOT the red “Disable” that turns off global + security middleware.'
-      )
-    )
-      return;
-    setSecurityLoading(true);
-    try {
-      const response = await api.post('/admin/security/rate-limits/disable-all-endpoints-only');
-      toast.success(response.data.message);
-      await handleViewRateLimits();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to disable endpoint rows');
-    } finally {
-      setSecurityLoading(false);
-    }
-  };
-
-  const fetchRateLimitLog = async () => {
-    setRateLimitLogLoading(true);
-    try {
-      const params = new URLSearchParams();
-      params.append('limit', '200');
-      if (rateLimitLogUsername.trim()) params.append('username', rateLimitLogUsername.trim());
-      const res = await api.get(`/admin/rate-limit-log?${params.toString()}`);
-      setRateLimitLog(res.data);
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to fetch rate limit log');
-    } finally {
-      setRateLimitLogLoading(false);
-    }
-  };
-
-  const handleClearRateLimitLogUser = async (userId, username) => {
-    if (!window.confirm(`Clear rate limit flags for ${username}?`)) return;
-    try {
-      const res = await api.post(`/admin/rate-limit-log/clear-user?user_id=${userId}`);
-      toast.success(res.data?.message || 'Cleared');
-      fetchRateLimitLog();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to clear');
-    }
-  };
-
-  const handleClearAllRateLimitLog = async () => {
-    if (!window.confirm('Clear ALL rate limit flags? This cannot be undone.')) return;
-    try {
-      const res = await api.post('/admin/rate-limit-log/clear-all');
-      toast.success(res.data?.message || 'Cleared all');
-      fetchRateLimitLog();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to clear');
-    }
   };
 
   const handleFetchQuicktradeOverview = useCallback(async () => {
@@ -12024,267 +11798,11 @@ export default function Admin() {
               </div>
             )}
 
-            <ActionRow icon={Shield} label="Rate Limits (Cooldown)" description={rateLimits?.global_enabled ? "ENABLED - Users see cooldown when clicking too fast" : "DISABLED - No cooldown protection"}>
-              <div className="flex items-center gap-2">
-                <span className={`text-xs font-bold ${rateLimits?.global_enabled ? 'text-green-400' : 'text-red-400'}`}>
-                  {rateLimits?.global_enabled ? 'ON' : 'OFF'}
-                </span>
-                <BtnPrimary onClick={handleViewRateLimits} disabled={securityLoading}>
-                  {securityLoading ? '...' : 'Refresh'}
-                </BtnPrimary>
-                {rateLimits?.global_enabled ? (
-                  <BtnDanger onClick={handleDisableAllLimits} disabled={securityLoading}>
-                    {securityLoading ? '...' : 'Disable'}
-                  </BtnDanger>
-                ) : (
-                  <BtnPrimary onClick={handleEnableAllLimits} disabled={securityLoading}>
-                    {securityLoading ? '...' : 'Enable'}
-                  </BtnPrimary>
-                )}
-              </div>
-            </ActionRow>
-
             <ActionRow
               icon={Shield}
-              label="Page visit rate limit"
-              description={
-                rateLimits?.page_visit_rate_limit?.summary ||
-                'Sliding window per SPA path (X-Current-Path), includes GET. Requires security middleware ON.'
-              }
-            >
-              <div className="flex flex-col gap-2 items-stretch sm:items-end min-w-[12rem]">
-                <div className="flex items-center gap-2 flex-wrap justify-end">
-                  <span
-                    className={`text-xs font-bold ${
-                      rateLimits?.page_visit_rate_limit?.enabled ? 'text-green-400' : 'text-red-400'
-                    }`}
-                  >
-                    {rateLimits?.page_visit_rate_limit
-                      ? rateLimits.page_visit_rate_limit.enabled
-                        ? 'ON'
-                        : 'OFF'
-                      : '—'}
-                  </span>
-                  <BtnPrimary
-                    type="button"
-                    disabled={securityLoading || !rateLimits?.page_visit_rate_limit}
-                    onClick={handleTogglePageVisitRateLimit}
-                  >
-                    {rateLimits?.page_visit_rate_limit?.enabled ? 'Disable' : 'Enable'}
-                  </BtnPrimary>
-                </div>
-                <div className="flex flex-wrap items-end gap-2 text-[10px]">
-                  <label className="flex flex-col gap-0.5">
-                    <span className="text-mutedForeground">Window (sec)</span>
-                    <input
-                      type="number"
-                      min={5}
-                      max={600}
-                      step={1}
-                      value={pageVisitDraft.window_sec}
-                      onChange={(e) => setPageVisitDraft((d) => ({ ...d, window_sec: e.target.value }))}
-                      className="w-20 bg-zinc-900/70 border border-zinc-700/50 rounded px-2 py-1 text-foreground"
-                      disabled={securityLoading}
-                    />
-                  </label>
-                  <label className="flex flex-col gap-0.5">
-                    <span className="text-mutedForeground">Max requests</span>
-                    <input
-                      type="number"
-                      min={10}
-                      max={5000}
-                      step={1}
-                      value={pageVisitDraft.max_requests}
-                      onChange={(e) => setPageVisitDraft((d) => ({ ...d, max_requests: e.target.value }))}
-                      className="w-24 bg-zinc-900/70 border border-zinc-700/50 rounded px-2 py-1 text-foreground"
-                      disabled={securityLoading}
-                    />
-                  </label>
-                  <BtnSecondary type="button" disabled={securityLoading} onClick={handleSavePageVisitRateLimit}>
-                    Save limits
-                  </BtnSecondary>
-                </div>
-              </div>
-            </ActionRow>
-
-            <ActionRow icon={Shield} label="Set All Rate Limits" description="Set all endpoints to the same interval">
-              <div className="flex items-center gap-1 flex-wrap">
-                {[500, 1000, 1500, 2000, 3000, 5000].map(ms => (
-                  <button
-                    key={ms}
-                    onClick={() => handleSetAllRateLimitInterval(ms)}
-                    disabled={securityLoading}
-                    className="px-2 py-1 text-[10px] rounded bg-zinc-700/50 hover:bg-zinc-600 text-foreground border border-zinc-600/30 transition-colors"
-                  >
-                    {ms >= 1000 ? `${ms/1000}s` : `${ms}ms`}
-                  </button>
-                ))}
-                <BtnSecondary type="button" onClick={handleDisableAllEndpointTogglesOnly} disabled={securityLoading}>
-                  {securityLoading ? '...' : 'All rows OFF (keep global)'}
-                </BtnSecondary>
-              </div>
-            </ActionRow>
-
-            {rateLimits && rateLimits.rate_limits && (
-              <div className="mt-2 p-3 rounded bg-zinc-900/50 border border-zinc-700/50 space-y-2">
-                <div className="text-[10px] font-heading text-mutedForeground uppercase mb-2">
-                  Rate limit (ms between clicks)
-                  {rateLimits.pattern_count != null
-                    ? ` — ${rateLimits.pattern_count} patterns`
-                    : ` — ${Object.keys(rateLimits.rate_limits).length} patterns`}
-                  :
-                </div>
-                <div className="max-h-[28rem] overflow-y-auto space-y-1.5">
-                  {[...Object.entries(rateLimits.rate_limits)]
-                    .sort(([a], [b]) => a.localeCompare(b))
-                    .map(([endpoint, val]) => {
-                    const minIntervalMs = Array.isArray(val) ? val[0] : (val?.min_interval_ms ?? 1000);
-                    const enabled = Array.isArray(val) ? val[1] : (val?.enabled ?? false);
-                    const editValue = rateLimitEdits[endpoint] !== undefined ? rateLimitEdits[endpoint] : minIntervalMs;
-                    const hasChanged = Number(editValue) !== Number(minIntervalMs);
-                    const displayLabel = Number(editValue) >= 1000 ? `${(Number(editValue) / 1000).toFixed(1)}s` : `${Number(editValue)}ms`;
-
-                    return (
-                      <div key={endpoint} className="flex flex-col gap-2 text-[10px] p-2 rounded bg-zinc-800/50 border border-zinc-700/30 hover:border-primary/30 transition-colors">
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex-1 min-w-0">
-                            <div className="text-foreground font-mono text-[11px] truncate mb-0.5">{endpoint}</div>
-                          </div>
-                          <button
-                            onClick={() => handleToggleRateLimit(endpoint, enabled)}
-                            className={`shrink-0 px-2 py-1 rounded text-[9px] font-bold transition-all ${
-                              enabled
-                                ? 'bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30'
-                                : 'bg-zinc-700/50 text-mutedForeground hover:bg-zinc-700 border border-zinc-600/30'
-                            }`}
-                          >
-                            {enabled ? 'ON' : 'OFF'}
-                          </button>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="number"
-                            min="0"
-                            max="60000"
-                            step="50"
-                            value={editValue}
-                            onChange={(e) => setRateLimitEdits({...rateLimitEdits, [endpoint]: parseFloat(e.target.value) || 0})}
-                            className="flex-1 bg-zinc-900/70 border border-zinc-700/50 rounded px-2 py-1 text-[10px] text-foreground focus:border-primary/50 focus:outline-none"
-                          />
-                          <span className="text-mutedForeground text-[9px] whitespace-nowrap">ms ({displayLabel})</span>
-                          {hasChanged && (
-                            <button
-                              onClick={() => handleUpdateRateLimit(endpoint, editValue)}
-                              className="px-2 py-1 rounded text-[9px] font-bold bg-primary/20 text-primary hover:bg-primary/30 border border-primary/30 transition-all"
-                            >
-                              SAVE
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-                {rateLimits.note && (
-                  <p className="text-[9px] text-mutedForeground italic mt-2">{rateLimits.note}</p>
-                )}
-                {rateLimits.endpoint_rl_policy?.summary && (
-                  <p className="text-[9px] text-zinc-400 mt-1.5 font-heading leading-relaxed">
-                    {rateLimits.endpoint_rl_policy.summary}
-                    {rateLimits.endpoint_rl_policy.burst_tokens != null && (
-                      <span className="block mt-0.5 text-mutedForeground">
-                        Burst {rateLimits.endpoint_rl_policy.burst_tokens} · sustain {rateLimits.endpoint_rl_policy.sustain_min_violations}+
-                        hits in {rateLimits.endpoint_rl_policy.sustain_window_sec}s spanning ≥{rateLimits.endpoint_rl_policy.sustain_min_span_sec}s → hard cooldown{' '}
-                        {Array.isArray(rateLimits.endpoint_rl_policy.hard_cooldown_sec_range)
-                          ? `${rateLimits.endpoint_rl_policy.hard_cooldown_sec_range[0]}–${rateLimits.endpoint_rl_policy.hard_cooldown_sec_range[1]}s`
-                          : ''}
-                      </span>
-                    )}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Rate Limit Log */}
-            <div className="mt-3 pt-3 border-t border-zinc-700/50">
-              <div className="text-[10px] font-heading text-primary uppercase tracking-wider mb-2">Rate Limit Violations Log</div>
-              <p className="text-[10px] text-mutedForeground mb-2">Users who hit rate limits. Shows why they got cooldown and which endpoints.</p>
-              <div className="flex flex-wrap items-center gap-2 mb-2">
-                <input
-                  type="text"
-                  value={rateLimitLogUsername}
-                  onChange={(e) => setRateLimitLogUsername(e.target.value)}
-                  placeholder="Filter by username"
-                  className="w-40 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none"
-                />
-                <BtnPrimary onClick={fetchRateLimitLog} disabled={rateLimitLogLoading}>
-                  {rateLimitLogLoading ? '...' : 'Load Log'}
-                </BtnPrimary>
-                {rateLimitLog && rateLimitLog.count > 0 && (
-                  <BtnDanger onClick={handleClearAllRateLimitLog} disabled={rateLimitLogLoading}>Clear All</BtnDanger>
-                )}
-              </div>
-              {rateLimitLog && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-4 text-[10px] text-mutedForeground">
-                    <span>Total violations: <span className="text-foreground font-bold">{rateLimitLog.count}</span></span>
-                    <span>Unique users: <span className="text-foreground font-bold">{rateLimitLog.unique_users}</span></span>
-                  </div>
-                  {rateLimitLog.by_user && rateLimitLog.by_user.length > 0 && (
-                    <div className="rounded bg-zinc-900/50 border border-zinc-700/50 p-2">
-                      <div className="text-[9px] font-heading text-mutedForeground uppercase mb-2">By User (top offenders)</div>
-                      <div className="max-h-48 overflow-y-auto space-y-1.5">
-                        {rateLimitLog.by_user.map((u, i) => (
-                          <div key={i} className="flex items-start justify-between gap-2 text-[10px] py-2 px-2 rounded bg-zinc-800/50 border border-zinc-700/30">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                <span className="font-bold text-primary">{u.username}</span>
-                                <span className="text-amber-400 font-mono">{u.count} violation{u.count !== 1 ? 's' : ''}</span>
-                              </div>
-                              <div className="text-[9px] text-mutedForeground mb-1">
-                                First: {u.first_at ? formatAdminDateTime(u.first_at) : '—'} · Last: {u.last_at ? formatAdminDateTime(u.last_at) : '—'}
-                              </div>
-                              <div className="flex flex-wrap gap-1">
-                                {Object.entries(u.endpoints || {}).map(([ep, cnt]) => (
-                                  <span key={ep} className="px-1.5 py-0.5 rounded bg-zinc-700/50 text-[8px] font-mono">
-                                    {ep.replace('/api/', '')} <span className="text-amber-400">×{cnt}</span>
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {rateLimitLog.entries && rateLimitLog.entries.length > 0 && (
-                    <details className="rounded border border-zinc-700/30 bg-zinc-800/30 overflow-hidden">
-                      <summary className="px-2.5 py-2 cursor-pointer text-[10px] font-heading font-bold text-mutedForeground uppercase tracking-wider hover:bg-zinc-700/30 list-none">
-                        Detailed Log ({rateLimitLog.entries.length} entries)
-                      </summary>
-                      <div className="max-h-64 overflow-y-auto p-2 space-y-1">
-                        {rateLimitLog.entries.map((e, i) => (
-                          <div key={i} className="text-[9px] py-1.5 px-2 rounded bg-zinc-900/50 border border-zinc-700/30">
-                            <div className="flex items-center justify-between gap-2 mb-0.5">
-                              <span className="font-bold text-primary">{e.username}</span>
-                              <span className="text-mutedForeground">{e.created_at ? formatAdminDateTime(e.created_at) : '—'}</span>
-                            </div>
-                            <div className="text-foreground mb-0.5">{e.reason}</div>
-                            {e.details && (
-                              <div className="text-mutedForeground">
-                                Path: <span className="font-mono text-amber-400">{e.details.path}</span>
-                                {e.details.min_interval_sec && <span className="ml-2">Limit: {e.details.min_interval_sec}s</span>}
-                                {e.details.elapsed_sec !== undefined && <span className="ml-2">Actual: {e.details.elapsed_sec}s</span>}
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </details>
-                  )}
-                </div>
-              )}
-            </div>
+              label="API rate limiting"
+              description="Removed in Phase 0 (no global cooldown / page-visit / per-endpoint RL). IP bans still run in SecurityMiddleware."
+            />
 
             <ActionRow icon={Trash2} label="Clear Old Flags" description="Remove flags older than 30 days" color="text-red-400">
               <BtnDanger onClick={handleClearOldFlags} disabled={securityLoading}>
@@ -12295,7 +11813,7 @@ export default function Admin() {
             {/* Cheat Detection Config */}
             <div className="mt-3 pt-3 border-t border-zinc-700/50">
               <div className="text-[10px] font-heading text-primary uppercase tracking-wider mb-2">Cheat Detection Toggles</div>
-              <p className="text-[10px] text-mutedForeground mb-2">Enable/disable exploit checks. Duplicate request and negative balance are off by default.</p>
+              <p className="text-[10px] text-mutedForeground mb-2">Enable/disable exploit checks. Duplicate-request detection is not enforced in HTTP middleware (Phase 0). Negative balance is off by default.</p>
               <BtnSecondary onClick={fetchCheatDetectionConfig} disabled={cheatDetectionConfigLoading} className="mb-2">
                 {cheatDetectionConfigLoading ? '...' : 'Load config'}
               </BtnSecondary>
@@ -12303,7 +11821,7 @@ export default function Admin() {
                 <div className="space-y-2 p-2 rounded bg-zinc-900/50 border border-zinc-700/50">
                   <label className="flex items-center gap-2 text-[10px] cursor-pointer">
                     <input type="checkbox" checked={!!cheatDetectionConfig.detect_duplicate_requests} onChange={(e) => updateCheatDetectionConfig({ detect_duplicate_requests: e.target.checked })} className="rounded" />
-                    Detect duplicate requests (200-500ms window)
+                    Detect duplicate requests (config only; not enforced in middleware)
                   </label>
                   <label className="flex items-center gap-2 text-[10px] cursor-pointer">
                     <input type="checkbox" checked={!!cheatDetectionConfig.detect_negative_balance} onChange={(e) => updateCheatDetectionConfig({ detect_negative_balance: e.target.checked })} className="rounded" />
@@ -12539,9 +12057,6 @@ export default function Admin() {
                     <BtnSecondary type="button" onClick={loadBotInvestigationDupe} disabled={cheatLoading}>
                       Load intelligent dupe check
                     </BtnSecondary>
-                    <BtnSecondary type="button" onClick={loadBotInvestigationRateLimit} disabled={botInvestLoading}>
-                      Load rate limits (this user)
-                    </BtnSecondary>
                     <BtnSecondary type="button" onClick={loadBotInvestigationBlocksForUser} disabled={botInvestLoading}>
                       Load bot blocks (this user)
                     </BtnSecondary>
@@ -12662,14 +12177,6 @@ export default function Admin() {
                   <div className="text-[10px] font-heading text-primary uppercase mb-1">Intelligent dupe check (filtered to this username cohort)</div>
                   <pre className="text-[9px] p-2 rounded bg-zinc-950/80 border border-zinc-700/50 text-mutedForeground overflow-auto max-h-96 whitespace-pre-wrap break-words">
                     {JSON.stringify(botInvestDupe, null, 2)}
-                  </pre>
-                </div>
-              )}
-              {botInvestRateLimit && (
-                <div>
-                  <div className="text-[10px] font-heading text-primary uppercase mb-1">Rate limit log (this user)</div>
-                  <pre className="text-[9px] p-2 rounded bg-zinc-950/80 border border-zinc-700/50 text-mutedForeground overflow-auto max-h-64 whitespace-pre-wrap break-words">
-                    {JSON.stringify(botInvestRateLimit, null, 2)}
                   </pre>
                 </div>
               )}

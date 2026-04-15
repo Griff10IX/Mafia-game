@@ -18,29 +18,6 @@ from utils.point_provenance import log_points_event
 # E-Games prizes: Rank-XP Pass is shop-only (not listed in "what you can win" and never rolled here).
 ENTERTAINER_TOKEN_TYPES = tuple(t for t in TOKEN_TYPES if t != "rank_xp_pass")
 
-# Synthetic paths for check_endpoint_rate_limit (must match RATE_LIMIT_CONFIG in middleware.security).
-_RL_ENTERTAINER_JOIN = "/api/forum-entertainer-rl/join"
-_RL_ENTERTAINER_GUESS = "/api/forum-entertainer-rl/guess"
-_RL_ENTERTAINER_ROLL = "/api/forum-entertainer-rl/roll"
-_RL_ENTERTAINER_FIND_WORD_CLAIM = "/api/forum-entertainer-rl/find-word-claim"
-
-
-async def _entertainer_rl_or_raise(rl_path: str, user_id: str, username: str) -> None:
-    from middleware.security import check_endpoint_rate_limit
-
-    rl = await check_endpoint_rate_limit(
-        rl_path,
-        user_id,
-        (username or "?").strip() or "?",
-        db,
-        ignore_global_toggle=True,
-    )
-    if rl.blocked:
-        raise HTTPException(
-            status_code=429,
-            detail=f"Slow down — try again in {rl.cooldown_seconds}s.",
-        )
-
 # Auto-create runs every 3 hours; open games roll 20 mins before the next batch (so plenty of time to join)
 AUTO_CREATE_INTERVAL_SECONDS = 3 * 3600   # 3 hours between batches
 ROLL_BEFORE_NEXT_CREATE_SECONDS = 20 * 60  # roll current games 20 mins before next batch
@@ -1057,7 +1034,6 @@ async def create_game(
 
 async def join_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
     """Join an open game. Pay join_fee if set (added to pot). If full after join, run payout automatically."""
-    await _entertainer_rl_or_raise(_RL_ENTERTAINER_JOIN, current_user["id"], current_user.get("username") or "?")
     game = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -1111,7 +1087,6 @@ async def guess_hangman(
     Wrong: increments wrong_count — game auto-settles at MAX_HANGMAN_WRONG.
     Word fully revealed: game auto-settles immediately.
     """
-    await _entertainer_rl_or_raise(_RL_ENTERTAINER_GUESS, current_user["id"], current_user.get("username") or "?")
     game = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -1195,7 +1170,6 @@ async def guess_hangman(
 # ---------- Manual roll: admin or creator (for manual_roll games) ----------
 async def admin_roll_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
     """Force settle (roll) an open game now. Admin can always roll; creator can roll if game is manual_roll."""
-    await _entertainer_rl_or_raise(_RL_ENTERTAINER_ROLL, current_user["id"], current_user.get("username") or "?")
     game = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
@@ -1600,7 +1574,6 @@ class FindWordClaimBody(BaseModel):
 
 
 async def find_word_claim(body: FindWordClaimBody, current_user: dict = Depends(get_current_user_verified)):
-    await _entertainer_rl_or_raise(_RL_ENTERTAINER_FIND_WORD_CLAIM, current_user["id"], current_user.get("username") or "?")
     rid = (body.round_id or "").strip()
     if not rid:
         raise HTTPException(status_code=400, detail="round_id required")

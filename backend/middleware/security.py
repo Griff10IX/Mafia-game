@@ -3,13 +3,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, List, Tuple
 import logging
-import math
 import os
-import random
 import re
 import time
-from collections import defaultdict, Counter
-from urllib.parse import urlparse
+from collections import defaultdict
 import asyncio
 
 # Telegram bot token format: 8-10 digits, colon, ~35 alphanumeric chars. Reject BotFather message paste.
@@ -37,8 +34,6 @@ except ImportError:
     HTTPX_AVAILABLE = False
     TELEGRAM_BOT_API_TIMEOUT = None  # unused
 
-from pymongo.errors import DuplicateKeyError
-
 logger = logging.getLogger(__name__)
 
 # Telegram configuration
@@ -46,32 +41,13 @@ TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN', '')
 TELEGRAM_CHAT_ID = os.environ.get('TELEGRAM_CHAT_ID', '')
 TELEGRAM_ENABLED = bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID)
 
-# Security thresholds - FOCUS ON SPAM & EXPLOITS, NOT LEGITIMATE HIGH ACTIVITY
-MAX_REQUESTS_PER_SECOND = 20  # Spam detection: more than this many mutating requests in 1s
+# Security thresholds (failed-attack spam only; per-request mutating spam removed in Phase 0)
 MAX_FAILED_ATTACKS_PER_MINUTE = 20  # Bot-like failed attack spam
-MAX_SAME_ACTION_PER_SECOND = 3  # Same endpoint hit 3+ times in 1 second = bot
 
-# Burst detection - catches rapid clicking (e.g. autoclickers or macros)
-BURST_WINDOW_SECONDS = 0.5  # Time window for burst detection
-BURST_MAX_REQUESTS = 20  # Max mutating requests in burst window (>= this in 0.5s triggers burst_spam)
-
-# Cap per-user request/burst log length (must exceed thresholds above; avoids unbounded memory)
-_SPAM_LOG_MAX = 50
-
-# Page-visit spam: (user_id, SPA path from X-Current-Path) sliding window; counts GETs too (polling).
-_page_spam_en_raw = (os.environ.get("PAGE_SPAM_ENABLED") or "1").strip().lower()
-PAGE_SPAM_ENABLED = _page_spam_en_raw in ("1", "true", "yes", "")
-_page_ws_raw = (os.environ.get("PAGE_SPAM_WINDOW_SEC") or "").strip()
-PAGE_SPAM_WINDOW_SEC = float(_page_ws_raw) if _page_ws_raw else 30.0
-_page_max_raw = (os.environ.get("PAGE_SPAM_MAX_REQUESTS") or "").strip()
-# Default 130: heavy SPA pages issue many parallel GETs; 100 could false-positive (see docs/RATE_LIMITS.md).
-PAGE_SPAM_MAX_REQUESTS = int(_page_max_raw) if _page_max_raw.isdigit() else 130
-user_page_request_counts: Dict[Tuple[str, str], List[datetime]] = defaultdict(list)
-
-
-def _page_spam_deque_cap() -> int:
-    """Max timestamps kept per (user, spa_path); scales when admin raises PAGE_SPAM_MAX_REQUESTS."""
-    return max(PAGE_SPAM_MAX_REQUESTS + 50, 150)
+# Page-visit / mutating request RL removed (Phase 0). Kept for admin cheat-config introspection only.
+PAGE_SPAM_ENABLED = False
+PAGE_SPAM_WINDOW_SEC = 30.0
+PAGE_SPAM_MAX_REQUESTS = 130
 
 # Throttle repeated Telegram alerts for the same user (spam burst/request flags)
 _SPAM_TELEGRAM_COOLDOWN_SEC = 300
@@ -83,10 +59,7 @@ DETECT_IMPOSSIBLE_GAIN = 50_000_000  # $50M+ gain in single action = exploit (co
 DETECT_DUPLICATE_REQUESTS = False
 DUPLICATE_REQUEST_WINDOW_MS = 300  # 200-500ms window to reduce false positives from double-clicks
 
-# In-memory rate limiting (per user)
-user_request_counts = defaultdict(list)  # user_id -> [timestamp1, timestamp2, ...]
-user_burst_counts = defaultdict(list)    # user_id -> [timestamp1, timestamp2, ...] for burst detection
-user_action_counts = defaultdict(list)   # user_id -> [timestamp1, timestamp2, ...]
+# In-memory tracking for failed-attack spam only
 user_failed_attacks = defaultdict(list)  # user_id -> [timestamp1, timestamp2, ...]
 
 # Security flags database structure:
@@ -367,223 +340,6 @@ async def set_telegram_bot_commands(bot_token: Optional[str] = None) -> bool:
         return False
 
 
-def _summarize_spam_paths(entries: List[Tuple], max_lines: int = 8) -> str:
-    if not entries:
-        return "  (no path detail)"
-    keys = [f"{m} {p}" for _, m, p, _ in entries]
-    c = Counter(keys)
-    lines = [f"  {n}×  {k}" for k, n in c.most_common(max_lines)]
-    if len(c) > max_lines:
-        lines.append(f"  … +{len(c) - max_lines} other endpoint(s)")
-    return "\n".join(lines)
-
-
-# (path_prefix, method or None for any, human label) — sorted longest-first for matching
-_SPAM_ACTIVITY_RULES_RAW: List[Tuple[str, Optional[str], str]] = [
-    ("/api/bank/interest/deposit", "POST", "Bank interest deposit"),
-    ("/api/bank/interest/claim", "POST", "Bank interest claim"),
-    ("/api/bank/swiss/deposit", "POST", "Swiss bank deposit"),
-    ("/api/bank/swiss/withdraw", "POST", "Swiss bank withdraw"),
-    ("/api/bank/transfer", "POST", "Bank transfer"),
-    ("/api/bank/overview", "GET", "Bank overview"),
-    ("/api/bank/meta", "GET", "Bank meta"),
-    ("/api/gauntlet/leaderboard", "GET", "Flappy Gangster leaderboard"),
-    ("/api/gauntlet/me", "GET", "Flappy Gangster profile"),
-    ("/api/gauntlet/start", "POST", "Flappy Gangster start run"),
-    ("/api/gauntlet/claim", "POST", "Flappy Gangster claim"),
-    ("/api/minigames/run-session/start", "POST", "Mini game run session start"),
-    ("/api/auth/me", "GET", "Auth session check"),
-    ("/api/auth/login", "POST", "Login"),
-    ("/api/auth/register", "POST", "Registration"),
-]
-SPAM_ACTIVITY_RULES: List[Tuple[str, Optional[str], str]] = sorted(
-    _SPAM_ACTIVITY_RULES_RAW, key=lambda r: len(r[0]), reverse=True
-)
-
-# First URL segment after /api/ → human name (fallback when no SPAM_ACTIVITY_RULES match).
-API_SEGMENT_LABELS: Dict[str, str] = {
-    "achievements": "Achievements",
-    "admin": "Admin",
-    "airport": "Airport / travel",
-    "armour": "Armoury",
-    "attack": "Attacks",
-    "auth": "Auth",
-    "auto-rank": "Auto Rank",
-    "bank": "Bank",
-    "battleships": "Battleships",
-    "blackjack": "Blackjack",
-    "bodyguards": "Bodyguards",
-    "booze-run": "Booze run",
-    "boxing": "Boxing",
-    "bullet-factory": "Bullet factory",
-    "crack-safe": "Crack the safe",
-    "crimes": "Crimes",
-    "daily-rewards": "Daily rewards",
-    "dead-alive": "Dead or alive",
-    "dice": "Dice",
-    "events": "Events",
-    "families": "Families",
-    "family-run": "Family run",
-    "forum": "Forum",
-    "game-chat": "Game chat",
-    "giphy": "Giphy",
-    "gta": "GTA / cars",
-    "help-desk": "Help desk",
-    "hitlist": "Hitlist",
-    "horseracing": "Horse racing",
-    "illegal-business": "Illegal business",
-    "inventory": "Inventory / consumables",
-    "jail": "Jail",
-    "leaderboard": "Leaderboard",
-    "loot-box": "Loot box",
-    "mdg": "Mafia dice game",
-    "meta": "Meta / app config",
-    "minesweeper": "Minesweeper",
-    "minigames": "Mini games leaderboard",
-    "missions": "Missions",
-    "mp-blackjack": "Multiplayer blackjack",
-    "mp-poker": "Multiplayer poker",
-    "my-properties": "My properties",
-    "news": "News",
-    "notifications": "Notifications",
-    "npcs": "NPCs",
-    "objectives": "Objectives",
-    "oc": "Organised crime (OC)",
-    "organised-crime": "Organised crime (heists)",
-    "payments": "Payments",
-    "prestige": "Prestige",
-    "profile": "Profile",
-    "properties": "Properties",
-    "racket": "Racket",
-    "racing": "Racing / garage",
-    "roulette": "Roulette",
-    "shooting-range": "Shooting range",
-    "slots": "Slots",
-    "snake": "Snake",
-    "sports-betting": "Sports betting",
-    "stats": "Stats",
-    "stock-market": "Stock market",
-    "store": "Store",
-    "the-getaway": "The Getaway",
-    "trade": "Quick trade",
-    "user": "User / rank progress",
-    "users": "Users",
-    "video-poker": "Video poker",
-    "wealth-ranks": "Wealth ranks",
-    "weapons": "Weapons",
-    "whack-a-copper": "Whack-a-copper",
-    "gauntlet": "Flappy Gangster",
-}
-
-# Longer prefixes where the first segment alone is misleading (sorted with segment rows by length desc).
-API_AREA_PREFIX_EXTRA: List[Tuple[str, str]] = [
-    ("/api/families/compound/", "Family compound"),
-    ("/api/families/crew-oc/", "Crew organised crime"),
-    ("/api/families/rackets/", "Family rackets"),
-    ("/api/families/war/", "Family war"),
-    ("/api/racing/races/", "Circuit races"),
-    ("/api/racing/bets/", "Racing bets"),
-    ("/api/forum/designer/", "Designer competitions"),
-    ("/api/forum/entertainer/", "Entertainer"),
-    ("/api/admin/game-ideas/", "Game ideas (admin)"),
-    ("/api/admin/security/", "Security admin"),
-    ("/api/store/buy-bullets", "Armoury (buy bullets)"),
-    ("/api/admin/add-bullets", "Admin — add bullets"),
-]
-
-_API_LABEL_PREFIX_CACHE: Optional[List[Tuple[str, str]]] = None
-
-
-def _build_api_label_prefix_rows() -> List[Tuple[str, str]]:
-    rows: List[Tuple[str, str]] = []
-    rows.extend(API_AREA_PREFIX_EXTRA)
-    for seg, lab in API_SEGMENT_LABELS.items():
-        rows.append((f"/api/{seg}/", lab))
-        rows.append((f"/api/{seg}", lab))
-    rows.sort(key=lambda x: len(x[0]), reverse=True)
-    return rows
-
-
-def _get_api_label_prefix_rows() -> List[Tuple[str, str]]:
-    global _API_LABEL_PREFIX_CACHE
-    if _API_LABEL_PREFIX_CACHE is None:
-        _API_LABEL_PREFIX_CACHE = _build_api_label_prefix_rows()
-    return _API_LABEL_PREFIX_CACHE
-
-
-def _normalize_spam_path(path: str) -> str:
-    if not path:
-        return ""
-    p = path.split("?", 1)[0].strip()
-    if not p.startswith("/"):
-        p = "/" + p
-    return p.lower()
-
-
-def _describe_api_activity(method: str, path: str) -> str:
-    p = _normalize_spam_path(path)
-    m = (method or "?").upper()[:16]
-    if not p:
-        return f"API {m} (no path)"
-    for prefix, rule_method, label in SPAM_ACTIVITY_RULES:
-        if not p.startswith(prefix):
-            continue
-        if rule_method is not None and m != rule_method.upper():
-            continue
-        return label
-    if p.startswith("/api/"):
-        for prefix, lab in _get_api_label_prefix_rows():
-            if p.startswith(prefix):
-                return f"{lab} — {m}"
-    short = path.split("?", 1)[0].strip()
-    if len(short) > 140:
-        short = short[:137] + "..."
-    return f"API {m} {short}"
-
-
-def _spam_activity_extras(entries: List[Tuple], flag_type: str, max_lines: int = 10) -> Dict[str, str]:
-    """Human-readable activity breakdown; primary line if one label is >=50% of window."""
-    if not entries:
-        return {}
-    labels = [_describe_api_activity(m, p) for _, m, p, _ in entries]
-    c = Counter(labels)
-    n = len(labels)
-    lines = [f"  {cnt}×  {lab}" for lab, cnt in c.most_common(max_lines)]
-    if len(c) > max_lines:
-        lines.append(f"  … +{len(c) - max_lines} other kind(s)")
-    out: Dict[str, str] = {"activity_breakdown": "\n".join(lines)}
-    top_lab, top_n = c.most_common(1)[0]
-    if n and top_n / n >= 0.5:
-        out["primary_activity"] = (
-            f"Rapid-fire on: {top_lab}" if flag_type == "burst_spam" else f"Spamming: {top_lab}"
-        )
-    return out
-
-
-def _api_area_hint(path: str) -> str:
-    p = _normalize_spam_path(path)
-    if not p.startswith("/api/"):
-        return ""
-    for prefix, label in _get_api_label_prefix_rows():
-        if p.startswith(prefix):
-            return f"Likely feature: {label}"
-    return "Likely feature: API (unknown route prefix)"
-
-
-def _referer_page_hint(referer: str) -> str:
-    r = (referer or "").strip()
-    if not r:
-        return "Browser page: not sent (direct API / missing Referer header)"
-    try:
-        p = urlparse(r)
-        host = (p.netloc or "")[:80]
-        path = (p.path or "/")[:140]
-        q = ("?" + p.query[:100]) if p.query else ""
-        return f"Browser page: {host}{path}{q}"
-    except Exception:
-        return f"Browser page: {r[:160]}"
-
-
 def _format_spam_flag_message(username: str, user_id: str, flag_type: str, reason: str, details: Dict) -> str:
     if flag_type == "burst_spam":
         title = "Burst spam (rapid-fire)"
@@ -685,27 +441,6 @@ async def flag_user_suspicious(db, user_id: str, username: str, flag_type: str, 
         logger.exception(f"Failed to flag user {username}: {e}")
 
 
-def _is_auto_rank_control_path(path: str) -> bool:
-    """User-facing Auto Rank prefs/start/stop; do not count toward spam/duplicate (cron uses no JWT)."""
-    p = (path or "")[:400]
-    if not p.startswith("/api"):
-        p = "/api" + p if p.startswith("/") else "/api/" + p
-    return p.startswith("/api/auto-rank/")
-
-
-def _normalize_spa_path_from_header(raw: Optional[str]) -> str:
-    """Normalize X-Current-Path for page-spam keying (strip, collapse slashes, cap length)."""
-    s = (raw or "").strip()
-    if not s:
-        return "/"
-    while "//" in s:
-        s = s.replace("//", "/")
-    if not s.startswith("/"):
-        s = "/" + s
-    return s[:500]
-
-
-# Spam detection (not gameplay limits)
 async def check_request_spam(
     user_id: str,
     username: str,
@@ -714,77 +449,7 @@ async def check_request_spam(
     path: str = "",
     referer: Optional[str] = None,
 ) -> bool:
-    """Detect spam: more than MAX_REQUESTS_PER_SECOND mutating requests in 1s OR burst (>= BURST_MAX_REQUESTS in 0.5s). GET/HEAD/OPTIONS skipped."""
-    now = datetime.now(timezone.utc)
-    m = (method or "?").upper()[:16]
-    if m in ("GET", "HEAD", "OPTIONS"):
-        return False
-    p = (path or "")[:400]
-    if _is_auto_rank_control_path(p):
-        return False
-    ref = (referer or "").strip()[:500]
-    entry: Tuple[datetime, str, str, str] = (now, m, p, ref)
-
-    # Check 1: Standard spam detection (10+ requests in 1 second)
-    cutoff_1s = now - timedelta(seconds=1)
-    rq = user_request_counts[user_id]
-    rq[:] = [e for e in rq if e[0] > cutoff_1s]
-    rq.append(entry)
-    if len(rq) > _SPAM_LOG_MAX:
-        del rq[: len(rq) - _SPAM_LOG_MAX]
-
-    count_1s = len(rq)
-    if count_1s > MAX_REQUESTS_PER_SECOND:
-        win = list(rq)
-        details = {
-            "count": count_1s,
-            "threshold": MAX_REQUESTS_PER_SECOND,
-            "window_sec": 1,
-            "last_method": m,
-            "last_path": p,
-            "path_summary": _summarize_spam_paths(win),
-            "referer_hint": _referer_page_hint(ref),
-            "api_area_hint": _api_area_hint(p),
-        }
-        details.update(_spam_activity_extras(win, "request_spam"))
-        await flag_user_suspicious(
-            db, user_id, username,
-            "request_spam",
-            f"{count_1s} API calls in 1 second (limit {MAX_REQUESTS_PER_SECOND}).",
-            details,
-        )
-        return True
-
-    # Check 2: Burst detection (rapid clicking - catches autoclickers/macros)
-    cutoff_burst = now - timedelta(seconds=BURST_WINDOW_SECONDS)
-    bq = user_burst_counts[user_id]
-    bq[:] = [e for e in bq if e[0] > cutoff_burst]
-    bq.append(entry)
-    if len(bq) > _SPAM_LOG_MAX:
-        del bq[: len(bq) - _SPAM_LOG_MAX]
-
-    count_burst = len(bq)
-    if count_burst >= BURST_MAX_REQUESTS:
-        bwin = list(bq)
-        bdetails = {
-            "count": count_burst,
-            "threshold": BURST_MAX_REQUESTS,
-            "window_sec": BURST_WINDOW_SECONDS,
-            "last_method": m,
-            "last_path": p,
-            "path_summary": _summarize_spam_paths(bwin),
-            "referer_hint": _referer_page_hint(ref),
-            "api_area_hint": _api_area_hint(p),
-        }
-        bdetails.update(_spam_activity_extras(bwin, "burst_spam"))
-        await flag_user_suspicious(
-            db, user_id, username,
-            "burst_spam",
-            f"{count_burst} API calls in {BURST_WINDOW_SECONDS}s burst (limit {BURST_MAX_REQUESTS}).",
-            bdetails,
-        )
-        return True
-
+    """Phase 0: mutating-request spam detection removed (no 429 from this layer)."""
     return False
 
 
@@ -798,78 +463,12 @@ async def check_page_request_spam(
     method: str,
     referer: Optional[str] = None,
 ) -> bool:
-    """Too many authenticated requests (including GET) for same SPA route within sliding window → 429 cooldown."""
-    if not PAGE_SPAM_ENABLED:
-        return False
-    m = (method or "").upper()[:16]
-    if m in ("HEAD", "OPTIONS"):
-        return False
-    ap = (api_path or "")[:400]
-    if _is_auto_rank_control_path(ap):
-        return False
-    spa = _normalize_spa_path_from_header(spa_path_header)
-    now = datetime.now(timezone.utc)
-    cutoff = now - timedelta(seconds=PAGE_SPAM_WINDOW_SEC)
-    key = (user_id, spa)
-    dq = user_page_request_counts[key]
-    dq[:] = [t for t in dq if t > cutoff]
-    dq.append(now)
-    cap = _page_spam_deque_cap()
-    if len(dq) > cap:
-        del dq[: len(dq) - cap]
-    count = len(dq)
-    if count > PAGE_SPAM_MAX_REQUESTS:
-        ref = (referer or "").strip()[:500]
-        details = {
-            "count": count,
-            "threshold": PAGE_SPAM_MAX_REQUESTS,
-            "window_sec": PAGE_SPAM_WINDOW_SEC,
-            "spa_path": spa,
-            "last_method": m,
-            "api_path": ap,
-            "referer_hint": _referer_page_hint(ref),
-            "api_area_hint": _api_area_hint(ap),
-        }
-        await flag_user_suspicious(
-            db,
-            user_id,
-            username,
-            "page_visit_spam",
-            f"{count} requests in {PAGE_SPAM_WINDOW_SEC}s on same page (limit {PAGE_SPAM_MAX_REQUESTS}).",
-            details,
-        )
-        return True
+    """Phase 0: page-visit sliding window removed."""
     return False
 
 
 async def check_duplicate_request(user_id: str, path: str, params_hash: str, db, username: str) -> bool:
-    """Detect duplicate requests within configurable window (200-500ms) to reduce false positives from double-clicks."""
-    if not DETECT_DUPLICATE_REQUESTS:
-        return False
-    if _is_auto_rank_control_path(path):
-        return False
-
-    window_sec = DUPLICATE_REQUEST_WINDOW_MS / 1000.0
-    now = datetime.now(timezone.utc)
-    key = f"{user_id}_{path}_{params_hash}"
-
-    # Check if same request was made within the window
-    if key in user_action_counts and user_action_counts[key]:
-        last_request = user_action_counts[key][-1]
-        if (now - last_request).total_seconds() < window_sec:
-            await flag_user_suspicious(
-                db, user_id, username,
-                "duplicate_request",
-                f"Duplicate request within {DUPLICATE_REQUEST_WINDOW_MS}ms: {path}",
-                {"path": path, "interval_ms": int((now - last_request).total_seconds() * 1000)}
-            )
-            return True
-
-    # Clean old timestamps (keep only last 2 seconds)
-    cutoff = now - timedelta(seconds=2)
-    user_action_counts[key] = [ts for ts in user_action_counts.get(key, []) if ts > cutoff]
-    user_action_counts[key].append(now)
-
+    """Phase 0: duplicate POST window removed from HTTP pipeline (DETECT_DUPLICATE_REQUESTS ignored)."""
     return False
 
 
@@ -941,180 +540,10 @@ def validate_positive_int(value: Any, field_name: str, max_value: int = None) ->
         raise ValueError(f"Invalid {field_name}: {e}")
 
 
-# ====== CONFIGURABLE RATE LIMITING PER ENDPOINT (SPEED / CLICKS) ======
-
-# GLOBAL TOGGLE - When False, ALL rate limits are bypassed regardless of per-endpoint settings
+# ====== Phase 0: per-endpoint rate limiting removed (empty registry) ======
 GLOBAL_RATE_LIMITS_ENABLED = False
 
-# Token bucket + strict inter-arrival sustain + hard cooldown (endpoint RL; see security_middleware).
-# docs/RATE_LIMITS.md
-ENDPOINT_RL_BURST_TOKENS = 35
-ENDPOINT_RL_SUSTAIN_WINDOW_SEC = 30
-ENDPOINT_RL_SUSTAIN_MIN_SPAN_SEC = 26
-ENDPOINT_RL_SUSTAIN_MIN_COUNT = 100
-ENDPOINT_RL_HARD_COOLDOWN_MIN_SEC = 15
-ENDPOINT_RL_HARD_COOLDOWN_MAX_SEC = 30
-ENDPOINT_RL_DB_ATTEMPTS = 5
-
-# Rate limit configuration: endpoint_pattern -> (min_interval_seconds, enabled)
-# Default interval 0.3s (300ms) for all patterns when enabled; toggles stay False until admin enables.
-RATE_LIMIT_CONFIG = {
-    # Format: "endpoint_pattern": (min_interval_sec, enabled)
-    # NOTE: Paths must include /api/ prefix to match actual request paths
-
-    # Entertainer forum games — synthetic paths (handlers pass these to check_endpoint_rate_limit only).
-    # Enabled + ignore_global_toggle so limits apply even when GLOBAL_RATE_LIMITS_ENABLED is false (same idea as jail bust).
-    "/api/forum-entertainer-rl/join": (1.5, True),
-    "/api/forum-entertainer-rl/guess": (0.4, True),
-    "/api/forum-entertainer-rl/roll": (1.2, True),
-    "/api/forum-entertainer-rl/find-word-claim": (2.0, True),
-
-    # Money & economy
-    "/api/bank/transfer": (0.3, False),
-    "/api/bank/interest/deposit": (0.3, False),
-    "/api/bank/interest/claim": (0.3, False),
-    "/api/bank/swiss/deposit": (0.3, False),
-    "/api/bank/swiss/withdraw": (0.3, False),
-
-    # Attack system
-    "/api/attack/": (0.3, False),
-
-    # Crimes
-    "/api/crimes/": (0.3, False),
-
-    # Hitlist (all mutating paths under /api/hitlist/)
-    "/api/hitlist/": (0.3, False),
-
-    # Store purchases
-    "/api/store/": (0.3, False),
-    "/api/weapons/": (0.3, False),
-    "/api/armour/": (0.3, False),
-
-    # Properties & racket
-    "/api/properties/": (0.3, False),
-    "/api/racket/": (0.3, False),
-
-    # Bodyguards
-    "/api/bodyguards/": (0.3, False),
-
-    # Casino/gambling
-    "/api/casino/dice/": (0.3, False),
-    "/api/casino/roulette/": (0.3, False),
-    "/api/casino/blackjack/": (0.3, False),
-    "/api/casino/slots/": (0.3, False),
-    "/api/casino/videopoker/": (0.3, False),
-    "/api/casino/mdg/": (0.3, False),
-    "/api/casino/mp-poker/": (0.3, False),
-    "/api/casino/mp-blackjack/": (0.3, False),
-    "/api/casino/horseracing/": (0.3, False),
-    "/api/casino/mp-8ball/": (0.3, False),
-    "/api/sports-betting/": (0.3, False),
-
-    # Minigames & activities
-    "/api/loot-box/": (0.3, False),
-    "/api/crack-safe/": (0.3, False),
-    # Jail: exact paths before /api/jail/ prefix so list/bust have their own admin toggles.
-    "/api/jail/players": (0.3, False),  # GET list; route calls check_endpoint_rate_limit like bust
-    "/api/jail/bust": (0.3, False),  # off by default; jail route calls RL when admin enables this row
-    "/api/jail/": (0.3, False),
-    "/api/gta/": (0.3, False),
-    "/api/entertainer/": (0.3, False),
-    "/api/gauntlet/": (0.3, False),
-    "/api/minigames/run-session/start": (0.3, False),
-    "/api/minigames/": (0.3, False),
-    "/api/boxing/": (0.3, False),
-    "/api/snake/": (0.3, False),
-    "/api/shooting-range/train": (0.3, False),
-    "/api/shooting-range/score": (0.3, False),
-    "/api/whack-a-copper/": (0.3, False),
-
-    # Travel & Booze Run (/api/travel exact + /api/travel/* e.g. buy-airmiles)
-    "/api/travel": (0.3, False),
-    "/api/travel/": (0.3, False),
-    "/api/booze-run/": (0.3, False),
-
-    # Families (POST /api/families create is exact path, no trailing slash)
-    "/api/families/attack-racket": (0.3, False),
-    "/api/families/": (0.3, False),
-    "/api/families": (0.3, False),
-
-    # Notifications (bulk DELETE /api/notifications + subpaths)
-    "/api/notifications": (0.3, False),
-    "/api/notifications/": (0.3, False),
-
-    # Admin endpoints
-    "/api/admin/": (0.3, False),
-
-    # Auth & profile
-    "/api/auth/login": (0.3, False),
-    "/api/auth/register": (0.3, False),
-    "/api/auth/me": (0.3, False),
-    # Auth router: redeem, locked flow, civilian protection (not under /api/auth/)
-    "/api/account/": (0.3, False),
-    "/api/account-locked": (0.3, False),
-    "/api/account-locked-reply": (0.3, False),
-
-    # Meta & read-only
-    "/api/meta/": (0.3, False),
-    "/api/users/": (0.3, False),
-    "/api/leaderboard/": (0.3, False),
-
-    # Daily rewards & misc
-    "/api/daily-rewards/": (0.3, False),
-    "/api/prestige/": (0.3, False),
-
-    # Communication
-    "/api/game-chat/": (0.3, False),
-    "/api/help-desk/": (0.3, False),
-
-    # Economy
-    "/api/stock-market/": (0.3, False),
-
-    # Activities
-    "/api/oc/": (0.3, False),
-    "/api/organised-crime/": (0.3, False),
-    "/api/inventory/": (0.3, False),
-    "/api/profile/": (0.3, False),
-
-    # Racing, trading, missions, forum (incl. designer auctions & competitions)
-    "/api/racing/": (0.3, False),
-    "/api/trade/": (0.3, False),
-    "/api/illegal-business/": (0.3, False),
-    "/api/illegal-business": (0.3, False),
-    "/api/lottery/": (0.3, False),
-    "/api/forum/": (0.3, False),
-    "/api/bullet-factory/": (0.3, False),
-    "/api/airports/": (0.3, False),
-    "/api/grave-robber/": (0.3, False),
-    "/api/witness-statements/": (0.3, False),
-    "/api/missions/": (0.3, False),
-    "/api/objectives/": (0.3, False),
-    "/api/payments/": (0.3, False),
-    "/api/webhook/": (0.3, False),
-    "/api/family-run/": (0.3, False),
-    "/api/auto-rank/": (0.3, False),
-    "/api/states/": (0.3, False),
-    "/api/stats/": (0.3, False),
-    "/api/death/": (0.3, False),
-    "/api/dead-alive/": (0.3, False),
-    "/api/image-host/": (0.3, False),
-    "/api/minesweeper/": (0.3, False),
-    "/api/battleships/": (0.3, False),
-    "/api/the-getaway/": (0.3, False),
-    "/api/mafia-rpg/": (0.3, False),
-}
-
-# Keys allowed through check_endpoint_rate_limit(..., ignore_global_toggle=True) when GLOBAL_RATE_LIMITS_ENABLED is false.
-_RL_FORCE_KEYS_WHEN_GLOBAL_RATE_LIMITS_OFF = frozenset(
-    {
-        "/api/jail/players",
-        "/api/jail/bust",
-        "/api/forum-entertainer-rl/join",
-        "/api/forum-entertainer-rl/guess",
-        "/api/forum-entertainer-rl/roll",
-        "/api/forum-entertainer-rl/find-word-claim",
-    }
-)
+RATE_LIMIT_CONFIG: Dict[str, Tuple[float, bool]] = {}
 
 
 def iter_rate_limit_config_sorted() -> List[Tuple[str, Tuple[float, bool]]]:
@@ -1122,33 +551,13 @@ def iter_rate_limit_config_sorted() -> List[Tuple[str, Tuple[float, bool]]]:
     return sorted(RATE_LIMIT_CONFIG.items(), key=lambda x: x[0])
 
 
-# In-memory token bucket when DB path fails: (user_id, endpoint_key) -> {"tokens": float, "last_refill": datetime}
-endpoint_rl_bucket_memory: Dict[tuple, dict] = {}
-
-
 @dataclass
 class EndpointRateLimitOutcome:
-    """Endpoint RL: blocked + cooldown_seconds. Only hard lockout (rate_limit_hard_until) returns blocked=True."""
+    """Legacy shape for callers; Phase 0 always allows."""
 
     blocked: bool = False
     cooldown_seconds: int = 0
     is_hard_cooldown_response: bool = False
-
-
-def _coerce_utc_dt(val: Any) -> Optional[datetime]:
-    if val is None:
-        return None
-    if isinstance(val, datetime):
-        if val.tzinfo is None:
-            return val.replace(tzinfo=timezone.utc)
-        return val.astimezone(timezone.utc)
-    try:
-        dt = datetime.fromisoformat(str(val).replace("Z", "+00:00"))
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(timezone.utc)
-    except Exception:
-        return None
 
 
 def get_rate_limit_for_path(path: str) -> tuple[float, bool, str]:
@@ -1165,282 +574,22 @@ def get_rate_limit_for_path(path: str) -> tuple[float, bool, str]:
     return (1.0, False, path)
 
 
-async def _endpoint_rl_memory_consume(
-    db,
-    user_id: str,
-    username: str,
-    path: str,
-    key: str,
-    min_interval_sec: float,
-    now: datetime,
-) -> EndpointRateLimitOutcome:
-    """In-memory token bucket + inter-arrival metering. Empty bucket does not 429; sustain violations still feed hard lockout."""
-    mem_key = (user_id, key)
-    cap = float(ENDPOINT_RL_BURST_TOKENS)
-    st = endpoint_rl_bucket_memory.get(mem_key)
-    if not st:
-        endpoint_rl_bucket_memory[mem_key] = {"tokens": cap - 1.0, "last_refill": now, "last_arrival_at": now}
-        return EndpointRateLimitOutcome()
-    prev = st.get("last_arrival_at")
-    if prev and getattr(prev, "tzinfo", None) is None:
-        prev = prev.replace(tzinfo=timezone.utc)
-    if prev and min_interval_sec > 0 and (now - prev).total_seconds() < min_interval_sec and db is not None:
-        armed = await _endpoint_rl_record_violation_and_maybe_arm_hard(db, user_id, username, path, key, now)
-        if armed:
-            st["last_arrival_at"] = now
-            urow = await db.users.find_one({"id": user_id}, {"rate_limit_hard_until": 1})
-            hu = _coerce_utc_dt((urow or {}).get("rate_limit_hard_until"))
-            if hu and now < hu:
-                cd = max(1, int(math.ceil((hu - now).total_seconds())))
-                return EndpointRateLimitOutcome(blocked=True, cooldown_seconds=cd, is_hard_cooldown_response=True)
-    last_refill = st["last_refill"]
-    if getattr(last_refill, "tzinfo", None) is None:
-        last_refill = last_refill.replace(tzinfo=timezone.utc)
-    tokens = float(st.get("tokens", cap))
-    elapsed = (now - last_refill).total_seconds()
-    if min_interval_sec > 0:
-        tokens = min(cap, tokens + elapsed / min_interval_sec)
-    else:
-        tokens = cap
-    if tokens >= 1.0:
-        st["tokens"] = tokens - 1.0
-        st["last_refill"] = now
-        st["last_arrival_at"] = now
-        return EndpointRateLimitOutcome()
-    st["last_arrival_at"] = now
-    if db is not None:
-        urow = await db.users.find_one({"id": user_id}, {"rate_limit_hard_until": 1})
-        hu = _coerce_utc_dt((urow or {}).get("rate_limit_hard_until"))
-        if hu and now < hu:
-            cd = max(1, int(math.ceil((hu - now).total_seconds())))
-            return EndpointRateLimitOutcome(blocked=True, cooldown_seconds=cd, is_hard_cooldown_response=True)
-    return EndpointRateLimitOutcome()
-
-
-async def _endpoint_rl_record_violation_and_maybe_arm_hard(
-    db, user_id: str, username: str, path: str, key: str, now: datetime
-) -> bool:
-    """Record a sub-interval (too-fast) hit; return True if a new hard cooldown was applied."""
-    if db is None:
-        return False
-    try:
-        await db.endpoint_rl_violations.insert_one({"user_id": user_id, "at": now})
-    except Exception as e:
-        logger.warning("endpoint_rl_violations insert: %s", e)
-        return False
-    cutoff = now - timedelta(seconds=ENDPOINT_RL_SUSTAIN_WINDOW_SEC)
-    q = {"user_id": user_id, "at": {"$gte": cutoff}}
-    try:
-        vcount = await db.endpoint_rl_violations.count_documents(q)
-    except Exception as e:
-        logger.warning("endpoint_rl_violations count: %s", e)
-        return False
-    if vcount < ENDPOINT_RL_SUSTAIN_MIN_COUNT:
-        return False
-    try:
-        first_doc = await db.endpoint_rl_violations.find_one(q, sort=[("at", 1)])
-        last_doc = await db.endpoint_rl_violations.find_one(q, sort=[("at", -1)])
-    except Exception as e:
-        logger.warning("endpoint_rl_violations first/last: %s", e)
-        return False
-    if not first_doc or not last_doc:
-        return False
-    first_at = _coerce_utc_dt(first_doc.get("at")) or now
-    last_at = _coerce_utc_dt(last_doc.get("at")) or now
-    span = (last_at - first_at).total_seconds()
-    if span < ENDPOINT_RL_SUSTAIN_MIN_SPAN_SEC:
-        return False
-    try:
-        u = await db.users.find_one({"id": user_id}, {"rate_limit_hard_until": 1})
-        hu = _coerce_utc_dt((u or {}).get("rate_limit_hard_until"))
-        if hu and now < hu:
-            return False
-    except Exception:
-        pass
-    secs = random.randint(ENDPOINT_RL_HARD_COOLDOWN_MIN_SEC, ENDPOINT_RL_HARD_COOLDOWN_MAX_SEC)
-    until = now + timedelta(seconds=secs)
-    try:
-        await db.users.update_one({"id": user_id}, {"$set": {"rate_limit_hard_until": until.isoformat()}})
-        await flag_user_suspicious(
-            db,
-            user_id,
-            username,
-            "endpoint_rate_limit_hard",
-            (
-                f"Sustained endpoint rate abuse ({vcount} hits in {ENDPOINT_RL_SUSTAIN_WINDOW_SEC}s, "
-                f"span {span:.0f}s): hard cooldown {secs}s on {path}"
-            ),
-            {"path": path, "endpoint_key": key, "cooldown_seconds": secs, "violation_count": vcount},
-        )
-    except Exception as e:
-        logger.warning("arm hard endpoint RL: %s", e)
-        return False
-    return True
-
-
-async def _endpoint_rl_consume_db(
-    db, user_id: str, username: str, path: str, key: str, min_interval_sec: float, now: datetime
-) -> EndpointRateLimitOutcome:
-    cap = float(ENDPOINT_RL_BURST_TOKENS)
-    for _attempt in range(ENDPOINT_RL_DB_ATTEMPTS):
-        doc = await db.rate_limit_clicks.find_one({"user_id": user_id, "endpoint_key": key})
-        if doc is None:
-            try:
-                await db.rate_limit_clicks.insert_one(
-                    {
-                        "user_id": user_id,
-                        "endpoint_key": key,
-                        "last_at": now,
-                        "last_refill": now,
-                        "last_arrival_at": now,
-                        "tokens": cap - 1.0,
-                    }
-                )
-                return EndpointRateLimitOutcome()
-            except DuplicateKeyError:
-                continue
-
-        prev = _coerce_utc_dt(doc.get("last_arrival_at")) or _coerce_utc_dt(doc.get("last_at"))
-        if prev and min_interval_sec > 0 and (now - prev).total_seconds() < min_interval_sec:
-            armed = await _endpoint_rl_record_violation_and_maybe_arm_hard(db, user_id, username, path, key, now)
-            if armed:
-                await db.rate_limit_clicks.update_one(
-                    {"_id": doc["_id"]},
-                    {"$set": {"last_arrival_at": now, "last_at": now, "user_id": user_id, "endpoint_key": key}},
-                )
-                urow = await db.users.find_one({"id": user_id}, {"rate_limit_hard_until": 1})
-                hu = _coerce_utc_dt((urow or {}).get("rate_limit_hard_until"))
-                if hu and now < hu:
-                    cd = max(1, int(math.ceil((hu - now).total_seconds())))
-                    return EndpointRateLimitOutcome(blocked=True, cooldown_seconds=cd, is_hard_cooldown_response=True)
-
-        last_refill = _coerce_utc_dt(doc.get("last_refill")) or _coerce_utc_dt(doc.get("last_at")) or now
-        if doc.get("tokens") is None:
-            tokens = cap
-        else:
-            tokens = float(doc["tokens"])
-        elapsed = (now - last_refill).total_seconds()
-        if min_interval_sec > 0:
-            tokens = min(cap, tokens + elapsed / min_interval_sec)
-        else:
-            tokens = cap
-        if tokens >= 1.0:
-            new_tokens = tokens - 1.0
-            res = await db.rate_limit_clicks.update_one(
-                {"_id": doc["_id"]},
-                {
-                    "$set": {
-                        "tokens": new_tokens,
-                        "last_refill": now,
-                        "last_at": now,
-                        "last_arrival_at": now,
-                        "user_id": user_id,
-                        "endpoint_key": key,
-                    }
-                },
-            )
-            if res.modified_count == 1:
-                return EndpointRateLimitOutcome()
-            continue
-
-        await db.rate_limit_clicks.update_one(
-            {"_id": doc["_id"]},
-            {"$set": {"last_arrival_at": now, "last_at": now, "user_id": user_id, "endpoint_key": key}},
-        )
-        urow = await db.users.find_one({"id": user_id}, {"rate_limit_hard_until": 1})
-        hu = _coerce_utc_dt((urow or {}).get("rate_limit_hard_until"))
-        if hu and now < hu:
-            cd = max(1, int(math.ceil((hu - now).total_seconds())))
-            return EndpointRateLimitOutcome(blocked=True, cooldown_seconds=cd, is_hard_cooldown_response=True)
-        return EndpointRateLimitOutcome()
-
-    return await _endpoint_rl_memory_consume(db, user_id, username, path, key, min_interval_sec, now)
-
-
 async def check_endpoint_rate_limit(
     path: str, user_id: str, username: str, db, *, ignore_global_toggle: bool = False
 ) -> EndpointRateLimitOutcome:
-    """
-    Per-endpoint token-bucket metering (DB-backed). Sub-interval arrivals feed sustain violations.
-    Empty bucket allows the request; only active hard lockout (rate_limit_hard_until) returns HTTP block from this layer.
-    When ignore_global_toggle is True, selected patterns may still rate-limit while GLOBAL_RATE_LIMITS_ENABLED is off (jail bust, entertainer forum game actions).
-    """
-    min_interval_sec, enabled, key = get_rate_limit_for_path(path)
-    if not enabled or min_interval_sec <= 0:
-        return EndpointRateLimitOutcome()
-    if not GLOBAL_RATE_LIMITS_ENABLED:
-        if not (ignore_global_toggle and key in _RL_FORCE_KEYS_WHEN_GLOBAL_RATE_LIMITS_OFF):
-            return EndpointRateLimitOutcome()
-
-    now = datetime.now(timezone.utc)
-
-    if db is not None:
-        try:
-            urow = await db.users.find_one({"id": user_id}, {"rate_limit_hard_until": 1})
-            hu = _coerce_utc_dt((urow or {}).get("rate_limit_hard_until"))
-            if hu and now < hu:
-                cd = max(1, int(math.ceil((hu - now).total_seconds())))
-                return EndpointRateLimitOutcome(blocked=True, cooldown_seconds=cd, is_hard_cooldown_response=True)
-            if hu and now >= hu:
-                await db.users.update_one({"id": user_id}, {"$unset": {"rate_limit_hard_until": ""}})
-        except Exception as e:
-            logger.warning("rate_limit_hard_until check: %s", e)
-
-    if db is not None:
-        try:
-            return await _endpoint_rl_consume_db(db, user_id, username, path, key, min_interval_sec, now)
-        except Exception as e:
-            logger.warning("Rate limit DB check failed, falling back to in-memory: %s", e)
-
-    return await _endpoint_rl_memory_consume(db, user_id, username, path, key, min_interval_sec, now)
+    """Phase 0: no endpoint throttling (legacy callers may still await this)."""
+    _ = path, user_id, username, db, ignore_global_toggle
+    return EndpointRateLimitOutcome()
 
 
-# Middleware helper for FastAPI
 async def security_check_request(request, db, current_user: Dict = None):
-    """
-    Main security check for incoming requests.
-    Call this from middleware or route dependencies.
-    Returns True if request should be blocked.
-    """
-    if not current_user:
-        return False  # Skip checks for unauthenticated requests
-    
-    user_id = current_user.get("id")
-    username = current_user.get("username", "Unknown")
-    path = request.url.path
-    
-    # Check endpoint-specific rate limit
-    rl = await check_endpoint_rate_limit(path, user_id, username, db)
-    if rl.blocked:
-        return True  # Block request
-    
-    return False  # Allow request
+    """Phase 0: do not block (IP bans handled in SecurityMiddleware)."""
+    return False
 
-
-# FastAPI dependency for rate limiting
-from fastapi import HTTPException as FastAPIHTTPException
 
 async def rate_limit_dependency(request, current_user: Dict, db):
-    """
-    FastAPI dependency that enforces rate limiting.
-    Add this to any endpoint with: Depends(rate_limit_dependency)
-    
-    Usage example:
-    @app.get("/some-endpoint")
-    async def my_endpoint(
-        current_user: dict = Depends(get_current_user),
-        _rate_limit: None = Depends(rate_limit_dependency)
-    ):
-        # Your endpoint code here
-    """
-    user_id = current_user.get("id")
-    username = current_user.get("username", "Unknown")
-    path = request.url.path
-    
-    rl = await check_endpoint_rate_limit(path, user_id, username, db)
-    if rl.blocked:
-        detail = f"Too many repeated rate limits. Please wait {rl.cooldown_seconds} seconds."
-        raise FastAPIHTTPException(status_code=429, detail=detail)
+    """Phase 0: no-op for optional Depends() sites."""
+    return None
 
 
 # ============================================================================
@@ -1504,11 +653,6 @@ async def get_security_summary(db, limit: int = 100, flag_type: str = None) -> d
         "recent_flags": flags,
         "telegram_enabled": TELEGRAM_ENABLED,
         "telegram_configured": bool(TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID),
-        "rate_limit_config": {
-            path: {"min_interval_ms": round(interval * 1000, 1), "enabled": enabled}
-            for path, (interval, enabled) in iter_rate_limit_config_sorted()
-        },
-        "rate_limit_pattern_count": len(RATE_LIMIT_CONFIG),
     }
 
 
