@@ -1012,6 +1012,8 @@ RATE_LIMIT_CONFIG = {
     # Minigames & activities
     "/api/loot-box/": (0.3, False),
     "/api/crack-safe/": (0.3, False),
+    # Jail: exact paths before /api/jail/ prefix so list/bust have their own admin toggles.
+    "/api/jail/players": (0.3, False),  # GET list; route calls check_endpoint_rate_limit like bust
     "/api/jail/bust": (0.3, False),  # off by default; jail route calls RL when admin enables this row
     "/api/jail/": (0.3, False),
     "/api/gta/": (0.3, False),
@@ -1104,6 +1106,7 @@ RATE_LIMIT_CONFIG = {
 # Keys allowed through check_endpoint_rate_limit(..., ignore_global_toggle=True) when GLOBAL_RATE_LIMITS_ENABLED is false.
 _RL_FORCE_KEYS_WHEN_GLOBAL_RATE_LIMITS_OFF = frozenset(
     {
+        "/api/jail/players",
         "/api/jail/bust",
         "/api/forum-entertainer-rl/join",
         "/api/forum-entertainer-rl/guess",

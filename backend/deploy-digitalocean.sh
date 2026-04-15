@@ -105,7 +105,7 @@ Type=simple
 User=$CURRENT_USER
 WorkingDirectory=$BACKEND_PATH
 Environment="PATH=$BACKEND_PATH/venv/bin"
-ExecStart=$BACKEND_PATH/venv/bin/uvicorn server:app --host 127.0.0.1 --port 8000 --workers 2
+ExecStart=$BACKEND_PATH/venv/bin/uvicorn server:app --host 127.0.0.1 --port 8000 --workers 2 --no-access-log
 Restart=always
 RestartSec=10
 StandardOutput=append:/home/$CURRENT_USER/mafia-backend.log

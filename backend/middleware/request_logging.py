@@ -9,6 +9,12 @@ from jose import jwt, JWTError
 logger = logging.getLogger("http")
 
 REQUEST_LOGGING_ENABLED = (os.environ.get("REQUEST_LOGGING_ENABLED") or "1").strip().lower() in ("1", "true", "yes")
+# When true, only log HTTP status >= 400 (much quieter under steady traffic).
+REQUEST_LOGGING_ERRORS_ONLY = (os.environ.get("REQUEST_LOGGING_ERRORS_ONLY") or "").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 _SKIP_PATHS = {
     "/",
@@ -23,6 +29,7 @@ _SKIP_PREFIXES = [
     "/api/auto-rank/cron",
     "/api/auto-rank/cron-bust",
     "/api/sports-betting/cron",
+    "/api/admin/toast-events/ingest",
     "/static",
     "/health",
 ]
@@ -69,6 +76,9 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         user_id, username = _extract_user_from_request(request)
         user_label = username if username else (user_id if user_id else "anonymous")
         status = response.status_code
+
+        if REQUEST_LOGGING_ERRORS_ONLY and int(status) < 400:
+            return response
 
         # One compact line: METHOD path status user (avoid duplicating uvicorn access log wording).
         logger.info("%s %s %d %s", method, path, status, user_label)

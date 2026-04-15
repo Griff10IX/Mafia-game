@@ -2854,6 +2854,15 @@ except ImportError:
 _REQ_LOG_ENABLED = (os.environ.get("REQUEST_LOGGING_ENABLED") or "1").strip().lower() in ("1", "true", "yes")
 _UVICORN_ACCESS_LOG_ENABLED = (os.environ.get("UVICORN_ACCESS_LOG") or "").strip().lower() in ("1", "true", "yes")
 
+
+def _dedupe_uvicorn_access_log():
+    """Drop uvicorn's default access line when our compact RequestLoggingMiddleware is on."""
+    if not _request_logging_middleware_installed or not _REQ_LOG_ENABLED or _UVICORN_ACCESS_LOG_ENABLED:
+        return
+    acc = logging.getLogger("uvicorn.access")
+    acc.setLevel(logging.WARNING)
+    acc.disabled = True
+
 app.add_middleware(OPTIONSResponder)
 app.add_middleware(
     CORSMiddleware,
@@ -2871,7 +2880,8 @@ log_dir.mkdir(exist_ok=True)
 
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
     handlers=[
         # Console output
         logging.StreamHandler(),
@@ -2889,12 +2899,12 @@ logging.basicConfig(
 logging.getLogger("httpx").setLevel(logging.WARNING)
 logging.getLogger("httpcore").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
+_dedupe_uvicorn_access_log()
 
 @app.on_event("startup")
 async def startup_db():
     # After uvicorn attaches loggers: avoid double line per request (middleware + uvicorn.access).
-    if _request_logging_middleware_installed and _REQ_LOG_ENABLED and not _UVICORN_ACCESS_LOG_ENABLED:
-        logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    _dedupe_uvicorn_access_log()
     await init_game_data()
     # Load persisted car value overrides (exclusive cars edited via admin)
     try:

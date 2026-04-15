@@ -899,10 +899,11 @@ export default function Layout({ children }) {
       const crimesPromise = crimesPrefetchData != null
         ? Promise.resolve({ data: crimesPrefetchData })
         : api.get('/crimes');
+      const onJailPage = location.pathname === '/crime/jail';
       const settled = await Promise.allSettled([
         crimesPromise,
         api.get('/gta/options'),
-        api.get('/jail/players'),
+        onJailPage ? Promise.resolve({ data: null }) : api.get('/jail/players'),
         api.get('/gta/exclusive-pool-status'),
         api.get('/sports-betting/events'),
       ]);
@@ -912,8 +913,14 @@ export default function Layout({ children }) {
       const now = new Date();
       const crimesAvailable = crimesRes && Array.isArray(crimesRes.data) ? crimesRes.data.filter((c) => c?.can_commit).length : 0;
       const gtaAvailable = gtaRes && Array.isArray(gtaRes.data) ? gtaRes.data.filter((o) => { if (!o?.unlocked) return false; if (!o?.cooldown_until) return true; const t = new Date(o.cooldown_until); return !Number.isNaN(t.getTime()) && t <= now; }).length : 0;
-      const jailCount = jailPlayersRes && Array.isArray(jailPlayersRes.data?.players) ? jailPlayersRes.data.players.length : 0;
-      setRankingCounts({ crimes: crimesAvailable, gta: gtaAvailable, jail: jailCount });
+      const jailCount = onJailPage
+        ? undefined
+        : (jailPlayersRes && Array.isArray(jailPlayersRes.data?.players) ? jailPlayersRes.data.players.length : 0);
+      setRankingCounts((prev) => ({
+        crimes: crimesAvailable,
+        gta: gtaAvailable,
+        jail: jailCount === undefined ? prev.jail : jailCount,
+      }));
       if (settled[4].status === 'fulfilled') {
         const ev = settled[4].value?.data?.events;
         setSportsBettingEventCount(Array.isArray(ev) ? ev.length : 0);

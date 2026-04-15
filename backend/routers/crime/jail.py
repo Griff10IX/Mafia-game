@@ -370,6 +370,23 @@ async def _private_cell_meta(user_id: str) -> dict:
 
 
 async def get_jailed_players(current_user: dict = Depends(get_current_user)):
+    rl = await check_endpoint_rate_limit(
+        "/api/jail/players",
+        current_user["id"],
+        current_user.get("username") or "?",
+        db,
+        ignore_global_toggle=True,
+    )
+    if rl.blocked:
+        return JSONResponse(
+            status_code=429,
+            content={
+                "detail": f"Too many repeated rate limits. Please wait {rl.cooldown_seconds} seconds.",
+                "is_cooldown": True,
+                "cooldown_seconds": rl.cooldown_seconds,
+                "endpoint_rate_limit_hard": bool(rl.is_hard_cooldown_response),
+            },
+        )
     now = datetime.now(timezone.utc)
     five_min_ago = now - timedelta(minutes=5)
     ten_min_ago = now - timedelta(minutes=10)
