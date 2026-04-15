@@ -12,7 +12,6 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from server import db, get_current_user, get_current_user_verified, send_notification, send_notification_to_all, _is_admin, CARS
-from middleware.security import check_endpoint_rate_limit
 from routers.kill.armoury import TOKEN_TYPES, TOKEN_CONFIG
 from utils.point_provenance import log_points_event
 
@@ -27,6 +26,8 @@ _RL_ENTERTAINER_FIND_WORD_CLAIM = "/api/forum-entertainer-rl/find-word-claim"
 
 
 async def _entertainer_rl_or_raise(rl_path: str, user_id: str, username: str) -> None:
+    from middleware.security import check_endpoint_rate_limit
+
     rl = await check_endpoint_rate_limit(
         rl_path,
         user_id,
