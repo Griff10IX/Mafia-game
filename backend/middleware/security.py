@@ -1005,7 +1005,7 @@ RATE_LIMIT_CONFIG = {
     # Minigames & activities
     "/api/loot-box/": (0.3, False),
     "/api/crack-safe/": (0.3, False),
-    "/api/jail/bust": (0.3, False),
+    "/api/jail/bust": (0.3, False),  # off by default; jail route calls RL when admin enables this row
     "/api/jail/": (0.3, False),
     "/api/gta/": (0.3, False),
     "/api/entertainer/": (0.3, False),
@@ -1335,17 +1335,20 @@ async def _endpoint_rl_consume_db(
     return await _endpoint_rl_memory_consume(db, user_id, username, path, key, min_interval_sec, now)
 
 
-async def check_endpoint_rate_limit(path: str, user_id: str, username: str, db) -> EndpointRateLimitOutcome:
+async def check_endpoint_rate_limit(
+    path: str, user_id: str, username: str, db, *, ignore_global_toggle: bool = False
+) -> EndpointRateLimitOutcome:
     """
     Per-endpoint token-bucket metering (DB-backed). Sub-interval arrivals feed sustain violations.
     Empty bucket allows the request; only active hard lockout (rate_limit_hard_until) returns HTTP block from this layer.
+    When ignore_global_toggle is True, only the /api/jail/bust pattern may run while GLOBAL_RATE_LIMITS_ENABLED is off.
     """
-    if not GLOBAL_RATE_LIMITS_ENABLED:
-        return EndpointRateLimitOutcome()
-
     min_interval_sec, enabled, key = get_rate_limit_for_path(path)
     if not enabled or min_interval_sec <= 0:
         return EndpointRateLimitOutcome()
+    if not GLOBAL_RATE_LIMITS_ENABLED:
+        if not (ignore_global_toggle and key == "/api/jail/bust"):
+            return EndpointRateLimitOutcome()
 
     now = datetime.now(timezone.utc)
 

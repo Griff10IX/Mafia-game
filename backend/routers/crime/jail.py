@@ -9,6 +9,7 @@ import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Tuple
 from fastapi import Depends, HTTPException
+from starlette.responses import JSONResponse
 from pydantic import BaseModel
 
 import sys
@@ -37,6 +38,8 @@ class SnitchRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+
+from middleware.security import check_endpoint_rate_limit
 
 from server import (
     db,
@@ -800,6 +803,23 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
 async def bust_out_of_jail(
     request: BustOutRequest, current_user: dict = Depends(get_current_user_verified)
 ):
+    rl = await check_endpoint_rate_limit(
+        "/api/jail/bust",
+        current_user["id"],
+        current_user.get("username") or "?",
+        db,
+        ignore_global_toggle=True,
+    )
+    if rl.blocked:
+        return JSONResponse(
+            status_code=429,
+            content={
+                "detail": f"Too many repeated rate limits. Please wait {rl.cooldown_seconds} seconds.",
+                "is_cooldown": True,
+                "cooldown_seconds": rl.cooldown_seconds,
+                "endpoint_rate_limit_hard": bool(rl.is_hard_cooldown_response),
+            },
+        )
     try:
         result = await _attempt_bust_impl(current_user, request.target_username or "")
     except Exception as e:

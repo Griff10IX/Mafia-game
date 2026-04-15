@@ -26,6 +26,7 @@ from server import (
 from routers.money.booze_run import BOOZE_TYPES
 from routers.kill.armoury import TOKEN_CONFIG
 from utils.missions_extended import build_missions, MISSION_RANDOM_TOKEN_TYPES
+from pymongo.errors import DuplicateKeyError
 import random
 
 # Single first mission: no districts/cities
@@ -930,14 +931,33 @@ async def run_daily_tribute_deposit():
     deposit_hour = int(doc.get("deposit_utc_hour") or TRIBUTE_DEPOSIT_UTC_HOUR) % 24 if doc else TRIBUTE_DEPOSIT_UTC_HOUR
     if now.hour != deposit_hour:
         return
-    # Atomic claim: only update last_run_utc_date if it is not already today (prevents double-pay on restart or multiple workers)
+    # Ensure row exists ($setOnInsert only). Do NOT upsert the "claim" update: when last_run_utc_date is already
+    # `today`, that filter matches zero docs and upsert would try to insert a second {id: tribute_deposit} → E11000.
+    try:
+        await db.game_config.update_one(
+            {"id": TRIBUTE_DEPOSIT_CONFIG_ID},
+            {
+                "$setOnInsert": {
+                    "id": TRIBUTE_DEPOSIT_CONFIG_ID,
+                    "deposit_utc_hour": TRIBUTE_DEPOSIT_UTC_HOUR,
+                }
+            },
+            upsert=True,
+        )
+    except DuplicateKeyError:
+        pass
+    # Atomic claim: only set last_run when not already today (no upsert — row guaranteed above).
     claim_filter = {
         "id": TRIBUTE_DEPOSIT_CONFIG_ID,
-        "$or": [{"last_run_utc_date": {"$ne": today}}, {"last_run_utc_date": {"$exists": False}}],
+        "$or": [
+            {"last_run_utc_date": {"$exists": False}},
+            {"last_run_utc_date": None},
+            {"last_run_utc_date": {"$ne": today}},
+        ],
     }
-    claim_result = await db.game_config.update_one(claim_filter, {"$set": {"last_run_utc_date": today}}, upsert=True)
-    if claim_result.modified_count == 0 and claim_result.upserted_id is None:
-        return  # already ran today
+    claim_result = await db.game_config.update_one(claim_filter, {"$set": {"last_run_utc_date": today}})
+    if claim_result.modified_count == 0:
+        return  # already ran today or lost a claim race
     # All daily rewards stack in tribute buckets until user collects (cash, bullets, respect, loot)
     result = await db.users.update_many(
         {},

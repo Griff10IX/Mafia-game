@@ -5,7 +5,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from jose import jwt, JWTError
 
-logger = logging.getLogger(__name__)
+# Short logger name so journald/console lines are easier to scan (not "middleware.request_logging").
+logger = logging.getLogger("http")
 
 REQUEST_LOGGING_ENABLED = (os.environ.get("REQUEST_LOGGING_ENABLED") or "1").strip().lower() in ("1", "true", "yes")
 
@@ -69,5 +70,6 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
         user_label = username if username else (user_id if user_id else "anonymous")
         status = response.status_code
 
-        logger.info("API %s %s %s | user=%s", method, path, status, user_label)
+        # One compact line: METHOD path status user (avoid duplicating uvicorn access log wording).
+        logger.info("%s %s %d %s", method, path, status, user_label)
         return response

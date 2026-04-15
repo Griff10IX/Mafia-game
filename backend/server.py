@@ -2841,11 +2841,18 @@ try:
 except ImportError:
     print("Warning: security_middleware.py not found - rate limiting disabled")
 
+_request_logging_middleware_installed = False
 try:
     from middleware.request_logging import RequestLoggingMiddleware
+
     app.add_middleware(RequestLoggingMiddleware)
+    _request_logging_middleware_installed = True
 except ImportError:
     pass
+
+# Read once for startup: dedupe uvicorn access vs RequestLoggingMiddleware
+_REQ_LOG_ENABLED = (os.environ.get("REQUEST_LOGGING_ENABLED") or "1").strip().lower() in ("1", "true", "yes")
+_UVICORN_ACCESS_LOG_ENABLED = (os.environ.get("UVICORN_ACCESS_LOG") or "").strip().lower() in ("1", "true", "yes")
 
 app.add_middleware(OPTIONSResponder)
 app.add_middleware(
@@ -2885,6 +2892,9 @@ logger = logging.getLogger(__name__)
 
 @app.on_event("startup")
 async def startup_db():
+    # After uvicorn attaches loggers: avoid double line per request (middleware + uvicorn.access).
+    if _request_logging_middleware_installed and _REQ_LOG_ENABLED and not _UVICORN_ACCESS_LOG_ENABLED:
+        logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     await init_game_data()
     # Load persisted car value overrides (exclusive cars edited via admin)
     try:
