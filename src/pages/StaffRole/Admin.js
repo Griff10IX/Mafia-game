@@ -47,12 +47,12 @@ const ADMIN_STYLES = `
     box-shadow: 0 0 20px rgba(var(--noir-primary-rgb), 0.06);
   }
   @media (max-width: 767px) {
-    /* Match Crimes / GTA: no extra horizontal padding here — Layout main p-4 + .mobile-panel negative margins handle full-bleed cards */
+    /* Do not use global .mobile-panel negative margins here: main has overflow-x-hidden and bleed clips the left edge of admin cards. */
     .admin-mobile-shell.mobile-page-root {
       padding-left: 0;
       padding-right: 0;
       overflow-x: hidden;
-      max-width: 100vw;
+      max-width: 100%;
       width: 100%;
       box-sizing: border-box;
     }
@@ -115,7 +115,7 @@ const ADMIN_STYLES = `
       gap: 6px !important;
     }
   }
-  /* Full-bleed mobile sidebar strip (uses global .mobile-panel margins); reset on md+ */
+  /* Sidebar width on md+; card bleed cancelled globally below */
   @media (min-width: 768px) {
     .admin-mobile-shell aside.admin-aside-nav.mobile-panel {
       margin-left: 0 !important;
@@ -123,6 +123,11 @@ const ADMIN_STYLES = `
       width: 220px;
       max-width: 220px;
     }
+  }
+  /* Global .mobile-panel uses negative L/R margins on small viewports; inside admin that paints past Layout main's overflow-x-hidden and clips the left edge of content. */
+  .admin-mobile-shell .mobile-panel {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
   }
   .admin-command-bar {
     border-bottom: 1px solid rgba(var(--noir-primary-rgb), 0.35);
