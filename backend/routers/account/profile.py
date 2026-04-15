@@ -86,6 +86,9 @@ def register(router):
     get_password_hash = srv.get_password_hash
     ADMIN_EMAILS = srv.ADMIN_EMAILS
     _staff_exclude_user_filter = srv._staff_exclude_user_filter
+    _user_excluded_from_stat_leaderboards = srv._user_excluded_from_stat_leaderboards
+    honours_stat_excluded_user_ids = srv.honours_stat_excluded_user_ids
+    user_has_admin_list_email = srv.user_has_admin_list_email
     PRESTIGE_CONFIGS = srv.PRESTIGE_CONFIGS
     AvatarUpdateRequest = srv.AvatarUpdateRequest
     ThemePreferencesRequest = srv.ThemePreferencesRequest
@@ -320,6 +323,13 @@ def register(router):
 
     async def _build_profile_honours(user: dict, is_dead: bool) -> list:
         """Honour ranks (expensive DB work); callable from full profile or GET .../profile/honours."""
+        if _user_excluded_from_stat_leaderboards(user):
+            return []
+
+        excluded_ids = await honours_stat_excluded_user_ids(db)
+        uid = user.get("id")
+        fresh = await db.users.find_one({"id": uid}, {"_id": 0, "password_hash": 0}) if uid else None
+        u = {**user, **(fresh or {})}
 
         def _honours_liveness_match(subject_dead: bool) -> dict:
             """Same alive/dead pool as GET /leaderboards/top (StatLeaderboard boards)."""
@@ -327,11 +337,17 @@ def register(router):
                 return {"is_dead": True, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
             return {"is_dead": {"$ne": True}, "is_bodyguard": {"$ne": True}, "is_npc": {"$ne": True}}
 
+        def _honours_base_q(subject_dead: bool) -> dict:
+            q = _honours_liveness_match(subject_dead)
+            q.update(_staff_exclude_user_filter())
+            if excluded_ids:
+                q["id"] = {"$nin": excluded_ids}
+            return q
+
         async def _rank_for_field(field: str, value: int, *, subject_dead: bool) -> int:
             if value is None:
                 value = 0
-            q = _honours_liveness_match(subject_dead)
-            q.update(_staff_exclude_user_filter())
+            q = _honours_base_q(subject_dead)
             q[field] = {"$gt": value}
             n_better = await db.users.count_documents(q)
             return n_better + 1
@@ -340,8 +356,7 @@ def register(router):
             """Same ordering as GET /leaderboards/top all-time kills (effective kills, not raw total_kills)."""
             if effective_value is None:
                 effective_value = 0
-            q = _honours_liveness_match(subject_dead)
-            q.update(_staff_exclude_user_filter())
+            q = _honours_base_q(subject_dead)
             ev = int(effective_value)
             pipeline = [
                 {"$match": q},
@@ -357,8 +372,7 @@ def register(router):
             """Same pipeline fields as leaderboard rank_points board: _lb_total_rp then $gt; pool matches /leaderboards/top."""
             if total_value is None:
                 total_value = 0
-            q = _honours_liveness_match(subject_dead)
-            q.update(_staff_exclude_user_filter())
+            q = _honours_base_q(subject_dead)
             tv = int(total_value)
             pipeline = [
                 {"$match": q},
@@ -379,17 +393,17 @@ def register(router):
             n_better = int(cur[0].get("n", 0)) if cur else 0
             return n_better + 1
 
-        eff_kills = effective_player_kill_count(user)
+        eff_kills = effective_player_kill_count(u)
         kills_rank, crimes_rank, gta_rank, jail_rank, rank_points_rank, points_spent_rank = await asyncio.gather(
             _rank_for_effective_kills(eff_kills, subject_dead=is_dead),
-            _rank_for_field("total_crimes", int(user.get("total_crimes") or 0), subject_dead=is_dead),
-            _rank_for_field("total_gta", int(user.get("total_gta") or 0), subject_dead=is_dead),
-            _rank_for_field("jail_busts", int(user.get("jail_busts") or 0), subject_dead=is_dead),
+            _rank_for_field("total_crimes", int(u.get("total_crimes") or 0), subject_dead=is_dead),
+            _rank_for_field("total_gta", int(u.get("total_gta") or 0), subject_dead=is_dead),
+            _rank_for_field("jail_busts", int(u.get("jail_busts") or 0), subject_dead=is_dead),
             _rank_for_total_rank_points_lifetime(
-                int(user.get("rank_points") or 0) + int(user.get("rank_xp_pass_prestige_carry_rp") or 0),
+                int(u.get("rank_points") or 0) + int(u.get("rank_xp_pass_prestige_carry_rp") or 0),
                 subject_dead=is_dead,
             ),
-            _rank_for_field("lifetime_points_spent", int(user.get("lifetime_points_spent") or 0), subject_dead=is_dead),
+            _rank_for_field("lifetime_points_spent", int(u.get("lifetime_points_spent") or 0), subject_dead=is_dead),
         )
         return [
             {"rank": rank_points_rank, "label": "Most Rank Points Earned", "board": "rank_points"},
@@ -548,7 +562,7 @@ def register(router):
         _prestige_mult = float(user.get("prestige_rank_multiplier") or 1.0)
         rank_id, rank_name = get_rank_info(user.get("rank_points", 0), _prestige_mult)
         _game_rank_name = rank_name
-        if user.get("email") in ADMIN_EMAILS:
+        if user_has_admin_list_email(user):
             rank_name = "Admin"
         elif _is_moderator(user):
             rank_name = "Moderator"
@@ -590,7 +604,7 @@ def register(router):
         if is_dead:
             status = "dead"
             online = False
-        elif (user.get("email") in ADMIN_EMAILS or user.get("is_moderator")) and user.get("admin_ghost_mode"):
+        elif (user_has_admin_list_email(user) or user.get("is_moderator")) and user.get("admin_ghost_mode"):
             # Admin ghost mode - always offline
             status = "offline"
             online = False
@@ -742,7 +756,7 @@ def register(router):
             current_user.get("id") == user_id
             and requested_username_norm == current_username_norm
         )
-        is_admin = current_user.get("email") in ADMIN_EMAILS
+        is_admin = user_has_admin_list_email(current_user)
         # When viewing another player's profile, hide last_seen (privacy). Account created is public.
         # owned_casinos and property are always shown for the profile subject (public who owns what)
         created_at = user.get("created_at")
@@ -945,8 +959,7 @@ def register(router):
         except Exception as e:
             logger.warning("staff-stats get_rank_info failed: %s", e)
             rank_id, rank_name = 1, "Street Punk"
-        admin_emails_set = set(ADMIN_EMAILS) if ADMIN_EMAILS else set()
-        if (user.get("email") or "") in admin_emails_set:
+        if user_has_admin_list_email(user):
             rank_name = "Admin"
         elif user.get("is_moderator"):
             rank_name = "Moderator"

@@ -1089,6 +1089,8 @@ export default function Admin() {
   const [minigameTurnstileEnabled, setMinigameTurnstileEnabled] = useState(false);
   const [minigameTurnstileSiteKey, setMinigameTurnstileSiteKey] = useState('');
   const [loginTurnstileEnabled, setLoginTurnstileEnabled] = useState(false);
+  const [sustainedPageRlJailEnabled, setSustainedPageRlJailEnabled] = useState(false);
+  const [sustainedJailRlSaving, setSustainedJailRlSaving] = useState(false);
   const [captchaFailModalOpen, setCaptchaFailModalOpen] = useState(false);
   const [captchaFailRows, setCaptchaFailRows] = useState([]);
   const [captchaFailTotal, setCaptchaFailTotal] = useState(0);
@@ -1693,6 +1695,7 @@ export default function Admin() {
       setMinigameTurnstileEnabled(!!res.data?.minigame_turnstile_enabled);
       setMinigameTurnstileSiteKey((res.data?.minigame_turnstile_site_key ?? '').trim());
       setLoginTurnstileEnabled(!!res.data?.login_turnstile_enabled);
+      setSustainedPageRlJailEnabled(!!res.data?.sustained_page_rl_jail_enabled);
       setSpotifyFeatureEnabled(!!res.data?.spotify_feature_enabled);
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
       setLandingBannerMessage(res.data?.landing_banner_message ?? '');
@@ -1762,6 +1765,7 @@ export default function Admin() {
       setMinigameTurnstileEnabled(false);
       setMinigameTurnstileSiteKey('');
       setLoginTurnstileEnabled(false);
+      setSustainedPageRlJailEnabled(false);
       setSpotifyFeatureEnabled(false);
       setLandingBannerMessage('');
       setStockMarketMaxPoints(3000);
@@ -1893,6 +1897,7 @@ export default function Admin() {
         minigame_turnstile_enabled: minigameTurnstileEnabled,
         minigame_turnstile_site_key: minigameTurnstileSiteKey.trim(),
         login_turnstile_enabled: loginTurnstileEnabled,
+        sustained_page_rl_jail_enabled: sustainedPageRlJailEnabled,
         spotify_feature_enabled: spotifyFeatureEnabled,
         landing_banner_enabled: landingBannerEnabled,
         landing_banner_message: landingBannerMessage,
@@ -1922,6 +1927,9 @@ export default function Admin() {
         setMinigameTurnstileSiteKey((res.data.minigame_turnstile_site_key ?? '').trim());
       }
       setLoginTurnstileEnabled(!!res.data?.login_turnstile_enabled);
+      if (res.data?.sustained_page_rl_jail_enabled !== undefined) {
+        setSustainedPageRlJailEnabled(!!res.data.sustained_page_rl_jail_enabled);
+      }
       setSpotifyFeatureEnabled(!!res.data?.spotify_feature_enabled);
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
       if (res.data?.landing_banner_message !== undefined) setLandingBannerMessage(res.data.landing_banner_message ?? '');
@@ -1979,6 +1987,21 @@ export default function Admin() {
       toast.error(e.response?.data?.detail ?? 'Failed to update');
     } finally {
       setBlockScriptGameActionsSaving(false);
+    }
+  };
+
+  const applySustainedPageRlJail = async (enabled) => {
+    setSustainedJailRlSaving(true);
+    try {
+      const res = await api.patch('/admin/settings', { sustained_page_rl_jail_enabled: !!enabled });
+      if (res.data?.sustained_page_rl_jail_enabled !== undefined) {
+        setSustainedPageRlJailEnabled(!!res.data.sustained_page_rl_jail_enabled);
+      }
+      toast.success(enabled ? 'Jail pacing limiter enabled' : 'Jail pacing limiter disabled');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to update');
+    } finally {
+      setSustainedJailRlSaving(false);
     }
   };
 
@@ -10836,6 +10859,33 @@ export default function Admin() {
                 >
                   {blockScriptGameActionsSaving ? '…' : 'Disable gameplay blocking'}
                 </button>
+              </div>
+              <div className="space-y-1 pt-2 border-t border-zinc-700/40">
+                <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Jail — sustained pacing</p>
+                <p className="text-[10px] text-mutedForeground font-heading leading-relaxed max-w-3xl">
+                  When on, jail API calls (any method) that stay faster than ~500ms apart for ~15s straight get a random 10–15s cooldown (429). Off by default.
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={sustainedJailRlSaving || sustainedPageRlJailEnabled}
+                    onClick={() => applySustainedPageRlJail(true)}
+                    className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {sustainedJailRlSaving ? '…' : 'Enable'}
+                  </button>
+                  <button
+                    type="button"
+                    disabled={sustainedJailRlSaving || !sustainedPageRlJailEnabled}
+                    onClick={() => applySustainedPageRlJail(false)}
+                    className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {sustainedJailRlSaving ? '…' : 'Disable'}
+                  </button>
+                  <span className="text-[10px] text-mutedForeground font-heading">
+                    Current: {sustainedPageRlJailEnabled ? 'on' : 'off'} — also saved with &quot;Save settings&quot; below.
+                  </span>
+                </div>
               </div>
               <label className="flex items-start gap-2 cursor-pointer text-sm font-heading pt-1">
                 <input

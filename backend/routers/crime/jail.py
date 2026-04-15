@@ -54,8 +54,17 @@ from server import (
 )
 from routers.account.objectives import update_objectives_progress
 from utils.point_provenance import log_points_event
+from utils.sustained_page_ratelimit import check_jail_sustained_page_rl
 
 logger = logging.getLogger(__name__)
+
+
+async def _jail_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+    await check_jail_sustained_page_rl(db, current_user.get("id") or "")
+
+
+async def _jail_sustained_rl_verified(current_user: dict = Depends(get_current_user_verified)):
+    await check_jail_sustained_page_rl(db, current_user.get("id") or "")
 
 
 def _safe_int(val, default: int = 0) -> int:
@@ -366,7 +375,10 @@ async def _private_cell_meta(user_id: str) -> dict:
     }
 
 
-async def get_jailed_players(current_user: dict = Depends(get_current_user)):
+async def get_jailed_players(
+    current_user: dict = Depends(get_current_user),
+    _rl: None = Depends(_jail_sustained_rl_user),
+):
     now = datetime.now(timezone.utc)
     five_min_ago = now - timedelta(minutes=5)
     ten_min_ago = now - timedelta(minutes=10)
@@ -798,7 +810,9 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
 
 
 async def bust_out_of_jail(
-    request: BustOutRequest, current_user: dict = Depends(get_current_user_verified)
+    request: BustOutRequest,
+    current_user: dict = Depends(get_current_user_verified),
+    _rl: None = Depends(_jail_sustained_rl_verified),
 ):
     try:
         result = await _attempt_bust_impl(current_user, request.target_username or "")
@@ -814,7 +828,10 @@ async def bust_out_of_jail(
     return result
 
 
-async def get_jail_stats(current_user: dict = Depends(get_current_user)):
+async def get_jail_stats(
+    current_user: dict = Depends(get_current_user),
+    _rl: None = Depends(_jail_sustained_rl_user),
+):
     """Return busts today/week, successful busts, profit today / 24h / week."""
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -863,7 +880,10 @@ async def get_jail_stats(current_user: dict = Depends(get_current_user)):
     }
 
 
-async def get_jail_status(current_user: dict = Depends(get_current_user)):
+async def get_jail_status(
+    current_user: dict = Depends(get_current_user),
+    _rl: None = Depends(_jail_sustained_rl_user),
+):
     jail_busts = int((current_user.get("jail_busts") or 0) or 0)
     stored_reward = _safe_int(current_user.get("bust_reward_cash"), 0)
     on_hand = _safe_int(current_user.get("money"), 0)
@@ -911,7 +931,11 @@ async def get_jail_status(current_user: dict = Depends(get_current_user)):
     }
 
 
-async def set_bust_reward(request: JailSetBustRewardRequest, current_user: dict = Depends(get_current_user_verified)):
+async def set_bust_reward(
+    request: JailSetBustRewardRequest,
+    current_user: dict = Depends(get_current_user_verified),
+    _rl: None = Depends(_jail_sustained_rl_verified),
+):
     """Set the $ reward offered to whoever busts you out. 0 to clear. Cannot exceed cash on hand (same pool debited on bust). Not while in jail."""
     if current_user.get("in_jail"):
         raise HTTPException(status_code=400, detail="You cannot change your bust reward while in jail.")
@@ -930,7 +954,10 @@ async def set_bust_reward(request: JailSetBustRewardRequest, current_user: dict 
     return {"message": f"Bust reward set to ${amount:,}" if amount else "Bust reward cleared.", "bust_reward_cash": amount}
 
 
-async def leave_jail(current_user: dict = Depends(get_current_user_verified)):
+async def leave_jail(
+    current_user: dict = Depends(get_current_user_verified),
+    _rl: None = Depends(_jail_sustained_rl_verified),
+):
     """Pay 3 points to leave jail immediately."""
     if not current_user.get("in_jail"):
         raise HTTPException(status_code=400, detail="You are not in jail")
@@ -1006,6 +1033,7 @@ async def _get_random_online_user(exclude_user_id: str):
 async def snitch(
     request: SnitchRequest,
     current_user: dict = Depends(get_current_user),
+    _rl: None = Depends(_jail_sustained_rl_user),
 ):
     """When in jail: snitch on a user (by username) or pick random online. On success you're released and they serve time. They get a notification that they were snitched on (not by whom). One attempt per jail term."""
     if not current_user.get("in_jail"):
@@ -1197,7 +1225,10 @@ async def try_spawn_private_jail_cell(uid: str) -> Tuple[bool, Optional[str], in
     return True, None, 200
 
 
-async def spawn_private_jail_cell(current_user: dict = Depends(get_current_user_verified)):
+async def spawn_private_jail_cell(
+    current_user: dict = Depends(get_current_user_verified),
+    _rl: None = Depends(_jail_sustained_rl_verified),
+):
     """When there are no global jail NPCs, add 5 NPCs only this user sees. 5-minute cooldown; max 5 at a time (must bust all before summoning again)."""
     uid = current_user.get("id") or ""
     ok, err, code = await try_spawn_private_jail_cell(uid)

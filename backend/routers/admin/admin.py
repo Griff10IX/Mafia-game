@@ -174,6 +174,7 @@ class AdminSettingsUpdate(BaseModel):
     minigame_turnstile_enabled: Optional[bool] = None  # Cloudflare Turnstile before minigame run start
     minigame_turnstile_site_key: Optional[str] = None  # Public site key (secret stays in TURNSTILE_SECRET_KEY env)
     login_turnstile_enabled: Optional[bool] = None  # Turnstile on /auth/login; reuses site key above
+    sustained_page_rl_jail_enabled: Optional[bool] = None  # Jail: sustained sub-500ms gaps -> random 10–15s cooldown
     spotify_feature_enabled: Optional[bool] = None
     stock_market_max_points: Optional[int] = None
     sports_bet_max_total_open_stake: Optional[int] = None  # Max $ in open sports bets per user (default 25M)
@@ -5587,6 +5588,7 @@ def register(router):
         minigame_turnstile_enabled = bool(main_doc.get("minigame_turnstile_enabled")) if main_doc else False
         minigame_turnstile_site_key = (main_doc.get("minigame_turnstile_site_key") or "") if main_doc else ""
         login_turnstile_enabled = bool(main_doc.get("login_turnstile_enabled")) if main_doc else False
+        sustained_page_rl_jail_enabled = bool(main_doc.get("sustained_page_rl_jail_enabled")) if main_doc else False
         spotify_feature_enabled = bool(main_doc.get("spotify_feature_enabled", False)) if main_doc else False
         preorder_points_release_date = main_doc.get("preorder_points_release_date") if main_doc else None
         store_points_auto_credit = main_doc.get("store_points_auto_credit") if main_doc else None
@@ -5615,6 +5617,7 @@ def register(router):
             "minigame_turnstile_enabled": minigame_turnstile_enabled,
             "minigame_turnstile_site_key": (minigame_turnstile_site_key or "").strip(),
             "login_turnstile_enabled": login_turnstile_enabled,
+            "sustained_page_rl_jail_enabled": sustained_page_rl_jail_enabled,
             "spotify_feature_enabled": spotify_feature_enabled,
             "stock_market_max_points": stock_market_max_points,
             "sports_bet_max_total_open_stake": sports_bet_max_total_open_stake,
@@ -5713,6 +5716,12 @@ def register(router):
             await db.game_settings.update_one(
                 {"_id": "main"},
                 {"$set": {"login_turnstile_enabled": bool(body.login_turnstile_enabled)}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_jail_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_jail_enabled": bool(body.sustained_page_rl_jail_enabled)}},
                 upsert=True,
             )
         if body.spotify_feature_enabled is not None:
@@ -5887,6 +5896,7 @@ def register(router):
         minigame_turnstile_enabled = bool(main_doc.get("minigame_turnstile_enabled")) if main_doc else False
         minigame_turnstile_site_key = (main_doc.get("minigame_turnstile_site_key") or "") if main_doc else ""
         login_turnstile_enabled = bool(main_doc.get("login_turnstile_enabled")) if main_doc else False
+        sustained_page_rl_jail_enabled = bool(main_doc.get("sustained_page_rl_jail_enabled")) if main_doc else False
         spotify_feature_enabled = bool(main_doc.get("spotify_feature_enabled", False)) if main_doc else False
         preorder_points_release_date = main_doc.get("preorder_points_release_date") if main_doc else None
         store_points_auto_credit = main_doc.get("store_points_auto_credit") if main_doc else None
@@ -5909,6 +5919,7 @@ def register(router):
             "minigame_turnstile_enabled": minigame_turnstile_enabled,
             "minigame_turnstile_site_key": (minigame_turnstile_site_key or "").strip(),
             "login_turnstile_enabled": login_turnstile_enabled,
+            "sustained_page_rl_jail_enabled": sustained_page_rl_jail_enabled,
             "spotify_feature_enabled": spotify_feature_enabled,
             "stock_market_max_points": stock_market_max_points,
             "sports_bet_max_total_open_stake": sports_bet_max_total_open_stake,

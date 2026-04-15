@@ -2187,7 +2187,8 @@ async def resolve_gambling_log_buy_back(offer_id: str, outcome: str, points_cred
 
 def _is_admin(user: dict) -> bool:
     """True if user has admin email and is not currently acting as normal user."""
-    return (user.get("email") or "") in ADMIN_EMAILS and not user.get("admin_acting_as_normal", False)
+    em = str(user.get("email") or "").strip().lower()
+    return bool(em and em in ADMIN_EMAILS) and not user.get("admin_acting_as_normal", False)
 
 
 def _is_moderator(user: dict) -> bool:
@@ -2213,14 +2214,35 @@ def _staff_exclude_user_filter() -> dict:
     return q
 
 
+def user_has_admin_list_email(user: dict) -> bool:
+    """True if user's email matches ADMIN_EMAILS (env list is lowercased; compare case-insensitive)."""
+    em = str(user.get("email") or "").strip().lower()
+    return bool(em and em in (ADMIN_EMAILS or []))
+
+
+def _user_excluded_from_stat_leaderboards(user: dict) -> bool:
+    """True if this account is excluded from /leaderboards/top and stat honours (mods + ADMIN_EMAILS)."""
+    if user.get("is_moderator"):
+        return True
+    return user_has_admin_list_email(user)
+
+
 async def _get_staff_user_ids() -> list:
     """Return user IDs of all admin and moderator accounts (for excluding from non-users collections)."""
-    admin_emails = list(ADMIN_EMAILS or [])
-    conditions = [{"is_moderator": True}]
-    if admin_emails:
-        conditions.append({"email": {"$in": admin_emails}})
-    cursor = db.users.find({"$or": conditions}, {"_id": 0, "id": 1})
-    return [u["id"] for u in await cursor.to_list(500)]
+    mod_ids = [u["id"] for u in await db.users.find({"is_moderator": True}, {"_id": 0, "id": 1}).to_list(500)]
+    admin_ids = await _get_admin_user_ids()
+    out: list = []
+    seen = set()
+    for uid in mod_ids + admin_ids:
+        if uid and uid not in seen:
+            seen.add(uid)
+            out.append(uid)
+    return out
+
+
+async def honours_stat_excluded_user_ids(db) -> list:
+    """User ids excluded from profile honour rank counts (mods + admin emails, case-insensitive). Matches public leaderboards."""
+    return await _get_staff_user_ids()
 
 
 async def _get_admin_user_ids() -> list:
