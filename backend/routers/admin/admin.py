@@ -174,10 +174,17 @@ class AdminSettingsUpdate(BaseModel):
     minigame_turnstile_enabled: Optional[bool] = None  # Cloudflare Turnstile before minigame run start
     minigame_turnstile_site_key: Optional[str] = None  # Public site key (secret stays in TURNSTILE_SECRET_KEY env)
     login_turnstile_enabled: Optional[bool] = None  # Turnstile on /auth/login; reuses site key above
-    sustained_page_rl_jail_enabled: Optional[bool] = None  # Jail: sustained sub-500ms gaps -> random 10–15s cooldown
+    sustained_page_rl_jail_enabled: Optional[bool] = None  # Jail-style pacing (~750ms gap chain, ~22s sustain -> 10–15s cooldown)
     sustained_page_rl_entertainer_enabled: Optional[bool] = None  # Entertainer forum API (player routes)
     sustained_page_rl_forum_enabled: Optional[bool] = None  # Forum API
-    sustained_page_rl_kill_enabled: Optional[bool] = None  # Kill / attack `/attack/*` API
+    sustained_page_rl_kill_enabled: Optional[bool] = None  # Kill / attack `/attack/*` API (100ms gap; sustain 15s)
+    sustained_page_rl_gta_enabled: Optional[bool] = None  # GTA GETs (jail-style math)
+    sustained_page_rl_crimes_enabled: Optional[bool] = None  # Crimes list/stats/logs GETs (jail-style)
+    sustained_page_rl_oc_enabled: Optional[bool] = None  # OC config/status GETs (jail-style)
+    sustained_page_rl_booze_enabled: Optional[bool] = None  # Booze run config GET (jail-style)
+    sustained_page_rl_game_chat_enabled: Optional[bool] = None  # Game chat messages/prefs GETs (jail-style)
+    sustained_page_rl_store_enabled: Optional[bool] = None  # Store/points-related GETs (jail-style)
+    sustained_page_rl_ranking_enabled: Optional[bool] = None  # Rank progress GET (jail-style)
     spotify_feature_enabled: Optional[bool] = None
     stock_market_max_points: Optional[int] = None
     sports_bet_max_total_open_stake: Optional[int] = None  # Max $ in open sports bets per user (default 25M)
@@ -5658,6 +5665,13 @@ def register(router):
         sustained_page_rl_entertainer_enabled = bool(main_doc.get("sustained_page_rl_entertainer_enabled")) if main_doc else False
         sustained_page_rl_forum_enabled = bool(main_doc.get("sustained_page_rl_forum_enabled")) if main_doc else False
         sustained_page_rl_kill_enabled = bool(main_doc.get("sustained_page_rl_kill_enabled")) if main_doc else False
+        sustained_page_rl_gta_enabled = bool(main_doc.get("sustained_page_rl_gta_enabled")) if main_doc else False
+        sustained_page_rl_crimes_enabled = bool(main_doc.get("sustained_page_rl_crimes_enabled")) if main_doc else False
+        sustained_page_rl_oc_enabled = bool(main_doc.get("sustained_page_rl_oc_enabled")) if main_doc else False
+        sustained_page_rl_booze_enabled = bool(main_doc.get("sustained_page_rl_booze_enabled")) if main_doc else False
+        sustained_page_rl_game_chat_enabled = bool(main_doc.get("sustained_page_rl_game_chat_enabled")) if main_doc else False
+        sustained_page_rl_store_enabled = bool(main_doc.get("sustained_page_rl_store_enabled")) if main_doc else False
+        sustained_page_rl_ranking_enabled = bool(main_doc.get("sustained_page_rl_ranking_enabled")) if main_doc else False
         spotify_feature_enabled = bool(main_doc.get("spotify_feature_enabled", False)) if main_doc else False
         preorder_points_release_date = main_doc.get("preorder_points_release_date") if main_doc else None
         store_points_auto_credit = main_doc.get("store_points_auto_credit") if main_doc else None
@@ -5690,6 +5704,13 @@ def register(router):
             "sustained_page_rl_entertainer_enabled": sustained_page_rl_entertainer_enabled,
             "sustained_page_rl_forum_enabled": sustained_page_rl_forum_enabled,
             "sustained_page_rl_kill_enabled": sustained_page_rl_kill_enabled,
+            "sustained_page_rl_gta_enabled": sustained_page_rl_gta_enabled,
+            "sustained_page_rl_crimes_enabled": sustained_page_rl_crimes_enabled,
+            "sustained_page_rl_oc_enabled": sustained_page_rl_oc_enabled,
+            "sustained_page_rl_booze_enabled": sustained_page_rl_booze_enabled,
+            "sustained_page_rl_game_chat_enabled": sustained_page_rl_game_chat_enabled,
+            "sustained_page_rl_store_enabled": sustained_page_rl_store_enabled,
+            "sustained_page_rl_ranking_enabled": sustained_page_rl_ranking_enabled,
             "spotify_feature_enabled": spotify_feature_enabled,
             "stock_market_max_points": stock_market_max_points,
             "sports_bet_max_total_open_stake": sports_bet_max_total_open_stake,
@@ -5812,6 +5833,48 @@ def register(router):
             await db.game_settings.update_one(
                 {"_id": "main"},
                 {"$set": {"sustained_page_rl_kill_enabled": bool(body.sustained_page_rl_kill_enabled)}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_gta_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_gta_enabled": bool(body.sustained_page_rl_gta_enabled)}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_crimes_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_crimes_enabled": bool(body.sustained_page_rl_crimes_enabled)}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_oc_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_oc_enabled": bool(body.sustained_page_rl_oc_enabled)}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_booze_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_booze_enabled": bool(body.sustained_page_rl_booze_enabled)}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_game_chat_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_game_chat_enabled": bool(body.sustained_page_rl_game_chat_enabled)}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_store_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_store_enabled": bool(body.sustained_page_rl_store_enabled)}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_ranking_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_ranking_enabled": bool(body.sustained_page_rl_ranking_enabled)}},
                 upsert=True,
             )
         if body.spotify_feature_enabled is not None:
@@ -5990,6 +6053,13 @@ def register(router):
         sustained_page_rl_entertainer_enabled = bool(main_doc.get("sustained_page_rl_entertainer_enabled")) if main_doc else False
         sustained_page_rl_forum_enabled = bool(main_doc.get("sustained_page_rl_forum_enabled")) if main_doc else False
         sustained_page_rl_kill_enabled = bool(main_doc.get("sustained_page_rl_kill_enabled")) if main_doc else False
+        sustained_page_rl_gta_enabled = bool(main_doc.get("sustained_page_rl_gta_enabled")) if main_doc else False
+        sustained_page_rl_crimes_enabled = bool(main_doc.get("sustained_page_rl_crimes_enabled")) if main_doc else False
+        sustained_page_rl_oc_enabled = bool(main_doc.get("sustained_page_rl_oc_enabled")) if main_doc else False
+        sustained_page_rl_booze_enabled = bool(main_doc.get("sustained_page_rl_booze_enabled")) if main_doc else False
+        sustained_page_rl_game_chat_enabled = bool(main_doc.get("sustained_page_rl_game_chat_enabled")) if main_doc else False
+        sustained_page_rl_store_enabled = bool(main_doc.get("sustained_page_rl_store_enabled")) if main_doc else False
+        sustained_page_rl_ranking_enabled = bool(main_doc.get("sustained_page_rl_ranking_enabled")) if main_doc else False
         spotify_feature_enabled = bool(main_doc.get("spotify_feature_enabled", False)) if main_doc else False
         preorder_points_release_date = main_doc.get("preorder_points_release_date") if main_doc else None
         store_points_auto_credit = main_doc.get("store_points_auto_credit") if main_doc else None
@@ -6016,6 +6086,13 @@ def register(router):
             "sustained_page_rl_entertainer_enabled": sustained_page_rl_entertainer_enabled,
             "sustained_page_rl_forum_enabled": sustained_page_rl_forum_enabled,
             "sustained_page_rl_kill_enabled": sustained_page_rl_kill_enabled,
+            "sustained_page_rl_gta_enabled": sustained_page_rl_gta_enabled,
+            "sustained_page_rl_crimes_enabled": sustained_page_rl_crimes_enabled,
+            "sustained_page_rl_oc_enabled": sustained_page_rl_oc_enabled,
+            "sustained_page_rl_booze_enabled": sustained_page_rl_booze_enabled,
+            "sustained_page_rl_game_chat_enabled": sustained_page_rl_game_chat_enabled,
+            "sustained_page_rl_store_enabled": sustained_page_rl_store_enabled,
+            "sustained_page_rl_ranking_enabled": sustained_page_rl_ranking_enabled,
             "spotify_feature_enabled": spotify_feature_enabled,
             "stock_market_max_points": stock_market_max_points,
             "sports_bet_max_total_open_stake": sports_bet_max_total_open_stake,

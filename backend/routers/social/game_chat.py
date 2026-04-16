@@ -8,6 +8,7 @@ from fastapi import Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
 
 from server import db, get_current_user, send_notification, ADMIN_EMAILS, _is_admin, _is_moderator
+from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_GAME_CHAT
 
 logger = logging.getLogger(__name__)
 
@@ -126,8 +127,15 @@ def _is_user_muted_from_game_chat(user: dict) -> bool:
         return False
 
 
+async def _game_chat_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_GAME_CHAT)
+
+
+_game_chat_rl_u = [Depends(_game_chat_sustained_rl_user)]
+
+
 def register(router):
-    @router.get("/game-chat/messages")
+    @router.get("/game-chat/messages", dependencies=_game_chat_rl_u)
     async def get_game_chat_messages(
         limit: int = Query(GAME_CHAT_DEFAULT_LIMIT, ge=1, le=GAME_CHAT_MAX_LIMIT),
         before_id: Optional[str] = Query(None),
@@ -211,7 +219,7 @@ def register(router):
         safe_doc = {k: v for k, v in doc.items() if k not in ("_id", "user_id", "family_id")}
         return {"message": safe_doc}
 
-    @router.get("/game-chat/prefs")
+    @router.get("/game-chat/prefs", dependencies=_game_chat_rl_u)
     async def get_game_chat_prefs(current_user: dict = Depends(get_current_user)):
         """Get current user's game chat preferences (family_only, blocked_user_ids)."""
         blocked_ids = current_user.get("game_chat_blocked_user_ids") or []

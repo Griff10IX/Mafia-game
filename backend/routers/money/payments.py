@@ -760,6 +760,13 @@ def register(router):
     _is_admin = srv._is_admin
     POINT_PACKAGES = srv.POINT_PACKAGES
 
+    from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_STORE
+
+    async def _store_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+        await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_STORE)
+
+    _store_rl_u = [Depends(_store_sustained_rl_user)]
+
     @router.get("/payments/release-soft-launch")
     async def get_release_soft_launch_status():
         """Public flags for UI: PvP kill pause and Game Pass purchase lock during release soft-launch."""
@@ -1295,7 +1302,7 @@ def register(router):
         await _attach_pending_ui_labels(items, api_key)
         return {"transactions": items}
 
-    @router.get("/payments/pending-points")
+    @router.get("/payments/pending-points", dependencies=_store_rl_u)
     async def get_pending_points(current_user: dict = Depends(get_current_user)):
         """Pending points: preorder (scheduled release) and/or manual_credit_pending (staff credit)."""
         settings = await db.game_settings.find_one({"_id": "main"})

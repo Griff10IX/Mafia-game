@@ -459,6 +459,14 @@ from routers.kill.armoury import (
     TOKEN_GLOBAL_DROP_CHANCE,
 )
 from utils.point_provenance import log_points_event
+from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_CRIMES
+
+
+async def _crimes_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_CRIMES)
+
+
+_crimes_rl_u = [Depends(_crimes_sustained_rl_user)]
 
 
 async def get_crimes(current_user: dict = Depends(get_current_user)):
@@ -1102,16 +1110,19 @@ def register(router):
         get_crimes,
         methods=["GET"],
         response_model=List[CrimeResponse],
+        dependencies=_crimes_rl_u,
     )
     router.add_api_route(
         "/crimes/stats",
         get_crime_stats,
         methods=["GET"],
+        dependencies=_crimes_rl_u,
     )
     router.add_api_route(
         "/crimes/logs",
         get_crime_logs,
         methods=["GET"],
+        dependencies=_crimes_rl_u,
     )
     router.add_api_route(
         "/crimes/{crime_id}/commit",

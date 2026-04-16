@@ -28,6 +28,14 @@ from server import (
 )
 from utils.minigame_captcha_gate import require_turnstile_for_game_action
 from utils.point_provenance import log_points_event
+from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_BOOZE
+
+
+async def _booze_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_BOOZE)
+
+
+_booze_rl_u = [Depends(_booze_sustained_rl_user)]
 
 
 def _parse_iso_datetime(s):
@@ -985,7 +993,7 @@ async def admin_set_booze_jail_chances(request: AdminBoozeJailChanceRequest, cur
 
 
 def register(router):
-    router.add_api_route("/booze-run/config", booze_run_config, methods=["GET"])
+    router.add_api_route("/booze-run/config", booze_run_config, methods=["GET"], dependencies=_booze_rl_u)
     router.add_api_route("/booze-run/buy", booze_run_buy, methods=["POST"])
     router.add_api_route("/booze-run/sell", booze_run_sell, methods=["POST"])
     # buy-booze-capacity route is registered in store.py (uses respect-first logic)

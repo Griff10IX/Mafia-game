@@ -109,6 +109,14 @@ from routers.money.booze_run import (
 )
 from routers.admin.airport import _invalidate_travel_info_cache
 from utils.point_provenance import consume_points_fifo, mint_transfer_in_lots
+from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_STORE
+
+
+async def _store_points_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_STORE)
+
+
+_store_points_rl_u = [Depends(_store_points_sustained_rl_user)]
 
 # Store-only constants
 SILENCER_COST_POINTS = 150
@@ -996,5 +1004,10 @@ def register(router):
     router.add_api_route("/store/buy-shooting-range-bonus", buy_shooting_range_bonus, methods=["POST"])
     router.add_api_route("/store/buy-hitlist-npc-bonus-slot", buy_hitlist_npc_bonus_slot, methods=["POST"])
     router.add_api_route("/store/send-points", send_points, methods=["POST"])
-    router.add_api_route("/store/points-transfers", get_my_points_transfers, methods=["GET"])
+    router.add_api_route(
+        "/store/points-transfers",
+        get_my_points_transfers,
+        methods=["GET"],
+        dependencies=_store_points_rl_u,
+    )
     router.add_api_route("/store/points-transfers/admin", admin_points_transfers, methods=["GET"])

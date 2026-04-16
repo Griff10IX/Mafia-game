@@ -1,7 +1,24 @@
 # User progress: rank progress, wealth ranks list, wealth progress
 from fastapi import Depends
 
-from server import get_current_user, get_rank_info, get_wealth_rank, RANKS, WEALTH_RANKS, get_prestige_requirement, GODFATHER_RANK_ID
+from server import (
+    db,
+    get_current_user,
+    get_rank_info,
+    get_wealth_rank,
+    RANKS,
+    WEALTH_RANKS,
+    get_prestige_requirement,
+    GODFATHER_RANK_ID,
+)
+from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_RANKING
+
+
+async def _ranking_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_RANKING)
+
+
+_ranking_rl_u = [Depends(_ranking_sustained_rl_user)]
 
 
 async def get_rank_progress(current_user: dict = Depends(get_current_user)):
@@ -31,8 +48,6 @@ async def get_rank_progress(current_user: dict = Depends(get_current_user)):
                 "rank_points_needed": needed,
                 "money_current": current_user["money"],
                 "rank_points_current": effective_points,
-                # Bar at Godfather = RP banked toward prestige gate, not "spread" across lower street ranks.
-                "progress_kind": "prestige",
             }
         progress = 100
         return {
@@ -124,6 +139,11 @@ async def get_wealth_progress(current_user: dict = Depends(get_current_user)):
 
 
 def register(router):
-    router.add_api_route("/user/rank-progress", get_rank_progress, methods=["GET"])
+    router.add_api_route(
+        "/user/rank-progress",
+        get_rank_progress,
+        methods=["GET"],
+        dependencies=_ranking_rl_u,
+    )
     router.add_api_route("/wealth-ranks", get_wealth_ranks_list, methods=["GET"])
     router.add_api_route("/user/wealth-progress", get_wealth_progress, methods=["GET"])

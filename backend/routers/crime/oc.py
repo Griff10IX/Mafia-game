@@ -43,6 +43,14 @@ if _backend not in sys.path:
     sys.path.insert(0, _backend)
 from server import db, get_current_user, get_effective_event, log_activity, maybe_process_rank_up, send_notification, user_prestige_rank_mult
 from utils.point_provenance import log_points_event
+from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_OC
+
+
+async def _oc_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_OC)
+
+
+_oc_rl_u = [Depends(_oc_sustained_rl_user)]
 
 # Roles (team of 4)
 OC_ROLES = [
@@ -841,9 +849,9 @@ async def execute_oc(
 
 
 def register(router):
-    router.add_api_route("/oc/config", get_oc_config, methods=["GET"])
+    router.add_api_route("/oc/config", get_oc_config, methods=["GET"], dependencies=_oc_rl_u)
     router.add_api_route("/store/buy-oc-timer", buy_oc_timer, methods=["POST"])
-    router.add_api_route("/oc/status", get_oc_status, methods=["GET"])
+    router.add_api_route("/oc/status", get_oc_status, methods=["GET"], dependencies=_oc_rl_u)
     router.add_api_route("/oc/send-invites", send_invites_oc, methods=["POST"])
     router.add_api_route("/oc/invite/{invite_id}/accept", oc_invite_accept, methods=["POST"])
     router.add_api_route("/oc/invite/{invite_id}/decline", oc_invite_decline, methods=["POST"])

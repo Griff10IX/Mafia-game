@@ -17,37 +17,61 @@ logger = logging.getLogger(__name__)
 # Inbox admins at most this often per (user_id, page_key) for sustained RL 429s (repeat hits while in cooldown).
 _ADMIN_RL_INBOX_MIN_GAP_SEC = 180
 
-# Default streak gap: requests farther apart than this reset the fast chain.
+# Default streak gap / sustain for scopes not in PAGE_KEYS_JAIL_STYLE_TUNING (except kill, which uses a tighter gap).
 MAX_GAP_MS = 500.0
 SUSTAIN_SEC = 15.0
 COOLDOWN_MIN_SEC = 10
 COOLDOWN_MAX_SEC = 15
 COLL = "sustained_page_rl_state"
 
+# Jail-style profile: same math as jail (750ms max gap between requests in a chain, 22s wall-clock sustain).
+JAIL_STYLE_MAX_GAP_MS = 750.0
+JAIL_STYLE_SUSTAIN_SEC = 22.0
+
 PAGE_KEY_JAIL = "jail"
 PAGE_KEY_ENTERTAINER = "entertainer"
 PAGE_KEY_FORUM = "forum"
 PAGE_KEY_KILL = "kill"
+PAGE_KEY_GTA = "gta"
+PAGE_KEY_CRIMES = "crimes"
+PAGE_KEY_OC = "oc"
+PAGE_KEY_BOOZE = "booze"
+PAGE_KEY_GAME_CHAT = "game_chat"
+PAGE_KEY_STORE = "store"
+PAGE_KEY_RANKING = "ranking"
 
-_MAX_GAP_MS_BY_PAGE = {
-    PAGE_KEY_KILL: 100.0,
-    # Jail: only count requests as one "burst" if they arrive within ~¾s of the previous one.
-    # ~1 Hz polling and typical page loads (gaps > this) reset the chain — limits real spam, not normal play.
-    PAGE_KEY_JAIL: 750.0,
-}
+# Scopes that use JAIL_STYLE_MAX_GAP_MS / JAIL_STYLE_SUSTAIN_SEC (forum/entertainer aligned with jail per product).
+PAGE_KEYS_JAIL_STYLE_TUNING = frozenset(
+    {
+        PAGE_KEY_JAIL,
+        PAGE_KEY_FORUM,
+        PAGE_KEY_ENTERTAINER,
+        PAGE_KEY_GTA,
+        PAGE_KEY_CRIMES,
+        PAGE_KEY_OC,
+        PAGE_KEY_BOOZE,
+        PAGE_KEY_GAME_CHAT,
+        PAGE_KEY_STORE,
+        PAGE_KEY_RANKING,
+    }
+)
 
-_SUSTAIN_SEC_BY_PAGE = {
-    # Jail: require a long stretch of hammering before cooldown (brief triple-fetch / refresh won't qualify).
-    PAGE_KEY_JAIL: 22.0,
-}
+# Kill: stricter gap than jail-style (unchanged product behavior).
+_KILL_MAX_GAP_MS = 100.0
 
 
 def _max_gap_ms(page_key: str) -> float:
-    return float(_MAX_GAP_MS_BY_PAGE.get(page_key, MAX_GAP_MS))
+    if page_key in PAGE_KEYS_JAIL_STYLE_TUNING:
+        return JAIL_STYLE_MAX_GAP_MS
+    if page_key == PAGE_KEY_KILL:
+        return _KILL_MAX_GAP_MS
+    return MAX_GAP_MS
 
 
 def _sustain_sec(page_key: str) -> float:
-    return float(_SUSTAIN_SEC_BY_PAGE.get(page_key, SUSTAIN_SEC))
+    if page_key in PAGE_KEYS_JAIL_STYLE_TUNING:
+        return JAIL_STYLE_SUSTAIN_SEC
+    return SUSTAIN_SEC
 
 
 _SETTINGS_FIELD_BY_PAGE = {
@@ -55,6 +79,13 @@ _SETTINGS_FIELD_BY_PAGE = {
     PAGE_KEY_ENTERTAINER: "sustained_page_rl_entertainer_enabled",
     PAGE_KEY_FORUM: "sustained_page_rl_forum_enabled",
     PAGE_KEY_KILL: "sustained_page_rl_kill_enabled",
+    PAGE_KEY_GTA: "sustained_page_rl_gta_enabled",
+    PAGE_KEY_CRIMES: "sustained_page_rl_crimes_enabled",
+    PAGE_KEY_OC: "sustained_page_rl_oc_enabled",
+    PAGE_KEY_BOOZE: "sustained_page_rl_booze_enabled",
+    PAGE_KEY_GAME_CHAT: "sustained_page_rl_game_chat_enabled",
+    PAGE_KEY_STORE: "sustained_page_rl_store_enabled",
+    PAGE_KEY_RANKING: "sustained_page_rl_ranking_enabled",
 }
 
 _COOLDOWN_MSG = {
@@ -62,6 +93,13 @@ _COOLDOWN_MSG = {
     PAGE_KEY_ENTERTAINER: "Entertainer actions are temporarily limited — try again in a few seconds.",
     PAGE_KEY_FORUM: "Forum actions are temporarily limited — try again in a few seconds.",
     PAGE_KEY_KILL: "Attack / kill actions are temporarily limited — try again in a few seconds.",
+    PAGE_KEY_GTA: "Too many GTA requests too fast — try again in a few seconds.",
+    PAGE_KEY_CRIMES: "Too many crimes requests too fast — try again in a few seconds.",
+    PAGE_KEY_OC: "Too many organised crime requests too fast — try again in a few seconds.",
+    PAGE_KEY_BOOZE: "Too many booze run requests too fast — try again in a few seconds.",
+    PAGE_KEY_GAME_CHAT: "Too many game chat requests too fast — try again in a few seconds.",
+    PAGE_KEY_STORE: "Too many store requests too fast — try again in a few seconds.",
+    PAGE_KEY_RANKING: "Too many ranking requests too fast — try again in a few seconds.",
 }
 
 _SLOW_MSG = {
@@ -69,6 +107,13 @@ _SLOW_MSG = {
     PAGE_KEY_ENTERTAINER: "Entertainer actions are temporarily limited — slow down for a few seconds.",
     PAGE_KEY_FORUM: "Forum actions are temporarily limited — slow down for a few seconds.",
     PAGE_KEY_KILL: "Attack / kill actions are temporarily limited — slow down for a few seconds.",
+    PAGE_KEY_GTA: "You're hitting the GTA server too fast — slow down for a few seconds.",
+    PAGE_KEY_CRIMES: "You're hitting the crimes server too fast — slow down for a few seconds.",
+    PAGE_KEY_OC: "You're hitting the OC server too fast — slow down for a few seconds.",
+    PAGE_KEY_BOOZE: "You're hitting the booze run server too fast — slow down for a few seconds.",
+    PAGE_KEY_GAME_CHAT: "You're loading game chat too fast — slow down for a few seconds.",
+    PAGE_KEY_STORE: "You're hitting the store server too fast — slow down for a few seconds.",
+    PAGE_KEY_RANKING: "You're hitting the ranking server too fast — slow down for a few seconds.",
 }
 
 _PAGE_LABEL_ADMIN = {
@@ -76,6 +121,13 @@ _PAGE_LABEL_ADMIN = {
     PAGE_KEY_KILL: "Kill / attack",
     PAGE_KEY_FORUM: "Forum",
     PAGE_KEY_ENTERTAINER: "Entertainer",
+    PAGE_KEY_GTA: "GTA",
+    PAGE_KEY_CRIMES: "Crimes",
+    PAGE_KEY_OC: "Organised crime",
+    PAGE_KEY_BOOZE: "Booze run",
+    PAGE_KEY_GAME_CHAT: "Game chat",
+    PAGE_KEY_STORE: "Store / points",
+    PAGE_KEY_RANKING: "Rank progress",
 }
 
 

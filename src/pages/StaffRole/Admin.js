@@ -1102,10 +1102,24 @@ export default function Admin() {
   const [sustainedPageRlEntEnabled, setSustainedPageRlEntEnabled] = useState(false);
   const [sustainedPageRlForumEnabled, setSustainedPageRlForumEnabled] = useState(false);
   const [sustainedPageRlKillEnabled, setSustainedPageRlKillEnabled] = useState(false);
+  const [sustainedPageRlGtaEnabled, setSustainedPageRlGtaEnabled] = useState(false);
+  const [sustainedPageRlCrimesEnabled, setSustainedPageRlCrimesEnabled] = useState(false);
+  const [sustainedPageRlOcEnabled, setSustainedPageRlOcEnabled] = useState(false);
+  const [sustainedPageRlBoozeEnabled, setSustainedPageRlBoozeEnabled] = useState(false);
+  const [sustainedPageRlGameChatEnabled, setSustainedPageRlGameChatEnabled] = useState(false);
+  const [sustainedPageRlStoreEnabled, setSustainedPageRlStoreEnabled] = useState(false);
+  const [sustainedPageRlRankingEnabled, setSustainedPageRlRankingEnabled] = useState(false);
   const [sustainedJailRlSaving, setSustainedJailRlSaving] = useState(false);
   const [sustainedEntRlSaving, setSustainedEntRlSaving] = useState(false);
   const [sustainedForumRlSaving, setSustainedForumRlSaving] = useState(false);
   const [sustainedKillRlSaving, setSustainedKillRlSaving] = useState(false);
+  const [sustainedGtaRlSaving, setSustainedGtaRlSaving] = useState(false);
+  const [sustainedCrimesRlSaving, setSustainedCrimesRlSaving] = useState(false);
+  const [sustainedOcRlSaving, setSustainedOcRlSaving] = useState(false);
+  const [sustainedBoozeRlSaving, setSustainedBoozeRlSaving] = useState(false);
+  const [sustainedGameChatRlSaving, setSustainedGameChatRlSaving] = useState(false);
+  const [sustainedStoreRlSaving, setSustainedStoreRlSaving] = useState(false);
+  const [sustainedRankingRlSaving, setSustainedRankingRlSaving] = useState(false);
   const [captchaFailModalOpen, setCaptchaFailModalOpen] = useState(false);
   const [captchaFailRows, setCaptchaFailRows] = useState([]);
   const [captchaFailTotal, setCaptchaFailTotal] = useState(0);
@@ -1714,6 +1728,13 @@ export default function Admin() {
       setSustainedPageRlEntEnabled(!!res.data?.sustained_page_rl_entertainer_enabled);
       setSustainedPageRlForumEnabled(!!res.data?.sustained_page_rl_forum_enabled);
       setSustainedPageRlKillEnabled(!!res.data?.sustained_page_rl_kill_enabled);
+      setSustainedPageRlGtaEnabled(!!res.data?.sustained_page_rl_gta_enabled);
+      setSustainedPageRlCrimesEnabled(!!res.data?.sustained_page_rl_crimes_enabled);
+      setSustainedPageRlOcEnabled(!!res.data?.sustained_page_rl_oc_enabled);
+      setSustainedPageRlBoozeEnabled(!!res.data?.sustained_page_rl_booze_enabled);
+      setSustainedPageRlGameChatEnabled(!!res.data?.sustained_page_rl_game_chat_enabled);
+      setSustainedPageRlStoreEnabled(!!res.data?.sustained_page_rl_store_enabled);
+      setSustainedPageRlRankingEnabled(!!res.data?.sustained_page_rl_ranking_enabled);
       setSpotifyFeatureEnabled(!!res.data?.spotify_feature_enabled);
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
       setLandingBannerMessage(res.data?.landing_banner_message ?? '');
@@ -1787,6 +1808,13 @@ export default function Admin() {
       setSustainedPageRlEntEnabled(false);
       setSustainedPageRlForumEnabled(false);
       setSustainedPageRlKillEnabled(false);
+      setSustainedPageRlGtaEnabled(false);
+      setSustainedPageRlCrimesEnabled(false);
+      setSustainedPageRlOcEnabled(false);
+      setSustainedPageRlBoozeEnabled(false);
+      setSustainedPageRlGameChatEnabled(false);
+      setSustainedPageRlStoreEnabled(false);
+      setSustainedPageRlRankingEnabled(false);
       setSpotifyFeatureEnabled(false);
       setLandingBannerMessage('');
       setStockMarketMaxPoints(3000);
@@ -1922,6 +1950,13 @@ export default function Admin() {
         sustained_page_rl_entertainer_enabled: sustainedPageRlEntEnabled,
         sustained_page_rl_forum_enabled: sustainedPageRlForumEnabled,
         sustained_page_rl_kill_enabled: sustainedPageRlKillEnabled,
+        sustained_page_rl_gta_enabled: sustainedPageRlGtaEnabled,
+        sustained_page_rl_crimes_enabled: sustainedPageRlCrimesEnabled,
+        sustained_page_rl_oc_enabled: sustainedPageRlOcEnabled,
+        sustained_page_rl_booze_enabled: sustainedPageRlBoozeEnabled,
+        sustained_page_rl_game_chat_enabled: sustainedPageRlGameChatEnabled,
+        sustained_page_rl_store_enabled: sustainedPageRlStoreEnabled,
+        sustained_page_rl_ranking_enabled: sustainedPageRlRankingEnabled,
         spotify_feature_enabled: spotifyFeatureEnabled,
         landing_banner_enabled: landingBannerEnabled,
         landing_banner_message: landingBannerMessage,
@@ -1962,6 +1997,27 @@ export default function Admin() {
       }
       if (res.data?.sustained_page_rl_kill_enabled !== undefined) {
         setSustainedPageRlKillEnabled(!!res.data.sustained_page_rl_kill_enabled);
+      }
+      if (res.data?.sustained_page_rl_gta_enabled !== undefined) {
+        setSustainedPageRlGtaEnabled(!!res.data.sustained_page_rl_gta_enabled);
+      }
+      if (res.data?.sustained_page_rl_crimes_enabled !== undefined) {
+        setSustainedPageRlCrimesEnabled(!!res.data.sustained_page_rl_crimes_enabled);
+      }
+      if (res.data?.sustained_page_rl_oc_enabled !== undefined) {
+        setSustainedPageRlOcEnabled(!!res.data.sustained_page_rl_oc_enabled);
+      }
+      if (res.data?.sustained_page_rl_booze_enabled !== undefined) {
+        setSustainedPageRlBoozeEnabled(!!res.data.sustained_page_rl_booze_enabled);
+      }
+      if (res.data?.sustained_page_rl_game_chat_enabled !== undefined) {
+        setSustainedPageRlGameChatEnabled(!!res.data.sustained_page_rl_game_chat_enabled);
+      }
+      if (res.data?.sustained_page_rl_store_enabled !== undefined) {
+        setSustainedPageRlStoreEnabled(!!res.data.sustained_page_rl_store_enabled);
+      }
+      if (res.data?.sustained_page_rl_ranking_enabled !== undefined) {
+        setSustainedPageRlRankingEnabled(!!res.data.sustained_page_rl_ranking_enabled);
       }
       setSpotifyFeatureEnabled(!!res.data?.spotify_feature_enabled);
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
@@ -2080,6 +2136,111 @@ export default function Admin() {
       toast.error(e.response?.data?.detail ?? 'Failed to update');
     } finally {
       setSustainedKillRlSaving(false);
+    }
+  };
+
+  const applySustainedPageRlGta = async (enabled) => {
+    setSustainedGtaRlSaving(true);
+    try {
+      const res = await api.patch('/admin/settings', { sustained_page_rl_gta_enabled: !!enabled });
+      if (res.data?.sustained_page_rl_gta_enabled !== undefined) {
+        setSustainedPageRlGtaEnabled(!!res.data.sustained_page_rl_gta_enabled);
+      }
+      toast.success(enabled ? 'GTA pacing limiter enabled' : 'GTA pacing limiter disabled');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to update');
+    } finally {
+      setSustainedGtaRlSaving(false);
+    }
+  };
+
+  const applySustainedPageRlCrimes = async (enabled) => {
+    setSustainedCrimesRlSaving(true);
+    try {
+      const res = await api.patch('/admin/settings', { sustained_page_rl_crimes_enabled: !!enabled });
+      if (res.data?.sustained_page_rl_crimes_enabled !== undefined) {
+        setSustainedPageRlCrimesEnabled(!!res.data.sustained_page_rl_crimes_enabled);
+      }
+      toast.success(enabled ? 'Crimes pacing limiter enabled' : 'Crimes pacing limiter disabled');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to update');
+    } finally {
+      setSustainedCrimesRlSaving(false);
+    }
+  };
+
+  const applySustainedPageRlOc = async (enabled) => {
+    setSustainedOcRlSaving(true);
+    try {
+      const res = await api.patch('/admin/settings', { sustained_page_rl_oc_enabled: !!enabled });
+      if (res.data?.sustained_page_rl_oc_enabled !== undefined) {
+        setSustainedPageRlOcEnabled(!!res.data.sustained_page_rl_oc_enabled);
+      }
+      toast.success(enabled ? 'OC pacing limiter enabled' : 'OC pacing limiter disabled');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to update');
+    } finally {
+      setSustainedOcRlSaving(false);
+    }
+  };
+
+  const applySustainedPageRlBooze = async (enabled) => {
+    setSustainedBoozeRlSaving(true);
+    try {
+      const res = await api.patch('/admin/settings', { sustained_page_rl_booze_enabled: !!enabled });
+      if (res.data?.sustained_page_rl_booze_enabled !== undefined) {
+        setSustainedPageRlBoozeEnabled(!!res.data.sustained_page_rl_booze_enabled);
+      }
+      toast.success(enabled ? 'Booze run pacing limiter enabled' : 'Booze run pacing limiter disabled');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to update');
+    } finally {
+      setSustainedBoozeRlSaving(false);
+    }
+  };
+
+  const applySustainedPageRlGameChat = async (enabled) => {
+    setSustainedGameChatRlSaving(true);
+    try {
+      const res = await api.patch('/admin/settings', { sustained_page_rl_game_chat_enabled: !!enabled });
+      if (res.data?.sustained_page_rl_game_chat_enabled !== undefined) {
+        setSustainedPageRlGameChatEnabled(!!res.data.sustained_page_rl_game_chat_enabled);
+      }
+      toast.success(enabled ? 'Game chat pacing limiter enabled' : 'Game chat pacing limiter disabled');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to update');
+    } finally {
+      setSustainedGameChatRlSaving(false);
+    }
+  };
+
+  const applySustainedPageRlStore = async (enabled) => {
+    setSustainedStoreRlSaving(true);
+    try {
+      const res = await api.patch('/admin/settings', { sustained_page_rl_store_enabled: !!enabled });
+      if (res.data?.sustained_page_rl_store_enabled !== undefined) {
+        setSustainedPageRlStoreEnabled(!!res.data.sustained_page_rl_store_enabled);
+      }
+      toast.success(enabled ? 'Store / points pacing limiter enabled' : 'Store / points pacing limiter disabled');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to update');
+    } finally {
+      setSustainedStoreRlSaving(false);
+    }
+  };
+
+  const applySustainedPageRlRanking = async (enabled) => {
+    setSustainedRankingRlSaving(true);
+    try {
+      const res = await api.patch('/admin/settings', { sustained_page_rl_ranking_enabled: !!enabled });
+      if (res.data?.sustained_page_rl_ranking_enabled !== undefined) {
+        setSustainedPageRlRankingEnabled(!!res.data.sustained_page_rl_ranking_enabled);
+      }
+      toast.success(enabled ? 'Rank progress pacing limiter enabled' : 'Rank progress pacing limiter disabled');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to update');
+    } finally {
+      setSustainedRankingRlSaving(false);
     }
   };
 
@@ -11288,7 +11449,7 @@ export default function Admin() {
           title="Sustained page pacing"
           badge={
             <span className="text-[10px] font-heading text-mutedForeground">
-              Jail · Forum · Entertainer · Kill (optional anti-script bursts)
+              Jail-style scopes · Kill (tighter gap) — optional anti-script bursts
             </span>
           }
           toolAnchor="sustainedPageRl"
@@ -11298,15 +11459,16 @@ export default function Admin() {
         {!collapsed.sustainedPageRl && (
           <div className="p-3 space-y-4">
             <p className="text-[10px] text-mutedForeground font-heading leading-relaxed max-w-3xl">
-              When a scope is on, that area&apos;s authenticated API calls that stay <span className="text-foreground/90">more than ~2 per second</span> (gaps under ~500ms) for ~15s wall-clock straight get a random 10–15s cooldown (HTTP 429, Retry-After). Each scope is independent. Off by default. Toggles apply immediately and are included when you use Save settings in Admin display.
+              When a scope is on, that area&apos;s authenticated GETs that form a <span className="text-foreground/90">fast chain</span> (gaps under ~750ms between requests) for ~22s wall-clock get a random 10–15s cooldown (HTTP 429, <code className="text-[9px] bg-muted px-1 rounded">Retry-After</code>). Each scope is independent. Off by default. Toggles apply immediately and are included when you use Save settings in Admin display.{' '}
+              <span className="text-foreground/80">Kill / attack</span> uses a <span className="text-foreground/90">100ms</span> gap and ~15s sustain (stricter than jail-style).
             </p>
             <p className="text-[10px] text-amber-400/90 font-heading leading-relaxed max-w-3xl rounded border border-amber-500/25 bg-amber-500/5 px-2 py-1.5">
-              <span className="font-bold">Jail page / F5:</span> the in-game jail screen polls the API about every 1–3s and full reloads are slower than that, so the chain keeps resetting — spamming refresh will usually <span className="italic">not</span> trigger this. It targets scripted or click-spam bursts, not normal browsing.
+              <span className="font-bold">Normal UI:</span> gaps above the threshold reset the chain, so typical polling (e.g. ~1Hz) and page loads usually <span className="italic">do not</span> trigger this. It targets scripted or click-spam bursts.
             </p>
             <div className="space-y-1 rounded border border-zinc-700/40 p-2">
               <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Jail</p>
               <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                Player jail routes (list, status, bust, snitch, private cell, etc.). Same sub-500ms / ~15s rule as above.
+                Player jail routes (list, status, bust, snitch, private cell, etc.). Jail-style pacing (~750ms / ~22s) as above.
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <button
@@ -11331,7 +11493,7 @@ export default function Admin() {
             <div className="space-y-1 rounded border border-zinc-700/40 p-2">
               <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Forum</p>
               <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                All <code className="text-[9px] bg-muted px-1 rounded">/forum/topics…</code> routes (topics, comments, likes, reactions).
+                All <code className="text-[9px] bg-muted px-1 rounded">/forum/topics…</code> routes (topics, comments, likes, reactions). Same jail-style math (~750ms / ~22s).
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <button
@@ -11356,7 +11518,7 @@ export default function Admin() {
             <div className="space-y-1 rounded border border-zinc-700/40 p-2">
               <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Entertainer</p>
               <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
-                Player entertainer forum APIs (games, find-word, prizes, history). Staff <code className="text-[9px] bg-muted px-1 rounded">/forum/entertainer/admin/*</code> and manual roll are not throttled here.
+                Player entertainer forum APIs (games, find-word, prizes, history). Staff <code className="text-[9px] bg-muted px-1 rounded">/forum/entertainer/admin/*</code> and manual roll are not throttled here. Same jail-style math (~750ms / ~22s).
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <button
@@ -11401,6 +11563,181 @@ export default function Admin() {
                   {sustainedKillRlSaving ? '…' : 'Disable'}
                 </button>
                 <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlKillEnabled ? 'on' : 'off'}</span>
+              </div>
+            </div>
+            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
+              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">GTA</p>
+              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+                Hot GTA GETs (options, garage, stats, marketplace, etc.). Jail-style pacing.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={sustainedGtaRlSaving || sustainedPageRlGtaEnabled}
+                  onClick={() => applySustainedPageRlGta(true)}
+                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedGtaRlSaving ? '…' : 'Enable'}
+                </button>
+                <button
+                  type="button"
+                  disabled={sustainedGtaRlSaving || !sustainedPageRlGtaEnabled}
+                  onClick={() => applySustainedPageRlGta(false)}
+                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedGtaRlSaving ? '…' : 'Disable'}
+                </button>
+                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlGtaEnabled ? 'on' : 'off'}</span>
+              </div>
+            </div>
+            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
+              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Crimes</p>
+              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+                <code className="text-[9px] bg-muted px-1 rounded">GET /crimes</code>, stats, logs. Jail-style pacing.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={sustainedCrimesRlSaving || sustainedPageRlCrimesEnabled}
+                  onClick={() => applySustainedPageRlCrimes(true)}
+                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedCrimesRlSaving ? '…' : 'Enable'}
+                </button>
+                <button
+                  type="button"
+                  disabled={sustainedCrimesRlSaving || !sustainedPageRlCrimesEnabled}
+                  onClick={() => applySustainedPageRlCrimes(false)}
+                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedCrimesRlSaving ? '…' : 'Disable'}
+                </button>
+                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlCrimesEnabled ? 'on' : 'off'}</span>
+              </div>
+            </div>
+            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
+              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Organised crime</p>
+              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+                <code className="text-[9px] bg-muted px-1 rounded">GET /oc/config</code> and <code className="text-[9px] bg-muted px-1 rounded">/oc/status</code>. Jail-style pacing.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={sustainedOcRlSaving || sustainedPageRlOcEnabled}
+                  onClick={() => applySustainedPageRlOc(true)}
+                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedOcRlSaving ? '…' : 'Enable'}
+                </button>
+                <button
+                  type="button"
+                  disabled={sustainedOcRlSaving || !sustainedPageRlOcEnabled}
+                  onClick={() => applySustainedPageRlOc(false)}
+                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedOcRlSaving ? '…' : 'Disable'}
+                </button>
+                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlOcEnabled ? 'on' : 'off'}</span>
+              </div>
+            </div>
+            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
+              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Booze run</p>
+              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+                <code className="text-[9px] bg-muted px-1 rounded">GET /booze-run/config</code>. Jail-style pacing.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={sustainedBoozeRlSaving || sustainedPageRlBoozeEnabled}
+                  onClick={() => applySustainedPageRlBooze(true)}
+                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedBoozeRlSaving ? '…' : 'Enable'}
+                </button>
+                <button
+                  type="button"
+                  disabled={sustainedBoozeRlSaving || !sustainedPageRlBoozeEnabled}
+                  onClick={() => applySustainedPageRlBooze(false)}
+                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedBoozeRlSaving ? '…' : 'Disable'}
+                </button>
+                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlBoozeEnabled ? 'on' : 'off'}</span>
+              </div>
+            </div>
+            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
+              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Game chat</p>
+              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+                <code className="text-[9px] bg-muted px-1 rounded">GET /game-chat/messages</code> and prefs. Jail-style pacing.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={sustainedGameChatRlSaving || sustainedPageRlGameChatEnabled}
+                  onClick={() => applySustainedPageRlGameChat(true)}
+                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedGameChatRlSaving ? '…' : 'Enable'}
+                </button>
+                <button
+                  type="button"
+                  disabled={sustainedGameChatRlSaving || !sustainedPageRlGameChatEnabled}
+                  onClick={() => applySustainedPageRlGameChat(false)}
+                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedGameChatRlSaving ? '…' : 'Disable'}
+                </button>
+                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlGameChatEnabled ? 'on' : 'off'}</span>
+              </div>
+            </div>
+            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
+              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Store / points</p>
+              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+                <code className="text-[9px] bg-muted px-1 rounded">GET /payments/pending-points</code> and <code className="text-[9px] bg-muted px-1 rounded">GET /store/points-transfers</code> (shared counter). Jail-style pacing.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={sustainedStoreRlSaving || sustainedPageRlStoreEnabled}
+                  onClick={() => applySustainedPageRlStore(true)}
+                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedStoreRlSaving ? '…' : 'Enable'}
+                </button>
+                <button
+                  type="button"
+                  disabled={sustainedStoreRlSaving || !sustainedPageRlStoreEnabled}
+                  onClick={() => applySustainedPageRlStore(false)}
+                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedStoreRlSaving ? '…' : 'Disable'}
+                </button>
+                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlStoreEnabled ? 'on' : 'off'}</span>
+              </div>
+            </div>
+            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
+              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Rank progress</p>
+              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+                <code className="text-[9px] bg-muted px-1 rounded">GET /user/rank-progress</code>. Jail-style pacing.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={sustainedRankingRlSaving || sustainedPageRlRankingEnabled}
+                  onClick={() => applySustainedPageRlRanking(true)}
+                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedRankingRlSaving ? '…' : 'Enable'}
+                </button>
+                <button
+                  type="button"
+                  disabled={sustainedRankingRlSaving || !sustainedPageRlRankingEnabled}
+                  onClick={() => applySustainedPageRlRanking(false)}
+                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedRankingRlSaving ? '…' : 'Disable'}
+                </button>
+                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlRankingEnabled ? 'on' : 'off'}</span>
               </div>
             </div>
           </div>

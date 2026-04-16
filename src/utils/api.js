@@ -11,8 +11,46 @@ const api = axios.create({
   baseURL: API,
 });
 
-// No-op for Layout; kept for API compatibility.
-export function invalidateApiCache() {}
+const _rawGet = api.get.bind(api);
+
+/** Merge concurrent GET /auth/me (same session token) so refresh/login prefetch storms hit the server once. */
+function _isBareAuthMeGet(url, config) {
+  if (typeof url !== 'string') return false;
+  const path = url.split('?')[0].replace(/^\/+/, '');
+  if (path !== 'auth/me') return false;
+  const p = config?.params;
+  if (p && typeof p === 'object' && Object.keys(p).length > 0) return false;
+  return true;
+}
+
+let _authMeInflight = null;
+let _authMeInflightForToken = null;
+
+api.get = function dedupingGet(url, config) {
+  if (!_isBareAuthMeGet(url, config)) {
+    return _rawGet(url, config);
+  }
+  const token = typeof localStorage !== 'undefined' ? (localStorage.getItem('token') || '') : '';
+  if (_authMeInflight && _authMeInflightForToken === token) {
+    return _authMeInflight;
+  }
+  const p = _rawGet(url, config);
+  _authMeInflight = p;
+  _authMeInflightForToken = token;
+  p.finally(() => {
+    if (_authMeInflight === p) {
+      _authMeInflight = null;
+      _authMeInflightForToken = null;
+    }
+  });
+  return p;
+};
+
+/** Clear in-flight /auth/me merge so the next profile fetch is not tied to a stale promise. */
+export function invalidateApiCache() {
+  _authMeInflight = null;
+  _authMeInflightForToken = null;
+}
 
 // ── Rate-limit cooldown state (shared across the app) ──
 let _cooldownUntil = 0;        // timestamp (ms) when cooldown expires

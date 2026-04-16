@@ -133,6 +133,7 @@ EXCLUSIVE_CAR_WAR_LOCK_DETAIL = (
 )
 from utils.minigame_captcha_gate import require_turnstile_for_game_action
 from utils.civilian_protection import maybe_revoke_civilian_protection
+from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_GTA
 
 
 def effective_garage_batch_limit(user: dict) -> int:
@@ -2063,27 +2064,34 @@ async def get_gta_exclusive_pool_status(current_user: dict = Depends(get_current
     return {"exclusive_in_pool": bool(released)}
 
 
+async def _gta_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_GTA)
+
+
+_gta_rl_u = [Depends(_gta_sustained_rl_user)]
+
+
 def register(router):
-    router.add_api_route("/gta/options", get_gta_options, methods=["GET"])
-    router.add_api_route("/gta/playable-count", get_gta_playable_count, methods=["GET"])
-    router.add_api_route("/gta/exclusive-pool-status", get_gta_exclusive_pool_status, methods=["GET"])
-    router.add_api_route("/gta/car/{car_id}", get_car, methods=["GET"])
+    router.add_api_route("/gta/options", get_gta_options, methods=["GET"], dependencies=_gta_rl_u)
+    router.add_api_route("/gta/playable-count", get_gta_playable_count, methods=["GET"], dependencies=_gta_rl_u)
+    router.add_api_route("/gta/exclusive-pool-status", get_gta_exclusive_pool_status, methods=["GET"], dependencies=_gta_rl_u)
+    router.add_api_route("/gta/car/{car_id}", get_car, methods=["GET"], dependencies=_gta_rl_u)
     router.add_api_route(
         "/gta/attempt",
         attempt_gta,
         methods=["POST"],
         response_model=GTAAttemptResponse,
     )
-    router.add_api_route("/gta/stats", get_gta_stats, methods=["GET"])
-    router.add_api_route("/gta/garage", get_garage, methods=["GET"])
-    router.add_api_route("/gta/recent-stolen", get_recent_stolen, methods=["GET"])
+    router.add_api_route("/gta/stats", get_gta_stats, methods=["GET"], dependencies=_gta_rl_u)
+    router.add_api_route("/gta/garage", get_garage, methods=["GET"], dependencies=_gta_rl_u)
+    router.add_api_route("/gta/recent-stolen", get_recent_stolen, methods=["GET"], dependencies=_gta_rl_u)
     router.add_api_route("/gta/melt", melt_cars, methods=["POST"])
-    router.add_api_route("/gta/cars-for-sale", get_cars_for_sale, methods=["GET"])
+    router.add_api_route("/gta/cars-for-sale", get_cars_for_sale, methods=["GET"], dependencies=_gta_rl_u)
     router.add_api_route("/gta/buy-car", buy_car, methods=["POST"])
-    router.add_api_route("/gta/marketplace", get_marketplace_listings, methods=["GET"])
+    router.add_api_route("/gta/marketplace", get_marketplace_listings, methods=["GET"], dependencies=_gta_rl_u)
     router.add_api_route("/gta/list-car", list_car, methods=["POST"])
     router.add_api_route("/gta/delist-car", delist_car, methods=["POST"])
     router.add_api_route("/gta/buy-listed-car", buy_listed_car, methods=["POST"])
     router.add_api_route("/gta/repair-car", repair_car, methods=["POST"])
     router.add_api_route("/gta/custom-car/{user_car_id}", update_custom_car_image, methods=["PATCH"])
-    router.add_api_route("/gta/view-car", get_view_car, methods=["GET"])
+    router.add_api_route("/gta/view-car", get_view_car, methods=["GET"], dependencies=_gta_rl_u)

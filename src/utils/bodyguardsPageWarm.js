@@ -63,22 +63,21 @@ export async function prefetchBodyguardsPageData(options = {}) {
     if (!uid) return;
 
     const nc = noCacheGetConfig();
-    const [bodyguardsRes, userRes, eventsRes, inflationRes, statsRes, invitesRes] = await Promise.all([
+    const [bodyguardsRes, eventsRes, inflationRes, statsRes, invitesRes] = await Promise.all([
       api.get('/bodyguards', nc),
-      api.get('/auth/me'),
       api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
       api.get('/bodyguards/inflation', nc).catch(() => ({ data: { next_hire_inflation_pct: 0 } })),
       api.get('/bodyguards/stats').catch(() => ({ data: null })),
       api.get('/bodyguards/invites').catch(() => ({ data: { sent: [], received: [] } })),
     ]);
 
-    if (bodyguardsRes.status >= 400 || userRes.status >= 400) return;
+    if (bodyguardsRes.status >= 400 || meRes.status >= 400) return;
 
     const bgData = bodyguardsRes.data;
     writeBodyguardsPageWarm({
       userId: uid,
       main: bgData,
-      user: userRes.data,
+      user: meRes.data,
       event: eventsRes.data?.event ?? null,
       eventsEnabled: !!eventsRes.data?.events_enabled,
       inflation: inflationRes.data ?? null,

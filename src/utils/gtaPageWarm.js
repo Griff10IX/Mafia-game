@@ -103,7 +103,7 @@ export async function prefetchGtaPageData(options = {}) {
       api.get('/gta/stats').catch(() => ({ data: {} })),
       api.get('/auto-rank/me').catch(() => ({ data: {} })),
       api.get('/loot-box/status').catch(() => ({ data: {} })),
-      api.get('/auth/me').catch(() => ({ data: null })),
+      Promise.resolve(meRes),
     ]);
 
     if (settled[0].status !== 'fulfilled' || !Array.isArray(settled[0].value?.data)) return;
