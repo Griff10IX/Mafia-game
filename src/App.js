@@ -190,15 +190,6 @@ function AttackShortcutRedirect() {
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isLoading, setIsLoading] = useState(true);
-  // Initialize from sessionStorage to prevent flicker on reload
-  const [loginLocked, setLoginLocked] = useState(() => {
-    try {
-      return sessionStorage.getItem('login_locked') === 'true';
-    } catch (_) {
-      return false;
-    }
-  });
 
   useEffect(() => {
     initToastObservability();
@@ -228,33 +219,10 @@ function App() {
     if (token) {
       setIsAuthenticated(true);
     }
-    // Check if login is locked (pre-registration mode)
-    const raw = (process.env.REACT_APP_BACKEND_URL && process.env.REACT_APP_BACKEND_URL.trim())
-      ? process.env.REACT_APP_BACKEND_URL.replace(/\/+$/, '').replace(/\/api\/?$/, '')
-      : '';
-    const apiBase = raw ? `${raw}/api` : '/api';
-    fetch(`${apiBase}/auth/launch-status`)
-      .then(r => r.json())
-      .then(data => {
-        const locked = !!data?.login_locked;
-        setLoginLocked(locked);
-        try {
-          sessionStorage.setItem('login_locked', locked ? 'true' : 'false');
-        } catch (_) {}
-      })
-      .catch(() => {
-        // On error, keep existing state from sessionStorage
-      })
-      .finally(() => setIsLoading(false));
+    try {
+      sessionStorage.removeItem("login_locked");
+    } catch (_) {}
   }, []);
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-primary text-xl font-heading">Loading...</div>
-      </div>
-    );
-  }
 
   return (
     <div className="App">
@@ -268,8 +236,6 @@ function App() {
             element={
               isAuthenticated ? (
                 <Navigate to="/account/dashboard" replace />
-              ) : loginLocked ? (
-                <PreRegister />
               ) : (
                 <Landing setIsAuthenticated={setIsAuthenticated} />
               )
@@ -291,8 +257,6 @@ function App() {
             element={
               isAuthenticated ? (
                 <Navigate to="/account/dashboard" replace />
-              ) : loginLocked ? (
-                <PreRegister />
               ) : (
                 <Landing setIsAuthenticated={setIsAuthenticated} />
               )

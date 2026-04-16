@@ -333,13 +333,12 @@ export default function Store() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [userRes, boozeRes, eventsRes, adminRes, locksRes, launchRes, pendingRes] = await Promise.all([
+      const [userRes, boozeRes, eventsRes, adminRes, locksRes, pendingRes] = await Promise.all([
         api.get('/auth/me'),
         api.get('/booze-run/config').catch(() => ({ data: null })),
         api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
         api.get('/admin/check').catch(() => ({ data: { is_admin: false } })),
         api.get('/page-locks').catch(() => ({ data: { paths: {} } })),
-        api.get('/auth/launch-status').catch(() => ({ data: {} })),
         api.get('/payments/pending-points').catch(() => ({ data: { pending_points: 0 } })),
       ]);
       setUser(userRes.data);
@@ -350,13 +349,21 @@ export default function Store() {
       const paths = locksRes?.data?.paths ?? {};
       setPointsTabLocked(!!paths['/store/points']);
       setPointsTabLockMessage(paths['/store/points'] || 'Points purchase temporarily unavailable');
-      setPreorderActive(!!launchRes.data?.preorder_active);
-      setPreorderReleaseDate(launchRes.data?.preorder_release_date || null);
-      setStorePointsAutoCredit(launchRes.data?.store_points_auto_credit !== false);
-      setManualCreditEta(
-        launchRes.data?.manual_credit_eta ?? pendingRes.data?.manual_credit_eta ?? null,
-      );
-      setPendingPoints(pendingRes.data?.pending_points || 0);
+      const pending = pendingRes?.data || {};
+      const releaseDate = pending.release_date || null;
+      let preorderOn = false;
+      if (releaseDate) {
+        try {
+          preorderOn = new Date(releaseDate).getTime() > Date.now();
+        } catch {
+          preorderOn = false;
+        }
+      }
+      setPreorderActive(preorderOn);
+      setPreorderReleaseDate(releaseDate);
+      setStorePointsAutoCredit(pending.store_points_auto_credit !== false);
+      setManualCreditEta(pending.manual_credit_eta ?? null);
+      setPendingPoints(pending.pending_points || 0);
       await fetchPaymentTransactions();
     } catch {
       toast.error('Failed to load data');

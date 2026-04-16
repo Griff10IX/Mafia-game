@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { Turnstile } from '@marsidev/react-turnstile';
@@ -14,19 +14,6 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
   const [isLogin, setIsLogin] = useState(defaultTab !== 'register');
   const [verifySentForEmail, setVerifySentForEmail] = useState(null);
   const [authInlineError, setAuthInlineError] = useState(null);
-
-  // Launch lock state
-  const [launchStatus, setLaunchStatus] = useState({
-    loginLocked: false,
-    lockUntil: null,
-    lockMessage: null,
-    showPreregisterBanner: false,
-    preregisterLandingBannerEnabled: true,
-    preregisterBannerPreviewOpen: false,
-  });
-  const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-  /** Reward copy for founding-member preview (from server; no public signup counts) */
-  const [preregisterRewards, setPreregisterRewards] = useState(null);
 
   useEffect(() => {
     const msg = sessionStorage.getItem(AUTH_ERROR_KEY);
@@ -171,60 +158,6 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
     };
   }, [formData.username, formData.email, isLogin]);
 
-  // Fetch launch status on mount
-  useEffect(() => {
-    api.get('/auth/launch-status')
-      .then((r) => {
-        setLaunchStatus({
-          loginLocked: !!r.data?.login_locked,
-          lockUntil: r.data?.lock_until || null,
-          lockMessage: r.data?.lock_message || null,
-          showPreregisterBanner: !!r.data?.show_preregister_banner,
-          preregisterLandingBannerEnabled:
-            r.data?.preregister_landing_banner_enabled !== undefined
-              ? !!r.data.preregister_landing_banner_enabled
-              : true,
-          preregisterBannerPreviewOpen: !!r.data?.preregister_landing_banner_preview_open,
-        });
-      })
-      .catch(() => {});
-  }, []);
-
-  // Calculate countdown
-  const calculateCountdown = useCallback(() => {
-    if (!launchStatus.lockUntil) return { days: 0, hours: 0, minutes: 0, seconds: 0 };
-    const target = new Date(launchStatus.lockUntil).getTime();
-    const now = Date.now();
-    const diff = Math.max(0, target - now);
-    if (diff <= 0) {
-      setLaunchStatus((prev) => {
-        const stillShow =
-          !!prev.preregisterLandingBannerEnabled && !!prev.preregisterBannerPreviewOpen;
-        return {
-          ...prev,
-          loginLocked: false,
-          showPreregisterBanner: stillShow,
-        };
-      });
-      return { days: 0, hours: 0, minutes: 0, seconds: 0 };
-    }
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-    return { days, hours, minutes, seconds };
-  }, [launchStatus.lockUntil]);
-
-  // Update countdown every second when locked
-  useEffect(() => {
-    if (!launchStatus.loginLocked || !launchStatus.lockUntil) return;
-    setCountdown(calculateCountdown());
-    const interval = setInterval(() => {
-      setCountdown(calculateCountdown());
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [launchStatus.loginLocked, launchStatus.lockUntil, calculateCountdown]);
-
   const DEFAULT_BANNER_MESSAGE = 'Beta round end: March 24 6pm. Full game release March 28th 6pm. This beta lets you try the game and features before launch.';
 
   // Read ?ref= from URL for referral (e.g. ?ref=Username)
@@ -243,13 +176,6 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
       })
       .catch(() => { setBannerEnabled(false); setBannerMessage(''); });
   }, []);
-
-  useEffect(() => {
-    if (!launchStatus.showPreregisterBanner) return;
-    api.get('/auth/preregister/rewards')
-      .then((r) => setPreregisterRewards(r.data?.rewards || null))
-      .catch(() => setPreregisterRewards(null));
-  }, [launchStatus.showPreregisterBanner]);
 
   useEffect(() => {
     if (resendCooldownSeconds <= 0) return;
@@ -341,7 +267,7 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
         const username = response.data.username || formData.username;
         setPreregisteredSuccess({ username });
         setFormData({ email: '', username: '', password: '', confirmPassword: '' });
-        toast.success(response.data.message || 'Account created! You can log in when the game launches.');
+        toast.success(response.data.message || 'Account created! Check your email to verify your account.');
         return;
       }
 
@@ -464,140 +390,6 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
 
       <div className="relative min-h-screen flex items-start md:items-center justify-center px-4 py-6 md:py-10">
         <div className="w-full max-w-md mx-auto flex flex-col gap-2">
-          {/* Founding member preview — compact; same width as login card; full detail on /preregister */}
-          {launchStatus.showPreregisterBanner && !preregisteredSuccess && (
-            <div className="landing-fade-up w-full space-y-1.5" data-testid="preregister-mini-banner">
-              {!launchStatus.loginLocked ? (
-                <p className="text-center text-[7px] font-heading uppercase tracking-wider leading-tight" style={{ color: 'var(--noir-muted)' }}>
-                  <span
-                    className="inline-block px-1.5 py-0.5 rounded border"
-                    style={{
-                      borderColor: 'rgba(56, 189, 248, 0.35)',
-                      background: 'rgba(14, 116, 144, 0.2)',
-                      color: 'var(--noir-foreground)',
-                    }}
-                  >
-                    Preview — logins open
-                  </span>
-                </p>
-              ) : null}
-
-              {launchStatus.loginLocked && launchStatus.lockUntil && (
-                <div className="text-center">
-                  <p className="text-[8px] font-heading uppercase tracking-wider mb-1" style={{ color: 'var(--noir-primary)' }}>
-                    Launches in
-                  </p>
-                  <div className="grid grid-cols-4 gap-1 max-w-[220px] mx-auto">
-                    {[
-                      { value: countdown.days, label: 'D' },
-                      { value: countdown.hours, label: 'H' },
-                      { value: countdown.minutes, label: 'M' },
-                      { value: countdown.seconds, label: 'S' },
-                    ].map(({ value, label }) => (
-                      <div
-                        key={label}
-                        className="flex flex-col items-center py-1 rounded"
-                        style={{ backgroundColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.1)' }}
-                      >
-                        <span className="text-sm font-heading font-bold tabular-nums leading-none" style={{ color: 'var(--noir-primary)' }}>
-                          {String(value).padStart(2, '0')}
-                        </span>
-                        <span className="text-[6px] font-heading uppercase mt-0.5" style={{ color: 'var(--noir-muted)' }}>
-                          {label}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                  {launchStatus.lockMessage?.trim() ? (
-                    <p className="text-[8px] font-heading mt-1 px-1 line-clamp-2" style={{ color: 'var(--noir-muted)' }}>
-                      {launchStatus.lockMessage.trim()}
-                    </p>
-                  ) : null}
-                </div>
-              )}
-
-              <div className={`${styles.panel} rounded-lg overflow-hidden border border-primary/20`}>
-                <div className="px-2.5 py-2.5 text-center" style={{ background: 'linear-gradient(180deg, rgba(var(--noir-primary-rgb,201,168,76),0.12) 0%, transparent 100%)' }}>
-                  <h2 className="text-[11px] font-heading font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--noir-primary)' }}>
-                    Founding Member Rewards
-                  </h2>
-                  <p className="text-[8px] font-heading mb-2 leading-snug line-clamp-3" style={{ color: 'var(--noir-muted)' }}>
-                    <span className="text-primary/90 font-bold">Founding Member</span> badge, launch bundle, and permanent earnings bonus if you register before go-live.
-                  </p>
-                  <div className="grid grid-cols-3 gap-1">
-                    <div className="p-1.5 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
-                      <div className="text-sm leading-none mb-0.5">💎</div>
-                      <div className="text-[10px] font-heading font-bold leading-tight" style={{ color: 'var(--noir-primary)' }}>
-                        {(preregisterRewards?.bonus_respect_points ?? 1000).toLocaleString()} resp
-                      </div>
-                      <div className="text-[6px] font-heading uppercase tracking-tighter leading-tight mt-0.5" style={{ color: 'var(--noir-muted)' }}>
-                        Respect
-                      </div>
-                    </div>
-                    <div className="p-1.5 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
-                      <div className="text-sm leading-none mb-0.5">💵</div>
-                      <div className="text-[10px] font-heading font-bold leading-tight" style={{ color: 'var(--noir-primary)' }}>
-                        ${(preregisterRewards?.bonus_cash ?? 50000).toLocaleString()}
-                      </div>
-                      <div className="text-[6px] font-heading uppercase tracking-tighter leading-tight mt-0.5" style={{ color: 'var(--noir-muted)' }}>
-                        Cash
-                      </div>
-                    </div>
-                    <div className="p-1.5 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>
-                      <div className="text-sm leading-none mb-0.5">🏆</div>
-                      <div className="text-[9px] font-heading font-bold leading-tight line-clamp-2" style={{ color: 'var(--noir-primary)' }}>
-                        {preregisterRewards?.badge || 'Founding'}
-                      </div>
-                      <div className="text-[6px] font-heading uppercase tracking-tighter leading-tight mt-0.5" style={{ color: 'var(--noir-muted)' }}>
-                        Badge
-                      </div>
-                    </div>
-                  </div>
-                  <div
-                    className="mt-2 mx-auto text-left p-1.5 rounded border text-[7px] font-heading leading-snug max-h-[3.25rem] overflow-y-auto overscroll-contain"
-                    style={{
-                      backgroundColor: 'rgba(0,0,0,0.35)',
-                      borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.25)',
-                      color: 'var(--noir-muted)',
-                    }}
-                  >
-                    <p className="text-primary font-bold uppercase tracking-wider text-[6px] mb-0.5">Permanent bonus</p>
-                    <p>
-                      {preregisterRewards?.founding_passive_blurb
-                        || `+${preregisterRewards?.founding_passive_bonus_pct ?? 2.5}% on crimes, GTA, OC, hitlist, properties, rackets & missions.`}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="px-2.5 py-2 border-t text-center" style={{ borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.15)' }}>
-                  <h3 className="text-[10px] font-heading font-bold uppercase tracking-wider mb-0.5" style={{ color: 'var(--noir-foreground)' }}>
-                    Secure your username
-                  </h3>
-                  <p className="text-[7px] font-heading mb-1.5 leading-snug" style={{ color: 'var(--noir-muted)' }}>
-                    Register below. Referrals: <span className="font-mono text-primary/90">?ref=Username</span>
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => { setIsLogin(false); window.requestAnimationFrame(() => { document.getElementById('landing-auth-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' }); }); }}
-                    className={`${styles.btnPrimary} w-full px-3 py-2 font-heading font-bold uppercase tracking-wider text-[10px]`}
-                  >
-                    Create account
-                  </button>
-                  <p className="text-[7px] font-heading mt-1.5 leading-tight" style={{ color: 'var(--noir-muted)' }}>
-                    {launchStatus.loginLocked ? 'Login when we launch.' : 'Or sign in with the form below.'}
-                  </p>
-                  <Link
-                    to="/preregister"
-                    className="inline-block mt-1 text-[7px] font-heading uppercase tracking-wider underline opacity-90 hover:opacity-100"
-                    style={{ color: 'var(--noir-primary)' }}
-                  >
-                    Full pre-register page
-                  </Link>
-                </div>
-              </div>
-            </div>
-          )}
-
           <div id="landing-auth-card" className="w-full max-w-md mx-auto flex flex-col gap-2">
           {/* ── HERO HEADER ─────────────────────────────────────── */}
           {/*   Gold radial glow + vertical shaft lines, no image   */}
@@ -724,10 +516,10 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
             {preregisteredSuccess ? (
               <div className="p-6 space-y-4">
                 <p className="text-sm font-heading text-center" style={{ color: 'var(--noir-foreground)' }}>
-                  Account created! You&apos;re now a Founding Member. You&apos;ll be able to log in when the game launches.
+                  Account created! Check your email to verify, then you can log in.
                 </p>
                 <p className="text-[10px] font-heading uppercase tracking-wider text-center" style={{ color: 'var(--noir-primary)', opacity: 0.8 }}>
-                  Share your link to get friends to pre-register
+                  Share your referral link once you&apos;re in the game
                 </p>
                 <div className="flex items-center gap-2 rounded border p-3" style={{ borderColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.2)', backgroundColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.05)' }}>
                   <code className="flex-1 truncate text-xs font-mono" style={{ color: 'var(--noir-foreground)' }}>
@@ -750,51 +542,6 @@ export default function Landing({ setIsAuthenticated, defaultTab }) {
                 >
                   Done
                 </button>
-              </div>
-            ) : launchStatus.loginLocked && isLogin ? (
-              <div className="p-6 space-y-6 text-center">
-                {launchStatus.lockMessage && (
-                  <p className="text-sm font-heading" style={{ color: 'var(--noir-foreground)' }}>
-                    {launchStatus.lockMessage}
-                  </p>
-                )}
-                <div>
-                  <p className="text-[10px] font-heading uppercase tracking-wider mb-4" style={{ color: 'var(--noir-primary)', opacity: 0.7 }}>
-                    Game Launches In
-                  </p>
-                  <div className="grid grid-cols-4 gap-2">
-                    {[
-                      { value: countdown.days, label: 'Days' },
-                      { value: countdown.hours, label: 'Hours' },
-                      { value: countdown.minutes, label: 'Mins' },
-                      { value: countdown.seconds, label: 'Secs' },
-                    ].map(({ value, label }) => (
-                      <div
-                        key={label}
-                        className="flex flex-col items-center p-3 rounded"
-                        style={{ backgroundColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.08)' }}
-                      >
-                        <span
-                          className="text-2xl md:text-3xl font-heading font-bold tabular-nums"
-                          style={{ color: 'var(--noir-primary)' }}
-                        >
-                          {String(value).padStart(2, '0')}
-                        </span>
-                        <span
-                          className="text-[8px] font-heading uppercase tracking-wider mt-1"
-                          style={{ color: 'var(--noir-muted)' }}
-                        >
-                          {label}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                <p className="text-[10px] font-heading" style={{ color: 'var(--noir-muted)' }}>
-                  You can register an account now to secure your username.
-                  <br />
-                  Login will be available when the countdown ends.
-                </p>
               </div>
             ) : (
             <form onSubmit={handleSubmit} className="p-6 space-y-4" autoComplete="on">

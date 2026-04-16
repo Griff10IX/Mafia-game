@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Link2, KeyRound, DollarSign, UserPlus, Crosshair, Building2, Car, Wine, BarChart3, Copy } from 'lucide-react';
 import { toast } from 'sonner';
@@ -17,50 +17,17 @@ const FEATURES = [
 export default function PreRegister() {
   const navigate = useNavigate();
   const [rewards, setRewards] = useState(null);
-  const [launchStatus, setLaunchStatus] = useState({ loginLocked: false, lockUntil: null, lockMessage: null });
-  const [countdown, setCountdown] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
-  // Track pre-launch/landing page views for admin analytics.
+  // Track landing page views for admin analytics.
   useEffect(() => {
     api.post('/auth/track-login-page-view').catch(() => {});
   }, []);
 
   useEffect(() => {
-    // Get launch status from the same endpoint as Landing page
-    api.get('/auth/launch-status')
-      .then((r) => {
-        setLaunchStatus({
-          loginLocked: !!r.data?.login_locked,
-          lockUntil: r.data?.lock_until || null,
-          lockMessage: r.data?.lock_message || null,
-        });
-      })
-      .catch(() => {});
-
     api.get('/auth/preregister/rewards')
       .then((r) => setRewards(r.data?.rewards || null))
       .catch(() => {});
   }, []);
-
-  const calculateCountdown = useCallback(() => {
-    if (!launchStatus.lockUntil) return { days: 0, hours: 0, minutes: 0, seconds: 0 };
-    const target = new Date(launchStatus.lockUntil).getTime();
-    const now = Date.now();
-    const diff = Math.max(0, target - now);
-    if (diff <= 0) return { days: 0, hours: 0, minutes: 0, seconds: 0 };
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-    return { days, hours, minutes, seconds };
-  }, [launchStatus.lockUntil]);
-
-  useEffect(() => {
-    if (!launchStatus.lockUntil) return;
-    setCountdown(calculateCountdown());
-    const interval = setInterval(() => setCountdown(calculateCountdown()), 1000);
-    return () => clearInterval(interval);
-  }, [launchStatus.lockUntil, calculateCountdown]);
 
   const [redeemCodeInput, setRedeemCodeInput] = useState('');
   const [redeemLoading, setRedeemLoading] = useState(false);
@@ -131,7 +98,7 @@ export default function PreRegister() {
           {/* Header */}
           <div className="text-center mb-8 fade-up">
             <p className="text-[10px] font-heading uppercase tracking-[0.4em] mb-2" style={{ color: 'var(--noir-primary)', opacity: 0.6 }}>
-              Pre-Register Now
+              Join the family
             </p>
             <h1 className="text-4xl md:text-5xl font-heading font-black uppercase tracking-wider mb-3" style={{ color: 'var(--noir-foreground)' }}>
               MAFIA WARS
@@ -141,41 +108,6 @@ export default function PreRegister() {
             </p>
           </div>
 
-          {/* Countdown */}
-          {launchStatus.lockUntil && (
-            <div className="mb-8 fade-up-1">
-              <p className="text-center text-[10px] font-heading uppercase tracking-wider mb-3" style={{ color: 'var(--noir-primary)' }}>
-                Game Launches In
-              </p>
-              <div className="grid grid-cols-4 gap-2 max-w-md mx-auto">
-                {[
-                  { value: countdown.days, label: 'Days' },
-                  { value: countdown.hours, label: 'Hours' },
-                  { value: countdown.minutes, label: 'Mins' },
-                  { value: countdown.seconds, label: 'Secs' },
-                ].map(({ value, label }) => (
-                  <div
-                    key={label}
-                    className="flex flex-col items-center p-3 rounded"
-                    style={{ backgroundColor: 'rgba(var(--noir-primary-rgb,201,168,76),0.1)' }}
-                  >
-                    <span className="text-2xl md:text-3xl font-heading font-bold tabular-nums" style={{ color: 'var(--noir-primary)' }}>
-                      {String(value).padStart(2, '0')}
-                    </span>
-                    <span className="text-[8px] font-heading uppercase tracking-wider mt-1" style={{ color: 'var(--noir-muted)' }}>
-                      {label}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              {launchStatus.lockMessage && (
-                <p className="text-center text-xs font-heading mt-3" style={{ color: 'var(--noir-muted)' }}>
-                  {launchStatus.lockMessage}
-                </p>
-              )}
-            </div>
-          )}
-
           {/* Main Card */}
           <div className={`${styles.panel} rounded-xl overflow-hidden fade-up-2`}>
             {/* Rewards Banner */}
@@ -184,7 +116,7 @@ export default function PreRegister() {
                 Founding Member Rewards
               </h2>
               <p className="text-xs font-heading mb-4" style={{ color: 'var(--noir-muted)' }}>
-                Register before launch to earn the <span className="text-primary/90 font-bold">Founding Member</span> badge on your profile, a launch-day bundle, and a permanent in-game earnings edge.
+                Create a free account to start playing. Referral rewards below reflect current server settings.
               </p>
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4 max-w-4xl mx-auto">
                 <div className="p-4 rounded" style={{ backgroundColor: 'rgba(0,0,0,0.3)' }}>

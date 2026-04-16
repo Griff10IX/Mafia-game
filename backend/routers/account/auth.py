@@ -507,52 +507,19 @@ def register(router):
 
     @router.get("/auth/launch-status")
     async def get_launch_status():
-        """Public endpoint to check if login is locked until launch date."""
-        settings = await db.game_settings.find_one({"_id": "main"})
-        lock_from = settings.get("login_lock_from") if settings else None
-        lock_until = settings.get("login_lock_until") if settings else None
-        lock_message = settings.get("login_lock_message") if settings else None
-        banner_pref = settings.get("preregister_landing_banner_enabled") if settings else None
-        if banner_pref is None:
-            banner_pref = True
-        preview_open = bool(settings.get("preregister_landing_banner_preview_open")) if settings else False
-        preorder_release = settings.get("preorder_points_release_date") if settings else None
-        now = datetime.now(timezone.utc)
-        login_locked = False
-        if lock_until:
-            try:
-                lock_until_dt = datetime.fromisoformat(lock_until.replace("Z", "+00:00"))
-                started = True
-                if lock_from:
-                    lock_from_dt = datetime.fromisoformat(lock_from.replace("Z", "+00:00"))
-                    started = now >= lock_from_dt
-                login_locked = started and now < lock_until_dt
-            except (ValueError, TypeError):
-                pass
-        preorder_active = False
-        if preorder_release:
-            try:
-                preorder_dt = datetime.fromisoformat(preorder_release.replace("Z", "+00:00"))
-                preorder_active = now < preorder_dt
-            except (ValueError, TypeError):
-                pass
-        store_auto = settings.get("store_points_auto_credit") if settings else None
-        if store_auto is None:
-            store_auto = True
-        manual_credit_eta = settings.get("store_points_manual_credit_eta") if settings else None
-        show_strip = bool(banner_pref) and (login_locked or preview_open)
+        """Post-launch stub (no DB). Clients use /payments/pending-points for store credit flags."""
         return {
-            "login_locked": login_locked,
-            "lock_from": lock_from,
-            "lock_until": lock_until,
-            "lock_message": lock_message,
-            "preregister_landing_banner_enabled": bool(banner_pref),
-            "preregister_landing_banner_preview_open": preview_open,
-            "show_preregister_banner": show_strip,
-            "preorder_active": preorder_active,
-            "preorder_release_date": preorder_release,
-            "store_points_auto_credit": bool(store_auto),
-            "manual_credit_eta": manual_credit_eta,
+            "login_locked": False,
+            "lock_from": None,
+            "lock_until": None,
+            "lock_message": None,
+            "preregister_landing_banner_enabled": False,
+            "preregister_landing_banner_preview_open": False,
+            "show_preregister_banner": False,
+            "preorder_active": False,
+            "preorder_release_date": None,
+            "store_points_auto_credit": True,
+            "manual_credit_eta": None,
         }
 
     @router.get("/auth/check-username")
