@@ -1109,6 +1109,10 @@ export default function Admin() {
   const [sustainedPageRlGameChatEnabled, setSustainedPageRlGameChatEnabled] = useState(false);
   const [sustainedPageRlStoreEnabled, setSustainedPageRlStoreEnabled] = useState(false);
   const [sustainedPageRlRankingEnabled, setSustainedPageRlRankingEnabled] = useState(false);
+  const [sustainedPageRlNotificationsEnabled, setSustainedPageRlNotificationsEnabled] = useState(false);
+  const [sustainedPageRlHitlistEnabled, setSustainedPageRlHitlistEnabled] = useState(false);
+  const [sustainedPageRlBankEnabled, setSustainedPageRlBankEnabled] = useState(false);
+  const [sustainedPageRlLeaderboardEnabled, setSustainedPageRlLeaderboardEnabled] = useState(false);
   const [sustainedJailRlSaving, setSustainedJailRlSaving] = useState(false);
   const [sustainedEntRlSaving, setSustainedEntRlSaving] = useState(false);
   const [sustainedForumRlSaving, setSustainedForumRlSaving] = useState(false);
@@ -1120,6 +1124,10 @@ export default function Admin() {
   const [sustainedGameChatRlSaving, setSustainedGameChatRlSaving] = useState(false);
   const [sustainedStoreRlSaving, setSustainedStoreRlSaving] = useState(false);
   const [sustainedRankingRlSaving, setSustainedRankingRlSaving] = useState(false);
+  const [sustainedNotificationsRlSaving, setSustainedNotificationsRlSaving] = useState(false);
+  const [sustainedHitlistRlSaving, setSustainedHitlistRlSaving] = useState(false);
+  const [sustainedBankRlSaving, setSustainedBankRlSaving] = useState(false);
+  const [sustainedLeaderboardRlSaving, setSustainedLeaderboardRlSaving] = useState(false);
   const [captchaFailModalOpen, setCaptchaFailModalOpen] = useState(false);
   const [captchaFailRows, setCaptchaFailRows] = useState([]);
   const [captchaFailTotal, setCaptchaFailTotal] = useState(0);
@@ -1735,6 +1743,10 @@ export default function Admin() {
       setSustainedPageRlGameChatEnabled(!!res.data?.sustained_page_rl_game_chat_enabled);
       setSustainedPageRlStoreEnabled(!!res.data?.sustained_page_rl_store_enabled);
       setSustainedPageRlRankingEnabled(!!res.data?.sustained_page_rl_ranking_enabled);
+      setSustainedPageRlNotificationsEnabled(!!res.data?.sustained_page_rl_notifications_enabled);
+      setSustainedPageRlHitlistEnabled(!!res.data?.sustained_page_rl_hitlist_enabled);
+      setSustainedPageRlBankEnabled(!!res.data?.sustained_page_rl_bank_enabled);
+      setSustainedPageRlLeaderboardEnabled(!!res.data?.sustained_page_rl_leaderboard_enabled);
       setSpotifyFeatureEnabled(!!res.data?.spotify_feature_enabled);
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
       setLandingBannerMessage(res.data?.landing_banner_message ?? '');
@@ -1815,6 +1827,10 @@ export default function Admin() {
       setSustainedPageRlGameChatEnabled(false);
       setSustainedPageRlStoreEnabled(false);
       setSustainedPageRlRankingEnabled(false);
+      setSustainedPageRlNotificationsEnabled(false);
+      setSustainedPageRlHitlistEnabled(false);
+      setSustainedPageRlBankEnabled(false);
+      setSustainedPageRlLeaderboardEnabled(false);
       setSpotifyFeatureEnabled(false);
       setLandingBannerMessage('');
       setStockMarketMaxPoints(3000);
@@ -1957,6 +1973,10 @@ export default function Admin() {
         sustained_page_rl_game_chat_enabled: sustainedPageRlGameChatEnabled,
         sustained_page_rl_store_enabled: sustainedPageRlStoreEnabled,
         sustained_page_rl_ranking_enabled: sustainedPageRlRankingEnabled,
+        sustained_page_rl_notifications_enabled: sustainedPageRlNotificationsEnabled,
+        sustained_page_rl_hitlist_enabled: sustainedPageRlHitlistEnabled,
+        sustained_page_rl_bank_enabled: sustainedPageRlBankEnabled,
+        sustained_page_rl_leaderboard_enabled: sustainedPageRlLeaderboardEnabled,
         spotify_feature_enabled: spotifyFeatureEnabled,
         landing_banner_enabled: landingBannerEnabled,
         landing_banner_message: landingBannerMessage,
@@ -2018,6 +2038,18 @@ export default function Admin() {
       }
       if (res.data?.sustained_page_rl_ranking_enabled !== undefined) {
         setSustainedPageRlRankingEnabled(!!res.data.sustained_page_rl_ranking_enabled);
+      }
+      if (res.data?.sustained_page_rl_notifications_enabled !== undefined) {
+        setSustainedPageRlNotificationsEnabled(!!res.data.sustained_page_rl_notifications_enabled);
+      }
+      if (res.data?.sustained_page_rl_hitlist_enabled !== undefined) {
+        setSustainedPageRlHitlistEnabled(!!res.data.sustained_page_rl_hitlist_enabled);
+      }
+      if (res.data?.sustained_page_rl_bank_enabled !== undefined) {
+        setSustainedPageRlBankEnabled(!!res.data.sustained_page_rl_bank_enabled);
+      }
+      if (res.data?.sustained_page_rl_leaderboard_enabled !== undefined) {
+        setSustainedPageRlLeaderboardEnabled(!!res.data.sustained_page_rl_leaderboard_enabled);
       }
       setSpotifyFeatureEnabled(!!res.data?.spotify_feature_enabled);
       setLandingBannerEnabled(!!res.data?.landing_banner_enabled);
@@ -2241,6 +2273,66 @@ export default function Admin() {
       toast.error(e.response?.data?.detail ?? 'Failed to update');
     } finally {
       setSustainedRankingRlSaving(false);
+    }
+  };
+
+  const applySustainedPageRlNotifications = async (enabled) => {
+    setSustainedNotificationsRlSaving(true);
+    try {
+      const res = await api.patch('/admin/settings', { sustained_page_rl_notifications_enabled: !!enabled });
+      if (res.data?.sustained_page_rl_notifications_enabled !== undefined) {
+        setSustainedPageRlNotificationsEnabled(!!res.data.sustained_page_rl_notifications_enabled);
+      }
+      toast.success(enabled ? 'Notifications pacing limiter enabled' : 'Notifications pacing limiter disabled');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to update');
+    } finally {
+      setSustainedNotificationsRlSaving(false);
+    }
+  };
+
+  const applySustainedPageRlHitlist = async (enabled) => {
+    setSustainedHitlistRlSaving(true);
+    try {
+      const res = await api.patch('/admin/settings', { sustained_page_rl_hitlist_enabled: !!enabled });
+      if (res.data?.sustained_page_rl_hitlist_enabled !== undefined) {
+        setSustainedPageRlHitlistEnabled(!!res.data.sustained_page_rl_hitlist_enabled);
+      }
+      toast.success(enabled ? 'Hitlist pacing limiter enabled' : 'Hitlist pacing limiter disabled');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to update');
+    } finally {
+      setSustainedHitlistRlSaving(false);
+    }
+  };
+
+  const applySustainedPageRlBank = async (enabled) => {
+    setSustainedBankRlSaving(true);
+    try {
+      const res = await api.patch('/admin/settings', { sustained_page_rl_bank_enabled: !!enabled });
+      if (res.data?.sustained_page_rl_bank_enabled !== undefined) {
+        setSustainedPageRlBankEnabled(!!res.data.sustained_page_rl_bank_enabled);
+      }
+      toast.success(enabled ? 'Bank pacing limiter enabled' : 'Bank pacing limiter disabled');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to update');
+    } finally {
+      setSustainedBankRlSaving(false);
+    }
+  };
+
+  const applySustainedPageRlLeaderboard = async (enabled) => {
+    setSustainedLeaderboardRlSaving(true);
+    try {
+      const res = await api.patch('/admin/settings', { sustained_page_rl_leaderboard_enabled: !!enabled });
+      if (res.data?.sustained_page_rl_leaderboard_enabled !== undefined) {
+        setSustainedPageRlLeaderboardEnabled(!!res.data.sustained_page_rl_leaderboard_enabled);
+      }
+      toast.success(enabled ? 'Leaderboard pacing limiter enabled' : 'Leaderboard pacing limiter disabled');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to update');
+    } finally {
+      setSustainedLeaderboardRlSaving(false);
     }
   };
 
@@ -11738,6 +11830,106 @@ export default function Admin() {
                   {sustainedRankingRlSaving ? '…' : 'Disable'}
                 </button>
                 <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlRankingEnabled ? 'on' : 'off'}</span>
+              </div>
+            </div>
+            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
+              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Notifications / inbox</p>
+              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+                <code className="text-[9px] bg-muted px-1 rounded">GET /notifications</code>, sent, thread. Same jail-style pacing as jail when enabled.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={sustainedNotificationsRlSaving || sustainedPageRlNotificationsEnabled}
+                  onClick={() => applySustainedPageRlNotifications(true)}
+                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedNotificationsRlSaving ? '…' : 'Enable'}
+                </button>
+                <button
+                  type="button"
+                  disabled={sustainedNotificationsRlSaving || !sustainedPageRlNotificationsEnabled}
+                  onClick={() => applySustainedPageRlNotifications(false)}
+                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedNotificationsRlSaving ? '…' : 'Disable'}
+                </button>
+                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlNotificationsEnabled ? 'on' : 'off'}</span>
+              </div>
+            </div>
+            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
+              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Hitlist</p>
+              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+                <code className="text-[9px] bg-muted px-1 rounded">GET /hitlist/list</code>, <code className="text-[9px] bg-muted px-1 rounded">/hitlist/me</code>, <code className="text-[9px] bg-muted px-1 rounded">/hitlist/npc-status</code>. Jail-style pacing.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={sustainedHitlistRlSaving || sustainedPageRlHitlistEnabled}
+                  onClick={() => applySustainedPageRlHitlist(true)}
+                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedHitlistRlSaving ? '…' : 'Enable'}
+                </button>
+                <button
+                  type="button"
+                  disabled={sustainedHitlistRlSaving || !sustainedPageRlHitlistEnabled}
+                  onClick={() => applySustainedPageRlHitlist(false)}
+                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedHitlistRlSaving ? '…' : 'Disable'}
+                </button>
+                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlHitlistEnabled ? 'on' : 'off'}</span>
+              </div>
+            </div>
+            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
+              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Bank</p>
+              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+                <code className="text-[9px] bg-muted px-1 rounded">GET /bank/meta</code> and <code className="text-[9px] bg-muted px-1 rounded">/bank/overview</code>. Jail-style pacing.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={sustainedBankRlSaving || sustainedPageRlBankEnabled}
+                  onClick={() => applySustainedPageRlBank(true)}
+                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedBankRlSaving ? '…' : 'Enable'}
+                </button>
+                <button
+                  type="button"
+                  disabled={sustainedBankRlSaving || !sustainedPageRlBankEnabled}
+                  onClick={() => applySustainedPageRlBank(false)}
+                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedBankRlSaving ? '…' : 'Disable'}
+                </button>
+                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlBankEnabled ? 'on' : 'off'}</span>
+              </div>
+            </div>
+            <div className="space-y-1 rounded border border-zinc-700/40 p-2">
+              <p className="text-[10px] font-heading uppercase tracking-wider text-mutedForeground">Leaderboard</p>
+              <p className="text-[10px] text-mutedForeground font-heading leading-relaxed">
+                <code className="text-[9px] bg-muted px-1 rounded">GET /leaderboard</code> and <code className="text-[9px] bg-muted px-1 rounded">/leaderboards/top</code>. Jail-style pacing.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={sustainedLeaderboardRlSaving || sustainedPageRlLeaderboardEnabled}
+                  onClick={() => applySustainedPageRlLeaderboard(true)}
+                  className="px-2.5 py-1 rounded border border-primary/40 bg-primary/10 text-[11px] font-heading text-primary hover:bg-primary/20 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedLeaderboardRlSaving ? '…' : 'Enable'}
+                </button>
+                <button
+                  type="button"
+                  disabled={sustainedLeaderboardRlSaving || !sustainedPageRlLeaderboardEnabled}
+                  onClick={() => applySustainedPageRlLeaderboard(false)}
+                  className="px-2.5 py-1 rounded border border-zinc-600 bg-zinc-800/80 text-[11px] font-heading text-zinc-200 hover:bg-zinc-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {sustainedLeaderboardRlSaving ? '…' : 'Disable'}
+                </button>
+                <span className="text-[10px] text-mutedForeground font-heading">Current: {sustainedPageRlLeaderboardEnabled ? 'on' : 'off'}</span>
               </div>
             </div>
           </div>

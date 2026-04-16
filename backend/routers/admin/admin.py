@@ -185,6 +185,10 @@ class AdminSettingsUpdate(BaseModel):
     sustained_page_rl_game_chat_enabled: Optional[bool] = None  # Game chat messages/prefs GETs (jail-style)
     sustained_page_rl_store_enabled: Optional[bool] = None  # Store/points-related GETs (jail-style)
     sustained_page_rl_ranking_enabled: Optional[bool] = None  # Rank progress GET (jail-style)
+    sustained_page_rl_notifications_enabled: Optional[bool] = None  # Inbox / notification list GETs (jail-style)
+    sustained_page_rl_hitlist_enabled: Optional[bool] = None  # Hitlist GETs (jail-style)
+    sustained_page_rl_bank_enabled: Optional[bool] = None  # Bank meta/overview GETs (jail-style)
+    sustained_page_rl_leaderboard_enabled: Optional[bool] = None  # Leaderboard GETs (jail-style)
     spotify_feature_enabled: Optional[bool] = None
     stock_market_max_points: Optional[int] = None
     sports_bet_max_total_open_stake: Optional[int] = None  # Max $ in open sports bets per user (default 25M)
@@ -5672,6 +5676,10 @@ def register(router):
         sustained_page_rl_game_chat_enabled = bool(main_doc.get("sustained_page_rl_game_chat_enabled")) if main_doc else False
         sustained_page_rl_store_enabled = bool(main_doc.get("sustained_page_rl_store_enabled")) if main_doc else False
         sustained_page_rl_ranking_enabled = bool(main_doc.get("sustained_page_rl_ranking_enabled")) if main_doc else False
+        sustained_page_rl_notifications_enabled = bool(main_doc.get("sustained_page_rl_notifications_enabled")) if main_doc else False
+        sustained_page_rl_hitlist_enabled = bool(main_doc.get("sustained_page_rl_hitlist_enabled")) if main_doc else False
+        sustained_page_rl_bank_enabled = bool(main_doc.get("sustained_page_rl_bank_enabled")) if main_doc else False
+        sustained_page_rl_leaderboard_enabled = bool(main_doc.get("sustained_page_rl_leaderboard_enabled")) if main_doc else False
         spotify_feature_enabled = bool(main_doc.get("spotify_feature_enabled", False)) if main_doc else False
         preorder_points_release_date = main_doc.get("preorder_points_release_date") if main_doc else None
         store_points_auto_credit = main_doc.get("store_points_auto_credit") if main_doc else None
@@ -5711,6 +5719,10 @@ def register(router):
             "sustained_page_rl_game_chat_enabled": sustained_page_rl_game_chat_enabled,
             "sustained_page_rl_store_enabled": sustained_page_rl_store_enabled,
             "sustained_page_rl_ranking_enabled": sustained_page_rl_ranking_enabled,
+            "sustained_page_rl_notifications_enabled": sustained_page_rl_notifications_enabled,
+            "sustained_page_rl_hitlist_enabled": sustained_page_rl_hitlist_enabled,
+            "sustained_page_rl_bank_enabled": sustained_page_rl_bank_enabled,
+            "sustained_page_rl_leaderboard_enabled": sustained_page_rl_leaderboard_enabled,
             "spotify_feature_enabled": spotify_feature_enabled,
             "stock_market_max_points": stock_market_max_points,
             "sports_bet_max_total_open_stake": sports_bet_max_total_open_stake,
@@ -5875,6 +5887,30 @@ def register(router):
             await db.game_settings.update_one(
                 {"_id": "main"},
                 {"$set": {"sustained_page_rl_ranking_enabled": bool(body.sustained_page_rl_ranking_enabled)}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_notifications_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_notifications_enabled": bool(body.sustained_page_rl_notifications_enabled)}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_hitlist_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_hitlist_enabled": bool(body.sustained_page_rl_hitlist_enabled)}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_bank_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_bank_enabled": bool(body.sustained_page_rl_bank_enabled)}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_leaderboard_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_leaderboard_enabled": bool(body.sustained_page_rl_leaderboard_enabled)}},
                 upsert=True,
             )
         if body.spotify_feature_enabled is not None:
@@ -6060,6 +6096,10 @@ def register(router):
         sustained_page_rl_game_chat_enabled = bool(main_doc.get("sustained_page_rl_game_chat_enabled")) if main_doc else False
         sustained_page_rl_store_enabled = bool(main_doc.get("sustained_page_rl_store_enabled")) if main_doc else False
         sustained_page_rl_ranking_enabled = bool(main_doc.get("sustained_page_rl_ranking_enabled")) if main_doc else False
+        sustained_page_rl_notifications_enabled = bool(main_doc.get("sustained_page_rl_notifications_enabled")) if main_doc else False
+        sustained_page_rl_hitlist_enabled = bool(main_doc.get("sustained_page_rl_hitlist_enabled")) if main_doc else False
+        sustained_page_rl_bank_enabled = bool(main_doc.get("sustained_page_rl_bank_enabled")) if main_doc else False
+        sustained_page_rl_leaderboard_enabled = bool(main_doc.get("sustained_page_rl_leaderboard_enabled")) if main_doc else False
         spotify_feature_enabled = bool(main_doc.get("spotify_feature_enabled", False)) if main_doc else False
         preorder_points_release_date = main_doc.get("preorder_points_release_date") if main_doc else None
         store_points_auto_credit = main_doc.get("store_points_auto_credit") if main_doc else None
@@ -6093,6 +6133,10 @@ def register(router):
             "sustained_page_rl_game_chat_enabled": sustained_page_rl_game_chat_enabled,
             "sustained_page_rl_store_enabled": sustained_page_rl_store_enabled,
             "sustained_page_rl_ranking_enabled": sustained_page_rl_ranking_enabled,
+            "sustained_page_rl_notifications_enabled": sustained_page_rl_notifications_enabled,
+            "sustained_page_rl_hitlist_enabled": sustained_page_rl_hitlist_enabled,
+            "sustained_page_rl_bank_enabled": sustained_page_rl_bank_enabled,
+            "sustained_page_rl_leaderboard_enabled": sustained_page_rl_leaderboard_enabled,
             "spotify_feature_enabled": spotify_feature_enabled,
             "stock_market_max_points": stock_market_max_points,
             "sports_bet_max_total_open_stake": sports_bet_max_total_open_stake,

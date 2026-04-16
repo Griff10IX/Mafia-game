@@ -17,6 +17,7 @@ from server import (
     _is_admin,
     _is_moderator,
 )
+from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_NOTIFICATIONS
 
 # ----- Constants -----
 # Read items: removed 5 days after marked read (read_at). Keeps inbox DB lean.
@@ -68,6 +69,13 @@ def _invalidate_list_cache(user_id: str):
     _list_cache.pop(user_id, None)
 
 
+async def _notifications_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_NOTIFICATIONS)
+
+
+_notifications_rl_u = [Depends(_notifications_sustained_rl_user)]
+
+
 def register(router):
     @router.get("/profile/preferences")
     async def get_profile_preferences(current_user: dict = Depends(get_current_user)):
@@ -89,7 +97,7 @@ def register(router):
         )
         return {"message": "Preferences updated", "notification_preferences": new_prefs}
 
-    @router.get("/notifications")
+    @router.get("/notifications", dependencies=_notifications_rl_u)
     async def get_notifications(current_user: dict = Depends(get_current_user)):
         user_id = current_user.get("id") or ""
         now_utc = datetime.now(timezone.utc)
@@ -150,7 +158,7 @@ def register(router):
             _list_cache[user_id] = {"ts": now_ts, "data": out}
         return out
 
-    @router.get("/notifications/sent")
+    @router.get("/notifications/sent", dependencies=_notifications_rl_u)
     async def get_sent_messages(current_user: dict = Depends(get_current_user)):
         """Return sent direct messages for the current user."""
         user_id = current_user.get("id") or ""
@@ -294,7 +302,7 @@ def register(router):
         await send_notification_to_all(title, message, notification_type="system", category="system")
         return {"message": "System message sent to all users"}
 
-    @router.get("/notifications/thread/{other_user_id}")
+    @router.get("/notifications/thread/{other_user_id}", dependencies=_notifications_rl_u)
     async def get_thread(other_user_id: str, current_user: dict = Depends(get_current_user)):
         """Get conversation thread with another user (for Telegram-style chat)."""
         me = current_user.get("id") or ""

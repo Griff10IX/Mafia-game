@@ -12,6 +12,7 @@ from fastapi import Depends, HTTPException, Request
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from server import db, get_current_user, get_current_user_verified, log_activity, send_notification
 from utils.bank_economy_settings import get_bank_economy_config, interest_option_for_hours
+from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_BANK
 
 # Set from server in register() (server keeps constants for UserProfile / new-user / auth/me)
 SWISS_BANK_LIMIT_START = None
@@ -25,6 +26,13 @@ check_rate_limit = None
 _overview_cache: dict = {}  # user_id -> (payload, expires_at)
 _OVERVIEW_CACHE_TTL_SEC = 10
 _OVERVIEW_CACHE_MAX_ENTRIES = 5000
+
+
+async def _bank_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_BANK)
+
+
+_bank_rl_u = [Depends(_bank_sustained_rl_user)]
 
 
 class BankInterestDepositRequest(BaseModel):
@@ -398,8 +406,8 @@ def register(router):
     _username_pattern_fn = getattr(srv, "_username_pattern", None)
     check_rate_limit = getattr(srv, "check_rate_limit", None)
 
-    router.add_api_route("/bank/meta", bank_meta, methods=["GET"])
-    router.add_api_route("/bank/overview", bank_overview, methods=["GET"])
+    router.add_api_route("/bank/meta", bank_meta, methods=["GET"], dependencies=_bank_rl_u)
+    router.add_api_route("/bank/overview", bank_overview, methods=["GET"], dependencies=_bank_rl_u)
     router.add_api_route("/bank/interest/deposit", bank_interest_deposit, methods=["POST"])
     router.add_api_route("/bank/interest/claim", bank_interest_claim, methods=["POST"])
     router.add_api_route("/bank/swiss/deposit", bank_swiss_deposit, methods=["POST"])

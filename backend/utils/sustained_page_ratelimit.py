@@ -39,6 +39,10 @@ PAGE_KEY_BOOZE = "booze"
 PAGE_KEY_GAME_CHAT = "game_chat"
 PAGE_KEY_STORE = "store"
 PAGE_KEY_RANKING = "ranking"
+PAGE_KEY_NOTIFICATIONS = "notifications"
+PAGE_KEY_HITLIST = "hitlist"
+PAGE_KEY_BANK = "bank"
+PAGE_KEY_LEADERBOARD = "leaderboard"
 
 # Scopes that use JAIL_STYLE_MAX_GAP_MS / JAIL_STYLE_SUSTAIN_SEC (forum/entertainer aligned with jail per product).
 PAGE_KEYS_JAIL_STYLE_TUNING = frozenset(
@@ -53,6 +57,10 @@ PAGE_KEYS_JAIL_STYLE_TUNING = frozenset(
         PAGE_KEY_GAME_CHAT,
         PAGE_KEY_STORE,
         PAGE_KEY_RANKING,
+        PAGE_KEY_NOTIFICATIONS,
+        PAGE_KEY_HITLIST,
+        PAGE_KEY_BANK,
+        PAGE_KEY_LEADERBOARD,
     }
 )
 
@@ -86,6 +94,10 @@ _SETTINGS_FIELD_BY_PAGE = {
     PAGE_KEY_GAME_CHAT: "sustained_page_rl_game_chat_enabled",
     PAGE_KEY_STORE: "sustained_page_rl_store_enabled",
     PAGE_KEY_RANKING: "sustained_page_rl_ranking_enabled",
+    PAGE_KEY_NOTIFICATIONS: "sustained_page_rl_notifications_enabled",
+    PAGE_KEY_HITLIST: "sustained_page_rl_hitlist_enabled",
+    PAGE_KEY_BANK: "sustained_page_rl_bank_enabled",
+    PAGE_KEY_LEADERBOARD: "sustained_page_rl_leaderboard_enabled",
 }
 
 _COOLDOWN_MSG = {
@@ -100,6 +112,10 @@ _COOLDOWN_MSG = {
     PAGE_KEY_GAME_CHAT: "Too many game chat requests too fast — try again in a few seconds.",
     PAGE_KEY_STORE: "Too many store requests too fast — try again in a few seconds.",
     PAGE_KEY_RANKING: "Too many ranking requests too fast — try again in a few seconds.",
+    PAGE_KEY_NOTIFICATIONS: "Too many notification requests too fast — try again in a few seconds.",
+    PAGE_KEY_HITLIST: "Too many hitlist requests too fast — try again in a few seconds.",
+    PAGE_KEY_BANK: "Too many bank requests too fast — try again in a few seconds.",
+    PAGE_KEY_LEADERBOARD: "Too many leaderboard requests too fast — try again in a few seconds.",
 }
 
 _SLOW_MSG = {
@@ -114,6 +130,10 @@ _SLOW_MSG = {
     PAGE_KEY_GAME_CHAT: "You're loading game chat too fast — slow down for a few seconds.",
     PAGE_KEY_STORE: "You're hitting the store server too fast — slow down for a few seconds.",
     PAGE_KEY_RANKING: "You're hitting the ranking server too fast — slow down for a few seconds.",
+    PAGE_KEY_NOTIFICATIONS: "You're hitting notifications too fast — slow down for a few seconds.",
+    PAGE_KEY_HITLIST: "You're hitting the hitlist server too fast — slow down for a few seconds.",
+    PAGE_KEY_BANK: "You're hitting the bank server too fast — slow down for a few seconds.",
+    PAGE_KEY_LEADERBOARD: "You're hitting the leaderboard too fast — slow down for a few seconds.",
 }
 
 _PAGE_LABEL_ADMIN = {
@@ -128,6 +148,10 @@ _PAGE_LABEL_ADMIN = {
     PAGE_KEY_GAME_CHAT: "Game chat",
     PAGE_KEY_STORE: "Store / points",
     PAGE_KEY_RANKING: "Rank progress",
+    PAGE_KEY_NOTIFICATIONS: "Notifications / inbox",
+    PAGE_KEY_HITLIST: "Hitlist",
+    PAGE_KEY_BANK: "Bank",
+    PAGE_KEY_LEADERBOARD: "Leaderboard",
 }
 
 

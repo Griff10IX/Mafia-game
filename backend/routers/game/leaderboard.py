@@ -20,6 +20,7 @@ from server import (
     effective_player_kill_count,
     mongodb_effective_kill_count_expr,
 )
+from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_LEADERBOARD
 
 _lb_cache: dict = {}
 _LB_CACHE_TTL = 30
@@ -826,6 +827,19 @@ async def aggregate_weekly_payout_refund_amounts_by_user(database, week_start: s
     return out
 
 
+async def _leaderboard_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_LEADERBOARD)
+
+
+_leaderboard_rl_u = [Depends(_leaderboard_sustained_rl_user)]
+
+
 def register(router):
-    router.add_api_route("/leaderboard", get_leaderboard, methods=["GET"], response_model=List[LeaderboardEntry])
-    router.add_api_route("/leaderboards/top", get_top_leaderboards, methods=["GET"])
+    router.add_api_route(
+        "/leaderboard",
+        get_leaderboard,
+        methods=["GET"],
+        response_model=List[LeaderboardEntry],
+        dependencies=_leaderboard_rl_u,
+    )
+    router.add_api_route("/leaderboards/top", get_top_leaderboards, methods=["GET"], dependencies=_leaderboard_rl_u)

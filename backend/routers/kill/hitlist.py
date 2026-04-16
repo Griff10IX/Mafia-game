@@ -21,8 +21,16 @@ from server import (
     STATES,
     DEFAULT_HEALTH,
 )
+from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_HITLIST
 
 logger = logging.getLogger(__name__)
+
+
+async def _hitlist_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_HITLIST)
+
+
+_hitlist_rl_u = [Depends(_hitlist_sustained_rl_user)]
 
 
 def _parse_iso_datetime(val):
@@ -699,10 +707,10 @@ async def hitlist_reveal(current_user: dict = Depends(get_current_user)):
 
 def register(router):
     router.add_api_route("/hitlist/add", hitlist_add, methods=["POST"])
-    router.add_api_route("/hitlist/npc-status", hitlist_npc_status, methods=["GET"])
+    router.add_api_route("/hitlist/npc-status", hitlist_npc_status, methods=["GET"], dependencies=_hitlist_rl_u)
     router.add_api_route("/hitlist/add-npc", hitlist_add_npc, methods=["POST"])
-    router.add_api_route("/hitlist/list", hitlist_list, methods=["GET"])
-    router.add_api_route("/hitlist/me", hitlist_me, methods=["GET"])
+    router.add_api_route("/hitlist/list", hitlist_list, methods=["GET"], dependencies=_hitlist_rl_u)
+    router.add_api_route("/hitlist/me", hitlist_me, methods=["GET"], dependencies=_hitlist_rl_u)
     router.add_api_route("/hitlist/buy-off", hitlist_buy_off, methods=["POST"])
     router.add_api_route("/hitlist/buy-off-user", hitlist_buy_off_user, methods=["POST"])
     router.add_api_route("/hitlist/reveal", hitlist_reveal, methods=["POST"])
