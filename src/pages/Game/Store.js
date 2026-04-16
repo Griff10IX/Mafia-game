@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { ShoppingBag, Zap, Shield, Star, Car, Crosshair, VolumeX, Clock, Bot, Heart, Send, ArrowRightLeft, ChevronDown, ChevronUp, Package, Copy } from 'lucide-react';
-import api, { refreshUser } from '../../utils/api';
+import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { copyTextToClipboard } from '../../utils/copyToClipboard';
 import { toast } from 'sonner';
 import { containsProfanity } from '../../utils/profanityFilter';
@@ -336,7 +336,7 @@ export default function Store() {
       const [userRes, boozeRes, eventsRes, adminRes, locksRes, pendingRes] = await Promise.all([
         api.get('/auth/me'),
         api.get('/booze-run/config').catch(() => ({ data: null })),
-        api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
+        apiRequestWith429Retry(() => api.get('/events/active')).catch(() => ({ data: { event: null, events_enabled: false } })),
         api.get('/admin/check').catch(() => ({ data: { is_admin: false } })),
         api.get('/page-locks').catch(() => ({ data: { paths: {} } })),
         api.get('/payments/pending-points').catch(() => ({ data: { pending_points: 0 } })),

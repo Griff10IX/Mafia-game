@@ -13,7 +13,7 @@ function SlotsIcon({ size = 10, className = '' }) {
     </svg>
   );
 }
-import api from '../../utils/api';
+import api, { apiRequestWith429Retry } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 
@@ -338,7 +338,7 @@ export default function States() {
   }, [fetchUserCity]);
 
   const fetchFamilyMy = useCallback(() => {
-    api.get('/families/my').then((r) => setFamilyMy(r.data ?? null)).catch(() => setFamilyMy(null));
+    apiRequestWith429Retry(() => api.get('/families/my')).then((r) => setFamilyMy(r.data ?? null)).catch(() => setFamilyMy(null));
   }, []);
   useEffect(() => { fetchFamilyMy(); }, [fetchFamilyMy]);
 

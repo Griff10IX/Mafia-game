@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { Plane, Car, Clock, MapPin, Zap, ShoppingCart, Bot, Spade } from 'lucide-react';
-import api, { refreshUser } from '../../utils/api';
+import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import ActiveTokenBadge from '../../components/ActiveTokenBadge';
@@ -349,7 +349,7 @@ export default function Travel() {
   const fetchTravelInfo = useCallback(async ({ silent = false } = {}) => {
     try {
       const [infoRes, autoRankRes, userRes, bjRes, mpBjRes] = await Promise.all([
-        api.get('/travel/info'),
+        apiRequestWith429Retry(() => api.get('/travel/info')),
         api.get('/auto-rank/me').catch(() => ({ data: {} })),
         api.get('/auth/me').catch(() => ({ data: null })),
         api.get('/casino/blackjack/current-game').catch(() => ({ data: {} })),

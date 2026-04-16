@@ -4,7 +4,7 @@ import {
   BookOpen, X, Crown, Clock, Lock, CheckCircle, Banknote,
   MapPin, ChevronRight, Skull, Star, AlertCircle, Coins, ListChecks, ChevronUp, Zap
 } from 'lucide-react';
-import api, { refreshUser } from '../../utils/api';
+import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
@@ -977,8 +977,8 @@ export default function Missions() {
   const load = useCallback(async ({ silentError = false } = {}) => {
     try {
       const [mapRes, listRes] = await Promise.all([
-        api.get('/missions/map'),
-        api.get('/missions'),
+        apiRequestWith429Retry(() => api.get('/missions/map')),
+        apiRequestWith429Retry(() => api.get('/missions')),
       ]);
       const nextData = mapRes.data;
       const nextMissions = listRes.data?.missions || [];
@@ -1077,7 +1077,7 @@ export default function Missions() {
         }
         toast.success(`Collected ${parts.join(' and ')}`);
         refreshUser();
-        const mapRes = await api.get('/missions/map');
+        const mapRes = await apiRequestWith429Retry(() => api.get('/missions/map'));
         setData(mapRes.data);
       }
     } catch {

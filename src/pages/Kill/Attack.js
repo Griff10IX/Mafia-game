@@ -1,7 +1,7 @@
 import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { Search, Plane, Car, Crosshair, Clock, MapPin, Skull, Calculator, Zap, FileText, Users, AlertTriangle, History, ChevronDown, ChevronRight } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
-import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
+import api, { refreshUser, getApiErrorMessage, apiRequestWith429Retry } from '../../utils/api';
 import { formatReleaseUnlockLine } from '../../utils/releaseSoftLaunchDisplay';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
@@ -1145,7 +1145,7 @@ export default function Attack() {
         const [inflationRes, meRes, eventsRes, rlRes] = await Promise.all([
           api.get('/attack/inflation').catch(() => ({ data: {} })),
           api.get('/auth/me').catch(() => ({ data: {} })),
-          api.get('/events/active').catch(() => ({ data: {} })),
+          apiRequestWith429Retry(() => api.get('/events/active')).catch(() => ({ data: {} })),
           api.get('/payments/release-soft-launch').catch(() => ({ data: {} })),
         ]);
         setInflationPct(Number(inflationRes.data?.inflation_pct ?? 0));
@@ -1344,7 +1344,7 @@ export default function Attack() {
     setTravelModalDestination(locationState || null);
     setTravelInfo(null);
     if (locationState) {
-      api.get('/travel/info').then((r) => setTravelInfo(r.data)).catch(() => setTravelInfo(null));
+      apiRequestWith429Retry(() => api.get('/travel/info')).then((r) => setTravelInfo(r.data)).catch(() => setTravelInfo(null));
     }
   };
 

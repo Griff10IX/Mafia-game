@@ -15,7 +15,7 @@ const RARITY_COLORS = {
 function getRarityColor(rarity) {
   return RARITY_COLORS[rarity] || 'text-foreground';
 }
-import api, { refreshUser } from '../../utils/api';
+import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
@@ -429,7 +429,7 @@ export default function GTA() {
       const [optionsRes, recentStolenRes, eventsRes, statsRes, autoRankRes, lootStatusRes, meRes] = await Promise.allSettled([
         api.get('/gta/options'),
         api.get('/gta/recent-stolen'),
-        api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
+        apiRequestWith429Retry(() => api.get('/events/active')).catch(() => ({ data: { event: null, events_enabled: false } })),
         api.get('/gta/stats').catch(() => ({ data: {} })),
         api.get('/auto-rank/me').catch(() => ({ data: {} })),
         api.get('/loot-box/status').catch(() => ({ data: {} })),

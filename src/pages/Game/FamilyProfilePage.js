@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import api from '../../utils/api';
+import api, { apiRequestWith429Retry } from '../../utils/api';
 import { Building2, Users, TrendingUp, Plane, ArrowLeft, Crosshair, Clock, Skull, MapPin, Bold, Italic, AlignCenter, Image, Sparkles } from 'lucide-react';
 import { toast } from 'sonner';
 import { parseForumContent, insertAtCursor } from '../../utils/forumContent';
@@ -212,7 +212,7 @@ export default function FamilyProfilePage() {
     const run = async () => {
       try {
         const params = isUuid ? { id } : { tag: id };
-        const res = await api.get('/families/lookup', { params });
+        const res = await apiRequestWith429Retry(() => api.get('/families/lookup', { params }));
         setFamily(res.data);
         setProfileTextEdit((res.data?.profile_text || '').trim() || '');
         setNotepadColorEdit(res.data?.profile_notepad_color ?? '');
@@ -277,7 +277,7 @@ export default function FamilyProfilePage() {
     try {
       const res = await api.post('/families/crew-oc/apply', { family_id: family.id });
       toast.success(res.data?.message || 'Applied.');
-      const r = await api.get('/families/lookup', { params: { tag: family.tag } });
+      const r = await apiRequestWith429Retry(() => api.get('/families/lookup', { params: { tag: family.tag } }));
       setFamily(r.data);
       setProfileTextEdit((r.data?.profile_text || '').trim() || '');
       setNotepadColorEdit(r.data?.profile_notepad_color ?? '');
@@ -310,7 +310,7 @@ export default function FamilyProfilePage() {
         notepad_color: (notepadColorEdit || '').trim() === '' ? '' : notepadColorEdit.trim(),
       });
       toast.success('Family profile updated.');
-      const r = await api.get('/families/lookup', { params: { tag: family.tag } });
+      const r = await apiRequestWith429Retry(() => api.get('/families/lookup', { params: { tag: family.tag } }));
       setFamily(r.data);
       setProfileTextEdit((r.data?.profile_text || '').trim() || '');
       setNotepadColorEdit(r.data?.profile_notepad_color ?? '');
@@ -320,7 +320,7 @@ export default function FamilyProfilePage() {
   };
 
   const refreshFamilyLookup = async () => {
-    const r = await api.get('/families/lookup', { params: { tag: family.tag } });
+    const r = await apiRequestWith429Retry(() => api.get('/families/lookup', { params: { tag: family.tag } }));
     setFamily(r.data);
     setProfileTextEdit((r.data?.profile_text || '').trim() || '');
     setNotepadColorEdit(r.data?.profile_notepad_color ?? '');

@@ -1,7 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { Shield, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
-import api, { refreshUser } from '../../utils/api';
+import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { readBodyguardsPageWarm, writeBodyguardsPageWarm } from '../../utils/bodyguardsPageWarm';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -138,32 +138,32 @@ export default function Bodyguards() {
   const fetchData = async () => {
     try {
       const [bodyguardsRes, userRes, eventsRes, inflationRes, statsRes, invitesRes] = await Promise.all([
-        api.get('/bodyguards', noCacheGetConfig()),
+        apiRequestWith429Retry(() => api.get('/bodyguards', noCacheGetConfig())),
         api.get('/auth/me'),
-        api.get('/events/active').catch((e) => {
+        apiRequestWith429Retry(() => api.get('/events/active')).catch((e) => {
           if (process.env.NODE_ENV === 'development') {
             console.warn('[Bodyguards] events/active failed', e?.response?.status, e?.response?.data);
           }
           return { data: { event: null, events_enabled: false } };
         }),
-        api.get('/bodyguards/inflation', noCacheGetConfig()).catch((e) => {
+        apiRequestWith429Retry(() => api.get('/bodyguards/inflation', noCacheGetConfig())).catch((e) => {
           if (process.env.NODE_ENV === 'development') {
             console.warn('[Bodyguards] inflation failed', e?.response?.status, e?.response?.data);
           }
           return { data: { next_hire_inflation_pct: 0 } };
         }),
-        api.get('/bodyguards/stats').catch((e) => {
+        apiRequestWith429Retry(() => api.get('/bodyguards/stats')).catch((e) => {
           if (process.env.NODE_ENV === 'development') {
             console.warn('[Bodyguards] stats failed', e?.response?.status, e?.response?.data);
           }
           return { data: null };
         }),
-        api.get('/bodyguards/invites').catch((e) => {
+        apiRequestWith429Retry(() => api.get('/bodyguards/invites')).catch((e) => {
           if (process.env.NODE_ENV === 'development') {
             console.warn('[Bodyguards] invites failed', e?.response?.status, e?.response?.data);
           }
           return { data: { sent: [], received: [] } };
-        })
+        }),
       ]);
       if (bodyguardsRes.status >= 400) {
         const msg = bodyguardsRes.data?.detail ?? bodyguardsRes.statusText ?? 'Bodyguards request failed';
@@ -287,7 +287,7 @@ export default function Bodyguards() {
         refreshUser().catch(() => {});
         await fetchData();
         try {
-          const inflRes = await api.get('/bodyguards/inflation', noCacheGetConfig());
+          const inflRes = await apiRequestWith429Retry(() => api.get('/bodyguards/inflation', noCacheGetConfig()));
           setNextHireInflationPct(inflRes.data?.next_hire_inflation_pct ?? 0);
           setInflationWindowEndsAt(inflRes.data?.inflation_window_ends_at ?? null);
         } catch { /* fetchData already set inflation */ }

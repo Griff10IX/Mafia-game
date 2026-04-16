@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { HelpCircle, Clock, AlertCircle, Bot, Skull, Zap, Lock, Star } from 'lucide-react';
-import api, { refreshUser } from '../../utils/api';
+import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { getCrimesPrefetch, clearCrimesPrefetch } from '../../utils/prefetchCache';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -471,7 +471,7 @@ export default function Crimes() {
       setAutoRankCrimesDisabled(!!(ar.auto_rank_enabled && (ar.auto_rank_crimes || ar.auto_rank_bust_every_5_sec)));
 
       Promise.all([
-        api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
+        apiRequestWith429Retry(() => api.get('/events/active')).catch(() => ({ data: { event: null, events_enabled: false } })),
         api.get('/crimes/stats').catch(() => ({ data: {} })),
         api.get('/loot-box/status').catch(() => ({ data: {} })),
       ])

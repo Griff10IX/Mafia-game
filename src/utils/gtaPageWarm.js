@@ -1,7 +1,7 @@
 /**
  * Background warm for Crime → GTA: same GET bundle as `GTA.js` fetchData.
  */
-import api from './api';
+import api, { apiRequestWith429Retry } from './api';
 import { writeSessionJson } from './sessionPageCache';
 
 export const GTA_SESSION_CACHE_KEY = 'mafia_gta_v1';
@@ -99,7 +99,7 @@ export async function prefetchGtaPageData(options = {}) {
     const settled = await Promise.allSettled([
       api.get('/gta/options'),
       api.get('/gta/recent-stolen'),
-      api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
+      apiRequestWith429Retry(() => api.get('/events/active')).catch(() => ({ data: { event: null, events_enabled: false } })),
       api.get('/gta/stats').catch(() => ({ data: {} })),
       api.get('/auto-rank/me').catch(() => ({ data: {} })),
       api.get('/loot-box/status').catch(() => ({ data: {} })),

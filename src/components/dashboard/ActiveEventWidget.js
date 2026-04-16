@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Zap } from 'lucide-react';
-import api from '../../utils/api';
+import api, { apiRequestWith429Retry } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
 
 export default function ActiveEventWidget() {
@@ -8,7 +8,7 @@ export default function ActiveEventWidget() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    api.get('/events/active')
+    apiRequestWith429Retry(() => api.get('/events/active'))
       .then((res) => setData(res.data))
       .catch(() => setData(null))
       .finally(() => setLoading(false));

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Users, Building2, DollarSign, TrendingUp, TrendingDown, LogOut, Swords, Trophy, Shield, Skull, X, Crosshair, RefreshCw, Clock, ChevronRight, MessageSquare, UserPlus, Lock, Unlock, ArrowUpCircle, Flame, MapPin, Plane, Sparkles } from 'lucide-react';
-import api, { refreshUser } from '../../utils/api';
+import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { toast } from 'sonner';
 import { getRacketAccent } from '../../constants';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
@@ -2503,8 +2503,11 @@ export default function FamilyPage() {
       let nextVaultTxTotal = 0;
 
       const [listRes, myRes, configRes, historyRes, eventsRes] = await Promise.allSettled([
-        api.get('/families'), api.get('/families/my'), api.get('/families/config').catch(() => ({ data: {} })),
-        api.get('/families/wars/history').catch(() => ({ data: { wars: [] } })), api.get('/events/active').catch(() => ({ data: { event: null, events_enabled: false } })),
+        apiRequestWith429Retry(() => api.get('/families')),
+        apiRequestWith429Retry(() => api.get('/families/my')),
+        apiRequestWith429Retry(() => api.get('/families/config')).catch(() => ({ data: {} })),
+        apiRequestWith429Retry(() => api.get('/families/wars/history')).catch(() => ({ data: { wars: [] } })),
+        apiRequestWith429Retry(() => api.get('/events/active')).catch(() => ({ data: { event: null, events_enabled: false } })),
       ]);
       if (listRes.status === 'fulfilled') {
         nextFamilies = listRes.value?.data || [];
@@ -2515,9 +2518,11 @@ export default function FamilyPage() {
         setMyFamily(nextMyFamily);
         if (myRes.value.data?.family) {
           const [statsRes, targetsRes, vaultRes] = await Promise.allSettled([
-            api.get('/families/war/stats'),
-            api.get('/families/racket-attack-targets', { params: { _: Date.now() } }),
-            api.get('/families/vault-transactions', { params: { limit: 50 } }).catch(() => ({ data: { transactions: [], total: 0 } })),
+            apiRequestWith429Retry(() => api.get('/families/war/stats')),
+            apiRequestWith429Retry(() => api.get('/families/racket-attack-targets', { params: { _: Date.now() } })),
+            apiRequestWith429Retry(() => api.get('/families/vault-transactions', { params: { limit: 50 } })).catch(() => ({
+              data: { transactions: [], total: 0 },
+            })),
           ]);
           if (statsRes.status === 'fulfilled') {
             nextWarStats = statsRes.value?.data;
@@ -2578,7 +2583,10 @@ export default function FamilyPage() {
   const fetchRacketAttackTargets = useCallback(async () => {
     if (!myFamily?.family) return;
     setTargetsRefreshing(true);
-    try { const res = await api.get('/families/racket-attack-targets', { params: { _: Date.now() } }); setRacketAttackTargets(res.data?.targets ?? []); }
+    try {
+      const res = await apiRequestWith429Retry(() => api.get('/families/racket-attack-targets', { params: { _: Date.now() } }));
+      setRacketAttackTargets(res.data?.targets ?? []);
+    }
     catch { setRacketAttackTargets([]); } finally { setTargetsRefreshing(false); }
   }, [myFamily?.family]);
 
@@ -2915,7 +2923,11 @@ export default function FamilyPage() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
   useEffect(() => { const id = setInterval(() => setTick((t) => t + 1), 1000); return () => clearInterval(id); }, []);
-  useEffect(() => { if (showWarModal && myFamily?.family) api.get('/families/war/stats').then((res) => setWarStats(res.data)).catch(() => {}); }, [showWarModal, myFamily?.family]);
+  useEffect(() => {
+    if (showWarModal && myFamily?.family) {
+      apiRequestWith429Retry(() => api.get('/families/war/stats')).then((res) => setWarStats(res.data)).catch(() => {});
+    }
+  }, [showWarModal, myFamily?.family]);
 
   return (
     <div className={`space-y-2 sm:space-y-3 ${styles.pageContent} mobile-page-root px-3 sm:px-4 pb-6`} data-testid="families-page">
