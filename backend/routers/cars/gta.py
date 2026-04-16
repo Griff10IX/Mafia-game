@@ -2,6 +2,7 @@
 import asyncio
 import logging
 import secrets
+import time
 from datetime import datetime, timezone, timedelta
 _rng = secrets.SystemRandom()
 import uuid
@@ -1561,10 +1562,34 @@ async def get_cars_for_sale(current_user: dict = Depends(get_current_user)):
     return {"cars": out}
 
 
+# Per-process pacing: rapid "buy all" from the dealer was hammering Mongo (writes + full restock).
+_dealer_buy_last_mon: Dict[str, float] = {}
+_dealer_buy_interval_guard = asyncio.Lock()
+DEALER_BUY_MIN_INTERVAL_SEC = 0.45
+
+
+async def _enforce_dealer_buy_min_interval(user_id: str) -> None:
+    if not user_id:
+        return
+    now = time.monotonic()
+    async with _dealer_buy_interval_guard:
+        prev = _dealer_buy_last_mon.get(user_id)
+        if prev is not None and (now - prev) < DEALER_BUY_MIN_INTERVAL_SEC:
+            gap = DEALER_BUY_MIN_INTERVAL_SEC - (now - prev)
+            retry_after = max(1, int(gap + 0.999))
+            raise HTTPException(
+                status_code=429,
+                detail="Slow down between dealer purchases.",
+                headers={"Retry-After": str(retry_after)},
+            )
+        _dealer_buy_last_mon[user_id] = now
+
+
 async def buy_car(
     request: GTABuyCarRequest, current_user: dict = Depends(get_current_user_verified)
 ):
     """Purchase one car from the dealer for cash. Removes one from dealer stock."""
+    await _enforce_dealer_buy_min_interval(current_user.get("id") or "")
     car_info = next((c for c in CARS if c.get("id") == request.car_id), None)
     if not car_info:
         raise HTTPException(status_code=400, detail="Car not found")

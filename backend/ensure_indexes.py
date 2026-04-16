@@ -133,12 +133,16 @@ async def ensure_all_indexes(db):
         await db.families.create_index("name")
         await db.families.create_index("tag")
         await db.families.create_index("wiped")  # list non-wiped families
+        # Partial filters cannot use $ne (server rewrites to $not). Match non-wiped docs only.
         await db.families.create_index(
             "emblem_key",
             unique=True,
             partialFilterExpression={
                 "emblem_key": {"$exists": True, "$type": "string"},
-                "wiped": {"$ne": True},
+                "$or": [
+                    {"wiped": {"$exists": False}},
+                    {"wiped": False},
+                ],
             },
         )
 
