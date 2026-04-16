@@ -375,10 +375,7 @@ async def _private_cell_meta(user_id: str) -> dict:
     }
 
 
-async def get_jailed_players(
-    current_user: dict = Depends(get_current_user),
-    _rl: None = Depends(_jail_sustained_rl_user),
-):
+async def get_jailed_players(current_user: dict = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
     five_min_ago = now - timedelta(minutes=5)
     ten_min_ago = now - timedelta(minutes=10)
@@ -828,10 +825,7 @@ async def bust_out_of_jail(
     return result
 
 
-async def get_jail_stats(
-    current_user: dict = Depends(get_current_user),
-    _rl: None = Depends(_jail_sustained_rl_user),
-):
+async def get_jail_stats(current_user: dict = Depends(get_current_user)):
     """Return busts today/week, successful busts, profit today / 24h / week."""
     now = datetime.now(timezone.utc)
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -880,10 +874,7 @@ async def get_jail_stats(
     }
 
 
-async def get_jail_status(
-    current_user: dict = Depends(get_current_user),
-    _rl: None = Depends(_jail_sustained_rl_user),
-):
+async def get_jail_status(current_user: dict = Depends(get_current_user)):
     jail_busts = int((current_user.get("jail_busts") or 0) or 0)
     stored_reward = _safe_int(current_user.get("bust_reward_cash"), 0)
     on_hand = _safe_int(current_user.get("money"), 0)
@@ -1267,11 +1258,13 @@ async def spawn_jail_npcs():
 
 
 def register(router):
-    router.add_api_route("/jail/players", get_jailed_players, methods=["GET"])
+    # Sustained page RL on jail GETs (same pattern as routers/kill/attack.py) so throttling always runs on the route.
+    _jail_rl_u = [Depends(_jail_sustained_rl_user)]
+    router.add_api_route("/jail/players", get_jailed_players, methods=["GET"], dependencies=_jail_rl_u)
     router.add_api_route("/jail/private-cell", spawn_private_jail_cell, methods=["POST"])
     router.add_api_route("/jail/bust", bust_out_of_jail, methods=["POST"])
-    router.add_api_route("/jail/stats", get_jail_stats, methods=["GET"])
-    router.add_api_route("/jail/status", get_jail_status, methods=["GET"])
+    router.add_api_route("/jail/stats", get_jail_stats, methods=["GET"], dependencies=_jail_rl_u)
+    router.add_api_route("/jail/status", get_jail_status, methods=["GET"], dependencies=_jail_rl_u)
     router.add_api_route("/jail/set-bust-reward", set_bust_reward, methods=["POST"])
     router.add_api_route("/jail/leave", leave_jail, methods=["POST"])
     router.add_api_route("/jail/snitch", snitch, methods=["POST"])

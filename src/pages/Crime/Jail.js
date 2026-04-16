@@ -37,6 +37,37 @@ function parseBustWaitSecondsFromDetail(detail) {
   return Number.isFinite(n) && n >= 1 ? n : null;
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Jail sustained RL is stored server-side (Mongo), so it survives a full browser refresh.
+ * On 429, wait Retry-After (or a short default) and retry so a refresh mid-cooldown can still load.
+ * Sequential jail GETs on first paint avoid three parallel hits in the same RL window.
+ */
+async function jailGetWith429Retry(requestFn, maxAttempts = 3) {
+  let lastErr;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await requestFn();
+    } catch (e) {
+      lastErr = e;
+      const st = e?.response?.status;
+      if (st === 429 && attempt < maxAttempts - 1) {
+        const h = e?.response?.headers;
+        const raw = h?.['retry-after'] ?? h?.['Retry-After'];
+        const sec = parseInt(String(raw), 10);
+        const ms = Number.isFinite(sec) && sec > 0 && sec <= 120 ? sec * 1000 : 2500;
+        await sleep(ms);
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw lastErr;
+}
+
 const JailStatusCard = ({ 
   inJail, 
   secondsRemaining, 
@@ -350,10 +381,10 @@ export default function Jail() {
 
   const fetchJailData = async () => {
     try {
-      const [jailRes, playersRes, statsRes, autoRankRes, meRes] = await Promise.all([
-        api.get('/jail/status'),
-        api.get('/jail/players'),
-        api.get('/jail/stats').catch(() => ({ data: {} })),
+      const jailRes = await jailGetWith429Retry(() => api.get('/jail/status'));
+      const playersRes = await jailGetWith429Retry(() => api.get('/jail/players'));
+      const statsRes = await jailGetWith429Retry(() => api.get('/jail/stats')).catch(() => ({ data: {} }));
+      const [autoRankRes, meRes] = await Promise.all([
         api.get('/auto-rank/me').catch(() => ({ data: {} })),
         api.get('/auth/me').catch(() => ({ data: null })),
       ]);

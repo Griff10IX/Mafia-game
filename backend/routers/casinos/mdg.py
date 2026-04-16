@@ -1,6 +1,6 @@
 # Casino MDG (Pot Game): create game (fee points/money/both), join, list; one winner takes pot; auto-roll when N spots filled
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import Any, Optional
 import asyncio
 import logging
 import math
@@ -8,6 +8,7 @@ import secrets
 _rng = secrets.SystemRandom()
 import uuid
 
+from bson import ObjectId
 from pydantic import BaseModel
 from fastapi import Depends, HTTPException
 
@@ -32,6 +33,17 @@ AUTO_MDG_MAX_PLAYERS = 10
 AUTO_MDG_EARLY_ROLL_MINUTES = 10
 
 _logger = logging.getLogger(__name__)
+
+
+def _mdg_sanitize_for_json(obj: Any) -> Any:
+    """Strip Mongo `_id` keys and BSON ObjectIds so FastAPI can JSON-encode responses (nested `entries`, etc.)."""
+    if isinstance(obj, ObjectId):
+        return str(obj)
+    if isinstance(obj, dict):
+        return {k: _mdg_sanitize_for_json(v) for k, v in obj.items() if k != "_id"}
+    if isinstance(obj, list):
+        return [_mdg_sanitize_for_json(x) for x in obj]
+    return obj
 
 
 def _mdg_roll_pool(entries: list) -> list:
@@ -305,7 +317,7 @@ def register(router):
             {"_id": 0, "id": 1, "created_by": 1, "created_by_username": 1, "created_at": 1, "fee_points": 1, "fee_money": 1, "max_players": 1, "auto_roll_at": 1, "extra_pot_points": 1, "extra_pot_money": 1, "entries": 1, "pot_points": 1, "pot_money": 1, "status": 1, "is_automated": 1, "house_pot": 1, "auto_roll_deadline": 1},
         ).sort("created_at", -1)
         games = await cursor.to_list(100)
-        return {"games": games}
+        return {"games": [_mdg_sanitize_for_json(g) for g in games]}
 
     @router.get("/casino/mdg/auto-stats")
     async def mdg_auto_stats(current_user: dict = Depends(get_current_user_verified)):
@@ -401,7 +413,7 @@ def register(router):
             "mdg",
             {"action": "create", "game_id": game_id, "fee_points": fee_pts, "fee_money": fee_money, "extra_pot_points": extra_pts, "extra_pot_money": extra_money},
         )
-        return {"message": "Game created and you are in it", "game_id": game_id, "game": {k: v for k, v in doc.items() if k != "_id"}}
+        return {"message": "Game created and you are in it", "game_id": game_id, "game": _mdg_sanitize_for_json(doc)}
 
     @router.post("/casino/mdg/join")
     async def mdg_join(request: MDGJoinRequest, current_user: dict = Depends(get_current_user_verified)):
