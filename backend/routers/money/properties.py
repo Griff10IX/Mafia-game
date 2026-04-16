@@ -1081,13 +1081,15 @@ def register(router):
     import server as srv
     get_current_user = srv.get_current_user
     _user_owns_any_casino = srv._user_owns_any_casino
+    _user_owns_all_casinos = srv._user_owns_all_casinos
     _user_owns_airport = srv._user_owns_airport
     _user_owns_bullet_factory = srv._user_owns_bullet_factory
 
     async def get_my_properties(current_user: dict = Depends(get_current_user)):
         """Return current user's casino (if any), airport and/or armoury. Rule: max 1 casino; max 1 airport and max 1 armoury (may hold both)."""
         user_id = current_user["id"]
-        casino = await _user_owns_any_casino(user_id)
+        casinos = await _user_owns_all_casinos(user_id)
+        casino = casinos[0] if casinos else None
         airport = await _user_owns_airport(user_id)
         armoury = await _user_owns_bullet_factory(user_id)
         property_ = airport or armoury
@@ -1095,6 +1097,7 @@ def register(router):
         points = int((urow or {}).get("points") or 0)
         return {
             "casino": casino,
+            "casinos": casinos,
             "property": property_,
             "airport": airport,
             "armoury": armoury,

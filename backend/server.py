@@ -2679,8 +2679,10 @@ def assert_casino_clear_of_buy_back_for_relinquish(ownership_doc: Optional[Dict[
     )
 
 
-async def _user_owns_any_casino(user_id: str):
-    """Return first casino owned by user: {type, city, max_bet, buy_back_reward?, profit?} or None. Rule: 1 casino only. profit is $ (total_earnings or profit field)."""
+async def _iter_user_casino_summaries(user_id: str):
+    """Yield each owned casino summary (dice → … → slots order). Used for one-casino rule checks and listing."""
+    if not user_id:
+        return
     for game_type, coll in [
         ("dice", db.dice_ownership),
         ("roulette", db.roulette_ownership),
@@ -2700,7 +2702,7 @@ async def _user_owns_any_casino(user_id: str):
                         continue
                 except Exception:
                     continue
-            out = {"type": game_type, "city": doc.get("city") or doc.get("state"), "max_bet": doc.get("max_bet")}
+            out: Dict[str, Any] = {"type": game_type, "city": doc.get("city") or doc.get("state"), "max_bet": doc.get("max_bet")}
             if game_type == "videopoker":
                 raw_odds = str((doc.get("odds_preset") or "normal")).strip().lower()
                 out["odds_preset"] = raw_odds if raw_odds in ("normal", "increased", "enhanced") else "normal"
@@ -2708,7 +2710,18 @@ async def _user_owns_any_casino(user_id: str):
                 out["buy_back_reward"] = doc.get("buy_back_reward")
             profit_val = doc.get("profit") if doc.get("profit") is not None else doc.get("total_earnings")
             out["profit"] = int(profit_val or 0)
-            return out
+            yield out
+
+
+async def _user_owns_all_casinos(user_id: str) -> List[Dict[str, Any]]:
+    """All casino rows owned by this user (normally 0 or 1; duplicates are a bug / legacy edge case)."""
+    return [out async for out in _iter_user_casino_summaries(user_id)]
+
+
+async def _user_owns_any_casino(user_id: str):
+    """Return first casino owned by user: {type, city, max_bet, buy_back_reward?, profit?} or None. Rule: 1 casino only. profit is $ (total_earnings or profit field)."""
+    async for out in _iter_user_casino_summaries(user_id):
+        return out
     return None
 
 

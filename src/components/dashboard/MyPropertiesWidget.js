@@ -60,10 +60,12 @@ export default function MyPropertiesWidget({ userId }) {
     );
   }
 
-  const casino = data?.casino ?? null;
+  const casinos = Array.isArray(data?.casinos) && data.casinos.length
+    ? data.casinos
+    : (data?.casino ? [data.casino] : []);
   const airport = data?.airport ?? (data?.property?.type === 'airport' ? data.property : null);
   const armoury = data?.armoury ?? (data?.property?.type === 'bullet_factory' ? data.property : null);
-  const hasAny = casino || airport || armoury;
+  const hasAny = casinos.length > 0 || airport || armoury;
 
   return (
     <div className={`${styles.panel} rounded-md overflow-hidden border border-primary/20 mobile-panel`}>
@@ -82,18 +84,20 @@ export default function MyPropertiesWidget({ userId }) {
           <p className="text-[10px] font-heading text-mutedForeground">No casino or property</p>
         ) : (
           <>
-            {casino ? (
-              <div className="flex items-center gap-1.5 px-2 py-1 rounded border bg-primary/5 border-primary/30">
-                <Dice5 size={12} className="text-primary shrink-0" />
-                <span className="text-[10px] font-heading text-foreground">
-                  {CASINO_LABELS[casino.type] || casino.type} in {casino.city || '?'}
-                </span>
-                {casino.profit != null && (
-                  <span className="text-[9px] text-mutedForeground ml-auto">
-                    {formatMoney(casino.profit)}
+            {casinos.length ? (
+              casinos.map((casino) => (
+                <div key={`${casino.type}-${casino.city}`} className="flex items-center gap-1.5 px-2 py-1 rounded border bg-primary/5 border-primary/30">
+                  <Dice5 size={12} className="text-primary shrink-0" />
+                  <span className="text-[10px] font-heading text-foreground">
+                    {CASINO_LABELS[casino.type] || casino.type} in {casino.city || '?'}
                   </span>
-                )}
-              </div>
+                  {casino.profit != null && (
+                    <span className="text-[9px] text-mutedForeground ml-auto">
+                      {formatMoney(casino.profit)}
+                    </span>
+                  )}
+                </div>
+              ))
             ) : (
               <div className="flex items-center gap-1.5 px-2 py-1 rounded border bg-zinc-800/20 border-zinc-700/30">
                 <span className="text-[10px] font-heading text-mutedForeground">No casino</span>

@@ -1,15 +1,24 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { X, Zap } from 'lucide-react';
 import api from '../utils/api';
 import styles from '../styles/noir.module.css';
 
-const STORAGE_PREFIX = 'active_event_banner_dismissed_v3';
+const STORAGE_PREFIX = 'active_event_banner_dismissed_v4';
 
-/** Stable per rotation: sorted ids + expiry so order from API cannot break dismiss; new rotation = new key = banner shows again. */
+/** Normalize expiry so ISO variants (+00:00 vs Z) map to one key. */
+function expiryKeyPart(expiresAt) {
+  if (!expiresAt) return '';
+  const t = new Date(expiresAt).getTime();
+  return Number.isFinite(t) ? String(t) : String(expiresAt);
+}
+
+/**
+ * Stable per rotation: sorted ids + expiry ms so API string quirks cannot break dismiss.
+ * New rotation (different ids or expiry) => new key => banner shows again.
+ */
 function dismissStorageKey(eventIds, expiresAt) {
   const sorted = [...(eventIds || [])].sort().join('|');
-  const exp = expiresAt ? String(expiresAt) : '';
-  return `${STORAGE_PREFIX}_${sorted}@${encodeURIComponent(exp)}`;
+  return `${STORAGE_PREFIX}_${sorted}@${expiryKeyPart(expiresAt)}`;
 }
 
 function formatCountdown(expiresAt) {
@@ -22,10 +31,20 @@ function formatCountdown(expiresAt) {
   return `${m}m`;
 }
 
+function readDismissed(sig) {
+  if (!sig) return false;
+  try {
+    return localStorage.getItem(sig) === '1';
+  } catch {
+    return false;
+  }
+}
+
 export default function ActiveEventBanner({ fetchEnabled }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [dismissed, setDismissed] = useState(false);
+  /** Bumps after dismiss so we re-read localStorage in the same session without relying on useEffect (avoids flash on remount / route changes). */
+  const [dismissTick, setDismissTick] = useState(0);
   const [countdown, setCountdown] = useState('');
 
   const load = useCallback(() => {
@@ -56,19 +75,20 @@ export default function ActiveEventBanner({ fetchEnabled }) {
     };
   }, [fetchEnabled, load]);
 
-  const eventDismissSig =
-    data?.events_enabled && data?.event && data.event.id !== 'none' && (data.active_event_ids || []).length > 0
-      ? dismissStorageKey(data.active_event_ids, data.expires_at)
-      : '';
+  const eventDismissSig = useMemo(() => {
+    if (!data?.events_enabled || !data?.event || data.event.id === 'none') return '';
+    const rawIds = data.active_event_ids;
+    const ids =
+      Array.isArray(rawIds) && rawIds.length > 0
+        ? rawIds
+        : data.event?.id && data.event.id !== 'none'
+          ? ['__sole__', data.event.id]
+          : [];
+    if (ids.length === 0) return '';
+    return dismissStorageKey(ids, data.expires_at);
+  }, [data]);
 
-  useEffect(() => {
-    if (!eventDismissSig) return;
-    try {
-      setDismissed(localStorage.getItem(eventDismissSig) === '1');
-    } catch {
-      setDismissed(false);
-    }
-  }, [eventDismissSig]);
+  const dismissed = useMemo(() => readDismissed(eventDismissSig), [eventDismissSig, dismissTick]);
 
   useEffect(() => {
     if (!data?.expires_at) return undefined;
@@ -87,12 +107,13 @@ export default function ActiveEventBanner({ fetchEnabled }) {
   const body = countdown ? `Changes in ${countdown}` : '';
 
   const onDismiss = () => {
+    if (!eventDismissSig) return;
     try {
-      localStorage.setItem(dismissStorageKey(data.active_event_ids || [], data.expires_at), '1');
+      localStorage.setItem(eventDismissSig, '1');
     } catch {
       /* ignore */
     }
-    setDismissed(true);
+    setDismissTick((t) => t + 1);
   };
 
   return (

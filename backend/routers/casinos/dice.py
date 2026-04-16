@@ -684,6 +684,11 @@ def register(router):
         target = await db.users.find_one({"username": target_username_pattern}, {"_id": 0, "id": 1, "username": 1, "rank_points": 1})
         if not target:
             raise HTTPException(status_code=404, detail="User not found")
+        if await _user_owns_any_casino(target.get("id") or ""):
+            raise HTTPException(
+                status_code=400,
+                detail="That player already owns a casino. They must transfer or relinquish it before receiving another.",
+            )
         held = int((doc or {}).get("buy_back_points_held") or 0)
         await refund_casino_buy_back_escrow_points(
             current_user.get("id") or "",
