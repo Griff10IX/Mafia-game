@@ -29,6 +29,15 @@ from utils.missions_extended import build_missions, MISSION_RANDOM_TOKEN_TYPES
 from pymongo.errors import DuplicateKeyError
 import random
 
+from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_MISSIONS
+
+
+async def _missions_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_MISSIONS)
+
+
+_missions_rl_u = [Depends(_missions_sustained_rl_user)]
+
 # Single first mission: no districts/cities
 FIRST_MISSION_ID = "m_first"
 SECOND_MISSION_ID = "m_second"
@@ -1082,11 +1091,11 @@ async def run_daily_tribute_deposit():
 
 
 def register(router):
-    router.add_api_route("/missions", get_missions, methods=["GET"])
-    router.add_api_route("/missions/map", get_missions_map, methods=["GET"])
+    router.add_api_route("/missions", get_missions, methods=["GET"], dependencies=_missions_rl_u)
+    router.add_api_route("/missions/map", get_missions_map, methods=["GET"], dependencies=_missions_rl_u)
     router.add_api_route("/missions/complete", complete_mission, methods=["POST"])
     router.add_api_route("/missions/collect-tribute", collect_tribute, methods=["POST"])
-    router.add_api_route("/missions/characters", get_missions_characters, methods=["GET"])
+    router.add_api_route("/missions/characters", get_missions_characters, methods=["GET"], dependencies=_missions_rl_u)
 
 
 # Load mission table after router registration (avoids circular import with server).

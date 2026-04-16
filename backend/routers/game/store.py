@@ -985,7 +985,12 @@ async def buy_store_token_bundle_cash(
 
 
 def register(router):
-    router.add_api_route("/store/token-cash-price", get_token_cash_price, methods=["GET"])
+    router.add_api_route(
+        "/store/token-cash-price",
+        get_token_cash_price,
+        methods=["GET"],
+        dependencies=_store_points_rl_u,
+    )
     router.add_api_route("/store/buy-token-cash", buy_store_token_cash, methods=["POST"])
     router.add_api_route("/store/buy-token-bundle-cash", buy_store_token_bundle_cash, methods=["POST"])
     router.add_api_route("/store/buy-rank-bar", buy_premium_rank_bar, methods=["POST"])

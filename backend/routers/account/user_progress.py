@@ -146,4 +146,9 @@ def register(router):
         dependencies=_ranking_rl_u,
     )
     router.add_api_route("/wealth-ranks", get_wealth_ranks_list, methods=["GET"])
-    router.add_api_route("/user/wealth-progress", get_wealth_progress, methods=["GET"])
+    router.add_api_route(
+        "/user/wealth-progress",
+        get_wealth_progress,
+        methods=["GET"],
+        dependencies=_ranking_rl_u,
+    )

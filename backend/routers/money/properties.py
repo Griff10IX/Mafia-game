@@ -11,6 +11,14 @@ from fastapi import Depends, HTTPException
 
 from server import db, get_current_user, founding_member_income_mult, log_activity
 from utils.point_provenance import log_points_event
+from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_PROPERTIES
+
+
+async def _properties_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_PROPERTIES)
+
+
+_properties_rl_u = [Depends(_properties_sustained_rl_user)]
 
 
 def _parse_iso_datetime(s):
@@ -1317,11 +1325,17 @@ def register(router):
             "properties_heat_bribe_quote": _properties_heat_bribe_quote(new_heat),
         }
 
-    router.add_api_route("/properties", get_properties, methods=["GET"], response_model=PropertiesListResponse)
+    router.add_api_route(
+        "/properties",
+        get_properties,
+        methods=["GET"],
+        response_model=PropertiesListResponse,
+        dependencies=_properties_rl_u,
+    )
     router.add_api_route("/properties/upkeep/pay", pay_property_upkeep, methods=["POST"])
     router.add_api_route("/properties/heat/bribe", bribe_properties_heat, methods=["POST"])
     router.add_api_route("/properties/upgrades/buy", buy_property_portfolio_upgrade, methods=["POST"])
     router.add_api_route("/properties/{property_id}/buy", buy_property, methods=["POST"])
     router.add_api_route("/properties/{property_id}/collect", collect_property_income, methods=["POST"])
     router.add_api_route("/properties/{property_id}/reinvest", reinvest_property, methods=["POST"])
-    router.add_api_route("/my-properties", get_my_properties, methods=["GET"])
+    router.add_api_route("/my-properties", get_my_properties, methods=["GET"], dependencies=_properties_rl_u)

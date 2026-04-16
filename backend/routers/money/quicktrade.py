@@ -25,6 +25,14 @@ from server import (
 from routers.kill.armoury import TOKEN_CONFIG, TOKEN_TYPES
 from utils.point_provenance import log_points_event
 from utils.civilian_protection import maybe_revoke_civilian_protection
+from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_QUICKTRADE
+
+
+async def _quicktrade_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_QUICKTRADE)
+
+
+_quicktrade_rl_u = [Depends(_quicktrade_sustained_rl_user)]
 
 # Cache for list endpoints (short TTL; invalidate on any mutation)
 _sell_offers_cache: Optional[tuple] = None
@@ -1664,21 +1672,21 @@ async def admin_quicktrade_cancel_all_for_user(
 
 
 def register(router):
-    router.add_api_route("/trade/sell-offers", get_sell_offers, methods=["GET"])
-    router.add_api_route("/trade/buy-offers", get_buy_offers, methods=["GET"])
+    router.add_api_route("/trade/sell-offers", get_sell_offers, methods=["GET"], dependencies=_quicktrade_rl_u)
+    router.add_api_route("/trade/buy-offers", get_buy_offers, methods=["GET"], dependencies=_quicktrade_rl_u)
     router.add_api_route("/trade/sell-offer", create_sell_offer, methods=["POST"])
     router.add_api_route("/trade/buy-offer", create_buy_offer, methods=["POST"])
     router.add_api_route("/trade/sell-offer/{offer_id}/accept", accept_sell_offer, methods=["POST"])
     router.add_api_route("/trade/buy-offer/{offer_id}/accept", accept_buy_offer, methods=["POST"])
     router.add_api_route("/trade/sell-offer/{offer_id}", cancel_sell_offer_delete, methods=["DELETE"])
     router.add_api_route("/trade/buy-offer/{offer_id}", cancel_buy_offer_delete, methods=["DELETE"])
-    router.add_api_route("/trade/properties", get_properties_for_sale, methods=["GET"])
+    router.add_api_route("/trade/properties", get_properties_for_sale, methods=["GET"], dependencies=_quicktrade_rl_u)
     router.add_api_route("/trade/property/{property_id}/accept", buy_property, methods=["POST"])
     router.add_api_route("/trade/property/{property_id}/cancel", cancel_property_listing, methods=["POST"])
     router.add_api_route("/trade/sell-offer/{offer_id}/cancel", cancel_sell_offer_post, methods=["POST"])
     router.add_api_route("/trade/buy-offer/{offer_id}/cancel", cancel_buy_offer_post, methods=["POST"])
-    router.add_api_route("/trade/token-offers", get_token_offers, methods=["GET"])
-    router.add_api_route("/trade/my-token-balances", get_my_token_balances, methods=["GET"])
+    router.add_api_route("/trade/token-offers", get_token_offers, methods=["GET"], dependencies=_quicktrade_rl_u)
+    router.add_api_route("/trade/my-token-balances", get_my_token_balances, methods=["GET"], dependencies=_quicktrade_rl_u)
     router.add_api_route("/trade/token-offer", create_token_offer, methods=["POST"])
     router.add_api_route("/trade/token-offer/{offer_id}/accept", accept_token_offer, methods=["POST"])
     router.add_api_route("/trade/token-offer/{offer_id}/cancel", cancel_token_offer, methods=["POST"])

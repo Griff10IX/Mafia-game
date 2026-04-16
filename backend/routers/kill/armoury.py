@@ -40,6 +40,14 @@ from utils.minigame_run_session import (
     RATE_LIMIT_PERIOD_HOURS,
 )
 from utils.minigame_security import skip_minigame_session
+from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_ARMOURY
+
+
+async def _armoury_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_ARMOURY)
+
+
+_armoury_rl_u = [Depends(_armoury_sustained_rl_user)]
 
 # 5k bullets per 24h, effectively delivered every 20 mins (72 ticks per day)
 BULLET_FACTORY_TOTAL_PER_24H = 5000
@@ -2806,8 +2814,8 @@ async def get_inventory(request: Request, current_user: dict = Depends(get_curre
 
 def register(router):
     # Bullet factory routes
-    router.add_api_route("/bullet-factory", get_bullet_factory, methods=["GET"])
-    router.add_api_route("/bullet-factory/list", get_bullet_factory_list, methods=["GET"])
+    router.add_api_route("/bullet-factory", get_bullet_factory, methods=["GET"], dependencies=_armoury_rl_u)
+    router.add_api_route("/bullet-factory/list", get_bullet_factory_list, methods=["GET"], dependencies=_armoury_rl_u)
     router.add_api_route("/bullet-factory/claim", claim_bullet_factory, methods=["POST"])
     router.add_api_route("/bullet-factory/set-price", set_price, methods=["POST"])
     router.add_api_route("/bullet-factory/set-item-prices", set_armoury_item_prices, methods=["POST"])
@@ -2823,22 +2831,33 @@ def register(router):
     router.add_api_route("/store/buy-bullets", store_buy_bullets, methods=["POST"])
     router.add_api_route("/admin/add-bullets", admin_add_bullets, methods=["POST"])
     # Armour routes
-    router.add_api_route("/armour/options", get_armour_options, methods=["GET"])
+    router.add_api_route("/armour/options", get_armour_options, methods=["GET"], dependencies=_armoury_rl_u)
     router.add_api_route("/armour/buy", buy_armour, methods=["POST"])
     router.add_api_route("/armour/equip", equip_armour, methods=["POST"])
     router.add_api_route("/armour/unequip", unequip_armour, methods=["POST"])
     router.add_api_route("/armour/sell", sell_armour, methods=["POST"])
     # Weapons routes
-    router.add_api_route("/weapons", get_weapons, methods=["GET"], response_model=List[WeaponResponse])
+    router.add_api_route(
+        "/weapons",
+        get_weapons,
+        methods=["GET"],
+        response_model=List[WeaponResponse],
+        dependencies=_armoury_rl_u,
+    )
     router.add_api_route("/weapons/equip", equip_weapon, methods=["POST"])
     router.add_api_route("/weapons/unequip", unequip_weapon, methods=["POST"])
     router.add_api_route("/weapons/{weapon_id}/buy", buy_weapon, methods=["POST"])
     router.add_api_route("/weapons/{weapon_id}/sell", sell_weapon, methods=["POST"])
-    router.add_api_route("/shooting-range/mastery", get_shooting_range_mastery, methods=["GET"])
+    router.add_api_route("/shooting-range/mastery", get_shooting_range_mastery, methods=["GET"], dependencies=_armoury_rl_u)
     router.add_api_route("/shooting-range/train", train_shooting_range, methods=["POST"])
     router.add_api_route("/shooting-range/score", submit_shooting_range_score, methods=["POST"])
-    router.add_api_route("/shooting-range/leaderboard", get_shooting_range_leaderboard, methods=["GET"])
-    router.add_api_route("/inventory", get_inventory, methods=["GET"])
+    router.add_api_route(
+        "/shooting-range/leaderboard",
+        get_shooting_range_leaderboard,
+        methods=["GET"],
+        dependencies=_armoury_rl_u,
+    )
+    router.add_api_route("/inventory", get_inventory, methods=["GET"], dependencies=_armoury_rl_u)
     router.add_api_route("/inventory/tokens/use", use_consumable_token, methods=["POST"])
     router.add_api_route("/inventory/tokens/exchange-auto-rank", exchange_auto_rank_tokens, methods=["POST"])
     router.add_api_route("/inventory/tokens/gift", gift_inventory_tokens, methods=["POST"])

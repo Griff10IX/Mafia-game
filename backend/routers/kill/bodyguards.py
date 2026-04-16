@@ -48,6 +48,14 @@ from server import (
     _is_admin,
     _username_pattern,
 )
+from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_BODYGUARDS
+
+
+async def _bodyguards_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_BODYGUARDS)
+
+
+_bodyguards_rl_u = [Depends(_bodyguards_sustained_rl_user)]
 
 # Constants (moved from server)
 BODYGUARD_SLOT_COSTS = [75, 150, 300, 450]
@@ -1763,14 +1771,14 @@ async def admin_test_bodyguard_payout(current_user: dict = Depends(get_current_u
 
 
 def register(router):
-    router.add_api_route("/bodyguards/inflation", get_bodyguards_hire_inflation, methods=["GET"])
-    router.add_api_route("/bodyguards/stats", get_bodyguards_stats, methods=["GET"])
-    router.add_api_route("/bodyguards", get_bodyguards, methods=["GET"])
+    router.add_api_route("/bodyguards/inflation", get_bodyguards_hire_inflation, methods=["GET"], dependencies=_bodyguards_rl_u)
+    router.add_api_route("/bodyguards/stats", get_bodyguards_stats, methods=["GET"], dependencies=_bodyguards_rl_u)
+    router.add_api_route("/bodyguards", get_bodyguards, methods=["GET"], dependencies=_bodyguards_rl_u)
     router.add_api_route("/bodyguards/armour/upgrade", upgrade_bodyguard_armour, methods=["POST"])
     router.add_api_route("/bodyguards/slot/buy", buy_bodyguard_slot, methods=["POST"])
     router.add_api_route("/bodyguards/hire", hire_bodyguard, methods=["POST"])
     router.add_api_route("/bodyguards/invite", invite_bodyguard, methods=["POST"])
-    router.add_api_route("/bodyguards/invites", get_bodyguard_invites, methods=["GET"])
+    router.add_api_route("/bodyguards/invites", get_bodyguard_invites, methods=["GET"], dependencies=_bodyguards_rl_u)
     router.add_api_route("/bodyguards/invites/{invite_id}/accept", accept_bodyguard_invite, methods=["POST"])
     router.add_api_route("/bodyguards/invites/{invite_id}/decline", decline_bodyguard_invite, methods=["POST"])
     router.add_api_route("/bodyguards/invites/{invite_id}/cancel", cancel_bodyguard_invite, methods=["POST"])

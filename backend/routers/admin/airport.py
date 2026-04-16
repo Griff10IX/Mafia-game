@@ -22,6 +22,14 @@ from server import (
     CAPO_RANK_ID,
 )
 from routers.money.booze_run import _booze_user_carrying_total
+from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_TRAVEL
+
+
+async def _travel_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_TRAVEL)
+
+
+_travel_rl_u = [Depends(_travel_sustained_rl_user)]
 
 # Constants (moved from server)
 AIRPORT_COST = 10
@@ -694,11 +702,11 @@ async def airport_sell_on_trade(req: AirportSellRequest, current_user: dict = De
 
 
 def register(router):
-    router.add_api_route("/travel/status", get_travel_status, methods=["GET"])
-    router.add_api_route("/travel/info", get_travel_info, methods=["GET"])
+    router.add_api_route("/travel/status", get_travel_status, methods=["GET"], dependencies=_travel_rl_u)
+    router.add_api_route("/travel/info", get_travel_info, methods=["GET"], dependencies=_travel_rl_u)
     router.add_api_route("/travel", travel, methods=["POST"])
     router.add_api_route("/travel/buy-airmiles", buy_extra_airmiles, methods=["POST"])
-    router.add_api_route("/airports", list_airports, methods=["GET"])
+    router.add_api_route("/airports", list_airports, methods=["GET"], dependencies=_travel_rl_u)
     router.add_api_route("/airports/claim", claim_airport, methods=["POST"])
     router.add_api_route("/airports/set-price", set_airport_price, methods=["POST"])
     router.add_api_route("/airports/transfer", airport_transfer, methods=["POST"])

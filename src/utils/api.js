@@ -52,6 +52,37 @@ export function invalidateApiCache() {
   _authMeInflightForToken = null;
 }
 
+function _sleep429Retry(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Retry transient sustained page RL 429s (server sets Retry-After). Same behaviour as Jail.js jailGetWith429Retry.
+ * @param {() => Promise<any>} requestFn
+ * @param {number} [maxAttempts=3]
+ */
+export async function apiRequestWith429Retry(requestFn, maxAttempts = 3) {
+  let lastErr;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      return await requestFn();
+    } catch (e) {
+      lastErr = e;
+      const st = e?.response?.status;
+      if (st === 429 && attempt < maxAttempts - 1) {
+        const h = e?.response?.headers;
+        const raw = h?.['retry-after'] ?? h?.['Retry-After'];
+        const sec = parseInt(String(raw), 10);
+        const ms = Number.isFinite(sec) && sec > 0 && sec <= 120 ? sec * 1000 : 2500;
+        await _sleep429Retry(ms);
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw lastErr;
+}
+
 // ── Rate-limit cooldown state (shared across the app) ──
 let _cooldownUntil = 0;        // timestamp (ms) when cooldown expires
 let _cooldownTimerId = null;

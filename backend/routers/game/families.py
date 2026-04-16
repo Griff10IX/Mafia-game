@@ -32,6 +32,7 @@ from utils.notepad_color import notepad_color_for_api_response, normalize_notepa
 from utils.point_provenance import log_points_event
 from utils.family_vault_log import log_family_vault_tx
 from utils.civilian_protection import maybe_revoke_civilian_protection
+from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_FAMILIES
 
 from server import (
     db,
@@ -56,6 +57,13 @@ from server import (
     founding_member_income_mult,
     _is_admin,
 )
+
+
+async def _families_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_FAMILIES)
+
+
+_families_rl_u = [Depends(_families_sustained_rl_user)]
 
 # ============ Constants ============
 MAX_FAMILIES = 6
@@ -4375,14 +4383,19 @@ async def state_takeover_reject(current_user: dict = Depends(get_current_user)):
 
 def register(router):
     router.add_api_route("/admin/debug/war-stats", admin_debug_war_stats, methods=["GET"])
-    router.add_api_route("/families", families_list, methods=["GET"])
-    router.add_api_route("/families/config", families_config, methods=["GET"])
-    router.add_api_route("/families/my", families_my, methods=["GET"])
-    router.add_api_route("/families/lookup", families_lookup, methods=["GET"])
+    router.add_api_route("/families", families_list, methods=["GET"], dependencies=_families_rl_u)
+    router.add_api_route("/families/config", families_config, methods=["GET"], dependencies=_families_rl_u)
+    router.add_api_route("/families/my", families_my, methods=["GET"], dependencies=_families_rl_u)
+    router.add_api_route("/families/lookup", families_lookup, methods=["GET"], dependencies=_families_rl_u)
     router.add_api_route("/families", families_create, methods=["POST"])
     router.add_api_route("/families/join", families_join, methods=["POST"])
     router.add_api_route("/families/apply", families_apply, methods=["POST"])
-    router.add_api_route("/families/join-applications", families_join_applications_list, methods=["GET"])
+    router.add_api_route(
+        "/families/join-applications",
+        families_join_applications_list,
+        methods=["GET"],
+        dependencies=_families_rl_u,
+    )
     router.add_api_route("/families/join-applications/{application_id}/accept", families_join_application_accept, methods=["POST"])
     router.add_api_route("/families/join-applications/{application_id}/deny", families_join_application_deny, methods=["POST"])
     router.add_api_route("/families/join-settings", families_join_settings, methods=["PATCH"])
@@ -4393,7 +4406,12 @@ def register(router):
     router.add_api_route("/families/assign-role", families_assign_role, methods=["POST"])
     router.add_api_route("/families/deposit", families_deposit, methods=["POST"])
     router.add_api_route("/families/withdraw", families_withdraw, methods=["POST"])
-    router.add_api_route("/families/vault-transactions", families_vault_transactions, methods=["GET"])
+    router.add_api_route(
+        "/families/vault-transactions",
+        families_vault_transactions,
+        methods=["GET"],
+        dependencies=_families_rl_u,
+    )
     router.add_api_route("/families/bullets/give", families_give_bullets, methods=["POST"])
     router.add_api_route("/families/bullets/split-all", families_split_all_bullets, methods=["POST"])
     router.add_api_route("/families/loot/give", families_give_loot, methods=["POST"])
@@ -4408,7 +4426,12 @@ def register(router):
     router.add_api_route("/families/avatar", families_update_avatar, methods=["PATCH"])
     router.add_api_route("/families/crew-oc/advertise", families_crew_oc_advertise, methods=["POST"])
     router.add_api_route("/families/crew-oc/apply", families_crew_oc_apply, methods=["POST"])
-    router.add_api_route("/families/crew-oc/applications", families_crew_oc_applications, methods=["GET"])
+    router.add_api_route(
+        "/families/crew-oc/applications",
+        families_crew_oc_applications,
+        methods=["GET"],
+        dependencies=_families_rl_u,
+    )
     router.add_api_route("/families/crew-oc/applications/{application_id}/accept", families_crew_oc_accept, methods=["POST"])
     router.add_api_route("/families/crew-oc/applications/{application_id}/reject", families_crew_oc_reject, methods=["POST"])
     router.add_api_route("/families/crew-oc/applications/{application_id}/kick", families_crew_oc_kick, methods=["POST"])
@@ -4416,15 +4439,20 @@ def register(router):
     router.add_api_route("/families/rackets/{racket_id}/collect", families_racket_collect, methods=["POST"])
     router.add_api_route("/families/rackets/{racket_id}/unlock", families_racket_unlock, methods=["POST"])
     router.add_api_route("/families/rackets/{racket_id}/upgrade", families_racket_upgrade, methods=["POST"])
-    router.add_api_route("/families/racket-attack-targets", families_racket_attack_targets, methods=["GET"])
+    router.add_api_route(
+        "/families/racket-attack-targets",
+        families_racket_attack_targets,
+        methods=["GET"],
+        dependencies=_families_rl_u,
+    )
     router.add_api_route("/families/attack-racket", families_attack_racket, methods=["POST"])
-    router.add_api_route("/families/war", families_war, methods=["GET"])
-    router.add_api_route("/families/war/stats", families_war_stats, methods=["GET"])
-    router.add_api_route("/families/war/{war_id}/feed", families_war_feed, methods=["GET"])
-    router.add_api_route("/families/war/{war_id}/stats", families_war_public_stats, methods=["GET"])
+    router.add_api_route("/families/war", families_war, methods=["GET"], dependencies=_families_rl_u)
+    router.add_api_route("/families/war/stats", families_war_stats, methods=["GET"], dependencies=_families_rl_u)
+    router.add_api_route("/families/war/{war_id}/feed", families_war_feed, methods=["GET"], dependencies=_families_rl_u)
+    router.add_api_route("/families/war/{war_id}/stats", families_war_public_stats, methods=["GET"], dependencies=_families_rl_u)
     router.add_api_route("/families/war/truce/offer", families_war_truce_offer, methods=["POST"])
     router.add_api_route("/families/war/truce/accept", families_war_truce_accept, methods=["POST"])
-    router.add_api_route("/families/wars/history", families_wars_history, methods=["GET"])
+    router.add_api_route("/families/wars/history", families_wars_history, methods=["GET"], dependencies=_families_rl_u)
     router.add_api_route("/families/state-takeover/accept", state_takeover_accept, methods=["POST"])
     router.add_api_route("/families/state-takeover/reject", state_takeover_reject, methods=["POST"])
     router.add_api_route("/families/head-of-state/relinquish", relinquish_head_of_state, methods=["POST"])

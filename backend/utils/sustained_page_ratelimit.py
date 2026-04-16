@@ -43,6 +43,15 @@ PAGE_KEY_NOTIFICATIONS = "notifications"
 PAGE_KEY_HITLIST = "hitlist"
 PAGE_KEY_BANK = "bank"
 PAGE_KEY_LEADERBOARD = "leaderboard"
+PAGE_KEY_FAMILIES = "families"
+PAGE_KEY_STOCK_MARKET = "stock_market"
+PAGE_KEY_QUICKTRADE = "quicktrade"
+PAGE_KEY_PROPERTIES = "properties"
+PAGE_KEY_ARMOURY = "armoury"
+PAGE_KEY_BODYGUARDS = "bodyguards"
+PAGE_KEY_MISSIONS = "missions"
+PAGE_KEY_TRAVEL = "travel"
+PAGE_KEY_EVENTS = "events"
 
 # Scopes that use JAIL_STYLE_MAX_GAP_MS / JAIL_STYLE_SUSTAIN_SEC (forum/entertainer aligned with jail per product).
 PAGE_KEYS_JAIL_STYLE_TUNING = frozenset(
@@ -61,6 +70,15 @@ PAGE_KEYS_JAIL_STYLE_TUNING = frozenset(
         PAGE_KEY_HITLIST,
         PAGE_KEY_BANK,
         PAGE_KEY_LEADERBOARD,
+        PAGE_KEY_FAMILIES,
+        PAGE_KEY_STOCK_MARKET,
+        PAGE_KEY_QUICKTRADE,
+        PAGE_KEY_PROPERTIES,
+        PAGE_KEY_ARMOURY,
+        PAGE_KEY_BODYGUARDS,
+        PAGE_KEY_MISSIONS,
+        PAGE_KEY_TRAVEL,
+        PAGE_KEY_EVENTS,
     }
 )
 
@@ -98,6 +116,15 @@ _SETTINGS_FIELD_BY_PAGE = {
     PAGE_KEY_HITLIST: "sustained_page_rl_hitlist_enabled",
     PAGE_KEY_BANK: "sustained_page_rl_bank_enabled",
     PAGE_KEY_LEADERBOARD: "sustained_page_rl_leaderboard_enabled",
+    PAGE_KEY_FAMILIES: "sustained_page_rl_families_enabled",
+    PAGE_KEY_STOCK_MARKET: "sustained_page_rl_stock_market_enabled",
+    PAGE_KEY_QUICKTRADE: "sustained_page_rl_quicktrade_enabled",
+    PAGE_KEY_PROPERTIES: "sustained_page_rl_properties_enabled",
+    PAGE_KEY_ARMOURY: "sustained_page_rl_armoury_enabled",
+    PAGE_KEY_BODYGUARDS: "sustained_page_rl_bodyguards_enabled",
+    PAGE_KEY_MISSIONS: "sustained_page_rl_missions_enabled",
+    PAGE_KEY_TRAVEL: "sustained_page_rl_travel_enabled",
+    PAGE_KEY_EVENTS: "sustained_page_rl_events_enabled",
 }
 
 _COOLDOWN_MSG = {
@@ -116,6 +143,15 @@ _COOLDOWN_MSG = {
     PAGE_KEY_HITLIST: "Too many hitlist requests too fast — try again in a few seconds.",
     PAGE_KEY_BANK: "Too many bank requests too fast — try again in a few seconds.",
     PAGE_KEY_LEADERBOARD: "Too many leaderboard requests too fast — try again in a few seconds.",
+    PAGE_KEY_FAMILIES: "Too many family requests too fast — try again in a few seconds.",
+    PAGE_KEY_STOCK_MARKET: "Too many stock market requests too fast — try again in a few seconds.",
+    PAGE_KEY_QUICKTRADE: "Too many quick trade requests too fast — try again in a few seconds.",
+    PAGE_KEY_PROPERTIES: "Too many property requests too fast — try again in a few seconds.",
+    PAGE_KEY_ARMOURY: "Too many armoury requests too fast — try again in a few seconds.",
+    PAGE_KEY_BODYGUARDS: "Too many bodyguard requests too fast — try again in a few seconds.",
+    PAGE_KEY_MISSIONS: "Too many mission requests too fast — try again in a few seconds.",
+    PAGE_KEY_TRAVEL: "Too many travel requests too fast — try again in a few seconds.",
+    PAGE_KEY_EVENTS: "Too many event / news requests too fast — try again in a few seconds.",
 }
 
 _SLOW_MSG = {
@@ -134,6 +170,15 @@ _SLOW_MSG = {
     PAGE_KEY_HITLIST: "You're hitting the hitlist server too fast — slow down for a few seconds.",
     PAGE_KEY_BANK: "You're hitting the bank server too fast — slow down for a few seconds.",
     PAGE_KEY_LEADERBOARD: "You're hitting the leaderboard too fast — slow down for a few seconds.",
+    PAGE_KEY_FAMILIES: "You're hitting the family server too fast — slow down for a few seconds.",
+    PAGE_KEY_STOCK_MARKET: "You're hitting the stock market too fast — slow down for a few seconds.",
+    PAGE_KEY_QUICKTRADE: "You're hitting quick trade too fast — slow down for a few seconds.",
+    PAGE_KEY_PROPERTIES: "You're hitting the properties server too fast — slow down for a few seconds.",
+    PAGE_KEY_ARMOURY: "You're hitting the armoury too fast — slow down for a few seconds.",
+    PAGE_KEY_BODYGUARDS: "You're hitting bodyguards too fast — slow down for a few seconds.",
+    PAGE_KEY_MISSIONS: "You're hitting missions too fast — slow down for a few seconds.",
+    PAGE_KEY_TRAVEL: "You're hitting travel too fast — slow down for a few seconds.",
+    PAGE_KEY_EVENTS: "You're loading events / news too fast — slow down for a few seconds.",
 }
 
 _PAGE_LABEL_ADMIN = {
@@ -152,6 +197,15 @@ _PAGE_LABEL_ADMIN = {
     PAGE_KEY_HITLIST: "Hitlist",
     PAGE_KEY_BANK: "Bank",
     PAGE_KEY_LEADERBOARD: "Leaderboard",
+    PAGE_KEY_FAMILIES: "Families / crew",
+    PAGE_KEY_STOCK_MARKET: "Stock market",
+    PAGE_KEY_QUICKTRADE: "Quick trade",
+    PAGE_KEY_PROPERTIES: "Properties",
+    PAGE_KEY_ARMOURY: "Armoury / bullet factory",
+    PAGE_KEY_BODYGUARDS: "Bodyguards",
+    PAGE_KEY_MISSIONS: "Missions",
+    PAGE_KEY_TRAVEL: "Travel / airports",
+    PAGE_KEY_EVENTS: "Events / flash news",
 }
 
 

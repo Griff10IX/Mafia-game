@@ -5,6 +5,14 @@ from fastapi import Depends
 
 from server import db, get_current_user, get_effective_event, get_effective_event_full, get_events_enabled, GAME_EVENTS_BY_ID
 from routers.money.booze_run import get_booze_rotation_interval_seconds, get_booze_rotation_index
+from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_EVENTS
+
+
+async def _events_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_EVENTS)
+
+
+_events_rl_u = [Depends(_events_sustained_rl_user)]
 
 # Rotating tips for flash news ticker (multiple shown per load so the bar has variety)
 FLASH_NEWS_TIPS = [
@@ -264,5 +272,5 @@ async def get_flash_news(current_user: dict = Depends(get_current_user)):
 
 
 def register(router):
-    router.add_api_route("/events/active", get_active_event, methods=["GET"])
-    router.add_api_route("/news/flash", get_flash_news, methods=["GET"])
+    router.add_api_route("/events/active", get_active_event, methods=["GET"], dependencies=_events_rl_u)
+    router.add_api_route("/news/flash", get_flash_news, methods=["GET"], dependencies=_events_rl_u)

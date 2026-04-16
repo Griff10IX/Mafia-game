@@ -12,6 +12,14 @@ from fastapi import Depends, HTTPException
 
 from server import db, get_current_user, send_notification, log_activity
 from utils.point_provenance import log_points_event
+from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_STOCK_MARKET
+
+
+async def _stock_market_sustained_rl_user(current_user: dict = Depends(get_current_user)):
+    await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_STOCK_MARKET)
+
+
+_stock_market_rl_u = [Depends(_stock_market_sustained_rl_user)]
 
 _stock_buy_locks: dict = {}
 
@@ -287,7 +295,7 @@ class StockSellRequest(BaseModel):
 
 
 def register(router):
-    @router.get("/stock-market/list")
+    @router.get("/stock-market/list", dependencies=_stock_market_rl_u)
     async def stock_market_list(current_user: dict = Depends(get_current_user)):
         """List all stocks with current price and % change over 3h, 1d, 3d, 1w (live from CoinGecko, fallback if API down)."""
         now_ts = datetime.now(timezone.utc).timestamp()
@@ -324,7 +332,7 @@ def register(router):
                 })
         return {"stocks": out}
 
-    @router.get("/stock-market/positions")
+    @router.get("/stock-market/positions", dependencies=_stock_market_rl_u)
     async def stock_market_positions(current_user: dict = Depends(get_current_user)):
         """Current open positions and current value (using live price from CoinGecko, fallback if missing). Auto-sells positions older than 7 days."""
         uid = current_user.get("id") or ""
@@ -405,7 +413,7 @@ def register(router):
                 })
         return {"positions": out}
 
-    @router.get("/stock-market/history")
+    @router.get("/stock-market/history", dependencies=_stock_market_rl_u)
     async def stock_market_history(current_user: dict = Depends(get_current_user)):
         """Transaction history (buys and sells)."""
         uid = current_user.get("id") or ""
@@ -413,7 +421,7 @@ def register(router):
         items = await cursor.to_list(100)
         return {"history": items}
 
-    @router.get("/stock-market/summary")
+    @router.get("/stock-market/summary", dependencies=_stock_market_rl_u)
     async def stock_market_summary(current_user: dict = Depends(get_current_user)):
         """Total trades, all-time profit/loss, points-in-market cap and usage."""
         uid = current_user.get("id") or ""

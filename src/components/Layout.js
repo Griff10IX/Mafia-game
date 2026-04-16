@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb } from 'lucide-react';
-import api, { getApiErrorMessage, onCooldownChange, invalidateApiCache } from '../utils/api';
+import api, { getApiErrorMessage, onCooldownChange, invalidateApiCache, apiRequestWith429Retry } from '../utils/api';
 import { getThemeUiPlatform } from '../utils/themePlatform';
 import { readSessionJson } from '../utils/sessionPageCache';
 import { DASHBOARD_SESSION_CACHE_KEY } from '../utils/dashboardSessionCache';
@@ -763,7 +763,7 @@ export default function Layout({ children }) {
   useEffect(() => {
     const pollNotifications = async () => {
       try {
-        const response = await api.get('/notifications');
+        const response = await apiRequestWith429Retry(() => api.get('/notifications'));
         setUnreadCount(response.data.unread_count ?? 0);
         if (notificationPanelOpenRef.current) setNotificationList(response.data.notifications || []);
       } catch { }
@@ -793,7 +793,12 @@ export default function Layout({ children }) {
   }, []); // eslint-disable-line
 
   const fetchFlashNews = async () => {
-    try { const res = await api.get('/news/flash'); setFlashNews(res.data?.items || []); } catch { setFlashNews([]); }
+    try {
+      const res = await apiRequestWith429Retry(() => api.get('/news/flash'));
+      setFlashNews(res.data?.items || []);
+    } catch {
+      setFlashNews([]);
+    }
   };
 
   useEffect(() => { const t = setTimeout(() => { api.get('/objectives').catch(() => {}); }, 500); return () => clearTimeout(t); }, []);
@@ -813,7 +818,7 @@ export default function Layout({ children }) {
       const sinkProgress = (p) => {
         p.catch(() => {});
       };
-      const progressPromise = api.get('/user/rank-progress');
+      const progressPromise = apiRequestWith429Retry(() => api.get('/user/rank-progress'));
       const userRes = await api.get('/auth/me');
       if (userRes.data?.account_locked) {
         sinkProgress(progressPromise);
@@ -851,7 +856,12 @@ export default function Layout({ children }) {
   };
 
   const fetchWarStatus = async () => {
-    try { const res = await api.get('/families/war'); setAtWar(!!(res.data?.wars?.length > 0)); } catch { setAtWar(false); }
+    try {
+      const res = await apiRequestWith429Retry(() => api.get('/families/war'));
+      setAtWar(!!(res.data?.wars?.length > 0));
+    } catch {
+      setAtWar(false);
+    }
   };
   const fetchUnreadCount = async () => {
     try { const response = await api.get('/notifications'); setUnreadCount(response.data.unread_count); } catch (error) { console.error('Failed to fetch notifications'); }
@@ -964,7 +974,7 @@ export default function Layout({ children }) {
 
   const fetchTravelStatus = useCallback(async () => {
     try {
-      const res = await api.get('/travel/status');
+      const res = await apiRequestWith429Retry(() => api.get('/travel/status'));
       const data = res.data || {};
       if (data.traveling && data.seconds_remaining > 0) {
         setTravelStatus({ traveling: true, destination: data.destination || data.current_state || '?', seconds_remaining: data.seconds_remaining });

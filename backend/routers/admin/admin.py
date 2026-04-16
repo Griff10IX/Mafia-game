@@ -189,6 +189,15 @@ class AdminSettingsUpdate(BaseModel):
     sustained_page_rl_hitlist_enabled: Optional[bool] = None  # Hitlist GETs (jail-style)
     sustained_page_rl_bank_enabled: Optional[bool] = None  # Bank meta/overview GETs (jail-style)
     sustained_page_rl_leaderboard_enabled: Optional[bool] = None  # Leaderboard GETs (jail-style)
+    sustained_page_rl_families_enabled: Optional[bool] = None  # Families / crew GETs (jail-style)
+    sustained_page_rl_stock_market_enabled: Optional[bool] = None  # Stock market GETs (jail-style)
+    sustained_page_rl_quicktrade_enabled: Optional[bool] = None  # Quick trade listing GETs (jail-style)
+    sustained_page_rl_properties_enabled: Optional[bool] = None  # Properties GETs (jail-style)
+    sustained_page_rl_armoury_enabled: Optional[bool] = None  # Armoury / inventory GETs (jail-style)
+    sustained_page_rl_bodyguards_enabled: Optional[bool] = None  # Bodyguards GETs (jail-style)
+    sustained_page_rl_missions_enabled: Optional[bool] = None  # Missions GETs (jail-style)
+    sustained_page_rl_travel_enabled: Optional[bool] = None  # Travel / airports GETs (jail-style)
+    sustained_page_rl_events_enabled: Optional[bool] = None  # Events / flash news GETs (jail-style)
     spotify_feature_enabled: Optional[bool] = None
     stock_market_max_points: Optional[int] = None
     sports_bet_max_total_open_stake: Optional[int] = None  # Max $ in open sports bets per user (default 25M)
@@ -5680,6 +5689,15 @@ def register(router):
         sustained_page_rl_hitlist_enabled = bool(main_doc.get("sustained_page_rl_hitlist_enabled")) if main_doc else False
         sustained_page_rl_bank_enabled = bool(main_doc.get("sustained_page_rl_bank_enabled")) if main_doc else False
         sustained_page_rl_leaderboard_enabled = bool(main_doc.get("sustained_page_rl_leaderboard_enabled")) if main_doc else False
+        sustained_page_rl_families_enabled = bool(main_doc.get("sustained_page_rl_families_enabled")) if main_doc else False
+        sustained_page_rl_stock_market_enabled = bool(main_doc.get("sustained_page_rl_stock_market_enabled")) if main_doc else False
+        sustained_page_rl_quicktrade_enabled = bool(main_doc.get("sustained_page_rl_quicktrade_enabled")) if main_doc else False
+        sustained_page_rl_properties_enabled = bool(main_doc.get("sustained_page_rl_properties_enabled")) if main_doc else False
+        sustained_page_rl_armoury_enabled = bool(main_doc.get("sustained_page_rl_armoury_enabled")) if main_doc else False
+        sustained_page_rl_bodyguards_enabled = bool(main_doc.get("sustained_page_rl_bodyguards_enabled")) if main_doc else False
+        sustained_page_rl_missions_enabled = bool(main_doc.get("sustained_page_rl_missions_enabled")) if main_doc else False
+        sustained_page_rl_travel_enabled = bool(main_doc.get("sustained_page_rl_travel_enabled")) if main_doc else False
+        sustained_page_rl_events_enabled = bool(main_doc.get("sustained_page_rl_events_enabled")) if main_doc else False
         spotify_feature_enabled = bool(main_doc.get("spotify_feature_enabled", False)) if main_doc else False
         preorder_points_release_date = main_doc.get("preorder_points_release_date") if main_doc else None
         store_points_auto_credit = main_doc.get("store_points_auto_credit") if main_doc else None
@@ -5723,6 +5741,15 @@ def register(router):
             "sustained_page_rl_hitlist_enabled": sustained_page_rl_hitlist_enabled,
             "sustained_page_rl_bank_enabled": sustained_page_rl_bank_enabled,
             "sustained_page_rl_leaderboard_enabled": sustained_page_rl_leaderboard_enabled,
+            "sustained_page_rl_families_enabled": sustained_page_rl_families_enabled,
+            "sustained_page_rl_stock_market_enabled": sustained_page_rl_stock_market_enabled,
+            "sustained_page_rl_quicktrade_enabled": sustained_page_rl_quicktrade_enabled,
+            "sustained_page_rl_properties_enabled": sustained_page_rl_properties_enabled,
+            "sustained_page_rl_armoury_enabled": sustained_page_rl_armoury_enabled,
+            "sustained_page_rl_bodyguards_enabled": sustained_page_rl_bodyguards_enabled,
+            "sustained_page_rl_missions_enabled": sustained_page_rl_missions_enabled,
+            "sustained_page_rl_travel_enabled": sustained_page_rl_travel_enabled,
+            "sustained_page_rl_events_enabled": sustained_page_rl_events_enabled,
             "spotify_feature_enabled": spotify_feature_enabled,
             "stock_market_max_points": stock_market_max_points,
             "sports_bet_max_total_open_stake": sports_bet_max_total_open_stake,
@@ -5913,6 +5940,60 @@ def register(router):
                 {"$set": {"sustained_page_rl_leaderboard_enabled": bool(body.sustained_page_rl_leaderboard_enabled)}},
                 upsert=True,
             )
+        if body.sustained_page_rl_families_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_families_enabled": bool(body.sustained_page_rl_families_enabled)}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_stock_market_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_stock_market_enabled": bool(body.sustained_page_rl_stock_market_enabled)}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_quicktrade_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_quicktrade_enabled": bool(body.sustained_page_rl_quicktrade_enabled)}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_properties_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_properties_enabled": bool(body.sustained_page_rl_properties_enabled)}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_armoury_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_armoury_enabled": bool(body.sustained_page_rl_armoury_enabled)}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_bodyguards_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_bodyguards_enabled": bool(body.sustained_page_rl_bodyguards_enabled)}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_missions_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_missions_enabled": bool(body.sustained_page_rl_missions_enabled)}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_travel_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_travel_enabled": bool(body.sustained_page_rl_travel_enabled)}},
+                upsert=True,
+            )
+        if body.sustained_page_rl_events_enabled is not None:
+            await db.game_settings.update_one(
+                {"_id": "main"},
+                {"$set": {"sustained_page_rl_events_enabled": bool(body.sustained_page_rl_events_enabled)}},
+                upsert=True,
+            )
         if body.spotify_feature_enabled is not None:
             await db.game_settings.update_one(
                 {"_id": "main"},
@@ -6100,6 +6181,15 @@ def register(router):
         sustained_page_rl_hitlist_enabled = bool(main_doc.get("sustained_page_rl_hitlist_enabled")) if main_doc else False
         sustained_page_rl_bank_enabled = bool(main_doc.get("sustained_page_rl_bank_enabled")) if main_doc else False
         sustained_page_rl_leaderboard_enabled = bool(main_doc.get("sustained_page_rl_leaderboard_enabled")) if main_doc else False
+        sustained_page_rl_families_enabled = bool(main_doc.get("sustained_page_rl_families_enabled")) if main_doc else False
+        sustained_page_rl_stock_market_enabled = bool(main_doc.get("sustained_page_rl_stock_market_enabled")) if main_doc else False
+        sustained_page_rl_quicktrade_enabled = bool(main_doc.get("sustained_page_rl_quicktrade_enabled")) if main_doc else False
+        sustained_page_rl_properties_enabled = bool(main_doc.get("sustained_page_rl_properties_enabled")) if main_doc else False
+        sustained_page_rl_armoury_enabled = bool(main_doc.get("sustained_page_rl_armoury_enabled")) if main_doc else False
+        sustained_page_rl_bodyguards_enabled = bool(main_doc.get("sustained_page_rl_bodyguards_enabled")) if main_doc else False
+        sustained_page_rl_missions_enabled = bool(main_doc.get("sustained_page_rl_missions_enabled")) if main_doc else False
+        sustained_page_rl_travel_enabled = bool(main_doc.get("sustained_page_rl_travel_enabled")) if main_doc else False
+        sustained_page_rl_events_enabled = bool(main_doc.get("sustained_page_rl_events_enabled")) if main_doc else False
         spotify_feature_enabled = bool(main_doc.get("spotify_feature_enabled", False)) if main_doc else False
         preorder_points_release_date = main_doc.get("preorder_points_release_date") if main_doc else None
         store_points_auto_credit = main_doc.get("store_points_auto_credit") if main_doc else None
@@ -6137,6 +6227,15 @@ def register(router):
             "sustained_page_rl_hitlist_enabled": sustained_page_rl_hitlist_enabled,
             "sustained_page_rl_bank_enabled": sustained_page_rl_bank_enabled,
             "sustained_page_rl_leaderboard_enabled": sustained_page_rl_leaderboard_enabled,
+            "sustained_page_rl_families_enabled": sustained_page_rl_families_enabled,
+            "sustained_page_rl_stock_market_enabled": sustained_page_rl_stock_market_enabled,
+            "sustained_page_rl_quicktrade_enabled": sustained_page_rl_quicktrade_enabled,
+            "sustained_page_rl_properties_enabled": sustained_page_rl_properties_enabled,
+            "sustained_page_rl_armoury_enabled": sustained_page_rl_armoury_enabled,
+            "sustained_page_rl_bodyguards_enabled": sustained_page_rl_bodyguards_enabled,
+            "sustained_page_rl_missions_enabled": sustained_page_rl_missions_enabled,
+            "sustained_page_rl_travel_enabled": sustained_page_rl_travel_enabled,
+            "sustained_page_rl_events_enabled": sustained_page_rl_events_enabled,
             "spotify_feature_enabled": spotify_feature_enabled,
             "stock_market_max_points": stock_market_max_points,
             "sports_bet_max_total_open_stake": sports_bet_max_total_open_stake,

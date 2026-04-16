@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Building, TrendingUp, DollarSign, Lock, Zap, Martini, Factory, Crown, AlertTriangle, Wallet, Skull } from 'lucide-react';
-import api, { refreshUser } from '../../utils/api';
+import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import ActiveTokenBadge from '../../components/ActiveTokenBadge';
@@ -117,7 +117,7 @@ export default function Properties() {
 
   const fetchProperties = async ({ silent = false } = {}) => {
     try {
-      const response = await api.get('/properties');
+      const response = await apiRequestWith429Retry(() => api.get('/properties'));
       const data = response.data;
       const nextProperties = Array.isArray(data) ? data : (data?.properties ?? []);
       const nextPropertyIncomePerkUntil = data?.property_income_perk_until ?? null;

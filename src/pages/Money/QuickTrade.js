@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Coins, ArrowLeftRight, Users, Building2, TrendingUp, TrendingDown, HelpCircle, Zap } from 'lucide-react';
-import api, { refreshUser } from '../../utils/api';
+import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
@@ -79,11 +79,11 @@ export default function QuickTrade() {
   const fetchTrades = async () => {
     try {
       const [sellRes, buyRes, tokenRes, propRes, balancesRes] = await Promise.all([
-        api.get('/trade/sell-offers'),
-        api.get('/trade/buy-offers'),
-        api.get('/trade/token-offers'),
-        api.get('/trade/properties'),
-        api.get('/trade/my-token-balances'),
+        apiRequestWith429Retry(() => api.get('/trade/sell-offers')),
+        apiRequestWith429Retry(() => api.get('/trade/buy-offers')),
+        apiRequestWith429Retry(() => api.get('/trade/token-offers')),
+        apiRequestWith429Retry(() => api.get('/trade/properties')),
+        apiRequestWith429Retry(() => api.get('/trade/my-token-balances')),
       ]);
       setSellOffers(sellRes.data || []);
       setBuyOffers(buyRes.data || []);

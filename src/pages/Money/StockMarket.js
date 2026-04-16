@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { toast } from 'sonner';
 import { TrendingUp, BarChart3, History } from 'lucide-react';
-import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
+import api, { refreshUser, getApiErrorMessage, apiRequestWith429Retry } from '../../utils/api';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
 import { formatGameDateTimeShort as formatDateTime } from '../../utils/gameDateTime';
@@ -49,10 +49,25 @@ export default function StockMarket() {
   const [popoverAnchor, setPopoverAnchor] = useState(null);
   const hoverCloseTimeoutRef = useRef(null);
 
-  const fetchList = useCallback(() => api.get('/stock-market/list').then((r) => setStocks(r.data?.stocks || [])).catch(() => setStocks([])), []);
-  const fetchPositions = useCallback(() => api.get('/stock-market/positions').then((r) => setPositions(r.data?.positions || [])).catch(() => setPositions([])), []);
-  const fetchSummary = useCallback(() => api.get('/stock-market/summary').then((r) => setSummary(r.data ?? { total_trades: 0, total_profit: 0, max_points: 3000, points_in_use: 0 })).catch(() => setSummary({ total_trades: 0, total_profit: 0, max_points: 3000, points_in_use: 0 })), []);
-  const fetchHistory = useCallback(() => api.get('/stock-market/history').then((r) => setHistory(r.data?.history || [])).catch(() => setHistory([])), []);
+  const fetchList = useCallback(
+    () => apiRequestWith429Retry(() => api.get('/stock-market/list')).then((r) => setStocks(r.data?.stocks || [])).catch(() => setStocks([])),
+    [],
+  );
+  const fetchPositions = useCallback(
+    () => apiRequestWith429Retry(() => api.get('/stock-market/positions')).then((r) => setPositions(r.data?.positions || [])).catch(() => setPositions([])),
+    [],
+  );
+  const fetchSummary = useCallback(
+    () =>
+      apiRequestWith429Retry(() => api.get('/stock-market/summary'))
+        .then((r) => setSummary(r.data ?? { total_trades: 0, total_profit: 0, max_points: 3000, points_in_use: 0 }))
+        .catch(() => setSummary({ total_trades: 0, total_profit: 0, max_points: 3000, points_in_use: 0 })),
+    [],
+  );
+  const fetchHistory = useCallback(
+    () => apiRequestWith429Retry(() => api.get('/stock-market/history')).then((r) => setHistory(r.data?.history || [])).catch(() => setHistory([])),
+    [],
+  );
 
   useEffect(() => {
     Promise.all([fetchList(), fetchPositions(), fetchSummary()]).finally(() => setLoading(false));
