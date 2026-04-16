@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { SAME_ROUTE_NAV_CLICK } from '../constants/navigationEvents';
 import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb } from 'lucide-react';
 import api, { getApiErrorMessage, onCooldownChange, invalidateApiCache, apiRequestWith429Retry } from '../utils/api';
 import { getThemeUiPlatform } from '../utils/themePlatform';
@@ -297,6 +298,20 @@ function SidebarCatHeader({ label, classic }) {
       <div style={{ flex: 1, height: 1, background: 'rgba(var(--noir-primary-rgb), 0.18)' }} />
     </div>
   );
+}
+
+function SameRouteAwareLink({ to, onClick, ...rest }) {
+  const location = useLocation();
+  const mergeClick = (e) => {
+    const path = typeof to === 'string' ? to : (to.pathname || '/');
+    const search = typeof to === 'string' ? '' : (to.search || '');
+    if (location.pathname === path && (location.search || '') === search) {
+      e.preventDefault();
+      window.dispatchEvent(new CustomEvent(SAME_ROUTE_NAV_CLICK, { detail: { pathname: path, search } }));
+    }
+    if (onClick) onClick(e);
+  };
+  return <Link to={to} {...rest} onClick={mergeClick} />;
 }
 
 export default function Layout({ children }) {
@@ -806,6 +821,16 @@ export default function Layout({ children }) {
   useEffect(() => { fetchFlashNews(); const id = setInterval(fetchFlashNews, 60000); return () => clearInterval(id); }, []); // eslint-disable-line
 
   useEffect(() => {
+    const onSameRoute = () => {
+      try {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      } catch (_) {}
+    };
+    window.addEventListener(SAME_ROUTE_NAV_CLICK, onSameRoute);
+    return () => window.removeEventListener(SAME_ROUTE_NAV_CLICK, onSameRoute);
+  }, []);
+
+  useEffect(() => {
     if (flashNews.length <= 1) return;
     // 45s on mobile so marquee can fully scroll before next message; 8s on desktop
     const ms = isMobileViewport ? 45000 : 8000;
@@ -1145,15 +1170,15 @@ export default function Layout({ children }) {
       </button>
       {rankingOpen && (
         <div className={`space-y-0 ${styles.sidebarSubmenuBorder}`}>
-          <Link to="/crime/crimes" onClick={() => setSidebarOpen(false)} onMouseEnter={() => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); }} onFocus={() => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); }}
+          <SameRouteAwareLink to="/crime/crimes" onClick={() => setSidebarOpen(false)} onMouseEnter={() => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); }} onFocus={() => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); }}
             className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/crime/crimes' ? styles.navItemActivePage : styles.sidebarNavLink}`}
             style={location.pathname === '/crime/crimes' ? sidebarActiveStyle : undefined} data-testid="nav-crimes">
             <ListChecks size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
             <span className="uppercase tracking-widest font-heading flex-1">Crimes</span>
             {rankingCounts.crimes > 0 && <span className="bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30">{rankingCounts.crimes}</span>}
-          </Link>
+          </SameRouteAwareLink>
           {showSidebarDividers && navDividerEl('rd1')}
-          <Link
+          <SameRouteAwareLink
             to="/crime/gta"
             onClick={() => setSidebarOpen(false)}
             className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/crime/gta' ? styles.navItemActivePage : styles.sidebarNavLink} ${gtaExclusiveInPool ? 'gta-exclusive-flash' : ''}`}
@@ -1167,31 +1192,31 @@ export default function Layout({ children }) {
             <span className="uppercase tracking-widest font-heading flex-1">GTA</span>
             {gtaExclusiveInPool && <span className="text-[9px] text-violet-400 font-bold shrink-0" title="Exclusive in pool">★</span>}
             {rankingCounts.gta > 0 && <span className="bg-emerald-600/20 text-emerald-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-emerald-500/30">{rankingCounts.gta}</span>}
-          </Link>
+          </SameRouteAwareLink>
           {showSidebarDividers && navDividerEl('rd2')}
-          <Link to="/crime/jail" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/crime/jail' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/crime/jail' ? sidebarActiveStyle : undefined} data-testid="nav-jail">
+          <SameRouteAwareLink to="/crime/jail" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/crime/jail' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/crime/jail' ? sidebarActiveStyle : undefined} data-testid="nav-jail">
             <Lock size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
             <span className="uppercase tracking-widest font-heading flex-1">Jail</span>
             {rankingCounts.jail > 0 && <span className="bg-red-600/20 text-red-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-red-500/30">{rankingCounts.jail}</span>}
-          </Link>
+          </SameRouteAwareLink>
           {showSidebarDividers && navDividerEl('rd3')}
-          <Link to="/organised-crime" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/organised-crime' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/organised-crime' ? sidebarActiveStyle : undefined} data-testid="nav-organised-crime">
+          <SameRouteAwareLink to="/organised-crime" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/organised-crime' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/organised-crime' ? sidebarActiveStyle : undefined} data-testid="nav-organised-crime">
             <Users size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
             <span className="uppercase tracking-widest font-heading flex-1">Organised Crime</span>
-          </Link>
+          </SameRouteAwareLink>
           {showSidebarDividers && navDividerEl('rd4')}
-          <Link to="/game/ranking/badges" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/game/ranking/badges' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/game/ranking/badges' ? sidebarActiveStyle : undefined} data-testid="nav-badges">
+          <SameRouteAwareLink to="/game/ranking/badges" onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/game/ranking/badges' ? styles.navItemActivePage : styles.sidebarNavLink}`} style={location.pathname === '/game/ranking/badges' ? sidebarActiveStyle : undefined} data-testid="nav-badges">
             <Award size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
             <span className="uppercase tracking-widest font-heading flex-1">Badges</span>
-          </Link>
+          </SameRouteAwareLink>
           {showSidebarDividers && navDividerEl('rd5')}
-          <Link to="/account/prestige" onClick={() => setSidebarOpen(false)} data-testid="nav-prestige"
+          <SameRouteAwareLink to="/account/prestige" onClick={() => setSidebarOpen(false)} data-testid="nav-prestige"
             className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${location.pathname === '/account/prestige' ? styles.navItemActivePage : styles.sidebarNavLink}`}
             style={location.pathname === '/account/prestige' ? sidebarActiveStyle : undefined}>
             <Trophy size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
             <span className="uppercase tracking-widest font-heading flex-1">Prestige</span>
             {rankProgress?.current_rank >= 11 && (user?.prestige_level ?? 0) < 5 && <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse shrink-0" title="You can prestige!" />}
-          </Link>
+          </SameRouteAwareLink>
         </div>
       )}
     </div>
@@ -1233,7 +1258,7 @@ export default function Layout({ children }) {
             return (
               <Fragment key={item.to}>
                 {showSidebarDividers && idx > 0 && navDividerEl(`cb${idx}`)}
-                <Link to={item.to} onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${isActive ? styles.navItemActivePage : styles.sidebarNavLink}`} style={isActive ? sidebarActiveStyle : undefined} data-testid={item.testId}>
+                <SameRouteAwareLink to={item.to} onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${isActive ? styles.navItemActivePage : styles.sidebarNavLink}`} style={isActive ? sidebarActiveStyle : undefined} data-testid={item.testId}>
                   <Icon size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />
                   <span className="uppercase tracking-widest font-heading flex-1">{item.label}</span>
                   {wsBadge > 0 && (
@@ -1247,7 +1272,7 @@ export default function Layout({ children }) {
                       </span>
                     )
                   )}
-                </Link>
+                </SameRouteAwareLink>
               </Fragment>
             );
           })}
@@ -1318,7 +1343,7 @@ export default function Layout({ children }) {
               return (
                 <Fragment key={row.key}>
                   {showSidebarDividers && idx > 0 && navDividerEl(`msg${idx}`)}
-                  <Link
+                  <SameRouteAwareLink
                     to={row.to}
                     onClick={() => setSidebarOpen(false)}
                     className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${isActive ? styles.navItemActivePage : styles.sidebarNavLink}`}
@@ -1330,7 +1355,7 @@ export default function Layout({ children }) {
                     {row.kind === 'inbox' && unreadCount > 0 && (
                       <span className="shrink-0 rounded border border-red-500/30 bg-red-600/20 px-1.5 py-0.5 font-heading text-[10px] font-bold text-red-400">{unreadCount > 9 ? '9+' : unreadCount}</span>
                     )}
-                  </Link>
+                  </SameRouteAwareLink>
                 </Fragment>
               );
             })}
@@ -1371,7 +1396,7 @@ export default function Layout({ children }) {
             return (
               <Fragment key={item.to}>
                 {showSidebarDividers && idx > 0 && navDividerEl(`cd${idx}`)}
-                <Link to={item.to} onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${isActive ? styles.navItemActivePage : styles.sidebarNavLink}`} style={isActive ? sidebarActiveStyle : undefined} data-testid={item.testId}>
+                <SameRouteAwareLink to={item.to} onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${isActive ? styles.navItemActivePage : styles.sidebarNavLink}`} style={isActive ? sidebarActiveStyle : undefined} data-testid={item.testId}>
                   {IconComp && <IconComp size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />}
                   <span className="uppercase tracking-widest font-heading flex-1">{item.label}</span>
                   {item.to === '/sports-betting' && sportsBettingEventCount > 0 && (
@@ -1382,7 +1407,7 @@ export default function Layout({ children }) {
                       {sportsBettingEventCount > 99 ? '99+' : sportsBettingEventCount}
                     </span>
                   )}
-                </Link>
+                </SameRouteAwareLink>
               </Fragment>
             );
           })}
@@ -1423,10 +1448,10 @@ export default function Layout({ children }) {
             return (
               <Fragment key={item.to}>
                 {showSidebarDividers && idx > 0 && navDividerEl(`mg${idx}`)}
-                <Link to={item.to} onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${isActive ? styles.navItemActivePage : styles.sidebarNavLink}`} style={isActive ? sidebarActiveStyle : undefined} data-testid={item.testId}>
+                <SameRouteAwareLink to={item.to} onClick={() => setSidebarOpen(false)} className={`flex items-center gap-1 px-2 py-0.5 min-h-[22px] rounded-sm transition-smooth text-[10px] ${isActive ? styles.navItemActivePage : styles.sidebarNavLink}`} style={isActive ? sidebarActiveStyle : undefined} data-testid={item.testId}>
                   {IconComp && <IconComp size={13} className="shrink-0" style={{ color: 'var(--noir-primary)' }} />}
                   <span className="uppercase tracking-widest font-heading flex-1">{item.label}</span>
-                </Link>
+                </SameRouteAwareLink>
               </Fragment>
             );
           })}
@@ -1450,7 +1475,7 @@ export default function Layout({ children }) {
     return (
       <Fragment key={itemKey}>
         {navDivider}
-        <Link to={item.path} data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`} data-at-war={atWar && item.path === '/game/family/list' ? 'true' : undefined}
+        <SameRouteAwareLink to={item.path} data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`} data-at-war={atWar && item.path === '/game/family/list' ? 'true' : undefined}
           className={`flex items-center gap-1 px-2 ${sizeClass} rounded-sm transition-smooth touch-manipulation ${isFamiliesAtWar ? (isActive ? 'bg-red-500/20 text-red-400 border-l-2 border-red-500' : 'text-red-400 hover:bg-red-500/10') : (isActive ? styles.navItemActivePage : styles.sidebarNavLink)}`}
           style={isFamiliesAtWar ? { color: '#f87171' } : isActive ? sidebarActiveStyle : undefined}
           onClick={() => setSidebarOpen(false)}
@@ -1476,7 +1501,7 @@ export default function Layout({ children }) {
             </span>
           )}
           {item.badge > 0 && <span className="bg-red-600/20 text-red-400 text-[10px] px-1.5 py-0.5 rounded font-bold border border-red-500/30">{item.badge > 9 ? '9+' : item.badge}</span>}
-        </Link>
+        </SameRouteAwareLink>
       </Fragment>
     );
   };
@@ -1726,11 +1751,11 @@ export default function Layout({ children }) {
                   {adminNavItems.map((item) => {
                     const Icon = item.icon; const isActive = location.pathname === item.path;
                     return (
-                      <Link key={item.path} to={item.path} data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
+                      <SameRouteAwareLink key={item.path} to={item.path} data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
                         className={`flex items-center gap-1 px-2 py-1 rounded-sm transition-smooth border-t border-primary/20 mt-1 pt-1 ${isActive ? 'bg-red-600/20 text-red-400 border-l-2 border-red-500' : 'text-red-400 hover:bg-red-500/10'}`}
                         onClick={() => setSidebarOpen(false)}>
                         <Icon size={14} /><span className="uppercase tracking-widest text-xs font-heading">{item.label}</span>
-                      </Link>
+                      </SameRouteAwareLink>
                     );
                   })}
                 </>
@@ -1742,11 +1767,11 @@ export default function Layout({ children }) {
                   {moderatorNavItems.map((item) => {
                     const Icon = item.icon; const isActive = location.pathname === item.path;
                     return (
-                      <Link key={item.path} to={item.path} data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
+                      <SameRouteAwareLink key={item.path} to={item.path} data-testid={`nav-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
                         className={`flex items-center gap-1 px-2 py-1 rounded-sm transition-smooth border-t border-primary/20 mt-1 pt-1 ${isActive ? 'bg-primary/20 border-l-2 border-primary text-primary' : 'text-primary hover:bg-primary/10'}`}
                         onClick={() => setSidebarOpen(false)}>
                         <Icon size={14} /><span className="uppercase tracking-widest text-xs font-heading">{item.label}</span>
-                      </Link>
+                      </SameRouteAwareLink>
                     );
                   })}
                 </>
@@ -1807,7 +1832,7 @@ export default function Layout({ children }) {
 
           {/* Casino & property profit — show on mobile when bottom bar, but not when top bar stats selected */}
           {isMobileViewport && mobileNavStyle === 'bottom' && mobileStatsDisplay !== 'top_bar' && user && hasCasinoOrProperty && (
-            <Link
+            <SameRouteAwareLink
               to="/my-properties"
               className="flex items-center gap-1 min-h-[1.5rem] rounded px-1.5 py-0.5 border border-primary/15 bg-primary/5 shrink-0 hover:bg-primary/10 hover:border-primary/25 transition-colors"
             >
@@ -1815,7 +1840,7 @@ export default function Layout({ children }) {
               <span className={`font-heading text-[10px] tabular-nums ${(user.casino_profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>C {formatMoneyCompact(user.casino_profit ?? 0)}</span>
               <span className="text-primary/50 text-[9px]">·</span>
               <span className="font-heading text-[10px] text-mutedForeground tabular-nums">P {formatCompact(user.property_profit ?? 0)} pts</span>
-            </Link>
+            </SameRouteAwareLink>
           )}
 
           {/* IMPROVEMENT 1: Improved travel indicator — 2-line compact card */}
@@ -1956,7 +1981,7 @@ export default function Layout({ children }) {
                                 <div className="p-4 text-center text-sm font-heading text-mutedForeground md:p-3 md:text-[11px]">{userSearchQuery.trim().length < 1 ? 'Type to search' : 'No users found'}</div>
                               ) : (
                                 userSearchResults.map((u) => (
-                                  <Link key={u.username} to={`/profile/${encodeURIComponent(u.username)}`}
+                                  <SameRouteAwareLink key={u.username} to={`/profile/${encodeURIComponent(u.username)}`}
                                     onClick={() => { setUserSearchOpen(false); setUserSearchExpanded(false); setUserSearchQuery(''); setUserSearchResults([]); }}
                                     className="flex items-center justify-between gap-2 w-full text-left px-3 py-3 min-h-[44px] border-b font-heading text-sm hover:bg-noir-raised/80 active:bg-noir-raised/90 transition-colors touch-manipulation md:py-2 md:min-h-0"
                                     style={{ borderColor: 'var(--noir-border)', color: 'var(--noir-foreground)' }}>
@@ -1966,7 +1991,7 @@ export default function Layout({ children }) {
                                       {u.in_jail && !u.is_dead && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-400 md:text-[9px] md:px-1">Jail</span>}
                                       {u.is_bodyguard && <span className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-blue-500/20 text-blue-400 md:text-[9px] md:px-1">Robot</span>}
                                     </div>
-                                  </Link>
+                                  </SameRouteAwareLink>
                                 ))
                               )}
                             </div>
@@ -2065,7 +2090,7 @@ export default function Layout({ children }) {
           <div className="mb-3 px-3 py-2 rounded-sm flex items-center gap-2 flex-wrap" style={{ backgroundColor: 'rgba(var(--noir-primary-rgb), 0.15)', border: '1px solid rgba(var(--noir-primary-rgb), 0.4)' }}>
             <Mail size={16} style={{ color: 'var(--noir-primary)' }} className="shrink-0" />
             <span className="text-sm font-heading" style={{ color: 'var(--noir-foreground)' }}>Verify your email to use crimes, GTA, OC, bank, gambling, dead-alive, and other features.</span>
-            <Link to="/verify-email" className="text-sm font-heading font-bold uppercase tracking-wider shrink-0" style={{ color: 'var(--noir-primary)' }}>Verify email</Link>
+            <SameRouteAwareLink to="/verify-email" className="text-sm font-heading font-bold uppercase tracking-wider shrink-0" style={{ color: 'var(--noir-primary)' }}>Verify email</SameRouteAwareLink>
           </div>
         )}
         {(() => {
@@ -2091,7 +2116,7 @@ export default function Layout({ children }) {
                 <div className="rounded-xl border-2 p-8 max-w-md w-full" style={{ borderColor: 'var(--noir-primary)', backgroundColor: 'rgba(var(--noir-primary-rgb), 0.08)' }}>
                   <p className="text-lg font-heading font-bold uppercase tracking-wider mb-2" style={{ color: 'var(--noir-primary)' }}>Down for maintenance</p>
                   <p className="text-sm font-heading text-muted-foreground mb-6">{msg}</p>
-                  <Link to="/account/dashboard" className="text-sm font-heading font-bold uppercase tracking-wider" style={{ color: 'var(--noir-primary)' }}>Back to Dashboard</Link>
+                  <SameRouteAwareLink to="/account/dashboard" className="text-sm font-heading font-bold uppercase tracking-wider" style={{ color: 'var(--noir-primary)' }}>Back to Dashboard</SameRouteAwareLink>
                 </div>
               </div>
             );
@@ -2193,7 +2218,7 @@ export default function Layout({ children }) {
                 ].map((row, i) => {
                   if (row.isLink) {
                     return (
-                      <Link key={i} to={row.to} onClick={() => isMobileViewport && setRightSidebarOpen(false)}
+                      <SameRouteAwareLink key={i} to={row.to} onClick={() => isMobileViewport && setRightSidebarOpen(false)}
                         className={`flex justify-between gap-1 text-[9px] font-heading px-1 py-1 rounded-sm transition-colors min-w-0 ${row.wrapValue ? 'items-start' : 'items-center'}`}
                         style={{ color: 'var(--noir-foreground)' }}
                         onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(var(--noir-primary-rgb), 0.05)'; }}
@@ -2210,7 +2235,7 @@ export default function Layout({ children }) {
                         >
                           {row.value}
                         </span>
-                      </Link>
+                      </SameRouteAwareLink>
                     );
                   }
                   return (
@@ -2262,21 +2287,21 @@ export default function Layout({ children }) {
               <div className="h-px shrink-0" style={dividerStyle} />
 
               <div className="space-y-1 pt-1">
-                <Link to="/game/leaderboard" onClick={() => isMobileViewport && setRightSidebarOpen(false)}
+                <SameRouteAwareLink to="/game/leaderboard" onClick={() => isMobileViewport && setRightSidebarOpen(false)}
                   onMouseEnter={prefetchMainLeaderboard}
                   onFocus={prefetchMainLeaderboard}
                   className="flex items-center gap-1.5 text-[10px] font-heading font-bold py-0.5 px-1 rounded-sm"
                   style={{ color: 'var(--noir-primary)' }}>
                   <Trophy size={12} /> Leaderboard
-                </Link>
-                <Link to="/social/inbox" onClick={() => isMobileViewport && setRightSidebarOpen(false)}
+                </SameRouteAwareLink>
+                <SameRouteAwareLink to="/social/inbox" onClick={() => isMobileViewport && setRightSidebarOpen(false)}
                   className="flex items-center justify-between gap-1 text-[10px] font-heading py-0.5 px-1 rounded-sm"
                   style={{ color: 'var(--noir-foreground)' }}>
                   <span className="flex items-center gap-1.5">
                     <Newspaper size={12} style={{ color: 'var(--noir-primary)' }} /> Notifications
                     {unreadCount > 0 && <span className="text-[9px] font-bold" style={{ color: 'var(--noir-primary)' }}>({unreadCount} new)</span>}
                   </span>
-                </Link>
+                </SameRouteAwareLink>
               </div>
 
               {/* IMPROVEMENT 4: Theme button in right sidebar too */}
@@ -2332,7 +2357,7 @@ export default function Layout({ children }) {
                 </div>
               )}
               {user && hasCasinoOrProperty && (
-                <Link
+                <SameRouteAwareLink
                   to="/my-properties"
                   className="flex min-h-[1.5rem] min-w-0 flex-1 basis-0 items-center justify-start gap-1 rounded border border-primary/15 bg-primary/5 px-2 py-1.5 font-heading text-[10px] tabular-nums transition-colors hover:border-primary/25 hover:bg-primary/10"
                 >
@@ -2340,7 +2365,7 @@ export default function Layout({ children }) {
                   <span className={`min-w-0 truncate ${(user.casino_profit ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>C {formatMoneyCompact(user.casino_profit ?? 0)}</span>
                   <span className="shrink-0 text-[9px] text-primary/50">·</span>
                   <span className="min-w-0 truncate text-mutedForeground">P {formatCompact(user.property_profit ?? 0)} pts</span>
-                </Link>
+                </SameRouteAwareLink>
               )}
             </div>
           )}
@@ -2408,7 +2433,7 @@ export default function Layout({ children }) {
                     const prefetchCrimes = sub.path === '/crime/crimes' ? () => { api.get('/crimes').then((r) => setCrimesPrefetch(r.data)).catch(() => {}); } : undefined;
                     const isGtaExclusive = sub.path === '/crime/gta' && gtaExclusiveInPool;
                     return (
-                      <Link key={sub.path ? `${sub.path}-${sub.label}` : idx} to={to}
+                      <SameRouteAwareLink key={sub.path ? `${sub.path}-${sub.label}` : idx} to={to}
                         onClick={() => setMobileBottomMenuOpen(null)}
                         onMouseEnter={prefetchCrimes} onFocus={prefetchCrimes}
                         role="menuitem"
@@ -2433,7 +2458,7 @@ export default function Layout({ children }) {
                             <span className="shrink-0 min-w-[16px] h-[16px] rounded-full bg-red-600 text-[9px] font-bold text-white flex items-center justify-center px-0.5">{sub.badge > 9 ? '9+' : sub.badge}</span>
                           )
                         )}
-                      </Link>
+                      </SameRouteAwareLink>
                     );
                   })}
                 </div>
@@ -2457,14 +2482,14 @@ export default function Layout({ children }) {
                     const isActive = location.pathname === item.path || (item.path !== '/account/dashboard' && location.pathname.startsWith(item.path + '/'));
                     const isInbox = item.path === '/social/inbox';
                     return (
-                      <Link key={item.path} to={item.path} onClick={() => { setSidebarOpen(false); setMobileBottomMenuOpen(null); }}
+                      <SameRouteAwareLink key={item.path} to={item.path} onClick={() => { setSidebarOpen(false); setMobileBottomMenuOpen(null); }}
                         className={boxBase} style={isActive ? boxActive : boxInactive} aria-current={isActive ? 'page' : undefined} title={item.label}>
                         <span className="relative inline-flex leading-none">
                           <Icon size={13} strokeWidth={2} />
                           {isInbox && unreadCount > 0 && <span className="absolute -top-0.5 -right-1 min-w-[10px] h-[10px] rounded-full bg-red-600 text-[8px] font-bold text-white flex items-center justify-center px-0.5">{unreadCount > 9 ? '9+' : unreadCount}</span>}
                         </span>
                         <span className="text-[7px] font-heading uppercase tracking-wider truncate max-w-[44px] leading-tight">{item.mobileShortLabel ?? item.label}</span>
-                      </Link>
+                      </SameRouteAwareLink>
                     );
                   })()}
                   {item.type === 'group' && (() => {
@@ -2596,12 +2621,12 @@ export default function Layout({ children }) {
                       <div className="p-3 text-center text-xs font-heading" style={{ color: 'var(--noir-muted)' }}>No users found</div>
                     ) : (
                       userSearchResults.map((u) => (
-                        <Link key={u.username} to={`/profile/${encodeURIComponent(u.username)}`}
+                        <SameRouteAwareLink key={u.username} to={`/profile/${encodeURIComponent(u.username)}`}
                           onClick={() => { setUserSearchOpen(false); setUserSearchQuery(''); setUserSearchResults([]); setNotificationPanelOpen(false); }}
                           className="block w-full text-left px-3 py-2.5 border-b font-heading text-sm"
                           style={{ borderColor: 'var(--noir-border)', color: 'var(--noir-foreground)' }}>
                           {u.username}
-                        </Link>
+                        </SameRouteAwareLink>
                       ))
                     )}
                   </div>

@@ -1,6 +1,7 @@
 import { useMemo, useState, useEffect, useCallback } from 'react';
 import { HelpCircle, Clock, AlertCircle, Bot, Skull, Zap, Lock, Star } from 'lucide-react';
 import api, { refreshUser, apiRequestWith429Retry } from '../../utils/api';
+import { SAME_ROUTE_NAV_CLICK } from '../../constants/navigationEvents';
 import { getCrimesPrefetch, clearCrimesPrefetch } from '../../utils/prefetchCache';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -502,6 +503,17 @@ export default function Crimes() {
   useEffect(() => {
     fetchCrimes(!!bootPrefetchedCrimes);
   }, [fetchCrimes, bootPrefetchedCrimes]);
+
+  useEffect(() => {
+    const onSameRouteNav = (e) => {
+      const d = e.detail;
+      if (!d || d.pathname !== '/crime/crimes' || (d.search && d.search !== '')) return;
+      clearCrimesPrefetch();
+      fetchCrimes(false);
+    };
+    window.addEventListener(SAME_ROUTE_NAV_CLICK, onSameRouteNav);
+    return () => window.removeEventListener(SAME_ROUTE_NAV_CLICK, onSameRouteNav);
+  }, [fetchCrimes]);
 
   const tick = useCooldownTicker(crimes, () => fetchCrimes(true));
 

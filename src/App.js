@@ -188,8 +188,17 @@ function AttackShortcutRedirect() {
   return <Navigate to={`/kill/attack${search}`} replace />;
 }
 
+/** Sync with localStorage on first paint so refresh on a deep link does not briefly treat the user as logged out (which redirected to / then /account/dashboard). */
+function readIsAuthenticatedFromStorage() {
+  try {
+    return Boolean(localStorage.getItem('token'));
+  } catch {
+    return false;
+  }
+}
+
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(readIsAuthenticatedFromStorage);
 
   useEffect(() => {
     initToastObservability();
@@ -215,10 +224,6 @@ function App() {
   }, [isAuthenticated]);
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (token) {
-      setIsAuthenticated(true);
-    }
     try {
       sessionStorage.removeItem("login_locked");
     } catch (_) {}
