@@ -1475,6 +1475,9 @@ export default function Forum() {
 
   const currentCategory = activeTab === 'entertainer' ? 'entertainer' : activeTab === 'crew_oc' ? 'crew_oc' : activeTab === 'designer' ? 'designer' : activeTab === 'game_ideas' ? 'game_ideas' : 'general';
   const openGames = (entertainerGames || []).filter((g) => g.status === 'open');
+  const uidStr = user?.id != null ? String(user.id) : '';
+  const isUserInParticipantList = (parts) =>
+    !!uidStr && (parts || []).some((p) => String(p.user_id || '') === uidStr);
   const handleJoinGame = async (gameId) => {
     setJoiningId(gameId);
     try {
@@ -2217,7 +2220,7 @@ export default function Forum() {
               <div className="divide-y divide-zinc-700/30">
                 {openGames.map((g) => {
                   const participants = g.participants || [];
-                  const isIn = user && participants.some((p) => p.user_id === user.id);
+                  const isIn = isUserInParticipantList(participants);
                   const secsLeft = getSecondsUntilRollWindow(entertainerConfig.next_auto_create_at);
                   return (
                     <div key={g.id}>
@@ -2252,7 +2255,7 @@ export default function Forum() {
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
-                        {!isIn && g.status === 'open' && (
+                        {!!user && !isIn && g.status === 'open' && (
                           <button
                             onClick={() => handleJoinGame(g.id)}
                             disabled={joiningId === g.id}

@@ -1048,6 +1048,7 @@ async def join_game(game_id: str, current_user: dict = Depends(get_current_user_
         raise HTTPException(status_code=404, detail="Game not found")
     if game.get("status") != "open":
         raise HTTPException(status_code=400, detail="Game is not open to join")
+    uid = current_user["id"]
     max_players = game.get("max_players", 10)
     join_fee = int(game.get("join_fee") or 0)
     if game.get("game_type") == "hangman" and not game.get("hangman_state"):
@@ -1066,7 +1067,7 @@ async def join_game(game_id: str, current_user: dict = Depends(get_current_user_
             "id": game_id,
             "status": "open",
             f"participants.{max_players - 1}": {"$exists": False},
-            "participants.user_id": {"$ne": current_user["id"]},
+            "participants.user_id": {"$ne": uid},
         },
         {"$push": {"participants": participant_doc}, "$inc": {"pot": join_fee}},
     )
