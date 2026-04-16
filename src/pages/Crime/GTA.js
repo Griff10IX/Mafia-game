@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Car, Lock, ChevronDown, ChevronRight, Bot, Zap } from 'lucide-react';
 import ActiveTokenBadge from '../../components/ActiveTokenBadge';
@@ -413,15 +413,18 @@ export default function GTA() {
   const [activeLootPerks, setActiveLootPerks] = useState(() => gtaBoot?.activeLootPerks ?? []);
   const [user, setUser] = useState(() => gtaBoot?.user ?? null);
 
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
+
   const fetchData = useCallback(async ({ silent = false } = {}) => {
-    let nextOptions = options;
-    let nextRecentStolen = recentStolen;
-    let nextEvent = event;
-    let nextEventsEnabled = eventsEnabled;
-    let nextAutoRankGtaDisabled = autoRankGtaDisabled;
-    let nextActiveLootPerks = activeLootPerks;
-    let nextUser = user;
-    let nextGtaStats = gtaStats;
+    let nextOptions = optionsRef.current;
+    let nextRecentStolen = [];
+    let nextEvent = null;
+    let nextEventsEnabled = false;
+    let nextAutoRankGtaDisabled = false;
+    let nextActiveLootPerks = [];
+    let nextUser = null;
+    let nextGtaStats = { ...DEFAULT_GTA_STATS };
     try {
       const [optionsRes, recentStolenRes, eventsRes, statsRes, autoRankRes, lootStatusRes, meRes] = await Promise.allSettled([
         api.get('/gta/options'),
@@ -489,15 +492,12 @@ export default function GTA() {
         console.error('Error fetching GTA data:', error);
       }
     }
-  }, [options, recentStolen, gtaStats, event, eventsEnabled, autoRankGtaDisabled, activeLootPerks, user]);
+  }, []);
 
   useEffect(() => {
-    fetchData({ silent: !!gtaBoot?.options?.length });
-  }, [fetchData]);
-
-  useEffect(() => {
-    const id = setInterval(() => fetchData({ silent: true }), 60_000);
-    return () => clearInterval(id);
+    const boot = readSessionJson(GTA_SESSION_CACHE_KEY);
+    fetchData({ silent: !!(boot?.options?.length) });
+    // Intentionally once per mount (returning to /crime/gta remounts and loads fresh).
   }, [fetchData]);
 
   const tick = useCooldownTicker(options, () => fetchData({ silent: true }));

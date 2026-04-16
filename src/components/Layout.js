@@ -911,17 +911,19 @@ export default function Layout({ children }) {
       const onJailPage = location.pathname === '/crime/jail';
       const settled = await Promise.allSettled([
         crimesPromise,
-        api.get('/gta/options'),
+        api.get('/gta/playable-count'),
         onJailPage ? Promise.resolve({ data: null }) : api.get('/jail/players'),
-        api.get('/gta/exclusive-pool-status'),
         api.get('/sports-betting/events'),
       ]);
       const crimesRes = settled[0].status === 'fulfilled' ? settled[0].value : null;
-      const gtaRes = settled[1].status === 'fulfilled' ? settled[1].value : null;
+      const gtaPcRes = settled[1].status === 'fulfilled' ? settled[1].value : null;
       const jailPlayersRes = settled[2].status === 'fulfilled' ? settled[2].value : null;
-      const now = new Date();
       const crimesAvailable = crimesRes && Array.isArray(crimesRes.data) ? crimesRes.data.filter((c) => c?.can_commit).length : 0;
-      const gtaAvailable = gtaRes && Array.isArray(gtaRes.data) ? gtaRes.data.filter((o) => { if (!o?.unlocked) return false; if (!o?.cooldown_until) return true; const t = new Date(o.cooldown_until); return !Number.isNaN(t.getTime()) && t <= now; }).length : 0;
+      const pc = gtaPcRes?.data?.playable_count;
+      const gtaAvailable = typeof pc === 'number' ? pc : 0;
+      if (gtaPcRes?.data && typeof gtaPcRes.data.exclusive_in_pool !== 'undefined') {
+        setGtaExclusiveInPool(!!gtaPcRes.data.exclusive_in_pool);
+      }
       const jailCount = onJailPage
         ? undefined
         : (jailPlayersRes && Array.isArray(jailPlayersRes.data?.players) ? jailPlayersRes.data.players.length : 0);
@@ -930,18 +932,11 @@ export default function Layout({ children }) {
         gta: gtaAvailable,
         jail: jailCount === undefined ? prev.jail : jailCount,
       }));
-      if (settled[4].status === 'fulfilled') {
-        const ev = settled[4].value?.data?.events;
+      if (settled[3].status === 'fulfilled') {
+        const ev = settled[3].value?.data?.events;
         setSportsBettingEventCount(Array.isArray(ev) ? ev.length : 0);
       } else {
         setSportsBettingEventCount(0);
-      }
-      // Only update when the request succeeds; failed requests used to clear the ★ intermittently
-      if (settled[3].status === 'fulfilled') {
-        const d = settled[3].value?.data;
-        if (d && typeof d.exclusive_in_pool !== 'undefined') {
-          setGtaExclusiveInPool(!!d.exclusive_in_pool);
-        }
       }
     } catch (error) { }
   };

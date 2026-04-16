@@ -407,6 +407,25 @@ async def get_gta_options(current_user: dict = Depends(get_current_user)):
     return result
 
 
+async def get_gta_playable_count(current_user: dict = Depends(get_current_user)):
+    """Nav/badge: playable tier count + exclusive-in-pool (same bundle Layout used to fetch as two GETs)."""
+    now = datetime.now(timezone.utc)
+    user_rank, _ = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))
+    released, cooldown_doc = await asyncio.gather(
+        _sync_gta_exclusive_pool_release_state(),
+        db.gta_cooldowns.find_one(
+            {"user_id": current_user.get("id") or ""},
+            {"_id": 0, "cooldown_until": 1},
+        ),
+    )
+    if cooldown_doc:
+        until = _parse_iso_datetime(cooldown_doc.get("cooldown_until"))
+        if until and until > now:
+            return {"playable_count": 0, "exclusive_in_pool": bool(released)}
+    playable = sum(1 for opt in GTA_OPTIONS if user_rank >= opt["min_rank"])
+    return {"playable_count": playable, "exclusive_in_pool": bool(released)}
+
+
 async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_total_gta: bool = False) -> GTAAttemptResponse:
     """Run one GTA attempt. Caller must ensure option exists, user rank OK, and cooldown passed. Used by route and auto_rank.
     When caller_updates_total_gta is True (e.g. auto_rank), total_gta is not incremented here; the caller does it for leaderboard consistency."""
@@ -2046,6 +2065,7 @@ async def get_gta_exclusive_pool_status(current_user: dict = Depends(get_current
 
 def register(router):
     router.add_api_route("/gta/options", get_gta_options, methods=["GET"])
+    router.add_api_route("/gta/playable-count", get_gta_playable_count, methods=["GET"])
     router.add_api_route("/gta/exclusive-pool-status", get_gta_exclusive_pool_status, methods=["GET"])
     router.add_api_route("/gta/car/{car_id}", get_car, methods=["GET"])
     router.add_api_route(

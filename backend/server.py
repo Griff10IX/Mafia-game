@@ -915,6 +915,7 @@ DEAD_ACCOUNT_WHITELIST = {
 JAIL_BLOCKED_EXACT = frozenset({
     "/api/crimes",
     "/api/gta/options",
+    "/api/gta/playable-count",
     "/api/gta/attempt",
     "/api/gta/recent-stolen",
     "/api/gta/stats",
