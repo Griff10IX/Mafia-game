@@ -505,6 +505,8 @@ async def run_weekly_leaderboard_payout(database, test_run: bool = False):
     )
     already_paid = bool(cfg and cfg.get("last_run_week_start") == last_week_start_str and not test_run)
     should_award = not already_paid
+    if already_paid and not test_run:
+        return
 
     top1 = int(cfg.get("top1_points") or DEFAULT_TOP1_POINTS) if cfg else DEFAULT_TOP1_POINTS
     top2 = int(cfg.get("top2_points") or DEFAULT_TOP2_POINTS) if cfg else DEFAULT_TOP2_POINTS
@@ -668,7 +670,7 @@ async def run_weekly_leaderboard_payout(database, test_run: bool = False):
         # Never break payouts because the admin audit write failed.
         log.exception("Weekly leaderboard payout: failed to persist audit trail")
 
-    if user_points:
+    if should_award and user_points:
         log.info(
             "Weekly leaderboard payout: week %s paid %d users total %d points",
             last_week_start_str, len(user_points), sum(user_points.values()),

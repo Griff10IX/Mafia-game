@@ -254,12 +254,32 @@ async def _run_slots_draw_if_needed(state: str):
 
 async def run_slots_draws_due():
     """Run the lottery draw for every state where next_draw_at is due. Call from a background task so draws run on time even if no one is on the page."""
-    logging.getLogger().info("Slots draw check starting (states=%s)", len(STATES or []))
-    for state in (STATES or []):
+    log = logging.getLogger(__name__)
+    now = datetime.now(timezone.utc)
+    docs = await db.slots_ownership.find({}, {"_id": 0, "state": 1, "next_draw_at": 1}).to_list(300)
+    states_with_doc: set[str] = set()
+    due_norm: set[str] = set()
+    for d in docs:
+        st = (d.get("state") or "").strip()
+        if not st:
+            continue
+        norm = _normalize_state(st)
+        states_with_doc.add(norm)
+        nd = _parse_iso_datetime(d.get("next_draw_at"))
+        if nd is None or nd <= now:
+            due_norm.add(norm)
+    for state in STATES or []:
+        ns = _normalize_state(state)
+        if ns not in states_with_doc:
+            due_norm.add(ns)
+    log.debug("Slots draw check (due_states=%s of %s total STATES)", len(due_norm), len(STATES or []))
+    for state in STATES or []:
+        if _normalize_state(state) not in due_norm:
+            continue
         try:
             await _run_slots_draw_if_needed(state)
         except Exception as e:
-            logging.exception("Slots draw failed for state %s: %s", state, e)
+            log.exception("Slots draw failed for state %s: %s", state, e)
 
 
 # ----- Models -----

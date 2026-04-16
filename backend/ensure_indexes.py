@@ -698,6 +698,7 @@ async def ensure_all_indexes(db):
         try:
             await db.lottery_tickets.create_index([("round_id", 1)])
             await db.lottery_tickets.create_index([("round_id", 1), ("user_id", 1)])
+            await db.lottery_tickets.create_index([("round_id", 1), ("numbers", 1)])
             await db.lottery_rounds.create_index([("status", 1), ("closes_at", 1)])
             await db.lottery_rounds.create_index([("status", 1), ("drawn_at", -1)])
             await db.lottery_events.create_index([("drawn_at", -1)])

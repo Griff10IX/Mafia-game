@@ -376,16 +376,38 @@ async def lottery_draw_cron(_: bool = Depends(_cron_verify())):
         lock = await db.lottery_rounds.update_one({"_id": rid, "status": "open"}, {"$set": {"status": "drawing"}})
         if lock.modified_count == 0:
             break
-        tickets = await db.lottery_tickets.find(
-            {"round_id": rid},
+        n = await db.lottery_tickets.count_documents({"round_id": rid})
+        rollover_start = int(rd.get("rollover_in") or 0)
+        ticket_revenue = n * TICKET_PRICE
+        gross = ticket_revenue + rollover_start
+        sink = (gross * POT_TAX_PERCENT) // 100 if gross > 0 else 0
+        payout = gross - sink
+        winning_numbers = _random_lottery_numbers()
+        drawn_iso = datetime.now(timezone.utc).isoformat()
+
+        # Exact-match lines only (tickets store sorted six numbers). Avoid loading all tickets for the round.
+        _MAX_WINNER_TICKETS = 100_000
+        raw_winning = await db.lottery_tickets.find(
+            {"round_id": rid, "numbers": winning_numbers},
             {"_id": 0, "user_id": 1, "username": 1, "numbers": 1},
-        ).to_list(500_000)
-        # Staff can buy tickets to grow the pot, but cannot win payouts.
-        ticket_user_ids = sorted({
-            _normalize_lottery_user_id(t.get("user_id"))
-            for t in tickets
-            if _normalize_lottery_user_id(t.get("user_id"))
-        })
+        ).to_list(_MAX_WINNER_TICKETS + 1)
+        if len(raw_winning) > _MAX_WINNER_TICKETS:
+            logger.warning(
+                "lottery draw: exact-match ticket count exceeds cap (%s > %s) round_id=%s; capping payouts to cap",
+                len(raw_winning),
+                _MAX_WINNER_TICKETS,
+                rid,
+            )
+            raw_winning = raw_winning[:_MAX_WINNER_TICKETS]
+
+        # Staff can buy tickets to grow the pot, but cannot win payouts — only check users on winning lines.
+        ticket_user_ids = sorted(
+            {
+                uid
+                for uid in (_normalize_lottery_user_id(t.get("user_id")) for t in raw_winning)
+                if uid
+            }
+        )
         blocked_winner_ids: set[str] = set()
         if ticket_user_ids:
             staff_rows = await db.users.find(
@@ -399,14 +421,6 @@ async def lottery_draw_cron(_: bool = Depends(_cron_verify())):
                 email = (u.get("email") or "").strip().lower()
                 if bool(u.get("is_moderator")) or email in ADMIN_EMAILS:
                     blocked_winner_ids.add(uid)
-        n = len(tickets)
-        rollover_start = int(rd.get("rollover_in") or 0)
-        ticket_revenue = n * TICKET_PRICE
-        gross = ticket_revenue + rollover_start
-        sink = (gross * POT_TAX_PERCENT) // 100 if gross > 0 else 0
-        payout = gross - sink
-        winning_numbers = _random_lottery_numbers()
-        drawn_iso = datetime.now(timezone.utc).isoformat()
 
         amounts_by_user: dict[str, int] = defaultdict(int)
         names_by_user: dict[str, str] = {}
@@ -417,7 +431,7 @@ async def lottery_draw_cron(_: bool = Depends(_cron_verify())):
         paid_user_ids: set[str] = set()
 
         if gross > 0 and payout > 0:
-            for t in tickets:
+            for t in raw_winning:
                 norm = _normalize_ticket_numbers(t.get("numbers"))
                 owner_id = _normalize_lottery_user_id(t.get("user_id"))
                 if norm is not None and norm == winning_numbers and owner_id not in blocked_winner_ids:

@@ -1399,10 +1399,39 @@ async def send_notification_to_family(family_id: str, title: str, message: str, 
 
 
 async def send_notification_to_all(title: str, message: str, notification_type: str = "system", category: Optional[str] = None, **extra):
-    """Notify all users (e.g. new E-Games available). Respects each user's notification_preferences when category is set."""
-    user_ids = await db.users.distinct("id")
-    for uid in user_ids:
-        await send_notification(uid, title, message, notification_type, category=category, **extra)
+    """Notify all users (e.g. new E-Games available). Respects each user's notification_preferences when category is set.
+
+    Uses batched insert_many while streaming users — avoids O(users) sequential find_one+insert_one round trips
+    (which caused sharp load spikes when auto E-Games were created).
+    """
+    now_iso = datetime.now(timezone.utc).isoformat()
+    batch: list = []
+    batch_size = 500
+    async for user in db.users.find({}, {"_id": 0, "id": 1, "notification_preferences": 1}):
+        uid = user.get("id")
+        if not uid:
+            continue
+        if category:
+            prefs = (user.get("notification_preferences") or {})
+            if prefs.get(category) is False:
+                continue
+        batch.append(
+            {
+                "id": str(uuid.uuid4()),
+                "user_id": uid,
+                "title": title,
+                "message": message,
+                "notification_type": notification_type,
+                "read": False,
+                "created_at": now_iso,
+                **extra,
+            }
+        )
+        if len(batch) >= batch_size:
+            await db.notifications.insert_many(batch, ordered=False)
+            batch.clear()
+    if batch:
+        await db.notifications.insert_many(batch, ordered=False)
 
 
 async def maybe_daily_event_inbox_reminder() -> None:
