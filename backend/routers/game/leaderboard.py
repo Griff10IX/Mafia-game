@@ -223,22 +223,33 @@ async def _top_by_field_weekly(
     extra_match: dict = None,
 ) -> List[StatLeaderboardEntry]:
     """Aggregate events in collection since week start, then filter by alive/dead and return top N.
-    Normalizes time field to date so both BSON Date and ISO string storage work."""
+    When time_is_iso is False (BSON Date on time_field), $match on the time range first so Mongo can use
+    compound indexes like (user_id, at). When True, use $toDate then match for legacy ISO-string rows."""
     limit = max(1, min(100, int(limit)))
     now = datetime.now(timezone.utc)
     week_start, week_end = game_week_range_utc(now)
-    match_stage = {"_lb_ts": {"$gte": week_start, "$lt": week_end}}
-    if extra_match:
-        match_stage.update(extra_match)
     cap = _weekly_agg_candidate_limit(limit)
-    pipeline = [
-        # Normalize time to date so both BSON Date and ISO string in DB compare correctly
-        {"$addFields": {"_lb_ts": {"$toDate": f"${time_field}"}}},
-        {"$match": match_stage},
-        {"$group": {"_id": f"${user_field}", "value": {"$sum": 1}}},
-        {"$sort": {"value": -1}},
-        {"$limit": cap},
-    ]
+    if not time_is_iso:
+        match_first = {time_field: {"$gte": week_start, "$lt": week_end}}
+        if extra_match:
+            match_first.update(extra_match)
+        pipeline = [
+            {"$match": match_first},
+            {"$group": {"_id": f"${user_field}", "value": {"$sum": 1}}},
+            {"$sort": {"value": -1}},
+            {"$limit": cap},
+        ]
+    else:
+        match_stage = {"_lb_ts": {"$gte": week_start, "$lt": week_end}}
+        if extra_match:
+            match_stage.update(extra_match)
+        pipeline = [
+            {"$addFields": {"_lb_ts": {"$toDate": f"${time_field}"}}},
+            {"$match": match_stage},
+            {"$group": {"_id": f"${user_field}", "value": {"$sum": 1}}},
+            {"$sort": {"value": -1}},
+            {"$limit": cap},
+        ]
     coll = getattr(db, collection)
     cursor = coll.aggregate(pipeline)
     docs = await cursor.to_list(cap)
@@ -286,23 +297,36 @@ async def _top_by_field_weekly_sum(
     limit: int,
     dead: bool,
     extra_match: dict = None,
+    time_is_iso: bool = False,
 ) -> List[StatLeaderboardEntry]:
     """Aggregate events since week start, sum value_field per user (e.g. profit_points), return top N.
-    Used for weekly stock market profit and booze run profit."""
+    Used for weekly stock market profit and booze run profit.
+    time_is_iso: see _top_by_field_weekly."""
     limit = max(1, min(100, int(limit)))
     now = datetime.now(timezone.utc)
     week_start, week_end = game_week_range_utc(now)
-    match_stage = {"_lb_ts": {"$gte": week_start, "$lt": week_end}}
-    if extra_match:
-        match_stage.update(extra_match)
     cap = _weekly_agg_candidate_limit(limit)
-    pipeline = [
-        {"$addFields": {"_lb_ts": {"$toDate": f"${time_field}"}}},
-        {"$match": match_stage},
-        {"$group": {"_id": f"${user_field}", "value": {"$sum": {"$ifNull": [f"${value_field}", 0]}}}},
-        {"$sort": {"value": -1}},
-        {"$limit": cap},
-    ]
+    if not time_is_iso:
+        match_first = {time_field: {"$gte": week_start, "$lt": week_end}}
+        if extra_match:
+            match_first.update(extra_match)
+        pipeline = [
+            {"$match": match_first},
+            {"$group": {"_id": f"${user_field}", "value": {"$sum": {"$ifNull": [f"${value_field}", 0]}}}},
+            {"$sort": {"value": -1}},
+            {"$limit": cap},
+        ]
+    else:
+        match_stage = {"_lb_ts": {"$gte": week_start, "$lt": week_end}}
+        if extra_match:
+            match_stage.update(extra_match)
+        pipeline = [
+            {"$addFields": {"_lb_ts": {"$toDate": f"${time_field}"}}},
+            {"$match": match_stage},
+            {"$group": {"_id": f"${user_field}", "value": {"$sum": {"$ifNull": [f"${value_field}", 0]}}}},
+            {"$sort": {"value": -1}},
+            {"$limit": cap},
+        ]
     coll = getattr(db, collection)
     cursor = coll.aggregate(pipeline)
     docs = await cursor.to_list(cap)
@@ -353,23 +377,33 @@ async def _top_by_field_for_week(
     extra_match: dict = None,
 ) -> List[dict]:
     """Aggregate events in collection between week_start_dt and week_end_dt; return top N as [{user_id, value, rank}] for alive non-bodyguard non-npc users.
-    Uses $toDate on time field so both BSON Date and ISO string storage work."""
+    When time_is_iso is False, $match on BSON Date range first (index-friendly). When True, $toDate then match."""
     limit = max(1, min(100, int(limit)))
-    match_stage = {
-        "_lb_ts": {"$gte": week_start_dt, "$lt": week_end_dt},
-    }
-    if extra_match:
-        match_stage.update(extra_match)
-    pipeline = [
-        {"$addFields": {"_lb_ts": {"$toDate": f"${time_field}"}}},
-        {"$match": match_stage},
-        {"$group": {"_id": f"${user_field}", "value": {"$sum": 1}}},
-        {"$sort": {"value": -1}},
-        {"$limit": limit * 2},
-    ]
+    lim2 = limit * 2
+    if not time_is_iso:
+        match_first = {time_field: {"$gte": week_start_dt, "$lt": week_end_dt}}
+        if extra_match:
+            match_first.update(extra_match)
+        pipeline = [
+            {"$match": match_first},
+            {"$group": {"_id": f"${user_field}", "value": {"$sum": 1}}},
+            {"$sort": {"value": -1}},
+            {"$limit": lim2},
+        ]
+    else:
+        match_stage = {"_lb_ts": {"$gte": week_start_dt, "$lt": week_end_dt}}
+        if extra_match:
+            match_stage.update(extra_match)
+        pipeline = [
+            {"$addFields": {"_lb_ts": {"$toDate": f"${time_field}"}}},
+            {"$match": match_stage},
+            {"$group": {"_id": f"${user_field}", "value": {"$sum": 1}}},
+            {"$sort": {"value": -1}},
+            {"$limit": lim2},
+        ]
     coll = getattr(database, collection)
     cursor = coll.aggregate(pipeline)
-    docs = await cursor.to_list(limit * 2)
+    docs = await cursor.to_list(lim2)
     if not docs:
         return []
     user_ids = [d["_id"] for d in docs if d.get("_id")]
@@ -404,7 +438,7 @@ async def _get_last_reward_winners(database) -> dict:
     last_week_start = this_week_start - timedelta(days=7)
     kills, crimes, gta, jail_busts = await asyncio.gather(
         _top_by_field_for_week(
-            database, "attack_attempts", "attacker_id", "created_at", True,
+            database, "attack_attempts", "attacker_id", "created_at", False,
             last_week_start, this_week_start, 10,
             _ATTACK_WEEKLY_PLAYER_KILL_MATCH,
         ),
@@ -506,7 +540,7 @@ async def run_weekly_leaderboard_payout(database, test_run: bool = False):
 
     kills, crimes, gta, jail_busts = await asyncio.gather(
         _top_by_field_for_week(
-            database, "attack_attempts", "attacker_id", "created_at", True,
+            database, "attack_attempts", "attacker_id", "created_at", False,
             last_week_start, this_week_start, 10,
             _ATTACK_WEEKLY_PLAYER_KILL_MATCH,
         ),
@@ -701,7 +735,7 @@ async def _fetch_top_boards_raw(limit: int, dead: bool, period: str) -> dict:
                 "attack_attempts",
                 "attacker_id",
                 "created_at",
-                True,
+                False,
                 dummy_uid,
                 limit,
                 dead,
@@ -712,7 +746,17 @@ async def _fetch_top_boards_raw(limit: int, dead: bool, period: str) -> dict:
             _top_by_field_weekly("bust_events", "user_id", "at", False, dummy_uid, limit, dead, {"success": True}),
             _top_by_total_rank_points(dummy_uid, limit, dead=dead),
             _top_by_field_weekly_sum("stock_transactions", "user_id", "created_at", "profit_points", dummy_uid, limit, dead),
-            _top_by_field_weekly_sum("economy_events", "user_id", "at", "profit", dummy_uid, limit, dead, {"type": "booze_run_sell"}),
+            _top_by_field_weekly_sum(
+                "economy_events",
+                "user_id",
+                "at",
+                "profit",
+                dummy_uid,
+                limit,
+                dead,
+                {"type": "booze_run_sell"},
+                time_is_iso=True,
+            ),
             _top_by_field_weekly_sum(
                 "respect_events",
                 "user_id",
