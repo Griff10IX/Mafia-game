@@ -26,6 +26,12 @@ def _now_iso() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def _dt_to_iso_z(dt: datetime) -> str:
+    """Same canonical string as boxing_events.at (matches _now_iso) for index-friendly $match."""
+    d = dt.astimezone(timezone.utc) if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    return d.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
 def _user_id_match(a: Any, b: Any) -> bool:
     """JWT `sub` and Mongo `users.id` may differ by type (str vs int); normalize for comparisons."""
     if a is None or b is None:
@@ -1036,9 +1042,9 @@ async def boxing_leaderboard(period: str = "weekly", current_user: dict = Depend
     staff_match = {"user_id": {"$nin": staff_ids}} if staff_ids else {}
     if p == "weekly":
         ws = game_week_start_utc(now)
+        ws_iso = _dt_to_iso_z(ws)
         pipeline = [
-            {"$addFields": {"_ts": {"$toDate": "$at"}}},
-            {"$match": {"_ts": {"$gte": ws}, **staff_match}},
+            {"$match": {"at": {"$gte": ws_iso}, **staff_match}},
             {"$group": {
                 "_id": "$user_id",
                 "points": {"$sum": "$points"},
@@ -1154,9 +1160,10 @@ async def run_weekly_boxing_league_payout(database, test_run: bool = False):
         if claim_result.modified_count == 0 and claim_result.upserted_id is None:
             return
 
+    last_week_iso = _dt_to_iso_z(last_week_start)
+    this_week_iso = _dt_to_iso_z(this_week_start)
     pipeline = [
-        {"$addFields": {"_ts": {"$toDate": "$at"}}},
-        {"$match": {"_ts": {"$gte": last_week_start, "$lt": this_week_start}}},
+        {"$match": {"at": {"$gte": last_week_iso, "$lt": this_week_iso}}},
         {"$group": {"_id": "$user_id", "points": {"$sum": "$points"}}},
         {"$sort": {"points": -1}},
         {"$limit": 10},

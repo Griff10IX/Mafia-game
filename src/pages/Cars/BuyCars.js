@@ -37,6 +37,11 @@ const RARITY_LABELS = {
   loot_exclusive: 'Loot Exclusives',
   exclusive: 'Exclusives',
 };
+/** Pause after each successful dealer buy so "buy selected" does not trip server pacing (see DEALER_BUY_MIN_INTERVAL_SEC in gta.py). */
+const DEALER_BUY_BATCH_GAP_MS = 500;
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const RARITY_COLOR = {
   common: 'text-gray-400',
   uncommon: 'text-green-400',
@@ -198,6 +203,7 @@ export default function BuyCars() {
       try {
         if (row.source === 'dealer') {
           await api.post('/gta/buy-car', { car_id: row.carId });
+          await sleep(DEALER_BUY_BATCH_GAP_MS);
         } else {
           await api.post('/gta/buy-listed-car', { user_car_id: row.userCarId });
         }
@@ -208,7 +214,9 @@ export default function BuyCars() {
           return next;
         });
       } catch (e) {
-        toast.error(e.response?.data?.detail || `Failed to buy ${row.name}`);
+        const d = e.response?.data?.detail;
+        const msg = typeof d === 'string' ? d : (d && typeof d === 'object' ? d.message : null);
+        toast.error(msg || `Failed to buy ${row.name}`);
       }
     }
     if (bought > 0) {

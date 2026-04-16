@@ -47,6 +47,12 @@ MIN_PLAY_SECONDS = 3
 GAUNTLET_GAME_SLUG = "gauntlet"
 
 
+def _dt_to_iso_z(dt: datetime) -> str:
+    """Same canonical string as gauntlet_scores.at on insert (ISO Z, no microseconds)."""
+    d = dt.astimezone(timezone.utc) if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    return d.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
 def _get_reward(score: int) -> dict:
     """Compute cash and respect for any score; apply caps. Returns label from highest tier reached."""
     score = max(0, int(score))
@@ -128,9 +134,10 @@ def register(router):
         staff_match = {"user_id": {"$nin": staff_ids}} if staff_ids else {}
         if p == "weekly":
             ws, we = game_week_range_utc(now_dt)
-            match = {"_ts": {"$gte": ws, "$lt": we}, **staff_match}
+            ws_iso = _dt_to_iso_z(ws)
+            we_iso = _dt_to_iso_z(we)
+            match = {"at": {"$gte": ws_iso, "$lt": we_iso}, **staff_match}
             pipeline = [
-                {"$addFields": {"_ts": {"$toDate": "$at"}}},
                 {"$match": match},
                 {"$group": {"_id": "$user_id", "best_score": {"$max": "$score"}, "username": {"$last": "$username"}}},
                 {"$sort": {"best_score": -1}},

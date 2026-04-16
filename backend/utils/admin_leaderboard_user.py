@@ -17,6 +17,18 @@ def _week_bounds(now: Optional[datetime] = None) -> Tuple[datetime, datetime]:
     return game_week_range_utc(n)
 
 
+def _dt_to_iso_z(dt: datetime) -> str:
+    """Canonical economy_events.at string (ISO Z, no microseconds) for index-friendly range match."""
+    d = dt.astimezone(timezone.utc) if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    return d.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _week_time_match(time_field: str, week_start: datetime, week_end: datetime, *, time_is_iso: bool) -> Dict[str, Any]:
+    if time_is_iso:
+        return {time_field: {"$gte": _dt_to_iso_z(week_start), "$lt": _dt_to_iso_z(week_end)}}
+    return {time_field: {"$gte": week_start, "$lt": week_end}}
+
+
 async def _aggregate_count_week(
     db,
     *,
@@ -25,12 +37,12 @@ async def _aggregate_count_week(
     time_field: str,
     week_start: datetime,
     week_end: datetime,
+    time_is_iso: bool = False,
 ) -> int:
     coll = getattr(db, collection)
+    m = {**user_match, **_week_time_match(time_field, week_start, week_end, time_is_iso=time_is_iso)}
     pipeline: List[Dict[str, Any]] = [
-        {"$match": user_match},
-        {"$addFields": {"_lb_ts": {"$toDate": f"${time_field}"}}},
-        {"$match": {"_lb_ts": {"$gte": week_start, "$lt": week_end}}},
+        {"$match": m},
         {"$count": "c"},
     ]
     rows = await coll.aggregate(pipeline).to_list(1)
@@ -46,12 +58,12 @@ async def _aggregate_sum_week(
     value_field: str,
     week_start: datetime,
     week_end: datetime,
+    time_is_iso: bool = False,
 ) -> int:
     coll = getattr(db, collection)
+    m = {**user_match, **_week_time_match(time_field, week_start, week_end, time_is_iso=time_is_iso)}
     pipeline = [
-        {"$match": user_match},
-        {"$addFields": {"_lb_ts": {"$toDate": f"${time_field}"}}},
-        {"$match": {"_lb_ts": {"$gte": week_start, "$lt": week_end}}},
+        {"$match": m},
         {"$group": {"_id": None, "t": {"$sum": {"$ifNull": [f"${value_field}", 0]}}}},
     ]
     rows = await coll.aggregate(pipeline).to_list(1)
@@ -119,6 +131,7 @@ async def get_user_leaderboard_scores(db, *, user_id: str) -> Dict[str, Any]:
             value_field="profit",
             week_start=week_start,
             week_end=week_end,
+            time_is_iso=True,
         ),
         "respect_earned": await _aggregate_sum_week(
             db,

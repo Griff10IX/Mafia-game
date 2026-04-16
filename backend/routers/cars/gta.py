@@ -1579,7 +1579,11 @@ async def _enforce_dealer_buy_min_interval(user_id: str) -> None:
             retry_after = max(1, int(gap + 0.999))
             raise HTTPException(
                 status_code=429,
-                detail="Slow down between dealer purchases.",
+                detail={
+                    "message": "Slow down between dealer purchases.",
+                    "cooldown_seconds": retry_after,
+                    "suppress_global_cooldown": True,
+                },
                 headers={"Retry-After": str(retry_after)},
             )
         _dealer_buy_last_mon[user_id] = now

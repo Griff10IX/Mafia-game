@@ -37,6 +37,37 @@ OC_RETRY_AFTER_AFFORD_SECONDS = 10 * 60
 AUTO_RANK_IDLE_TIMEOUT_SECONDS = 24 * 60 * 60  # 24 hours - if no real user activity, auto-rank goes idle (normal users)
 
 
+def _auto_rank_env_int(key: str, default: int, lo: int = 1, hi: Optional[int] = None) -> int:
+    try:
+        v = int((os.environ.get(key) or "").strip() or default)
+    except (TypeError, ValueError):
+        v = default
+    v = max(lo, v)
+    if hi is not None:
+        v = min(hi, v)
+    return v
+
+
+# Cap parallel crime/GTA/booze work per wake (was up to 30 via asyncio.gather); lowers CPU/Mongo spikes.
+AUTO_RANK_MAX_CONCURRENT = _auto_rank_env_int("AUTO_RANK_MAX_CONCURRENT", 8, 1, 64)
+# Max due users handled per booze-arrivals / main-loop wake; remainder stay due for the next wake (~2s).
+AUTO_RANK_MAX_DUE_PER_WAKE = _auto_rank_env_int("AUTO_RANK_MAX_DUE_PER_WAKE", 40, 1, 500)
+
+
+async def _gather_with_concurrency(coroutines: list, limit: int):
+    """Run awaitables with a semaphore so at most ``limit`` run at once."""
+    if not coroutines:
+        return []
+    lim = max(1, min(int(limit), 128))
+    sem = asyncio.Semaphore(lim)
+
+    async def _run(c):
+        async with sem:
+            return await c
+
+    return await asyncio.gather(*(_run(c) for c in coroutines))
+
+
 # ─── Config helpers ───────────────────────────────────────────────
 
 def _invalidate_auto_rank_config_cache():
@@ -1342,7 +1373,7 @@ async def run_booze_arrivals():
             logger.exception("Auto rank booze arrival for user %s: %s", u.get("id"), e)
 
     if users:
-        await asyncio.gather(*[run_one(u) for u in users])
+        await _gather_with_concurrency([run_one(u) for u in users], AUTO_RANK_MAX_CONCURRENT)
 
 
 async def run_auto_rank_due_users(interval_seconds: Optional[int] = None, cycle_start: Optional[datetime] = None):
@@ -1355,22 +1386,27 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None, cycle_
     now = datetime.now(timezone.utc)
     idle_cutoff = (now - timedelta(seconds=AUTO_RANK_IDLE_TIMEOUT_SECONDS)).isoformat()
     interval = interval_seconds if interval_seconds is not None else await get_auto_rank_interval_seconds(db)
-    cursor = db.users.find(
-        {
-            "auto_rank_purchased": True,
-            "auto_rank_enabled": True,
-            "in_jail": {"$ne": True},
-            "is_dead": {"$ne": True},
-            "auto_rank_idle": {"$ne": True},
-            "$or": [
-                {"auto_rank_next_run_at": {"$exists": False}},
-                {"auto_rank_next_run_at": None},
-                {"auto_rank_next_run_at": {"$lte": now.isoformat()}},
-            ],
-        },
-        {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "last_seen": 1, "email": 1, "is_moderator": 1},
+    cap = AUTO_RANK_MAX_DUE_PER_WAKE
+    cursor = (
+        db.users.find(
+            {
+                "auto_rank_purchased": True,
+                "auto_rank_enabled": True,
+                "in_jail": {"$ne": True},
+                "is_dead": {"$ne": True},
+                "auto_rank_idle": {"$ne": True},
+                "$or": [
+                    {"auto_rank_next_run_at": {"$exists": False}},
+                    {"auto_rank_next_run_at": None},
+                    {"auto_rank_next_run_at": {"$lte": now.isoformat()}},
+                ],
+            },
+            {"_id": 0, "id": 1, "username": 1, "telegram_chat_id": 1, "telegram_bot_token": 1, "last_seen": 1, "email": 1, "is_moderator": 1},
+        )
+        .sort("auto_rank_next_run_at", 1)
+        .limit(cap)
     )
-    users = await cursor.to_list(500)
+    users = await cursor.to_list(cap)
     
     # Check each user for idle status and filter out those who should be idle
     active_users = []
@@ -1399,13 +1435,15 @@ async def run_auto_rank_due_users(interval_seconds: Optional[int] = None, cycle_
 
     if users:
         from pymongo import UpdateOne
+
         batch_size = 30
         for i in range(0, len(users), batch_size):
             batch = users[i : i + batch_size]
-            # Use start of this batch for next_run_at so interval is accurate per batch
             batch_start = datetime.now(timezone.utc)
-            await asyncio.gather(*[run_one(u) for u in batch])
-            next_run_dt = batch_start + timedelta(seconds=interval)
+            await _gather_with_concurrency([run_one(u) for u in batch], AUTO_RANK_MAX_CONCURRENT)
+            clock = datetime.now(timezone.utc)
+            anchor = cycle_start if cycle_start is not None else batch_start
+            next_run_dt = max(anchor + timedelta(seconds=interval), clock)
             next_run_iso = next_run_dt.isoformat()
             await db.users.bulk_write(
                 [UpdateOne({"id": u["id"]}, {"$set": {"auto_rank_next_run_at": next_run_iso}}) for u in batch],
@@ -1472,7 +1510,7 @@ async def run_bust_5sec_once():
                 logger.exception("Auto rank bust 5sec for user %s: %s", u.get("id"), e)
 
         if users:
-            await asyncio.gather(*[run_one(u) for u in users])
+            await _gather_with_concurrency([run_one(u) for u in users], AUTO_RANK_MAX_CONCURRENT)
     except Exception as e:
         logger.exception("Bust 5sec cycle failed: %s", e)
 
@@ -1544,7 +1582,7 @@ async def run_auto_rank_oc_once():
                 logger.exception("Auto rank OC for user %s: %s", u.get("id"), e)
 
         if to_run:
-            await asyncio.gather(*[run_one(u) for u in to_run])
+            await _gather_with_concurrency([run_one(u) for u in to_run], AUTO_RANK_MAX_CONCURRENT)
     except Exception as e:
         logger.exception("Auto rank OC cycle failed: %s", e)
 
