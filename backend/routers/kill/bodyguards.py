@@ -51,6 +51,19 @@ from server import (
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_BODYGUARDS
 
 
+async def _delete_attacks_referencing_deleted_npc_user_ids(user_ids: list[str]) -> None:
+    """Clear attack rows tied to NPC user ids being removed (e.g. robot bodyguards). Removes searches/found/traveling and any other attack docs referencing the id."""
+    ids = [(x or "").strip() for x in user_ids if (x or "").strip()]
+    if not ids:
+        return
+    chunk = 300
+    for i in range(0, len(ids), chunk):
+        part = ids[i : i + chunk]
+        await db.attacks.delete_many(
+            {"$or": [{"target_id": {"$in": part}}, {"attacker_id": {"$in": part}}]},
+        )
+
+
 async def _bodyguards_sustained_rl_user(current_user: dict = Depends(get_current_user)):
     await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_BODYGUARDS)
 
@@ -985,6 +998,14 @@ async def admin_clear_bodyguards(target_username: str, current_user: dict = Depe
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     res_bg = await db.bodyguards.delete_many({"user_id": target["id"]})
+    robot_ids = [
+        d["id"]
+        async for d in db.users.find(
+            {"is_bodyguard": True, "is_npc": True, "bodyguard_owner_id": target["id"]},
+            {"_id": 0, "id": 1},
+        )
+    ]
+    await _delete_attacks_referencing_deleted_npc_user_ids(robot_ids)
     # Only delete robot bodyguard users; human bodyguards are real player accounts
     res_robots = await db.users.delete_many({"is_bodyguard": True, "is_npc": True, "bodyguard_owner_id": target["id"]})
     # Release human bodyguards (clear flags, do not delete)
@@ -1021,6 +1042,11 @@ async def admin_drop_all_bodyguards(current_user: dict = Depends(get_current_use
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Admin access required")
     res = await db.bodyguards.delete_many({})
+    robot_ids = [
+        d["id"]
+        async for d in db.users.find({"is_bodyguard": True, "is_npc": True}, {"_id": 0, "id": 1})
+    ]
+    await _delete_attacks_referencing_deleted_npc_user_ids(robot_ids)
     # Only delete robot bodyguard users (is_npc=True); human bodyguards are real player accounts
     res_robots = await db.users.delete_many({"is_bodyguard": True, "is_npc": True})
     # Clear bodyguard flags from human bodyguards so they can log in normally again
@@ -1085,6 +1111,7 @@ async def admin_replace_robot_bodyguards_hacked(
 
     await db.bodyguards.delete_many({"user_id": owner_id, "is_robot": True})
     if old_robot_user_ids:
+        await _delete_attacks_referencing_deleted_npc_user_ids(old_robot_user_ids)
         await db.users.delete_many({"id": {"$in": old_robot_user_ids}, "is_npc": True, "is_bodyguard": True})
 
     now_iso = datetime.now(timezone.utc).isoformat()
@@ -1169,6 +1196,14 @@ async def admin_generate_bodyguards(request: AdminBodyguardsGenerateRequest, cur
     if not target:
         raise HTTPException(status_code=404, detail="User not found")
     if request.replace_existing:
+        robot_ids = [
+            d["id"]
+            async for d in db.users.find(
+                {"is_bodyguard": True, "is_npc": True, "bodyguard_owner_id": target["id"]},
+                {"_id": 0, "id": 1},
+            )
+        ]
+        await _delete_attacks_referencing_deleted_npc_user_ids(robot_ids)
         await db.bodyguards.delete_many({"user_id": target["id"]})
         await db.users.delete_many({"is_bodyguard": True, "is_npc": True, "bodyguard_owner_id": target["id"]})
         await db.users.update_many(
@@ -1347,6 +1382,14 @@ async def admin_seed_human_bodyguards(current_user: dict = Depends(get_current_u
     
     # Clear all existing bodyguards (robots and humans) for admin
     await db.bodyguards.delete_many({"user_id": admin_id})
+    robot_ids = [
+        d["id"]
+        async for d in db.users.find(
+            {"is_bodyguard": True, "is_npc": True, "bodyguard_owner_id": admin_id},
+            {"_id": 0, "id": 1},
+        )
+    ]
+    await _delete_attacks_referencing_deleted_npc_user_ids(robot_ids)
     await db.users.delete_many({"is_bodyguard": True, "is_npc": True, "bodyguard_owner_id": admin_id})
     await db.users.update_many(
         {"is_bodyguard": True, "bodyguard_owner_id": admin_id},
@@ -1428,6 +1471,14 @@ async def admin_seed_random_bodyguards(current_user: dict = Depends(get_current_
     
     # Clear all existing bodyguards (robots and humans) for admin
     await db.bodyguards.delete_many({"user_id": admin_id})
+    robot_ids = [
+        d["id"]
+        async for d in db.users.find(
+            {"is_bodyguard": True, "is_npc": True, "bodyguard_owner_id": admin_id},
+            {"_id": 0, "id": 1},
+        )
+    ]
+    await _delete_attacks_referencing_deleted_npc_user_ids(robot_ids)
     # Remove robot users only; release human bodyguards (clear flags)
     await db.users.delete_many({"is_bodyguard": True, "is_npc": True, "bodyguard_owner_id": admin_id})
     await db.users.update_many(
@@ -1716,6 +1767,7 @@ async def drop_bodyguard(slot: int, current_user: dict = Depends(get_current_use
 
     if is_robot:
         # Robot: delete the bodyguard slot doc and the robot user record entirely (is_npc ensures we never delete real players)
+        await _delete_attacks_referencing_deleted_npc_user_ids([guard_id])
         await db.bodyguards.delete_one({"user_id": current_user["id"], "slot_number": slot})
         await db.users.delete_one({"id": guard_id, "is_bodyguard": True, "is_npc": True})
     else:

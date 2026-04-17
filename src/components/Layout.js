@@ -790,7 +790,12 @@ export default function Layout({ children }) {
 
   useEffect(() => {
     let intervalId;
-    const deferred = setTimeout(() => { fetchHelpDeskOpenCount(); intervalId = setInterval(fetchHelpDeskOpenCount, 60000); }, 300);
+    // Random 0–45s so clients do not all hit /help-desk/open-count on the same wall-clock second every minute.
+    const jitterMs = Math.floor(Math.random() * 45000);
+    const deferred = setTimeout(() => {
+      fetchHelpDeskOpenCount();
+      intervalId = setInterval(fetchHelpDeskOpenCount, 60000);
+    }, 300 + jitterMs);
     return () => { clearTimeout(deferred); if (intervalId) clearInterval(intervalId); };
   }, []); // eslint-disable-line
 

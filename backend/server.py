@@ -3133,7 +3133,7 @@ async def startup_db():
         )
     from routers.cars import gta as gta_router
     asyncio.create_task(gta_router.run_dealer_replenish_loop())
-    # Slots: run lottery draw on schedule (every 5s check) so draws happen at next_draw_at even if no one is on the page
+    # Slots: run ownership draw check every 60s so draws happen at next_draw_at even if no one is on the page (3h boundaries; 1m delay is fine)
     from routers.casinos import slots as slots_router
     async def slots_draw_ticker():
         while True:
@@ -3141,7 +3141,7 @@ async def startup_db():
                 await slots_router.run_slots_draws_due()
             except Exception as e:
                 logging.exception("Slots draw ticker: %s", e)
-            await asyncio.sleep(5)
+            await asyncio.sleep(60)
     asyncio.create_task(slots_draw_ticker())
     # City lottery (Wed/Sun UTC): poll so draws run at closes_at without relying on external cron
     lottery_draw_use_cron = (os.environ.get("LOTTERY_DRAW_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
