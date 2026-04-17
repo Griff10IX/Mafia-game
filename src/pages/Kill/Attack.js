@@ -425,7 +425,12 @@ const SearchesCard = ({
               
               <div className="divide-y divide-zinc-700/30">
                 {attacks.map((a) => (
-                  <div key={a.attack_id} className="atk-row grid grid-cols-12 px-2 py-1.5 items-start gap-2">
+                  <div
+                    key={a.attack_id}
+                    className={`atk-row grid grid-cols-12 px-2 py-1.5 items-start gap-2 ${
+                      a.bodyguard_is_mine ? 'border-l-2 border-primary bg-primary/[0.07]' : ''
+                    }`}
+                  >
                     <div className="col-span-1 pt-0.5">
                       <input
                         type="checkbox"
@@ -437,13 +442,32 @@ const SearchesCard = ({
                     </div>
 
                     <div className="col-span-4 min-w-0">
-                      <Link
-                        to={`/profile/${encodeURIComponent(a.target_username)}`}
-                        className="font-heading font-bold text-foreground hover:text-primary transition-colors block text-[10px] truncate"
-                        data-testid={`attack-user-${a.attack_id}`}
-                      >
-                        {a.target_username}
-                      </Link>
+                      <div className="flex items-start gap-1.5 min-w-0">
+                        <Link
+                          to={`/profile/${encodeURIComponent(a.target_username)}`}
+                          className="font-heading font-bold text-foreground hover:text-primary transition-colors block text-[10px] truncate min-w-0"
+                          data-testid={`attack-user-${a.attack_id}`}
+                        >
+                          {a.target_username}
+                        </Link>
+                        {a.bodyguard_is_mine ? (
+                          <span className="shrink-0 px-1 py-0.5 rounded text-[8px] font-heading font-bold uppercase bg-primary/25 text-primary border border-primary/40">
+                            Yours
+                          </span>
+                        ) : null}
+                      </div>
+                      {a.bodyguard_owner_username && !a.bodyguard_is_mine ? (
+                        <div className="text-[8px] text-zinc-500 font-heading mt-0.5 truncate">
+                          Guarding{' '}
+                          <Link
+                            to={`/profile/${encodeURIComponent(a.bodyguard_owner_username)}`}
+                            className="text-zinc-400 hover:text-primary"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {a.bodyguard_owner_username}
+                          </Link>
+                        </div>
+                      ) : null}
                       {a.note && (
                         <div className="text-[9px] text-mutedForeground truncate font-heading mt-0.5">
                           {a.note}
@@ -508,7 +532,12 @@ const SearchesCard = ({
 
             <div className="md:hidden space-y-2">
               {attacks.map((a) => (
-                <div key={a.attack_id} className="atk-row bg-zinc-800/30 rounded p-2 border border-zinc-700/30 space-y-2">
+                <div
+                  key={a.attack_id}
+                  className={`atk-row bg-zinc-800/30 rounded p-2 border space-y-2 ${
+                    a.bodyguard_is_mine ? 'border-primary/50 border-l-2 border-l-primary bg-primary/[0.07]' : 'border-zinc-700/30'
+                  }`}
+                >
                   <div className="flex items-start gap-2">
                     <input
                       type="checkbox"
@@ -518,12 +547,30 @@ const SearchesCard = ({
                       data-testid={`attack-select-${a.attack_id}`}
                     />
                     <div className="flex-1 min-w-0">
-                      <Link
-                        to={`/profile/${encodeURIComponent(a.target_username)}`}
-                        className="font-heading font-bold text-foreground hover:text-primary transition-colors block text-[11px] truncate"
-                      >
-                        {a.target_username}
-                      </Link>
+                      <div className="flex items-start gap-1.5 min-w-0">
+                        <Link
+                          to={`/profile/${encodeURIComponent(a.target_username)}`}
+                          className="font-heading font-bold text-foreground hover:text-primary transition-colors block text-[11px] truncate min-w-0"
+                        >
+                          {a.target_username}
+                        </Link>
+                        {a.bodyguard_is_mine ? (
+                          <span className="shrink-0 px-1 py-0.5 rounded text-[8px] font-heading font-bold uppercase bg-primary/25 text-primary border border-primary/40">
+                            Yours
+                          </span>
+                        ) : null}
+                      </div>
+                      {a.bodyguard_owner_username && !a.bodyguard_is_mine ? (
+                        <div className="text-[8px] text-zinc-500 font-heading mt-0.5">
+                          Guarding{' '}
+                          <Link
+                            to={`/profile/${encodeURIComponent(a.bodyguard_owner_username)}`}
+                            className="text-zinc-400 hover:text-primary"
+                          >
+                            {a.bodyguard_owner_username}
+                          </Link>
+                        </div>
+                      ) : null}
                       {a.note && (
                         <div className="text-[9px] text-mutedForeground font-heading mt-0.5">
                           {a.note}

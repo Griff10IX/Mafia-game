@@ -730,8 +730,16 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
     derived_unlocked = _portfolio_unlocked_tier_from_progress(progress)
     if derived_unlocked > unlocked_tier:
         unlocked_tier = derived_unlocked
-    next_tier = min(_portfolio_upgrade_tier_max(), max(0, purchased_tier) + 1)
-    next_row = next((t for t in PROPERTY_PORTFOLIO_UPGRADE_TIERS if int(t.get("tier") or 0) == next_tier), None) if next_tier else None
+    tier_max = _portfolio_upgrade_tier_max()
+    # Next purchasable tier is purchased+1 only while below max (min(..., max) was wrong: at tier 5 it showed 5 again).
+    if purchased_tier >= tier_max:
+        next_tier = None
+        next_row = None
+    else:
+        next_tier = max(0, purchased_tier) + 1
+        next_row = next((t for t in PROPERTY_PORTFOLIO_UPGRADE_TIERS if int(t.get("tier") or 0) == next_tier), None)
+        if not next_row:
+            next_tier = None
     upgrades_block = {
         "purchased_tier": purchased_tier,
         "unlocked_tier": unlocked_tier,
@@ -742,7 +750,7 @@ async def get_properties(current_user: dict = Depends(get_current_user)):
             "collect_total_cash": _portfolio_progress_get(progress, "collect_total_cash"),
             "collect_all_sets": _portfolio_progress_get(progress, "collect_all_sets"),
         },
-        "next_tier": next_tier if next_row else None,
+        "next_tier": next_tier,
         "next_unlock": (next_row or {}).get("unlock") if next_row else None,
         "next_cost_cash": (next_row or {}).get("cost_cash") if next_row else None,
         "next_income_mult": (next_row or {}).get("income_mult") if next_row else None,
@@ -1218,6 +1226,8 @@ def register(router):
             raise HTTPException(status_code=404, detail="User not found")
         purchased = int(u.get("property_portfolio_upgrade_tier") or 0)
         unlocked = int(u.get("property_portfolio_upgrade_unlocked_tier") or 0)
+        if purchased >= _portfolio_upgrade_tier_max():
+            raise HTTPException(status_code=400, detail="You already own the highest property portfolio upgrade tier.")
         if desired != purchased + 1:
             raise HTTPException(status_code=400, detail="You can only buy the next tier in order.")
         row = next((t for t in PROPERTY_PORTFOLIO_UPGRADE_TIERS if int(t.get("tier") or 0) == desired), None)

@@ -821,12 +821,26 @@ async def _build_active_attacks_list(attacker_id: str, attacker_current_state: s
 
     bg_target_ids = [tid for tid in target_ids if (users_map.get(tid) or {}).get("is_bodyguard")]
     still_bg_tids = set()
+    bg_owner_by_guard_uid: Dict[str, Dict[str, str]] = {}
     if bg_target_ids:
         async for b in db.bodyguards.find(
             {"bodyguard_user_id": {"$in": bg_target_ids}},
-            {"_id": 0, "bodyguard_user_id": 1},
+            {"_id": 0, "bodyguard_user_id": 1, "user_id": 1},
         ):
             still_bg_tids.add(b["bodyguard_user_id"])
+            gid = b.get("bodyguard_user_id")
+            ouid = b.get("user_id")
+            if gid and ouid:
+                bg_owner_by_guard_uid[str(gid)] = {"owner_id": str(ouid), "owner_username": ""}
+        owner_uid_list = list({d["owner_id"] for d in bg_owner_by_guard_uid.values() if d.get("owner_id")})
+        owner_username_by_id: Dict[str, str] = {}
+        if owner_uid_list:
+            async for u in db.users.find({"id": {"$in": owner_uid_list}}, {"_id": 0, "id": 1, "username": 1}):
+                owner_username_by_id[str(u["id"])] = str(u.get("username") or "?")
+        for gid, d in list(bg_owner_by_guard_uid.items()):
+            oid = d.get("owner_id")
+            if oid:
+                d["owner_username"] = owner_username_by_id.get(oid, "?")
 
     bgs_by_owner: Dict[str, List[dict]] = {}
     if target_ids:
@@ -942,6 +956,13 @@ async def _build_active_attacks_list(attacker_id: str, attacker_current_state: s
             "message": msg,
             "target_is_npc": bool((users_map.get(tid or "") or {}).get("is_npc")) if tid else False,
         }
+        if tid:
+            tu_bg = users_map.get(tid)
+            if tu_bg and tu_bg.get("is_bodyguard"):
+                own = bg_owner_by_guard_uid.get(str(tid))
+                if own and own.get("owner_id"):
+                    item["bodyguard_owner_username"] = own.get("owner_username") or "?"
+                    item["bodyguard_is_mine"] = own["owner_id"] == str(attacker_id)
         # Mint server-side token as soon as the hunt is "found" (any list refresh). Execute requires it once set,
         # so scripts that only POST /execute without polling list fail. Only return the token to the client when can_attack.
         if attack["status"] == "found":
