@@ -45,7 +45,10 @@ from server import (
     send_notification,
 )
 from routers.casinos.dice import DiceSellOnTradeRequest
-from utils.quicktrade_casino_cleanup import cancel_quicktrade_casino_listings_by_locations
+from utils.quicktrade_casino_cleanup import (
+    cancel_quicktrade_casino_listings_by_locations,
+    ensure_no_duplicate_casino_quicktrade_listing,
+)
 
 # ----- Constants -----
 ROULETTE_RED = {1, 3, 5, 7, 9, 12, 14, 16, 18, 19, 21, 23, 25, 27, 30, 32, 34, 36}
@@ -555,6 +558,9 @@ def register(router):
         if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this table")
         assert_casino_clear_of_buy_back_for_listing(doc)
+        await ensure_no_duplicate_casino_quicktrade_listing(
+            "casino_rlt", city, current_user.get("id") or ""
+        )
         listing_id = ObjectId()
         casino_property = {
             "_id": listing_id,

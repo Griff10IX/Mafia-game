@@ -45,7 +45,10 @@ from server import (
     notify_casino_seizure,
     send_notification,
 )
-from utils.quicktrade_casino_cleanup import cancel_quicktrade_casino_listings_by_locations
+from utils.quicktrade_casino_cleanup import (
+    cancel_quicktrade_casino_listings_by_locations,
+    ensure_no_duplicate_casino_quicktrade_listing,
+)
 
 # ----- Constants -----
 DICE_SIDES_MIN = 2
@@ -578,6 +581,9 @@ def register(router):
         if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this table")
         assert_casino_clear_of_buy_back_for_listing(doc)
+        await ensure_no_duplicate_casino_quicktrade_listing(
+            "casino_dice", city, current_user.get("id") or ""
+        )
         listing_id = ObjectId()
         casino_property = {
             "_id": listing_id,

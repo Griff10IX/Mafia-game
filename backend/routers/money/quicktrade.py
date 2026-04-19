@@ -26,6 +26,7 @@ from routers.kill.armoury import TOKEN_CONFIG, TOKEN_TYPES
 from utils.point_provenance import log_points_event
 from utils.civilian_protection import maybe_revoke_civilian_protection
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_QUICKTRADE
+from utils.quicktrade_casino_cleanup import cancel_quicktrade_casino_listings_by_locations
 
 
 async def _quicktrade_sustained_rl_user(current_user: dict = Depends(get_current_user)):
@@ -1255,6 +1256,11 @@ async def buy_property(property_id: str, current_user: dict = Depends(get_curren
             buyer_id=buyer_id,
             buyer_username=buyer_username,
         )
+    # Remove any duplicate/stale casino rows for this slot (only `for_sale: true` docs; purchased row was already marked not for sale).
+    if (prop_type or "").startswith("casino_"):
+        loc = prop.get("location")
+        if loc:
+            await cancel_quicktrade_casino_listings_by_locations(prop_type, loc, loc)
     try:
         await db.trade_events.insert_one(
             {
@@ -1489,6 +1495,111 @@ async def force_cancel_property_listing_by_id(
         "property_id": property_id,
         "owner_id": prop.get("owner_id"),
         "property_name": prop.get("name", "Property"),
+    }
+
+
+_CASINO_QUICKTRADE_TYPES = (
+    "casino_blackjack",
+    "casino_dice",
+    "casino_rlt",
+    "casino_horseracing",
+    "casino_videopoker",
+)
+
+
+def _property_created_sort_key(prop: Dict[str, Any]) -> tuple:
+    """Sort key for newest-first: use with sorted(..., reverse=True)."""
+    c = prop.get("created_at")
+    ts = 0.0
+    if c is not None:
+        if hasattr(c, "timestamp"):
+            try:
+                ts = float(c.timestamp())
+            except Exception:
+                ts = 0.0
+        elif isinstance(c, str):
+            try:
+                ts = float(datetime.fromisoformat(c.replace("Z", "+00:00")).timestamp())
+            except Exception:
+                ts = 0.0
+    oid = prop.get("_id")
+    oid_part = str(oid) if oid is not None else ""
+    return (ts, oid_part)
+
+
+async def admin_quicktrade_deduplicate_casino_listings(
+    *,
+    actor_user_id: str,
+    dry_run: bool = False,
+    reason: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    For each (casino type, city, owner) with more than one active Quick Trade row, keep the newest listing
+    and admin-cancel the rest (same unlist behaviour as cancel-property).
+    """
+    actor = str(actor_user_id or "").strip()
+    if not actor:
+        raise ValueError("actor_user_id required")
+    docs = await db.properties.find(
+        {"for_sale": True, "type": {"$in": list(_CASINO_QUICKTRADE_TYPES)}},
+        {"_id": 1, "type": 1, "location": 1, "owner_id": 1, "sale_price": 1, "name": 1, "owner_username": 1, "created_at": 1},
+    ).to_list(3000)
+    groups: Dict[tuple, List[dict]] = {}
+    for p in docs:
+        t = str(p.get("type") or "").strip()
+        loc = str(p.get("location") or "").strip()
+        oid = str(p.get("owner_id") or "").strip()
+        if not t or not loc or not oid:
+            continue
+        key = (t, loc, oid)
+        groups.setdefault(key, []).append(p)
+    dedupe_reason = (reason or "").strip() or "admin dedupe duplicate casino Quick Trade listings"
+    cancelled: List[Dict[str, Any]] = []
+    kept: List[Dict[str, Any]] = []
+    duplicate_groups = 0
+    for key, rows in groups.items():
+        if len(rows) <= 1:
+            continue
+        duplicate_groups += 1
+        rows_sorted = sorted(rows, key=_property_created_sort_key, reverse=True)
+        winner = rows_sorted[0]
+        losers = rows_sorted[1:]
+        kept.append(
+            {
+                "property_id": str(winner["_id"]),
+                "type": winner.get("type"),
+                "location": winner.get("location"),
+                "owner_id": winner.get("owner_id"),
+                "owner_username": winner.get("owner_username"),
+                "sale_price": winner.get("sale_price"),
+                "name": winner.get("name"),
+            }
+        )
+        for p in losers:
+            pid = str(p["_id"])
+            entry = {
+                "property_id": pid,
+                "type": p.get("type"),
+                "location": p.get("location"),
+                "owner_id": p.get("owner_id"),
+                "owner_username": p.get("owner_username"),
+                "sale_price": p.get("sale_price"),
+                "name": p.get("name"),
+            }
+            if dry_run:
+                entry["dry_run"] = True
+                cancelled.append(entry)
+            else:
+                await force_cancel_property_listing_by_id(pid, actor_user_id=actor, reason=dedupe_reason)
+                cancelled.append(entry)
+    return {
+        "ok": True,
+        "dry_run": dry_run,
+        "duplicate_groups": duplicate_groups,
+        "cancelled_count": len(cancelled),
+        "kept_count": len(kept),
+        "cancelled": cancelled,
+        "kept": kept,
     }
 
 

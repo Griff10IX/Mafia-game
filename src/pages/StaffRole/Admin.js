@@ -6704,6 +6704,32 @@ export default function Admin() {
     }
   };
 
+  const handleQtDedupeCasinoListings = async (dryRun) => {
+    if (!dryRun) {
+      if (!window.confirm(
+        'Unlist duplicate casino Quick Trade rows? For each owner + venue + city, the newest listing is kept; older duplicates are cancelled (same as admin property unlist, audit reason optional below).',
+      )) return;
+    }
+    setQtActionKey(dryRun ? 'dedupe-casino-dry' : 'dedupe-casino');
+    try {
+      const payload = { dry_run: !!dryRun, ...qtCancelBody() };
+      const res = await api.post('/admin/quicktrade/deduplicate-casino-listings', payload);
+      const g = res.data?.duplicate_groups ?? 0;
+      const n = res.data?.cancelled_count ?? 0;
+      if (dryRun) {
+        toast.success(`Dry run: ${g} duplicate group(s), would unlist ${n} row(s).`);
+      } else {
+        toast.success(`Unlisted ${n} duplicate row(s) across ${g} group(s).`);
+      }
+      await handleFetchQuicktradeOverview();
+      await refreshQuicktradeUserIfAny();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Casino dedupe failed');
+    } finally {
+      setQtActionKey(null);
+    }
+  };
+
   const handleFetchEconomyOverview = async () => {
     setEconomyOverviewLoading(true);
     try {
@@ -9920,6 +9946,28 @@ export default function Admin() {
                   className="w-full max-w-md bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground"
                   maxLength={500}
                 />
+              </div>
+              <div className="rounded border border-amber-500/35 bg-amber-950/25 p-2 space-y-2">
+                <p className="text-[10px] text-foreground font-bold uppercase tracking-wide">Duplicate casino listings</p>
+                <p className="text-[9px] text-mutedForeground leading-relaxed">
+                  Same owner can stack multiple Quick Trade rows for one table (e.g. two prices). This keeps the newest listing per owner + venue + city and unlists the rest (same as admin property cancel; optional reason above is logged).
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <BtnSecondary
+                    type="button"
+                    disabled={!!qtActionKey}
+                    onClick={() => handleQtDedupeCasinoListings(true)}
+                  >
+                    {qtActionKey === 'dedupe-casino-dry' ? '…' : 'Dry run'}
+                  </BtnSecondary>
+                  <BtnDanger
+                    type="button"
+                    disabled={!!qtActionKey}
+                    onClick={() => handleQtDedupeCasinoListings(false)}
+                  >
+                    {qtActionKey === 'dedupe-casino' ? '…' : 'Cancel duplicates'}
+                  </BtnDanger>
+                </div>
               </div>
               {quicktradeUserDetail?.user && (
                 <div className="space-y-3 border border-violet-500/20 rounded-lg p-2 bg-violet-500/5">

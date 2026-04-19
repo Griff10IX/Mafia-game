@@ -102,6 +102,11 @@ class AdminQuicktradeReason(BaseModel):
     reason: Optional[str] = Field(default=None, max_length=500)
 
 
+class AdminQuicktradeCasinoDedupeBody(BaseModel):
+    reason: Optional[str] = Field(default=None, max_length=500)
+    dry_run: bool = False
+
+
 class NewReleaseConfirmation(BaseModel):
     confirmation_text: str  # Must be exactly "NEW RELEASE"
 
@@ -2016,6 +2021,26 @@ def register(router):
         actor = str(current_user.get("id") or "")
         try:
             return await qt_mod.force_cancel_property_listing_by_id(property_id, actor_user_id=actor, reason=body.reason)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e)) from e
+
+    @router.post("/admin/quicktrade/deduplicate-casino-listings")
+    async def admin_quicktrade_deduplicate_casino_listings_route(
+        body: AdminQuicktradeCasinoDedupeBody = Body(default=AdminQuicktradeCasinoDedupeBody()),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Remove stacked Quick Trade rows for the same casino slot + owner (keeps newest listing). Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from routers.money import quicktrade as qt_mod
+
+        actor = str(current_user.get("id") or "")
+        try:
+            return await qt_mod.admin_quicktrade_deduplicate_casino_listings(
+                actor_user_id=actor,
+                dry_run=bool(body.dry_run),
+                reason=body.reason,
+            )
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e)) from e
 
