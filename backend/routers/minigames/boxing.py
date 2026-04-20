@@ -458,7 +458,7 @@ async def boxing_opponents(current_user: dict = Depends(get_current_user)):
 
 
 NPC_FIGHT_COOLDOWN_SECONDS = 5 * 60
-NPC_MAX_FIGHTS_PER_HOUR = 10
+NPC_MAX_FIGHTS_PER_HOUR = 20
 PVP_MAX_FIGHTS_PER_HOUR = 10
 # 1.0 = winner receives full NPC "reward" shown in UI (was 0.6).
 NPC_WIN_PAYOUT_MULTIPLIER = 1.0

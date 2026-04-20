@@ -6,6 +6,16 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-20 12:00 UTC[/color][/b] — [b]Boxing: NPC fight limit raised[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Casino → Mini-games → Boxing[/b] — [b]NPC sparring[/b] allows up to [b]20 fights[/b] per rolling [b]2-hour[/b] window (was [b]10[/b]). [b]PvP[/b] stays at [b]10 per 2h[/b]. The [b]5-minute cooldown[/b] between NPC fights is unchanged.[/color]
+[*][color=#888888][b]Player action:[/b] No setup needed.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-11 18:00 UTC[/color][/b] — [b]“Completed it” lifetime objectives — target changes[/b][/size]
 [quote]
 [list]
