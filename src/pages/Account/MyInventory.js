@@ -45,6 +45,8 @@ export default function MyInventory() {
   const [giftTokenType, setGiftTokenType] = useState('');
   const [giftAmount, setGiftAmount] = useState(1);
   const [gifting, setGifting] = useState(false);
+  const [speakeasyGiftUsername, setSpeakeasyGiftUsername] = useState('');
+  const [speakeasyGifting, setSpeakeasyGifting] = useState(false);
 
   const fetchInventory = (silent = false) => {
     api
@@ -169,6 +171,23 @@ export default function MyInventory() {
     }
   };
 
+  const giftSpeakeasy = async () => {
+    const un = speakeasyGiftUsername.trim();
+    if (!un || speakeasyGifting) return;
+    setSpeakeasyGifting(true);
+    try {
+      const res = await api.post('/loot-box/speakeasy/gift', { target_username: un });
+      toast.success(res?.data?.message || 'Speakeasy transferred.');
+      setSpeakeasyGiftUsername('');
+      refreshUser();
+      fetchInventory();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to gift Speakeasy');
+    } finally {
+      setSpeakeasyGifting(false);
+    }
+  };
+
   const sendGift = async () => {
     const un = giftUsername.trim();
     if (!un || !giftTokenType || !data?.tokens) return;
@@ -219,6 +238,7 @@ export default function MyInventory() {
   const exclusiveCars = loot.exclusive_cars || [];
   const hasSpeakeasy = loot.has_speakeasy === true;
   const speakeasyInfo = loot.speakeasy || null;
+  const isAdmin = data.is_admin === true;
   const tokens = data.tokens || {};
 
   const getSpeakeasyCooldownText = () => {
@@ -571,17 +591,64 @@ export default function MyInventory() {
                       </span>
                     )}
                   </div>
+                  {isAdmin && (
+                    <div className="mt-3 pt-3 border-t border-amber-500/25 space-y-1.5">
+                      <p className="text-[8px] font-heading uppercase tracking-wider text-amber-200/80">Admin — gift Speakeasy</p>
+                      <p className="text-[8px] text-mutedForeground leading-snug">Transfers your Speakeasy to their account. They must not already own one.</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <input
+                          type="text"
+                          value={speakeasyGiftUsername}
+                          onChange={(e) => setSpeakeasyGiftUsername(e.target.value)}
+                          placeholder="Recipient username"
+                          className="flex-1 min-w-[8rem] px-2 py-1.5 rounded-md border border-amber-500/30 bg-background/80 text-[10px] font-heading text-foreground placeholder:text-mutedForeground focus:outline-none focus:border-amber-400/50"
+                        />
+                        <button
+                          type="button"
+                          onClick={giftSpeakeasy}
+                          disabled={speakeasyGifting || !speakeasyGiftUsername.trim()}
+                          className="px-3 py-1.5 rounded-md text-[9px] font-heading font-bold uppercase tracking-wider border border-amber-600/50 bg-amber-950/40 text-amber-100 hover:bg-amber-900/50 disabled:opacity-50"
+                        >
+                          {speakeasyGifting ? 'Sending…' : 'Gift Speakeasy'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
               {hasSpeakeasy && !speakeasyInfo && (
-                <div className="inv-item flex flex-wrap items-center gap-2 py-2.5 px-2 rounded-lg border border-amber-500/25 ring-1 ring-amber-500/10 bg-amber-950/10">
-                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-amber-500/25 bg-amber-500/10">
-                    <Building2 size={12} className="text-amber-400" />
+                <div className="inv-item flex flex-col gap-2 py-2.5 px-2 rounded-lg border border-amber-500/25 ring-1 ring-amber-500/10 bg-amber-950/10">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-amber-500/25 bg-amber-500/10">
+                      <Building2 size={12} className="text-amber-400" />
+                    </div>
+                    <span className="text-[11px] font-heading text-amber-400/90 tracking-wide">Speakeasy</span>
+                    <span className="text-[8px] font-heading font-bold uppercase tracking-wider text-amber-300/90 border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 rounded-full">
+                      Loot exclusive
+                    </span>
                   </div>
-                  <span className="text-[11px] font-heading text-amber-400/90 tracking-wide">Speakeasy</span>
-                  <span className="text-[8px] font-heading font-bold uppercase tracking-wider text-amber-300/90 border border-amber-500/40 bg-amber-500/10 px-1.5 py-0.5 rounded-full">
-                    Loot exclusive
-                  </span>
+                  {isAdmin && (
+                    <div className="space-y-1.5 pl-0.5">
+                      <p className="text-[8px] font-heading uppercase tracking-wider text-amber-200/80">Admin — gift Speakeasy</p>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <input
+                          type="text"
+                          value={speakeasyGiftUsername}
+                          onChange={(e) => setSpeakeasyGiftUsername(e.target.value)}
+                          placeholder="Recipient username"
+                          className="flex-1 min-w-[8rem] px-2 py-1.5 rounded-md border border-amber-500/30 bg-background/80 text-[10px] font-heading"
+                        />
+                        <button
+                          type="button"
+                          onClick={giftSpeakeasy}
+                          disabled={speakeasyGifting || !speakeasyGiftUsername.trim()}
+                          className="px-3 py-1.5 rounded-md text-[9px] font-heading font-bold uppercase border border-amber-600/50 bg-amber-950/40 text-amber-100 disabled:opacity-50"
+                        >
+                          {speakeasyGifting ? 'Sending…' : 'Gift'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

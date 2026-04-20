@@ -18,6 +18,7 @@ from server import (
     log_activity,
     send_notification,
     _is_admin,
+    _username_pattern,
     CARS,
     ARMOUR_BASE_BULLETS,
 )
@@ -195,6 +196,11 @@ class LootBoxRarityAdminUpdate(BaseModel):
     common_pct: Optional[int] = None
     uncommon_pct: Optional[int] = None
     rare_pct: Optional[int] = None
+
+
+class SpeakeasyGiftRequest(BaseModel):
+    """Admin-only: transfer your Speakeasy exclusive property to another player."""
+    target_username: str
 
 
 def _active_rewards_from_user(user: dict) -> List[Dict[str, Any]]:
@@ -643,9 +649,56 @@ async def collect_speakeasy(current_user: dict = Depends(get_current_user)):
     }
 
 
+async def gift_speakeasy(body: SpeakeasyGiftRequest, current_user: dict = Depends(get_current_user)):
+    """Admin-only: transfer the current user's Speakeasy (exclusive_properties) to another player by username."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Only admins can gift a Speakeasy.")
+    admin_id = current_user["id"]
+    raw_un = (body.target_username or "").strip()
+    if not raw_un:
+        raise HTTPException(status_code=400, detail="Enter the recipient's in-game username.")
+    pat = _username_pattern(raw_un)
+    if not pat:
+        raise HTTPException(status_code=400, detail="Invalid username.")
+    recipient = await db.users.find_one({"username": pat}, {"_id": 0, "id": 1, "username": 1})
+    if not recipient:
+        raise HTTPException(status_code=404, detail="No player found with that username.")
+    rid = recipient["id"]
+    if rid == admin_id:
+        raise HTTPException(status_code=400, detail="You cannot gift the Speakeasy to yourself.")
+    taken = await db.exclusive_properties.find_one({"owner_id": rid, "type": "speakeasy"}, {"_id": 1})
+    if taken:
+        raise HTTPException(status_code=400, detail="That player already owns a Speakeasy.")
+    res = await db.exclusive_properties.update_one(
+        {"owner_id": admin_id, "type": "speakeasy"},
+        {"$set": {"owner_id": rid}},
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=400, detail="You do not own a Speakeasy to gift.")
+    if res.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Could not transfer Speakeasy.")
+    r_display = recipient.get("username") or raw_un
+    admin_name = current_user.get("username", "?")
+    await log_activity(
+        admin_id,
+        admin_name,
+        "speakeasy_admin_gift",
+        {"to_user_id": rid, "to_username": r_display},
+    )
+    await send_notification(
+        rid,
+        "Loot box",
+        f"{admin_name} gifted you the Speakeasy (loot exclusive). Collect daily cash and bullets from My Inventory.",
+        "system",
+    )
+    await maybe_revoke_civilian_protection(db, rid, "received_property_transfer")
+    return {"message": f"Speakeasy transferred to {r_display}.", "recipient_username": r_display}
+
+
 def register(router):
     router.add_api_route("/loot-box/status", get_loot_box_status, methods=["GET"])
     router.add_api_route("/loot-box/open", open_loot_box, methods=["POST"])
     router.add_api_route("/loot-box/speakeasy/collect", collect_speakeasy, methods=["POST"])
+    router.add_api_route("/loot-box/speakeasy/gift", gift_speakeasy, methods=["POST"])
     router.add_api_route("/loot-box/admin/rarity", get_loot_box_rarity_admin, methods=["GET"])
     router.add_api_route("/loot-box/admin/rarity", set_loot_box_rarity_admin, methods=["POST"])

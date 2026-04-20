@@ -2809,6 +2809,7 @@ async def get_inventory(request: Request, current_user: dict = Depends(get_curre
         },
         "tokens": tokens,
         "token_gift_daily": _token_gift_daily_from_user(udoc),
+        "is_admin": _is_admin(current_user),
     }
 
 
