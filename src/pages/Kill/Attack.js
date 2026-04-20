@@ -854,6 +854,12 @@ const CalcModal = ({
                     </span>
                   </div>
                 )}
+                {calcResult.loot_exclusive_weapon_bullet_discount && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-mutedForeground font-heading">Colt Monitor equipped:</span>
+                    <span className="text-[11px] font-heading font-bold text-emerald-500">−25% bullets</span>
+                  </div>
+                )}
                 <div className="pt-2 border-t border-border text-[10px] text-mutedForeground font-heading space-y-0.5">
                   <div>
                     Your Rank: <span className="text-foreground font-bold">{calcResult.attacker_rank_name}</span>

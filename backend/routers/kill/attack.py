@@ -67,7 +67,12 @@ from utils.civilian_protection import (
 )
 from routers.money.booze_run import BOOZE_TYPES
 from routers.account.objectives import update_objectives_progress
-from routers.kill.armoury import _best_weapon_for_user, _get_weapon_mastery_pct, MASTERY_MAX_BULLET_REDUCTION_PCT
+from routers.kill.armoury import (
+    LOOT_EXCLUSIVE_WEAPON_ID,
+    MASTERY_MAX_BULLET_REDUCTION_PCT,
+    _best_weapon_for_user,
+    _get_weapon_mastery_pct,
+)
 from routers.game.families import resolve_family_id
 from utils.staff_bot_client_alert import maybe_notify_staff_bot_attack_from_ua, maybe_notify_staff_attack_execute_token_fail
 from utils.sustained_page_ratelimit import PAGE_KEY_KILL, check_sustained_page_rl
@@ -1055,6 +1060,10 @@ def _bullets_to_kill_breakdown(
     }
 
 
+# Attacker has Colt Monitor (weapon_loot) equipped: fewer bullets needed to kill.
+LOOT_EXCLUSIVE_WEAPON_ATTACK_BULLET_MULT = 0.75
+
+
 async def _exclusive_car_bullet_defense_multiplier(target: dict) -> float:
     """Extra bullets to kill this target: +5% if owner has any exclusive car, +10% if any loot_exclusive (stronger wins).
     Bodyguards use their hire owner's garage (same rule as completed_it armour bonus)."""
@@ -1386,6 +1395,9 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
     exclusive_car_bullet_mult = await _exclusive_car_bullet_defense_multiplier(target)
     if exclusive_car_bullet_mult > 1.0:
         bullets_required = int(math.ceil(bullets_required * exclusive_car_bullet_mult))
+    loot_exclusive_weapon_bullet_discount = equipped_id == LOOT_EXCLUSIVE_WEAPON_ID
+    if loot_exclusive_weapon_bullet_discount:
+        bullets_required = max(1, int(round(bullets_required * LOOT_EXCLUSIVE_WEAPON_ATTACK_BULLET_MULT)))
     # "Completed it" perk: 65% fewer bullets needed when attacking
     completed_it_discount = bool(current_user.get("completed_it_bullet_reduction"))
     if completed_it_discount:
@@ -1411,6 +1423,7 @@ async def calc_bullets(request: BulletCalcRequest, current_user: dict = Depends(
         "completed_it_discount": completed_it_discount,
         "target_armour_bonus": target_armour_bonus,
         "exclusive_car_bullet_mult": exclusive_car_bullet_mult,
+        "loot_exclusive_weapon_bullet_discount": loot_exclusive_weapon_bullet_discount,
     }
 
 async def get_attack_inflation(current_user: dict = Depends(get_current_user)):
@@ -1556,6 +1569,8 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
     exclusive_car_bullet_mult = await _exclusive_car_bullet_defense_multiplier(target)
     if exclusive_car_bullet_mult > 1.0:
         bullets_required = int(math.ceil(bullets_required * exclusive_car_bullet_mult))
+    if equipped_weapon_id == LOOT_EXCLUSIVE_WEAPON_ID:
+        bullets_required = max(1, int(round(bullets_required * LOOT_EXCLUSIVE_WEAPON_ATTACK_BULLET_MULT)))
     # "Completed it" perk: 65% fewer bullets needed when attacking
     if current_user.get("completed_it_bullet_reduction"):
         bullets_required = max(1, int(bullets_required * 0.35))

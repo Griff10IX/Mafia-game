@@ -23,18 +23,6 @@ const STORE_STYLES = `
 
 const CUSTOM_POINTS_PACKAGE = 'custom';
 
-const PACKAGES = [
-  { id: 'mini', name: '1,000 pts', points: 1000, price: 2.49, popular: false },
-  { id: 'starter', name: '2,500 pts', points: 2500, price: 5.99, popular: false },
-  { id: 'bronze', name: '5,000 pts', points: 5000, price: 11.99, popular: false },
-  { id: 'silver', name: '10,000 pts', points: 10000, price: 21.99, popular: true },
-  { id: 'gold', name: '25,000 pts', points: 25000, price: 52.99, popular: false },
-  { id: 'platinum', name: '50,000 pts', points: 50000, price: 99.99, popular: false },
-  { id: 'diamond', name: '100,000 pts', points: 100000, price: 189.99, popular: false },
-  { id: 'elite', name: '150,000 pts', points: 150000, price: 274.99, popular: false },
-  { id: 'legend', name: '200,000 pts', points: 200000, price: 349.99, popular: false },
-];
-
 const BULLET_PACKS = [
   { bullets: 5000, cost: 100 },
   { bullets: 10000, cost: 175 },
@@ -518,17 +506,6 @@ export default function Store() {
     }
   };
 
-  const handlePurchase = async (id) => {
-    setLoading(true);
-    try {
-      const res = await api.post('/payments/checkout', { package_id: id, origin_url: window.location.origin + '/game/store' });
-      window.location.href = res.data.url;
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed');
-      setLoading(false);
-    }
-  };
-
   const handleCustomPointsPurchase = async () => {
     if (!customQuote?.points || customQuote.points < 1) {
       toast.error('Enter a valid amount and wait for the price preview');
@@ -727,52 +704,12 @@ export default function Store() {
             </div>
           ) : (
           <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-3">
-            {PACKAGES.map((pkg) => (
-              <div
-                key={pkg.id}
-                data-testid={`package-${pkg.id}`}
-                className={`relative rounded-lg border overflow-hidden transition-all ${
-                  pkg.isTest ? 'border-amber-500/40 bg-amber-500/5' : pkg.popular ? 'border-primary/20 bg-primary/5' : 'border-primary/20 bg-zinc-900/50'
-                }`}
-              >
-                {pkg.isTest && (
-                  <div className="absolute top-1 right-1 px-1.5 py-0.5 rounded text-[8px] font-heading font-bold uppercase bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                    Test
-                  </div>
-                )}
-                <div className={`h-0.5 bg-gradient-to-r from-transparent ${pkg.isTest ? 'via-amber-500/50' : 'via-primary/40'} to-transparent`} />
-                <div className="p-3 text-center">
-                  <p className={`text-[10px] font-heading font-bold uppercase tracking-[0.15em] ${pkg.isTest ? 'text-amber-400' : 'text-primary'}`}>{pkg.name}</p>
-                  <p className={`text-lg font-heading font-bold mt-1 ${pkg.isTest ? 'text-amber-400' : 'text-primary'}`}>{Number(pkg.points ?? 0).toLocaleString()}</p>
-                  <p className="text-[10px] text-zinc-500 font-heading italic">£{pkg.price.toFixed(2)}</p>
-                </div>
-                <div className="px-3 pb-3">
-                  <button
-                    type="button"
-                    onClick={() => handlePurchase(pkg.id)}
-                    data-testid={`buy-package-${pkg.id}`}
-                    disabled={loading}
-                    className={`w-full min-h-[44px] py-2.5 sm:py-1.5 text-[10px] font-heading font-bold uppercase rounded disabled:opacity-50 touch-manipulation ${
-                      pkg.isTest 
-                        ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40 hover:bg-amber-500/30' 
-                        : 'bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30'
-                    }`}
-                  >
-                    {loading ? '...' : 'Buy'}
-                  </button>
-                </div>
-                <div className="store-art-line text-primary mx-3" />
-              </div>
-            ))}
-          </div>
-
           <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-3 py-2 bg-primary/8 border-b border-primary/20">
-              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Custom amount</span>
+              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Buy points</span>
               <p className="text-[8px] text-mutedForeground font-heading mt-0.5 leading-snug">
-                Integer points 1,000–200,000 (same cap as top pack), or set a GBP budget — price follows the same curve as fixed packs.
+                Enter whole points from 1,000–200,000, or a GBP budget — the server prices along the standard store curve (Stripe checkout).
               </p>
             </div>
             <div className="p-3 space-y-2">
@@ -833,7 +770,7 @@ export default function Store() {
                 disabled={loading || !customQuote}
                 className="w-full min-h-[44px] py-2.5 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
               >
-                {loading ? '...' : 'Buy custom'}
+                {loading ? '...' : 'Buy with card'}
               </button>
             </div>
             <div className="store-art-line text-primary mx-3" />
