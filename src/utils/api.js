@@ -164,6 +164,24 @@ if (typeof window !== 'undefined') {
   });
 }
 
+/** Booze run: 403 jail on follow-up requests (e.g. /booze-run/config) used to replace location immediately and hide the prohibition toast. Defer once. */
+let _boozeJailRedirectTimer = null;
+function _scheduleBoozeRunJailRedirect() {
+  if (typeof window === 'undefined' || _boozeJailRedirectTimer) return;
+  _boozeJailRedirectTimer = setTimeout(() => {
+    _boozeJailRedirectTimer = null;
+    try {
+      const cur = (window.location.pathname || '').replace(/\/+/g, '/');
+      const onBooze =
+        cur === '/money/booze-run' ||
+        cur.startsWith('/money/booze-run/') ||
+        cur === '/booze-run' ||
+        cur.startsWith('/booze-run/');
+      if (onBooze) window.location.replace('/crime/jail');
+    } catch (_) { /* ignore */ }
+  }, 4000);
+}
+
 function isRequestCanceled(error) {
   if (!error) return false;
   if (axios.isCancel?.(error)) return true;
@@ -275,8 +293,17 @@ api.interceptors.response.use(
           '/organised-crime', '/oc',
           '/money/booze-run', '/booze-run',
         ];
-        if (jailBlocked.some(prefix => p === prefix || p.startsWith(prefix + '/'))) {
-          window.location.replace('/crime/jail');
+        if (jailBlocked.some((prefix) => p === prefix || p.startsWith(`${prefix}/`))) {
+          const onBooze =
+            p === '/money/booze-run' ||
+            p.startsWith('/money/booze-run/') ||
+            p === '/booze-run' ||
+            p.startsWith('/booze-run/');
+          if (onBooze) {
+            _scheduleBoozeRunJailRedirect();
+          } else {
+            window.location.replace('/crime/jail');
+          }
         }
         return Promise.reject(error);
       }

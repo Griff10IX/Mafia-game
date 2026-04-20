@@ -21,6 +21,8 @@ const STORE_STYLES = `
   .store-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
 `;
 
+const CUSTOM_POINTS_PACKAGE = 'custom';
+
 const PACKAGES = [
   { id: 'mini', name: '1,000 pts', points: 1000, price: 2.49, popular: false },
   { id: 'starter', name: '2,500 pts', points: 2500, price: 5.99, popular: false },
@@ -263,6 +265,10 @@ export default function Store() {
   const [sendToUsername, setSendToUsername] = useState('');
   const [sendAmount, setSendAmount] = useState('');
   const [customBullets, setCustomBullets] = useState('');
+  const [customPurchaseMode, setCustomPurchaseMode] = useState('points');
+  const [customPointsInput, setCustomPointsInput] = useState('');
+  const [customGbpInput, setCustomGbpInput] = useState('');
+  const [customQuote, setCustomQuote] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [pointsTabLocked, setPointsTabLocked] = useState(false);
   const [pointsTabLockMessage, setPointsTabLockMessage] = useState('');
@@ -286,6 +292,38 @@ export default function Store() {
       setStorePayWith('points');
     }
   }, [activeTab, storePayWith]);
+
+  useEffect(() => {
+    if (activeTab !== 'points' || pointsTabLocked) {
+      setCustomQuote(null);
+      return;
+    }
+    const t = setTimeout(async () => {
+      try {
+        if (customPurchaseMode === 'points') {
+          const p = parseInt(String(customPointsInput).replace(/\D/g, ''), 10);
+          if (!Number.isFinite(p) || p < 1000) {
+            setCustomQuote(null);
+            return;
+          }
+          const r = await api.get('/payments/custom-quote', { params: { points: p } });
+          setCustomQuote(r.data || null);
+        } else {
+          const raw = String(customGbpInput).replace(/[^0-9.]/g, '');
+          const g = parseFloat(raw);
+          if (!Number.isFinite(g) || g < 2.49) {
+            setCustomQuote(null);
+            return;
+          }
+          const r = await api.get('/payments/custom-quote', { params: { gbp: g } });
+          setCustomQuote(r.data || null);
+        }
+      } catch {
+        setCustomQuote(null);
+      }
+    }, 450);
+    return () => clearTimeout(t);
+  }, [activeTab, pointsTabLocked, customPurchaseMode, customPointsInput, customGbpInput]);
 
   useEffect(() => {
     if (activeTab === 'tokens' && storePayWith === 'cash') {
@@ -491,6 +529,26 @@ export default function Store() {
     }
   };
 
+  const handleCustomPointsPurchase = async () => {
+    if (!customQuote?.points || customQuote.points < 1) {
+      toast.error('Enter a valid amount and wait for the price preview');
+      return;
+    }
+    setLoading(true);
+    try {
+      const origin = `${window.location.origin}/game/store`;
+      const body =
+        customPurchaseMode === 'points'
+          ? { package_id: CUSTOM_POINTS_PACKAGE, origin_url: origin, custom_points: customQuote.points }
+          : { package_id: CUSTOM_POINTS_PACKAGE, origin_url: origin, custom_gbp: parseFloat(String(customGbpInput).replace(/[^0-9.]/g, '')) || 0 };
+      const res = await api.post('/payments/checkout', body);
+      window.location.href = res.data.url;
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Checkout failed');
+      setLoading(false);
+    }
+  };
+
   const handleCustomBulletsPurchase = async () => {
     const b = parseInt(String(customBullets).replace(/\D/g, ''), 10);
     if (!Number.isFinite(b) || b < 1 || b > CUSTOM_BULLETS_MAX) {
@@ -668,6 +726,7 @@ export default function Store() {
               <p className="text-[9px] text-mutedForeground mt-1">Points purchase is temporarily unavailable. Upgrades, bullets, and send pts remain available.</p>
             </div>
           ) : (
+          <>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-3">
             {PACKAGES.map((pkg) => (
               <div
@@ -707,6 +766,79 @@ export default function Store() {
               </div>
             ))}
           </div>
+
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <div className="px-3 py-2 bg-primary/8 border-b border-primary/20">
+              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Custom amount</span>
+              <p className="text-[8px] text-mutedForeground font-heading mt-0.5 leading-snug">
+                Integer points 1,000–200,000 (same cap as top pack), or set a GBP budget — price follows the same curve as fixed packs.
+              </p>
+            </div>
+            <div className="p-3 space-y-2">
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  onClick={() => { setCustomPurchaseMode('points'); setCustomQuote(null); }}
+                  className={`flex-1 py-1.5 text-[9px] font-heading font-bold uppercase rounded border ${customPurchaseMode === 'points' ? 'border-primary/50 bg-primary/15 text-primary' : 'border-primary/20 text-mutedForeground'}`}
+                >
+                  By points
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setCustomPurchaseMode('gbp'); setCustomQuote(null); }}
+                  className={`flex-1 py-1.5 text-[9px] font-heading font-bold uppercase rounded border ${customPurchaseMode === 'gbp' ? 'border-primary/50 bg-primary/15 text-primary' : 'border-primary/20 text-mutedForeground'}`}
+                >
+                  By GBP
+                </button>
+              </div>
+              {customPurchaseMode === 'points' ? (
+                <FormattedNumberInput
+                  value={customPointsInput}
+                  onChange={setCustomPointsInput}
+                  placeholder="Points (e.g. 160000)"
+                  className="w-full px-3 py-2 text-xs bg-zinc-900/50 border border-zinc-700/50 rounded focus:border-primary/50 focus:outline-none text-foreground font-heading"
+                />
+              ) : (
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={customGbpInput}
+                  onChange={(e) => setCustomGbpInput(e.target.value)}
+                  placeholder="GBP (e.g. 40)"
+                  className="w-full px-3 py-2 text-xs bg-zinc-900/50 border border-zinc-700/50 rounded focus:border-primary/50 focus:outline-none text-foreground font-heading"
+                />
+              )}
+              {customQuote && (
+                <p className="text-[10px] font-heading text-zinc-300">
+                  {customPurchaseMode === 'points' ? (
+                    <>
+                      <span className="text-primary font-bold">{Number(customQuote.points).toLocaleString()} pts</span>
+                      {' · '}
+                      <span className="text-emerald-400/90">£{Number(customQuote.price_gbp).toFixed(2)}</span>
+                    </>
+                  ) : (
+                    <>
+                      Pay <span className="text-emerald-400/90 font-bold">£{Number(customQuote.price_gbp).toFixed(2)}</span>
+                      {' → '}
+                      <span className="text-primary font-bold">{Number(customQuote.points).toLocaleString()} pts</span>
+                      <span className="block text-[8px] text-mutedForeground mt-0.5">GBP mode charges the shown amount (largest whole points that fit your budget).</span>
+                    </>
+                  )}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={handleCustomPointsPurchase}
+                disabled={loading || !customQuote}
+                className="w-full min-h-[44px] py-2.5 text-[10px] font-heading font-bold uppercase rounded bg-primary/20 text-primary border border-primary/40 hover:bg-primary/30 disabled:opacity-50"
+              >
+                {loading ? '...' : 'Buy custom'}
+              </button>
+            </div>
+            <div className="store-art-line text-primary mx-3" />
+          </div>
+          </>
           )}
           <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`} data-testid="store-game-pass-inline">
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />

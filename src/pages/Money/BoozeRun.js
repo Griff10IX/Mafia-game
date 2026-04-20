@@ -14,6 +14,8 @@ function formatMoney(n) {
 
 // Shown in toast when caught during booze run (prohibition bust)
 const BOOZE_CAUGHT_IMAGE = 'https://historicipswich.net/wp-content/uploads/2021/12/0a79f-boston-rum-prohibition1.jpg';
+/** Let the toast + image render before navigating; avoids axios 403 on /booze-run/config tearing down the page first. */
+const BOOZE_CAUGHT_JAIL_REDIRECT_MS = 4800;
 
 function apiErrorDetail(e, fallback) {
   const d = e.response?.data?.detail;
@@ -672,6 +674,7 @@ export default function BoozeRun() {
       const response = await api.post('/booze-run/buy', { booze_id: boozeId, amount });
       if (response.data.caught) {
         toast.error(response.data.message, {
+          duration: 7000,
           description: (
             <div className="mt-2 overflow-hidden isolate max-w-[280px]" style={{ contain: 'layout paint' }}>
               <div className="relative w-full aspect-[4/3] rounded-sm overflow-hidden border border-red-500/50 bg-black">
@@ -690,7 +693,13 @@ export default function BoozeRun() {
       }
       refreshUser();
       setTradeAmounts((prev) => ({ ...prev, [boozeId]: '' }));
-      fetchConfig();
+      if (response.data.caught) {
+        window.setTimeout(() => {
+          window.location.replace('/crime/jail');
+        }, BOOZE_CAUGHT_JAIL_REDIRECT_MS);
+      } else {
+        fetchConfig();
+      }
     } catch (e) {
       toast.error(apiErrorDetail(e, 'Purchase failed'));
     }
@@ -719,6 +728,7 @@ export default function BoozeRun() {
       });
       if (response.data.caught) {
         toast.error(response.data.message, {
+          duration: 7000,
           description: (
             <div className="mt-2 overflow-hidden isolate max-w-[280px]" style={{ contain: 'layout paint' }}>
               <div className="relative w-full aspect-[4/3] rounded-sm overflow-hidden border border-red-500/50 bg-black">
@@ -737,7 +747,13 @@ export default function BoozeRun() {
       }
       refreshUser();
       setTradeAmounts((prev) => ({ ...prev, [boozeId]: '' }));
-      fetchConfig();
+      if (response.data.caught) {
+        window.setTimeout(() => {
+          window.location.replace('/crime/jail');
+        }, BOOZE_CAUGHT_JAIL_REDIRECT_MS);
+      } else {
+        fetchConfig();
+      }
     } catch (e) {
       toast.error(apiErrorDetail(e, 'Sell failed'));
     }

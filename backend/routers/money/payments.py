@@ -4,14 +4,24 @@ import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 
-from typing import Optional
+from typing import Optional, Tuple
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from server import send_notification, _get_staff_user_ids
 from utils.point_provenance import mint_purchase_lot_if_missing, log_points_event
 from utils.release_soft_launch import game_pass_purchase_locked_detail, get_release_soft_launch_public
+from utils.store_points_pricing import (
+    CUSTOM_POINTS_PACKAGE_ID,
+    CUSTOM_POINTS_MAX,
+    CUSTOM_POINTS_MIN,
+    gbp_to_minor_pence,
+    price_gbp_for_points,
+    points_and_price_for_gbp_budget,
+    validate_custom_gbp_budget,
+    validate_custom_points_input,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +84,9 @@ def _add_months(dt: datetime, months: int) -> datetime:
 class CheckoutRequest(BaseModel):
     package_id: str
     origin_url: str
+    # When package_id is "custom", send exactly one of: integer points in [CUSTOM_POINTS_MIN, CUSTOM_POINTS_MAX], or GBP budget.
+    custom_points: Optional[int] = None
+    custom_gbp: Optional[float] = None
 
 
 class BuyGamePassWithPointsRequest(BaseModel):
@@ -157,6 +170,66 @@ async def _notify_staff_game_pass_fulfillment_blocked(
                 logger.warning("staff fulfillment blocked inbox notify %s: %s", staff_uid, e)
     except Exception:
         logger.exception("notify_staff_game_pass_fulfillment_blocked failed")
+
+
+async def _notify_staff_custom_points_fulfillment_blocked(
+    db,
+    *,
+    session_id: str,
+    user_id: str,
+    detail: str,
+) -> None:
+    """Inbox staff when Stripe paid amount does not match custom points checkout (possible tampering or bug)."""
+    username = ""
+    try:
+        u = await db.users.find_one({"id": user_id}, {"_id": 0, "username": 1})
+        if u:
+            username = (u.get("username") or "").strip()[:64]
+    except Exception:
+        pass
+    title = "Store custom points — fulfillment blocked (amount mismatch)"
+    msg = (
+        "Stripe reported a paid amount that does not match the server-expected pence for a custom points checkout.\n\n"
+        f"User: {username or '(unknown)'} ({user_id})\n"
+        f"Stripe session: {session_id}\n"
+        f"Detail: {(detail or '')[:800]}"
+    )
+    try:
+        staff_ids = await _get_staff_user_ids()
+        for staff_uid in staff_ids:
+            try:
+                await send_notification(staff_uid, title, msg, "staff_store_custom_fulfillment_blocked")
+            except Exception as e:
+                logger.warning("staff custom fulfillment blocked notify %s: %s", staff_uid, e)
+    except Exception:
+        logger.exception("notify_staff_custom_points_fulfillment_blocked failed")
+
+
+def _resolve_points_for_stripe_payment(
+    package_id: str,
+    stripe_amount_total_minor: Optional[int],
+    txn: Optional[dict],
+    POINT_PACKAGES: dict,
+) -> Tuple[int, Optional[str]]:
+    """
+    Resolve points to credit for a Stripe Checkout session.
+    Custom package: points and expected pence must come from payment_transactions; Stripe amount must match.
+    """
+    if package_id == CUSTOM_POINTS_PACKAGE_ID:
+        if not txn:
+            return 0, "missing_transaction"
+        pts = int(txn.get("points") or 0)
+        exp = txn.get("expected_amount_minor")
+        if exp is None:
+            return 0, "missing_expected_amount"
+        if stripe_amount_total_minor is not None and int(stripe_amount_total_minor) != int(exp):
+            return 0, "stripe_amount_mismatch"
+        if pts <= 0:
+            return 0, "invalid_points"
+        return pts, None
+    pkg = POINT_PACKAGES.get(package_id) or {}
+    pts = int(pkg.get("points") or 0)
+    return pts, None
 
 
 async def _notify_staff_preorder_points_held(
@@ -913,14 +986,46 @@ def register(router):
         if not api_key:
             raise HTTPException(status_code=503, detail="Payments not configured (set STRIPE_SECRET_KEY)")
 
-        if request.package_id not in POINT_PACKAGES:
-            raise HTTPException(status_code=400, detail="Invalid package")
-
-        package = POINT_PACKAGES[request.package_id]
-        points = package["points"]
-        price_gbp = package["price_gbp"]
-        package_id = request.package_id
         now = datetime.now(timezone.utc)
+        package_id = (request.package_id or "").strip()
+        points = 0
+        price_gbp = 0.0
+        expected_amount_minor: Optional[int] = None
+
+        if package_id == CUSTOM_POINTS_PACKAGE_ID:
+            if (request.custom_points is None) == (request.custom_gbp is None):
+                raise HTTPException(
+                    status_code=400,
+                    detail="For custom purchases, send exactly one of custom_points or custom_gbp.",
+                )
+            if request.custom_points is not None:
+                msg = validate_custom_points_input(request.custom_points)
+                if msg:
+                    raise HTTPException(status_code=400, detail=msg)
+                points = int(request.custom_points)
+                price_gbp = float(price_gbp_for_points(points))
+            else:
+                msg = validate_custom_gbp_budget(request.custom_gbp)
+                if msg:
+                    raise HTTPException(status_code=400, detail=msg)
+                points, price_gbp = points_and_price_for_gbp_budget(float(request.custom_gbp))
+                price_gbp = float(price_gbp)
+                if points <= 0:
+                    raise HTTPException(status_code=400, detail="No points for that budget")
+            expected_amount_minor = gbp_to_minor_pence(price_gbp)
+        else:
+            if request.custom_points is not None or request.custom_gbp is not None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="custom_points and custom_gbp are only allowed when package_id is 'custom'.",
+                )
+            if package_id not in POINT_PACKAGES:
+                raise HTTPException(status_code=400, detail="Invalid package")
+            package = POINT_PACKAGES[package_id]
+            points = int(package["points"])
+            price_gbp = float(package["price_gbp"])
+
+        unit_amount_minor = gbp_to_minor_pence(price_gbp)
 
         # Pre-check: disallow buying again while the user already has an unactivated pass token.
         if package_id == RANK_XP_PASS_PACKAGE_ID:
@@ -963,12 +1068,20 @@ def register(router):
             product_name = f"{points} points"
             if package_id == RANK_XP_PASS_PACKAGE_ID:
                 product_name = "Game Pass"
+            md = {
+                "user_id": current_user["id"],
+                "package_id": package_id,
+                "points": str(points),
+            }
+            if package_id == CUSTOM_POINTS_PACKAGE_ID and expected_amount_minor is not None:
+                md["pricing_version"] = "1"
+                md["expected_amount_minor"] = str(int(expected_amount_minor))
             session = stripe.checkout.Session.create(
                 payment_method_types=["card"],
                 line_items=[{
                     "price_data": {
                         "currency": "gbp",
-                        "unit_amount": int(round(price_gbp * 100)),
+                        "unit_amount": int(unit_amount_minor),
                         "product_data": {
                         "name": product_name,
                             "metadata": {"package_id": package_id},
@@ -979,11 +1092,7 @@ def register(router):
                 mode="payment",
                 success_url=success_url,
                 cancel_url=cancel_url,
-                metadata={
-                    "user_id": current_user["id"],
-                    "package_id": package_id,
-                    "points": str(points),
-                },
+                metadata=md,
             )
             return session
 
@@ -994,16 +1103,61 @@ def register(router):
             raise HTTPException(status_code=500, detail="Checkout failed")
 
         # Record pending transaction so status endpoint can fulfill
-        await db.payment_transactions.insert_one({
+        txn_doc = {
             "session_id": session.id,
             "user_id": current_user["id"],
             "package_id": package_id,
             "points": points,
             "payment_status": "pending",
             "created_at": datetime.now(timezone.utc).isoformat(),
-        })
+        }
+        if expected_amount_minor is not None:
+            txn_doc["expected_amount_minor"] = int(expected_amount_minor)
+        await db.payment_transactions.insert_one(txn_doc)
 
         return {"url": session.url}
+
+    @router.get("/payments/custom-quote", dependencies=_store_rl_u)
+    async def payments_custom_quote(
+        points: Optional[int] = Query(None),
+        gbp: Optional[float] = Query(None),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Preview price for a custom points purchase (piecewise curve). Exactly one of `points` or `gbp`."""
+        _ = current_user
+        if (points is None) == (gbp is None):
+            raise HTTPException(
+                status_code=400,
+                detail="Provide exactly one query parameter: points or gbp.",
+            )
+        if points is not None:
+            msg = validate_custom_points_input(points)
+            if msg:
+                raise HTTPException(status_code=400, detail=msg)
+            p = int(points)
+            pr = price_gbp_for_points(p)
+            m = gbp_to_minor_pence(pr)
+            return {
+                "mode": "points",
+                "points": p,
+                "price_gbp": round(float(pr), 2),
+                "expected_amount_minor": m,
+                "min_points": CUSTOM_POINTS_MIN,
+                "max_points": CUSTOM_POINTS_MAX,
+            }
+        msg = validate_custom_gbp_budget(float(gbp))
+        if msg:
+            raise HTTPException(status_code=400, detail=msg)
+        pts, pr = points_and_price_for_gbp_budget(float(gbp))
+        m = gbp_to_minor_pence(pr)
+        return {
+            "mode": "gbp",
+            "points": pts,
+            "price_gbp": round(float(pr), 2),
+            "expected_amount_minor": m,
+            "min_points": CUSTOM_POINTS_MIN,
+            "max_points": CUSTOM_POINTS_MAX,
+        }
 
     @router.post("/payments/mark-checkout-cancelled/{session_id}")
     async def mark_checkout_cancelled(session_id: str, current_user: dict = Depends(get_current_user)):
@@ -1098,20 +1252,75 @@ def register(router):
                 package_id = session.metadata.get("package_id") or (transaction or {}).get("package_id")
                 if user_id != current_user["id"]:
                     raise HTTPException(status_code=403, detail="Unauthorized")
-                # Always use server-side points to prevent exploit (never trust metadata amount)
-                points = POINT_PACKAGES.get(package_id, {}).get("points", 0) if package_id else 0
-                if not points and transaction:
-                    points = transaction.get("points", 0)
+                txn_row = transaction or await db.payment_transactions.find_one({"session_id": session_id}, {"_id": 0})
+                if (
+                    not txn_row
+                    and (package_id == CUSTOM_POINTS_PACKAGE_ID or session.metadata.get("package_id") == CUSTOM_POINTS_PACKAGE_ID)
+                ):
+                    try:
+                        exp_m = int(session.metadata.get("expected_amount_minor") or "")
+                        pts_m = int(session.metadata.get("points") or 0)
+                        txn_row = {"points": pts_m, "expected_amount_minor": exp_m}
+                    except (TypeError, ValueError):
+                        txn_row = None
+                stripe_minor = getattr(session, "amount_total", None)
+                points, rerr = _resolve_points_for_stripe_payment(
+                    package_id or "",
+                    stripe_minor,
+                    txn_row,
+                    POINT_PACKAGES,
+                )
+                if rerr == "stripe_amount_mismatch":
+                    now_iso = datetime.now(timezone.utc).isoformat()
+                    await db.payment_transactions.update_one(
+                        {"session_id": session_id},
+                        {
+                            "$set": {
+                                "payment_status": "fulfillment_blocked",
+                                "fulfillment_blocked_at": now_iso,
+                                "fulfillment_blocked_detail": "Stripe amount did not match expected custom checkout pence",
+                            }
+                        },
+                    )
+                    try:
+                        await _notify_staff_custom_points_fulfillment_blocked(
+                            db,
+                            session_id=session_id,
+                            user_id=user_id,
+                            detail=f"stripe_minor={stripe_minor} txn={txn_row}",
+                        )
+                    except Exception:
+                        logger.exception("notify custom mismatch from get_payment_status failed")
+                    return {
+                        "status": "fulfillment_blocked",
+                        "payment_status": "fulfillment_blocked",
+                        "points_added": 0,
+                        "detail": "Payment could not be matched to this checkout. If you were charged, contact support.",
+                    }
+                if package_id == CUSTOM_POINTS_PACKAGE_ID and rerr:
+                    logger.warning(
+                        "GET /payments/status: custom resolve failed session=%s err=%s",
+                        session_id,
+                        rerr,
+                    )
+                    return {"status": "pending", "payment_status": "unknown"}
+                is_rank_xp_pass = package_id == RANK_XP_PASS_PACKAGE_ID
+                if not points and not is_rank_xp_pass:
+                    logger.warning("GET /payments/status: no points for package session=%s", session_id)
+                    return {"status": "pending", "payment_status": "unknown"}
 
                 if not transaction:
-                    await db.payment_transactions.insert_one({
+                    ins = {
                         "session_id": session_id,
                         "user_id": user_id,
                         "package_id": package_id or "",
                         "points": points,
                         "payment_status": "pending",
                         "created_at": datetime.now(timezone.utc).isoformat(),
-                    })
+                    }
+                    if package_id == CUSTOM_POINTS_PACKAGE_ID and txn_row and txn_row.get("expected_amount_minor") is not None:
+                        ins["expected_amount_minor"] = int(txn_row["expected_amount_minor"])
+                    await db.payment_transactions.insert_one(ins)
                 credit_result = await _credit_payment_if_pending(db, session_id, user_id, package_id or "", points)
                 if (
                     session.payment_status == "paid"
@@ -1236,43 +1445,88 @@ def register(router):
             if session.payment_status == "paid" and session.metadata:
                 user_id = session.metadata.get("user_id")
                 package_id = session.metadata.get("package_id")
-                # Use server-side points only (never trust metadata for amount — prevents exploit)
-                points = POINT_PACKAGES.get(package_id, {}).get("points", 0) if package_id else 0
-                is_rank_xp_pass = package_id == RANK_XP_PASS_PACKAGE_ID
-                if not user_id or (points <= 0 and not is_rank_xp_pass):
-                    logger.warning("Stripe webhook: missing user_id or invalid package_id, session_id=%s", session.id)
+                txn_row = await db.payment_transactions.find_one({"session_id": session.id}, {"_id": 0})
+                if not txn_row and package_id == CUSTOM_POINTS_PACKAGE_ID:
+                    try:
+                        txn_row = {
+                            "points": int(session.metadata.get("points") or 0),
+                            "expected_amount_minor": int(session.metadata.get("expected_amount_minor") or ""),
+                        }
+                    except (TypeError, ValueError):
+                        txn_row = None
+                stripe_minor = getattr(session, "amount_total", None)
+                points, rerr = _resolve_points_for_stripe_payment(
+                    package_id or "",
+                    stripe_minor,
+                    txn_row,
+                    POINT_PACKAGES,
+                )
+                if rerr == "stripe_amount_mismatch":
+                    now_iso = datetime.now(timezone.utc).isoformat()
+                    await db.payment_transactions.update_one(
+                        {"session_id": session.id},
+                        {
+                            "$set": {
+                                "payment_status": "fulfillment_blocked",
+                                "fulfillment_blocked_at": now_iso,
+                                "fulfillment_blocked_detail": "Stripe amount did not match expected custom checkout pence",
+                            }
+                        },
+                    )
+                    try:
+                        await _notify_staff_custom_points_fulfillment_blocked(
+                            db,
+                            session_id=session.id,
+                            user_id=user_id or "",
+                            detail=f"webhook stripe_minor={stripe_minor}",
+                        )
+                    except Exception:
+                        logger.exception("notify custom mismatch from webhook failed")
+                elif package_id == CUSTOM_POINTS_PACKAGE_ID and (rerr or points <= 0):
+                    logger.warning(
+                        "Stripe webhook: custom resolve failed session_id=%s err=%s",
+                        session.id,
+                        rerr,
+                    )
                 else:
-                    # Ensure we have a transaction row (status poll may not have run)
-                    existing = await db.payment_transactions.find_one({"session_id": session.id}, {"_id": 1})
-                    if not existing:
-                        await db.payment_transactions.insert_one({
-                            "session_id": session.id,
-                            "user_id": user_id,
-                            "package_id": package_id or "",
-                            "points": points,
-                            "payment_status": "pending",
-                            "created_at": datetime.now(timezone.utc).isoformat(),
-                        })
-                    credit_result = await _credit_payment_if_pending(db, session.id, user_id, package_id or "", points)
-                    if (
-                        session.payment_status == "paid"
-                        and points > 0
-                        and not credit_result.get("credited")
-                        and not credit_result.get("fulfillment_blocked")
-                    ):
-                        t_chk = await db.payment_transactions.find_one({"session_id": session.id}, {"_id": 0, "payment_status": 1})
-                        if (t_chk or {}).get("payment_status") == "pending":
-                            try:
-                                await _notify_staff_paid_stuck_pending(
-                                    db,
-                                    session_id=session.id,
-                                    user_id=user_id,
-                                    package_id=package_id or "",
-                                    points=points,
-                                    context="Stripe webhook checkout.session.completed",
-                                )
-                            except Exception:
-                                logger.exception("staff stuck pending notify from webhook failed")
+                    is_rank_xp_pass = package_id == RANK_XP_PASS_PACKAGE_ID
+                    if not user_id or (points <= 0 and not is_rank_xp_pass):
+                        logger.warning("Stripe webhook: missing user_id or invalid package_id, session_id=%s", session.id)
+                    else:
+                        # Ensure we have a transaction row (status poll may not have run)
+                        existing = await db.payment_transactions.find_one({"session_id": session.id}, {"_id": 1})
+                        if not existing:
+                            doc = {
+                                "session_id": session.id,
+                                "user_id": user_id,
+                                "package_id": package_id or "",
+                                "points": points,
+                                "payment_status": "pending",
+                                "created_at": datetime.now(timezone.utc).isoformat(),
+                            }
+                            if package_id == CUSTOM_POINTS_PACKAGE_ID and txn_row and txn_row.get("expected_amount_minor") is not None:
+                                doc["expected_amount_minor"] = int(txn_row["expected_amount_minor"])
+                            await db.payment_transactions.insert_one(doc)
+                        credit_result = await _credit_payment_if_pending(db, session.id, user_id, package_id or "", points)
+                        if (
+                            session.payment_status == "paid"
+                            and points > 0
+                            and not credit_result.get("credited")
+                            and not credit_result.get("fulfillment_blocked")
+                        ):
+                            t_chk = await db.payment_transactions.find_one({"session_id": session.id}, {"_id": 0, "payment_status": 1})
+                            if (t_chk or {}).get("payment_status") == "pending":
+                                try:
+                                    await _notify_staff_paid_stuck_pending(
+                                        db,
+                                        session_id=session.id,
+                                        user_id=user_id,
+                                        package_id=package_id or "",
+                                        points=points,
+                                        context="Stripe webhook checkout.session.completed",
+                                    )
+                                except Exception:
+                                    logger.exception("staff stuck pending notify from webhook failed")
 
         return {"received": True}
 
@@ -1540,24 +1794,40 @@ def register(router):
         if session.payment_status == "paid" and session.metadata:
             user_id = session.metadata.get("user_id")
             package_id = session.metadata.get("package_id")
-            points = POINT_PACKAGES.get(package_id, {}).get("points", 0) if package_id else 0
-            
-            if not points and txn:
-                points = txn.get("points", 0)
-            
+            txn_row = txn
+            if not txn_row and package_id == CUSTOM_POINTS_PACKAGE_ID:
+                try:
+                    txn_row = {
+                        "points": int(session.metadata.get("points") or 0),
+                        "expected_amount_minor": int(session.metadata.get("expected_amount_minor") or ""),
+                    }
+                except (TypeError, ValueError):
+                    txn_row = None
+            stripe_minor = getattr(session, "amount_total", None)
+            points, rerr = _resolve_points_for_stripe_payment(
+                package_id or "",
+                stripe_minor,
+                txn_row,
+                POINT_PACKAGES,
+            )
+            if rerr == "stripe_amount_mismatch":
+                result["message"] = "Stripe amount does not match expected custom checkout; not crediting"
             is_rank_xp_pass = package_id == RANK_XP_PASS_PACKAGE_ID
-            if user_id and (points > 0 or is_rank_xp_pass):
+            if user_id and (points > 0 or is_rank_xp_pass) and rerr != "stripe_amount_mismatch":
                 # Ensure transaction exists
                 if not txn:
-                    await db.payment_transactions.insert_one({
+                    ins_ad = {
                         "session_id": body.session_id,
                         "user_id": user_id,
                         "package_id": package_id or "",
                         "points": points,
                         "payment_status": "pending",
                         "created_at": datetime.now(timezone.utc).isoformat(),
-                    })
-                
+                    }
+                    if package_id == CUSTOM_POINTS_PACKAGE_ID and txn_row and txn_row.get("expected_amount_minor") is not None:
+                        ins_ad["expected_amount_minor"] = int(txn_row["expected_amount_minor"])
+                    await db.payment_transactions.insert_one(ins_ad)
+
                 credit_result = await _credit_payment_if_pending(db, body.session_id, user_id, package_id or "", points)
                 result["credit_attempted"] = True
                 result["credit_result"] = credit_result
@@ -1587,7 +1857,7 @@ def register(router):
                         result["message"] = f"Successfully processed: {points} points {'held for preorder' if credit_result.get('preorder') else 'credited'}"
                 else:
                     result["message"] = "Already processed or failed to credit"
-            else:
+            elif rerr != "stripe_amount_mismatch":
                 result["message"] = "Missing user_id or points in metadata"
         else:
             result["message"] = f"Stripe payment_status is '{session.payment_status}', not 'paid'"
