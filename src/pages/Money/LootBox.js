@@ -11,6 +11,9 @@ const LOOT_BOX_STYLES = `
   @keyframes lb-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .lb-fade-in { animation: lb-fade-in 0.4s ease-out both; }
   .lb-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+  @keyframes lb-idle-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+  @keyframes lb-shimmer-band { 0% { background-position: -120% 0; } 100% { background-position: 220% 0; } }
+  .lb-loot-ready-glow { animation: goldPulse 2.2s ease-in-out infinite; border-radius: 0.5rem; }
 `;
 
 /* GTA-style rarity text colors for cars */
@@ -98,8 +101,8 @@ const globalStyles = `
     100% { border-color: rgba(234,179,8,0.3); }
   }
   @keyframes chestLidOpen {
-    0%   { transform: perspective(300px) rotateX(0deg); transform-origin: top center; }
-    100% { transform: perspective(300px) rotateX(-110deg); transform-origin: top center; }
+    0%   { transform: perspective(420px) rotateX(0deg); }
+    100% { transform: perspective(420px) rotateX(-88deg); }
   }
   @keyframes tickerBlink {
     0%,100% { opacity: 1; }
@@ -238,25 +241,118 @@ function PiecesBar({ pieces }) {
   );
 }
 
-/* ─── Chest icon ─── */
-function ChestIcon({ shaking, exploding }) {
+/* ─── Chest icon (layered “proper” loot box) ─── */
+function ChestIcon({ shaking, exploding, ready }) {
+  const motion =
+    exploding ? 'boxExplode 0.6s ease-out forwards' : shaking ? 'boxShake 0.5s ease-in-out infinite' : 'lb-idle-float 3.2s ease-in-out infinite';
+
   return (
     <div
-      className="relative w-20 h-20 mx-auto mb-4 flex items-center justify-center"
-      style={{
-        animation: exploding ? 'boxExplode 0.6s ease-out forwards' : shaking ? 'boxShake 0.5s ease-in-out infinite' : undefined,
-      }}
+      className={`relative mx-auto mb-4 flex flex-col items-center justify-end ${ready && !shaking && !exploding ? 'lb-loot-ready-glow p-1 -m-1' : ''}`}
+      style={{ width: '7.75rem', height: '9.25rem', animation: motion }}
     >
       <Particles active={exploding} />
-      <div className="w-14 h-11 rounded-b border-2 border-primary bg-gradient-to-b from-primary/40 to-primary/10 relative overflow-hidden shadow-lg">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-3.5 h-3.5 rounded-full bg-primary border border-primary/80 shadow-inner" />
-        <div className="absolute top-[30%] left-0 right-0 h-0.5 bg-primary/50" />
-        <div className="absolute top-[65%] left-0 right-0 h-0.5 bg-primary/50" />
-      </div>
       <div
-        className="absolute top-0 left-2 right-2 h-6 rounded-t border-2 border-b-0 border-primary bg-gradient-to-b from-primary/50 to-primary/20 shadow-sm"
-        style={{ animation: exploding ? 'chestLidOpen 0.4s 0.1s ease-out forwards' : undefined, transformOrigin: 'top center' }}
+        className="pointer-events-none absolute left-1/2 -translate-x-1/2 z-0"
+        style={{
+          bottom: '0.15rem',
+          width: '78%',
+          height: '0.85rem',
+          background: 'radial-gradient(ellipse at center, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.2) 55%, transparent 72%)',
+        }}
       />
+      <div className="relative z-[1] w-full flex flex-col items-center" style={{ perspective: '420px', transformStyle: 'preserve-3d' }}>
+        <div
+          className="relative z-[2] w-[6.35rem] h-[2.85rem] rounded-t-[10px] border-2 border-b-0"
+          style={{
+            borderColor: 'rgba(212, 165, 92, 0.95)',
+            boxShadow: 'inset 0 3px 10px rgba(255,255,255,0.18), inset 0 -14px 20px rgba(0,0,0,0.45), 0 -2px 0 rgba(0,0,0,0.25)',
+            background: 'linear-gradient(165deg, #e8c896 0%, #b8894a 28%, #7a4f24 62%, #4a2c12 100%)',
+            transformOrigin: 'center bottom',
+            transformStyle: 'preserve-3d',
+            animation: exploding ? 'chestLidOpen 0.48s 0.06s ease-out forwards' : undefined,
+          }}
+        >
+          <div
+            className="absolute inset-x-0 top-0 h-[45%] opacity-35 pointer-events-none"
+            style={{
+              background: 'linear-gradient(180deg, rgba(255,255,255,0.55) 0%, transparent 100%)',
+            }}
+          />
+          <div
+            className="absolute inset-0 opacity-[0.22] pointer-events-none"
+            style={{
+              backgroundImage: 'repeating-linear-gradient(95deg, transparent, transparent 5px, rgba(0,0,0,0.12) 5px, rgba(0,0,0,0.12) 6px)',
+            }}
+          />
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[72%] h-[2px] bg-gradient-to-r from-transparent via-amber-950/50 to-transparent rotate-[-34deg]" />
+          <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[72%] h-[2px] bg-gradient-to-r from-transparent via-amber-950/50 to-transparent rotate-[34deg]" />
+          <div
+            className="absolute left-1/2 top-[42%] -translate-x-1/2 -translate-y-1/2 w-7 h-7 rounded-md border-2 border-amber-950/40 bg-gradient-to-br from-amber-200/90 to-amber-700/90 shadow-md flex items-center justify-center"
+            style={{ boxShadow: 'inset 0 1px 2px rgba(255,255,255,0.5), 0 2px 4px rgba(0,0,0,0.35)' }}
+          >
+            <div className="w-2.5 h-2.5 rounded-full bg-amber-950/80 border border-amber-950 shadow-inner" />
+          </div>
+          <div className="absolute bottom-0 left-2 right-2 h-px bg-gradient-to-r from-transparent via-amber-200/35 to-transparent" />
+        </div>
+        <div
+          className="relative -mt-[2px] w-[6.75rem] h-[5.1rem] rounded-b-[12px] border-2 overflow-hidden"
+          style={{
+            borderColor: 'rgba(180, 130, 70, 0.9)',
+            background: `
+              linear-gradient(105deg, rgba(255,255,255,0.07) 0%, transparent 42%),
+              repeating-linear-gradient(88deg, #2f1f14 0px, #1a100a 3px, #352418 6px),
+              linear-gradient(180deg, #4d301c 0%, #1f1209 55%, #0d0805 100%)
+            `,
+            boxShadow: 'inset 0 0 28px rgba(0,0,0,0.55), 0 10px 22px rgba(0,0,0,0.5)',
+          }}
+        >
+          <div
+            className="absolute top-[26%] left-0 right-0 h-[2px] opacity-90 pointer-events-none"
+            style={{
+              background: 'linear-gradient(90deg, transparent, rgba(234,179,8,0.25) 12%, rgba(250,204,21,0.85) 50%, rgba(234,179,8,0.25) 88%, transparent)',
+              backgroundSize: '200% 100%',
+              animation: ready && !shaking && !exploding ? 'lb-shimmer-band 2.8s linear infinite' : undefined,
+            }}
+          />
+          <div
+            className="absolute top-[58%] left-0 right-0 h-[2px] opacity-90 pointer-events-none"
+            style={{
+              background: 'linear-gradient(90deg, transparent, rgba(234,179,8,0.2) 10%, rgba(212,175,55,0.75) 50%, rgba(234,179,8,0.2) 90%, transparent)',
+            }}
+          />
+          <div className="absolute left-1 top-2 bottom-2 w-[3px] rounded-full bg-gradient-to-b from-amber-600/50 via-amber-500/25 to-amber-900/40" />
+          <div className="absolute right-1 top-2 bottom-2 w-[3px] rounded-full bg-gradient-to-b from-amber-600/50 via-amber-500/25 to-amber-900/40" />
+          {[18, 38, 58, 78].map((top, i) => (
+            <span
+              key={i}
+              className="absolute left-0.5 w-1.5 h-1.5 rounded-full border border-amber-900/60 bg-gradient-to-br from-amber-300/40 to-amber-950/50 shadow-sm"
+              style={{ top: `${top}%` }}
+            />
+          ))}
+          {[18, 38, 58, 78].map((top, i) => (
+            <span
+              key={`r-${i}`}
+              className="absolute right-0.5 w-1.5 h-1.5 rounded-full border border-amber-900/60 bg-gradient-to-br from-amber-300/40 to-amber-950/50 shadow-sm"
+              style={{ top: `${top}%` }}
+            />
+          ))}
+          <div
+            className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-11 h-12 rounded-md border-2 flex flex-col items-center justify-center gap-0.5"
+            style={{
+              borderColor: 'rgba(161, 98, 7, 0.85)',
+              background: 'linear-gradient(180deg, rgba(55,38,24,0.95) 0%, rgba(24,16,10,0.98) 100%)',
+              boxShadow: 'inset 0 2px 6px rgba(0,0,0,0.65), 0 4px 10px rgba(0,0,0,0.45)',
+            }}
+          >
+            <div className="w-6 h-6 rounded-full border-2 border-amber-600/80 bg-gradient-to-b from-zinc-700 to-zinc-950 shadow-inner flex flex-col items-center justify-center pt-0.5">
+              <div className="w-1 h-1 rounded-full bg-zinc-950" />
+              <div className="w-0.5 h-1.5 bg-zinc-950 rounded-b-[1px] -mt-px" />
+            </div>
+            <div className="w-5 h-1 rounded-full bg-gradient-to-r from-transparent via-amber-600/50 to-transparent" />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -529,14 +625,14 @@ export default function LootBox() {
             </div>
 
             {/* Chest card */}
-            <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 lb-fade-in mobile-panel ${canOpen ? 'ring-1 ring-primary/30' : ''}`} style={{ animationDelay: '0.03s' }}>
+            <div className={`relative ${styles.panel} rounded-md border border-primary/20 lb-fade-in mobile-panel ${phase === 'exploding' ? 'overflow-visible' : 'overflow-hidden'} ${canOpen ? 'ring-1 ring-primary/30' : ''}`} style={{ animationDelay: '0.03s' }}>
               <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
               <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
                 <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">The Vault</span>
               </div>
               <div className="p-3 relative">
                 <Embers />
-                <ChestIcon shaking={phase === 'shaking'} exploding={phase === 'exploding'} />
+                <ChestIcon shaking={phase === 'shaking'} exploding={phase === 'exploding'} ready={canOpen} />
                 <div className="text-center mb-2">
                   <div className="flex items-baseline justify-center gap-1.5">
                     <span className="text-2xl font-heading font-bold text-primary">{pieces}</span>
