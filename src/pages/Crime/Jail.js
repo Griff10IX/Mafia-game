@@ -24,6 +24,10 @@ const JAIL_BACKGROUND_IMAGE =
 /** Keep in sync with `JAIL_BUST_MIN_INTERVAL_SEC` in backend `routers/crime/jail.py`. */
 const JAIL_BUST_MIN_INTERVAL_SEC = 3;
 
+/** While the Jail page is visible — each open tab used 1s + 3s polling, which scaled badly on the server. */
+const JAIL_STATUS_POLL_MS = 3000;
+const JAIL_PLAYERS_POLL_MS = 6000;
+
 function parseBustWaitSecondsFromDetail(detail) {
   const s =
     typeof detail === 'string'
@@ -460,11 +464,32 @@ export default function Jail() {
 
   useEffect(() => {
     fetchJailData();
-    const statusInterval = setInterval(fetchJailStatus, 1000);
-    const playersInterval = setInterval(fetchJailPlayers, 3000);
+    let statusIntervalId;
+    let playersIntervalId;
+    const clearPolling = () => {
+      if (statusIntervalId != null) clearInterval(statusIntervalId);
+      if (playersIntervalId != null) clearInterval(playersIntervalId);
+      statusIntervalId = undefined;
+      playersIntervalId = undefined;
+    };
+    const startPolling = () => {
+      clearPolling();
+      statusIntervalId = window.setInterval(fetchJailStatus, JAIL_STATUS_POLL_MS);
+      playersIntervalId = window.setInterval(fetchJailPlayers, JAIL_PLAYERS_POLL_MS);
+    };
+    const onVisibility = () => {
+      if (document.hidden) clearPolling();
+      else {
+        void fetchJailStatus();
+        void fetchJailPlayers();
+        startPolling();
+      }
+    };
+    startPolling();
+    document.addEventListener('visibilitychange', onVisibility);
     return () => {
-      clearInterval(statusInterval);
-      clearInterval(playersInterval);
+      document.removeEventListener('visibilitychange', onVisibility);
+      clearPolling();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 

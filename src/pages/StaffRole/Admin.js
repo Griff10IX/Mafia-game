@@ -1,6 +1,6 @@
 import { Fragment, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useLocation, Navigate, useParams } from 'react-router-dom';
-import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle, Eye, Receipt, ArrowLeftRight, Ticket, RefreshCw, MessagesSquare } from 'lucide-react';
+import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle, Eye, Receipt, ArrowLeftRight, Ticket, RefreshCw, MessagesSquare, Swords } from 'lucide-react';
 import api, { imageHostPublicUrl } from '../../utils/api';
 import { formatAdminDateTime, formatAdminDateOnly, formatAdminTimeOnly } from '../../utils/adminDateTime';
 import { toast } from 'sonner';
@@ -302,6 +302,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'System health', categoryId: 'admin-operations', collapseKey: 'systemHealth', keywords: ['system', 'health', 'uptime', 'status', 'db'] },
   { label: 'Moderation related accounts', categoryId: 'admin-operations', collapseKey: 'moderationRelated', keywords: ['moderation', 'related', 'linked', 'accounts'] },
   { label: 'Page locks (admin)', categoryId: 'admin-operations', collapseKey: 'pageLocks', keywords: ['page', 'lock', 'route'] },
+  { label: 'Family war — force truce', categoryId: 'admin-operations', collapseKey: 'familyWarTruce', scrollToId: 'admin-family-war-truce', keywords: ['family', 'war', 'truce', 'crew', 'end war', 'peace'], adminOnly: true },
   { label: 'Mod display', categoryId: 'admin-operations', collapseKey: 'modDisplay', keywords: ['mod', 'display', 'colour', 'color', 'badge'] },
   { label: 'Cheat detection (mod)', categoryId: 'admin-operations', collapseKey: 'cheatDetectionMod', keywords: ['cheat', 'detection', 'mod', 'suspicious'] },
   { label: 'Database tools', categoryId: 'admin-world-systems', collapseKey: 'database', keywords: ['database', 'mongo', 'wipe', 'migrate'], adminOnly: true },
@@ -343,8 +344,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, ...parsed };
-  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true }; }
+    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, familyWarTruce: true, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, familyWarTruce: true }; }
 }
 
 function saveCollapsed(state) {
@@ -1210,6 +1211,10 @@ export default function Admin() {
   const [pageLockMessage, setPageLockMessage] = useState('Down for maintenance');
   const [pageLockUnlockAt, setPageLockUnlockAt] = useState('');
   const [pageLockSaving, setPageLockSaving] = useState(false);
+  const [adminFamilyWarList, setAdminFamilyWarList] = useState([]);
+  const [adminFamilyWarLoading, setAdminFamilyWarLoading] = useState(false);
+  const [adminForceTruceWarId, setAdminForceTruceWarId] = useState(null);
+  const [adminFamilyWarIdInput, setAdminFamilyWarIdInput] = useState('');
 
   const [moderatorsList, setModeratorsList] = useState([]);
   const [moderatorsLoading, setModeratorsLoading] = useState(false);
@@ -1283,6 +1288,38 @@ export default function Admin() {
       saveCollapsed(next);
       return next;
     });
+  };
+
+  const fetchAdminFamilyWars = useCallback(async () => {
+    setAdminFamilyWarLoading(true);
+    try {
+      const r = await api.get('/admin/debug/war-stats');
+      setAdminFamilyWarList(Array.isArray(r.data?.wars) ? r.data.wars : []);
+    } catch (e) {
+      const d = e.response?.data?.detail;
+      toast.error(typeof d === 'string' ? d : 'Failed to load active wars');
+      setAdminFamilyWarList([]);
+    } finally {
+      setAdminFamilyWarLoading(false);
+    }
+  }, []);
+
+  const handleAdminForceTruceWar = async (warId) => {
+    const w = (warId || '').trim();
+    if (!w) return;
+    if (!window.confirm(`Force truce and end this war?\n\nWar ID: ${w}`)) return;
+    setAdminForceTruceWarId(w);
+    try {
+      await api.post(`/admin/families/war/${encodeURIComponent(w)}/force-truce`);
+      toast.success('War ended by admin truce');
+      setAdminFamilyWarIdInput('');
+      await fetchAdminFamilyWars();
+    } catch (e) {
+      const d = e.response?.data?.detail;
+      toast.error(typeof d === 'string' ? d : 'Failed to end war');
+    } finally {
+      setAdminForceTruceWarId(null);
+    }
   };
 
   const checkAdmin = async () => {
@@ -11500,6 +11537,86 @@ export default function Admin() {
           </div>
         )}
         </div>
+
+        {isAdmin && (
+        <div id="admin-family-war-truce" className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel scroll-mt-24`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Swords}
+          title="Family war — force truce"
+          badge={
+            adminFamilyWarList.length > 0 ? (
+              <span className="text-[10px] font-heading text-amber-400">{adminFamilyWarList.length} active</span>
+            ) : null
+          }
+          toolAnchor="familyWarTruce"
+          isCollapsed={collapsed.familyWarTruce}
+          onToggle={() => {
+            const wasCollapsed = collapsed.familyWarTruce;
+            toggleSection('familyWarTruce');
+            if (wasCollapsed) fetchAdminFamilyWars();
+          }}
+        />
+        {!collapsed.familyWarTruce && (
+          <div className="p-3 space-y-2">
+            <p className="text-[10px] text-mutedForeground">
+              Ends a war in <span className="text-foreground font-semibold">active</span> or{' '}
+              <span className="text-foreground font-semibold">truce offered</span> status the same way as both crews accepting a truce. Both families are notified; vault and rackets unlock.
+            </p>
+            <BtnSecondary type="button" onClick={() => fetchAdminFamilyWars()} disabled={adminFamilyWarLoading}>
+              {adminFamilyWarLoading ? 'Loading…' : 'Refresh active wars'}
+            </BtnSecondary>
+            {adminFamilyWarLoading ? (
+              <p className="text-xs text-mutedForeground">Loading…</p>
+            ) : adminFamilyWarList.length > 0 ? (
+              <ul className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                {adminFamilyWarList.map((w) => (
+                  <li
+                    key={w.war_id}
+                    className="flex flex-wrap items-center gap-2 rounded border border-zinc-700/50 bg-zinc-900/40 px-2 py-1.5 text-[10px] font-heading"
+                  >
+                    <span className="font-mono text-primary shrink-0 max-w-[200px] truncate" title={w.war_id}>{w.war_id}</span>
+                    <span className="text-mutedForeground truncate min-w-0 flex-1">
+                      {w.family_a_name || w.family_a || '?'} vs {w.family_b_name || w.family_b || '?'}
+                      <span className="text-zinc-500"> · {w.status}</span>
+                    </span>
+                    <BtnPrimary
+                      type="button"
+                      className="shrink-0"
+                      disabled={!!adminForceTruceWarId}
+                      onClick={() => handleAdminForceTruceWar(w.war_id)}
+                    >
+                      {adminForceTruceWarId === w.war_id ? '…' : 'Force truce'}
+                    </BtnPrimary>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-mutedForeground">No active wars right now.</p>
+            )}
+            <div className="pt-2 border-t border-white/10 flex flex-wrap items-end gap-2">
+              <div>
+                <label className="text-[9px] text-mutedForeground uppercase font-heading block mb-1">War ID</label>
+                <input
+                  type="text"
+                  value={adminFamilyWarIdInput}
+                  onChange={(e) => setAdminFamilyWarIdInput(e.target.value)}
+                  placeholder="Paste war UUID"
+                  className="w-56 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs font-mono text-foreground"
+                />
+              </div>
+              <BtnPrimary
+                type="button"
+                onClick={() => handleAdminForceTruceWar(adminFamilyWarIdInput)}
+                disabled={!!adminForceTruceWarId || !(adminFamilyWarIdInput || '').trim()}
+              >
+                Force truce by ID
+              </BtnPrimary>
+            </div>
+          </div>
+        )}
+        </div>
+        )}
 
         {isAdmin && (
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>

@@ -4116,6 +4116,62 @@ async def admin_debug_war_stats(current_user: dict = Depends(get_current_user)):
     return {"wars": result}
 
 
+async def admin_force_truce_family_war(
+    war_id: str,
+    current_user: dict = Depends(get_current_user),
+):
+    """Admin: end an active or truce-pending war immediately (same outcome as players accepting a truce)."""
+    from server import _is_admin
+
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    wid = (war_id or "").strip()
+    if not wid:
+        raise HTTPException(status_code=400, detail="war_id required")
+    war = await db.family_wars.find_one({"id": wid}, {"_id": 0})
+    if not war:
+        raise HTTPException(status_code=404, detail="War not found")
+    st = war.get("status")
+    if st not in ("active", "truce_offered"):
+        raise HTTPException(status_code=400, detail="War is not active (already ended)")
+    now = datetime.now(timezone.utc).isoformat()
+    result = await db.family_wars.update_one(
+        {"id": wid, "status": {"$in": ["active", "truce_offered"]}},
+        {
+            "$set": {"status": "truce", "ended_at": now},
+            "$unset": {"truce_offered_by_family_id": "", "truce_offered_at": ""},
+        },
+    )
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="War already ended or was updated")
+    fa = war.get("family_a_id")
+    fb = war.get("family_b_id")
+    msg = "A game administrator ended your family war by truce. Vault and rackets are unlocked."
+    if fa:
+        await send_notification_to_family(fa, "🤝 War ended (staff)", msg, "system")
+    if fb:
+        await send_notification_to_family(fb, "🤝 War ended (staff)", msg, "system")
+    _invalidate_list_cache()
+    fam_ids = [x for x in (fa, fb) if x]
+    if fam_ids:
+        member_rows = await db.family_members.find(
+            {"family_id": {"$in": fam_ids}},
+            {"_id": 0, "user_id": 1},
+        ).to_list(600)
+        for m in member_rows:
+            uid = m.get("user_id")
+            if uid:
+                _invalidate_my_cache(str(uid))
+    _invalidate_my_cache(current_user.get("id") or "")
+    await log_activity(
+        current_user.get("id") or "",
+        current_user.get("username") or "?",
+        "admin_family_war_force_truce",
+        {"war_id": wid, "family_a_id": fa, "family_b_id": fb, "previous_status": st},
+    )
+    return {"message": "War ended by admin truce.", "war_id": wid}
+
+
 async def families_war_feed(war_id: str, current_user: dict = Depends(get_current_user)):
     """Return the kill-event feed for a specific war plus aggregated totals. Public to all authenticated users."""
     war = await db.family_wars.find_one({"id": war_id}, {"_id": 0, "family_a_id": 1, "family_b_id": 1, "status": 1})
@@ -4383,6 +4439,7 @@ async def state_takeover_reject(current_user: dict = Depends(get_current_user)):
 
 def register(router):
     router.add_api_route("/admin/debug/war-stats", admin_debug_war_stats, methods=["GET"])
+    router.add_api_route("/admin/families/war/{war_id}/force-truce", admin_force_truce_family_war, methods=["POST"])
     router.add_api_route("/families", families_list, methods=["GET"], dependencies=_families_rl_u)
     router.add_api_route("/families/config", families_config, methods=["GET"], dependencies=_families_rl_u)
     router.add_api_route("/families/my", families_my, methods=["GET"], dependencies=_families_rl_u)
