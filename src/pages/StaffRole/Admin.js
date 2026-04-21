@@ -344,8 +344,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, familyWarTruce: true, ...parsed };
-  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, familyWarTruce: true }; }
+    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, familyWarTruce: false, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, familyWarTruce: false }; }
 }
 
 function saveCollapsed(state) {
@@ -7130,6 +7130,86 @@ export default function Admin() {
         <div className="admin-art-line text-primary mx-3" />
       </div>
 
+      {isAdmin && (
+      <div id="admin-family-war-truce" className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel scroll-mt-24`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Swords}
+          title="Family war — force truce"
+          badge={
+            adminFamilyWarList.length > 0 ? (
+              <span className="text-[10px] font-heading text-amber-400">{adminFamilyWarList.length} active</span>
+            ) : null
+          }
+          toolAnchor="familyWarTruce"
+          isCollapsed={collapsed.familyWarTruce}
+          onToggle={() => {
+            const wasCollapsed = collapsed.familyWarTruce;
+            toggleSection('familyWarTruce');
+            if (wasCollapsed) fetchAdminFamilyWars();
+          }}
+        />
+        {!collapsed.familyWarTruce && (
+          <div className="p-3 space-y-2">
+            <p className="text-[10px] text-mutedForeground">
+              Ends a war in <span className="text-foreground font-semibold">active</span> or{' '}
+              <span className="text-foreground font-semibold">truce offered</span> status the same way as both crews accepting a truce. Both families are notified; vault and rackets unlock.
+            </p>
+            <BtnSecondary type="button" onClick={() => fetchAdminFamilyWars()} disabled={adminFamilyWarLoading}>
+              {adminFamilyWarLoading ? 'Loading…' : 'Refresh active wars'}
+            </BtnSecondary>
+            {adminFamilyWarLoading ? (
+              <p className="text-xs text-mutedForeground">Loading…</p>
+            ) : adminFamilyWarList.length > 0 ? (
+              <ul className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                {adminFamilyWarList.map((w) => (
+                  <li
+                    key={w.war_id}
+                    className="flex flex-wrap items-center gap-2 rounded border border-zinc-700/50 bg-zinc-900/40 px-2 py-1.5 text-[10px] font-heading"
+                  >
+                    <span className="font-mono text-primary shrink-0 max-w-[200px] truncate" title={w.war_id}>{w.war_id}</span>
+                    <span className="text-mutedForeground truncate min-w-0 flex-1">
+                      {w.family_a_name || w.family_a || '?'} vs {w.family_b_name || w.family_b || '?'}
+                      <span className="text-zinc-500"> · {w.status}</span>
+                    </span>
+                    <BtnPrimary
+                      type="button"
+                      className="shrink-0"
+                      disabled={!!adminForceTruceWarId}
+                      onClick={() => handleAdminForceTruceWar(w.war_id)}
+                    >
+                      {adminForceTruceWarId === w.war_id ? '…' : 'Force truce'}
+                    </BtnPrimary>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-xs text-mutedForeground">No active wars right now.</p>
+            )}
+            <div className="pt-2 border-t border-white/10 flex flex-wrap items-end gap-2">
+              <div>
+                <label className="text-[9px] text-mutedForeground uppercase font-heading block mb-1">War ID</label>
+                <input
+                  type="text"
+                  value={adminFamilyWarIdInput}
+                  onChange={(e) => setAdminFamilyWarIdInput(e.target.value)}
+                  placeholder="Paste war UUID"
+                  className="w-56 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs font-mono text-foreground"
+                />
+              </div>
+              <BtnPrimary
+                type="button"
+                onClick={() => handleAdminForceTruceWar(adminFamilyWarIdInput)}
+                disabled={!!adminForceTruceWarId || !(adminFamilyWarIdInput || '').trim()}
+              >
+                Force truce by ID
+              </BtnPrimary>
+            </div>
+          </div>
+        )}
+      </div>
+      )}
+
       {(isAdmin || isModerator) && (
       <div id="admin-respect-points-log" className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel scroll-mt-24`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -11537,86 +11617,6 @@ export default function Admin() {
           </div>
         )}
         </div>
-
-        {isAdmin && (
-        <div id="admin-family-war-truce" className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel scroll-mt-24`}>
-        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <SectionHeader
-          icon={Swords}
-          title="Family war — force truce"
-          badge={
-            adminFamilyWarList.length > 0 ? (
-              <span className="text-[10px] font-heading text-amber-400">{adminFamilyWarList.length} active</span>
-            ) : null
-          }
-          toolAnchor="familyWarTruce"
-          isCollapsed={collapsed.familyWarTruce}
-          onToggle={() => {
-            const wasCollapsed = collapsed.familyWarTruce;
-            toggleSection('familyWarTruce');
-            if (wasCollapsed) fetchAdminFamilyWars();
-          }}
-        />
-        {!collapsed.familyWarTruce && (
-          <div className="p-3 space-y-2">
-            <p className="text-[10px] text-mutedForeground">
-              Ends a war in <span className="text-foreground font-semibold">active</span> or{' '}
-              <span className="text-foreground font-semibold">truce offered</span> status the same way as both crews accepting a truce. Both families are notified; vault and rackets unlock.
-            </p>
-            <BtnSecondary type="button" onClick={() => fetchAdminFamilyWars()} disabled={adminFamilyWarLoading}>
-              {adminFamilyWarLoading ? 'Loading…' : 'Refresh active wars'}
-            </BtnSecondary>
-            {adminFamilyWarLoading ? (
-              <p className="text-xs text-mutedForeground">Loading…</p>
-            ) : adminFamilyWarList.length > 0 ? (
-              <ul className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                {adminFamilyWarList.map((w) => (
-                  <li
-                    key={w.war_id}
-                    className="flex flex-wrap items-center gap-2 rounded border border-zinc-700/50 bg-zinc-900/40 px-2 py-1.5 text-[10px] font-heading"
-                  >
-                    <span className="font-mono text-primary shrink-0 max-w-[200px] truncate" title={w.war_id}>{w.war_id}</span>
-                    <span className="text-mutedForeground truncate min-w-0 flex-1">
-                      {w.family_a_name || w.family_a || '?'} vs {w.family_b_name || w.family_b || '?'}
-                      <span className="text-zinc-500"> · {w.status}</span>
-                    </span>
-                    <BtnPrimary
-                      type="button"
-                      className="shrink-0"
-                      disabled={!!adminForceTruceWarId}
-                      onClick={() => handleAdminForceTruceWar(w.war_id)}
-                    >
-                      {adminForceTruceWarId === w.war_id ? '…' : 'Force truce'}
-                    </BtnPrimary>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="text-xs text-mutedForeground">No active wars right now.</p>
-            )}
-            <div className="pt-2 border-t border-white/10 flex flex-wrap items-end gap-2">
-              <div>
-                <label className="text-[9px] text-mutedForeground uppercase font-heading block mb-1">War ID</label>
-                <input
-                  type="text"
-                  value={adminFamilyWarIdInput}
-                  onChange={(e) => setAdminFamilyWarIdInput(e.target.value)}
-                  placeholder="Paste war UUID"
-                  className="w-56 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs font-mono text-foreground"
-                />
-              </div>
-              <BtnPrimary
-                type="button"
-                onClick={() => handleAdminForceTruceWar(adminFamilyWarIdInput)}
-                disabled={!!adminForceTruceWarId || !(adminFamilyWarIdInput || '').trim()}
-              >
-                Force truce by ID
-              </BtnPrimary>
-            </div>
-          </div>
-        )}
-        </div>
-        )}
 
         {isAdmin && (
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
