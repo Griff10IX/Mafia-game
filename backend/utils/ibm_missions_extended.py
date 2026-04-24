@@ -118,9 +118,9 @@ def _requirement_tuple(order: int) -> Tuple[Dict[str, int], str]:
         req = {
             "security_level": sl,
             "raids_attempted": 20 + (o - 31) * 5,
-            "kill_rewards_claimed": min(12, 2 + (o - 31) // 10),
+            "hitlist_npc_kills": min(12, 2 + (o - 31) // 10),
         }
-        how = f"Security {req['security_level']}, {req['raids_attempted']} raid attempts, {req['kill_rewards_claimed']} kill rewards claimed."
+        how = f"Security {req['security_level']}, {req['raids_attempted']} raid attempts, {req['hitlist_npc_kills']} hitlist practice NPC kills."
     elif mod == 5:
         req = {
             "crimes": 15000 + (o - 31) * 2800,
@@ -245,7 +245,7 @@ def build_extended_ibm_missions() -> List[Dict[str, Any]]:
             "story": "One hundred proofs on the ledger. The city pays rent to you.",
             "how_to_complete": (
                 "Godfather rank; 85k crimes; 12k in-state; 200 collections; "
-                "220 raid attempts; 150 raid wins; 95 guards hired; 14 kill claims; security 80."
+                "220 raid attempts; 150 raid wins; 95 guards hired; 14 hitlist practice NPC kills; security 80."
             ),
             "requirements": {
                 "rank_id": RANK_GODFATHER,
@@ -255,7 +255,7 @@ def build_extended_ibm_missions() -> List[Dict[str, Any]]:
                 "raids_attempted": 220,
                 "raids_won": 150,
                 "guards_hired": 95,
-                "kill_rewards_claimed": 14,
+                "hitlist_npc_kills": 14,
                 "security_level": 80,
             },
             "rewards": fin_rewards,

@@ -26,7 +26,7 @@ const IBM_REQUIREMENT_LABELS = {
   guards_hired: 'Guards hired',
   guard_slots_bought: 'Guard slots bought',
   vault_withdrawals: 'Vault withdrawals',
-  kill_rewards_claimed: 'Kill rewards claimed',
+  hitlist_npc_kills: 'Hitlist practice NPC kills',
 };
 
 /** Matches backend server.RANKS (illegal business rank gates). */
@@ -54,7 +54,7 @@ const IBM_SEGMENTED_KEYS = new Set([
   'guards_hired',
   'guard_slots_bought',
   'vault_withdrawals',
-  'kill_rewards_claimed',
+  'hitlist_npc_kills',
 ]);
 
 function ibmRankLabel(rankId) {
@@ -670,6 +670,17 @@ export default function IllegalBusiness() {
                     <span className="text-xs font-heading font-bold text-foreground block">{mission.title}</span>
                     {mission.story && <p className="text-[11px] text-mutedForeground italic mt-1">{mission.story}</p>}
                     {mission.how_to_complete && <p className="text-[11px] text-mutedForeground mt-1.5">{mission.how_to_complete}</p>}
+                    {reqKeys.includes('hitlist_npc_kills') && (
+                      <p className="text-[10px] text-zinc-300 font-heading mt-2 rounded border border-primary/25 bg-primary/5 px-2.5 py-2 leading-snug">
+                        <span className="text-primary font-bold uppercase tracking-wide text-[9px]">How to complete</span>
+                        {' — '}
+                        On{' '}
+                        <Link to="/kill/hitlist" className="text-primary underline underline-offset-2 hover:text-primary/90">Hitlist</Link>
+                        , tap <span className="text-foreground">Add NPC</span> (up to your on-board cap), then kill that target from{' '}
+                        <Link to="/kill/attack" className="text-primary underline underline-offset-2 hover:text-primary/90">Attack</Link>
+                        . Each successful kill adds one toward the bar above (only while this mission is active — see note under the bars).
+                      </p>
+                    )}
 
                     {/* Progress bars per requirement */}
                     {target && typeof current === 'object' && current !== null && (
@@ -697,7 +708,7 @@ export default function IllegalBusiness() {
                         })}
                         {hasSegmented && (
                           <p className="text-[9px] text-zinc-600 font-heading leading-snug pt-0.5">
-                            Counts for collections, state crimes, raids, hires, slots, withdrawals, and kill claims start from when you began this mission.
+                            Counts for collections, state crimes, raids, hires, slots, withdrawals, and hitlist practice NPC kills start from when you began this mission.
                           </p>
                         )}
                       </div>
