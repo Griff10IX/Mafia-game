@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Target, Eye, ShieldOff, DollarSign, Coins, User, Users, UserPlus, Clock, Crosshair } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
@@ -136,41 +136,12 @@ const CashStack = ({ className = "" }) => (
 /* ═══════════════════════════════════════════════════════
    Your Status Card (Combined)
    ═══════════════════════════════════════════════════════ */
-function formatNpcSlotCountdown(nextAddAtIso) {
-  if (!nextAddAtIso) return null;
-  const end = new Date(nextAddAtIso).getTime();
-  if (Number.isNaN(end)) return null;
-  const sec = Math.max(0, Math.ceil((end - Date.now()) / 1000));
-  if (sec <= 0) return 'now';
-  const h = Math.floor(sec / 3600);
-  const m = Math.floor((sec % 3600) / 60);
-  const s = sec % 60;
-  if (h > 0) return `${h}h ${m}m`;
-  if (m > 0) return `${m}m ${s}s`;
-  return `${s}s`;
-}
-
-function formatNpcNextLocal(iso) {
-  if (!iso) return '';
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
-}
-
 const YourStatusCard = ({ me, user, revealed, who, submitting, onBuyOff, onReveal, npcStatus, addingNpc, onAddNpc }) => {
   const onHitlist = me?.on_hitlist ?? false;
-  const [npcCooldownTick, setNpcCooldownTick] = useState(0);
-  const npcAddsUsed = Number(npcStatus?.adds_used_in_window ?? 0);
-  const npcWindowFreesAt = npcStatus?.window_next_frees_at;
-  useEffect(() => {
-    if (!npcStatus || !npcWindowFreesAt || npcAddsUsed <= 0) return undefined;
-    const id = setInterval(() => setNpcCooldownTick((x) => x + 1), 1000);
-    return () => clearInterval(id);
-  }, [npcWindowFreesAt, npcAddsUsed]);
-  const npcWindowCountdown = useMemo(
-    () => (npcWindowFreesAt && npcAddsUsed > 0 ? formatNpcSlotCountdown(npcWindowFreesAt) : null),
-    [npcWindowFreesAt, npcAddsUsed, npcCooldownTick],
+  const npcOnBoard = Number(
+    npcStatus?.active_on_board ?? npcStatus?.adds_used_in_window ?? 0,
   );
+  const npcMaxBoard = Number(npcStatus?.max_on_board ?? npcStatus?.max_per_window ?? 3);
   
   // Don't show if not on hitlist and no NPC status
   if (!onHitlist && !npcStatus) return null;
@@ -257,74 +228,66 @@ const YourStatusCard = ({ me, user, revealed, who, submitting, onBuyOff, onRevea
           
           {npcStatus && (
             npcStatus.can_add ? (
-              <button
-                type="button"
-                onClick={onAddNpc}
-                disabled={addingNpc}
-                className="flex-1 min-w-[120px] bg-primary/20 text-primary rounded px-2.5 sm:px-3 py-1.5 sm:py-2 font-heading font-bold uppercase tracking-wide text-[9px] sm:text-[10px] border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 inline-flex items-center justify-center gap-1 touch-manipulation"
-              >
-                <UserPlus size={10} className="sm:w-3 sm:h-3" />
-                {addingNpc ? 'Adding...' : 'Add NPC'}
-              </button>
+              <div className="flex flex-1 min-w-[120px] flex-col gap-1">
+                <button
+                  type="button"
+                  onClick={onAddNpc}
+                  disabled={addingNpc}
+                  title={`Practice targets: max ${npcMaxBoard} on The Board at once. Kill one from Attack to free a slot.`}
+                  className="w-full bg-primary/20 text-primary rounded px-2.5 sm:px-3 py-1.5 sm:py-2 font-heading font-bold uppercase tracking-wide text-[9px] sm:text-[10px] border border-primary/40 hover:bg-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed active:scale-95 inline-flex items-center justify-center gap-1 touch-manipulation"
+                >
+                  <UserPlus size={10} className="sm:w-3 sm:h-3" />
+                  {addingNpc ? 'Adding...' : 'Add NPC'}
+                </button>
+                <p className="text-[8px] text-zinc-500 font-heading text-center leading-tight px-0.5">
+                  Max {npcMaxBoard} on The Board — kill one to free a slot
+                </p>
+              </div>
             ) : (
               <div className="flex-1 min-w-[120px] flex flex-col items-center justify-center gap-0.5 text-[9px] sm:text-[10px] text-zinc-400 font-heading bg-zinc-800/50 px-2 py-1.5 rounded border border-zinc-700/40">
                 <div className="flex items-center justify-center gap-1">
                   <Clock size={10} />
                   <span>
-                    {npcStatus.adds_used_in_window ?? 0}/{npcStatus.max_per_window ?? 3} NPCs
+                    {npcOnBoard}/{npcMaxBoard} on board
                   </span>
                 </div>
                 <span className="text-[8px] text-amber-200/80 font-heading text-center leading-tight">
-                  At cap — see below for next add time
+                  Board full — kill a practice NPC to add another
                 </span>
               </div>
             )
           )}
         </div>
 
-        {npcStatus && npcWindowFreesAt && npcAddsUsed > 0 && (
+        {npcStatus && npcOnBoard > 0 && (
           <div className="rounded-lg bg-zinc-900/70 border border-primary/25 px-2.5 py-2 space-y-1">
             <div className="text-[8px] sm:text-[9px] font-heading font-bold text-primary uppercase tracking-wider">
-              {!npcStatus.can_add ? 'Next NPC add' : '3h rolling window'}
+              Practice NPCs
             </div>
-            {!npcStatus.can_add ? (
-              <p className="text-[9px] sm:text-[10px] text-zinc-300 font-heading leading-snug">
-                You can add another practice NPC at{' '}
-                <span className="text-foreground font-bold tabular-nums">{formatNpcNextLocal(npcWindowFreesAt)}</span>
-                {npcWindowCountdown && npcWindowCountdown !== 'now' ? (
-                  <>
-                    {' '}
-                    <span className="text-zinc-500">(</span>
-                    <span className="text-primary font-mono font-bold tabular-nums">in {npcWindowCountdown}</span>
-                    <span className="text-zinc-500">)</span>
-                  </>
-                ) : null}
-                {npcWindowCountdown === 'now' ? (
-                  <span className="text-emerald-400 font-heading font-bold"> — slot open now, refresh if this stuck</span>
-                ) : null}
-              </p>
-            ) : (
-              <p className="text-[9px] sm:text-[10px] text-zinc-300 font-heading leading-snug">
-                You can add now ({npcAddsUsed}/{npcStatus.max_per_window ?? 3} used). Oldest add drops from your window at{' '}
-                <span className="text-foreground font-bold tabular-nums">{formatNpcNextLocal(npcWindowFreesAt)}</span>
-                {npcWindowCountdown && npcWindowCountdown !== 'now' ? (
-                  <>
-                    {' '}
-                    <span className="text-zinc-500">(</span>
-                    <span className="text-primary font-mono font-bold tabular-nums">in {npcWindowCountdown}</span>
-                    <span className="text-zinc-500">)</span>
-                  </>
-                ) : null}
-                .
-              </p>
-            )}
+            <p className="text-[9px] sm:text-[10px] text-zinc-300 font-heading leading-snug">
+              {npcStatus.can_add ? (
+                <>
+                  You have <span className="text-foreground font-bold tabular-nums">{npcOnBoard}</span> of{' '}
+                  <span className="text-foreground font-bold tabular-nums">{npcMaxBoard}</span> on The Board. You can add{' '}
+                  <span className="text-foreground font-bold tabular-nums">{npcMaxBoard - npcOnBoard}</span> more
+                  {npcOnBoard > 0 ? ' until you reach the cap' : ''}.
+                </>
+              ) : (
+                <>
+                  You have <span className="text-foreground font-bold tabular-nums">{npcOnBoard}</span> of{' '}
+                  <span className="text-foreground font-bold tabular-nums">{npcMaxBoard}</span> on The Board (max). Finish one
+                  from the Attack page, then add another.
+                </>
+              )}
+            </p>
           </div>
         )}
         
         {/* NPC info */}
         {npcStatus && !onHitlist && (
           <p className="text-[9px] sm:text-[10px] text-zinc-400 font-heading">
-            Add practice targets · Max {npcStatus.max_per_window ?? 3} per {npcStatus.window_hours ?? 3} hours
+            Add practice targets · Max {npcStatus.max_on_board ?? npcStatus.max_per_window ?? 3} on The Board at once
+            (kill one to free a slot)
           </p>
         )}
         
@@ -827,7 +790,7 @@ export default function HitlistPage() {
     };
     const id = setInterval(poll, 15_000);
     return () => clearInterval(id);
-  }, [npcStatus?.can_add, npcStatus?.max_per_window]);
+  }, [npcStatus?.can_add, npcStatus?.max_on_board, npcStatus?.max_per_window]);
 
   const mult = hidden ? 1.5 : 1;
   const cashAmt = parseInt(rewardCash, 10) || 0;
@@ -904,12 +867,10 @@ export default function HitlistPage() {
       return;
     }
     if (npcStatus?.can_add === false) {
-      const maxW = npcStatus.max_per_window ?? 3;
-      const hrs = npcStatus.window_hours ?? 3;
-      const when = npcStatus.next_add_at
-        ? ` Try again after ${new Date(npcStatus.next_add_at).toLocaleString()}.`
-        : '';
-      toast.error(`You can add at most ${maxW} practice NPCs per ${hrs} hours.${when}`);
+      const maxB = npcStatus.max_on_board ?? npcStatus.max_per_window ?? 3;
+      toast.error(
+        `You already have ${npcStatus.active_on_board ?? npcStatus.adds_used_in_window ?? maxB} practice NPC(s) on the board (max ${maxB}). Kill one from Attack first.`,
+      );
       return;
     }
     setAddingNpc(true);

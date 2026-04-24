@@ -49,46 +49,6 @@ def _parse_iso_datetime(val):
         return None
 
 
-def _hitlist_npc_ts_to_utc(val):
-    """Normalize hitlist_npc_add_timestamps element to aware UTC datetime, or None."""
-    if val is None or val == "":
-        return None
-    if isinstance(val, str):
-        return _parse_iso_datetime(val)
-    if hasattr(val, "year"):
-        dt = val
-        if dt.tzinfo is None:
-            return dt.replace(tzinfo=timezone.utc)
-        return dt.astimezone(timezone.utc)
-    return None
-
-
-def _hitlist_npc_pruned_iso_in_window(raw, window_start_utc: datetime) -> list:
-    """UTC ISO strings for NPC add timestamps still inside the rolling window (chronological order)."""
-    pairs = []
-    for t in raw or []:
-        dt = _hitlist_npc_ts_to_utc(t)
-        if dt and dt > window_start_utc:
-            pairs.append((dt, t))
-    pairs.sort(key=lambda x: x[0])
-    return [p[0].replace(microsecond=0).isoformat().replace("+00:00", "Z") for p in pairs]
-
-
-def _hitlist_npc_window_entries_stale(raw, window_start_utc: datetime, pruned_iso: list) -> bool:
-    """True if DB array should be rewritten (nulls, expired adds, or count mismatch vs rolling window)."""
-    raw = raw or []
-    if any(t is None or t == "" for t in raw):
-        return True
-    clean = [t for t in raw if t]
-    for t in clean:
-        dt = _hitlist_npc_ts_to_utc(t)
-        if not dt or dt <= window_start_utc:
-            return True
-    if any(not isinstance(t, str) for t in clean):
-        return True
-    return len(pruned_iso) != len(clean)
-
-
 # Request models (used only by hitlist)
 class HitlistAddRequest(BaseModel):
     target_username: str
@@ -108,7 +68,7 @@ class HitlistBuyOffUserRequest(BaseModel):
 HITLIST_HIDDEN_MULTIPLIER = 1.5  # 50% extra for hidden
 HITLIST_BUY_OFF_MULTIPLIER = 1.5  # pay bounty amount + 50% per entry (cash or points, same as placed)
 HITLIST_REVEAL_COST_POINTS = 5000
-HITLIST_NPC_COOLDOWN_HOURS = 3
+# Max practice NPCs **on the board at once** per placer (same numbers as former "per 3h window" + store bonus).
 HITLIST_NPC_MAX_PER_WINDOW = 3
 HITLIST_NPC_STORE_BONUS_SLOTS_MAX = 3  # base 3 + max 3 from store = 6
 
@@ -137,6 +97,10 @@ def _hitlist_npc_max_per_window_for_user(user: dict) -> int:
     bonus = int((user or {}).get("hitlist_npc_bonus_slots") or 0)
     bonus = max(0, min(HITLIST_NPC_STORE_BONUS_SLOTS_MAX, bonus))
     return HITLIST_NPC_MAX_PER_WINDOW + bonus
+
+
+async def _hitlist_npc_active_on_board_count(placer_id: str) -> int:
+    return await db.hitlist.count_documents({"placer_id": placer_id, "target_type": "npc"})
 
 
 async def hitlist_add(request: HitlistAddRequest, current_user: dict = Depends(get_current_user)):
@@ -297,64 +261,39 @@ async def hitlist_add(request: HitlistAddRequest, current_user: dict = Depends(g
 
 
 async def hitlist_npc_status(current_user: dict = Depends(get_current_user)):
-    """Whether this user can add an NPC to the hitlist (max 3 per 3 hours). Timers are per-user, not global."""
-    now = datetime.now(timezone.utc)
-    window_start = now - timedelta(hours=HITLIST_NPC_COOLDOWN_HOURS)
-    max_per_window = _hitlist_npc_max_per_window_for_user(current_user)
+    """Practice NPCs: cap = how many of your NPC rows are still on the hitlist; kill one to free a slot (no rolling timer)."""
     uid = current_user["id"]
-    raw = (current_user.get("hitlist_npc_add_timestamps") or [])[:]
-    pruned_iso = _hitlist_npc_pruned_iso_in_window(raw, window_start)
-    if _hitlist_npc_window_entries_stale(raw, window_start, pruned_iso):
-        try:
-            await db.users.update_one({"id": uid}, {"$set": {"hitlist_npc_add_timestamps": pruned_iso}})
-        except Exception:
-            logger.exception("hitlist_npc_status: failed to prune hitlist_npc_add_timestamps for user_id=%s", uid)
-    adds_in_window = len(pruned_iso)
-    can_add = adds_in_window < max_per_window
-    next_add_at = None
-    seconds_until_next_slot = None
-    window_next_frees_at = None
-    seconds_until_window_frees = None
-    if pruned_iso:
-        dts = [_parse_iso_datetime(s) for s in pruned_iso]
-        dts = [d for d in dts if d]
-        if dts:
-            oldest_dt = min(dts)
-            next_dt = oldest_dt + timedelta(hours=HITLIST_NPC_COOLDOWN_HOURS)
-            window_next_frees_at = next_dt.replace(microsecond=0).isoformat().replace("+00:00", "Z")
-            seconds_until_window_frees = max(0, int((next_dt - now).total_seconds()))
-    if not can_add:
-        next_add_at = window_next_frees_at
-        seconds_until_next_slot = seconds_until_window_frees
+    max_on_board = _hitlist_npc_max_per_window_for_user(current_user)
+    active = await _hitlist_npc_active_on_board_count(uid)
+    can_add = active < max_on_board
     return {
         "can_add": can_add,
-        "adds_used_in_window": adds_in_window,
-        "max_per_window": max_per_window,
-        "window_hours": HITLIST_NPC_COOLDOWN_HOURS,
-        "next_add_at": next_add_at,
-        "seconds_until_next_slot": seconds_until_next_slot,
-        "window_next_frees_at": window_next_frees_at,
-        "seconds_until_window_frees": seconds_until_window_frees,
+        "active_on_board": active,
+        "max_on_board": max_on_board,
+        "adds_used_in_window": active,
+        "max_per_window": max_on_board,
+        "next_add_at": None,
+        "seconds_until_next_slot": None,
+        "window_next_frees_at": None,
+        "seconds_until_window_frees": None,
     }
 
 
 async def hitlist_add_npc(current_user: dict = Depends(get_current_user)):
-    """Add a random NPC to the hitlist. Max 3 per 3 hours per user. NPC is attackable from Attack page."""
+    """Add a random NPC to the hitlist. At most N practice NPCs on the board at once (N=3 base, up to 6 with store)."""
     now = datetime.now(timezone.utc)
-    window_start = now - timedelta(hours=HITLIST_NPC_COOLDOWN_HOURS)
     now_iso = now.replace(microsecond=0).isoformat().replace("+00:00", "Z")
-    max_per_window = _hitlist_npc_max_per_window_for_user(current_user)
+    max_on_board = _hitlist_npc_max_per_window_for_user(current_user)
     uid = current_user["id"]
-    doc = await db.users.find_one({"id": uid}, {"_id": 0, "hitlist_npc_add_timestamps": 1})
-    raw = (doc or {}).get("hitlist_npc_add_timestamps") or []
-    pruned_iso = _hitlist_npc_pruned_iso_in_window(raw, window_start)
-    if len(pruned_iso) >= max_per_window:
+    active = await _hitlist_npc_active_on_board_count(uid)
+    if active >= max_on_board:
         raise HTTPException(
             status_code=400,
-            detail=f"You can add at most {max_per_window} NPCs per {HITLIST_NPC_COOLDOWN_HOURS} hours. Try again later."
+            detail=(
+                f"You already have {active} practice NPC(s) on the board (max {max_on_board}). "
+                "Kill one from Attack or clear the board before adding another."
+            ),
         )
-    new_list = pruned_iso + [now_iso]
-    await db.users.update_one({"id": uid}, {"$set": {"hitlist_npc_add_timestamps": new_list}})
     template = random.choice(HITLIST_NPC_TEMPLATES)
     hitlist_id = str(uuid.uuid4())
     npc_user_id = str(uuid.uuid4())

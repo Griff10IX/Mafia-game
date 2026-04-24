@@ -856,7 +856,10 @@ MELT_BULLETS_COOLDOWN_SECONDS = 45  # Only 1 car can be melted for bullets every
 MELT_BULLETS_TOTAL_PAYOUT_MULT_NUM = 125
 MELT_BULLETS_TOTAL_PAYOUT_MULT_DEN = 100
 
+# Newest-first cap for normal garage rows. Custom + exclusive + loot-exclusive are merged separately
+# so they are never dropped when a player owns more than this many cars (matches travel's custom split).
 GARAGE_FETCH_LIMIT = 10_000
+GARAGE_SPECIAL_ROWS_MAX = 500
 _VALID_GARAGE_RARITIES = frozenset(
     {"common", "uncommon", "rare", "ultra_rare", "legendary", "custom", "loot_exclusive", "exclusive"}
 )
@@ -944,6 +947,10 @@ def _garage_entry_from_user_car(user_car: Dict[str, Any]) -> Optional[dict]:
     return entry
 
 
+def _user_car_row_dedupe_key(uc: dict) -> str:
+    return str(uc.get("id") or uc.get("_id") or "")
+
+
 async def get_garage(current_user: dict = Depends(get_current_user)):
     uid = current_user.get("id") or ""
     await db.user_cars.update_many(
@@ -954,7 +961,31 @@ async def get_garage(current_user: dict = Depends(get_current_user)):
         },
         {"$set": {"damage_percent": 0}},
     )
-    cars = await db.user_cars.find({"user_id": uid}).sort("acquired_at", -1).to_list(GARAGE_FETCH_LIMIT)
+    always_car_ids = [cid for cid in _damage_immune_car_ids() if cid]
+    if always_car_ids:
+        main_rows = await db.user_cars.find({"user_id": uid, "car_id": {"$nin": always_car_ids}}).sort(
+            "acquired_at", -1
+        ).to_list(GARAGE_FETCH_LIMIT)
+        extra_rows = await db.user_cars.find({"user_id": uid, "car_id": {"$in": always_car_ids}}).to_list(
+            GARAGE_SPECIAL_ROWS_MAX
+        )
+    else:
+        main_rows = await db.user_cars.find({"user_id": uid}).sort("acquired_at", -1).to_list(GARAGE_FETCH_LIMIT)
+        extra_rows = []
+    seen: set[str] = set()
+    cars: List[dict] = []
+    for uc in main_rows:
+        k = _user_car_row_dedupe_key(uc)
+        if not k or k in seen:
+            continue
+        seen.add(k)
+        cars.append(uc)
+    for uc in extra_rows:
+        k = _user_car_row_dedupe_key(uc)
+        if not k or k in seen:
+            continue
+        seen.add(k)
+        cars.append(uc)
     user_doc = await db.users.find_one(
         {"id": uid},
         {"_id": 0, "melt_bullets_cooldown_until": 1},

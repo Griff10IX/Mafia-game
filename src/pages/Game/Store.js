@@ -90,8 +90,8 @@ const UPGRADES = [
     price: (u) => (Math.min(3, (Number(u?.hitlist_npc_bonus_slots) || 0) + 1) * 100),
     path: '/store/buy-hitlist-npc-bonus-slot',
     ownedKey: null,
-    desc: '+1 max hitlist NPC per 3h window (base 3, max 6). Costs: 4th=100, 5th=200, 6th=300.',
-    extra: (u) => ({ line: 'Limit', value: `${3 + (Number(u?.hitlist_npc_bonus_slots) || 0)} per 3h` }),
+    desc: '+1 max practice NPC on The Board at once (base 3, max 6). Costs: 4th=100, 5th=200, 6th=300.',
+    extra: (u) => ({ line: 'Limit', value: `${3 + (Number(u?.hitlist_npc_bonus_slots) || 0)} on board` }),
   },
 ];
 
@@ -275,6 +275,21 @@ export default function Store() {
   const [cashPurchasesToday, setCashPurchasesToday] = useState(0);
   const [cashPurchasesLimit, setCashPurchasesLimit] = useState(25);
 
+  const fetchTokenCashPrice = useCallback(() => {
+    api.get('/store/token-cash-price').then(({ data }) => {
+      setCashPriceAvailable(!!data.available);
+      setCashPricePerPoint(data.price_per_point || 0);
+      setCashPriceUsesQtAvg(!!data.used_qt_average);
+      setCashMinPricePerPoint(Number(data.min_price_per_point) || 150_000);
+      setCashPurchasesToday(Number(data.cash_purchases_today) || 0);
+      setCashPurchasesLimit(Number(data.cash_purchases_limit) || 25);
+    }).catch(() => {
+      setCashPriceAvailable(false);
+      setCashPricePerPoint(0);
+      setCashPriceUsesQtAvg(false);
+    });
+  }, []);
+
   useEffect(() => {
     if (activeTab !== 'tokens' && storePayWith === 'cash') {
       setStorePayWith('points');
@@ -315,20 +330,23 @@ export default function Store() {
 
   useEffect(() => {
     if (activeTab === 'tokens' && storePayWith === 'cash') {
-      api.get('/store/token-cash-price').then(({ data }) => {
-        setCashPriceAvailable(!!data.available);
-        setCashPricePerPoint(data.price_per_point || 0);
-        setCashPriceUsesQtAvg(!!data.used_qt_average);
-        setCashMinPricePerPoint(Number(data.min_price_per_point) || 150_000);
-        setCashPurchasesToday(data.cash_purchases_today || 0);
-        setCashPurchasesLimit(data.cash_purchases_limit || 25);
-      }).catch(() => {
-        setCashPriceAvailable(false);
-        setCashPricePerPoint(0);
-        setCashPriceUsesQtAvg(false);
-      });
+      fetchTokenCashPrice();
     }
-  }, [activeTab, storePayWith]);
+  }, [activeTab, storePayWith, fetchTokenCashPrice]);
+
+  useEffect(() => {
+    if (activeTab !== 'tokens' || storePayWith !== 'cash') return undefined;
+    const onVis = () => {
+      if (document.visibilityState === 'visible') fetchTokenCashPrice();
+    };
+    const onFocus = () => fetchTokenCashPrice();
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('focus', onFocus);
+    return () => {
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [activeTab, storePayWith, fetchTokenCashPrice]);
 
   const handleClaimPendingPoints = async () => {
     setClaimingPending(true);
@@ -500,7 +518,12 @@ export default function Store() {
       fetchData();
       if (onSuccess) onSuccess(res.data);
     } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed');
+      const detail = e.response?.data?.detail;
+      const msg = typeof detail === 'string' ? detail : 'Failed';
+      toast.error(msg || 'Failed');
+      if (typeof detail === 'string' && detail.includes('Daily cash purchase limit')) {
+        fetchTokenCashPrice();
+      }
     } finally {
       setLoading(false);
     }

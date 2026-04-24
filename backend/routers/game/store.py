@@ -1,6 +1,6 @@
 # Store endpoints: rank bar, silencer, OC timer, garage batch, booze capacity, bullets, custom car, send points
 import logging
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import uuid
 
 logger = logging.getLogger(__name__)
@@ -236,7 +236,7 @@ SHOOTING_RANGE_BONUS_STEP = 2
 SHOOTING_RANGE_BONUS_COST_POINTS = 85
 SHOOTING_RANGE_BONUS_CAP = 10  # must match armoury.SHOOTING_RANGE_BONUS_STORE_MAX
 HITLIST_NPC_BONUS_SLOTS_BASE = 3
-HITLIST_NPC_BONUS_SLOTS_CAP = 3  # +3 -> max 6 per 3h
+HITLIST_NPC_BONUS_SLOTS_CAP = 3  # +3 -> max 6 practice NPCs on board at once
 
 
 def _hitlist_npc_bonus_slot_cost(next_bonus_slot: int) -> int:
@@ -783,7 +783,7 @@ async def buy_hitlist_npc_bonus_slot(
     pay_with: str = Query("auto"),
     current_user: dict = Depends(get_current_user),
 ):
-    """Increase hitlist NPC add cap by +1 (3h window). Base 3; store can raise to 6."""
+    """Increase max practice hitlist NPCs on the board at once by +1. Base 3; store can raise to 6."""
     cur_bonus = int(current_user.get("hitlist_npc_bonus_slots") or 0)
     if cur_bonus >= HITLIST_NPC_BONUS_SLOTS_CAP:
         raise HTTPException(status_code=400, detail="Hitlist NPC practice target cap is already maxed")
@@ -803,7 +803,7 @@ async def buy_hitlist_npc_bonus_slot(
     new_bonus = cur_bonus + 1
     new_limit = HITLIST_NPC_BONUS_SLOTS_BASE + new_bonus
     return {
-        "message": f"Practice target cap increased to {new_limit} per 3h window. Cost {cost_used} points.",
+        "message": f"Practice target cap increased to {new_limit} on The Board at once. Cost {cost_used} points.",
         "cost": cost_used,
         "hitlist_npc_bonus_slots": new_bonus,
         "hitlist_npc_window_limit": new_limit,
@@ -841,10 +841,35 @@ async def _get_cash_price_per_point() -> tuple:
     return True, float(TOKEN_CASH_MIN_PRICE_PER_POINT), len(top)
 
 
+def _normalize_token_cash_purchase_date_key(raw) -> str | None:
+    """Match token_cash_purchases_date to a London calendar day YYYY-MM-DD (handles str / datetime / BSON)."""
+    if raw is None:
+        return None
+    if isinstance(raw, datetime):
+        dt = raw if raw.tzinfo is not None else raw.replace(tzinfo=timezone.utc)
+        return game_today_date_str(dt)
+    if isinstance(raw, date):
+        return raw.isoformat()
+    if isinstance(raw, str):
+        s = raw.strip().replace("Z", "+00:00")
+        if len(s) >= 10 and s[4] == "-" and s[7] == "-":
+            if len(s) == 10:
+                return s[:10]
+            try:
+                dt = datetime.fromisoformat(s)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return game_today_date_str(dt)
+            except ValueError:
+                return s[:10]
+    return None
+
+
 def _cash_purchases_today(user: dict) -> int:
-    """Return how many cash token purchases the user has made today (UTC)."""
+    """Return how many cash token units bought today (London calendar day; same as token_cash_purchases_date)."""
     today = game_today_date_str()
-    if user.get("token_cash_purchases_date") != today:
+    prev = _normalize_token_cash_purchase_date_key(user.get("token_cash_purchases_date"))
+    if prev != today:
         return 0
     return int(user.get("token_cash_purchases_today") or 0)
 
@@ -887,7 +912,10 @@ async def buy_store_token_cash(
 
     used = _cash_purchases_today(current_user)
     if used + amt > TOKEN_CASH_DAILY_LIMIT:
-        raise HTTPException(status_code=400, detail=f"Daily cash purchase limit reached ({TOKEN_CASH_DAILY_LIMIT}/day).")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Daily cash purchase limit reached ({TOKEN_CASH_DAILY_LIMIT}/day; {used} used today).",
+        )
 
     _available, price_per_point, _ = await _get_cash_price_per_point()
     if price_per_point <= 0:
@@ -903,16 +931,20 @@ async def buy_store_token_cash(
         raise HTTPException(status_code=400, detail=f"Insufficient cash. Need ${cash_cost:,.0f}, have ${money_balance:,.0f}.")
 
     today = game_today_date_str()
+    prev_key = _normalize_token_cash_purchase_date_key(current_user.get("token_cash_purchases_date"))
+    new_day = prev_key != today
     filt = {
         "id": current_user["id"],
         "money": {"$gte": cash_cost},
         **_token_count_lte_atom_filter(cf, STORE_TOKEN_MAX_HELD - amt),
     }
-    inc = {"money": -cash_cost, cf: amt, "token_cash_purchases_today": amt, "token_cash_spent": cash_cost}
-    result = await db.users.update_one(
-        filt,
-        {"$inc": inc, "$set": {"token_cash_purchases_date": today}},
-    )
+    inc = {"money": -cash_cost, cf: amt, "token_cash_spent": cash_cost}
+    set_doc = {"token_cash_purchases_date": today}
+    if new_day:
+        set_doc["token_cash_purchases_today"] = amt
+    else:
+        inc["token_cash_purchases_today"] = amt
+    result = await db.users.update_one(filt, {"$inc": inc, "$set": set_doc})
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Purchase failed (balance or token cap). Try again.")
 
@@ -945,7 +977,10 @@ async def buy_store_token_bundle_cash(
 
     used = _cash_purchases_today(current_user)
     if used + 1 > TOKEN_CASH_DAILY_LIMIT:
-        raise HTTPException(status_code=400, detail=f"Daily cash purchase limit reached ({TOKEN_CASH_DAILY_LIMIT}/day).")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Daily cash purchase limit reached ({TOKEN_CASH_DAILY_LIMIT}/day; {used} used today).",
+        )
 
     _available, price_per_point, _ = await _get_cash_price_per_point()
     if price_per_point <= 0:
@@ -960,15 +995,22 @@ async def buy_store_token_bundle_cash(
         raise HTTPException(status_code=400, detail=f"Insufficient cash. Need ${cash_cost:,.0f}, have ${money_balance:,.0f}.")
 
     today = game_today_date_str()
-    inc = {"money": -cash_cost, "token_cash_purchases_today": 1, "token_cash_spent": cash_cost}
+    prev_key = _normalize_token_cash_purchase_date_key(current_user.get("token_cash_purchases_date"))
+    new_day = prev_key != today
+    inc = {"money": -cash_cost, "token_cash_spent": cash_cost}
     gte = {"money": {"$gte": cash_cost}}
     for field, add in field_inc.items():
         inc[field] = inc.get(field, 0) + add
+    if not new_day:
+        inc["token_cash_purchases_today"] = 1
     filt = {"id": current_user["id"], **gte}
     for field, add in field_inc.items():
         filt.update(_token_count_lte_atom_filter(field, STORE_TOKEN_MAX_HELD - add))
 
-    result = await db.users.update_one(filt, {"$inc": inc, "$set": {"token_cash_purchases_date": today}})
+    set_doc = {"token_cash_purchases_date": today}
+    if new_day:
+        set_doc["token_cash_purchases_today"] = 1
+    result = await db.users.update_one(filt, {"$inc": inc, "$set": set_doc})
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Purchase failed (balance or token cap). Try again.")
 
