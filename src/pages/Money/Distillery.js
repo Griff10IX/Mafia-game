@@ -316,6 +316,11 @@ export default function Distillery() {
   };
 
   const dist = state?.distillery || {};
+  const distStats = dist?.stats || {};
+  const autoSellUnitsLifetime = Number(distStats.total_booze_auto_sold || 0);
+  const autoSellCrewVaultLifetime = Number(distStats.total_auto_sell_cash || 0);
+  const autoSellBoozeRunVaultLifetime = Number(distStats.total_booze_run_auto_vault || 0);
+  const autoSellVaultCombined = autoSellCrewVaultLifetime + autoSellBoozeRunVaultLifetime;
   const roi = state?.roi || {};
   const lossForecast24h = state?.loss_forecast_24h || {};
   const progression = state?.progression || {};
@@ -1268,11 +1273,37 @@ export default function Distillery() {
                             <strong className="font-semibold">Booze run</strong> mode: sells at rotation street prices; proceeds go to your <strong className="font-semibold">racket vault</strong> (same place as crew auto-sell) and still carries <strong className="font-semibold">jail risk</strong> like a real run.
                           </li>
                           <li>Heat and raids can still hurt outcomes.</li>
+                          <li>
+                            <strong className="font-semibold">Totals</strong> below are lifetime: units moved and dollars credited to your racket vault (crew vs booze-run paths).
+                          </li>
                         </ul>
                       </TooltipContent>
                     </Tooltip>
                   </TooltipProvider>
                 </SectionHead>
+                <div className="mb-3 rounded border border-zinc-700/45 bg-primary/[0.06] px-3 py-2.5 text-[10px] leading-snug text-mutedForeground">
+                  <div className="mb-1.5 font-heading text-[9px] font-bold uppercase tracking-wide text-primary/85">Auto-sell totals (lifetime)</div>
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 tabular-nums">
+                    <span>
+                      To racket vault (combined){' '}
+                      <span className="font-bold text-foreground">{money(autoSellVaultCombined)}</span>
+                    </span>
+                    <span>
+                      Units moved{' '}
+                      <span className="font-bold text-foreground">{autoSellUnitsLifetime.toLocaleString()}</span>
+                    </span>
+                  </div>
+                  <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-0.5 border-t border-border-dim/60 pt-1.5 text-[9px] tabular-nums">
+                    <span>
+                      Crew (margin){' '}
+                      <span className="font-semibold text-foreground/90">{money(autoSellCrewVaultLifetime)}</span>
+                    </span>
+                    <span>
+                      Booze run (street){' '}
+                      <span className="font-semibold text-foreground/90">{money(autoSellBoozeRunVaultLifetime)}</span>
+                    </span>
+                  </div>
+                </div>
                 <div className="dist-autosell-row">
                   <input
                     type="checkbox"

@@ -47,6 +47,34 @@ TRAVEL_TOKEN_CAR_TIME_MIN = 3
 # Travel must account for large garages so fastest options/custom aren't skipped.
 USER_CARS_FETCH_LIMIT = 5000
 
+# Catalog ids for rarities that must always appear in /travel/info (bulk query is capped).
+_TRAVEL_ALWAYS_INCLUDE_CAR_IDS = frozenset(
+    c["id"] for c in (CARS or []) if c.get("rarity") in ("exclusive", "loot_exclusive")
+)
+
+
+def _user_car_merge_key(uc: dict) -> str:
+    return str(uc.get("id") or uc.get("_id") or "")
+
+
+def _merge_user_cars_for_travel(bulk: list, extras: list) -> list:
+    """Dedupe by user car id; extras (exclusive / loot-exclusive) win if missing from capped bulk fetch."""
+    seen: set[str] = set()
+    out: list = []
+    for uc in bulk:
+        k = _user_car_merge_key(uc)
+        if not k or k in seen:
+            continue
+        seen.add(k)
+        out.append(uc)
+    for uc in extras:
+        k = _user_car_merge_key(uc)
+        if not k or k in seen:
+            continue
+        seen.add(k)
+        out.append(uc)
+    return out
+
 
 def _parse_iso_datetime(s):
     """Parse ISO datetime string safely; return timezone-aware datetime or None."""
@@ -215,7 +243,13 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
     airport_time_effective = max(0, TRAVEL_TIMES["airport"] - fam_time_red)
     # Fetch custom separately so it is never dropped by non-custom pagination/limits.
     custom_cars = await db.user_cars.find({"user_id": uid, "car_id": "car_custom"}).to_list(20)
-    user_cars = await db.user_cars.find({"user_id": uid, "car_id": {"$ne": "car_custom"}}).to_list(USER_CARS_FETCH_LIMIT)
+    user_cars_bulk = await db.user_cars.find({"user_id": uid, "car_id": {"$ne": "car_custom"}}).to_list(USER_CARS_FETCH_LIMIT)
+    extra_cars: list = []
+    if _TRAVEL_ALWAYS_INCLUDE_CAR_IDS:
+        extra_cars = await db.user_cars.find(
+            {"user_id": uid, "car_id": {"$in": list(_TRAVEL_ALWAYS_INCLUDE_CAR_IDS)}}
+        ).to_list(200)
+    user_cars = _merge_user_cars_for_travel(user_cars_bulk, extra_cars)
     cars_with_travel_times = []
     for uc in user_cars:
         car_info = next((c for c in CARS if c["id"] == uc["car_id"]), None)
