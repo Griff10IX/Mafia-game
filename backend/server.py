@@ -3105,6 +3105,16 @@ async def startup_db():
         logging.getLogger(__name__).info(
             "Auto Rank: using cron only (AUTO_RANK_USE_CRON=1). Call POST /api/auto-rank/cron and POST /api/auto-rank/cron-bust every 5s. Header: X-Cron-Secret: <CRON_SECRET>"
         )
+    # Distillery auto-aging ticker (non-Auto-Rank users with auto_aging.enabled)
+    distillery_automation_use_cron = (os.environ.get("DISTILLERY_AUTOMATION_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
+    if not distillery_automation_use_cron:
+        from routers.money import illegal_business as illegal_business_mod
+
+        asyncio.create_task(illegal_business_mod.run_distillery_automation_ticker())
+    else:
+        logging.getLogger(__name__).info(
+            "Distillery automation: ticker disabled (DISTILLERY_AUTOMATION_USE_CRON=1). Schedule a worker to call distillery_process_automation per user or add a cron route."
+        )
     # Racing: 2 automated races per day (morning/evening UTC); in-process ticker or cron
     from routers.minigames import racing as racing_router
     racing_use_cron = (os.environ.get("RACING_USE_CRON") or "").strip().lower() in ("1", "true", "yes")

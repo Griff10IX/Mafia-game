@@ -1291,6 +1291,14 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
                     except Exception as e:
                         logger.exception("Auto rank scrap for %s: %s", user_id, e)
 
+    # --- Distillery auto-aging / throttled collect (before booze run) ---
+    try:
+        from routers.money.illegal_business import distillery_process_automation
+
+        await distillery_process_automation(user_id)
+    except Exception as e:
+        logger.exception("Auto rank distillery_process_automation %s: %s", user_id, e)
+
     # --- Booze ---
     # Refetch user: scrap block uses minimal projection that omits auto_rank_booze
     user = await db.users.find_one({"id": user_id}, {"_id": 0})

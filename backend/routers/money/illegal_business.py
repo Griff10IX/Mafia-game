@@ -1,6 +1,7 @@
 # Illegal business (1920s–30s mafia): one per player, Capo+, raid formula, guards/security, missions, killer choice on death
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional, Dict, Any, Tuple
+import os
 import re
 import uuid
 import secrets
@@ -107,6 +108,23 @@ DISTILLERY_AUTO_SELL_MARGIN_CAP = 1.70
 DISTILLERY_BASE_BOOZE_UNIT_VALUE = 900
 DISTILLERY_COLLECT_ROI_SAFETY_FLOOR = 1.0
 DISTILLERY_MAX_ACTIVE_BATCHES = 8
+DISTILLERY_AUTO_SELL_MODES = frozenset({"crew", "booze_run"})
+try:
+    DISTILLERY_AUTOMATION_TICKER_SECONDS = max(15, min(600, int(os.environ.get("DISTILLERY_AUTOMATION_TICKER_SECONDS", "60") or "60")))
+except (TypeError, ValueError):
+    DISTILLERY_AUTOMATION_TICKER_SECONDS = 60
+try:
+    DISTILLERY_AUTO_COLLECT_MIN_INTERVAL_SECONDS = max(
+        60, min(3600, int(os.environ.get("DISTILLERY_AUTO_COLLECT_MIN_INTERVAL_SECONDS", "240") or "240"))
+    )
+except (TypeError, ValueError):
+    DISTILLERY_AUTO_COLLECT_MIN_INTERVAL_SECONDS = 240
+try:
+    DISTILLERY_AUTOMATION_MAX_BUSINESSES_PER_TICK = max(
+        1, min(500, int(os.environ.get("DISTILLERY_AUTOMATION_MAX_BUSINESSES_PER_TICK", "40") or "40"))
+    )
+except (TypeError, ValueError):
+    DISTILLERY_AUTOMATION_MAX_BUSINESSES_PER_TICK = 40
 DISTILLERY_TARGET_12D_TOP_END = 50_000_000
 DISTILLERY_TARGET_DAILY_TOP_END = DISTILLERY_TARGET_12D_TOP_END / 12.0
 DISTILLERY_TOP_END_HOURS = 12 * 24
@@ -753,9 +771,16 @@ def _distillery_default(now: datetime) -> Dict[str, Any]:
         "shutdown_until": None,
         "auto_sell": {
             "enabled": False,
+            "mode": "crew",
             "booze_id": _default_booze_type_id(),
             "min_inventory": 50,
             "batch_size": 30,
+        },
+        "auto_aging": {
+            "enabled": False,
+            "tier": "standard",
+            "reserve_units": 0,
+            "auto_collect_booze": True,
         },
         "special_upgrades": {},
         "mastery_tier": 0,
@@ -765,6 +790,7 @@ def _distillery_default(now: datetime) -> Dict[str, Any]:
             "total_batches_claimed": 0,
             "total_booze_auto_sold": 0,
             "total_auto_sell_cash": 0,
+            "total_booze_run_auto_vault": 0,
             "heat_events_survived": 0,
             "premium_sells": 0,
             "booze_lost_to_heat": 0,
@@ -776,6 +802,7 @@ def _distillery_default(now: datetime) -> Dict[str, Any]:
         "last_risk_action_at": None,
         "recent_failures": [],
         "last_tick_at": now.isoformat(),
+        "last_auto_collect_at": None,
     }
 
 
@@ -860,6 +887,36 @@ def _distillery_ensure_state(business: dict, now: Optional[datetime] = None) -> 
     if "batch_size" not in auto_sell:
         auto_sell["batch_size"] = 30
         changed = True
+    _asm = str(auto_sell.get("mode") or "crew").lower()
+    if _asm not in DISTILLERY_AUTO_SELL_MODES:
+        auto_sell["mode"] = "crew"
+        changed = True
+    auto_aging = dist.get("auto_aging")
+    if not isinstance(auto_aging, dict):
+        auto_aging = {
+            "enabled": False,
+            "tier": "standard",
+            "reserve_units": 0,
+            "auto_collect_booze": True,
+        }
+        dist["auto_aging"] = auto_aging
+        changed = True
+    else:
+        if "enabled" not in auto_aging:
+            auto_aging["enabled"] = False
+            changed = True
+        if "tier" not in auto_aging or str(auto_aging.get("tier") or "").lower() not in DISTILLERY_AGING_TIERS:
+            auto_aging["tier"] = "standard"
+            changed = True
+        if "reserve_units" not in auto_aging:
+            auto_aging["reserve_units"] = 0
+            changed = True
+        if "auto_collect_booze" not in auto_aging:
+            auto_aging["auto_collect_booze"] = True
+            changed = True
+    if "last_auto_collect_at" not in dist:
+        dist["last_auto_collect_at"] = None
+        changed = True
     special_upgrades = dist.get("special_upgrades")
     if not isinstance(special_upgrades, dict):
         dist["special_upgrades"] = {}
@@ -881,6 +938,7 @@ def _distillery_ensure_state(business: dict, now: Optional[datetime] = None) -> 
         "total_batches_claimed",
         "total_booze_auto_sold",
         "total_auto_sell_cash",
+        "total_booze_run_auto_vault",
         "heat_events_survived",
         "premium_sells",
         "booze_lost_to_heat",
@@ -891,6 +949,11 @@ def _distillery_ensure_state(business: dict, now: Optional[datetime] = None) -> 
         if key not in stats:
             stats[key] = 0
             changed = True
+    legacy_hand = int(stats.get("total_booze_run_auto_hand") or 0)
+    if legacy_hand > 0:
+        stats["total_booze_run_auto_vault"] = int(stats.get("total_booze_run_auto_vault") or 0) + legacy_hand
+        stats.pop("total_booze_run_auto_hand", None)
+        changed = True
     risk_actions = dist.get("risk_actions")
     if not isinstance(risk_actions, dict):
         dist["risk_actions"] = {"cool_off": 0, "bribe_crackdown": 0}
@@ -1435,9 +1498,17 @@ class DistilleryMaintenanceRequest(BaseModel):
 
 class DistilleryAutoSellRequest(BaseModel):
     enabled: bool = False
+    mode: Optional[str] = None  # crew | booze_run
     booze_id: Optional[str] = None
     min_inventory: int = 50
     batch_size: int = 30
+
+
+class DistilleryAutoAgingRequest(BaseModel):
+    enabled: bool = False
+    tier: str = "standard"
+    reserve_units: int = 0
+    auto_collect_booze: bool = True
 
 
 class DistilleryStartAgingRequest(BaseModel):
@@ -1732,7 +1803,173 @@ async def _restore_illegal_business_collect_time(business_id: str, previous_last
         await db.illegal_businesses.update_one({"id": business_id}, {"$unset": {"last_collected_at": ""}})
 
 
-async def collect_illegal_business(current_user: dict = Depends(get_current_user)):
+def _distillery_claim_ready_mutate(distillery: dict, now: datetime) -> tuple[int, int]:
+    """Remove ready aging batches; credit vault via return total. Mutates distillery in place."""
+    queue = list(distillery.get("aging_queue") or [])
+    new_queue: List[dict] = []
+    vault_add = 0
+    claimed = 0
+    heat = float(distillery.get("heat") or 0.0)
+    stats = distillery.get("stats") or {}
+    for batch in queue:
+        ready_at = _parse_iso_utc(batch.get("ready_at"), now)
+        if now < ready_at:
+            new_queue.append(batch)
+            continue
+        qty = int(batch.get("quantity") or 0)
+        cash_mult = float(batch.get("cash_mult") or 1.0)
+        quality_mult = float(batch.get("quality_mult") or 1.0)
+        cash = int(qty * DISTILLERY_BASE_BOOZE_UNIT_VALUE * cash_mult * quality_mult)
+        if heat >= DISTILLERY_HEAT_THRESHOLDS["hot"]:
+            cash = int(cash * 0.9)
+        vault_add += cash
+        claimed += 1
+        stats["total_batches_claimed"] = int(stats.get("total_batches_claimed") or 0) + 1
+        if (batch.get("tier") or "") == "premium":
+            stats["premium_sells"] = int(stats.get("premium_sells") or 0) + 1
+    distillery["aging_queue"] = new_queue
+    distillery["stats"] = stats
+    return claimed, vault_add
+
+
+async def _distillery_start_aging_batch_persist(
+    business_id: str, user_id: str, distillery: dict, tier: str, qty: int
+) -> tuple[bool, Optional[str], Optional[str]]:
+    """Append one aging batch and deduct booze. Returns (ok, batch_id, ready_at_iso)."""
+    now = _utc_now()
+    tier_cfg = DISTILLERY_AGING_TIERS[tier]
+    aging_hours = _rng.uniform(float(tier_cfg["hours_min"]), float(tier_cfg["hours_max"]))
+    finish = now + timedelta(hours=aging_hours)
+    batch_id = str(uuid.uuid4())
+    booze_id = _default_booze_type_id()
+    user_result = await db.users.update_one(
+        {"id": user_id, f"booze_carrying.{booze_id}": {"$gte": qty}},
+        {"$inc": {f"booze_carrying.{booze_id}": -qty}},
+    )
+    if user_result.modified_count == 0:
+        return False, None, None
+    queue = list(distillery.get("aging_queue") or [])
+    queue.append(
+        {
+            "id": batch_id,
+            "tier": tier,
+            "booze_id": booze_id,
+            "quantity": qty,
+            "started_at": now.isoformat(),
+            "ready_at": finish.isoformat(),
+            "quality_mult": float(tier_cfg["quality_mult"]),
+            "cash_mult": float(tier_cfg["cash_mult"]),
+        }
+    )
+    distillery["aging_queue"] = queue
+    stats = distillery.get("stats") or {}
+    stats["total_batches_started"] = int(stats.get("total_batches_started") or 0) + 1
+    distillery["stats"] = stats
+    await db.illegal_businesses.update_one({"id": business_id}, {"$set": {"distillery": distillery}})
+    return True, batch_id, finish.isoformat()
+
+
+async def _distillery_try_start_one_automation_batch(user_id: str, business_id: str) -> bool:
+    """Start one aging batch if auto_aging enabled, queue has room, and carrying exceeds reserve."""
+    business = await db.illegal_businesses.find_one({"id": business_id, "user_id": user_id}, {"_id": 0})
+    if not business or not business.get("booze_per_hour"):
+        return False
+    now = _utc_now()
+    distillery, _ = _distillery_ensure_state(business, now)
+    _distillery_decay_and_status(distillery, now)
+    auto_aging = distillery.get("auto_aging") or {}
+    if not auto_aging.get("enabled"):
+        return False
+    tier = str(auto_aging.get("tier") or "standard").lower()
+    if tier not in DISTILLERY_AGING_TIERS:
+        tier = "standard"
+    reserve = max(0, int(auto_aging.get("reserve_units") or 0))
+    queue = list(distillery.get("aging_queue") or [])
+    if len(queue) >= DISTILLERY_MAX_ACTIVE_BATCHES:
+        return False
+    booze_id = _default_booze_type_id()
+    user = await db.users.find_one({"id": user_id}, {"_id": 0, "booze_carrying": 1})
+    carrying = (user or {}).get("booze_carrying") or {}
+    have = int(carrying.get(booze_id) or 0)
+    qty = have - reserve
+    if qty < 1:
+        return False
+    ok, _, _ = await _distillery_start_aging_batch_persist(business_id, user_id, distillery, tier, qty)
+    return ok
+
+
+async def distillery_process_automation(user_id: str) -> None:
+    """Claim ready aging batches, fill queue from settings, optional throttled racket collect for booze."""
+    business = await db.illegal_businesses.find_one({"user_id": user_id}, {"_id": 0})
+    if not business or not business.get("booze_per_hour"):
+        return
+    now = _utc_now()
+    distillery, _ = _distillery_ensure_state(business, now)
+    _distillery_decay_and_status(distillery, now)
+    claimed, vault_add = _distillery_claim_ready_mutate(distillery, now)
+    set_doc: Dict[str, Any] = {"distillery": distillery}
+    inc_doc: Dict[str, int] = {}
+    if vault_add > 0:
+        inc_doc["vault"] = vault_add
+        inc_doc["vault_lifetime_earned"] = max(0, vault_add)
+    if inc_doc:
+        await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": set_doc, "$inc": inc_doc})
+    else:
+        await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": set_doc})
+    auto_aging = distillery.get("auto_aging") or {}
+    if not auto_aging.get("enabled"):
+        return
+    while await _distillery_try_start_one_automation_batch(user_id, business["id"]):
+        pass
+    business = await db.illegal_businesses.find_one({"id": business["id"]}, {"_id": 0})
+    if not business:
+        return
+    distillery = business.get("distillery") or {}
+    auto_aging = distillery.get("auto_aging") or {}
+    if not auto_aging.get("auto_collect_booze", True):
+        return
+    last_raw = distillery.get("last_auto_collect_at")
+    last_dt = _parse_iso_utc(last_raw, now) if last_raw else None
+    if last_dt and (now - last_dt).total_seconds() < DISTILLERY_AUTO_COLLECT_MIN_INTERVAL_SECONDS:
+        return
+    user = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not user or user.get("in_jail"):
+        return
+    try:
+        await _collect_illegal_business_impl(user)
+    except HTTPException:
+        return
+    await db.illegal_businesses.update_one(
+        {"id": business["id"]},
+        {"$set": {"distillery.last_auto_collect_at": now.isoformat()}},
+    )
+
+
+async def run_distillery_automation_ticker():
+    """Periodic pass for auto-aging / auto-collect (in-process; disable with DISTILLERY_AUTOMATION_USE_CRON=1)."""
+    import asyncio
+
+    await asyncio.sleep(12)
+    while True:
+        try:
+            cursor = db.illegal_businesses.find(
+                {"booze_per_hour": {"$gt": 0}, "distillery.auto_aging.enabled": True},
+                {"_id": 0, "user_id": 1},
+            ).limit(DISTILLERY_AUTOMATION_MAX_BUSINESSES_PER_TICK)
+            rows = await cursor.to_list(DISTILLERY_AUTOMATION_MAX_BUSINESSES_PER_TICK)
+            for row in rows:
+                uid = (row.get("user_id") or "").strip()
+                if uid:
+                    try:
+                        await distillery_process_automation(uid)
+                    except Exception as e:
+                        logger.exception("distillery_process_automation %s: %s", uid, e)
+        except Exception as e:
+            logger.exception("run_distillery_automation_ticker: %s", e)
+        await asyncio.sleep(DISTILLERY_AUTOMATION_TICKER_SECONDS)
+
+
+async def _collect_illegal_business_impl(current_user: dict) -> dict:
     now = datetime.now(timezone.utc)
     # Atomically swap last_collected_at — returns the pre-update document so
     # a concurrent request sees the already-advanced timestamp and computes ~0 income.
@@ -1795,6 +2032,10 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
     booze_earned = 0
     auto_sold_units = 0
     auto_sell_cash = 0
+    carry_inc = 0
+    booze_run_vault = 0
+    booze_run_jailed = False
+    auto_sell_mode = "crew"
     distillery_breakdown = None
     vault_penalty = 0
     if business.get("booze_per_hour"):
@@ -1831,6 +2072,9 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
             maintenance_degradation = (status or {}).get("maintenance_degradation") or {}
 
             if bool(auto_sell.get("enabled")) and sales_workers > 0 and booze_earned > 0:
+                auto_sell_mode = str(auto_sell.get("mode") or "crew").lower()
+                if auto_sell_mode not in DISTILLERY_AUTO_SELL_MODES:
+                    auto_sell_mode = "crew"
                 user_carrying = (current_user.get("booze_carrying") or {})
                 existing_qty = int(user_carrying.get(default_booze_id) or 0)
                 min_inv = max(0, int(auto_sell.get("min_inventory") or 0))
@@ -1839,18 +2083,19 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
                 worker_cap = sales_workers * batch_size
                 auto_sold_units = min(booze_earned, ready_to_sell, worker_cap)
                 if auto_sold_units > 0:
-                    auto_sell_cash = int(
-                        auto_sold_units
-                        * DISTILLERY_BASE_BOOZE_UNIT_VALUE
-                        * float(mods.get("auto_sell_margin") or DISTILLERY_AUTO_SELL_MARGIN_BASE)
-                        * float(mods.get("quality_mult") or 1.0)
-                        * float(mods.get("cash_mult") or 1.0)
-                    )
                     booze_earned -= auto_sold_units
-                    stats = distillery.get("stats") or {}
-                    stats["total_booze_auto_sold"] = int(stats.get("total_booze_auto_sold") or 0) + auto_sold_units
-                    stats["total_auto_sell_cash"] = int(stats.get("total_auto_sell_cash") or 0) + auto_sell_cash
-                    distillery["stats"] = stats
+                    if auto_sell_mode == "crew":
+                        auto_sell_cash = int(
+                            auto_sold_units
+                            * DISTILLERY_BASE_BOOZE_UNIT_VALUE
+                            * float(mods.get("auto_sell_margin") or DISTILLERY_AUTO_SELL_MARGIN_BASE)
+                            * float(mods.get("quality_mult") or 1.0)
+                            * float(mods.get("cash_mult") or 1.0)
+                        )
+                        stats = distillery.get("stats") or {}
+                        stats["total_booze_auto_sold"] = int(stats.get("total_booze_auto_sold") or 0) + auto_sold_units
+                        stats["total_auto_sell_cash"] = int(stats.get("total_auto_sell_cash") or 0) + auto_sell_cash
+                        distillery["stats"] = stats
 
             heat_gain = ((booze_raw * DISTILLERY_HEAT_GAIN_PER_BOOZE) + (auto_sold_units * DISTILLERY_HEAT_GAIN_PER_AUTO_SELL)) * float(mods.get("heat_gain_mult") or 1.0)
             heat_mitigation = int(workers.get("security") or 0) * 0.35 + int(equipment.get("tunnel") or 0) * 0.25 + int(equipment.get("bribe_office") or 0) * 0.2
@@ -1877,7 +2122,7 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
                         booze_lost_units = min(available_for_loss, max(1, int(round(available_for_loss * base_loss_pct))))
                         reduce_from_auto = min(auto_sold_units, booze_lost_units)
                         auto_sold_units -= reduce_from_auto
-                        if reduce_from_auto > 0:
+                        if reduce_from_auto > 0 and auto_sell_mode == "crew":
                             booze_loss_cash = int(
                                 reduce_from_auto
                                 * DISTILLERY_BASE_BOOZE_UNIT_VALUE
@@ -1893,7 +2138,7 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
                         stats["booze_lost_events"] = int(stats.get("booze_lost_events") or 0) + 1
                         distillery["stats"] = stats
 
-            if float(distillery.get("heat") or 0.0) >= DISTILLERY_HEAT_THRESHOLDS["critical"] and not status.get("is_shutdown"):
+            if float(distillery.get("heat") or 0.0) >= DISTILLERY_HEAT_THRESHOLDS["critical"] and not (status or {}).get("is_shutdown"):
                 over = float(distillery.get("heat") or 0.0) - DISTILLERY_HEAT_THRESHOLDS["critical"]
                 chance = _clamp(0.06 + (over / 100.0), 0.06, DISTILLERY_ENFORCEMENT_MAX_CHANCE)
                 if _rng.random() < chance:
@@ -1925,13 +2170,48 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
                 "vault_penalty": vault_penalty,
                 "maintenance_degradation": maintenance_degradation,
                 "roi": _distillery_roi_snapshot(distillery, business),
+                "booze_run_vault": 0,
+                "booze_run_jailed": False,
             }
-        if booze_earned > 0:
+        carry_inc = booze_earned
+        if distillery and auto_sold_units > 0 and auto_sell_mode == "booze_run":
+            carry_inc = booze_earned + auto_sold_units
+        if carry_inc > 0:
             updates["last_collected_booze_at"] = now.isoformat()
             await db.users.update_one(
                 {"id": current_user["id"]},
-                {"$inc": {f"booze_carrying.{default_booze_id}": booze_earned}},
+                {"$inc": {f"booze_carrying.{default_booze_id}": carry_inc}},
             )
+        if distillery and auto_sold_units > 0 and auto_sell_mode == "booze_run":
+            from routers.money.booze_run import _booze_sell_impl
+
+            fresh_user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0})
+            if fresh_user and not fresh_user.get("in_jail"):
+                try:
+                    sell_out = await _booze_sell_impl(
+                        fresh_user,
+                        default_booze_id,
+                        auto_sold_units,
+                        via_distillery_collect=True,
+                        illegal_business_id=business["id"],
+                    )
+                except HTTPException:
+                    sell_out = {}
+                if sell_out.get("caught"):
+                    booze_run_jailed = True
+                    if distillery_breakdown is not None:
+                        distillery_breakdown["booze_run_jailed"] = True
+                        distillery_breakdown["booze_run_vault"] = 0
+                elif sell_out:
+                    booze_run_vault = int(sell_out.get("revenue") or 0)
+                    stats = distillery.get("stats") or {}
+                    stats["total_booze_auto_sold"] = int(stats.get("total_booze_auto_sold") or 0) + auto_sold_units
+                    stats["total_booze_run_auto_vault"] = int(stats.get("total_booze_run_auto_vault") or 0) + booze_run_vault
+                    distillery["stats"] = stats
+                    updates["distillery"] = distillery
+                    if distillery_breakdown is not None:
+                        distillery_breakdown["booze_run_vault"] = booze_run_vault
+                        distillery_breakdown["booze_run_jailed"] = False
     await db.users.update_one({"id": current_user["id"]}, {"$inc": inc})
     if points_earned > 0:
         await log_points_event(db, user_id=current_user["id"], points=points_earned, event_type="illegal_biz_collect", meta={"business_id": business["id"]})
@@ -1944,10 +2224,14 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
         {"$set": updates, "$inc": {"vault": vault_delta, "vault_lifetime_earned": max(0, vault_income)}},
     )
     msg = f"The till's been cleared. ${income:,.2f} added to vault."
-    if booze_earned:
-        msg += f" and {booze_earned} booze."
+    if carry_inc > 0:
+        msg += f" and {carry_inc} booze."
     if auto_sell_cash > 0:
         msg += f" Workers moved {auto_sold_units} units for ${auto_sell_cash:,}."
+    if booze_run_vault > 0:
+        msg += f" Runners sold {auto_sold_units} units on the street for ${booze_run_vault:,} (racket vault)."
+    if booze_run_jailed:
+        msg += " A booze auto-sell run got busted — you're in jail."
     if distillery_breakdown and int(distillery_breakdown.get("booze_lost_units") or 0) > 0:
         msg += f" Heat damaged/confiscated {int(distillery_breakdown.get('booze_lost_units') or 0)} booze."
     if distillery_breakdown and int(((distillery_breakdown.get("maintenance_degradation") or {}).get("lost_count") or 0)) > 0:
@@ -1972,9 +2256,11 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
     return {
         "message": msg,
         "cash": income,
-        "booze": booze_earned,
+        "booze": carry_inc,
         "auto_sell_cash": auto_sell_cash,
         "auto_sold_units": auto_sold_units,
+        "booze_run_vault": booze_run_vault,
+        "booze_run_jailed": booze_run_jailed,
         "vault_penalty": vault_penalty,
         "distillery": distillery_breakdown,
         "respect_points": respect_earned,
@@ -1983,6 +2269,10 @@ async def collect_illegal_business(current_user: dict = Depends(get_current_user
         "loot_box_pieces": loot_pieces_earned,
         "tokens_earned": token_earned,
     }
+
+
+async def collect_illegal_business(current_user: dict = Depends(get_current_user)):
+    return await _collect_illegal_business_impl(current_user)
 
 
 async def get_distillery(current_user: dict = Depends(get_current_user)):
@@ -2147,10 +2437,33 @@ async def distillery_set_auto_sell(req: DistilleryAutoSellRequest, current_user:
     auto_sell["booze_id"] = booze_id
     auto_sell["min_inventory"] = max(0, int(req.min_inventory or 0))
     auto_sell["batch_size"] = max(1, int(req.batch_size or 1))
+    if req.mode is not None:
+        m = str(req.mode).strip().lower()
+        if m not in DISTILLERY_AUTO_SELL_MODES:
+            raise HTTPException(status_code=400, detail="Invalid auto-sell mode (use crew or booze_run).")
+        auto_sell["mode"] = m
     distillery["auto_sell"] = auto_sell
     await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": {"distillery": distillery}})
     return {
-        "message": "Worker auto-sell rules updated.",
+        "message": "Auto-sell rules updated.",
+        **_distillery_public_payload(distillery, business),
+    }
+
+
+async def distillery_set_auto_aging(req: DistilleryAutoAgingRequest, current_user: dict = Depends(get_current_user)):
+    business, distillery = await _distillery_business_for_user(current_user)
+    tier = (req.tier or "standard").strip().lower()
+    if tier not in DISTILLERY_AGING_TIERS:
+        raise HTTPException(status_code=400, detail="Invalid aging tier.")
+    auto_aging = distillery.get("auto_aging") or {}
+    auto_aging["enabled"] = bool(req.enabled)
+    auto_aging["tier"] = tier
+    auto_aging["reserve_units"] = max(0, int(req.reserve_units or 0))
+    auto_aging["auto_collect_booze"] = bool(req.auto_collect_booze)
+    distillery["auto_aging"] = auto_aging
+    await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": {"distillery": distillery}})
+    return {
+        "message": "Auto-aging rules updated.",
         **_distillery_public_payload(distillery, business),
     }
 
@@ -2262,36 +2575,13 @@ async def distillery_start_aging_batch(req: DistilleryStartAgingRequest, current
     have = int(carrying.get(booze_id) or 0)
     if have < qty:
         raise HTTPException(status_code=400, detail=f"Need {qty} units of booze to age. You have {have}.")
-    tier_cfg = DISTILLERY_AGING_TIERS[tier]
-    aging_hours = _rng.uniform(float(tier_cfg["hours_min"]), float(tier_cfg["hours_max"]))
-    now = _utc_now()
-    finish = now + timedelta(hours=aging_hours)
-    batch_id = str(uuid.uuid4())
-    queue.append(
-        {
-            "id": batch_id,
-            "tier": tier,
-            "booze_id": booze_id,
-            "quantity": qty,
-            "started_at": now.isoformat(),
-            "ready_at": finish.isoformat(),
-            "quality_mult": float(tier_cfg["quality_mult"]),
-            "cash_mult": float(tier_cfg["cash_mult"]),
-        }
-    )
-    distillery["aging_queue"] = queue
-    stats = distillery.get("stats") or {}
-    stats["total_batches_started"] = int(stats.get("total_batches_started") or 0) + 1
-    distillery["stats"] = stats
-
-    user_result = await db.users.update_one({"id": current_user["id"], f"booze_carrying.{booze_id}": {"$gte": qty}}, {"$inc": {f"booze_carrying.{booze_id}": -qty}})
-    if user_result.modified_count == 0:
+    ok, batch_id, ready_at = await _distillery_start_aging_batch_persist(business["id"], current_user["id"], distillery, tier, qty)
+    if not ok or not batch_id:
         raise HTTPException(status_code=400, detail="Could not reserve booze for aging.")
-    await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": {"distillery": distillery}})
     return {
         "message": f"Batch {batch_id[:8]} started in the {tier} cellar.",
         "batch_id": batch_id,
-        "ready_at": finish.isoformat(),
+        "ready_at": ready_at,
         **_distillery_public_payload(distillery, business),
     }
 
@@ -2993,6 +3283,7 @@ def register(router):
     router.add_api_route("/illegal-business/distillery/maintenance", distillery_maintenance, methods=["POST"])
     router.add_api_route("/illegal-business/distillery/risk-action", distillery_risk_action, methods=["POST"])
     router.add_api_route("/illegal-business/distillery/set-auto-sell-rules", distillery_set_auto_sell, methods=["POST"])
+    router.add_api_route("/illegal-business/distillery/set-auto-aging-rules", distillery_set_auto_aging, methods=["POST"])
     router.add_api_route("/illegal-business/distillery/start-aging-batch", distillery_start_aging_batch, methods=["POST"])
     router.add_api_route("/illegal-business/distillery/claim-aged-batch", distillery_claim_aged_batch, methods=["POST"])
     router.add_api_route("/illegal-business/missions", get_illegal_business_missions, methods=["GET"])

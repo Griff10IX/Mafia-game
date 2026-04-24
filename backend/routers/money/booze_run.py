@@ -1,9 +1,11 @@
 # Booze Run: config, buy, sell, capacity upgrade; rotation helpers for flash news
 from datetime import datetime, timezone, timedelta
-from typing import Optional
+from typing import Any, Dict, Optional
+import logging
 import time
 import secrets
 _rng = secrets.SystemRandom()
+logger = logging.getLogger(__name__)
 from pydantic import BaseModel
 
 from fastapi import Depends, HTTPException, Request
@@ -489,10 +491,25 @@ async def _booze_buy_impl(user: dict, booze_id: str, amount: int, *, via_auto_ra
     return {"message": f"Purchased {amount} {booze_name}", "new_carrying": new_carrying, "spent": cost}
 
 
-async def _booze_sell_impl(user: dict, booze_id: str, amount: int, *, via_auto_rank: bool = False) -> dict:
-    """Perform sell for given user. Returns response dict or raises HTTPException. Updates DB."""
+async def _booze_sell_impl(
+    user: dict,
+    booze_id: str,
+    amount: int,
+    *,
+    via_auto_rank: bool = False,
+    via_distillery_collect: bool = False,
+    illegal_business_id: Optional[str] = None,
+) -> dict:
+    """Perform sell for given user. Returns response dict or raises HTTPException. Updates DB.
+
+    When ``illegal_business_id`` is set (only with ``via_distillery_collect``), revenue is credited
+    to that illegal business vault instead of hand ``money``.
+    """
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")
+    ib_vault_id = (illegal_business_id or "").strip() or None
+    if ib_vault_id and not via_distillery_collect:
+        raise HTTPException(status_code=400, detail="Racket vault payout is only valid for distillery collect sells.")
     if _booze_user_in_jail(user):
         raise HTTPException(status_code=400, detail="You are in jail!")
     booze_ids = [b["id"] for b in BOOZE_TYPES]
@@ -528,6 +545,8 @@ async def _booze_sell_impl(user: dict, booze_id: str, amount: int, *, via_auto_r
         _bj = {"phase": "sell", "inventory_loss_basis": loss_basis}
         if via_auto_rank:
             _bj["via_auto_rank"] = True
+        if via_distillery_collect:
+            _bj["via_distillery_collect"] = True
         await log_activity(
             user.get("id", ""),
             user.get("username", ""),
@@ -591,36 +610,61 @@ async def _booze_sell_impl(user: dict, booze_id: str, amount: int, *, via_auto_r
         "location": current_state,
         "is_run": is_run,
     }
-    updates = {
-        "$inc": {"money": revenue},
-        "$push": {"booze_run_history": {"$each": [history_entry], "$position": 0, "$slice": BOOZE_RUN_HISTORY_MAX}},
-    }
+    if ib_vault_id:
+        history_entry["racket_vault"] = True
+    inc_user: Dict[str, Any] = {}
+    if not ib_vault_id:
+        inc_user["money"] = int(revenue)
     if is_run:
-        updates["$inc"] = updates.get("$inc", {})
-        updates["$inc"]["booze_profit_total"] = profit
-        updates["$inc"]["booze_run_profit_total"] = profit
-        updates["$inc"]["booze_runs_count"] = 1
-        updates["$inc"][f"booze_profit_by_type.{booze_id}"] = profit
-        # New UTC day: must set today's counter in DB — $inc alone never cleared the field, so it matched lifetime total.
-        day_fields = {"booze_profit_today_date": today_utc}
+        inc_user["booze_profit_total"] = profit
+        inc_user["booze_run_profit_total"] = profit
+        inc_user["booze_runs_count"] = 1
+        inc_user[f"booze_profit_by_type.{booze_id}"] = profit
+    push_hist = {"$each": [history_entry], "$position": 0, "$slice": BOOZE_RUN_HISTORY_MAX}
+    set_fields: Dict[str, Any] = {}
+    if is_run:
+        set_fields["booze_profit_today_date"] = today_utc
         if profit_today_date != today_utc:
-            day_fields["booze_profit_today"] = profit
+            set_fields["booze_profit_today"] = profit
         else:
-            updates["$inc"]["booze_profit_today"] = profit
-        updates["$set"] = day_fields
+            inc_user["booze_profit_today"] = profit
     if new_val == 0:
-        updates.setdefault("$unset", {})[f"booze_carrying.{booze_id}"] = ""
-        updates["$unset"][f"booze_carrying_cost.{booze_id}"] = ""
-        updates["$unset"][f"booze_buy_location.{booze_id}"] = ""
+        updates: Dict[str, Any] = {
+            "$push": {"booze_run_history": push_hist},
+            "$unset": {
+                f"booze_carrying.{booze_id}": "",
+                f"booze_carrying_cost.{booze_id}": "",
+                f"booze_buy_location.{booze_id}": "",
+            },
+        }
+        if inc_user:
+            updates["$inc"] = inc_user
+        if set_fields:
+            updates["$set"] = set_fields
     else:
-        updates["$inc"][f"booze_carrying.{booze_id}"] = -amount
-        updates["$inc"][f"booze_carrying_cost.{booze_id}"] = -cost_of_sold
+        inc_user[f"booze_carrying.{booze_id}"] = -amount
+        inc_user[f"booze_carrying_cost.{booze_id}"] = -cost_of_sold
+        updates = {"$push": {"booze_run_history": push_hist}, "$inc": inc_user}
+        if set_fields:
+            updates["$set"] = set_fields
     sell_result = await db.users.update_one(
         {"id": user["id"], f"booze_carrying.{booze_id}": {"$gte": amount}},
         updates,
     )
     if sell_result.modified_count == 0:
         raise HTTPException(status_code=400, detail=f"Insufficient booze to sell")
+    if ib_vault_id:
+        biz_res = await db.illegal_businesses.update_one(
+            {"id": ib_vault_id, "user_id": user.get("id")},
+            {"$inc": {"vault": int(revenue), "vault_lifetime_earned": max(0, int(revenue))}},
+        )
+        if biz_res.modified_count == 0:
+            logger.warning(
+                "booze_sell racket vault credit failed; crediting hand cash instead (business %s user %s)",
+                ib_vault_id,
+                user.get("id"),
+            )
+            await db.users.update_one({"id": user["id"]}, {"$inc": {"money": int(revenue)}})
     if is_run:
         now_iso = datetime.now(timezone.utc).isoformat()
         await db.economy_events.insert_one({
@@ -654,6 +698,10 @@ async def _booze_sell_impl(user: dict, booze_id: str, amount: int, *, via_auto_r
     _bs = {"booze": booze_name, "amount": amount, "revenue": revenue, "profit": profit}
     if via_auto_rank:
         _bs["via_auto_rank"] = True
+    if via_distillery_collect:
+        _bs["via_distillery_collect"] = True
+    if ib_vault_id:
+        _bs["illegal_business_id"] = ib_vault_id
     await log_activity(user.get("id", ""), user.get("username", ""), "booze_sell", _bs)
     return {"message": f"Sold {amount} {booze_name}", "revenue": revenue, "profit": profit, "new_carrying": new_val, "is_run": is_run}
 

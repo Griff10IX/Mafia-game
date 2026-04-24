@@ -217,7 +217,13 @@ export default function Distillery() {
   const [specialCursor, setSpecialCursor] = useState(0);
   const [workerDraft, setWorkerDraft] = useState({ production: 0, quality: 0, security: 0, sales: 0 });
   const [maintenancePoints, setMaintenancePoints] = useState(10);
-  const [autoSell, setAutoSell] = useState({ enabled: false, min_inventory: 50, batch_size: 30 });
+  const [autoSell, setAutoSell] = useState({ enabled: false, mode: 'crew', min_inventory: 50, batch_size: 30 });
+  const [autoAging, setAutoAging] = useState({
+    enabled: false,
+    tier: 'standard',
+    reserve_units: 0,
+    auto_collect_booze: true,
+  });
   const [agingTier, setAgingTier] = useState('standard');
   const [agingQty, setAgingQty] = useState(50);
 
@@ -249,10 +255,21 @@ export default function Distillery() {
         sales: Number(w.sales || 0),
       });
       const a = next?.distillery?.auto_sell || {};
+      const m = String(a.mode || 'crew').toLowerCase();
       setAutoSell({
         enabled: !!a.enabled,
+        mode: m === 'booze_run' ? 'booze_run' : 'crew',
         min_inventory: Number(a.min_inventory || 0),
         batch_size: Number(a.batch_size || 1),
+      });
+      const ag = next?.distillery?.auto_aging || {};
+      setAutoAging({
+        enabled: !!ag.enabled,
+        tier: ['quick', 'standard', 'reserve', 'premium'].includes(String(ag.tier || '').toLowerCase())
+          ? String(ag.tier).toLowerCase()
+          : 'standard',
+        reserve_units: Number(ag.reserve_units || 0),
+        auto_collect_booze: ag.auto_collect_booze !== false,
       });
     } catch (e) {
       const status = e.response?.status;
@@ -1147,6 +1164,78 @@ export default function Distillery() {
                 </div>
               )}
 
+              {/* Auto-aging */}
+              <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border-dim)' }}>
+                <SectionHead icon={Zap} title="Auto-Aging" />
+                <p className="mb-2 text-[10px] leading-snug text-mutedForeground">
+                  Server claims ready batches, starts new ones with spare booze (above reserve), and optionally throttles racket collect so passive booze keeps flowing without the page open.
+                </p>
+                <div className="dist-autosell-row">
+                  <input
+                    type="checkbox"
+                    checked={!!autoAging.enabled}
+                    onChange={(e) => setAutoAging((p) => ({ ...p, enabled: e.target.checked }))}
+                    className="dist-autosell-check"
+                    id="autoaging-toggle"
+                  />
+                  <label htmlFor="autoaging-toggle" className="dist-autosell-label">Enable auto-aging</label>
+                </div>
+                <div className="mb-2 text-[9px] font-heading uppercase tracking-wide text-mutedForeground">Auto tier</div>
+                <div className="mb-3 flex gap-1">
+                  {['quick', 'standard', 'reserve', 'premium'].map((tier) => (
+                    <button
+                      key={`auto-${tier}`}
+                      type="button"
+                      onClick={() => setAutoAging((p) => ({ ...p, tier }))}
+                      className={`flex-1 rounded border py-1.5 px-0.5 text-center font-heading text-[8px] font-bold uppercase tracking-wider transition-all ${
+                        autoAging.tier === tier
+                          ? 'border-primary/50 bg-primary/15 text-primary'
+                          : 'border-zinc-700/50 bg-primary/5 text-mutedForeground hover:border-primary/30 hover:text-foreground'
+                      }`}
+                    >
+                      {tier}
+                    </button>
+                  ))}
+                </div>
+                <div className="dist-autosell-inputs">
+                  <div>
+                    <div className="dist-input-label">Reserve (min on hand)</div>
+                    <input
+                      type="number"
+                      min="0"
+                      value={autoAging.reserve_units}
+                      onChange={(e) => setAutoAging((p) => ({ ...p, reserve_units: Number(e.target.value || 0) }))}
+                      className="dist-input"
+                    />
+                  </div>
+                </div>
+                <div className="dist-autosell-row mt-2">
+                  <input
+                    type="checkbox"
+                    checked={!!autoAging.auto_collect_booze}
+                    onChange={(e) => setAutoAging((p) => ({ ...p, auto_collect_booze: e.target.checked }))}
+                    className="dist-autosell-check"
+                    id="autoaging-collect"
+                  />
+                  <label htmlFor="autoaging-collect" className="dist-autosell-label">Auto-collect racket (throttled)</label>
+                </div>
+                <GhostBtn
+                  className="mt-2"
+                  disabled={saving}
+                  onClick={() => run(async () => {
+                    const res = await api.post('/illegal-business/distillery/set-auto-aging-rules', {
+                      enabled: !!autoAging.enabled,
+                      tier: autoAging.tier,
+                      reserve_units: Math.max(0, intOr(autoAging.reserve_units, 0)),
+                      auto_collect_booze: !!autoAging.auto_collect_booze,
+                    });
+                    toast.success(res.data?.message || 'Auto-aging saved.');
+                  })}
+                >
+                  Save Auto-Aging
+                </GhostBtn>
+              </div>
+
               {/* Auto-sell */}
               <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border-dim)' }}>
                 <SectionHead icon={TrendingUp} title="Auto-Sell Rules">
@@ -1164,11 +1253,17 @@ export default function Distillery() {
                       <TooltipContent side="left" className="max-w-[min(320px,calc(100vw-2rem))] space-y-2 p-3 text-left text-[11px] leading-snug text-primary-foreground">
                         <p className="font-heading text-[10px] font-bold uppercase tracking-wide text-primary-foreground">How auto-sell works</p>
                         <ul className="list-disc space-y-1.5 pl-3.5 normal-case">
-                          <li>It runs when you <strong className="font-semibold">Collect</strong> — not on its own in the background.</li>
+                          <li>It runs when you <strong className="font-semibold">Collect</strong> from the racket (or from auto-collect when auto-aging is on).</li>
                           <li>You need <strong className="font-semibold">Sales</strong> workers hired. More sales workers move more bottles per collect.</li>
-                          <li><strong className="font-semibold">Min inventory</strong> is the stash you try to keep; the crew avoids selling below that (using what you already have plus this collect).</li>
-                          <li><strong className="font-semibold">Batch size</strong> is the max each sales worker can sell in one collect (you still cannot sell more than you earned that collect).</li>
-                          <li>Money from sales goes to your <strong className="font-semibold">vault</strong> with the collect. Heat and raids can still hurt outcomes.</li>
+                          <li><strong className="font-semibold">Min inventory</strong> is the stash you try to keep; auto-sell avoids selling below that (using what you already have plus this collect).</li>
+                          <li><strong className="font-semibold">Batch size</strong> is the max each sales worker can move in one collect (still capped by units earned that collect).</li>
+                          <li>
+                            <strong className="font-semibold">Crew</strong> mode: margin sales credit your <strong className="font-semibold">vault</strong> on collect.
+                          </li>
+                          <li>
+                            <strong className="font-semibold">Booze run</strong> mode: sells at rotation street prices; proceeds go to your <strong className="font-semibold">racket vault</strong> (same place as crew auto-sell) and still carries <strong className="font-semibold">jail risk</strong> like a real run.
+                          </li>
+                          <li>Heat and raids can still hurt outcomes.</li>
                         </ul>
                       </TooltipContent>
                     </Tooltip>
@@ -1182,7 +1277,27 @@ export default function Distillery() {
                     className="dist-autosell-check"
                     id="autosell-toggle"
                   />
-                  <label htmlFor="autosell-toggle" className="dist-autosell-label">Enable auto-sell crew</label>
+                  <label htmlFor="autosell-toggle" className="dist-autosell-label">Enable auto-sell</label>
+                </div>
+                <div className="mb-2 flex flex-wrap gap-2 text-[10px] font-heading text-mutedForeground">
+                  <label className="flex cursor-pointer items-center gap-1.5 rounded border border-zinc-700/50 px-2 py-1 has-[:checked]:border-primary/40 has-[:checked]:bg-primary/10">
+                    <input
+                      type="radio"
+                      name="autosell-mode"
+                      checked={autoSell.mode !== 'booze_run'}
+                      onChange={() => setAutoSell((p) => ({ ...p, mode: 'crew' }))}
+                    />
+                    Crew (vault)
+                  </label>
+                  <label className="flex cursor-pointer items-center gap-1.5 rounded border border-zinc-700/50 px-2 py-1 has-[:checked]:border-primary/40 has-[:checked]:bg-primary/10">
+                    <input
+                      type="radio"
+                      name="autosell-mode"
+                      checked={autoSell.mode === 'booze_run'}
+                      onChange={() => setAutoSell((p) => ({ ...p, mode: 'booze_run' }))}
+                    />
+                    Booze run (racket vault)
+                  </label>
                 </div>
                 <div className="dist-autosell-inputs">
                   <div>
@@ -1211,6 +1326,7 @@ export default function Distillery() {
                   onClick={() => run(async () => {
                     const payload = {
                       enabled: !!autoSell.enabled,
+                      mode: autoSell.mode === 'booze_run' ? 'booze_run' : 'crew',
                       min_inventory: Math.max(0, intOr(autoSell.min_inventory, 0)),
                       batch_size: Math.max(1, intOr(autoSell.batch_size, 1)),
                     };

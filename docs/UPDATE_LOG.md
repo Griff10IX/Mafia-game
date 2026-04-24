@@ -6,6 +6,40 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-24 18:30 UTC[/color][/b] — [b]Distillery: booze-run auto-sell pays the racket vault[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Money → Distillery[/b] — [b]Auto-sell → Booze run[/b] mode now credits sell proceeds to your [b]illegal business vault[/b] (same pool as crew auto-sell and aging claims), using rotation street prices and the same [b]jail[/b] rules as before. [b]Manual[/b] sells from [b]Booze Run[/b] still pay [b]hand cash[/b] — only the distillery auto-sell path uses the vault.[/color]
+[*][color=#888888][b]Player action:[/b] No setting change required. If you expected hand cash from distillery booze-run auto-sell, check [b]Money → Racket[/b] vault balance instead.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-04-24 16:00 UTC[/color][/b] — [b]Distillery: booze-run auto-sell, auto-aging, Auto Rank order[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New / Changed:[/b] [b]Money → Distillery[/b] — [b]Auto-sell[/b] can use [b]Crew[/b] (vault, margin) or [b]Booze run[/b] (rotation street prices; proceeds go to the [b]racket vault[/b], with the same [b]jail risk[/b] as a real street sell). Still needs [b]Sales[/b] workers and runs on [b]Collect[/b] (or auto-collect when aging automation is on).[/color]
+[*][color=#888888][b]New:[/b] [b]Auto-aging[/b] — server can [b]claim[/b] ready batches, [b]start[/b] new ones from spare booze (above your [b]reserve[/b]), and optionally [b]auto-collect[/b] the racket on a throttle so passive booze keeps moving without leaving the page open. A background ticker runs for anyone with auto-aging enabled; [b]Auto Rank[/b] also runs the same pass [b]before[/b] its booze-run step so inventory stays consistent.[/color]
+[*][color=#888888][b]Player action:[/b] Open [b]Distillery[/b] → [b]Auto-Aging[/b] / [b]Auto-Sell Rules[/b] to configure. Set [b]DISTILLERY_AUTOMATION_USE_CRON=1[/b] on the server if you want to disable the in-process ticker and drive automation from cron instead.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-04-24 14:00 UTC[/color][/b] — [b]Racket missions, Hitlist, Store, Garage[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Illegal Business missions[/b] that ask for [b]kills[/b] for IBM progression now count [b]Hitlist practice NPC[/b] kills on the board ([b]hitlist_npc_kills[/b]), not generic illegal-business kill reward claims — so only the intended practice targets advance those steps. In-game IBM copy includes a short [b]how to complete[/b] hint when that requirement applies.[/color]
+[*][color=#888888][b]Changed:[/b] [b]Kill → Hitlist[/b] — [b]Add NPC[/b] is limited by how many practice targets you already have [b]on the board[/b] (not a rolling timer); UI copy explains the cap.[/color]
+[*][color=#888888][b]Fixed:[/b] [b]Game → Store[/b] — [b]Daily token→cash[/b] limit messaging and refetch stay in sync with the server (including across the London-day rollover).[/color]
+[*][color=#888888][b]Fixed:[/b] [b]Cars → Garage[/b] — special / loot / custom rows are merged into the main list so long garages still show those vehicles within the fetch cap.[/color]
+[*][color=#888888][b]Player action:[/b] No migration needed. Re-read mission text on [b]Illegal Business[/b] if you were chasing the old kill counter.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-20 12:00 UTC[/color][/b] — [b]Boxing: NPC fight limit raised[/b][/size]
 [quote]
 [list]
