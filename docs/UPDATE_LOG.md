@@ -6,6 +6,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-24 20:00 UTC[/color][/b] — [b]Distillery: automation defaults (aging + auto-sell)[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Money → Distillery[/b] — [b]Auto-aging[/b] defaults to [b]on[/b] for new rackets; existing saves pick up the same once (tracked with [b]automation_baseline_v1[/b]) so claim/start/throttled collect runs without an extra setup step. You can still disable it and [b]Save Auto-aging[/b].[/color]
+[*][color=#888888][b]Changed:[/b] [b]Auto-sell[/b] defaults to [b]Booze run → racket vault[/b] for new distilleries and when the [b]mode[/b] key was missing; invalid modes snap to that. [b]Auto-sell enabled[/b] defaults [b]on[/b] for new stills (still needs [b]Sales[/b] workers to move volume). One-time [b]automation_baseline_v1[/b] turns [b]auto-aging[/b] on for older saves that never had the flag.[/color]
+[*][color=#888888][b]UI:[/b] Aging Cellar copy clarifies manual vs auto-aging.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-24 18:30 UTC[/color][/b] — [b]Distillery: booze-run auto-sell pays the racket vault[/b][/size]
 [quote]
 [list]

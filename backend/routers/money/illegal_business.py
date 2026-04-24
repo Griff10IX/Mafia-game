@@ -770,14 +770,14 @@ def _distillery_default(now: datetime) -> Dict[str, Any]:
         "last_heat_at": now.isoformat(),
         "shutdown_until": None,
         "auto_sell": {
-            "enabled": False,
-            "mode": "crew",
+            "enabled": True,
+            "mode": "booze_run",
             "booze_id": _default_booze_type_id(),
             "min_inventory": 50,
             "batch_size": 30,
         },
         "auto_aging": {
-            "enabled": False,
+            "enabled": True,
             "tier": "standard",
             "reserve_units": 0,
             "auto_collect_booze": True,
@@ -803,6 +803,7 @@ def _distillery_default(now: datetime) -> Dict[str, Any]:
         "recent_failures": [],
         "last_tick_at": now.isoformat(),
         "last_auto_collect_at": None,
+        "automation_baseline_v1": True,
     }
 
 
@@ -876,7 +877,7 @@ def _distillery_ensure_state(business: dict, now: Optional[datetime] = None) -> 
         dist["auto_sell"] = auto_sell
         changed = True
     if "enabled" not in auto_sell:
-        auto_sell["enabled"] = False
+        auto_sell["enabled"] = True
         changed = True
     if "booze_id" not in auto_sell:
         auto_sell["booze_id"] = _default_booze_type_id()
@@ -887,14 +888,17 @@ def _distillery_ensure_state(business: dict, now: Optional[datetime] = None) -> 
     if "batch_size" not in auto_sell:
         auto_sell["batch_size"] = 30
         changed = True
-    _asm = str(auto_sell.get("mode") or "crew").lower()
+    if "mode" not in auto_sell:
+        auto_sell["mode"] = "booze_run"
+        changed = True
+    _asm = str(auto_sell.get("mode") or "booze_run").lower()
     if _asm not in DISTILLERY_AUTO_SELL_MODES:
-        auto_sell["mode"] = "crew"
+        auto_sell["mode"] = "booze_run"
         changed = True
     auto_aging = dist.get("auto_aging")
     if not isinstance(auto_aging, dict):
         auto_aging = {
-            "enabled": False,
+            "enabled": True,
             "tier": "standard",
             "reserve_units": 0,
             "auto_collect_booze": True,
@@ -903,7 +907,7 @@ def _distillery_ensure_state(business: dict, now: Optional[datetime] = None) -> 
         changed = True
     else:
         if "enabled" not in auto_aging:
-            auto_aging["enabled"] = False
+            auto_aging["enabled"] = True
             changed = True
         if "tier" not in auto_aging or str(auto_aging.get("tier") or "").lower() not in DISTILLERY_AGING_TIERS:
             auto_aging["tier"] = "standard"
@@ -914,6 +918,10 @@ def _distillery_ensure_state(business: dict, now: Optional[datetime] = None) -> 
         if "auto_collect_booze" not in auto_aging:
             auto_aging["auto_collect_booze"] = True
             changed = True
+    if not dist.get("automation_baseline_v1"):
+        dist["automation_baseline_v1"] = True
+        auto_aging["enabled"] = True
+        changed = True
     if "last_auto_collect_at" not in dist:
         dist["last_auto_collect_at"] = None
         changed = True

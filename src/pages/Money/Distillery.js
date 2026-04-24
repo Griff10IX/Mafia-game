@@ -217,9 +217,9 @@ export default function Distillery() {
   const [specialCursor, setSpecialCursor] = useState(0);
   const [workerDraft, setWorkerDraft] = useState({ production: 0, quality: 0, security: 0, sales: 0 });
   const [maintenancePoints, setMaintenancePoints] = useState(10);
-  const [autoSell, setAutoSell] = useState({ enabled: false, mode: 'crew', min_inventory: 50, batch_size: 30 });
+  const [autoSell, setAutoSell] = useState({ enabled: true, mode: 'booze_run', min_inventory: 50, batch_size: 30 });
   const [autoAging, setAutoAging] = useState({
-    enabled: false,
+    enabled: true,
     tier: 'standard',
     reserve_units: 0,
     auto_collect_booze: true,
@@ -255,16 +255,16 @@ export default function Distillery() {
         sales: Number(w.sales || 0),
       });
       const a = next?.distillery?.auto_sell || {};
-      const m = String(a.mode || 'crew').toLowerCase();
+      const m = String(a.mode || 'booze_run').toLowerCase();
       setAutoSell({
-        enabled: !!a.enabled,
-        mode: m === 'booze_run' ? 'booze_run' : 'crew',
+        enabled: a.enabled !== false,
+        mode: m === 'crew' ? 'crew' : 'booze_run',
         min_inventory: Number(a.min_inventory || 0),
         batch_size: Number(a.batch_size || 1),
       });
       const ag = next?.distillery?.auto_aging || {};
       setAutoAging({
-        enabled: !!ag.enabled,
+        enabled: ag.enabled !== false,
         tier: ['quick', 'standard', 'reserve', 'premium'].includes(String(ag.tier || '').toLowerCase())
           ? String(ag.tier).toLowerCase()
           : 'standard',
@@ -1067,6 +1067,10 @@ export default function Distillery() {
             {/* Auto-sell & Aging */}
             <div className="dist-panel">
               <SectionHead icon={Clock3} title="Aging Cellar" />
+              <p className="mb-2 text-[10px] leading-snug text-mutedForeground">
+                Manual start/claim below. For hands-off aging (claim when ready, start batches, optional racket collect), use{' '}
+                <strong className="text-foreground/90">Auto-aging</strong> and <strong className="text-foreground/90">Save Auto-aging</strong> (defaults are on — turn off here if you prefer only manual cellar).
+              </p>
               <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2 text-[11px] font-heading text-mutedForeground">
                 <span>
                   On hand:{' '}
@@ -1168,7 +1172,7 @@ export default function Distillery() {
               <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border-dim)' }}>
                 <SectionHead icon={Zap} title="Auto-Aging" />
                 <p className="mb-2 text-[10px] leading-snug text-mutedForeground">
-                  Server claims ready batches, starts new ones with spare booze (above reserve), and optionally throttles racket collect so passive booze keeps flowing without the page open.
+                  On by default: server claims ready batches, starts new ones with spare booze (above reserve), and optionally throttles racket collect so passive booze keeps flowing without the page open. Turn off here if you only want manual cellar controls.
                 </p>
                 <div className="dist-autosell-row">
                   <input
