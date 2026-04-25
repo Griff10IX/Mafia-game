@@ -6,6 +6,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-25 19:00 UTC[/color][/b] — [b]Forum smileys, MP Poker leave/cancel, host kick[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Forum, inbox, and game chat[/b] — classic [b]BBCode / :smiley:[/b] icons (PNG and wrapped Unicode) render a bit [b]larger[/b] so they stay clear at normal zoom next to small text.[/color]
+[*][color=#888888][b]Fixed:[/b] [b]Casinos → MP Poker → tournaments[/b] — [b]Leave Table[/b] no longer errors with [b]Game not found[/b] during registration/ready-up; buy-in is refunded the same way as cash tables ([b]money[/b] or [b]points[/b] tournaments). [b]Cancel Table[/b] as host now closes an open registration tournament and refunds everyone.[/color]
+[*][color=#888888][b]New:[/b] [b]MP Poker[/b] — while the table is still in [b]lobby[/b] or [b]ready[/b] (before the hand starts), the [b]host[/b] can [b]Kick[/b] a seated player who has [b]not[/b] tapped [b]I'm Ready[/b]; they get their [b]buy-in refunded[/b] and an inbox note. On tournaments, [b]staff[/b] can kick in the same situations (same rules as inactive reminders).[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-25 13:10 UTC[/color][/b] — [b]Prestige made easier (lower RP gates)[/b][/size]
 [quote]
 [list]
