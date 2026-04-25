@@ -170,6 +170,15 @@ const PKR_TABLE_HUD_PILL_STYLE = {
   boxShadow: '0 2px 12px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)',
 };
 
+/** Largest pot share(s) — main pot / chop. Side-pot-only winners have a lower payout than this max. */
+function mpPokerLargestShareWinners(results) {
+  if (!results?.length) return [];
+  let maxPay = 0;
+  for (const r of results) maxPay = Math.max(maxPay, Number(r.payout) || 0);
+  if (maxPay <= 0) return [];
+  return results.filter((r) => (Number(r.payout) || 0) === maxPay);
+}
+
 /** Shared showdown / winner banner (cash table settled or tournament last_hand_showdown). */
 function MpPokerHandOutcomePanel({
   results,
@@ -183,27 +192,60 @@ function MpPokerHandOutcomePanel({
 }) {
   if (!results?.length) return null;
   const myResult = results.find((r) => r.user_id === myUserId);
-  const didWin = myResult?.result === 'win';
-  const winner = results.find((r) => r.result === 'win');
-  const winnerName =
-    winner?.user_id === myUserId
-      ? 'You'
-      : winner?.user_id === 'dealer'
-        ? 'The Dealer'
-        : players.find((p) => p.user_id === winner?.user_id)?.username ?? 'Unknown';
-  const winnerHand = winner?.hand;
-  const potLabel = Number(pot) > 0 ? Number(pot) : winner?.payout ?? 0;
+  const primary = mpPokerLargestShareWinners(results);
+  const primaryIds = new Set(primary.map((r) => r.user_id));
+  const didWinMainPot = myUserId && primaryIds.has(myUserId);
+  const didWinAnyShare = (Number(myResult?.payout) || 0) > 0;
+  const winnerLabel = (() => {
+    if (!primary.length) return 'Unknown';
+    const names = primary.map((w) => {
+      if (w.user_id === myUserId) return 'You';
+      if (w.user_id === 'dealer') return 'The Dealer';
+      return players.find((p) => p.user_id === w.user_id)?.username ?? 'Unknown';
+    });
+    if (names.length === 1) return names[0];
+    return `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}`;
+  })();
+  const winnerHand = primary.find((w) => w.hand)?.hand ?? primary[0]?.hand;
+  const maxShare = primary.reduce((m, r) => Math.max(m, Number(r.payout) || 0), 0);
+  const potLabel = Number(pot) > 0 ? Number(pot) : maxShare;
+
+  const showdownRows = (() => {
+    const byUid = new Map();
+    for (const r of results) {
+      if (!r?.user_id) continue;
+      byUid.set(r.user_id, r);
+    }
+    const rows = [];
+    for (const [uid, r] of byUid) {
+      const pl = players.find((p) => p.user_id === uid);
+      const payout = Number(r.payout) || 0;
+      const hc = pl?.hole_cards || [];
+      if (!r.hand && hc.length < 1 && payout <= 0) continue;
+      rows.push({ uid, r, pl });
+    }
+    rows.sort((a, b) => {
+      const d = (Number(b.r.payout) || 0) - (Number(a.r.payout) || 0);
+      if (d) return d;
+      const na = (a.pl?.username || '').toLowerCase();
+      const nb = (b.pl?.username || '').toLowerCase();
+      return na.localeCompare(nb);
+    });
+    return rows;
+  })();
 
   return (
-    <div className="rounded-xl overflow-hidden border-2 animate-pkr-fade" style={{ borderColor: didWin ? 'var(--noir-primary-bright)' : '#5a3e1b' }}>
+    <div className="rounded-xl overflow-hidden border-2 animate-pkr-fade" style={{ borderColor: didWinMainPot || didWinAnyShare ? 'var(--noir-primary-bright)' : '#5a3e1b' }}>
       <div style={PKR_GOLD_BAR} />
 
       <div
         className="p-5 text-center space-y-3"
         style={{
-          background: didWin
+          background: didWinMainPot
             ? 'linear-gradient(180deg,rgba(212,175,55,0.12),rgba(0,0,0,0.6))'
-            : 'linear-gradient(180deg,rgba(248,113,113,0.06),rgba(0,0,0,0.6))',
+            : didWinAnyShare
+              ? 'linear-gradient(180deg,rgba(52,211,153,0.08),rgba(0,0,0,0.6))'
+              : 'linear-gradient(180deg,rgba(248,113,113,0.06),rgba(0,0,0,0.6))',
         }}
       >
         <p className="text-[9px] font-heading uppercase tracking-[0.3em]" style={{ color: 'rgba(255,255,255,0.3)' }}>
@@ -217,21 +259,46 @@ function MpPokerHandOutcomePanel({
           <p
             className="text-2xl font-heading font-black uppercase tracking-wider"
             style={
-              didWin
+              didWinMainPot
                 ? {
                     background: 'linear-gradient(180deg,#ffd700,var(--noir-primary-bright))',
                     WebkitBackgroundClip: 'text',
                     WebkitTextFillColor: 'transparent',
                   }
-                : { color: '#f87171' }
+                : didWinAnyShare
+                  ? { color: '#6ee7b7' }
+                  : { color: '#f87171' }
             }
           >
-            {didWin ? '🏆 You Win' : `${winnerName} Wins`}
+            {didWinMainPot ? '🏆 You Win' : didWinAnyShare ? 'You won a share' : `${winnerLabel} Wins`}
           </p>
-          {winnerHand && (
-            <p className="text-[11px] font-heading font-bold mt-1" style={{ color: didWin ? 'var(--noir-primary)' : 'rgba(255,255,255,0.45)' }}>
-              with {winnerHand}
-            </p>
+          {primary.length > 1 ? (
+            <div className="mt-1 space-y-0.5">
+              {primary.map((w) => {
+                if (!w.hand) return null;
+                const nm =
+                  w.user_id === myUserId
+                    ? 'You'
+                    : players.find((p) => p.user_id === w.user_id)?.username ?? 'Player';
+                return (
+                  <p
+                    key={w.user_id}
+                    className="text-[10px] font-heading font-bold leading-snug"
+                    style={{ color: didWinMainPot ? 'var(--noir-primary)' : 'rgba(255,255,255,0.5)' }}
+                  >
+                    <span className="text-white/35 uppercase tracking-wider text-[8px] mr-1">Hand</span>
+                    {nm}: {w.hand}
+                  </p>
+                );
+              })}
+            </div>
+          ) : (
+            winnerHand && (
+              <p className="text-[11px] font-heading font-bold mt-1" style={{ color: didWinMainPot ? 'var(--noir-primary)' : 'rgba(255,255,255,0.45)' }}>
+                <span className="text-white/35 uppercase tracking-wider text-[9px] mr-1">Hand</span>
+                {winnerHand}
+              </p>
+            )
           )}
           {potLabel > 0 && (
             <p className="text-[10px] font-heading mt-1" style={{ color: 'rgba(110,231,183,0.6)' }}>
@@ -256,35 +323,58 @@ function MpPokerHandOutcomePanel({
           </div>
         )}
 
-        {players.length > 0 && (
-          <div className="flex flex-wrap justify-center gap-4 pt-2 border-t border-white/5">
-            {players
-              .filter((p) => (p.hole_cards || []).length > 0)
-              .map((p) => {
-                const pResult = results.find((r) => r.user_id === p.user_id);
-                const pWon = pResult?.result === 'win';
-                const isMe = p.user_id === myUserId;
-                const pName = isMe ? 'You' : p.is_bot ? 'Dealer' : p.username;
+        {showdownRows.length > 0 && (
+          <div className="pt-2 border-t border-white/5 space-y-2">
+            <p className="text-[8px] font-heading uppercase tracking-wider text-white/35 text-center">
+              Everyone at showdown — cards and hand
+            </p>
+            <div className="flex flex-col gap-2 max-h-[min(52vh,340px)] overflow-y-auto pr-0.5">
+              {showdownRows.map(({ uid, r, pl }) => {
+                const payout = Number(r.payout) || 0;
+                const pWon = payout > 0;
+                const isPrimary = primaryIds.has(uid);
+                const isMe = uid === myUserId;
+                const pName = isMe ? 'You' : pl?.is_bot ? 'Dealer' : pl?.username ?? 'Player';
+                const hc = pl?.hole_cards || [];
                 return (
-                  <div key={p.user_id} className="flex flex-col items-center gap-1.5">
-                    <div className="flex gap-1">
-                      {(p.hole_cards || []).map((c, i) => (
-                        <Card key={i} card={c} hidden={false} index={i} total={2} />
-                      ))}
-                    </div>
-                    <div className="text-center">
-                      <p className="text-[9px] font-heading font-bold" style={{ color: pWon ? 'var(--noir-primary)' : 'rgba(255,255,255,0.45)' }}>
-                        {pName} {pWon ? '✓' : '✗'}
-                      </p>
-                      {pResult?.hand && (
-                        <p className="text-[8px] font-heading italic" style={{ color: pWon ? 'rgba(212,175,55,0.7)' : 'rgba(255,255,255,0.3)' }}>
-                          {pResult.hand}
-                        </p>
+                  <div
+                    key={uid}
+                    className="flex flex-wrap items-center gap-2 rounded-lg px-2 py-1.5"
+                    style={{
+                      background: isPrimary ? 'rgba(212,175,55,0.08)' : 'rgba(255,255,255,0.03)',
+                      border: `1px solid ${isPrimary ? 'rgba(212,175,55,0.28)' : 'rgba(255,255,255,0.06)'}`,
+                    }}
+                  >
+                    <div className="flex gap-1 shrink-0">
+                      {hc.length > 0 ? (
+                        hc.map((c, i) => <Card key={i} card={c} hidden={false} index={i} total={2} small />)
+                      ) : (
+                        <span className="text-[8px] font-heading text-white/25 px-1 self-center">—</span>
                       )}
+                    </div>
+                    <div className="min-w-0 flex-1 text-left">
+                      <p className="text-[9px] font-heading font-bold leading-tight" style={{ color: pWon ? 'var(--noir-primary)' : 'rgba(255,255,255,0.48)' }}>
+                        {pName}
+                        {isPrimary ? ' · pot' : ''}
+                        {pWon ? ' ✓' : ' ✗'}
+                        {payout > 0 && (
+                          <span className="text-[7px] font-semibold ml-1" style={{ color: 'rgba(110,231,183,0.85)' }}>
+                            +
+                            {payoutPoints
+                              ? `${Math.trunc(payout).toLocaleString()} pts`
+                              : formatMoneyFull(payout)}
+                          </span>
+                        )}
+                      </p>
+                      <p className="text-[8px] font-heading mt-0.5 leading-snug" style={{ color: 'rgba(255,255,255,0.4)' }}>
+                        <span className="text-white/30 uppercase tracking-wider text-[7px] mr-1">Hand</span>
+                        <span style={{ color: pWon ? 'rgba(212,175,55,0.75)' : 'rgba(255,255,255,0.35)' }}>{r.hand || '—'}</span>
+                      </p>
                     </div>
                   </div>
                 );
               })}
+            </div>
           </div>
         )}
       </div>
@@ -295,7 +385,7 @@ function MpPokerHandOutcomePanel({
         ) : (
           <>
             <p className="text-[9px] font-heading text-mutedForeground italic">
-              {didWin ? 'The pot is yours, Don.' : 'Better luck next hand.'}
+              {didWinMainPot ? 'The pot is yours, Don.' : didWinAnyShare ? 'Side pot shipped — nice pick-up.' : 'Better luck next hand.'}
             </p>
             <Link
               to="/casino/mp-poker"
@@ -316,25 +406,43 @@ function MpPokerHandOutcomePanel({
   );
 }
 
-/** Small floating card on the felt: last tournament hand winner (~5s). */
+/** Small floating card on the felt: last tournament hand showdown (~5s). */
 function MpPokerTournamentHandToast({ snapshot, myUserId, visible }) {
   if (!visible || !snapshot?.results?.length) return null;
   const results = snapshot.results;
   const players = snapshot.players || [];
-  const winner = results.find((r) => r.result === 'win');
-  if (!winner) return null;
-  const winnerName =
-    winner.user_id === myUserId
-      ? 'You'
-      : players.find((p) => p.user_id === winner.user_id)?.username ?? 'Winner';
-  const wp = players.find((p) => p.user_id === winner.user_id);
-  const hole = wp?.hole_cards || [];
-  const hand = winner.hand;
-  const pot = Number(snapshot.pot ?? winner.payout ?? 0);
+  const primary = mpPokerLargestShareWinners(results);
+  if (!primary.length) return null;
+  const primaryIds = new Set(primary.map((p) => p.user_id));
+  const winnerLabel = primary.map((w) => {
+    if (w.user_id === myUserId) return 'You';
+    return players.find((p) => p.user_id === w.user_id)?.username ?? 'Winner';
+  }).join(' & ');
+  const maxShare = primary.reduce((m, r) => Math.max(m, Number(r.payout) || 0), 0);
+  const pot = Number(snapshot.pot) || maxShare;
+  const brd = snapshot.board || [];
+
+  const showdownRows = (() => {
+    const byUid = new Map();
+    for (const r of results) {
+      if (!r?.user_id) continue;
+      byUid.set(r.user_id, r);
+    }
+    const rows = [];
+    for (const [uid, r] of byUid) {
+      const pl = players.find((p) => p.user_id === uid);
+      const payout = Number(r.payout) || 0;
+      const hc = pl?.hole_cards || [];
+      if (!r.hand && hc.length < 1 && payout <= 0) continue;
+      rows.push({ uid, r, pl });
+    }
+    rows.sort((a, b) => (Number(b.r.payout) || 0) - (Number(a.r.payout) || 0));
+    return rows;
+  })();
 
   return (
     <div
-      className="pointer-events-none absolute left-1/2 top-[40%] z-[25] -translate-x-1/2 -translate-y-1/2 w-[min(90vw,260px)] animate-pkr-fade rounded-lg border px-2.5 py-2 shadow-2xl"
+      className="pointer-events-none absolute left-1/2 top-[40%] z-[25] -translate-x-1/2 -translate-y-1/2 w-[min(94vw,300px)] animate-pkr-fade rounded-lg border px-2 py-2 shadow-2xl overflow-hidden"
       style={{
         borderColor: 'rgba(212,175,55,0.6)',
         background: 'linear-gradient(165deg,rgba(15,23,42,0.92),rgba(0,0,0,0.88))',
@@ -344,19 +452,18 @@ function MpPokerTournamentHandToast({ snapshot, myUserId, visible }) {
       }}
     >
       <p className="text-[6px] font-heading uppercase tracking-[0.2em] text-center" style={{ color: 'rgba(255,255,255,0.4)' }}>
-        Hand #{snapshot.hand_number} winner
+        Hand #{snapshot.hand_number} · Showdown
       </p>
       <p
-        className="text-center text-[13px] sm:text-sm font-heading font-black uppercase tracking-wide mt-0.5 truncate px-1"
+        className="text-center text-[12px] sm:text-sm font-heading font-black uppercase tracking-wide mt-0.5 truncate px-1"
         style={{ color: 'var(--noir-primary-bright)' }}
       >
-        {winnerName}
+        {winnerLabel}
       </p>
-      {hand && <p className="text-[8px] font-heading text-center font-semibold text-white/65 leading-tight px-1">{hand}</p>}
-      {hole.length > 0 && (
-        <div className="flex justify-center gap-0.5 mt-1">
-          {hole.map((c, i) => (
-            <Card key={i} card={c} hidden={false} index={i} total={2} small />
+      {brd.length > 0 && (
+        <div className="flex justify-center gap-0.5 mt-1 flex-wrap">
+          {brd.map((c, i) => (
+            <Card key={`b-${i}`} card={c} hidden={false} index={i} total={brd.length} small />
           ))}
         </div>
       )}
@@ -365,6 +472,46 @@ function MpPokerTournamentHandToast({ snapshot, myUserId, visible }) {
           Pot <span className="font-bold text-emerald-400">{formatMoneyFull(pot)}</span>
         </p>
       )}
+      <p className="text-[6px] font-heading uppercase tracking-wider text-center text-white/30 mt-1">Cards and hand</p>
+      <div className="mt-1 space-y-1.5 overflow-y-auto pr-0.5 max-h-[200px]">
+        {showdownRows.map(({ uid, r, pl }) => {
+          const payout = Number(r.payout) || 0;
+          const pWon = payout > 0;
+          const isPrimary = primaryIds.has(uid);
+          const isMe = uid === myUserId;
+          const pName = isMe ? 'You' : pl?.is_bot ? 'Dealer' : pl?.username ?? 'Player';
+          const hc = pl?.hole_cards || [];
+          return (
+            <div
+              key={uid}
+              className="rounded-md px-1.5 py-1 flex gap-1.5 items-center"
+              style={{
+                background: isPrimary ? 'rgba(212,175,55,0.1)' : 'rgba(255,255,255,0.04)',
+                border: `1px solid ${isPrimary ? 'rgba(212,175,55,0.3)' : 'rgba(255,255,255,0.06)'}`,
+              }}
+            >
+              <div className="flex gap-0.5 shrink-0">
+                {hc.length > 0 ? (
+                  hc.map((c, i) => <Card key={i} card={c} hidden={false} index={i} total={2} small />)
+                ) : (
+                  <span className="text-[7px] font-heading text-white/25 px-0.5">—</span>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-[8px] font-heading font-bold truncate leading-tight" style={{ color: pWon ? 'var(--noir-primary-bright)' : 'rgba(255,255,255,0.5)' }}>
+                  {pName}
+                  {isPrimary ? ' · pot' : ''}
+                  {pWon ? ' ✓' : ' ✗'}
+                </p>
+                <p className="text-[7px] font-heading leading-snug text-white/45 mt-0.5">
+                  <span className="text-white/30 uppercase text-[6px] mr-0.5">Hand</span>
+                  {r.hand || '—'}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -678,7 +825,7 @@ export default function MPPokerGamePage() {
           if (g?.status === 'completed' && prev?.status !== 'completed') {
             const uid = myUserIdRef.current;
             const myResult = (g?.results || []).find((res) => res.user_id === uid);
-            if (myResult?.result === 'win') {
+            if ((Number(myResult?.payout) || 0) > 0) {
               setShowWin(true);
               setTimeout(() => setShowWin(false), 4500);
             }
@@ -795,7 +942,7 @@ export default function MPPokerGamePage() {
           if (g?.status === 'completed' && prev?.status !== 'completed') {
             const uid = myUserIdRef.current;
             const myResult = (g?.results || []).find((r) => r.user_id === uid);
-            if (myResult?.result === 'win') {
+            if ((Number(myResult?.payout) || 0) > 0) {
               setShowWin(true);
               setTimeout(() => setShowWin(false), 4500);
             }
@@ -813,7 +960,7 @@ export default function MPPokerGamePage() {
           if (g?.status === 'completed' && prev?.status !== 'completed') {
             const uid = myUserIdRef.current;
             const myResult = (g?.results || []).find((r) => r.user_id === uid);
-            if (myResult?.result === 'win') {
+            if ((Number(myResult?.payout) || 0) > 0) {
               setShowWin(true);
               setTimeout(() => setShowWin(false), 4500);
             }
@@ -1676,6 +1823,16 @@ export default function MPPokerGamePage() {
                 Dealing remaining streets…
               </p>
             </div>
+            {board.length > 0 && (
+              <div>
+                <p className="text-[8px] font-heading uppercase tracking-wider text-white/35 mb-1">Community cards</p>
+                <div className="flex justify-center gap-0.5 flex-wrap">
+                  {board.map((c, i) => (
+                    <Card key={`allin-board-${i}`} card={c} hidden={false} index={i} total={board.length} small />
+                  ))}
+                </div>
+              </div>
+            )}
             {/* Manual advance fallback for vs-dealer all-in */}
             {isVsDealer && (
               <button type="button" onClick={fetchGame}
@@ -1702,7 +1859,7 @@ export default function MPPokerGamePage() {
         <MpPokerHandOutcomePanel
           results={game.results}
           players={players}
-          pot={(game.results || []).find((r) => r.result === 'win')?.payout ?? 0}
+          pot={Math.max(0, ...(game.results || []).map((r) => Number(r.payout) || 0))}
           myUserId={myUserId}
           tournamentFooter={false}
           board={board}

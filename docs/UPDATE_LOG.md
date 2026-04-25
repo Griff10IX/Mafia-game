@@ -6,6 +6,16 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-25 22:00 UTC[/color][/b] — [b]MP Poker: full showdown recap (everyone’s hand + cards)[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Casinos → MP Poker[/b] — at [b]showdown[/b], the server now attaches a readable [b]hand description[/b] (pair, flush, full house, etc.) for [b]every seat that was still in the hand[/b], not only the pot winner(s). Older finished hands in the database may still only list the winner’s hand until new hands are played.[/color]
+[*][color=#888888][b]UI:[/b] The [b]settled / results[/b] panel lists [b]everyone at showdown[/b] with hole cards, a [b]Hand:[/b] line, checkmarks, and payout where it applies; [b]main pot / chop[/b] winners are highlighted. [b]Tournaments[/b] — the short [b]floating recap[/b] after each hand now shows the board, pot, and the same per-player [b]cards + hand[/b] for the table (scrollable when many seats).[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-25 20:35 UTC[/color][/b] — [b]Entertainer stability + load reduction[/b][/size]
 [quote]
 [list]

@@ -281,6 +281,20 @@ def _hand_description(category: int, tie: Tuple) -> str:
     return base
 
 
+def _mp_poker_evaluated_hand_label(p: dict, board: List[dict]) -> Optional[str]:
+    """Best 5-card description at showdown; None if folded, no hole cards, or fewer than 5 cards total."""
+    if p.get("status") == "folded":
+        return None
+    hole = list(p.get("hole_cards") or [])
+    bd = list(board or [])
+    if len(hole) < 2:
+        return None
+    if len(hole) + len(bd) < 5:
+        return None
+    cat, tie = _best_hand_seven(hole, bd)
+    return _hand_description(cat, tie)
+
+
 def _enrich_players_current_hand(g: dict) -> None:
     """Set current_hand_name on each player (for API response only; not persisted)."""
     if not g:
@@ -2205,7 +2219,7 @@ def register(router):
                     "user_id": p.get("user_id"),
                     "result": "win" if p.get("user_id") == uid else "lose",
                     "payout": pot if p.get("user_id") == uid else 0,
-                    "hand": None,
+                    "hand": _mp_poker_evaluated_hand_label(p, board),
                 })
         else:
             # Side-pot algorithm: a player can only win from each opponent
@@ -2236,18 +2250,15 @@ def register(router):
             if not side_pots:
                 side_pots = [(pot, [i for i, p in enumerate(players) if p.get("status") != "folded"])]
 
-            winner_hand_names = {}
             for sp_amt, sp_elig in side_pots:
                 best_rank = None
                 pot_winners = []
-                pot_hand_name = None
                 for idx in sp_elig:
                     hole = players[idx].get("hole_cards") or []
                     r = _best_hand_seven(hole, board)
                     if best_rank is None or r > best_rank:
                         best_rank = r
                         pot_winners = [players[idx]]
-                        pot_hand_name = _hand_description(r[0], r[1]) if r else None
                     elif r == best_rank:
                         pot_winners.append(players[idx])
                 sp_split = sp_amt // len(pot_winners)
@@ -2255,8 +2266,14 @@ def register(router):
                 for i, w in enumerate(pot_winners):
                     uid = w.get("user_id")
                     winner_payouts[uid] = winner_payouts.get(uid, 0) + sp_split + (sp_rem if i == 0 else 0)
-                    if uid not in winner_hand_names:
-                        winner_hand_names[uid] = pot_hand_name
+
+            showdown_hands = {}
+            for p in players:
+                uid = p.get("user_id")
+                if uid:
+                    lbl = _mp_poker_evaluated_hand_label(p, board)
+                    if lbl:
+                        showdown_hands[uid] = lbl
 
             for p in players:
                 uid = p.get("user_id")
@@ -2264,7 +2281,7 @@ def register(router):
                     "user_id": uid,
                     "result": "win" if uid in winner_payouts else "lose",
                     "payout": winner_payouts.get(uid, 0),
-                    "hand": winner_hand_names.get(uid) if uid in winner_payouts else None,
+                    "hand": showdown_hands.get(uid),
                 })
         last_snap = _mp_poker_last_hand_showdown_snapshot(g, players, board, pot, results) if is_tournament else None
         if is_tournament:
