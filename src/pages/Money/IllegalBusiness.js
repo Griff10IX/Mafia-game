@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Shield, ListChecks, Crosshair, TrendingUp, Lock, UserPlus, Star, AlertTriangle, ChevronRight, ChevronDown, Award } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
@@ -8,8 +8,13 @@ import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
 import ActiveTokenBadge from '../../components/ActiveTokenBadge';
 
-const BIZ_CACHE_KEY = 'mafia_illegal_biz_v1';
+const BIZ_CACHE_PREFIX = 'mafia_illegal_biz_v1:';
 const BIZ_REFRESH = 30_000;
+
+function bizSessionKey(userId) {
+  const id = (userId || '').trim();
+  return id ? `${BIZ_CACHE_PREFIX}${id}` : '';
+}
 
 /** Matches backend LOOT_BOX_PIECES_PER_OPEN (routers/money/loot_box.py) */
 const LOOT_BOX_PIECES_PER_OPEN = 100;
@@ -313,9 +318,8 @@ function StartScreen({ types, saving, onStart }) {
 }
 
 export default function IllegalBusiness() {
-  const bizBoot = readSessionJson(BIZ_CACHE_KEY);
-  const [data, setData] = useState(() => bizBoot?.data ?? null);
-  const [types, setTypes] = useState(() => bizBoot?.types ?? []);
+  const [data, setData] = useState(null);
+  const [types, setTypes] = useState([]);
   const [saving, setSaving] = useState(false);
   const [raidTarget, setRaidTarget] = useState('');
   const [raidState, setRaidState] = useState('');
@@ -325,12 +329,13 @@ export default function IllegalBusiness() {
   const [missionLogShowAll, setMissionLogShowAll] = useState(false);
 
   const fetchData = useCallback(async (silent = false) => {
+    const cacheKey = bizSessionKey(user?.id);
     try {
       const [res, typesRes] = await Promise.all([
         api.get('/illegal-business').catch((e) => ({ ...e, response: e.response })),
         api.get('/illegal-business/types').catch(() => ({ data: { types: [] } })),
       ]);
-      const prevSnap = readSessionJson(BIZ_CACHE_KEY) || {};
+      const prevSnap = cacheKey ? readSessionJson(cacheKey) || {} : {};
       let nextTypes = prevSnap.types ?? [];
       if (typesRes?.data?.types) {
         nextTypes = typesRes.data.types;
@@ -346,28 +351,46 @@ export default function IllegalBusiness() {
       } else if (!silent) {
         toast.error(getApiErrorMessage(res));
       }
-      if (nextData !== undefined) {
-        writeSessionJson(BIZ_CACHE_KEY, { data: nextData, types: nextTypes, t: Date.now() });
+      if (nextData !== undefined && cacheKey) {
+        writeSessionJson(cacheKey, { data: nextData, types: nextTypes, t: Date.now() });
       }
     } catch (e) {
       if (e.response?.status === 404) {
         const nextData = { noBusiness: true };
         setData(nextData);
-        const prevSnap = readSessionJson(BIZ_CACHE_KEY) || {};
-        writeSessionJson(BIZ_CACHE_KEY, { data: nextData, types: prevSnap.types ?? [], t: Date.now() });
+        if (cacheKey) {
+          const prevSnap = readSessionJson(cacheKey) || {};
+          writeSessionJson(cacheKey, { data: nextData, types: prevSnap.types ?? [], t: Date.now() });
+        }
       } else if (!silent) toast.error(getApiErrorMessage(e));
     }
-  }, []);
+  }, [user?.id]);
 
   useEffect(() => {
-    const c = readSessionJson(BIZ_CACHE_KEY);
+    api.get('/auth/me').then((r) => setUser(r.data)).catch(() => {});
+  }, []);
+
+  const prevBizUserIdRef = useRef(null);
+  useEffect(() => {
+    const uid = user?.id;
+    if (!uid) return undefined;
+    if (prevBizUserIdRef.current && prevBizUserIdRef.current !== uid) {
+      setData(null);
+      setTypes([]);
+    }
+    prevBizUserIdRef.current = uid;
+    const key = bizSessionKey(uid);
+    const c = readSessionJson(key);
     const stale = !c?.t || Date.now() - c.t > BIZ_REFRESH;
+    if (c?.data != null) {
+      setData((prev) => prev ?? c.data);
+      if (c.types?.length) setTypes((prev) => (prev.length ? prev : c.types));
+    }
     if (c?.data == null) fetchData(false);
     else if (stale) fetchData(true);
     const id = setInterval(() => fetchData(true), BIZ_REFRESH);
-    api.get('/auth/me').then((r) => setUser(r.data)).catch(() => {});
     return () => clearInterval(id);
-  }, [fetchData]);
+  }, [user?.id, fetchData]);
 
   const withSave = (fn) => async (...args) => {
     if (saving) return;
@@ -491,7 +514,10 @@ export default function IllegalBusiness() {
   const vault = parseInt(business?.vault ?? 0, 10);
   const minIbmCash = 100;
   const pendingTake = Number(data?.pending_take ?? 0);
-  const canCollectTake = pendingTake >= minIbmCash;
+  const racketPayoutMult = Number(data?.racket_payout_mult ?? 1);
+  const safeMult = Number.isFinite(racketPayoutMult) && racketPayoutMult > 0 ? racketPayoutMult : 1;
+  const tillAtCollect = Math.round(pendingTake * safeMult * 100) / 100;
+  const canCollectTake = tillAtCollect >= minIbmCash;
   const canWithdrawFromVault = vault >= minIbmCash;
   const upgradesDone = business?.security_upgrades || [];
   const nextUpgradeIdx = upgradesDone.length;
@@ -584,7 +610,16 @@ export default function IllegalBusiness() {
                   {formatMoney(vault)}
                 </div>
                 <div className="text-[10px] text-zinc-500 font-heading mt-1">
-                  Till ready: {formatTillDollars(pendingTake)}
+                  {safeMult === 1 ? (
+                    <>Till ready: {formatTillDollars(pendingTake)}</>
+                  ) : (
+                    <>
+                      Till ready (base): {formatTillDollars(pendingTake)}
+                      <span className="block text-[9px] text-zinc-400 mt-0.5">
+                        World event ×{safeMult} at collect → ~{formatTillDollars(tillAtCollect)} to vault
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
               <button onClick={handleCollect} disabled={saving || !canCollectTake}
@@ -594,7 +629,15 @@ export default function IllegalBusiness() {
             </div>
             {!canCollectTake && pendingTake >= 0.01 && (
               <p className="text-[10px] text-mutedForeground font-heading">
-                Collect unlocks at {formatMoney(minIbmCash)} in the till (currently {formatTillDollars(pendingTake)}).
+                {safeMult === 1 ? (
+                  <>
+                    Collect unlocks at {formatMoney(minIbmCash)} in the till (currently {formatTillDollars(pendingTake)}).
+                  </>
+                ) : (
+                  <>
+                    Collect unlocks at {formatMoney(minIbmCash)} after the world event is applied (currently ~{formatTillDollars(tillAtCollect)} to vault).
+                  </>
+                )}
               </p>
             )}
             <p className="text-[9px] text-zinc-500 font-heading leading-snug pt-1 border-t border-primary/10" title={LOOT_BOX_PIECES_HINT}>

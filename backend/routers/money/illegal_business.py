@@ -1634,6 +1634,7 @@ async def get_illegal_business(current_user: dict = Depends(get_current_user)):
             "no_business": True,
             "business": None,
             "pending_take": 0.0,
+            "racket_payout_mult": 1.0,
             "guards": [],
             "type_info": {},
             "missions_completed": [],
@@ -1690,10 +1691,12 @@ async def get_illegal_business(current_user: dict = Depends(get_current_user)):
     else:
         next_guard_slot_cash = None
     pending_take, _ = await _illegal_business_pending_take_and_hours(business, current_user, now)
+    ev = await get_effective_event()
     return {
         "no_business": False,
         "business": business,
         "pending_take": round(pending_take, 2),
+        "racket_payout_mult": float(ev.get("racket_payout", 1.0)),
         "guards": guards,
         "type_info": type_info,
         "missions_completed": list(completed_ids),
@@ -1784,9 +1787,10 @@ async def _illegal_business_pending_take_and_hours(
     income_per_hour_eff = income_per_hour * level_mult * (1.0 + boost_pct / 100.0)
     income = min(hours * income_per_hour_eff, income_per_hour_eff * cap_hours)
     income = round(income, 2)
-    ev = await get_effective_event()
+    # Prestige only here — global event racket_payout is applied at collect so the till
+    # does not jump down when the server event rotates (same hours, different multiplier).
     prestige = get_prestige_bonus(current_user)
-    income = round(income * float(ev.get("racket_payout", 1.0)) * float(prestige.get("illegal_business_mult", 1.0)), 2)
+    income = round(income * float(prestige.get("illegal_business_mult", 1.0)), 2)
     racket_until = current_user.get("racket_until")
     if racket_until:
         try:
@@ -1990,6 +1994,8 @@ async def _collect_illegal_business_impl(current_user: dict) -> dict:
         raise HTTPException(status_code=404, detail="You don't have an illegal business.")
     prev_last = business.get("last_collected_at")
     income, hours = await _illegal_business_pending_take_and_hours(business, current_user, now)
+    ev_collect = await get_effective_event()
+    income = round(float(income) * float(ev_collect.get("racket_payout", 1.0)), 2)
     if income < 0.01:
         await _restore_illegal_business_collect_time(business["id"], prev_last)
         raise HTTPException(status_code=400, detail="No take to collect yet.")
