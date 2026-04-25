@@ -804,6 +804,9 @@ export default function Distillery() {
                 </div>
               </div>
               <div className="dist-heat-flavor">{heatInfo.flavor}</div>
+              <p style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 10, lineHeight: 1.5, borderTop: '1px solid var(--border-dim)', paddingTop: 8 }}>
+                <strong style={{ color: 'var(--text-muted)' }}>Vault note:</strong> at <strong style={{ color: 'var(--text-muted)' }}>critical</strong> heat and above, each collect can randomly trigger enforcement: short shutdown plus a vault seizure scaled to heat (typically about 5–22% of vault plus till from that collect). Heat also rises every collect from booze volume and auto-sell; security workers, tunnels, bribe office, specials, and <em>Cool Off</em> help.
+              </p>
               {dist?.shutdown_until && (
                 <div className="dist-heat-shutdown">
                   <ShieldAlert size={13} />
@@ -1177,7 +1180,7 @@ export default function Distillery() {
               <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--border-dim)' }}>
                 <SectionHead icon={Zap} title="Auto-Aging" />
                 <p className="mb-2 text-[10px] leading-snug text-mutedForeground">
-                  On by default: server claims ready batches, starts new ones with spare booze (above reserve), and optionally throttles racket collect so passive booze keeps flowing without the page open. Turn off here if you only want manual cellar controls.
+                  On by default: the server claims ready batches, starts new ones when spare booze stays above your reserve, and can run throttled racket collects so income keeps moving without this page open. Each collect (manual or auto) applies the same rules as the main racket: till goes to the vault, distillery heat rises from production and auto-sell, and heat slowly decays over real time between updates. Turn auto-aging off if you want full manual control of the cellar queue only.
                 </p>
                 <div className="dist-autosell-row">
                   <input
@@ -1228,6 +1231,9 @@ export default function Distillery() {
                   />
                   <label htmlFor="autoaging-collect" className="dist-autosell-label">Auto-collect racket (throttled)</label>
                 </div>
+                <p className="mt-1.5 text-[9px] leading-snug text-mutedForeground">
+                  When checked, the server periodically runs the same <strong className="text-foreground/85">Collect the Take</strong> action as on the racket page: till clears into the vault, heat can climb, and at <strong className="text-foreground/85">critical heat (75+)</strong> a collect can still roll enforcement (shutdown + a random cut of vault, often about 5–22% including that collect&apos;s cash). Uncheck to avoid background collects — you only bank when you press Collect on the racket.
+                </p>
                 <GhostBtn
                   className="mt-2"
                   disabled={saving}

@@ -621,6 +621,15 @@ export default function IllegalBusiness() {
                     </>
                   )}
                 </div>
+                {business?.booze_per_hour != null && (
+                  <p className="text-[9px] text-amber-500/85 font-heading leading-snug mt-2 max-w-md">
+                    Distillery: if heat stays critical, a collect — including <strong className="text-amber-400/95">auto-collect</strong> from the distillery — can trigger enforcement and remove part of this vault. See{' '}
+                    <Link to="/money/distillery" className="text-amber-400/95 underline underline-offset-2 hover:text-amber-300/95">
+                      Heat &amp; Enforcement
+                    </Link>
+                    {' '}on the distillery page; turn off auto-collect there to avoid background collects.
+                  </p>
+                )}
               </div>
               <button onClick={handleCollect} disabled={saving || !canCollectTake}
                 className="collect-btn px-6 py-3 bg-primary/20 text-primary font-heading font-bold uppercase tracking-widest text-xs rounded border border-primary/40 hover:bg-primary/30 disabled:opacity-40 transition-all">
