@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { ArrowLeft, MessageSquare, CheckCircle2, XCircle } from 'lucide-react';
+import { ArrowLeft, MessageSquare, CheckCircle2, XCircle, UserMinus } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import styles from '../../styles/noir.module.css';
 
@@ -570,6 +570,7 @@ export default function MPPokerGamePage() {
   const [readyLoading, setReadyLoading] = useState(false);
   const [cancelLoading, setCancelLoading] = useState(false);
   const [leaveLoading, setLeaveLoading] = useState(false);
+  const [kickLoadingUserId, setKickLoadingUserId] = useState(null);
   const [chatInput, setChatInput] = useState('');
   const [sendingChat, setSendingChat] = useState(false);
   const [showWin, setShowWin] = useState(false);
@@ -873,6 +874,21 @@ export default function MPPokerGamePage() {
     finally { setLeaveLoading(false); }
   };
 
+  const kickUnreadyPlayer = async (targetUserId) => {
+    if (!gameId || !targetUserId || kickLoadingUserId) return;
+    setKickLoadingUserId(targetUserId);
+    try {
+      const res = await api.post(`/casino/mp-poker/games/${gameId}/kick`, { user_id: targetUserId });
+      setGame(res.data ?? null);
+      await refreshUser();
+      toast.success('Player removed; buy-in refunded');
+    } catch (e) {
+      toast.error(getApiErrorMessage(e) || 'Could not remove player');
+    } finally {
+      setKickLoadingUserId(null);
+    }
+  };
+
   const remindInactivePlayers = async () => {
     if (remindLoading || !gameId) return;
     setRemindLoading(true);
@@ -950,6 +966,14 @@ export default function MPPokerGamePage() {
   const canRemindTournamentRole = Boolean(
     isTournament && tournamentStatus === 'registration' && status === 'open'
     && (phase === 'lobby' || phase === 'ready') && (isCreator || canStaffTournamentRemind),
+  );
+  const canHostKickUnready = Boolean(
+    status === 'open'
+    && (phase === 'lobby' || phase === 'ready')
+    && (
+      (isTournament && tournamentStatus === 'registration' && game?.approval_status === 'approved' && (isCreator || canStaffTournamentRemind))
+      || (!isTournament && game?.mode === 'vs_players' && isCreator)
+    ),
   );
   const remindCooldownMs = tournamentReminderCooldownRemainingMs(game?.inactive_reminder_sent_at, remindCooldownTick);
   const canClickRemindInactive = canRemindTournamentRole && inactiveOthersCount > 0 && remindCooldownMs <= 0;
@@ -1176,10 +1200,25 @@ export default function MPPokerGamePage() {
               </p>
               <div className="flex flex-wrap justify-center gap-2">
                 {players.map((p) => (
-                  <span key={p.user_id} className="px-3 py-1 rounded-full text-[9px] font-heading font-bold"
-                    style={{ background: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.3)', color: 'var(--noir-primary)' }}>
-                    {p.username}
-                  </span>
+                  <div key={p.user_id} className="inline-flex items-center gap-1">
+                    <span className="px-3 py-1 rounded-full text-[9px] font-heading font-bold"
+                      style={{ background: 'rgba(212,175,55,0.12)', border: '1px solid rgba(212,175,55,0.3)', color: 'var(--noir-primary)' }}>
+                      {p.username}
+                    </span>
+                    {canHostKickUnready && p.user_id && p.user_id !== game.creator_id && !p.ready && (
+                      <button
+                        type="button"
+                        disabled={Boolean(kickLoadingUserId)}
+                        onClick={() => kickUnreadyPlayer(p.user_id)}
+                        title="Remove player (not ready); refund buy-in"
+                        className="inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md border text-[8px] font-heading font-bold uppercase disabled:opacity-45"
+                        style={{ borderColor: 'rgba(248,113,113,0.45)', background: 'rgba(248,113,113,0.1)', color: '#fca5a5' }}
+                      >
+                        <UserMinus size={10} />
+                        {kickLoadingUserId === p.user_id ? '…' : 'Kick'}
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
               <div className="flex flex-wrap justify-center gap-2 mt-2">
@@ -1275,10 +1314,23 @@ export default function MPPokerGamePage() {
                   }}>
                   <div className="w-2 h-2 rounded-full flex-shrink-0 transition-all"
                     style={{ background: p.ready ? '#34d399' : 'rgba(255,255,255,0.15)', boxShadow: p.ready ? '0 0 6px rgba(52,211,153,0.5)' : 'none' }} />
-                  <span className="text-[9px] font-heading font-bold truncate"
+                  <span className="text-[9px] font-heading font-bold truncate min-w-0 flex-1"
                     style={{ color: p.user_id === myUserId ? 'var(--noir-primary)' : 'rgba(255,255,255,0.75)' }}>
                     {p.username}{p.user_id === myUserId ? ' (You)' : ''}
                   </span>
+                  {canHostKickUnready && p.user_id && p.user_id !== game.creator_id && !p.ready && (
+                    <button
+                      type="button"
+                      disabled={Boolean(kickLoadingUserId)}
+                      onClick={() => kickUnreadyPlayer(p.user_id)}
+                      title="Kick — not readied; refund buy-in"
+                      className="shrink-0 inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded border text-[7px] font-heading font-bold uppercase disabled:opacity-45"
+                      style={{ borderColor: 'rgba(248,113,113,0.45)', color: '#fca5a5' }}
+                    >
+                      <UserMinus size={9} />
+                      {kickLoadingUserId === p.user_id ? '…' : 'Kick'}
+                    </button>
+                  )}
                   {p.ready && <CheckCircle2 size={10} className="ml-auto shrink-0" style={{ color: '#34d399' }} />}
                 </div>
               ))}

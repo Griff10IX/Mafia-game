@@ -382,6 +382,10 @@ class PokerTournamentAdminFixRequest(BaseModel):
     reason: Optional[str] = None
 
 
+class PokerKickRequest(BaseModel):
+    user_id: str
+
+
 def _parse_iso_utc(value: Any) -> Optional[datetime]:
     if not value:
         return None
@@ -2072,6 +2076,81 @@ def register(router):
         await db.mp_poker_games.update_one({"id": game_id}, {"$set": updates})
         g = await db.mp_poker_games.find_one({"id": game_id})
         return {k: v for k, v in g.items() if k != "_id"}
+
+    @router.post("/casino/mp-poker/games/{game_id}/kick")
+    async def kick_unready_player(
+        game_id: str,
+        body: PokerKickRequest,
+        current_user: dict = Depends(get_current_user_verified),
+    ):
+        """Host (or staff, tournaments only) removes a seated player who has not readied up; target is refunded."""
+        uid = (current_user.get("id") or "").strip()
+        tid = (body.user_id or "").strip()
+        if not tid:
+            raise HTTPException(status_code=400, detail="user_id required")
+        g = await db.mp_poker_games.find_one({"id": game_id})
+        if not g or g.get("mode") not in ("vs_players", "tournament"):
+            raise HTTPException(status_code=404, detail="Game not found")
+        is_tournament = _is_tournament_game(g)
+        if is_tournament:
+            if g.get("approval_status") != "approved" or g.get("tournament_status") != "registration":
+                raise HTTPException(status_code=400, detail="Cannot remove players at this stage")
+        if g.get("status") != "open" or g.get("phase") not in ("lobby", "ready"):
+            raise HTTPException(status_code=400, detail="Cannot remove players at this stage")
+        is_host = (g.get("creator_id") or "").strip() == uid
+        is_staff = _is_admin(current_user) or _is_moderator(current_user)
+        if is_tournament:
+            if not is_host and not is_staff:
+                raise HTTPException(status_code=403, detail="Only the tournament host or staff can remove a player")
+        else:
+            if not is_host:
+                raise HTTPException(status_code=403, detail="Only the table host can remove a player")
+        if tid == uid:
+            raise HTTPException(status_code=400, detail="Use Leave Table to step away as a player")
+        if tid == (g.get("creator_id") or "").strip():
+            raise HTTPException(status_code=400, detail="Cannot remove the host")
+        players = list(g.get("players") or [])
+        idx = next((i for i, p in enumerate(players) if (p.get("user_id") or "").strip() == tid), None)
+        if idx is None:
+            raise HTTPException(status_code=400, detail="Player is not seated at this table")
+        target = players[idx]
+        if target.get("ready"):
+            raise HTTPException(status_code=400, detail="Player has already readied up")
+        buy_in = int(g.get("buy_in") or 0)
+        currency = _tournament_buy_in_currency(g) if is_tournament else "money"
+        players.pop(idx)
+        if buy_in > 0:
+            if is_tournament:
+                await _tournament_refund_user(tid, buy_in, currency)
+            else:
+                await db.users.update_one({"id": tid}, {"$inc": {"money": buy_in}})
+        for i, p in enumerate(players):
+            p["seat_index"] = i
+        min_players = MP_POKER_TOURNAMENT_MIN_PLAYERS if (is_tournament and g.get("tournament_status") == "registration") else 2
+        phase = "ready" if len(players) >= min_players else "lobby"
+        all_ready_at = None
+        if phase == "ready":
+            all_ready = len(players) >= min_players and all(p.get("ready") for p in players)
+            if all_ready:
+                all_ready_at = g.get("all_ready_at") or datetime.now(timezone.utc).isoformat()
+        updates: Dict[str, Any] = {"players": players, "phase": phase, "all_ready_at": all_ready_at}
+        if is_tournament and buy_in > 0:
+            updates["prize_pool"] = max(0, int(g.get("prize_pool") or 0) - buy_in)
+        await db.mp_poker_games.update_one({"id": game_id}, {"$set": updates})
+        host_name = (current_user.get("username") or "Host").strip() or "Host"
+        table_label = "tournament" if is_tournament else "table"
+        try:
+            await send_notification(
+                tid,
+                "Removed from poker " + table_label,
+                f"{host_name} removed you before play started because you had not readied up. Your buy-in has been refunded.",
+                "system",
+                category="casino",
+            )
+        except Exception:
+            pass
+        g = await db.mp_poker_games.find_one({"id": game_id})
+        return {k: v for k, v in (g or {}).items() if k != "_id"}
 
     @router.post("/casino/mp-poker/games/{game_id}/ready")
     async def ready_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
