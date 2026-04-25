@@ -113,7 +113,7 @@ function resolveSmileyImgSrc(relativePath) {
 }
 
 /** PNG :kekw: etc. and Unicode :fire: wrapper share this height so BBCode icons stay readable in text-xs UI. */
-const FORUM_INLINE_SMILEY_PX = 22;
+export const FORUM_INLINE_SMILEY_PX = 28;
 
 /** Wrap :fire: etc. so emoji do not inherit tiny parent font-size (unlike fixed-size PNG smileys). */
 function wrapForumUnicodeEmoji(emoji) {

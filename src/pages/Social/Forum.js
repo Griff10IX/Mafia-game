@@ -7,7 +7,7 @@ import { readForumSpecialTabsWarm } from '../../utils/forumSpecialTabsWarm';
 import { toast } from 'sonner';
 import GifPicker from '../../components/GifPicker';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
-import { parseForumContent, insertAtCursor } from '../../utils/forumContent';
+import { parseForumContent, insertAtCursor, FORUM_INLINE_SMILEY_PX } from '../../utils/forumContent';
 import styles from '../../styles/noir.module.css';
 import FamilyEmblem from '../../components/FamilyEmblem';
 
@@ -596,7 +596,7 @@ const CreateTopicModal = ({ isOpen, onClose, onCreated, category = 'general', ca
               {/* Classic forum smileys first */}
               {CLASSIC_SMILEYS.map(({ code, img }) => (
                 <button key={code} type="button" onClick={() => insertEmoji(code)} className="hover:scale-110 transition-transform p-0.5" title={code}>
-                  <img src={`/images/smileys/${img}.png`} alt={code} className="w-[22px] h-[22px] object-contain" />
+                  <img src={`/images/smileys/${img}.png`} alt={code} className="object-contain shrink-0" style={{ width: FORUM_INLINE_SMILEY_PX, height: FORUM_INLINE_SMILEY_PX }} />
                 </button>
               ))}
               {/* Modern emojis */}

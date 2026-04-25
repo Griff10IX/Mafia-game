@@ -1961,17 +1961,57 @@ def register(router):
 
     @router.post("/casino/mp-poker/games/{game_id}/cancel")
     async def cancel_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
-        """Cancel open/ready game; refund all."""
+        """Cancel open/ready cash table, or a tournament still in registration; refund all seated players."""
         g = await db.mp_poker_games.find_one({"id": game_id})
-        if not g or g.get("mode") != "vs_players":
+        if not g or g.get("mode") not in ("vs_players", "tournament"):
             raise HTTPException(status_code=404, detail="Game not found")
         if g.get("status") not in ("open", "ready"):
             raise HTTPException(status_code=400, detail="Cannot cancel")
         uid = current_user.get("id") or ""
         if g.get("creator_id") != uid and not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Only creator can cancel")
+        is_tournament = _is_tournament_game(g)
+        if is_tournament:
+            if g.get("approval_status") != "approved" or g.get("tournament_status") != "registration":
+                raise HTTPException(status_code=400, detail="Cannot cancel tournament at this stage")
+            if g.get("phase") not in ("lobby", "ready"):
+                raise HTTPException(status_code=400, detail="Cannot cancel")
+            now_iso = datetime.now(timezone.utc).isoformat()
+            claim_res = await db.mp_poker_games.update_one(
+                {
+                    "id": game_id,
+                    "status": {"$in": ("open", "ready")},
+                    "mode": "tournament",
+                    "tournament_status": "registration",
+                },
+                {
+                    "$set": {
+                        "status": "cancelled",
+                        "phase": "cancelled",
+                        "tournament_status": "denied",
+                        "approval_reason": "Cancelled by host",
+                        "completed_at": now_iso,
+                    }
+                },
+            )
+            if claim_res.modified_count == 0:
+                raise HTTPException(status_code=400, detail="Game already cancelled or in progress")
+            players = list(g.get("players") or [])
+            buy_in = int(g.get("buy_in") or 0)
+            currency = _tournament_buy_in_currency(g)
+            seen: set[str] = set()
+            for p in players:
+                puid = (p.get("user_id") or "").strip()
+                if not puid or puid in seen:
+                    continue
+                seen.add(puid)
+                if buy_in > 0:
+                    await _tournament_refund_user(puid, buy_in, currency)
+            await db.mp_poker_games.update_one({"id": game_id}, {"$set": {"prize_pool": 0}})
+            return {"message": "Tournament cancelled; everyone refunded"}
+
         claim_res = await db.mp_poker_games.update_one(
-            {"id": game_id, "status": {"$in": ("open", "ready")}},
+            {"id": game_id, "status": {"$in": ("open", "ready")}, "mode": "vs_players"},
             {"$set": {"status": "cancelled", "phase": "cancelled"}},
         )
         if claim_res.modified_count == 0:
@@ -1987,16 +2027,19 @@ def register(router):
 
     @router.post("/casino/mp-poker/games/{game_id}/leave")
     async def leave_game(game_id: str, current_user: dict = Depends(get_current_user_verified)):
-        """Leave an open/ready multiplayer poker game before the hand starts.
+        """Leave an open/ready cash table or tournament (registration only) before the hand starts.
 
         Non-creators can leave while the game is still in the lobby/ready phase.
         They get their buy-in back and are removed from the seats.
         """
         uid = current_user.get("id") or ""
         g = await db.mp_poker_games.find_one({"id": game_id})
-        if not g or g.get("mode") != "vs_players":
+        if not g or g.get("mode") not in ("vs_players", "tournament"):
             raise HTTPException(status_code=404, detail="Game not found")
-        # Only allow leaving before the first hand has started
+        is_tournament = _is_tournament_game(g)
+        if is_tournament:
+            if g.get("approval_status") != "approved" or g.get("tournament_status") != "registration":
+                raise HTTPException(status_code=400, detail="Cannot leave at this stage")
         if g.get("status") != "open" or g.get("phase") not in ("lobby", "ready"):
             raise HTTPException(status_code=400, detail="Cannot leave at this stage")
         players = list(g.get("players") or [])
@@ -2007,21 +2050,25 @@ def register(router):
             # Creator should cancel the table instead so everyone is refunded consistently
             raise HTTPException(status_code=400, detail="Creator must cancel the table instead of leaving")
         buy_in = int(g.get("buy_in") or 0)
-        # Remove player and refund their buy-in
+        currency = _tournament_buy_in_currency(g) if is_tournament else "money"
         players.pop(idx)
         if buy_in > 0:
-            await db.users.update_one({"id": uid}, {"$inc": {"money": buy_in}})
-        # Re-seat remaining players
+            if is_tournament:
+                await _tournament_refund_user(uid, buy_in, currency)
+            else:
+                await db.users.update_one({"id": uid}, {"$inc": {"money": buy_in}})
         for i, p in enumerate(players):
             p["seat_index"] = i
-        # Recompute phase and ready state
-        phase = "ready" if len(players) >= 2 else "lobby"
+        min_players = MP_POKER_TOURNAMENT_MIN_PLAYERS if (is_tournament and g.get("tournament_status") == "registration") else 2
+        phase = "ready" if len(players) >= min_players else "lobby"
         all_ready_at = None
         if phase == "ready":
-            all_ready = len(players) >= 2 and all(p.get("ready") for p in players)
+            all_ready = len(players) >= min_players and all(p.get("ready") for p in players)
             if all_ready:
                 all_ready_at = g.get("all_ready_at") or datetime.now(timezone.utc).isoformat()
-        updates = {"players": players, "phase": phase, "all_ready_at": all_ready_at}
+        updates: Dict[str, Any] = {"players": players, "phase": phase, "all_ready_at": all_ready_at}
+        if is_tournament and buy_in > 0:
+            updates["prize_pool"] = max(0, int(g.get("prize_pool") or 0) - buy_in)
         await db.mp_poker_games.update_one({"id": game_id}, {"$set": updates})
         g = await db.mp_poker_games.find_one({"id": game_id})
         return {k: v for k, v in g.items() if k != "_id"}

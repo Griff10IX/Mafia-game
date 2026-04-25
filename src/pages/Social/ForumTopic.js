@@ -7,7 +7,7 @@ import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache'
 import AutoRefreshNote from '../../components/AutoRefreshNote';
 import GifPicker from '../../components/GifPicker';
 import { toast } from 'sonner';
-import { parseForumContent, insertAtCursor } from '../../utils/forumContent';
+import { parseForumContent, insertAtCursor, FORUM_INLINE_SMILEY_PX } from '../../utils/forumContent';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import FamilyEmblem from '../../components/FamilyEmblem';
 import styles from '../../styles/noir.module.css';
@@ -130,7 +130,7 @@ const FORUM_CONTENT_STYLES = `
   .forum-content-gif { max-height: 280px; object-fit: contain; }
   .forum-content strong { font-weight: 700; }
   .forum-content em { font-style: italic; }
-  .forum-content .forum-content-emoji { font-size: 22px !important; line-height: 1; display: inline-block; vertical-align: -0.2em; }
+  .forum-content .forum-content-emoji { font-size: ${FORUM_INLINE_SMILEY_PX}px !important; line-height: 1; display: inline-block; vertical-align: -0.2em; }
 `;
 
 function getTimeAgo(iso) {
@@ -1726,7 +1726,8 @@ export default function ForumTopic() {
                       <img 
                         src={`/images/smileys/${img}.png`}
                         alt={code}
-                        className="w-[22px] h-[22px] object-contain"
+                        className="object-contain shrink-0"
+                        style={{ width: FORUM_INLINE_SMILEY_PX, height: FORUM_INLINE_SMILEY_PX }}
                       />
                     </button>
                   ))}

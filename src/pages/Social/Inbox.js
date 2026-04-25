@@ -4,7 +4,7 @@ import { Mail, MailOpen, Bell, Trophy, Shield, Skull, Gift, Trash2, MessageCircl
 import api from '../../utils/api';
 import { toast } from 'sonner';
 import GifPicker from '../../components/GifPicker';
-import { parseForumContent } from '../../utils/forumContent';
+import { parseForumContent, FORUM_INLINE_SMILEY_PX } from '../../utils/forumContent';
 import styles from '../../styles/noir.module.css';
 import { NotificationMessage } from '../../components/NotificationMessage';
 
@@ -178,7 +178,7 @@ const ComposeModal = ({
                   className="p-1 rounded hover:bg-primary/20 active:scale-95 transition-all hover:scale-110"
                   title={code}
                 >
-                  <img src={`/images/smileys/${img}.png`} alt={code} className="w-[22px] h-[22px] object-contain" />
+                  <img src={`/images/smileys/${img}.png`} alt={code} className="object-contain shrink-0" style={{ width: FORUM_INLINE_SMILEY_PX, height: FORUM_INLINE_SMILEY_PX }} />
                 </button>
               ))}
               {/* Modern emojis */}

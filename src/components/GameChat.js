@@ -5,7 +5,7 @@ import api from '../utils/api';
 import { getApiErrorMessage } from '../utils/api';
 import { toast } from 'sonner';
 import GifPicker from './GifPicker';
-import { parseForumContent } from '../utils/forumContent';
+import { parseForumContent, FORUM_INLINE_SMILEY_PX } from '../utils/forumContent';
 
 const POLL_INTERVAL_MS = 10000;
 const MAX_MESSAGE_LEN = 500;
@@ -297,10 +297,10 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
            a small PNG can scale up to the full chat column (looks like a “big GIF”). */
         .game-chat-panel .game-chat-message-content .inline-smiley {
           display: inline !important;
-          width: 22px !important;
-          height: 22px !important;
-          max-width: 22px !important;
-          max-height: 22px !important;
+          width: ${FORUM_INLINE_SMILEY_PX}px !important;
+          height: ${FORUM_INLINE_SMILEY_PX}px !important;
+          max-width: ${FORUM_INLINE_SMILEY_PX}px !important;
+          max-height: ${FORUM_INLINE_SMILEY_PX}px !important;
           min-width: 0;
           min-height: 0;
           object-fit: contain;
@@ -645,7 +645,7 @@ export default function GameChat({ myUserId, onCloseSidebar, censorProfanity = f
                 }}
                 title={code}
               >
-                <img src={`/images/smileys/${img}.png`} alt={code} className="w-[22px] h-[22px] object-contain" />
+                <img src={`/images/smileys/${img}.png`} alt={code} className="object-contain shrink-0" style={{ width: FORUM_INLINE_SMILEY_PX, height: FORUM_INLINE_SMILEY_PX }} />
               </button>
             ))}
             {/* Modern emojis */}
