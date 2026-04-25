@@ -796,6 +796,7 @@ export default function Admin() {
   const [allUsersFilter, setAllUsersFilter] = useState('non_npc');
   const [allUsersSort, setAllUsersSort] = useState('username_asc');
   const [allUsersLoading, setAllUsersLoading] = useState(false);
+  const [allUsersRemindAllLoading, setAllUsersRemindAllLoading] = useState(false);
   const [lockedAccounts, setLockedAccounts] = useState([]);
   const [lockedAccountsLoading, setLockedAccountsLoading] = useState(false);
   const [lockedMessageByUser, setLockedMessageByUser] = useState({});
@@ -3997,6 +3998,35 @@ export default function Admin() {
       setAllUsersList([]);
     } finally {
       setAllUsersLoading(false);
+    }
+  };
+
+  const handleAllUsersSendInactiveReminders = async () => {
+    const eligible = (allUsersList || []).filter((u) =>
+      !!u?.id
+      && !(u.is_npc || u.is_bodyguard)
+      && !u.is_dead
+      && !!(u.email || '').trim()
+      && lastSeenEligibleForInactiveReminder(u.last_seen)
+      && !inactiveReminderOnCooldown(u.inactivity_reminder_sent_at),
+    );
+    if (eligible.length === 0) {
+      toast.info('No eligible users in this loaded list');
+      return;
+    }
+    if (!window.confirm(`Send inactive reminder emails to ${eligible.length} eligible user(s) from this loaded list?`)) return;
+    setAllUsersRemindAllLoading(true);
+    try {
+      const res = await api.post('/admin/users/inactivity-reminder-email/bulk', {
+        user_ids: eligible.map((u) => u.id),
+      });
+      const d = res.data || {};
+      toast.success(d.message || 'Bulk reminders processed');
+      await fetchAllUsers();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to send bulk reminders');
+    } finally {
+      setAllUsersRemindAllLoading(false);
     }
   };
 
@@ -7368,6 +7398,26 @@ export default function Admin() {
               <option value="created_asc">Oldest first</option>
             </select>
             <BtnPrimary onClick={fetchAllUsers} disabled={allUsersLoading} className="ml-2">{allUsersLoading ? '...' : 'Load'}</BtnPrimary>
+            <button
+              type="button"
+              onClick={handleAllUsersSendInactiveReminders}
+              disabled={
+                allUsersLoading
+                || allUsersRemindAllLoading
+                || ((allUsersList || []).filter((u) =>
+                  !!u?.id
+                  && !(u.is_npc || u.is_bodyguard)
+                  && !u.is_dead
+                  && !!(u.email || '').trim()
+                  && lastSeenEligibleForInactiveReminder(u.last_seen)
+                  && !inactiveReminderOnCooldown(u.inactivity_reminder_sent_at),
+                ).length === 0)
+              }
+              className="px-2 py-1.5 rounded text-[10px] font-heading font-bold uppercase border border-sky-500/50 text-sky-400 hover:bg-sky-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
+              title="Send inactive reminder emails to eligible users in this loaded list"
+            >
+              {allUsersRemindAllLoading ? 'Sending reminders...' : 'Remind all eligible'}
+            </button>
           </div>
           {allUsersTotal != null && allUsersList && (
             <p className="text-[10px] text-mutedForeground font-heading">Showing {allUsersList.length} of {allUsersTotal} user(s)</p>

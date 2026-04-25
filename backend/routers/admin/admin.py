@@ -311,6 +311,10 @@ class InactivityReminderEmailRequest(BaseModel):
     user_id: str
 
 
+class InactivityReminderBulkEmailRequest(BaseModel):
+    user_ids: List[str]
+
+
 class DropAllCasinosPropertiesConfirmation(BaseModel):
     confirmation_text: str  # "DROP ALL CASINOS PROPERTIES"
 
@@ -10617,7 +10621,19 @@ def register(router):
 
         cursor = db.users.find(
             query,
-            {"_id": 0, "id": 1, "username": 1, "email": 1, "is_dead": 1, "is_bodyguard": 1, "is_npc": 1, "created_at": 1, "email_verified": 1},
+            {
+                "_id": 0,
+                "id": 1,
+                "username": 1,
+                "email": 1,
+                "is_dead": 1,
+                "is_bodyguard": 1,
+                "is_npc": 1,
+                "created_at": 1,
+                "email_verified": 1,
+                "last_seen": 1,
+                "inactivity_reminder_sent_at": 1,
+            },
         ).sort(sort_spec).skip(skip).limit(limit)
         raw = await cursor.to_list(limit)
         total = await db.users.count_documents(query)
@@ -10631,6 +10647,8 @@ def register(router):
                 "is_npc": bool(u.get("is_npc")),
                 "created_at": u.get("created_at"),
                 "email_verified": bool(u.get("email_verified", True)),
+                "last_seen": u.get("last_seen"),
+                "inactivity_reminder_sent_at": u.get("inactivity_reminder_sent_at"),
             }
             for u in raw
         ]
@@ -10934,6 +10952,58 @@ def register(router):
             "message": f"Inactive reminder email sent to {to_email}",
             "user_id": user_id,
             "username": username,
+        }
+
+    @router.post("/admin/users/inactivity-reminder-email/bulk")
+    async def admin_send_inactivity_reminder_email_bulk(
+        body: InactivityReminderBulkEmailRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Send inactivity reminder emails to many users (best-effort per user). Admin only."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        ids = []
+        seen = set()
+        for raw in (body.user_ids or []):
+            uid = str(raw or "").strip()
+            if uid and uid not in seen:
+                ids.append(uid)
+                seen.add(uid)
+        if not ids:
+            raise HTTPException(status_code=400, detail="Provide at least one user_id")
+        if len(ids) > 1000:
+            raise HTTPException(status_code=400, detail="Too many users in one request (max 1000)")
+
+        sent = 0
+        skipped = 0
+        failed = 0
+        failures = []
+        for uid in ids:
+            try:
+                await admin_send_inactivity_reminder_email(
+                    InactivityReminderEmailRequest(user_id=uid),
+                    current_user=current_user,
+                )
+                sent += 1
+            except HTTPException as e:
+                code = int(getattr(e, "status_code", 500) or 500)
+                detail = e.detail if isinstance(e.detail, str) else "Failed"
+                if code in (400, 404, 429):
+                    skipped += 1
+                else:
+                    failed += 1
+                failures.append({"user_id": uid, "status_code": code, "detail": detail})
+            except Exception:
+                failed += 1
+                failures.append({"user_id": uid, "status_code": 500, "detail": "Unexpected error"})
+
+        return {
+            "message": f"Inactive reminders processed: sent {sent}, skipped {skipped}, failed {failed}.",
+            "requested": len(ids),
+            "sent": sent,
+            "skipped": skipped,
+            "failed": failed,
+            "failures": failures[:100],
         }
 
     @router.post("/admin/clear-user-jail-bust-reward")
