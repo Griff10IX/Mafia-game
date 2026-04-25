@@ -936,6 +936,8 @@ export default function Admin() {
   const [bankLogsData, setBankLogsData] = useState(null);
   const [donationsLogData, setDonationsLogData] = useState(null);
   const [donationsLogLoading, setDonationsLogLoading] = useState(false);
+  const [donationsLogIncludeOpenUnpaid, setDonationsLogIncludeOpenUnpaid] = useState(false);
+  const [donationsLogFilteredOpenUnpaid, setDonationsLogFilteredOpenUnpaid] = useState(null);
   const [bankLogsLoading, setBankLogsLoading] = useState(false);
   const [stockLogsUsername, setStockLogsUsername] = useState('');
   const [stockLogsLimit, setStockLogsLimit] = useState(500);
@@ -5806,12 +5808,19 @@ export default function Admin() {
     }
   };
 
-  const handleFetchDonationsLog = async () => {
+  const handleFetchDonationsLog = async (includeOpenOverride) => {
+    const includeOpen = includeOpenOverride !== undefined ? includeOpenOverride : donationsLogIncludeOpenUnpaid;
     setDonationsLogLoading(true);
     setDonationsLogData(null);
+    setDonationsLogFilteredOpenUnpaid(null);
     try {
-      const res = await api.get('/admin/payments');
+      const res = await api.get('/admin/payments', {
+        params: includeOpen ? { include_open_unpaid: 1 } : {},
+      });
       setDonationsLogData(res.data?.transactions || []);
+      setDonationsLogFilteredOpenUnpaid(
+        typeof res.data?.filtered_open_unpaid === 'number' ? res.data.filtered_open_unpaid : null,
+      );
       toast.success(`Loaded ${(res.data?.transactions?.length ?? 0)} payment transactions`);
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to load donations log');
@@ -9900,7 +9909,22 @@ export default function Admin() {
             <div className="p-3 space-y-3">
               <p className="text-[10px] text-mutedForeground font-heading">Stripe point purchases. Status shows whether Stripe reports paid or unpaid. "Paid — points not credited yet" means Stripe charged successfully but our DB row is still pending (often a missed/delayed webhook or the player never hit the store success page). Staff receive an inbox notification once per session when this is detected. "Credit" appears when Stripe is paid but points are not in-game yet. Use "Check &amp; Process" to reconcile a session id.</p>
               <div className="flex flex-wrap gap-2 items-center">
-                <BtnPrimary onClick={handleFetchDonationsLog} disabled={donationsLogLoading}>
+                <label className="flex items-center gap-1.5 text-[10px] font-heading text-mutedForeground cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={donationsLogIncludeOpenUnpaid}
+                    onChange={(e) => {
+                      const v = e.target.checked;
+                      setDonationsLogIncludeOpenUnpaid(v);
+                      if (donationsLogData !== null) {
+                        handleFetchDonationsLog(v);
+                      }
+                    }}
+                    className="rounded border-input"
+                  />
+                  Show open unpaid checkouts
+                </label>
+                <BtnPrimary onClick={() => handleFetchDonationsLog()} disabled={donationsLogLoading}>
                   {donationsLogLoading ? 'Loading…' : 'Load payments log'}
                 </BtnPrimary>
                 <input
@@ -9919,76 +9943,144 @@ export default function Admin() {
                   <pre className="whitespace-pre-wrap">{JSON.stringify(stripeCheckResult, null, 2)}</pre>
                 </div>
               )}
+              {donationsLogFilteredOpenUnpaid > 0 && !donationsLogIncludeOpenUnpaid ? (
+                <p className="text-[10px] text-amber-400/90 font-heading">
+                  Hiding {donationsLogFilteredOpenUnpaid} open unpaid checkout{donationsLogFilteredOpenUnpaid === 1 ? '' : 's'}. Enable &quot;Show open unpaid checkouts&quot; to list them.
+                </p>
+              ) : null}
               {donationsLogData && donationsLogData.length > 0 && (
-                <div className="overflow-x-auto max-h-[420px] overflow-y-auto">
-                  <table className="w-full text-left border-collapse text-[9px] font-heading">
-                    <thead className="sticky top-0 bg-zinc-900/95 z-10">
-                      <tr className="border-b border-zinc-700/50">
-                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Date</th>
-                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Session</th>
-                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Lot ID</th>
-                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">User</th>
-                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Package</th>
-                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Points</th>
-                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Status</th>
-                        <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {donationsLogData.map((row, idx) => {
-                        const added = row.preorder_points || row.points || 0;
-                        const isPending = row.payment_status !== 'completed';
-                        const canCredit = row.allow_manual_credit === true
-                          || (row.allow_manual_credit === undefined && isPending && row.session_id && row.payment_status !== 'pending' && row.payment_status !== 'abandoned');
-                        const statusLabel = row.status_display || (
-                          row.payment_status === 'completed' ? 'Credited'
-                            : row.payment_status === 'preorder_pending' ? 'Pre-order'
-                              : row.payment_status === 'manual_credit_pending' ? 'Manual credit'
-                                : row.payment_status || 'Pending'
-                        );
-                        const statusClass = row.allow_manual_credit
-                          ? 'text-emerald-400'
-                          : (statusLabel || '').startsWith('Unpaid')
-                            ? 'text-red-400/90'
-                            : row.payment_status === 'completed'
-                              ? 'text-green-400'
-                              : 'text-amber-400';
-                        const sessionId = row.session_id || '—';
-                        const lotId = row.provenance_lot_id || (row.session_id ? `purchase:${row.session_id}` : '—');
-                        return (
-                          <tr key={row.session_id || idx} className="border-b border-zinc-700/30">
-                            <td className="py-1 pr-1 text-mutedForeground" title={row.created_at}>{row.created_at ? formatAdminDateTime(row.created_at) : '—'}</td>
-                            <td className="py-1 pr-1 font-mono text-[8px] align-top break-all whitespace-normal min-w-[12rem] max-w-[28rem]" title={sessionId}>{sessionId}</td>
-                            <td className="py-1 pr-1 font-mono text-[8px] align-top break-all whitespace-normal min-w-[12rem] max-w-[28rem]" title={lotId}>{lotId}</td>
-                            <td className="py-1 pr-1">{row.username ?? row.user_id ?? '—'}</td>
-                            <td className="py-1 pr-1 capitalize">{row.package_id ?? '—'}</td>
-                            <td className="py-1 pr-1 font-mono">{Number(added).toLocaleString()}</td>
-                            <td className="py-1 pr-1">
-                              <span className={statusClass}>{statusLabel}</span>
-                              {row.stripe_payment_status && row.payment_status === 'pending' ? (
-                                <span className="block text-[8px] text-mutedForeground mt-0.5 font-mono" title="Stripe payment_status">Stripe: {row.stripe_payment_status}</span>
-                              ) : null}
-                            </td>
-                            <td className="py-1 pr-1">
-                              {canCredit && row.session_id ? (
-                                <button
-                                  type="button"
-                                  onClick={() => handleManualCreditTransaction(row.session_id)}
-                                  disabled={manualCreditLoading === row.session_id}
-                                  className="px-2 py-0.5 text-[8px] font-heading font-bold uppercase rounded bg-green-500/20 text-green-400 border border-green-500/40 hover:bg-green-500/30 disabled:opacity-50"
-                                >
-                                  {manualCreditLoading === row.session_id ? '...' : 'Credit'}
-                                </button>
-                              ) : (
-                                <span className="text-mutedForeground">—</span>
-                              )}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                <>
+                  <div className="hidden sm:block overflow-x-auto max-h-[420px] overflow-y-auto">
+                    <table className="w-full text-left border-collapse text-[9px] font-heading">
+                      <thead className="sticky top-0 bg-zinc-900/95 z-10">
+                        <tr className="border-b border-zinc-700/50">
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Date</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Session</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Lot ID</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">User</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Package</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Points</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Paid</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Status</th>
+                          <th className="py-1 pr-1 font-bold text-mutedForeground uppercase">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {donationsLogData.map((row, idx) => {
+                          const added = row.preorder_points || row.points || 0;
+                          const isPending = row.payment_status !== 'completed';
+                          const canCredit = row.allow_manual_credit === true
+                            || (row.allow_manual_credit === undefined && isPending && row.session_id && row.payment_status !== 'pending' && row.payment_status !== 'abandoned');
+                          const statusLabel = row.status_display || (
+                            row.payment_status === 'completed' ? 'Credited'
+                              : row.payment_status === 'preorder_pending' ? 'Pre-order'
+                                : row.payment_status === 'manual_credit_pending' ? 'Manual credit'
+                                  : row.payment_status || 'Pending'
+                          );
+                          const statusClass = row.allow_manual_credit
+                            ? 'text-emerald-400'
+                            : (statusLabel || '').startsWith('Unpaid')
+                              ? 'text-red-400/90'
+                              : row.payment_status === 'completed'
+                                ? 'text-green-400'
+                                : 'text-amber-400';
+                          const sessionId = row.session_id || '—';
+                          const lotId = row.provenance_lot_id || (row.session_id ? `purchase:${row.session_id}` : '—');
+                          const provBits = [
+                            row.points_before != null && row.points_before !== '' ? `points_before: ${row.points_before}` : null,
+                            row.points_after != null && row.points_after !== '' ? `points_after: ${row.points_after}` : null,
+                          ].filter(Boolean);
+                          const sessionTitle = provBits.length ? `${provBits.join(' · ')}\n${sessionId}` : sessionId;
+                          return (
+                            <tr key={row.session_id || idx} className="border-b border-zinc-700/30">
+                              <td className="py-1 pr-1 text-mutedForeground" title={row.created_at}>{row.created_at ? formatAdminDateTime(row.created_at) : '—'}</td>
+                              <td className="py-1 pr-1 font-mono text-[8px] align-top break-all whitespace-normal min-w-[12rem] max-w-[28rem]" title={sessionTitle}>{sessionId}</td>
+                              <td className="py-1 pr-1 font-mono text-[8px] align-top break-all whitespace-normal min-w-[12rem] max-w-[28rem]" title={lotId}>{lotId}</td>
+                              <td className="py-1 pr-1">{row.username ?? row.user_id ?? '—'}</td>
+                              <td className="py-1 pr-1 capitalize">{row.package_id ?? '—'}</td>
+                              <td className="py-1 pr-1 font-mono">{Number(added).toLocaleString()}</td>
+                              <td className="py-1 pr-1 font-mono text-emerald-300/90">{row.paid_display ?? '—'}</td>
+                              <td className="py-1 pr-1">
+                                <span className={statusClass}>{statusLabel}</span>
+                                {row.stripe_payment_status && row.payment_status === 'pending' ? (
+                                  <span className="block text-[8px] text-mutedForeground mt-0.5 font-mono" title="Stripe payment_status">Stripe: {row.stripe_payment_status}</span>
+                                ) : null}
+                              </td>
+                              <td className="py-1 pr-1">
+                                {canCredit && row.session_id ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleManualCreditTransaction(row.session_id)}
+                                    disabled={manualCreditLoading === row.session_id}
+                                    className="px-2 py-0.5 text-[8px] font-heading font-bold uppercase rounded bg-green-500/20 text-green-400 border border-green-500/40 hover:bg-green-500/30 disabled:opacity-50"
+                                  >
+                                    {manualCreditLoading === row.session_id ? '...' : 'Credit'}
+                                  </button>
+                                ) : (
+                                  <span className="text-mutedForeground">—</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="sm:hidden space-y-2 max-h-[420px] overflow-y-auto pr-0.5">
+                    {donationsLogData.map((row, idx) => {
+                      const added = row.preorder_points || row.points || 0;
+                      const isPending = row.payment_status !== 'completed';
+                      const canCredit = row.allow_manual_credit === true
+                        || (row.allow_manual_credit === undefined && isPending && row.session_id && row.payment_status !== 'pending' && row.payment_status !== 'abandoned');
+                      const statusLabel = row.status_display || (
+                        row.payment_status === 'completed' ? 'Credited'
+                          : row.payment_status === 'preorder_pending' ? 'Pre-order'
+                            : row.payment_status === 'manual_credit_pending' ? 'Manual credit'
+                              : row.payment_status || 'Pending'
+                      );
+                      const statusClass = row.allow_manual_credit
+                        ? 'text-emerald-400'
+                        : (statusLabel || '').startsWith('Unpaid')
+                          ? 'text-red-400/90'
+                          : row.payment_status === 'completed'
+                            ? 'text-green-400'
+                            : 'text-amber-400';
+                      const sessionId = row.session_id || '—';
+                      return (
+                        <div
+                          key={row.session_id || idx}
+                          className="rounded-md border border-zinc-700/50 bg-zinc-900/40 p-2 text-[9px] font-heading space-y-1.5"
+                        >
+                          <div className="flex justify-between gap-2">
+                            <span className="text-mutedForeground">{row.created_at ? formatAdminDateTime(row.created_at) : '—'}</span>
+                            {canCredit && row.session_id ? (
+                              <button
+                                type="button"
+                                onClick={() => handleManualCreditTransaction(row.session_id)}
+                                disabled={manualCreditLoading === row.session_id}
+                                className="shrink-0 px-2 py-0.5 text-[8px] font-bold uppercase rounded bg-green-500/20 text-green-400 border border-green-500/40 hover:bg-green-500/30 disabled:opacity-50"
+                              >
+                                {manualCreditLoading === row.session_id ? '...' : 'Credit'}
+                              </button>
+                            ) : null}
+                          </div>
+                          <div><span className="text-mutedForeground">User:</span> {row.username ?? row.user_id ?? '—'}</div>
+                          <div><span className="text-mutedForeground">Package:</span> <span className="capitalize">{row.package_id ?? '—'}</span></div>
+                          <div><span className="text-mutedForeground">Points:</span> <span className="font-mono">{Number(added).toLocaleString()}</span></div>
+                          <div><span className="text-mutedForeground">Paid:</span> <span className="font-mono text-emerald-300/90">{row.paid_display ?? '—'}</span></div>
+                          <div>
+                            <span className="text-mutedForeground">Status:</span>{' '}
+                            <span className={statusClass}>{statusLabel}</span>
+                            {row.stripe_payment_status && row.payment_status === 'pending' ? (
+                              <span className="block text-[8px] text-mutedForeground mt-0.5 font-mono">Stripe: {row.stripe_payment_status}</span>
+                            ) : null}
+                          </div>
+                          <div className="font-mono text-[8px] break-all text-mutedForeground/90" title={sessionId}>Session: {sessionId}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </>
               )}
               {donationsLogData && donationsLogData.length === 0 && (
                 <p className="text-[10px] text-mutedForeground font-heading">No payment transactions.</p>

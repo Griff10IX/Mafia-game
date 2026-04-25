@@ -232,6 +232,60 @@ def _resolve_points_for_stripe_payment(
     return pts, None
 
 
+def _format_paid_display_from_minor(minor: int, currency: str) -> str:
+    cur = (currency or "gbp").lower()
+    try:
+        m = int(minor)
+    except (TypeError, ValueError):
+        return "—"
+    if cur == "gbp":
+        return f"£{m / 100:.2f}"
+    return f"{m} {cur.upper()}"
+
+
+def _attach_admin_paid_display(t: dict, POINT_PACKAGES: dict) -> None:
+    """Set paid_display on an admin payment log row; consumes ephemeral _stripe_session_* keys."""
+    minor = None
+    cur = None
+    raw_m = t.get("stripe_amount_total_minor")
+    if raw_m is not None:
+        try:
+            minor = int(raw_m)
+            cur = (t.get("stripe_currency") or "gbp").strip().lower()
+        except (TypeError, ValueError):
+            minor = None
+    if minor is None:
+        sess_minor = t.pop("_stripe_session_amount_minor", None)
+        sess_cur = t.pop("_stripe_session_currency", None)
+        if sess_minor is not None:
+            try:
+                minor = int(sess_minor)
+            except (TypeError, ValueError):
+                minor = None
+            cur = (sess_cur or "gbp").lower()
+    else:
+        t.pop("_stripe_session_amount_minor", None)
+        t.pop("_stripe_session_currency", None)
+    package_id = t.get("package_id") or ""
+    paid_display = None
+    if minor is not None:
+        paid_display = _format_paid_display_from_minor(minor, cur or "gbp")
+    elif package_id == CUSTOM_POINTS_PACKAGE_ID and t.get("expected_amount_minor") is not None:
+        try:
+            paid_display = _format_paid_display_from_minor(int(t["expected_amount_minor"]), "gbp")
+        except (TypeError, ValueError):
+            paid_display = None
+    else:
+        pkg = POINT_PACKAGES.get(package_id) or {}
+        price = pkg.get("price_gbp")
+        if price is not None:
+            try:
+                paid_display = f"£{float(price):.2f}"
+            except (TypeError, ValueError):
+                paid_display = None
+    t["paid_display"] = paid_display
+
+
 async def _notify_staff_preorder_points_held(
     db,
     *,
@@ -723,7 +777,7 @@ async def _attach_pending_ui_labels(items: list, api_key: Optional[str]) -> None
             t["ui_status"] = "Awaiting payment"
 
 
-async def _enrich_admin_payment_log_rows(db, items: list, api_key: Optional[str]) -> None:
+async def _enrich_admin_payment_log_rows(db, items: list, api_key: Optional[str], POINT_PACKAGES: dict) -> None:
     """Admin table: paid vs unpaid for DB `pending` rows, and whether manual Credit is safe.
     If Stripe is paid but the row is still `pending`, notify staff once (deduped via payment_issue_staff_notified_at)."""
     pending_rows = [t for t in items if t.get("payment_status") == "pending" and t.get("session_id")]
@@ -792,6 +846,14 @@ async def _enrich_admin_payment_log_rows(db, items: list, api_key: Optional[str]
             t["allow_manual_credit"] = False
             continue
 
+        amt = getattr(session, "amount_total", None)
+        if amt is not None:
+            try:
+                t["_stripe_session_amount_minor"] = int(amt)
+            except (TypeError, ValueError):
+                pass
+            t["_stripe_session_currency"] = (getattr(session, "currency", None) or "gbp").lower()
+
         t["stripe_session_status"] = session.status
         t["stripe_payment_status"] = session.payment_status
 
@@ -822,6 +884,9 @@ async def _enrich_admin_payment_log_rows(db, items: list, api_key: Optional[str]
         else:
             t["status_display"] = f"Unpaid (Stripe: {session.status} / {session.payment_status})"
             t["allow_manual_credit"] = False
+
+    for t in items:
+        _attach_admin_paid_display(t, POINT_PACKAGES)
 
 
 def register(router):
@@ -1456,6 +1521,22 @@ def register(router):
 
         if event.type == "checkout.session.completed":
             session = event.data.object
+            if session.payment_status == "paid":
+                _at = getattr(session, "amount_total", None)
+                _ac = getattr(session, "currency", None) or "gbp"
+                if _at is not None:
+                    try:
+                        await db.payment_transactions.update_one(
+                            {"session_id": session.id},
+                            {
+                                "$set": {
+                                    "stripe_amount_total_minor": int(_at),
+                                    "stripe_currency": str(_ac).lower(),
+                                }
+                            },
+                        )
+                    except Exception:
+                        logger.exception("webhook: persist stripe_amount_total_minor failed session_id=%s", session.id)
             if session.payment_status == "paid" and session.metadata:
                 user_id = session.metadata.get("user_id")
                 package_id = session.metadata.get("package_id")
@@ -1747,13 +1828,31 @@ def register(router):
         }
 
     @router.get("/admin/payments")
-    async def admin_payment_log(current_user: dict = Depends(get_current_user)):
+    async def admin_payment_log(
+        current_user: dict = Depends(get_current_user),
+        include_open_unpaid: int = Query(0, ge=0, le=1),
+    ):
         """Admin only: list all payment transactions (donations) with username for audit."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin only")
         cursor = db.payment_transactions.find(
             {},
-            {"_id": 0, "session_id": 1, "user_id": 1, "package_id": 1, "points": 1, "payment_status": 1, "created_at": 1, "points_credited_at": 1, "points_before": 1, "points_after": 1, "preorder_points": 1},
+            {
+                "_id": 0,
+                "session_id": 1,
+                "user_id": 1,
+                "package_id": 1,
+                "points": 1,
+                "payment_status": 1,
+                "created_at": 1,
+                "points_credited_at": 1,
+                "points_before": 1,
+                "points_after": 1,
+                "preorder_points": 1,
+                "expected_amount_minor": 1,
+                "stripe_amount_total_minor": 1,
+                "stripe_currency": 1,
+            },
         ).sort("created_at", -1).limit(500)
         items = await cursor.to_list(500)
         user_ids = list({t["user_id"] for t in items if t.get("user_id")})
@@ -1764,8 +1863,16 @@ def register(router):
         by_id = {u["id"]: u.get("username", "?") for u in users}
         for t in items:
             t["username"] = by_id.get(t.get("user_id"), "?")
-        await _enrich_admin_payment_log_rows(db, items, _get_stripe_key())
-        return {"transactions": items}
+        await _enrich_admin_payment_log_rows(db, items, _get_stripe_key(), POINT_PACKAGES)
+        filtered_open_unpaid = sum(
+            1 for t in items if t.get("status_display") == "Unpaid (checkout not completed)"
+        )
+        if not include_open_unpaid:
+            items = [t for t in items if t.get("status_display") != "Unpaid (checkout not completed)"]
+        return {
+            "transactions": items,
+            "filtered_open_unpaid": filtered_open_unpaid if not include_open_unpaid else 0,
+        }
 
     class ManualCreditRequest(BaseModel):
         session_id: str
@@ -1790,7 +1897,24 @@ def register(router):
         except Exception as e:
             logger.exception("Admin Stripe session check failed: %s", e)
             raise HTTPException(status_code=400, detail="Failed to retrieve session. Please try again.")
-        
+
+        if session.payment_status == "paid":
+            _at = getattr(session, "amount_total", None)
+            _ac = getattr(session, "currency", None) or "gbp"
+            if _at is not None:
+                try:
+                    await db.payment_transactions.update_one(
+                        {"session_id": body.session_id},
+                        {
+                            "$set": {
+                                "stripe_amount_total_minor": int(_at),
+                                "stripe_currency": str(_ac).lower(),
+                            }
+                        },
+                    )
+                except Exception:
+                    logger.exception("admin_check_stripe_session: persist stripe_amount_total_minor failed")
+
         result = {
             "session_id": body.session_id,
             "stripe_status": session.status,
