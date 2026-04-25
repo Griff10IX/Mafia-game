@@ -6,6 +6,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-25 10:30 UTC[/color][/b] — [b]Store: selectable 5-token discount bundle[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] [b]Game → Store → Tokens[/b] now includes [b]Build your bundle (5 tokens)[/b]. Pick any eligible token mix (duplicates allowed), and when your total is exactly [b]5[/b], the bundle applies a [b]20% discount[/b] to the subtotal.[/color]
+[*][color=#888888][b]Changed:[/b] Bundle selections explicitly [b]exclude[/b] [b]Auto Rank (2h)[/b] and [b]Game Pass[/b] tokens. These cannot be added to selectable bundles.[/color]
+[*][color=#888888][b]Changed:[/b] Works with [b]points[/b], [b]respect[/b], or [b]cash[/b] payment modes and uses the same inventory cap checks (max stored tokens per type) and spend tracking as other store token purchases.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-24 20:00 UTC[/color][/b] — [b]Distillery: automation defaults (aging + auto-sell)[/b][/size]
 [quote]
 [list]

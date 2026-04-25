@@ -232,6 +232,9 @@ TOKEN_STORE_BUNDLES = {
     "racket_runner": (78, {"racket_tokens": 1, "booze_tokens": 1}),
     "builder": (100, {"travel_tokens": 1, "properties_tokens": 1}),
 }
+TOKEN_SELECTABLE_BUNDLE_SIZE = 5
+TOKEN_SELECTABLE_BUNDLE_DISCOUNT_PCT = 20
+TOKEN_SELECTABLE_BUNDLE_DISALLOWED = frozenset({"auto_rank_2h", "rank_xp_pass"})
 SHOOTING_RANGE_BONUS_STEP = 2
 SHOOTING_RANGE_BONUS_COST_POINTS = 85
 SHOOTING_RANGE_BONUS_CAP = 10  # must match armoury.SHOOTING_RANGE_BONUS_STORE_MAX
@@ -258,6 +261,63 @@ class BuyStoreTokenBody(BaseModel):
 
 class BuyStoreTokenBundleBody(BaseModel):
     bundle_id: str
+
+
+class BuyStoreSelectableTokenBundleBody(BaseModel):
+    selections: dict[str, int]
+
+
+def _normalize_selectable_bundle_entries(selections: dict) -> dict[str, int]:
+    if not isinstance(selections, dict):
+        raise HTTPException(status_code=400, detail="selections must be an object of token_type: quantity")
+    out: dict[str, int] = {}
+    for raw_tt, raw_qty in selections.items():
+        tt = str(raw_tt or "").strip()
+        if not tt:
+            continue
+        try:
+            qty = int(raw_qty)
+        except Exception:
+            raise HTTPException(status_code=400, detail=f"Invalid quantity for {tt}")
+        if qty <= 0:
+            continue
+        out[tt] = out.get(tt, 0) + qty
+    return out
+
+
+def _validate_selectable_bundle_purchase(current_user: dict, selections: dict, token_config: dict) -> tuple[list[dict], int, int]:
+    norm = _normalize_selectable_bundle_entries(selections)
+    total_qty = sum(norm.values())
+    if total_qty != TOKEN_SELECTABLE_BUNDLE_SIZE:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Selectable bundle must contain exactly {TOKEN_SELECTABLE_BUNDLE_SIZE} tokens.",
+        )
+    if not norm:
+        raise HTTPException(status_code=400, detail="No tokens selected")
+    entries: list[dict] = []
+    subtotal_pts = 0
+    for tt, qty in norm.items():
+        if tt in TOKEN_SELECTABLE_BUNDLE_DISALLOWED:
+            raise HTTPException(status_code=400, detail=f"{tt} cannot be included in selectable bundles")
+        if tt not in token_config:
+            raise HTTPException(status_code=400, detail=f"Invalid token_type: {tt}")
+        if tt not in TOKEN_STORE_UNIT_PRICE_POINTS:
+            raise HTTPException(status_code=400, detail=f"This token type is not sold in the store: {tt}")
+        cfg = token_config[tt]
+        cf = cfg["count_field"]
+        cur = int(current_user.get(cf) or 0)
+        if cur + qty > STORE_TOKEN_MAX_HELD:
+            raise HTTPException(
+                status_code=400,
+                detail=f"You can hold at most {STORE_TOKEN_MAX_HELD} unactivated tokens of this type ({tt}, have {cur}).",
+            )
+        unit = int(TOKEN_STORE_UNIT_PRICE_POINTS[tt])
+        subtotal_pts += unit * qty
+        entries.append({"token_type": tt, "count_field": cf, "qty": qty, "unit_price": unit})
+    discount_pts = (subtotal_pts * TOKEN_SELECTABLE_BUNDLE_DISCOUNT_PCT) // 100
+    final_cost_pts = max(1, subtotal_pts - discount_pts)
+    return entries, subtotal_pts, final_cost_pts
 
 
 async def buy_premium_rank_bar(
@@ -750,6 +810,54 @@ async def buy_store_token_bundle(
     return {"message": f"Bundle '{bid}' purchased for {cost_used} points", "cost": cost_used, "bundle_id": bid}
 
 
+async def buy_store_token_selectable_bundle(
+    body: BuyStoreSelectableTokenBundleBody,
+    pay_with: str = Query("auto"),
+    current_user: dict = Depends(get_current_user),
+):
+    from routers.kill.armoury import TOKEN_CONFIG
+
+    entries, subtotal_pts, final_cost_pts = _validate_selectable_bundle_purchase(
+        current_user, body.selections or {}, TOKEN_CONFIG
+    )
+    cost_used, inc, gte_filter = _store_cost_inc(current_user, final_cost_pts, pay_with)
+    if not cost_used:
+        raise HTTPException(status_code=400, detail="Insufficient points")
+    for e in entries:
+        field = e["count_field"]
+        qty = int(e["qty"])
+        inc[field] = inc.get(field, 0) + qty
+    _pts = inc.get("lifetime_points_spent", 0)
+    _rsp = inc.get("lifetime_respect_points_spent", 0)
+    if _pts > 0:
+        inc["token_points_spent"] = _pts
+    if _rsp > 0:
+        inc["token_respect_spent"] = _rsp
+    expr_clauses = [
+        {"$lte": [{"$ifNull": [f"${e['count_field']}", 0]}, STORE_TOKEN_MAX_HELD - int(e["qty"])]}
+        for e in entries
+    ]
+    filt = {
+        "id": current_user["id"],
+        "$expr": expr_clauses[0] if len(expr_clauses) == 1 else {"$and": expr_clauses},
+        **gte_filter,
+    }
+    result = await db.users.update_one(filt, {"$inc": inc})
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Purchase failed (balance or token cap). Try again.")
+    await _record_store_points_spend(current_user["id"], inc, "buy-token-selectable-bundle")
+    selected = [{"token_type": e["token_type"], "amount": int(e["qty"])} for e in entries]
+    return {
+        "message": f"Selectable bundle purchased for {cost_used} points",
+        "cost": cost_used,
+        "bundle_size": TOKEN_SELECTABLE_BUNDLE_SIZE,
+        "discount_percent": TOKEN_SELECTABLE_BUNDLE_DISCOUNT_PCT,
+        "subtotal_points": subtotal_pts,
+        "discount_points": subtotal_pts - final_cost_pts,
+        "selected_tokens": selected,
+    }
+
+
 async def buy_shooting_range_bonus(
     current_user: dict = Depends(get_current_user),
 ):
@@ -1026,6 +1134,69 @@ async def buy_store_token_bundle_cash(
     }
 
 
+async def buy_store_token_selectable_bundle_cash(
+    body: BuyStoreSelectableTokenBundleBody,
+    current_user: dict = Depends(get_current_user),
+):
+    from routers.kill.armoury import TOKEN_CONFIG
+
+    entries, subtotal_pts, final_cost_pts = _validate_selectable_bundle_purchase(
+        current_user, body.selections or {}, TOKEN_CONFIG
+    )
+    units_selected = sum(int(e["qty"]) for e in entries)
+    used = _cash_purchases_today(current_user)
+    if used + units_selected > TOKEN_CASH_DAILY_LIMIT:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Daily cash purchase limit reached ({TOKEN_CASH_DAILY_LIMIT}/day; {used} used today).",
+        )
+    _available, price_per_point, _ = await _get_cash_price_per_point()
+    if price_per_point <= 0:
+        raise HTTPException(status_code=400, detail="Cash price unavailable. Try again.")
+    cash_cost = round(final_cost_pts * price_per_point)
+    if cash_cost <= 0:
+        raise HTTPException(status_code=400, detail="Calculated cash cost is invalid.")
+    money_balance = float(current_user.get("money") or 0)
+    if money_balance < cash_cost:
+        raise HTTPException(status_code=400, detail=f"Insufficient cash. Need ${cash_cost:,.0f}, have ${money_balance:,.0f}.")
+    today = game_today_date_str()
+    prev_key = _normalize_token_cash_purchase_date_key(current_user.get("token_cash_purchases_date"))
+    new_day = prev_key != today
+    inc = {"money": -cash_cost, "token_cash_spent": cash_cost}
+    for e in entries:
+        field = e["count_field"]
+        qty = int(e["qty"])
+        inc[field] = inc.get(field, 0) + qty
+    if not new_day:
+        inc["token_cash_purchases_today"] = units_selected
+    expr_clauses = [
+        {"$lte": [{"$ifNull": [f"${e['count_field']}", 0]}, STORE_TOKEN_MAX_HELD - int(e["qty"])]}
+        for e in entries
+    ]
+    filt = {
+        "id": current_user["id"],
+        "money": {"$gte": cash_cost},
+        "$expr": expr_clauses[0] if len(expr_clauses) == 1 else {"$and": expr_clauses},
+    }
+    set_doc = {"token_cash_purchases_date": today}
+    if new_day:
+        set_doc["token_cash_purchases_today"] = units_selected
+    result = await db.users.update_one(filt, {"$inc": inc, "$set": set_doc})
+    if result.modified_count == 0:
+        raise HTTPException(status_code=400, detail="Purchase failed (balance or token cap). Try again.")
+    selected = [{"token_type": e["token_type"], "amount": int(e["qty"])} for e in entries]
+    return {
+        "message": f"Selectable bundle purchased for ${cash_cost:,.0f}",
+        "cost_cash": cash_cost,
+        "bundle_size": TOKEN_SELECTABLE_BUNDLE_SIZE,
+        "discount_percent": TOKEN_SELECTABLE_BUNDLE_DISCOUNT_PCT,
+        "subtotal_points": subtotal_pts,
+        "discount_points": subtotal_pts - final_cost_pts,
+        "selected_tokens": selected,
+        "cash_purchases_today": used + units_selected,
+    }
+
+
 def register(router):
     router.add_api_route(
         "/store/token-cash-price",
@@ -1035,6 +1206,7 @@ def register(router):
     )
     router.add_api_route("/store/buy-token-cash", buy_store_token_cash, methods=["POST"])
     router.add_api_route("/store/buy-token-bundle-cash", buy_store_token_bundle_cash, methods=["POST"])
+    router.add_api_route("/store/buy-token-selectable-bundle-cash", buy_store_token_selectable_bundle_cash, methods=["POST"])
     router.add_api_route("/store/buy-rank-bar", buy_premium_rank_bar, methods=["POST"])
     router.add_api_route("/store/buy-auto-rank", buy_auto_rank, methods=["POST"])
     router.add_api_route("/store/buy-silencer", buy_silencer, methods=["POST"])
@@ -1048,6 +1220,7 @@ def register(router):
     router.add_api_route("/store/buy-custom-car", buy_custom_car, methods=["POST"])
     router.add_api_route("/store/buy-token", buy_store_token, methods=["POST"])
     router.add_api_route("/store/buy-token-bundle", buy_store_token_bundle, methods=["POST"])
+    router.add_api_route("/store/buy-token-selectable-bundle", buy_store_token_selectable_bundle, methods=["POST"])
     router.add_api_route("/store/buy-shooting-range-bonus", buy_shooting_range_bonus, methods=["POST"])
     router.add_api_route("/store/buy-hitlist-npc-bonus-slot", buy_hitlist_npc_bonus_slot, methods=["POST"])
     router.add_api_route("/store/send-points", send_points, methods=["POST"])

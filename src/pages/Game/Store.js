@@ -72,6 +72,10 @@ const TOKEN_BUNDLES = [
   { id: 'racket_runner', title: 'Racket Runner Pack', price: 78, desc: '+1 Racket token and +1 Booze token.' },
   { id: 'builder', title: 'Builder Pack', price: 100, desc: '+1 Travel token and +1 Properties token.' },
 ];
+const SELECTABLE_BUNDLE_SIZE = 5;
+const SELECTABLE_BUNDLE_DISCOUNT_PCT = 20;
+const SELECTABLE_BUNDLE_DISALLOWED = new Set(['auto_rank_2h', 'rank_xp_pass']);
+const SELECTABLE_BUNDLE_ITEMS = TOKEN_STORE_ITEMS.filter((t) => !SELECTABLE_BUNDLE_DISALLOWED.has(t.tokenType));
 
 const UPGRADES = [
   { id: 'health', title: 'Full Health', Icon: Heart, price: 15, path: '/store/buy-health', ownedKey: null, desc: 'Restore health to 100%', extra: (u) => ({ line: 'Health', value: `${Number(u?.health ?? 100).toFixed(0)}%` }) },
@@ -274,6 +278,9 @@ export default function Store() {
   const [cashMinPricePerPoint, setCashMinPricePerPoint] = useState(150_000);
   const [cashPurchasesToday, setCashPurchasesToday] = useState(0);
   const [cashPurchasesLimit, setCashPurchasesLimit] = useState(25);
+  const [selectableBundleQtyByToken, setSelectableBundleQtyByToken] = useState(() =>
+    Object.fromEntries(SELECTABLE_BUNDLE_ITEMS.map((t) => [t.tokenType, 0])),
+  );
 
   const fetchTokenCashPrice = useCallback(() => {
     api.get('/store/token-cash-price').then(({ data }) => {
@@ -527,6 +534,36 @@ export default function Store() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const selectableBundlePickedTotal = SELECTABLE_BUNDLE_ITEMS.reduce(
+    (sum, t) => sum + Number(selectableBundleQtyByToken[t.tokenType] || 0),
+    0,
+  );
+  const selectableBundleSubtotalPoints = SELECTABLE_BUNDLE_ITEMS.reduce(
+    (sum, t) => sum + (Number(selectableBundleQtyByToken[t.tokenType] || 0) * Number(t.price || 0)),
+    0,
+  );
+  const selectableBundleDiscountPoints = Math.floor((selectableBundleSubtotalPoints * SELECTABLE_BUNDLE_DISCOUNT_PCT) / 100);
+  const selectableBundleFinalPoints = Math.max(0, selectableBundleSubtotalPoints - selectableBundleDiscountPoints);
+  const selectableBundleFinalRespect = storeRespectForPoints(selectableBundleFinalPoints);
+  const selectableBundleFinalCash = cashPriceAvailable ? Math.round(selectableBundleFinalPoints * cashPricePerPoint) : 0;
+  const selectableBundleCanBuy = selectableBundlePickedTotal === SELECTABLE_BUNDLE_SIZE;
+  const selectableBundleSelectionPayload = Object.fromEntries(
+    Object.entries(selectableBundleQtyByToken).filter(([, qty]) => Number(qty) > 0),
+  );
+
+  const adjustSelectableBundleQty = (tokenType, delta) => {
+    setSelectableBundleQtyByToken((prev) => {
+      const cur = Number(prev[tokenType] || 0);
+      const next = Math.max(0, cur + delta);
+      if (next === cur) return prev;
+      return { ...prev, [tokenType]: next };
+    });
+  };
+
+  const clearSelectableBundle = () => {
+    setSelectableBundleQtyByToken(Object.fromEntries(SELECTABLE_BUNDLE_ITEMS.map((t) => [t.tokenType, 0])));
   };
 
   const handleCustomPointsPurchase = async () => {
@@ -1127,6 +1164,122 @@ export default function Store() {
                   </StoreCard>
                 );
               })}
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Build your bundle (5 tokens)</h2>
+            <p className="text-[9px] text-zinc-500 font-heading italic max-w-2xl">
+              Pick exactly {SELECTABLE_BUNDLE_SIZE} eligible tokens (duplicates allowed). Auto Rank and Game Pass tokens are excluded.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2">
+              {SELECTABLE_BUNDLE_ITEMS.map((t) => {
+                const held = Number(user?.[t.userKey] ?? 0);
+                const picked = Number(selectableBundleQtyByToken[t.tokenType] || 0);
+                const atCap = held + picked >= STORE_TOKEN_MAX_HELD;
+                const canAdd = selectableBundlePickedTotal < SELECTABLE_BUNDLE_SIZE && !atCap;
+                const canRemove = picked > 0;
+                return (
+                  <div key={`sel-${t.tokenType}`} className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+                    <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+                    <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-2">
+                      <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em] truncate">{t.title}</span>
+                      <Package className="text-primary shrink-0" size={14} />
+                    </div>
+                    <div className="p-2.5">
+                      <p className="text-[9px] text-mutedForeground font-heading mb-1.5">{t.desc}</p>
+                      <p className="text-[10px] text-mutedForeground mb-1.5">
+                        Held: {held}/{STORE_TOKEN_MAX_HELD} · {t.price} pts each
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => adjustSelectableBundleQty(t.tokenType, -1)}
+                          disabled={!canRemove}
+                          className="min-h-[36px] min-w-[36px] rounded border border-primary/30 bg-primary/10 text-primary font-bold disabled:opacity-40"
+                        >
+                          -
+                        </button>
+                        <div className="flex-1 text-center text-[11px] font-heading font-bold text-foreground tabular-nums">{picked}</div>
+                        <button
+                          type="button"
+                          onClick={() => adjustSelectableBundleQty(t.tokenType, +1)}
+                          disabled={!canAdd}
+                          className="min-h-[36px] min-w-[36px] rounded border border-primary/30 bg-primary/10 text-primary font-bold disabled:opacity-40"
+                        >
+                          +
+                        </button>
+                      </div>
+                    </div>
+                    <div className="store-art-line text-primary mx-3" />
+                  </div>
+                );
+              })}
+            </div>
+            <div className="rounded border border-primary/20 bg-primary/5 p-3">
+              <p className="text-[10px] font-heading text-zinc-300">
+                Selected: <span className="text-primary font-bold">{selectableBundlePickedTotal}/{SELECTABLE_BUNDLE_SIZE}</span>
+                {' · '}
+                Subtotal: <span className="font-bold">{selectableBundleSubtotalPoints.toLocaleString()} pts</span>
+                {' · '}
+                Discount: <span className="text-emerald-400/90 font-bold">{SELECTABLE_BUNDLE_DISCOUNT_PCT}% ({selectableBundleDiscountPoints.toLocaleString()} pts)</span>
+                {' · '}
+                Final: <span className="text-primary font-bold">{selectableBundleFinalPoints.toLocaleString()} pts</span>
+              </p>
+              {storePayWith === 'cash' && (
+                <p className="text-[9px] text-zinc-500 font-heading mt-1">
+                  Cash total: {cashPriceAvailable ? <span className="text-primary font-bold">${selectableBundleFinalCash.toLocaleString()}</span> : 'Unavailable'}
+                </p>
+              )}
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!selectableBundleCanBuy) {
+                      toast.error(`Pick exactly ${SELECTABLE_BUNDLE_SIZE} tokens`);
+                      return;
+                    }
+                    if (storePayWith === 'cash') {
+                      apiBuy('/store/buy-token-selectable-bundle-cash', { selections: selectableBundleSelectionPayload }, 'Selectable bundle purchased', (d) => {
+                        if (d?.cash_purchases_today != null) setCashPurchasesToday(d.cash_purchases_today);
+                        clearSelectableBundle();
+                      });
+                      return;
+                    }
+                    apiBuy(
+                      `/store/buy-token-selectable-bundle?pay_with=${encodeURIComponent(storePayWith)}`,
+                      { selections: selectableBundleSelectionPayload },
+                      'Selectable bundle purchased',
+                      () => clearSelectableBundle(),
+                    );
+                  }}
+                  disabled={
+                    loading
+                    || !user
+                    || !selectableBundleCanBuy
+                    || (storePayWith === 'cash'
+                      ? (!cashPriceAvailable || cashPurchasesToday >= cashPurchasesLimit || (user.money ?? 0) < selectableBundleFinalCash)
+                      : (storePayWith === 'points'
+                        ? (user.points ?? 0) < selectableBundleFinalPoints
+                        : (user.respect_points ?? 0) < selectableBundleFinalRespect))
+                  }
+                  className="min-h-[40px] rounded border border-primary/40 bg-primary/20 px-3 py-2 text-[10px] font-heading font-bold uppercase text-primary hover:bg-primary/30 disabled:opacity-50"
+                >
+                  {storePayWith === 'cash'
+                    ? `Buy bundle · $${selectableBundleFinalCash.toLocaleString()}`
+                    : storePayWith === 'respect'
+                      ? `Buy bundle · ${selectableBundleFinalRespect.toLocaleString()} resp`
+                      : `Buy bundle · ${selectableBundleFinalPoints.toLocaleString()} pts`}
+                </button>
+                <button
+                  type="button"
+                  onClick={clearSelectableBundle}
+                  disabled={loading || selectableBundlePickedTotal === 0}
+                  className="min-h-[40px] rounded border border-zinc-700/60 bg-zinc-900/40 px-3 py-2 text-[10px] font-heading font-bold uppercase text-zinc-300 hover:bg-zinc-800/50 disabled:opacity-50"
+                >
+                  Clear
+                </button>
+              </div>
             </div>
           </div>
 
