@@ -72,9 +72,9 @@ const TOKEN_BUNDLES = [
   { id: 'racket_runner', title: 'Racket Runner Pack', price: 78, desc: '+1 Racket token and +1 Booze token.' },
   { id: 'builder', title: 'Builder Pack', price: 100, desc: '+1 Travel token and +1 Properties token.' },
 ];
-const SELECTABLE_BUNDLE_SIZE = 5;
+const SELECTABLE_BUNDLE_SIZE = 10;
 const SELECTABLE_BUNDLE_DISCOUNT_PCT = 20;
-const SELECTABLE_BUNDLE_DISALLOWED = new Set(['auto_rank_2h', 'rank_xp_pass']);
+const SELECTABLE_BUNDLE_DISALLOWED = new Set(['rank_xp_pass']);
 const SELECTABLE_BUNDLE_ITEMS = TOKEN_STORE_ITEMS.filter((t) => !SELECTABLE_BUNDLE_DISALLOWED.has(t.tokenType));
 
 const UPGRADES = [
@@ -1168,9 +1168,9 @@ export default function Store() {
           </div>
 
           <div className="space-y-2">
-            <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Build your bundle (5 tokens)</h2>
+            <h2 className="text-[11px] font-heading font-bold text-primary uppercase tracking-wider">Build your bundle (10 tokens)</h2>
             <p className="text-[9px] text-zinc-500 font-heading italic max-w-2xl">
-              Pick exactly {SELECTABLE_BUNDLE_SIZE} eligible tokens (duplicates allowed). Auto Rank and Game Pass tokens are excluded.
+              Pick exactly {SELECTABLE_BUNDLE_SIZE} eligible tokens (duplicates allowed). Game Pass token is excluded.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-2">
               {SELECTABLE_BUNDLE_ITEMS.map((t) => {

@@ -232,9 +232,9 @@ TOKEN_STORE_BUNDLES = {
     "racket_runner": (78, {"racket_tokens": 1, "booze_tokens": 1}),
     "builder": (100, {"travel_tokens": 1, "properties_tokens": 1}),
 }
-TOKEN_SELECTABLE_BUNDLE_SIZE = 5
+TOKEN_SELECTABLE_BUNDLE_SIZE = 10
 TOKEN_SELECTABLE_BUNDLE_DISCOUNT_PCT = 20
-TOKEN_SELECTABLE_BUNDLE_DISALLOWED = frozenset({"auto_rank_2h", "rank_xp_pass"})
+TOKEN_SELECTABLE_BUNDLE_DISALLOWED = frozenset({"rank_xp_pass"})
 SHOOTING_RANGE_BONUS_STEP = 2
 SHOOTING_RANGE_BONUS_COST_POINTS = 85
 SHOOTING_RANGE_BONUS_CAP = 10  # must match armoury.SHOOTING_RANGE_BONUS_STORE_MAX
