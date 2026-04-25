@@ -24,6 +24,30 @@ async def _entertainer_sustained_rl_user(current_user: dict = Depends(get_curren
 async def _entertainer_sustained_rl_verified(current_user: dict = Depends(get_current_user_verified)):
     await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_ENTERTAINER)
 
+
+async def _entertainer_join_spam_guard(current_user: dict = Depends(get_current_user_verified)):
+    """Small always-on per-user guard for rapid repeat join attempts."""
+    uid = str((current_user or {}).get("id") or "").strip()
+    if not uid:
+        return
+    now = datetime.now(timezone.utc)
+    endpoint_key = "entertainer_join"
+    row = await db.rate_limit_clicks.find_one(
+        {"user_id": uid, "endpoint_key": endpoint_key},
+        {"_id": 0, "last_at": 1},
+    )
+    last_at = _parse_iso((row or {}).get("last_at"))
+    if last_at and (now - last_at).total_seconds() < 2.0:
+        raise HTTPException(
+            status_code=429,
+            detail="Please wait a moment before trying to join again.",
+        )
+    await db.rate_limit_clicks.update_one(
+        {"user_id": uid, "endpoint_key": endpoint_key},
+        {"$set": {"last_at": now.isoformat()}},
+        upsert=True,
+    )
+
 # E-Games prizes: Rank-XP Pass is shop-only (not listed in "what you can win" and never rolled here).
 ENTERTAINER_TOKEN_TYPES = tuple(t for t in TOKEN_TYPES if t != "rank_xp_pass")
 
@@ -1696,6 +1720,7 @@ async def _try_auto_create_find_word_round():
 def register(router):
     _ent_rl_u = [Depends(_entertainer_sustained_rl_user)]
     _ent_rl_v = [Depends(_entertainer_sustained_rl_verified)]
+    _ent_rl_join = [Depends(_entertainer_sustained_rl_verified), Depends(_entertainer_join_spam_guard)]
     router.add_api_route("/forum/entertainer/find-word/active", find_word_active, methods=["GET"], dependencies=_ent_rl_u)
     router.add_api_route("/forum/entertainer/find-word/history", find_word_history, methods=["GET"], dependencies=_ent_rl_u)
     router.add_api_route("/forum/entertainer/find-word/claim", find_word_claim, methods=["POST"], dependencies=_ent_rl_v)
@@ -1705,7 +1730,7 @@ def register(router):
     router.add_api_route("/forum/entertainer/games", create_game, methods=["POST"], dependencies=_ent_rl_v)
     router.add_api_route("/forum/entertainer/games/history", games_history, methods=["GET"], dependencies=_ent_rl_u)
     router.add_api_route("/forum/entertainer/games/{game_id}", get_game, methods=["GET"], dependencies=_ent_rl_u)
-    router.add_api_route("/forum/entertainer/games/{game_id}/join", join_game, methods=["POST"], dependencies=_ent_rl_v)
+    router.add_api_route("/forum/entertainer/games/{game_id}/join", join_game, methods=["POST"], dependencies=_ent_rl_join)
     router.add_api_route("/forum/entertainer/games/{game_id}/guess", guess_hangman, methods=["POST"], dependencies=_ent_rl_v)
     router.add_api_route("/forum/entertainer/games/{game_id}/roll", admin_roll_game, methods=["POST"])
     router.add_api_route("/forum/entertainer/admin/config", get_entertainer_config, methods=["GET"])

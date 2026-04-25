@@ -1115,6 +1115,20 @@ def register(router):
             txn_doc["expected_amount_minor"] = int(expected_amount_minor)
         await db.payment_transactions.insert_one(txn_doc)
 
+        # Refresh session activity: user is about to spend unbounded time on Stripe with no API calls;
+        # inactivity-based session end would otherwise log them out before they can verify payment.
+        sid = current_user.get("_session_id")
+        if sid:
+            now_iso = datetime.now(timezone.utc).isoformat()
+            try:
+                await db.users.update_one(
+                    {"id": current_user["id"]},
+                    {"$set": {"sessions.$[s].last_used_at": now_iso}},
+                    array_filters=[{"s.id": sid}],
+                )
+            except Exception:
+                logger.exception("checkout: failed to touch session last_used_at user=%s", current_user.get("id"))
+
         return {"url": session.url}
 
     @router.get("/payments/custom-quote", dependencies=_store_rl_u)

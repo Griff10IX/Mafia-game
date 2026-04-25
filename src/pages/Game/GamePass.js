@@ -440,10 +440,6 @@ export default function GamePass() {
     }
   }, []);
 
-  useEffect(() => {
-    fetchData();
-  }, [fetchData]);
-
   const expiryIso = user?.rank_xp_pass_token_expires_at;
   useEffect(() => {
     if (!expiryIso) return undefined;
@@ -587,8 +583,17 @@ export default function GamePass() {
   useEffect(() => {
     const sp = new URLSearchParams(window.location.search);
     const sessionId = sp.get('session_id');
-    if (!sessionId) return;
-    checkPaymentStatus(sessionId);
+    (async () => {
+      if (sessionId) {
+        try {
+          await api.get(`/payments/status/${encodeURIComponent(sessionId)}`);
+        } catch {
+          /* checkPaymentStatus will retry / surface errors */
+        }
+      }
+      await fetchData();
+      if (sessionId) checkPaymentStatus(sessionId);
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

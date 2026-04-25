@@ -76,6 +76,7 @@ const HangmanSVG = ({ wrongCount }) => {
 };
 
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+const ENTERTAINER_POLL_MS = 30000;
 
 const HangmanPanel = ({ game, userId, onGuessLetter, guessingLetter }) => {
   const hang = game?.hangman || {};
@@ -1011,6 +1012,7 @@ export default function Forum() {
   const [isHdo, setIsHdo] = useState(false);
   const [updatingId, setUpdatingId] = useState(null);
   const [joiningId, setJoiningId] = useState(null);
+  const joiningInFlightRef = useRef(new Set());
   const [rollingId, setRollingId] = useState(null);
   const [configSaving, setConfigSaving] = useState(false);
   const [creatingGames, setCreatingGames] = useState(false);
@@ -1252,11 +1254,27 @@ export default function Forum() {
   useEffect(() => {
     if (activeTab === 'entertainer') {
       const id = setInterval(() => {
+        if (typeof document !== 'undefined' && document.hidden) return;
         fetchEntertainerGames();
         fetchEntertainerConfig();
         fetchFindWordPublic(true);
-      }, 10000);
-      return () => clearInterval(id);
+      }, ENTERTAINER_POLL_MS);
+      const onVisibilityChange = () => {
+        if (typeof document !== 'undefined' && !document.hidden) {
+          fetchEntertainerGames();
+          fetchEntertainerConfig();
+          fetchFindWordPublic(true);
+        }
+      };
+      if (typeof document !== 'undefined') {
+        document.addEventListener('visibilitychange', onVisibilityChange);
+      }
+      return () => {
+        clearInterval(id);
+        if (typeof document !== 'undefined') {
+          document.removeEventListener('visibilitychange', onVisibilityChange);
+        }
+      };
     }
   }, [activeTab, fetchEntertainerGames, fetchEntertainerConfig, fetchFindWordPublic]);
 
@@ -1479,6 +1497,8 @@ export default function Forum() {
   const isUserInParticipantList = (parts) =>
     !!uidStr && (parts || []).some((p) => String(p.user_id || '') === uidStr);
   const handleJoinGame = async (gameId) => {
+    if (!gameId || joiningInFlightRef.current.has(gameId)) return;
+    joiningInFlightRef.current.add(gameId);
     setJoiningId(gameId);
     try {
       await api.post(`/forum/entertainer/games/${gameId}/join`);
@@ -1489,6 +1509,7 @@ export default function Forum() {
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Failed to join');
     } finally {
+      joiningInFlightRef.current.delete(gameId);
       setJoiningId(null);
     }
   };

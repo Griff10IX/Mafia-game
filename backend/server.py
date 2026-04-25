@@ -1034,6 +1034,12 @@ async def get_current_user(
             raise HTTPException(status_code=401, detail="Session invalidated. Please log in again.")
         user["_session_id"] = session_id
         now = datetime.now(timezone.utc)
+        # Stripe Checkout is an external redirect: the browser makes no requests to our API while the
+        # user pays. Inactivity would otherwise revoke the session mid-flow and the SPA treats 401 as logout.
+        path_for_session = (request.url.path or "") if request else ""
+        stripe_return_no_inactivity = path_for_session.startswith("/api/payments/status/") or path_for_session.startswith(
+            "/api/payments/mark-checkout-cancelled/"
+        )
         for s in sessions:
             if s.get("id") == session_id:
                 try:
@@ -1045,12 +1051,19 @@ async def get_current_user(
                         inactive_seconds = (now - lu_dt).total_seconds()
                         # Inactivity timeout: end session if no requests for SESSION_INACTIVITY_MINUTES (0 = disabled)
                         if SESSION_INACTIVITY_MINUTES > 0 and inactive_seconds >= SESSION_INACTIVITY_MINUTES * 60:
-                            await db.users.update_one({"id": user_id}, {"$pull": {"sessions": {"id": session_id}}})
-                            _log_auth_failure(user_id, 401, "Session expired due to inactivity")
-                            raise HTTPException(
-                                status_code=401,
-                                detail="Session expired due to inactivity. Please log in again.",
-                            )
+                            if stripe_return_no_inactivity:
+                                await db.users.update_one(
+                                    {"id": user_id},
+                                    {"$set": {"sessions.$[s].last_used_at": now.isoformat()}},
+                                    array_filters=[{"s.id": session_id}],
+                                )
+                            else:
+                                await db.users.update_one({"id": user_id}, {"$pull": {"sessions": {"id": session_id}}})
+                                _log_auth_failure(user_id, 401, "Session expired due to inactivity")
+                                raise HTTPException(
+                                    status_code=401,
+                                    detail="Session expired due to inactivity. Please log in again.",
+                                )
                         # Update last_used_at every 5 minutes to avoid write storm
                         if inactive_seconds >= 300:
                             await db.users.update_one(

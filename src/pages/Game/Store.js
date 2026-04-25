@@ -460,8 +460,19 @@ export default function Store() {
       })();
       return;
     }
-    fetchData();
-    if (sessionId) checkPaymentStatus(sessionId);
+    // Prime session activity before /auth/me: Stripe redirect means no API calls for a long time; inactivity
+    // logout + parallel fetchData used to race and clear the token before payment verification.
+    (async () => {
+      if (sessionId) {
+        try {
+          await api.get(`/payments/status/${encodeURIComponent(sessionId)}`);
+        } catch {
+          /* checkPaymentStatus will surface errors; avoid blocking store load */
+        }
+      }
+      fetchData();
+      if (sessionId) checkPaymentStatus(sessionId);
+    })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {

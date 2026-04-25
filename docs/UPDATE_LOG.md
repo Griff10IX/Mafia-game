@@ -6,6 +6,17 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-25 20:35 UTC[/color][/b] — [b]Entertainer stability + load reduction[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Forum → Entertainer[/b] auto-refresh now runs every [b]30s[/b] (was 10s), pauses while the tab is hidden, and refreshes when the tab becomes visible again.[/color]
+[*][color=#888888][b]Fixed:[/b] [b]Join game[/b] now has stronger duplicate-click protection on the client so rapid taps do not fire multiple concurrent join requests for the same game.[/color]
+[*][color=#888888][b]Changed:[/b] [b]Server[/b] adds a short anti-spam guard on entertainer join attempts per user; very fast repeats now return [b]429[/b] with a brief retry message.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-25 19:00 UTC[/color][/b] — [b]Forum smileys, MP Poker leave/cancel, host kick[/b][/size]
 [quote]
 [list]
