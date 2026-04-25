@@ -6,6 +6,22 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-25 13:10 UTC[/color][/b] — [b]Prestige made easier (lower RP gates)[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Account → Prestige[/b] RP requirements were reduced with a flatter progression. New gates are:[/color]
+[*][color=#888888]• [b]Prestige 1:[/b] [b]1,020,000 RP[/b] (unchanged)[/color]
+[*][color=#888888]• [b]Prestige 2:[/b] [b]1,428,000 RP[/b] (was 2,040,000)[/color]
+[*][color=#888888]• [b]Prestige 3:[/b] [b]2,142,000 RP[/b] (was 3,060,000)[/color]
+[*][color=#888888]• [b]Prestige 4:[/b] [b]2,856,000 RP[/b] (was 4,080,000)[/color]
+[*][color=#888888]• [b]Prestige 5:[/b] [b]3,570,000 RP[/b] (was 5,100,000)[/color]
+[*][color=#888888][b]Changed:[/b] Street-rank thresholds during prestige climbs are scaled to the same flatter multipliers so rank titles and prestige checks stay aligned.[/color]
+[*][color=#888888][b]Player action:[/b] No migration needed; lower gates apply immediately on next prestige check.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-25 10:30 UTC[/color][/b] — [b]Store: selectable 5-token discount bundle[/b][/size]
 [quote]
 [list]

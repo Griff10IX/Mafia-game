@@ -155,30 +155,41 @@ PRESTIGE_CONFIGS = {
 }
 
 
-def get_prestige_gate_multiplier(prestige_level: int) -> int:
-    """Integer scale for this prestige's climb: next prestige gate is this × Godfather base (capped at 5)."""
+def get_prestige_gate_multiplier(prestige_level: int) -> float:
+    """Scale for this prestige's climb: next prestige gate is this × Godfather base."""
     pl = int(prestige_level or 0)
+    # Medium-easier balance: keep P1 baseline, then flatten the rest of the old 2/3/4/5 ladder.
     if pl <= 0:
-        return 1
-    return min(pl + 1, 5)
+        return 1.0
+    if pl == 1:
+        return 1.4
+    if pl == 2:
+        return 2.1
+    if pl == 3:
+        return 2.8
+    return 3.5
 
 
 def get_rank_threshold_mult(prestige_level: int) -> float:
-    """Same factor applied to every RANKS tier; equals prestige_gate / godfather_base for your current prestige."""
-    return float(get_prestige_gate_multiplier(prestige_level))
+    """Same factor applied to every RANKS tier for the current prestige cycle."""
+    pl = int(prestige_level or 0)
+    # At prestige 0, street ladder stays baseline.
+    if pl <= 0:
+        return 1.0
+    return float(get_prestige_gate_multiplier(pl))
 
 
 def get_prestige_requirement(current_level: int) -> int:
     """
     Raw rank_points required to prestige from current_level -> current_level+1.
 
-    Linear: (n+1) × Godfather base (1.02M, 2.04M, …, 5.10M). Street tiers use the same ratio:
-    get_rank_threshold_mult(prestige_level) = gate_multiplier so Capo etc. scale in lockstep.
+    Gate = get_prestige_gate_multiplier(current_level) × Godfather base.
+    Street tiers use the same ratio via get_rank_threshold_mult(prestige_level) so Capo etc. scale in lockstep.
     """
     if current_level < 0 or current_level >= 5:
         return 0
     step = int(RANKS[-1]["required_points"])
-    return (current_level + 1) * step
+    return int(step * float(get_prestige_gate_multiplier(current_level)))
 
 def get_prestige_bonus(user: dict) -> dict:
     """Return stacking benefit multipliers for a user based on their prestige_level."""

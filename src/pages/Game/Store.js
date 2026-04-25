@@ -547,6 +547,8 @@ export default function Store() {
   const selectableBundleDiscountPoints = Math.floor((selectableBundleSubtotalPoints * SELECTABLE_BUNDLE_DISCOUNT_PCT) / 100);
   const selectableBundleFinalPoints = Math.max(0, selectableBundleSubtotalPoints - selectableBundleDiscountPoints);
   const selectableBundleFinalRespect = storeRespectForPoints(selectableBundleFinalPoints);
+  const selectableBundleSubtotalCash = cashPriceAvailable ? Math.round(selectableBundleSubtotalPoints * cashPricePerPoint) : 0;
+  const selectableBundleDiscountCash = cashPriceAvailable ? Math.round(selectableBundleDiscountPoints * cashPricePerPoint) : 0;
   const selectableBundleFinalCash = cashPriceAvailable ? Math.round(selectableBundleFinalPoints * cashPricePerPoint) : 0;
   const selectableBundleCanBuy = selectableBundlePickedTotal === SELECTABLE_BUNDLE_SIZE;
   const selectableBundleSelectionPayload = Object.fromEntries(
@@ -1220,11 +1222,20 @@ export default function Store() {
               <p className="text-[10px] font-heading text-zinc-300">
                 Selected: <span className="text-primary font-bold">{selectableBundlePickedTotal}/{SELECTABLE_BUNDLE_SIZE}</span>
                 {' · '}
-                Subtotal: <span className="font-bold">{selectableBundleSubtotalPoints.toLocaleString()} pts</span>
+                Subtotal:{' '}
+                <span className="font-bold">
+                  {storePayWith === 'cash' ? `$${selectableBundleSubtotalCash.toLocaleString()}` : `${selectableBundleSubtotalPoints.toLocaleString()} pts`}
+                </span>
                 {' · '}
-                Discount: <span className="text-emerald-400/90 font-bold">{SELECTABLE_BUNDLE_DISCOUNT_PCT}% ({selectableBundleDiscountPoints.toLocaleString()} pts)</span>
+                Discount:{' '}
+                <span className="text-emerald-400/90 font-bold">
+                  {SELECTABLE_BUNDLE_DISCOUNT_PCT}% ({storePayWith === 'cash' ? `$${selectableBundleDiscountCash.toLocaleString()}` : `${selectableBundleDiscountPoints.toLocaleString()} pts`})
+                </span>
                 {' · '}
-                Final: <span className="text-primary font-bold">{selectableBundleFinalPoints.toLocaleString()} pts</span>
+                Final:{' '}
+                <span className="text-primary font-bold">
+                  {storePayWith === 'cash' ? `$${selectableBundleFinalCash.toLocaleString()}` : `${selectableBundleFinalPoints.toLocaleString()} pts`}
+                </span>
               </p>
               {storePayWith === 'cash' && (
                 <p className="text-[9px] text-zinc-500 font-heading mt-1">
