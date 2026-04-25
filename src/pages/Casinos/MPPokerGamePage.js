@@ -407,7 +407,7 @@ function MpPokerHandOutcomePanel({
 }
 
 /** Small floating card on the felt: last tournament hand showdown (~5s). */
-function MpPokerTournamentHandToast({ snapshot, myUserId, visible }) {
+function MpPokerTournamentHandToast({ snapshot, myUserId, visible, compact }) {
   if (!visible || !snapshot?.results?.length) return null;
   const results = snapshot.results;
   const players = snapshot.players || [];
@@ -440,40 +440,46 @@ function MpPokerTournamentHandToast({ snapshot, myUserId, visible }) {
     return rows;
   })();
 
+  // Outer shell: flex centering only — do NOT put animate-pkr-fade here; its keyframes set
+  // `transform` and would override -translate-x-1/2, breaking horizontal center on mobile.
   return (
     <div
-      className="pointer-events-none absolute left-1/2 top-[40%] z-[25] -translate-x-1/2 -translate-y-1/2 w-[min(94vw,300px)] animate-pkr-fade rounded-lg border px-2 py-2 shadow-2xl overflow-hidden"
-      style={{
-        borderColor: 'rgba(212,175,55,0.6)',
-        background: 'linear-gradient(165deg,rgba(15,23,42,0.92),rgba(0,0,0,0.88))',
-        backdropFilter: 'blur(10px)',
-        WebkitBackdropFilter: 'blur(10px)',
-        boxShadow: '0 20px 56px rgba(0,0,0,0.8), 0 0 0 1px rgba(212,175,55,0.15), 0 0 32px rgba(212,175,55,0.14)',
-      }}
+      className={`pointer-events-none absolute inset-x-0 z-[25] flex justify-center px-2 sm:px-3 ${compact ? 'top-[22%]' : 'top-[30%] sm:top-[34%]'}`}
     >
-      <p className="text-[6px] font-heading uppercase tracking-[0.2em] text-center" style={{ color: 'rgba(255,255,255,0.4)' }}>
+      <div
+        className={`animate-pkr-fade w-full max-w-[min(100%,300px)] rounded-lg border shadow-2xl overflow-hidden ${compact ? 'px-1.5 py-1' : 'px-2 py-2'}`}
+        style={{
+          borderColor: 'rgba(212,175,55,0.6)',
+          background: 'linear-gradient(165deg,rgba(15,23,42,0.92),rgba(0,0,0,0.88))',
+          backdropFilter: 'blur(10px)',
+          WebkitBackdropFilter: 'blur(10px)',
+          boxShadow: '0 20px 56px rgba(0,0,0,0.8), 0 0 0 1px rgba(212,175,55,0.15), 0 0 32px rgba(212,175,55,0.14)',
+          maxHeight: compact ? 'min(38vh, 220px)' : 'min(48vh, 320px)',
+        }}
+      >
+      <p className={`font-heading uppercase tracking-[0.2em] text-center ${compact ? 'text-[5px]' : 'text-[6px]'}`} style={{ color: 'rgba(255,255,255,0.4)' }}>
         Hand #{snapshot.hand_number} · Showdown
       </p>
       <p
-        className="text-center text-[12px] sm:text-sm font-heading font-black uppercase tracking-wide mt-0.5 truncate px-1"
+        className={`text-center font-heading font-black uppercase tracking-wide mt-0.5 truncate px-0.5 ${compact ? 'text-[10px]' : 'text-[12px] sm:text-sm'}`}
         style={{ color: 'var(--noir-primary-bright)' }}
       >
         {winnerLabel}
       </p>
       {brd.length > 0 && (
-        <div className="flex justify-center gap-0.5 mt-1 flex-wrap">
+        <div className="flex justify-center gap-0.5 mt-0.5 flex-wrap">
           {brd.map((c, i) => (
             <Card key={`b-${i}`} card={c} hidden={false} index={i} total={brd.length} small />
           ))}
         </div>
       )}
       {pot > 0 && (
-        <p className="text-[7px] font-heading text-center mt-1" style={{ color: 'rgba(110,231,183,0.8)' }}>
+        <p className={`font-heading text-center mt-0.5 ${compact ? 'text-[6px]' : 'text-[7px]'}`} style={{ color: 'rgba(110,231,183,0.8)' }}>
           Pot <span className="font-bold text-emerald-400">{formatMoneyFull(pot)}</span>
         </p>
       )}
-      <p className="text-[6px] font-heading uppercase tracking-wider text-center text-white/30 mt-1">Cards and hand</p>
-      <div className="mt-1 space-y-1.5 overflow-y-auto pr-0.5 max-h-[200px]">
+      <p className={`font-heading uppercase tracking-wider text-center text-white/30 ${compact ? 'text-[5px] mt-0.5' : 'text-[6px] mt-1'}`}>Cards and hand</p>
+      <div className={`mt-0.5 space-y-1 overflow-y-auto pr-0.5 min-h-0 ${compact ? 'max-h-[120px]' : 'max-h-[200px]'}`}>
         {showdownRows.map(({ uid, r, pl }) => {
           const payout = Number(r.payout) || 0;
           const pWon = payout > 0;
@@ -484,7 +490,7 @@ function MpPokerTournamentHandToast({ snapshot, myUserId, visible }) {
           return (
             <div
               key={uid}
-              className="rounded-md px-1.5 py-1 flex gap-1.5 items-center"
+              className={`rounded-md flex gap-1 items-center ${compact ? 'px-1 py-0.5' : 'px-1.5 py-1'}`}
               style={{
                 background: isPrimary ? 'rgba(212,175,55,0.1)' : 'rgba(255,255,255,0.04)',
                 border: `1px solid ${isPrimary ? 'rgba(212,175,55,0.3)' : 'rgba(255,255,255,0.06)'}`,
@@ -494,23 +500,24 @@ function MpPokerTournamentHandToast({ snapshot, myUserId, visible }) {
                 {hc.length > 0 ? (
                   hc.map((c, i) => <Card key={i} card={c} hidden={false} index={i} total={2} small />)
                 ) : (
-                  <span className="text-[7px] font-heading text-white/25 px-0.5">—</span>
+                  <span className={`font-heading text-white/25 px-0.5 ${compact ? 'text-[6px]' : 'text-[7px]'}`}>—</span>
                 )}
               </div>
               <div className="min-w-0 flex-1">
-                <p className="text-[8px] font-heading font-bold truncate leading-tight" style={{ color: pWon ? 'var(--noir-primary-bright)' : 'rgba(255,255,255,0.5)' }}>
+                <p className={`font-heading font-bold truncate leading-tight ${compact ? 'text-[7px]' : 'text-[8px]'}`} style={{ color: pWon ? 'var(--noir-primary-bright)' : 'rgba(255,255,255,0.5)' }}>
                   {pName}
                   {isPrimary ? ' · pot' : ''}
                   {pWon ? ' ✓' : ' ✗'}
                 </p>
-                <p className="text-[7px] font-heading leading-snug text-white/45 mt-0.5">
-                  <span className="text-white/30 uppercase text-[6px] mr-0.5">Hand</span>
+                <p className={`font-heading leading-snug text-white/45 ${compact ? 'text-[6px] mt-px' : 'text-[7px] mt-0.5'}`}>
+                  <span className={`text-white/30 uppercase mr-0.5 ${compact ? 'text-[5px]' : 'text-[6px]'}`}>Hand</span>
                   {r.hand || '—'}
                 </p>
               </div>
             </div>
           );
         })}
+      </div>
       </div>
     </div>
   );
@@ -774,6 +781,16 @@ export default function MPPokerGamePage() {
     const id = setTimeout(() => setTournamentToast((prev) => ({ ...prev, visible: false })), 5000);
     return () => clearTimeout(id);
   }, [game?.mode, game?.status, game?.last_hand_showdown?.hand_number]);
+
+  // Hide showdown toast as soon as the table advances to the next hand (don't cover live play for 5s).
+  useEffect(() => {
+    const cur = Number(game?.hand_number);
+    const snapN = Number(tournamentToast.snap?.hand_number);
+    if (!tournamentToast.visible || !Number.isFinite(snapN)) return;
+    if (Number.isFinite(cur) && cur > snapN) {
+      setTournamentToast((prev) => ({ ...prev, visible: false }));
+    }
+  }, [game?.hand_number, tournamentToast.visible, tournamentToast.snap?.hand_number]);
 
   useEffect(() => {
     if (game?.mode !== 'tournament') {
@@ -1546,6 +1563,7 @@ export default function MPPokerGamePage() {
                 snapshot={tournamentToast.snap}
                 myUserId={myUserId}
                 visible={tournamentToast.visible}
+                compact={compactUi}
               />
             )}
 
@@ -1580,10 +1598,19 @@ export default function MPPokerGamePage() {
                   </div>
                 )}
                 <div
-                  className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full font-heading font-bold ${compactUi ? 'text-[8px]' : 'text-[9px]'}`}
+                  className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full font-heading font-bold text-center whitespace-normal ${compactUi ? 'text-[8px] max-w-[min(100%,200px)] leading-tight' : 'text-[9px]'}`}
                   style={PKR_TABLE_HUD_PILL_STYLE}
                 >
-                  {street ? `${STREET_LABELS[street] || street} · ` : ''}Pot {formatMoneyFull(pot)}
+                  {compactUi && street ? (
+                    <>
+                      <span className="block opacity-90">{STREET_LABELS[street] || street}</span>
+                      <span className="block">Pot {formatMoneyFull(pot)}</span>
+                    </>
+                  ) : (
+                    <>
+                      {street ? `${STREET_LABELS[street] || street} · ` : ''}Pot {formatMoneyFull(pot)}
+                    </>
+                  )}
                 </div>
                 {myPlayer?.current_hand_name && board.length >= 3 && myPlayer?.status !== 'folded' && (
                   <div
