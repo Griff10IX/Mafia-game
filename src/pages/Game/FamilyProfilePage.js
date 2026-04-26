@@ -443,13 +443,21 @@ export default function FamilyProfilePage() {
             {/* Intel stat strip */}
             <div className="flex items-stretch rounded-lg overflow-hidden border border-primary/15 bg-zinc-900/70 divide-x divide-primary/10">
               {[
-                { label: 'Vault',    value: formatMoney(family.treasury), gold: true },
+                {
+                  label: 'Vault',
+                  value: formatMoney(family.treasury),
+                  gold: true,
+                  sub: `${(Number(family.treasury_bullets) || 0).toLocaleString()} bullets`,
+                },
                 { label: 'Made Men', value: `${members.length}${fallen.length > 0 ? ` +${fallen.length}†` : ''}` },
-                { label: 'Rackets',  value: rackets.length },
-              ].map(({ label, value, gold }) => (
+                { label: 'Rackets', value: rackets.length },
+              ].map(({ label, value, gold, sub }) => (
                 <div key={label} className="flex flex-col items-center justify-center px-4 py-2.5 min-w-[60px]">
                   <span className="text-[7px] text-zinc-600 font-heading uppercase tracking-[0.2em] mb-0.5">{label}</span>
                   <span className={`text-sm font-heading font-black leading-none ${gold ? 'fp-shimmer' : 'text-foreground'}`}>{value}</span>
+                  {sub ? (
+                    <span className="text-[7px] font-heading text-amber-400/90 tabular-nums mt-0.5 leading-tight text-center max-w-[100px]">{sub}</span>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -785,7 +793,7 @@ export default function FamilyProfilePage() {
             )}
             {cb.treasury_bullets_hourly?.active && (
               <p className="mt-2 text-[9px] text-emerald-400/90 font-heading">
-                Vault drip: {cb.treasury_bullets_hourly.min}–{cb.treasury_bullets_hourly.max} bullets/hour (UTC)
+                Bullet treasury drip: {cb.treasury_bullets_hourly.min}–{cb.treasury_bullets_hourly.max} bullets/hour (UTC), not vault cash
               </p>
             )}
             {cb.airport_crew_perk?.active && (

@@ -887,6 +887,24 @@ def _is_damage_immune_car(car_id: Optional[str], rarity_hint: Optional[str] = No
     return rarity in ("exclusive", "loot_exclusive")
 
 
+def _effective_catalog_value_for_melt_bullets(
+    catalog_value: int,
+    damage_percent: Any,
+    car_id: Optional[str],
+    rarity_hint: Optional[str],
+) -> int:
+    """Melt-for-bullets uses catalog value scaled down by damage (linear). Immune cars use full value."""
+    v = max(0, int(catalog_value or 0))
+    if v <= 0 or _is_damage_immune_car(car_id, rarity_hint):
+        return v
+    try:
+        d = float(damage_percent or 0)
+    except (TypeError, ValueError):
+        d = 0.0
+    d = min(100.0, max(0.0, d))
+    return max(0, int(v * (100.0 - d) / 100.0))
+
+
 def _damage_immune_car_ids() -> List[str]:
     ids = [c.get("id") for c in CARS if _is_damage_immune_car(c.get("id"), c.get("rarity")) and c.get("id")]
     return list(dict.fromkeys(ids))
@@ -1136,9 +1154,15 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
             if car_info:
                 if car_info.get("rarity") == "uncommon":
                     uncommon_count += 1
-                car_value = int(car_info.get("value", 0) or 0)
+                catalog_value = int(car_info.get("value", 0) or 0)
                 if action == "bullets":
                     rarity = (car_info.get("rarity") or "").strip().lower()
+                    car_value = _effective_catalog_value_for_melt_bullets(
+                        catalog_value,
+                        deleted_car.get("damage_percent", 0),
+                        model_id,
+                        car_info.get("rarity"),
+                    )
                     melt_value = (car_value * MELT_BULLETS_VALUE_MULT_NUM) // MELT_BULLETS_VALUE_MULT_DEN
                     car_bullets = melt_value // MELT_VALUE_PER_BULLET
                     if car_info.get("rarity") == "common":
@@ -1151,7 +1175,7 @@ async def _melt_cars_impl(user: dict, car_ids: list, action: str, *, manual_gara
                         car_bullets = (int(car_bullets) * 125) // 100
                     total_bullets += car_bullets
                 else:
-                    total_value += int(car_value * 0.5)
+                    total_value += int(catalog_value * 0.5)
                 deleted_count += 1
                 processed += 1
             else:

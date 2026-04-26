@@ -232,7 +232,7 @@ function AnimatedCounter({ target, prefix = '', duration = 1000 }) {
 // STAT CARD — themed with icon glow
 // ============================================================================
 
-const StatCard = ({ label, value, highlight, icon, accent: accentColor, delay = 0 }) => (
+const StatCard = ({ label, value, sub, highlight, icon, accent: accentColor, delay = 0 }) => (
   <div className={`relative overflow-hidden rounded-lg p-2 sm:p-3 fam-stat-card fam-scale-in ${highlight ? 'bg-emerald-500/10 border border-emerald-500/30' : `${styles.surface} border border-primary/20`}`} style={{ animationDelay: `${delay}s` }}>
     {highlight && <div className="absolute -top-4 -right-4 w-16 h-16 rounded-full bg-emerald-500/10 blur-xl" />}
     {!highlight && <div className="absolute -top-6 left-1/2 -translate-x-1/2 w-20 h-12 bg-primary/5 rounded-full blur-xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity" />}
@@ -241,6 +241,9 @@ const StatCard = ({ label, value, highlight, icon, accent: accentColor, delay = 
       {label}
     </div>
     <div className={`text-base sm:text-lg font-heading font-bold ${highlight ? 'text-emerald-400' : accentColor || 'text-foreground'}`}>{value}</div>
+    {sub != null && sub !== '' && (
+      <div className="text-[8px] font-heading text-amber-400/90 tabular-nums mt-0.5 leading-tight">{sub}</div>
+    )}
   </div>
 );
 
@@ -3024,7 +3027,14 @@ export default function FamilyPage() {
         <>
           {/* ── Stats Row ── */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 sm:gap-2">
-            <StatCard label="The Vault" value={formatMoney(family.treasury)} icon={<DollarSign size={10} />} accent="text-primary" delay={0} />
+            <StatCard
+              label="The Vault"
+              value={formatMoney(family.treasury)}
+              sub={`${(Number(family.treasury_bullets) || 0).toLocaleString()} bullets`}
+              icon={<DollarSign size={10} />}
+              accent="text-primary"
+              delay={0}
+            />
             <StatCard label="Made Men" value={`${members.length}${fallen.length > 0 ? ` (+${fallen.length}†)` : ''}`} icon={<Users size={10} />} delay={0.05} />
             <StatCard label="Rackets" value={`${unlockedRackets}/${rackets.length}`} icon={<TrendingUp size={10} />} delay={0.1} />
             <StatCard label="Ready" value={readyRackets} highlight={readyRackets > 0} icon={<Clock size={10} />} delay={0.15} />
@@ -3042,7 +3052,7 @@ export default function FamilyPage() {
                   {n > 0 && <span className="text-zinc-500 font-normal normal-case ml-auto">{n} crew holding{n !== 1 ? 's' : ''}</span>}
                 </div>
                 <p className="text-[8px] text-zinc-600 leading-snug border-b border-primary/5 pb-2">
-                  Each member may hold <span className="text-zinc-400 font-heading font-bold">one</span> airport and <span className="text-zinc-400 font-heading font-bold">one</span> armoury. Hourly vault bullets stack when high command holds both for <span className="text-zinc-500">this family</span> (airport + armoury)—no alt accounts required. Casinos are separate.
+                  Each member may hold <span className="text-zinc-400 font-heading font-bold">one</span> airport and <span className="text-zinc-400 font-heading font-bold">one</span> armoury. Hourly drip bullets stack when high command holds both for <span className="text-zinc-500">this family</span> (airport + armoury) and credit the <span className="text-amber-400/90 font-heading">bullet treasury</span> on the Vault tab—not vault cash. Casinos are separate.
                 </p>
                 {n > 0 ? (
                   <ul className="text-[10px] text-zinc-400 space-y-0.5 max-h-28 overflow-y-auto">

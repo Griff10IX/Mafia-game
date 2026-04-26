@@ -276,7 +276,7 @@ MIN_BULLETS_TO_KILL = 5000
 MAX_BULLETS_TO_KILL = 100000
 # Base bullets before rank/weapon/gap factors; high tiers tuned down (was up to 120k @ 6).
 ARMOUR_BASE_BULLETS = {0: 5000, 1: 14000, 2: 25000, 3: 36000, 4: 47000, 5: 55000, 6: 66000}  # 6 = loot-exclusive Steel Plate Vest (1922)
-KILL_CASH_PERCENT = 0.25  # killer gets 25% of victim's cash
+KILL_CASH_PERCENT = 0.75  # killer gets 75% of victim's cash
 DEAD_ALIVE_PERCENT = 0.9995  # 0.05% tax to state head: you receive 99.95% of dead account's money and points when using Dead > Alive (one-time)
 
 # State heads: which family (if any) is head of each state. One family per state; at most 4 families.
@@ -609,7 +609,7 @@ TRAVEL_TIMES = {
     "airport": 0   # Airport (instant); set > 0 for timed flights (family -1s perk applies to this value)
 }
 
-# Melt-for-bullets: melt_value = car_value * NUM // DEN, then bullets = melt_value // MELT_VALUE_PER_BULLET — see gta._melt_cars_impl
+# Melt-for-bullets: catalog value × (100 − damage)% (damage-immune cars unchanged); melt_value = that × NUM // DEN; bullets = melt_value // MELT_VALUE_PER_BULLET — see gta._melt_cars_impl
 MELT_VALUE_PER_BULLET = 385
 MELT_BULLETS_VALUE_MULT_NUM = 122
 MELT_BULLETS_VALUE_MULT_DEN = 100
@@ -3180,6 +3180,19 @@ async def startup_db():
         asyncio.create_task(families.run_crew_oc_auto_apply_ticker())
         logging.getLogger(__name__).info(
             "Crew OC auto-apply: in-process ticker enabled (~60s+jitter; CREW_OC_AUTO_APPLY_TICKER=0 to disable). Multi-worker: prefer cron-only."
+        )
+    # Family vault hourly bullets (airport + armoury high command): credits ``treasury_bullets``, not cash
+    family_tb_hourly_use_cron = (os.environ.get("FAMILY_TREASURY_BULLETS_HOURLY_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
+    _family_tb_hourly_ticker_raw = (os.environ.get("FAMILY_TREASURY_BULLETS_HOURLY_TICKER") or "").strip().lower()
+    family_tb_hourly_ticker_on = _family_tb_hourly_ticker_raw not in ("0", "false", "no", "off")
+    if family_tb_hourly_use_cron:
+        logging.getLogger(__name__).info(
+            "Family vault hourly bullets: ticker disabled (FAMILY_TREASURY_BULLETS_HOURLY_USE_CRON=1). Schedule POST /api/families/cron/treasury-bullets-hourly each UTC hour with X-Cron-Secret."
+        )
+    elif family_tb_hourly_ticker_on:
+        asyncio.create_task(families.run_family_treasury_bullets_hourly_ticker())
+        logging.getLogger(__name__).info(
+            "Family vault hourly bullets: in-process ticker enabled (~60s+jitter; FAMILY_TREASURY_BULLETS_HOURLY_USE_CRON=1 or FAMILY_TREASURY_BULLETS_HOURLY_TICKER=0 for external cron only). Multi-worker: prefer cron-only."
         )
     from routers.cars import gta as gta_router
     asyncio.create_task(gta_router.run_dealer_replenish_loop())

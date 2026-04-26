@@ -1082,19 +1082,23 @@ async def family_crew_bonuses_summary(family_id: str, fam_doc: dict) -> dict:
                 "that slot does not add the hourly vault bullet bonus or activate the Don airport crew perk until high command holds it."
             )
     lines: List[str] = []
+    _tb_suffix = " Credited each UTC hour to the crew bullet treasury (Vault tab), not vault cash."
     if treasury_hourly_active:
         if top3_air and top3_bf:
             lines.append(
-                "Family vault earns 100–200 random bullets per hour from the crew airport and another 100–200 per hour from the crew armoury "
+                "Family bullet treasury earns 100–200 random bullets per hour from the crew airport and another 100–200 per hour from the crew armoury "
                 "when Don, Underboss, or Consigliere owns each (both bonuses stack)."
+                + _tb_suffix
             )
         elif top3_air:
             lines.append(
-                "Family vault earns 100–200 random bullets per hour while Don, Underboss, or Consigliere owns the crew airport."
+                "Family bullet treasury earns 100–200 random bullets per hour while Don, Underboss, or Consigliere owns the crew airport."
+                + _tb_suffix
             )
         else:
             lines.append(
-                "Family vault earns 100–200 random bullets per hour while Don, Underboss, or Consigliere owns the crew armoury."
+                "Family bullet treasury earns 100–200 random bullets per hour while Don, Underboss, or Consigliere owns the crew armoury."
+                + _tb_suffix
             )
     if perk_active:
         if pts_pct:
@@ -1163,8 +1167,9 @@ async def verify_cron_secret_families(x_cron_secret: Optional[str] = Header(None
         raise HTTPException(status_code=403, detail="Invalid cron secret")
 
 
-async def families_cron_treasury_bullets_hourly(_: None = Depends(verify_cron_secret_families)):
-    """Hourly: high command airport and/or armoury each grant 100–200 treasury bullets (stacked when both)."""
+async def run_family_treasury_bullets_hourly_tick() -> dict:
+    """Credit each qualifying family once per UTC hour bucket into ``treasury_bullets`` (not cash ``treasury``).
+    Safe to call every ~60s; idempotent per family per hour via ``last_treasury_bullet_hour_utc``."""
     now = datetime.now(timezone.utc)
     hour_bucket = now.strftime("%Y-%m-%dT%H")
     families = await db.families.find(
@@ -1211,6 +1216,21 @@ async def families_cron_treasury_bullets_hourly(_: None = Depends(verify_cron_se
                 meta={"hour_utc": hour_bucket, "airport": top3_air, "armoury": top3_bf},
             )
     return {"ok": True, "hour_utc": hour_bucket, "families_credited": credited}
+
+
+async def families_cron_treasury_bullets_hourly(_: None = Depends(verify_cron_secret_families)):
+    """Hourly: high command airport and/or armoury each grant 100–200 treasury bullets (stacked when both)."""
+    return await run_family_treasury_bullets_hourly_tick()
+
+
+async def run_family_treasury_bullets_hourly_ticker():
+    """Background loop (~60s + jitter). Prefer cron-only in multi-worker (FAMILY_TREASURY_BULLETS_HOURLY_USE_CRON=1)."""
+    while True:
+        try:
+            await run_family_treasury_bullets_hourly_tick()
+        except Exception:
+            logger.exception("family treasury bullets hourly ticker tick failed")
+        await asyncio.sleep(60 + _rng.random() * 15)
 
 
 async def families_set_airport_crew_perk(

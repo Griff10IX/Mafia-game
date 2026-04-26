@@ -52,17 +52,30 @@ function normalizeCarRarity(rarity) {
   return ALL_RARITIES.includes(compact) ? compact : 'common';
 }
 
-function previewBulletsForCarValue(value, rarity) {
+function isDamageImmuneCar(carId, rarity) {
+  const r = normalizeCarRarity(rarity);
+  if (carId === 'car_custom') return true;
+  return r === 'exclusive' || r === 'loot_exclusive';
+}
+
+/** Per-car melt-for-bullets preview; keep in sync with gta._effective_catalog_value_for_melt_bullets + melt pipeline. */
+function previewBulletsForCarValue(value, rarity, damagePercent = 0, carId = '') {
   const carValue = Number(value || 0);
   if (!Number.isFinite(carValue) || carValue <= 0) return 0;
-  const meltValue = Math.floor((carValue * MELT_VALUE_MULTIPLIER_NUM) / MELT_VALUE_MULTIPLIER_DEN);
+  const r = normalizeCarRarity(rarity);
+  let effective = carValue;
+  if (!isDamageImmuneCar(carId, r)) {
+    const d = Math.min(100, Math.max(0, Number(damagePercent) || 0));
+    effective = Math.max(0, Math.floor((carValue * (100 - d)) / 100));
+  }
+  const meltValue = Math.floor((effective * MELT_VALUE_MULTIPLIER_NUM) / MELT_VALUE_MULTIPLIER_DEN);
   let bullets = Math.floor(meltValue / MELT_VALUE_PER_BULLET);
-  if (rarity === 'common') {
+  if (r === 'common') {
     if (bullets < 5) bullets = 5;
     else if (bullets > 7) bullets = 7;
   }
   // +25% bullets for all but exclusive / loot_exclusive (floor-rounded), keep in sync with backend melt rewards.
-  if (rarity !== 'exclusive' && rarity !== 'loot_exclusive') bullets = Math.floor((bullets * 125) / 100);
+  if (r !== 'exclusive' && r !== 'loot_exclusive') bullets = Math.floor((bullets * 125) / 100);
   return bullets;
 }
 
@@ -783,7 +796,7 @@ export default function Garage() {
   const predictedMeltBullets = Math.floor(
     (selectedCarsForMelt
       .slice(0, batchLimit)
-      .reduce((sum, c) => sum + previewBulletsForCarValue(c.value, c.rarity), 0) *
+      .reduce((sum, c) => sum + previewBulletsForCarValue(c.value, c.rarity, c.damage_percent, c.car_id), 0) *
       MELT_BULLETS_TOTAL_PAYOUT_MULT_NUM) /
       MELT_BULLETS_TOTAL_PAYOUT_MULT_DEN
   );
@@ -831,7 +844,9 @@ export default function Garage() {
 
       <div className="relative gar-fade-in">
         <p className="text-[9px] text-primary/40 font-heading uppercase tracking-[0.3em] mb-1">Your Fleet</p>
-        <p className="text-[10px] text-zinc-500 font-heading italic">View, melt, scrap, and list your cars.</p>
+        <p className="text-[10px] text-zinc-500 font-heading italic">
+          View, melt, scrap, and list your cars. Melt for bullets pays less when a car is damaged (repair for full value); exclusives, loot exclusives, and customs ignore damage.
+        </p>
         <AutoRefreshNote seconds={60} />
       </div>
 
