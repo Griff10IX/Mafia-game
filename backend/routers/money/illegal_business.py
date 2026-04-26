@@ -3250,8 +3250,9 @@ async def claim_kill_reward(req: ClaimKillRewardRequest, current_user: dict = De
             detail="This reward is too old to take over (no business snapshot). Liquidate for cash instead.",
         )
     if choice == "takeover":
-        killer_row = await db.users.find_one({"id": killer_id}, {"_id": 0, "rank": 1})
-        if _user_rank_id(killer_row or current_user) < CAPO_RANK_ID:
+        # Must use full session user (rank_points + prestige_rank_multiplier); a DB row with only `rank`
+        # makes _user_rank_id see 0 RP and wrongly blocks Don+ / prestiged players.
+        if _user_rank_id(current_user) < CAPO_RANK_ID:
             raise HTTPException(
                 status_code=403,
                 detail="Only Capo or higher can take over an illegal business. Liquidate for cash instead.",
