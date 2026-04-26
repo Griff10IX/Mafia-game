@@ -126,6 +126,8 @@ CREW_OC_TIMER_COST_POINTS = 350  # Family Crew OC: 6h cooldown instead of 8h
 AUTO_RANK_COST_POINTS = 5000  # Auto Rank: auto-commit crimes + GTAs, results to Telegram
 # Per 2h token: 8 tokens cost the same points as permanent unlock but only stack 16h — not a cheap bypass
 AUTO_RANK_2H_TOKEN_STORE_POINTS = (AUTO_RANK_COST_POINTS + 7) // 8
+# Crew OC auto-apply (3h): priced between premium timers and Auto Rank tokens; not a cheap bypass of manual recruiting.
+CREW_OC_AUTO_3H_TOKEN_STORE_POINTS = 220
 BULLET_PACKS = {5000: 100, 10000: 175, 50000: 775, 100000: 1525}  # 5k→100, 10k→175, +75 per 5k
 CUSTOM_BULLETS_MAX = 250_000
 
@@ -225,6 +227,7 @@ TOKEN_STORE_UNIT_PRICE_POINTS = {
     "travel": 55,
     "jailbust_bonus": 48,
     "auto_rank_2h": AUTO_RANK_2H_TOKEN_STORE_POINTS,
+    "crew_oc_auto_3h": CREW_OC_AUTO_3H_TOKEN_STORE_POINTS,
 }
 # bundle_id -> points cost, { count_field: amount }
 TOKEN_STORE_BUNDLES = {
@@ -234,7 +237,7 @@ TOKEN_STORE_BUNDLES = {
 }
 TOKEN_SELECTABLE_BUNDLE_SIZE = 10
 TOKEN_SELECTABLE_BUNDLE_DISCOUNT_PCT = 20
-TOKEN_SELECTABLE_BUNDLE_DISALLOWED = frozenset({"rank_xp_pass"})
+TOKEN_SELECTABLE_BUNDLE_DISALLOWED = frozenset({"rank_xp_pass", "crew_oc_auto_3h"})
 SHOOTING_RANGE_BONUS_STEP = 2
 SHOOTING_RANGE_BONUS_COST_POINTS = 85
 SHOOTING_RANGE_BONUS_CAP = 10  # must match armoury.SHOOTING_RANGE_BONUS_STORE_MAX

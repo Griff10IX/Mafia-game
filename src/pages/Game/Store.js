@@ -46,6 +46,7 @@ const STORE_TOKEN_MAX_HELD = 15;
 /** Must match backend AUTO_RANK_COST_POINTS / pricing logic (8× token pts ≈ full unlock pts for 16h only). */
 const AUTO_RANK_COST_POINTS = 5000;
 const AUTO_RANK_2H_TOKEN_STORE_PTS = Math.ceil(AUTO_RANK_COST_POINTS / 8);
+const CREW_OC_AUTO_3H_TOKEN_STORE_PTS = 220;
 
 /** Single consumable tokens (armoury); activate from My Inventory */
 const TOKEN_STORE_ITEMS = [
@@ -65,6 +66,13 @@ const TOKEN_STORE_ITEMS = [
     userKey: 'auto_rank_2h_tokens',
     desc: `+2h Auto Rank when activated (stack to 24h). ${AUTO_RANK_2H_TOKEN_STORE_PTS} pts each — eight tokens equal ${AUTO_RANK_COST_POINTS.toLocaleString()} pts but only 16h vs permanent unlock.`,
   },
+  {
+    tokenType: 'crew_oc_auto_3h',
+    title: 'Crew OC auto-apply (3h)',
+    price: CREW_OC_AUTO_3H_TOKEN_STORE_PTS,
+    userKey: 'crew_oc_auto_apply_tokens',
+    desc: 'Activate in My Inventory — you must set a max join fee; auto-apply only runs after that. 3h per token, stack to 24h.',
+  },
 ];
 
 const TOKEN_BUNDLES = [
@@ -74,7 +82,7 @@ const TOKEN_BUNDLES = [
 ];
 const SELECTABLE_BUNDLE_SIZE = 10;
 const SELECTABLE_BUNDLE_DISCOUNT_PCT = 20;
-const SELECTABLE_BUNDLE_DISALLOWED = new Set(['rank_xp_pass']);
+const SELECTABLE_BUNDLE_DISALLOWED = new Set(['rank_xp_pass', 'crew_oc_auto_3h']);
 const SELECTABLE_BUNDLE_ITEMS = TOKEN_STORE_ITEMS.filter((t) => !SELECTABLE_BUNDLE_DISALLOWED.has(t.tokenType));
 
 const UPGRADES = [

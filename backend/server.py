@@ -749,6 +749,9 @@ class UserResponse(BaseModel):
     travel_tokens: int = 0
     properties_tokens: int = 0
     jailbust_tokens: int = 0
+    crew_oc_auto_apply_tokens: int = 0
+    crew_oc_auto_apply_until: Optional[str] = None
+    crew_oc_auto_apply_max_fee: Optional[int] = None
     # Rank-XP pass token entitlement (unactivated): stored as 0 or 1 via purchase rules.
     rank_xp_pass_tokens: int = 0
     # For unactivated pass tokens only: expires if not used within 1 month.
@@ -3164,6 +3167,19 @@ async def startup_db():
         asyncio.create_task(sports_betting_mod.run_sports_auto_settle_ticker())
         logging.getLogger(__name__).info(
             "Sports auto-settle: in-process ticker enabled (default ON; set SPORTS_AUTO_SETTLE_TICKER=0 to disable). Multi-worker: each worker runs a ticker — use one worker or cron-only mode."
+        )
+    # Crew OC store-token auto-apply: bounded ticker vs cron-only (multi-worker safe)
+    crew_oc_auto_apply_use_cron = (os.environ.get("CREW_OC_AUTO_APPLY_USE_CRON") or "").strip().lower() in ("1", "true", "yes")
+    _crew_oc_auto_apply_ticker_raw = (os.environ.get("CREW_OC_AUTO_APPLY_TICKER") or "").strip().lower()
+    crew_oc_auto_apply_ticker_on = _crew_oc_auto_apply_ticker_raw not in ("0", "false", "no", "off")
+    if crew_oc_auto_apply_use_cron:
+        logging.getLogger(__name__).info(
+            "Crew OC auto-apply: ticker disabled (CREW_OC_AUTO_APPLY_USE_CRON=1). Schedule POST /api/families/cron/crew-oc-auto-apply ~every 60s. Header: X-Cron-Secret."
+        )
+    elif crew_oc_auto_apply_ticker_on:
+        asyncio.create_task(families.run_crew_oc_auto_apply_ticker())
+        logging.getLogger(__name__).info(
+            "Crew OC auto-apply: in-process ticker enabled (~60s+jitter; CREW_OC_AUTO_APPLY_TICKER=0 to disable). Multi-worker: prefer cron-only."
         )
     from routers.cars import gta as gta_router
     asyncio.create_task(gta_router.run_dealer_replenish_loop())

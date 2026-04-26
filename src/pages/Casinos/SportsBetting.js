@@ -1119,6 +1119,11 @@ export default function SportsBetting() {
                   THE_ODDS_API_KEY is not set on the API server — Football/UFC/Boxing/F1 use fallbacks where available; Snooker is always staff-created. Set the key and restart, then Check for events again.
                 </p>
               ) : null}
+              {templates.odds_api_configured && adminCategory === 'Snooker' && (templateMap.Snooker || []).length === 0 ? (
+                <p className="text-[9px] text-zinc-500 font-heading leading-snug">
+                  Snooker is pulled from The Odds API only when your plan exposes a snooker sport key (we discover keys from GET /v4/sports on each Check for events). If the list is empty, set server env SNOOKER_ODDS_SPORT_KEYS to comma-separated keys to try, or use Custom event below.
+                </p>
+              ) : null}
 
               {/* Category tabs */}
               <div className="flex flex-wrap gap-1">

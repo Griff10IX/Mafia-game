@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Package, Swords, Shield, Gift, Car, Building2, Zap, Target, ArrowLeftRight } from 'lucide-react';
+import { Package, Swords, Shield, Gift, Car, Building2, Zap, Target, ArrowLeftRight, Users } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
@@ -16,14 +16,19 @@ let _cachedInventory = null;
 let _invLastFetch = 0;
 const INV_REFRESH = 30_000;
 
-const TOKEN_TYPES = ['xp_crimes', 'xp_gta', 'auto_rank_2h', 'melt', 'oc_reduced', 'booze', 'racket', 'travel', 'properties', 'jailbust_bonus', 'rank_xp_pass'];
-const GIFTABLE_TOKEN_TYPES = TOKEN_TYPES.filter((k) => k !== 'rank_xp_pass');
+const TOKEN_TYPES = ['xp_crimes', 'xp_gta', 'auto_rank_2h', 'crew_oc_auto_3h', 'melt', 'oc_reduced', 'booze', 'racket', 'travel', 'properties', 'jailbust_bonus', 'rank_xp_pass'];
+const GIFTABLE_TOKEN_TYPES = TOKEN_TYPES.filter((k) => k !== 'rank_xp_pass' && k !== 'crew_oc_auto_3h');
 const TOKEN_GIFT_DAILY_DEFAULT = { sent: 0, limit: 20 };
 
 const tokenLabels = {
   xp_crimes: { name: 'Crimes XP', icon: Zap, desc: 'Double XP from crimes, 1h per token (stack up to 24h)' },
   xp_gta: { name: 'GTA XP', icon: Zap, desc: 'Double XP from GTA, 1h per token (stack up to 24h)' },
   auto_rank_2h: { name: 'Auto Rank (2h)', icon: Zap, desc: 'Temporary Auto Rank access, 2h per token (stack up to 24h)' },
+  crew_oc_auto_3h: {
+    name: 'Crew OC auto-apply (3h)',
+    icon: Users,
+    desc: 'Set a max join fee when you use it — auto-apply only runs after that (families above your cap are skipped). 3h per token, stack up to 24h.',
+  },
   melt: { name: 'Melt', icon: Zap, desc: 'Reduced melt (bullets) cooldown, 1h per token (stack up to 24h)' },
   oc_reduced: { name: 'OC Reduced', icon: Zap, desc: 'Reduced OC cooldown, setup cost & higher payout, 1h per token (stack up to 24h)' },
   booze: { name: 'Booze', icon: Zap, desc: 'Booze costs less to buy, 1h per token (stack up to 24h)' },
@@ -47,6 +52,8 @@ export default function MyInventory() {
   const [gifting, setGifting] = useState(false);
   const [speakeasyGiftUsername, setSpeakeasyGiftUsername] = useState('');
   const [speakeasyGifting, setSpeakeasyGifting] = useState(false);
+  const [crewOcModal, setCrewOcModal] = useState(null);
+  const [crewOcMaxFeeStr, setCrewOcMaxFeeStr] = useState('');
 
   const fetchInventory = (silent = false) => {
     api
@@ -150,6 +157,38 @@ export default function MyInventory() {
       toast.success(res?.data?.message || 'Token used.');
       refreshUser();
       fetchInventory();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to use token');
+    } finally {
+      setUsingToken(null);
+    }
+  };
+
+  const openCrewOcModal = (useAll) => {
+    setCrewOcMaxFeeStr('');
+    setCrewOcModal({ useAll });
+  };
+
+  const submitCrewOcToken = async () => {
+    if (!crewOcModal) return;
+    const n = parseInt(String(crewOcMaxFeeStr).replace(/,/g, '').trim(), 10);
+    if (Number.isNaN(n) || n < 0) {
+      toast.error('Enter a max join fee (0 or more). Auto-apply only starts after you set this cap.');
+      return;
+    }
+    const crew_oc_auto_apply_max_fee = n;
+    setUsingToken(crewOcModal.useAll ? 'crew_oc_auto_3h:all' : 'crew_oc_auto_3h');
+    try {
+      const res = await api.post('/inventory/tokens/use', {
+        token_type: 'crew_oc_auto_3h',
+        use_all: crewOcModal.useAll,
+        crew_oc_auto_apply_max_fee,
+      });
+      if (res?.data?.tokens) setData((d) => (d ? { ...d, tokens: res.data.tokens } : d));
+      toast.success(res?.data?.message || 'Token used.');
+      refreshUser();
+      fetchInventory();
+      setCrewOcModal(null);
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to use token');
     } finally {
@@ -468,6 +507,39 @@ export default function MyInventory() {
               <Zap size={14} className="text-primary" />
               <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-wider">Consumables</h2>
             </div>
+            {crewOcModal && (
+              <div className="px-2.5 py-2 border-b border-primary/15 bg-zinc-950/40 space-y-2">
+                <p className="text-[9px] font-heading text-mutedForeground leading-snug">
+                  Max join fee ($): families charging more than this are skipped. Use 0 to only try free-join crews. The perk does not auto-apply until you confirm a cap.
+                </p>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  placeholder="Max join fee ($)"
+                  value={crewOcMaxFeeStr}
+                  onChange={(e) => setCrewOcMaxFeeStr(e.target.value)}
+                  className="w-full rounded border border-primary/30 bg-background/80 px-2 py-1.5 text-[10px] font-heading text-foreground"
+                />
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={submitCrewOcToken}
+                    disabled={usingToken !== null}
+                    className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-primary/40 bg-primary/15 text-primary hover:bg-primary/25 disabled:opacity-50"
+                  >
+                    {usingToken ? '…' : crewOcModal.useAll ? 'Confirm use all' : 'Confirm use'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setCrewOcModal(null)}
+                    disabled={usingToken !== null}
+                    className="px-2 py-1 rounded text-[9px] font-heading border border-zinc-600 text-mutedForeground hover:bg-zinc-800/50 disabled:opacity-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
             <div className="p-2.5 space-y-2">
               <p className="text-[8px] text-mutedForeground font-heading leading-snug border-b border-zinc-700/30 pb-2 mb-1">
                 Use all only spends tokens that add a full token duration toward this row&apos;s max stack (or until you run out). Tiny leftover headroom is not filled, and extra tokens stay in your inventory.
@@ -477,7 +549,12 @@ export default function MyInventory() {
                 const { name, icon: Icon, desc } = tokenLabels[key] || { name: key, icon: Zap, desc: '' };
                 // Game Pass is now one-time tier rewards (no 24h "active until" window).
                 // Older DB rows may still have rank_xp_pass_bonus_until set, so we explicitly ignore it in UI.
-                const active = key !== 'rank_xp_pass' && t.active_until ? new Date(t.active_until) > new Date() : false;
+                const untilLive =
+                  key !== 'rank_xp_pass' && t.active_until ? new Date(t.active_until) > new Date() : false;
+                const active =
+                  untilLive && (key !== 'crew_oc_auto_3h' || t.auto_apply_ready);
+                const crewWindowNoCap =
+                  key === 'crew_oc_auto_3h' && untilLive && !t.auto_apply_ready;
                 const expired = key === 'rank_xp_pass' && t.expires_at ? new Date(t.expires_at) <= new Date() : false;
                 return (
                   <div key={key} className="inv-item flex flex-wrap items-center justify-between gap-2 py-2">
@@ -488,6 +565,12 @@ export default function MyInventory() {
                         <span className="text-[9px] text-mutedForeground">×{t.count}</span>
                       </div>
                       {desc && <div className="text-[9px] text-mutedForeground mt-0.5">{desc}</div>}
+                      {crewWindowNoCap && t.active_until && (
+                        <div className="text-[9px] text-amber-300/90 mt-0.5">
+                          Window until {new Date(t.active_until).toLocaleString(undefined, { timeZone: 'UTC' })} UTC — use
+                          another token with a max fee set to enable auto-apply.
+                        </div>
+                      )}
                       {active && t.active_until && (
                         <div className="text-[9px] text-primary mt-0.5">
                           Active until {new Date(t.active_until).toLocaleString(undefined, { timeZone: 'UTC' })} UTC
@@ -505,8 +588,8 @@ export default function MyInventory() {
                     <div className="flex items-center gap-1 shrink-0">
                       <button
                         type="button"
-                        disabled={t.count < 1 || usingToken !== null || expired}
-                        onClick={() => activateToken(key, false)}
+                        disabled={t.count < 1 || usingToken !== null || expired || (key === 'crew_oc_auto_3h' && crewOcModal)}
+                        onClick={() => (key === 'crew_oc_auto_3h' ? openCrewOcModal(false) : activateToken(key, false))}
                         className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20 disabled:opacity-50"
                       >
                         {usingToken === key ? '...' : 'Use'}
@@ -514,8 +597,8 @@ export default function MyInventory() {
                       {key !== 'rank_xp_pass' && (
                         <button
                           type="button"
-                          disabled={t.count < 1 || usingToken !== null}
-                          onClick={() => activateToken(key, true)}
+                          disabled={t.count < 1 || usingToken !== null || (key === 'crew_oc_auto_3h' && crewOcModal)}
+                          onClick={() => (key === 'crew_oc_auto_3h' ? openCrewOcModal(true) : activateToken(key, true))}
                           className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-teal-500/40 bg-teal-500/10 text-teal-400 hover:bg-teal-500/20 disabled:opacity-50"
                         >
                           {usingToken === `${key}:all` ? '...' : 'Use all'}

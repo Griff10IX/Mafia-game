@@ -3229,6 +3229,197 @@ async def families_update_avatar(request: FamilyAvatarRequest, current_user: dic
 
 CREW_OC_TOPIC_WINDOW_MINUTES = 10  # Can create Crew OC topic only when OC is available or within this many mins before
 
+# Store token ticker: eligible if OC available now OR within this many minutes before cooldown ends (not forum advertise window).
+CREW_OC_AUTO_APPLY_PRE_AVAILABLE_MINUTES = 60
+CREW_OC_AUTO_APPLY_MAX_USERS_PER_TICK = 40
+CREW_OC_AUTO_APPLY_MAX_FAMILIES_PER_USER = 25
+CREW_OC_AUTO_APPLY_MAX_APPLIES_PER_TICK = 40
+
+
+def _crew_oc_parse_dt_utc(val) -> Optional[datetime]:
+    if not val:
+        return None
+    try:
+        dt = datetime.fromisoformat(str(val).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return None
+
+
+def _crew_oc_family_is_auto_apply_eligible(fam_doc: dict, now_utc: datetime) -> bool:
+    raw = fam_doc.get("crew_oc_cooldown_until")
+    if not raw:
+        return True
+    cd = _crew_oc_parse_dt_utc(raw)
+    if not cd:
+        return True
+    if now_utc >= cd:
+        return True
+    pre = cd - timedelta(minutes=CREW_OC_AUTO_APPLY_PRE_AVAILABLE_MINUTES)
+    return now_utc >= pre
+
+
+async def _crew_oc_apply_user_to_family(
+    db,
+    uid: str,
+    username: str,
+    user_family_id: Optional[str],
+    money: int,
+    family_id: str,
+    *,
+    max_join_fee_cap: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Apply current user to another family's Crew OC (shared by HTTP + auto-apply ticker)."""
+    family_id = (family_id or "").strip()
+    if not family_id:
+        return {"ok": False, "reason": "bad_family_id"}
+    if user_family_id and user_family_id == family_id:
+        return {"ok": False, "reason": "same_family"}
+    fam = await db.families.find_one(
+        {"id": family_id},
+        {"_id": 0, "name": 1, "tag": 1, "crew_oc_join_fee": 1, "crew_oc_auto_accept": 1, "wiped": 1},
+    )
+    if not fam or fam.get("wiped"):
+        return {"ok": False, "reason": "family_not_found"}
+    fee = int(fam.get("crew_oc_join_fee") or 0)
+    if max_join_fee_cap is not None and fee > int(max_join_fee_cap):
+        return {"ok": False, "reason": "fee_above_cap"}
+    auto_accept = bool(fam.get("crew_oc_auto_accept"))
+    existing = await db.family_crew_oc_applications.find_one({"family_id": family_id, "user_id": uid}, {"_id": 0, "status": 1})
+    if existing:
+        status = (existing.get("status") or "").strip().lower()
+        if status in ("pending", "accepted"):
+            return {"ok": False, "reason": "already_applied", "status": existing.get("status")}
+        await db.family_crew_oc_applications.delete_one({"family_id": family_id, "user_id": uid})
+    now = datetime.now(timezone.utc).isoformat()
+    application_id = str(uuid.uuid4())
+    if fee > 0:
+        if money < fee:
+            return {"ok": False, "reason": "insufficient_cash", "fee": fee}
+        await db.users.update_one({"id": uid}, {"$inc": {"money": -fee}})
+        await db.families.update_one({"id": family_id}, {"$inc": {"treasury": fee}})
+        await log_family_vault_tx(
+            db,
+            family_id,
+            "crew_oc_join_fee",
+            uid,
+            username,
+            cash_delta=fee,
+            meta={"crew_oc_application": True},
+        )
+        st = "accepted" if auto_accept else "pending"
+        await db.family_crew_oc_applications.insert_one({
+            "id": application_id, "family_id": family_id, "user_id": uid,
+            "username": username, "status": st, "amount_paid": fee, "created_at": now,
+        })
+        fam_name = (fam.get("name") or fam.get("tag") or "the family").strip()
+        if auto_accept:
+            await send_notification(uid, "Crew OC – You're in", f"You paid ${fee:,} and joined {fam_name} Crew OC for their next run.", "reward", category="crew_oc")
+            await send_notification_to_family(family_id, "Crew OC – New crew member", f'{username} paid ${fee:,} and joined your Crew OC for the next run.', "reward", category="oc_invites", actor_username=username)
+            _invalidate_my_cache(uid)
+            return {"ok": True, "status": "accepted", "amount_paid": fee}
+        await send_notification_to_family(family_id, "Crew OC application", f'{username} applied to your Crew OC (paid ${fee:,}). Accept or reject in Families → Crew OC.', "system", category="oc_invites", actor_username=username)
+        _invalidate_my_cache(uid)
+        return {"ok": True, "status": "pending", "amount_paid": fee}
+    st0 = "accepted" if auto_accept else "pending"
+    await db.family_crew_oc_applications.insert_one({
+        "id": application_id, "family_id": family_id, "user_id": uid,
+        "username": username, "status": st0, "amount_paid": 0, "created_at": now,
+    })
+    fam_name = (fam.get("name") or fam.get("tag") or "the family").strip()
+    if auto_accept:
+        await send_notification(uid, "Crew OC – You're in", f"You applied and joined {fam_name} Crew OC for their next run.", "reward", category="crew_oc")
+        await send_notification_to_family(family_id, "Crew OC – New crew member", f'{username} applied and joined your Crew OC for the next run.', "reward", category="oc_invites", actor_username=username)
+        _invalidate_my_cache(uid)
+        return {"ok": True, "status": "accepted", "amount_paid": 0}
+    await send_notification_to_family(family_id, "Crew OC application", f'{username} applied to your Crew OC. Accept or reject in Families → Crew OC.', "system", category="oc_invites", actor_username=username)
+    _invalidate_my_cache(uid)
+    return {"ok": True, "status": "pending", "amount_paid": 0}
+
+
+async def run_crew_oc_auto_apply_tick_once(db) -> Dict[str, Any]:
+    """One bounded pass: active token users × capped families; sequential; no large gather."""
+    now_utc = datetime.now(timezone.utc)
+    now_iso = now_utc.isoformat()
+    applies = 0
+    capped = False
+    cursor = db.users.find(
+        {
+            "crew_oc_auto_apply_until": {"$gt": now_iso},
+            "crew_oc_auto_apply_max_fee": {"$gte": 0},
+        },
+        {
+            "_id": 0,
+            "id": 1,
+            "username": 1,
+            "family_id": 1,
+            "money": 1,
+            "crew_oc_auto_apply_max_fee": 1,
+        },
+    ).sort("crew_oc_auto_apply_until", 1).limit(CREW_OC_AUTO_APPLY_MAX_USERS_PER_TICK)
+    users = await cursor.to_list(CREW_OC_AUTO_APPLY_MAX_USERS_PER_TICK)
+    for u in users:
+        try:
+            uid = u.get("id")
+            if not uid:
+                continue
+            raw_cap = u.get("crew_oc_auto_apply_max_fee")
+            cap_val = int(raw_cap) if raw_cap is not None else 0
+            my_fam = u.get("family_id")
+            money = int(u.get("money") or 0)
+            username = (u.get("username") or "?").strip() or "?"
+            fam_q: Dict[str, Any] = {"wiped": {"$ne": True}, "crew_oc_join_fee": {"$lte": cap_val}}
+            if my_fam:
+                fam_q["id"] = {"$ne": my_fam}
+            candidates = await db.families.find(
+                fam_q,
+                {"_id": 0, "id": 1, "crew_oc_join_fee": 1, "crew_oc_cooldown_until": 1},
+            ).sort("crew_oc_join_fee", 1).limit(CREW_OC_AUTO_APPLY_MAX_FAMILIES_PER_USER).to_list(CREW_OC_AUTO_APPLY_MAX_FAMILIES_PER_USER)
+            for fam in candidates:
+                if applies >= CREW_OC_AUTO_APPLY_MAX_APPLIES_PER_TICK:
+                    capped = True
+                    return {"ok": True, "users_scanned": len(users), "applies": applies, "capped": capped}
+                if not _crew_oc_family_is_auto_apply_eligible(fam, now_utc):
+                    continue
+                fid = fam.get("id")
+                if not fid:
+                    continue
+                res = await _crew_oc_apply_user_to_family(
+                    db,
+                    str(uid),
+                    username,
+                    my_fam,
+                    money,
+                    str(fid),
+                    max_join_fee_cap=cap_val,
+                )
+                if not res.get("ok"):
+                    continue
+                applies += 1
+                fresh = await db.users.find_one({"id": uid}, {"_id": 0, "money": 1})
+                money = int((fresh or {}).get("money") or 0)
+        except Exception:
+            logger.warning("crew_oc_auto_apply tick user=%s", u.get("id"), exc_info=True)
+        await asyncio.sleep(0)
+    return {"ok": True, "users_scanned": len(users), "applies": applies, "capped": capped}
+
+
+async def run_crew_oc_auto_apply_ticker():
+    """Background loop (~60s + jitter). Prefer cron-only in multi-worker (CREW_OC_AUTO_APPLY_USE_CRON=1)."""
+    while True:
+        try:
+            await run_crew_oc_auto_apply_tick_once(db)
+        except Exception:
+            logger.exception("crew_oc_auto_apply ticker tick failed")
+        await asyncio.sleep(60 + _rng.random() * 15)
+
+
+async def families_cron_crew_oc_auto_apply(_: None = Depends(verify_cron_secret_families)):
+    """One bounded auto-apply pass. Schedule every 60s when CREW_OC_AUTO_APPLY_USE_CRON=1. Header: X-Cron-Secret."""
+    return await run_crew_oc_auto_apply_tick_once(db)
+
 
 async def families_crew_oc_advertise(current_user: dict = Depends(get_current_user)):
     if (current_user.get("family_role") or "").strip().lower() not in ("boss", "underboss", "capo"):
@@ -3283,65 +3474,40 @@ async def families_crew_oc_apply(request: FamilyCrewOCApplyRequest, current_user
     if not family_id:
         raise HTTPException(status_code=400, detail="family_id required")
     uid = current_user["id"]
-    if current_user.get("family_id") == family_id:
+    uname = current_user.get("username") or "?"
+    money = int(current_user.get("money") or 0)
+    res = await _crew_oc_apply_user_to_family(
+        db,
+        uid,
+        uname,
+        current_user.get("family_id"),
+        money,
+        family_id,
+        max_join_fee_cap=None,
+    )
+    if res.get("ok"):
+        ap = int(res.get("amount_paid") or 0)
+        st = res.get("status") or "pending"
+        if st == "accepted" and ap > 0:
+            return {"message": "You paid and joined the crew. You'll get rewards when they commit.", "status": "accepted", "amount_paid": ap}
+        if st == "accepted":
+            return {"message": "You joined the crew. You'll get rewards when they commit.", "status": "accepted"}
+        if ap > 0:
+            return {"message": "Application sent. The family will accept or reject.", "status": "pending", "amount_paid": ap}
+        return {"message": "Application sent. The family will accept or reject.", "status": "pending"}
+    reason = res.get("reason") or "unknown"
+    if reason == "same_family":
         raise HTTPException(status_code=400, detail="You are already in this family")
-    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "name": 1, "tag": 1, "crew_oc_join_fee": 1, "crew_oc_auto_accept": 1})
-    if not fam:
+    if reason == "family_not_found":
         raise HTTPException(status_code=404, detail="Family not found")
-    fee = int(fam.get("crew_oc_join_fee") or 0)
-    auto_accept = bool(fam.get("crew_oc_auto_accept"))
-    existing = await db.family_crew_oc_applications.find_one({"family_id": family_id, "user_id": uid}, {"_id": 0, "status": 1})
-    if existing:
-        status = (existing.get("status") or "").strip().lower()
-        if status in ("pending", "accepted"):
-            raise HTTPException(status_code=400, detail=f"You already applied (status: {existing.get('status')})")
-        # kicked or rejected: allow reapply by removing the old application
-        await db.family_crew_oc_applications.delete_one({"family_id": family_id, "user_id": uid})
-    now = datetime.now(timezone.utc).isoformat()
-    application_id = str(uuid.uuid4())
-    if fee > 0:
-        money = int(current_user.get("money") or 0)
-        if money < fee:
-            raise HTTPException(status_code=400, detail=f"Join fee is ${fee:,}. You need ${fee - money:,} more cash.")
-        await db.users.update_one({"id": uid}, {"$inc": {"money": -fee}})
-        await db.families.update_one({"id": family_id}, {"$inc": {"treasury": fee}})
-        await log_family_vault_tx(
-            db,
-            family_id,
-            "crew_oc_join_fee",
-            uid,
-            current_user.get("username") or "?",
-            cash_delta=fee,
-            meta={"crew_oc_application": True},
-        )
-        status = "accepted" if auto_accept else "pending"
-        await db.family_crew_oc_applications.insert_one({
-            "id": application_id, "family_id": family_id, "user_id": uid,
-            "username": current_user.get("username") or "?", "status": status, "amount_paid": fee, "created_at": now,
-        })
-        fam_name = (fam.get("name") or fam.get("tag") or "the family").strip()
-        if auto_accept:
-            await send_notification(uid, "Crew OC – You're in", f"You paid ${fee:,} and joined {fam_name} Crew OC for their next run.", "reward", category="crew_oc")
-            await send_notification_to_family(family_id, "Crew OC – New crew member", f'{current_user.get("username") or "?"} paid ${fee:,} and joined your Crew OC for the next run.', "reward", category="oc_invites", actor_username=current_user.get("username") or "?")
-            _invalidate_my_cache(current_user["id"])
-            return {"message": "You paid and joined the crew. You'll get rewards when they commit.", "status": "accepted", "amount_paid": fee}
-        await send_notification_to_family(family_id, "Crew OC application", f'{current_user.get("username") or "?"} applied to your Crew OC (paid ${fee:,}). Accept or reject in Families → Crew OC.', "system", category="oc_invites", actor_username=current_user.get("username") or "?")
-        _invalidate_my_cache(current_user["id"])
-        return {"message": "Application sent. The family will accept or reject.", "status": "pending", "amount_paid": fee}
-    status = "accepted" if auto_accept else "pending"
-    await db.family_crew_oc_applications.insert_one({
-        "id": application_id, "family_id": family_id, "user_id": uid,
-        "username": current_user.get("username") or "?", "status": status, "amount_paid": 0, "created_at": now,
-    })
-    fam_name = (fam.get("name") or fam.get("tag") or "the family").strip()
-    if auto_accept:
-        await send_notification(uid, "Crew OC – You're in", f"You applied and joined {fam_name} Crew OC for their next run.", "reward", category="crew_oc")
-        await send_notification_to_family(family_id, "Crew OC – New crew member", f'{current_user.get("username") or "?"} applied and joined your Crew OC for the next run.', "reward", category="oc_invites", actor_username=current_user.get("username") or "?")
-        _invalidate_my_cache(current_user["id"])
-        return {"message": "You joined the crew. You'll get rewards when they commit.", "status": "accepted"}
-    await send_notification_to_family(family_id, "Crew OC application", f'{current_user.get("username") or "?"} applied to your Crew OC. Accept or reject in Families → Crew OC.', "system", category="oc_invites", actor_username=current_user.get("username") or "?")
-    _invalidate_my_cache(current_user["id"])
-    return {"message": "Application sent. The family will accept or reject.", "status": "pending"}
+    if reason == "already_applied":
+        raise HTTPException(status_code=400, detail=f"You already applied (status: {res.get('status')})")
+    if reason == "insufficient_cash":
+        fee = int(res.get("fee") or 0)
+        raise HTTPException(status_code=400, detail=f"Join fee is ${fee:,}. You need ${fee - money:,} more cash.")
+    if reason == "bad_family_id":
+        raise HTTPException(status_code=400, detail="family_id required")
+    raise HTTPException(status_code=400, detail="Could not apply to this family's Crew OC.")
 
 
 async def families_crew_oc_applications(current_user: dict = Depends(get_current_user)):
@@ -4561,4 +4727,5 @@ def register(router):
     router.add_api_route("/families/state-takeover/reject", state_takeover_reject, methods=["POST"])
     router.add_api_route("/families/head-of-state/relinquish", relinquish_head_of_state, methods=["POST"])
     router.add_api_route("/families/cron/treasury-bullets-hourly", families_cron_treasury_bullets_hourly, methods=["POST"])
+    router.add_api_route("/families/cron/crew-oc-auto-apply", families_cron_crew_oc_auto_apply, methods=["POST"])
     router.add_api_route("/families/airport-crew-perk", families_set_airport_crew_perk, methods=["PATCH"])

@@ -133,6 +133,7 @@ async def ensure_all_indexes(db):
         await db.families.create_index("name")
         await db.families.create_index("tag")
         await db.families.create_index("wiped")  # list non-wiped families
+        await db.families.create_index([("crew_oc_join_fee", 1)], sparse=True)
         # Partial filters cannot use $ne (server rewrites to $not). Match non-wiped docs only.
         await db.families.create_index(
             "emblem_key",
@@ -591,6 +592,7 @@ async def ensure_all_indexes(db):
         await db.users.create_index([("money", -1)])
         await db.users.create_index("in_jail")
         await db.users.create_index([("auto_rank_enabled", 1), ("auto_rank_next_run_at", 1)])
+        await db.users.create_index([("crew_oc_auto_apply_until", 1)], sparse=True)
 
         # --- Mini games leaderboard ---
         await db.minigame_plays.create_index([("week_start", 1), ("user_id", 1)])

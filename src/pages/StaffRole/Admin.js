@@ -777,6 +777,9 @@ export default function Admin() {
   const [viewRegistrationInfo, setViewRegistrationInfo] = useState(null);
   const [adminUserSessions, setAdminUserSessions] = useState(null);
   const [adminUserSessionsLoading, setAdminUserSessionsLoading] = useState(false);
+  const [autoRankInspectData, setAutoRankInspectData] = useState(null);
+  const [autoRankInspectLoading, setAutoRankInspectLoading] = useState(false);
+  const [autoRankInspectError, setAutoRankInspectError] = useState('');
   const [sessionStats, setSessionStats] = useState(null);
   const [sessionStatsLoading, setSessionStatsLoading] = useState(false);
   const [revokeOldSessionsLoading, setRevokeOldSessionsLoading] = useState(false);
@@ -3793,6 +3796,29 @@ export default function Admin() {
       const response = await api.post(`/admin/remove-auto-rank?target_username=${encodeURIComponent(formData.targetUsername)}`);
       toast.success(response.data?.message || 'Auto rank removed');
     } catch (error) { toast.error(error.response?.data?.detail || 'Failed'); }
+  };
+
+  const handleLoadAutoRankInspect = async () => {
+    const u = (formData.targetUsername || '').trim();
+    if (!u) {
+      toast.error('Enter target username');
+      return;
+    }
+    setAutoRankInspectLoading(true);
+    setAutoRankInspectError('');
+    setAutoRankInspectData(null);
+    try {
+      const res = await api.get('/admin/auto-rank/user-inspect', { params: { username: u } });
+      setAutoRankInspectData(res.data);
+      toast.success('Auto Rank inspector loaded');
+    } catch (error) {
+      const d = error.response?.data?.detail;
+      const msg = typeof d === 'string' ? d : (Array.isArray(d) ? d.map((x) => x.msg).join(' ') : 'Failed to load');
+      setAutoRankInspectError(msg);
+      toast.error(msg);
+    } finally {
+      setAutoRankInspectLoading(false);
+    }
   };
 
   const handleChangeEmail = async () => {
@@ -9494,7 +9520,118 @@ export default function Admin() {
             <ActionRow icon={Bot} label="Auto Rank" description="Give or remove auto rank for the target user">
               <button type="button" onClick={handleGiveAutoRank} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-emerald-500/20 border-emerald-500/40 text-emerald-400 hover:bg-emerald-500/30">Give</button>
               <button type="button" onClick={handleRemoveAutoRank} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-zinc-700/60 border-zinc-500/40 text-zinc-300 hover:bg-zinc-600">Remove</button>
+              <button
+                type="button"
+                onClick={handleLoadAutoRankInspect}
+                disabled={autoRankInspectLoading}
+                className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border bg-primary/15 border-primary/40 text-primary hover:bg-primary/25 disabled:opacity-50"
+              >
+                {autoRankInspectLoading ? '…' : 'Inspect'}
+              </button>
             </ActionRow>
+            {(autoRankInspectError || autoRankInspectData) && (
+              <div className="pl-6 pr-2 py-2 space-y-2 border-l-2 border-primary/20 ml-1 max-w-3xl">
+                {autoRankInspectError ? (
+                  <div className="text-[10px] font-heading text-red-400">{autoRankInspectError}</div>
+                ) : null}
+                {autoRankInspectData ? (
+                  <div className="space-y-3 text-[10px] font-heading text-foreground">
+                    <div className="text-[9px] font-bold uppercase tracking-wider text-mutedForeground">Auto Rank inspector</div>
+                    <div className="rounded border border-zinc-700/50 bg-zinc-900/40 p-2 space-y-1">
+                      <div><span className="text-mutedForeground">User:</span> {autoRankInspectData.user?.username || '—'} <span className="text-mutedForeground">· id</span> {autoRankInspectData.user?.id || '—'}</div>
+                      <div><span className="text-mutedForeground">Last seen:</span> {autoRankInspectData.user?.last_seen ? formatAdminDateTime(autoRankInspectData.user.last_seen) : '—'}</div>
+                      <div><span className="text-mutedForeground">Dead:</span> {autoRankInspectData.user?.is_dead ? 'yes' : 'no'} <span className="text-mutedForeground ml-2">In jail (snapshot):</span> {autoRankInspectData.user?.in_jail ? 'yes' : 'no'}</div>
+                    </div>
+                    <div className="rounded border border-zinc-700/50 bg-zinc-900/40 p-2 space-y-1">
+                      <div className="text-[9px] font-bold text-primary uppercase tracking-wider mb-1">Purchase / trial</div>
+                      <div><span className="text-mutedForeground">Purchased:</span> {autoRankInspectData.purchase?.auto_rank_purchased ? 'yes' : 'no'}</div>
+                      <div><span className="text-mutedForeground">Trial:</span> {autoRankInspectData.purchase?.auto_rank_trial ? 'yes' : 'no'} {autoRankInspectData.purchase?.auto_rank_trial_until ? <span className="text-mutedForeground"> until </span> : null}{autoRankInspectData.purchase?.auto_rank_trial_until ? formatAdminDateTime(autoRankInspectData.purchase.auto_rank_trial_until) : null}</div>
+                      <div><span className="text-mutedForeground">Trial dismissed:</span> {autoRankInspectData.purchase?.auto_rank_trial_dismissed ? 'yes' : 'no'}</div>
+                    </div>
+                    <div className="rounded border border-zinc-700/50 bg-zinc-900/40 p-2 space-y-1">
+                      <div className="text-[9px] font-bold text-primary uppercase tracking-wider mb-1">Toggles</div>
+                      {autoRankInspectData.preferences && Object.entries(autoRankInspectData.preferences).map(([k, v]) => (
+                        <div key={k}><span className="text-mutedForeground">{k}:</span> {v === true ? 'on' : v === false ? 'off' : String(v)}</div>
+                      ))}
+                    </div>
+                    <div className="rounded border border-zinc-700/50 bg-zinc-900/40 p-2 space-y-1">
+                      <div className="text-[9px] font-bold text-primary uppercase tracking-wider mb-1">Idle</div>
+                      <div><span className="text-mutedForeground">auto_rank_idle:</span> {autoRankInspectData.idle?.auto_rank_idle ? 'yes' : 'no'}</div>
+                      {autoRankInspectData.idle?.saved_on_idle && Object.keys(autoRankInspectData.idle.saved_on_idle).length > 0 ? (
+                        <div className="pl-1 border-l border-zinc-600/50 space-y-0.5">
+                          {Object.entries(autoRankInspectData.idle.saved_on_idle).map(([k, v]) => (
+                            <div key={k}><span className="text-mutedForeground">{k}:</span> {v === true ? 'on' : v === false ? 'off' : String(v)}</div>
+                          ))}
+                        </div>
+                      ) : <div className="text-mutedForeground">No saved-on-idle prefs</div>}
+                    </div>
+                    <div className="rounded border border-zinc-700/50 bg-zinc-900/40 p-2 space-y-1">
+                      <div className="text-[9px] font-bold text-primary uppercase tracking-wider mb-1">Telegram</div>
+                      <div className="break-all"><span className="text-mutedForeground">chat_id:</span> {autoRankInspectData.telegram?.telegram_chat_id || '—'}</div>
+                      <div className="break-all"><span className="text-mutedForeground">bot_token:</span> {autoRankInspectData.telegram?.telegram_bot_token ? `${String(autoRankInspectData.telegram.telegram_bot_token).slice(0, 12)}…` : '—'}</div>
+                    </div>
+                    <div className="rounded border border-zinc-700/50 bg-zinc-900/40 p-2 space-y-1">
+                      <div className="text-[9px] font-bold text-primary uppercase tracking-wider mb-1">Booze / travel</div>
+                      <div><span className="text-mutedForeground">State:</span> {autoRankInspectData.booze_travel?.current_state ?? '—'}</div>
+                      <div><span className="text-mutedForeground">Traveling to:</span> {autoRankInspectData.booze_travel?.traveling_to ?? '—'}</div>
+                      <div><span className="text-mutedForeground">Arrives:</span> {autoRankInspectData.booze_travel?.travel_arrives_at ? formatAdminDateTime(autoRankInspectData.booze_travel.travel_arrives_at) : '—'}</div>
+                      <div><span className="text-mutedForeground">booze_carrying:</span> <span className="font-mono text-[9px] text-zinc-400">{autoRankInspectData.booze_travel?.booze_carrying != null ? JSON.stringify(autoRankInspectData.booze_travel.booze_carrying) : '—'}</span></div>
+                    </div>
+                    {autoRankInspectData.selection_labels ? (
+                      <div className="rounded border border-zinc-700/50 bg-zinc-900/40 p-2 space-y-2">
+                        <div className="text-[9px] font-bold text-primary uppercase tracking-wider">Selections</div>
+                        {(autoRankInspectData.selection_labels.crimes || []).length > 0 ? (
+                          <div><span className="text-mutedForeground">Crimes:</span> {(autoRankInspectData.selection_labels.crimes || []).map((c) => `${c.name} (${c.id})`).join(', ')}</div>
+                        ) : null}
+                        {(autoRankInspectData.selection_labels.gta_options || []).length > 0 ? (
+                          <div><span className="text-mutedForeground">GTA:</span> {(autoRankInspectData.selection_labels.gta_options || []).map((c) => `${c.name} (${c.id})`).join(', ')}</div>
+                        ) : null}
+                        {(autoRankInspectData.selection_labels.melt_actions || []).length > 0 ? (
+                          <div><span className="text-mutedForeground">Melt actions:</span> {(autoRankInspectData.selection_labels.melt_actions || []).map((c) => c.name).join(', ')}</div>
+                        ) : null}
+                        {(autoRankInspectData.selection_labels.melt_rarities || []).length > 0 ? (
+                          <div><span className="text-mutedForeground">Melt rarities:</span> {(autoRankInspectData.selection_labels.melt_rarities || []).map((c) => c.name).join(', ')}</div>
+                        ) : null}
+                        {(autoRankInspectData.selection_labels.scrap_rarities || []).length > 0 ? (
+                          <div><span className="text-mutedForeground">Scrap rarities:</span> {(autoRankInspectData.selection_labels.scrap_rarities || []).map((c) => c.name).join(', ')}</div>
+                        ) : null}
+                      </div>
+                    ) : null}
+                    {autoRankInspectData.presence_simulator ? (
+                      <div className="rounded border border-amber-700/40 bg-amber-950/20 p-2 text-[9px] text-amber-200/90">
+                        <span className="font-bold uppercase tracking-wider">Presence simulator</span>
+                        <pre className="mt-1 whitespace-pre-wrap break-all font-mono text-[8px] text-amber-100/80">{JSON.stringify(autoRankInspectData.presence_simulator, null, 2)}</pre>
+                      </div>
+                    ) : null}
+                    <div className="rounded border border-zinc-700/50 bg-zinc-900/40 p-2 space-y-1">
+                      <div className="text-[9px] font-bold text-primary uppercase tracking-wider mb-1">Live stats (same as player /auto-rank/stats)</div>
+                      {autoRankInspectData.stats ? (
+                        <>
+                          <div><span className="text-mutedForeground">Global loop:</span> {autoRankInspectData.stats.global_loop_enabled ? 'on' : 'off'}</div>
+                          <div><span className="text-mutedForeground">Activity:</span> {autoRankInspectData.stats.activity_detail || '—'}</div>
+                          <div><span className="text-mutedForeground">Last activity:</span> {autoRankInspectData.stats.last_activity || '—'} {autoRankInspectData.stats.last_activity_at ? <span className="text-mutedForeground"> @ </span> : null}{autoRankInspectData.stats.last_activity_at ? formatAdminDateTime(autoRankInspectData.stats.last_activity_at) : null}</div>
+                          <div><span className="text-mutedForeground">Next cycle:</span> {autoRankInspectData.stats.auto_rank_next_run_at ? formatAdminDateTime(autoRankInspectData.stats.auto_rank_next_run_at) : '—'}</div>
+                          <div><span className="text-mutedForeground">Next crime:</span> {autoRankInspectData.stats.next_crime_at ? formatAdminDateTime(autoRankInspectData.stats.next_crime_at) : '—'}</div>
+                          <div><span className="text-mutedForeground">Next GTA:</span> {autoRankInspectData.stats.next_gta_at ? formatAdminDateTime(autoRankInspectData.stats.next_gta_at) : '—'}</div>
+                          <div><span className="text-mutedForeground">Next booze arrival:</span> {autoRankInspectData.stats.next_booze_arrival_at ? formatAdminDateTime(autoRankInspectData.stats.next_booze_arrival_at) : '—'}</div>
+                          <div><span className="text-mutedForeground">Next OC:</span> {autoRankInspectData.stats.next_oc_at ? formatAdminDateTime(autoRankInspectData.stats.next_oc_at) : '—'}</div>
+                          <div><span className="text-mutedForeground">Jail until:</span> {autoRankInspectData.stats.jail_until ? formatAdminDateTime(autoRankInspectData.stats.jail_until) : '—'} {autoRankInspectData.stats.jail_seconds_remaining != null ? <span className="text-mutedForeground"> ({autoRankInspectData.stats.jail_seconds_remaining}s left)</span> : null}</div>
+                          <div><span className="text-mutedForeground">Stats since:</span> {autoRankInspectData.stats.stats_since ? formatAdminDateTime(autoRankInspectData.stats.stats_since) : '—'}</div>
+                          <div><span className="text-mutedForeground">Booze runs:</span> {(autoRankInspectData.stats.total_booze_runs ?? 0).toLocaleString()} <span className="text-mutedForeground ml-2">Booze profit:</span> ${(autoRankInspectData.stats.total_booze_profit ?? 0).toLocaleString()}</div>
+                          <div><span className="text-mutedForeground">Total cash (crimes+booze+scrap in stat):</span> ${(autoRankInspectData.stats.total_cash ?? 0).toLocaleString()}</div>
+                          <div><span className="text-mutedForeground">Crimes / GTA / busts:</span> {(autoRankInspectData.stats.total_crimes ?? 0).toLocaleString()} / {(autoRankInspectData.stats.total_gtas ?? 0).toLocaleString()} / {(autoRankInspectData.stats.total_busts ?? 0).toLocaleString()}</div>
+                          <div><span className="text-mutedForeground">Today successes:</span> crimes {(autoRankInspectData.stats.successful_crimes_today ?? 0).toLocaleString()} · GTA {(autoRankInspectData.stats.successful_gtas_today ?? 0).toLocaleString()} · busts {(autoRankInspectData.stats.successful_busts_today ?? 0).toLocaleString()}</div>
+                          <div><span className="text-mutedForeground">Today failures:</span> crimes {(autoRankInspectData.stats.failed_crimes_today ?? 0).toLocaleString()} · GTA {(autoRankInspectData.stats.failed_gtas_today ?? 0).toLocaleString()} · busts {(autoRankInspectData.stats.failed_busts_today ?? 0).toLocaleString()}</div>
+                          <div><span className="text-mutedForeground">Melt / scrap:</span> cars melted {(autoRankInspectData.stats.total_cars_melted ?? 0).toLocaleString()} · bullets from melt {(autoRankInspectData.stats.total_bullets_from_melt ?? 0).toLocaleString()} · scrapped {(autoRankInspectData.stats.total_cars_scrapped ?? 0).toLocaleString()} · scrap cash ${(autoRankInspectData.stats.total_cash_from_scrap ?? 0).toLocaleString()}</div>
+                          <div><span className="text-mutedForeground">auto_rank_idle:</span> {autoRankInspectData.stats.auto_rank_idle ? 'yes' : 'no'}</div>
+                          <div><span className="text-mutedForeground">Intervals (s):</span> main {autoRankInspectData.stats.interval_seconds ?? '—'} · bust {autoRankInspectData.stats.interval_bust_seconds ?? '—'} · OC {autoRankInspectData.stats.interval_oc_seconds ?? '—'} · scrap {autoRankInspectData.stats.interval_scrap_seconds ?? '—'}</div>
+                        </>
+                      ) : <div className="text-mutedForeground">No stats</div>}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            )}
             <ActionRow icon={Mail} label="Change Email" description="Set a new email for the target user">
               <Input type="email" value={formData.adminNewEmail} onChange={(e) => setFormData((prev) => ({ ...prev, adminNewEmail: e.target.value }))} placeholder="new@email.com" className="flex-1 min-w-0 text-[11px]" />
               <BtnPrimary onClick={handleChangeEmail}>Set</BtnPrimary>

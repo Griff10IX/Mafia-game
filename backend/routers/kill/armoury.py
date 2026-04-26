@@ -6,11 +6,11 @@ import os
 import sys
 import random
 import time
-from typing import Optional, List, Tuple, Dict
+from typing import Optional, List, Tuple, Dict, Any
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi import Depends, HTTPException, Request, Body
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from bson.objectid import ObjectId
 
 from server import db, get_current_user, get_effective_event, STATES, get_rank_info, user_prestige_rank_mult, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, get_effective_event, STATES, get_rank_info, CAPO_RANK_ID, maybe_auto_relinquish_below_capo, _is_admin, _username_pattern, ARMOUR_SETS, ARMOUR_WEAPON_MARGIN, _family_in_active_war, CARS, _get_staff_user_ids, send_notification, log_activity, log_minigame_payout
@@ -153,6 +153,8 @@ TOKEN_TYPES = (
     "xp_gta",
     # Auto-rank boost: affects both crimes+GTA durations simultaneously.
     "auto_rank_2h",
+    # Crew OC: auto-apply to other families' Crew OCs for 3h (max join fee cap at activation).
+    "crew_oc_auto_3h",
     "melt",
     "oc_reduced",
     "booze",
@@ -172,6 +174,7 @@ TOKEN_CONFIG = {
     "xp_crimes":     {"count_field": "xp_crimes_tokens",     "until_field": "xp_crimes_until",     "max_stack_hours": TOKEN_MAX_STACK_HOURS},
     "xp_gta":        {"count_field": "xp_gta_tokens",        "until_field": "xp_gta_until",        "max_stack_hours": TOKEN_MAX_STACK_HOURS},
     "auto_rank_2h":  {"count_field": "auto_rank_2h_tokens",  "until_field": "auto_rank_trial_until", "duration_hours": 2, "max_stack_hours": TOKEN_MAX_STACK_HOURS},
+    "crew_oc_auto_3h": {"count_field": "crew_oc_auto_apply_tokens", "until_field": "crew_oc_auto_apply_until", "duration_hours": 3, "max_stack_hours": TOKEN_MAX_STACK_HOURS},
     "melt":          {"count_field": "melt_tokens",          "until_field": "melt_until",          "max_stack_hours": TOKEN_MAX_STACK_HOURS},
     "oc_reduced":    {"count_field": "oc_reduced_tokens",    "until_field": "oc_reduced_until",    "max_stack_hours": TOKEN_MAX_STACK_HOURS},
     "booze":         {"count_field": "booze_tokens",         "until_field": "booze_until",         "max_stack_hours": TOKEN_MAX_STACK_HOURS},
@@ -206,10 +209,10 @@ AUTO_RANK_EXCHANGE_TOKEN_COUNT = 2
 
 # Gift perks: sum of token amounts sent per UTC day (Game Pass / rank_xp_pass not giftable).
 TOKEN_GIFT_DAILY_UNITS_MAX = 20
-GIFTABLE_TOKEN_TYPES = tuple(t for t in TOKEN_TYPES if t != "rank_xp_pass")
+GIFTABLE_TOKEN_TYPES = tuple(t for t in TOKEN_TYPES if t not in ("rank_xp_pass", "crew_oc_auto_3h"))
 
 # Ultra-rare RNG drops (e.g. crimes, illegal business collect) must not grant Game Pass — purchase/admin only.
-TOKEN_TYPES_GLOBAL_RANDOM_DROP = tuple(t for t in TOKEN_TYPES if t != "rank_xp_pass")
+TOKEN_TYPES_GLOBAL_RANDOM_DROP = tuple(t for t in TOKEN_TYPES if t not in ("rank_xp_pass", "crew_oc_auto_3h"))
 # Shared: random token drop chance and amount (crimes commit, illegal business collect extras, etc.)
 TOKEN_GLOBAL_DROP_CHANCE = 1 / 250
 TOKEN_GLOBAL_DROP_AMOUNT_MIN = 1
@@ -417,6 +420,15 @@ class StateOptionalBody(BaseModel):
 class UseTokenRequest(BaseModel):
     token_type: str  # one of TOKEN_TYPES (xp_crimes, xp_gta, melt, oc_reduced, booze, racket, travel, properties, jailbust_bonus)
     use_all: bool = False  # if True, use as many tokens as needed to reach max stack (or until count runs out)
+    # Only for crew_oc_auto_3h: max join fee (required when using that token). Ignored for other token types.
+    crew_oc_auto_apply_max_fee: Optional[int] = None
+
+    @field_validator("crew_oc_auto_apply_max_fee")
+    @classmethod
+    def _crew_oc_fee_non_negative(cls, v: Optional[int]) -> Optional[int]:
+        if v is not None and v < 0:
+            raise ValueError("crew_oc_auto_apply_max_fee must be >= 0")
+        return v
 
 
 class ExchangeAutoRankRequest(BaseModel):
@@ -2208,7 +2220,11 @@ def _tokens_from_user(user: dict) -> dict:
                 expires_dt = _parse_utc(expires_raw)
                 if expires_dt:
                     expires_at = expires_dt.isoformat()
-        out[t] = {"count": count, "active_until": active_until, "expires_at": expires_at}
+        row: Dict[str, Any] = {"count": count, "active_until": active_until, "expires_at": expires_at}
+        if t == "crew_oc_auto_3h":
+            # Auto-apply ticker only runs when a cap is set; UI treats the perk as inactive until then.
+            row["auto_apply_ready"] = user.get("crew_oc_auto_apply_max_fee") is not None
+        out[t] = row
     return out
 
 
@@ -2300,6 +2316,101 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
     count = int(current_user.get(count_field) or 0)
     if count < 1:
         raise HTTPException(status_code=400, detail="No tokens of this type available.")
+
+    if req.token_type != "crew_oc_auto_3h" and req.crew_oc_auto_apply_max_fee is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="crew_oc_auto_apply_max_fee is only for the Crew OC auto-apply (3h) token.",
+        )
+
+    # Crew OC auto-apply window + max join fee cap (stackable up to max_stack_hours).
+    if req.token_type == "crew_oc_auto_3h":
+        if req.crew_oc_auto_apply_max_fee is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Set a max join fee (whole dollars, 0 or more). Auto-apply only runs after a cap is set.",
+            )
+        now = datetime.now(timezone.utc)
+        existing_until = _parse_until(current_user.get(until_field))
+        if existing_until and existing_until <= now:
+            existing_until = None
+        cap_until = now + timedelta(hours=max_stack_hours)
+        duration_td = timedelta(hours=duration_hours)
+
+        if req.use_all:
+            to_use, sim_until = _tokens_to_reach_stack_cap(current_user, req.token_type)
+            if to_use < 1 or sim_until is None:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot extend this boost further — already at the maximum stack duration.",
+                )
+            new_until_iso = sim_until.isoformat()
+            upd_use_all: Dict[str, Any] = {
+                "$inc": {count_field: -to_use},
+                "$set": {
+                    until_field: new_until_iso,
+                    "crew_oc_auto_apply_max_fee": int(req.crew_oc_auto_apply_max_fee),
+                },
+            }
+            result = await db.users.update_one(
+                {"id": current_user["id"], count_field: {"$gte": to_use}},
+                upd_use_all,
+            )
+            if result.modified_count == 0:
+                raise HTTPException(status_code=400, detail="No tokens available or race condition.")
+            tokens = _tokens_from_user({
+                **current_user,
+                count_field: count - to_use,
+                until_field: new_until_iso,
+                "crew_oc_auto_apply_max_fee": int(req.crew_oc_auto_apply_max_fee),
+            })
+            return {
+                "message": (
+                    f"Used {to_use} token(s). Crew OC auto-apply active until {_format_boost_until_utc(sim_until)} "
+                    f"(max {max_stack_hours}h stack)."
+                ),
+                "tokens": tokens,
+            }
+
+        if existing_until and existing_until > now:
+            add_until = existing_until + duration_td
+            new_until = min(add_until, cap_until)
+            if new_until <= existing_until:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Already at the maximum stack ({max_stack_hours}h). Wait for it to expire or use 'Apply all' after it runs down.",
+                )
+            if new_until < add_until:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Using one token would exceed the stack cap and waste time. Use 'Apply all' to add only the tokens needed to reach the cap.",
+                )
+        else:
+            new_until = now + timedelta(hours=min(duration_hours, max_stack_hours))
+        new_until_iso = new_until.isoformat()
+        upd_one: Dict[str, Any] = {
+            "$inc": {count_field: -1},
+            "$set": {
+                until_field: new_until_iso,
+                "crew_oc_auto_apply_max_fee": int(req.crew_oc_auto_apply_max_fee),
+            },
+        }
+        result = await db.users.update_one(
+            {"id": current_user["id"], count_field: {"$gte": 1}},
+            upd_one,
+        )
+        if result.modified_count == 0:
+            raise HTTPException(status_code=400, detail="No tokens available or race condition.")
+        tokens = _tokens_from_user({
+            **current_user,
+            count_field: count - 1,
+            until_field: new_until_iso,
+            "crew_oc_auto_apply_max_fee": int(req.crew_oc_auto_apply_max_fee),
+        })
+        return {
+            "message": f"Crew OC auto-apply active until {_format_boost_until_utc(new_until)} (3h per token).",
+            "tokens": tokens,
+        }
 
     # Special case: auto_rank_2h grants temporary Auto Rank access (stackable up to TOKEN_MAX_STACK_HOURS).
     if req.token_type == "auto_rank_2h":

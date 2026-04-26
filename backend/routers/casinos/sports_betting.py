@@ -129,7 +129,10 @@ THESPORTSDB_LEAGUE_LALIGA = 4335
 THESPORTSDB_LEAGUE_UFC = 4443
 THESPORTSDB_LEAGUE_BOXING = 4445
 
-_sports_live_cache = {"football": [], "ufc": [], "boxing": [], "f1": [], "updated_at": 0.0}
+_sports_live_cache = {"football": [], "ufc": [], "boxing": [], "f1": [], "snooker": [], "updated_at": 0.0}
+# GET /v4/sports (used to discover Snooker keys when Odds API adds them). Short TTL to limit quota.
+_odds_sports_catalog_cache = {"at": 0.0, "rows": []}
+_ODDS_SPORTS_CATALOG_TTL_SEC = 600
 
 
 async def get_sports_bet_max_total_open_stake() -> int:
@@ -670,34 +673,140 @@ async def _fetch_odds_api_soccer() -> list:
     return out
 
 
-async def _fetch_odds_api_mma() -> list:
-    key = _odds_api_key()
-    if not key:
+async def _fetch_odds_api_h2h_events_merged(sport_key: str) -> list:
+    """GET /sports/{sport_key}/odds (h2h only), merged across region attempts; returns raw Odds API event dicts."""
+    api_key = _odds_api_key()
+    sk = (sport_key or "").strip()
+    if not api_key or not sk:
         return []
-    cache_key = "v2:odds:mma_mixed_martial_arts:merged"
+    cache_key = "v2:odds:%s:merged" % re.sub(r"[^a-zA-Z0-9_-]+", "_", sk)[:56]
     ttl = _sports_odds_cache_ttl_sec()
+    try:
+        cached = await _odds_cache_read_list_if_fresh(cache_key, ttl)
+        if cached is not None:
+            return cached if isinstance(cached, list) else []
+        raw_lists: list = []
+        async with httpx.AsyncClient(timeout=18.0) as client:
+            for regions in FIGHT_SPORTS_ODDS_REGION_ATTEMPTS:
+                try:
+                    r = await client.get(
+                        "%s/sports/%s/odds" % (ODDS_API_BASE, sk),
+                        params={"apiKey": api_key, "regions": regions, "markets": "h2h", "oddsFormat": "decimal"},
+                    )
+                    if r.status_code != 200:
+                        logger.warning("Odds API odds %s HTTP %s regions=%s", sk, r.status_code, regions)
+                        continue
+                    chunk = r.json()
+                    if isinstance(chunk, list):
+                        raw_lists.append(chunk)
+                except Exception as ex:
+                    logger.warning("Odds API fetch %s regions=%s: %s", sk, regions, ex)
+        merged = _merge_odds_api_events_by_id(raw_lists)
+        await _odds_cache_write_list(cache_key, 200, merged)
+        return merged
+    except Exception as ex:
+        logger.warning("Odds API h2h merge %s: %s", sk, ex)
+        return []
+
+
+async def _odds_api_fetch_sports_catalog_rows() -> list:
+    """Cached GET /v4/sports — used to discover sport keys (e.g. Snooker) not hardcoded in ODDS_API_SPORT_KEYS."""
+    api_key = _odds_api_key()
+    if not api_key:
+        return []
+    now = time.time()
+    prev = _odds_sports_catalog_cache.get("rows") or []
+    if prev and (now - float(_odds_sports_catalog_cache.get("at") or 0.0)) < _ODDS_SPORTS_CATALOG_TTL_SEC:
+        return prev
+    try:
+        async with httpx.AsyncClient(timeout=14.0) as client:
+            r = await client.get("%s/sports" % ODDS_API_BASE, params={"apiKey": api_key})
+        if r.status_code != 200:
+            logger.warning("Odds API GET /sports HTTP %s", r.status_code)
+            return prev
+        rows = r.json()
+        if not isinstance(rows, list):
+            rows = []
+        _odds_sports_catalog_cache["rows"] = rows
+        _odds_sports_catalog_cache["at"] = now
+        return rows
+    except Exception as ex:
+        logger.warning("Odds API GET /sports failed: %s", ex)
+        return prev
+
+
+def _snooker_sport_keys_env_override() -> list[str]:
+    raw = (os.environ.get("SNOOKER_ODDS_SPORT_KEYS") or "").strip()
+    if not raw:
+        return []
+    return [x.strip() for x in raw.split(",") if x.strip()][:8]
+
+
+def _snooker_sport_keys_from_odds_catalog(rows: list) -> list[str]:
+    """Keys from /v4/sports whose key or title mentions snooker (in-season / active entries only)."""
+    out: list[str] = []
+    seen: set[str] = set()
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        k = (row.get("key") or "").strip()
+        if not k or k in seen:
+            continue
+        title_l = (row.get("title") or "").lower()
+        kl = k.lower()
+        if "snooker" not in kl and "snooker" not in title_l:
+            continue
+        if row.get("active") is False:
+            continue
+        seen.add(k)
+        out.append(k)
+    return out
+
+
+async def _fetch_snooker_events() -> list:
+    """Snooker match odds from The Odds API when a snooker sport key exists (discovered via /v4/sports or SNOOKER_ODDS_SPORT_KEYS)."""
+    if not _odds_api_key():
+        return []
+    out: list = []
+    seen_pair: set[tuple[str, str]] = set()
+    try:
+        catalog = await _odds_api_fetch_sports_catalog_rows()
+        keys = _snooker_sport_keys_from_odds_catalog(catalog)
+        for k in _snooker_sport_keys_env_override():
+            if k not in keys:
+                keys.append(k)
+        keys = keys[:8]
+        if not keys:
+            logger.debug(
+                "Sports templates: no Snooker sport keys from Odds API /sports (Snooker is often absent; set SNOOKER_ODDS_SPORT_KEYS=comma_keys to try specific keys).",
+            )
+            return []
+        for sport_key in keys:
+            events = await _fetch_odds_api_h2h_events_merged(sport_key)
+            for ev in events:
+                if not _is_future_event(ev, require_time=True, buffer_minutes=0):
+                    continue
+                eid = (ev.get("id") or "").strip()
+                if eid:
+                    dedupe = (sport_key, eid)
+                    if dedupe in seen_pair:
+                        continue
+                parsed = _parse_odds_event(ev, "Snooker", three_way=False, sport_key=sport_key)
+                if parsed:
+                    if eid:
+                        seen_pair.add((sport_key, eid))
+                    out.append(parsed)
+    except Exception as ex:
+        logger.warning("Odds API snooker: %s", ex)
+    return out
+
+
+async def _fetch_odds_api_mma() -> list:
+    if not _odds_api_key():
+        return []
     out = []
     try:
-        events = await _odds_cache_read_list_if_fresh(cache_key, ttl)
-        if events is None:
-            raw_lists: list = []
-            async with httpx.AsyncClient(timeout=18.0) as client:
-                for regions in FIGHT_SPORTS_ODDS_REGION_ATTEMPTS:
-                    try:
-                        r = await client.get(
-                            "%s/sports/mma_mixed_martial_arts/odds" % ODDS_API_BASE,
-                            params={"apiKey": key, "regions": regions, "markets": "h2h", "oddsFormat": "decimal"},
-                        )
-                        if r.status_code != 200:
-                            logger.warning("Odds API odds mma HTTP %s regions=%s", r.status_code, regions)
-                            continue
-                        chunk = r.json()
-                        if isinstance(chunk, list):
-                            raw_lists.append(chunk)
-                    except Exception as ex:
-                        logger.warning("Odds API mma fetch regions=%s: %s", regions, ex)
-            events = _merge_odds_api_events_by_id(raw_lists)
-            await _odds_cache_write_list(cache_key, 200, events)
+        events = await _fetch_odds_api_h2h_events_merged("mma_mixed_martial_arts")
         for ev in events:
             if not _is_future_event(ev, require_time=True, buffer_minutes=0):
                 continue
@@ -710,33 +819,11 @@ async def _fetch_odds_api_mma() -> list:
 
 
 async def _fetch_odds_api_boxing() -> list:
-    key = _odds_api_key()
-    if not key:
+    if not _odds_api_key():
         return []
-    cache_key = "v2:odds:boxing_boxing:merged"
-    ttl = _sports_odds_cache_ttl_sec()
     out = []
     try:
-        events = await _odds_cache_read_list_if_fresh(cache_key, ttl)
-        if events is None:
-            raw_lists: list = []
-            async with httpx.AsyncClient(timeout=18.0) as client:
-                for regions in FIGHT_SPORTS_ODDS_REGION_ATTEMPTS:
-                    try:
-                        r = await client.get(
-                            "%s/sports/boxing_boxing/odds" % ODDS_API_BASE,
-                            params={"apiKey": key, "regions": regions, "markets": "h2h", "oddsFormat": "decimal"},
-                        )
-                        if r.status_code != 200:
-                            logger.warning("Odds API odds boxing HTTP %s regions=%s", r.status_code, regions)
-                            continue
-                        chunk = r.json()
-                        if isinstance(chunk, list):
-                            raw_lists.append(chunk)
-                    except Exception as ex:
-                        logger.warning("Odds API boxing fetch regions=%s: %s", regions, ex)
-            events = _merge_odds_api_events_by_id(raw_lists)
-            await _odds_cache_write_list(cache_key, 200, events)
+        events = await _fetch_odds_api_h2h_events_merged("boxing_boxing")
         for ev in events:
             if not _is_future_event(ev, require_time=True, buffer_minutes=0):
                 continue
@@ -1203,7 +1290,7 @@ async def _auto_settle_fallback_thesportsdb_open_bets() -> int:
     has_fb = await db.sports_events.find_one(
         {"status": "open", "id": {"$in": list(bet_event_ids)},
          "start_time": {"$lte": now_iso},
-         "category": {"$in": ["Football", "Boxing"]}},
+         "category": {"$in": ["Football", "Boxing", "Snooker"]}},
         {"_id": 1},
     )
     if not has_fb:
@@ -1213,7 +1300,7 @@ async def _auto_settle_fallback_thesportsdb_open_bets() -> int:
             "status": "open",
             "id": {"$in": list(bet_event_ids)},
             "start_time": {"$lte": now_iso},
-            "category": {"$in": ["Football", "Boxing"]},
+            "category": {"$in": ["Football", "Boxing", "Snooker"]},
         },
         {"_id": 0, "id": 1, "name": 1, "category": 1, "options": 1, "start_time": 1},
     ).limit(1200)
@@ -1248,7 +1335,7 @@ async def _auto_settle_fallback_thesportsdb_open_bets() -> int:
                     m["away_team"],
                     int(m["home_score"]),
                     int(m["away_score"]),
-                    True if (ev.get("category") or "") == "Football" else False,
+                    (ev.get("category") or "") == "Football",
                 )
                 if winning_id:
                     break
@@ -1348,6 +1435,34 @@ async def _auto_settle_from_scores() -> dict:
                     continue
                 if await _settle_event_internal(ev["id"], winning_id):
                     settled_count += 1
+    # Odds-backed events whose sport_key is not listed in ODDS_API_SPORT_KEYS (e.g. Snooker when added under a new key).
+    for sport_key in sorted(needed_sport_keys - sport_keys_used):
+        sport_keys_used.add(sport_key)
+        events = await _fetch_odds_api_scores(sport_key, days_from=3)
+        for api_ev in events:
+            if not api_ev.get("completed"):
+                continue
+            ext_id = (api_ev.get("id") or "").strip()
+            if not ext_id:
+                continue
+            ev = await db.sports_events.find_one(
+                {
+                    "external_event_id": ext_id,
+                    "external_sport_key": sport_key,
+                    "status": "open",
+                    "id": {"$in": list(due_event_ids)},
+                },
+                {"_id": 0, "id": 1, "options": 1},
+            )
+            if not ev:
+                skipped_no_match += 1
+                continue
+            winning_id = _derive_winning_option_from_scores(api_ev, ev.get("options") or [], False)
+            if not winning_id:
+                skipped_no_winner += 1
+                continue
+            if await _settle_event_internal(ev["id"], winning_id):
+                settled_count += 1
     try:
         fallback_settled += await _auto_settle_fallback_football_data()
     except Exception as ex:
@@ -1375,7 +1490,7 @@ async def _auto_settle_from_scores() -> dict:
         "skipped_no_winner": skipped_no_winner,
         "fallback_settled": fallback_settled,
         "sport_keys_queried": len(sport_keys_used),
-        "sport_keys_skipped": len(all_sport_keys) - len(sport_keys_used),
+        "sport_keys_skipped": max(0, len(all_sport_keys) - len(sport_keys_used & all_sport_keys)),
     }
 
 
@@ -1672,16 +1787,21 @@ async def _refresh_sports_live_cache(force: bool = False):
     now = time.time()
     if not force and now - _sports_live_cache["updated_at"] < SPORTS_LIVE_CACHE_TTL:
         return
-    football, ufc, boxing, f1_drivers, f1_odds_events = await asyncio.gather(
+    if force:
+        # Admin "Check for events" should see newly-added sports (e.g. Snooker) without waiting for catalog TTL.
+        _odds_sports_catalog_cache["at"] = 0.0
+    football, ufc, boxing, f1_drivers, f1_odds_events, snooker = await asyncio.gather(
         _fetch_football_events(),
         _fetch_ufc_events(),
         _fetch_boxing_events(),
         _fetch_f1_drivers(),
         _fetch_odds_api_f1(),
+        _fetch_snooker_events(),
     )
     _sports_live_cache["football"] = football
     _sports_live_cache["ufc"] = ufc
     _sports_live_cache["boxing"] = boxing
+    _sports_live_cache["snooker"] = snooker
     retry_soon = (not football) or (not f1_drivers)
     if retry_soon:
         _sports_live_cache["updated_at"] = now - SPORTS_LIVE_CACHE_TTL + 120
@@ -1735,6 +1855,7 @@ def _get_all_sports_templates() -> list:
         + (_sports_live_cache.get("ufc") or [])
         + (_sports_live_cache.get("boxing") or [])
         + (_sports_live_cache.get("f1") or [])
+        + (_sports_live_cache.get("snooker") or [])
     )
 
 

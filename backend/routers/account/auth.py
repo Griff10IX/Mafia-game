@@ -1899,6 +1899,13 @@ def register(router):
                 travel_tokens=_safe_int(u.get("travel_tokens"), 0),
                 properties_tokens=_safe_int(u.get("properties_tokens"), 0),
                 jailbust_tokens=_safe_int(u.get("jailbust_tokens"), 0),
+                crew_oc_auto_apply_tokens=_safe_int(u.get("crew_oc_auto_apply_tokens"), 0),
+                crew_oc_auto_apply_until=u.get("crew_oc_auto_apply_until"),
+                crew_oc_auto_apply_max_fee=(
+                    _safe_int(u.get("crew_oc_auto_apply_max_fee"), 0)
+                    if u.get("crew_oc_auto_apply_max_fee") is not None
+                    else None
+                ),
                 rank_xp_pass_tokens=_safe_int(u.get("rank_xp_pass_tokens"), 0),
                 rank_xp_pass_token_expires_at=u.get("rank_xp_pass_token_expires_at"),
                 rank_xp_pass_tier_snapshot=_safe_int(u.get("rank_xp_pass_tier_snapshot"), 0) if u.get("rank_xp_pass_tier_snapshot") is not None else None,

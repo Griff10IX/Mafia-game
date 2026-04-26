@@ -4,7 +4,7 @@ import logging
 import os
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, List, Optional
 
 # Ensure backend/.env is loaded (e.g. when process cwd is not the backend dir)
 try:
@@ -1700,6 +1700,62 @@ def _extract_preferences(user: dict) -> dict:
     return {k: user.get(k, _PREFERENCE_DEFAULTS[k]) for k in _PREFERENCE_FIELDS}
 
 
+async def _auto_rank_selection_labels_for_inspect(db, u: dict) -> dict:
+    """Resolve crime/GTA/melt/scrap selection IDs to human-readable labels for admin inspect."""
+    crime_ids = u.get("auto_rank_crime_ids") if isinstance(u.get("auto_rank_crime_ids"), list) else []
+    gta_ids = u.get("auto_rank_gta_option_ids") if isinstance(u.get("auto_rank_gta_option_ids"), list) else []
+    melt_action_ids = u.get("auto_rank_melt_action_ids") if isinstance(u.get("auto_rank_melt_action_ids"), list) else []
+    melt_rarity_ids = u.get("auto_rank_melt_rarity_ids") if isinstance(u.get("auto_rank_melt_rarity_ids"), list) else []
+    scrap_rarity_ids = u.get("auto_rank_scrap_rarity_ids") if isinstance(u.get("auto_rank_scrap_rarity_ids"), list) else []
+
+    id_to_name: dict = {}
+    try:
+        crimes = await db.crimes.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(120)
+        for c in crimes or []:
+            cid = c.get("id")
+            if cid:
+                id_to_name[str(cid)] = (c.get("name") or cid) or cid
+    except Exception:
+        crimes = []
+    try:
+        from routers.crime.crimes import PRESTIGE_CRIMES
+        for pc in PRESTIGE_CRIMES or []:
+            pid = pc.get("id")
+            if pid and str(pid) not in id_to_name:
+                id_to_name[str(pid)] = (pc.get("name") or pid) or pid
+    except Exception:
+        pass
+
+    crime_rows = [{"id": str(cid), "name": id_to_name.get(str(cid), str(cid))} for cid in crime_ids]
+
+    gta_rows: List[dict] = []
+    try:
+        from routers.cars.gta import GTA_OPTIONS
+        gta_map = {str(o.get("id", "")): (o.get("name") or o.get("id")) for o in (GTA_OPTIONS or []) if o.get("id")}
+        for gid in gta_ids:
+            sg = str(gid)
+            gta_rows.append({"id": sg, "name": gta_map.get(sg, sg)})
+    except Exception:
+        for gid in gta_ids:
+            gta_rows.append({"id": str(gid), "name": str(gid)})
+
+    melt_action_map = {str(x["id"]): x["name"] for x in MELT_OPTIONS}
+    melt_action_rows = [{"id": str(mid), "name": melt_action_map.get(str(mid), str(mid))} for mid in melt_action_ids]
+
+    def _rarity_label(r: Any) -> str:
+        if not isinstance(r, str):
+            return str(r)
+        return r.replace("_", " ").title()
+
+    return {
+        "crimes": crime_rows,
+        "gta_options": gta_rows,
+        "melt_actions": melt_action_rows,
+        "melt_rarities": [{"id": str(r), "name": _rarity_label(r)} for r in melt_rarity_ids],
+        "scrap_rarities": [{"id": str(r), "name": _rarity_label(r)} for r in scrap_rarity_ids],
+    }
+
+
 def register(router):
     import server as srv
     from fastapi import Depends, Header, HTTPException, Request
@@ -1710,6 +1766,7 @@ def register(router):
     db = srv.db
     get_current_user = srv.get_current_user
     _is_admin = srv._is_admin
+    _is_moderator = srv._is_moderator
     cron_secret = (os.environ.get("CRON_SECRET") or "").strip()
     telegram_webhook_secret = (os.environ.get("TELEGRAM_WEBHOOK_SECRET") or "").strip()
     game_bot_token = (getattr(security_module, "TELEGRAM_BOT_TOKEN", None) or "").strip()
@@ -2314,6 +2371,116 @@ def register(router):
         telegram_chat_id: Optional[str] = None
         telegram_bot_token: Optional[str] = None
         auto_rank_enabled: Optional[bool] = None
+
+    @router.get("/admin/auto-rank/user-inspect")
+    async def admin_auto_rank_user_inspect(
+        user_id: Optional[str] = Query(None, description="Exact user id"),
+        username: Optional[str] = Query(None, description="Exact username (case-insensitive)"),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Admin/mod: full Auto Rank preferences, booze/travel snapshot, selection labels, and live stats for one user."""
+        if not (_is_admin(current_user) or _is_moderator(current_user)):
+            raise HTTPException(status_code=403, detail="Admin or moderator access required")
+        import re
+
+        uid = (user_id or "").strip()
+        uname = (username or "").strip()
+        if not uid and not uname:
+            raise HTTPException(status_code=400, detail="Provide user_id or username")
+        q: Dict[str, Any] = {}
+        if uid:
+            q["id"] = uid
+        else:
+            q["username"] = re.compile("^" + re.escape(uname) + "$", re.IGNORECASE)
+
+        idle_saved_proj = {f"auto_rank_idle_saved_{k}": 1 for k in _IDLE_SAVE_FIELDS}
+        proj = {
+            "_id": 0,
+            "id": 1,
+            "username": 1,
+            "last_seen": 1,
+            "is_dead": 1,
+            "in_jail": 1,
+            "auto_rank_purchased": 1,
+            "auto_rank_trial": 1,
+            "auto_rank_trial_until": 1,
+            "auto_rank_trial_dismissed": 1,
+            **{f: 1 for f in _PREFERENCE_FIELDS},
+            "auto_rank_crime_ids": 1,
+            "auto_rank_gta_option_ids": 1,
+            "auto_rank_melt_action_ids": 1,
+            "auto_rank_melt_rarity_ids": 1,
+            "auto_rank_scrap_rarity_ids": 1,
+            "auto_rank_idle": 1,
+            **idle_saved_proj,
+            "telegram_chat_id": 1,
+            "telegram_bot_token": 1,
+            "current_state": 1,
+            "traveling_to": 1,
+            "travel_arrives_at": 1,
+            "booze_carrying": 1,
+            "presence_simulator_auto_rank_managed": 1,
+            "presence_simulator_auto_rank_prev": 1,
+        }
+        doc = await db.users.find_one(q, proj)
+        if not doc:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        stats = await _get_auto_rank_stats_impl(db, doc)
+        selection_labels = await _auto_rank_selection_labels_for_inspect(db, doc)
+
+        saved_on_idle: Dict[str, Any] = {}
+        for k in _IDLE_SAVE_FIELDS:
+            sk = f"auto_rank_idle_saved_{k}"
+            if sk in doc:
+                saved_on_idle[k] = doc.get(sk)
+
+        presence: Dict[str, Any] = {}
+        if doc.get("presence_simulator_auto_rank_managed"):
+            presence["managed"] = doc.get("presence_simulator_auto_rank_managed")
+        if doc.get("presence_simulator_auto_rank_prev"):
+            presence["prev_snapshot"] = doc.get("presence_simulator_auto_rank_prev")
+
+        return {
+            "user": {
+                "id": doc.get("id"),
+                "username": doc.get("username"),
+                "last_seen": doc.get("last_seen"),
+                "is_dead": doc.get("is_dead"),
+                "in_jail": doc.get("in_jail"),
+            },
+            "purchase": {
+                "auto_rank_purchased": bool(doc.get("auto_rank_purchased")),
+                "auto_rank_trial": bool(doc.get("auto_rank_trial")),
+                "auto_rank_trial_until": doc.get("auto_rank_trial_until"),
+                "auto_rank_trial_dismissed": bool(doc.get("auto_rank_trial_dismissed")),
+            },
+            "preferences": _extract_preferences(doc),
+            "selection_ids": {
+                "auto_rank_crime_ids": doc.get("auto_rank_crime_ids") if isinstance(doc.get("auto_rank_crime_ids"), list) else [],
+                "auto_rank_gta_option_ids": doc.get("auto_rank_gta_option_ids") if isinstance(doc.get("auto_rank_gta_option_ids"), list) else [],
+                "auto_rank_melt_action_ids": doc.get("auto_rank_melt_action_ids") if isinstance(doc.get("auto_rank_melt_action_ids"), list) else [],
+                "auto_rank_melt_rarity_ids": doc.get("auto_rank_melt_rarity_ids") if isinstance(doc.get("auto_rank_melt_rarity_ids"), list) else [],
+                "auto_rank_scrap_rarity_ids": doc.get("auto_rank_scrap_rarity_ids") if isinstance(doc.get("auto_rank_scrap_rarity_ids"), list) else [],
+            },
+            "selection_labels": selection_labels,
+            "idle": {
+                "auto_rank_idle": bool(doc.get("auto_rank_idle")),
+                "saved_on_idle": saved_on_idle,
+            },
+            "telegram": {
+                "telegram_chat_id": doc.get("telegram_chat_id") or "",
+                "telegram_bot_token": doc.get("telegram_bot_token") or "",
+            },
+            "booze_travel": {
+                "current_state": doc.get("current_state"),
+                "traveling_to": doc.get("traveling_to"),
+                "travel_arrives_at": doc.get("travel_arrives_at"),
+                "booze_carrying": doc.get("booze_carrying"),
+            },
+            "presence_simulator": presence if presence else None,
+            "stats": stats,
+        }
 
     @router.get("/admin/auto-rank/users")
     async def admin_list_auto_rank_users(
