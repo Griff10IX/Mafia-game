@@ -1,4 +1,4 @@
-# Dead-alive: 0.05% tax to state head — you receive 99.95% of dead account's money and points (one-time)
+# Dead-alive: cash 99.95% to recipient (0.05% state head tax); points 100% to recipient; 50% of tokens restored (one-time)
 # 50% of tokens are also restored
 # Revive: pay 50k points to bring back a dead account (same email, once per email)
 from datetime import datetime, timezone
@@ -74,6 +74,7 @@ def register(router):
     DeadAliveRetrieveRequest = srv.DeadAliveRetrieveRequest
     DeadAliveReviveRequest = srv.DeadAliveReviveRequest
     DEAD_ALIVE_PERCENT = srv.DEAD_ALIVE_PERCENT
+    DEAD_ALIVE_POINTS_PERCENT = srv.DEAD_ALIVE_POINTS_PERCENT
     DEFAULT_HEALTH = srv.DEFAULT_HEALTH
 
     @router.post("/death/reveal-killer")
@@ -105,7 +106,7 @@ def register(router):
 
     @router.post("/dead-alive/retrieve")
     async def dead_alive_retrieve(request: DeadAliveRetrieveRequest, current_user: dict = Depends(get_current_user_verified)):
-        """Transfer 99.95% of a dead account's money and points into your current account (0.05% tax to state head). One-time per dead account."""
+        """Transfer dead account estate: cash at DEAD_ALIVE_PERCENT (state head tax), points at DEAD_ALIVE_POINTS_PERCENT, plus token restore rules. One-time per dead account."""
         username_pattern = _username_pattern(request.dead_username)
         dead_user = await db.users.find_one({"username": username_pattern}, {"_id": 0})
         if not dead_user:
@@ -140,10 +141,10 @@ def register(router):
         )
         if not claim:
             raise HTTPException(status_code=400, detail="That dead account has already been used for a transfer.")
-        add_points = max(0, int(points_at_death * DEAD_ALIVE_PERCENT))
+        add_points = max(0, int(points_at_death * float(DEAD_ALIVE_POINTS_PERCENT)))
         add_money = max(0, int(money_at_death * DEAD_ALIVE_PERCENT))
         tax_money = max(0, int(money_at_death * (1 - DEAD_ALIVE_PERCENT)))
-        tax_points = max(0, int(points_at_death * (1 - DEAD_ALIVE_PERCENT)))
+        tax_points = max(0, int(points_at_death * (1 - float(DEAD_ALIVE_POINTS_PERCENT))))
         dead_state = (dead_user.get("current_state") or "").strip()
         head_family_id = await get_head_family_id_for_state(dead_state) if dead_state else None
         if head_family_id:
@@ -204,7 +205,7 @@ def register(router):
             await db.users.update_one({"id": current_user["id"]}, {"$set": pass_updates})
 
         if has_estate or has_token_restore:
-            msg = f"Transferred 99.95% from your dead account ({dead_user['username']}, 0.05% tax): "
+            msg = f"Transferred inheritance from your dead account ({dead_user['username']}): "
         else:
             msg = f"Inheritance from your dead account ({dead_user['username']}): "
         parts = []

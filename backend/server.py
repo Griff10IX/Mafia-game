@@ -277,7 +277,9 @@ MAX_BULLETS_TO_KILL = 100000
 # Base bullets before rank/weapon/gap factors; high tiers tuned down (was up to 120k @ 6).
 ARMOUR_BASE_BULLETS = {0: 5000, 1: 14000, 2: 25000, 3: 36000, 4: 47000, 5: 55000, 6: 66000}  # 6 = loot-exclusive Steel Plate Vest (1922)
 KILL_CASH_PERCENT = 0.75  # killer gets 75% of victim's cash
-DEAD_ALIVE_PERCENT = 0.9995  # 0.05% tax to state head: you receive 99.95% of dead account's money and points when using Dead > Alive (one-time)
+# Dead > Alive retrieve: cash uses DEAD_ALIVE_PERCENT (state head tax on money); points use DEAD_ALIVE_POINTS_PERCENT.
+DEAD_ALIVE_PERCENT = 0.9995  # cash: 0.05% tax to state head — recipient gets 99.95% of money_at_death
+DEAD_ALIVE_POINTS_PERCENT = 1.0  # points: 100% of points_at_death to recipient (no points tax)
 
 # State heads: which family (if any) is head of each state. One family per state; at most 4 families.
 async def get_state_heads() -> Dict[str, Optional[str]]:

@@ -139,7 +139,7 @@ MIN_BULLETS_TO_KILL = 5000
 MAX_BULLETS_TO_KILL = 100000
 ARMOUR_BASE_BULLETS = {0: 5000, 1: 14000, 2: 25000, 3: 36000, 4: 47000, 5: 55000, 6: 66000}  # base before weapon/rank reduction (sync server.py)
 KILL_CASH_PERCENT = 0.75  # killer gets 75% of victim's cash
-DEAD_ALIVE_POINTS_PERCENT = 0.25  # retrieved points from dead account (25%)
+DEAD_ALIVE_POINTS_PERCENT = 1.0  # retrieved points from dead account (100%)
 
 # Game-wide daily events (rotate by UTC date). Multipliers default 1.0 when not set.
 # racket_cooldown: <1 = faster, >1 = longer; racket_payout: >1 = extra %, <1 = reduced %

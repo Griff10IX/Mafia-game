@@ -105,7 +105,7 @@ export default function DeadAlive() {
             Dead Man&apos;s Inheritance
           </h1>
           <p className="text-[11px] mt-0.5 leading-relaxed max-w-lg font-heading" style={{ color: 'var(--noir-muted)' }}>
-            Even in death, a made man&apos;s debts are honored. Claim what is owed to the family from a fallen account — 99.95% of their fortune, collected once; 0.05% goes to the state head.
+            Even in death, a made man&apos;s debts are honored. Claim what is owed from a fallen account once: <strong className="text-foreground">100% of points</strong> at death, and <strong className="text-foreground">99.95% of cash</strong> (0.05% state head tithe on money only).
           </p>
         </div>
       </div>
@@ -164,8 +164,8 @@ export default function DeadAlive() {
             </div>
 
             <div className="flex items-center justify-between px-3 py-2 rounded bg-primary/10 border border-primary/20 text-[11px] font-heading" style={{ color: 'var(--noir-foreground)' }}>
-              <span style={{ color: 'var(--noir-muted)' }}>Family tithe</span>
-              <span>0.05% <span style={{ color: 'var(--noir-muted)' }}>to state head, 99.95% yours</span></span>
+              <span style={{ color: 'var(--noir-muted)' }}>State head tithe</span>
+              <span><span style={{ color: 'var(--noir-muted)' }}>Cash:</span> 0.05% · <span style={{ color: 'var(--noir-muted)' }}>Points:</span> 0%</span>
             </div>
 
             <button
@@ -207,11 +207,11 @@ export default function DeadAlive() {
               },
               {
                 icon: <KeyRound size={14} className="shrink-0 mt-0.5 text-primary" />,
-                text: <>Enter the dead account&apos;s credentials here. Your new account receives <strong style={{ color: 'var(--noir-foreground)' }}>99.95% of its money & points</strong> — as they stood at time of death.</>
+                text: <>Enter the dead account&apos;s credentials here. Your new account receives <strong style={{ color: 'var(--noir-foreground)' }}>100% of points</strong> and <strong style={{ color: 'var(--noir-foreground)' }}>99.95% of cash</strong> — as they stood at time of death.</>
               },
               {
                 icon: <DollarSign size={14} className="text-emerald-400 shrink-0 mt-0.5" />,
-                text: <>A <strong style={{ color: 'var(--noir-foreground)' }}>0.05% tax</strong> goes to the state head family — same as the casino house edge.</>
+                text: <>A <strong style={{ color: 'var(--noir-foreground)' }}>0.05% tithe on cash only</strong> goes to the state head family (casino-style edge). Points are not taxed on retrieval.</>
               },
               {
                 icon: <Info size={14} className="shrink-0 mt-0.5" style={{ color: 'var(--noir-muted)' }} />,
