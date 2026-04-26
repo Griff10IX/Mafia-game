@@ -2364,7 +2364,7 @@ async def admin_sports_templates(current_user: dict = Depends(get_current_user))
     """Admin: list event templates from cache only. No API calls - use POST /refresh to fetch (saves free-tier quota)."""
     if current_user.get("email") not in ADMIN_EMAILS:
         raise HTTPException(status_code=403, detail="Admin only")
-    categories = ["Football", "UFC", "Boxing", "Formula 1"]
+    categories = ["Football", "UFC", "Boxing", "Formula 1", "Snooker"]
     by_category = {c: [] for c in categories}
     for t in _get_all_sports_templates():
         by_category.setdefault(t["category"], []).append(_sports_template_to_response(t))
@@ -2377,7 +2377,7 @@ async def admin_sports_refresh(current_user: dict = Depends(get_current_user)):
     if current_user.get("email") not in ADMIN_EMAILS:
         raise HTTPException(status_code=403, detail="Admin only")
     await _refresh_sports_live_cache(force=True)
-    categories = ["Football", "UFC", "Boxing", "Formula 1"]
+    categories = ["Football", "UFC", "Boxing", "Formula 1", "Snooker"]
     by_category = {c: [] for c in categories}
     for t in _get_all_sports_templates():
         by_category.setdefault(t["category"], []).append(_sports_template_to_response(t))

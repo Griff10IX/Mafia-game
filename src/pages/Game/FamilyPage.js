@@ -3063,7 +3063,7 @@ export default function FamilyPage() {
                   <div className="pt-1 border-t border-primary/10 space-y-0.5">
                     <p className="text-[9px] font-heading uppercase tracking-wider text-zinc-500 flex items-center gap-1"><Sparkles size={9} /> Bonuses</p>
                     {(cb.bonus_warnings || []).map((line, i) => (
-                      <p key={`w-${i}`} className="text-[9px] text-amber-400/90 leading-snug pl-2 border-l border-amber-500/30">{line}</p>
+                      <p key={`w-${i}`} className="text-[9px] text-amber-300/95 leading-snug pl-2 border-l border-amber-500/40 font-heading">{line}</p>
                     ))}
                     {(cb.summary_lines || []).map((line, i) => (
                       <p key={i} className="text-[9px] text-emerald-400/90 leading-snug pl-2 border-l border-emerald-500/30">{line}</p>

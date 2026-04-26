@@ -326,6 +326,7 @@ export default function Distillery() {
   const progression = state?.progression || {};
   const pricing = state?.pricing || {};
   const heat = Number(dist?.heat || 0);
+  const allowVaultForHeat = dist?.allow_vault_for_heat !== false;
   const workers = dist?.workers || {};
   const equipment = dist?.equipment || {};
   const queue = Array.isArray(dist?.aging_queue) ? dist.aging_queue : [];
@@ -340,6 +341,7 @@ export default function Distillery() {
   const riskCooldownRemaining = Number(riskCooldown?.cooldown_remaining_seconds || 0);
   const riskCooldownActive = riskCooldownRemaining > 0;
   const riskCooldownMinutes = Math.ceil(riskCooldownRemaining / 60);
+  const riskCooldownHoursLabel = Number(riskCooldown?.cooldown_hours || 4);
   const workerCap = Number(dist?.worker_capacity || 0);
   const workerTotal = Number(workers.production || 0) + Number(workers.quality || 0) + Number(workers.security || 0) + Number(workers.sales || 0);
   const draftWorkerTotal = Number(workerDraft.production || 0) + Number(workerDraft.quality || 0) + Number(workerDraft.security || 0) + Number(workerDraft.sales || 0);
@@ -805,6 +807,9 @@ export default function Distillery() {
               </div>
               <div className="dist-heat-flavor">{heatInfo.flavor}</div>
               <p style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 10, lineHeight: 1.5, borderTop: '1px solid var(--border-dim)', paddingTop: 8 }}>
+                <strong style={{ color: 'var(--text-muted)' }}>Passive heat:</strong> drops slowly with <strong style={{ color: 'var(--text-muted)' }}>real time</strong> whenever data is refreshed (this page about every {REFRESH_MS / 1000}s). Baseline cooling is only ~1–2° per hour (faster with security workers, heat-control specials, and <strong style={{ color: 'var(--text-muted)' }}>during enforcement shutdown</strong>), so a HOT reading can sit for a while. That is normal — it is not stuck.
+              </p>
+              <p style={{ fontSize: 10, color: 'var(--text-dim)', marginTop: 8, lineHeight: 1.5 }}>
                 <strong style={{ color: 'var(--text-muted)' }}>Vault note:</strong> at <strong style={{ color: 'var(--text-muted)' }}>critical</strong> heat and above, each collect can randomly trigger enforcement: short shutdown plus a vault seizure scaled to heat (typically about 5–22% of vault plus till from that collect). Heat also rises every collect from booze volume and auto-sell; security workers, tunnels, bribe office, specials, and <em>Cool Off</em> help.
               </p>
               {dist?.shutdown_until && (
@@ -815,22 +820,45 @@ export default function Distillery() {
               )}
               {riskCooldownActive && (
                 <div className="dist-heat-cooldown">
-                  ⏱ Cooldown active: {riskCooldownMinutes} min remaining
+                  ⏱ Cooldown active: {riskCooldownMinutes >= 120
+                    ? `${Math.ceil(riskCooldownMinutes / 60)}h`
+                    : `${riskCooldownMinutes} min`}{' '}
+                  remaining — Cool Off / Bribe stay locked for {riskCooldownHoursLabel}h after a risk action. Passive heat decay still applies.
+                </div>
+              )}
+              {!allowVaultForHeat && (
+                <div className="dist-heat-cooldown" style={{ color: 'var(--text-dim)', borderColor: 'var(--border-dim)' }}>
+                  Vault heat spend is <strong style={{ color: 'var(--amber)' }}>off</strong>: enforcement will not take vault cash on collect, and Cool Off / Bribe are disabled. Passive decay still runs.
                 </div>
               )}
               <div className="dist-btn-row">
                 <GoldBtn
-                  disabled={saving || riskCooldownActive}
+                  disabled={saving || riskCooldownActive || !allowVaultForHeat}
                   onClick={() => run(async () => { const res = await api.post('/illegal-business/distillery/risk-action', { action: 'cool_off' }); toast.success(res.data?.message || 'Heat cooled.'); })}
                 >
                   Cool Off {riskActionCosts.cool_off ? `(${money(riskActionCosts.cool_off)})` : ''}
                 </GoldBtn>
                 <GhostBtn
-                  disabled={saving || riskCooldownActive}
+                  disabled={saving || riskCooldownActive || !allowVaultForHeat}
                   onClick={() => run(async () => { const res = await api.post('/illegal-business/distillery/risk-action', { action: 'bribe_crackdown' }); toast.success(res.data?.message || 'Crackdown eased.'); })}
                 >
                   Bribe {riskActionCosts.bribe_crackdown ? `(${money(riskActionCosts.bribe_crackdown)})` : ''}
                 </GhostBtn>
+              </div>
+              <div style={{ marginTop: 10 }}>
+                <GhostBtn
+                  disabled={saving}
+                  onClick={() => run(async () => {
+                    const next = !allowVaultForHeat;
+                    const res = await api.post('/illegal-business/distillery/set-heat-vault-spend', { allow_vault_for_heat: next });
+                    toast.success(res.data?.message || (next ? 'Vault heat spend on.' : 'Vault heat spend off.'));
+                  })}
+                >
+                  {allowVaultForHeat ? 'Turn off vault paying for heat' : 'Turn vault paying for heat back on'}
+                </GhostBtn>
+                <p style={{ fontSize: 9, color: 'var(--text-faint)', marginTop: 6, lineHeight: 1.45, maxWidth: 420 }}>
+                  When off: critical heat enforcement can still shut the still down, but it will not remove vault money. Cool Off and Bribe (vault fees) stay disabled until you re-enable.
+                </p>
               </div>
             </div>
 

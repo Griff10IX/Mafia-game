@@ -790,6 +790,9 @@ ODDS_API_SPORT_KEYS = {
     "Formula 1": ["motor_racing_f1"],
 }
 
+# Admin / browse template library tabs (Odds-backed + Snooker: manual custom events only, no Odds API feed).
+SPORTS_BOARD_CATEGORIES = ("Football", "UFC", "Boxing", "Formula 1", "Snooker")
+
 
 async def _fetch_odds_api_scores(sport_key: str, days_from: int = 1) -> list:
     """Fetch completed events with scores from The Odds API. days_from 1-3 returns completed games."""
@@ -1806,7 +1809,7 @@ def _football_league_filter_options() -> list:
 
 
 def _admin_templates_json_from_list(templates: list, *, template_source: str) -> dict:
-    categories = ["Football", "UFC", "Boxing", "Formula 1"]
+    categories = list(SPORTS_BOARD_CATEGORIES)
     by_category = {c: [] for c in categories}
     for t in templates:
         cat = t.get("category")
@@ -2616,9 +2619,8 @@ async def admin_sports_add_custom_event(request: AdminAddCustomSportsEventReques
     category = (request.category or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="Event name required")
-    valid_categories = ("Football", "UFC", "Boxing", "Formula 1")
-    if category not in valid_categories:
-        raise HTTPException(status_code=400, detail=f"category must be one of: {', '.join(valid_categories)}")
+    if category not in SPORTS_BOARD_CATEGORIES:
+        raise HTTPException(status_code=400, detail=f"category must be one of: {', '.join(SPORTS_BOARD_CATEGORIES)}")
     opts = list(request.options or [])
     if len(opts) < 2:
         raise HTTPException(status_code=400, detail="At least 2 options required")
@@ -3458,10 +3460,12 @@ async def run_sports_auto_settle_ticker() -> None:
 def register(router):
     if _odds_api_key():
         logger.info(
-            "Sports betting: THE_ODDS_API_KEY is set — using The Odds API for Football/UFC/Boxing/F1 (where available) and for auto-settle.",
+            "Sports betting: THE_ODDS_API_KEY is set — using The Odds API for Football/UFC/Boxing/F1 (where available) and for auto-settle; Snooker is manual-only.",
         )
     else:
-        logger.warning("Sports betting: THE_ODDS_API_KEY is not set — Football/UFC/Boxing use fallback sources; auto-settle will not run.")
+        logger.warning(
+            "Sports betting: THE_ODDS_API_KEY is not set — Football/UFC/Boxing/F1 use fallback sources where applicable; auto-settle limited; Snooker is manual-only.",
+        )
 
     router.add_api_route("/sports-betting/events", sports_betting_events, methods=["GET"])
     router.add_api_route("/sports-betting/bet", sports_betting_place, methods=["POST"])

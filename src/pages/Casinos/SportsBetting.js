@@ -120,7 +120,9 @@ const STAKE_CHIPS = [
   { label: '25M', value: 25_000_000, color: '#6d28d9', ring: '#4c1d95' },
 ];
 
-const CATEGORY_ICONS = { Football: '⚽', UFC: '🥊', Boxing: '🥊', 'Formula 1': '🏎️' };
+const SPORTS_BOARD_CATEGORIES = ['Football', 'UFC', 'Boxing', 'Formula 1', 'Snooker'];
+
+const CATEGORY_ICONS = { Football: '⚽', UFC: '🥊', Boxing: '🥊', 'Formula 1': '🏎️', Snooker: '🎱' };
 
 const DEFAULT_MY_BETS = {
   open: [],
@@ -1114,7 +1116,7 @@ export default function SportsBetting() {
 
               {templates.odds_api_configured === false ? (
                 <p className="text-[9px] text-amber-500/90 font-heading">
-                  THE_ODDS_API_KEY is not set on the API server — Football/UFC/Boxing use fallbacks; set the key and restart, then Check for events again.
+                  THE_ODDS_API_KEY is not set on the API server — Football/UFC/Boxing/F1 use fallbacks where available; Snooker is always staff-created. Set the key and restart, then Check for events again.
                 </p>
               ) : null}
 
@@ -1212,7 +1214,7 @@ export default function SportsBetting() {
                 <span className="text-[9px] font-heading text-primary uppercase tracking-widest font-bold">Custom event</span>
                 <input type="text" value={customEventName} onChange={(e) => setCustomEventName(e.target.value)} placeholder="Event name" className="w-full bg-zinc-900/50 border border-zinc-700/30 rounded px-2 py-1.5 text-[11px] text-foreground font-heading focus:border-primary/50 focus:outline-none" />
                 <select value={customEventCategory} onChange={(e) => setCustomEventCategory(e.target.value)} className="w-full bg-zinc-900/50 border border-zinc-700/30 rounded px-2 py-1.5 text-[11px] text-foreground font-heading focus:border-primary/50 focus:outline-none">
-                  {['Football', 'UFC', 'Boxing', 'Formula 1'].map((c) => <option key={c} value={c}>{c}</option>)}
+                  {SPORTS_BOARD_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <label className="flex flex-col gap-0.5 min-w-0">

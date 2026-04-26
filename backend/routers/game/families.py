@@ -885,7 +885,7 @@ def _owner_id_or_clauses_for_uids(uids: list) -> list:
 
 
 async def top3_user_ids(family_id: str) -> List[str]:
-    """User ids for boss/don, underboss, consigliere in this family."""
+    """User ids for boss/don, underboss, consigliere in this family (plus families.boss_id as Don fallback)."""
     if not (family_id or "").strip():
         return []
     members = await db.family_members.find(
@@ -899,6 +899,12 @@ async def top3_user_ids(family_id: str) -> List[str]:
         if uid and uid not in seen:
             seen.add(uid)
             out.append(uid)
+    # Don may own airport/armoury while missing or mis-keyed on family_members; bonuses + cron use this list.
+    fam = await db.families.find_one({"id": family_id}, {"_id": 0, "boss_id": 1})
+    bid = _uid_str((fam or {}).get("boss_id"))
+    if bid and bid not in seen:
+        seen.add(bid)
+        out.append(bid)
     return out
 
 
@@ -1021,8 +1027,11 @@ async def family_property_holdings_summary(family_id: str, fam_doc: dict) -> dic
 async def family_crew_bonuses_summary(family_id: str, fam_doc: dict) -> dict:
     """Vault + travel perks tied to high command properties (public-safe copy)."""
     perk = (fam_doc.get("airport_crew_perk") or AIRPORT_CREW_PERK_NONE)
-    top3_air = await any_top3_owns_airport(family_id)
-    top3_bf = await any_top3_owns_bullet_factory(family_id)
+    top_uids_list = await top3_user_ids(family_id)
+    top_cmd = frozenset(top_uids_list)
+    oc_top = _owner_id_or_clauses_for_uids(top_uids_list)
+    top3_air = bool(oc_top) and (await db.airport_ownership.find_one({"$or": oc_top}, {"_id": 1})) is not None
+    top3_bf = bool(oc_top) and (await db.bullet_factory.find_one({"$or": oc_top}, {"_id": 1})) is not None
     n_hourly_sources = int(bool(top3_air)) + int(bool(top3_bf))
     treasury_hourly_active = n_hourly_sources > 0
     perk_active = perk in (AIRPORT_CREW_PERK_TRAVEL_TIME, AIRPORT_CREW_PERK_POINTS_DISCOUNT) and top3_air
@@ -1034,6 +1043,44 @@ async def family_crew_bonuses_summary(family_id: str, fam_doc: dict) -> dict:
         else:
             travel_red_s = 1
     bonus_warnings: List[str] = []
+    all_member_uids = await all_family_member_uids(family_id, fam_doc)
+    oc_all = _owner_id_or_clauses_for_uids(all_member_uids)
+    if oc_all:
+        warned_bf: set[str] = set()
+        async for doc in db.bullet_factory.find({"$or": oc_all}, {"_id": 0, "state": 1, "owner_id": 1}):
+            oid = _uid_str(doc.get("owner_id"))
+            if not oid or oid in top_cmd:
+                continue
+            st = (doc.get("state") or "?").strip() or "?"
+            key = f"bf:{st}:{oid}"
+            if key in warned_bf:
+                continue
+            warned_bf.add(key)
+            bonus_warnings.append(
+                f"Armoury ({st}) is owned by a crew member who is not Don, Underboss, or Consigliere — "
+                "that location does not add the hourly vault bullet bonus. Transfer the armoury or promote them to high command."
+            )
+        warned_ap: set[str] = set()
+        async for doc in db.airport_ownership.find({"$or": oc_all}, {"_id": 0, "state": 1, "slot": 1, "owner_id": 1}):
+            oid = _uid_str(doc.get("owner_id"))
+            if not oid or oid in top_cmd:
+                continue
+            st = (doc.get("state") or "?").strip() or "?"
+            slot = doc.get("slot")
+            slot_label = ""
+            if slot is not None:
+                try:
+                    slot_label = f" #{int(slot)}"
+                except (TypeError, ValueError):
+                    slot_label = f" ({slot})"
+            key = f"ap:{st}:{slot!s}:{oid}"
+            if key in warned_ap:
+                continue
+            warned_ap.add(key)
+            bonus_warnings.append(
+                f"Airport ({st}{slot_label}) is owned by a crew member who is not Don, Underboss, or Consigliere — "
+                "that slot does not add the hourly vault bullet bonus or activate the Don airport crew perk until high command holds it."
+            )
     lines: List[str] = []
     if treasury_hourly_active:
         if top3_air and top3_bf:

@@ -925,6 +925,9 @@ def _distillery_ensure_state(business: dict, now: Optional[datetime] = None) -> 
     if "last_auto_collect_at" not in dist:
         dist["last_auto_collect_at"] = None
         changed = True
+    if "allow_vault_for_heat" not in dist:
+        dist["allow_vault_for_heat"] = True
+        changed = True
     special_upgrades = dist.get("special_upgrades")
     if not isinstance(special_upgrades, dict):
         dist["special_upgrades"] = {}
@@ -997,17 +1000,20 @@ def _distillery_decay_and_status(distillery: dict, now: datetime) -> dict:
     maintenance = float(distillery.get("maintenance") or 0.0)
     decay_rate = max(0.05, DISTILLERY_MAINTENANCE_DECAY_PER_HOUR * (1.0 - min(0.65, float(specials.get("maintenance_bonus", 0.0)))))
     maintenance = _clamp(maintenance - (elapsed_hours * decay_rate), 0.0, 100.0)
+    shutdown_until = _parse_iso_utc(distillery.get("shutdown_until"), now)
+    is_shutdown = bool(distillery.get("shutdown_until")) and now < shutdown_until
     heat = float(distillery.get("heat") or 0.0)
     workers = distillery.get("workers") or {}
     security_workers = int(workers.get("security") or 0)
     heat_decay = DISTILLERY_HEAT_DECAY_PER_HOUR + security_workers * 0.18 + float(specials.get("heat_control", 0.0)) * 0.45
+    if is_shutdown:
+        # Lay low while closed — extra bleed so enforcement shutdown isn't "stuck hot" for days.
+        heat_decay *= 2.35
     heat = _clamp(heat - (elapsed_hours * heat_decay), 0.0, 100.0)
     distillery["maintenance"] = maintenance
     distillery["heat"] = heat
     distillery["last_tick_at"] = now.isoformat()
     distillery["last_heat_at"] = now.isoformat()
-    shutdown_until = _parse_iso_utc(distillery.get("shutdown_until"), now)
-    is_shutdown = bool(distillery.get("shutdown_until")) and now < shutdown_until
     if distillery.get("shutdown_until") and now >= shutdown_until:
         distillery["shutdown_until"] = None
         is_shutdown = False
@@ -1534,6 +1540,11 @@ class DistilleryBuySpecialUpgradeRequest(BaseModel):
 
 class DistilleryRiskActionRequest(BaseModel):
     action: str  # cool_off | bribe_crackdown
+
+
+class DistilleryHeatVaultSpendRequest(BaseModel):
+    """When False, enforcement cannot seize vault cash on collect and Cool Off/Bribe are blocked."""
+    allow_vault_for_heat: bool = True
 
 
 # ---------------------------------------------------------------------------
@@ -2111,7 +2122,9 @@ async def _collect_illegal_business_impl(current_user: dict) -> dict:
                         stats["total_auto_sell_cash"] = int(stats.get("total_auto_sell_cash") or 0) + auto_sell_cash
                         distillery["stats"] = stats
 
-            heat_gain = ((booze_raw * DISTILLERY_HEAT_GAIN_PER_BOOZE) + (auto_sold_units * DISTILLERY_HEAT_GAIN_PER_AUTO_SELL)) * float(mods.get("heat_gain_mult") or 1.0)
+            # During shutdown, booze_earned is 0 — do not charge heat from theoretical booze_raw or each collect re-adds heat and masks passive decay.
+            booze_raw_for_heat = 0.0 if (status and status.get("is_shutdown")) else float(booze_raw)
+            heat_gain = ((booze_raw_for_heat * DISTILLERY_HEAT_GAIN_PER_BOOZE) + (auto_sold_units * DISTILLERY_HEAT_GAIN_PER_AUTO_SELL)) * float(mods.get("heat_gain_mult") or 1.0)
             heat_mitigation = int(workers.get("security") or 0) * 0.35 + int(equipment.get("tunnel") or 0) * 0.25 + int(equipment.get("bribe_office") or 0) * 0.2
             distillery["heat"] = _clamp(float(distillery.get("heat") or 0.0) + max(0.0, heat_gain - heat_mitigation), 0.0, 100.0)
 
@@ -2165,6 +2178,8 @@ async def _collect_illegal_business_impl(current_user: dict) -> dict:
                     )
                     vault_total_before = int(business.get("vault") or 0) + int(income) + auto_sell_cash
                     vault_penalty = int(max(0, vault_total_before * loss_pct))
+                    if distillery.get("allow_vault_for_heat") is False:
+                        vault_penalty = 0
                     stats = distillery.get("stats") or {}
                     stats["heat_events_survived"] = int(stats.get("heat_events_survived") or 0) + 1
                     distillery["stats"] = stats
@@ -2464,6 +2479,17 @@ async def distillery_set_auto_sell(req: DistilleryAutoSellRequest, current_user:
     }
 
 
+async def distillery_set_heat_vault_spend(req: DistilleryHeatVaultSpendRequest, current_user: dict = Depends(get_current_user)):
+    business, distillery = await _distillery_business_for_user(current_user)
+    distillery["allow_vault_for_heat"] = bool(req.allow_vault_for_heat)
+    await db.illegal_businesses.update_one({"id": business["id"]}, {"$set": {"distillery": distillery}})
+    if req.allow_vault_for_heat:
+        msg = "Vault can pay for heat again (enforcement seizures on collect + Cool Off / Bribe)."
+    else:
+        msg = "Vault will not pay for heat: enforcement will not seize vault cash on collect, and Cool Off / Bribe are disabled until you turn this back on."
+    return {"message": msg, **_distillery_public_payload(distillery, business)}
+
+
 async def distillery_set_auto_aging(req: DistilleryAutoAgingRequest, current_user: dict = Depends(get_current_user)):
     business, distillery = await _distillery_business_for_user(current_user)
     tier = (req.tier or "standard").strip().lower()
@@ -2524,6 +2550,11 @@ async def distillery_risk_action(req: DistilleryRiskActionRequest, current_user:
         raise HTTPException(status_code=400, detail="Invalid risk action.")
     action_costs = DISTILLERY_RISK_ACTION_COSTS
     business, distillery = await _distillery_business_for_user(current_user)
+    if distillery.get("allow_vault_for_heat") is False:
+        raise HTTPException(
+            status_code=400,
+            detail="Vault spending on heat is turned off. Use the Heat panel toggle to allow it again before Cool Off or Bribe.",
+        )
     now = _utc_now()
     last = _parse_iso_utc(distillery.get("last_risk_action_at"), now)
     if distillery.get("last_risk_action_at") and (now - last).total_seconds() < DISTILLERY_RISK_ACTION_COOLDOWN_HOURS * 3600:
@@ -3296,6 +3327,7 @@ def register(router):
     router.add_api_route("/illegal-business/distillery/assign-workers", distillery_assign_workers, methods=["POST"])
     router.add_api_route("/illegal-business/distillery/maintenance", distillery_maintenance, methods=["POST"])
     router.add_api_route("/illegal-business/distillery/risk-action", distillery_risk_action, methods=["POST"])
+    router.add_api_route("/illegal-business/distillery/set-heat-vault-spend", distillery_set_heat_vault_spend, methods=["POST"])
     router.add_api_route("/illegal-business/distillery/set-auto-sell-rules", distillery_set_auto_sell, methods=["POST"])
     router.add_api_route("/illegal-business/distillery/set-auto-aging-rules", distillery_set_auto_aging, methods=["POST"])
     router.add_api_route("/illegal-business/distillery/start-aging-batch", distillery_start_aging_batch, methods=["POST"])
