@@ -443,7 +443,7 @@ async def _booze_buy_impl(user: dict, booze_id: str, amount: int, *, via_auto_ra
             "booze_jail",
             _bj,
         )
-        jail_at = datetime.now(timezone.utc).isoformat()
+        jail_at = datetime.now(timezone.utc)
         try:
             await db.economy_events.insert_one(
                 {
@@ -553,7 +553,7 @@ async def _booze_sell_impl(
             "booze_jail",
             _bj,
         )
-        jail_at = datetime.now(timezone.utc).isoformat()
+        jail_at = datetime.now(timezone.utc)
         try:
             await db.economy_events.insert_one(
                 {
@@ -666,9 +666,8 @@ async def _booze_sell_impl(
             )
             await db.users.update_one({"id": user["id"]}, {"$inc": {"money": int(revenue)}})
     if is_run:
-        now_iso = datetime.now(timezone.utc).isoformat()
         await db.economy_events.insert_one({
-            "at": now_iso,
+            "at": datetime.now(timezone.utc),
             "type": "booze_run_sell",
             "user_id": user["id"],
             "username": user.get("username") or "",

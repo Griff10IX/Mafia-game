@@ -73,6 +73,19 @@ async def _prune_mixed_date_string_field(
         logger.warning("%s mixed prune: %s", coll_name, e)
 
 
+async def _migrate_economy_booze_at_strings_to_date(db):
+    """Booze rows used ISO strings for `at`, forcing $toDate scans on weekly boards; convert to BSON Date."""
+    try:
+        r = await db.economy_events.update_many(
+            {"type": {"$in": ["booze_run_sell", "booze_run_jail"]}, "at": {"$type": "string"}},
+            [{"$set": {"at": {"$toDate": "$at"}}}],
+        )
+        if r.modified_count:
+            logger.info("economy_events booze: normalized %s string at -> Date", r.modified_count)
+    except Exception as e:
+        logger.warning("economy_events booze at migration: %s", e)
+
+
 async def ensure_all_indexes(db):
     """Create indexes for bank, attack, families, GTA, airport, OC, jail, forum, etc."""
     try:
@@ -171,6 +184,9 @@ async def ensure_all_indexes(db):
         await db.attack_attempts.create_index([("attacker_id", 1), ("created_at", -1)])
         await db.attack_attempts.create_index([("target_id", 1), ("created_at", -1)])
         await db.attack_attempts.create_index([("outcome", 1), ("created_at", -1)])
+        await db.attack_attempts.create_index(
+            [("created_at", 1), ("outcome", 1), ("attacker_id", 1)],
+        )
         await db.witness_statement_listings.create_index("id", unique=True)
         await db.witness_statement_listings.create_index([("seller_id", 1), ("status", 1)])
 
@@ -180,6 +196,7 @@ async def ensure_all_indexes(db):
         await db.user_cars.create_index([("listed_for_sale", 1), ("listed_at", -1)])
         await db.user_cars.create_index("id", unique=True)
         await db.user_cars.create_index([("user_id", 1), ("car_id", 1)])
+        await db.user_cars.create_index("car_id")
         await db.gta_cooldowns.create_index("user_id", unique=True)
         await db.user_gta.create_index("user_id")
         await db.gta_events.create_index([("user_id", 1), ("at", -1)])
@@ -302,31 +319,46 @@ async def ensure_all_indexes(db):
             db,
             "crime_events",
             "at",
-            compound_indexes=[[("user_id", 1), ("at", -1)]],
+            compound_indexes=[
+                [("user_id", 1), ("at", -1)],
+                [("at", 1), ("success", 1), ("user_id", 1)],
+            ],
         )
         await _ensure_event_log_ttl(
             db,
             "gta_events",
             "at",
-            compound_indexes=[[("user_id", 1), ("at", -1)]],
+            compound_indexes=[
+                [("user_id", 1), ("at", -1)],
+                [("at", 1), ("success", 1), ("user_id", 1)],
+            ],
         )
         await _ensure_event_log_ttl(
             db,
             "bust_events",
             "at",
-            compound_indexes=[[("user_id", 1), ("at", -1)]],
+            compound_indexes=[
+                [("user_id", 1), ("at", -1)],
+                [("at", 1), ("success", 1), ("user_id", 1)],
+            ],
         )
         await _ensure_event_log_ttl(
             db,
             "respect_events",
             "at",
-            compound_indexes=[[("user_id", 1), ("at", -1)]],
+            compound_indexes=[
+                [("user_id", 1), ("at", -1)],
+                [("at", 1), ("user_id", 1)],
+            ],
         )
         await _ensure_event_log_ttl(
             db,
             "melt_events",
             "at",
-            compound_indexes=[[("user_id", 1), ("at", -1)]],
+            compound_indexes=[
+                [("user_id", 1), ("at", -1)],
+                [("at", 1), ("user_id", 1)],
+            ],
         )
         # attack_attempts: no TTL — these rows power the public Last N kills feed, player timelines,
         # and staff tools. A 14d expiry deleted real kills while users expected a rolling top-15 only.
@@ -339,7 +371,10 @@ async def ensure_all_indexes(db):
             db,
             "stock_transactions",
             "created_at",
-            compound_indexes=[[("user_id", 1), ("created_at", -1)]],
+            compound_indexes=[
+                [("user_id", 1), ("created_at", -1)],
+                [("created_at", 1), ("user_id", 1)],
+            ],
         )
         # economy_events: booze/property/etc.; some legacy docs store `at` as ISO string — prune both; TTL applies to BSON dates.
         try:
@@ -353,6 +388,7 @@ async def ensure_all_indexes(db):
         except Exception as e:
             logger.warning("economy_events TTL: %s", e)
         await _prune_mixed_date_string_field(db, "economy_events", "at")
+        await _migrate_economy_booze_at_strings_to_date(db)
 
         # --- Reference / config data ---
         await db.weapons.create_index("id", unique=True)

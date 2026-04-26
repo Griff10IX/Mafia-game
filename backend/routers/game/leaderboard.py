@@ -23,7 +23,9 @@ from server import (
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_LEADERBOARD
 
 _lb_cache: dict = {}
-_LB_CACHE_TTL = 30
+_LB_CACHE_TTL = 90
+# Weekly boards fire many heavy aggregates; cap parallel scans to reduce CPU spikes / pool contention.
+_LEADERBOARD_WEEKLY_DB_CONCURRENCY = 4
 
 
 def invalidate_leaderboard_cache():
@@ -33,6 +35,16 @@ _last_reward_winners_cache: dict = {}
 _LAST_WINNERS_CACHE_TTL = 300
 
 _leaderboard_user_filter = _staff_exclude_user_filter
+
+
+async def _gather_bounded_db(*coroutines, limit: int = _LEADERBOARD_WEEKLY_DB_CONCURRENCY):
+    sem = asyncio.Semaphore(max(1, int(limit)))
+
+    async def _run(c):
+        async with sem:
+            return await c
+
+    return await asyncio.gather(*(_run(c) for c in coroutines))
 
 
 async def _users_query_id_in_with_staff_filters(database, id_list: list) -> dict:
@@ -732,7 +744,7 @@ async def _fetch_top_boards_raw(limit: int, dead: bool, period: str) -> dict:
     """Run all DB aggregations, return dicts with _uid so is_current_user can be stamped per request."""
     dummy_uid = "__cache__"
     if (period or "").lower() == "weekly":
-        kills, crimes, gta, jail_busts, rank_points, stock_market_profit, booze_run_profit, respect_points, bullets_melted = await asyncio.gather(
+        kills, crimes, gta, jail_busts, rank_points, stock_market_profit, booze_run_profit, respect_points, bullets_melted = await _gather_bounded_db(
             _top_by_field_weekly(
                 "attack_attempts",
                 "attacker_id",
@@ -757,7 +769,7 @@ async def _fetch_top_boards_raw(limit: int, dead: bool, period: str) -> dict:
                 limit,
                 dead,
                 {"type": "booze_run_sell"},
-                time_is_iso=True,
+                time_is_iso=False,
             ),
             _top_by_field_weekly_sum(
                 "respect_events",
@@ -772,7 +784,7 @@ async def _fetch_top_boards_raw(limit: int, dead: bool, period: str) -> dict:
             _top_by_field_weekly_sum("melt_events", "user_id", "at", "bullets", dummy_uid, limit, dead),
         )
     else:
-        kills, crimes, gta, jail_busts, rank_points, points_spent, respect_points, bullets_melted, stock_market_profit, booze_run_profit = await asyncio.gather(
+        kills, crimes, gta, jail_busts, rank_points, points_spent, respect_points, bullets_melted, stock_market_profit, booze_run_profit = await _gather_bounded_db(
             _top_by_effective_kills(dummy_uid, limit, dead=dead),
             _top_by_field("total_crimes", dummy_uid, limit, dead=dead),
             _top_by_field("total_gta", dummy_uid, limit, dead=dead),

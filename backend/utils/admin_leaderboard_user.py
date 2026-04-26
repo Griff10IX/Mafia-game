@@ -131,7 +131,7 @@ async def get_user_leaderboard_scores(db, *, user_id: str) -> Dict[str, Any]:
             value_field="profit",
             week_start=week_start,
             week_end=week_end,
-            time_is_iso=True,
+            time_is_iso=False,
         ),
         "respect_earned": await _aggregate_sum_week(
             db,

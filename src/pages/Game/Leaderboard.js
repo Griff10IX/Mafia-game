@@ -474,7 +474,7 @@ export default function Leaderboard() {
             <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Weekly Rewards</h2>
           </div>
           <p className="text-[9px] text-zinc-500 font-heading italic mt-0.5 leading-tight">
-            Top 10 each week receive cash, respect points, and rare vehicles.
+            Top 10 each week receive cash, respect points, and bullets (by category).
           </p>
         </div>
         <div className="p-2">
@@ -485,7 +485,7 @@ export default function Leaderboard() {
                 1st Place
               </div>
               <div className="text-[10px] text-mutedForeground font-heading leading-tight">
-                $500,000 + 3,000 Respect Points + Premium Car
+                $15,000,000 + 5,000 Respect Points + 10,000 Bullets
               </div>
             </div>
             <div className="bg-gradient-to-b from-zinc-600/20 to-zinc-800/20 border border-zinc-500/30 rounded-sm p-2">
@@ -494,7 +494,7 @@ export default function Leaderboard() {
                 2nd Place
               </div>
               <div className="text-[10px] text-mutedForeground font-heading leading-tight">
-                $300,000 + 1,500 Respect Points + Luxury Car
+                $9,000,000 + 2,500 Respect Points + 6,000 Bullets
               </div>
             </div>
             <div className="bg-gradient-to-b from-amber-700/20 to-amber-900/20 border border-amber-600/30 rounded-sm p-2">
@@ -503,7 +503,27 @@ export default function Leaderboard() {
                 3rd Place
               </div>
               <div className="text-[10px] text-mutedForeground font-heading leading-tight">
-                $150,000 + 750 Respect Points + Classic Car
+                $4,500,000 + 1,250 Respect Points + 3,000 Bullets
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2 max-w-lg mx-auto">
+            <div className="bg-gradient-to-b from-zinc-700/15 to-zinc-900/20 border border-zinc-600/25 rounded-sm p-2">
+              <div className="flex items-center gap-1.5 text-zinc-500 font-heading font-bold uppercase tracking-wider text-[10px] mb-0.5">
+                <Award size={12} />
+                4th Place
+              </div>
+              <div className="text-[10px] text-mutedForeground font-heading leading-tight">
+                $2,250,000 + 625 Respect Points + 1,500 Bullets
+              </div>
+            </div>
+            <div className="bg-gradient-to-b from-zinc-700/15 to-zinc-900/20 border border-zinc-600/25 rounded-sm p-2">
+              <div className="flex items-center gap-1.5 text-zinc-500 font-heading font-bold uppercase tracking-wider text-[10px] mb-0.5">
+                <Award size={12} />
+                5th Place
+              </div>
+              <div className="text-[10px] text-mutedForeground font-heading leading-tight">
+                $1,125,000 + 312 Respect Points + 750 Bullets
               </div>
             </div>
           </div>

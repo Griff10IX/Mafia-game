@@ -2014,7 +2014,8 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
         cash_pf = int(portfolio_summary.get("cash_from_portfolio") or 0)
         if cash_pf > 0:
             cash_loot += cash_pf
-        money_after_loot = max(0, victim_money - cash_loot)
+        # On-hand cash not credited to the killer is removed from the economy (not kept for Dead > Alive).
+        money_after_loot = 0
         tokens_at_death = {}
         for token_type, cfg in TOKEN_CONFIG.items():
             count_field = cfg["count_field"]
