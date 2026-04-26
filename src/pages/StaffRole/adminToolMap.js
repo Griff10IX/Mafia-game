@@ -1,4 +1,4 @@
-import { Activity, BarChart3, Building2, Globe, Layers, Lock, Shield, UserCog, Users, Wrench, Coins, Zap } from 'lucide-react';
+import { Activity, BarChart3, Crosshair, FileText, Globe, Layers, Lock, LockKeyhole, Radio, Shield, UserCog, Users, Wrench, Coins, Zap } from 'lucide-react';
 
 export const ADMIN_CATEGORIES = [
   { id: 'admin-operations', label: 'Operations', icon: UserCog },
@@ -59,6 +59,10 @@ export const ADMIN_ROUTE_GROUPS = [
   { id: 'logs', label: 'Logs', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: Layers, description: 'Audit trails and event logs.' },
   { id: 'staff', label: 'Staff', categoryId: 'admin-operations', anchorId: 'admin-staff', icon: UserCog, description: 'Moderator visibility and staffing tools.' },
   { id: 'engineering', label: 'Engineering', categoryId: 'admin-world-systems', anchorId: 'admin-database', icon: Wrench, description: 'Testing, DB utilities, and diagnostics.' },
+  { id: 'users-online', label: 'Live online', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: Radio, description: 'Who is online now (IPs, last page, same-IP hints).' },
+  { id: 'attack-logs', label: 'Attack logs', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: Crosshair, description: 'PVP attack log console and analytics.' },
+  { id: 'witness-statements', label: 'Witness', categoryId: 'admin-operations', anchorId: 'admin-moderation', icon: FileText, description: 'Witness statements review.' },
+  { id: 'locked', label: 'Page locks', categoryId: 'admin-operations', anchorId: 'admin-operations', icon: LockKeyhole, description: 'Locked accounts and route / page locks.' },
 ];
 
 export const ADMIN_ROUTE_GROUP_MAP = ADMIN_ROUTE_GROUPS.reduce((acc, item) => {
@@ -78,4 +82,8 @@ export const ADMIN_ROUTE_GROUP_MOBILE_SHORT = {
   logs: 'Logs',
   staff: 'Staff',
   engineering: 'Eng',
+  'users-online': 'Live',
+  'attack-logs': 'Attacks',
+  'witness-statements': 'Witness',
+  locked: 'Locks',
 };

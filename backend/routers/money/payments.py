@@ -889,6 +889,12 @@ async def _enrich_admin_payment_log_rows(db, items: list, api_key: Optional[str]
         _attach_admin_paid_display(t, POINT_PACKAGES)
 
 
+def _admin_payment_log_row_is_unpaid_checkout_noise(t: dict) -> bool:
+    """Rows hidden from admin log when include_open_unpaid=0 (open, expired, abandoned, other Stripe-unpaid)."""
+    sd = t.get("status_display")
+    return isinstance(sd, str) and sd.startswith("Unpaid (")
+
+
 def register(router):
     """Register payment routes. Dependencies from server to avoid circular imports."""
     import server as srv
@@ -1832,7 +1838,8 @@ def register(router):
         current_user: dict = Depends(get_current_user),
         include_open_unpaid: int = Query(0, ge=0, le=1),
     ):
-        """Admin only: list all payment transactions (donations) with username for audit."""
+        """Admin only: list all payment transactions (donations) with username for audit.
+        When include_open_unpaid is 0, unpaid checkout noise (open / expired / abandoned / etc.) is omitted."""
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin only")
         cursor = db.payment_transactions.find(
@@ -1864,11 +1871,9 @@ def register(router):
         for t in items:
             t["username"] = by_id.get(t.get("user_id"), "?")
         await _enrich_admin_payment_log_rows(db, items, _get_stripe_key(), POINT_PACKAGES)
-        filtered_open_unpaid = sum(
-            1 for t in items if t.get("status_display") == "Unpaid (checkout not completed)"
-        )
+        filtered_open_unpaid = sum(1 for t in items if _admin_payment_log_row_is_unpaid_checkout_noise(t))
         if not include_open_unpaid:
-            items = [t for t in items if t.get("status_display") != "Unpaid (checkout not completed)"]
+            items = [t for t in items if not _admin_payment_log_row_is_unpaid_checkout_noise(t)]
         return {
             "transactions": items,
             "filtered_open_unpaid": filtered_open_unpaid if not include_open_unpaid else 0,

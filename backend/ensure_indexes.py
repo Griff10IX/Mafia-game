@@ -113,6 +113,17 @@ async def ensure_all_indexes(db):
         except Exception as e:
             logger.warning("bot_client_block_events indexes: %s", e)
 
+        # Sustained page RL 429 audit (admin UI; TTL on created_at)
+        try:
+            await db.admin_sustained_rl_events.create_index([("created_at", -1)])
+            await db.admin_sustained_rl_events.create_index([("user_id", 1), ("created_at", -1)])
+            await db.admin_sustained_rl_events.create_index([("page_key", 1), ("created_at", -1)])
+            await db.admin_sustained_rl_events.create_index(
+                [("created_at", 1)], expireAfterSeconds=21 * 24 * 3600
+            )
+        except Exception as e:
+            logger.warning("admin_sustained_rl_events indexes: %s", e)
+
         # --- Families ---
         await db.family_members.create_index("family_id")
         await db.family_members.create_index([("family_id", 1), ("user_id", 1)])

@@ -122,10 +122,6 @@ const ImageHost = lazy(() => import("./pages/Social/ImageHost"));
 
 // StaffRole pages
 const AdminShell = lazy(() => import("./pages/StaffRole/AdminShell"));
-const AdminLocked = lazy(() => import("./pages/StaffRole/AdminLocked"));
-const AdminUsersOnline = lazy(() => import("./pages/StaffRole/AdminUsersOnline"));
-const AdminWitnessStatements = lazy(() => import("./pages/StaffRole/AdminWitnessStatements"));
-const AdminAttackLogs = lazy(() => import("./pages/StaffRole/AdminAttackLogs"));
 
 // Casinos pages
 const Casino = lazy(() => import("./pages/Casinos/Casino"));
@@ -589,60 +585,16 @@ function App() {
             }
           />
           <Route path="/staffrole/mod" element={<Navigate to="/staffrole/admin" replace />} />
-          <Route
-            path="/staffrole/locked"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <AdminLocked />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/staffrole/users-online"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <AdminUsersOnline />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/staffrole/witness-statements"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <AdminWitnessStatements />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
-          <Route
-            path="/staffrole/attack-logs"
-            element={
-              isAuthenticated ? (
-                <Layout>
-                  <AdminAttackLogs />
-                </Layout>
-              ) : (
-                <Navigate to="/" replace />
-              )
-            }
-          />
+          <Route path="/staffrole/locked" element={<Navigate to="/staffrole/admin/locked" replace />} />
+          <Route path="/staffrole/users-online" element={<Navigate to="/staffrole/admin/users-online" replace />} />
+          <Route path="/staffrole/witness-statements" element={<Navigate to="/staffrole/admin/witness-statements" replace />} />
+          <Route path="/staffrole/attack-logs" element={<Navigate to="/staffrole/admin/attack-logs" replace />} />
           {/* Staff redirects */}
           <Route path="/admin" element={<Navigate to="/staffrole/admin/overview" replace />} />
-          <Route path="/admin/locked" element={<Navigate to="/staffrole/locked" replace />} />
-          <Route path="/admin/users-online" element={<Navigate to="/staffrole/users-online" replace />} />
-          <Route path="/admin/witness-statements" element={<Navigate to="/staffrole/witness-statements" replace />} />
-          <Route path="/admin/attack-logs" element={<Navigate to="/staffrole/attack-logs" replace />} />
+          <Route path="/admin/locked" element={<Navigate to="/staffrole/admin/locked" replace />} />
+          <Route path="/admin/users-online" element={<Navigate to="/staffrole/admin/users-online" replace />} />
+          <Route path="/admin/witness-statements" element={<Navigate to="/staffrole/admin/witness-statements" replace />} />
+          <Route path="/admin/attack-logs" element={<Navigate to="/staffrole/admin/attack-logs" replace />} />
           <Route
             path="/account/autorank"
             element={

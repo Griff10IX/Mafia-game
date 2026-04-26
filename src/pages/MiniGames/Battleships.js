@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import api from '../../utils/api';
 import { startMinigameRun } from '../../utils/minigameRunSession';
 import useMinigamePlaysLeft from '../../hooks/useMinigamePlaysLeft';
@@ -289,11 +289,23 @@ function ExplosionCanvas({particlesRef,width,height}) {
 // ─────────────────────────────────────────────────────────────────────────────
 // WATER CANVAS
 // ─────────────────────────────────────────────────────────────────────────────
-function WaterCanvas({width,height,size,CELL}) {
+function WaterCanvas({width,height,size,CELL,paused=false}) {
   const ref=useRef(null),t=useRef(0);
   useEffect(()=>{
     const canvas=ref.current;if(!canvas)return;
-    const ctx=canvas.getContext("2d");let running=true;
+    const ctx=canvas.getContext("2d");
+    if (paused) {
+      ctx.clearRect(0,0,width,height);
+      for (let row=0;row<size;row++) for (let col=0;col<size;col++) {
+        const x=col*CELL,y=row*CELL;
+        ctx.fillStyle="rgba(10,38,80,0.09)";
+        ctx.fillRect(x,y,CELL,CELL);
+      }
+      ctx.strokeStyle="rgba(30,75,145,0.06)";ctx.lineWidth=1;
+      for (let i=0;i<width+height;i+=28){ctx.beginPath();ctx.moveTo(i,0);ctx.lineTo(0,i);ctx.stroke();}
+      return;
+    }
+    let running=true;
     const loop=()=>{
       if (!running) return;
       t.current+=0.017;ctx.clearRect(0,0,width,height);
@@ -313,7 +325,7 @@ function WaterCanvas({width,height,size,CELL}) {
     };
     requestAnimationFrame(loop);
     return()=>{running=false;};
-  },[width,height,size,CELL]);
+  },[width,height,size,CELL,paused]);
   return <canvas ref={ref} width={width} height={height} style={{position:"absolute",top:0,left:0,pointerEvents:"none",zIndex:1}}/>;
 }
 
@@ -1265,6 +1277,7 @@ function SettingsScreen({settings,onSave}) {
 // BOARD — now receives CELL as prop
 // ─────────────────────────────────────────────────────────────────────────────
 function Board({grid,isAi,interactive,phase,hoverCells,hoverValid,onHover,onLeave,onPlace,onFire,sunkShips,particlesRef,label,size,CELL}) {
+  const waterPaused = phase === "won" || phase === "lost";
   const W=size*CELL,H=size*CELL;
   const cols=Array.from({length:size},(_,i)=>COLS[i]||String.fromCharCode(75+i));
   const shipMap={};
@@ -1284,7 +1297,7 @@ function Board({grid,isAi,interactive,phase,hoverCells,hoverValid,onHover,onLeav
           {Array.from({length:size},(_,i)=><div key={i} style={{height:CELL,width:rowLabelW,display:"flex",alignItems:"center",justifyContent:"center",fontSize:labelFontSize,color:"rgba(212,175,55,0.3)",fontFamily:"'Cinzel',serif"}}>{i+1}</div>)}
         </div>
         <div style={{position:"relative",width:W,height:H,overflow:"hidden"}}>
-          <WaterCanvas width={W} height={H} size={size} CELL={CELL}/>
+          <WaterCanvas width={W} height={H} size={size} CELL={CELL} paused={waterPaused}/>
           <div style={{position:"absolute",inset:0,zIndex:2,background:"rgba(3,12,25,0.52)",border:"1px solid rgba(212,175,55,0.17)",boxSizing:"border-box",pointerEvents:"none"}}/>
           <svg style={{position:"absolute",inset:0,zIndex:3,pointerEvents:"none"}} width={W} height={H}>
             {Array.from({length:size+1}).map((_,i)=>(
@@ -1406,7 +1419,8 @@ export default function Battleships() {
   const [pendingAfterCutscene,setPendingAfterCutscene]=useState(null);
   const [shotsFired,setShotsFired]=useState(0);
   const [gameStartTime,setGameStartTime]=useState(null);
-  const [winSubmitted,setWinSubmitted]=useState(false);
+  /** idle → in_flight while POST runs → done on success; idle again on error (allows one more attempt if effect re-runs) */
+  const battleshipsWinSyncRef = useRef("idle");
   const [battleTab, setBattleTab] = useState("enemy");
   const [consecutiveHits,setConsecutiveHits]=useState(0);
   const [bonusShotActive,setBonusShotActive]=useState(false);
@@ -1441,20 +1455,26 @@ export default function Battleships() {
     return()=>clearInterval(iv);
   },[screen,gameStartTime]);
 
-  // Fetch leaderboard + stats on mount and after wins
-  useEffect(()=>{
-    const fetchStats=async()=>{
-      try {
-        const [lb,st]=await Promise.all([
-          api.get('/battleships/leaderboard'),
-          api.get('/battleships/my-stats'),
-        ]);
-        if (lb.data?.leaderboard) setLeaderboard(lb.data.leaderboard);
-        if (st.data?.stats) setMyStats(st.data.stats);
-      } catch {}
-    };
-    fetchStats();
-  },[winSubmitted]);
+  const fetchBattleshipsStats = useCallback(async () => {
+    try {
+      const [lb, st] = await Promise.all([
+        api.get('/battleships/leaderboard'),
+        api.get('/battleships/my-stats'),
+      ]);
+      if (lb.data?.leaderboard) setLeaderboard(lb.data.leaderboard);
+      if (st.data?.stats) setMyStats(st.data.stats);
+    } catch {
+      /* silent */
+    }
+  }, []);
+
+  useEffect(() => {
+    void fetchBattleshipsStats();
+  }, [fetchBattleshipsStats]);
+
+  useEffect(() => {
+    if (screen === "battle") battleshipsWinSyncRef.current = "idle";
+  }, [screen]);
 
   // Screen shake helper
   const triggerShake=useCallback(()=>{
@@ -1463,8 +1483,8 @@ export default function Battleships() {
   },[]);
 
   const submitWin=useCallback(async()=>{
-    if (winSubmitted) return;
-    setWinSubmitted(true);
+    if (battleshipsWinSyncRef.current === "done" || battleshipsWinSyncRef.current === "in_flight") return;
+    battleshipsWinSyncRef.current = "in_flight";
     const timeSeconds=gameStartTime?Math.floor((Date.now()-gameStartTime)/1000):0;
     try {
       const res=await api.post('/battleships/win',{
@@ -1483,6 +1503,7 @@ export default function Battleships() {
         const estResp=Math.floor((25+shipsSaved*5)*diffMult*fleetMult);
         setWinReward({cash:estCash,respect:estResp});
         toast.success(`Victory! +$${estCash.toLocaleString()} +${estResp} Respect`);
+        battleshipsWinSyncRef.current = "done";
       }
       if (res.data?.plays_left != null) applyPlaysLeftPayload(res.data);
       else refreshPlays();
@@ -1490,12 +1511,15 @@ export default function Battleships() {
       const msg=err?.response?.data?.detail||'Failed to record win';
       if (!msg.includes('limit')) toast.error(msg);
       refreshPlays();
+    } finally {
+      if (battleshipsWinSyncRef.current === "in_flight") battleshipsWinSyncRef.current = "idle";
+      void fetchBattleshipsStats();
     }
-  },[winSubmitted,gameStartTime,shotsFired,sunkByAi.length,activeShips.length,settings.difficulty,refreshPlays,applyPlaysLeftPayload]);
+  },[gameStartTime,shotsFired,sunkByAi.length,activeShips.length,settings.difficulty,refreshPlays,applyPlaysLeftPayload,fetchBattleshipsStats]);
 
   useEffect(()=>{
-    if (screen==="won"&&!winSubmitted) submitWin();
-  },[screen,winSubmitted,submitWin]);
+    if (screen==="won") void submitWin();
+  },[screen,submitWin]);
 
   useEffect(()=>{
     if (screen!=="lost"){
@@ -1516,7 +1540,7 @@ export default function Battleships() {
     setPlacingIdx(0); setHoriz(true); setHoverCell(null); setPlacedShips([]);
     setAiState({mode:"hunt",targets:[],hits:[],firstHit:null}); setPlayerTurn(true);
     setSunkByPlayer([]); setSunkByAi([]); setEvents([]); setCutscene(null);
-    setShotsFired(0); setGameStartTime(null); setWinSubmitted(false);
+    setShotsFired(0); setGameStartTime(null);
     battleshipsSessionRef.current=null;
     setBattleTab("enemy"); setConsecutiveHits(0); setBonusShotActive(false);
     setElapsedTime(0); setWinReward(null);
@@ -1729,6 +1753,21 @@ export default function Battleships() {
   const playerLeft=activeShips.filter(s=>!sunkByAi.includes(s.id)).length;
   const aiLeft=activeShips.filter(s=>!sunkByPlayer.includes(s.id)).length;
 
+  const hudAccuracyPct = useMemo(() => {
+    if (shotsFired <= 0) return null;
+    const covered = sunkByPlayer.reduce((a, id) => {
+      const sh = activeShips.find((s) => s.id === id);
+      return a + (sh ? sh.size : 0);
+    }, 0);
+    let partialHits = 0;
+    aiGrid.forEach((row) => {
+      row.forEach((c) => {
+        if (c.hit && c.ship && !sunkByPlayer.includes(c.ship)) partialHits += 1;
+      });
+    });
+    return Math.round(((covered + partialHits) / shotsFired) * 100);
+  }, [shotsFired, sunkByPlayer, activeShips, aiGrid]);
+
   const inGame = screen==="battle"||screen==="won"||screen==="lost";
 
   return (
@@ -1803,7 +1842,6 @@ export default function Battleships() {
                 setScreen("battle");
                 setGameStartTime(Date.now());
                 setShotsFired(0);
-                setWinSubmitted(false);
               }catch(e){
                 toast.error(e.response?.data?.detail||e.message||"Could not start battle");
               }
@@ -1854,9 +1892,12 @@ export default function Battleships() {
             <div style={{fontSize:10,color:"rgba(212,175,55,0.5)"}}>Shots: <span style={{color:"var(--noir-primary)",fontWeight:600}}>{shotsFired}</span></div>
             <div style={{fontSize:10,color:"rgba(212,175,55,0.5)"}}>Time: <span style={{color:"var(--noir-primary)",fontWeight:600}}>
               {Math.floor(elapsedTime/60)}:{String(elapsedTime%60).padStart(2,'0')}</span></div>
-            {shotsFired>0&&<div style={{fontSize:10,color:"rgba(212,175,55,0.5)"}}>Accuracy: <span style={{color:"var(--noir-primary)",fontWeight:600}}>
-              {Math.round((sunkByPlayer.reduce((a,id)=>{const sh=activeShips.find(s=>s.id===id);return a+(sh?sh.size:0);},0)+(()=>{let h=0;aiGrid.forEach(row=>row.forEach(c=>{if(c.hit&&c.ship&&!sunkByPlayer.includes(c.ship))h++;}));return h;})())/shotsFired*100)}%
-            </span></div>}
+            {hudAccuracyPct != null && (
+              <div style={{ fontSize: 10, color: "rgba(212,175,55,0.5)" }}>
+                Accuracy:{' '}
+                <span style={{ color: "var(--noir-primary)", fontWeight: 600 }}>{hudAccuracyPct}%</span>
+              </div>
+            )}
             {consecutiveHits>=2&&<div style={{fontSize:10,color:"#ffa500",fontWeight:600}}>🔥 ×{consecutiveHits}</div>}
           </div>
 

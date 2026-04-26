@@ -6,6 +6,7 @@ import { formatAdminDateTime, formatAdminDateOnly, formatAdminTimeOnly } from '.
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import AttackLogsPanel from '../../components/staff/AttackLogsPanel';
+import AdminSustainedRlEventsTable from './admin/AdminSustainedRlEventsTable';
 import styles from '../../styles/noir.module.css';
 import {
   ADMIN_CATEGORIES,
@@ -240,6 +241,7 @@ const SEARCHABLE_TOOLS = [
   // Security
   { label: 'Security Summary', categoryId: 'admin-security', collapseKey: 'security', keywords: ['security', 'summary', 'flags', 'rate', 'ban', 'ip', 'lockout', 'telegram'] },
   { label: 'Session stats', categoryId: 'admin-security', collapseKey: 'sessionStats', keywords: ['session', 'sessions', 'active', 'log out', 'revoke', '24h'] },
+  { label: 'Sustained pacing 429 log', categoryId: 'admin-security', collapseKey: 'sustainedRl429Log', keywords: ['429', 'rate', 'limit', 'pacing', 'sustained', 'inbox', 'spam', 'throttle'], adminOnly: true },
   { label: 'IP Bans', categoryId: 'admin-security', collapseKey: 'security', keywords: ['ip', 'ban', 'block', 'unban', 'restore'] },
   { label: 'Rate Limits', categoryId: 'admin-security', collapseKey: 'security', keywords: ['rate', 'limit', 'throttle', 'violations', 'cooldown'] },
   { label: 'Cloudflare Bot Block', categoryId: 'admin-security', collapseKey: 'cfBotBlock', keywords: ['cloudflare', 'bot', 'block', 'cf'] },
@@ -344,8 +346,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, familyWarTruce: false, ...parsed };
-  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, familyWarTruce: false }; }
+    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, familyWarTruce: false, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, familyWarTruce: false }; }
 }
 
 function saveCollapsed(state) {
@@ -10059,7 +10061,7 @@ export default function Admin() {
                     }}
                     className="rounded border-input"
                   />
-                  Show open unpaid checkouts
+                  Show unpaid checkouts (open, expired, abandoned)
                 </label>
                 <BtnPrimary onClick={() => handleFetchDonationsLog()} disabled={donationsLogLoading}>
                   {donationsLogLoading ? 'Loading…' : 'Load payments log'}
@@ -10082,7 +10084,7 @@ export default function Admin() {
               )}
               {donationsLogFilteredOpenUnpaid > 0 && !donationsLogIncludeOpenUnpaid ? (
                 <p className="text-[10px] text-amber-400/90 font-heading">
-                  Hiding {donationsLogFilteredOpenUnpaid} open unpaid checkout{donationsLogFilteredOpenUnpaid === 1 ? '' : 's'}. Enable &quot;Show open unpaid checkouts&quot; to list them.
+                  Hiding {donationsLogFilteredOpenUnpaid} unpaid checkout{donationsLogFilteredOpenUnpaid === 1 ? '' : 's'} (open, expired, or abandoned). Enable the checkbox above to list them.
                 </p>
               ) : null}
               {donationsLogData && donationsLogData.length > 0 && (
@@ -13369,6 +13371,19 @@ export default function Admin() {
             </div>
           </div>
         )}
+        </div>
+
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <SectionHeader
+          icon={Clock}
+          title="Sustained page pacing (429) log"
+          badge={<span className="text-[10px] text-mutedForeground">Admin audit</span>}
+          toolAnchor="sustainedRl429Log"
+          isCollapsed={collapsed.sustainedRl429Log}
+          onToggle={() => toggleSection('sustainedRl429Log')}
+        />
+        {!collapsed.sustainedRl429Log && <AdminSustainedRlEventsTable />}
         </div>
 
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>

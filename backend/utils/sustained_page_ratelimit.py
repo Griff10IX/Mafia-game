@@ -23,6 +23,8 @@ SUSTAIN_SEC = 15.0
 COOLDOWN_MIN_SEC = 10
 COOLDOWN_MAX_SEC = 15
 COLL = "sustained_page_rl_state"
+# Staff-visible audit trail (replaces per-admin inbox spam from send_notification).
+ADMIN_RL_EVENTS_COLL = "admin_sustained_rl_events"
 
 # Jail-style profile: same math as jail (750ms max gap between requests in a chain, 22s wall-clock sustain).
 JAIL_STYLE_MAX_GAP_MS = 750.0
@@ -234,20 +236,8 @@ async def _notify_admins_sustained_rl_429(
     retry_after_sec: int,
     reason: str,
 ) -> None:
-    """Inbox game admins when a user hits sustained page rate limit (HTTP 429). Best-effort; never raises."""
+    """Record sustained page RL 429 for Admin Safety log (no inbox — avoids spamming staff notifications). Best-effort; never raises."""
     if not user_id:
-        return
-    try:
-        from server import send_notification, _get_admin_user_ids
-    except Exception:
-        logger.exception("sustained RL admin notify: server import failed")
-        return
-    try:
-        admin_ids = await _get_admin_user_ids(db)
-    except Exception:
-        logger.exception("sustained RL admin notify: _get_admin_user_ids failed")
-        return
-    if not admin_ids:
         return
     uname = "?"
     try:
@@ -257,19 +247,20 @@ async def _notify_admins_sustained_rl_429(
     except Exception:
         pass
     label = _PAGE_LABEL_ADMIN.get(page_key, page_key)
-    title = "Player rate limited"
-    msg = (
-        f"A user was blocked by sustained page rate limiting ({label}).\n\n"
-        f"User: {uname} ({user_id})\n"
-        f"Retry-After: {retry_after_sec}s\n"
-        f"Reason: {reason}\n"
-        f"Scope: {page_key}"
-    )
-    for aid in admin_ids:
-        try:
-            await send_notification(aid, title, msg, "system", category="admin")
-        except Exception:
-            logger.exception("sustained RL admin notify failed for admin_id=%s", aid)
+    now_iso = _now().isoformat().replace("+00:00", "Z")
+    doc = {
+        "created_at": now_iso,
+        "user_id": user_id,
+        "username": uname,
+        "page_key": page_key,
+        "label": label,
+        "reason": reason,
+        "retry_after_sec": int(max(0, retry_after_sec)),
+    }
+    try:
+        await db[ADMIN_RL_EVENTS_COLL].insert_one(doc)
+    except Exception:
+        logger.exception("sustained RL admin event insert failed user_id=%s page_key=%s", user_id, page_key)
 
 
 async def sustained_page_rl_enabled_for(db, page_key: str) -> bool:

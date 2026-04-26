@@ -3646,6 +3646,39 @@ def register(router):
         flags = await db.security_flags.find(query, {"_id": 0}).sort("created_at", -1).limit(limit).to_list(limit)
         return {"flags": flags, "count": len(flags)}
 
+    @router.get("/admin/security/sustained-page-rl-events")
+    async def admin_sustained_page_rl_events(
+        limit: int = 50,
+        skip: int = 0,
+        user_id: Optional[str] = None,
+        page_key: Optional[str] = None,
+        since: Optional[str] = None,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """List sustained page pacing 429 incidents (admin-only; see Admin Safety)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        lim = max(1, min(200, int(limit or 50)))
+        sk = max(0, int(skip or 0))
+        query: Dict[str, Any] = {}
+        if user_id and str(user_id).strip():
+            query["user_id"] = str(user_id).strip()
+        if page_key and str(page_key).strip():
+            query["page_key"] = str(page_key).strip()
+        if since and str(since).strip():
+            s = str(since).strip().replace("Z", "+00:00")
+            try:
+                dt = datetime.fromisoformat(s)
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                query["created_at"] = {"$gte": dt.isoformat().replace("+00:00", "Z")}
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail="Invalid since (use ISO-8601 UTC).")
+        coll = db.admin_sustained_rl_events
+        total = await coll.count_documents(query)
+        rows = await coll.find(query, {"_id": 0}).sort("created_at", -1).skip(sk).limit(lim).to_list(lim)
+        return {"events": rows, "count": len(rows), "total": total, "skip": sk, "limit": lim}
+
     @router.post("/admin/security/flags/{flag_id}/resolve")
     async def admin_resolve_security_flag(flag_id: str, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):

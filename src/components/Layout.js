@@ -135,7 +135,7 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
         { action: 'theme', label: 'Theme' },
         { action: 'logout', label: 'Logout' },
         { path: '/account/autorank', label: 'Auto Rank' },
-        ...(isAdmin ? [{ path: '/staffrole/admin/overview', label: 'Admin Tools' }, { path: '/staffrole/locked', label: 'Locked accounts' }] : []),
+        ...(isAdmin ? [{ path: '/staffrole/admin/overview', label: 'Admin Tools' }, { path: '/staffrole/admin/locked', label: 'Locked accounts' }] : []),
         ...(isModerator && !isAdmin ? [{ path: '/staffrole/admin/overview', label: 'Moderator tools' }] : []),
       ],
     },
@@ -1135,16 +1135,16 @@ export default function Layout({ children }) {
 
   const adminNavItems = isAdmin ? [
     { path: '/staffrole/admin/overview', icon: Settings, label: 'Admin Tools' },
-    { path: '/staffrole/locked', icon: Lock, label: 'Locked accounts' },
-    { path: '/staffrole/users-online', icon: Users, label: 'Users online (live)' },
-    { path: '/staffrole/witness-statements', icon: FileText, label: 'Witness statements' },
-    { path: '/staffrole/attack-logs', icon: Crosshair, label: 'Attack logs' },
+    { path: '/staffrole/admin/locked', icon: Lock, label: 'Locked accounts' },
+    { path: '/staffrole/admin/users-online', icon: Users, label: 'Users online (live)' },
+    { path: '/staffrole/admin/witness-statements', icon: FileText, label: 'Witness statements' },
+    { path: '/staffrole/admin/attack-logs', icon: Crosshair, label: 'Attack logs' },
   ] : [];
   const moderatorNavItems = isModerator && !isAdmin ? [
     { path: '/staffrole/admin/overview', icon: Shield, label: 'Moderator tools' },
-    { path: '/staffrole/users-online', icon: Users, label: 'Users online (live)' },
-    { path: '/staffrole/witness-statements', icon: FileText, label: 'Witness statements' },
-    { path: '/staffrole/attack-logs', icon: Crosshair, label: 'Attack logs' },
+    { path: '/staffrole/admin/users-online', icon: Users, label: 'Users online (live)' },
+    { path: '/staffrole/admin/witness-statements', icon: FileText, label: 'Witness statements' },
+    { path: '/staffrole/admin/attack-logs', icon: Crosshair, label: 'Attack logs' },
   ] : [];
 
   const sidebarBgStyle = { backgroundColor: 'var(--noir-content)' };

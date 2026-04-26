@@ -34,13 +34,14 @@ PARTICIPATION_POINTS = 10
 SCORE_BONUS_DIVISOR = 100
 SCORE_BONUS_CAP = 50
 
-# Cash: 1st = $7.5M; ranks 2–5 keep the same relative split as the old table (1/2, 1/4, 1/10, 1/20 of 1st).
+# Cash: 1st = $50M; ranks 2–5 same relative split as before (1/2, 1/4, 1/10, 1/20 of 1st cash).
+# Respect / bullets use the same rank-to-rank ratios as the prior table; loot on 1st only (unchanged pattern).
 DEFAULT_REWARDS = {
-    1: {"cash": 7_500_000, "respect": 200, "loot_pieces": 15, "bullets": 125},
-    2: {"cash": 3_750_000, "respect": 100, "loot_pieces": 0, "bullets": 75},
-    3: {"cash": 1_875_000, "respect": 50, "loot_pieces": 0, "bullets": 38},
-    4: {"cash": 750_000, "respect": 25, "loot_pieces": 0, "bullets": 19},
-    5: {"cash": 375_000, "respect": 10, "loot_pieces": 0, "bullets": 13},
+    1: {"cash": 50_000_000, "respect": 5_000, "loot_pieces": 25, "bullets": 10_000},
+    2: {"cash": 25_000_000, "respect": 2_500, "loot_pieces": 0, "bullets": 6_000},
+    3: {"cash": 12_500_000, "respect": 1_250, "loot_pieces": 0, "bullets": 3_040},
+    4: {"cash": 5_000_000, "respect": 625, "loot_pieces": 0, "bullets": 1_520},
+    5: {"cash": 2_500_000, "respect": 250, "loot_pieces": 0, "bullets": 1_040},
 }
 
 

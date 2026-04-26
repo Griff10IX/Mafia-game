@@ -80,7 +80,7 @@ export default function AdminUsersOnline() {
       <div className={`space-y-3 ${styles.pageContent} mobile-page-root min-w-0 overflow-x-hidden`} style={{ padding: '12px 14px', maxWidth: 1400, margin: '0 auto' }}>
         <div className={`${styles.panel} rounded-lg border border-amber-500/30 p-4 mobile-panel`}>
           <p className="text-amber-400 font-heading">{error}</p>
-          <Link to="/admin" className="text-primary text-sm font-heading hover:underline mt-2 inline-block">← Back to Admin</Link>
+          <Link to="/staffrole/admin/overview" className="text-primary text-sm font-heading hover:underline mt-2 inline-block">← Back to Admin</Link>
         </div>
       </div>
     );

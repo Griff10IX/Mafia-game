@@ -2,6 +2,10 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Search, User, ChevronDown } from 'lucide-react';
 import Admin from './Admin';
+import AdminUsersOnline from './AdminUsersOnline';
+import AdminAttackLogs from './AdminAttackLogs';
+import AdminWitnessStatements from './AdminWitnessStatements';
+import AdminLocked from './AdminLocked';
 import {
   ADMIN_ROUTE_GROUP_MAP,
   ADMIN_ROUTE_GROUPS,
@@ -11,6 +15,9 @@ import {
 function routeFor(groupId) {
   return `/staffrole/admin/${groupId}`;
 }
+
+/** Sections that render dedicated tools instead of the monolithic Admin page. */
+const STANDALONE_ADMIN_SECTIONS = new Set(['users-online', 'attack-logs', 'witness-statements', 'locked']);
 
 const LEGACY_HASH_TO_ROUTE_GROUP = {
   'admin-players': 'players',
@@ -34,10 +41,11 @@ export default function AdminShell() {
   const [targetPlayer, setTargetPlayer] = useState('');
   const [targetContextOpen, setTargetContextOpen] = useState(false);
 
+  const hubSection = (section || 'overview').toLowerCase();
+
   const routeGroup = useMemo(() => {
-    const key = (section || 'overview').toLowerCase();
-    return ADMIN_ROUTE_GROUP_MAP[key] || ADMIN_ROUTE_GROUP_MAP.overview;
-  }, [section]);
+    return ADMIN_ROUTE_GROUP_MAP[hubSection] || ADMIN_ROUTE_GROUP_MAP.overview;
+  }, [hubSection]);
 
   useEffect(() => {
     if (!section) {
@@ -49,6 +57,7 @@ export default function AdminShell() {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (STANDALONE_ADMIN_SECTIONS.has(hubSection)) return;
     const targetHash = routeGroup?.categoryId || 'admin-operations';
     if (window.location.hash !== `#${targetHash}`) {
       window.location.hash = targetHash;
@@ -61,7 +70,7 @@ export default function AdminShell() {
         document.getElementById(scrollId)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
       }, delay);
     }
-  }, [routeGroup, location.pathname, location.search]);
+  }, [routeGroup, location.pathname, location.search, hubSection]);
 
   const quickJumpToTarget = () => {
     if (typeof window === 'undefined') return;
@@ -185,7 +194,7 @@ export default function AdminShell() {
                 );
               })}
             </div>
-            <div className="hidden md:grid md:grid-cols-5 xl:grid-cols-10 gap-1.5">
+            <div className="hidden md:grid md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-7 gap-1.5">
               {ADMIN_ROUTE_GROUPS.map((group) => {
                 const active = group.id === routeGroup?.id;
                 const Icon = group.icon;
@@ -210,7 +219,11 @@ export default function AdminShell() {
         </div>
       </section>
 
-      <Admin />
+      {hubSection === 'users-online' && <AdminUsersOnline />}
+      {hubSection === 'attack-logs' && <AdminAttackLogs />}
+      {hubSection === 'witness-statements' && <AdminWitnessStatements />}
+      {hubSection === 'locked' && <AdminLocked />}
+      {!STANDALONE_ADMIN_SECTIONS.has(hubSection) && <Admin />}
     </div>
   );
 }
