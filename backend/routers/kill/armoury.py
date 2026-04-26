@@ -431,6 +431,11 @@ class UseTokenRequest(BaseModel):
         return v
 
 
+class CrewOcAutoApplyMaxFeeBody(BaseModel):
+    """Update join-fee cap while Crew OC auto-apply window is active (does not consume a token)."""
+    crew_oc_auto_apply_max_fee: int = Field(..., ge=0)
+
+
 class ExchangeAutoRankRequest(BaseModel):
     count: int = 1  # v1: must be 1 (one Auto Rank token consumed per exchange)
 
@@ -2222,8 +2227,13 @@ def _tokens_from_user(user: dict) -> dict:
                     expires_at = expires_dt.isoformat()
         row: Dict[str, Any] = {"count": count, "active_until": active_until, "expires_at": expires_at}
         if t == "crew_oc_auto_3h":
+            cap_raw = user.get("crew_oc_auto_apply_max_fee")
             # Auto-apply ticker only runs when a cap is set; UI treats the perk as inactive until then.
-            row["auto_apply_ready"] = user.get("crew_oc_auto_apply_max_fee") is not None
+            row["auto_apply_ready"] = cap_raw is not None
+            try:
+                row["max_join_fee"] = int(cap_raw) if cap_raw is not None else None
+            except (TypeError, ValueError):
+                row["max_join_fee"] = None
         out[t] = row
     return out
 
@@ -2705,6 +2715,34 @@ async def use_consumable_token(req: UseTokenRequest, current_user: dict = Depend
     }
 
 
+async def update_crew_oc_auto_apply_max_fee(
+    body: CrewOcAutoApplyMaxFeeBody,
+    current_user: dict = Depends(get_current_user),
+):
+    """Set or change max join fee while the 3h Crew OC auto-apply window is active (no token consumed)."""
+    uid = current_user["id"]
+    fresh = await db.users.find_one({"id": uid}, {"_id": 0, "crew_oc_auto_apply_until": 1})
+    if not fresh:
+        raise HTTPException(status_code=401, detail="Session expired.")
+    until_raw = fresh.get("crew_oc_auto_apply_until")
+    until = _parse_until(until_raw) if until_raw else None
+    now = datetime.now(timezone.utc)
+    if not until or until <= now:
+        raise HTTPException(
+            status_code=400,
+            detail="Crew OC auto-apply is not active (no time window). Use a token first to start the window.",
+        )
+    fee = int(body.crew_oc_auto_apply_max_fee)
+    res = await db.users.update_one({"id": uid}, {"$set": {"crew_oc_auto_apply_max_fee": fee}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=400, detail="Could not update max join fee.")
+    u2 = await db.users.find_one({"id": uid}, {"_id": 0})
+    return {
+        "message": f"Max join fee set to ${fee:,}. Families above that fee are skipped.",
+        "tokens": _tokens_from_user(u2 or {}),
+    }
+
+
 async def exchange_auto_rank_tokens(req: ExchangeAutoRankRequest, current_user: dict = Depends(get_current_user)):
     """Burn 1× Auto Rank (2h) token for 2 random distinct other tokens (no cash/points)."""
     if int(req.count or 1) != 1:
@@ -2971,5 +3009,11 @@ def register(router):
     )
     router.add_api_route("/inventory", get_inventory, methods=["GET"], dependencies=_armoury_rl_u)
     router.add_api_route("/inventory/tokens/use", use_consumable_token, methods=["POST"])
+    router.add_api_route(
+        "/inventory/tokens/crew-oc-auto-apply-max-fee",
+        update_crew_oc_auto_apply_max_fee,
+        methods=["POST"],
+        dependencies=_armoury_rl_u,
+    )
     router.add_api_route("/inventory/tokens/exchange-auto-rank", exchange_auto_rank_tokens, methods=["POST"])
     router.add_api_route("/inventory/tokens/gift", gift_inventory_tokens, methods=["POST"])

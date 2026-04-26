@@ -174,11 +174,45 @@ export default function MyInventory() {
 
   const openCrewOcModal = (useAll) => {
     setCrewOcMaxFeeStr('');
-    setCrewOcModal({ useAll });
+    setCrewOcModal({ mode: 'use', useAll });
+  };
+
+  const openCrewOcEditModal = (maxFee) => {
+    if (maxFee == null || maxFee === '') {
+      setCrewOcMaxFeeStr('');
+    } else {
+      const n = Number(maxFee);
+      setCrewOcMaxFeeStr(Number.isFinite(n) ? n.toLocaleString('en-US') : '');
+    }
+    setCrewOcModal({ mode: 'edit' });
+  };
+
+  const submitCrewOcEdit = async () => {
+    if (!crewOcModal || crewOcModal.mode !== 'edit') return;
+    const n = parseInt(String(crewOcMaxFeeStr).replace(/,/g, '').trim(), 10);
+    if (Number.isNaN(n) || n < 0) {
+      toast.error('Enter a max join fee (0 or more).');
+      return;
+    }
+    setUsingToken('crew_oc_edit');
+    try {
+      const res = await api.post('/inventory/tokens/crew-oc-auto-apply-max-fee', {
+        crew_oc_auto_apply_max_fee: n,
+      });
+      if (res?.data?.tokens) setData((d) => (d ? { ...d, tokens: res.data.tokens } : d));
+      toast.success(res?.data?.message || 'Max join fee updated.');
+      refreshUser();
+      fetchInventory();
+      setCrewOcModal(null);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to update max join fee');
+    } finally {
+      setUsingToken(null);
+    }
   };
 
   const submitCrewOcToken = async () => {
-    if (!crewOcModal) return;
+    if (!crewOcModal || crewOcModal.mode !== 'use') return;
     const n = parseInt(String(crewOcMaxFeeStr).replace(/,/g, '').trim(), 10);
     if (Number.isNaN(n) || n < 0) {
       toast.error('Enter a max join fee (0 or more). Auto-apply only starts after you set this cap.');
@@ -518,7 +552,9 @@ export default function MyInventory() {
             {crewOcModal && (
               <div className="px-2.5 py-2 border-b border-primary/15 bg-zinc-950/40 space-y-2">
                 <p className="text-[9px] font-heading text-mutedForeground leading-snug">
-                  Max join fee ($): families charging more than this are skipped. Use 0 to only try free-join crews. The perk does not auto-apply until you confirm a cap.
+                  {crewOcModal.mode === 'edit'
+                    ? 'Change your max join fee ($) for the current window. No token is consumed. Families above this cap are skipped; use 0 for free-join only.'
+                    : 'Max join fee ($): families charging more than this are skipped. Use 0 to only try free-join crews. The perk does not auto-apply until you confirm a cap.'}
                 </p>
                 <input
                   type="text"
@@ -531,11 +567,11 @@ export default function MyInventory() {
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={submitCrewOcToken}
+                    onClick={crewOcModal.mode === 'edit' ? submitCrewOcEdit : submitCrewOcToken}
                     disabled={usingToken !== null}
                     className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-primary/40 bg-primary/15 text-primary hover:bg-primary/25 disabled:opacity-50"
                   >
-                    {usingToken ? '…' : crewOcModal.useAll ? 'Confirm use all' : 'Confirm use'}
+                    {usingToken ? '…' : crewOcModal.mode === 'edit' ? 'Save cap' : crewOcModal.useAll ? 'Confirm use all' : 'Confirm use'}
                   </button>
                   <button
                     type="button"
@@ -575,13 +611,21 @@ export default function MyInventory() {
                       {desc && <div className="text-[9px] text-mutedForeground mt-0.5">{desc}</div>}
                       {crewWindowNoCap && t.active_until && (
                         <div className="text-[9px] text-amber-300/90 mt-0.5">
-                          Window until {new Date(t.active_until).toLocaleString(undefined, { timeZone: 'UTC' })} UTC — use
-                          another token with a max fee set to enable auto-apply.
+                          Window until {new Date(t.active_until).toLocaleString(undefined, { timeZone: 'UTC' })} UTC — set a
+                          max join fee to enable auto-apply (no extra token), or extend the window with Use and set a cap.
                         </div>
                       )}
                       {active && t.active_until && (
                         <div className="text-[9px] text-primary mt-0.5">
                           Active until {new Date(t.active_until).toLocaleString(undefined, { timeZone: 'UTC' })} UTC
+                        </div>
+                      )}
+                      {active && t.max_join_fee != null && (
+                        <div className="text-[9px] text-mutedForeground mt-0.5">
+                          Max join fee cap:{' '}
+                          <span className="text-foreground font-medium">
+                            ${Number(t.max_join_fee).toLocaleString('en-US')}
+                          </span>
                         </div>
                       )}
                       {!active && key === 'rank_xp_pass' && t.expires_at && (
@@ -593,7 +637,27 @@ export default function MyInventory() {
                         <div className="text-[9px] text-emerald-300 mt-0.5">Rewards claimed</div>
                       )}
                     </div>
-                    <div className="flex items-center gap-1 shrink-0">
+                    <div className="flex flex-wrap items-center justify-end gap-1 shrink-0">
+                      {key === 'crew_oc_auto_3h' && active && (
+                        <button
+                          type="button"
+                          disabled={usingToken !== null || crewOcModal}
+                          onClick={() => openCrewOcEditModal(t.max_join_fee)}
+                          className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-zinc-500/50 bg-zinc-800/40 text-zinc-200 hover:bg-zinc-700/50 disabled:opacity-50"
+                        >
+                          Edit cap
+                        </button>
+                      )}
+                      {key === 'crew_oc_auto_3h' && crewWindowNoCap && (
+                        <button
+                          type="button"
+                          disabled={usingToken !== null || crewOcModal}
+                          onClick={() => openCrewOcEditModal(null)}
+                          className="px-2 py-1 rounded text-[9px] font-heading font-bold border border-amber-500/45 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20 disabled:opacity-50"
+                        >
+                          Set max fee
+                        </button>
+                      )}
                       <button
                         type="button"
                         disabled={t.count < 1 || usingToken !== null || expired || (key === 'crew_oc_auto_3h' && crewOcModal)}
