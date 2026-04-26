@@ -450,6 +450,7 @@ from server import (
     send_notification,
     RANKS,
 )
+from utils.location_climate import get_location_climate, rank_multiplier_for_actor, success_multiplier_for_actor
 from routers.account.objectives import update_objectives_progress
 from routers.kill.armoury import (
     TOKEN_CONFIG,
@@ -732,8 +733,11 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
         progress_max = int(progress_max)
     else:
         progress_max = max(progress, _progress_from_attempts(crime_attempts))
-    success_rate = (progress / 100.0) * CRIME_DIFFICULTY_MULT
-    success = _rng.random() < success_rate
+    _climate = get_location_climate()
+    success_rate = (progress / 100.0) * CRIME_DIFFICULTY_MULT * success_multiplier_for_actor(
+        current_user.get("current_state"), _climate
+    )
+    success = _rng.random() < min(1.0, success_rate)
     rank_points_earned_out = 0
 
     if success:
@@ -811,6 +815,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
         reward = int(reward * pass_mult)
         rank_points = int(rank_points * pass_mult)
         reward = int(reward * CRIME_CASH_PAYOUT_MULT)
+        rank_points = max(1, int(rank_points * rank_multiplier_for_actor(current_user.get("current_state"), _climate)))
         rank_points_earned_out = int(rank_points)
         rp_before = int(current_user.get("rank_points") or 0)
         # Racket / illegal-business missions: crimes in the business's state (doc.state set at start)

@@ -170,14 +170,20 @@ const RoleKey = ({ adminOnlineColor, modDefaultOnlineColor, hdoOnlineColor }) =>
   );
 };
 
-const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, adminOnlineColor, modDefaultOnlineColor, profileHoverEnabled }) => {
+const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, adminOnlineColor, modDefaultOnlineColor, profileHoverEnabled, myUsername }) => {
   const preview = profileCache[user.username];
   const isLoading = !!profileLoading[user.username];
   const adminColor = (adminOnlineColor && adminOnlineColor.trim()) || '#a78bfa';
   const modColor = (modDefaultOnlineColor && modDefaultOnlineColor.trim()) || DEFAULT_MOD_COLOR;
   const displayColor = user.online_color || (user.is_admin ? adminColor : user.is_moderator ? modColor : undefined);
   const userStatus = user.status || 'online';
-  const profileTo = `/profile/${encodeURIComponent(user.username)}`;
+  const selfFromRoster =
+    myUsername &&
+    user.username &&
+    String(user.username).toLowerCase() === String(myUsername).toLowerCase();
+  const profileTo = selfFromRoster
+    ? `/profile/${encodeURIComponent(user.username)}?view=public`
+    : `/profile/${encodeURIComponent(user.username)}`;
   const linkClass = `relative z-10 text-[11px] font-heading font-bold transition-colors ${displayColor ? '' : 'text-foreground hover:text-primary'}`;
 
   const profileLink = (extra = {}) => (
@@ -446,6 +452,7 @@ export default function UsersOnline() {
   const [hasLoaded, setHasLoaded] = useState(() => !!bootCache);
   const [profileCache, setProfileCache] = useState({});
   const [profileLoading, setProfileLoading] = useState({});
+  const [myUsername, setMyUsername] = useState(null);
   const [profileHoverEnabled, setProfileHoverEnabled] = useState(() =>
     typeof window !== 'undefined' ? !window.matchMedia('(max-width: 767px)').matches : true,
   );
@@ -456,6 +463,21 @@ export default function UsersOnline() {
     sync();
     mq.addEventListener('change', sync);
     return () => mq.removeEventListener('change', sync);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await api.get('/auth/me');
+        if (!cancelled && res.data?.username) setMyUsername(res.data.username);
+      } catch {
+        if (!cancelled) setMyUsername(null);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const fetchOnlineUsers = useCallback(async (silent = false) => {
@@ -582,6 +604,7 @@ export default function UsersOnline() {
                     adminOnlineColor={adminOnlineColor}
                     modDefaultOnlineColor={modDefaultOnlineColor}
                     profileHoverEnabled={profileHoverEnabled}
+                    myUsername={myUsername}
                   />
                 ))}
               </div>

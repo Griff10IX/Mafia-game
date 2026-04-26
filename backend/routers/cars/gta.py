@@ -126,6 +126,7 @@ from routers.account.objectives import update_objectives_progress
 from routers.admin.airport import _invalidate_travel_info_cache
 from routers.game.families import resolve_family_id
 from utils.family_vault_log import log_family_vault_tx
+from utils.location_climate import get_location_climate, rank_multiplier_for_actor, success_multiplier_for_actor
 
 # Family members in an active war cannot liquidate exclusive / loot-exclusive cars (list, scrap, melt).
 EXCLUSIVE_CAR_WAR_LOCK_DETAIL = (
@@ -480,8 +481,14 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         progress_max = max(progress, _gta_progress_from_attempts(gta_attempts))
     
     ev = await get_effective_event()
+    _climate = get_location_climate()
     success_rate = progress / 100.0
-    gta_rate = success_rate * ev.get("gta_success", 1.0) * GTA_DIFFICULTY_MULT
+    gta_rate = (
+        success_rate
+        * ev.get("gta_success", 1.0)
+        * GTA_DIFFICULTY_MULT
+        * success_multiplier_for_actor(current_user.get("current_state"), _climate)
+    )
     success = _rng.random() < min(1.0, gta_rate)
     
     if success:
@@ -617,6 +624,7 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
         from server import rank_xp_pass_multiplier
         pass_mult = float(rank_xp_pass_multiplier(current_user))
         rank_points = int(rank_points * pass_mult)
+        rank_points = max(1, int(rank_points * rank_multiplier_for_actor(current_user.get("current_state"), _climate)))
         gta_rare_perk = int(current_user.get("gta_rare_drop_perk_attempts_remaining") or 0)
         if gta_rare_perk > 0:
             await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"gta_rare_drop_perk_attempts_remaining": -1}})

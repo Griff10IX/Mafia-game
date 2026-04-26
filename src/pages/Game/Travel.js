@@ -32,6 +32,12 @@ function DestinationLocationImage({ src }) {
   );
 }
 
+function climateDestinationRing(climateBand) {
+  if (climateBand === 'hot') return 'ring-1 ring-amber-500/40 shadow-[0_0_14px_rgba(245,158,11,0.14)]';
+  if (climateBand === 'cold') return 'ring-1 ring-sky-500/35 shadow-[0_0_14px_rgba(56,189,248,0.12)]';
+  return '';
+}
+
 const TRAVEL_STYLES = `
   @keyframes trv-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
   .trv-fade-in { animation: trv-fade-in 0.4s ease-out both; }
@@ -55,12 +61,13 @@ const TravelingScreen = ({ destination, timeLeft }) => (
   </div>
 );
 
-function CurrentLocationCard({ location, travelsUsed, maxTravels, userPoints }) {
+function CurrentLocationCard({ location, travelsUsed, maxTravels, userPoints, climateBand }) {
   const imgSrc = locationImageSrc(location);
   const [imgError, setImgError] = useState(false);
   const showImage = imgSrc && !imgError;
+  const ring = climateDestinationRing(climateBand);
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 trv-card trv-fade-in mobile-panel`}>
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 trv-card trv-fade-in mobile-panel${ring ? ` ${ring}` : ''}`}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20">
         <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
@@ -87,9 +94,17 @@ function CurrentLocationCard({ location, travelsUsed, maxTravels, userPoints }) 
             <p className="text-[9px] text-mutedForeground uppercase tracking-wider mb-0.5">
               You are in
             </p>
-            <h3 className="text-base font-heading font-bold text-primary">
-              {location}
-            </h3>
+            <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+              <h3 className="text-base font-heading font-bold text-primary">
+                {location}
+              </h3>
+              {climateBand === 'hot' && (
+                <span className="text-[8px] font-heading font-bold uppercase text-amber-400/95 shrink-0">Hot</span>
+              )}
+              {climateBand === 'cold' && (
+                <span className="text-[8px] font-heading font-bold uppercase text-sky-400/95 shrink-0">Cold</span>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex flex-wrap gap-3 text-[10px] font-heading">
@@ -117,6 +132,7 @@ const DestinationCard = ({
   onTravel, 
   travelInfo,
   travelDisabled = false,
+  climateBand,
 }) => {
   if (!travelInfo) return null;
   const airports = travelInfo.airports || [];
@@ -129,16 +145,23 @@ const DestinationCard = ({
   const familyAirportTimeRed = (travelInfo.family_airport_travel_reduction_seconds ?? 0) > 0;
 
   const destImgSrc = locationImageSrc(destination);
+  const ring = climateDestinationRing(climateBand);
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 trv-card trv-fade-in mobile-panel ${travelDisabled ? 'opacity-70' : ''}`} data-testid={`dest-${destination}`}>
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 trv-card trv-fade-in mobile-panel ${travelDisabled ? 'opacity-70' : ''}${ring ? ` ${ring}` : ''}`} data-testid={`dest-${destination}`}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2">
+      <div className="px-2.5 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center gap-2 flex-wrap">
         {destImgSrc && (
           <DestinationLocationImage src={destImgSrc} />
         )}
-        <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex-1 text-center">
+        <h3 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] flex-1 text-center min-w-0">
           {destination}
         </h3>
+        {climateBand === 'hot' && (
+          <span className="text-[8px] font-heading font-bold uppercase text-amber-400/95 shrink-0">Hot</span>
+        )}
+        {climateBand === 'cold' && (
+          <span className="text-[8px] font-heading font-bold uppercase text-sky-400/95 shrink-0">Cold</span>
+        )}
       </div>
       <div className="p-2 space-y-1">
         {/* One airport option per destination (city) */}
@@ -318,6 +341,9 @@ const TravelInfoCard = ({ travelInfo, onBuyAirmiles }) => (
             <span className="text-mutedForeground">Airport limit</span>
             <span className="text-foreground font-bold">{MAX_TRAVELS_PER_HOUR}/hour (car unlimited)</span>
           </div>
+          <p className="text-[9px] text-mutedForeground/90 leading-snug pt-1 border-t border-border/40 mt-1">
+            Hot/cold cities rotate every 3h (UTC). While you are in the hot city, crimes, GTA, and jail busts are slightly easier with a small rank XP bonus; the cold city is the opposite.
+          </p>
         </div>
 
         <button
@@ -536,25 +562,54 @@ export default function Travel() {
         travelsUsed={travelInfo?.travels_this_hour}
         maxTravels={travelInfo?.max_travels}
         userPoints={travelInfo?.user_points}
+        climateBand={(() => {
+          const bc = travelInfo?.location_climate?.by_city?.[travelInfo?.current_location];
+          return bc === 'hot' || bc === 'cold' ? bc : null;
+        })()}
       />
 
       <div>
-        <div className="flex items-center gap-1.5 mb-2">
+        <div className="flex items-center gap-1.5 mb-2 flex-wrap">
           <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">
             🌎 Destinations
           </h2>
-          <div className="flex-1 h-px bg-gradient-to-r from-primary/40 via-primary/20 to-transparent" />
+          <div className="flex-1 h-px bg-gradient-to-r from-primary/40 via-primary/20 to-transparent min-w-[4rem]" />
         </div>
+        {travelInfo?.location_climate?.hot && travelInfo?.location_climate?.cold && (
+          <p className="text-[9px] text-mutedForeground font-heading mb-2 leading-snug">
+            <span className="text-amber-400/90 font-bold">Hot</span> {travelInfo.location_climate.hot} ·{' '}
+            <span className="text-sky-400/90 font-bold">Cold</span> {travelInfo.location_climate.cold}
+            {travelInfo.location_climate.period_ends_at && (
+              <span className="text-zinc-500">
+                {' '}
+                · Next shift{' '}
+                {(() => {
+                  try {
+                    const d = new Date(travelInfo.location_climate.period_ends_at);
+                    return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+                  } catch {
+                    return '—';
+                  }
+                })()}
+              </span>
+            )}
+          </p>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 md:gap-3">
-          {travelInfo?.destinations?.map(dest => (
+          {travelInfo?.destinations?.map(dest => {
+            const bc = travelInfo?.location_climate?.by_city?.[dest];
+            const band = bc === 'hot' || bc === 'cold' ? bc : null;
+            return (
             <DestinationCard
               key={dest}
               destination={dest}
               onTravel={handleTravel}
               travelInfo={travelInfo}
               travelDisabled={autoRankBoozeOn}
+              climateBand={band}
             />
-          ))}
+            );
+          })}
         </div>
       </div>
 

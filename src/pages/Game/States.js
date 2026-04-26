@@ -61,6 +61,12 @@ const GAME_COLORS = {
   slots: 'text-amber-400',
 };
 
+function climateDestinationRing(climateBand) {
+  if (climateBand === 'hot') return 'ring-1 ring-amber-500/40 shadow-[0_0_14px_rgba(245,158,11,0.14)]';
+  if (climateBand === 'cold') return 'ring-1 ring-sky-500/35 shadow-[0_0_14px_rgba(56,189,248,0.12)]';
+  return '';
+}
+
 // ============================================================================
 // CITY CARD
 // ============================================================================
@@ -87,6 +93,7 @@ const CityCard = ({
   onClaimState,
   claimingState,
   airportClaimCost,
+  climateBand,
 }) => {
   const bf = bulletFactory;
   const ap = airportSlot1;
@@ -103,17 +110,24 @@ const CityCard = ({
   const buyBacks = games.filter(g => GAMES_WITH_BUYBACK.includes(g?.id)).map(g => getEffectiveBuyBack(g, city)).filter(n => n != null && Number(n) > 0);
   const highestBuyBack = buyBacks.length ? Math.max(...buyBacks.map(Number)) : null;
 
+  const climateRing = climateDestinationRing(climateBand);
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 st-card st-fade-in mobile-panel`}>
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 st-card st-fade-in mobile-panel${climateRing ? ` ${climateRing}` : ''}`}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
       {/* Header - Always visible */}
       <button
         onClick={onToggle}
         className="w-full px-2 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between hover:bg-primary/12 transition-colors"
       >
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 flex-wrap">
           <MapPin size={10} className="text-primary" />
           <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">{city}</h2>
+          {climateBand === 'hot' && (
+            <span className="text-[8px] font-heading font-bold uppercase tracking-wide text-amber-400/95" title="Hot city this period">Hot</span>
+          )}
+          {climateBand === 'cold' && (
+            <span className="text-[8px] font-heading font-bold uppercase tracking-wide text-sky-400/95" title="Cold city this period">Cold</span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1 text-[9px]">
@@ -315,7 +329,7 @@ const StatsOverview = ({ cities, games, allOwners, bulletFactories, airports }) 
 // ============================================================================
 
 export default function States() {
-  const [data, setData] = useState({ cities: [], games: [], state_heads: {} });
+  const [data, setData] = useState({ cities: [], games: [], state_heads: {}, location_climate: null });
   const [hasLoaded, setHasLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [bulletFactories, setBulletFactories] = useState([]);
@@ -356,6 +370,7 @@ export default function States() {
           videopoker_owners: res.data?.videopoker_owners ?? {},
           slots_owners: res.data?.slots_owners ?? {},
           state_heads: res.data?.state_heads ?? {},
+          location_climate: res.data?.location_climate ?? null,
         });
         // Expand all cities by default
         const citiesList = res.data?.cities ?? [];
@@ -368,7 +383,7 @@ export default function States() {
       .catch(() => {
         setLoadError(true);
         toast.error('Failed to load states');
-        setData({ cities: [], games: [], state_heads: {} });
+        setData({ cities: [], games: [], state_heads: {}, location_climate: null });
       })
       .finally(() => setHasLoaded(true));
   }, []);
@@ -546,12 +561,35 @@ export default function States() {
       {/* Destinations section */}
       <div className="st-fade-in" style={{ animationDelay: '0.06s' }}>
         <p className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] mb-1">Destinations</p>
+        {data.location_climate?.hot && data.location_climate?.cold && (
+          <p className="text-[9px] text-mutedForeground font-heading mb-1 leading-snug">
+            <span className="text-amber-400/90 font-bold">Hot</span> {data.location_climate.hot} ·{' '}
+            <span className="text-sky-400/90 font-bold">Cold</span> {data.location_climate.cold}
+            {data.location_climate.period_ends_at && (
+              <span className="text-zinc-500">
+                {' '}
+                · Next shift{' '}
+                {(() => {
+                  try {
+                    const d = new Date(data.location_climate.period_ends_at);
+                    return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+                  } catch {
+                    return '—';
+                  }
+                })()}
+              </span>
+            )}
+          </p>
+        )}
         <div className="h-px bg-gradient-to-r from-primary/40 via-primary/20 to-transparent mb-2" />
       </div>
 
       {/* City Cards */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-1.5 st-fade-in" style={{ animationDelay: '0.08s' }}>
-        {cities.map((city) => (
+        {cities.map((city) => {
+          const bc = data.location_climate?.by_city?.[city];
+          const climateBand = bc === 'hot' || bc === 'cold' ? bc : null;
+          return (
           <CityCard
             key={city}
             city={city}
@@ -573,8 +611,10 @@ export default function States() {
             onClaimState={handleClaimState}
             claimingState={claimingState}
             airportClaimCost={airportClaimCost}
+            climateBand={climateBand}
           />
-        ))}
+          );
+        })}
       </div>
 
       {/* Info */}
@@ -588,7 +628,7 @@ export default function States() {
             <li className="flex items-start gap-1"><span className="text-primary shrink-0">•</span>Use Travel to move between cities</li>
             <li className="flex items-start gap-1"><span className="text-primary shrink-0">•</span>Access Casino games from the Casino menu</li>
             <li className="flex items-start gap-1"><span className="text-primary shrink-0">•</span>Highest max bets highlighted in gold</li>
-            <li className="flex items-start gap-1"><span className="text-primary shrink-0">•</span>HOT/COLD city events coming soon</li>
+            <li className="flex items-start gap-1"><span className="text-primary shrink-0">•</span>Hot/cold rotates every 3h (UTC): easier crimes, GTA, and jail busts plus a little rank XP in the hot city; the opposite in the cold city while you are there</li>
           </ul>
         </div>
         <div className="st-art-line text-primary mx-2.5" />

@@ -24,6 +24,7 @@ from routers.casinos.blackjack import BLACKJACK_MAX_BET
 from routers.casinos.horseracing import HORSERACING_MAX_BET
 from routers.casinos.slots import SLOTS_MAX_BET
 from routers.casinos.video_poker import VIDEO_POKER_MAX_BET
+from utils.location_climate import get_location_climate
 
 CASINO_GAMES = [
     {"id": "blackjack", "name": "Blackjack", "max_bet": BLACKJACK_MAX_BET},
@@ -180,6 +181,7 @@ async def get_states(current_user: dict = Depends(get_current_user)):
         "videopoker_owners": videopoker_owners,
         "slots_owners": slots_owners,
         "state_heads": state_heads,
+        "location_climate": get_location_climate(now_utc),
     }
 
 

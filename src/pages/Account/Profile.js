@@ -1180,6 +1180,8 @@ export default function Profile() {
   const [searchParams] = useSearchParams();
   const viewPublic = searchParams.get('view') === 'public';
   const [me, setMe] = useState(null);
+  /** After first /auth/me attempt (success or fail) — avoids flashing visitor dossier for own account while me is still null but prefetch filled profile. */
+  const [authMeReady, setAuthMeReady] = useState(false);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(!usernameParam);
   const [profileLoading, setProfileLoading] = useState(!!usernameParam);
@@ -1349,6 +1351,7 @@ export default function Profile() {
         toast.error('Failed to load your account');
       } finally {
         if (!usernameParam) setLoading(false);
+        setAuthMeReady(true);
       }
     };
     run();
@@ -1817,6 +1820,15 @@ export default function Profile() {
     return (
       <div className={`space-y-3 ${styles.pageContent} mobile-page-root`}>
         <style>{PROFILE_STYLES}</style>
+      </div>
+    );
+  }
+
+  if (usernameParam && profile && !authMeReady) {
+    return (
+      <div className={`space-y-3 ${styles.pageContent} mobile-page-root`}>
+        <style>{PROFILE_STYLES}</style>
+        <div className="min-h-[240px] flex items-center justify-center text-primary text-sm font-heading">Loading…</div>
       </div>
     );
   }

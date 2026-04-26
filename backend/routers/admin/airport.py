@@ -23,6 +23,7 @@ from server import (
 )
 from routers.money.booze_run import _booze_user_carrying_total
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_TRAVEL
+from utils.location_climate import get_location_climate
 
 
 async def _travel_sustained_rl_user(current_user: dict = Depends(get_current_user)):
@@ -350,6 +351,7 @@ async def get_travel_info(current_user: dict = Depends(get_current_user)):
         "user_points": current_user.get("points", 0),
         "carrying_booze": carrying_booze,
         "travel_boost_applies_to_car_times": _travel_token_active(current_user, now_utc),
+        "location_climate": get_location_climate(now_utc),
     }
 
     if len(_travel_info_cache) >= _TRAVEL_INFO_MAX_ENTRIES:

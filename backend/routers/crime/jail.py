@@ -556,6 +556,8 @@ async def _award_bust_milestones(user_id: str, new_total_busts: int, claimed: li
 
 async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
     """Attempt to bust target (NPC or player) out of jail. Returns dict with success, message, optional rank_points_earned, cash_reward, jail_time. On validation failure returns {success: False, error: str, error_code: int}."""
+    from utils.location_climate import get_location_climate, jail_bust_rate_after_climate, rank_multiplier_for_actor
+
     target_name = (target_username or "").strip()
     username_ci = re.compile("^" + re.escape(target_name) + "$", re.IGNORECASE) if target_name else None
     if not username_ci:
@@ -614,12 +616,16 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
     if _jailbust_bonus_active(current_user):
         player_success_rate = min(0.95, player_success_rate + 0.10)
 
+    _climate = get_location_climate()
+    _state = current_user.get("current_state")
+
     npc = await db.jail_npcs.find_one(
         {"$and": [{"username": username_ci}, _npc_visible_to_user_filter(current_user["id"])]},
         {"_id": 0},
     )
     if npc:
-        success = _rng.random() < player_success_rate
+        bust_rate = jail_bust_rate_after_climate(player_success_rate, _state, _climate)
+        success = _rng.random() < bust_rate
         rank_points = _jail_bust_roll_rank_points_npc()
         now_utc = datetime.now(timezone.utc)
         xp_double_until = current_user.get("xp_double_until")
@@ -632,6 +638,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
                     rank_points = round(rank_points * 2, 1)
             except Exception:
                 pass
+        rank_points = round(float(rank_points) * rank_multiplier_for_actor(_state, _climate), 1)
         bust_reward_cash = _safe_int(npc.get("bust_reward_cash"), 0)
         if success:
             npc_username = npc.get("username")
@@ -709,7 +716,9 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
             pass
 
     target_bust_mult = _active_target_bust_difficulty_mult(target)
-    effective_success_rate = player_success_rate / target_bust_mult
+    effective_success_rate = jail_bust_rate_after_climate(
+        player_success_rate / target_bust_mult, _state, _climate
+    )
     success = _rng.random() < effective_success_rate
     if success:
         rank_points = _jail_bust_roll_rank_points_player()
@@ -734,6 +743,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
                     rank_points = round(rank_points * 2, 1)
             except Exception:
                 pass
+        rank_points = round(float(rank_points) * rank_multiplier_for_actor(_state, _climate), 1)
         released = await db.users.find_one_and_update(
             {"id": target["id"], "in_jail": True},
             {"$set": {"in_jail": False, "jail_until": None, "unbreakable_until": None, "snitch_attempted_this_term": False}, "$unset": {"auto_rank_next_run_at": ""}},

@@ -161,7 +161,8 @@ function KillRewardsBlock({ pendingRewards, saving, onClaim }) {
       <CardHead icon={Star} title="Seized operation — choose" />
       <div className="p-3 space-y-3">
         <p className="text-[10px] text-mutedForeground font-heading leading-snug">
-          Take over the whole racket (Capo+), rename it, and gain +5% passive income/hr — or liquidate for about one week of its till rate as cash.
+          If their till rate beats yours, you can take the whole racket (Capo+), rename it, and it keeps +5% /hr on that operation.
+          If yours is already stronger, you absorb their cut: +5% /hr on your racket plus the same liquidation cash — or cash out only.
         </p>
         {pendingRewards.map((p) => (
           <KillRewardRow key={p.victim_id} p={p} saving={saving} onClaim={onClaim} />
@@ -174,13 +175,19 @@ function KillRewardsBlock({ pendingRewards, saving, onClaim }) {
 function KillRewardRow({ p, saving, onClaim }) {
   const [takeoverName, setTakeoverName] = useState('');
   const preview = Number(p.liquidation_preview ?? p.total_spent ?? 0);
-  const canTakeover = Boolean(p.has_snapshot);
+  const hasSnap = Boolean(p.has_snapshot);
+  const canTakeover = Boolean(p.takeover_available);
+  const canAbsorb = Boolean(p.absorb_available);
+  let sub = 'Legacy reward — liquidate for invested cash.';
+  if (hasSnap && canTakeover) sub = 'Their till rate beats yours — full takeover or liquidate.';
+  else if (hasSnap && canAbsorb) sub = 'Yours pays better — absorb (+5% /hr on yours) & cash, or liquidate only.';
+  else if (hasSnap) sub = 'Choose how to close this seizure.';
   return (
     <div className="kill-reward-card flex flex-col gap-2 p-3 rounded">
       <div className="min-w-0">
         <div className="text-xs font-heading font-bold text-foreground">{p.victim_username}</div>
         <div className="text-[10px] text-mutedForeground">
-          {canTakeover ? 'Full seizure — take over or liquidate.' : 'Legacy reward — liquidate for invested cash.'}
+          {sub}
         </div>
         <div className="text-[10px] text-zinc-500 font-heading mt-0.5 tabular-nums">
           Liquidate ≈ {formatMoney(preview)}
@@ -207,6 +214,16 @@ function KillRewardRow({ p, saving, onClaim }) {
             className="px-3 py-1.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/28 rounded text-[10px] font-heading font-bold uppercase tracking-wider hover:bg-emerald-500/18 disabled:opacity-40 transition-all"
           >
             Take over (+5% / hr)
+          </button>
+        )}
+        {canAbsorb && (
+          <button
+            type="button"
+            onClick={() => onClaim(p.victim_id, 'absorb')}
+            disabled={saving}
+            className="px-3 py-1.5 bg-violet-500/10 text-violet-300 border border-violet-500/28 rounded text-[10px] font-heading font-bold uppercase tracking-wider hover:bg-violet-500/18 disabled:opacity-40 transition-all"
+          >
+            Absorb (+5% yours + {formatMoney(preview)})
           </button>
         )}
         <button
