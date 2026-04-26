@@ -164,6 +164,14 @@ export default function MyInventory() {
     }
   };
 
+  const formatCrewOcMaxFeeInput = (raw) => {
+    let digits = raw.replace(/\D/g, '').slice(0, 15);
+    if (!digits) return '';
+    const n = parseInt(digits, 10);
+    if (Number.isNaN(n)) return '';
+    return n.toLocaleString('en-US');
+  };
+
   const openCrewOcModal = (useAll) => {
     setCrewOcMaxFeeStr('');
     setCrewOcModal({ useAll });
@@ -515,9 +523,9 @@ export default function MyInventory() {
                 <input
                   type="text"
                   inputMode="numeric"
-                  placeholder="Max join fee ($)"
+                  placeholder="e.g. 5,000,000"
                   value={crewOcMaxFeeStr}
-                  onChange={(e) => setCrewOcMaxFeeStr(e.target.value)}
+                  onChange={(e) => setCrewOcMaxFeeStr(formatCrewOcMaxFeeInput(e.target.value))}
                   className="w-full rounded border border-primary/30 bg-background/80 px-2 py-1.5 text-[10px] font-heading text-foreground"
                 />
                 <div className="flex flex-wrap gap-2">

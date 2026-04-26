@@ -46,7 +46,7 @@ const STORE_TOKEN_MAX_HELD = 15;
 /** Must match backend AUTO_RANK_COST_POINTS / pricing logic (8× token pts ≈ full unlock pts for 16h only). */
 const AUTO_RANK_COST_POINTS = 5000;
 const AUTO_RANK_2H_TOKEN_STORE_PTS = Math.ceil(AUTO_RANK_COST_POINTS / 8);
-const CREW_OC_AUTO_3H_TOKEN_STORE_PTS = 220;
+const CREW_OC_AUTO_3H_TOKEN_STORE_PTS = 48; // match backend jailbust_bonus / crew_oc_auto_3h store price
 
 /** Single consumable tokens (armoury); activate from My Inventory */
 const TOKEN_STORE_ITEMS = [
