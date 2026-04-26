@@ -10,7 +10,7 @@ from typing import List, Optional, Dict, Any, Tuple
 from fastapi import Depends, HTTPException, Query, Request
 from bson.objectid import ObjectId
 from pydantic import BaseModel
-from pymongo import ReturnDocument
+from pymongo import ReturnDocument, UpdateOne
 
 from utils.referral_ids import (
     apply_referrer_referral_increment,
@@ -1946,6 +1946,27 @@ async def buy_listed_car(
 REPAIR_COST_FRACTION = 0.6
 
 
+def _repair_car_query_from_user_car(user_car: dict, uid: str) -> dict:
+    if user_car.get("_id") is not None:
+        return {"_id": user_car["_id"]}
+    return {"user_id": uid, "id": user_car.get("id")}
+
+
+def _repair_cost_for_catalog_car(user_car: dict, car_info: Optional[dict]) -> int:
+    """Cash repair cost for one garage row; 0 if not billable (listed, immune, no damage, unknown catalog)."""
+    if not car_info:
+        return 0
+    if user_car.get("listed_for_sale"):
+        return 0
+    if _is_damage_immune_car(user_car.get("car_id"), car_info.get("rarity")):
+        return 0
+    damage = min(100, max(0, float(user_car.get("damage_percent", 0))))
+    if damage <= 0:
+        return 0
+    value = int(car_info.get("value", 0))
+    return max(1, round((damage / 100) * value * REPAIR_COST_FRACTION))
+
+
 async def repair_car(
     request: GTARepairCarRequest, current_user: dict = Depends(get_current_user_verified)
 ):
@@ -1979,10 +2000,7 @@ async def repair_car(
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail=f"Insufficient money. Repair costs ${cost:,}.")
-    if user_car.get("_id") is not None:
-        q = {"_id": user_car["_id"]}
-    else:
-        q = {"user_id": current_user.get("id") or "", "id": user_car.get("id")}
+    q = _repair_car_query_from_user_car(user_car, current_user.get("id") or "")
     await db.user_cars.update_one(q, {"$set": {"damage_percent": 0}})
     await log_activity(current_user.get("id", ""), current_user.get("username", "?"), "gta_repair", {"car": car_info.get("name"), "cost": cost})
     return {
@@ -1990,6 +2008,61 @@ async def repair_car(
         "damage_percent": 0,
         "cost": cost,
     }
+
+
+async def repair_all_cars(current_user: dict = Depends(get_current_user_verified)):
+    """Repair every damaged, unlisted, non-immune car in one payment (same per-car formula as repair-car)."""
+    uid = current_user.get("id") or ""
+    lock = await _get_gta_garage_lock(uid)
+    async with lock:
+        await db.user_cars.update_many(
+            {
+                "user_id": uid,
+                "car_id": {"$in": _damage_immune_car_ids()},
+                "damage_percent": {"$gt": 0},
+            },
+            {"$set": {"damage_percent": 0}},
+        )
+        rows = await db.user_cars.find({"user_id": uid}).to_list(GARAGE_FETCH_LIMIT)
+        repairs: List[Tuple[dict, int]] = []
+        total = 0
+        for uc in rows:
+            car_info = next((c for c in CARS if c.get("id") == uc.get("car_id")), None)
+            cost = _repair_cost_for_catalog_car(uc, car_info)
+            if cost <= 0:
+                continue
+            repairs.append((_repair_car_query_from_user_car(uc, uid), cost))
+            total += cost
+        if total == 0 or not repairs:
+            return {"message": "No damaged cars to repair.", "total_cost": 0, "repaired_count": 0}
+        deduct = await db.users.update_one(
+            {"id": uid, "money": {"$gte": total}},
+            {"$inc": {"money": -total}},
+        )
+        if deduct.modified_count == 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Insufficient money. Repair all costs ${total:,}.",
+            )
+        try:
+            ops = [UpdateOne(q, {"$set": {"damage_percent": 0}}) for q, _ in repairs]
+            await db.user_cars.bulk_write(ops, ordered=False)
+        except Exception:
+            logger.exception("repair_all bulk_write failed user=%s", uid)
+            await db.users.update_one({"id": uid}, {"$inc": {"money": total}})
+            raise HTTPException(status_code=500, detail="Repair failed; money was refunded.")
+        repaired_count = len(repairs)
+        await log_activity(
+            uid,
+            current_user.get("username") or "?",
+            "gta_repair_all",
+            {"repaired_count": repaired_count, "total_cost": total},
+        )
+        return {
+            "message": f"Repaired {repaired_count} car(s) for ${total:,}.",
+            "total_cost": total,
+            "repaired_count": repaired_count,
+        }
 
 
 async def get_car(car_id: str, current_user: dict = Depends(get_current_user)):
@@ -2185,5 +2258,6 @@ def register(router):
     router.add_api_route("/gta/delist-car", delist_car, methods=["POST"])
     router.add_api_route("/gta/buy-listed-car", buy_listed_car, methods=["POST"])
     router.add_api_route("/gta/repair-car", repair_car, methods=["POST"])
+    router.add_api_route("/gta/repair-all", repair_all_cars, methods=["POST"])
     router.add_api_route("/gta/custom-car/{user_car_id}", update_custom_car_image, methods=["PATCH"])
     router.add_api_route("/gta/view-car", get_view_car, methods=["GET"], dependencies=_gta_rl_u)

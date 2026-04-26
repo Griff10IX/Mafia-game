@@ -30,6 +30,8 @@ const MELT_VALUE_MULTIPLIER_DEN = 100;
 /** Applied to sum of per-car bullets in one melt; keep in sync with `gta.py` MELT_BULLETS_TOTAL_PAYOUT_* */
 const MELT_BULLETS_TOTAL_PAYOUT_MULT_NUM = 125;
 const MELT_BULLETS_TOTAL_PAYOUT_MULT_DEN = 100;
+/** Match `gta.REPAIR_COST_FRACTION` (repair-car / repair-all). */
+const REPAIR_COST_FRACTION = 0.6;
 const ALL_RARITIES = ['common', 'uncommon', 'rare', 'ultra_rare', 'legendary', 'custom', 'loot_exclusive', 'exclusive'];
 /** Match SellCars / BuyCars labels for rarity pills */
 const RARITY_LABELS = {
@@ -56,6 +58,16 @@ function isDamageImmuneCar(carId, rarity) {
   const r = normalizeCarRarity(rarity);
   if (carId === 'car_custom') return true;
   return r === 'exclusive' || r === 'loot_exclusive';
+}
+
+/** Same billable repair total as the garage repair-all endpoint (listed / immune / 0 damage = $0). */
+function previewRepairCostForCar(car) {
+  if (!car || car.listed_for_sale) return 0;
+  if (isDamageImmuneCar(car.car_id, car.rarity)) return 0;
+  const damage = Math.min(100, Math.max(0, Number(car.damage_percent) || 0));
+  if (damage <= 0) return 0;
+  const value = Number(car.value) || 0;
+  return Math.max(1, Math.round((damage / 100) * value * REPAIR_COST_FRACTION));
 }
 
 /** Per-car melt-for-bullets preview; keep in sync with gta._effective_catalog_value_for_melt_bullets + melt pipeline. */
@@ -219,6 +231,10 @@ const ActionsBar = ({
   onScrap,
   meltBulletsSecondsRemaining,
   predictedMeltBullets,
+  repairAllCount,
+  repairAllTotal,
+  onRepairAll,
+  repairingAll,
 }) => {
   const meltOnCooldown = meltBulletsSecondsRemaining != null && meltBulletsSecondsRemaining > 0;
   return (
@@ -241,48 +257,67 @@ const ActionsBar = ({
             </span>
           )}
           
-          {displayedCount > 0 && (
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={onToggleSelectAll}
-                disabled={noBulkSelectable}
-                title={
-                  noBulkSelectable
-                    ? filterActive
-                      ? 'No cars in this list match your melt/scrap rarity filter (or all are listed).'
-                      : 'No unlisted cars in this list.'
-                    : undefined
-                }
-                className={`inline-flex items-center gap-1.5 px-2 py-1 rounded border text-[10px] font-heading font-bold uppercase tracking-wide transition-all ${
-                  noBulkSelectable
-                    ? 'border-border text-mutedForeground/60 cursor-not-allowed'
-                    : 'border-primary/30 text-foreground hover:border-primary/50 hover:bg-primary/10 active:scale-95'
-                }`}
-                data-testid="garage-select-all"
-              >
-                {allBulkSelected ? (
-                  <CheckSquare size={12} className="text-primary" />
-                ) : (
-                  <Square size={12} className="text-mutedForeground" />
-                )}
-                {noBulkSelectable
-                  ? noMeltMatchInList
-                    ? 'No match'
-                    : 'None to select'
-                  : allBulkSelected
-                    ? `Clear${bulkSelectCount > 0 ? ` (${bulkSelectCount})` : ''}`
-                    : `Select all${bulkSelectCount > 0 ? ` (${bulkSelectCount})` : ''}`}
-              </button>
-              
-              <button
-                type="button"
-                onClick={onOpenSettings}
-                className="inline-flex items-center justify-center w-7 h-7 rounded border border-primary/30 text-mutedForeground hover:text-primary hover:border-primary/50 hover:bg-primary/10 transition-all active:scale-95"
-                title="Filter rarities"
-              >
-                <Settings size={14} />
-              </button>
+          {(displayedCount > 0 || repairAllCount > 0) && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {displayedCount > 0 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={onToggleSelectAll}
+                    disabled={noBulkSelectable}
+                    title={
+                      noBulkSelectable
+                        ? filterActive
+                          ? 'No cars in this list match your melt/scrap rarity filter (or all are listed).'
+                          : 'No unlisted cars in this list.'
+                        : undefined
+                    }
+                    className={`inline-flex items-center gap-1.5 px-2 py-1 rounded border text-[10px] font-heading font-bold uppercase tracking-wide transition-all ${
+                      noBulkSelectable
+                        ? 'border-border text-mutedForeground/60 cursor-not-allowed'
+                        : 'border-primary/30 text-foreground hover:border-primary/50 hover:bg-primary/10 active:scale-95'
+                    }`}
+                    data-testid="garage-select-all"
+                  >
+                    {allBulkSelected ? (
+                      <CheckSquare size={12} className="text-primary" />
+                    ) : (
+                      <Square size={12} className="text-mutedForeground" />
+                    )}
+                    {noBulkSelectable
+                      ? noMeltMatchInList
+                        ? 'No match'
+                        : 'None to select'
+                      : allBulkSelected
+                        ? `Clear${bulkSelectCount > 0 ? ` (${bulkSelectCount})` : ''}`
+                        : `Select all${bulkSelectCount > 0 ? ` (${bulkSelectCount})` : ''}`}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onOpenSettings}
+                    className="inline-flex items-center justify-center w-7 h-7 rounded border border-primary/30 text-mutedForeground hover:text-primary hover:border-primary/50 hover:bg-primary/10 transition-all active:scale-95"
+                    title="Filter rarities"
+                  >
+                    <Settings size={14} />
+                  </button>
+                </>
+              )}
+              {repairAllCount > 0 && (
+                <button
+                  type="button"
+                  onClick={onRepairAll}
+                  disabled={repairingAll}
+                  title={`Repair every damaged car in your fleet (${repairAllCount} car${repairAllCount === 1 ? '' : 's'})`}
+                  className={`inline-flex items-center gap-1 px-2 py-1 rounded border text-[10px] font-heading font-bold uppercase tracking-wide transition-all ${
+                    repairingAll
+                      ? 'border-border text-mutedForeground/60 cursor-wait'
+                      : 'border-sky-500/40 text-sky-300 hover:border-sky-400/60 hover:bg-sky-500/10 active:scale-95'
+                  }`}
+                >
+                  <Wrench size={12} />
+                  {repairingAll ? 'Repairing…' : `Repair all $${repairAllTotal.toLocaleString()}`}
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -329,7 +364,7 @@ const ActionsBar = ({
   );
 };
 
-const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, onRepair, repairingCarId, getRarityColor, censorProfanity = false }) => {
+const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, onRepair, repairingCarId, repairingAll = false, getRarityColor, censorProfanity = false }) => {
   const isCustom = car.car_id === 'car_custom';
   const isListed = car.listed_for_sale;
   const damage = car.damage_percent ?? 0;
@@ -412,7 +447,7 @@ const CarCard = ({ car, isSelected, onToggle, onOpenCustomModal, onRepair, repai
             <button
               type="button"
               onClick={(e) => { e.stopPropagation(); onRepair(car); }}
-              disabled={isRepairing}
+              disabled={isRepairing || repairingAll}
               className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-primary/20 text-primary border border-primary/50 text-[8px] font-heading font-bold uppercase hover:bg-primary/30 disabled:opacity-50"
             >
               <Wrench size={10} />
@@ -513,6 +548,7 @@ export default function Garage() {
   const [meltBulletsCooldownUntil, setMeltBulletsCooldownUntil] = useState(null);
   const [meltBulletsSecondsRemaining, setMeltBulletsSecondsRemaining] = useState(0);
   const [repairingCarId, setRepairingCarId] = useState(null);
+  const [repairingAll, setRepairingAll] = useState(false);
   const [user, setUser] = useState(null);
   const { getCaptchaToken, captchaModal } = useGameActionsTurnstile();
 
@@ -661,7 +697,7 @@ export default function Garage() {
   };
 
   const handleRepair = async (car) => {
-    if (!car?.user_car_id) return;
+    if (!car?.user_car_id || repairingAll) return;
     setRepairingCarId(car.user_car_id);
     try {
       const res = await api.post('/gta/repair-car', { user_car_id: car.user_car_id });
@@ -672,6 +708,47 @@ export default function Garage() {
       toast.error(e.response?.data?.detail || 'Repair failed');
     } finally {
       setRepairingCarId(null);
+    }
+  };
+
+  const repairAllPreview = useMemo(() => {
+    let total = 0;
+    let count = 0;
+    cars.forEach((c) => {
+      const cost = previewRepairCostForCar(c);
+      if (cost > 0) {
+        total += cost;
+        count += 1;
+      }
+    });
+    return { total, count };
+  }, [cars]);
+
+  const handleRepairAll = async () => {
+    const { total, count } = repairAllPreview;
+    if (count === 0 || repairingAll) return;
+    const money = Number(user?.money);
+    const affordHint =
+      Number.isFinite(money) && money < total
+        ? `\n\nYou only have $${money.toLocaleString()}; this action will be rejected until you have enough cash.`
+        : '';
+    if (
+      !window.confirm(
+        `Repair ${count} damaged car${count === 1 ? '' : 's'} for a total of $${total.toLocaleString()}?${affordHint}`
+      )
+    ) {
+      return;
+    }
+    setRepairingAll(true);
+    try {
+      const res = await api.post('/gta/repair-all');
+      toast.success(res.data?.message || 'Fleet repaired');
+      refreshUser();
+      fetchGarage();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Repair all failed');
+    } finally {
+      setRepairingAll(false);
     }
   };
 
@@ -884,6 +961,10 @@ export default function Garage() {
             onScrap={scrapCars}
             meltBulletsSecondsRemaining={meltBulletsSecondsRemaining > 0 ? meltBulletsSecondsRemaining : null}
             predictedMeltBullets={selectedCars.length > 0 ? predictedMeltBullets : null}
+            repairAllCount={repairAllPreview.count}
+            repairAllTotal={repairAllPreview.total}
+            onRepairAll={handleRepairAll}
+            repairingAll={repairingAll}
           />
 
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2">
@@ -896,6 +977,7 @@ export default function Garage() {
                 onOpenCustomModal={openCustomCarModal}
                 onRepair={handleRepair}
                 repairingCarId={repairingCarId}
+                repairingAll={repairingAll}
                 getRarityColor={getRarityColor}
                 censorProfanity={user?.censor_profanity}
               />

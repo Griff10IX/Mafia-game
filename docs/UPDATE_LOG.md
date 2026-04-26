@@ -6,6 +6,25 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-25 23:30 UTC[/color][/b] — [b]Missions: rewards & daily tribute rebalanced[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Account → Missions[/b] and [b]Illegal Business[/b] — completion rewards, vault cash, passive income steps, and related perks on the long mission track have been [b]retuned[/b] for clearer progression.[/color]
+[*][color=#888888][b]Changed:[/b] [b]Daily tribute[/b] (cash, respect, bullets, random tokens, and [b]Auto Rank (2h)[/b] accrual from missions) is [b]recalculated[/b] to match; your [b]Collect tribute[/b] and mission panels show the current rates — [b]no action needed[/b] except collecting as usual.[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-04-25 23:15 UTC[/color][/b] — [b]GTA Garage: Repair all (preview + confirm)[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New:[/b] [b]Cars → Your Fleet (Garage)[/b] — [b]Repair all[/b] in the control row next to select-all / filter settings. The button shows the [b]total cash[/b] to fix every [b]damaged[/b] car in your fleet (same formula as a single [b]Repair[/b]); [b]listed[/b] cars and [b]damage-immune[/b] types (exclusives, loot exclusives, customs) are skipped. A [b]confirmation[/b] dialog appears before you pay.[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-25 22:00 UTC[/color][/b] — [b]MP Poker: full showdown recap (everyone’s hand + cards)[/b][/size]
 [quote]
 [list]

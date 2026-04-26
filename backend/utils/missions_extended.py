@@ -35,6 +35,8 @@ TOTAL_RESPECT_DAILY = 1000
 TOTAL_BULLETS_DAILY = 14_500
 # Total random-armoury-token credits per day (tribute_tokens pool); split across token-eligible missions.
 TOTAL_TRIBUTE_TOKEN_CREDITS_DAILY = 20
+# Auto-rank 2h tokens credited daily to balance (not tribute bank); split only across missions that used to grant this bonus.
+TOTAL_TRIBUTE_AUTO_RANK_2H_DAILY = 10
 
 WEIGHT_P = 1.6
 WEIGHT_BASE = 12.0
@@ -70,13 +72,13 @@ def _is_boss(difficulty: int) -> bool:
     return difficulty > 25 and difficulty % 5 == 0
 
 
-def _auto_rank_daily(difficulty: int) -> int:
-    # 2× old cadence (was 1): m_11,13,15,17,20,23 → difficulties 11,13,15,17,20,23
+def _mission_eligible_auto_rank_2h_daily(difficulty: int) -> bool:
+    """Which missions participate in splitting TOTAL_TRIBUTE_AUTO_RANK_2H_DAILY (legacy cadence, was 2 tokens each)."""
     if difficulty in (11, 13, 15, 17, 20, 23):
-        return 2
+        return True
     if difficulty > 25 and difficulty % 11 in (0, 4, 8):
-        return 2
-    return 0
+        return True
+    return False
 
 
 def _requirements_for_extended(difficulty: int) -> Dict[str, int]:
@@ -186,6 +188,18 @@ def build_missions() -> List[Dict[str, Any]]:
     w_tok = w[4:100]
     tok_sub = _allocate_exact_int(TOTAL_TRIBUTE_TOKEN_CREDITS_DAILY, w_tok)
     tok_daily_by_order = [0] * 4 + tok_sub
+
+    eligible_ar_orders = [o for o in range(4, 100) if _mission_eligible_auto_rank_2h_daily(o + 1)]
+    if eligible_ar_orders:
+        ar_sub = _allocate_exact_int(
+            TOTAL_TRIBUTE_AUTO_RANK_2H_DAILY,
+            [1.0] * len(eligible_ar_orders),
+        )
+    else:
+        ar_sub = []
+    auto_rank_by_order = [0] * 100
+    for idx, o in enumerate(eligible_ar_orders):
+        auto_rank_by_order[o] = ar_sub[idx]
 
     missions: List[Dict[str, Any]] = []
 
@@ -570,7 +584,7 @@ def build_missions() -> List[Dict[str, Any]]:
             row["reward_tribute_tokens_daily"] = td
         if _mission_has_random_token(o):
             row["reward_token"] = "random"
-        ard = _auto_rank_daily(diff)
+        ard = auto_rank_by_order[o]
         if ard:
             row["reward_tribute_auto_rank_2h_daily"] = ard
         # Bullet lump milestones (subset)
@@ -610,7 +624,7 @@ def build_missions() -> List[Dict[str, Any]]:
             row["reward_tribute_tokens_daily"] = td
         if _mission_has_random_token(o):
             row["reward_token"] = "random"
-        ard = _auto_rank_daily(diff)
+        ard = auto_rank_by_order[o]
         if ard:
             row["reward_tribute_auto_rank_2h_daily"] = ard
         if diff % 4 == 0:
@@ -627,6 +641,10 @@ def build_missions() -> List[Dict[str, Any]]:
     assert (
         sum(int(m.get("reward_tribute_tokens_daily") or 0) for m in missions)
         == TOTAL_TRIBUTE_TOKEN_CREDITS_DAILY
+    )
+    assert (
+        sum(int(m.get("reward_tribute_auto_rank_2h_daily") or 0) for m in missions)
+        == TOTAL_TRIBUTE_AUTO_RANK_2H_DAILY
     )
 
     return missions
