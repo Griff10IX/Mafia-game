@@ -25,15 +25,16 @@ COMMON_CAR_REWARD_ID = "car1"
 
 # Economy targets (plan)
 TOTAL_REWARD_POINTS = 10_000
-TOTAL_TRIBUTE_DAILY_CASH = 25_000_000
+# Sum of per-mission reward_tribute_daily when ladder complete (~$75M/day).
+TOTAL_TRIBUTE_DAILY_CASH = 75_000_000
 TOTAL_CASH_IMMEDIATE = 500_000_000
-# Old ~120.125M mission cash daily → 25M; scale legacy respect/bullet dailies similarly
+# Reference only (legacy ratio vs old 120.125M cash ladder); respect/bullets are explicit below so raising cash does not scale them.
 _OLD_MISSION_CASH_DAILY_SUM = 120_125_000
-_DAILY_SCALE = TOTAL_TRIBUTE_DAILY_CASH / _OLD_MISSION_CASH_DAILY_SUM
-TOTAL_RESPECT_DAILY = max(1, int(2051 * _DAILY_SCALE))
-TOTAL_BULLETS_DAILY = max(1, int(69_575 * _DAILY_SCALE))
-# Total random-armoury-token credits per day (tribute_tokens pool); 2× old ~55 for m_5–m_25, scaled to 96 missions with tokens
-TOTAL_TRIBUTE_TOKEN_CREDITS_DAILY = 500
+TOTAL_RESPECT_DAILY = 1000
+# Kept near prior ~14.5k/day (was 69_575 * TOTAL_TRIBUTE_DAILY_CASH / _OLD_...) before cash target rose to 75M.
+TOTAL_BULLETS_DAILY = 14_500
+# Total random-armoury-token credits per day (tribute_tokens pool); split across token-eligible missions.
+TOTAL_TRIBUTE_TOKEN_CREDITS_DAILY = 20
 
 WEIGHT_P = 1.6
 WEIGHT_BASE = 12.0

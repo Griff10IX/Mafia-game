@@ -968,9 +968,9 @@ async def get_missions_characters(current_user: dict = Depends(get_current_user)
     return {"characters": out}
 
 
-# Loot box pieces in daily tribute: base for all users, extra for mission 2 completers
-DAILY_TRIBUTE_LOOT_BOX_PIECES = int(os.environ.get("DAILY_TRIBUTE_LOOT_BOX_PIECES", "1"))
-MISSION_2_DAILY_LOOT_BOX_PIECES = int(os.environ.get("MISSION_2_DAILY_LOOT_BOX_PIECES", "1"))
+# Loot box pieces in daily tribute: base for all users; optional extra for m_second completers (env; default 0).
+DAILY_TRIBUTE_LOOT_BOX_PIECES = int(os.environ.get("DAILY_TRIBUTE_LOOT_BOX_PIECES", "25"))
+MISSION_2_DAILY_LOOT_BOX_PIECES = int(os.environ.get("MISSION_2_DAILY_LOOT_BOX_PIECES", "0"))
 
 # Filled when MISSIONS loads at EOF (see register() block below)
 MISSION_1_DAILY_CASH = 0
@@ -993,7 +993,7 @@ async def run_daily_tribute_deposit():
     Deposit time and "already ran today" are stored in game_config (id=tribute_deposit): deposit_utc_hour, last_run_utc_date.
     We atomically claim the run for today (set last_run_utc_date only when not already today) so a restart or multiple workers cannot double-pay.
     For each mission, users who completed it get that mission's reward_tribute_daily, reward_respect_daily,
-    reward_tribute_bullets_daily, and reward_tribute_tokens_daily (random tokens). Mission 2 also gets extra loot_box_pieces.
+    reward_tribute_bullets_daily, and reward_tribute_tokens_daily (random tokens). m_second completers get MISSION_2_DAILY_LOOT_BOX_PIECES extra loot when that env is > 0.
     """
     now = datetime.now(timezone.utc)
     today = now.date().isoformat()
@@ -1052,7 +1052,7 @@ async def run_daily_tribute_deposit():
             inc["tribute_tokens"] = tokens
         if auto_rank_tokens:
             inc["auto_rank_2h_tokens"] = auto_rank_tokens
-        if mid == "m_second":
+        if mid == "m_second" and MISSION_2_DAILY_LOOT_BOX_PIECES:
             inc["tribute_loot_box_pieces"] = MISSION_2_DAILY_LOOT_BOX_PIECES
         if not inc:
             continue
