@@ -867,6 +867,8 @@ MELT_BULLETS_TOTAL_PAYOUT_MULT_DEN = 100
 # Newest-first cap for normal garage rows. Custom + exclusive + loot-exclusive catalog ids are merged
 # separately (GARAGE_SPECIAL_ROWS_MAX) so immune types are not dropped; this limit still bounds plain rows.
 GARAGE_FETCH_LIMIT = 250_000
+# Catalog exclusives / loot exclusives (not car_custom). Kept separate from customs so 500+ immune cars
+# never crowd out every `car_custom` row (customs are fetched in their own slice up to GARAGE_FETCH_LIMIT).
 GARAGE_SPECIAL_ROWS_MAX = 500
 _VALID_GARAGE_RARITIES = frozenset(
     {"common", "uncommon", "rare", "ultra_rare", "legendary", "custom", "loot_exclusive", "exclusive"}
@@ -989,15 +991,23 @@ async def get_garage(current_user: dict = Depends(get_current_user)):
     )
     always_car_ids = [cid for cid in _damage_immune_car_ids() if cid]
     if always_car_ids:
+        immune_catalog_ids = [cid for cid in always_car_ids if cid != "car_custom"]
         main_rows = await db.user_cars.find({"user_id": uid, "car_id": {"$nin": always_car_ids}}).sort(
             "acquired_at", -1
         ).to_list(GARAGE_FETCH_LIMIT)
-        extra_rows = await db.user_cars.find({"user_id": uid, "car_id": {"$in": always_car_ids}}).to_list(
-            GARAGE_SPECIAL_ROWS_MAX
-        )
+        if immune_catalog_ids:
+            extra_rows = await db.user_cars.find({"user_id": uid, "car_id": {"$in": immune_catalog_ids}}).sort(
+                "acquired_at", -1
+            ).to_list(GARAGE_SPECIAL_ROWS_MAX)
+        else:
+            extra_rows = []
+        custom_rows = await db.user_cars.find({"user_id": uid, "car_id": "car_custom"}).sort(
+            "acquired_at", -1
+        ).to_list(GARAGE_FETCH_LIMIT)
     else:
         main_rows = await db.user_cars.find({"user_id": uid}).sort("acquired_at", -1).to_list(GARAGE_FETCH_LIMIT)
         extra_rows = []
+        custom_rows = []
     seen: set[str] = set()
     cars: List[dict] = []
     for uc in main_rows:
@@ -1007,6 +1017,12 @@ async def get_garage(current_user: dict = Depends(get_current_user)):
         seen.add(k)
         cars.append(uc)
     for uc in extra_rows:
+        k = _user_car_row_dedupe_key(uc)
+        if not k or k in seen:
+            continue
+        seen.add(k)
+        cars.append(uc)
+    for uc in custom_rows:
         k = _user_car_row_dedupe_key(uc)
         if not k or k in seen:
             continue
