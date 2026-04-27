@@ -864,9 +864,9 @@ MELT_BULLETS_COOLDOWN_SECONDS = 45  # Only 1 car can be melted for bullets every
 MELT_BULLETS_TOTAL_PAYOUT_MULT_NUM = 125
 MELT_BULLETS_TOTAL_PAYOUT_MULT_DEN = 100
 
-# Newest-first cap for normal garage rows. Custom + exclusive + loot-exclusive are merged separately
-# so they are never dropped when a player owns more than this many cars (matches travel's custom split).
-GARAGE_FETCH_LIMIT = 10_000
+# Newest-first cap for normal garage rows. Custom + exclusive + loot-exclusive catalog ids are merged
+# separately (GARAGE_SPECIAL_ROWS_MAX) so immune types are not dropped; this limit still bounds plain rows.
+GARAGE_FETCH_LIMIT = 250_000
 GARAGE_SPECIAL_ROWS_MAX = 500
 _VALID_GARAGE_RARITIES = frozenset(
     {"common", "uncommon", "rare", "ultra_rare", "legendary", "custom", "loot_exclusive", "exclusive"}
