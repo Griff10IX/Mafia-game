@@ -235,7 +235,7 @@ async def _state_head_casino_week_stats(state_name: str):
         pass
     return result
 CREW_OC_COOLDOWN_HOURS_REDUCED = 6
-CREW_OC_REWARD_RP = 80
+CREW_OC_REWARD_RP = 250
 CREW_OC_REWARD_CASH = 250_000
 CREW_OC_REWARD_BULLETS = 500
 CREW_OC_REWARD_POINTS_MIN = 5
