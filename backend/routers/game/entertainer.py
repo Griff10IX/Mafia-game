@@ -11,7 +11,8 @@ from pymongo import ReturnDocument
 import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from server import db, get_current_user, get_current_user_verified, send_notification, send_notification_to_all, _is_admin, CARS
+from server import db, get_current_user, get_current_user_verified, send_notification, send_notification_to_all, _is_admin, _is_entertainer, CARS
+from utils.entertainer_service import try_debit_entertainer_fund
 from routers.kill.armoury import TOKEN_TYPES, TOKEN_CONFIG
 from utils.point_provenance import log_points_event
 from utils.sustained_page_ratelimit import PAGE_KEY_ENTERTAINER, check_sustained_page_rl
@@ -1009,37 +1010,71 @@ async def create_game(
     participants = []
     # Safety: keep non-admin created games manual-only even if the client sends false.
     manual_roll = bool(request.manual_roll) if is_admin else True
+    if _is_entertainer(current_user) and not manual_roll:
+        raise HTTPException(
+            status_code=400,
+            detail="Entertainment hosts fund manual dice/gbox games only — automatic batch games are created by the system.",
+        )
     if manual_roll and reward_money <= 0 and reward_points <= 0:
         raise HTTPException(status_code=400, detail="Manual games must include a cash reward, points reward, or both.")
     # Manual gbox: reward_money / reward_points are totals (split randomly at payout), not per-player.
     reserve_money = reward_money if manual_roll else 0
     reserve_points = reward_points if manual_roll else 0
     total_money_needed = int(pot + reserve_money)
-    # Creator must fully fund creator pot + manual rewards at create time.
+    uid = current_user["id"]
+    funded_via_entertainer = False
+    # Creator must fully fund creator pot + manual rewards at create time (wallet or entertainer fund).
     if total_money_needed > 0 or reserve_points > 0:
-        user_filter = {"id": current_user["id"]}
-        if total_money_needed > 0:
-            user_filter["money"] = {"$gte": total_money_needed}
-        if reserve_points > 0:
-            user_filter["points"] = {"$gte": reserve_points}
-        inc = {}
-        if total_money_needed > 0:
-            inc["money"] = -total_money_needed
-        if reserve_points > 0:
-            inc["points"] = -reserve_points
-        result = await db.users.update_one(user_filter, {"$inc": inc})
-        if result.modified_count == 0:
-            need_parts = []
-            if total_money_needed > 0:
-                need_parts.append(f"${total_money_needed:,}")
+        if _is_entertainer(current_user):
+            ok = await try_debit_entertainer_fund(db, uid, float(total_money_needed), reserve_points)
+            if not ok:
+                need_parts = []
+                if total_money_needed > 0:
+                    need_parts.append(f"${total_money_needed:,} entertainer fund cash")
+                if reserve_points > 0:
+                    need_parts.append(f"{reserve_points:,} entertainer fund points")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Insufficient entertainer fund to create this game. Required: {' and '.join(need_parts)}.",
+                )
+            funded_via_entertainer = True
             if reserve_points > 0:
-                need_parts.append(f"{reserve_points:,} points")
-            raise HTTPException(
-                status_code=400,
-                detail=f"Insufficient balance to fund this game. Required: {' and '.join(need_parts)}.",
-            )
-        if reserve_points > 0:
-            await log_points_event(db, user_id=current_user["id"], points=-reserve_points, event_type="entertainer_reserve", event_ref=game_id)
+                u_pts_read = await db.users.find_one({"id": uid}, {"_id": 0, "points": 1})
+                pts_before = int((u_pts_read or {}).get("points") or 0)
+                await log_points_event(
+                    db,
+                    user_id=uid,
+                    points=-reserve_points,
+                    event_type="entertainer_forum_game_fund",
+                    event_ref=game_id,
+                    meta={"action": "create_reserve", "game_id": game_id, "from": "entertainer_fund"},
+                    wallet_points_before=pts_before,
+                    wallet_points_after=pts_before,
+                )
+        else:
+            user_filter = {"id": uid}
+            if total_money_needed > 0:
+                user_filter["money"] = {"$gte": total_money_needed}
+            if reserve_points > 0:
+                user_filter["points"] = {"$gte": reserve_points}
+            inc = {}
+            if total_money_needed > 0:
+                inc["money"] = -total_money_needed
+            if reserve_points > 0:
+                inc["points"] = -reserve_points
+            result = await db.users.update_one(user_filter, {"$inc": inc})
+            if result.modified_count == 0:
+                need_parts = []
+                if total_money_needed > 0:
+                    need_parts.append(f"${total_money_needed:,}")
+                if reserve_points > 0:
+                    need_parts.append(f"{reserve_points:,} points")
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Insufficient balance to fund this game. Required: {' and '.join(need_parts)}.",
+                )
+            if reserve_points > 0:
+                await log_points_event(db, user_id=uid, points=-reserve_points, event_type="entertainer_reserve", event_ref=game_id)
     topic_id = (request.topic_id or "").strip() or None
     doc = {
         "id": game_id,
@@ -1058,6 +1093,7 @@ async def create_game(
         "manual_reward": {"money": reward_money, "points": reward_points},
         "manual_reward_reserve": {"money": reserve_money, "points": reserve_points},
         "topic_id": topic_id,
+        "entertainer_funded": funded_via_entertainer,
     }
     if request.game_type == "hangman":
         doc["hangman_state"] = _hangman_init_state()

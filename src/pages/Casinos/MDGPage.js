@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Zap, PlusCircle, Dices, Bot, TrendingUp, TrendingDown, Clock, Users, Trophy, Skull } from 'lucide-react';
+import { Zap, PlusCircle, Dices, Bot, TrendingUp, TrendingDown, Clock, Users, Trophy, Skull, Mic2 } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
@@ -240,10 +240,37 @@ export default function MDGPage() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isModerator, setIsModerator] = useState(false);
   const [autoStats, setAutoStats] = useState(null);
+  /** Entertainer segregated fund — MDG create debits fee + extra pot from here when role is entertainer */
+  const [entFund, setEntFund] = useState({
+    is_entertainer: false,
+    cash: 0,
+    points: 0,
+  });
+
+  const refreshAuthMe = useCallback(() => {
+    api
+      .get('/auth/me')
+      .then((r) => {
+        const d = r.data || {};
+        setMyUserId(d.id ?? null);
+        setEntFund({
+          is_entertainer: !!d.is_entertainer,
+          cash: Number(d.entertainer_fund_cash ?? 0),
+          points: Number(d.entertainer_fund_points ?? 0),
+        });
+      })
+      .catch(() => {
+        setMyUserId(null);
+      });
+  }, []);
 
   useEffect(() => {
-    api.get('/auth/me').then((r) => setMyUserId(r.data?.id ?? null)).catch(() => setMyUserId(null));
-  }, []);
+    refreshAuthMe();
+  }, [refreshAuthMe]);
+
+  useEffect(() => {
+    if (createOpen) refreshAuthMe();
+  }, [createOpen, refreshAuthMe]);
 
   useEffect(() => {
     api.get('/admin/check').then((r) => {
@@ -320,17 +347,23 @@ export default function MDGPage() {
       toast.error('Set a fee: points and/or money');
       return;
     }
+    const maxPlayers = Math.max(2, Math.min(100, parseInt(createMaxPlayers, 10) || 10));
+    if (entFund.is_entertainer && maxPlayers < 4) {
+      toast.error('Entertainer-created MDG games must allow at least 4 players (increase Max players).');
+      return;
+    }
     setCreating(true);
     try {
       await api.post('/casino/mdg/create', {
         fee_points: feePoints,
         fee_money: feeMoney,
-        max_players: Math.max(2, Math.min(100, parseInt(createMaxPlayers, 10) || 10)),
+        max_players: maxPlayers,
         auto_roll_at: createAutoRollAt.trim() ? Math.max(2, parseInt(createAutoRollAt, 10) || 2) : null,
         extra_pot_points: parseInt(createExtraPotPoints, 10) || 0,
         extra_pot_money: parseFloat(createExtraPotMoney) || 0,
       });
       await refreshUser();
+      refreshAuthMe();
       toast.success('Game created — fee taken (you’re in the game)');
       setCreateOpen(false);
       setCreateFeePoints('');
@@ -350,6 +383,17 @@ export default function MDGPage() {
   const autoGames = games.filter((g) => g.is_automated);
   const playerGames = games.filter((g) => !g.is_automated);
   const houseNet = autoStats ? (autoStats.total_fees_collected ?? 0) - ((autoStats.total_paid_to_winners ?? 0) - (autoStats.total_pot_created ?? 0)) : 0;
+
+  const previewFeePts = parseInt(createFeePoints, 10) || 0;
+  const previewFeeMoney = parseFloat(createFeeMoney) || 0;
+  const previewExtraPts = parseInt(createExtraPotPoints, 10) || 0;
+  const previewExtraMoney = parseFloat(createExtraPotMoney) || 0;
+  const previewTotalPts = previewFeePts + previewExtraPts;
+  const previewTotalMoney = previewFeeMoney + previewExtraMoney;
+  const entInsufficient =
+    entFund.is_entertainer &&
+    createOpen &&
+    (previewTotalPts > entFund.points || previewTotalMoney > entFund.cash);
 
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="mdg-page">
@@ -390,9 +434,54 @@ export default function MDGPage() {
                 <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Game options</h2>
                 <p className="text-[9px] text-mutedForeground font-heading mt-0.5">
                   Fee (points and/or money), max players, auto-roll when N spots filled, optional extra pot. Max 3 open games. You are auto-joined.
+                  {entFund.is_entertainer ? (
+                    <>
+                      {' '}
+                      As an Entertainer, your creation fee plus extra pot are paid from your Entertainer fund — not your main wallet. Max players must be at least <strong className="text-violet-200">4</strong>.
+                    </>
+                  ) : null}
                 </p>
               </div>
               <div className="p-3 space-y-3">
+                {entFund.is_entertainer && (
+                  <div className="rounded-lg border border-violet-500/35 bg-violet-950/25 px-3 py-2.5 space-y-2">
+                    <div className="flex items-center gap-2 text-[10px] font-heading font-bold text-violet-200 uppercase tracking-wider">
+                      <Mic2 size={14} className="text-violet-400 shrink-0" />
+                      Entertainer fund (charged on create)
+                    </div>
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] font-heading">
+                      <span className="text-zinc-300">
+                        Cash:{' '}
+                        <strong className="text-emerald-400 tabular-nums">{formatMoney(entFund.cash)}</strong>
+                      </span>
+                      <span className="text-zinc-300">
+                        Fund points:{' '}
+                        <strong className="text-sky-400 tabular-nums">{Math.trunc(entFund.points).toLocaleString()}</strong>
+                      </span>
+                    </div>
+                    <p className="text-[9px] text-zinc-400 font-heading leading-snug">
+                      Debit at create = your fee + extra pot (same fields below). Join fees from other players still go to main balances as usual.
+                    </p>
+                    {(previewFeePts > 0 || previewFeeMoney > 0) && (
+                      <div className="text-[10px] font-heading border-t border-violet-500/20 pt-2 mt-1">
+                        <span className="text-zinc-500 uppercase tracking-wide mr-2">This setup debits</span>
+                        <span className="text-foreground tabular-nums">
+                          {[
+                            previewTotalPts > 0 ? `${previewTotalPts.toLocaleString()} pts` : null,
+                            previewTotalMoney > 0 ? formatMoney(previewTotalMoney) : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' + ') || '—'}
+                        </span>
+                        {entInsufficient && (
+                          <span className="block text-amber-400/95 mt-1">
+                            Not enough in Entertainer fund for these amounts — lower fees/extra pot or wait for daily UTC top-up.
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1">Fee (points)</label>
@@ -415,10 +504,12 @@ export default function MDGPage() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1">Max players</label>
+                    <label className="block text-[9px] font-heading text-mutedForeground uppercase tracking-wider mb-1">
+                      Max players{entFund.is_entertainer ? ' (min 4)' : ''}
+                    </label>
                     <input
                       type="number"
-                      min={2}
+                      min={entFund.is_entertainer ? 4 : 2}
                       max={100}
                       value={createMaxPlayers}
                       onChange={(e) => setCreateMaxPlayers(e.target.value)}

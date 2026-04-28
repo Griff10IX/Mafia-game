@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { PlusCircle, User, Users, Clock, DollarSign, Trophy, ShieldCheck, Eye } from 'lucide-react';
+import { PlusCircle, User, Users, Clock, DollarSign, Trophy, ShieldCheck, Eye, Mic2 } from 'lucide-react';
 import api, { refreshUser, getApiErrorMessage } from '../../utils/api';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import styles from '../../styles/noir.module.css';
@@ -74,9 +74,30 @@ export default function MPPokerPage() {
   const [adminActionLoading, setAdminActionLoading] = useState(null);
   const [remindTournamentLoadingId, setRemindTournamentLoadingId] = useState(null);
   const [adminDrafts, setAdminDrafts] = useState({});
+  /** Segregated entertainer fund — MP Poker creation debits from here when role is entertainer */
+  const [entFund, setEntFund] = useState({
+    is_entertainer: false,
+    cash: 0,
+    points: 0,
+  });
+
+  const refreshAuthMe = useCallback(() => {
+    api
+      .get('/auth/me')
+      .then((r) => {
+        const d = r.data || {};
+        setMyUserId(d.id ?? null);
+        setEntFund({
+          is_entertainer: !!d.is_entertainer,
+          cash: Number(d.entertainer_fund_cash ?? 0),
+          points: Number(d.entertainer_fund_points ?? 0),
+        });
+      })
+      .catch(() => setMyUserId(null));
+  }, []);
 
   useEffect(() => {
-    api.get('/auth/me').then((r) => setMyUserId(r.data?.id ?? null)).catch(() => {});
+    refreshAuthMe();
     api.get('/admin/whoami')
       .then((r) => setStaffFlags({
         is_admin: Boolean(r.data?.is_admin),
@@ -84,7 +105,11 @@ export default function MPPokerPage() {
         has_admin_email: Boolean(r.data?.has_admin_email),
       }))
       .catch(() => setStaffFlags({ is_admin: false, is_moderator: false, has_admin_email: false }));
-  }, []);
+  }, [refreshAuthMe]);
+
+  useEffect(() => {
+    if (createOpen || tournamentCreateOpen) refreshAuthMe();
+  }, [createOpen, tournamentCreateOpen, refreshAuthMe]);
 
   const canManageTournaments = Boolean(staffFlags.is_admin || staffFlags.has_admin_email || staffFlags.is_moderator);
 
@@ -143,6 +168,7 @@ export default function MPPokerPage() {
         extra_prize: parseInt(String(createExtraPrize).replace(/\D/g, ''), 10) || 0,
       });
       await refreshUser();
+      refreshAuthMe();
       toast.success('Table created');
       setCreateOpen(false);
       fetchGames();
@@ -192,6 +218,7 @@ export default function MPPokerPage() {
         buy_in_currency: tournamentBuyInCurrency === 'points' ? 'points' : 'money',
       });
       await refreshUser();
+      refreshAuthMe();
       const approvalStatus = res.data?.game?.approval_status;
       toast.success(approvalStatus === 'approved' ? 'Tournament created and open for registration' : 'Tournament submitted for admin approval');
       setTournamentCreateOpen(false);
@@ -372,6 +399,24 @@ export default function MPPokerPage() {
   const inputStyle = { background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(212,175,55,0.2)', color: 'inherit' };
   const selectStyle = { ...inputStyle, background: '#27272a', color: '#e4e4e7', colorScheme: 'dark' };
 
+  const previewCashBuyIn = parseInt(String(createBuyIn).replace(/\D/g, ''), 10) || 0;
+  const previewCashExtra = parseInt(String(createExtraPrize).replace(/\D/g, ''), 10) || 0;
+  const previewCashTableDebit = previewCashBuyIn + previewCashExtra;
+  const cashTableFundInsufficient =
+    entFund.is_entertainer && createOpen && previewCashTableDebit > entFund.cash;
+
+  const previewTourBuyIn = parseInt(String(tournamentBuyIn).replace(/\D/g, ''), 10) || 0;
+  const tournamentFundInsufficientMoney =
+    entFund.is_entertainer &&
+    tournamentCreateOpen &&
+    tournamentBuyInCurrency === 'money' &&
+    previewTourBuyIn > entFund.cash;
+  const tournamentFundInsufficientPoints =
+    entFund.is_entertainer &&
+    tournamentCreateOpen &&
+    tournamentBuyInCurrency === 'points' &&
+    previewTourBuyIn > entFund.points;
+
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="mp-poker-page">
       <style>{`
@@ -448,7 +493,10 @@ export default function MPPokerPage() {
               </div>
             </div>
             <p className="text-[9px] text-mutedForeground font-heading mb-3 leading-relaxed">
-              Create or join a live Hold'em table. Buy in, compete for the pot.
+              Create or join a live Hold&apos;em table. Buy in, compete for the pot.
+              {entFund.is_entertainer ? (
+                <> As an Entertainer, opening a table charges <strong className="text-violet-300/95">buy-in + bonus prize</strong> to your Entertainer fund cash — not your main wallet.</>
+              ) : null}
             </p>
             <button type="button" onClick={() => setCreateOpen((o) => !o)}
               className="w-full py-2 rounded-lg border-2 font-heading font-bold text-[9px] uppercase tracking-wider transition-all active:scale-[0.97] flex items-center justify-center gap-1.5"
@@ -461,6 +509,36 @@ export default function MPPokerPage() {
             </button>
             {createOpen && (
               <div className="mt-3 space-y-2 pt-3 border-t border-primary/20">
+                {entFund.is_entertainer && (
+                  <div className="rounded-lg border border-violet-500/35 bg-violet-950/25 px-2.5 py-2 space-y-1.5 mb-1">
+                    <div className="flex items-center gap-2 text-[9px] font-heading font-bold text-violet-200 uppercase tracking-wider">
+                      <Mic2 size={13} className="text-violet-400 shrink-0" />
+                      Entertainer fund (cash only for this table)
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] font-heading text-zinc-300">
+                      <span>
+                        Cash: <strong className="text-emerald-400 tabular-nums">{formatMoney(entFund.cash)}</strong>
+                      </span>
+                      <span>
+                        Fund pts: <strong className="text-sky-400/90 tabular-nums">{Math.trunc(entFund.points).toLocaleString()}</strong>
+                      </span>
+                    </div>
+                    <p className="text-[8px] text-zinc-400 font-heading leading-snug">
+                      Server debits entertainer fund <strong className="text-zinc-300">cash</strong> = buy-in + bonus prize. Other players buy in from their normal balances.
+                    </p>
+                    {previewCashTableDebit > 0 && (
+                      <p className="text-[9px] font-heading border-t border-violet-500/20 pt-1.5 text-zinc-300">
+                        <span className="text-zinc-500 uppercase mr-1">Debit at create</span>
+                        <span className="tabular-nums text-foreground">{formatMoney(previewCashTableDebit)}</span>
+                        {cashTableFundInsufficient && (
+                          <span className="block text-amber-400/95 mt-1">
+                            Not enough entertainer fund cash — lower buy-in/bonus or wait for UTC top-up.
+                          </span>
+                        )}
+                      </p>
+                    )}
+                  </div>
+                )}
                 <div className="flex items-center gap-2">
                   <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-20 shrink-0">Max Players</label>
                   <select value={createMaxPlayers} onChange={(e) => setCreateMaxPlayers(Number(e.target.value))}
@@ -594,7 +672,12 @@ export default function MPPokerPage() {
             <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] flex items-center gap-1.5">
               <Trophy size={12} /> Poker Tournaments
             </h2>
-            <p className="text-[9px] text-mutedForeground font-heading mt-0.5">4–9 players · freezeout · escalating blinds · cash or points buy-in (points max {TOURNAMENT_MAX_POINTS_BUY_IN.toLocaleString()} pts)</p>
+            <p className="text-[9px] text-mutedForeground font-heading mt-0.5">
+              4–9 players · freezeout · escalating blinds · cash or points buy-in (points max {TOURNAMENT_MAX_POINTS_BUY_IN.toLocaleString()} pts)
+              {entFund.is_entertainer ? (
+                <> · Entertainer creators pay the <strong className="text-violet-300/95">your buy-in</strong> from the entertainer fund (cash or fund points to match currency).</>
+              ) : null}
+            </p>
           </div>
           <button
             type="button"
@@ -606,6 +689,40 @@ export default function MPPokerPage() {
         </div>
         {tournamentCreateOpen && (
           <div className="p-3 space-y-2 border-b border-primary/10">
+            {entFund.is_entertainer && (
+              <div className="rounded-lg border border-violet-500/35 bg-violet-950/25 px-2.5 py-2 space-y-1.5">
+                <div className="flex items-center gap-2 text-[9px] font-heading font-bold text-violet-200 uppercase tracking-wider">
+                  <Mic2 size={13} className="text-violet-400 shrink-0" />
+                  Entertainer fund (your entry fee)
+                </div>
+                <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] font-heading text-zinc-300">
+                  <span>
+                    Cash: <strong className="text-emerald-400 tabular-nums">{formatMoney(entFund.cash)}</strong>
+                  </span>
+                  <span>
+                    Fund pts: <strong className="text-sky-400/90 tabular-nums">{Math.trunc(entFund.points).toLocaleString()}</strong>
+                  </span>
+                </div>
+                <p className="text-[8px] text-zinc-400 font-heading leading-snug">
+                  Cash buy-ins debit entertainer fund cash; points buy-ins debit entertainer fund points. Joiners pay from their normal wallets.
+                </p>
+                {previewTourBuyIn > 0 && (
+                  <p className="text-[9px] font-heading border-t border-violet-500/20 pt-1.5 text-zinc-300">
+                    <span className="text-zinc-500 uppercase mr-1">Debit at create</span>
+                    <span className="tabular-nums text-foreground">
+                      {tournamentBuyInCurrency === 'points'
+                        ? `${previewTourBuyIn.toLocaleString()} pts`
+                        : formatMoney(previewTourBuyIn)}
+                    </span>
+                    {(tournamentFundInsufficientMoney || tournamentFundInsufficientPoints) && (
+                      <span className="block text-amber-400/95 mt-1">
+                        Not enough in entertainer fund for this buy-in — lower amount or wait for UTC top-up.
+                      </span>
+                    )}
+                  </p>
+                )}
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-20 shrink-0">Players</label>
               <select value={tournamentMaxPlayers} onChange={(e) => setTournamentMaxPlayers(Number(e.target.value))}

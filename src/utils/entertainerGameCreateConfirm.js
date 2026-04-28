@@ -5,6 +5,7 @@
  */
 export function confirmEntertainerGameCreatorDeduction({
   isAdmin,
+  isEntertainer,
   manualRoll,
   parsedPot,
   rewardMoney,
@@ -23,11 +24,18 @@ export function confirmEntertainerGameCreatorDeduction({
       gameType === 'gbox'
         ? '\nGbox: reward cash and points are total pools split randomly among everyone who joined.'
         : '\nDice: winner receives the full reward cash and points reserved above.';
+    const src = isEntertainer ? 'Entertainer fund' : 'your account';
+    const cashLine = isEntertainer
+      ? `Fund cash: $${totalMoney.toLocaleString()} (${parsedPot.toLocaleString()} pot + ${reserveMoney.toLocaleString()} rewards)`
+      : `Cash: $${totalMoney.toLocaleString()} (${parsedPot.toLocaleString()} pot + ${reserveMoney.toLocaleString()} rewards)`;
+    const ptsLine = isEntertainer
+      ? `Fund points: ${reservePoints.toLocaleString()}`
+      : `Points: ${reservePoints.toLocaleString()}`;
     const ok = window.confirm(
       `Create game and deduct now?\n\n` +
-        `From your account:\n` +
-        `- Cash: $${totalMoney.toLocaleString()} (${parsedPot.toLocaleString()} pot + ${reserveMoney.toLocaleString()} rewards)\n` +
-        `- Points: ${reservePoints.toLocaleString()}\n` +
+        `From ${src}:\n` +
+        `- ${cashLine}\n` +
+        `- ${ptsLine}\n` +
         `${rewardNote}`
     );
     if (!ok) return { allowed: false };

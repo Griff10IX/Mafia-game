@@ -19,6 +19,7 @@ from utils.entertainer_service import try_debit_entertainer_fund, insert_funded_
 
 MDG_MIN_PLAYERS = 2
 MDG_MAX_PLAYERS = 100
+ENTERTAINER_MDG_MIN_MAX_PLAYERS = 4  # entertainer-created tables must seat at least this many
 MDG_MAX_OPEN_GAMES_PER_USER = 3
 MDG_MAX_FEE_POINTS = 100_000_000
 MDG_MAX_FEE_MONEY = 1_000_000_000
@@ -345,6 +346,11 @@ def register(router):
         if fee_pts > MDG_MAX_FEE_POINTS or fee_money > MDG_MAX_FEE_MONEY:
             raise HTTPException(status_code=400, detail="Fee exceeds maximum allowed")
         max_players = max(MDG_MIN_PLAYERS, min(MDG_MAX_PLAYERS, int(request.max_players or 10)))
+        if _is_entertainer(current_user) and max_players < ENTERTAINER_MDG_MIN_MAX_PLAYERS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Entertainer-created MDG games must allow at least {ENTERTAINER_MDG_MIN_MAX_PLAYERS} players (set Max players ≥ {ENTERTAINER_MDG_MIN_MAX_PLAYERS}).",
+            )
         auto_roll_at = None
         if request.auto_roll_at is not None:
             auto_roll_at = max(MDG_MIN_PLAYERS, min(max_players, int(request.auto_roll_at)))

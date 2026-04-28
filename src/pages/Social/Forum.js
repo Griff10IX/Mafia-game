@@ -1,6 +1,6 @@
 import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
-import { MessageSquare, Lock, Pin, AlertCircle, Plus, ChevronRight, Eye, MessageCircle, Dice5, Package, Users, Bold, Italic, Image, Palette, Puzzle } from 'lucide-react';
+import { MessageSquare, Lock, Pin, AlertCircle, Plus, ChevronRight, Eye, MessageCircle, Dice5, Package, Users, Bold, Italic, Image, Palette, Puzzle, Mic2 } from 'lucide-react';
 import api from '../../utils/api';
 import { confirmEntertainerGameCreatorDeduction } from '../../utils/entertainerGameCreateConfirm';
 import { readForumSpecialTabsWarm } from '../../utils/forumSpecialTabsWarm';
@@ -643,6 +643,7 @@ const CreateGameModal = ({ isOpen, onClose, onCreated, me }) => {
     const parsedRewardPoints = Math.max(0, parseInt(String(rewardPoints).replace(/\D/g, ''), 10) || 0);
     const prep = confirmEntertainerGameCreatorDeduction({
       isAdmin: !!me?.is_admin,
+      isEntertainer: !!me?.is_entertainer,
       manualRoll,
       parsedPot,
       rewardMoney: parsedRewardMoney,
@@ -692,6 +693,21 @@ const CreateGameModal = ({ isOpen, onClose, onCreated, me }) => {
           <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">🎲 Create Game</h2>
         </div>
         <form onSubmit={handleSubmit} className="p-3 space-y-3">
+          {me?.is_entertainer && (
+            <div className="rounded-lg border border-violet-500/35 bg-violet-950/25 px-2.5 py-2 space-y-1">
+              <div className="flex items-center gap-2 text-[9px] font-heading font-bold text-violet-200 uppercase tracking-wider">
+                <Mic2 size={13} className="text-violet-400 shrink-0" />
+                Entertainer fund
+              </div>
+              <p className="text-[9px] text-zinc-400 font-heading leading-snug">
+                Pot + rewards are debited from your <strong className="text-zinc-200">entertainer fund</strong> (cash + fund points), not your main wallet.
+              </p>
+              <div className="flex flex-wrap gap-x-3 text-[10px] font-heading text-zinc-300">
+                <span>Cash <strong className="text-emerald-400">${Math.trunc(Number(me?.entertainer_fund_cash ?? 0)).toLocaleString()}</strong></span>
+                <span>Fund pts <strong className="text-sky-400/90">{Math.trunc(Number(me?.entertainer_fund_points ?? 0)).toLocaleString()}</strong></span>
+              </div>
+            </div>
+          )}
           <div>
             <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Type</label>
             <div className="flex gap-2">

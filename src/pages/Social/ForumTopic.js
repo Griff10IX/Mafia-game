@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
-import { Lock, ThumbsUp, ThumbsDown, Send, Pin, AlertCircle, Trash2, ArrowLeft, MessageCircle, Eye, Clock, Dice5, Package, UserPlus, Bold, Italic, Image, Palette, Pencil, X, Plus } from 'lucide-react';
+import { Lock, ThumbsUp, ThumbsDown, Send, Pin, AlertCircle, Trash2, ArrowLeft, MessageCircle, Eye, Clock, Dice5, Package, UserPlus, Bold, Italic, Image, Palette, Pencil, X, Plus, Mic2 } from 'lucide-react';
 import api from '../../utils/api';
 import { confirmEntertainerGameCreatorDeduction } from '../../utils/entertainerGameCreateConfirm';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
@@ -715,6 +715,7 @@ export default function ForumTopic() {
     const rewardPoints = Math.max(0, parseInt(String(createGameRewardPoints).replace(/\D/g, ''), 10) || 0);
     const prep = confirmEntertainerGameCreatorDeduction({
       isAdmin: !!isAdmin,
+      isEntertainer: !!user?.is_entertainer,
       manualRoll: createGameManualRoll,
       parsedPot,
       rewardMoney,
@@ -1339,6 +1340,21 @@ export default function ForumTopic() {
           </div>
           <div className="p-3">
             <p className="text-xs text-mutedForeground mb-3">Link a dice or gbox game to this topic. Manual dice: winner gets the full rewards below. Manual gbox: reward cash and points are totals split randomly among joiners. You can also start a game from Entertainer Forum (New Game) without a topic.</p>
+            {user?.is_entertainer && (
+              <div className="rounded-lg border border-violet-500/35 bg-violet-950/25 px-2.5 py-2 space-y-1 mb-3">
+                <div className="flex items-center gap-2 text-[9px] font-heading font-bold text-violet-200 uppercase tracking-wider">
+                  <Mic2 size={13} className="text-violet-400 shrink-0" />
+                  Entertainer fund
+                </div>
+                <p className="text-[9px] text-zinc-400 font-heading leading-snug">
+                  Funding comes from your <strong className="text-zinc-200">entertainer fund</strong> (not main wallet): cash for pot + reward cash; fund points for reward points.
+                </p>
+                <div className="flex flex-wrap gap-x-3 text-[10px] font-heading text-zinc-300">
+                  <span>Cash <strong className="text-emerald-400">${Math.trunc(Number(user?.entertainer_fund_cash ?? 0)).toLocaleString()}</strong></span>
+                  <span>Fund pts <strong className="text-sky-400/90">{Math.trunc(Number(user?.entertainer_fund_points ?? 0)).toLocaleString()}</strong></span>
+                </div>
+              </div>
+            )}
             <form onSubmit={createGameInTopic} className="space-y-3">
               <div>
                 <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Type</label>
