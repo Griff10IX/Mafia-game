@@ -293,6 +293,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Main leaderboards strip (respect melt stock booze)', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['leaderboard', 'weekly', 'respect', 'melt', 'stock', 'booze', 'strip', 'top 10'], adminOnly: true },
   { label: 'Reconcile Game Pass tiers', categoryId: 'admin-players', collapseKey: 'userAdjustHub', keywords: ['game pass', 'reconcile', 'tier', 'vip', 'rank xp', 'micro tier', 'force grant', 'rewards'], adminOnly: true },
   { label: 'Game Pass inspector', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-game-pass-inspector', keywords: ['game pass', 'inspector', 'vip', 'token', 'stripe', 'rank xp', 'micro tier', 'entitlement'], adminOnly: true },
+  { label: 'Game Pass points diagnostic', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-game-pass-inspector', keywords: ['game pass', 'points', 'diagnostic', 'ledger', 'stripe', 'purchase source', 'catch up pending'], adminOnly: true },
   { label: 'Game Pass stuck cursors', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-game-pass-inspector', keywords: ['game pass', 'stuck', 'cursor', 'broken', 'fix', 'repair', 'rewards'], adminOnly: true },
   { label: 'Deleted messages', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-deleted-messages', keywords: ['deleted', 'messages', 'archive', 'forum', 'chat', 'dm', 'notification', 'history'], adminOnly: true },
   { label: 'Reset OC Timers', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['oc', 'organised', 'crime', 'timer'] },
@@ -759,6 +760,9 @@ export default function Admin() {
   const [gamePassInspectQuery, setGamePassInspectQuery] = useState('');
   const [gamePassInspectDetail, setGamePassInspectDetail] = useState(null);
   const [gamePassInspectDetailLoading, setGamePassInspectDetailLoading] = useState(false);
+  const [gamePassPointsDiag, setGamePassPointsDiag] = useState(null);
+  const [gamePassPointsDiagUserId, setGamePassPointsDiagUserId] = useState('');
+  const [gamePassPointsDiagLoading, setGamePassPointsDiagLoading] = useState(false);
   const [gamePassStuck, setGamePassStuck] = useState(null);
   const [gamePassStuckLoading, setGamePassStuckLoading] = useState(false);
   const [deletedMsgs, setDeletedMsgs] = useState(null);
@@ -3672,6 +3676,31 @@ export default function Admin() {
       toast.error(error.response?.data?.detail || 'Inspect failed');
     } finally {
       setGamePassInspectDetailLoading(false);
+    }
+  };
+
+  const loadGamePassPointsDiagnostic = async () => {
+    const targetUsername = (formData.targetUsername || '').trim();
+    const targetUserId = (gamePassPointsDiagUserId || '').trim();
+    if (!targetUsername && !targetUserId) {
+      toast.error('Enter target username or user id');
+      return;
+    }
+    setGamePassPointsDiagLoading(true);
+    try {
+      const qs = new URLSearchParams();
+      if (targetUsername) qs.set('target_username', targetUsername);
+      if (targetUserId) qs.set('target_user_id', targetUserId);
+      const res = await api.get(`/admin/game-pass/points-diagnostic?${qs.toString()}`);
+      setGamePassPointsDiag(res.data || null);
+      if (res.data?.user?.username && !targetUsername) {
+        setFormData((prev) => ({ ...prev, targetUsername: res.data.user.username }));
+      }
+      toast.success('Game Pass points diagnostic loaded');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to load Game Pass points diagnostic');
+    } finally {
+      setGamePassPointsDiagLoading(false);
     }
   };
 
@@ -9281,6 +9310,16 @@ export default function Admin() {
                 <BtnSecondary type="button" onClick={() => loadGamePassInspectUser()} disabled={gamePassInspectDetailLoading}>
                   {gamePassInspectDetailLoading ? '…' : 'Inspect target'}
                 </BtnSecondary>
+                <input
+                  type="text"
+                  value={gamePassPointsDiagUserId}
+                  onChange={(e) => setGamePassPointsDiagUserId(e.target.value)}
+                  placeholder="User id (optional)"
+                  className="w-40 px-2 py-1 rounded border border-input bg-transparent text-[11px]"
+                />
+                <BtnPrimary type="button" onClick={loadGamePassPointsDiagnostic} disabled={gamePassPointsDiagLoading}>
+                  {gamePassPointsDiagLoading ? '…' : 'Check GP points diagnostic'}
+                </BtnPrimary>
               </div>
               {gamePassInspectList && (
                 <div className="space-y-1">
@@ -9354,6 +9393,20 @@ export default function Admin() {
                   </div>
                   <pre className="text-[9px] font-mono whitespace-pre-wrap break-words max-h-80 overflow-y-auto text-zinc-200/90">
                     {JSON.stringify(gamePassInspectDetail, null, 2)}
+                  </pre>
+                </div>
+              )}
+              {gamePassPointsDiag && (
+                <div className="rounded border border-indigo-500/30 bg-indigo-500/5 p-2 space-y-1">
+                  <div className="text-[9px] font-heading font-bold text-indigo-300 uppercase tracking-wider flex items-center justify-between gap-2">
+                    <span>Points diagnostic — {gamePassPointsDiag.user?.username ?? 'unknown'}</span>
+                    <button type="button" className="text-mutedForeground hover:text-foreground text-[10px]" onClick={() => setGamePassPointsDiag(null)}>Clear</button>
+                  </div>
+                  <div className="text-[10px] text-zinc-200/90 font-mono">
+                    Points balance: {(gamePassPointsDiag.user?.points_balance ?? 0).toLocaleString()} | Status: {gamePassPointsDiag.entitlement_state?.game_pass_status ?? '—'} | Source: {gamePassPointsDiag.entitlement_state?.purchase_source ?? '—'}
+                  </div>
+                  <pre className="text-[9px] font-mono whitespace-pre-wrap break-words max-h-80 overflow-y-auto text-zinc-200/90">
+                    {JSON.stringify(gamePassPointsDiag, null, 2)}
                   </pre>
                 </div>
               )}

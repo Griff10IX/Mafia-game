@@ -2896,6 +2896,33 @@ def register(router):
             "estimated_entitlement": estimated,
         }
 
+    @router.get("/admin/game-pass/points-diagnostic")
+    async def admin_game_pass_points_diagnostic(
+        target_username: Optional[str] = Query(None),
+        target_user_id: Optional[str] = Query(None),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Detailed Game Pass points/reward diagnostic for one user."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        if not (target_username or target_user_id):
+            raise HTTPException(status_code=400, detail="Provide target_username or target_user_id")
+        from utils.game_pass_points_diagnostic import (
+            build_game_pass_points_diagnostic,
+            game_pass_points_projection,
+        )
+
+        proj = game_pass_points_projection()
+        user = None
+        if target_user_id:
+            user = await db.users.find_one({"id": str(target_user_id).strip()}, proj)
+        if not user and target_username:
+            username_pattern = _username_pattern(target_username)
+            user = await db.users.find_one({"username": username_pattern}, proj)
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        return await build_game_pass_points_diagnostic(db, user)
+
     @router.post("/admin/add-car")
     async def admin_add_car(target_username: str, car_id: str, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
