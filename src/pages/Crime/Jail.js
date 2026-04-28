@@ -385,15 +385,10 @@ export default function Jail() {
 
   const fetchJailData = async () => {
     try {
-      const jailRes = await jailGetWith429Retry(() => api.get('/jail/status'));
-      const playersRes = await jailGetWith429Retry(() => api.get('/jail/players'));
-      const statsRes = await jailGetWith429Retry(() => api.get('/jail/stats')).catch(() => ({ data: {} }));
-      const [autoRankRes, meRes] = await Promise.all([
-        api.get('/auto-rank/me').catch(() => ({ data: {} })),
-        api.get('/auth/me').catch(() => ({ data: null })),
-      ]);
-      setJailStatus(jailRes.data || { in_jail: false });
-      const pd = playersRes.data || {};
+      const bootRes = await jailGetWith429Retry(() => api.get('/jail/bootstrap'));
+      const boot = bootRes?.data || {};
+      setJailStatus(boot.status || { in_jail: false });
+      const pd = boot.players || {};
       setJailedPlayers(Array.isArray(pd.players) ? pd.players : []);
       if (pd.private_cell && typeof pd.private_cell === 'object') {
         setPrivateCell({
@@ -407,17 +402,22 @@ export default function Jail() {
         admin_online_color: pd.admin_online_color || '#a78bfa',
         mod_default_online_color: pd.mod_default_online_color || DEFAULT_MOD_COLOR,
       });
-      setJailStats(statsRes.data || {});
-      const ar = autoRankRes.data || {};
+      setJailStats(boot.stats || {});
+      const ar = boot.auto_rank || {};
       setAutoRankJailDisabled(!!(ar.auto_rank_enabled && ar.auto_rank_bust_every_5_sec));
+      if (boot.me) {
+        setUser((prev) => ({ ...(prev || {}), ...boot.me }));
+      }
+      // Keep user object fresh for components that rely on broader /auth/me fields.
+      const meRes = await api.get('/auth/me').catch(() => ({ data: null }));
       if (meRes.data) setUser(meRes.data);
+      setInitialLoading(false);
     } catch (error) {
       console.error('Failed to load jail data:', error);
       toast.error('Failed to load jail data');
       setJailStatus({ in_jail: false });
       setJailedPlayers([]);
       setJailStats({ count_today: 0, count_week: 0, success_today: 0, success_week: 0, profit_today: 0, profit_24h: 0, profit_week: 0 });
-    } finally {
       setInitialLoading(false);
     }
   };

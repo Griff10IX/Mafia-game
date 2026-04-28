@@ -427,26 +427,6 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
             continue
         real_players.append(p)
     npcs = await _get_visible_jail_npcs(current_user["id"])
-    hitlist_totals = {}
-    if real_players:
-        user_ids = [p["id"] for p in real_players if p.get("id") is not None]
-        if user_ids:
-            hitlist_entries = await db.hitlist.find(
-                {"target_id": {"$in": user_ids}, "target_type": {"$in": ["user", "bodyguards"]}},
-                {"_id": 0, "target_id": 1, "reward_type": 1, "reward_amount": 1},
-            ).to_list(1000)
-            for e in hitlist_entries:
-                tid = e.get("target_id")
-                if tid is None:
-                    continue
-                tkey = str(tid)
-                if tkey not in hitlist_totals:
-                    hitlist_totals[tkey] = [0, 0]
-                if e.get("reward_type") == "cash":
-                    hitlist_totals[tkey][0] += int(e.get("reward_amount") or 0)
-                elif e.get("reward_type") == "points":
-                    hitlist_totals[tkey][1] += int(e.get("reward_amount") or 0)
-
     players_data = []
     for player in real_players:
         _rp = int(player.get("rank_points") or 0)
@@ -884,6 +864,30 @@ async def get_jail_stats(current_user: dict = Depends(get_current_user)):
     }
 
 
+async def get_jail_bootstrap(current_user: dict = Depends(get_current_user)):
+    """
+    Combined first-load payload for Jail page.
+    Avoids multiple first-paint round trips by bundling status + players + stats + lightweight extras.
+    """
+    status_task = get_jail_status(current_user)
+    players_task = get_jailed_players(current_user)
+    stats_task = get_jail_stats(current_user)
+    status, players, stats = await asyncio.gather(status_task, players_task, stats_task)
+    return {
+        "status": status or {"in_jail": False},
+        "players": players or {"players": []},
+        "stats": stats or {},
+        "auto_rank": {
+            "auto_rank_enabled": bool(current_user.get("auto_rank_enabled")),
+            "auto_rank_bust_every_5_sec": bool(current_user.get("auto_rank_bust_every_5_sec")),
+        },
+        "me": {
+            "id": current_user.get("id"),
+            "jailbust_bonus_until": current_user.get("jailbust_bonus_until"),
+        },
+    }
+
+
 async def get_jail_status(current_user: dict = Depends(get_current_user)):
     jail_busts = int((current_user.get("jail_busts") or 0) or 0)
     stored_reward = _safe_int(current_user.get("bust_reward_cash"), 0)
@@ -1275,6 +1279,7 @@ def register(router):
     router.add_api_route("/jail/bust", bust_out_of_jail, methods=["POST"])
     router.add_api_route("/jail/stats", get_jail_stats, methods=["GET"], dependencies=_jail_rl_u)
     router.add_api_route("/jail/status", get_jail_status, methods=["GET"], dependencies=_jail_rl_u)
+    router.add_api_route("/jail/bootstrap", get_jail_bootstrap, methods=["GET"], dependencies=_jail_rl_u)
     router.add_api_route("/jail/set-bust-reward", set_bust_reward, methods=["POST"])
     router.add_api_route("/jail/leave", leave_jail, methods=["POST"])
     router.add_api_route("/jail/snitch", snitch, methods=["POST"])
