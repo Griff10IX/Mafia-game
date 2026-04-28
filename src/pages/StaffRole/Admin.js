@@ -255,6 +255,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Casino limits (global caps)', categoryId: 'admin-gameworld', collapseKey: 'casinoLimits', keywords: ['casino', 'limits', 'caps', 'max bet', 'buyback', 'poker', 'blind'] },
   { label: 'Claim costs (casino, airport, armoury)', categoryId: 'admin-gameworld', collapseKey: 'claimCosts', keywords: ['claim', 'cost', 'casino', 'airport', 'armoury', 'bullet', 'factory', 'dice', 'roulette'], adminOnly: true },
   { label: 'Casino per-game max bets', categoryId: 'admin-gameworld', collapseKey: 'casinoMaxBets', keywords: ['casino', 'max bet', 'per game', 'slots', 'blackjack', 'roulette'] },
+  { label: 'Casinos on dead owners', categoryId: 'admin-gameworld', collapseKey: 'casinosDeadOwners', keywords: ['dead', 'casino', 'ownership', 'stuck', 'invalid', 'takeover'] },
   { label: 'Admin display & signup', categoryId: 'admin-gameworld', collapseKey: 'adminDisplay', keywords: ['admin', 'display', 'colour', 'color', 'online', 'email', 'verification', 'vpn', 'proxy', 'user agent', 'signup'], adminOnly: true },
   { label: 'Sustained page pacing (jail, forum, entertainer, kill)', categoryId: 'admin-gameworld', collapseKey: 'sustainedPageRl', keywords: ['sustained', 'pacing', 'rate', 'forum', 'entertainer', 'jail', 'kill', 'attack', '429', 'cooldown', 'bot'], adminOnly: true },
   { label: 'Swiss & interest bank limits', categoryId: 'admin-gameworld', collapseKey: 'bankEconomy', keywords: ['swiss', 'interest', 'bank', 'limit', 'deposit', 'maturity', 'principal'], adminOnly: true },
@@ -370,8 +371,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, familyWarTruce: false, ...parsed };
-  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, familyWarTruce: false }; }
+    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, familyWarTruce: false, casinosDeadOwners: true, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, familyWarTruce: false, casinosDeadOwners: true }; }
 }
 
 function saveCollapsed(state) {
@@ -1099,6 +1100,8 @@ export default function Admin() {
   // Casino Max Bets
   const [casinoMaxBets, setCasinoMaxBets] = useState(null);
   const [casinoMaxBetsLoading, setCasinoMaxBetsLoading] = useState(false);
+  const [casinosDeadOwners, setCasinosDeadOwners] = useState([]);
+  const [casinosDeadOwnersLoading, setCasinosDeadOwnersLoading] = useState(false);
   const [casinoMaxBetGameType, setCasinoMaxBetGameType] = useState('all');
   const [casinoMaxBetLocation, setCasinoMaxBetLocation] = useState('');
   const [casinoMaxBetValue, setCasinoMaxBetValue] = useState('');
@@ -3296,6 +3299,19 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed to fetch casino max bets');
     } finally {
       setCasinoMaxBetsLoading(false);
+    }
+  };
+
+  const fetchCasinosDeadOwners = async () => {
+    setCasinosDeadOwnersLoading(true);
+    try {
+      const res = await api.get('/admin/casinos-on-dead-owners');
+      setCasinosDeadOwners(Array.isArray(res.data?.entries) ? res.data.entries : []);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load casinos on dead owners');
+      setCasinosDeadOwners([]);
+    } finally {
+      setCasinosDeadOwnersLoading(false);
     }
   };
 
@@ -12090,6 +12106,79 @@ export default function Admin() {
                 {racketResetLoading ? '...' : 'Reset Cooldown'}
               </BtnPrimary>
             </div>
+          </div>
+        )}
+        </div>
+        )}
+
+        {staffCanAccessWorldSystems && (
+        <div id="admin-casinos-dead-owners" className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-amber-500/25 mobile-panel scroll-mt-24`}>
+        <div className="h-0.5 bg-gradient-to-r from-transparent via-amber-400/35 to-transparent" />
+        <SectionHeader
+          icon={Skull}
+          title="Casinos on dead owners"
+          badge={casinosDeadOwners.length > 0 ? <span className="text-[10px] font-heading text-amber-400">{casinosDeadOwners.length}</span> : null}
+          toolAnchor="casinosDeadOwners"
+          isCollapsed={collapsed.casinosDeadOwners}
+          onToggle={() => {
+            toggleSection('casinosDeadOwners');
+            if (collapsed.casinosDeadOwners && casinosDeadOwners.length === 0 && !casinosDeadOwnersLoading) fetchCasinosDeadOwners();
+          }}
+        />
+        {!collapsed.casinosDeadOwners && (
+          <div className="p-3 space-y-3">
+            <p className="text-[10px] text-mutedForeground leading-snug">
+              Dead characters cannot receive casinos in-game. Rows here still point at a dead owner — use the user dossier to <strong className="text-foreground">Take over</strong> (admin) or <strong className="text-foreground">Drop</strong> (admin/mod) after clearing buy-back if needed.
+            </p>
+            <div className="flex flex-wrap items-center gap-2">
+              <BtnPrimary type="button" onClick={fetchCasinosDeadOwners} disabled={casinosDeadOwnersLoading}>
+                {casinosDeadOwnersLoading ? 'Scanning…' : 'Scan database'}
+              </BtnPrimary>
+              {casinosDeadOwners.length > 0 && (
+                <span className="text-[10px] font-heading text-mutedForeground">{casinosDeadOwners.length} row{casinosDeadOwners.length === 1 ? '' : 's'}</span>
+              )}
+            </div>
+            {!casinosDeadOwnersLoading && casinosDeadOwners.length === 0 && (
+              <p className="text-[10px] text-mutedForeground">No owned casinos on dead accounts (or run scan).</p>
+            )}
+            {casinosDeadOwners.length > 0 && (
+              <div className="overflow-x-auto border border-zinc-700/40 rounded">
+                <table className="w-full text-left text-[10px] font-heading">
+                  <thead>
+                    <tr className="border-b border-zinc-700/50 text-mutedForeground uppercase">
+                      <th className="p-2">Game</th>
+                      <th className="p-2">Location</th>
+                      <th className="p-2">Owner</th>
+                      <th className="p-2">Buy-back</th>
+                      <th className="p-2 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {casinosDeadOwners.map((row, idx) => (
+                      <tr key={`${row.owner_id}-${row.game_type}-${row.location}-${idx}`} className="border-b border-zinc-800/60">
+                        <td className="p-2 text-foreground capitalize">{row.game_type}</td>
+                        <td className="p-2 font-mono text-mutedForeground">{row.location || '—'}</td>
+                        <td className="p-2 text-primary">{row.username || row.owner_id}</td>
+                        <td className="p-2 text-mutedForeground">
+                          {(row.buy_back_reward > 0 || row.buy_back_points_held > 0)
+                            ? `Reward ${Number(row.buy_back_reward || 0).toLocaleString()} pts · Held ${Number(row.buy_back_points_held || 0).toLocaleString()} pts`
+                            : '—'}
+                        </td>
+                        <td className="p-2 text-right whitespace-nowrap">
+                          <button
+                            type="button"
+                            onClick={() => openUserDetail({ id: row.owner_id })}
+                            className="px-2 py-0.5 text-[9px] font-heading uppercase border border-primary/50 text-primary hover:bg-primary/10 rounded"
+                          >
+                            Open dossier
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         )}
         </div>

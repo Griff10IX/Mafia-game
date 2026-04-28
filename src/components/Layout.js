@@ -387,6 +387,8 @@ export default function Layout({ children }) {
   const [userSearchLoading, setUserSearchLoading] = useState(false);
   const [pageLocks, setPageLocks] = useState({});
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
+  /** Remount `{children}` after the tab was backgrounded long enough (mobile browsers often freeze or drop XHR; UI stays blank until refresh). */
+  const [contentResumeKey, setContentResumeKey] = useState(0);
   const userSearchRef = useRef(null);
   const userSearchInputRef = useRef(null);
   const userSearchDebounceRef = useRef(null);
@@ -691,6 +693,47 @@ export default function Layout({ children }) {
     window.addEventListener('app:refresh-user', handler);
     return () => { window.removeEventListener('app:refresh-user', handler); if (refreshUserDebounceRef.current) clearTimeout(refreshUserDebounceRef.current); };
   }, []); // eslint-disable-line
+
+  // After a real background stint, remount the current page so its data effects run again (fixes blank/stuck content without a manual refresh).
+  const contentResumeTimerRef = useRef(null);
+  const tabHiddenAtRef = useRef(null);
+  useEffect(() => {
+    const MIN_HIDDEN_MS = 4000;
+    const scheduleResume = () => {
+      if (contentResumeTimerRef.current) clearTimeout(contentResumeTimerRef.current);
+      contentResumeTimerRef.current = setTimeout(() => {
+        contentResumeTimerRef.current = null;
+        try {
+          invalidateApiCache();
+        } catch (_) { /* ignore */ }
+        setContentResumeKey((k) => k + 1);
+        window.dispatchEvent(new CustomEvent('app:refresh-user', { detail: {} }));
+      }, 350);
+    };
+
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden' || document.hidden) {
+        if (!tabHiddenAtRef.current) tabHiddenAtRef.current = Date.now();
+        return;
+      }
+      const t0 = tabHiddenAtRef.current;
+      tabHiddenAtRef.current = null;
+      if (!t0) return;
+      if (Date.now() - t0 >= MIN_HIDDEN_MS) scheduleResume();
+    };
+
+    const onPageShow = (e) => {
+      if (e.persisted) scheduleResume();
+    };
+
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pageshow', onPageShow);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pageshow', onPageShow);
+      if (contentResumeTimerRef.current) clearTimeout(contentResumeTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     const handler = () => checkAdmin();
@@ -2133,7 +2176,7 @@ export default function Layout({ children }) {
           return (
             <ErrorBoundary>
               <div className="relative">
-                {children}
+                <Fragment key={contentResumeKey}>{children}</Fragment>
                 {user ? <FindWordHuntLayer /> : null}
               </div>
             </ErrorBoundary>

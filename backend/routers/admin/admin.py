@@ -11435,6 +11435,63 @@ def register(router):
             "bust_reward_cash": 0,
         }
 
+    @router.get("/admin/casinos-on-dead-owners")
+    async def admin_casinos_on_dead_owners(current_user: dict = Depends(get_current_user)):
+        """List casino tables owned by dead characters (invalid; use takeover or drop in user dossier). Admin or moderator."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        scan_specs = [
+            ("dice", db.dice_ownership, "city"),
+            ("roulette", db.roulette_ownership, "city"),
+            ("blackjack", db.blackjack_ownership, "city"),
+            ("horseracing", db.horseracing_ownership, "city"),
+            ("videopoker", db.videopoker_ownership, "city"),
+            ("slots", db.slots_ownership, "state"),
+        ]
+        rows: List[Dict[str, Any]] = []
+        for game_type, coll, loc_key in scan_specs:
+            proj = {"_id": 0, "owner_id": 1, "owner_username": 1, loc_key: 1, "buy_back_reward": 1, "buy_back_points_held": 1}
+            try:
+                chunk = await coll.find({"owner_id": {"$nin": [None, ""]}}, proj).to_list(400)
+            except Exception:
+                chunk = []
+            for doc in chunk:
+                oid = (doc.get("owner_id") or "").strip()
+                if not oid:
+                    continue
+                loc = doc.get(loc_key)
+                rows.append(
+                    {
+                        "game_type": game_type,
+                        "location": str(loc or "").strip(),
+                        "owner_id": oid,
+                        "owner_username": (doc.get("owner_username") or "").strip() or None,
+                        "buy_back_reward": int(doc.get("buy_back_reward") or 0),
+                        "buy_back_points_held": int(doc.get("buy_back_points_held") or 0),
+                    }
+                )
+        owner_ids = list({r["owner_id"] for r in rows})
+        if not owner_ids:
+            return {"entries": []}
+        users = await db.users.find(
+            {"id": {"$in": owner_ids}},
+            {"_id": 0, "id": 1, "username": 1, "is_dead": 1},
+        ).to_list(len(owner_ids))
+        by_id = {str(u.get("id") or ""): u for u in users}
+        entries: List[Dict[str, Any]] = []
+        for r in rows:
+            u = by_id.get(r["owner_id"])
+            if not u or not u.get("is_dead"):
+                continue
+            entries.append(
+                {
+                    **r,
+                    "username": u.get("username") or r.get("owner_username") or "?",
+                }
+            )
+        entries.sort(key=lambda x: (x.get("username") or "", x.get("game_type") or "", x.get("location") or ""))
+        return {"entries": entries}
+
     @router.post("/admin/drop-user-casino")
     async def admin_drop_user_casino(body: DropUserCasinoRequest, current_user: dict = Depends(get_current_user)):
         """Remove one casino from a user (ownership becomes unowned). Admin or moderator."""
@@ -11476,7 +11533,7 @@ def register(router):
             raise HTTPException(status_code=403, detail="Admin access required")
         import importlib
 
-        from server import CAPO_RANK_ID, _user_owns_any_casino, user_prestige_rank_mult
+        from server import CAPO_RANK_ID, _user_owns_any_casino, raise_if_dead_casino_transfer_target, user_prestige_rank_mult
         from utils.quicktrade_casino_cleanup import cancel_quicktrade_casino_listings_by_locations
 
         game_type = (body.game_type or "").strip().lower()
@@ -11516,18 +11573,19 @@ def register(router):
         if to_username_raw:
             to_user = await db.users.find_one(
                 {"username": {"$regex": f"^{re.escape(to_username_raw)}$", "$options": "i"}},
-                {"_id": 0, "id": 1, "username": 1, "rank_points": 1, "prestige_level": 1},
+                {"_id": 0, "id": 1, "username": 1, "rank_points": 1, "prestige_level": 1, "is_dead": 1},
             )
             if not to_user:
                 raise HTTPException(status_code=404, detail=f"No user with username {to_username_raw!r}")
         else:
             to_user = await db.users.find_one(
                 {"id": current_user.get("id") or ""},
-                {"_id": 0, "id": 1, "username": 1, "rank_points": 1, "prestige_level": 1},
+                {"_id": 0, "id": 1, "username": 1, "rank_points": 1, "prestige_level": 1, "is_dead": 1},
             )
             if not to_user:
                 raise HTTPException(status_code=400, detail="Could not resolve acting admin user")
 
+        raise_if_dead_casino_transfer_target(to_user)
         to_uid = str(to_user.get("id") or "")
         to_un = str(to_user.get("username") or "").strip() or "?"
         if to_uid == from_uid:

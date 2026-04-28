@@ -2793,6 +2793,12 @@ async def _user_owns_any_casino(user_id: str):
     return None
 
 
+def raise_if_dead_casino_transfer_target(target: Optional[dict]) -> None:
+    """Dead characters cannot receive casino ownership (venue would be unusable / stuck)."""
+    if target and target.get("is_dead"):
+        raise HTTPException(status_code=400, detail="That player is dead and cannot receive a casino.")
+
+
 from routers.casinos.dice import DICE_MAX_BET, DiceSellOnTradeRequest  # used by CASINO_GAMES and roulette/blackjack/horseracing sell-on-trade
 from routers.casinos.roulette import ROULETTE_MAX_BET, RouletteClaimRequest, RouletteSetMaxBetRequest, RouletteSendToUserRequest  # CASINO_GAMES, blackjack/horseracing reuse these models
 from routers.casinos.blackjack import BLACKJACK_MAX_BET  # CASINO_GAMES

@@ -27,6 +27,7 @@ from server import (
     log_gambling,
     resolve_gambling_log_buy_back,
     _user_owns_any_casino,
+    raise_if_dead_casino_transfer_target,
     _username_pattern,
     get_head_family_id_for_state,
     get_casino_caps,
@@ -479,9 +480,10 @@ def register(router):
         if not doc or doc.get("owner_id") != current_user.get("id") or "":
             raise HTTPException(status_code=403, detail="You do not own this track")
         target_username_pattern = _username_pattern(request.target_username.strip())
-        target = await db.users.find_one({"username": target_username_pattern}, {"_id": 0, "id": 1, "username": 1, "rank_points": 1})
+        target = await db.users.find_one({"username": target_username_pattern}, {"_id": 0, "id": 1, "username": 1, "rank_points": 1, "is_dead": 1})
         if not target or (target.get("id") or "") == (current_user.get("id") or ""):
             raise HTTPException(status_code=400, detail="Invalid target user")
+        raise_if_dead_casino_transfer_target(target)
         if await _user_owns_any_casino(target.get("id") or ""):
             raise HTTPException(
                 status_code=400,

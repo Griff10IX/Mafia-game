@@ -552,6 +552,44 @@ def _format_reward_desc(desc: dict) -> str:
     return ", ".join(parts) if parts else "Nothing"
 
 
+def _dice_slot_for_user(result: Optional[dict], user_id: str) -> Optional[int]:
+    if not result or not user_id:
+        return None
+    for a in result.get("assignments") or []:
+        if a.get("user_id") == user_id:
+            return a.get("number")
+    return None
+
+
+def _roll_summary_after_settle(game: dict) -> str:
+    """Short summary for the manual roll API response (toast)."""
+    res = game.get("result") or {}
+    gt = game.get("game_type") or "dice"
+    parts = game.get("participants") or []
+    if not parts:
+        return "Game settled — no players had joined."
+    n = len(parts)
+    if gt == "dice":
+        roll = res.get("roll")
+        wname = (res.get("winner_username") or "").strip() or "—"
+        rw = res.get("reward")
+        prize = _format_reward_desc(rw) if rw else "Nothing"
+        if roll is not None:
+            return f"Rolled {roll} (1–{n}). Winner: {wname}. Prize: {prize}."
+        return f"Dice settled. Winner: {wname}. Prize: {prize}."
+    if gt == "hangman":
+        wname = (res.get("winner_username") or "").strip()
+        if not wname:
+            return "Hangman settled — no winner this round."
+        rw = res.get("reward")
+        prize = _format_reward_desc(rw) if rw else "Nothing"
+        return f"Hangman settled. Winner: {wname}. Prize: {prize}."
+    if gt == "gbox":
+        pot = int(res.get("total_cash_pot") or game.get("pot") or 0)
+        return f"Gbox settled — {n} player(s), cash pot was ${pot:,}."
+    return "Game settled."
+
+
 async def _settle_game(game: dict):
     """Run payout (random rewards + pot) and mark game completed. Idempotent if already completed."""
     if game.get("status") == "completed":
@@ -603,32 +641,62 @@ async def _settle_game(game: dict):
                 if game_type in ("dice", "hangman"):
                     winner_id = (result or {}).get("winner_id")
                     reward = (result or {}).get("reward")
-                    if uid == winner_id and reward:
+                    n_players = len(participants)
+                    if game_type == "dice":
+                        roll = (result or {}).get("roll")
+                        my_slot = _dice_slot_for_user(result, uid)
+                        roll_line = (
+                            f"The die rolled {roll} (numbers 1–{n_players}). "
+                            + (f"You had number {my_slot}. " if my_slot is not None else "")
+                        )
+                    else:
+                        roll_line = ""
+                    if uid == winner_id:
                         reward_money = int((reward or {}).get("money") or 0)
                         total_money = int(pot or 0) + reward_money
                         points = int((reward or {}).get("points") or 0)
                         points_str = f" + {points:,} points" if points > 0 else ""
-                        msg = (
-                            f"You won! Reward: {_format_reward_desc(reward)}. "
-                            f"Pot: ${pot:,}. Total cash paid: ${total_money:,}{points_str}."
-                        )
+                        if reward:
+                            win_body = (
+                                f"You won! Reward: {_format_reward_desc(reward)}. "
+                                f"Pot: ${pot:,}. Total cash paid: ${total_money:,}{points_str}."
+                            )
+                        else:
+                            win_body = f"You won this round! Pot: ${pot:,}. Total cash paid: ${total_money:,}{points_str}."
+                        msg = roll_line + win_body
                     else:
                         winner_name = (result or {}).get("winner_username")
                         if game_type == "hangman" and not winner_name:
-                            msg = f"Game over. No winner this round. Pot was ${pot:,}."
+                            msg = (
+                                "Hangman is over — no winner this round (word not solved in time). "
+                                f"Pot was ${pot:,}. Better luck next time!"
+                            )
+                        elif game_type == "dice":
+                            msg = (
+                                roll_line
+                                + f"You did not win. Winner: {winner_name or 'Someone'}. "
+                                + f"Prize: {_format_reward_desc(reward) if reward else 'Nothing'}. Pot was ${pot:,}."
+                            )
                         else:
-                            msg = f"Game over. Winner: {winner_name or 'Someone'}. Pot was ${pot:,}. Better luck next time!"
-                    title = "🧩 Hangman results" if game_type == "hangman" else "🎲 E-Game results"
+                            msg = (
+                                f"Hangman is over. Winner: {winner_name or 'Someone'}. "
+                                + f"You did not take this round. Pot was ${pot:,}."
+                            )
+                    title = "🧩 Hangman results" if game_type == "hangman" else "🎲 E-Game dice results"
                     await send_notification(uid, title, msg, "system", category="ent_games")
                 else:
                     # gbox: each player got a reward
                     rewards = (result or {}).get("rewards_by_user") or {}
                     reward = rewards.get(uid)
                     if reward:
-                        msg = f"You won: {_format_reward_desc(reward)}. Pot was ${pot:,}."
+                        desc = _format_reward_desc(reward)
+                        if desc == "Nothing":
+                            msg = f"Gbox settled. You did not receive a cash or points share this round. Pot was ${pot:,}."
+                        else:
+                            msg = f"Gbox settled. Your payout: {desc}. (Table pot was ${pot:,}.)"
                     else:
-                        msg = f"Game over. Pot was ${pot:,}."
-                    await send_notification(uid, "🎁 E-Game results", msg, "system", category="ent_games")
+                        msg = f"Gbox settled. You had no prize row this round. Pot was ${pot:,}."
+                    await send_notification(uid, "🎁 E-Game Gbox results", msg, "system", category="ent_games")
             except Exception:
                 pass
 
@@ -1259,7 +1327,12 @@ async def admin_roll_game(game_id: str, current_user: dict = Depends(get_current
         raise HTTPException(status_code=403, detail="Only the game creator can roll manual games; admins can roll any game.")
     await _settle_game(game)
     updated = await db.entertainer_games.find_one({"id": game_id}, {"_id": 0})
-    return {"message": "Game rolled", "game": updated}
+    summary = _roll_summary_after_settle(updated) if updated and updated.get("status") == "completed" else "Game rolled."
+    return {
+        "message": summary,
+        "summary": summary,
+        "game": _with_public_hangman(updated or game, current_user.get("id")),
+    }
 
 
 # ---------- Admin: entertainer reward config ----------

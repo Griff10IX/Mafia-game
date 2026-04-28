@@ -634,6 +634,20 @@ const CreateGameModal = ({ isOpen, onClose, onCreated, me }) => {
   const [rewardPoints, setRewardPoints] = useState('0');
   const [submitting, setSubmitting] = useState(false);
 
+  useEffect(() => {
+    if (!isOpen) return;
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtml = html.style.overflow;
+    const prevBody = body.style.overflow;
+    html.style.overflow = 'hidden';
+    body.style.overflow = 'hidden';
+    return () => {
+      html.style.overflow = prevHtml;
+      body.style.overflow = prevBody;
+    };
+  }, [isOpen]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     const parsedMaxPlayers = Math.max(1, Math.min(10, parseInt(maxPlayers, 10) || 10));
@@ -686,15 +700,29 @@ const CreateGameModal = ({ isOpen, onClose, onCreated, me }) => {
 
   if (!isOpen) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-      <div className={`${styles.panel} w-full max-w-sm rounded-lg overflow-hidden border border-primary/20 shadow-2xl`}>
-        <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-        <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
-          <h2 className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">🎲 Create Game</h2>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 bg-black/80 backdrop-blur-sm"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="create-game-modal-title"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div
+        className={`${styles.panel} w-full max-w-sm max-h-[min(82dvh,calc(100dvh-5.25rem))] sm:max-h-[min(90dvh,720px)] rounded-lg overflow-hidden border border-primary/20 shadow-2xl flex flex-col min-h-0`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="h-0.5 shrink-0 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+        <div className="shrink-0 px-3 py-2 sm:py-2.5 bg-primary/8 border-b border-primary/20">
+          <h2 id="create-game-modal-title" className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">🎲 Create Game</h2>
         </div>
-        <form onSubmit={handleSubmit} className="p-3 space-y-3">
+        <form
+          onSubmit={handleSubmit}
+          className="flex flex-col flex-1 min-h-0 overflow-y-auto overscroll-y-contain touch-pan-y px-3 py-2 space-y-2 sm:space-y-3 sm:py-3 pb-4 [-webkit-overflow-scrolling:touch]"
+        >
           {me?.is_entertainer && (
-            <div className="rounded-lg border border-violet-500/35 bg-violet-950/25 px-2.5 py-2 space-y-1">
+            <div className="rounded-lg border border-violet-500/35 bg-violet-950/25 px-2 py-1.5 sm:px-2.5 sm:py-2 space-y-1">
               <div className="flex items-center gap-2 text-[9px] font-heading font-bold text-violet-200 uppercase tracking-wider">
                 <Mic2 size={13} className="text-violet-400 shrink-0" />
                 Entertainer fund
@@ -711,14 +739,14 @@ const CreateGameModal = ({ isOpen, onClose, onCreated, me }) => {
           <div>
             <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Type</label>
             <div className="flex gap-2">
-              <button type="button" onClick={() => setGameType('dice')} className={`flex-1 flex items-center justify-center gap-1 px-2 py-2 rounded border text-xs font-heading ${gameType === 'dice' ? 'bg-primary/20 border-primary/50 text-primary' : 'border-zinc-600/50 text-mutedForeground'}`}>
+              <button type="button" onClick={() => setGameType('dice')} className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 sm:py-2 rounded border text-xs font-heading ${gameType === 'dice' ? 'bg-primary/20 border-primary/50 text-primary' : 'border-zinc-600/50 text-mutedForeground'}`}>
                 <Dice5 size={14} /> Dice
               </button>
-              <button type="button" onClick={() => setGameType('gbox')} className={`flex-1 flex items-center justify-center gap-1 px-2 py-2 rounded border text-xs font-heading ${gameType === 'gbox' ? 'bg-primary/20 border-primary/50 text-primary' : 'border-zinc-600/50 text-mutedForeground'}`}>
+              <button type="button" onClick={() => setGameType('gbox')} className={`flex-1 flex items-center justify-center gap-1 px-2 py-1.5 sm:py-2 rounded border text-xs font-heading ${gameType === 'gbox' ? 'bg-primary/20 border-primary/50 text-primary' : 'border-zinc-600/50 text-mutedForeground'}`}>
                 <Package size={14} /> Gbox
               </button>
             </div>
-            <p className="text-[10px] text-mutedForeground mt-1">
+            <p className="text-[9px] sm:text-[10px] text-mutedForeground mt-1 leading-snug">
               {gameType === 'gbox'
                 ? `Gbox: set total reward cash and/or points — split randomly among joiners when you roll.${me?.is_entertainer ? ` Entertainer fund: max ${ENTERTAINER_GBOX_MAX_POINTS.toLocaleString()} reward points total per Gbox.` : ''}`
                 : 'Dice: winner gets the full reward cash and points you set below.'}
@@ -726,35 +754,34 @@ const CreateGameModal = ({ isOpen, onClose, onCreated, me }) => {
           </div>
           <div>
             <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Players (1–10)</label>
-            <input type="number" min={1} max={10} value={maxPlayers} onChange={(e) => setMaxPlayers(e.target.value)} className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground" />
+            <input type="number" min={1} max={10} value={maxPlayers} onChange={(e) => setMaxPlayers(e.target.value)} className="w-full px-3 py-1.5 sm:py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground" />
           </div>
           <div>
             <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Pot ($ you put in)</label>
-            <input type="number" min={0} value={pot} onChange={(e) => setPot(e.target.value)} placeholder="0" className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground" />
+            <input type="number" min={0} value={pot} onChange={(e) => setPot(e.target.value)} placeholder="0" className="w-full px-3 py-1.5 sm:py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground" />
           </div>
           <div>
             <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Entry fee ($ per player)</label>
-            <input type="number" min={0} value={joinFee} onChange={(e) => setJoinFee(e.target.value)} placeholder="0" className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground" />
+            <input type="number" min={0} value={joinFee} onChange={(e) => setJoinFee(e.target.value)} placeholder="0" className="w-full px-3 py-1.5 sm:py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground" />
           </div>
           <label className="flex items-center gap-2 cursor-pointer">
-            <input type="checkbox" checked={manualRoll} onChange={(e) => setManualRoll(e.target.checked)} className="w-4 h-4 accent-primary" />
-            <span className="text-xs font-heading text-foreground">Manual roll (I roll when ready)</span>
+            <input type="checkbox" checked={manualRoll} onChange={(e) => setManualRoll(e.target.checked)} className="w-4 h-4 accent-primary shrink-0" />
+            <span className="text-[11px] sm:text-xs font-heading text-foreground leading-snug">Manual roll (I roll when ready)</span>
           </label>
           <div>
             <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Reward cash ($)</label>
-            <FormattedNumberInput value={rewardMoney} onChange={setRewardMoney} placeholder="0" className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground font-heading focus:border-primary/50 focus:outline-none" />
+            <FormattedNumberInput value={rewardMoney} onChange={setRewardMoney} placeholder="0" className="w-full px-3 py-1.5 sm:py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground font-heading focus:border-primary/50 focus:outline-none" />
           </div>
           <div>
             <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Reward points</label>
-            <FormattedNumberInput value={rewardPoints} onChange={setRewardPoints} placeholder="0" className="w-full px-3 py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground font-heading focus:border-primary/50 focus:outline-none" />
+            <FormattedNumberInput value={rewardPoints} onChange={setRewardPoints} placeholder="0" className="w-full px-3 py-1.5 sm:py-2 bg-zinc-900/50 border border-zinc-700/50 rounded text-sm text-foreground font-heading focus:border-primary/50 focus:outline-none" />
           </div>
-          <div className="flex gap-2 pt-1">
-            <button type="button" onClick={onClose} className="flex-1 px-4 py-2 bg-zinc-700/50 text-foreground text-xs font-heading uppercase rounded border border-zinc-600/50">Cancel</button>
-            <button type="submit" disabled={submitting} className="flex-1 px-4 py-2 bg-primary/20 text-primary text-xs font-heading uppercase rounded border border-primary/40 hover:bg-primary/30 disabled:opacity-50">{submitting ? '...' : 'Create'}</button>
+          <div className="flex gap-2 pt-1 shrink-0 pb-1">
+            <button type="button" onClick={onClose} className="flex-1 min-h-[44px] sm:min-h-0 px-3 sm:px-4 py-2 bg-zinc-700/50 text-foreground text-xs font-heading uppercase rounded border border-zinc-600/50">Cancel</button>
+            <button type="submit" disabled={submitting} className="flex-1 min-h-[44px] sm:min-h-0 px-3 sm:px-4 py-2 bg-primary/20 text-primary text-xs font-heading uppercase rounded border border-primary/40 hover:bg-primary/30 disabled:opacity-50">{submitting ? '...' : 'Create'}</button>
           </div>
         </form>
       </div>
-      <button type="button" onClick={onClose} className="absolute inset-0 -z-10" aria-label="Close" />
     </div>
   );
 };
@@ -1476,11 +1503,11 @@ export default function Forum() {
   };
 
   const handleRollGame = async (gameId) => {
-    if (!isAdmin) return;
     setRollingId(gameId);
     try {
-      await api.post(`/forum/entertainer/games/${gameId}/roll`);
-      toast.success('Game rolled');
+      const res = await api.post(`/forum/entertainer/games/${encodeURIComponent(gameId)}/roll`);
+      const summary = typeof res.data?.message === 'string' ? res.data.message : res.data?.summary;
+      toast.success(summary || 'Game rolled');
       fetchEntertainerGames();
       fetchEntertainerHistory();
     } catch (err) {
@@ -2325,6 +2352,27 @@ export default function Forum() {
                                     <Link to={`/profile/${encodeURIComponent(host)}`} className="text-primary hover:underline font-heading">
                                       {host}
                                     </Link>
+                                  )}
+                                </div>
+                                <div className="text-[10px] mt-0.5 flex flex-wrap items-baseline gap-x-1 gap-y-0.5">
+                                  <span className="text-mutedForeground shrink-0">Joined:</span>
+                                  {participants.length === 0 ? (
+                                    <span className="text-zinc-500 font-heading">Nobody yet</span>
+                                  ) : (
+                                    participants.map((p, idx) => {
+                                      const uname = (p.username || '?').trim() || '?';
+                                      return (
+                                        <span key={p.user_id || `join-${g.id}-${idx}`} className="inline">
+                                          {idx > 0 ? <span className="text-mutedForeground">, </span> : null}
+                                          <Link
+                                            to={`/profile/${encodeURIComponent(uname)}`}
+                                            className="text-primary/90 hover:underline font-heading"
+                                          >
+                                            {uname}
+                                          </Link>
+                                        </span>
+                                      );
+                                    })
                                   )}
                                 </div>
                               </div>
