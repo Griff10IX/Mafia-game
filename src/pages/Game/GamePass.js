@@ -10,8 +10,10 @@ import {
   GAME_PASS_DURATION_FINE_PRINT,
   GAME_PASS_DURATION_LABEL,
   GAME_PASS_PACKAGE_ID,
+  GAME_PASS_PURCHASE_FINAL_DAYS_BLOCK,
   GAME_PASS_POINTS_PRICE,
   GAME_PASS_PRICE_GBP,
+  GAME_PASS_SEASON_END_AT_ISO,
   SILVER_PACK_POINTS,
   SILVER_PACK_PRICE_GBP,
   gamePassPurchaseBlockedFinalWindowMessage,
@@ -420,6 +422,8 @@ export default function GamePass() {
   const [checkingPayment, setCheckingPayment] = useState(false);
   const [user, setUser] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [seasonEndAtIso, setSeasonEndAtIso] = useState(GAME_PASS_SEASON_END_AT_ISO);
+  const [seasonCloseWindowDays, setSeasonCloseWindowDays] = useState(GAME_PASS_PURCHASE_FINAL_DAYS_BLOCK);
 
   const [selectedBandIndex, setSelectedBandIndex] = useState(null);
   const [selectedMicroTier, setSelectedMicroTier] = useState(null);
@@ -427,12 +431,20 @@ export default function GamePass() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [userRes, adminRes] = await Promise.all([
+      const [userRes, adminRes, seasonRes] = await Promise.all([
         api.get('/auth/me'),
         api.get('/admin/check').catch(() => ({ data: { is_admin: false } })),
+        api.get('/payments/game-pass-season').catch(() => ({ data: null })),
       ]);
       setUser(userRes.data);
       setIsAdmin(!!adminRes.data?.is_admin);
+      if (seasonRes?.data?.game_pass_season_end_at) {
+        setSeasonEndAtIso(String(seasonRes.data.game_pass_season_end_at));
+      }
+      if (seasonRes?.data?.game_pass_purchase_close_window_days != null) {
+        const n = Number(seasonRes.data.game_pass_purchase_close_window_days);
+        if (Number.isFinite(n) && n > 0) setSeasonCloseWindowDays(Math.floor(n));
+      }
     } catch {
       toast.error('Failed to load data');
     } finally {
@@ -440,17 +452,17 @@ export default function GamePass() {
     }
   }, []);
 
-  const expiryIso = user?.rank_xp_pass_token_expires_at;
+  const seasonEndUntil = seasonEndAtIso ? new Date(seasonEndAtIso) : null;
+  const seasonEndMs = seasonEndUntil && !Number.isNaN(seasonEndUntil.getTime()) ? seasonEndUntil.getTime() : null;
   useEffect(() => {
-    if (!expiryIso) return undefined;
-    const end = new Date(expiryIso).getTime();
+    const end = seasonEndMs;
     if (Number.isNaN(end) || end <= Date.now()) return undefined;
     const id = setInterval(() => setTickMs(Date.now()), 1000);
     return () => clearInterval(id);
-  }, [expiryIso]);
+  }, [seasonEndMs]);
 
-  // When a pass expiry exists, drive "now" off tickMs so VIP/token state flips with the countdown.
-  const nowTs = expiryIso ? tickMs : Date.now();
+  // Drive "now" off tickMs while season countdown is active.
+  const nowTs = seasonEndMs ? tickMs : Date.now();
   const passTokensHeld = Number(user?.rank_xp_pass_tokens ?? 0);
   const vipClaimed = user?.rank_xp_pass_rewards_granted === true;
   const pointsBalance = Number(user?.points ?? 0);
@@ -459,7 +471,12 @@ export default function GamePass() {
   const passIsUnactivatedExpired = passTokensHeld > 0 && !!(passExpiryUntil && passExpiryUntil.getTime() <= nowTs);
   const passIsUnactivatedUnknownExpiry = passTokensHeld > 0 && !passExpiryUntil;
 
-  const gamePassPurchaseBlockedFinalFortnight = gamePassPurchaseBlockedFinalWindowMessage(user, nowTs);
+  const gamePassPurchaseBlockedFinalFortnight = gamePassPurchaseBlockedFinalWindowMessage(
+    user,
+    nowTs,
+    seasonEndAtIso,
+    seasonCloseWindowDays,
+  );
 
   const vipGrantingActive = vipClaimed && (!passExpiryUntil || passExpiryUntil.getTime() > nowTs);
 
@@ -484,10 +501,8 @@ export default function GamePass() {
       ? 'VIP (Token Ready)'
       : 'Free';
 
-  const passExpiryEndMs =
-    passExpiryUntil && !Number.isNaN(passExpiryUntil.getTime()) ? passExpiryUntil.getTime() : null;
-  const passExpiryRemainingMs = passExpiryEndMs != null ? passExpiryEndMs - tickMs : null;
-  const showGamePassExpiryPanel = Boolean(expiryIso && passExpiryUntil && !Number.isNaN(passExpiryUntil.getTime()));
+  const passExpiryRemainingMs = seasonEndMs != null ? seasonEndMs - tickMs : null;
+  const showGamePassExpiryPanel = Boolean(seasonEndUntil && !Number.isNaN(seasonEndUntil.getTime()));
 
   useEffect(() => {
     // Default selection = current band. Keeps selection stable once picked.
@@ -755,7 +770,7 @@ export default function GamePass() {
               {showGamePassExpiryPanel && (
                 <div className="rounded-md border border-primary/30 bg-zinc-950/40 px-2.5 py-2.5 space-y-1.5">
                   <div className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider">Game Pass end date</div>
-                  <div className="text-[11px] font-heading font-bold text-primary leading-snug">{formatGamePassEndDateTime(passExpiryUntil)}</div>
+                  <div className="text-[11px] font-heading font-bold text-primary leading-snug">{formatGamePassEndDateTime(seasonEndUntil)}</div>
                   {passExpiryRemainingMs != null && passExpiryRemainingMs > 0 ? (
                     <>
                       <div className="text-[10px] font-heading text-emerald-300/95">
@@ -765,9 +780,7 @@ export default function GamePass() {
                       {passIsUnactivatedValid && !vipClaimed && (
                         <p className="text-[9px] text-zinc-400 font-heading">Activate your token before this time.</p>
                       )}
-                      {vipGrantingActive && (
-                        <p className="text-[9px] text-zinc-400 font-heading">VIP tier rewards run until this time.</p>
-                      )}
+                      <p className="text-[9px] text-zinc-400 font-heading">Current Game Pass season ends at this time for everyone.</p>
                     </>
                   ) : (
                     <div className="text-[10px] font-heading text-amber-400/95">This Game Pass window has ended.</div>

@@ -23,23 +23,24 @@ export const GAME_PASS_DURATION_FINE_PRINT =
 
 /** Must match backend `payments.GAME_PASS_PURCHASE_CLOSE_WINDOW_DAYS`. */
 export const GAME_PASS_PURCHASE_FINAL_DAYS_BLOCK = 7;
+/** Must match backend `payments.GAME_PASS_SEASON_END_AT` (15:00 BST). */
+export const GAME_PASS_SEASON_END_AT_ISO = '2026-05-01T14:00:00+00:00';
 
 const MS_PER_DAY = 86400000;
 
 /**
  * When non-null, Stripe/points Game Pass purchase should be disabled (server enforces too).
- * Block inside final N days before rank_xp_pass_token_expires_at (server-enforced).
+ * Block inside final N days before the global Game Pass season end timestamp.
  */
-export function gamePassPurchaseBlockedFinalWindowMessage(user, nowMs = Date.now()) {
-  if (!user) return null;
-  const raw = user.rank_xp_pass_token_expires_at;
-  if (!raw) return null;
-  const end = new Date(raw).getTime();
+export function gamePassPurchaseBlockedFinalWindowMessage(
+  user,
+  nowMs = Date.now(),
+  seasonEndAtIso = GAME_PASS_SEASON_END_AT_ISO,
+  closeWindowDays = GAME_PASS_PURCHASE_FINAL_DAYS_BLOCK,
+) {
+  const end = new Date(seasonEndAtIso).getTime();
   if (Number.isNaN(end) || end <= nowMs) return null;
   const remainingMs = end - nowMs;
-  if (remainingMs > GAME_PASS_PURCHASE_FINAL_DAYS_BLOCK * MS_PER_DAY) return null;
-  const hasToken = Number(user.rank_xp_pass_tokens ?? 0) > 0;
-  const vip = user.rank_xp_pass_rewards_granted === true;
-  if (!hasToken && !vip) return null;
-  return `Game Pass is not available for purchase in the final ${GAME_PASS_PURCHASE_FINAL_DAYS_BLOCK} days before your current pass ends. You can buy again after it expires.`;
+  if (remainingMs > closeWindowDays * MS_PER_DAY) return null;
+  return `Game Pass is not available for purchase in the final ${closeWindowDays} days before this season ends. You can buy again when the new season releases.`;
 }

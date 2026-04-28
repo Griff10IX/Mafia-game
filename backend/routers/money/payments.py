@@ -10,6 +10,10 @@ from fastapi import Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from server import send_notification, _get_staff_user_ids
+from utils.game_pass_season import (
+    DEFAULT_GAME_PASS_SEASON_END_AT,
+    get_game_pass_season_public,
+)
 from utils.point_provenance import mint_purchase_lot_if_missing, log_points_event
 from utils.release_soft_launch import game_pass_purchase_locked_detail, get_release_soft_launch_public
 from utils.store_points_pricing import (
@@ -29,24 +33,27 @@ RANK_XP_PASS_PACKAGE_ID = "rank_xp_pass_499"
 GAME_PASS_POINTS_PRICE = 8_000
 # No new Game Pass checkout while an active pass is within this many days of rank_xp_pass_token_expires_at.
 GAME_PASS_PURCHASE_CLOSE_WINDOW_DAYS = 7
+GAME_PASS_SEASON_END_AT = DEFAULT_GAME_PASS_SEASON_END_AT
 
 
-def game_pass_purchase_blocked_in_final_window(user: Optional[dict], now: datetime) -> Optional[str]:
+def game_pass_purchase_blocked_in_final_window(
+    user: Optional[dict],
+    now: datetime,
+    *,
+    season_end_at: Optional[str] = None,
+) -> Optional[str]:
     """
-    Block purchasing another Game Pass when the current window (token and/or VIP) ends in <= N days.
-    Mirrors UX: avoid taking payment for a pass that cannot meaningfully run before renewal.
+    Block Game Pass purchases for everyone in the final N days before the global season end.
     """
-    if not user:
+    season_end_dt = _parse_utc(season_end_at or GAME_PASS_SEASON_END_AT)
+    if not season_end_dt or season_end_dt <= now:
         return None
-    expires_dt = _parse_utc(user.get("rank_xp_pass_token_expires_at"))
-    if not expires_dt or expires_dt <= now:
-        return None
-    remaining = expires_dt - now
+    remaining = season_end_dt - now
     if remaining > timedelta(days=GAME_PASS_PURCHASE_CLOSE_WINDOW_DAYS):
         return None
     return (
-        f"Game Pass is not available for purchase in the final {GAME_PASS_PURCHASE_CLOSE_WINDOW_DAYS} days before your "
-        "current pass ends. You can buy again after it expires."
+        f"Game Pass is not available for purchase in the final {GAME_PASS_PURCHASE_CLOSE_WINDOW_DAYS} days before this season ends. "
+        "You can buy again when the new season releases."
     )
 
 
@@ -404,7 +411,12 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
                 "rank_xp_pass_free_last_micro_tier_granted": 1,
             },
         )
-        block_msg = game_pass_purchase_blocked_in_final_window(user, now)
+        season = await get_game_pass_season_public(db)
+        block_msg = game_pass_purchase_blocked_in_final_window(
+            user,
+            now,
+            season_end_at=season.get("game_pass_season_end_at"),
+        )
         if block_msg:
             blocked = await db.payment_transactions.update_one(
                 {"session_id": session_id, "payment_status": "pending"},
@@ -912,6 +924,15 @@ def register(router):
         """Public flags for UI: PvP kill pause and Game Pass purchase lock during release soft-launch."""
         return await get_release_soft_launch_public(db)
 
+    @router.get("/payments/game-pass-season")
+    async def get_game_pass_season_status():
+        """Public Game Pass season settings for page countdown and purchase windows."""
+        season = await get_game_pass_season_public(db)
+        return {
+            **season,
+            "game_pass_purchase_close_window_days": GAME_PASS_PURCHASE_CLOSE_WINDOW_DAYS,
+        }
+
     @router.post("/payments/buy-game-pass-with-points")
     async def buy_game_pass_with_points(request: BuyGamePassWithPointsRequest, current_user: dict = Depends(get_current_user)):
         """Buy a Game Pass token using in-game points (no Stripe). Grants an unactivated `rank_xp_pass` token."""
@@ -952,7 +973,12 @@ def register(router):
         if rl.get("game_pass_purchase_locked"):
             raise HTTPException(status_code=403, detail=game_pass_purchase_locked_detail(rl))
 
-        block_msg = game_pass_purchase_blocked_in_final_window(current_user, now)
+        season = await get_game_pass_season_public(db)
+        block_msg = game_pass_purchase_blocked_in_final_window(
+            current_user,
+            now,
+            season_end_at=season.get("game_pass_season_end_at"),
+        )
         if block_msg:
             raise HTTPException(status_code=403, detail=block_msg)
 
@@ -1099,7 +1125,12 @@ def register(router):
             rl = await get_release_soft_launch_public(db)
             if rl.get("game_pass_purchase_locked"):
                 raise HTTPException(status_code=403, detail=game_pass_purchase_locked_detail(rl))
-            block_msg = game_pass_purchase_blocked_in_final_window(current_user, now)
+            season = await get_game_pass_season_public(db)
+            block_msg = game_pass_purchase_blocked_in_final_window(
+                current_user,
+                now,
+                season_end_at=season.get("game_pass_season_end_at"),
+            )
             if block_msg:
                 raise HTTPException(status_code=403, detail=block_msg)
             existing_tokens = int(current_user.get("rank_xp_pass_tokens") or 0)

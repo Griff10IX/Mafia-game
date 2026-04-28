@@ -40,6 +40,11 @@ from utils.release_soft_launch import (
     RELEASE_SOFT_LAUNCH_KEY,
     get_release_soft_launch_public,
 )
+from utils.game_pass_season import (
+    GAME_PASS_SEASON_SETTINGS_KEY,
+    get_game_pass_season_public,
+    normalize_game_pass_season_end_at,
+)
 from utils.point_provenance import (
     chargeback_preview,
     execute_chargeback_best_effort,
@@ -13104,6 +13109,9 @@ def register(router):
         pvp_kills_unlock_at: Optional[str] = None
         force_game_pass_purchase_locked: Optional[bool] = None
 
+    class GamePassSeasonSettingsRequest(BaseModel):
+        season_end_at: str
+
     @router.get("/admin/release-soft-launch")
     async def admin_get_release_soft_launch(current_user: dict = Depends(get_current_user)):
         """Release soft-launch: separate unlock times for points/Game Pass vs PvP kills."""
@@ -13151,6 +13159,32 @@ def register(router):
             "message": f"Release soft-launch {'enabled' if req.enabled else 'disabled'}",
             **pub,
             "stored": value,
+        }
+
+    @router.get("/admin/game-pass-season")
+    async def admin_get_game_pass_season(current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        return await get_game_pass_season_public(db)
+
+    @router.post("/admin/game-pass-season")
+    async def admin_set_game_pass_season(req: GamePassSeasonSettingsRequest, current_user: dict = Depends(get_current_user)):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        season_end_at = normalize_game_pass_season_end_at(req.season_end_at)
+        value = {
+            "season_end_at": season_end_at,
+            "set_by": current_user.get("username", "?"),
+            "set_at": datetime.now(timezone.utc).isoformat(),
+        }
+        await db.game_settings.update_one(
+            {"key": GAME_PASS_SEASON_SETTINGS_KEY},
+            {"$set": {"key": GAME_PASS_SEASON_SETTINGS_KEY, "value": value}},
+            upsert=True,
+        )
+        return {
+            "message": "Game Pass season end updated",
+            **(await get_game_pass_season_public(db)),
         }
 
     class BulkUserActionRequest(BaseModel):
