@@ -149,6 +149,30 @@ export const SERVER_UNAVAILABLE_EVENT = 'app:server-unavailable';
 
 let _lastServerUnavailableDispatch = 0;
 const _SERVER_UNAVAILABLE_THROTTLE_MS = 30_000; // Only dispatch once per 30s to avoid overlay + toast spam
+const _SERVER_UNAVAILABLE_STRIKE_WINDOW_MS = 12_000; // Require repeated failures in a short window
+let _serverUnavailableStrikeCount = 0;
+let _serverUnavailableFirstStrikeAt = 0;
+
+function _resetServerUnavailableStrikes() {
+  _serverUnavailableStrikeCount = 0;
+  _serverUnavailableFirstStrikeAt = 0;
+}
+
+function _recordServerUnavailableStrike(nowMs) {
+  if (_serverUnavailableFirstStrikeAt <= 0 || (nowMs - _serverUnavailableFirstStrikeAt) > _SERVER_UNAVAILABLE_STRIKE_WINDOW_MS) {
+    _serverUnavailableFirstStrikeAt = nowMs;
+    _serverUnavailableStrikeCount = 1;
+    return _serverUnavailableStrikeCount;
+  }
+  _serverUnavailableStrikeCount += 1;
+  return _serverUnavailableStrikeCount;
+}
+
+function _shouldSuppressServerUnavailableOverlay() {
+  if (typeof document !== 'undefined' && document.hidden) return true;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+  return false;
+}
 
 // Full reload / tab close / external navigation tears down in-flight XHRs; those often look like
 // "network" errors (no response) and must not trigger the server-unavailable overlay.
@@ -195,7 +219,10 @@ function isRequestCanceled(error) {
 }
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    _resetServerUnavailableStrikes();
+    return response;
+  },
   (error) => {
     // Aborted in-flight requests (e.g. Attack page replaces poll) must not look like "server down"
     if (isRequestCanceled(error)) {
@@ -333,18 +360,22 @@ api.interceptors.response.use(
       // No response: network error, timeout, or server unreachable (often after server restart)
       error.response = { status: 0, data: { detail: NETWORK_ERROR_MSG } };
     }
-    // Show full-screen overlay for server-down scenarios (skip 401/403 — those redirect)
+    // Show full-screen overlay for repeated server-down scenarios (skip 401/403 — those redirect)
     // Throttle: only dispatch once per 30s to avoid overlay + toast spam when many requests fail at once
     const status = error.response?.status;
     if (
       (status === 0 || isServerUnavailable(status)) &&
       typeof window !== 'undefined' &&
       !isPublicPath() &&
-      !_pageUnloading
+      !_pageUnloading &&
+      !_shouldSuppressServerUnavailableOverlay()
     ) {
       const now = Date.now();
-      if (now - _lastServerUnavailableDispatch >= _SERVER_UNAVAILABLE_THROTTLE_MS) {
+      const strikes = _recordServerUnavailableStrike(now);
+      // Avoid false positives from one transient failed background request.
+      if (strikes >= 2 && now - _lastServerUnavailableDispatch >= _SERVER_UNAVAILABLE_THROTTLE_MS) {
         _lastServerUnavailableDispatch = now;
+        _resetServerUnavailableStrikes();
         window.dispatchEvent(new CustomEvent(SERVER_UNAVAILABLE_EVENT));
       }
     }
