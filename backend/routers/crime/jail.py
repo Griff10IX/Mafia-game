@@ -55,6 +55,7 @@ from server import (
 from routers.account.objectives import update_objectives_progress
 from utils.point_provenance import log_points_event
 from utils.sustained_page_ratelimit import check_jail_sustained_page_rl
+from utils.entertainer_service import ENTERTAINER_ONLINE_COLOR_DEFAULT
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +100,7 @@ def _jail_row_online_styling(
     is_admin = user.get("email") in ADMIN_EMAILS
     is_mod = bool(user.get("is_moderator"))
     is_hdo = bool(user.get("is_help_desk_operator"))
+    is_ent = bool(user.get("is_entertainer"))
     if (is_admin or is_mod) and user.get("admin_ghost_mode"):
         return None
 
@@ -113,10 +115,17 @@ def _jail_row_online_styling(
             online_color = mod_default_online_color
     elif is_hdo:
         online_color = HDO_ONLINE_COLOR
+    elif is_ent:
+        raw_e = (user.get("entertainer_online_color") or "").strip()
+        if raw_e and raw_e.startswith("#") and len(raw_e) <= 9:
+            online_color = raw_e
+        else:
+            online_color = ENTERTAINER_ONLINE_COLOR_DEFAULT
 
     return {
         "is_admin": is_admin,
         "is_moderator": is_mod,
+        "is_entertainer": is_ent,
         "online_color": online_color,
     }
 
@@ -400,7 +409,9 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
             "email": 1,
             "is_moderator": 1,
             "is_help_desk_operator": 1,
+            "is_entertainer": 1,
             "mod_online_color": 1,
+            "entertainer_online_color": 1,
             "admin_ghost_mode": 1,
         },
     ).to_list(50)
@@ -435,12 +446,15 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
         is_admin = player.get("email") in ADMIN_EMAILS
         is_mod = bool(player.get("is_moderator"))
         is_hdo = bool(player.get("is_help_desk_operator"))
+        is_ent = bool(player.get("is_entertainer"))
         if is_admin:
             rank_name = "Admin"
         elif is_mod:
             rank_name = "Moderator"
         elif is_hdo:
             rank_name = f"(HDO) {rank_name}"
+        elif is_ent:
+            rank_name = f"(Entertainer) {rank_name}"
         stored = _safe_int(player.get("bust_reward_cash"), 0)
         on_hand = _safe_int(player.get("money"), 0)
         reward_cash = min(stored, on_hand) if stored > 0 else 0

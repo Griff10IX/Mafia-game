@@ -720,6 +720,10 @@ class UserResponse(BaseModel):
     admin_online_color: Optional[str] = None  # global setting for styling "Admin" rank (so profile API can omit it when viewing others)
     mod_online_color: Optional[str] = None  # moderator's own colour on Users Online (default dark blue when not set)
     is_help_desk_operator: bool = False  # can reply/close help desk tickets; shown dark green on Users Online
+    is_entertainer: bool = False  # staff: MDG/MP Poker fund; own online colour; not attack-immune
+    entertainer_online_color: Optional[str] = None  # hex colour on Users Online (like mod_online_color)
+    entertainer_fund_cash: float = 0.0  # segregated fund for sponsoring MDG / MP Poker only
+    entertainer_fund_points: int = 0
     # Death state (when account has been killed)
     is_dead: bool = False
     dead_at: Optional[str] = None
@@ -2263,6 +2267,11 @@ def _is_hdo(user: dict) -> bool:
     return bool(user.get("is_help_desk_operator"))
 
 
+def _is_entertainer(user: dict) -> bool:
+    """True if user is an Entertainer (sponsor fund for MDG / MP Poker; badge on Users Online)."""
+    return bool(user.get("is_entertainer"))
+
+
 def _staff_exclude_user_filter() -> dict:
     """Mongo match dict to exclude admin/mod accounts from queries on the users collection.
 
@@ -2833,7 +2842,7 @@ from routers.admin import admin, security_admin, airport, investigate
 from routers.cars import gta
 from routers.casinos import dice, roulette, blackjack, mp_blackjack, mp_poker, mp_8ball, horseracing, slots, video_poker, mdg, sports_betting
 from routers.crime import crimes, jail, organised_crime, oc
-from routers.game import families, leaderboard, states, stats, store, dead_alive, events, notifications, meta, entertainer, achievements
+from routers.game import families, leaderboard, states, stats, store, dead_alive, events, notifications, meta, entertainer, entertainer_staff, achievements
 from routers.kill import attack, armoury, bodyguards, hitlist, witness_statements
 from routers.minigames import gauntlet, boxing, racing, snake
 from routers.money import bank, stock_market, properties, quicktrade, crack_safe, illegal_business, booze_run, racket, payments, lottery, grave_robber
@@ -2861,6 +2870,7 @@ designer_auctions.register(api_router)
 from routers.social import game_ideas as game_ideas_router
 game_ideas_router.register(api_router)
 entertainer.register(api_router)
+entertainer_staff.register(api_router)
 from routers.game import designer_competitions
 designer_competitions.register(api_router)
 armoury.register(api_router)
@@ -3238,6 +3248,17 @@ async def startup_db():
                 logging.exception("Daily tribute deposit ticker: %s", e)
             await asyncio.sleep(60)
     asyncio.create_task(tribute_deposit_ticker())
+    from utils.entertainer_service import run_entertainer_daily_refills
+
+    async def entertainer_refill_ticker():
+        while True:
+            try:
+                await run_entertainer_daily_refills(db, send_notification)
+            except Exception as e:
+                logging.exception("Entertainer daily refill ticker: %s", e)
+            await asyncio.sleep(60)
+
+    asyncio.create_task(entertainer_refill_ticker())
     async def daily_event_inbox_ticker():
         while True:
             try:

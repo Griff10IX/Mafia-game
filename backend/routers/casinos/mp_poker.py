@@ -10,8 +10,9 @@ import itertools
 from pydantic import BaseModel, field_validator, model_validator
 from fastapi import Depends, HTTPException, Body
 
-from server import db, get_current_user, get_current_user_verified, log_gambling, _is_admin, _is_moderator, send_notification
+from server import db, get_current_user, get_current_user_verified, log_gambling, _is_admin, _is_moderator, _is_entertainer, send_notification
 from utils.point_provenance import log_points_event
+from utils.entertainer_service import try_debit_entertainer_fund, insert_funded_game_row, on_funded_game_completed
 from routers.casinos.mp_poker_flow import (
     classify_player_action as _classify_player_action,
     is_betting_round_complete as _is_betting_round_complete,
@@ -1104,6 +1105,14 @@ def register(router):
                 }
             },
         )
+        if g.get("entertainer_funded"):
+            await on_funded_game_completed(
+                db,
+                ref_id=game_id,
+                source="mp_poker",
+                send_notification=send_notification,
+                log_points_event=log_points_event,
+            )
         return await db.mp_poker_games.find_one({"id": game_id})
 
     # ── Vs Players: list, create, join, etc. ───────────────────────────────────
@@ -1255,7 +1264,15 @@ def register(router):
         )
         if created_today >= int(settings.get("tournament_limit_per_day") or 10):
             raise HTTPException(status_code=400, detail="Daily tournament limit reached")
-        if currency == "points":
+        use_ent_fund = _is_entertainer(current_user)
+        if use_ent_fund:
+            if currency == "points":
+                ok = await try_debit_entertainer_fund(db, uid, 0.0, buy_in)
+            else:
+                ok = await try_debit_entertainer_fund(db, uid, float(buy_in), 0)
+            if not ok:
+                raise HTTPException(status_code=400, detail="Insufficient entertainer fund for tournament buy-in")
+        elif currency == "points":
             deduct = await db.users.update_one(
                 {"id": uid, "points": {"$gte": buy_in}},
                 {"$inc": {"points": -buy_in}},
@@ -1320,14 +1337,24 @@ def register(router):
             "created_at": now_iso,
             "chat": [],
             "admin_bonus_reward": None,
+            "entertainer_funded": bool(use_ent_fund),
         }
         await log_gambling(
             uid,
             username,
             "mp_poker",
-            {"action": "create", "game_id": game_id, "buy_in": buy_in, "mode": "tournament", "buy_in_currency": currency},
+            {
+                "action": "create",
+                "game_id": game_id,
+                "buy_in": buy_in,
+                "mode": "tournament",
+                "buy_in_currency": currency,
+                **({"entertainer_fund": True} if use_ent_fund else {}),
+            },
         )
         await db.mp_poker_games.insert_one(doc)
+        if use_ent_fund:
+            await insert_funded_game_row(db, entertainer_id=uid, source="mp_poker", ref_id=game_id)
         if currency == "points":
             try:
                 await log_points_event(
@@ -1836,15 +1863,30 @@ def register(router):
             "hand_number": 0,
             "created_at": now_iso,
             "chat": [],
+            "entertainer_funded": False,
         }
-        deduct_result = await db.users.update_one(
-            {"id": uid, "money": {"$gte": need}},
-            {"$inc": {"money": -need}},
-        )
-        if deduct_result.modified_count == 0:
-            raise HTTPException(status_code=400, detail="Insufficient funds")
-        await log_gambling(uid, username, "mp_poker", {"action": "create", "game_id": game_id, "buy_in": need, "mode": "vs_players"})
-        await db.mp_poker_games.insert_one(doc)
+        if _is_entertainer(current_user):
+            ok = await try_debit_entertainer_fund(db, uid, float(need), 0)
+            if not ok:
+                raise HTTPException(status_code=400, detail="Insufficient entertainer fund for buy-in + extra prize")
+            doc["entertainer_funded"] = True
+            await log_gambling(
+                uid,
+                username,
+                "mp_poker",
+                {"action": "create", "game_id": game_id, "buy_in": need, "mode": "vs_players", "entertainer_fund": True},
+            )
+            await db.mp_poker_games.insert_one(doc)
+            await insert_funded_game_row(db, entertainer_id=uid, source="mp_poker", ref_id=game_id)
+        else:
+            deduct_result = await db.users.update_one(
+                {"id": uid, "money": {"$gte": need}},
+                {"$inc": {"money": -need}},
+            )
+            if deduct_result.modified_count == 0:
+                raise HTTPException(status_code=400, detail="Insufficient funds")
+            await log_gambling(uid, username, "mp_poker", {"action": "create", "game_id": game_id, "buy_in": need, "mode": "vs_players"})
+            await db.mp_poker_games.insert_one(doc)
         return {"game_id": game_id, "game": {k: v for k, v in doc.items() if k != "_id"}}
 
     @router.get("/casino/mp-poker/games/{game_id}")
@@ -2371,10 +2413,19 @@ def register(router):
                 },
             )
         now_iso = datetime.now(timezone.utc).isoformat()
+        ent_funded = bool(g.get("entertainer_funded"))
         await db.mp_poker_games.update_one(
             {"id": game_id},
             {"$set": {"status": "completed", "phase": "settled", "results": results, "completed_at": now_iso}},
         )
+        if ent_funded and not is_tournament:
+            await on_funded_game_completed(
+                db,
+                ref_id=game_id,
+                source="mp_poker",
+                send_notification=send_notification,
+                log_points_event=log_points_event,
+            )
 
     def _first_actor_after_advance(players: list, start_idx: int) -> int:
         """First seat index that can act (not folded, not all_in). If none, return start_idx."""

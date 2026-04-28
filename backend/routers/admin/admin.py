@@ -656,6 +656,7 @@ def register(router):
     _is_admin = srv._is_admin
     _is_moderator = srv._is_moderator
     _is_hdo = srv._is_hdo
+    _is_entertainer = srv._is_entertainer
     ADMIN_EMAILS = srv.ADMIN_EMAILS
     _staff_exclude_user_filter = srv._staff_exclude_user_filter
     effective_player_kill_count = srv.effective_player_kill_count
@@ -5562,7 +5563,14 @@ def register(router):
         is_moderator = _is_moderator(current_user)
         is_help_desk_operator = _is_hdo(current_user)
         has_admin_email = (current_user.get("email") or "") in ADMIN_EMAILS
-        out = {"is_admin": is_admin, "is_moderator": is_moderator, "is_help_desk_operator": is_help_desk_operator, "has_admin_email": has_admin_email}
+        is_entertainer = _is_entertainer(current_user)
+        out = {
+            "is_admin": is_admin,
+            "is_moderator": is_moderator,
+            "is_help_desk_operator": is_help_desk_operator,
+            "is_entertainer": is_entertainer,
+            "has_admin_email": has_admin_email,
+        }
         if is_moderator:
             doc = await db.game_settings.find_one({"key": "mod_visible_category_ids"}, {"_id": 0, "value": 1})
             raw = doc.get("value") if doc else None
@@ -5652,6 +5660,57 @@ def register(router):
             raise HTTPException(status_code=404, detail="User not found")
         await db.users.update_one({"id": target["id"]}, {"$set": {"is_help_desk_operator": False}})
         return {"message": f"Removed Help Desk Operator role from {target.get('username', target_username)}."}
+
+    @router.get("/admin/entertainers")
+    async def admin_list_entertainers(current_user: dict = Depends(get_current_user)):
+        """List Entertainers. Admin or moderator."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        cursor = db.users.find(
+            {"is_entertainer": True},
+            {"_id": 0, "id": 1, "username": 1, "email": 1},
+        )
+        rows = await cursor.to_list(500)
+        return {"entertainers": rows}
+
+    @router.post("/admin/promote-entertainer")
+    async def admin_promote_entertainer(target_username: str, current_user: dict = Depends(get_current_user)):
+        """Promote a user to Entertainer. Admin or moderator."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one(
+            {"username": username_pattern},
+            {"_id": 0, "id": 1, "username": 1, "is_entertainer": 1},
+        )
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        if target.get("is_entertainer"):
+            return {"message": f"{target.get('username', target_username)} is already an Entertainer."}
+        await db.users.update_one({"id": target["id"]}, {"$set": {"is_entertainer": True}})
+        try:
+            await send_notification(
+                target["id"],
+                "Entertainer role",
+                "You have been promoted to Entertainer. Open Entertainer Hub from the menu to view your fund, stats, and daily top-ups.",
+                "system",
+                category="entertainer",
+            )
+        except Exception:
+            pass
+        return {"message": f"Promoted {target.get('username', target_username)} to Entertainer."}
+
+    @router.post("/admin/demote-entertainer")
+    async def admin_demote_entertainer(target_username: str, current_user: dict = Depends(get_current_user)):
+        """Remove Entertainer role. Admin or moderator."""
+        if not _admin_or_mod(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        username_pattern = _username_pattern(target_username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        await db.users.update_one({"id": target["id"]}, {"$set": {"is_entertainer": False}})
+        return {"message": f"Removed Entertainer role from {target.get('username', target_username)}."}
 
     @router.get("/admin/forum-mutes")
     async def admin_list_forum_mutes(

@@ -109,12 +109,15 @@ def register(router):
             is_admin = user.get("email") in ADMIN_EMAILS
             is_mod = bool(user.get("is_moderator"))
             is_hdo = bool(user.get("is_help_desk_operator"))
+            is_ent = bool(user.get("is_entertainer"))
             if is_admin:
                 rank_name = "Admin"
             elif is_mod:
                 rank_name = "Moderator"
             elif is_hdo:
                 rank_name = f"(HDO) {rank_name}"
+            elif is_ent:
+                rank_name = f"(Entertainer) {rank_name}"
             _prestige_level = int(user.get("prestige_level") or 0)
             online_color = None
             if is_admin:
@@ -127,6 +130,12 @@ def register(router):
                     online_color = None  # will use mod_default from settings below
             elif is_hdo:
                 online_color = HDO_ONLINE_COLOR
+            elif is_ent:
+                raw_e = (user.get("entertainer_online_color") or "").strip()
+                if raw_e and raw_e.startswith("#") and len(raw_e) <= 9:
+                    online_color = raw_e
+                else:
+                    online_color = "#7c3aed"
             
             # Determine user status: online, idle, or offline
             user_status = "offline"
@@ -168,6 +177,7 @@ def register(router):
                 "is_admin": is_admin,
                 "is_moderator": is_mod,
                 "is_help_desk_operator": is_hdo,
+                "is_entertainer": is_ent,
                 "prestige_level": _prestige_level,
                 "online_color": online_color,
                 "status": user_status,

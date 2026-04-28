@@ -1,7 +1,7 @@
 import { Fragment, useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useLocation, Navigate, useParams } from 'react-router-dom';
 import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle, Eye, Receipt, ArrowLeftRight, Ticket, RefreshCw, MessagesSquare, Swords } from 'lucide-react';
-import api, { imageHostPublicUrl } from '../../utils/api';
+import api, { imageHostPublicUrl, refreshUser } from '../../utils/api';
 import { formatAdminDateTime, formatAdminDateOnly, formatAdminTimeOnly } from '../../utils/adminDateTime';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
@@ -1247,6 +1247,13 @@ export default function Admin() {
   const [hdosLoading, setHdosLoading] = useState(false);
   const [promoteHdoUsername, setPromoteHdoUsername] = useState('');
   const [promoteHdoLoading, setPromoteHdoLoading] = useState(false);
+  const [entertainersList, setEntertainersList] = useState([]);
+  const [entertainersLoading, setEntertainersLoading] = useState(false);
+  const [promoteEntUsername, setPromoteEntUsername] = useState('');
+  const [promoteEntLoading, setPromoteEntLoading] = useState(false);
+  const [entDashboardUser, setEntDashboardUser] = useState('');
+  const [entDashboardData, setEntDashboardData] = useState(null);
+  const [entDashboardLoading, setEntDashboardLoading] = useState(false);
   const [modVisibleCategoriesSaving, setModVisibleCategoriesSaving] = useState(false);
 
   const [economyOverview, setEconomyOverview] = useState(null);
@@ -1371,6 +1378,7 @@ export default function Admin() {
       }
       if (admin || mod) {
         fetchHdos();
+        fetchEntertainers();
       }
       if (mod && !admin) {
         fetchPageLocks();  // Mods need page locks for Mod Tools Lock page
@@ -1481,6 +1489,86 @@ export default function Admin() {
       fetchHdos();
     } catch (e) {
       toast.error(e.response?.data?.detail ?? 'Failed');
+    }
+  };
+
+  const fetchEntertainers = async () => {
+    setEntertainersLoading(true);
+    try {
+      const res = await api.get('/admin/entertainers');
+      setEntertainersList(res.data?.entertainers ?? []);
+    } catch {
+      setEntertainersList([]);
+    } finally {
+      setEntertainersLoading(false);
+    }
+  };
+
+  const handlePromoteEnt = async () => {
+    const username = (promoteEntUsername || '').trim();
+    if (!username) { toast.error('Enter a username'); return; }
+    setPromoteEntLoading(true);
+    try {
+      const res = await api.post('/admin/promote-entertainer', null, { params: { target_username: username } });
+      toast.success(res.data?.message ?? 'Promoted');
+      setPromoteEntUsername('');
+      fetchEntertainers();
+      refreshUser();
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed');
+    } finally {
+      setPromoteEntLoading(false);
+    }
+  };
+
+  const handlePromoteSelfEntertainer = async () => {
+    if (!isAdmin) return;
+    setPromoteEntLoading(true);
+    try {
+      const me = await api.get('/auth/me');
+      const uname = (me.data?.username || '').trim();
+      if (!uname) {
+        toast.error('Could not read your username');
+        return;
+      }
+      const res = await api.post('/admin/promote-entertainer', null, { params: { target_username: uname } });
+      toast.success(res.data?.message ?? 'Promoted');
+      fetchEntertainers();
+      refreshUser();
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed');
+    } finally {
+      setPromoteEntLoading(false);
+    }
+  };
+
+  const handleDemoteEnt = async (username) => {
+    try {
+      const res = await api.post('/admin/demote-entertainer', null, { params: { target_username: username } });
+      toast.success(res.data?.message ?? 'Demoted');
+      fetchEntertainers();
+      if (entDashboardUser === username) {
+        setEntDashboardData(null);
+        setEntDashboardUser('');
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed');
+    }
+  };
+
+  const handleViewEntDashboard = async (username) => {
+    const u = (username || '').trim();
+    if (!u) return;
+    setEntDashboardUser(u);
+    setEntDashboardLoading(true);
+    setEntDashboardData(null);
+    try {
+      const res = await api.get('/admin/entertainer-dashboard', { params: { target_username: u } });
+      setEntDashboardData(res.data);
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to load dashboard');
+    } finally {
+      setEntDashboardLoading(false);
     }
   };
 
@@ -19946,6 +20034,68 @@ export default function Admin() {
                 </ul>
               )}
             </div>
+          </div>
+          <div className="admin-art-line text-primary mx-3" />
+        </div>
+
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
+            <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Promote / demote Entertainers</span>
+          </div>
+          <div className="p-3 space-y-3">
+            <p className="text-[10px] text-mutedForeground font-heading">Entertainers get a daily segregated fund for MDG and MP Poker sponsorship. View dashboard for balances and funded games.</p>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                value={promoteEntUsername}
+                onChange={(e) => setPromoteEntUsername(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handlePromoteEnt()}
+                placeholder="Username to promote"
+                className="flex-1 min-w-[140px] bg-zinc-900/50 border border-zinc-700/50 rounded px-3 py-2 text-sm text-foreground focus:border-primary/50 focus:outline-none"
+              />
+              <BtnPrimary onClick={handlePromoteEnt} disabled={promoteEntLoading}>
+                {promoteEntLoading ? '...' : 'Promote to Entertainer'}
+              </BtnPrimary>
+              {isAdmin && (
+                <BtnPrimary type="button" onClick={handlePromoteSelfEntertainer} disabled={promoteEntLoading} title="Grant Entertainer on your admin account (testing)">
+                  {promoteEntLoading ? '...' : 'Promote my account'}
+                </BtnPrimary>
+              )}
+            </div>
+            <div>
+              <div className="text-[10px] font-heading text-mutedForeground uppercase mb-1.5">Current Entertainers</div>
+              {entertainersLoading ? (
+                <p className="text-[10px] text-mutedForeground">Loading…</p>
+              ) : entertainersList.length === 0 ? (
+                <p className="text-[10px] text-mutedForeground font-heading">None. Promote a user above.</p>
+              ) : (
+                <ul className="space-y-1.5">
+                  {entertainersList.map((h) => (
+                    <li key={h.id || h.username} className="flex flex-wrap items-center justify-between gap-2 py-1.5 px-2 rounded bg-zinc-800/40 border border-zinc-700/50">
+                      <span className="text-sm font-heading font-medium text-foreground">{h.username ?? '—'}</span>
+                      <span className="text-[10px] text-mutedForeground truncate max-w-[140px]">{h.email ?? '—'}</span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <BtnPrimary type="button" className="!py-1 !px-2 text-[10px]" onClick={() => handleViewEntDashboard(h.username)}>View dashboard</BtnPrimary>
+                        <BtnDanger onClick={() => handleDemoteEnt(h.username)}>Demote</BtnDanger>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            {entDashboardUser && (
+              <div className="rounded border border-primary/20 bg-zinc-900/40 p-2 space-y-1">
+                <div className="text-[10px] font-heading text-primary uppercase">Dashboard — {entDashboardUser}</div>
+                {entDashboardLoading ? (
+                  <p className="text-[10px] text-mutedForeground">Loading…</p>
+                ) : entDashboardData ? (
+                  <pre className="text-[10px] text-foreground font-mono whitespace-pre-wrap break-all max-h-64 overflow-y-auto">{JSON.stringify(entDashboardData, null, 2)}</pre>
+                ) : (
+                  <p className="text-[10px] text-mutedForeground">No data</p>
+                )}
+              </div>
+            )}
           </div>
           <div className="admin-art-line text-primary mx-3" />
         </div>

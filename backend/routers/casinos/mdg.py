@@ -14,7 +14,8 @@ from fastapi import Depends, HTTPException
 
 from utils.point_provenance import log_points_event
 
-from server import db, get_current_user, get_current_user_verified, send_notification, log_gambling, _is_admin, _is_moderator
+from server import db, get_current_user, get_current_user_verified, send_notification, log_gambling, _is_admin, _is_moderator, _is_entertainer
+from utils.entertainer_service import try_debit_entertainer_fund, insert_funded_game_row, on_funded_game_completed
 
 MDG_MIN_PLAYERS = 2
 MDG_MAX_PLAYERS = 100
@@ -380,7 +381,38 @@ def register(router):
             "winner_id": None,
             "winner_username": None,
             "rolled_at": None,
+            "entertainer_funded": False,
         }
+        if _is_entertainer(current_user):
+            ok = await try_debit_entertainer_fund(db, uid, total_money, total_pts)
+            if not ok:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Insufficient entertainer fund (fee + extra pot must be covered by your entertainer fund balance).",
+                )
+            doc["entertainer_funded"] = True
+            u_pts_read = await db.users.find_one({"id": uid}, {"_id": 0, "points": 1})
+            pts_before_create = int((u_pts_read or {}).get("points") or 0)
+            if total_pts > 0:
+                await log_points_event(
+                    db,
+                    user_id=uid,
+                    points=-total_pts,
+                    event_type="entertainer_mdg_fund",
+                    event_ref=f"create:{game_id}",
+                    meta={"action": "create_fee", "game_id": game_id, "fee_points": fee_pts, "extra_pot_points": extra_pts, "from": "entertainer_fund"},
+                    wallet_points_before=pts_before_create,
+                    wallet_points_after=pts_before_create,
+                )
+            await db.mdg_games.insert_one(doc)
+            await insert_funded_game_row(db, entertainer_id=uid, source="mdg", ref_id=game_id)
+            await log_gambling(
+                uid,
+                current_user.get("username") or "?",
+                "mdg",
+                {"action": "create", "game_id": game_id, "fee_points": fee_pts, "fee_money": fee_money, "extra_pot_points": extra_pts, "extra_pot_money": extra_money, "entertainer_fund": True},
+            )
+            return {"message": "Game created and you are in it", "game_id": game_id, "game": _mdg_sanitize_for_json(doc)}
         u_pts_read = await db.users.find_one({"id": uid}, {"_id": 0, "points": 1})
         pts_before_create = int((u_pts_read or {}).get("points") or 0)
         deduct_filter = {"id": uid}
@@ -561,6 +593,14 @@ def register(router):
             )
             await send_notification(winner_id, "🎲 MDG Won", f"You won the pot: {new_pot_pts} pts, ${new_pot_money:,.0f}", "reward")
             await _notify_mdg_losers(new_entries, winner_id, winner_username, new_pot_pts, new_pot_money)
+            if game.get("entertainer_funded"):
+                await on_funded_game_completed(
+                    db,
+                    ref_id=request.game_id,
+                    source="mdg",
+                    send_notification=send_notification,
+                    log_points_event=log_points_event,
+                )
             return {"message": "Joined; game rolled. One winner takes the pot.", "roll": roll, "winner_id": winner_id, "winner_username": winner_username, "pot_points": new_pot_pts, "pot_money": new_pot_money}
 
         return {"message": "Joined", "players": len(new_entries), "pot_points": new_pot_pts, "pot_money": new_pot_money}
@@ -617,4 +657,12 @@ def register(router):
         )
         await send_notification(winner_id, "🎲 MDG Won", f"You won the pot: {pot_pts} pts, ${pot_money:,.0f}", "reward")
         await _notify_mdg_losers(entries, winner_id, winner_username, pot_pts, pot_money)
+        if game.get("entertainer_funded"):
+            await on_funded_game_completed(
+                db,
+                ref_id=request.game_id,
+                source="mdg",
+                send_notification=send_notification,
+                log_points_event=log_points_event,
+            )
         return {"message": "Roll complete. One winner takes the pot.", "roll": roll, "winner_id": winner_id, "winner_username": winner_username, "pot_points": pot_pts, "pot_money": pot_money}

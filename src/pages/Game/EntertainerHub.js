@@ -1,0 +1,274 @@
+import { useEffect, useState, useCallback } from 'react';
+import { Link } from 'react-router-dom';
+import { toast } from 'sonner';
+import api from '../../utils/api';
+import { Gift, Mic2, RefreshCw } from 'lucide-react';
+
+const PERK_LABELS = {
+  xp_crimes: 'Crime XP',
+  xp_gta: 'GTA XP',
+  auto_rank_2h: 'Auto Rank (2h)',
+  melt: 'Melt',
+  oc_reduced: 'OC Reduced',
+  booze: 'Booze',
+  racket: 'Racket',
+  travel: 'Travel',
+  properties: 'Properties',
+  jailbust_bonus: 'Jailbust',
+};
+
+export default function EntertainerHub() {
+  const [dash, setDash] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [entColor, setEntColor] = useState('#7c3aed');
+  const [colorSaving, setColorSaving] = useState(false);
+  const [perkTarget, setPerkTarget] = useState('');
+  const [perkType, setPerkType] = useState('xp_crimes');
+  const [perkAmt, setPerkAmt] = useState(1);
+  const [perkSubmitting, setPerkSubmitting] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await api.get('/entertainer/dashboard');
+      setDash(res.data);
+    } catch (e) {
+      const d = e.response?.data?.detail;
+      toast.error(typeof d === 'string' ? d : 'Could not load Entertainer hub');
+      setDash(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const r = await api.get('/auth/me');
+        if (!cancelled && r.data?.entertainer_online_color) setEntColor((r.data.entertainer_online_color || '').trim() || '#7c3aed');
+      } catch (_) {}
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const saveColor = async () => {
+    const hex = (entColor || '').trim() || '#7c3aed';
+    if (!/^#[0-9A-Fa-f]{3}([0-9A-Fa-f]{3})?$/.test(hex)) {
+      toast.error('Enter a valid hex colour');
+      return;
+    }
+    setColorSaving(true);
+    try {
+      await api.patch('/profile/entertainer-online-color', { color: hex });
+      toast.success('Entertainer online colour saved');
+      const r = await api.get('/auth/me');
+      if (r.data?.entertainer_online_color) setEntColor((r.data.entertainer_online_color || '').trim() || '#7c3aed');
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed to save');
+    } finally {
+      setColorSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="p-4 text-mutedForeground font-heading text-sm">Loading Entertainer hub…</div>
+    );
+  }
+
+  if (!dash?.username) {
+    return (
+      <div className="p-4 max-w-lg mx-auto space-y-3">
+        <p className="text-foreground font-heading">You do not have Entertainer access, or the dashboard could not be loaded.</p>
+        <Link to="/account/dashboard" className="text-primary underline text-sm font-heading">Back to dashboard</Link>
+      </div>
+    );
+  }
+
+  const recent = dash.recent_funded_games || [];
+  const perkTypes = dash.perk_token_types?.length ? dash.perk_token_types : Object.keys(PERK_LABELS);
+  const remTotal = Number(dash.perk_tokens_remaining_today ?? 10);
+  const remAuto = Number(dash.perk_auto_rank_remaining_today ?? 2);
+  const maxPerkAmt =
+    perkType === 'auto_rank_2h' ? Math.min(remTotal, remAuto, 10) : Math.min(remTotal, 10);
+
+  const submitPerk = async () => {
+    const uname = perkTarget.trim();
+    if (!uname) {
+      toast.error('Enter a player username');
+      return;
+    }
+    const amt = Math.min(10, Math.max(1, parseInt(perkAmt, 10) || 1));
+    if (amt > maxPerkAmt) {
+      toast.error(perkType === 'auto_rank_2h'
+        ? `Amount exceeds remaining slots (${remTotal} total left today, ${remAuto} Auto Rank left).`
+        : `Amount exceeds remaining perk tokens today (${remTotal} left).`);
+      return;
+    }
+    setPerkSubmitting(true);
+    try {
+      await api.post('/entertainer/reward-perk', {
+        target_username: uname,
+        token_type: perkType,
+        amount: amt,
+      });
+      toast.success(`Granted ${amt}× ${PERK_LABELS[perkType] || perkType}`);
+      setPerkTarget('');
+      setPerkAmt(1);
+      await load();
+    } catch (e) {
+      const d = e.response?.data?.detail;
+      toast.error(typeof d === 'string' ? d : 'Could not grant perk');
+    } finally {
+      setPerkSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="p-3 md:p-6 max-w-3xl mx-auto space-y-6">
+      <div className="flex items-center gap-2 border-b border-primary/20 pb-3">
+        <Mic2 className="text-primary shrink-0" size={22} />
+        <h1 className="text-lg md:text-xl font-heading font-bold text-primary tracking-wide uppercase">Entertainer Hub</h1>
+        <button type="button" onClick={() => load()} className="ml-auto flex items-center gap-1 text-[11px] font-heading text-mutedForeground hover:text-primary">
+          <RefreshCw size={14} /> Refresh
+        </button>
+      </div>
+
+      <section className="rounded-lg border border-primary/20 bg-zinc-900/40 p-4 space-y-3">
+        <h2 className="text-[11px] font-heading uppercase tracking-widest text-mutedForeground">Users Online colour</h2>
+        <p className="text-[11px] text-mutedForeground font-heading">Pick how your name appears on Users Online (same idea as moderators).</p>
+        <div className="flex flex-wrap items-center gap-3">
+          <input type="color" value={entColor} onChange={(e) => setEntColor(e.target.value)} className="h-9 w-12 rounded border border-input bg-transparent cursor-pointer" aria-label="Entertainer colour" />
+          <input type="text" value={entColor} onChange={(e) => setEntColor(e.target.value)} className="w-28 bg-zinc-900/60 border border-zinc-700 rounded px-2 py-1.5 text-xs font-mono text-foreground" />
+          <button type="button" onClick={saveColor} disabled={colorSaving} className="px-3 py-1.5 rounded bg-primary text-primary-foreground text-xs font-heading font-bold disabled:opacity-50">
+            {colorSaving ? 'Saving…' : 'Save colour'}
+          </button>
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-primary/20 bg-zinc-900/40 p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Gift className="text-primary shrink-0" size={18} />
+          <h2 className="text-[11px] font-heading uppercase tracking-widest text-mutedForeground">Reward perks</h2>
+        </div>
+        <p className="text-[11px] text-mutedForeground font-heading">
+          Grant armoury skill tokens to any player (UTC daily limits). Game Pass is not included — staff-only elsewhere.
+        </p>
+        <div className="flex flex-wrap gap-x-6 gap-y-1 text-[11px] font-heading text-foreground">
+          <span>
+            <span className="text-mutedForeground">Tokens left today:</span>{' '}
+            <strong>{remTotal}</strong> / 10
+          </span>
+          <span>
+            <span className="text-mutedForeground">Auto Rank (2h) left:</span>{' '}
+            <strong>{remAuto}</strong> / 2
+          </span>
+        </div>
+        <div className="flex flex-col sm:flex-row flex-wrap gap-2 items-stretch sm:items-end">
+          <label className="flex flex-col gap-1 min-w-[140px] flex-1">
+            <span className="text-[10px] text-mutedForeground font-heading uppercase">Player username</span>
+            <input
+              type="text"
+              value={perkTarget}
+              onChange={(e) => setPerkTarget(e.target.value)}
+              placeholder="Exact username"
+              className="bg-zinc-900/60 border border-zinc-700 rounded px-2 py-1.5 text-xs font-heading text-foreground"
+              disabled={remTotal <= 0}
+            />
+          </label>
+          <label className="flex flex-col gap-1 min-w-[160px]">
+            <span className="text-[10px] text-mutedForeground font-heading uppercase">Perk type</span>
+            <select
+              value={perkType}
+              onChange={(e) => setPerkType(e.target.value)}
+              className="bg-zinc-900/60 border border-zinc-700 rounded px-2 py-1.5 text-xs font-heading text-foreground"
+              disabled={remTotal <= 0}
+            >
+              {perkTypes.map((k) => (
+                <option key={k} value={k}>
+                  {PERK_LABELS[k] || k}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1 w-24">
+            <span className="text-[10px] text-mutedForeground font-heading uppercase">Amount</span>
+            <input
+              type="number"
+              min={1}
+              max={maxPerkAmt || 1}
+              value={perkAmt}
+              onChange={(e) => setPerkAmt(Number(e.target.value))}
+              className="bg-zinc-900/60 border border-zinc-700 rounded px-2 py-1.5 text-xs font-heading text-foreground"
+              disabled={remTotal <= 0 || maxPerkAmt <= 0}
+            />
+          </label>
+          <button
+            type="button"
+            onClick={() => submitPerk()}
+            disabled={perkSubmitting || remTotal <= 0 || maxPerkAmt <= 0}
+            className="px-4 py-2 rounded bg-primary text-primary-foreground text-xs font-heading font-bold disabled:opacity-50 sm:self-end"
+          >
+            {perkSubmitting ? 'Sending…' : 'Grant perk'}
+          </button>
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="rounded-lg border border-primary/20 bg-zinc-900/50 p-4">
+          <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading mb-1">Fund cash</div>
+          <div className="text-xl font-heading font-bold text-emerald-400">${Number(dash.entertainer_fund_cash || 0).toLocaleString()}</div>
+        </div>
+        <div className="rounded-lg border border-primary/20 bg-zinc-900/50 p-4">
+          <div className="text-[10px] uppercase tracking-wider text-mutedForeground font-heading mb-1">Fund points</div>
+          <div className="text-xl font-heading font-bold text-sky-400">{Number(dash.entertainer_fund_points || 0).toLocaleString()}</div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm font-heading">
+        <div className="rounded border border-zinc-700/50 p-3 bg-zinc-900/30">
+          <span className="text-mutedForeground text-[10px] uppercase block mb-1">Funded games today</span>
+          <span className="text-foreground text-lg font-bold">{dash.funded_games_today_count ?? 0}</span>
+        </div>
+        <div className="rounded border border-zinc-700/50 p-3 bg-zinc-900/30">
+          <span className="text-mutedForeground text-[10px] uppercase block mb-1">Lifetime bonus points paid</span>
+          <span className="text-foreground text-lg font-bold">{(dash.lifetime_bonus_points_paid ?? 0).toLocaleString()}</span>
+        </div>
+        <div className="rounded border border-zinc-700/50 p-3 bg-zinc-900/30">
+          <span className="text-mutedForeground text-[10px] uppercase block mb-1">Lifetime fund cash granted</span>
+          <span className="text-foreground">${(dash.lifetime_fund_cash_granted ?? 0).toLocaleString()}</span>
+        </div>
+        <div className="rounded border border-zinc-700/50 p-3 bg-zinc-900/30">
+          <span className="text-mutedForeground text-[10px] uppercase block mb-1">Lifetime fund points granted</span>
+          <span className="text-foreground">{(dash.lifetime_fund_points_granted ?? 0).toLocaleString()}</span>
+        </div>
+      </div>
+
+      <section className="space-y-2">
+        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest">Recent funded games</h2>
+        {recent.length === 0 ? (
+          <p className="text-[11px] text-mutedForeground font-heading">No entries yet. Create an MDG or MP Poker game using your entertainer fund.</p>
+        ) : (
+          <ul className="space-y-1.5 max-h-72 overflow-y-auto">
+            {recent.map((row) => (
+              <li key={row.id} className="text-[11px] font-heading flex flex-wrap gap-2 py-1.5 px-2 rounded bg-zinc-800/50 border border-zinc-700/40">
+                <span className="text-primary">{row.source}</span>
+                <span className="text-mutedForeground">{row.utc_day}</span>
+                <span className={row.completed_at ? 'text-emerald-400' : 'text-amber-400'}>{row.completed_at ? 'Completed' : 'Open'}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <p className="text-[10px] text-mutedForeground font-heading">
+        Daily fund top-up runs automatically (UTC). Use this fund only when creating MDG games or MP Poker tables as an Entertainer — normal wallet is not charged for those flows.
+      </p>
+    </div>
+  );
+}

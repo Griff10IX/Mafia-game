@@ -257,7 +257,9 @@ const ProfileInfoCard = ({
   const isHdoProfile = Boolean(profile.is_help_desk_operator)
     || (typeof profile.rank_name === 'string' && profile.rank_name.startsWith('(HDO)'))
     || profile.rank_name === 'Help Desk Operator';
-  const isStaffProfile = isAdminProfile || isModeratorProfile || isHdoProfile;
+  const isEntertainerProfile = Boolean(profile.is_entertainer)
+    || (typeof profile.rank_name === 'string' && profile.rank_name.startsWith('(Entertainer)'));
+  const isStaffProfile = isAdminProfile || isModeratorProfile || isHdoProfile || isEntertainerProfile;
   const [killDebug, setKillDebug] = useState(null);
   const [killDebugOpen, setKillDebugOpen] = useState(false);
   const [killDebugLoading, setKillDebugLoading] = useState(false);
@@ -281,7 +283,10 @@ const ProfileInfoCard = ({
   const adminColor = profile.admin_online_color ?? adminOnlineColor ?? '#a78bfa';
   const modColor = profile.mod_online_color ?? '#1e3a5f';
   const hdoColor = '#166534';
-  const roleColor = isAdminProfile ? adminColor : (isModeratorProfile ? modColor : (isHdoProfile ? hdoColor : undefined));
+  const entColor = profile.entertainer_online_color ?? '#7c3aed';
+  const roleColor = isAdminProfile
+    ? adminColor
+    : (isModeratorProfile ? modColor : (isHdoProfile ? hdoColor : (isEntertainerProfile ? entColor : undefined)));
   const allRows = [
     { 
       label: 'Username', 

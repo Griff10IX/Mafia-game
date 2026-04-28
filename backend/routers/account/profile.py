@@ -104,6 +104,7 @@ def register(router):
     get_wealth_rank_range = srv.get_wealth_rank_range
     _user_owns_any_property = srv._user_owns_any_property
     _is_moderator = srv._is_moderator
+    _is_entertainer = srv._is_entertainer
     _is_admin = srv._is_admin
     MOD_ONLINE_COLOR_DEFAULT = "#1e3a5f"
     verify_password = srv.verify_password
@@ -578,6 +579,8 @@ def register(router):
             rank_name = "Moderator"
         elif user.get("is_help_desk_operator"):
             rank_name = f"(HDO) {_game_rank_name}"
+        elif _is_entertainer(user):
+            rank_name = f"(Entertainer) {_game_rank_name}"
         _prestige_level = int(user.get("prestige_level") or 0)
         _prestige_name = PRESTIGE_CONFIGS.get(_prestige_level, {}).get("name", "") if _prestige_level > 0 else ""
         wealth_id, wealth_name, wealth_color = get_wealth_rank(user.get("money", 0))
@@ -786,6 +789,7 @@ def register(router):
             "rank": rank_id,
             "rank_name": rank_name,
             "is_help_desk_operator": bool(user.get("is_help_desk_operator")),
+            "is_entertainer": bool(user.get("is_entertainer")),
             "prestige_level": _prestige_level,
             "prestige_name": _prestige_name,
             "wealth_rank": wealth_id,
@@ -891,6 +895,11 @@ def register(router):
         if _is_moderator(user):
             raw = (user.get("mod_online_color") or "").strip() or MOD_ONLINE_COLOR_DEFAULT
             out["mod_online_color"] = raw if raw.startswith("#") and len(raw) <= 9 else MOD_ONLINE_COLOR_DEFAULT
+        if _is_entertainer(user):
+            from utils.entertainer_service import ENTERTAINER_ONLINE_COLOR_DEFAULT as _ENT_COL
+
+            raw_e = (user.get("entertainer_online_color") or "").strip() or _ENT_COL
+            out["entertainer_online_color"] = raw_e if raw_e.startswith("#") and len(raw_e) <= 9 else _ENT_COL
         # Hitlist banner: is this user on the hitlist? (public info: totals only)
         hitlist_entries = await db.hitlist.find(
             {"target_id": user_id, "target_type": {"$in": ["user", "bodyguards"]}},
@@ -1809,6 +1818,22 @@ def register(router):
             upsert=True,
         )
         return {"message": "Mod online colour updated", "mod_online_color": raw}
+
+    @router.patch("/profile/entertainer-online-color")
+    async def update_entertainer_online_color(
+        current_user: dict = Depends(get_current_user),
+        color: Optional[str] = Body(None, embed=True),
+    ):
+        """Entertainers only: set your colour on the Users Online list."""
+        if not _is_entertainer(current_user):
+            raise HTTPException(status_code=403, detail="Entertainers only")
+        from utils.entertainer_service import ENTERTAINER_ONLINE_COLOR_DEFAULT as _ENT_DEF
+
+        raw = (color or "").strip() or _ENT_DEF
+        if not (raw.startswith("#") and len(raw) in (4, 7) and all(c in "0123456789AaBbCcDdEeFf" for c in raw[1:])):
+            raw = _ENT_DEF
+        await db.users.update_one({"id": current_user["id"]}, {"$set": {"entertainer_online_color": raw}})
+        return {"message": "Entertainer online colour updated", "entertainer_online_color": raw}
 
     @router.get("/profile/cars-preferences")
     async def get_profile_cars_preferences(current_user: dict = Depends(get_current_user)):

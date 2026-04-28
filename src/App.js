@@ -132,6 +132,7 @@ const HorseRacing = lazy(() => import("./pages/Casinos/HorseRacingPage"));
 const Slots = lazy(() => import("./pages/Casinos/SlotsPage"));
 const VideoPoker = lazy(() => import("./pages/Casinos/VideoPokerPage"));
 const MDG = lazy(() => import("./pages/Casinos/MDGPage"));
+const EntertainerHub = lazy(() => import("./pages/Game/EntertainerHub"));
 const MPBlackjack = lazy(() => import("./pages/Casinos/MPBlackjackPage"));
 const MPBlackjackGame = lazy(() => import("./pages/Casinos/MPBlackjackGamePage"));
 const MPPoker = lazy(() => import("./pages/Casinos/MPPokerPage"));
@@ -933,6 +934,18 @@ function App() {
             }
           />
           <Route path="/daily-rewards" element={<Navigate to="/game/daily-rewards" replace />} />
+          <Route
+            path="/game/entertainer"
+            element={
+              isAuthenticated ? (
+                <Layout>
+                  <EntertainerHub />
+                </Layout>
+              ) : (
+                <Navigate to="/" replace />
+              )
+            }
+          />
           {/* ═══ GAMES GROUP ═══ */}
           <Route
             path="/casino/mini-games/snake"

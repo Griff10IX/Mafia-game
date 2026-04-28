@@ -128,6 +128,7 @@ const ActivitySnapshotCard = ({
 
 const DEFAULT_MOD_COLOR = '#1e3a5f';
 const DEFAULT_HDO_COLOR = '#166534';
+const DEFAULT_ENTERTAINER_COLOR = '#7c3aed';
 
 const RoleKey = ({ adminOnlineColor, modDefaultOnlineColor, hdoOnlineColor }) => {
   const adminColor = (adminOnlineColor && adminOnlineColor.trim()) || '#a78bfa';
@@ -161,6 +162,10 @@ const RoleKey = ({ adminOnlineColor, modDefaultOnlineColor, hdoOnlineColor }) =>
           <span className="text-mutedForeground">Help Desk</span>
         </span>
         <span className="flex items-center gap-1.5">
+          <span className="w-3 h-3 rounded-full shrink-0 border border-white/20" style={{ backgroundColor: DEFAULT_ENTERTAINER_COLOR }} aria-hidden />
+          <span className="text-mutedForeground">Entertainer</span>
+        </span>
+        <span className="flex items-center gap-1.5">
           <Target size={12} className="text-red-400 shrink-0" aria-hidden />
           <span className="text-mutedForeground">Hitlist</span>
         </span>
@@ -175,7 +180,7 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, ad
   const isLoading = !!profileLoading[user.username];
   const adminColor = (adminOnlineColor && adminOnlineColor.trim()) || '#a78bfa';
   const modColor = (modDefaultOnlineColor && modDefaultOnlineColor.trim()) || DEFAULT_MOD_COLOR;
-  const displayColor = user.online_color || (user.is_admin ? adminColor : user.is_moderator ? modColor : undefined);
+  const displayColor = user.online_color || (user.is_admin ? adminColor : user.is_moderator ? modColor : user.is_entertainer ? DEFAULT_ENTERTAINER_COLOR : undefined);
   const userStatus = user.status || 'online';
   const selfFromRoster =
     myUsername &&
