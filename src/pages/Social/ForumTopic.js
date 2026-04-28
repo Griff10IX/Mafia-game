@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { Lock, ThumbsUp, ThumbsDown, Send, Pin, AlertCircle, Trash2, ArrowLeft, MessageCircle, Eye, Clock, Dice5, Package, UserPlus, Bold, Italic, Image, Palette, Pencil, X, Plus, Mic2 } from 'lucide-react';
 import api from '../../utils/api';
-import { confirmEntertainerGameCreatorDeduction } from '../../utils/entertainerGameCreateConfirm';
+import { confirmEntertainerGameCreatorDeduction, ENTERTAINER_GBOX_MAX_POINTS } from '../../utils/entertainerGameCreateConfirm';
 import { readSessionJson, writeSessionJson } from '../../utils/sessionPageCache';
 import AutoRefreshNote from '../../components/AutoRefreshNote';
 import GifPicker from '../../components/GifPicker';
@@ -1366,6 +1366,11 @@ export default function ForumTopic() {
                     <Package size={14} /> Gbox
                   </button>
                 </div>
+                {user?.is_entertainer && createGameType === 'gbox' && (
+                  <p className="text-[10px] text-violet-300/90 font-heading mt-1">
+                    Entertainer fund: max {ENTERTAINER_GBOX_MAX_POINTS.toLocaleString()} reward points total per Gbox.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-[10px] text-mutedForeground uppercase font-heading mb-1">Max players (1–10)</label>

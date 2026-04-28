@@ -15,7 +15,12 @@ from fastapi import Depends, HTTPException
 from utils.point_provenance import log_points_event
 
 from server import db, get_current_user, get_current_user_verified, send_notification, log_gambling, _is_admin, _is_moderator, _is_entertainer
-from utils.entertainer_service import try_debit_entertainer_fund, insert_funded_game_row, on_funded_game_completed
+from utils.entertainer_service import (
+    ENTERTAINER_MDG_MAX_POINTS_PER_GAME,
+    try_debit_entertainer_fund,
+    insert_funded_game_row,
+    on_funded_game_completed,
+)
 
 MDG_MIN_PLAYERS = 2
 MDG_MAX_PLAYERS = 100
@@ -362,6 +367,11 @@ def register(router):
         # Creator is auto-joined: must have enough to pay fee + extra pot
         total_pts = fee_pts + extra_pts
         total_money = fee_money + extra_money
+        if _is_entertainer(current_user) and total_pts > ENTERTAINER_MDG_MAX_POINTS_PER_GAME:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Entertainer MDG: fee points + extra pot points cannot exceed {ENTERTAINER_MDG_MAX_POINTS_PER_GAME:,} (from your entertainer fund).",
+            )
         user = await db.users.find_one({"id": uid}, {"_id": 0, "username": 1})
         if not user:
             raise HTTPException(status_code=400, detail="User not found")
@@ -600,12 +610,24 @@ def register(router):
             await send_notification(winner_id, "🎲 MDG Won", f"You won the pot: {new_pot_pts} pts, ${new_pot_money:,.0f}", "reward")
             await _notify_mdg_losers(new_entries, winner_id, winner_username, new_pot_pts, new_pot_money)
             if game.get("entertainer_funded"):
+                fee_pts = int(game.get("fee_points") or 0)
+                extra_pts = int(game.get("extra_pot_points") or 0)
+                fee_money = float(game.get("fee_money") or 0)
+                extra_money = float(game.get("extra_pot_money") or 0)
                 await on_funded_game_completed(
                     db,
                     ref_id=request.game_id,
                     source="mdg",
                     send_notification=send_notification,
                     log_points_event=log_points_event,
+                    outcome={
+                        "winner_username": winner_username,
+                        "winner_id": winner_id,
+                        "total_winnings_points": int(new_pot_pts),
+                        "total_winnings_cash": float(new_pot_money),
+                        "from_entertainer_fund_points": fee_pts + extra_pts,
+                        "from_entertainer_fund_cash": fee_money + extra_money,
+                    },
                 )
             return {"message": "Joined; game rolled. One winner takes the pot.", "roll": roll, "winner_id": winner_id, "winner_username": winner_username, "pot_points": new_pot_pts, "pot_money": new_pot_money}
 
@@ -664,11 +686,23 @@ def register(router):
         await send_notification(winner_id, "🎲 MDG Won", f"You won the pot: {pot_pts} pts, ${pot_money:,.0f}", "reward")
         await _notify_mdg_losers(entries, winner_id, winner_username, pot_pts, pot_money)
         if game.get("entertainer_funded"):
+            fee_pts = int(game.get("fee_points") or 0)
+            extra_pts = int(game.get("extra_pot_points") or 0)
+            fee_money = float(game.get("fee_money") or 0)
+            extra_money = float(game.get("extra_pot_money") or 0)
             await on_funded_game_completed(
                 db,
                 ref_id=request.game_id,
                 source="mdg",
                 send_notification=send_notification,
                 log_points_event=log_points_event,
+                outcome={
+                    "winner_username": winner_username,
+                    "winner_id": winner_id,
+                    "total_winnings_points": int(pot_pts),
+                    "total_winnings_cash": float(pot_money),
+                    "from_entertainer_fund_points": fee_pts + extra_pts,
+                    "from_entertainer_fund_cash": fee_money + extra_money,
+                },
             )
         return {"message": "Roll complete. One winner takes the pot.", "roll": roll, "winner_id": winner_id, "winner_username": winner_username, "pot_points": pot_pts, "pot_money": pot_money}

@@ -22,6 +22,7 @@ const ROLE_LABELS = { user: 'User', admin: 'Admin', mod: 'Mod', hdo: 'HDO' };
 
 export default function HelpDesk() {
   const [canManage, setCanManage] = useState(false);
+  const [isHdo, setIsHdo] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [canApproveMute, setCanApproveMute] = useState(false);
   const [tickets, setTickets] = useState([]);
@@ -65,11 +66,13 @@ export default function HelpDesk() {
     try {
       const r = await api.get('/help-desk/check');
       setCanManage(!!r.data?.can_manage);
+      setIsHdo(!!r.data?.is_hdo);
       setIsAdmin(!!r.data?.is_admin);
       setCanApproveMute(!!r.data?.can_approve_mute);
       setBlacklistCanRemove(!!r.data?.is_admin);
     } catch (_) {
       setCanManage(false);
+      setIsHdo(false);
       setIsAdmin(false);
       setCanApproveMute(false);
       setBlacklistCanRemove(false);
@@ -200,6 +203,9 @@ export default function HelpDesk() {
       const r = await api.post(`/help-desk/tickets/${selectedId}/close`);
       setTicketDetail(r.data?.ticket || null);
       toast.success('Ticket closed');
+      if (isHdo) {
+        toast.info('100 points submitted for admin approval (one reward per ticket you close).');
+      }
       fetchTickets({ silent: true });
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to close ticket');

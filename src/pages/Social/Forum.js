@@ -2,7 +2,7 @@ import { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react
 import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { MessageSquare, Lock, Pin, AlertCircle, Plus, ChevronRight, Eye, MessageCircle, Dice5, Package, Users, Bold, Italic, Image, Palette, Puzzle, Mic2 } from 'lucide-react';
 import api from '../../utils/api';
-import { confirmEntertainerGameCreatorDeduction } from '../../utils/entertainerGameCreateConfirm';
+import { confirmEntertainerGameCreatorDeduction, ENTERTAINER_GBOX_MAX_POINTS } from '../../utils/entertainerGameCreateConfirm';
 import { readForumSpecialTabsWarm } from '../../utils/forumSpecialTabsWarm';
 import { toast } from 'sonner';
 import GifPicker from '../../components/GifPicker';
@@ -720,7 +720,7 @@ const CreateGameModal = ({ isOpen, onClose, onCreated, me }) => {
             </div>
             <p className="text-[10px] text-mutedForeground mt-1">
               {gameType === 'gbox'
-                ? 'Gbox: set total reward cash and/or points — split randomly among joiners when you roll.'
+                ? `Gbox: set total reward cash and/or points — split randomly among joiners when you roll.${me?.is_entertainer ? ` Entertainer fund: max ${ENTERTAINER_GBOX_MAX_POINTS.toLocaleString()} reward points total per Gbox.` : ''}`
                 : 'Dice: winner gets the full reward cash and points you set below.'}
             </p>
           </div>

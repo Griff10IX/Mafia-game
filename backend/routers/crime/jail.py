@@ -114,7 +114,11 @@ def _jail_row_online_styling(
         if online_color is None:
             online_color = mod_default_online_color
     elif is_hdo:
-        online_color = HDO_ONLINE_COLOR
+        raw_h = (user.get("hdo_online_color") or "").strip()
+        if raw_h and raw_h.startswith("#") and len(raw_h) <= 9:
+            online_color = raw_h
+        else:
+            online_color = HDO_ONLINE_COLOR
     elif is_ent:
         raw_e = (user.get("entertainer_online_color") or "").strip()
         if raw_e and raw_e.startswith("#") and len(raw_e) <= 9:
@@ -412,6 +416,7 @@ async def get_jailed_players(current_user: dict = Depends(get_current_user)):
             "is_entertainer": 1,
             "mod_online_color": 1,
             "entertainer_online_color": 1,
+            "hdo_online_color": 1,
             "admin_ghost_mode": 1,
         },
     ).to_list(50)

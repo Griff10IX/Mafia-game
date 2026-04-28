@@ -129,7 +129,11 @@ def register(router):
                 else:
                     online_color = None  # will use mod_default from settings below
             elif is_hdo:
-                online_color = HDO_ONLINE_COLOR
+                raw_h = (user.get("hdo_online_color") or "").strip()
+                if raw_h and raw_h.startswith("#") and len(raw_h) <= 9:
+                    online_color = raw_h
+                else:
+                    online_color = HDO_ONLINE_COLOR
             elif is_ent:
                 raw_e = (user.get("entertainer_online_color") or "").strip()
                 if raw_e and raw_e.startswith("#") and len(raw_e) <= 9:

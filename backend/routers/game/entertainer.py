@@ -12,7 +12,10 @@ import os
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from server import db, get_current_user, get_current_user_verified, send_notification, send_notification_to_all, _is_admin, _is_entertainer, CARS
-from utils.entertainer_service import try_debit_entertainer_fund
+from utils.entertainer_service import (
+    ENTERTAINER_GBOX_MAX_POINTS_PER_GAME,
+    try_debit_entertainer_fund,
+)
 from routers.kill.armoury import TOKEN_TYPES, TOKEN_CONFIG
 from utils.point_provenance import log_points_event
 from utils.sustained_page_ratelimit import PAGE_KEY_ENTERTAINER, check_sustained_page_rl
@@ -1017,6 +1020,11 @@ async def create_game(
         )
     if manual_roll and reward_money <= 0 and reward_points <= 0:
         raise HTTPException(status_code=400, detail="Manual games must include a cash reward, points reward, or both.")
+    if _is_entertainer(current_user) and request.game_type == "gbox" and reward_points > ENTERTAINER_GBOX_MAX_POINTS_PER_GAME:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Entertainer Gbox: total reward points cannot exceed {ENTERTAINER_GBOX_MAX_POINTS_PER_GAME:,} (from your entertainer fund).",
+        )
     # Manual gbox: reward_money / reward_points are totals (split randomly at payout), not per-player.
     reserve_money = reward_money if manual_roll else 0
     reserve_points = reward_points if manual_roll else 0

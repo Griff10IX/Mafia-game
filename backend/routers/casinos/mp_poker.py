@@ -12,7 +12,12 @@ from fastapi import Depends, HTTPException, Body
 
 from server import db, get_current_user, get_current_user_verified, log_gambling, _is_admin, _is_moderator, _is_entertainer, send_notification
 from utils.point_provenance import log_points_event
-from utils.entertainer_service import try_debit_entertainer_fund, insert_funded_game_row, on_funded_game_completed
+from utils.entertainer_service import (
+    ENTERTAINER_MP_POKER_MAX_POINTS_PER_GAME,
+    try_debit_entertainer_fund,
+    insert_funded_game_row,
+    on_funded_game_completed,
+)
 from routers.casinos.mp_poker_flow import (
     classify_player_action as _classify_player_action,
     is_betting_round_complete as _is_betting_round_complete,
@@ -1106,12 +1111,23 @@ def register(router):
             },
         )
         if g.get("entertainer_funded"):
+            bi = int(g.get("buy_in") or 0)
+            ent_outcome = {
+                "winner_username": (winner_name or "").strip() or None,
+                "winner_id": winner_uid,
+                "total_winnings_points": int(prize_pool) if currency == "points" else 0,
+                "total_winnings_cash": float(prize_pool) if currency == "money" else 0.0,
+                "from_entertainer_fund_points": int(bi) if currency == "points" else 0,
+                "from_entertainer_fund_cash": float(bi) if currency == "money" else 0.0,
+                "mp_poker_subkind": "tournament",
+            }
             await on_funded_game_completed(
                 db,
                 ref_id=game_id,
                 source="mp_poker",
                 send_notification=send_notification,
                 log_points_event=log_points_event,
+                outcome=ent_outcome,
             )
         return await db.mp_poker_games.find_one({"id": game_id})
 
@@ -1265,6 +1281,11 @@ def register(router):
         if created_today >= int(settings.get("tournament_limit_per_day") or 10):
             raise HTTPException(status_code=400, detail="Daily tournament limit reached")
         use_ent_fund = _is_entertainer(current_user)
+        if use_ent_fund and currency == "points" and buy_in > ENTERTAINER_MP_POKER_MAX_POINTS_PER_GAME:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Entertainer points tournaments: buy-in cannot exceed {ENTERTAINER_MP_POKER_MAX_POINTS_PER_GAME:,} points from the entertainer fund.",
+            )
         if use_ent_fund:
             if currency == "points":
                 ok = await try_debit_entertainer_fund(db, uid, 0.0, buy_in)
@@ -2389,6 +2410,7 @@ def register(router):
 
         # Single-hand table cashout: return remaining stack + any pot share to each player.
         # Without this, unbet chips disappear when the table settles.
+        cashout_rows: List[Tuple[str, str, int, int]] = []
         for p in players:
             uid = (p.get("user_id") or "").strip()
             if not uid or uid == "dealer":
@@ -2396,6 +2418,7 @@ def register(router):
             stack_refund = max(0, int(p.get("stack") or 0))
             pot_win = max(0, int(winner_payouts.get(uid) or 0))
             cashout = stack_refund + pot_win
+            cashout_rows.append((uid, (p.get("username") or "?").strip(), cashout, pot_win))
             if cashout <= 0:
                 continue
             await db.users.update_one({"id": uid}, {"$inc": {"money": cashout}})
@@ -2419,12 +2442,32 @@ def register(router):
             {"$set": {"status": "completed", "phase": "settled", "results": results, "completed_at": now_iso}},
         )
         if ent_funded and not is_tournament:
+            buy_in = int(g.get("buy_in") or 0)
+            extra_prize = int(g.get("extra_prize") or 0)
+            seed_cash = float(buy_in + extra_prize)
+            top_c = max((c[2] for c in cashout_rows), default=0)
+            tops = [c for c in cashout_rows if c[2] == top_c and top_c > 0]
+            if tops:
+                wnames = " / ".join(t[1] for t in tops)
+                wid = tops[0][0] if len(tops) == 1 else None
+            else:
+                wnames = None
+                wid = None
             await on_funded_game_completed(
                 db,
                 ref_id=game_id,
                 source="mp_poker",
                 send_notification=send_notification,
                 log_points_event=log_points_event,
+                outcome={
+                    "winner_username": wnames,
+                    "winner_id": wid,
+                    "total_winnings_points": 0,
+                    "total_winnings_cash": float(top_c),
+                    "from_entertainer_fund_points": 0,
+                    "from_entertainer_fund_cash": seed_cash,
+                    "mp_poker_subkind": "table",
+                },
             )
 
     def _first_actor_after_advance(players: list, start_idx: int) -> int:

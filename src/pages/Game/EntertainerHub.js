@@ -2,6 +2,12 @@ import { useEffect, useState, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
 import api from '../../utils/api';
+import {
+  fundedGameKindLabel,
+  formatTotalWinnings,
+  formatFromEntertainerFund,
+  fundedGameHref,
+} from '../../utils/entertainerFundedGameDisplay';
 import { Gift, Mic2, RefreshCw } from 'lucide-react';
 
 const PERK_LABELS = {
@@ -254,14 +260,43 @@ export default function EntertainerHub() {
         {recent.length === 0 ? (
           <p className="text-[11px] text-mutedForeground font-heading">No entries yet. Create an MDG or MP Poker game using your entertainer fund.</p>
         ) : (
-          <ul className="space-y-1.5 max-h-72 overflow-y-auto">
-            {recent.map((row) => (
-              <li key={row.id} className="text-[11px] font-heading flex flex-wrap gap-2 py-1.5 px-2 rounded bg-zinc-800/50 border border-zinc-700/40">
-                <span className="text-primary">{row.source}</span>
-                <span className="text-mutedForeground">{row.utc_day}</span>
-                <span className={row.completed_at ? 'text-emerald-400' : 'text-amber-400'}>{row.completed_at ? 'Completed' : 'Open'}</span>
-              </li>
-            ))}
+          <ul className="space-y-2 max-h-[28rem] overflow-y-auto">
+            {recent.map((row) => {
+              const href = fundedGameHref(row);
+              const kind = fundedGameKindLabel(row);
+              const winner = (row.winner_username || '').trim() || '—';
+              const total = formatTotalWinnings(row);
+              const fromFund = formatFromEntertainerFund(row);
+              return (
+                <li key={row.id} className="text-[11px] font-heading py-2 px-2 rounded bg-zinc-800/50 border border-zinc-700/40 space-y-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                    {href ? (
+                      <Link to={href} className="text-primary hover:underline">{kind}</Link>
+                    ) : (
+                      <span className="text-primary">{kind}</span>
+                    )}
+                    <span className="text-mutedForeground">{row.utc_day}</span>
+                    <span className={row.completed_at ? 'text-emerald-400' : 'text-amber-400'}>{row.completed_at ? 'Completed' : 'Open'}</span>
+                  </div>
+                  {row.completed_at ? (
+                    <div className="text-[10px] text-mutedForeground space-y-0.5 leading-snug">
+                      <div>
+                        <span className="text-zinc-500">Winner: </span>
+                        <span className="text-zinc-200">{winner}</span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500">Total paid out: </span>
+                        <span className="text-sky-400/90">{total}</span>
+                      </div>
+                      <div>
+                        <span className="text-zinc-500">From your fund (seed): </span>
+                        <span className="text-violet-300/90">{fromFund}</span>
+                      </div>
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

@@ -282,7 +282,7 @@ const ProfileInfoCard = ({
   };
   const adminColor = profile.admin_online_color ?? adminOnlineColor ?? '#a78bfa';
   const modColor = profile.mod_online_color ?? '#1e3a5f';
-  const hdoColor = '#166534';
+  const hdoColor = profile.hdo_online_color ?? '#166534';
   const entColor = profile.entertainer_online_color ?? '#7c3aed';
   const roleColor = isAdminProfile
     ? adminColor
@@ -569,6 +569,16 @@ const ProfileInfoCard = ({
                       {row.value}
                     </Link>
                   </div>
+                ) : row.label === 'Rank'
+                  && isEntertainerProfile
+                  && typeof profile.rank_name === 'string'
+                  && profile.rank_name.startsWith('(Entertainer)') ? (
+                  <span className={`${row.valueClass ?? ''} inline-flex flex-wrap items-baseline justify-end gap-x-1`}>
+                    <span style={{ color: entColor }} className="shrink-0">(Entertainer)</span>
+                    <span className="text-primary">
+                      {(profile.rank_name.slice('(Entertainer)'.length).trim() || profile.rank_name)}
+                    </span>
+                  </span>
                 ) : row.label === 'Rank'
                   && isHdoProfile
                   && typeof profile.rank_name === 'string'
@@ -1219,6 +1229,8 @@ export default function Profile() {
   const [savingProfanity, setSavingProfanity] = useState(false);
   const [modOnlineColor, setModOnlineColor] = useState('#1e3a5f');
   const [savingModColor, setSavingModColor] = useState(false);
+  const [hdoOnlineColor, setHdoOnlineColor] = useState('#166534');
+  const [savingHdoColor, setSavingHdoColor] = useState(false);
   const [bannerTextEdit, setBannerTextEdit] = useState('');
   const [notepadColorEdit, setNotepadColorEdit] = useState('');
   const [savingBanner, setSavingBanner] = useState(false);
@@ -1376,6 +1388,12 @@ export default function Profile() {
     if (me?.mod_online_color != null && (me.mod_online_color || '').trim())
       setModOnlineColor((me.mod_online_color || '').trim());
     else if (me && !me.mod_online_color) setModOnlineColor('#1e3a5f');
+  }, [me]);
+
+  useEffect(() => {
+    if (me?.hdo_online_color != null && (me.hdo_online_color || '').trim())
+      setHdoOnlineColor((me.hdo_online_color || '').trim());
+    else if (me && !me.hdo_online_color) setHdoOnlineColor('#166534');
   }, [me]);
 
   useEffect(() => {
@@ -1810,6 +1828,24 @@ export default function Profile() {
       toast.error(e.response?.data?.detail || 'Failed to save');
     } finally {
       setSavingModColor(false);
+    }
+  };
+
+  const saveHdoOnlineColor = async () => {
+    const hex = (hdoOnlineColor || '').trim() || '#166534';
+    if (!/^#[0-9A-Fa-f]{3}([0-9A-Fa-f]{3})?$/.test(hex)) {
+      toast.error('Enter a valid hex colour (e.g. #166534)');
+      return;
+    }
+    setSavingHdoColor(true);
+    try {
+      await api.patch('/profile/hdo-online-color', { color: hex });
+      toast.success('Users online colour saved');
+      await refetchMe();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to save');
+    } finally {
+      setSavingHdoColor(false);
     }
   };
 
@@ -2307,7 +2343,7 @@ export default function Profile() {
               <div className="prof-art-line text-primary mx-3" />
             </div>
 
-            {isMe && (hasAdminEmail || isModerator) && (
+            {isMe && (hasAdminEmail || isModerator || me?.is_help_desk_operator) && (
           <>
             {(isAdmin || isModerator) && (
               <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-fade-in`}>
@@ -2389,6 +2425,59 @@ export default function Profile() {
                 <p className="text-[9px] md:text-[10px] text-mutedForeground font-heading">
                   Set your colour for the Users Online page from <Link to="/admin" className="text-primary hover:underline font-heading">Admin → Mod display</Link> (mod tools), not here.
                 </p>
+              </div>
+            </div>
+            </>
+            ) : me?.is_help_desk_operator && !isModerator ? (
+            <>
+            <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-fade-in`}>
+              <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+              <div className="px-2.5 py-1.5 md:px-3 md:py-2 bg-primary/8 border-b border-primary/20 flex items-center justify-between gap-1.5">
+                <span className="text-[9px] md:text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Help Desk Hub</span>
+                <Link
+                  to="/game/help-desk-hub"
+                  className="px-2.5 py-1 rounded text-[9px] font-heading font-bold uppercase border border-primary/50 bg-primary/20 text-primary hover:bg-primary/30"
+                >
+                  Open
+                </Link>
+              </div>
+              <p className="px-2.5 py-1.5 md:px-3 text-[9px] md:text-[10px] text-mutedForeground font-heading">
+                Stats, close rewards, and your roster colour.
+              </p>
+            </div>
+            <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 prof-fade-in`}>
+              <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+              <div className="px-2.5 py-1.5 md:px-3 md:py-2 bg-primary/8 border-b border-primary/20">
+                <span className="text-[9px] md:text-[10px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Users online colour</span>
+              </div>
+              <div className="px-2.5 py-2 md:px-3 md:py-2.5 space-y-2">
+                <p className="text-[9px] md:text-[10px] text-mutedForeground font-heading">
+                  How your name appears on the live roster (default green #166534).
+                </p>
+                <div className="flex flex-wrap items-end gap-2">
+                  <input
+                    type="text"
+                    value={hdoOnlineColor}
+                    onChange={(e) => setHdoOnlineColor(e.target.value)}
+                    className="w-28 px-2 py-1 rounded border border-border bg-secondary text-xs font-mono text-foreground"
+                    maxLength={7}
+                  />
+                  <input
+                    type="color"
+                    value={/^#[0-9A-Fa-f]{6}$/.test(hdoOnlineColor) ? hdoOnlineColor : '#166534'}
+                    onChange={(e) => setHdoOnlineColor(e.target.value)}
+                    className="h-8 w-12 cursor-pointer rounded border border-border bg-transparent"
+                    aria-label="Colour picker"
+                  />
+                  <button
+                    type="button"
+                    onClick={saveHdoOnlineColor}
+                    disabled={savingHdoColor}
+                    className="px-2.5 py-1 rounded text-[9px] font-heading font-bold uppercase border border-primary/50 bg-primary/20 text-primary hover:bg-primary/30 disabled:opacity-50"
+                  >
+                    {savingHdoColor ? 'Saving…' : 'Save'}
+                  </button>
+                </div>
               </div>
             </div>
             </>

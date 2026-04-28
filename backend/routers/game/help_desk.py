@@ -8,8 +8,11 @@ from fastapi import Depends, HTTPException, Query
 
 from typing import Optional
 from pydantic import BaseModel
+from pymongo.errors import DuplicateKeyError
 
 from utils.profanity import contains_profanity
+
+HDO_POINTS_PER_CLOSE = 100
 
 
 class TicketCreate(BaseModel):
@@ -53,6 +56,12 @@ def register(router):
     _is_admin = srv._is_admin
     _is_moderator = srv._is_moderator
     _is_hdo = srv._is_hdo
+
+    async def _ensure_hdo_point_request_indexes():
+        coll = db.help_desk_hdo_point_requests
+        await coll.create_index([("status", 1), ("created_at", -1)])
+        await coll.create_index([("hdo_user_id", 1), ("status", 1)])
+        await coll.create_index("ticket_id", unique=True)
 
     def _can_manage_tickets(user: dict) -> bool:
         return _is_admin(user) or _is_moderator(user) or _is_hdo(user)
@@ -273,6 +282,26 @@ def register(router):
             {"$set": {"status": "closed", "updated_at": now, "closed_at": now, "closed_by_id": current_user["id"]}},
         )
         updated = await db.help_desk_tickets.find_one({"id": ticket_id}, {"_id": 0})
+        if _is_hdo(current_user):
+            await _ensure_hdo_point_request_indexes()
+            req_id = str(uuid.uuid4())
+            try:
+                await db.help_desk_hdo_point_requests.insert_one(
+                    {
+                        "id": req_id,
+                        "hdo_user_id": current_user["id"],
+                        "hdo_username": current_user.get("username") or "?",
+                        "ticket_id": ticket_id,
+                        "ticket_owner_username": ticket.get("username"),
+                        "action": "close",
+                        "amount": HDO_POINTS_PER_CLOSE,
+                        "status": "pending",
+                        "created_at": now,
+                        "closed_at": now,
+                    }
+                )
+            except DuplicateKeyError:
+                pass
         return {"message": "Ticket closed", "ticket": _ticket_to_response(updated)}
 
     @router.post("/help-desk/tickets/{ticket_id}/reward")
@@ -332,6 +361,52 @@ def register(router):
             "is_hdo": _is_hdo(current_user),
             "can_approve_mute": _is_admin(current_user) or _is_moderator(current_user),
             "is_admin": _is_admin(current_user),
+        }
+
+    @router.get("/help-desk/hdo/dashboard")
+    async def hdo_dashboard(current_user: dict = Depends(get_current_user)):
+        """Help Desk Operator: stats for hub (points from approved closes, pending count, tickets closed, users helped)."""
+        if not _is_hdo(current_user):
+            raise HTTPException(status_code=403, detail="Help Desk Operator access required")
+        await _ensure_hdo_point_request_indexes()
+        hid = current_user["id"]
+        coll = db.help_desk_hdo_point_requests
+        approved_rows = await coll.aggregate(
+            [
+                {"$match": {"hdo_user_id": hid, "status": "approved"}},
+                {"$group": {"_id": None, "total": {"$sum": "$amount"}}},
+            ]
+        ).to_list(1)
+        points_earned = int((approved_rows[0] or {}).get("total") or 0) if approved_rows else 0
+        pending_count = await coll.count_documents({"hdo_user_id": hid, "status": "pending"})
+        rejected_count = await coll.count_documents({"hdo_user_id": hid, "status": "rejected"})
+        tickets_closed = await db.help_desk_tickets.count_documents({"closed_by_id": hid, "status": "closed"})
+        distinct_helped = await db.help_desk_tickets.aggregate(
+            [
+                {"$match": {"closed_by_id": hid, "status": "closed", "user_id": {"$ne": hid}}},
+                {"$group": {"_id": "$user_id"}},
+                {"$count": "n"},
+            ]
+        ).to_list(1)
+        users_helped = int(distinct_helped[0]["n"]) if distinct_helped else 0
+        staff_replies = 0
+        try:
+            cursor = db.help_desk_tickets.find({"replies.author_id": hid}, {"_id": 0, "replies": 1})
+            async for doc in cursor:
+                for rep in doc.get("replies") or []:
+                    if rep.get("author_id") == hid:
+                        staff_replies += 1
+        except Exception:
+            staff_replies = 0
+        return {
+            "username": current_user.get("username") or "?",
+            "points_per_close": HDO_POINTS_PER_CLOSE,
+            "points_earned_approved": points_earned,
+            "pending_reward_count": pending_count,
+            "rejected_reward_count": rejected_count,
+            "tickets_closed": tickets_closed,
+            "users_helped": users_helped,
+            "staff_replies_count": staff_replies,
         }
 
     # ----- Word blacklist: staff (admin/mod/hdo) can add; only admin can remove. Added words apply site-wide (profanity list). -----

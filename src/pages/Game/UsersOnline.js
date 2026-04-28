@@ -180,7 +180,9 @@ const UserCard = ({ user, profileCache, profileLoading, ensureProfilePreview, ad
   const isLoading = !!profileLoading[user.username];
   const adminColor = (adminOnlineColor && adminOnlineColor.trim()) || '#a78bfa';
   const modColor = (modDefaultOnlineColor && modDefaultOnlineColor.trim()) || DEFAULT_MOD_COLOR;
-  const displayColor = user.online_color || (user.is_admin ? adminColor : user.is_moderator ? modColor : user.is_entertainer ? DEFAULT_ENTERTAINER_COLOR : undefined);
+  const displayColor =
+    user.online_color ||
+    (user.is_admin ? adminColor : user.is_moderator ? modColor : user.is_entertainer ? DEFAULT_ENTERTAINER_COLOR : user.is_help_desk_operator ? DEFAULT_HDO_COLOR : undefined);
   const userStatus = user.status || 'online';
   const selfFromRoster =
     myUsername &&

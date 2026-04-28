@@ -16,6 +16,11 @@ ENTERTAINER_COMPLETION_BLOCK = 5
 ENTERTAINER_COMPLETION_BONUS_POINTS = 50
 ENTERTAINER_COMPLETION_BONUS_DAILY_CAP = 250
 ENTERTAINER_ONLINE_COLOR_DEFAULT = "#7c3aed"  # violet; distinct from mod/HDO
+# Max points an entertainer may put into one game from the entertainer fund (fee + extra combined for MDG; tournament buy-in for MP Poker points).
+ENTERTAINER_MDG_MAX_POINTS_PER_GAME = 250
+ENTERTAINER_MP_POKER_MAX_POINTS_PER_GAME = 1000
+# Max total reward points (Gbox pool) from entertainer fund per forum Gbox game.
+ENTERTAINER_GBOX_MAX_POINTS_PER_GAME = 500
 
 # Skill perks (same mapping as admin add-tokens). Game Pass / rank_xp_pass is intentionally excluded.
 ENTERTAINER_PERK_TOKEN_FIELDS = {
@@ -193,6 +198,47 @@ async def _ensure_activity_day(db, entertainer_id: str, today: str) -> Tuple[int
     return completions, bonus_today
 
 
+_FUNDED_GAME_OUTCOME_KEYS = frozenset(
+    {
+        "winner_username",
+        "winner_id",
+        "total_winnings_points",
+        "total_winnings_cash",
+        "from_entertainer_fund_points",
+        "from_entertainer_fund_cash",
+        "mp_poker_subkind",
+    }
+)
+
+
+def _sanitize_funded_game_outcome(raw: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Persist only known keys with safe types (callers may pass partial dict)."""
+    if not raw:
+        return {}
+    out: Dict[str, Any] = {}
+    for k in _FUNDED_GAME_OUTCOME_KEYS:
+        if k not in raw:
+            continue
+        v = raw[k]
+        if v is None:
+            continue
+        if k in ("total_winnings_points", "from_entertainer_fund_points"):
+            out[k] = int(v)
+        elif k in ("total_winnings_cash", "from_entertainer_fund_cash"):
+            out[k] = float(v)
+        elif k == "mp_poker_subkind" and v in ("tournament", "table"):
+            out[k] = v
+        elif k == "winner_id":
+            s = str(v).strip()
+            if s:
+                out[k] = s
+        elif k == "winner_username":
+            s = str(v).strip()
+            if s:
+                out[k] = s
+    return out
+
+
 async def on_funded_game_completed(
     db,
     *,
@@ -200,11 +246,17 @@ async def on_funded_game_completed(
     source: str,
     send_notification,
     log_points_event,
+    outcome: Optional[Dict[str, Any]] = None,
 ) -> None:
-    """Mark ledger row completed (first wins) and grant +50 main points per 5 completions, max 250/day."""
+    """Mark ledger row completed (first wins) and grant +50 main points per 5 completions, max 250/day.
+
+    Optional ``outcome`` is merged into the ledger row (winner, total payout, amount seeded from fund).
+    """
+    now_iso = datetime.now(timezone.utc).isoformat()
+    set_doc: Dict[str, Any] = {"completed_at": now_iso, **(_sanitize_funded_game_outcome(outcome))}
     row = await db.entertainer_funded_games.find_one_and_update(
         {"ref_id": ref_id, "source": source, "completed_at": None},
-        {"$set": {"completed_at": datetime.now(timezone.utc).isoformat()}},
+        {"$set": set_doc},
         return_document=ReturnDocument.AFTER,
     )
     if not row or not row.get("entertainer_id"):

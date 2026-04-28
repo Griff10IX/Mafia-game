@@ -420,6 +420,7 @@ def register(router):
     get_rank_info = srv.get_rank_info
     _is_moderator = srv._is_moderator
     _is_entertainer = srv._is_entertainer
+    _is_hdo = srv._is_hdo
     get_wealth_rank = srv.get_wealth_rank
     get_wealth_rank_range = srv.get_wealth_rank_range
     _get_casino_property_profit = srv._get_casino_property_profit
@@ -1785,6 +1786,7 @@ def register(router):
             admin_online_color = admin_online_color.strip()
             mod_online_color = None
             entertainer_online_color = None
+            hdo_online_color = None
             if _is_moderator(current_user):
                 raw = (current_user.get("mod_online_color") or "").strip() or "#1e3a5f"
                 mod_online_color = raw if raw.startswith("#") and len(raw) <= 9 else "#1e3a5f"
@@ -1793,6 +1795,10 @@ def register(router):
 
                 raw_e = (current_user.get("entertainer_online_color") or "").strip() or _ent_col_def
                 entertainer_online_color = raw_e if raw_e.startswith("#") and len(raw_e) <= 9 else _ent_col_def
+            if _is_hdo(current_user):
+                _hdo_def = "#166534"
+                raw_h = (current_user.get("hdo_online_color") or "").strip() or _hdo_def
+                hdo_online_color = raw_h if raw_h.startswith("#") and len(raw_h) <= 9 else _hdo_def
             # Resolve gun_name, armour_name, gang_name for sidebar
             gun_name = None
             if equipped_weapon_id and weapon_doc:
@@ -1880,6 +1886,7 @@ def register(router):
                 admin_online_color=admin_online_color,
                 mod_online_color=mod_online_color,
                 is_help_desk_operator=bool(u.get("is_help_desk_operator", False)),
+                hdo_online_color=hdo_online_color,
                 is_entertainer=bool(u.get("is_entertainer", False)),
                 entertainer_online_color=entertainer_online_color,
                 entertainer_fund_cash=_safe_float(u.get("entertainer_fund_cash"), 0.0),

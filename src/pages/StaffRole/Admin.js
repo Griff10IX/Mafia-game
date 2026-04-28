@@ -3,6 +3,12 @@ import { Link, useLocation, Navigate, useParams } from 'react-router-dom';
 import { Settings, UserCog, Coins, Car, Lock, Skull, Bot, Crosshair, Shield, Building2, Zap, Gift, Trash2, Clock, ChevronDown, ChevronRight, ScrollText, Dice5, AlertTriangle, Palette, Users, Mail, LogOut, KeyRound, User, LayoutGrid, Info, X, HelpCircle, BarChart3, Wrench, Database, Globe, Activity, Bell, Layers, DollarSign, Trophy, Search, Award, Image, HandCoins, Wine, Landmark, UserCircle, Eye, Receipt, ArrowLeftRight, Ticket, RefreshCw, MessagesSquare, Swords } from 'lucide-react';
 import api, { imageHostPublicUrl, refreshUser } from '../../utils/api';
 import { formatAdminDateTime, formatAdminDateOnly, formatAdminTimeOnly } from '../../utils/adminDateTime';
+import {
+  fundedGameKindLabel,
+  formatTotalWinnings,
+  formatFromEntertainerFund,
+  fundedGameHref,
+} from '../../utils/entertainerFundedGameDisplay';
 import { toast } from 'sonner';
 import { FormattedNumberInput } from '../../components/FormattedNumberInput';
 import AttackLogsPanel from '../../components/staff/AttackLogsPanel';
@@ -1247,6 +1253,9 @@ export default function Admin() {
   const [hdosLoading, setHdosLoading] = useState(false);
   const [promoteHdoUsername, setPromoteHdoUsername] = useState('');
   const [promoteHdoLoading, setPromoteHdoLoading] = useState(false);
+  const [hdoPointRequests, setHdoPointRequests] = useState([]);
+  const [hdoPointRequestsLoading, setHdoPointRequestsLoading] = useState(false);
+  const [hdoPointRequestFilter, setHdoPointRequestFilter] = useState('pending');
   const [entertainersList, setEntertainersList] = useState([]);
   const [entertainersLoading, setEntertainersLoading] = useState(false);
   const [promoteEntUsername, setPromoteEntUsername] = useState('');
@@ -1375,6 +1384,7 @@ export default function Admin() {
         fetchPageLocks();
         fetchClaimCosts();
         fetchStateHeads();  // Auto-load state heads to show duplicate warnings
+        fetchHdoPointRequests('pending');
       }
       if (admin || mod) {
         fetchHdos();
@@ -1487,6 +1497,42 @@ export default function Admin() {
       const res = await api.post('/admin/demote-hdo', null, { params: { target_username: username } });
       toast.success(res.data?.message ?? 'Demoted');
       fetchHdos();
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed');
+    }
+  };
+
+  const fetchHdoPointRequests = async (status) => {
+    setHdoPointRequestsLoading(true);
+    try {
+      const res = await api.get('/admin/help-desk/hdo-point-requests', { params: { status, limit: 100 } });
+      setHdoPointRequests(res.data?.requests ?? []);
+      setHdoPointRequestFilter(status);
+    } catch {
+      setHdoPointRequests([]);
+    } finally {
+      setHdoPointRequestsLoading(false);
+    }
+  };
+
+  const handleApproveHdoPointRequest = async (requestId) => {
+    if (!window.confirm('Approve 100 points for this Help Desk close?')) return;
+    try {
+      await api.post(`/admin/help-desk/hdo-point-requests/${encodeURIComponent(requestId)}/approve`);
+      toast.success('Approved');
+      fetchHdoPointRequests(hdoPointRequestFilter);
+    } catch (e) {
+      toast.error(e.response?.data?.detail ?? 'Failed');
+    }
+  };
+
+  const handleRejectHdoPointRequest = async (requestId) => {
+    const reason = window.prompt('Reject reason (optional, max 500 chars):') ?? '';
+    if (reason === null) return;
+    try {
+      await api.post(`/admin/help-desk/hdo-point-requests/${encodeURIComponent(requestId)}/reject`, { reason: reason.trim() || null });
+      toast.success('Rejected');
+      fetchHdoPointRequests(hdoPointRequestFilter);
     } catch (e) {
       toast.error(e.response?.data?.detail ?? 'Failed');
     }
@@ -20002,7 +20048,7 @@ export default function Admin() {
             <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Promote / demote Help Desk Operators</span>
           </div>
           <div className="p-3 space-y-3">
-            <p className="text-[10px] text-mutedForeground font-heading">HDOs can reply to and close Help Desk tickets. They appear in dark green on Users Online. Admins and mods can promote or demote.</p>
+            <p className="text-[10px] text-mutedForeground font-heading">HDOs can reply to and close Help Desk tickets. They pick their Users Online colour (default green). Admins and mods can promote or demote.</p>
             <div className="flex flex-wrap items-center gap-2">
               <input
                 type="text"
@@ -20037,6 +20083,71 @@ export default function Admin() {
           </div>
           <div className="admin-art-line text-primary mx-3" />
         </div>
+
+        {isAdmin && (
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">HDO close — point approvals</span>
+            <div className="flex items-center gap-2">
+              <select
+                value={hdoPointRequestFilter}
+                onChange={(e) => fetchHdoPointRequests(e.target.value)}
+                className="text-[10px] bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-foreground"
+              >
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+                <option value="all">All</option>
+              </select>
+              <BtnPrimary type="button" className="!py-1 !px-2 text-[10px]" onClick={() => fetchHdoPointRequests(hdoPointRequestFilter)}>Refresh</BtnPrimary>
+            </div>
+          </div>
+          <div className="p-3 space-y-2">
+            <p className="text-[10px] text-mutedForeground font-heading">100 points per ticket closed by an HDO (not per reply). Approve to credit their account.</p>
+            {hdoPointRequestsLoading ? (
+              <p className="text-[10px] text-mutedForeground">Loading…</p>
+            ) : hdoPointRequests.length === 0 ? (
+              <p className="text-[10px] text-mutedForeground font-heading">No requests.</p>
+            ) : (
+              <div className="overflow-x-auto max-h-80 overflow-y-auto rounded border border-zinc-700/40">
+                <table className="w-full text-[10px] font-heading">
+                  <thead>
+                    <tr className="border-b border-zinc-700/50 text-left text-mutedForeground uppercase">
+                      <th className="p-2">HDO</th>
+                      <th className="p-2">Ticket</th>
+                      <th className="p-2">Pts</th>
+                      <th className="p-2">Status</th>
+                      <th className="p-2">When</th>
+                      <th className="p-2 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {hdoPointRequests.map((r) => (
+                      <tr key={r.id} className="border-b border-zinc-800/60">
+                        <td className="p-2 text-foreground">{r.hdo_username ?? '—'}</td>
+                        <td className="p-2 font-mono text-mutedForeground">{r.ticket_id?.slice(0, 8) ?? '—'}…</td>
+                        <td className="p-2 tabular-nums">{r.amount ?? 100}</td>
+                        <td className="p-2">{r.status}</td>
+                        <td className="p-2 text-mutedForeground whitespace-nowrap">{r.created_at ? new Date(r.created_at).toLocaleString() : '—'}</td>
+                        <td className="p-2 text-right whitespace-nowrap">
+                          {r.status === 'pending' && (
+                            <>
+                              <BtnPrimary type="button" className="!py-0.5 !px-2 text-[9px] mr-1" onClick={() => handleApproveHdoPointRequest(r.id)}>Approve</BtnPrimary>
+                              <BtnDanger type="button" className="!py-0.5 !px-2 text-[9px]" onClick={() => handleRejectHdoPointRequest(r.id)}>Reject</BtnDanger>
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+          <div className="admin-art-line text-primary mx-3" />
+        </div>
+        )}
 
         <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
           <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -20085,12 +20196,66 @@ export default function Admin() {
               )}
             </div>
             {entDashboardUser && (
-              <div className="rounded border border-primary/20 bg-zinc-900/40 p-2 space-y-1">
+              <div className="rounded border border-primary/20 bg-zinc-900/40 p-2 space-y-2">
                 <div className="text-[10px] font-heading text-primary uppercase">Dashboard — {entDashboardUser}</div>
                 {entDashboardLoading ? (
                   <p className="text-[10px] text-mutedForeground">Loading…</p>
                 ) : entDashboardData ? (
-                  <pre className="text-[10px] text-foreground font-mono whitespace-pre-wrap break-all max-h-64 overflow-y-auto">{JSON.stringify(entDashboardData, null, 2)}</pre>
+                  <div className="space-y-2 text-[10px] font-heading">
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-mutedForeground max-w-md">
+                      <span>Fund cash</span>
+                      <span className="text-right text-emerald-400">${Number(entDashboardData.entertainer_fund_cash ?? 0).toLocaleString()}</span>
+                      <span>Fund points</span>
+                      <span className="text-right text-sky-400/90">{Number(entDashboardData.entertainer_fund_points ?? 0).toLocaleString()}</span>
+                      <span>Funded games today</span>
+                      <span className="text-right text-foreground">{entDashboardData.funded_games_today_count ?? 0}</span>
+                    </div>
+                    {Array.isArray(entDashboardData.recent_funded_games) && entDashboardData.recent_funded_games.length > 0 ? (
+                      <div>
+                        <div className="text-[9px] uppercase tracking-wide text-mutedForeground mb-1">Recent funded games</div>
+                        <div className="overflow-x-auto max-h-64 overflow-y-auto rounded border border-zinc-700/40">
+                          <table className="w-full text-[9px] text-left">
+                            <thead>
+                              <tr className="border-b border-zinc-700/50 text-mutedForeground uppercase">
+                                <th className="p-1.5 font-heading">Kind</th>
+                                <th className="p-1.5 font-heading">Day</th>
+                                <th className="p-1.5 font-heading">Status</th>
+                                <th className="p-1.5 font-heading">Winner</th>
+                                <th className="p-1.5 font-heading">Paid out</th>
+                                <th className="p-1.5 font-heading">Fund seed</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {entDashboardData.recent_funded_games.map((row) => {
+                                const href = fundedGameHref(row);
+                                const kind = fundedGameKindLabel(row);
+                                return (
+                                  <tr key={row.id || `${row.source}-${row.ref_id}`} className="border-b border-zinc-800/60 align-top">
+                                    <td className="p-1.5 whitespace-nowrap">
+                                      {href ? (
+                                        <Link to={href} className="text-primary hover:underline">{kind}</Link>
+                                      ) : (
+                                        <span className="text-primary">{kind}</span>
+                                      )}
+                                    </td>
+                                    <td className="p-1.5 text-mutedForeground whitespace-nowrap">{row.utc_day ?? '—'}</td>
+                                    <td className="p-1.5 whitespace-nowrap">{row.completed_at ? <span className="text-emerald-400">Done</span> : <span className="text-amber-400">Open</span>}</td>
+                                    <td className="p-1.5 text-foreground max-w-[100px] break-words">{(row.winner_username || '').trim() || '—'}</td>
+                                    <td className="p-1.5 text-sky-400/90 whitespace-nowrap">{formatTotalWinnings(row)}</td>
+                                    <td className="p-1.5 text-violet-300/90 whitespace-nowrap">{formatFromEntertainerFund(row)}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    ) : null}
+                    <details className="text-[9px] text-mutedForeground">
+                      <summary className="cursor-pointer hover:text-foreground select-none">Raw JSON</summary>
+                      <pre className="mt-1 text-[9px] text-foreground font-mono whitespace-pre-wrap break-all max-h-48 overflow-y-auto border border-zinc-800/60 rounded p-1">{JSON.stringify(entDashboardData, null, 2)}</pre>
+                    </details>
+                  </div>
                 ) : (
                   <p className="text-[10px] text-mutedForeground">No data</p>
                 )}

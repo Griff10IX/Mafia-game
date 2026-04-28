@@ -5661,6 +5661,115 @@ def register(router):
         await db.users.update_one({"id": target["id"]}, {"$set": {"is_help_desk_operator": False}})
         return {"message": f"Removed Help Desk Operator role from {target.get('username', target_username)}."}
 
+    async def _ensure_hdo_point_request_indexes_admin():
+        coll = db.help_desk_hdo_point_requests
+        await coll.create_index([("status", 1), ("created_at", -1)])
+        await coll.create_index([("hdo_user_id", 1), ("status", 1)])
+        await coll.create_index("ticket_id", unique=True)
+
+    @router.get("/admin/help-desk/hdo-point-requests")
+    async def admin_list_hdo_point_requests(
+        status: str = Query("pending", description="pending | approved | rejected | all"),
+        limit: int = Query(50, ge=1, le=200),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Admin: list HDO close-reward requests for approval."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        await _ensure_hdo_point_request_indexes_admin()
+        coll = db.help_desk_hdo_point_requests
+        if status == "all":
+            query = {}
+        elif status in ("pending", "approved", "rejected"):
+            query = {"status": status}
+        else:
+            raise HTTPException(status_code=400, detail="status must be pending, approved, rejected, or all")
+        cursor = coll.find(query, {"_id": 0}).sort("created_at", -1).limit(limit)
+        rows = await cursor.to_list(limit)
+        return {"requests": rows}
+
+    @router.post("/admin/help-desk/hdo-point-requests/{request_id}/approve")
+    async def admin_approve_hdo_point_request(
+        request_id: str,
+        current_user: dict = Depends(get_current_user),
+    ):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        await _ensure_hdo_point_request_indexes_admin()
+        req = await db.help_desk_hdo_point_requests.find_one({"id": request_id}, {"_id": 0})
+        if not req:
+            raise HTTPException(status_code=404, detail="Request not found")
+        if req.get("status") != "pending":
+            raise HTTPException(status_code=400, detail="Request is not pending")
+        hdo_uid = req.get("hdo_user_id")
+        amt = int(req.get("amount") or 0)
+        if not hdo_uid or amt <= 0:
+            raise HTTPException(status_code=400, detail="Invalid request")
+        now = datetime.now(timezone.utc).isoformat()
+        res = await db.help_desk_hdo_point_requests.update_one(
+            {"id": request_id, "status": "pending"},
+            {
+                "$set": {
+                    "status": "approved",
+                    "resolved_at": now,
+                    "resolved_by_id": current_user["id"],
+                    "resolved_by_username": current_user.get("username") or "?",
+                }
+            },
+        )
+        if res.modified_count == 0:
+            raise HTTPException(status_code=400, detail="Request already processed")
+        u_before = await db.users.find_one({"id": hdo_uid}, {"_id": 0, "points": 1})
+        pts_before = int((u_before or {}).get("points") or 0)
+        await db.users.update_one({"id": hdo_uid}, {"$inc": {"points": amt}})
+        pts_after = pts_before + amt
+        await log_points_event(
+            db,
+            user_id=hdo_uid,
+            points=amt,
+            event_type="hdo_ticket_close_reward",
+            event_ref=request_id,
+            meta={
+                "ticket_id": req.get("ticket_id"),
+                "approved_by": current_user.get("id"),
+            },
+            wallet_points_before=pts_before,
+            wallet_points_after=pts_after,
+        )
+        return {"message": f"Approved {amt} points", "request_id": request_id}
+
+    @router.post("/admin/help-desk/hdo-point-requests/{request_id}/reject")
+    async def admin_reject_hdo_point_request(
+        request_id: str,
+        reason: Optional[str] = Body(None, embed=True),
+        current_user: dict = Depends(get_current_user),
+    ):
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        await _ensure_hdo_point_request_indexes_admin()
+        req = await db.help_desk_hdo_point_requests.find_one({"id": request_id}, {"_id": 0})
+        if not req:
+            raise HTTPException(status_code=404, detail="Request not found")
+        if req.get("status") != "pending":
+            raise HTTPException(status_code=400, detail="Request is not pending")
+        now = datetime.now(timezone.utc).isoformat()
+        reason_clean = (reason or "").strip()[:500] or None
+        res = await db.help_desk_hdo_point_requests.update_one(
+            {"id": request_id, "status": "pending"},
+            {
+                "$set": {
+                    "status": "rejected",
+                    "resolved_at": now,
+                    "resolved_by_id": current_user["id"],
+                    "resolved_by_username": current_user.get("username") or "?",
+                    "reject_reason": reason_clean,
+                }
+            },
+        )
+        if res.modified_count == 0:
+            raise HTTPException(status_code=400, detail="Request already processed")
+        return {"message": "Rejected", "request_id": request_id}
+
     @router.get("/admin/entertainers")
     async def admin_list_entertainers(current_user: dict = Depends(get_current_user)):
         """List Entertainers. Admin or moderator."""

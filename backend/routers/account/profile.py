@@ -105,6 +105,7 @@ def register(router):
     _user_owns_any_property = srv._user_owns_any_property
     _is_moderator = srv._is_moderator
     _is_entertainer = srv._is_entertainer
+    _is_hdo = srv._is_hdo
     _is_admin = srv._is_admin
     MOD_ONLINE_COLOR_DEFAULT = "#1e3a5f"
     verify_password = srv.verify_password
@@ -900,6 +901,10 @@ def register(router):
 
             raw_e = (user.get("entertainer_online_color") or "").strip() or _ENT_COL
             out["entertainer_online_color"] = raw_e if raw_e.startswith("#") and len(raw_e) <= 9 else _ENT_COL
+        if _is_hdo(user):
+            _hdo_def = "#166534"
+            raw_h = (user.get("hdo_online_color") or "").strip() or _hdo_def
+            out["hdo_online_color"] = raw_h if raw_h.startswith("#") and len(raw_h) <= 9 else _hdo_def
         # Hitlist banner: is this user on the hitlist? (public info: totals only)
         hitlist_entries = await db.hitlist.find(
             {"target_id": user_id, "target_type": {"$in": ["user", "bodyguards"]}},
@@ -1834,6 +1839,22 @@ def register(router):
             raw = _ENT_DEF
         await db.users.update_one({"id": current_user["id"]}, {"$set": {"entertainer_online_color": raw}})
         return {"message": "Entertainer online colour updated", "entertainer_online_color": raw}
+
+    HDO_ONLINE_COLOR_DEFAULT = "#166534"
+
+    @router.patch("/profile/hdo-online-color")
+    async def update_hdo_online_color(
+        current_user: dict = Depends(get_current_user),
+        color: Optional[str] = Body(None, embed=True),
+    ):
+        """Help Desk Operators only: set your colour on the Users Online list."""
+        if not _is_hdo(current_user):
+            raise HTTPException(status_code=403, detail="Help Desk Operators only")
+        raw = (color or "").strip() or HDO_ONLINE_COLOR_DEFAULT
+        if not (raw.startswith("#") and len(raw) in (4, 7) and all(c in "0123456789AaBbCcDdEeFf" for c in raw[1:])):
+            raw = HDO_ONLINE_COLOR_DEFAULT
+        await db.users.update_one({"id": current_user["id"]}, {"$set": {"hdo_online_color": raw}})
+        return {"message": "HDO online colour updated", "hdo_online_color": raw}
 
     @router.get("/profile/cars-preferences")
     async def get_profile_cars_preferences(current_user: dict = Depends(get_current_user)):

@@ -3,6 +3,9 @@
  * non-admins always use manual_roll (creator-funded rewards required).
  * Confirm whenever pot + reserved rewards would deduct cash or points.
  */
+/** Keep in sync with `ENTERTAINER_GBOX_MAX_POINTS_PER_GAME` in `utils/entertainer_service.py`. */
+export const ENTERTAINER_GBOX_MAX_POINTS = 500;
+
 export function confirmEntertainerGameCreatorDeduction({
   isAdmin,
   isEntertainer,
@@ -15,6 +18,12 @@ export function confirmEntertainerGameCreatorDeduction({
   const effectiveManual = isAdmin ? !!manualRoll : true;
   if (effectiveManual && rewardMoney <= 0 && rewardPoints <= 0) {
     return { allowed: false, toastMessage: 'Set reward cash, points, or both for manual games.' };
+  }
+  if (isEntertainer && gameType === 'gbox' && rewardPoints > ENTERTAINER_GBOX_MAX_POINTS) {
+    return {
+      allowed: false,
+      toastMessage: `Entertainer Gbox: total reward points cannot exceed ${ENTERTAINER_GBOX_MAX_POINTS.toLocaleString()} (from your entertainer fund).`,
+    };
   }
   const reserveMoney = effectiveManual ? rewardMoney : 0;
   const reservePoints = effectiveManual ? rewardPoints : 0;

@@ -223,6 +223,9 @@ function NextCycleCountdown({ deadline, large = false }) {
   );
 }
 
+/** Entertainer MDG: max points (fee + extra pot) from fund per game — keep in sync with backend `ENTERTAINER_MDG_MAX_POINTS_PER_GAME`. */
+const ENTERTAINER_MDG_MAX_POINTS = 250;
+
 export default function MDGPage() {
   const [games, setGames] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -352,6 +355,13 @@ export default function MDGPage() {
       toast.error('Entertainer-created MDG games must allow at least 4 players (increase Max players).');
       return;
     }
+    const extraPts = parseInt(createExtraPotPoints, 10) || 0;
+    if (entFund.is_entertainer && feePoints + extraPts > ENTERTAINER_MDG_MAX_POINTS) {
+      toast.error(
+        `Entertainer MDG: fee points + extra pot points cannot exceed ${ENTERTAINER_MDG_MAX_POINTS.toLocaleString()} (from your entertainer fund).`,
+      );
+      return;
+    }
     setCreating(true);
     try {
       await api.post('/casino/mdg/create', {
@@ -359,7 +369,7 @@ export default function MDGPage() {
         fee_money: feeMoney,
         max_players: maxPlayers,
         auto_roll_at: createAutoRollAt.trim() ? Math.max(2, parseInt(createAutoRollAt, 10) || 2) : null,
-        extra_pot_points: parseInt(createExtraPotPoints, 10) || 0,
+        extra_pot_points: extraPts,
         extra_pot_money: parseFloat(createExtraPotMoney) || 0,
       });
       await refreshUser();
@@ -394,6 +404,8 @@ export default function MDGPage() {
     entFund.is_entertainer &&
     createOpen &&
     (previewTotalPts > entFund.points || previewTotalMoney > entFund.cash);
+  const entMdgPointsOverCap =
+    entFund.is_entertainer && createOpen && previewTotalPts > ENTERTAINER_MDG_MAX_POINTS;
 
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="mdg-page">
@@ -437,7 +449,7 @@ export default function MDGPage() {
                   {entFund.is_entertainer ? (
                     <>
                       {' '}
-                      As an Entertainer, your creation fee plus extra pot are paid from your Entertainer fund — not your main wallet. Max players must be at least <strong className="text-violet-200">4</strong>.
+                      As an Entertainer, your creation fee plus extra pot are paid from your Entertainer fund — not your main wallet. Max players must be at least <strong className="text-violet-200">4</strong>. Points from the fund (fee + extra pot) are capped at <strong className="text-violet-200">{ENTERTAINER_MDG_MAX_POINTS.toLocaleString()}</strong> per game.
                     </>
                   ) : null}
                 </p>
@@ -473,7 +485,12 @@ export default function MDGPage() {
                             .filter(Boolean)
                             .join(' + ') || '—'}
                         </span>
-                        {entInsufficient && (
+                        {entMdgPointsOverCap && (
+                          <span className="block text-amber-400/95 mt-1">
+                            Points total exceeds entertainer cap ({ENTERTAINER_MDG_MAX_POINTS.toLocaleString()} max fee + extra pot combined).
+                          </span>
+                        )}
+                        {entInsufficient && !entMdgPointsOverCap && (
                           <span className="block text-amber-400/95 mt-1">
                             Not enough in Entertainer fund for these amounts — lower fees/extra pot or wait for daily UTC top-up.
                           </span>
@@ -552,7 +569,7 @@ export default function MDGPage() {
                 <div className="flex items-center gap-2 pt-1">
                   <button
                     type="button"
-                    disabled={creating}
+                    disabled={creating || (entFund.is_entertainer && (entInsufficient || entMdgPointsOverCap))}
                     onClick={handleCreate}
                     className="inline-flex items-center gap-1.5 px-3 py-2 rounded border border-primary/40 bg-primary/20 text-primary font-heading font-bold text-[10px] uppercase hover:bg-primary/30 disabled:opacity-50 transition-colors"
                   >

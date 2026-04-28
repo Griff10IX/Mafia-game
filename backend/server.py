@@ -720,6 +720,7 @@ class UserResponse(BaseModel):
     admin_online_color: Optional[str] = None  # global setting for styling "Admin" rank (so profile API can omit it when viewing others)
     mod_online_color: Optional[str] = None  # moderator's own colour on Users Online (default dark blue when not set)
     is_help_desk_operator: bool = False  # can reply/close help desk tickets; shown dark green on Users Online
+    hdo_online_color: Optional[str] = None  # hex colour on Users Online (HDO picks own; default when unset)
     is_entertainer: bool = False  # staff: MDG/MP Poker fund; own online colour; not attack-immune
     entertainer_online_color: Optional[str] = None  # hex colour on Users Online (like mod_online_color)
     entertainer_fund_cash: float = 0.0  # segregated fund for sponsoring MDG / MP Poker only
