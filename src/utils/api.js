@@ -389,8 +389,12 @@ api.interceptors.response.use(
     // Show full-screen overlay for repeated server-down scenarios (skip 401/403 — those redirect)
     // Throttle: only dispatch once per 30s to avoid overlay + toast spam when many requests fail at once
     const status = error.response?.status;
+    const reqMethod = String(error.config?.method || 'get').toLowerCase();
+    const isBackgroundSafeMethod = reqMethod === 'get' || reqMethod === 'head' || reqMethod === 'options';
+    const shouldCountAsServerDownSignal =
+      isServerUnavailable(status) || (status === 0 && !isBackgroundSafeMethod);
     if (
-      (status === 0 || isServerUnavailable(status)) &&
+      shouldCountAsServerDownSignal &&
       typeof window !== 'undefined' &&
       !isPublicPath() &&
       !_pageUnloading &&
