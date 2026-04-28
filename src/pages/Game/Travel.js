@@ -418,6 +418,27 @@ export default function Travel() {
   }, [fetchTravelInfo]);
 
   useEffect(() => {
+    let lastWakeRefetchAt = 0;
+    const onWake = () => {
+      const now = Date.now();
+      if (now - lastWakeRefetchAt < 2500) return;
+      lastWakeRefetchAt = now;
+      fetchTravelInfo({ silent: true });
+    };
+    const onVisibility = () => {
+      if (!document.hidden) onWake();
+    };
+    window.addEventListener('focus', onWake);
+    window.addEventListener('pageshow', onWake);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('focus', onWake);
+      window.removeEventListener('pageshow', onWake);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [fetchTravelInfo]);
+
+  useEffect(() => {
     if (travelTime > 0) {
       const timer = setInterval(() => {
         setTravelTime(prev => {

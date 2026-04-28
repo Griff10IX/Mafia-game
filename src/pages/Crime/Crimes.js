@@ -515,6 +515,31 @@ export default function Crimes() {
     return () => window.removeEventListener(SAME_ROUTE_NAV_CLICK, onSameRouteNav);
   }, [fetchCrimes]);
 
+  // AFK/mobile wake: if the page resumes with stale/empty data, silently refetch without forcing full reload.
+  useEffect(() => {
+    let lastWakeRefetchAt = 0;
+    const maybeRefetchOnWake = () => {
+      const now = Date.now();
+      if (now - lastWakeRefetchAt < 2500) return;
+      lastWakeRefetchAt = now;
+      clearCrimesPrefetch();
+      fetchCrimes(true);
+    };
+    const onFocus = () => maybeRefetchOnWake();
+    const onPageShow = () => maybeRefetchOnWake();
+    const onVisibility = () => {
+      if (!document.hidden) maybeRefetchOnWake();
+    };
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('pageshow', onPageShow);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('pageshow', onPageShow);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [fetchCrimes]);
+
   const tick = useCooldownTicker(crimes, () => fetchCrimes(true));
 
   const [commitAllLoading, setCommitAllLoading] = useState(false);

@@ -515,6 +515,34 @@ export default function States() {
     }).catch(() => setAirports([]));
   }, []);
 
+  useEffect(() => {
+    let lastWakeRefetchAt = 0;
+    const onWake = () => {
+      const now = Date.now();
+      if (now - lastWakeRefetchAt < 2500) return;
+      lastWakeRefetchAt = now;
+      fetchStates();
+      fetchFamilyMy();
+      fetchUserCity();
+      api.get('/bullet-factory/list').then((r) => setBulletFactories(r.data?.factories ?? [])).catch(() => setBulletFactories([]));
+      api.get('/airports').then((r) => {
+        setAirports(r.data?.airports ?? []);
+        if (r.data?.claim_cost != null) setAirportClaimCost(Number(r.data.claim_cost));
+      }).catch(() => setAirports([]));
+    };
+    const onVisibility = () => {
+      if (!document.hidden) onWake();
+    };
+    window.addEventListener('focus', onWake);
+    window.addEventListener('pageshow', onWake);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('focus', onWake);
+      window.removeEventListener('pageshow', onWake);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [fetchStates, fetchFamilyMy, fetchUserCity]);
+
   const cities = useMemo(() => (Array.isArray(data.cities) ? data.cities : []), [data.cities]);
   const games = useMemo(() => (Array.isArray(data.games) ? data.games : []), [data.games]);
   const allOwners = useMemo(() => ({

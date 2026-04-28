@@ -607,6 +607,28 @@ export default function Garage() {
     return () => clearInterval(id);
   }, [fetchGarage]);
 
+  useEffect(() => {
+    let lastWakeRefetchAt = 0;
+    const onWake = () => {
+      const now = Date.now();
+      if (now - lastWakeRefetchAt < 2500) return;
+      lastWakeRefetchAt = now;
+      fetchGarage(true);
+      api.get('/auth/me').then((r) => setUser(r.data)).catch(() => {});
+    };
+    const onVisibility = () => {
+      if (!document.hidden) onWake();
+    };
+    window.addEventListener('focus', onWake);
+    window.addEventListener('pageshow', onWake);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('focus', onWake);
+      window.removeEventListener('pageshow', onWake);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [fetchGarage]);
+
   // Tick every second while melt-for-bullets cooldown is active
   useEffect(() => {
     if (!meltBulletsCooldownUntil) {
