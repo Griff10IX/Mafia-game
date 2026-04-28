@@ -437,6 +437,25 @@ async def build_entertainer_dashboard(db, entertainer_id: str) -> Dict[str, Any]
     if not u or not u.get("is_entertainer"):
         return {}
     funded_today = await db.entertainer_funded_games.count_documents({"entertainer_id": entertainer_id, "utc_day": today})
+    funded_ledger_open = await db.entertainer_funded_games.count_documents(
+        {"entertainer_id": entertainer_id, "completed_at": None}
+    )
+    funded_ledger_completed = await db.entertainer_funded_games.count_documents(
+        {"entertainer_id": entertainer_id, "completed_at": {"$ne": None}}
+    )
+    agg_paid = await db.entertainer_funded_games.aggregate(
+        [
+            {"$match": {"entertainer_id": entertainer_id, "completed_at": {"$ne": None}}},
+            {
+                "$group": {
+                    "_id": None,
+                    "paid_pts": {"$sum": {"$ifNull": ["$total_winnings_points", 0]}},
+                    "paid_cash": {"$sum": {"$ifNull": ["$total_winnings_cash", 0.0]}},
+                }
+            },
+        ]
+    ).to_list(1)
+    paid_row = agg_paid[0] if agg_paid else {}
     recent = (
         await db.entertainer_funded_games.find({"entertainer_id": entertainer_id}, {"_id": 0})
         .sort("funded_at", -1)
@@ -455,6 +474,10 @@ async def build_entertainer_dashboard(db, entertainer_id: str) -> Dict[str, Any]
         "entertainer_fund_cash": float(u.get("entertainer_fund_cash") or 0),
         "entertainer_fund_points": int(u.get("entertainer_fund_points") or 0),
         "funded_games_today_count": funded_today,
+        "funded_ledger_open_count": int(funded_ledger_open),
+        "funded_ledger_completed_count": int(funded_ledger_completed),
+        "funded_ledger_paid_out_points_total": int(paid_row.get("paid_pts") or 0),
+        "funded_ledger_paid_out_cash_total": float(paid_row.get("paid_cash") or 0.0),
         "lifetime_bonus_points_paid": int(u.get("entertainer_lifetime_bonus_points_paid") or 0),
         "lifetime_fund_cash_granted": int(u.get("entertainer_lifetime_fund_cash_granted") or 0),
         "lifetime_fund_points_granted": int(u.get("entertainer_lifetime_fund_points_granted") or 0),

@@ -120,8 +120,11 @@ def register(router):
         uname = (target_username or "").strip()
         if not uname:
             raise HTTPException(status_code=400, detail="target_username required")
+        pat = _username_pattern(uname)
+        if not pat:
+            raise HTTPException(status_code=400, detail="target_username required")
         target = await db.users.find_one(
-            _username_pattern(uname),
+            {"username": pat},
             {"_id": 0, "id": 1, "username": 1, "is_entertainer": 1},
         )
         if not target or not target.get("is_entertainer"):

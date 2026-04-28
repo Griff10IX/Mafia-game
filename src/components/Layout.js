@@ -30,7 +30,7 @@ function readLayoutBootFromDashboardCache() {
 }
 
 /** Bottom bar: 6 icons. Rank = crimes/rank; Misc = everything that doesn't fit elsewhere. */
-function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
+function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, isEntertainer, isHelpDeskOperator) {
   const goItems = [
     { path: '/game/travel', label: 'Travel' },
     { path: '/game/states', label: 'States' },
@@ -168,12 +168,14 @@ function getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator) {
       items: [
         { path: '/social/forum', label: 'Forum' },
         { path: '/social/forum', label: 'Entertainer Forum', search: '?tab=entertainer' },
+        ...(isEntertainer ? [{ path: '/game/entertainer', label: 'Entertainer Hub' }] : []),
         { path: '/social/forum', label: 'Designer forum', search: '?tab=designer' },
         { path: '/social/forum', label: 'Game Ideas', search: '?tab=game_ideas' },
         { path: '/social/forum', label: 'Crew OC', search: '?tab=crew_oc' },
         { path: '/social/inbox', label: 'Inbox' },
         { path: '/social/image-host', label: 'Image host' },
         { path: '/game/help-desk', label: 'Help Desk' },
+        ...(isHelpDeskOperator ? [{ path: '/game/help-desk-hub', label: 'Help Desk Hub' }] : []),
         { path: '/game/users-online', label: 'Users Online' },
         { path: '/game/family/list', label: 'Families' },
         { path: '/game/leaderboard', label: 'Leaderboard' },
@@ -463,7 +465,7 @@ export default function Layout({ children }) {
 
   const hasCasinoOrProperty = Boolean(user?.has_casino_or_property);
   const mobileBottomNavItems = useMemo(() => {
-    let items = getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator);
+    let items = getMobileBottomNavItems(isAdmin, hasCasinoOrProperty, isModerator, !!user?.is_entertainer, !!user?.is_help_desk_operator);
     if (hasAdminEmail && !isAdmin) {
       items = items.map((i) =>
         i.type === 'group' && i.id === 'you'
@@ -516,7 +518,7 @@ export default function Layout({ children }) {
       }
       return i;
     });
-  }, [isAdmin, isModerator, hasAdminEmail, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, user?.witness_nav_red, user?.witness_nav_green]);
+  }, [isAdmin, isModerator, hasAdminEmail, hasCasinoOrProperty, helpDeskOpenCount, unreadCount, usersOnlineCount, rankingCounts.crimes, rankingCounts.gta, rankingCounts.jail, sportsBettingEventCount, user?.witness_nav_red, user?.witness_nav_green, user?.is_entertainer, user?.is_help_desk_operator]);
 
   useEffect(() => onCooldownChange(setCooldownSeconds), []);
 

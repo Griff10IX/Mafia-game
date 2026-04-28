@@ -256,7 +256,29 @@ export default function EntertainerHub() {
       </div>
 
       <section className="space-y-2">
-        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest">Recent funded games</h2>
+        <h2 className="text-xs font-heading font-bold text-mutedForeground uppercase tracking-widest">Sponsored games (MDG / MP Poker)</h2>
+        <p className="text-[10px] text-mutedForeground font-heading leading-snug">
+          <strong className="text-zinc-400">Open</strong> = game not finished yet. <strong className="text-zinc-400">Completed</strong> = done. Paid totals are from the ledger (games finished before payout tracking may show 0).
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] font-heading">
+          <div className="rounded border border-zinc-700/50 p-2 bg-zinc-900/30 text-center">
+            <div className="text-[9px] text-mutedForeground uppercase">Open</div>
+            <div className="text-lg font-bold text-amber-400 tabular-nums">{dash.funded_ledger_open_count ?? 0}</div>
+          </div>
+          <div className="rounded border border-zinc-700/50 p-2 bg-zinc-900/30 text-center">
+            <div className="text-[9px] text-mutedForeground uppercase">Completed</div>
+            <div className="text-lg font-bold text-emerald-400 tabular-nums">{dash.funded_ledger_completed_count ?? 0}</div>
+          </div>
+          <div className="rounded border border-zinc-700/50 p-2 bg-zinc-900/30 text-center">
+            <div className="text-[9px] text-mutedForeground uppercase">Paid pts</div>
+            <div className="text-lg font-bold text-sky-400/90 tabular-nums">{(dash.funded_ledger_paid_out_points_total ?? 0).toLocaleString()}</div>
+          </div>
+          <div className="rounded border border-zinc-700/50 p-2 bg-zinc-900/30 text-center">
+            <div className="text-[9px] text-mutedForeground uppercase">Paid cash</div>
+            <div className="text-lg font-bold text-emerald-400 tabular-nums">${Math.trunc(Number(dash.funded_ledger_paid_out_cash_total ?? 0)).toLocaleString()}</div>
+          </div>
+        </div>
+        <h3 className="text-[11px] font-heading font-bold text-mutedForeground uppercase tracking-wider">Recent funded games</h3>
         {recent.length === 0 ? (
           <p className="text-[11px] text-mutedForeground font-heading">No entries yet. Create an MDG or MP Poker game using your entertainer fund.</p>
         ) : (

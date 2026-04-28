@@ -63,6 +63,33 @@ def register(router):
         await coll.create_index([("hdo_user_id", 1), ("status", 1)])
         await coll.create_index("ticket_id", unique=True)
 
+    def _hdo_close_context_snapshot(ticket: dict) -> dict:
+        """Persist enough ticket text for admin approval if the ticket row is later purged (e.g. 48h closed prune)."""
+        thread = []
+        # Same order as _ticket_to_response (newest reply first, matches in-game ticket UI).
+        for rep in reversed(ticket.get("replies") or []):
+            body = (rep.get("body") or "").strip()
+            if len(body) > 8000:
+                body = body[:8000] + "…"
+            thread.append(
+                {
+                    "author_username": rep.get("author_username") or "?",
+                    "author_role": rep.get("author_role") or "?",
+                    "body": body,
+                    "created_at": rep.get("created_at"),
+                }
+            )
+        ob = (ticket.get("body") or "").strip()
+        if len(ob) > 12000:
+            ob = ob[:12000] + "…"
+        return {
+            "subject": ((ticket.get("subject") or "").strip()[:500]) or "—",
+            "category": ticket.get("category") or "general",
+            "player_username": ticket.get("username") or "?",
+            "initial_message": ob,
+            "thread": thread,
+        }
+
     def _can_manage_tickets(user: dict) -> bool:
         return _is_admin(user) or _is_moderator(user) or _is_hdo(user)
 
@@ -298,6 +325,7 @@ def register(router):
                         "status": "pending",
                         "created_at": now,
                         "closed_at": now,
+                        "close_context": _hdo_close_context_snapshot(ticket),
                     }
                 )
             except DuplicateKeyError:

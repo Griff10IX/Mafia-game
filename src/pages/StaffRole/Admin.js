@@ -42,6 +42,18 @@ function inactiveReminderOnCooldown(sentAtIso) {
   return Date.now() - d.getTime() < INACTIVITY_REMINDER_COOLDOWN_DAYS * 86400000;
 }
 
+/** Newest first — matches GET /help-desk/tickets/{id} and legacy snapshots stored oldest-first. */
+function sortHdoCloseThreadNewestFirst(thread) {
+  if (!thread?.length) return thread || [];
+  return [...thread].sort((a, b) => {
+    const ta = new Date(a.created_at || 0).getTime();
+    const tb = new Date(b.created_at || 0).getTime();
+    const sa = Number.isFinite(ta) ? ta : 0;
+    const sb = Number.isFinite(tb) ? tb : 0;
+    return sb - sa;
+  });
+}
+
 const ADMIN_STYLES = `
   .admin-fade-in { animation: admin-fade-in 0.4s ease-out both; }
   @keyframes admin-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -1256,6 +1268,9 @@ export default function Admin() {
   const [hdoPointRequests, setHdoPointRequests] = useState([]);
   const [hdoPointRequestsLoading, setHdoPointRequestsLoading] = useState(false);
   const [hdoPointRequestFilter, setHdoPointRequestFilter] = useState('pending');
+  const [expandedHdoRequestId, setExpandedHdoRequestId] = useState(null);
+  /** request id -> { loading?, err?, data? } for live ticket fetch when close_context missing */
+  const [hdoTicketFetch, setHdoTicketFetch] = useState({});
   const [entertainersList, setEntertainersList] = useState([]);
   const [entertainersLoading, setEntertainersLoading] = useState(false);
   const [promoteEntUsername, setPromoteEntUsername] = useState('');
@@ -1504,6 +1519,7 @@ export default function Admin() {
 
   const fetchHdoPointRequests = async (status) => {
     setHdoPointRequestsLoading(true);
+    setExpandedHdoRequestId(null);
     try {
       const res = await api.get('/admin/help-desk/hdo-point-requests', { params: { status, limit: 100 } });
       setHdoPointRequests(res.data?.requests ?? []);
@@ -1513,6 +1529,58 @@ export default function Admin() {
     } finally {
       setHdoPointRequestsLoading(false);
     }
+  };
+
+  const fetchHdoTicketForRequest = useCallback(async (r) => {
+    if (!r?.ticket_id || r.close_context) return;
+    setHdoTicketFetch((prev) => {
+      if (prev[r.id]?.data || prev[r.id]?.loading) return prev;
+      return { ...prev, [r.id]: { loading: true, err: null, data: null } };
+    });
+    try {
+      const res = await api.get(`/help-desk/tickets/${encodeURIComponent(r.ticket_id)}`);
+      setHdoTicketFetch((prev) => ({ ...prev, [r.id]: { loading: false, err: null, data: res.data } }));
+    } catch (e) {
+      const msg = typeof e.response?.data?.detail === 'string' ? e.response.data.detail : 'Could not load ticket (it may have been purged).';
+      setHdoTicketFetch((prev) => ({ ...prev, [r.id]: { loading: false, err: msg, data: null } }));
+    }
+  }, []);
+
+  const resolveHdoRequestContext = (r) => {
+    if (r.close_context) {
+      return {
+        ctx: {
+          ...r.close_context,
+          thread: sortHdoCloseThreadNewestFirst(r.close_context.thread),
+        },
+        loading: false,
+        err: null,
+      };
+    }
+    const f = hdoTicketFetch[r.id];
+    if (f?.loading) return { ctx: null, loading: true, err: null };
+    if (f?.err) return { ctx: null, loading: false, err: f.err };
+    if (f?.data) {
+      const t = f.data;
+      const thread = (t.replies || []).map((rep) => ({
+        author_username: rep.author_username,
+        author_role: rep.author_role,
+        body: rep.body,
+        created_at: rep.created_at,
+      }));
+      return {
+        ctx: {
+          subject: t.subject,
+          category: t.category || 'general',
+          player_username: t.username,
+          initial_message: t.body,
+          thread: sortHdoCloseThreadNewestFirst(thread),
+        },
+        loading: false,
+        err: null,
+      };
+    }
+    return { ctx: null, loading: false, err: null };
   };
 
   const handleApproveHdoPointRequest = async (requestId) => {
@@ -1611,6 +1679,7 @@ export default function Admin() {
     try {
       const res = await api.get('/admin/entertainer-dashboard', { params: { target_username: u } });
       setEntDashboardData(res.data);
+      if (res.data?.username) setEntDashboardUser(String(res.data.username));
     } catch (e) {
       toast.error(e.response?.data?.detail ?? 'Failed to load dashboard');
     } finally {
@@ -20114,6 +20183,7 @@ export default function Admin() {
                 <table className="w-full text-[10px] font-heading">
                   <thead>
                     <tr className="border-b border-zinc-700/50 text-left text-mutedForeground uppercase">
+                      <th className="p-2 w-8" aria-label="Expand" />
                       <th className="p-2">HDO</th>
                       <th className="p-2">Ticket</th>
                       <th className="p-2">Pts</th>
@@ -20123,23 +20193,94 @@ export default function Admin() {
                     </tr>
                   </thead>
                   <tbody>
-                    {hdoPointRequests.map((r) => (
-                      <tr key={r.id} className="border-b border-zinc-800/60">
-                        <td className="p-2 text-foreground">{r.hdo_username ?? '—'}</td>
-                        <td className="p-2 font-mono text-mutedForeground">{r.ticket_id?.slice(0, 8) ?? '—'}…</td>
-                        <td className="p-2 tabular-nums">{r.amount ?? 100}</td>
-                        <td className="p-2">{r.status}</td>
-                        <td className="p-2 text-mutedForeground whitespace-nowrap">{r.created_at ? new Date(r.created_at).toLocaleString() : '—'}</td>
-                        <td className="p-2 text-right whitespace-nowrap">
-                          {r.status === 'pending' && (
-                            <>
-                              <BtnPrimary type="button" className="!py-0.5 !px-2 text-[9px] mr-1" onClick={() => handleApproveHdoPointRequest(r.id)}>Approve</BtnPrimary>
-                              <BtnDanger type="button" className="!py-0.5 !px-2 text-[9px]" onClick={() => handleRejectHdoPointRequest(r.id)}>Reject</BtnDanger>
-                            </>
+                    {hdoPointRequests.map((r) => {
+                      const open = expandedHdoRequestId === r.id;
+                      const { ctx, loading: ctxLoading, err: ctxErr } = resolveHdoRequestContext(r);
+                      return (
+                        <Fragment key={r.id}>
+                          <tr className="border-b border-zinc-800/60">
+                            <td className="p-1 align-middle">
+                              <button
+                                type="button"
+                                className="p-1 rounded border border-zinc-600/60 text-mutedForeground hover:text-primary hover:border-primary/40"
+                                aria-expanded={open}
+                                title={open ? 'Hide ticket' : 'Show how they helped'}
+                                onClick={() => {
+                                  const next = open ? null : r.id;
+                                  setExpandedHdoRequestId(next);
+                                  if (next === r.id && !r.close_context) fetchHdoTicketForRequest(r);
+                                }}
+                              >
+                                {open ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                              </button>
+                            </td>
+                            <td className="p-2 text-foreground">{r.hdo_username ?? '—'}</td>
+                            <td className="p-2 font-mono text-mutedForeground" title={r.ticket_id || ''}>
+                              {r.close_context?.subject ? (
+                                <span className="text-foreground font-heading max-w-[140px] inline-block truncate align-bottom">{r.close_context.subject}</span>
+                              ) : null}
+                              <span className="block text-[9px] opacity-80">{r.ticket_id?.slice(0, 8) ?? '—'}…</span>
+                            </td>
+                            <td className="p-2 tabular-nums">{r.amount ?? 100}</td>
+                            <td className="p-2">{r.status}</td>
+                            <td className="p-2 text-mutedForeground whitespace-nowrap">{r.created_at ? new Date(r.created_at).toLocaleString() : '—'}</td>
+                            <td className="p-2 text-right whitespace-nowrap">
+                              {r.status === 'pending' && (
+                                <>
+                                  <BtnPrimary type="button" className="!py-0.5 !px-2 text-[9px] mr-1" onClick={() => handleApproveHdoPointRequest(r.id)}>Approve</BtnPrimary>
+                                  <BtnDanger type="button" className="!py-0.5 !px-2 text-[9px]" onClick={() => handleRejectHdoPointRequest(r.id)}>Reject</BtnDanger>
+                                </>
+                              )}
+                            </td>
+                          </tr>
+                          {open && (
+                            <tr className="border-b border-zinc-800/60 bg-zinc-900/50">
+                              <td colSpan={7} className="p-3 text-[10px] text-mutedForeground font-heading align-top">
+                                {ctxLoading && <p className="text-mutedForeground">Loading ticket…</p>}
+                                {ctxErr && <p className="text-red-400">{ctxErr}</p>}
+                                {!ctxLoading && !ctxErr && !ctx && (
+                                  <p className="text-mutedForeground">No saved snapshot — open once to load the ticket from the server (if still available).</p>
+                                )}
+                                {ctx && (
+                                  <div className="space-y-3 text-left max-w-4xl">
+                                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-zinc-300">
+                                      <span><span className="text-zinc-500">Ticket ID:</span> <span className="font-mono text-[10px]">{r.ticket_id}</span></span>
+                                      <span><span className="text-zinc-500">Category:</span> {ctx.category || '—'}</span>
+                                      <span><span className="text-zinc-500">Player:</span> {ctx.player_username ?? r.ticket_owner_username ?? '—'}</span>
+                                    </div>
+                                    <div>
+                                      <div className="text-[9px] uppercase text-zinc-500 mb-0.5">Subject</div>
+                                      <div className="text-foreground font-heading">{ctx.subject || '—'}</div>
+                                    </div>
+                                    <div>
+                                      <div className="text-[9px] uppercase text-zinc-500 mb-0.5">Original message</div>
+                                      <pre className="whitespace-pre-wrap break-words text-foreground/90 font-sans text-[11px] leading-relaxed bg-zinc-950/60 border border-zinc-700/40 rounded p-2 max-h-48 overflow-y-auto">{ctx.initial_message || '—'}</pre>
+                                    </div>
+                                    {(ctx.thread || []).length > 0 && (
+                                      <div>
+                                        <div className="text-[9px] uppercase text-zinc-500 mb-1">Thread (newest first, same as in-game ticket)</div>
+                                        <ul className="space-y-2 max-h-64 overflow-y-auto">
+                                          {(ctx.thread || []).map((rep, i) => (
+                                            <li key={`${rep.created_at || ''}-${rep.author_username || ''}-${i}`} className="border border-zinc-700/40 rounded p-2 bg-zinc-950/40">
+                                              <div className="text-[9px] text-primary mb-1">
+                                                {(rep.author_username || '?')}
+                                                {rep.author_role ? <span className="text-mutedForeground"> · {rep.author_role}</span> : null}
+                                                {rep.created_at ? <span className="text-mutedForeground font-normal"> · {new Date(rep.created_at).toLocaleString()}</span> : null}
+                                              </div>
+                                              <pre className="whitespace-pre-wrap break-words text-foreground/90 font-sans text-[11px] leading-relaxed">{rep.body || '—'}</pre>
+                                            </li>
+                                          ))}
+                                        </ul>
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
                           )}
-                        </td>
-                      </tr>
-                    ))}
+                        </Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -20197,11 +20338,32 @@ export default function Admin() {
             </div>
             {entDashboardUser && (
               <div className="rounded border border-primary/20 bg-zinc-900/40 p-2 space-y-2">
-                <div className="text-[10px] font-heading text-primary uppercase">Dashboard — {entDashboardUser}</div>
+                <div className="text-[10px] font-heading text-primary uppercase">Dashboard — {entDashboardData?.username || entDashboardUser}</div>
+                <p className="text-[9px] text-mutedForeground font-heading leading-snug">
+                  Sponsored-game stats (MDG / MP Poker) come from the ledger below. <strong className="text-zinc-400">Open</strong> = still in progress; <strong className="text-zinc-400">Done</strong> = completed. Paid totals sum winner payouts recorded on completed rows (older games may show $0 until they finish after this tracking shipped).
+                </p>
                 {entDashboardLoading ? (
                   <p className="text-[10px] text-mutedForeground">Loading…</p>
                 ) : entDashboardData ? (
                   <div className="space-y-2 text-[10px] font-heading">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div className="rounded border border-zinc-700/50 p-2 bg-zinc-900/50 text-center">
+                        <div className="text-[9px] text-mutedForeground uppercase">Open</div>
+                        <div className="text-lg font-bold text-amber-400 tabular-nums">{entDashboardData.funded_ledger_open_count ?? 0}</div>
+                      </div>
+                      <div className="rounded border border-zinc-700/50 p-2 bg-zinc-900/50 text-center">
+                        <div className="text-[9px] text-mutedForeground uppercase">Completed</div>
+                        <div className="text-lg font-bold text-emerald-400 tabular-nums">{entDashboardData.funded_ledger_completed_count ?? 0}</div>
+                      </div>
+                      <div className="rounded border border-zinc-700/50 p-2 bg-zinc-900/50 text-center">
+                        <div className="text-[9px] text-mutedForeground uppercase">Paid pts</div>
+                        <div className="text-lg font-bold text-sky-400/90 tabular-nums">{(entDashboardData.funded_ledger_paid_out_points_total ?? 0).toLocaleString()}</div>
+                      </div>
+                      <div className="rounded border border-zinc-700/50 p-2 bg-zinc-900/50 text-center">
+                        <div className="text-[9px] text-mutedForeground uppercase">Paid cash</div>
+                        <div className="text-lg font-bold text-emerald-400 tabular-nums">${Math.trunc(Number(entDashboardData.funded_ledger_paid_out_cash_total ?? 0)).toLocaleString()}</div>
+                      </div>
+                    </div>
                     <div className="grid grid-cols-2 gap-x-2 gap-y-0.5 text-mutedForeground max-w-md">
                       <span>Fund cash</span>
                       <span className="text-right text-emerald-400">${Number(entDashboardData.entertainer_fund_cash ?? 0).toLocaleString()}</span>

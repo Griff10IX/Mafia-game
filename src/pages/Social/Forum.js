@@ -1509,6 +1509,8 @@ export default function Forum() {
 
   const currentCategory = activeTab === 'entertainer' ? 'entertainer' : activeTab === 'crew_oc' ? 'crew_oc' : activeTab === 'designer' ? 'designer' : activeTab === 'game_ideas' ? 'game_ideas' : 'general';
   const openGames = (entertainerGames || []).filter((g) => g.status === 'open');
+  const openManualGames = openGames.filter((g) => g.manual_roll === true);
+  const openAutoGames = openGames.filter((g) => g.manual_roll !== true);
   const uidStr = user?.id != null ? String(user.id) : '';
   const isUserInParticipantList = (parts) =>
     !!uidStr && (parts || []).some((p) => String(p.user_id || '') === uidStr);
@@ -2234,111 +2236,149 @@ export default function Forum() {
             <div className="f-art-line text-primary mx-3" />
           </div>
 
-          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-fade-in mobile-panel`}>
-            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex flex-wrap items-center justify-between gap-2">
-              <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">🎲 Auto games</span>
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setGameModalOpen(true)}
-                  className="flex items-center gap-1 px-2 py-1 bg-primary/20 border border-primary/50 text-primary text-[10px] font-heading font-bold uppercase rounded hover:bg-primary/30 shrink-0"
-                >
-                  <Dice5 size={12} /> Create manual game
-                </button>
-                <span className="text-[10px] text-mutedForeground">Free to join · Win random: cash, bullets, tokens, cars · Rolls when full or 20 mins before next batch</span>
-              </div>
-            </div>
-            {gamesLoading ? (
-              <div className="p-4 text-center text-xs text-mutedForeground">Loading games...</div>
-            ) : openGames.length === 0 ? (
-              <div className="p-4 text-center text-xs text-mutedForeground">No open games. Use <strong className="text-foreground">New Game</strong> or <strong className="text-foreground">Create manual game</strong> (no topic needed){entertainerConfig.auto_create_enabled ? ', or wait for the next batch (every 3h)' : ''}.</div>
-            ) : (
-              <div className="divide-y divide-zinc-700/30">
-                {openGames.map((g) => {
-                  const participants = g.participants || [];
-                  const isIn = isUserInParticipantList(participants);
-                  const secsLeft = getSecondsUntilRollWindow(entertainerConfig.next_auto_create_at);
-                  return (
-                    <div key={g.id}>
-                    <div className="px-3 py-2 flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        <div className="p-1.5 rounded bg-primary/20 border border-primary/30">
-                          {g.game_type === 'dice' ? (
-                            <Dice5 size={14} className="text-primary" />
-                          ) : g.game_type === 'hangman' ? (
-                            <Puzzle size={14} className="text-primary" />
-                          ) : (
-                            <Package size={14} className="text-primary" />
-                          )}
-                        </div>
-                        <div>
-                          <span className="text-xs font-heading font-bold text-foreground capitalize">{g.game_type}</span>
-                          <span className="text-[10px] text-mutedForeground ml-2">
-                            <Users size={10} className="inline" /> {participants.length}/{g.max_players}
-                          </span>
-                          <span className="text-primary text-[10px] ml-2">Winnings: cash, bullets, tokens, cars</span>
-                          {g.game_type === 'hangman' && g.hangman && (
-                            <span className="text-[10px] text-amber-400 ml-2">
-                              {(g.hangman.wrong_count || 0)}/{g.hangman.max_wrong || 6} misses · {(g.hangman.revealed_pattern || []).filter(c => c !== '_').length}/{g.hangman.word_length || 0} revealed
-                            </span>
-                          )}
-                          {g.manual_roll && (
-                            <span className="text-[10px] text-mutedForeground ml-2">Manual roll</span>
-                          )}
-                          {secsLeft > 0 && !g.manual_roll && (
-                            <span className="text-[10px] text-amber-400/90 ml-2">Rolls in {formatTimeUntil(secsLeft)}</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {!!user && !isIn && g.status === 'open' && (
-                          <button
-                            onClick={() => handleJoinGame(g.id)}
-                            disabled={joiningId === g.id}
-                            className="px-2 py-1 bg-primary/20 border border-primary/50 text-primary text-[10px] font-heading font-bold uppercase rounded hover:bg-primary/30 disabled:opacity-50"
-                          >
-                            {joiningId === g.id ? '...' : 'Join free'}
-                          </button>
-                        )}
-                        {isIn && <span className="text-[10px] text-mutedForeground">You're in</span>}
-                        {g.game_type === 'hangman' && (
-                          <button
-                            type="button"
-                            onClick={() => setExpandedHangmanId(expandedHangmanId === g.id ? null : g.id)}
-                            className="px-2 py-1 bg-amber-500/20 border border-amber-500/50 text-amber-400 text-[10px] font-heading font-bold uppercase rounded hover:bg-amber-500/30"
-                          >
-                            {expandedHangmanId === g.id ? 'Hide' : 'Play'}
-                          </button>
-                        )}
-                        {((isAdmin || (g.manual_roll && user && g.creator_id === user.id)) && g.status === 'open') && (
-                          <button
-                            type="button"
-                            onClick={() => handleRollGame(g.id)}
-                            disabled={rollingId === g.id}
-                            className="px-2 py-1 bg-red-500/20 border border-red-500/50 text-red-400 text-[10px] font-heading font-bold uppercase rounded hover:bg-red-500/30 disabled:opacity-50"
-                            title={g.manual_roll ? 'Roll when ready' : 'Force roll (admin)'}
-                          >
-                            {rollingId === g.id ? '...' : 'Roll now'}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                    {g.game_type === 'hangman' && expandedHangmanId === g.id && (
-                      <HangmanPanel
-                        game={g}
-                        userId={user?.id}
-                        onGuessLetter={isIn ? handleGuessLetter : null}
-                        guessingLetter={guessingLetter}
-                      />
+          {[
+            {
+              key: 'manual',
+              title: 'Manual games',
+              emoji: '🎩',
+              subtitle: 'Funded by the host; they roll when the table is ready. Free to join unless an entry fee is set.',
+              games: openManualGames,
+              showAutoRollCountdown: false,
+              showCreateBtn: true,
+              emptyHint: 'No manual games open. Use Create manual game or start one from an entertainer topic.',
+            },
+            {
+              key: 'auto',
+              title: 'Auto games',
+              emoji: '🎲',
+              subtitle: 'System batch games — free to join · random prizes · rolls when full or 20 mins before the next batch.',
+              games: openAutoGames,
+              showAutoRollCountdown: true,
+              showCreateBtn: false,
+              emptyHint: openManualGames.length > 0
+                ? 'No system batch games open right now. Manual games are listed above.'
+                : `No open batch games${entertainerConfig.auto_create_enabled ? ' — next batch every ~3h when enabled' : ''}.`,
+            },
+          ].map((sec) => {
+            const secsLeft = getSecondsUntilRollWindow(entertainerConfig.next_auto_create_at);
+            return (
+              <div key={sec.key} className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-fade-in mobile-panel`}>
+                <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+                <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">{sec.emoji} {sec.title}</span>
+                  <div className="flex flex-wrap items-center gap-2 justify-end">
+                    {sec.showCreateBtn && (
+                      <button
+                        type="button"
+                        onClick={() => setGameModalOpen(true)}
+                        className="flex items-center gap-1 px-2 py-1 bg-primary/20 border border-primary/50 text-primary text-[10px] font-heading font-bold uppercase rounded hover:bg-primary/30 shrink-0"
+                      >
+                        <Dice5 size={12} /> Create manual game
+                      </button>
                     )}
-                    </div>
-                  );
-                })}
+                    <span className="text-[10px] text-mutedForeground max-w-xl">{sec.subtitle}</span>
+                  </div>
+                </div>
+                {gamesLoading ? (
+                  <div className="p-4 text-center text-xs text-mutedForeground">Loading games...</div>
+                ) : sec.games.length === 0 ? (
+                  <div className="p-4 text-center text-xs text-mutedForeground">{sec.emptyHint}</div>
+                ) : (
+                  <div className="divide-y divide-zinc-700/30">
+                    {sec.games.map((g) => {
+                      const participants = g.participants || [];
+                      const isIn = isUserInParticipantList(participants);
+                      const host = (g.creator_username || '').trim() || '—';
+                      const hostIsSystem = (g.creator_id || '') === 'system';
+                      return (
+                        <div key={g.id}>
+                          <div className="px-3 py-2 flex flex-wrap items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div className="p-1.5 rounded bg-primary/20 border border-primary/30 shrink-0">
+                                {g.game_type === 'dice' ? (
+                                  <Dice5 size={14} className="text-primary" />
+                                ) : g.game_type === 'hangman' ? (
+                                  <Puzzle size={14} className="text-primary" />
+                                ) : (
+                                  <Package size={14} className="text-primary" />
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <span className="text-xs font-heading font-bold text-foreground capitalize">{g.game_type}</span>
+                                <span className="text-[10px] text-mutedForeground ml-2">
+                                  <Users size={10} className="inline" /> {participants.length}/{g.max_players}
+                                </span>
+                                <span className="text-primary text-[10px] ml-2">Winnings: cash, bullets, tokens, cars</span>
+                                {g.game_type === 'hangman' && g.hangman && (
+                                  <span className="text-[10px] text-amber-400 ml-2">
+                                    {(g.hangman.wrong_count || 0)}/{g.hangman.max_wrong || 6} misses · {(g.hangman.revealed_pattern || []).filter((c) => c !== '_').length}/{g.hangman.word_length || 0} revealed
+                                  </span>
+                                )}
+                                {sec.showAutoRollCountdown && secsLeft > 0 && (
+                                  <span className="text-[10px] text-amber-400/90 ml-2">Rolls in {formatTimeUntil(secsLeft)}</span>
+                                )}
+                                <div className="text-[10px] text-mutedForeground mt-0.5">
+                                  Host:{' '}
+                                  {hostIsSystem || host === '—' ? (
+                                    <span className="text-zinc-300">{host}</span>
+                                  ) : (
+                                    <Link to={`/profile/${encodeURIComponent(host)}`} className="text-primary hover:underline font-heading">
+                                      {host}
+                                    </Link>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {!!user && !isIn && g.status === 'open' && (
+                                <button
+                                  onClick={() => handleJoinGame(g.id)}
+                                  disabled={joiningId === g.id}
+                                  className="px-2 py-1 bg-primary/20 border border-primary/50 text-primary text-[10px] font-heading font-bold uppercase rounded hover:bg-primary/30 disabled:opacity-50"
+                                >
+                                  {joiningId === g.id ? '...' : 'Join free'}
+                                </button>
+                              )}
+                              {isIn && <span className="text-[10px] text-mutedForeground">You&apos;re in</span>}
+                              {g.game_type === 'hangman' && (
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedHangmanId(expandedHangmanId === g.id ? null : g.id)}
+                                  className="px-2 py-1 bg-amber-500/20 border border-amber-500/50 text-amber-400 text-[10px] font-heading font-bold uppercase rounded hover:bg-amber-500/30"
+                                >
+                                  {expandedHangmanId === g.id ? 'Hide' : 'Play'}
+                                </button>
+                              )}
+                              {((isAdmin || (g.manual_roll && user && g.creator_id === user.id)) && g.status === 'open') && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRollGame(g.id)}
+                                  disabled={rollingId === g.id}
+                                  className="px-2 py-1 bg-red-500/20 border border-red-500/50 text-red-400 text-[10px] font-heading font-bold uppercase rounded hover:bg-red-500/30 disabled:opacity-50"
+                                  title={g.manual_roll ? 'Roll when ready' : 'Force roll (admin)'}
+                                >
+                                  {rollingId === g.id ? '...' : 'Roll now'}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          {g.game_type === 'hangman' && expandedHangmanId === g.id && (
+                            <HangmanPanel
+                              game={g}
+                              userId={user?.id}
+                              onGuessLetter={isIn ? handleGuessLetter : null}
+                              guessingLetter={guessingLetter}
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="f-art-line text-primary mx-3" />
               </div>
-            )}
-            <div className="f-art-line text-primary mx-3" />
-          </div>
+            );
+          })}
 
           {/* Last 10 Games */}
           <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 f-fade-in mobile-panel`}>

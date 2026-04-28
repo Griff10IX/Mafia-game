@@ -1426,6 +1426,7 @@ async def _create_system_game(game_type: str, max_players: int) -> dict:
         "created_at": now,
         "completed_at": None,
         "result": None,
+        "manual_roll": False,
     }
     if game_type == "hangman":
         doc["hangman_state"] = _hangman_init_state()
