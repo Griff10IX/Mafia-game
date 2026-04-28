@@ -149,9 +149,14 @@ export const SERVER_UNAVAILABLE_EVENT = 'app:server-unavailable';
 
 let _lastServerUnavailableDispatch = 0;
 const _SERVER_UNAVAILABLE_THROTTLE_MS = 30_000; // Only dispatch once per 30s to avoid overlay + toast spam
-const _SERVER_UNAVAILABLE_STRIKE_WINDOW_MS = 12_000; // Require repeated failures in a short window
+const _SERVER_UNAVAILABLE_STRIKE_WINDOW_MS = 20_000; // Require repeated failures in a short window
+const _SERVER_UNAVAILABLE_MIN_STRIKES = 3; // Need multiple failures before full-screen overlay
+const _SERVER_UNAVAILABLE_RESUME_GRACE_MS = 45_000; // Suppress overlay briefly after returning from idle/background
+const _SERVER_UNAVAILABLE_INTERACTION_WINDOW_MS = 30_000; // Only show full-screen overlay after recent user interaction
 let _serverUnavailableStrikeCount = 0;
 let _serverUnavailableFirstStrikeAt = 0;
+let _lastForegroundAt = Date.now();
+let _lastUserInteractionAt = Date.now();
 
 function _resetServerUnavailableStrikes() {
   _serverUnavailableStrikeCount = 0;
@@ -171,6 +176,8 @@ function _recordServerUnavailableStrike(nowMs) {
 function _shouldSuppressServerUnavailableOverlay() {
   if (typeof document !== 'undefined' && document.hidden) return true;
   if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+  if (_lastForegroundAt > 0 && (Date.now() - _lastForegroundAt) < _SERVER_UNAVAILABLE_RESUME_GRACE_MS) return true;
+  if (_lastUserInteractionAt > 0 && (Date.now() - _lastUserInteractionAt) > _SERVER_UNAVAILABLE_INTERACTION_WINDOW_MS) return true;
   return false;
 }
 
@@ -181,11 +188,30 @@ if (typeof window !== 'undefined') {
   const markUnloading = () => {
     _pageUnloading = true;
   };
+  const markForeground = () => {
+    _lastForegroundAt = Date.now();
+    _lastUserInteractionAt = Date.now();
+    _resetServerUnavailableStrikes();
+  };
+  const markUserInteraction = () => {
+    _lastUserInteractionAt = Date.now();
+  };
   window.addEventListener('pagehide', markUnloading);
   window.addEventListener('beforeunload', markUnloading);
   window.addEventListener('pageshow', (e) => {
     if (e.persisted) _pageUnloading = false;
+    markForeground();
   });
+  window.addEventListener('focus', markForeground);
+  window.addEventListener('online', markForeground);
+  window.addEventListener('pointerdown', markUserInteraction, { passive: true });
+  window.addEventListener('keydown', markUserInteraction, { passive: true });
+  window.addEventListener('touchstart', markUserInteraction, { passive: true });
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) markForeground();
+    });
+  }
 }
 
 /** Booze run: 403 jail on follow-up requests (e.g. /booze-run/config) used to replace location immediately and hide the prohibition toast. Defer once. */
@@ -372,11 +398,18 @@ api.interceptors.response.use(
     ) {
       const now = Date.now();
       const strikes = _recordServerUnavailableStrike(now);
-      // Avoid false positives from one transient failed background request.
-      if (strikes >= 2 && now - _lastServerUnavailableDispatch >= _SERVER_UNAVAILABLE_THROTTLE_MS) {
+      // Avoid false positives from transient wake/reconnect failures.
+      if (strikes >= _SERVER_UNAVAILABLE_MIN_STRIKES && now - _lastServerUnavailableDispatch >= _SERVER_UNAVAILABLE_THROTTLE_MS) {
         _lastServerUnavailableDispatch = now;
         _resetServerUnavailableStrikes();
-        window.dispatchEvent(new CustomEvent(SERVER_UNAVAILABLE_EVENT));
+        window.dispatchEvent(new CustomEvent(SERVER_UNAVAILABLE_EVENT, {
+          detail: {
+            status,
+            method: String(error.config?.method || 'get').toUpperCase(),
+            url: String(error.config?.url || ''),
+            message: String(error.response?.data?.detail || ''),
+          },
+        }));
       }
     }
     return Promise.reject(error);
