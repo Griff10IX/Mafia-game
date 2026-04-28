@@ -313,22 +313,30 @@ def _enrich_players_current_hand(g: dict) -> None:
         p["current_hand_name"] = _hand_rank_name(cat)
 
 
-def _redact_mp_poker_hole_cards_for_spectators(g: Optional[dict], viewer_uid: Optional[str]) -> None:
-    """Non-seated users must not receive hole cards mid-hand (API must not leak for spectators)."""
+def _redact_mp_poker_hidden_state_for_viewer(g: Optional[dict], viewer_uid: Optional[str]) -> None:
+    """Do not leak hidden table state in API responses before showdown."""
     if not g:
         return
     players = list(g.get("players") or [])
     vid = str(viewer_uid or "").strip()
-    seated = {str(p.get("user_id") or "").strip() for p in players if p.get("user_id")}
-    if vid and vid in seated:
-        return
     street = g.get("street")
     status = g.get("status")
     phase = g.get("phase")
     if street == "showdown" or status == "completed" or phase == "settled":
+        # Still never expose remaining deck order.
+        g["deck"] = []
         return
+    # Never expose deck order mid-hand.
+    g["deck"] = []
     for p in players:
-        p["hole_cards"] = []
+        puid = str(p.get("user_id") or "").strip()
+        if vid and puid and puid == vid:
+            # Keep only viewer's own hole cards.
+            pass
+        else:
+            hc = list(p.get("hole_cards") or [])
+            hide_len = len(hc) if len(hc) > 0 else 2
+            p["hole_cards"] = [{"hidden": True} for _ in range(hide_len)]
         p.pop("current_hand_name", None)
     g["players"] = players
 
@@ -863,6 +871,7 @@ def register(router):
         if g.get("status") == "playing" and g.get("current_turn_index") == 1:
             g = await _run_vs_dealer_bot_turn(g["id"])
         _enrich_players_current_hand(g)
+        _redact_mp_poker_hidden_state_for_viewer(g, current_user.get("id"))
         out = {k: v for k, v in (g or {}).items() if k != "_id"}
         return {"game": out}
 
@@ -904,6 +913,7 @@ def register(router):
             await _vs_dealer_showdown(g["id"])
             g = await db.mp_poker_games.find_one({"id": g["id"]})
             _enrich_players_current_hand(g)
+            _redact_mp_poker_hidden_state_for_viewer(g, current_user.get("id"))
             return {"game": {k: v for k, v in (g or {}).items() if k != "_id"}}
         if action == "check":
             if need_to_call > 0:
@@ -962,6 +972,7 @@ def register(router):
                     await _vs_dealer_showdown(g["id"])
                     g = await db.mp_poker_games.find_one({"id": g["id"]})
                     _enrich_players_current_hand(g)
+                    _redact_mp_poker_hidden_state_for_viewer(g, current_user.get("id"))
                     return {"game": {k: v for k, v in (g or {}).items() if k != "_id"}}
                 g = await db.mp_poker_games.find_one({"id": g["id"]})
                 await db.mp_poker_games.update_one(
@@ -970,6 +981,7 @@ def register(router):
                 )
                 g = await _run_vs_dealer_bot_turn(g["id"])
                 _enrich_players_current_hand(g)
+                _redact_mp_poker_hidden_state_for_viewer(g, current_user.get("id"))
                 return {"game": {k: v for k, v in (g or {}).items() if k != "_id"}}
         await db.mp_poker_games.update_one(
             {"id": g["id"]},
@@ -977,6 +989,7 @@ def register(router):
         )
         g = await _run_vs_dealer_bot_turn(g["id"])
         _enrich_players_current_hand(g)
+        _redact_mp_poker_hidden_state_for_viewer(g, current_user.get("id"))
         return {"game": {k: v for k, v in (g or {}).items() if k != "_id"}}
 
     async def _maybe_progress_tournament_blinds(game_id: str) -> Optional[dict]:
@@ -1414,7 +1427,7 @@ def register(router):
             await _mp_poker_run_showdown(game_id)
             g = await db.mp_poker_games.find_one({"id": game_id})
         _enrich_players_current_hand(g)
-        _redact_mp_poker_hole_cards_for_spectators(g, current_user.get("id"))
+        _redact_mp_poker_hidden_state_for_viewer(g, current_user.get("id"))
         return {k: v for k, v in (g or {}).items() if k != "_id"}
 
     @router.post("/casino/mp-poker/tournaments/{game_id}/remind-inactive")
@@ -1882,7 +1895,7 @@ def register(router):
                 await _mp_poker_run_showdown(game_id)
                 g = await db.mp_poker_games.find_one({"id": game_id})
         _enrich_players_current_hand(g)
-        _redact_mp_poker_hole_cards_for_spectators(g, current_user.get("id"))
+        _redact_mp_poker_hidden_state_for_viewer(g, current_user.get("id"))
         return {k: v for k, v in (g or {}).items() if k != "_id"}
 
     @router.post("/casino/mp-poker/games/{game_id}/join")

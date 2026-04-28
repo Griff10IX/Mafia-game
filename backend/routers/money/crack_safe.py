@@ -95,11 +95,19 @@ def _generate_clues(combo: list, total_attempts: int) -> list:
     total_sum = sum(combo)
     high = max(combo)
     first = combo[0] if combo else 0
+    def _clue_row(idx: int, unlock_after: int, solved_text: str):
+        unlocked = total_attempts >= unlock_after
+        return {
+            "id": idx,
+            "unlocked": unlocked,
+            "text": solved_text if unlocked else None,
+            "unlock_after": unlock_after,
+        }
     return [
-        {"id": 1, "unlocked": True, "text": f"There are {even_count} even number{'s' if even_count != 1 else ''}", "unlock_after": 0},
-        {"id": 2, "unlocked": total_attempts >= 5, "text": f"The sum of all numbers is {total_sum}", "unlock_after": 5},
-        {"id": 3, "unlocked": total_attempts >= 15, "text": f"The highest number is {high}", "unlock_after": 15},
-        {"id": 4, "unlocked": total_attempts >= 30, "text": f"The first number is {first}", "unlock_after": 30},
+        _clue_row(1, 0, f"There are {even_count} even number{'s' if even_count != 1 else ''}"),
+        _clue_row(2, 5, f"The sum of all numbers is {total_sum}"),
+        _clue_row(3, 15, f"The highest number is {high}"),
+        _clue_row(4, 30, f"The first number is {first}"),
     ]
 
 

@@ -12912,6 +12912,7 @@ def register(router):
         enabled: bool
         game_pass_unlock_at: Optional[str] = None
         pvp_kills_unlock_at: Optional[str] = None
+        force_game_pass_purchase_locked: Optional[bool] = None
 
     @router.get("/admin/release-soft-launch")
     async def admin_get_release_soft_launch(current_user: dict = Depends(get_current_user)):
@@ -12938,10 +12939,15 @@ def register(router):
             pvp_kills_unlock_at = pvp_raw
         else:
             pvp_kills_unlock_at = prev.get("pvp_kills_unlock_at") or game_pass_unlock_at
+        if req.force_game_pass_purchase_locked is None:
+            force_game_pass_purchase_locked = bool(prev.get("force_game_pass_purchase_locked"))
+        else:
+            force_game_pass_purchase_locked = bool(req.force_game_pass_purchase_locked)
         value = {
             "enabled": req.enabled,
             "game_pass_unlock_at": game_pass_unlock_at,
             "pvp_kills_unlock_at": pvp_kills_unlock_at,
+            "force_game_pass_purchase_locked": force_game_pass_purchase_locked,
             "set_by": current_user.get("username", "?"),
             "set_at": datetime.now(timezone.utc).isoformat(),
         }

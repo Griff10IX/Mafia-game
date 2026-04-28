@@ -162,6 +162,26 @@ def _blackjack_dealer_visible_total(hand):
     return int(v) if v else 0
 
 
+def _blackjack_public_dealer_hand(dealer_hand: list, hidden_count: int) -> list:
+    """
+    Return dealer hand safe for client render during active play:
+    keep visible cards, replace hidden cards with placeholders so the hole card
+    is never leaked in API responses.
+    """
+    cards = list(dealer_hand or [])
+    hide_n = max(0, min(int(hidden_count or 0), len(cards)))
+    if hide_n <= 0:
+        return cards
+    start_hidden = len(cards) - hide_n
+    out = []
+    for i, c in enumerate(cards):
+        if i >= start_hidden:
+            out.append({"hidden": True})
+        else:
+            out.append(c)
+    return out
+
+
 async def _blackjack_settle_and_save_history(
     user_id: str,
     username: str,
@@ -398,12 +418,13 @@ def register(router):
         dealer_visible_total = _blackjack_hand_total([dealer_visible]) if dealer_visible else 0
         dealer_hidden_count = max(0, len(dealer_hand) - 1)
         can_hit = player_total < 21 and dealer_hidden_count > 0
+        dealer_hand_public = _blackjack_public_dealer_hand(dealer_hand, dealer_hidden_count)
         return {
             "hasGame": True,
             "status": "playing",
             "bet": game.get("bet", 0),
             "player_hand": player_hand,
-            "dealer_hand": dealer_hand,
+            "dealer_hand": dealer_hand_public,
             "player_total": player_total,
             "dealer_visible_total": dealer_visible_total,
             "dealer_hidden_count": dealer_hidden_count,
@@ -1005,7 +1026,7 @@ def register(router):
             "status": status,
             "bet": bet,
             "player_hand": player_hand,
-            "dealer_hand": dealer_hand,
+            "dealer_hand": _blackjack_public_dealer_hand(dealer_hand, dealer_hidden),
             "player_total": player_total,
             "dealer_visible_total": _blackjack_dealer_visible_total(dealer_hand),
             "dealer_hidden_count": dealer_hidden,
@@ -1074,7 +1095,7 @@ def register(router):
             "status": "playing",
             "bet": game.get("bet"),
             "player_hand": player_hand,
-            "dealer_hand": game.get("dealer_hand", []),
+            "dealer_hand": _blackjack_public_dealer_hand(game.get("dealer_hand", []), 1),
             "player_total": player_total,
             "dealer_visible_total": _blackjack_dealer_visible_total(game.get("dealer_hand", [])),
             "dealer_hidden_count": 1,

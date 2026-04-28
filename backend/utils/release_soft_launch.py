@@ -40,18 +40,22 @@ async def get_release_soft_launch_public(db) -> Dict[str, Any]:
     pvp_dt = _parse_iso_utc(pvp_kills_unlock_at)
     gp_ok = gp_dt is not None and now >= gp_dt
     pvp_ok = pvp_dt is not None and now >= pvp_dt
-    game_pass_purchase_locked = enabled and not gp_ok
+    force_game_pass_purchase_locked = bool(val.get("force_game_pass_purchase_locked"))
+    game_pass_purchase_locked = force_game_pass_purchase_locked or (enabled and not gp_ok)
     pvp_kills_disabled = enabled and not pvp_ok
     return {
         "release_soft_launch_enabled": enabled,
         "pvp_kills_disabled": pvp_kills_disabled,
         "game_pass_purchase_locked": game_pass_purchase_locked,
+        "force_game_pass_purchase_locked": force_game_pass_purchase_locked,
         "game_pass_unlock_at": game_pass_unlock_at,
         "pvp_kills_unlock_at": pvp_kills_unlock_at,
     }
 
 
 def game_pass_purchase_locked_detail(state: Dict[str, Any]) -> str:
+    if bool(state.get("force_game_pass_purchase_locked")):
+        return "Game Pass purchases are temporarily disabled by admin."
     unlock = state.get("game_pass_unlock_at") or DEFAULT_GAME_PASS_UNLOCK_AT
     return (
         f"Game Pass is not available for purchase until the points-store unlock time ({unlock} UTC). "

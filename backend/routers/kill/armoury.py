@@ -280,10 +280,11 @@ async def _activate_rank_xp_pass_and_grant_cumulative_micro_tiers(
     """
     u0 = await db.users.find_one(
         {"id": user_id},
-        {"_id": 0, "rank_points": 1, "rank_xp_pass_prestige_carry_rp": 1},
+        {"_id": 0, "rank_points": 1, "rank_xp_pass_prestige_carry_rp": 1, "points": 1},
     )
     rp_live = int((u0 or {}).get("rank_points") or 0)
     carry = int((u0 or {}).get("rank_xp_pass_prestige_carry_rp") or 0)
+    points_running = int((u0 or {}).get("points") or 0)
     snap = int(tier_snapshot or 0)
     effective_rp = max(snap, rp_live + carry)
     activation_micro = micro_tier_from_rank_points(effective_rp)
@@ -341,10 +342,17 @@ async def _activate_rank_xp_pass_and_grant_cumulative_micro_tiers(
                 received_parts.append(f"{amount:,}x {REWARD_KEY_LABELS.get(reward_key, reward_key)}")
         if received_parts:
             blob = "; ".join(received_parts)
+            points_delta = int(applied.get("points") or 0)
+            points_audit = ""
+            if points_delta > 0:
+                before_points = points_running
+                after_points = before_points + points_delta
+                points_running = after_points
+                points_audit = f" Points: {before_points:,} > {after_points:,}."
             await send_notification(
                 user_id,
                 "Game Pass reward",
-                f"You received {blob}. Next reward: {next_summary}.",
+                f"You received {blob}. Next reward: {next_summary}.{points_audit}",
                 "reward",
                 tier_micro=t,
                 next_tier=next_t,
