@@ -178,6 +178,9 @@ function formatWholeCash(x) {
   return Math.trunc(n).toLocaleString();
 }
 
+/** Must match backend `FIRST_GAME_PASS_CONFIRM_PHRASE` for first VIP completion bulk grant. */
+const FIRST_GAME_PASS_VIP_COMPLETION_CONFIRM = 'FIRST GAME PASS COMPLETE';
+
 // Searchable tools list - each item has: label (searchable), categoryId (scroll target), collapseKey (optional - to expand section)
 const SEARCHABLE_TOOLS = [
   // Player Management
@@ -295,6 +298,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Game Pass inspector', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-game-pass-inspector', keywords: ['game pass', 'inspector', 'vip', 'token', 'stripe', 'rank xp', 'micro tier', 'entitlement'], adminOnly: true },
   { label: 'Game Pass points diagnostic', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-game-pass-inspector', keywords: ['game pass', 'points', 'diagnostic', 'ledger', 'stripe', 'purchase source', 'catch up pending'], adminOnly: true },
   { label: 'Game Pass stuck cursors', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-game-pass-inspector', keywords: ['game pass', 'stuck', 'cursor', 'broken', 'fix', 'repair', 'rewards'], adminOnly: true },
+  { label: 'First Game Pass VIP completion', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-first-gp-vip-completion', keywords: ['game pass', 'first', 'vip', 'completion', 'bulk', 'tier', '100', 'bonus', 'one time'], adminOnly: true },
   { label: 'Deleted messages', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-deleted-messages', keywords: ['deleted', 'messages', 'archive', 'forum', 'chat', 'dm', 'notification', 'history'], adminOnly: true },
   { label: 'Reset OC Timers', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['oc', 'organised', 'crime', 'timer'] },
   { label: 'Reset Daily Rewards Timer', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['daily', 'rewards', 'timer', 'rps'] },
@@ -765,6 +769,10 @@ export default function Admin() {
   const [gamePassPointsDiagLoading, setGamePassPointsDiagLoading] = useState(false);
   const [gamePassStuck, setGamePassStuck] = useState(null);
   const [gamePassStuckLoading, setGamePassStuckLoading] = useState(false);
+  const [firstGpVipCompletionPreview, setFirstGpVipCompletionPreview] = useState(null);
+  const [firstGpVipCompletionPreviewLoading, setFirstGpVipCompletionPreviewLoading] = useState(false);
+  const [firstGpVipCompletionConfirm, setFirstGpVipCompletionConfirm] = useState('');
+  const [firstGpVipCompletionRunLoading, setFirstGpVipCompletionRunLoading] = useState(false);
   const [deletedMsgs, setDeletedMsgs] = useState(null);
   const [deletedMsgsLoading, setDeletedMsgsLoading] = useState(false);
   const [deletedMsgsFilter, setDeletedMsgsFilter] = useState('');
@@ -3701,6 +3709,43 @@ export default function Admin() {
       toast.error(error.response?.data?.detail || 'Failed to load Game Pass points diagnostic');
     } finally {
       setGamePassPointsDiagLoading(false);
+    }
+  };
+
+  const loadFirstGpVipCompletionPreview = async () => {
+    setFirstGpVipCompletionPreviewLoading(true);
+    try {
+      const res = await api.get('/admin/game-pass/first-vip-completion-preview');
+      setFirstGpVipCompletionPreview(res.data || null);
+      toast.success('First Game Pass completion preview loaded');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Preview failed');
+    } finally {
+      setFirstGpVipCompletionPreviewLoading(false);
+    }
+  };
+
+  const runFirstGpVipCompletion = async (dryRun) => {
+    if ((firstGpVipCompletionConfirm || '').trim() !== FIRST_GAME_PASS_VIP_COMPLETION_CONFIRM) {
+      toast.error(`Type exactly: ${FIRST_GAME_PASS_VIP_COMPLETION_CONFIRM}`);
+      return;
+    }
+    if (!dryRun && !window.confirm('Irreversible economy grant: credits all remaining VIP Game Pass micro tiers (through 100) for every user with VIP claimed. Live run can only succeed once. Continue?')) {
+      return;
+    }
+    setFirstGpVipCompletionRunLoading(true);
+    try {
+      const res = await api.post('/admin/game-pass/first-vip-completion-run', {
+        confirm: FIRST_GAME_PASS_VIP_COMPLETION_CONFIRM,
+        dry_run: dryRun,
+      });
+      toast.success(res.data?.message || 'Done');
+      const pres = await api.get('/admin/game-pass/first-vip-completion-preview');
+      setFirstGpVipCompletionPreview(pres.data || null);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Run failed');
+    } finally {
+      setFirstGpVipCompletionRunLoading(false);
     }
   };
 
@@ -9410,6 +9455,80 @@ export default function Admin() {
                   </pre>
                 </div>
               )}
+
+              <div id="admin-first-gp-vip-completion" className="rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3 space-y-2 scroll-mt-24">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-heading font-bold text-emerald-300 uppercase tracking-wider">First Game Pass — VIP completion bonus (one-time)</span>
+                </div>
+                <p className="text-[9px] text-mutedForeground font-heading">
+                  For every user with VIP claimed (<span className="font-mono">rank_xp_pass_rewards_granted</span>), credits aggregated rewards for micro tiers
+                  {' '}
+                  <span className="font-mono">(last_granted+1)..100</span>
+                  , sets cursor to 100, and sends one inbox summary per updated user. Points changes are logged to the points ledger. Live run succeeds only once (stored in
+                  {' '}
+                  <span className="font-mono">game_settings</span>
+                  ).
+                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <BtnSecondary type="button" onClick={loadFirstGpVipCompletionPreview} disabled={firstGpVipCompletionPreviewLoading || firstGpVipCompletionRunLoading}>
+                    {firstGpVipCompletionPreviewLoading ? '…' : 'Preview'}
+                  </BtnSecondary>
+                  <input
+                    type="text"
+                    value={firstGpVipCompletionConfirm}
+                    onChange={(e) => setFirstGpVipCompletionConfirm(e.target.value)}
+                    placeholder={FIRST_GAME_PASS_VIP_COMPLETION_CONFIRM}
+                    className="flex-1 min-w-[12rem] max-w-md px-2 py-1 rounded border border-input bg-transparent text-[11px] font-mono"
+                    autoComplete="off"
+                  />
+                  <BtnSecondary type="button" onClick={() => runFirstGpVipCompletion(true)} disabled={firstGpVipCompletionRunLoading}>
+                    {firstGpVipCompletionRunLoading ? '…' : 'Run dry run'}
+                  </BtnSecondary>
+                  <BtnDanger type="button" onClick={() => runFirstGpVipCompletion(false)} disabled={firstGpVipCompletionRunLoading}>
+                    {firstGpVipCompletionRunLoading ? '…' : 'Run live (once)'}
+                  </BtnDanger>
+                </div>
+                {firstGpVipCompletionPreview && (
+                  <div className="text-[9px] font-mono text-zinc-200/90 space-y-1 rounded border border-emerald-500/20 bg-zinc-900/40 p-2 max-h-64 overflow-y-auto">
+                    <div>
+                      Eligible VIP:
+                      {' '}
+                      <span className="text-emerald-200">{(firstGpVipCompletionPreview.eligible_vip_users ?? 0).toLocaleString()}</span>
+                      {' · '}
+                      Would receive grant:
+                      {' '}
+                      <span className="text-emerald-200">{(firstGpVipCompletionPreview.would_receive_grant ?? 0).toLocaleString()}</span>
+                      {' · '}
+                      Already cursor-complete:
+                      {' '}
+                      {(firstGpVipCompletionPreview.already_cursor_complete ?? 0).toLocaleString()}
+                    </div>
+                    {firstGpVipCompletionPreview.completion_record?.live_completed_at && (
+                      <div className="text-amber-300 font-heading">
+                        Live already completed at
+                        {' '}
+                        {String(firstGpVipCompletionPreview.completion_record.live_completed_at)}
+                        {' '}
+                        by
+                        {' '}
+                        {firstGpVipCompletionPreview.completion_record.set_by || '—'}
+                        {' '}
+                        (
+                        {(firstGpVipCompletionPreview.completion_record.affected_user_count ?? 0).toLocaleString()}
+                        {' '}
+                        users)
+                      </div>
+                    )}
+                    {(firstGpVipCompletionPreview.sample_usernames || []).length > 0 && (
+                      <div className="text-mutedForeground">
+                        Sample:
+                        {' '}
+                        {(firstGpVipCompletionPreview.sample_usernames || []).join(', ')}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
 
               <div className="border-t border-violet-500/20 pt-2 space-y-2">
                 <div className="text-[10px] font-heading font-bold text-amber-300 uppercase tracking-wider">Stuck Cursor Detector</div>

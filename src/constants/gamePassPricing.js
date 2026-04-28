@@ -22,13 +22,13 @@ export const GAME_PASS_DURATION_FINE_PRINT =
   'Each Game Pass lasts 1 calendar month from purchase (when your token is granted). Activate it before that time or the token expires. While VIP is active, tier rewards run until that same end date and time.';
 
 /** Must match backend `payments.GAME_PASS_PURCHASE_CLOSE_WINDOW_DAYS`. */
-export const GAME_PASS_PURCHASE_FINAL_DAYS_BLOCK = 14;
+export const GAME_PASS_PURCHASE_FINAL_DAYS_BLOCK = 7;
 
 const MS_PER_DAY = 86400000;
 
 /**
  * When non-null, Stripe/points Game Pass purchase should be disabled (server enforces too).
- * Active pass = unactivated token or VIP claimed; block inside final N days before rank_xp_pass_token_expires_at.
+ * Block inside final N days before rank_xp_pass_token_expires_at (server-enforced).
  */
 export function gamePassPurchaseBlockedFinalWindowMessage(user, nowMs = Date.now()) {
   if (!user) return null;

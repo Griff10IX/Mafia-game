@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 RANK_XP_PASS_PACKAGE_ID = "rank_xp_pass_499"
 GAME_PASS_POINTS_PRICE = 8_000
 # No new Game Pass checkout while an active pass is within this many days of rank_xp_pass_token_expires_at.
-GAME_PASS_PURCHASE_CLOSE_WINDOW_DAYS = 14
+GAME_PASS_PURCHASE_CLOSE_WINDOW_DAYS = 7
 
 
 def game_pass_purchase_blocked_in_final_window(user: Optional[dict], now: datetime) -> Optional[str]:
@@ -43,10 +43,6 @@ def game_pass_purchase_blocked_in_final_window(user: Optional[dict], now: dateti
         return None
     remaining = expires_dt - now
     if remaining > timedelta(days=GAME_PASS_PURCHASE_CLOSE_WINDOW_DAYS):
-        return None
-    has_token = int(user.get("rank_xp_pass_tokens") or 0) > 0
-    vip = user.get("rank_xp_pass_rewards_granted") is True
-    if not has_token and not vip:
         return None
     return (
         f"Game Pass is not available for purchase in the final {GAME_PASS_PURCHASE_CLOSE_WINDOW_DAYS} days before your "

@@ -2923,6 +2923,169 @@ def register(router):
             raise HTTPException(status_code=404, detail="User not found")
         return await build_game_pass_points_diagnostic(db, user)
 
+    @router.get("/admin/game-pass/first-vip-completion-preview")
+    async def admin_first_vip_completion_preview(current_user: dict = Depends(get_current_user)):
+        """Preview one-time bulk grant of VIP tiers (last_granted+1..100) for all VIP-claimed users."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from utils.game_pass_first_vip_completion import preview_first_vip_completion
+
+        return await preview_first_vip_completion(db)
+
+    class FirstVipCompletionRunRequest(BaseModel):
+        confirm: str = Field(..., min_length=1)
+        dry_run: bool = False
+
+    @router.post("/admin/game-pass/first-vip-completion-run")
+    async def admin_first_vip_completion_run(
+        req: FirstVipCompletionRunRequest,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """
+        One-time: credit all missing VIP micro-tier rewards through tier 100 and set cursor to 100.
+        Live run is blocked after the first successful completion (game_settings).
+        """
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        from server import send_notification
+        from utils.game_pass_first_vip_completion import (
+            FIRST_GAME_PASS_CONFIRM_PHRASE,
+            aggregate_vip_increment_after_cursor,
+            eligible_vip_users_filter,
+            first_vip_completion_user_projection,
+            get_first_vip_completion_record,
+            set_first_vip_completion_record,
+        )
+        from utils.game_pass_micro_rewards import MAX_MICRO_TIER, format_rewards_summary
+
+        if (req.confirm or "").strip() != FIRST_GAME_PASS_CONFIRM_PHRASE:
+            raise HTTPException(
+                status_code=400,
+                detail=f'Confirmation must be exactly: {FIRST_GAME_PASS_CONFIRM_PHRASE}',
+            )
+
+        record = await get_first_vip_completion_record(db)
+        if not req.dry_run and record and record.get("live_completed_at"):
+            raise HTTPException(
+                status_code=409,
+                detail="This one-time completion has already been run live. See completion_record on preview.",
+            )
+
+        filt = eligible_vip_users_filter()
+        proj = first_vip_completion_user_projection()
+        live_updated = 0
+        skipped_complete = 0
+        skipped_no_op = 0
+        dry_would_receive = 0
+        dry_run_samples: List[Dict[str, Any]] = []
+        run_id = str(uuid.uuid4())
+        admin_un = current_user.get("username", "?")
+
+        async for row in db.users.find(filt, proj):
+            uid = str(row.get("id") or "")
+            if not uid:
+                continue
+            last = int(row.get("rank_xp_pass_last_granted_micro_tier") or 0)
+            if last >= MAX_MICRO_TIER:
+                skipped_complete += 1
+                continue
+            free_last = int(row.get("rank_xp_pass_free_last_micro_tier_granted") or 0)
+            inc = aggregate_vip_increment_after_cursor(last, free_last)
+            un = row.get("username") or uid
+
+            if req.dry_run:
+                dry_would_receive += 1
+                if len(dry_run_samples) < 50:
+                    dry_run_samples.append(
+                        {
+                            "username": un,
+                            "user_id": uid,
+                            "last_granted_before": last,
+                            "tiers_to_credit": MAX_MICRO_TIER - last,
+                            "increment_keys": sorted(inc.keys()),
+                            "increment_preview": {k: inc[k] for k in sorted(inc.keys())[:12]},
+                        }
+                    )
+                continue
+
+            update_doc: Dict[str, Any] = {
+                "$set": {
+                    "rank_xp_pass_last_granted_micro_tier": MAX_MICRO_TIER,
+                    "rank_xp_pass_rewards_granted": True,
+                },
+            }
+            if inc:
+                update_doc["$inc"] = inc
+            res = await db.users.update_one(
+                {
+                    "id": uid,
+                    "rank_xp_pass_rewards_granted": True,
+                    "rank_xp_pass_last_granted_micro_tier": {"$lt": MAX_MICRO_TIER},
+                },
+                update_doc,
+            )
+            if res.modified_count == 0:
+                skipped_no_op += 1
+                continue
+            live_updated += 1
+            pts_delta = int(inc.get("points") or 0)
+            if pts_delta != 0:
+                before_pts = int(row.get("points") or 0)
+                after_pts = before_pts + pts_delta
+                await log_points_event(
+                    db,
+                    user_id=uid,
+                    points=pts_delta,
+                    event_type="first_game_pass_vip_completion",
+                    event_ref=run_id,
+                    meta={"admin": admin_un, "run_id": run_id},
+                    wallet_points_before=before_pts,
+                    wallet_points_after=after_pts,
+                )
+            summary = format_rewards_summary(inc).strip() if inc else ""
+            body = (
+                f"One-time first-season bonus: all remaining VIP Game Pass tier rewards through tier {MAX_MICRO_TIER} have been credited."
+                + (f" {summary}" if summary else "")
+            )
+            await send_notification(
+                uid,
+                "First Game Pass bonus",
+                body,
+                "reward",
+                tier_micro=MAX_MICRO_TIER,
+                admin_run_id=run_id,
+            )
+
+        if not req.dry_run:
+            now_iso = datetime.now(timezone.utc).isoformat()
+            await set_first_vip_completion_record(
+                db,
+                {
+                    "live_completed_at": now_iso,
+                    "set_by": admin_un,
+                    "run_id": run_id,
+                    "affected_user_count": live_updated,
+                    "skipped_already_complete": skipped_complete,
+                    "skipped_no_op": skipped_no_op,
+                    "dry_run": False,
+                },
+            )
+
+        return {
+            "dry_run": req.dry_run,
+            "run_id": run_id,
+            "would_receive_grant": dry_would_receive if req.dry_run else None,
+            "live_updated_count": live_updated if not req.dry_run else None,
+            "skipped_already_complete": skipped_complete,
+            "skipped_no_op": skipped_no_op if not req.dry_run else None,
+            "dry_run_samples": dry_run_samples if req.dry_run else [],
+            "message": (
+                f"Dry run: {dry_would_receive} user(s) would receive grants (sample up to 50); {skipped_complete} already at max tier."
+                if req.dry_run
+                else f"Live run complete: {live_updated} user(s) updated; {skipped_complete} already at max tier; {skipped_no_op} no-op."
+            ),
+        }
+
     @router.post("/admin/add-car")
     async def admin_add_car(target_username: str, car_id: str, current_user: dict = Depends(get_current_user)):
         if not _is_admin(current_user):
