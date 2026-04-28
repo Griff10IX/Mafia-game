@@ -23,6 +23,7 @@ const STATES_STYLES = `
   .st-card { transition: all 0.3s ease; }
   .st-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,0.3), 0 0 0 1px rgba(var(--noir-primary-rgb), 0.1); }
   .st-art-line { background: repeating-linear-gradient(90deg, transparent, transparent 4px, currentColor 4px, currentColor 8px, transparent 8px, transparent 16px); height: 1px; opacity: 0.15; }
+  .st-city-hero-shine { pointer-events: none; background: linear-gradient(105deg, transparent 0%, rgba(255,255,255,0.04) 40%, transparent 65%); }
 `;
 
 function formatMaxBet(n) {
@@ -61,10 +62,30 @@ const GAME_COLORS = {
   slots: 'text-amber-400',
 };
 
-function climateDestinationRing(climateBand) {
-  if (climateBand === 'hot') return 'ring-1 ring-amber-500/40 shadow-[0_0_14px_rgba(245,158,11,0.14)]';
-  if (climateBand === 'cold') return 'ring-1 ring-sky-500/35 shadow-[0_0_14px_rgba(56,189,248,0.12)]';
-  return '';
+/** Per-city abstract hero (no external art); hue shifts from name so neighbors don’t look identical. */
+function cityHeroBackground(city, climateBand) {
+  let h = 0;
+  const s = String(city || '');
+  for (let i = 0; i < s.length; i += 1) h = (h * 33 + s.charCodeAt(i)) | 0;
+  const hue = Math.abs(h) % 360;
+  const hue2 = (hue + 48) % 360;
+  if (climateBand === 'hot') {
+    return `linear-gradient(128deg, hsl(${hue} 42% 16%) 0%, hsl(${(hue + 22) % 360} 48% 20%) 42%, hsl(32 55% 18%) 100%)`;
+  }
+  if (climateBand === 'cold') {
+    return `linear-gradient(128deg, hsl(${hue2} 35% 12%) 0%, hsl(205 40% 16%) 48%, hsl(222 32% 11%) 100%)`;
+  }
+  return `linear-gradient(128deg, hsl(${hue} 18% 12%) 0%, hsl(${(hue + 40) % 360} 14% 14%) 55%, hsl(220 12% 10%) 100%)`;
+}
+
+function climateCardShell(climateBand) {
+  if (climateBand === 'hot') {
+    return 'border-amber-500/40 shadow-[0_0_0_1px_rgba(245,158,11,0.12),0_12px_40px_rgba(0,0,0,0.35)]';
+  }
+  if (climateBand === 'cold') {
+    return 'border-sky-500/45 shadow-[0_0_0_1px_rgba(56,189,248,0.12),0_12px_40px_rgba(0,0,0,0.35)]';
+  }
+  return 'border-primary/20';
 }
 
 // ============================================================================
@@ -110,45 +131,81 @@ const CityCard = ({
   const buyBacks = games.filter(g => GAMES_WITH_BUYBACK.includes(g?.id)).map(g => getEffectiveBuyBack(g, city)).filter(n => n != null && Number(n) > 0);
   const highestBuyBack = buyBacks.length ? Math.max(...buyBacks.map(Number)) : null;
 
-  const climateRing = climateDestinationRing(climateBand);
+  const shell = climateCardShell(climateBand);
+  const headLabel = headFamily
+    ? `${headFamily.family_name} (${headFamily.family_tag})`
+    : 'Open seat';
+
   return (
-    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 st-card st-fade-in mobile-panel${climateRing ? ` ${climateRing}` : ''}`}>
-      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
-      {/* Header - Always visible */}
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border st-card st-fade-in mobile-panel ${shell}`}>
+      {/* Hero strip — climate-tinted “billboard”, not copied from any asset */}
       <button
+        type="button"
         onClick={onToggle}
-        className="w-full px-2 py-1.5 bg-primary/8 border-b border-primary/20 flex items-center justify-between hover:bg-primary/12 transition-colors"
+        className="relative w-full text-left min-h-[4.75rem] sm:min-h-[5.25rem] group transition-opacity hover:opacity-[0.98]"
       >
-        <div className="flex items-center gap-1 flex-wrap">
-          <MapPin size={10} className="text-primary" />
-          <h2 className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">{city}</h2>
-          {climateBand === 'hot' && (
-            <span className="text-[8px] font-heading font-bold uppercase tracking-wide text-amber-400/95" title="Hot city this period">Hot</span>
-          )}
-          {climateBand === 'cold' && (
-            <span className="text-[8px] font-heading font-bold uppercase tracking-wide text-sky-400/95" title="Cold city this period">Cold</span>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 text-[9px]">
-            <span className="text-mutedForeground">{ownedCount}/{games.length} owned</span>
-            {highestBuyBack != null && (
-              <span className="text-primary font-bold">{Number(highestBuyBack).toLocaleString()} pts</span>
-            )}
-            <span className="text-primary font-bold">Max: {formatMaxBet(highestBet)}</span>
+        <div
+          className="absolute inset-0"
+          style={{ background: cityHeroBackground(city, climateBand) }}
+          aria-hidden
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/88 via-black/45 to-black/15" aria-hidden />
+        <div className="absolute inset-0 st-city-hero-shine opacity-80" aria-hidden />
+        <div className="relative flex items-end justify-between gap-2 px-2.5 pb-2 pt-1.5">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+              <MapPin size={12} className="text-amber-200/90 shrink-0" />
+              <h2 className="text-sm sm:text-base font-heading font-bold text-white tracking-tight drop-shadow-sm truncate">
+                {city}
+              </h2>
+              {climateBand === 'hot' && (
+                <span className="text-[8px] font-heading font-bold uppercase tracking-wider px-1 py-0.5 rounded bg-amber-500/25 text-amber-200 border border-amber-400/35">
+                  Hot
+                </span>
+              )}
+              {climateBand === 'cold' && (
+                <span className="text-[8px] font-heading font-bold uppercase tracking-wider px-1 py-0.5 rounded bg-sky-500/20 text-sky-100 border border-sky-400/35">
+                  Cold
+                </span>
+              )}
+            </div>
+            <p className="text-[9px] text-zinc-300 font-heading truncate">
+              Head: <span className="text-zinc-100">{headLabel}</span>
+            </p>
+            <p className="text-[9px] text-zinc-400 font-heading">
+              Tables staffed{' '}
+              <span className="text-zinc-200 tabular-nums">
+                {ownedCount}/{games.length}
+              </span>
+              {highestBuyBack != null ? (
+                <span className="text-zinc-500">
+                  {' '}
+                  · Top buy-back <span className="text-amber-200/90 tabular-nums">{Number(highestBuyBack).toLocaleString()} pts</span>
+                </span>
+              ) : null}
+              <span className="text-zinc-500">
+                {' '}
+                · Ceiling <span className="text-zinc-100 tabular-nums">{formatMaxBet(highestBet)}</span>
+              </span>
+            </p>
           </div>
-          {expanded ? <ChevronDown size={10} className="text-primary" /> : <ChevronRight size={10} className="text-primary" />}
+          <div className="shrink-0 flex flex-col items-end gap-0.5 text-zinc-300 pb-0.5">
+            {expanded ? <ChevronDown size={14} className="text-zinc-200" /> : <ChevronRight size={14} className="text-zinc-200" />}
+            <span className="text-[8px] font-heading uppercase tracking-wide text-zinc-500 group-hover:text-zinc-400">
+              {expanded ? 'Less' : 'Casinos'}
+            </span>
+          </div>
         </div>
       </button>
 
       {expanded && (
         <>
           {/* Head family / Claim state */}
-          <div className="p-1.5 border-b border-zinc-700/30">
+          <div className="p-1.5 border-b border-zinc-800/60 bg-black/20">
             <div className="text-[8px] text-mutedForeground uppercase tracking-wider px-1 mb-0.5 flex items-center gap-1">
               <Users size={9} /> Head family
             </div>
-            <div className="flex items-center justify-between px-1.5 py-1 bg-zinc-800/30 rounded">
+            <div className="flex items-center justify-between px-1.5 py-1 bg-zinc-900/40 rounded border border-zinc-800/50">
               {headFamily ? (
                 <div className="flex items-center gap-1.5 min-w-0">
                   <FamilyEmblem
@@ -175,49 +232,109 @@ const CityCard = ({
             </div>
           </div>
 
-          {/* Casino Games */}
-          <div className="p-1.5 space-y-0.5">
-            <div className="text-[8px] text-mutedForeground uppercase tracking-wider px-1 mb-0.5">🎰 Casinos</div>
-            {games.map((game) => {
-              const Icon = GAME_ICONS[game.id] || Dice5;
-              const color = GAME_COLORS[game.id] || 'text-primary';
-              const owner = (allOwners[game.id] || {})[city] || null;
-              const effectiveBet = getEffectiveMaxBet(game, city);
-              const isTop = isHighestBet(game, city);
-              return (
-                <div
-                  key={game.id}
-                  className={`flex items-center justify-between px-1.5 py-1 rounded transition-colors ${isTop ? 'bg-primary/10' : 'bg-zinc-800/30'}`}
-                >
-                  <div className="flex items-center gap-1 flex-wrap min-w-0">
-                    <Icon size={10} className={color} />
-                    <span className="text-[10px] font-heading font-bold text-foreground">{game.name}</span>
-                    {game.id === 'slots' ? (
-                      <>
-                        {owner?.username ? (
-                          <span className="text-[9px] text-mutedForeground">· <Link to={`/profile/${encodeURIComponent(owner.username)}`} className="text-primary hover:underline font-heading">{owner.username}</Link></span>
-                        ) : (
-                          <span className="text-[9px] text-zinc-500">State owned</span>
-                        )}
-                        {owner?.next_draw_at && (
-                          <span className="text-[8px] text-mutedForeground">· Next draw: {formatNextDraw(owner.next_draw_at) || '—'}</span>
-                        )}
-                      </>
-                    ) : owner ? (
-                      <span className="text-[9px] text-mutedForeground">· <Link to={`/profile/${encodeURIComponent(owner.username)}`} className="text-primary hover:underline font-heading">{owner.username}</Link></span>
+          {/* Casinos — table layout (hot = richer accents; cold = quieter) */}
+          <div className="p-1.5 border-b border-zinc-800/50 bg-zinc-950/30">
+            <div className="text-[8px] text-mutedForeground uppercase tracking-wider px-1 mb-1">Casinos</div>
+            <div className="overflow-x-auto rounded border border-zinc-800/60 bg-zinc-950/40">
+              <table className="w-full min-w-[280px] text-left border-collapse">
+                <thead>
+                  <tr
+                    className={`text-[8px] font-heading font-bold uppercase tracking-wider border-b ${
+                      climateBand === 'cold' ? 'border-sky-950/50 text-zinc-500' : 'border-zinc-700/60 text-zinc-400'
+                    }`}
+                  >
+                    <th className="py-1 px-1.5">Casino</th>
+                    <th className="py-1 px-1.5">Owner</th>
+                    <th className="py-1 px-1.5">Wealth</th>
+                    <th className="py-1 px-1.5 text-right whitespace-nowrap">Max bet</th>
+                  </tr>
+                </thead>
+                <tbody className="text-[10px] font-heading">
+                  {games.map((game) => {
+                    const Icon = GAME_ICONS[game.id] || Dice5;
+                    const color = GAME_COLORS[game.id] || 'text-primary';
+                    const owner = (allOwners[game.id] || {})[city] || null;
+                    const effectiveBet = getEffectiveMaxBet(game, city);
+                    const isTop = isHighestBet(game, city);
+                    const hasPlayer = !!(owner && owner.username);
+                    const slotsStateOwned = game.id === 'slots' && !owner?.username;
+                    const coldMuted = climateBand === 'cold';
+                    const hotRow = climateBand === 'hot' && isTop;
+                    const wealthName = owner?.wealth_rank_name;
+                    const wealthHex = owner?.wealth_rank_color || '#94a3b8';
+                    const ownerCell = hasPlayer ? (
+                      <Link
+                        to={`/profile/${encodeURIComponent(owner.username)}`}
+                        className={`hover:underline ${coldMuted ? 'text-zinc-400' : 'text-sky-200/95'}`}
+                      >
+                        {owner.username}
+                      </Link>
+                    ) : slotsStateOwned ? (
+                      <span className={coldMuted ? 'text-zinc-500' : 'text-zinc-400'}>State</span>
                     ) : (
-                      <span className="text-[9px] text-zinc-500">Unclaimed</span>
-                    )}
-                    {GAMES_WITH_BUYBACK.includes(game.id) && owner?.buy_back_reward != null && Number(owner.buy_back_reward) > 0 && (
-                      <span className="text-[8px] text-amber-400/90">Buy-back: {Number(owner.buy_back_reward).toLocaleString()} pts</span>
-                    )}
-                  </div>
-                  <span className={`text-[10px] font-heading font-bold tabular-nums shrink-0 ${isTop ? 'text-primary' : 'text-foreground'}`}>
-                    {formatMaxBet(effectiveBet)}
-                  </span>
-                </div>
-              );
-            })}
+                      <span className="text-zinc-500">No owner</span>
+                    );
+                    let wealthCell;
+                    if (slotsStateOwned) {
+                      wealthCell = <span className="text-zinc-500">—</span>;
+                    } else if (!hasPlayer) {
+                      wealthCell = <span className="text-zinc-500">—</span>;
+                    } else if (coldMuted) {
+                      wealthCell = (
+                        <span className="text-zinc-500" style={wealthName ? { color: `${wealthHex}99` } : undefined}>
+                          {wealthName || 'Unknown'}
+                        </span>
+                      );
+                    } else if (wealthName) {
+                      wealthCell = (
+                        <span className="font-bold" style={{ color: wealthHex }}>
+                          {wealthName}
+                        </span>
+                      );
+                    } else {
+                      wealthCell = <span className="text-emerald-300/90 font-semibold">Active</span>;
+                    }
+                    const betTone = hotRow
+                      ? 'text-amber-200 font-bold tabular-nums'
+                      : isTop
+                        ? 'text-primary font-bold tabular-nums'
+                        : coldMuted
+                          ? 'text-zinc-500 tabular-nums'
+                          : 'text-zinc-200 tabular-nums';
+                    return (
+                      <tr
+                        key={game.id}
+                        className={`border-b border-zinc-800/50 last:border-0 ${
+                          hotRow ? 'bg-emerald-950/45' : coldMuted && !hasPlayer && !slotsStateOwned ? 'bg-zinc-900/25' : 'bg-transparent'
+                        }`}
+                      >
+                        <td className="py-1 px-1.5 align-top">
+                          <div className="flex items-start gap-1 min-w-0">
+                            <Icon size={11} className={`${color} shrink-0 mt-0.5`} />
+                            <div className="min-w-0">
+                              <span className={`font-bold block leading-tight ${coldMuted ? 'text-zinc-300' : 'text-zinc-100'}`}>{game.name}</span>
+                              {game.id === 'slots' && owner?.next_draw_at && (
+                                <span className="text-[8px] text-zinc-500 block leading-tight mt-0.5">
+                                  Draw {formatNextDraw(owner.next_draw_at) || '—'}
+                                </span>
+                              )}
+                              {GAMES_WITH_BUYBACK.includes(game.id) && owner?.buy_back_reward != null && Number(owner.buy_back_reward) > 0 && (
+                                <span className="text-[8px] text-amber-500/90 block leading-tight mt-0.5">
+                                  Buy-back {Number(owner.buy_back_reward).toLocaleString()} pts
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+                        <td className="py-1 px-1.5 align-top whitespace-nowrap">{ownerCell}</td>
+                        <td className="py-1 px-1.5 align-top whitespace-nowrap">{wealthCell}</td>
+                        <td className={`py-1 px-1.5 align-top text-right ${betTone}`}>{formatMaxBet(effectiveBet)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {/* Properties */}
@@ -627,7 +744,7 @@ export default function States() {
           <ul className="grid grid-cols-1 sm:grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] text-mutedForeground font-heading">
             <li className="flex items-start gap-1"><span className="text-primary shrink-0">•</span>Use Travel to move between cities</li>
             <li className="flex items-start gap-1"><span className="text-primary shrink-0">•</span>Access Casino games from the Casino menu</li>
-            <li className="flex items-start gap-1"><span className="text-primary shrink-0">•</span>Highest max bets highlighted in gold</li>
+            <li className="flex items-start gap-1"><span className="text-primary shrink-0">•</span>Highest max bet per game is highlighted; in the <span className="text-amber-400/90 font-bold">hot</span> city that row also gets a green tint and amber ceiling figure</li>
             <li className="flex items-start gap-1"><span className="text-primary shrink-0">•</span>Hot/cold rotates every 3h (UTC): easier crimes, GTA, and jail busts plus a little rank XP in the hot city; the opposite in the cold city while you are there</li>
           </ul>
         </div>
