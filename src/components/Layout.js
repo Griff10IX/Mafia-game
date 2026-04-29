@@ -694,11 +694,11 @@ export default function Layout({ children }) {
     return () => { window.removeEventListener('app:refresh-user', handler); if (refreshUserDebounceRef.current) clearTimeout(refreshUserDebounceRef.current); };
   }, []); // eslint-disable-line
 
-  // After a real background stint, remount the current page so its data effects run again (fixes blank/stuck content without a manual refresh).
+  // Only after a longer hidden stint: remount the current page so its data effects run again (fixes blank/stuck content without a manual refresh). Quick app switches stay under this threshold so scroll/state is preserved.
   const contentResumeTimerRef = useRef(null);
   const tabHiddenAtRef = useRef(null);
   useEffect(() => {
-    const MIN_HIDDEN_MS = 4000;
+    const MIN_HIDDEN_MS = 60_000;
     const scheduleResume = () => {
       if (contentResumeTimerRef.current) clearTimeout(contentResumeTimerRef.current);
       contentResumeTimerRef.current = setTimeout(() => {
