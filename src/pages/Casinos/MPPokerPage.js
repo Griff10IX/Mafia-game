@@ -56,7 +56,8 @@ export default function MPPokerPage() {
   const [tournamentCreateOpen, setTournamentCreateOpen] = useState(false);
   const [tournamentMaxPlayers, setTournamentMaxPlayers] = useState(6);
   const [tournamentBuyIn, setTournamentBuyIn] = useState('100000');
-  const [tournamentExtraPrize, setTournamentExtraPrize] = useState('');
+  const [tournamentWinnerBonusCash, setTournamentWinnerBonusCash] = useState('');
+  const [tournamentWinnerBonusPoints, setTournamentWinnerBonusPoints] = useState('');
   const [tournamentBuyInCurrency, setTournamentBuyInCurrency] = useState('money');
   const [tournamentCreating, setTournamentCreating] = useState(false);
   const [joiningTournamentId, setJoiningTournamentId] = useState(null);
@@ -206,7 +207,8 @@ export default function MPPokerPage() {
 
   const handleCreateTournament = async () => {
     const buyIn = parseInt(String(tournamentBuyIn).replace(/\D/g, ''), 10) || 0;
-    const extraPrize = parseInt(String(tournamentExtraPrize).replace(/\D/g, ''), 10) || 0;
+    const winnerBonusCash = parseInt(String(tournamentWinnerBonusCash).replace(/\D/g, ''), 10) || 0;
+    const winnerBonusPoints = parseInt(String(tournamentWinnerBonusPoints).replace(/\D/g, ''), 10) || 0;
     if (buyIn <= 0) { toast.error('Tournament buy-in must be positive'); return; }
     if (tournamentBuyInCurrency === 'points' && buyIn > TOURNAMENT_MAX_POINTS_BUY_IN) {
       toast.error(`Points buy-in cannot exceed ${TOURNAMENT_MAX_POINTS_BUY_IN.toLocaleString()} pts`);
@@ -217,7 +219,8 @@ export default function MPPokerPage() {
       const res = await api.post('/casino/mp-poker/tournaments', {
         max_players: Math.max(4, Math.min(9, tournamentMaxPlayers)),
         buy_in: buyIn,
-        extra_prize: extraPrize,
+        winner_bonus_cash: winnerBonusCash,
+        winner_bonus_points: winnerBonusPoints,
         buy_in_currency: tournamentBuyInCurrency === 'points' ? 'points' : 'money',
       });
       await refreshUser();
@@ -409,18 +412,18 @@ export default function MPPokerPage() {
     entFund.is_entertainer && createOpen && previewCashTableDebit > entFund.cash;
 
   const previewTourBuyIn = parseInt(String(tournamentBuyIn).replace(/\D/g, ''), 10) || 0;
-  const previewTourExtra = parseInt(String(tournamentExtraPrize).replace(/\D/g, ''), 10) || 0;
-  const previewTourDebit = previewTourBuyIn + previewTourExtra;
+  const previewTourBonusCash = parseInt(String(tournamentWinnerBonusCash).replace(/\D/g, ''), 10) || 0;
+  const previewTourBonusPoints = parseInt(String(tournamentWinnerBonusPoints).replace(/\D/g, ''), 10) || 0;
+  const previewTourDebitCash = (tournamentBuyInCurrency === 'money' ? previewTourBuyIn : 0) + previewTourBonusCash;
+  const previewTourDebitPoints = (tournamentBuyInCurrency === 'points' ? previewTourBuyIn : 0) + previewTourBonusPoints;
   const tournamentFundInsufficientMoney =
     entFund.is_entertainer &&
     tournamentCreateOpen &&
-    tournamentBuyInCurrency === 'money' &&
-    previewTourDebit > entFund.cash;
+    previewTourDebitCash > entFund.cash;
   const tournamentFundInsufficientPoints =
     entFund.is_entertainer &&
     tournamentCreateOpen &&
-    tournamentBuyInCurrency === 'points' &&
-    previewTourDebit > entFund.points;
+    previewTourDebitPoints > entFund.points;
 
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="mp-poker-page">
@@ -680,7 +683,7 @@ export default function MPPokerPage() {
             <p className="text-[9px] text-mutedForeground font-heading mt-0.5">
               4–9 players · freezeout · escalating blinds · cash or points buy-in (points max {TOURNAMENT_MAX_POINTS_BUY_IN.toLocaleString()} pts)
               {entFund.is_entertainer ? (
-                <> · Entertainer creators pay the <strong className="text-violet-300/95">your buy-in</strong> from the entertainer fund (cash or fund points to match currency).</>
+                <> · Entertainer creators pay the <strong className="text-violet-300/95">buy-in + winner bonus</strong> from entertainer fund (cash and/or points by currency).</>
               ) : null}
             </p>
           </div>
@@ -709,19 +712,17 @@ export default function MPPokerPage() {
                   </span>
                 </div>
                 <p className="text-[8px] text-zinc-400 font-heading leading-snug">
-                  Cash buy-ins + winner bonus debit entertainer fund cash; points buy-ins + winner bonus debit entertainer fund points. Joiners pay from their normal wallets.
+                  Buy-in + winner bonus are split by currency and debited from entertainer fund (cash and/or points). Joiners pay from their normal wallets.
                 </p>
-                {previewTourDebit > 0 && (
+                {(previewTourDebitCash > 0 || previewTourDebitPoints > 0) && (
                   <p className="text-[9px] font-heading border-t border-violet-500/20 pt-1.5 text-zinc-300">
                     <span className="text-zinc-500 uppercase mr-1">Debit at create</span>
-                    <span className="tabular-nums text-foreground">
-                      {tournamentBuyInCurrency === 'points'
-                        ? `${previewTourDebit.toLocaleString()} pts`
-                        : formatMoney(previewTourDebit)}
-                    </span>
+                    <span className="tabular-nums text-foreground">{formatMoney(previewTourDebitCash)}</span>
+                    <span className="text-zinc-500 mx-1.5">|</span>
+                    <span className="tabular-nums text-foreground">{previewTourDebitPoints.toLocaleString()} pts</span>
                     {(tournamentFundInsufficientMoney || tournamentFundInsufficientPoints) && (
                       <span className="block text-amber-400/95 mt-1">
-                        Not enough in entertainer fund for this buy-in/bonus — lower amount or wait for UTC top-up.
+                        Not enough in entertainer fund for this buy-in/bonus mix — lower amounts or wait for UTC top-up.
                       </span>
                     )}
                   </p>
@@ -775,23 +776,32 @@ export default function MPPokerPage() {
             <div className="flex items-center gap-2">
               <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-20 shrink-0">Winner bonus</label>
               <FormattedNumberInput
-                value={tournamentExtraPrize}
-                onChange={setTournamentExtraPrize}
-                placeholder={tournamentBuyInCurrency === 'points' ? '0 pts (optional)' : '0 (optional)'}
+                value={tournamentWinnerBonusCash}
+                onChange={setTournamentWinnerBonusCash}
+                placeholder="Cash $ (optional)"
+                className="flex-1 min-w-0 px-2 py-1.5 rounded-lg font-heading text-sm focus:outline-none"
+                style={inputStyle}
+              />
+              <FormattedNumberInput
+                value={tournamentWinnerBonusPoints}
+                onChange={setTournamentWinnerBonusPoints}
+                placeholder="Points (optional)"
                 className="flex-1 min-w-0 px-2 py-1.5 rounded-lg font-heading text-sm focus:outline-none"
                 style={inputStyle}
               />
             </div>
             {(() => {
-              const hint = tournamentPrizeLabel(
-                (parseInt(String(tournamentBuyIn).replace(/\D/g, ''), 10) || 0)
-                  + (parseInt(String(tournamentExtraPrize).replace(/\D/g, ''), 10) || 0),
-                tournamentMaxPlayers,
-                tournamentBuyInCurrency,
-              );
-              if (!hint) return null;
+              const buyInN = parseInt(String(tournamentBuyIn).replace(/\D/g, ''), 10) || 0;
+              const hint = tournamentPrizeLabel(buyInN, tournamentMaxPlayers, tournamentBuyInCurrency);
+              const bonusBits = [];
+              if (previewTourBonusCash > 0) bonusBits.push(`${formatMoney(previewTourBonusCash)} cash winner bonus`);
+              if (previewTourBonusPoints > 0) bonusBits.push(`${previewTourBonusPoints.toLocaleString()} pts winner bonus`);
+              if (!hint && bonusBits.length === 0) return null;
               return (
-                <p className="text-[8px] font-heading text-mutedForeground pl-[5.5rem]">{hint}</p>
+                <p className="text-[8px] font-heading text-mutedForeground pl-[5.5rem]">
+                  {hint || 'Prize seeded by winner bonus only.'}
+                  {bonusBits.length > 0 ? ` · + ${bonusBits.join(' + ')}` : ''}
+                </p>
               );
             })()}
             <button type="button" onClick={handleCreateTournament} disabled={tournamentCreating}
@@ -888,6 +898,15 @@ export default function MPPokerPage() {
                       <div className="text-[9px] text-mutedForeground font-heading mt-0.5 flex items-center gap-3 flex-wrap">
                         <span>Buy-in <span className="text-primary font-bold">{fmtEntry(t.buy_in)}</span></span>
                         <span>Prize <span className="text-primary font-bold">{fmtEntry(t.prize_pool)}</span></span>
+                        {(Number(t.winner_bonus_cash || 0) > 0 || Number(t.winner_bonus_points || 0) > 0) && (
+                          <span>
+                            Winner bonus <span className="text-primary font-bold">
+                              {Number(t.winner_bonus_cash || 0) > 0 ? formatMoney(t.winner_bonus_cash) : '$0'}
+                              {' / '}
+                              {Number(t.winner_bonus_points || 0).toLocaleString()} pts
+                            </span>
+                          </span>
+                        )}
                         <span>Blinds <span className="text-primary/80">{formatMoney(t.small_blind)}/{formatMoney(t.big_blind)}</span></span>
                         <span>{t.player_count}/{t.max_players}</span>
                       </div>
