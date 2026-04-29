@@ -56,6 +56,7 @@ export default function MPPokerPage() {
   const [tournamentCreateOpen, setTournamentCreateOpen] = useState(false);
   const [tournamentMaxPlayers, setTournamentMaxPlayers] = useState(6);
   const [tournamentBuyIn, setTournamentBuyIn] = useState('100000');
+  const [tournamentExtraPrize, setTournamentExtraPrize] = useState('');
   const [tournamentBuyInCurrency, setTournamentBuyInCurrency] = useState('money');
   const [tournamentCreating, setTournamentCreating] = useState(false);
   const [joiningTournamentId, setJoiningTournamentId] = useState(null);
@@ -205,6 +206,7 @@ export default function MPPokerPage() {
 
   const handleCreateTournament = async () => {
     const buyIn = parseInt(String(tournamentBuyIn).replace(/\D/g, ''), 10) || 0;
+    const extraPrize = parseInt(String(tournamentExtraPrize).replace(/\D/g, ''), 10) || 0;
     if (buyIn <= 0) { toast.error('Tournament buy-in must be positive'); return; }
     if (tournamentBuyInCurrency === 'points' && buyIn > TOURNAMENT_MAX_POINTS_BUY_IN) {
       toast.error(`Points buy-in cannot exceed ${TOURNAMENT_MAX_POINTS_BUY_IN.toLocaleString()} pts`);
@@ -215,6 +217,7 @@ export default function MPPokerPage() {
       const res = await api.post('/casino/mp-poker/tournaments', {
         max_players: Math.max(4, Math.min(9, tournamentMaxPlayers)),
         buy_in: buyIn,
+        extra_prize: extraPrize,
         buy_in_currency: tournamentBuyInCurrency === 'points' ? 'points' : 'money',
       });
       await refreshUser();
@@ -406,16 +409,18 @@ export default function MPPokerPage() {
     entFund.is_entertainer && createOpen && previewCashTableDebit > entFund.cash;
 
   const previewTourBuyIn = parseInt(String(tournamentBuyIn).replace(/\D/g, ''), 10) || 0;
+  const previewTourExtra = parseInt(String(tournamentExtraPrize).replace(/\D/g, ''), 10) || 0;
+  const previewTourDebit = previewTourBuyIn + previewTourExtra;
   const tournamentFundInsufficientMoney =
     entFund.is_entertainer &&
     tournamentCreateOpen &&
     tournamentBuyInCurrency === 'money' &&
-    previewTourBuyIn > entFund.cash;
+    previewTourDebit > entFund.cash;
   const tournamentFundInsufficientPoints =
     entFund.is_entertainer &&
     tournamentCreateOpen &&
     tournamentBuyInCurrency === 'points' &&
-    previewTourBuyIn > entFund.points;
+    previewTourDebit > entFund.points;
 
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="mp-poker-page">
@@ -704,19 +709,19 @@ export default function MPPokerPage() {
                   </span>
                 </div>
                 <p className="text-[8px] text-zinc-400 font-heading leading-snug">
-                  Cash buy-ins debit entertainer fund cash; points buy-ins debit entertainer fund points. Joiners pay from their normal wallets.
+                  Cash buy-ins + winner bonus debit entertainer fund cash; points buy-ins + winner bonus debit entertainer fund points. Joiners pay from their normal wallets.
                 </p>
-                {previewTourBuyIn > 0 && (
+                {previewTourDebit > 0 && (
                   <p className="text-[9px] font-heading border-t border-violet-500/20 pt-1.5 text-zinc-300">
                     <span className="text-zinc-500 uppercase mr-1">Debit at create</span>
                     <span className="tabular-nums text-foreground">
                       {tournamentBuyInCurrency === 'points'
-                        ? `${previewTourBuyIn.toLocaleString()} pts`
-                        : formatMoney(previewTourBuyIn)}
+                        ? `${previewTourDebit.toLocaleString()} pts`
+                        : formatMoney(previewTourDebit)}
                     </span>
                     {(tournamentFundInsufficientMoney || tournamentFundInsufficientPoints) && (
                       <span className="block text-amber-400/95 mt-1">
-                        Not enough in entertainer fund for this buy-in — lower amount or wait for UTC top-up.
+                        Not enough in entertainer fund for this buy-in/bonus — lower amount or wait for UTC top-up.
                       </span>
                     )}
                   </p>
@@ -767,9 +772,20 @@ export default function MPPokerPage() {
                 style={inputStyle}
               />
             </div>
+            <div className="flex items-center gap-2">
+              <label className="text-[9px] font-heading text-mutedForeground uppercase tracking-wider w-20 shrink-0">Winner bonus</label>
+              <FormattedNumberInput
+                value={tournamentExtraPrize}
+                onChange={setTournamentExtraPrize}
+                placeholder={tournamentBuyInCurrency === 'points' ? '0 pts (optional)' : '0 (optional)'}
+                className="flex-1 min-w-0 px-2 py-1.5 rounded-lg font-heading text-sm focus:outline-none"
+                style={inputStyle}
+              />
+            </div>
             {(() => {
               const hint = tournamentPrizeLabel(
-                parseInt(String(tournamentBuyIn).replace(/\D/g, ''), 10) || 0,
+                (parseInt(String(tournamentBuyIn).replace(/\D/g, ''), 10) || 0)
+                  + (parseInt(String(tournamentExtraPrize).replace(/\D/g, ''), 10) || 0),
                 tournamentMaxPlayers,
                 tournamentBuyInCurrency,
               );

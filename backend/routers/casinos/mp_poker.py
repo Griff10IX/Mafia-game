@@ -357,6 +357,7 @@ class PokerCreateRequest(BaseModel):
 class PokerTournamentCreateRequest(BaseModel):
     max_players: int = 6
     buy_in: int = 100_000
+    extra_prize: int = 0
     buy_in_currency: Literal["money", "points"] = "money"
 
     @field_validator("max_players")
@@ -1269,6 +1270,7 @@ def register(router):
         uid = current_user.get("id") or ""
         username = current_user.get("username") or "Player"
         buy_in = int(request.buy_in)
+        extra_prize = max(0, min(MP_POKER_MAX_EXTRA_PRIZE, int(getattr(request, "extra_prize", 0) or 0)))
         max_players = int(request.max_players)
         currency = str(request.buy_in_currency or "money").strip().lower()
         if currency not in ("money", "points"):
@@ -1286,24 +1288,29 @@ def register(router):
                 status_code=400,
                 detail=f"Entertainer points tournaments: buy-in cannot exceed {ENTERTAINER_MP_POKER_MAX_POINTS_PER_GAME:,} points from the entertainer fund.",
             )
+        if use_ent_fund and currency == "points" and (buy_in + extra_prize) > ENTERTAINER_MP_POKER_MAX_POINTS_PER_GAME:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Entertainer points tournaments: buy-in + winner bonus cannot exceed {ENTERTAINER_MP_POKER_MAX_POINTS_PER_GAME:,} points from the entertainer fund.",
+            )
         if use_ent_fund:
             if currency == "points":
-                ok = await try_debit_entertainer_fund(db, uid, 0.0, buy_in)
+                ok = await try_debit_entertainer_fund(db, uid, 0.0, buy_in + extra_prize)
             else:
-                ok = await try_debit_entertainer_fund(db, uid, float(buy_in), 0)
+                ok = await try_debit_entertainer_fund(db, uid, float(buy_in + extra_prize), 0)
             if not ok:
-                raise HTTPException(status_code=400, detail="Insufficient entertainer fund for tournament buy-in")
+                raise HTTPException(status_code=400, detail="Insufficient entertainer fund for tournament buy-in / winner bonus")
         elif currency == "points":
             deduct = await db.users.update_one(
-                {"id": uid, "points": {"$gte": buy_in}},
-                {"$inc": {"points": -buy_in}},
+                {"id": uid, "points": {"$gte": buy_in + extra_prize}},
+                {"$inc": {"points": -(buy_in + extra_prize)}},
             )
             if deduct.modified_count == 0:
                 raise HTTPException(status_code=400, detail="Insufficient points")
         else:
             deduct = await db.users.update_one(
-                {"id": uid, "money": {"$gte": buy_in}},
-                {"$inc": {"money": -buy_in}},
+                {"id": uid, "money": {"$gte": buy_in + extra_prize}},
+                {"$inc": {"money": -(buy_in + extra_prize)}},
             )
             if deduct.modified_count == 0:
                 raise HTTPException(status_code=400, detail="Insufficient funds")
@@ -1319,8 +1326,8 @@ def register(router):
             "max_players": max_players,
             "buy_in": buy_in,
             "buy_in_currency": currency,
-            "extra_prize": 0,
-            "prize_pool": buy_in,
+            "extra_prize": extra_prize,
+            "prize_pool": buy_in + extra_prize,
             "pot": 0,
             "small_blind": sb,
             "big_blind": bb,
@@ -1368,6 +1375,7 @@ def register(router):
                 "action": "create",
                 "game_id": game_id,
                 "buy_in": buy_in,
+                "extra_prize": extra_prize,
                 "mode": "tournament",
                 "buy_in_currency": currency,
                 **({"entertainer_fund": True} if use_ent_fund else {}),
@@ -1383,7 +1391,7 @@ def register(router):
                     user_id=uid,
                     points=-buy_in,
                     event_type="mp_poker_tournament_buy_in",
-                    meta={"action": "create", "game_id": game_id},
+                    meta={"action": "create", "game_id": game_id, "extra_prize": extra_prize},
                 )
             except Exception:
                 pass
@@ -1619,11 +1627,15 @@ def register(router):
             raise HTTPException(status_code=400, detail="Tournament is not pending")
         players = list(g.get("players") or [])
         buy_in = int(g.get("buy_in") or 0)
+        extra_prize = int(g.get("extra_prize") or 0)
         currency = _tournament_buy_in_currency(g)
         for p in players:
             uid = (p.get("user_id") or "").strip()
             if uid and buy_in > 0:
                 await _tournament_refund_user(uid, buy_in, currency)
+        creator_id = (g.get("creator_id") or "").strip()
+        if creator_id and extra_prize > 0:
+            await _tournament_refund_user(creator_id, extra_prize, currency)
         await db.mp_poker_games.update_one(
             {"id": game_id},
             {
@@ -1793,6 +1805,8 @@ def register(router):
             raise HTTPException(status_code=400, detail="Tournament is already closed")
         players = list(g.get("players") or [])
         buy_in = int(g.get("buy_in") or 0)
+        extra_prize = int(g.get("extra_prize") or 0)
+        creator_id = (g.get("creator_id") or "").strip()
         currency = _tournament_buy_in_currency(g)
         refunded_users = []
         seen = set()
@@ -1804,6 +1818,8 @@ def register(router):
                 seen.add(uid)
                 await _tournament_refund_user(uid, buy_in, currency)
                 refunded_users.append(uid)
+        if creator_id and extra_prize > 0:
+            await _tournament_refund_user(creator_id, extra_prize, currency)
         now_iso = datetime.now(timezone.utc).isoformat()
         await db.mp_poker_games.update_one(
             {"id": game_id},
