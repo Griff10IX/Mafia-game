@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Users, User, Target, Building2, Plane, Factory, Mail, Radio, Clock, CalendarDays, CalendarRange } from 'lucide-react';
 import api from '../../utils/api';
@@ -130,10 +130,42 @@ const DEFAULT_MOD_COLOR = '#1e3a5f';
 const DEFAULT_HDO_COLOR = '#166534';
 const DEFAULT_ENTERTAINER_COLOR = '#7c3aed';
 
-const RoleKey = ({ adminOnlineColor, modDefaultOnlineColor, hdoOnlineColor }) => {
+function uniqueOnlineColorsForRole(users, predicate, fallbackHex) {
+  const seen = new Set();
+  const out = [];
+  for (const u of users || []) {
+    if (!predicate(u)) continue;
+    const c = ((u.online_color || '').trim() || fallbackHex).replace(/\s/g, '');
+    const k = c.toLowerCase();
+    if (!seen.has(k)) {
+      seen.add(k);
+      out.push(c);
+    }
+  }
+  return out;
+}
+
+function roleKeySwatchStyle(colors, emptyFallbackHex) {
+  const list = Array.isArray(colors) ? colors : [];
+  if (list.length === 0) return { backgroundColor: emptyFallbackHex };
+  if (list.length === 1) return { backgroundColor: list[0] };
+  return {
+    background: `conic-gradient(from 0deg, ${list
+      .map((c, i) => {
+        const a = (i / list.length) * 360;
+        const b = ((i + 1) / list.length) * 360;
+        return `${c} ${a}deg ${b}deg`;
+      })
+      .join(', ')})`,
+  };
+}
+
+const RoleKey = ({ adminOnlineColor, modDefaultOnlineColor, hdoOnlineColor, hdoKeyColors, entertainerKeyColors }) => {
   const adminColor = (adminOnlineColor && adminOnlineColor.trim()) || '#a78bfa';
   const modColor = (modDefaultOnlineColor && modDefaultOnlineColor.trim()) || DEFAULT_MOD_COLOR;
   const hdoColor = (hdoOnlineColor && hdoOnlineColor.trim()) || DEFAULT_HDO_COLOR;
+  const hdoSwatchStyle = roleKeySwatchStyle(hdoKeyColors, hdoColor);
+  const entertainerSwatchStyle = roleKeySwatchStyle(entertainerKeyColors, DEFAULT_ENTERTAINER_COLOR);
   return (
     <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 uo-fade-in mobile-panel`}>
       <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
@@ -158,11 +190,11 @@ const RoleKey = ({ adminOnlineColor, modDefaultOnlineColor, hdoOnlineColor }) =>
           <span className="text-mutedForeground">Mod</span>
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full shrink-0 border border-white/20" style={{ backgroundColor: hdoColor }} aria-hidden />
+          <span className="w-3 h-3 rounded-full shrink-0 border border-white/20" style={hdoSwatchStyle} aria-hidden />
           <span className="text-mutedForeground">Help Desk</span>
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-full shrink-0 border border-white/20" style={{ backgroundColor: DEFAULT_ENTERTAINER_COLOR }} aria-hidden />
+          <span className="w-3 h-3 rounded-full shrink-0 border border-white/20" style={entertainerSwatchStyle} aria-hidden />
           <span className="text-mutedForeground">Entertainer</span>
         </span>
         <span className="flex items-center gap-1.5">
@@ -464,6 +496,15 @@ export default function UsersOnline() {
     typeof window !== 'undefined' ? !window.matchMedia('(max-width: 767px)').matches : true,
   );
 
+  const hdoKeyColors = useMemo(
+    () => uniqueOnlineColorsForRole(users, (u) => u.is_help_desk_operator, DEFAULT_HDO_COLOR),
+    [users],
+  );
+  const entertainerKeyColors = useMemo(
+    () => uniqueOnlineColorsForRole(users, (u) => u.is_entertainer, DEFAULT_ENTERTAINER_COLOR),
+    [users],
+  );
+
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 767px)');
     const sync = () => setProfileHoverEnabled(!mq.matches);
@@ -622,7 +663,13 @@ export default function UsersOnline() {
 
       <InfoCard profileHoverEnabled={profileHoverEnabled} />
 
-      <RoleKey adminOnlineColor={adminOnlineColor} modDefaultOnlineColor={modDefaultOnlineColor} hdoOnlineColor={hdoOnlineColor} />
+      <RoleKey
+        adminOnlineColor={adminOnlineColor}
+        modDefaultOnlineColor={modDefaultOnlineColor}
+        hdoOnlineColor={hdoOnlineColor}
+        hdoKeyColors={hdoKeyColors}
+        entertainerKeyColors={entertainerKeyColors}
+      />
     </div>
   );
 }
