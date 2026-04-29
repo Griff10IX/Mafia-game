@@ -7460,6 +7460,335 @@ export default function Admin() {
           </div>
 
           <div className="flex-1 min-h-0 overflow-visible overscroll-y-contain space-y-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] md:contents md:overflow-visible md:pb-0">
+      {/* User detail modal — outside category tabs so Open dossier works from Game World etc. */}
+      {userDetailData && (() => {
+        const u = userDetailData.user || {};
+        const fmtDate = (v) => (v ? formatAdminDateTime(v) : '—');
+        const fmtNum = (v) => {
+          if (v == null || v === '') return '—';
+          const n = Number(v);
+          return Number.isFinite(n) ? n.toLocaleString() : '—';
+        };
+        const Section = ({ title, children }) => (
+          <div className="space-y-1.5">
+            <div className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider border-b border-zinc-700/50 pb-0.5">{title}</div>
+            {children}
+          </div>
+        );
+        const Row = ({ label, value, fullWidth }) => {
+          if (value == null || value === '' || (typeof value === 'string' && value === '—')) value = '—';
+          return (
+            <div className={fullWidth ? 'col-span-2' : ''}>
+              <span className="text-mutedForeground">{label}:</span>{' '}
+              <span className="text-foreground">{value}</span>
+            </div>
+          );
+        };
+
+        const handleInactiveReminderClick = async () => {
+          const em = (u.email || '').trim();
+          if (!em) {
+            toast.error('User has no email on file');
+            return;
+          }
+          if (!window.confirm(`Send inactive reminder email to ${em} (${u.username})?`)) return;
+          try {
+            await api.post('/admin/users/inactivity-reminder-email', { user_id: u.id });
+            toast.success('Inactive reminder email sent');
+            if (userDetailData?.user?.id) openUserDetail({ id: userDetailData.user.id });
+          } catch (e) {
+            const d = e.response?.data?.detail;
+            toast.error(typeof d === 'string' ? d : 'Failed to send email');
+          }
+        };
+
+        const inactiveReminderTitle =
+          !(u.email || '').trim()
+            ? 'User has no email on file — add or fix email first'
+            : !lastSeenEligibleForInactiveReminder(u.last_seen)
+              ? `Only if last activity was at least ${INACTIVITY_REMINDER_MIN_DAYS} day(s) ago`
+              : inactiveReminderOnCooldown(u.inactivity_reminder_sent_at)
+                ? `Already sent within the last ${INACTIVITY_REMINDER_COOLDOWN_DAYS} day(s)`
+                : 'Send comeback email (inactive players)';
+
+        const inactiveReminderDisabled =
+          !(u.email || '').trim() ||
+          !lastSeenEligibleForInactiveReminder(u.last_seen) ||
+          inactiveReminderOnCooldown(u.inactivity_reminder_sent_at);
+
+        const InactiveReminderButton = ({ className }) => {
+          if (!u.id || u.is_npc || u.is_dead) return null;
+          return (
+            <button
+              type="button"
+              title={inactiveReminderTitle}
+              disabled={inactiveReminderDisabled}
+              onClick={handleInactiveReminderClick}
+              className={className}
+            >
+              Send inactive reminder
+            </button>
+          );
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => setUserDetailData(null)}>
+            <div className="bg-zinc-900 border border-primary/30 rounded-lg shadow-xl max-w-3xl w-full max-h-[92vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+              <div className="px-4 py-3 border-b border-zinc-700/50 flex items-center justify-between shrink-0 gap-2 flex-wrap">
+                <h3 className="text-sm font-heading font-bold text-primary min-w-0">User details: {u.username ?? '—'}</h3>
+                <div className="flex items-center gap-2 flex-wrap shrink-0">
+                  <InactiveReminderButton className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border border-sky-500/50 text-sky-400 hover:bg-sky-500/10 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap" />
+                  <button type="button" onClick={() => setTargetFromSearch(u.username)} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30">Set target</button>
+                  <button type="button" onClick={() => setUserDetailData(null)} className="p-1 rounded border border-zinc-600 text-zinc-400 hover:bg-zinc-700 hover:text-foreground"><X size={14} /></button>
+                </div>
+              </div>
+              <div className="p-4 overflow-y-auto flex-1 text-[10px] font-heading space-y-4">
+                <Section title="Identity">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                    <Row label="Username" value={u.username} />
+                    <Row label="Email" value={u.email} />
+                    <Row label="User ID" value={u.id} fullWidth />
+                    <Row label="Created" value={fmtDate(u.created_at)} />
+                    <Row label="Email verified" value={u.email_verified === false ? 'No' : 'Yes'} />
+                    <Row label="Dead" value={u.is_dead ? 'Yes' : 'No'} />
+                    <Row label="NPC" value={u.is_npc ? 'Yes' : 'No'} />
+                    <Row label="Bodyguard" value={u.is_bodyguard ? 'Yes' : 'No'} />
+                  </div>
+                </Section>
+                <Section title="Device & IPs">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                    <Row label="Device (last login)" value={u.last_device_type} />
+                    <Row label="Registration IP" value={u.registration_ip} />
+                    <Row label="Last login IP" value={u.last_login_ip} />
+                    <Row label="User-Agent (last login)" value={u.last_user_agent ? <span className="font-mono text-[9px] break-all text-mutedForeground">{u.last_user_agent}</span> : '—'} fullWidth />
+                    <Row label="Login IPs" value={Array.isArray(u.login_ips) && u.login_ips.length ? u.login_ips.join(', ') : '—'} fullWidth />
+                  </div>
+                </Section>
+                <Section title="Wealth & resources">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                    <Row label="Money" value={fmtNum(u.money)} />
+                    <Row label="Points" value={fmtNum(u.points)} />
+                    <Row label="Rank points" value={fmtNum(u.rank_points)} />
+                    <Row label="Prestige" value={u.prestige_level != null ? `P${u.prestige_level}` : '—'} />
+                    <Row label="Bullets" value={fmtNum(u.bullets)} />
+                    <Row label="Health" value={fmtNum(u.health)} />
+                    <Row label="Armour level" value={fmtNum(u.armour_level)} />
+                    <Row
+                      label="Respect points"
+                      value={
+                        <span className="inline-flex items-center gap-2 flex-wrap">
+                          {fmtNum(u.respect_points)}
+                          {u.id ? (
+                            <button
+                              type="button"
+                              onClick={() => jumpToRespectPointsLog(u.id)}
+                              className="px-2 py-0.5 text-[10px] font-heading uppercase border border-primary/40 bg-primary/15 text-primary hover:bg-primary/25 rounded"
+                            >
+                              Respect log
+                            </button>
+                          ) : null}
+                        </span>
+                      }
+                    />
+                    <Row label="Loot box pieces" value={fmtNum(u.loot_box_pieces)} />
+                    <Row label="Swiss balance" value={fmtNum(u.swiss_balance)} />
+                    <Row label="Swiss limit" value={fmtNum(u.swiss_limit)} />
+                  </div>
+                </Section>
+                <Section title="Combat & activity">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                    <Row label="Total kills" value={fmtNum(u.total_kills)} />
+                    <Row label="Total deaths" value={fmtNum(u.total_deaths)} />
+                    <Row label="Total crimes" value={fmtNum(u.total_crimes)} />
+                    <Row label="Crime profit" value={fmtNum(u.crime_profit)} />
+                    <Row label="Jail busts" value={fmtNum(u.jail_busts)} />
+                    <Row label="Total GTA" value={fmtNum(u.total_gta)} />
+                    <Row label="Bodyguard slots" value={fmtNum(u.bodyguard_slots)} />
+                  </div>
+                </Section>
+                <Section title="Location & state">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                    <Row label="Current state (city)" value={u.current_state} />
+                    <Row label="In jail" value={u.in_jail ? 'Yes' : 'No'} />
+                    <Row label="Jail until" value={fmtDate(u.jail_until)} />
+                    <Row
+                      label="Jail bust reward (stored)"
+                      value={
+                        <span className="inline-flex items-center gap-2 flex-wrap">
+                          ${fmtNum(u.bust_reward_cash ?? 0)}
+                          {Number(u.bust_reward_cash ?? 0) > 0 && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const amt = Number(u.bust_reward_cash ?? 0);
+                                if (!window.confirm(`Clear jail bust reward ($${amt.toLocaleString()}) to $0 for ${u.username}?`)) return;
+                                try {
+                                  await api.post('/admin/clear-user-jail-bust-reward', { user_id: u.id });
+                                  toast.success('Jail bust reward cleared');
+                                  if (userDetailData?.user?.id) openUserDetail({ id: userDetailData.user.id });
+                                } catch (e) {
+                                  toast.error(e.response?.data?.detail || 'Failed to clear jail bust reward');
+                                }
+                              }}
+                              className="px-2 py-0.5 text-[10px] font-heading uppercase border border-amber-500/50 text-amber-400 hover:bg-amber-500/10 rounded"
+                            >
+                              Clear to $0
+                            </button>
+                          )}
+                        </span>
+                      }
+                      fullWidth
+                    />
+                    <Row
+                      label="Last seen"
+                      value={
+                        <span className="inline-flex items-center gap-2 flex-wrap">
+                          {fmtDate(u.last_seen)}
+                          <InactiveReminderButton className="px-2 py-0.5 text-[10px] font-heading uppercase border border-sky-500/50 text-sky-400 hover:bg-sky-500/10 rounded disabled:opacity-40 disabled:cursor-not-allowed shrink-0" />
+                        </span>
+                      }
+                      fullWidth
+                    />
+                    <Row label="Forced online until" value={fmtDate(u.forced_online_until)} />
+                    <Row label="Travels this hour" value={fmtNum(u.travels_this_hour)} />
+                    <Row label="Extra airmiles" value={fmtNum(u.extra_airmiles)} />
+                    <Row label="Garage batch limit" value={fmtNum(u.garage_batch_limit)} />
+                  </div>
+                </Section>
+                <Section title="Family & social">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                    <Row label="Family ID" value={u.family_id} />
+                    <Row label="Family role" value={u.family_role} />
+                    <Row label="Telegram chat ID" value={u.telegram_chat_id ? 'Set' : '—'} />
+                    <Row label="Auto Rank enabled" value={u.auto_rank_enabled ? 'Yes' : 'No'} />
+                  </div>
+                </Section>
+                <Section title="Tribute & missions">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                    <Row label="Mission 1 bonus" value={u.has_mission_1_bonus ? 'Yes' : 'No'} />
+                    <Row label="Mission 2 bonus" value={u.has_mission_2_bonus ? 'Yes' : 'No'} />
+                    <Row label="Mission 3 bonus" value={u.has_mission_3_bonus ? 'Yes' : 'No'} />
+                    <Row label="Mission 4 bonus" value={u.has_mission_4_bonus ? 'Yes' : 'No'} />
+                  </div>
+                </Section>
+                <Section title="Moderation & lock">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                    <Row label="Account locked" value={u.account_locked_at ? `Yes (${fmtDate(u.account_locked_at)})` : 'No'} />
+                    <Row label="Lock until" value={fmtDate(u.account_locked_until)} />
+                    {u.account_locked_comment && <Row label="Lock comment (user)" value={u.account_locked_comment} fullWidth />}
+                    {u.account_locked_admin_message && <Row label="Lock message (admin)" value={u.account_locked_admin_message} fullWidth />}
+                    {u.account_locked_user_reply && <Row label="Lock reply (user)" value={u.account_locked_user_reply} fullWidth />}
+                  </div>
+                </Section>
+                <Section title="Other">
+                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                    <Row label="Token version" value={fmtNum(u.token_version)} />
+                    <Row label="Premium rank bar" value={u.premium_rank_bar ? 'Yes' : 'No'} />
+                    <Row label="Has silencer" value={u.has_silencer ? 'Yes' : 'No'} />
+                    <Row label="OC timer reduced" value={u.oc_timer_reduced ? 'Yes' : 'No'} />
+                    <Row label="Crew OC timer reduced" value={u.crew_oc_timer_reduced ? 'Yes' : 'No'} />
+                    <Row label="Casino profit" value={fmtNum(u.casino_profit)} />
+                    <Row label="Property profit" value={fmtNum(u.property_profit)} />
+                    <Row label="Booze profit today" value={fmtNum(u.booze_profit_today)} />
+                    <Row label="Booze profit total" value={fmtNum(u.booze_profit_total)} />
+                    <Row label="Lifetime points spent" value={fmtNum(u.lifetime_points_spent)} />
+                  </div>
+                </Section>
+                {(userDetailData.casinos_owned?.length > 0 || userDetailData.user?.id) && (
+                  <Section title="Casinos & properties">
+                    {isAdmin && (userDetailData.casinos_owned?.length > 0) && (
+                      <div className="mb-3 space-y-1">
+                        <p className="text-[10px] text-mutedForeground leading-snug">
+                          Take over moves this player&apos;s casino to your account, or to the username below. Destination must own no other casino; buy-back must be cleared first.
+                        </p>
+                        <input
+                          type="text"
+                          value={takeoverCasinoAssignUsername}
+                          onChange={(e) => setTakeoverCasinoAssignUsername(e.target.value)}
+                          placeholder="New owner username (blank = your account)"
+                          className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
+                        />
+                      </div>
+                    )}
+                    {(userDetailData.casinos_owned?.length > 0) && (
+                      <ul className="text-foreground space-y-1 mb-2">
+                        {userDetailData.casinos_owned.map((c, i) => (
+                          <li key={i} className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="font-mono text-[11px] min-w-0">{c.game_type} · {c.location}</span>
+                            <div className="flex flex-wrap items-center gap-1 shrink-0">
+                            {isAdmin && (
+                              <button
+                                type="button"
+                                onClick={async () => {
+                                  const assign = takeoverCasinoAssignUsername.trim();
+                                  const msg = assign
+                                    ? `Assign ${c.game_type} (${c.location}) from ${userDetailData.user?.username || '?'} to @${assign}?`
+                                    : `Assign ${c.game_type} (${c.location}) to your admin account?`;
+                                  if (!window.confirm(msg)) return;
+                                  try {
+                                    const payload = {
+                                      user_id: userDetailData.user?.id,
+                                      game_type: c.game_type,
+                                      location: c.location,
+                                    };
+                                    if (assign) payload.to_username = assign;
+                                    await api.post('/admin/takeover-user-casino', payload);
+                                    toast.success('Casino reassigned');
+                                    setTakeoverCasinoAssignUsername('');
+                                    if (userDetailData?.user?.id) openUserDetail({ id: userDetailData.user.id });
+                                  } catch (e) {
+                                    toast.error(e.response?.data?.detail || 'Takeover failed');
+                                  }
+                                }}
+                                className="px-2 py-0.5 text-[10px] font-heading uppercase border border-primary/50 text-primary hover:bg-primary/10 rounded"
+                              >
+                                Take over
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                if (!window.confirm(`Drop ${c.game_type} (${c.location}) from this user?`)) return;
+                                try {
+                                  await api.post('/admin/drop-user-casino', { user_id: userDetailData.user?.id, game_type: c.game_type, location: c.location });
+                                  toast.success('Casino dropped');
+                                  if (userDetailData?.user?.id) openUserDetail({ id: userDetailData.user.id });
+                                } catch (e) {
+                                  toast.error(e.response?.data?.detail || 'Failed to drop casino');
+                                }
+                              }}
+                              className="px-2 py-0.5 text-[10px] font-heading uppercase border border-red-500/50 text-red-500 hover:bg-red-500/10 rounded"
+                            >
+                              Drop
+                            </button>
+                            </div>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        if (!window.confirm('Drop ALL casinos and properties for this user? They will lose every casino and property (airport/armoury).')) return;
+                        try {
+                          const res = await api.post('/admin/drop-user-casinos-properties', { user_id: userDetailData.user?.id });
+                          toast.success(res.data?.message || 'Dropped all casinos & properties');
+                          if (userDetailData?.user?.id) openUserDetail({ id: userDetailData.user.id });
+                        } catch (e) {
+                          toast.error(e.response?.data?.detail || 'Failed');
+                        }
+                      }}
+                      className="px-2 py-1 text-[10px] font-heading uppercase border border-red-500/50 text-red-500 hover:bg-red-500/10 rounded"
+                    >
+                      Drop all this user's casinos & properties
+                    </button>
+                  </Section>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
           {activeCategoryId === 'admin-operations' && (
           <>
       {/* Search users (username or email) */}
@@ -7827,335 +8156,6 @@ export default function Admin() {
       </div>
       )}
 
-      {/* User detail modal */}
-      {userDetailData && (() => {
-        const u = userDetailData.user || {};
-        const fmtDate = (v) => (v ? formatAdminDateTime(v) : '—');
-        const fmtNum = (v) => {
-          if (v == null || v === '') return '—';
-          const n = Number(v);
-          return Number.isFinite(n) ? n.toLocaleString() : '—';
-        };
-        const Section = ({ title, children }) => (
-          <div className="space-y-1.5">
-            <div className="text-[9px] font-heading font-bold text-primary uppercase tracking-wider border-b border-zinc-700/50 pb-0.5">{title}</div>
-            {children}
-          </div>
-        );
-        const Row = ({ label, value, fullWidth }) => {
-          if (value == null || value === '' || (typeof value === 'string' && value === '—')) value = '—';
-          return (
-            <div className={fullWidth ? 'col-span-2' : ''}>
-              <span className="text-mutedForeground">{label}:</span>{' '}
-              <span className="text-foreground">{value}</span>
-            </div>
-          );
-        };
-
-        const handleInactiveReminderClick = async () => {
-          const em = (u.email || '').trim();
-          if (!em) {
-            toast.error('User has no email on file');
-            return;
-          }
-          if (!window.confirm(`Send inactive reminder email to ${em} (${u.username})?`)) return;
-          try {
-            await api.post('/admin/users/inactivity-reminder-email', { user_id: u.id });
-            toast.success('Inactive reminder email sent');
-            if (userDetailData?.user?.id) openUserDetail({ id: userDetailData.user.id });
-          } catch (e) {
-            const d = e.response?.data?.detail;
-            toast.error(typeof d === 'string' ? d : 'Failed to send email');
-          }
-        };
-
-        const inactiveReminderTitle =
-          !(u.email || '').trim()
-            ? 'User has no email on file — add or fix email first'
-            : !lastSeenEligibleForInactiveReminder(u.last_seen)
-              ? `Only if last activity was at least ${INACTIVITY_REMINDER_MIN_DAYS} day(s) ago`
-              : inactiveReminderOnCooldown(u.inactivity_reminder_sent_at)
-                ? `Already sent within the last ${INACTIVITY_REMINDER_COOLDOWN_DAYS} day(s)`
-                : 'Send comeback email (inactive players)';
-
-        const inactiveReminderDisabled =
-          !(u.email || '').trim() ||
-          !lastSeenEligibleForInactiveReminder(u.last_seen) ||
-          inactiveReminderOnCooldown(u.inactivity_reminder_sent_at);
-
-        const InactiveReminderButton = ({ className }) => {
-          if (!u.id || u.is_npc || u.is_dead) return null;
-          return (
-            <button
-              type="button"
-              title={inactiveReminderTitle}
-              disabled={inactiveReminderDisabled}
-              onClick={handleInactiveReminderClick}
-              className={className}
-            >
-              Send inactive reminder
-            </button>
-          );
-        };
-
-        return (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70" onClick={() => setUserDetailData(null)}>
-            <div className="bg-zinc-900 border border-primary/30 rounded-lg shadow-xl max-w-3xl w-full max-h-[92vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
-              <div className="px-4 py-3 border-b border-zinc-700/50 flex items-center justify-between shrink-0 gap-2 flex-wrap">
-                <h3 className="text-sm font-heading font-bold text-primary min-w-0">User details: {u.username ?? '—'}</h3>
-                <div className="flex items-center gap-2 flex-wrap shrink-0">
-                  <InactiveReminderButton className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border border-sky-500/50 text-sky-400 hover:bg-sky-500/10 disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap" />
-                  <button type="button" onClick={() => setTargetFromSearch(u.username)} className="px-2 py-1 rounded text-[9px] font-heading font-bold uppercase border border-primary/40 bg-primary/20 text-primary hover:bg-primary/30">Set target</button>
-                  <button type="button" onClick={() => setUserDetailData(null)} className="p-1 rounded border border-zinc-600 text-zinc-400 hover:bg-zinc-700 hover:text-foreground"><X size={14} /></button>
-                </div>
-              </div>
-              <div className="p-4 overflow-y-auto flex-1 text-[10px] font-heading space-y-4">
-                <Section title="Identity">
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
-                    <Row label="Username" value={u.username} />
-                    <Row label="Email" value={u.email} />
-                    <Row label="User ID" value={u.id} fullWidth />
-                    <Row label="Created" value={fmtDate(u.created_at)} />
-                    <Row label="Email verified" value={u.email_verified === false ? 'No' : 'Yes'} />
-                    <Row label="Dead" value={u.is_dead ? 'Yes' : 'No'} />
-                    <Row label="NPC" value={u.is_npc ? 'Yes' : 'No'} />
-                    <Row label="Bodyguard" value={u.is_bodyguard ? 'Yes' : 'No'} />
-                  </div>
-                </Section>
-                <Section title="Device & IPs">
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
-                    <Row label="Device (last login)" value={u.last_device_type} />
-                    <Row label="Registration IP" value={u.registration_ip} />
-                    <Row label="Last login IP" value={u.last_login_ip} />
-                    <Row label="User-Agent (last login)" value={u.last_user_agent ? <span className="font-mono text-[9px] break-all text-mutedForeground">{u.last_user_agent}</span> : '—'} fullWidth />
-                    <Row label="Login IPs" value={Array.isArray(u.login_ips) && u.login_ips.length ? u.login_ips.join(', ') : '—'} fullWidth />
-                  </div>
-                </Section>
-                <Section title="Wealth & resources">
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
-                    <Row label="Money" value={fmtNum(u.money)} />
-                    <Row label="Points" value={fmtNum(u.points)} />
-                    <Row label="Rank points" value={fmtNum(u.rank_points)} />
-                    <Row label="Prestige" value={u.prestige_level != null ? `P${u.prestige_level}` : '—'} />
-                    <Row label="Bullets" value={fmtNum(u.bullets)} />
-                    <Row label="Health" value={fmtNum(u.health)} />
-                    <Row label="Armour level" value={fmtNum(u.armour_level)} />
-                    <Row
-                      label="Respect points"
-                      value={
-                        <span className="inline-flex items-center gap-2 flex-wrap">
-                          {fmtNum(u.respect_points)}
-                          {u.id ? (
-                            <button
-                              type="button"
-                              onClick={() => jumpToRespectPointsLog(u.id)}
-                              className="px-2 py-0.5 text-[10px] font-heading uppercase border border-primary/40 bg-primary/15 text-primary hover:bg-primary/25 rounded"
-                            >
-                              Respect log
-                            </button>
-                          ) : null}
-                        </span>
-                      }
-                    />
-                    <Row label="Loot box pieces" value={fmtNum(u.loot_box_pieces)} />
-                    <Row label="Swiss balance" value={fmtNum(u.swiss_balance)} />
-                    <Row label="Swiss limit" value={fmtNum(u.swiss_limit)} />
-                  </div>
-                </Section>
-                <Section title="Combat & activity">
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
-                    <Row label="Total kills" value={fmtNum(u.total_kills)} />
-                    <Row label="Total deaths" value={fmtNum(u.total_deaths)} />
-                    <Row label="Total crimes" value={fmtNum(u.total_crimes)} />
-                    <Row label="Crime profit" value={fmtNum(u.crime_profit)} />
-                    <Row label="Jail busts" value={fmtNum(u.jail_busts)} />
-                    <Row label="Total GTA" value={fmtNum(u.total_gta)} />
-                    <Row label="Bodyguard slots" value={fmtNum(u.bodyguard_slots)} />
-                  </div>
-                </Section>
-                <Section title="Location & state">
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
-                    <Row label="Current state (city)" value={u.current_state} />
-                    <Row label="In jail" value={u.in_jail ? 'Yes' : 'No'} />
-                    <Row label="Jail until" value={fmtDate(u.jail_until)} />
-                    <Row
-                      label="Jail bust reward (stored)"
-                      value={
-                        <span className="inline-flex items-center gap-2 flex-wrap">
-                          ${fmtNum(u.bust_reward_cash ?? 0)}
-                          {Number(u.bust_reward_cash ?? 0) > 0 && (
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                const amt = Number(u.bust_reward_cash ?? 0);
-                                if (!window.confirm(`Clear jail bust reward ($${amt.toLocaleString()}) to $0 for ${u.username}?`)) return;
-                                try {
-                                  await api.post('/admin/clear-user-jail-bust-reward', { user_id: u.id });
-                                  toast.success('Jail bust reward cleared');
-                                  if (userDetailData?.user?.id) openUserDetail({ id: userDetailData.user.id });
-                                } catch (e) {
-                                  toast.error(e.response?.data?.detail || 'Failed to clear jail bust reward');
-                                }
-                              }}
-                              className="px-2 py-0.5 text-[10px] font-heading uppercase border border-amber-500/50 text-amber-400 hover:bg-amber-500/10 rounded"
-                            >
-                              Clear to $0
-                            </button>
-                          )}
-                        </span>
-                      }
-                      fullWidth
-                    />
-                    <Row
-                      label="Last seen"
-                      value={
-                        <span className="inline-flex items-center gap-2 flex-wrap">
-                          {fmtDate(u.last_seen)}
-                          <InactiveReminderButton className="px-2 py-0.5 text-[10px] font-heading uppercase border border-sky-500/50 text-sky-400 hover:bg-sky-500/10 rounded disabled:opacity-40 disabled:cursor-not-allowed shrink-0" />
-                        </span>
-                      }
-                      fullWidth
-                    />
-                    <Row label="Forced online until" value={fmtDate(u.forced_online_until)} />
-                    <Row label="Travels this hour" value={fmtNum(u.travels_this_hour)} />
-                    <Row label="Extra airmiles" value={fmtNum(u.extra_airmiles)} />
-                    <Row label="Garage batch limit" value={fmtNum(u.garage_batch_limit)} />
-                  </div>
-                </Section>
-                <Section title="Family & social">
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
-                    <Row label="Family ID" value={u.family_id} />
-                    <Row label="Family role" value={u.family_role} />
-                    <Row label="Telegram chat ID" value={u.telegram_chat_id ? 'Set' : '—'} />
-                    <Row label="Auto Rank enabled" value={u.auto_rank_enabled ? 'Yes' : 'No'} />
-                  </div>
-                </Section>
-                <Section title="Tribute & missions">
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
-                    <Row label="Mission 1 bonus" value={u.has_mission_1_bonus ? 'Yes' : 'No'} />
-                    <Row label="Mission 2 bonus" value={u.has_mission_2_bonus ? 'Yes' : 'No'} />
-                    <Row label="Mission 3 bonus" value={u.has_mission_3_bonus ? 'Yes' : 'No'} />
-                    <Row label="Mission 4 bonus" value={u.has_mission_4_bonus ? 'Yes' : 'No'} />
-                  </div>
-                </Section>
-                <Section title="Moderation & lock">
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
-                    <Row label="Account locked" value={u.account_locked_at ? `Yes (${fmtDate(u.account_locked_at)})` : 'No'} />
-                    <Row label="Lock until" value={fmtDate(u.account_locked_until)} />
-                    {u.account_locked_comment && <Row label="Lock comment (user)" value={u.account_locked_comment} fullWidth />}
-                    {u.account_locked_admin_message && <Row label="Lock message (admin)" value={u.account_locked_admin_message} fullWidth />}
-                    {u.account_locked_user_reply && <Row label="Lock reply (user)" value={u.account_locked_user_reply} fullWidth />}
-                  </div>
-                </Section>
-                <Section title="Other">
-                  <div className="grid grid-cols-2 gap-x-6 gap-y-1">
-                    <Row label="Token version" value={fmtNum(u.token_version)} />
-                    <Row label="Premium rank bar" value={u.premium_rank_bar ? 'Yes' : 'No'} />
-                    <Row label="Has silencer" value={u.has_silencer ? 'Yes' : 'No'} />
-                    <Row label="OC timer reduced" value={u.oc_timer_reduced ? 'Yes' : 'No'} />
-                    <Row label="Crew OC timer reduced" value={u.crew_oc_timer_reduced ? 'Yes' : 'No'} />
-                    <Row label="Casino profit" value={fmtNum(u.casino_profit)} />
-                    <Row label="Property profit" value={fmtNum(u.property_profit)} />
-                    <Row label="Booze profit today" value={fmtNum(u.booze_profit_today)} />
-                    <Row label="Booze profit total" value={fmtNum(u.booze_profit_total)} />
-                    <Row label="Lifetime points spent" value={fmtNum(u.lifetime_points_spent)} />
-                  </div>
-                </Section>
-                {(userDetailData.casinos_owned?.length > 0 || userDetailData.user?.id) && (
-                  <Section title="Casinos & properties">
-                    {isAdmin && (userDetailData.casinos_owned?.length > 0) && (
-                      <div className="mb-3 space-y-1">
-                        <p className="text-[10px] text-mutedForeground leading-snug">
-                          Take over moves this player&apos;s casino to your account, or to the username below. Destination must own no other casino; buy-back must be cleared first.
-                        </p>
-                        <input
-                          type="text"
-                          value={takeoverCasinoAssignUsername}
-                          onChange={(e) => setTakeoverCasinoAssignUsername(e.target.value)}
-                          placeholder="New owner username (blank = your account)"
-                          className="w-full bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1.5 text-xs text-foreground focus:border-primary/50 focus:outline-none"
-                        />
-                      </div>
-                    )}
-                    {(userDetailData.casinos_owned?.length > 0) && (
-                      <ul className="text-foreground space-y-1 mb-2">
-                        {userDetailData.casinos_owned.map((c, i) => (
-                          <li key={i} className="flex flex-wrap items-center justify-between gap-2">
-                            <span className="font-mono text-[11px] min-w-0">{c.game_type} · {c.location}</span>
-                            <div className="flex flex-wrap items-center gap-1 shrink-0">
-                            {isAdmin && (
-                              <button
-                                type="button"
-                                onClick={async () => {
-                                  const assign = takeoverCasinoAssignUsername.trim();
-                                  const msg = assign
-                                    ? `Assign ${c.game_type} (${c.location}) from ${userDetailData.user?.username || '?'} to @${assign}?`
-                                    : `Assign ${c.game_type} (${c.location}) to your admin account?`;
-                                  if (!window.confirm(msg)) return;
-                                  try {
-                                    const payload = {
-                                      user_id: userDetailData.user?.id,
-                                      game_type: c.game_type,
-                                      location: c.location,
-                                    };
-                                    if (assign) payload.to_username = assign;
-                                    await api.post('/admin/takeover-user-casino', payload);
-                                    toast.success('Casino reassigned');
-                                    setTakeoverCasinoAssignUsername('');
-                                    if (userDetailData?.user?.id) openUserDetail({ id: userDetailData.user.id });
-                                  } catch (e) {
-                                    toast.error(e.response?.data?.detail || 'Takeover failed');
-                                  }
-                                }}
-                                className="px-2 py-0.5 text-[10px] font-heading uppercase border border-primary/50 text-primary hover:bg-primary/10 rounded"
-                              >
-                                Take over
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={async () => {
-                                if (!window.confirm(`Drop ${c.game_type} (${c.location}) from this user?`)) return;
-                                try {
-                                  await api.post('/admin/drop-user-casino', { user_id: userDetailData.user?.id, game_type: c.game_type, location: c.location });
-                                  toast.success('Casino dropped');
-                                  if (userDetailData?.user?.id) openUserDetail({ id: userDetailData.user.id });
-                                } catch (e) {
-                                  toast.error(e.response?.data?.detail || 'Failed to drop casino');
-                                }
-                              }}
-                              className="px-2 py-0.5 text-[10px] font-heading uppercase border border-red-500/50 text-red-500 hover:bg-red-500/10 rounded"
-                            >
-                              Drop
-                            </button>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (!window.confirm('Drop ALL casinos and properties for this user? They will lose every casino and property (airport/armoury).')) return;
-                        try {
-                          const res = await api.post('/admin/drop-user-casinos-properties', { user_id: userDetailData.user?.id });
-                          toast.success(res.data?.message || 'Dropped all casinos & properties');
-                          if (userDetailData?.user?.id) openUserDetail({ id: userDetailData.user.id });
-                        } catch (e) {
-                          toast.error(e.response?.data?.detail || 'Failed');
-                        }
-                      }}
-                      className="px-2 py-1 text-[10px] font-heading uppercase border border-red-500/50 text-red-500 hover:bg-red-500/10 rounded"
-                    >
-                      Drop all this user's casinos & properties
-                    </button>
-                  </Section>
-                )}
-              </div>
-            </div>
-          </div>
-        );
-      })()}
 
       {/* ─── Players (admin only) ─── */}
       {isAdmin && (
