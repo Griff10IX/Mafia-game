@@ -480,8 +480,16 @@ export default function GamePass() {
 
   const vipGrantingActive = vipClaimed && (!passExpiryUntil || passExpiryUntil.getTime() > nowTs);
 
+  const lastGrantedMicro = Math.min(
+    MAX_MICRO_TIER,
+    Math.max(0, Math.floor(Number(user?.rank_xp_pass_last_granted_micro_tier ?? 0))),
+  );
+  const vipRewardTrackComplete = vipClaimed && lastGrantedMicro >= MAX_MICRO_TIER;
+
   const previewRankPointsRaw = vipGrantingActive
-    ? Number(user?.rank_points ?? 0) + Number(user?.rank_xp_pass_prestige_carry_rp ?? 0) // live RP + prestige carry (matches server VIP tier math)
+    ? vipRewardTrackComplete
+      ? MAX_THRESHOLD_RP // Admin bulk completion / natural tier-100 payout: UI matches reward cursor, not raw rank XP.
+      : Number(user?.rank_points ?? 0) + Number(user?.rank_xp_pass_prestige_carry_rp ?? 0) // live RP + prestige carry (matches server VIP tier math)
     : passIsUnactivatedValid
       ? Number(user?.rank_xp_pass_pending_tier_snapshot ?? 0) // pending snapshot before activation
       : vipClaimed
@@ -808,11 +816,16 @@ export default function GamePass() {
               <div className="w-full h-2 bg-zinc-900/30 border border-primary/10 rounded-full overflow-hidden">
                 <div className="h-full bg-gradient-to-r from-primary via-primary to-primary" style={{ width: `${seasonLevel}%` }} />
               </div>
-              {vipGrantingActive && (
-                <p className="text-[9px] text-zinc-500 font-heading leading-relaxed">
-                  VIP rewards are applied automatically: when you activate the pass, anything you already earned with rank XP is granted immediately; after that, each new tier credits on its own as soon as you pass the next milestone (you don’t need to buy again).
-                </p>
-              )}
+              {vipGrantingActive &&
+                (vipRewardTrackComplete ? (
+                  <p className="text-[9px] text-emerald-400/95 font-heading leading-relaxed">
+                    VIP Game Pass tier rewards are complete — all payouts through tier {MAX_MICRO_TIER} have been credited.
+                  </p>
+                ) : (
+                  <p className="text-[9px] text-zinc-500 font-heading leading-relaxed">
+                    VIP rewards are applied automatically: when you activate the pass, anything you already earned with rank XP is granted immediately; after that, each new tier credits on its own as soon as you pass the next milestone (you don’t need to buy again).
+                  </p>
+                ))}
             </div>
             <div className="store-art-line text-primary mx-3" />
           </div>

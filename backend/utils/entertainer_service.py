@@ -12,6 +12,8 @@ _logger = logging.getLogger(__name__)
 
 ENTERTAINER_DAILY_FUND_CASH = 50_000_000
 ENTERTAINER_DAILY_FUND_POINTS = 3_000
+ENTERTAINER_FUND_CASH_MAX = 100_000_000
+ENTERTAINER_FUND_POINTS_MAX = 5_000
 ENTERTAINER_COMPLETION_BLOCK = 5
 ENTERTAINER_COMPLETION_BONUS_POINTS = 50
 ENTERTAINER_COMPLETION_BONUS_DAILY_CAP = 250
@@ -119,7 +121,14 @@ async def run_entertainer_daily_refills(db, send_notification) -> None:
     today = entertainer_utc_today()
     cursor = db.users.find(
         {"is_entertainer": True, "is_dead": {"$ne": True}},
-        {"_id": 0, "id": 1, "username": 1, "entertainer_fund_last_refill_utc_date": 1},
+        {
+            "_id": 0,
+            "id": 1,
+            "username": 1,
+            "entertainer_fund_cash": 1,
+            "entertainer_fund_points": 1,
+            "entertainer_fund_last_refill_utc_date": 1,
+        },
     )
     async for u in cursor:
         uid = u.get("id")
@@ -128,6 +137,20 @@ async def run_entertainer_daily_refills(db, send_notification) -> None:
         last = u.get("entertainer_fund_last_refill_utc_date")
         if last == today:
             continue
+        current_cash = float(u.get("entertainer_fund_cash") or 0.0)
+        current_points = int(u.get("entertainer_fund_points") or 0)
+        add_cash = int(
+            min(
+                ENTERTAINER_DAILY_FUND_CASH,
+                max(0, int(ENTERTAINER_FUND_CASH_MAX - current_cash)),
+            )
+        )
+        add_points = int(
+            min(
+                ENTERTAINER_DAILY_FUND_POINTS,
+                max(0, int(ENTERTAINER_FUND_POINTS_MAX - current_points)),
+            )
+        )
         res = await db.users.update_one(
             {
                 "id": uid,
@@ -141,27 +164,38 @@ async def run_entertainer_daily_refills(db, send_notification) -> None:
             },
             {
                 "$inc": {
-                    "entertainer_fund_cash": ENTERTAINER_DAILY_FUND_CASH,
-                    "entertainer_fund_points": ENTERTAINER_DAILY_FUND_POINTS,
-                    "entertainer_lifetime_fund_cash_granted": ENTERTAINER_DAILY_FUND_CASH,
-                    "entertainer_lifetime_fund_points_granted": ENTERTAINER_DAILY_FUND_POINTS,
+                    "entertainer_lifetime_fund_cash_granted": add_cash,
+                    "entertainer_lifetime_fund_points_granted": add_points,
                 },
-                "$set": {"entertainer_fund_last_refill_utc_date": today},
+                "$set": {
+                    "entertainer_fund_cash": min(current_cash, float(ENTERTAINER_FUND_CASH_MAX)) + add_cash,
+                    "entertainer_fund_points": min(current_points, int(ENTERTAINER_FUND_POINTS_MAX)) + add_points,
+                    "entertainer_fund_last_refill_utc_date": today,
+                },
             },
         )
         if res.modified_count:
             uname = u.get("username") or "?"
-            try:
-                await send_notification(
-                    uid,
-                    "Entertainer daily fund",
-                    f"Your entertainer fund was topped up: +${ENTERTAINER_DAILY_FUND_CASH:,.0f} cash and +{ENTERTAINER_DAILY_FUND_POINTS:,} fund points (UTC day {today}).",
-                    "system",
-                    category="entertainer",
-                )
-            except Exception as e:
-                _logger.warning("Entertainer refill notify failed uid=%s: %s", uid, e)
-            _logger.info("Entertainer daily refill for %s (%s)", uname, uid)
+            if add_cash > 0 or add_points > 0:
+                try:
+                    await send_notification(
+                        uid,
+                        "Entertainer daily fund",
+                        f"Your entertainer fund was topped up: +${add_cash:,.0f} cash and +{add_points:,} fund points (UTC day {today}).",
+                        "system",
+                        category="entertainer",
+                    )
+                except Exception as e:
+                    _logger.warning("Entertainer refill notify failed uid=%s: %s", uid, e)
+            _logger.info(
+                "Entertainer daily refill for %s (%s): +$%s, +%s pts (caps cash=%s pts=%s)",
+                uname,
+                uid,
+                f"{add_cash:,}",
+                f"{add_points:,}",
+                f"{ENTERTAINER_FUND_CASH_MAX:,}",
+                f"{ENTERTAINER_FUND_POINTS_MAX:,}",
+            )
 
 
 async def _load_entertainer_counters(db, entertainer_id: str) -> dict:
