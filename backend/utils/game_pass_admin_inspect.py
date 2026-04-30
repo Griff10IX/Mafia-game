@@ -115,6 +115,14 @@ async def aggregate_game_pass_users_without_stripe_purchase(
     Users with VIP/token-style pass state and no completed Stripe rank_xp_pass_499 row.
     Adds points-ledger timestamp (buy_game_pass_points) and an attribution hint for admin review.
     """
+    from utils.game_pass_season_rp import (
+        current_game_pass_season_id,
+        reconcile_stale_game_pass_users_for_filter,
+    )
+
+    await reconcile_stale_game_pass_users_for_filter(db, game_pass_vip_or_token_mongo_filter())
+    current_sid = await current_game_pass_season_id(db)
+
     base: Dict[str, Any] = game_pass_vip_or_token_mongo_filter()
     if username_regex:
         base = {"$and": [base, {"username": {"$regex": username_regex, "$options": "i"}}]}
@@ -190,7 +198,7 @@ async def aggregate_game_pass_users_without_stripe_purchase(
         row = {k: doc.get(k) for k in proj_keys}
         pts_rows = doc.get("_gp_pts") or []
         pts_at = (pts_rows[0] or {}).get("created_at") if pts_rows else None
-        derived = game_pass_derived_fields(row, now_utc=now_utc)
+        derived = game_pass_derived_fields(row, now_utc=now_utc, current_season_id=current_sid)
         hint = "points_ledger" if pts_at else "unattributed"
         items.append(
             {
@@ -209,16 +217,49 @@ async def aggregate_game_pass_users_without_stripe_purchase(
     }
 
 
-def game_pass_derived_fields(user_row: Dict[str, Any], *, now_utc: datetime) -> Dict[str, Any]:
-    rp = int(user_row.get("rank_points") or 0)
-    season_rp = int(user_row.get("rank_xp_pass_season_rp") or 0)
-    vip_claimed = user_row.get("rank_xp_pass_rewards_granted") is True
-    current_micro = micro_tier_for_vip_game_pass(user_row) if vip_claimed else micro_tier_from_rank_points(season_rp)
-    tokens = int(user_row.get("rank_xp_pass_tokens") or 0)
-    last_granted = int(user_row.get("rank_xp_pass_last_granted_micro_tier") or 0)
-    free_last = int(user_row.get("rank_xp_pass_free_last_micro_tier_granted") or 0)
+def _game_pass_row_stale_for_season(user_row: Dict[str, Any], current_season_id: Optional[str]) -> bool:
+    if not current_season_id or not str(current_season_id).strip():
+        return False
+    cur = str(current_season_id).strip()
+    raw = user_row.get("game_pass_season_id")
+    if raw is None:
+        return True
+    return str(raw).strip() != cur
 
-    expires_dt = _parse_iso_utc(user_row.get("rank_xp_pass_token_expires_at"))
+
+def _masked_user_row_for_stale_season(user_row: Dict[str, Any]) -> Dict[str, Any]:
+    """Prior-season progress must not read as active before/without a DB reconcile."""
+    m = dict(user_row)
+    m["rank_xp_pass_rewards_granted"] = False
+    m["rank_xp_pass_tokens"] = 0
+    m["rank_xp_pass_token_expires_at"] = None
+    m["rank_xp_pass_bonus_until"] = None
+    m["rank_xp_pass_last_granted_micro_tier"] = 0
+    m["rank_xp_pass_tier_snapshot"] = None
+    m["rank_xp_pass_pending_tier_snapshot"] = None
+    m["rank_xp_pass_season_rp"] = 0
+    m["rank_xp_pass_free_last_micro_tier_granted"] = 0
+    return m
+
+
+def game_pass_derived_fields(
+    user_row: Dict[str, Any],
+    *,
+    now_utc: datetime,
+    current_season_id: Optional[str] = None,
+) -> Dict[str, Any]:
+    stale = _game_pass_row_stale_for_season(user_row, current_season_id)
+    eff = _masked_user_row_for_stale_season(user_row) if stale else user_row
+
+    rp = int(eff.get("rank_points") or 0)
+    season_rp = int(eff.get("rank_xp_pass_season_rp") or 0)
+    vip_claimed = eff.get("rank_xp_pass_rewards_granted") is True
+    current_micro = micro_tier_for_vip_game_pass(eff) if vip_claimed else micro_tier_from_rank_points(season_rp)
+    tokens = int(eff.get("rank_xp_pass_tokens") or 0)
+    last_granted = int(eff.get("rank_xp_pass_last_granted_micro_tier") or 0)
+    free_last = int(eff.get("rank_xp_pass_free_last_micro_tier_granted") or 0)
+
+    expires_dt = _parse_iso_utc(eff.get("rank_xp_pass_token_expires_at"))
 
     unactivated_active = bool(tokens > 0 and (expires_dt is None or expires_dt > now_utc))
     unactivated_expired = bool(tokens > 0 and expires_dt is not None and expires_dt <= now_utc)
@@ -233,9 +274,9 @@ def game_pass_derived_fields(user_row: Dict[str, Any], *, now_utc: datetime) -> 
         tokens > 0
         or vip_claimed
         or free_last > 0
-        or user_row.get("rank_xp_pass_token_expires_at")
-        or user_row.get("rank_xp_pass_tier_snapshot") is not None
-        or user_row.get("rank_xp_pass_pending_tier_snapshot") is not None
+        or eff.get("rank_xp_pass_token_expires_at")
+        or eff.get("rank_xp_pass_tier_snapshot") is not None
+        or eff.get("rank_xp_pass_pending_tier_snapshot") is not None
     )
 
     if not has_gp_fields:
@@ -264,6 +305,9 @@ def game_pass_derived_fields(user_row: Dict[str, Any], *, now_utc: datetime) -> 
         "game_pass_status": status,
         "rank_xp_pass_last_granted_micro_tier": last_granted,
         "rank_xp_pass_free_last_micro_tier_granted": free_last,
+        "game_pass_season_stale_for_display": stale,
+        "game_pass_season_current_id": str(current_season_id).strip() if current_season_id else None,
+        "game_pass_season_stored_id": user_row.get("game_pass_season_id"),
     }
 
 

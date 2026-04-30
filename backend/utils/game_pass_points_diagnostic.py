@@ -11,6 +11,7 @@ from utils.game_pass_admin_inspect import (
     game_pass_derived_fields,
 )
 from utils.game_pass_micro_rewards import vip_rewards_after_free_dedupe
+from utils.game_pass_season_rp import current_game_pass_season_id
 
 
 def calc_estimated_vip_points_from_granted_tiers(user_row: Dict[str, Any]) -> int:
@@ -29,7 +30,8 @@ def calc_estimated_vip_points_from_granted_tiers(user_row: Dict[str, Any]) -> in
 async def build_game_pass_points_diagnostic(db, user_row: Dict[str, Any]) -> Dict[str, Any]:
     now = datetime.now(timezone.utc)
     uid = str(user_row.get("id") or "")
-    derived = game_pass_derived_fields(user_row, now_utc=now)
+    current_sid = await current_game_pass_season_id(db)
+    derived = game_pass_derived_fields(user_row, now_utc=now, current_season_id=current_sid)
     stripe_events = await fetch_game_pass_payment_events(db, uid, limit=10)
     points_purchase = await fetch_latest_points_game_pass_purchase(db, uid)
     purchase_source = classify_purchase_source(

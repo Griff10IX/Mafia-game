@@ -7,7 +7,12 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-from utils.game_pass_season import get_game_pass_season_public, game_pass_season_id_from_stored
+from utils.game_pass_season import get_game_pass_season_public
+
+_RECONCILE_UNSET_FIELDS = {
+    "rank_xp_pass_token_expires_at": "",
+    "rank_xp_pass_bonus_until": "",
+}
 
 
 async def current_game_pass_season_id(db) -> str:
@@ -68,15 +73,30 @@ async def reconcile_user_game_pass_season_if_stale(db, *, user_id: str) -> bool:
     }
     res = await db.users.update_one(
         filt,
-        {
-            "$set": _reconcile_set_fields(current_sid),
-            "$unset": {
-                "rank_xp_pass_token_expires_at": "",
-                "rank_xp_pass_bonus_until": "",
-            },
-        },
+        {"$set": _reconcile_set_fields(current_sid), "$unset": _RECONCILE_UNSET_FIELDS},
     )
     return bool(res.modified_count)
+
+
+async def reconcile_stale_game_pass_users_for_filter(db, extra_match: Dict[str, Any]) -> int:
+    """
+    Bulk-reconcile users who match `extra_match` and are not on the current game_pass_season_id.
+
+    Used by admin Game Pass lists so prior-season VIP/tier rows are cleared before the query runs.
+    """
+    current_sid = await current_game_pass_season_id(db)
+    stale: Dict[str, Any] = {
+        "$or": [
+            {"game_pass_season_id": {"$ne": current_sid}},
+            {"game_pass_season_id": {"$exists": False}},
+        ],
+    }
+    filt: Dict[str, Any] = {"$and": [extra_match, stale]}
+    res = await db.users.update_many(
+        filt,
+        {"$set": _reconcile_set_fields(current_sid), "$unset": _RECONCILE_UNSET_FIELDS},
+    )
+    return int(res.modified_count or 0)
 
 
 async def reconcile_user_game_pass_season_if_stale_after_load(db, user: Dict[str, Any]) -> bool:
@@ -86,6 +106,8 @@ async def reconcile_user_game_pass_season_if_stale_after_load(db, user: Dict[str
         return False
     prev = user.get("game_pass_season_id")
     current_sid = await current_game_pass_season_id(db)
-    if prev is not None and str(prev) == str(current_sid):
+    prev_s = str(prev).strip() if prev is not None else ""
+    cur_s = str(current_sid).strip()
+    if prev_s and prev_s == cur_s:
         return False
     return await reconcile_user_game_pass_season_if_stale(db, user_id=uid)

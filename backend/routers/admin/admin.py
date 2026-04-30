@@ -2814,6 +2814,10 @@ def register(router):
             game_pass_derived_fields,
             game_pass_mongo_filter,
         )
+        from utils.game_pass_season_rp import (
+            current_game_pass_season_id,
+            reconcile_stale_game_pass_users_for_filter,
+        )
 
         now = datetime.now(timezone.utc)
         esc = escape_regex_fragment(q or "") or None
@@ -2831,6 +2835,8 @@ def register(router):
         filt = game_pass_mongo_filter()
         if esc:
             filt = {"$and": [filt, {"username": {"$regex": esc, "$options": "i"}}]}
+        await reconcile_stale_game_pass_users_for_filter(db, filt)
+        current_sid = await current_game_pass_season_id(db)
         cursor = db.users.find(filt, GAME_PASS_USER_PROJECTION).sort("username", 1).skip(skip).limit(limit)
         rows = await cursor.to_list(length=limit)
         uids = [str(r["id"]) for r in rows if r.get("id")]
@@ -2838,7 +2844,7 @@ def register(router):
         items: List[Dict[str, Any]] = []
         proj_keys = [k for k in GAME_PASS_USER_PROJECTION if k != "_id"]
         for row in rows:
-            derived = game_pass_derived_fields(row, now_utc=now)
+            derived = game_pass_derived_fields(row, now_utc=now, current_season_id=current_sid)
             base = {k: row.get(k) for k in proj_keys}
             uid = str(row.get("id") or "")
             items.append(
@@ -2873,13 +2879,22 @@ def register(router):
             fetch_latest_points_game_pass_purchase,
             game_pass_derived_fields,
         )
+        from utils.game_pass_season_rp import (
+            current_game_pass_season_id,
+            reconcile_user_game_pass_season_if_stale,
+        )
 
         username_pattern = _username_pattern(target_username)
         u = await db.users.find_one({"username": username_pattern}, GAME_PASS_USER_PROJECTION)
         if not u:
             raise HTTPException(status_code=404, detail="User not found")
+        await reconcile_user_game_pass_season_if_stale(db, user_id=str(u.get("id") or ""))
+        u = await db.users.find_one({"username": username_pattern}, GAME_PASS_USER_PROJECTION)
+        if not u:
+            raise HTTPException(status_code=404, detail="User not found")
         now = datetime.now(timezone.utc)
-        derived = game_pass_derived_fields(u, now_utc=now)
+        current_sid = await current_game_pass_season_id(db)
+        derived = game_pass_derived_fields(u, now_utc=now, current_season_id=current_sid)
         uid = str(u["id"])
         events = await fetch_game_pass_payment_events(db, uid)
         points_gp_ledger = await fetch_latest_points_game_pass_purchase(db, uid)
