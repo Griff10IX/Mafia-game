@@ -126,12 +126,9 @@ def _initial_base_amount_for_total(*, tiers: range, base_tier: int, target_total
     return float(target_total) / denom
 
 
-# Baselines:
-# Deterministic weighted random bucket selection:
-# - Each micro tier selects 1 bucket 70% of the time, or 2 distinct buckets 30% of the time.
-# - Rewards are deterministically chosen so all users see the same preview.
-# - Then we normalize (linear scaling + ceil) so totals for the key targets land close to:
-#     cash ~50,000,000, points ~6,000, bullets ~250,000, random tokens ~250, auto-rank 2h tokens ~50.
+# Baselines (v4):
+# - Each micro tier: rotating primary + loot_box_pieces + rotating pool token (see _ROT_PRIM_KEYS / _ROT_TOKEN_KEYS).
+# - Normalization keeps totals near: cash, bullets, points, loot pieces, XP tokens, random tokens, auto-rank 2h.
 
 TARGET_RANDOM_TOKENS_TOTAL = 250
 TARGET_LOOT_PIECES_TOTAL = 500
@@ -141,13 +138,15 @@ TARGET_XP_GTA_TOKENS_TOTAL = 150
 # Token keys that represent the "random token pool" in this implementation.
 _RANDOM_TOKEN_KEYS = ["melt_tokens", "jailbust_tokens", "travel_tokens", "properties_tokens"]
 
-# Deterministic seeds (string->int is stable across backend/frontend via fnv1a_32).
-_SEED_CATEGORY = "game_pass_micro_rewards:category:v3"
-_SEED_FREE = "game_pass_micro_rewards:free:v3"
+# Deterministic seed for free-track unlock pick (string->int matches frontend fnv1a32).
+_SEED_FREE = "game_pass_micro_rewards:free:v4"
 
-TWO_BUCKET_CHANCE = 0.30
+# v4 layout: every micro tier grants three buckets — rotating primary, loot pieces every tier,
+# and rotating random token — so loot + melt/jailbust/travel/properties appear across all 100 tiers.
+_ROT_PRIM_KEYS = ("money", "bullets", "xp_crimes_tokens", "xp_gta_tokens", "points")
+_ROT_TOKEN_KEYS = ("melt_tokens", "jailbust_tokens", "travel_tokens", "properties_tokens")
 
-# Category pool for bucket selection (auto_rank_2h_tokens is guaranteed separately).
+# Category pool for MICRO_TIER_REWARD_BASELINES init (auto_rank_2h_tokens is guaranteed separately).
 _SELECTABLE_KEYS = [
     "money",
     "bullets",
@@ -157,21 +156,6 @@ _SELECTABLE_KEYS = [
     "loot_box_pieces",
     *_RANDOM_TOKEN_KEYS,
 ]
-
-# Weights are tuned so cash isn't overwhelming early, and variety appears inside the same 1-10 band.
-# Final totals for normalized keys are enforced by baseAmount normalization.
-_CATEGORY_WEIGHTS = {
-    "money": 60,
-    "bullets": 20,
-    "xp_crimes_tokens": 10,
-    "xp_gta_tokens": 10,
-    "points": 12,
-    "loot_box_pieces": 8,
-    "melt_tokens": 2,
-    "jailbust_tokens": 2,
-    "travel_tokens": 2,
-    "properties_tokens": 2,
-}
 
 _BASE_TIER_BY_KEY = {
     "money": _MONEY_BASE_TIER,
@@ -217,22 +201,6 @@ def _mulberry32(seed: int):
     return _rand
 
 
-def _weighted_pick(rng, keys, weights_by_key):
-    total = 0.0
-    for k in keys:
-        total += float(weights_by_key.get(k) or 0.0)
-    if total <= 0:
-        return None
-    u = rng() * total
-    acc = 0.0
-    for k in keys:
-        w = float(weights_by_key.get(k) or 0.0)
-        acc += w
-        if u < acc:
-            return k
-    return keys[-1] if keys else None
-
-
 def _distribute_total(total: int, keys: list[str]) -> dict[str, int]:
     """Split `total` across keys as evenly as possible (stable order)."""
     n = max(1, len(keys))
@@ -265,28 +233,13 @@ _BASE_AMOUNT_BY_KEY: dict[str, float] = {}
 _tiers_assigned_by_key: dict[str, list[int]] = {k: [] for k in _TARGET_TOTAL_BY_KEY.keys()}
 
 for t in range(1, MAX_MICRO_TIER + 1):
-    rng = _mulberry32(_fnv1a_32(f"{_SEED_CATEGORY}:{t}"))
-    want_two = rng() < TWO_BUCKET_CHANCE
-    remaining_keys = list(_SELECTABLE_KEYS)
-    chosen: list[str] = []
-
-    n_buckets = 2 if want_two else 1
-    for _ in range(n_buckets):
-        k = _weighted_pick(rng, remaining_keys, _CATEGORY_WEIGHTS)
-        if not k:
-            break
-        chosen.append(k)
-        remaining_keys = [x for x in remaining_keys if x != k]
-
-    # Ensure 1..2 distinct keys.
-    if not chosen:
-        chosen = ["money"]
-    chosen = chosen[:2]
+    prim = _ROT_PRIM_KEYS[(t - 1) % len(_ROT_PRIM_KEYS)]
+    tok = _ROT_TOKEN_KEYS[(t - 1) % len(_ROT_TOKEN_KEYS)]
+    chosen = [prim, "loot_box_pieces", tok]
     _SELECTED_KEYS_BY_TIER[t] = chosen
 
     free_rng = _mulberry32(_fnv1a_32(f"{_SEED_FREE}:{t}"))
-    free_key = chosen[int(math.floor(free_rng() * len(chosen)))] if chosen else None
-    _FREE_UNLOCKED_KEY_BY_TIER[t] = free_key
+    _FREE_UNLOCKED_KEY_BY_TIER[t] = chosen[int(math.floor(free_rng() * len(chosen)))]
 
     for k in _TARGET_TOTAL_BY_KEY.keys():
         if k in chosen:
@@ -427,9 +380,9 @@ def rewards_for_micro_tier(micro_tier: int) -> Dict[str, int]:
     """
     Return the exact reward set for a given micro tier.
 
-    Deterministic weighted contract:
-    - Each micro tier gets 1 or 2 distinct reward keys chosen deterministically.
-    - Amounts are derived from normalized baseAmount scalars so totals land close to targets.
+    Deterministic v4 contract:
+    - Three buckets per tier: rotating primary, loot_box_pieces, rotating pool token (+ auto_rank every tier).
+    - Amounts use normalized baseAmount scalars so season totals stay near configured targets.
     """
     try:
         t = int(micro_tier or 0)

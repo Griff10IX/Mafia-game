@@ -4,8 +4,11 @@ from __future__ import annotations
 Game Pass season document in game_settings (key `game_pass_season`).
 
 Ops: bump `season_id` when starting a new pass season (admin POST includes optional season_id).
-Users reconcile lazily on auth hot paths: `rank_xp_pass_season_rp` resets to 0 and pass cursors clear.
-Prestige affects lifetime rank only unless you add a dedicated season carry field later.
+Users reconcile lazily on auth hot paths: season RP resets, pass cursors clear, and prior VIP token
+state is cleared so the pass must be purchased again for the new season.
+
+Retail: `get_game_pass_season_public` bumps legacy stored `season_id` "1" -> "2" once on read so
+deployments pick up the new season without a manual admin edit (subsequent seasons still use admin).
 """
 
 from datetime import datetime, timezone
@@ -48,6 +51,25 @@ async def get_game_pass_season_public(db) -> Dict[str, Any]:
     stored = raw if isinstance(raw, dict) else {}
     season_end_at = normalize_game_pass_season_end_at(stored.get("season_end_at"))
     season_id = game_pass_season_id_from_stored(stored)
+
+    # One-time retail roll: legacy season "1" -> "2" invalidates old entitlements via reconcile.
+    if str(season_id).strip() == "1":
+        now_iso = datetime.now(timezone.utc).isoformat()
+        new_stored = {
+            **stored,
+            "season_id": "2",
+            "season_end_at": season_end_at,
+            "set_by": "season_auto_bump",
+            "set_at": now_iso,
+        }
+        await db.game_settings.update_one(
+            {"key": GAME_PASS_SEASON_SETTINGS_KEY},
+            {"$set": {"key": GAME_PASS_SEASON_SETTINGS_KEY, "value": new_stored}},
+            upsert=True,
+        )
+        stored = new_stored
+        season_id = "2"
+
     return {
         "game_pass_season_end_at": season_end_at,
         "game_pass_season_id": season_id,

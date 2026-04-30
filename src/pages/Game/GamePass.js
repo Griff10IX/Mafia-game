@@ -94,7 +94,7 @@ function formatCountdown(ms) {
   return parts.join(' ');
 }
 
-// Reward math / deterministic bucket selection must stay in sync with backend `game_pass_micro_rewards.py`.
+// Reward math / v4 deterministic layout must stay in sync with backend `game_pass_micro_rewards.py`.
 const TARGET_CASH_TOTAL = 500_000_000;
 const TARGET_POINTS_TOTAL = 10_000;
 const TARGET_BULLETS_TOTAL = 250_000;
@@ -157,19 +157,6 @@ function mulberry32(seed) {
   };
 }
 
-function weightedPick(rng, keys, weightsByKey) {
-  let total = 0;
-  for (const k of keys) total += Number(weightsByKey[k] || 0);
-  if (total <= 0) return null;
-  const u = rng() * total;
-  let acc = 0;
-  for (const k of keys) {
-    acc += Number(weightsByKey[k] || 0);
-    if (u < acc) return k;
-  }
-  return keys[keys.length - 1] || null;
-}
-
 function distributeTotal(total, keys) {
   const n = Math.max(1, keys.length);
   const base = Math.floor(total / n);
@@ -179,32 +166,11 @@ function distributeTotal(total, keys) {
   return out;
 }
 
-const TWO_BUCKET_CHANCE = 0.30;
-const SEED_CATEGORY = 'game_pass_micro_rewards:category:v3';
-const SEED_FREE = 'game_pass_micro_rewards:free:v3';
+// v4: must match backend `utils/game_pass_micro_rewards.py` (_SEED_FREE + rotation).
+const SEED_FREE = 'game_pass_micro_rewards:free:v4';
 
-const SELECTABLE_KEYS = [
-  'money',
-  'bullets',
-  'xp_crimes_tokens',
-  'xp_gta_tokens',
-  'points',
-  'loot_box_pieces',
-  ...SELECTABLE_RANDOM_TOKEN_KEYS,
-];
-
-const CATEGORY_WEIGHTS = {
-  money: 60,
-  bullets: 20,
-  xp_crimes_tokens: 10,
-  xp_gta_tokens: 10,
-  points: 12,
-  loot_box_pieces: 8,
-  melt_tokens: 2,
-  jailbust_tokens: 2,
-  travel_tokens: 2,
-  properties_tokens: 2,
-};
+const ROT_PRIM_KEYS = ['money', 'bullets', 'xp_crimes_tokens', 'xp_gta_tokens', 'points'];
+const ROT_TOKEN_KEYS = ['melt_tokens', 'jailbust_tokens', 'travel_tokens', 'properties_tokens'];
 
 const BASE_TIER_BY_KEY = {
   money: MONEY_BASE_TIER,
@@ -244,26 +210,13 @@ const BASE_AMOUNT_BY_KEY = {};
 const PRECOMPUTED_REWARDS_BY_TIER = Array.from({ length: 101 }, () => ({}));
 
 for (let t = 1; t <= 100; t += 1) {
-  const rng = mulberry32(fnv1a32(`${SEED_CATEGORY}:${t}`));
-  const wantTwo = rng() < TWO_BUCKET_CHANCE;
-  const nBuckets = wantTwo ? 2 : 1;
-  let remainingKeys = [...SELECTABLE_KEYS];
-  const chosen = [];
-
-  for (let i = 0; i < nBuckets; i += 1) {
-    const k = weightedPick(rng, remainingKeys, CATEGORY_WEIGHTS);
-    if (!k) break;
-    chosen.push(k);
-    remainingKeys = remainingKeys.filter((x) => x !== k);
-  }
-
-  if (!chosen.length) chosen.push('money');
-  const finalChosen = chosen.slice(0, 2);
+  const prim = ROT_PRIM_KEYS[(t - 1) % ROT_PRIM_KEYS.length];
+  const tok = ROT_TOKEN_KEYS[(t - 1) % ROT_TOKEN_KEYS.length];
+  const finalChosen = [prim, 'loot_box_pieces', tok];
   SELECTED_KEYS_BY_TIER[t] = finalChosen;
 
   const freeRng = mulberry32(fnv1a32(`${SEED_FREE}:${t}`));
-  const freeKey = finalChosen.length ? finalChosen[Math.floor(freeRng() * finalChosen.length)] : null;
-  FREE_UNLOCKED_KEY_BY_TIER[t] = freeKey;
+  FREE_UNLOCKED_KEY_BY_TIER[t] = finalChosen.length ? finalChosen[Math.floor(freeRng() * finalChosen.length)] : null;
 
   Object.keys(TARGET_TOTAL_BY_KEY).forEach((key) => {
     if (finalChosen.includes(key)) _tiersAssignedByKey[key].push(t);

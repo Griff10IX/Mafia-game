@@ -1,6 +1,6 @@
 """
 Game Pass season-isolated RP: mirror positive rank_points gains into rank_xp_pass_season_rp
-and reconcile users when game_pass_season_id changes.
+and reconcile users when game_pass_season_id changes (resets progress, clears VIP token fields).
 """
 
 from __future__ import annotations
@@ -47,6 +47,8 @@ def _reconcile_set_fields(current_sid: str) -> Dict[str, Any]:
         "rank_xp_pass_free_last_micro_tier_granted": 0,
         "rank_xp_pass_pending_tier_snapshot": None,
         "rank_xp_pass_tier_snapshot": None,
+        "rank_xp_pass_tokens": 0,
+        "rank_xp_pass_rewards_granted": False,
     }
 
 
@@ -64,7 +66,16 @@ async def reconcile_user_game_pass_season_if_stale(db, *, user_id: str) -> bool:
             {"game_pass_season_id": {"$exists": False}},
         ],
     }
-    res = await db.users.update_one(filt, {"$set": _reconcile_set_fields(current_sid)})
+    res = await db.users.update_one(
+        filt,
+        {
+            "$set": _reconcile_set_fields(current_sid),
+            "$unset": {
+                "rank_xp_pass_token_expires_at": "",
+                "rank_xp_pass_bonus_until": "",
+            },
+        },
+    )
     return bool(res.modified_count)
 
 
