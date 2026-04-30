@@ -6,6 +6,30 @@
 
 [hr]
 
+[size=1.5][b][color=#2ECC71]2026-04-30 12:00 UTC[/color][/b] — [b]Loot box: bigger payouts, bonus pieces, accurate piece count[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]Changed:[/b] [b]Money → Loot box[/b] — standard prizes (cash, points, rank points, bullets) now roll in [b]higher ranges[/b] by box tier ([b]common[/b] / [b]uncommon[/b] / [b]rare[/b]). [b]Rare[/b] boxes can award up to about [b]$100M[/b] cash, [b]5,000[/b] points, [b]5,000[/b] rank points, and [b]100,000[/b] bullets per hit (lower tiers are scaled down).[/color]
+[*][color=#888888][b]New:[/b] Loot boxes can also drop [b]loot box pieces[/b] as a standard prize — extra progress toward your next open.[/color]
+[*][color=#888888][b]Fixed:[/b] After opening, the result screen’s [b]pieces remaining[/b] figure now matches your real balance when you won pieces on that open (it used to show only the post-cost amount).[/color]
+[/list]
+[/quote]
+
+[hr]
+
+[size=1.5][b][color=#2ECC71]2026-04-30 18:00 UTC[/color][/b] — [b]Loot intel, exclusives, store bonus, dealer stock, racing laps[/b][/size]
+[quote]
+[list]
+[*][color=#888888][b]New / UI:[/b] [b]Money → Loot box[/b] — [b]What you can win[/b] panel: min/max ranges per box tier (cash, points, rank points, bullets, pieces, tokens, cars, perks), live [b]exclusive %[/b] and [b]box tier %[/b], token pool and exclusives lists.[/color]
+[*][color=#888888][b]Changed:[/b] [b]Loot exclusives (global)[/b] — one extra worldwide slot each for [b]exclusive weapon[/b], [b]exclusive armour[/b], and [b]Speakeasy[/b] (now [b]2[/b] each); [b]exclusive vehicle[/b] stays at [b]1[/b]. The scarcity row shows the cap per item.[/color]
+[*][color=#888888][b]New:[/b] [b]Game → Store → Points[/b] (GBP card checkouts) — earn [b]50 loot box pieces per whole £5[/b] charged (GBP only); pieces credit when your points do (including preorder release / manual credit paths).[/color]
+[*][color=#888888][b]Changed:[/b] [b]Cars → Buy cars (dealer)[/b] — buying a model [b]restocks that model[/b] toward its cap right away; you no longer need to empty the entire dealer for a full refill (whole-lot refill still happens if stock hits zero).[/color]
+[*][color=#888888][b]Changed:[/b] [b]Casinos → Mini-games → Bootleg Runs / Racing[/b] — when creating a race or sending a challenge, you can set [b]any lap count from 3 to 99[/b] (was effectively capped at 20 with a lower minimum).[/color]
+[/list]
+[/quote]
+
+[hr]
+
 [size=1.5][b][color=#2ECC71]2026-04-25 23:30 UTC[/color][/b] — [b]Missions: rewards & daily tribute rebalanced[/b][/size]
 [quote]
 [list]

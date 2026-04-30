@@ -1,5 +1,15 @@
 // Shared racing UI / replay constants (aligned with backend tyre ids & weather keys).
 
+/** Must match `NUM_LAPS_MIN` / `NUM_LAPS_MAX` in backend/routers/minigames/racing.py */
+export const RACING_LAPS_MIN = 3;
+export const RACING_LAPS_MAX = 99;
+
+export function clampRacingLaps(n) {
+  const v = Math.floor(Number(n));
+  if (!Number.isFinite(v)) return RACING_LAPS_MIN;
+  return Math.max(RACING_LAPS_MIN, Math.min(RACING_LAPS_MAX, v));
+}
+
 export const CAR_COLORS = [
   "#d4af37", "#dc2626", "#3b82f6", "#16a34a",
   "#9333ea", "#f97316", "#ec4899", "#14b8a6",

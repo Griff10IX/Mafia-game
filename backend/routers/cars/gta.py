@@ -1614,11 +1614,18 @@ async def _ensure_dealer_stock_seeded():
     await _fill_dealer_stock_full()
 
 
-async def _dealer_full_restock_if_dealer_empty() -> None:
-    """After a sale: only when the dealer has zero cars left in total, refill the full lot (all models to max)."""
-    if await db.dealer_stock.count_documents({}) > 0:
+async def _dealer_after_sale_restock(car_id: str, car_info: dict) -> None:
+    """After removing one dealer unit: if the lot is empty, refill every model to max; else add one slot for this model (up to its cap)."""
+    total = await db.dealer_stock.count_documents({})
+    if total == 0:
+        await _fill_dealer_stock_full()
         return
-    await _fill_dealer_stock_full()
+    max_stock = _dealer_max_stock(car_info)
+    have = await db.dealer_stock.count_documents({"car_id": car_id})
+    if have < max_stock:
+        await db.dealer_stock.insert_one(
+            {"car_id": car_id, "added_at": datetime.now(timezone.utc).isoformat()}
+        )
 
 
 async def get_cars_for_sale(current_user: dict = Depends(get_current_user)):
@@ -1642,7 +1649,7 @@ async def get_cars_for_sale(current_user: dict = Depends(get_current_user)):
     return {"cars": out}
 
 
-# Per-process pacing: rapid "buy all" from the dealer was hammering Mongo (writes + full restock).
+# Per-process pacing: rapid "buy all" from the dealer was hammering Mongo (writes + restock).
 _dealer_buy_last_mon: Dict[str, float] = {}
 _dealer_buy_interval_guard = asyncio.Lock()
 DEALER_BUY_MIN_INTERVAL_SEC = 0.45
@@ -1690,7 +1697,7 @@ async def buy_car(
     if result.deleted_count == 0:
         await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"money": price}})
         raise HTTPException(status_code=400, detail="That car is out of stock. Try again in a moment.")
-    await _dealer_full_restock_if_dealer_empty()
+    await _dealer_after_sale_restock(request.car_id, car_info)
     now = datetime.now(timezone.utc)
     doc = {
         "id": str(uuid.uuid4()),

@@ -646,7 +646,7 @@ CARS = [
     {"id": "car_custom", "name": "Custom Car", "rarity": "custom", "min_difficulty": 5, "value": 71875, "travel_bonus": 55, "image": None},
     # Exclusive (admin only)
     {"id": "car20", "name": "Al Capone's Armored Cadillac", "rarity": "exclusive", "min_difficulty": 5, "value": 71875000, "travel_bonus": 60, "image": "/images/gta/car20.png"},
-    # Loot-exclusive (loot box only, cap 3 globally)
+    # Loot-exclusive (loot box only; global caps per type in loot_box.py)
     {"id": "car21", "name": "1930 Cadillac Series 452 V-16 Armored Sedan", "rarity": "loot_exclusive", "min_difficulty": 5, "value": 143750000, "travel_bonus": 68, "image": "/images/gta/car21.png"},
 ]
 

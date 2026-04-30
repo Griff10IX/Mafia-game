@@ -4,7 +4,7 @@ import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 
-from typing import Optional, Tuple
+from typing import Any, Dict, Optional, Tuple
 
 from fastapi import Depends, HTTPException, Query, Request
 from pydantic import BaseModel
@@ -28,6 +28,10 @@ from utils.store_points_pricing import (
 )
 
 logger = logging.getLogger(__name__)
+
+# GBP store points (Stripe): bonus loot box pieces — 50 pieces per whole £5 charged (currency must be GBP).
+STORE_POINTS_LOOT_GBP_MINOR_PER_BLOCK = 500
+STORE_POINTS_LOOT_PIECES_PER_BLOCK = 50
 
 RANK_XP_PASS_PACKAGE_ID = "rank_xp_pass_499"
 GAME_PASS_POINTS_PRICE = 8_000
@@ -206,6 +210,57 @@ async def _notify_staff_custom_points_fulfillment_blocked(
                 logger.warning("staff custom fulfillment blocked notify %s: %s", staff_uid, e)
     except Exception:
         logger.exception("notify_staff_custom_points_fulfillment_blocked failed")
+
+
+def loot_box_pieces_for_gbp_stripe_minor(amount_minor: Optional[int], currency: Optional[str]) -> int:
+    """Whole £5 blocks (500 pence each) → 50 loot box pieces. Non-GBP or invalid → 0."""
+    if amount_minor is None:
+        return 0
+    cur = (currency or "gbp").strip().lower()
+    if cur != "gbp":
+        return 0
+    try:
+        m = int(amount_minor)
+    except (TypeError, ValueError):
+        return 0
+    if m <= 0:
+        return 0
+    return (m // STORE_POINTS_LOOT_GBP_MINOR_PER_BLOCK) * STORE_POINTS_LOOT_PIECES_PER_BLOCK
+
+
+def _minor_and_currency_for_store_points_loot_bonus(
+    txn: Optional[Dict[str, Any]],
+    package_id: str,
+    POINT_PACKAGES: dict,
+) -> Tuple[Optional[int], str]:
+    """
+    Resolve Stripe total (minor units) + currency for loot bonus on a points purchase.
+    Prefer recorded Stripe amount; else custom expected pence; else catalog GBP price as pence.
+    """
+    t = txn or {}
+    cur = str(t.get("stripe_currency") or "gbp").strip().lower() or "gbp"
+    raw = t.get("stripe_amount_total_minor")
+    if raw is not None:
+        try:
+            return int(raw), cur
+        except (TypeError, ValueError):
+            pass
+    if package_id == CUSTOM_POINTS_PACKAGE_ID:
+        exp = t.get("expected_amount_minor")
+        if exp is not None:
+            try:
+                return int(exp), "gbp"
+            except (TypeError, ValueError):
+                pass
+        return None, cur
+    pkg = POINT_PACKAGES.get(package_id) or {}
+    price = pkg.get("price_gbp")
+    if price is not None:
+        try:
+            return gbp_to_minor_pence(float(price)), "gbp"
+        except (TypeError, ValueError):
+            pass
+    return None, cur
 
 
 def _resolve_points_for_stripe_payment(
@@ -642,7 +697,18 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
     )
     if result.modified_count == 0:
         return {"credited": False, "preorder": False}
-    await db.users.update_one({"id": user_id}, {"$inc": {"points": points}})
+    import server as srv
+
+    txn_row = await db.payment_transactions.find_one(
+        {"session_id": session_id},
+        {"_id": 0, "stripe_amount_total_minor": 1, "stripe_currency": 1, "expected_amount_minor": 1},
+    )
+    minor, cur = _minor_and_currency_for_store_points_loot_bonus(txn_row, package_id, srv.POINT_PACKAGES or {})
+    loot_bonus = loot_box_pieces_for_gbp_stripe_minor(minor, cur)
+    user_inc: Dict[str, int] = {"points": points}
+    if loot_bonus:
+        user_inc["loot_box_pieces"] = loot_bonus
+    await db.users.update_one({"id": user_id}, {"$inc": user_inc})
     await mint_purchase_lot_if_missing(
         db,
         user_id=user_id,
@@ -651,13 +717,14 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
         points=points,
     )
     logger.info(
-        "Payment credited: session_id=%s user_id=%s package_id=%s points_added=%s points_before=%s points_after=%s",
-        session_id, user_id, package_id, points, points_before, points_after,
+        "Payment credited: session_id=%s user_id=%s package_id=%s points_added=%s points_before=%s points_after=%s loot_pieces_bonus=%s",
+        session_id, user_id, package_id, points, points_before, points_after, loot_bonus,
     )
+    loot_tail = f" You also received {loot_bonus:,} loot box pieces." if loot_bonus else ""
     await send_notification(
         user_id,
         "Points Credited",
-        f"Your purchase of {points:,} points has been credited to your account. Balance: {points_before:,} → {points_after:,} points.",
+        f"Your purchase of {points:,} points has been credited to your account. Balance: {points_before:,} → {points_after:,} points.{loot_tail}",
         "points_credited",
         category="system",
     )
@@ -691,7 +758,14 @@ async def _credit_preorder_points(db, txn: dict) -> bool:
     )
     if result.modified_count == 0:
         return False
-    await db.users.update_one({"id": user_id}, {"$inc": {"points": points}})
+    import server as srv
+
+    minor, cur = _minor_and_currency_for_store_points_loot_bonus(txn, package_id, srv.POINT_PACKAGES or {})
+    loot_bonus = loot_box_pieces_for_gbp_stripe_minor(minor, cur)
+    user_inc: Dict[str, int] = {"points": points}
+    if loot_bonus:
+        user_inc["loot_box_pieces"] = loot_bonus
+    await db.users.update_one({"id": user_id}, {"$inc": user_inc})
     await mint_purchase_lot_if_missing(
         db,
         user_id=user_id,
@@ -700,13 +774,14 @@ async def _credit_preorder_points(db, txn: dict) -> bool:
         points=points,
     )
     logger.info(
-        "Preorder points released: session_id=%s user_id=%s package_id=%s points=%s",
-        session_id, user_id, package_id, points,
+        "Preorder points released: session_id=%s user_id=%s package_id=%s points=%s loot_pieces_bonus=%s",
+        session_id, user_id, package_id, points, loot_bonus,
     )
+    loot_tail = f" You also received {loot_bonus:,} loot box pieces." if loot_bonus else ""
     await send_notification(
         user_id,
         "Pre-Order Points Released",
-        f"Your pre-order of {points:,} points has been credited to your account. Balance: {points_before:,} → {points_after:,} points.",
+        f"Your pre-order of {points:,} points has been credited to your account. Balance: {points_before:,} → {points_after:,} points.{loot_tail}",
         "preorder_released",
         category="system",
     )
@@ -2100,7 +2175,12 @@ def register(router):
                 "points_after": points_after,
             }},
         )
-        await db.users.update_one({"id": user_id}, {"$inc": {"points": points}})
+        minor, cur = _minor_and_currency_for_store_points_loot_bonus(txn, package_id, POINT_PACKAGES)
+        loot_bonus = loot_box_pieces_for_gbp_stripe_minor(minor, cur)
+        user_inc: Dict[str, int] = {"points": points}
+        if loot_bonus:
+            user_inc["loot_box_pieces"] = loot_bonus
+        await db.users.update_one({"id": user_id}, {"$inc": user_inc})
         await mint_purchase_lot_if_missing(
             db,
             user_id=user_id,
@@ -2110,13 +2190,14 @@ def register(router):
         )
         
         logger.info(
-            "Admin manual credit: session_id=%s user_id=%s points=%s by=%s",
-            body.session_id, user_id, points, current_user.get("username"),
+            "Admin manual credit: session_id=%s user_id=%s points=%s loot_pieces_bonus=%s by=%s",
+            body.session_id, user_id, points, loot_bonus, current_user.get("username"),
         )
+        loot_tail = f" You also received {loot_bonus:,} loot box pieces." if loot_bonus else ""
         await send_notification(
             user_id,
             "Points Credited",
-            f"Your purchase of {points:,} points has been credited. Balance: {points_before:,} → {points_after:,} points.",
+            f"Your purchase of {points:,} points has been credited. Balance: {points_before:,} → {points_after:,} points.{loot_tail}",
             "points_credited",
             category="system",
         )

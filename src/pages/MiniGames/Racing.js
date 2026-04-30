@@ -6,6 +6,7 @@ import { getApiErrorMessage } from "../../utils/api";
 import { useMinigameCaptcha } from "../../hooks/useMinigameCaptcha";
 import styles from "../../styles/noir.module.css";
 import CircuitRaceView, { TRACKS as CIRCUIT_TRACKS, TrackThumb } from "./CircuitRaceView";
+import { RACING_LAPS_MIN, RACING_LAPS_MAX, clampRacingLaps } from "./racing/raceConstants";
 
 const TRACK_ID_MAP = {
   chicago_board: "chicago",
@@ -410,7 +411,7 @@ export default function Racing() {
     if (!challengeForm.target_username || !challengeForm.track_id) { toast.error("Fill in target and track"); return; }
     setChallengeCreating(true);
     try {
-      const r = await api.post("/racing/challenges/create", challengeForm);
+      const r = await api.post("/racing/challenges/create", { ...challengeForm, laps: clampRacingLaps(challengeForm.laps) });
       toast.success(r.data?.message || "Challenge sent");
       setChallengeForm(f => ({ ...f, target_username: "" }));
       fetchChallenges();
@@ -684,7 +685,7 @@ export default function Racing() {
     track_id: createForm.track_id,
     entry_fee: Number(createForm.entry_fee) || 0,
     max_grid: Number(createForm.max_grid) || 6,
-    laps: Number(createForm.laps) || 3,
+    laps: clampRacingLaps(createForm.laps),
     tyre_compound: createForm.tyre_compound || "medium",
     weather_id: WEATHER_ID_FOR_API(createForm.weather_id || "clear"),
     interactive: true,
@@ -1827,9 +1828,9 @@ export default function Racing() {
                   <div className="flex gap-2 items-end">
                     <label className="flex flex-col gap-0.5">
                       <span className="text-[9px] text-[var(--noir-muted)]">Laps</span>
-                      <input type="number" min={2} max={20} value={createForm.laps}
-                        onChange={(e) => setCreateForm((f) => ({ ...f, laps: Math.max(2, Math.min(20, Number(e.target.value) || 2)) }))}
-                        className={styles.input + " w-12 text-xs font-heading"} />
+                      <input type="number" min={RACING_LAPS_MIN} max={RACING_LAPS_MAX} value={createForm.laps}
+                        onChange={(e) => setCreateForm((f) => ({ ...f, laps: clampRacingLaps(e.target.value) }))}
+                        className={styles.input + " w-14 text-xs font-heading"} />
                     </label>
                     <label className="flex flex-col gap-0.5">
                       <span className="text-[9px] text-[var(--noir-muted)]">Fee</span>
@@ -2686,7 +2687,7 @@ export default function Racing() {
                     placeholder="Stake $" className="min-h-[36px] px-2 text-[11px] bg-transparent border border-[var(--noir-border)] rounded text-[var(--noir-foreground)]" />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <input type="number" min={2} max={20} value={challengeForm.laps} onChange={e => setChallengeForm(f => ({ ...f, laps: Math.max(2, Math.min(20, Number(e.target.value) || 3)) }))}
+                  <input type="number" min={RACING_LAPS_MIN} max={RACING_LAPS_MAX} value={challengeForm.laps} onChange={(e) => setChallengeForm((f) => ({ ...f, laps: clampRacingLaps(e.target.value) }))}
                     placeholder="Laps" className="min-h-[36px] px-2 text-[11px] bg-transparent border border-[var(--noir-border)] rounded text-[var(--noir-foreground)]" />
                   <select value={challengeForm.weather_id} onChange={e => setChallengeForm(f => ({ ...f, weather_id: e.target.value }))}
                     className="min-h-[36px] px-2 text-[11px] bg-transparent border border-[var(--noir-border)] rounded text-[var(--noir-foreground)]">

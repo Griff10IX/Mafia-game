@@ -726,6 +726,8 @@ export default function Store() {
                 {preorderReleaseDate ? formatGameDateTimeShort(preorderReleaseDate) : 'launch date'}
               </span>
               . Purchases on or after that time are credited <span className="text-emerald-400/90">automatically as soon as payment succeeds</span>.
+              {' '}
+              <span className="text-violet-400/90">Loot box piece bonuses (50 per £5 GBP charged) release with your points.</span>
             </p>
             {pendingPoints > 0 && (
               <p className="text-[10px] text-amber-400 font-heading font-bold mt-2">
@@ -791,6 +793,8 @@ export default function Store() {
               <span className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">Buy points</span>
               <p className="text-[8px] text-mutedForeground font-heading mt-0.5 leading-snug">
                 Enter whole points from 1,000–200,000, or a GBP budget — the server prices along the standard store curve (Stripe checkout).
+                {' '}
+                <span className="text-violet-400/90">GBP card checkouts earn 50 loot box pieces per £5 charged</span> (credited when your points are).
               </p>
             </div>
             <div className="p-3 space-y-2">

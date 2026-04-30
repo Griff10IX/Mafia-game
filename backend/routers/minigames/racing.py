@@ -383,8 +383,8 @@ BRAKES_GEARBOX_COST_BASE = 30000
 COOLING_COST_BASE = 25000
 WEIGHT_COST_BASE = 45000
 FUEL_COST_BASE = 35000
-NUM_LAPS_MIN = 2
-NUM_LAPS_MAX = 20
+NUM_LAPS_MIN = 3
+NUM_LAPS_MAX = 99
 INTERACTIVE_LAP_DEADLINE_SEC = 30
 # If no client sends green-flag (crash/refresh), open lap-1 decision window automatically after this many seconds from race start.
 INTERACTIVE_PRE_GREEN_FALLBACK_SEC = 300
@@ -3578,7 +3578,7 @@ async def accept_race_challenge(challenge_id: str, current_user: dict = Depends(
     race_id = str(uuid.uuid4())
     track = _get_track(ch["track_id"])
     weather_id = ch.get("weather") or "clear"
-    num_laps = ch.get("laps") or 3
+    num_laps = max(NUM_LAPS_MIN, min(NUM_LAPS_MAX, int(ch.get("laps") or 3)))
     weather = _get_weather(weather_id)
 
     race_doc = {

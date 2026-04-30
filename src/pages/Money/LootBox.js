@@ -1,11 +1,9 @@
 import { useState, useEffect, useRef } from 'react';
-import { Gift, X, Package, Swords, Car, Shield, Building2, Coins, Zap, Save } from 'lucide-react';
+import { Gift, X, Package, Swords, Car, Shield, Building2, Coins, Zap, Save, Puzzle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import api, { refreshUser } from '../../utils/api';
 import { toast } from 'sonner';
 import styles from '../../styles/noir.module.css';
-
-const CAP = 1;
 
 const LOOT_BOX_STYLES = `
   @keyframes lb-fade-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
@@ -176,16 +174,23 @@ function Embers() {
 /* ─── Reward Icon ─── */
 function RewardIcon({ type, rarity }) {
   const isExclusive = rarity === 'exclusive' || rarity === 'loot_exclusive' || rarity === 'ultra_rare';
+  const isBoxTier = rarity === 'common' || rarity === 'uncommon' || rarity === 'rare';
   const iconMap = {
     weapon: Swords, car: Car, armour: Shield,
     property: Building2, cash: Coins,
     points: Zap, rank_points: Zap, perk: Zap,
-    bullets: Package, cars: Car, token: Gift,
+    bullets: Package, cars: Car, token: Gift, loot_pieces: Puzzle,
   };
   const Icon = iconMap[type] || Gift;
+  const wrap =
+    isExclusive
+      ? 'bg-primary/30 border-primary'
+      : isBoxTier && rarity === 'rare'
+        ? 'bg-blue-500/15 border-blue-400/35'
+        : 'bg-primary/10 border-primary/30';
   return (
-    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border ${isExclusive ? 'bg-primary/30 border-primary' : 'bg-primary/10 border-primary/30'}`}>
-      <Icon size={16} className={isExclusive ? 'text-primary' : 'text-primary/90'} />
+    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 border ${wrap}`}>
+      <Icon size={16} className={isExclusive ? 'text-primary' : isBoxTier && rarity === 'rare' ? 'text-blue-200' : 'text-primary/90'} />
     </div>
   );
 }
@@ -204,10 +209,117 @@ function rewardLabel(reward) {
       if (reward.items?.length) return reward.items.map((it) => `${it.name} (${it.rarity ?? 'common'})`).join(', ');
       return `${reward.count ?? 0} cars`;
     case 'bullets':   return `${reward.amount ?? 0} bullets`;
+    case 'loot_pieces': return `${reward.amount ?? 0} loot box piece${(reward.amount ?? 0) === 1 ? '' : 's'}`;
     case 'perk':      return reward.name || 'Perk';
     case 'token':     return `${reward.amount ?? 1} ${(reward.token_type || 'bonus').replace(/_/g, ' ')} token(s)`;
     default:          return JSON.stringify(reward);
   }
+}
+
+function formatCashRange(lo, hi) {
+  return `$${Number(lo).toLocaleString()}–$${Number(hi).toLocaleString()}`;
+}
+
+function formatNumRange(lo, hi) {
+  return `${Number(lo).toLocaleString()}–${Number(hi).toLocaleString()}`;
+}
+
+function LootRewardGuide({ rewardInfo, odds }) {
+  if (!rewardInfo?.tiers) return null;
+  const { pieces_per_open, standard_prize_types, standard_note, exclusives, exclusive_note, tiers } = rewardInfo;
+  const tierOrder = [
+    { key: 'common', title: 'Common box', color: 'text-zinc-400 border-zinc-600/40 bg-zinc-900/30' },
+    { key: 'uncommon', title: 'Uncommon box', color: 'text-green-400 border-green-600/35 bg-green-950/20' },
+    { key: 'rare', title: 'Rare box', color: 'text-blue-300 border-blue-500/35 bg-blue-950/25' },
+  ];
+  return (
+    <div className={`relative ${styles.panel} rounded-md overflow-hidden border border-primary/20 lb-fade-in mobile-panel`}>
+      <div className="h-px bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+      <div className="px-2 py-1 bg-primary/8 border-b border-primary/20">
+        <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">What you can win</span>
+      </div>
+      <div className="p-2 space-y-2">
+        <p className="text-[8px] text-mutedForeground font-heading leading-snug">
+          Opens cost <span className="text-primary font-bold">{pieces_per_open}</span> pieces. Amounts below are min–max per prize when that category rolls for your box tier.
+        </p>
+        {odds && (
+          <p className="text-[8px] text-mutedForeground font-heading leading-snug border border-primary/15 rounded px-1.5 py-1 bg-primary/5">
+            <span className="text-amber-200/90">~{Number(odds.exclusive_chance_pct).toFixed(1)}%</span> per prize for a loot exclusive (if still claimable).
+            {' '}Box tier:{' '}
+            <span className="text-zinc-400">Common {odds.common_box_pct}%</span>
+            {' · '}
+            <span className="text-green-400/90">Uncommon {odds.uncommon_box_pct}%</span>
+            {' · '}
+            <span className="text-blue-300/90">Rare {odds.rare_box_pct}%</span>
+          </p>
+        )}
+        <div>
+          <p className="text-[8px] font-heading font-bold text-primary uppercase tracking-wider mb-0.5">Standard prize types</p>
+          <p className="text-[7px] text-mutedForeground font-heading italic mb-1">{standard_note}</p>
+          <ul className="list-none p-0 m-0 flex flex-wrap gap-x-2 gap-y-0.5 text-[8px] font-heading text-foreground">
+            {(standard_prize_types || []).map((p) => (
+              <li key={p.id} className="text-primary/90">{p.label}</li>
+            ))}
+          </ul>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5">
+          {tierOrder.map(({ key, title, color }) => {
+            const t = tiers[key];
+            if (!t) return null;
+            const [pLo, pHi] = t.prize_count || [1, 1];
+            const tok = t.tokens || {};
+            const [taLo, taHi] = tok.amount || [1, 1];
+            const cars = t.cars || {};
+            const [cLo, cHi] = cars.count || [1, 1];
+            return (
+              <div key={key} className={`rounded border px-1.5 py-1.5 ${color}`}>
+                <div className="text-[9px] font-heading font-bold uppercase tracking-wider mb-1">{title}</div>
+                <div className="text-[7px] opacity-90 mb-1">{pLo}–{pHi} prizes</div>
+                <ul className="list-none p-0 m-0 space-y-0.5 text-[7px] font-heading leading-tight opacity-95">
+                  <li>Cash {formatCashRange(t.cash[0], t.cash[1])}</li>
+                  <li>Points {formatNumRange(t.points[0], t.points[1])}</li>
+                  <li>Rank pts {formatNumRange(t.rank_points[0], t.rank_points[1])}</li>
+                  <li>Bullets {formatNumRange(t.bullets[0], t.bullets[1])}</li>
+                  <li>Pieces {formatNumRange(t.loot_pieces[0], t.loot_pieces[1])}</li>
+                  <li>Tokens {taLo}–{taHi} (random type)</li>
+                  <li>Cars {cLo}–{cHi} · {(cars.rarities || []).join(', ')}</li>
+                </ul>
+                {t.perks?.length > 0 && (
+                  <p className="text-[7px] font-heading mt-1 pt-1 border-t border-white/10 leading-tight opacity-90">
+                    Perks: {t.perks.join('; ')}
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <details className="text-[8px] font-heading group">
+          <summary className="cursor-pointer text-primary/90 hover:text-primary list-none flex items-center gap-1">
+            <span className="group-open:rotate-90 transition-transform inline-block">▸</span>
+            Token pool (random on roll)
+          </summary>
+          <ul className="mt-1 max-h-24 overflow-y-auto list-disc pl-4 text-mutedForeground space-y-0.5 text-[7px]">
+            {(tiers.common?.tokens?.types || []).map((x) => (
+              <li key={x.id}>{x.label}</li>
+            ))}
+          </ul>
+        </details>
+        <details className="text-[8px] font-heading group">
+          <summary className="cursor-pointer text-primary/90 hover:text-primary list-none flex items-center gap-1">
+            <span className="group-open:rotate-90 transition-transform inline-block">▸</span>
+            Loot exclusives (global caps)
+          </summary>
+          <p className="text-[7px] text-mutedForeground italic mt-1 mb-1">{exclusive_note}</p>
+          <ul className="list-none p-0 m-0 space-y-0.5 text-[7px]">
+            {(exclusives || []).map((ex) => (
+              <li key={ex.id} className="text-amber-200/85">{ex.label}</li>
+            ))}
+          </ul>
+        </details>
+      </div>
+      <div className="lb-art-line text-primary mx-2.5" />
+    </div>
+  );
 }
 
 function RarityBadge({ rarity }) {
@@ -600,6 +712,7 @@ export default function LootBox() {
 
   const pieces = status?.loot_box_pieces ?? 0;
   const claimed = status?.claimed_counts ?? { weapon: 0, car: 0, armour: 0, property: 0 };
+  const exclusiveCaps = status?.exclusive_caps ?? { weapon: 1, car: 1, armour: 1, property: 1 };
   const canOpen = pieces >= 100 && phase === 'idle';
 
   if (!status) {
@@ -623,6 +736,8 @@ export default function LootBox() {
             <div className="relative lb-fade-in">
               <p className="text-[9px] text-zinc-500 font-heading italic">Earn pieces from <Link to="/account/missions" className="text-primary underline">the Consigliere's Ledger</Link>. One hundred pieces open a box. Exclusives are scarce.</p>
             </div>
+
+            <LootRewardGuide rewardInfo={status.reward_info} odds={status.loot_rarity_odds} />
 
             {/* Chest card */}
             <div className={`relative ${styles.panel} rounded-md border border-primary/20 lb-fade-in mobile-panel ${phase === 'exploding' ? 'overflow-visible' : 'overflow-hidden'} ${canOpen ? 'ring-1 ring-primary/30' : ''}`} style={{ animationDelay: '0.03s' }}>
@@ -665,15 +780,17 @@ export default function LootBox() {
                 <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em]">Exclusive Scarcity</span>
               </div>
               <div className="p-1.5">
-                <p className="text-[9px] text-mutedForeground font-heading italic text-center mb-1">Each exclusive may only be claimed by {CAP} made {CAP === 1 ? 'man' : 'men'} across the family.</p>
+                <p className="text-[9px] text-mutedForeground font-heading italic text-center mb-1">
+                  Each row is how many exist worldwide vs the cap for that reward (you can still only hold one of each yourself).
+                </p>
                 <p className="text-[9px] text-amber-200/90 font-heading italic text-center mb-1.5 leading-snug">
                   Loot exclusives are not guaranteed—each vault opening is chance-based, and exclusives still depend on availability and global caps.
                 </p>
                 <ul className="list-none p-0 m-0 flex flex-col gap-0.5">
-                  <ScarcityRow icon={Swords} label="Exclusive Weapon" claimed={claimed.weapon} cap={CAP} />
-                  <ScarcityRow icon={Car} label="Exclusive Vehicle" claimed={claimed.car} cap={CAP} />
-                  <ScarcityRow icon={Shield} label="Exclusive Armour" claimed={claimed.armour} cap={CAP} />
-                  <ScarcityRow icon={Building2} label="Speakeasy" claimed={claimed.property} cap={CAP} />
+                  <ScarcityRow icon={Swords} label="Exclusive Weapon" claimed={claimed.weapon} cap={exclusiveCaps.weapon} />
+                  <ScarcityRow icon={Car} label="Exclusive Vehicle" claimed={claimed.car} cap={exclusiveCaps.car} />
+                  <ScarcityRow icon={Shield} label="Exclusive Armour" claimed={claimed.armour} cap={exclusiveCaps.armour} />
+                  <ScarcityRow icon={Building2} label="Speakeasy" claimed={claimed.property} cap={exclusiveCaps.property} />
                 </ul>
               </div>
               <div className="lb-art-line text-primary mx-2.5" />
