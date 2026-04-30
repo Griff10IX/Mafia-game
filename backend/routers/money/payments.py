@@ -478,7 +478,7 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
         if result.modified_count == 0:
             return {"credited": False, "preorder": False}
 
-        rank_points = int((user or {}).get("rank_points") or 0)
+        season_rp = int((user or {}).get("rank_xp_pass_season_rp") or 0)
         expires_at = _add_months(now, 1).isoformat()
         # Match `/payments/buy-game-pass-with-points`: clear stale VIP snapshot fields so activation
         # is not blocked by a previous pass / admin state.
@@ -488,8 +488,8 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
                 "$set": {
                     "rank_xp_pass_tokens": 1,
                     "rank_xp_pass_token_expires_at": expires_at,
-                    # Store for the unactivated token; activation will copy into the active multiplier window.
-                    "rank_xp_pass_pending_tier_snapshot": rank_points,
+                    # Store for the unactivated token; activation uses max(snapshot, live season RP).
+                    "rank_xp_pass_pending_tier_snapshot": season_rp,
                     "rank_xp_pass_rewards_granted": False,
                     "rank_xp_pass_last_granted_micro_tier": 0,
                     "rank_xp_pass_tier_snapshot": None,
@@ -502,14 +502,13 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
 
         u2 = await db.users.find_one(
             {"id": user_id},
-            {"_id": 0, "rank_points": 1, "rank_xp_pass_free_last_micro_tier_granted": 1},
+            {"_id": 0, "rank_xp_pass_season_rp": 1, "rank_xp_pass_free_last_micro_tier_granted": 1},
         )
-        rp_for_activate = int((u2 or {}).get("rank_points") or 0) or rank_points
         free_cash_last_micro = int((u2 or {}).get("rank_xp_pass_free_last_micro_tier_granted") or 0)
         activated = await _activate_rank_xp_pass_and_grant_cumulative_micro_tiers(
             db,
             user_id,
-            rp_for_activate,
+            season_rp,
             free_cash_last_micro_tier_granted=free_cash_last_micro,
         )
         # If auto-activation succeeded, consume the token in DB (same intent as points purchase response).
@@ -541,7 +540,7 @@ async def _credit_payment_if_pending(db, session_id: str, user_id: str, package_
             "Rank-XP pass entitlement granted: session_id=%s user_id=%s tier_snapshot=%s expires_at=%s auto_activated=%s",
             session_id,
             user_id,
-            rank_points,
+            season_rp,
             expires_at,
             activated,
         )
@@ -987,7 +986,7 @@ def register(router):
             raise HTTPException(status_code=400, detail=f"Not enough points. Need {GAME_PASS_POINTS_PRICE:,} points.")
 
         # Atomic consume points + set entitlement token.
-        rank_points = int(current_user.get("rank_points") or 0)
+        season_rp = int(current_user.get("rank_xp_pass_season_rp") or 0)
         expires_at = _add_months(now, 1).isoformat()
         updated = await db.users.update_one(
             {"id": current_user["id"], "points": {"$gte": GAME_PASS_POINTS_PRICE}},
@@ -996,7 +995,7 @@ def register(router):
                 "$set": {
                     "rank_xp_pass_tokens": 1,
                     "rank_xp_pass_token_expires_at": expires_at,
-                    "rank_xp_pass_pending_tier_snapshot": rank_points,
+                    "rank_xp_pass_pending_tier_snapshot": season_rp,
                     "rank_xp_pass_rewards_granted": False,
                     "rank_xp_pass_last_granted_micro_tier": 0,
                     # Legacy field support (kept harmless for multiplier removal).
@@ -1014,14 +1013,13 @@ def register(router):
 
         u_pts = await db.users.find_one(
             {"id": current_user["id"]},
-            {"_id": 0, "rank_points": 1, "rank_xp_pass_free_last_micro_tier_granted": 1},
+            {"_id": 0, "rank_xp_pass_season_rp": 1, "rank_xp_pass_free_last_micro_tier_granted": 1},
         )
-        rp_pts = int((u_pts or {}).get("rank_points") or 0) or rank_points
         free_cash_last_micro = int((u_pts or {}).get("rank_xp_pass_free_last_micro_tier_granted") or 0)
         activated = await _activate_rank_xp_pass_and_grant_cumulative_micro_tiers(
             db,
             current_user["id"],
-            rp_pts,
+            season_rp,
             free_cash_last_micro_tier_granted=free_cash_last_micro,
         )
         if activated:

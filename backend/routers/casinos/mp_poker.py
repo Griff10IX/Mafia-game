@@ -287,8 +287,27 @@ def _hand_description(category: int, tie: Tuple) -> str:
     return base
 
 
+def _mp_poker_hole_only_label(hole: List[dict]) -> Optional[str]:
+    """Readable label when the board is not complete enough for a 5-card Hold'em hand (e.g. preflop win)."""
+    if len(hole) != 2:
+        return None
+    c0, c1 = hole[0] or {}, hole[1] or {}
+    v0, v1 = c0.get("value"), c1.get("value")
+    s0, s1 = c0.get("suit"), c1.get("suit")
+    if not v0 or not v1:
+        return None
+    r0, r1 = _card_rank(c0), _card_rank(c1)
+    if v0 == v1:
+        return f"Pocket {_rank_to_name(r0)}"
+    hi, lo = (c0, c1) if r0 >= r1 else (c1, c0)
+    hiv, lov = hi.get("value"), lo.get("value")
+    suited = bool(s0) and s0 == s1
+    tail = " suited" if suited else " offsuit"
+    return f"{hiv}-{lov}{tail}"
+
+
 def _mp_poker_evaluated_hand_label(p: dict, board: List[dict]) -> Optional[str]:
-    """Best 5-card description at showdown; None if folded, no hole cards, or fewer than 5 cards total."""
+    """Best 5-card description at showdown; None if folded or no hole cards."""
     if p.get("status") == "folded":
         return None
     hole = list(p.get("hole_cards") or [])
@@ -296,7 +315,7 @@ def _mp_poker_evaluated_hand_label(p: dict, board: List[dict]) -> Optional[str]:
     if len(hole) < 2:
         return None
     if len(hole) + len(bd) < 5:
-        return None
+        return _mp_poker_hole_only_label(hole)
     cat, tie = _best_hand_seven(hole, bd)
     return _hand_description(cat, tie)
 

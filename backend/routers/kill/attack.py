@@ -58,6 +58,7 @@ from server import (
     log_activity,
     founding_member_income_mult,
 )
+from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
 from utils.kill_search_duration import KILL_SEARCH_RANDOM_MAX_MINUTES, KILL_SEARCH_RANDOM_MIN_MINUTES
 from utils.release_soft_launch import PVP_KILLS_DISABLED_DETAIL, soft_launch_blocks_pvp_kill_on_target
 from utils.civilian_protection import (
@@ -1775,7 +1776,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 inc["money"] = int(inc.get("money", 0) * _npc_mult)
                 if inc:
                     rp_before = int(current_user.get("rank_points") or 0)
-                    await db.users.update_one({"id": killer_id}, {"$inc": inc})
+                    await db.users.update_one({"id": killer_id}, apply_season_rp_mirror_to_update({"$inc": inc}))
                     if inc.get("respect_points"):
                         await log_respect_earned(killer_id, inc["respect_points"], "attack")
                     if rp_added > 0:
@@ -1970,7 +1971,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
             kill_inc["total_kills"] = 1
         if target.get("is_bodyguard") and target.get("is_npc"):
             kill_inc["robot_bodyguard_kills"] = 1
-        await db.users.update_one({"id": killer_id}, {"$inc": kill_inc})
+        await db.users.update_one({"id": killer_id}, apply_season_rp_mirror_to_update({"$inc": kill_inc}))
         try:
             await maybe_process_rank_up(killer_id, killer_rp_before, rank_points, (killer_doc or {}).get("username", ""), killer_pm)
         except Exception as e:

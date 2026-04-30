@@ -29,6 +29,7 @@ from utils.missions_extended import build_missions, MISSION_RANDOM_TOKEN_TYPES
 from pymongo.errors import DuplicateKeyError
 import random
 
+from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_MISSIONS
 
 
@@ -844,7 +845,7 @@ async def complete_mission(
     )
     result = await db.users.update_one(
         {"id": user_id, "mission_completions.mission_id": {"$ne": mission_id}},
-        update,
+        apply_season_rp_mirror_to_update(update),
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=400, detail="Mission already completed")
@@ -1317,7 +1318,7 @@ async def admin_apply_mission_progress(
                 include_next_mission_baseline=False,
             )
             if update:
-                await db.users.update_one({"id": user_id}, update)
+                await db.users.update_one({"id": user_id}, apply_season_rp_mirror_to_update(update))
             await _run_mission_completion_side_effects(user_id, u, mid, meta)
 
     new_completions = [{"mission_id": m["id"], "completed_at": now_iso} for m in to_complete]

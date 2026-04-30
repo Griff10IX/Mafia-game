@@ -27,6 +27,7 @@ from server import (
     maybe_respect_points_drop,
     founding_member_income_mult,
 )
+from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
 
 # Equipment tiers for Organised Crime (reduced for beta)
 EQUIPMENT_TIERS = [
@@ -363,7 +364,7 @@ async def run_heist(
             oc_inc["respect_points"] = respect_drop
         await db.users.update_one(
             {"id": current_user["id"]},
-            {"$inc": oc_inc}
+            apply_season_rp_mirror_to_update({"$inc": oc_inc}),
         )
         if oc_inc.get("respect_points"):
             await log_respect_earned(current_user["id"], oc_inc["respect_points"], "oc")

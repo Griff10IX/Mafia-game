@@ -44,6 +44,7 @@ REWARD_KEY_ORDER = [
     "xp_gta_tokens",
     "points",
     "respect_points",
+    "loot_box_pieces",
     "melt_tokens",
     "jailbust_tokens",
     "travel_tokens",
@@ -63,6 +64,7 @@ REWARD_KEY_LABELS = {
     "travel_tokens": "Travel Token",
     "properties_tokens": "Properties Token",
     "auto_rank_2h_tokens": "Auto Rank (2h) Token",
+    "loot_box_pieces": "loot box pieces",
 }
 
 # Targets (your request)
@@ -132,13 +134,16 @@ def _initial_base_amount_for_total(*, tiers: range, base_tier: int, target_total
 #     cash ~50,000,000, points ~6,000, bullets ~250,000, random tokens ~250, auto-rank 2h tokens ~50.
 
 TARGET_RANDOM_TOKENS_TOTAL = 250
+TARGET_LOOT_PIECES_TOTAL = 500
+TARGET_XP_CRIMES_TOKENS_TOTAL = 150
+TARGET_XP_GTA_TOKENS_TOTAL = 150
 
 # Token keys that represent the "random token pool" in this implementation.
 _RANDOM_TOKEN_KEYS = ["melt_tokens", "jailbust_tokens", "travel_tokens", "properties_tokens"]
 
 # Deterministic seeds (string->int is stable across backend/frontend via fnv1a_32).
-_SEED_CATEGORY = "game_pass_micro_rewards:category:v2"
-_SEED_FREE = "game_pass_micro_rewards:free:v2"
+_SEED_CATEGORY = "game_pass_micro_rewards:category:v3"
+_SEED_FREE = "game_pass_micro_rewards:free:v3"
 
 TWO_BUCKET_CHANCE = 0.30
 
@@ -149,6 +154,7 @@ _SELECTABLE_KEYS = [
     "xp_crimes_tokens",
     "xp_gta_tokens",
     "points",
+    "loot_box_pieces",
     *_RANDOM_TOKEN_KEYS,
 ]
 
@@ -160,6 +166,7 @@ _CATEGORY_WEIGHTS = {
     "xp_crimes_tokens": 10,
     "xp_gta_tokens": 10,
     "points": 12,
+    "loot_box_pieces": 8,
     "melt_tokens": 2,
     "jailbust_tokens": 2,
     "travel_tokens": 2,
@@ -172,6 +179,7 @@ _BASE_TIER_BY_KEY = {
     "xp_crimes_tokens": 40,
     "xp_gta_tokens": 40,
     "points": _POINTS_BASE_TIER,
+    "loot_box_pieces": 55,
     "melt_tokens": 70,
     "jailbust_tokens": 80,
     "travel_tokens": 90,
@@ -180,10 +188,7 @@ _BASE_TIER_BY_KEY = {
 }
 
 # For keys not included in the target normalization, we keep a fixed baseAmount.
-_FIXED_BASE_AMOUNT_BY_KEY = {
-    "xp_crimes_tokens": 2,
-    "xp_gta_tokens": 2,
-}
+_FIXED_BASE_AMOUNT_BY_KEY: dict[str, float] = {}
 
 
 def _fnv1a_32(s: str) -> int:
@@ -244,6 +249,9 @@ _TARGET_TOTAL_BY_KEY = {
     "money": TARGET_CASH_TOTAL,
     "bullets": TARGET_BULLETS_TOTAL,
     "points": TARGET_POINTS_TOTAL,
+    "loot_box_pieces": TARGET_LOOT_PIECES_TOTAL,
+    "xp_crimes_tokens": TARGET_XP_CRIMES_TOKENS_TOTAL,
+    "xp_gta_tokens": TARGET_XP_GTA_TOKENS_TOTAL,
     **_target_random_by_key,
 }
 
@@ -367,21 +375,45 @@ def vip_game_pass_entitlement_active(user: dict, *, now_utc: Optional[datetime] 
     return bool(dt > now)
 
 
+def rank_points_for_game_pass_season(user: dict) -> int:
+    """Season-isolated RP that drives Game Pass micro tiers (mirrors positive rank XP gains)."""
+    try:
+        return max(0, int(user.get("rank_xp_pass_season_rp") or 0))
+    except Exception:
+        return 0
+
+
 def rank_points_for_vip_game_pass(user: dict) -> int:
-    """Rank points that count toward VIP Game Pass micro tiers (live RP + prestige carry)."""
-    try:
-        rp = int(user.get("rank_points") or 0)
-    except Exception:
-        rp = 0
-    try:
-        carry = int(user.get("rank_xp_pass_prestige_carry_rp") or 0)
-    except Exception:
-        carry = 0
-    return max(0, rp + carry)
+    """Deprecated name: pass tiers use season RP only (prestige carry no longer applies to pass bar)."""
+    return rank_points_for_game_pass_season(user)
+
+
+def micro_tier_for_game_pass_season(user: dict) -> int:
+    return micro_tier_from_rank_points(rank_points_for_game_pass_season(user))
 
 
 def micro_tier_for_vip_game_pass(user: dict) -> int:
-    return micro_tier_from_rank_points(rank_points_for_vip_game_pass(user))
+    return micro_tier_for_game_pass_season(user)
+
+
+_PERK_ROTATION = ("rp_10", "property_income_10", "jail_bust_10", "airport_cost")
+_GAME_PASS_PERK_BY_TIER: dict[int, list[str]] = {}
+for _t in range(1, MAX_MICRO_TIER + 1):
+    if _t > 0 and _t % 25 == 0:
+        _GAME_PASS_PERK_BY_TIER[_t] = [_PERK_ROTATION[(_t // 25 - 1) % len(_PERK_ROTATION)]]
+    else:
+        _GAME_PASS_PERK_BY_TIER[_t] = []
+
+
+def perks_for_micro_tier(micro_tier: int) -> list[str]:
+    """24h-style loot perks granted at select VIP tiers (deterministic)."""
+    try:
+        t = int(micro_tier or 0)
+    except Exception:
+        t = 0
+    if t < 1 or t > MAX_MICRO_TIER:
+        return []
+    return list(_GAME_PASS_PERK_BY_TIER.get(t, []))
 
 
 def micro_tier_min_rank_points(micro_tier: int) -> int:
@@ -498,6 +530,8 @@ def format_rewards_summary(rewards: Dict[str, int], *, include_zero: bool = Fals
             parts.append(f"${_format_amount(amt)} cash")
         elif k in ("bullets", "points", "respect_points"):
             # points/respect labels are already in REWARD_KEY_LABELS
+            parts.append(f"{_format_amount(amt)} {label}")
+        elif k == "loot_box_pieces":
             parts.append(f"{_format_amount(amt)} {label}")
         else:
             parts.append(f"{_format_amount(amt)}x {label}")

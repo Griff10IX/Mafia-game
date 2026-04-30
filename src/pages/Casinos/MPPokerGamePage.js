@@ -17,11 +17,12 @@ function tournamentReminderCooldownRemainingMs(sentAtIso, _rerenderTick = 0) {
   return Math.max(0, TOURNAMENT_REMINDER_COOLDOWN_MS - (Date.now() - t));
 }
 
+/** High-contrast on cream card faces; black suits use cool black + light halo in render */
 const SUITS = {
-  H: { sym: '♥', color: '#dc2626' },
-  D: { sym: '♦', color: '#dc2626' },
-  C: { sym: '♣', color: '#1a1a2e' },
-  S: { sym: '♠', color: '#1a1a2e' },
+  H: { sym: '♥', color: '#b91c1c' },
+  D: { sym: '♦', color: '#b91c1c' },
+  C: { sym: '♣', color: '#0f172a' },
+  S: { sym: '♠', color: '#0f172a' },
 };
 
 const STREET_LABELS = { preflop: 'Pre-Flop', flop: 'Flop', turn: 'Turn', river: 'River', showdown: 'Showdown' };
@@ -98,53 +99,127 @@ function WinParticles({ active }) {
   );
 }
 
+/** Monospace ranks read more clearly (e.g. 4 vs A) at small sizes than proportional sans. */
+const POKER_RANK_FONT =
+  'ui-monospace, SFMono-Regular, "Cascadia Mono", "Segoe UI Mono", Menlo, Monaco, Consolas, "Liberation Mono", monospace';
+
+function pokerRankLetterSpacing(value) {
+  const v = String(value ?? '');
+  if (v === '10') return '-0.03em';
+  if (v === 'A') return '0.12em';
+  if (/^[2-9]$/.test(v)) return '0.06em';
+  return '0.04em';
+}
+
+function pokerCardAccessibleTitle(card) {
+  if (!card?.value || !card?.suit) return undefined;
+  const names = { H: 'Hearts', D: 'Diamonds', C: 'Clubs', S: 'Spades' };
+  const rank = card.value === 'A' ? 'Ace' : card.value === 'K' ? 'King' : card.value === 'Q' ? 'Queen' : card.value === 'J' ? 'Jack' : card.value;
+  return `${rank} of ${names[card.suit] || card.suit}`;
+}
+
 /* ─── Playing Card ─── */
 function Card({ card, hidden, index = 0, total = 1, small = false, medium = false }) {
   const w = small
-    ? 'w-[28px] h-[40px]'
+    ? 'w-[36px] h-[52px] sm:w-[38px] sm:h-[54px]'
     : medium
-    ? 'w-[38px] h-[54px]'
-    : 'w-[48px] h-[68px] sm:w-[54px] sm:h-[76px]';
+    ? 'w-[44px] h-[62px] sm:w-[48px] sm:h-[68px]'
+    : 'w-[54px] h-[76px] sm:w-[60px] sm:h-[84px]';
   const fan = total > 1 ? (index - (total - 1) / 2) * 4 : 0;
   const offsetX = total > 1 ? (index - (total - 1) / 2) * 3 : 0;
   const style = {
     transform: `rotate(${fan}deg) translateX(${offsetX}px)`,
     animationDelay: `${index * 0.08}s`,
-    boxShadow: '0 4px 14px rgba(0,0,0,0.5), 0 1px 0 rgba(255,255,255,0.06) inset',
+    boxShadow: '0 4px 16px rgba(0,0,0,0.55), 0 1px 0 rgba(255,255,255,0.12) inset',
     flexShrink: 0,
   };
-  const textSz = small ? 'text-[8px]' : medium ? 'text-[10px]' : 'text-[11px]';
-  const symSz = small ? 'text-[7px]' : medium ? 'text-[9px]' : 'text-[10px]';
-  const iconSz = small ? 'text-sm' : medium ? 'text-lg' : 'text-2xl';
+  const textSz = small ? 'text-[11px] sm:text-[12px]' : medium ? 'text-[12px] sm:text-[13px]' : 'text-[14px] sm:text-[16px]';
+  const symSz = small ? 'text-[9px] sm:text-[10px]' : medium ? 'text-[10px] sm:text-[11px]' : 'text-[12px] sm:text-[13px]';
+  const iconSz = small ? 'text-[17px] sm:text-[19px]' : medium ? 'text-[22px] sm:text-2xl' : 'text-[28px] sm:text-3xl';
 
   if (hidden) {
     return (
-      <div className={`relative ${w} rounded-md overflow-hidden animate-pkr-deal`} style={style}>
-        <div className="absolute inset-0 rounded-md" style={{ background: 'linear-gradient(145deg,#1e3d6e 0%,#0c1f45 50%,#152a5c 100%)', border: '2px solid rgba(212,175,55,0.35)' }}>
-          <div className="absolute inset-1 rounded" style={{ backgroundImage: 'repeating-linear-gradient(45deg,transparent,transparent 3px,rgba(255,255,255,0.04) 3px,rgba(255,255,255,0.04) 6px)' }}>
-            <div className="absolute inset-1.5 rounded border border-yellow-500/30 flex items-center justify-center shadow-[inset_0_0_12px_rgba(0,0,0,0.35)]">
-              <span className="text-yellow-500/40 text-sm drop-shadow-[0_0_6px_rgba(212,175,55,0.35)]">♠</span>
+      <div className={`relative ${w} rounded-[6px] overflow-hidden animate-pkr-deal`} style={style}>
+        <div
+          className="absolute inset-0 rounded-[6px]"
+          style={{
+            background: 'linear-gradient(145deg,#1a4a8c 0%,#0c2248 48%,#132f5c 100%)',
+            border: '2px solid rgba(234,179,8,0.55)',
+            boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.12), inset 0 -2px 8px rgba(0,0,0,0.35)',
+          }}
+        >
+          <div
+            className="absolute inset-[3px] rounded-[4px]"
+            style={{
+              backgroundImage:
+                'repeating-linear-gradient(45deg,transparent,transparent 4px,rgba(255,255,255,0.07) 4px,rgba(255,255,255,0.07) 8px)',
+            }}
+          >
+            <div
+              className="absolute inset-[3px] rounded-[3px] border flex items-center justify-center"
+              style={{ borderColor: 'rgba(234,179,8,0.45)', boxShadow: 'inset 0 0 14px rgba(0,0,0,0.4)' }}
+            >
+              <span
+                className={`${small ? 'text-[14px] sm:text-base' : medium ? 'text-lg' : 'text-xl'} font-black`}
+                style={{ color: 'rgba(250,204,21,0.75)', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.85))' }}
+              >
+                ♠
+              </span>
             </div>
           </div>
         </div>
       </div>
     );
   }
-  const s = SUITS[card?.suit] || { sym: '?', color: '#888' };
+  const s = SUITS[card?.suit] || { sym: '?', color: '#475569' };
   const isRed = card?.suit === 'H' || card?.suit === 'D';
+  const inkShadow = isRed
+    ? '0 0.5px 0 #fff, 0 1px 2px rgba(255,255,255,0.9)'
+    : '0 0 0 0.75px #fff, 0 0.5px 0 #fff, 0 1px 3px rgba(255,255,255,0.95)';
+  const faceBorder = isRed ? 'rgba(185,28,28,0.85)' : 'rgba(15,23,42,0.55)';
+  const rankStyle = {
+    color: s.color,
+    textShadow: inkShadow,
+    fontFamily: POKER_RANK_FONT,
+    letterSpacing: pokerRankLetterSpacing(card?.value),
+    fontVariantNumeric: 'lining-nums',
+    textRendering: 'geometricPrecision',
+    WebkitFontSmoothing: 'subpixel-antialiased',
+  };
   return (
-    <div className={`relative ${w} rounded-md overflow-hidden animate-pkr-deal`} style={style}>
-      <div className="absolute inset-0 rounded-md" style={{ background: 'linear-gradient(165deg,#ffffff 0%,#f0f0f2 45%,#e8e8ec 100%)', border: `2px solid ${isRed ? '#e85d5d' : '#b8b8c0'}`, boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.85), inset 0 -2px 6px rgba(0,0,0,0.06)' }}>
-        <div className="absolute top-0.5 left-1 leading-none" style={{ color: s.color }}>
-          <div className={`${textSz} font-black`}>{card?.value}</div>
-          <div className={`${symSz} -mt-0.5`}>{s.sym}</div>
+    <div
+      className={`relative ${w} rounded-[6px] overflow-hidden animate-pkr-deal`}
+      style={style}
+      title={pokerCardAccessibleTitle(card)}
+    >
+      <div
+        className="absolute inset-0 rounded-[6px]"
+        style={{
+          background: 'linear-gradient(165deg,#ffffff 0%,#f4f4f7 38%,#e6e8ef 100%)',
+          border: `2px solid ${faceBorder}`,
+          boxShadow:
+            'inset 0 1px 0 rgba(255,255,255,0.95), inset 0 -3px 10px rgba(15,23,42,0.06), 0 0 0 1px rgba(255,255,255,0.35)',
+        }}
+      >
+        <div className="absolute top-1 left-1 leading-[0.95] text-left font-black tabular-nums antialiased" style={rankStyle}>
+          <div className={textSz}>{card?.value}</div>
+          <div className={`${symSz} mt-px block`}>{s.sym}</div>
         </div>
-        <div className="absolute inset-0 flex items-center justify-center" style={{ color: s.color }}>
-          <span className={`${iconSz} opacity-85`}>{s.sym}</span>
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden>
+          <span
+            className={`${iconSz} font-black leading-none antialiased`}
+            style={{
+              color: s.color,
+              textShadow: inkShadow,
+              filter: isRed ? 'none' : 'drop-shadow(0 0 1px rgba(255,255,255,0.9))',
+            }}
+          >
+            {s.sym}
+          </span>
         </div>
-        <div className="absolute bottom-0.5 right-1 leading-none rotate-180" style={{ color: s.color }}>
-          <div className={`${textSz} font-black`}>{card?.value}</div>
-          <div className={`${symSz} -mt-0.5`}>{s.sym}</div>
+        <div className="absolute bottom-1 right-1 leading-[0.95] text-left font-black tabular-nums rotate-180 antialiased" style={rankStyle}>
+          <div className={textSz}>{card?.value}</div>
+          <div className={`${symSz} mt-px block`}>{s.sym}</div>
         </div>
       </div>
     </div>
@@ -206,7 +281,8 @@ function MpPokerHandOutcomePanel({
     if (names.length === 1) return names[0];
     return `${names.slice(0, -1).join(', ')} & ${names[names.length - 1]}`;
   })();
-  const winnerHand = primary.find((w) => w.hand)?.hand ?? primary[0]?.hand;
+  const winnerHand =
+    primary.length > 1 ? null : primary.map((w) => w.hand).find((h) => h && String(h).trim()) || null;
   const maxShare = primary.reduce((m, r) => Math.max(m, Number(r.payout) || 0), 0);
   const potLabel = Number(pot) > 0 ? Number(pot) : maxShare;
 
@@ -239,7 +315,7 @@ function MpPokerHandOutcomePanel({
       <div style={PKR_GOLD_BAR} />
 
       <div
-        className="p-5 text-center space-y-3"
+        className="p-3 sm:p-5 text-center space-y-2 sm:space-y-3"
         style={{
           background: didWinMainPot
             ? 'linear-gradient(180deg,rgba(212,175,55,0.12),rgba(0,0,0,0.6))'
@@ -257,7 +333,7 @@ function MpPokerHandOutcomePanel({
 
         <div>
           <p
-            className="text-2xl font-heading font-black uppercase tracking-wider"
+            className="text-lg sm:text-2xl font-heading font-black uppercase tracking-wider leading-tight px-1"
             style={
               didWinMainPot
                 ? {
@@ -325,10 +401,10 @@ function MpPokerHandOutcomePanel({
 
         {showdownRows.length > 0 && (
           <div className="pt-2 border-t border-white/5 space-y-2">
-            <p className="text-[8px] font-heading uppercase tracking-wider text-white/35 text-center">
+            <p className="text-[7px] sm:text-[8px] font-heading uppercase tracking-wider text-white/35 text-center px-1">
               Everyone at showdown — cards and hand
             </p>
-            <div className="flex flex-col gap-2 max-h-[min(52vh,340px)] overflow-y-auto pr-0.5">
+            <div className="flex flex-col gap-2 max-h-[min(48vh,280px)] sm:max-h-[min(52vh,340px)] overflow-y-auto pr-0.5 touch-pan-y">
               {showdownRows.map(({ uid, r, pl }) => {
                 const payout = Number(r.payout) || 0;
                 const pWon = payout > 0;
@@ -339,7 +415,7 @@ function MpPokerHandOutcomePanel({
                 return (
                   <div
                     key={uid}
-                    className="flex flex-wrap items-center gap-2 rounded-lg px-2 py-1.5"
+                    className="flex flex-wrap items-center gap-2 rounded-lg px-2 py-2 sm:py-1.5 min-h-[44px] sm:min-h-0"
                     style={{
                       background: isPrimary ? 'rgba(212,175,55,0.08)' : 'rgba(255,255,255,0.03)',
                       border: `1px solid ${isPrimary ? 'rgba(212,175,55,0.28)' : 'rgba(255,255,255,0.06)'}`,
@@ -379,17 +455,20 @@ function MpPokerHandOutcomePanel({
         )}
       </div>
 
-      <div className="px-4 py-3 border-t border-primary/20 flex items-center justify-between" style={{ background: 'rgba(0,0,0,0.4)' }}>
+      <div
+        className="px-3 sm:px-4 py-3 border-t border-primary/20 flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3"
+        style={{ background: 'rgba(0,0,0,0.4)' }}
+      >
         {tournamentFooter ? (
-          <p className="text-[9px] font-heading text-mutedForeground italic">Next hand is live below — good luck.</p>
+          <p className="text-[9px] font-heading text-mutedForeground italic text-center sm:text-left">Next hand is live below — good luck.</p>
         ) : (
           <>
-            <p className="text-[9px] font-heading text-mutedForeground italic">
+            <p className="text-[9px] font-heading text-mutedForeground italic text-center sm:text-left flex-1 min-w-0">
               {didWinMainPot ? 'The pot is yours, Don.' : didWinAnyShare ? 'Side pot shipped — nice pick-up.' : 'Better luck next hand.'}
             </p>
             <Link
               to="/casino/mp-poker"
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg border-2 text-[9px] font-heading font-bold uppercase tracking-wider active:scale-[0.97] transition-all"
+              className="inline-flex shrink-0 items-center justify-center gap-1.5 px-4 py-2.5 sm:py-2 rounded-lg border-2 text-[9px] font-heading font-bold uppercase tracking-wider active:scale-[0.97] transition-all w-full sm:w-auto min-h-[44px] sm:min-h-0"
               style={{
                 background: 'linear-gradient(180deg,var(--noir-primary),#a08020)',
                 borderColor: 'var(--noir-primary-bright)',
@@ -466,6 +545,30 @@ function MpPokerTournamentHandToast({ snapshot, myUserId, visible, compact }) {
       >
         {winnerLabel}
       </p>
+      {primary.length > 1 ? (
+        <div className={`mt-0.5 space-y-0.5 ${compact ? 'px-0.5' : 'px-1'}`}>
+          {primary.map((w) =>
+            w.hand ? (
+              <p
+                key={w.user_id}
+                className={`text-center font-heading font-bold leading-snug text-white/70 ${compact ? 'text-[6px]' : 'text-[7px]'}`}
+              >
+                <span className="text-white/35 uppercase tracking-wider mr-0.5">Hand</span>
+                {w.user_id === myUserId ? 'You' : players.find((p) => p.user_id === w.user_id)?.username ?? 'Winner'}: {w.hand}
+              </p>
+            ) : null
+          )}
+        </div>
+      ) : (
+        primary[0]?.hand && (
+          <p
+            className={`text-center font-heading font-bold mt-0.5 px-1 leading-snug text-white/70 ${compact ? 'text-[6px]' : 'text-[8px]'}`}
+          >
+            <span className="text-white/35 uppercase tracking-wider mr-0.5">Hand</span>
+            {primary[0].hand}
+          </p>
+        )
+      )}
       {brd.length > 0 && (
         <div className="flex justify-center gap-0.5 mt-0.5 flex-wrap">
           {brd.map((c, i) => (
@@ -624,9 +727,9 @@ function PlayerSeat({ p, isMe, isCurrent, showHole, isDealer, seatPos, totalSeat
   return (
     <div className={`flex flex-col items-center ${compact ? 'gap-0.5' : 'gap-1'}`} style={{ opacity: folded ? 0.45 : 1, transition: 'opacity 0.3s' }}>
       {/* Cards above/beside seat */}
-      <div className="flex items-center gap-0.5 mb-0.5" style={{ minHeight: compact ? 44 : 56 }}>
+      <div className="flex items-center gap-0.5 mb-0.5" style={{ minHeight: compact ? 52 : 68 }}>
         {hole.length === 0
-          ? <div className={`rounded border border-white/5 ${compact ? 'w-[28px] h-[40px]' : 'w-[38px] h-[54px]'}`} style={{ background: 'rgba(0,0,0,0.2)' }} />
+          ? <div className={`rounded-[6px] border border-white/10 ${compact ? 'w-[36px] h-[52px] sm:w-[38px] sm:h-[54px]' : 'w-[44px] h-[62px] sm:w-[48px] sm:h-[68px]'}`} style={{ background: 'rgba(0,0,0,0.28)' }} />
           : hole.map((c, i) => (
               <Card key={i} card={c} hidden={!showHole} index={i} total={hole.length} small={compact || !cardMedium} medium={cardMedium} />
             ))
@@ -1583,7 +1686,7 @@ export default function MPPokerGamePage() {
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ zIndex: 5 }}>
               <div className={`flex flex-col items-center ${compactUi ? 'gap-1' : 'gap-1.5'} max-w-[min(100%,280px)] sm:max-w-none px-1`}>
                 {board.length > 0 && (
-                  <div className="flex items-center gap-0.5 sm:gap-1 flex-wrap justify-center scale-[0.92] sm:scale-100 origin-center">
+                  <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap justify-center scale-[0.96] sm:scale-100 origin-center">
                     {board.map((c, i) => (
                       <Card
                         key={i}

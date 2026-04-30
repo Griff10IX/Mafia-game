@@ -30,6 +30,8 @@ from utils.speakeasy_rewards import (
     SPEAKEASY_DAILY_CASH,
     SPEAKEASY_COOLDOWN_HOURS,
 )
+from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
+from utils.loot_perk_stack import stacked_perk_until as _stacked_perk_until, GTA_RARE_DROP_PERK_ATTEMPTS
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +44,6 @@ ARMOUR_LEVEL_6_NAME = "Steel Plate Bulletproof Vest (1922)"
 
 GAME_SETTINGS_LOOT_COUNTS_KEY = "loot_exclusive_counts"
 GAME_SETTINGS_LOOT_RARITY_KEY = "loot_box_rarity"
-PERK_DURATION_HOURS = 24
 
 # Default rarity config (admin can override via game_settings)
 DEFAULT_RARITY_CONFIG = {
@@ -51,8 +52,6 @@ DEFAULT_RARITY_CONFIG = {
     "uncommon_pct": 32,
     "rare_pct": 13,
 }
-GTA_RARE_DROP_PERK_ATTEMPTS = 100
-
 # Box quality: how many prizes (1-2, 1-3, or 1-5). Weights: common 55%, uncommon 32%, rare 13%
 BOX_QUALITY_ROLL = [
     ("common", 0.55, (1, 2)),
@@ -86,22 +85,6 @@ PERK_LABELS = {
     "airport_cost": "Reduced airport cost for 24h",
     "gta_rare_100": "Increased GTA rare drop for 100 attempts",
 }
-
-
-def _stacked_perk_until(merged_set: Dict[str, Any], user: dict, field_name: str, now: datetime) -> str:
-    """Return new expiry ISO for a time-based perk, stacking on existing if still active."""
-    base_iso = merged_set.get(field_name) or user.get(field_name)
-    if not base_iso:
-        return (now + timedelta(hours=PERK_DURATION_HOURS)).isoformat()
-    try:
-        until = datetime.fromisoformat(base_iso.replace("Z", "+00:00"))
-        if until.tzinfo is None:
-            until = until.replace(tzinfo=timezone.utc)
-        if until > now:
-            return (until + timedelta(hours=PERK_DURATION_HOURS)).isoformat()
-    except Exception:
-        pass
-    return (now + timedelta(hours=PERK_DURATION_HOURS)).isoformat()
 
 
 async def _get_claimed_counts():
@@ -570,7 +553,7 @@ async def open_loot_box(
                 update["$inc"] = merged_inc
             if merged_set:
                 update["$set"] = merged_set
-            await db.users.update_one({"id": user_id}, update)
+            await db.users.update_one({"id": user_id}, apply_season_rp_mirror_to_update(update))
             if merged_inc.get("points", 0) > 0:
                 await log_points_event(db, user_id=user_id, points=merged_inc["points"], event_type="loot_box", meta={"box_quality": box_quality, "prizes_count": len(rewards)})
 

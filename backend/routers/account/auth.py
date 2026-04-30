@@ -23,6 +23,7 @@ from utils.referral_ids import normalize_referred_by_ids, user_has_referrers
 from utils.login_turnstile_gate import login_turnstile_effective_config, require_turnstile_for_login
 from middleware.security import is_proxy_or_vpn, get_ip_info
 from utils.geo_country import country_code_from_request_headers
+from utils.game_pass_season import get_game_pass_season_public
 
 
 class UserRegister(BaseModel):
@@ -721,6 +722,8 @@ def register(router):
                 "rank_xp_pass_tier_snapshot": None,
                 "rank_xp_pass_pending_tier_snapshot": None,
                 "rank_xp_pass_last_granted_micro_tier": 0,
+                "game_pass_season_id": None,
+                "rank_xp_pass_season_rp": 0,
                 "rank_xp_pass_rewards_granted": False,
                 "auto_rank_purchased": False,
                 "auto_rank_enabled": False,
@@ -1758,7 +1761,7 @@ def register(router):
                     mq["created_at"] = {"$gt": cleared}
                 return await db.witness_statement_listings.count_documents(mq)
 
-            admin_color_doc, weapon_doc, fam, bodyguard_count, witness_nav_green_n = await asyncio.gather(
+            admin_color_doc, weapon_doc, fam, bodyguard_count, witness_nav_green_n, gp_season_pub = await asyncio.gather(
                 db.game_settings.find_one({"key": "admin_online_color"}, {"_id": 0, "value": 1}),
                 db.weapons.find_one({"id": equipped_weapon_id}, {"_id": 0, "name": 1}) if equipped_weapon_id else _noop(),
                 db.families.find_one({"id": family_id}, {"_id": 0, "name": 1}) if family_id else _noop(),
@@ -1770,7 +1773,9 @@ def register(router):
                     ],
                 }),
                 _witness_nav_green_count(),
+                get_game_pass_season_public(db),
             )
+            gp_current_sid = str((gp_season_pub or {}).get("game_pass_season_id") or "1")
             witness_nav_red = _safe_int(u.get("witness_nav_red"), 0)
             witness_nav_green = min(_safe_int(witness_nav_green_n, 0), 999)
             ref_users = []
@@ -1929,7 +1934,19 @@ def register(router):
                 rank_xp_pass_tokens=_safe_int(u.get("rank_xp_pass_tokens"), 0),
                 rank_xp_pass_token_expires_at=u.get("rank_xp_pass_token_expires_at"),
                 rank_xp_pass_tier_snapshot=_safe_int(u.get("rank_xp_pass_tier_snapshot"), 0) if u.get("rank_xp_pass_tier_snapshot") is not None else None,
+                rank_xp_pass_pending_tier_snapshot=(
+                    _safe_int(u.get("rank_xp_pass_pending_tier_snapshot"), 0)
+                    if u.get("rank_xp_pass_pending_tier_snapshot") is not None
+                    else None
+                ),
                 rank_xp_pass_last_granted_micro_tier=_safe_int(u.get("rank_xp_pass_last_granted_micro_tier"), 0),
+                game_pass_season_id=(
+                    None
+                    if u.get("game_pass_season_id") is None or str(u.get("game_pass_season_id")).strip() == ""
+                    else str(u.get("game_pass_season_id")).strip()
+                ),
+                rank_xp_pass_season_rp=_safe_int(u.get("rank_xp_pass_season_rp"), 0),
+                game_pass_current_season_id=gp_current_sid,
                 rank_xp_pass_prestige_carry_rp=_safe_int(u.get("rank_xp_pass_prestige_carry_rp"), 0),
                 rank_xp_pass_rewards_granted=bool(u.get("rank_xp_pass_rewards_granted", False)),
                 shooting_range_bonus_plays=_safe_int(u.get("shooting_range_bonus_plays"), 0),

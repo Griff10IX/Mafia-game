@@ -53,6 +53,7 @@ from server import (
     STATES,
 )
 from routers.account.objectives import update_objectives_progress
+from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
 from utils.point_provenance import log_points_event
 from utils.sustained_page_ratelimit import check_jail_sustained_page_rl
 from utils.entertainer_service import ENTERTAINER_ONLINE_COLOR_DEFAULT
@@ -654,7 +655,7 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
             updates = {"$inc": {"rank_points": rank_points, "jail_busts": 1, "jail_busts_npc": 1, "jail_bust_attempts": 1}, "$set": {"current_consecutive_busts": new_consec, "consecutive_busts_record": record}}
             if bust_reward_cash > 0:
                 updates["$inc"]["money"] = bust_reward_cash
-            await db.users.update_one({"id": current_user["id"]}, updates)
+            await db.users.update_one({"id": current_user["id"]}, apply_season_rp_mirror_to_update(updates))
             try:
                 await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""), user_prestige_rank_mult(current_user))
             except Exception as e:
@@ -778,7 +779,9 @@ async def _attempt_bust_impl(current_user: dict, target_username: str) -> dict:
         rp_before = _rank_points_before_bust(current_user)
         await db.users.update_one(
             {"id": current_user["id"]},
-            {"$inc": {"rank_points": rank_points, "jail_busts": 1, "jail_bust_attempts": 1}, "$set": {"current_consecutive_busts": new_consec, "consecutive_busts_record": record}},
+            apply_season_rp_mirror_to_update(
+                {"$inc": {"rank_points": rank_points, "jail_busts": 1, "jail_bust_attempts": 1}, "$set": {"current_consecutive_busts": new_consec, "consecutive_busts_record": record}},
+            ),
         )
         try:
             await maybe_process_rank_up(current_user["id"], rp_before, rank_points, current_user.get("username", ""), user_prestige_rank_mult(current_user))

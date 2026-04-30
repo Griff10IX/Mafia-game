@@ -26,6 +26,7 @@ from pydantic import BaseModel
 from pymongo import UpdateOne
 
 from server import db, get_current_user_verified, get_current_user, maybe_process_rank_up, user_prestige_rank_mult, send_notification, log_gambling, _is_admin, _get_staff_user_ids, log_respect_delta
+from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
 from utils.minigame_captcha_gate import require_turnstile_for_minigame_start
 import pathlib as _pathlib
 
@@ -3043,7 +3044,7 @@ async def complete_race(race_id: str, body: CompleteRaceRequest, current_user: d
             crew_credit = int(cash) + sponsor_income
             if not is_dnf:
                 if rp:
-                    await db.users.update_one({"id": uid}, {"$inc": {"rank_points": rp}})
+                    await db.users.update_one({"id": uid}, apply_season_rp_mirror_to_update({"$inc": {"rank_points": rp}}))
                 await db.racing_profiles.update_one(
                     {"user_id": uid},
                     {"$inc": {"racing_rep": rep, "races_completed": 1, "wins": 1 if position == 1 else 0, "crew_bank": crew_credit}},

@@ -2954,6 +2954,7 @@ def register(router):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         from server import send_notification
+        from routers.kill.armoury import _try_grant_rank_xp_pass_micro_tier
         from utils.game_pass_first_vip_completion import (
             FIRST_GAME_PASS_CONFIRM_PHRASE,
             aggregate_vip_increment_after_cursor,
@@ -3014,41 +3015,46 @@ def register(router):
                     )
                 continue
 
-            update_doc: Dict[str, Any] = {
-                "$set": {
-                    "rank_xp_pass_last_granted_micro_tier": MAX_MICRO_TIER,
-                    "rank_xp_pass_rewards_granted": True,
-                },
-            }
-            if inc:
-                update_doc["$inc"] = inc
-            res = await db.users.update_one(
-                {
-                    "id": uid,
-                    "rank_xp_pass_rewards_granted": True,
-                    "rank_xp_pass_last_granted_micro_tier": {"$lt": MAX_MICRO_TIER},
-                },
-                update_doc,
+            points_delta = 0
+            notify_totals: Dict[str, int] = {}
+            for t in range(last + 1, MAX_MICRO_TIER + 1):
+                applied = await _try_grant_rank_xp_pass_micro_tier(
+                    db,
+                    user_id=uid,
+                    micro_tier=t,
+                    free_cash_last_micro_tier_granted=free_last,
+                )
+                if not applied:
+                    break
+                points_delta += int(applied.get("points") or 0)
+                for k, v in applied.items():
+                    iv = int(v or 0)
+                    if iv > 0:
+                        notify_totals[k] = notify_totals.get(k, 0) + iv
+
+            u_done = await db.users.find_one(
+                {"id": uid},
+                {"_id": 0, "rank_xp_pass_last_granted_micro_tier": 1},
             )
-            if res.modified_count == 0:
+            if int((u_done or {}).get("rank_xp_pass_last_granted_micro_tier") or 0) < MAX_MICRO_TIER:
                 skipped_no_op += 1
                 continue
+
             live_updated += 1
-            pts_delta = int(inc.get("points") or 0)
-            if pts_delta != 0:
+            if points_delta != 0:
                 before_pts = int(row.get("points") or 0)
-                after_pts = before_pts + pts_delta
+                after_pts = before_pts + points_delta
                 await log_points_event(
                     db,
                     user_id=uid,
-                    points=pts_delta,
+                    points=points_delta,
                     event_type="first_game_pass_vip_completion",
                     event_ref=run_id,
                     meta={"admin": admin_un, "run_id": run_id},
                     wallet_points_before=before_pts,
                     wallet_points_after=after_pts,
                 )
-            summary = format_rewards_summary(inc).strip() if inc else ""
+            summary = format_rewards_summary(notify_totals).strip() if notify_totals else ""
             body = (
                 f"One-time first-season bonus: all remaining VIP Game Pass tier rewards through tier {MAX_MICRO_TIER} have been credited."
                 + (f" {summary}" if summary else "")
@@ -13337,6 +13343,7 @@ def register(router):
 
     class GamePassSeasonSettingsRequest(BaseModel):
         season_end_at: str
+        season_id: Optional[str] = None
 
     @router.get("/admin/release-soft-launch")
     async def admin_get_release_soft_launch(current_user: dict = Depends(get_current_user)):
@@ -13398,8 +13405,15 @@ def register(router):
         if not _is_admin(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         season_end_at = normalize_game_pass_season_end_at(req.season_end_at)
+        prev_doc = await db.game_settings.find_one({"key": GAME_PASS_SEASON_SETTINGS_KEY}, {"_id": 0, "value": 1})
+        prev_raw = (prev_doc or {}).get("value")
+        prev_val = prev_raw if isinstance(prev_raw, dict) else {}
+        prev_sid = str(prev_val.get("season_id") or "").strip() or None
+        new_sid = (req.season_id or "").strip() if req.season_id is not None else None
+        season_id_out = new_sid if new_sid else (prev_sid or "1")
         value = {
             "season_end_at": season_end_at,
+            "season_id": season_id_out,
             "set_by": current_user.get("username", "?"),
             "set_at": datetime.now(timezone.utc).isoformat(),
         }

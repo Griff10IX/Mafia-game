@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict
 from typing import Optional
 
 from server import db, get_current_user, log_activity, log_minigame_payout, log_respect_earned, _get_staff_user_ids, _is_admin
+from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
 from utils.minigame_security import skip_minigame_session
 from routers.minigames.minigame_leaderboard import log_minigame_play
 from utils.minigame_run_session import (
@@ -56,7 +57,7 @@ async def _apply_rewards(user_id: str, score: int) -> dict[str, int]:
     applied = dict(inc)
 
     if inc:
-        await db.users.update_one({"id": user_id}, {"$inc": inc})
+        await db.users.update_one({"id": user_id}, apply_season_rp_mirror_to_update({"$inc": inc}))
         if inc.get("respect_points"):
             await log_respect_earned(user_id, inc["respect_points"], "snake")
 

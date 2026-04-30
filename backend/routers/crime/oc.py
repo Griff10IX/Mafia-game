@@ -42,6 +42,7 @@ _backend = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _backend not in sys.path:
     sys.path.insert(0, _backend)
 from server import db, get_current_user, get_effective_event, log_activity, maybe_process_rank_up, send_notification, user_prestige_rank_mult
+from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
 from utils.point_provenance import log_points_event
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_OC
 
@@ -661,7 +662,7 @@ async def _execute_oc_heist_core(uid: str, job: dict, resolved: list, pcts: list
         rp_before = int((user_map.get(user_id) or {}).get("rank_points") or 0)
         await db.users.update_one(
             {"id": user_id},
-            {"$inc": {"money": cash_add, "rank_points": rp_add, "total_oc_heists": 1}},
+            apply_season_rp_mirror_to_update({"$inc": {"money": cash_add, "rank_points": rp_add, "total_oc_heists": 1}}),
         )
         if rp_add > 0:
             try:

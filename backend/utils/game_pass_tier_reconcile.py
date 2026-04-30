@@ -16,7 +16,6 @@ from utils.game_pass_micro_rewards import (
     format_rewards_summary,
     micro_tier_for_vip_game_pass,
     rewards_for_micro_tier,
-    vip_rewards_after_free_dedupe,
 )
 
 
@@ -78,32 +77,17 @@ async def grant_missing_vip_micro_tier_rewards(
         }
 
     free_cash_last_micro = int(user.get("rank_xp_pass_free_last_micro_tier_granted") or 0)
-    now_iso = now.isoformat()
-    if ignore_token_expiry or vip_expires_dt is None:
-        expiry_filter: Dict[str, Any] = {}
-    else:
-        expiry_filter = {"rank_xp_pass_token_expires_at": {"$gt": now_iso}}
+
+    from routers.kill.armoury import _try_grant_rank_xp_pass_micro_tier
 
     for t in range(last_granted + 1, current_micro + 1):
-        rewards = vip_rewards_after_free_dedupe(t, free_cash_last_micro)
-        inc = {k: int(v) for k, v in rewards.items() if int(v or 0) > 0}
-
-        updated = await db.users.update_one(
-            {
-                "id": user_id,
-                "rank_xp_pass_rewards_granted": True,
-                **expiry_filter,
-                "$or": [
-                    {"rank_xp_pass_last_granted_micro_tier": {"$lt": t}},
-                    {"rank_xp_pass_last_granted_micro_tier": {"$exists": False}},
-                ],
-            },
-            {
-                "$set": {"rank_xp_pass_last_granted_micro_tier": t},
-                **({"$inc": inc} if inc else {}),
-            },
+        applied = await _try_grant_rank_xp_pass_micro_tier(
+            db,
+            user_id=user_id,
+            micro_tier=t,
+            free_cash_last_micro_tier_granted=free_cash_last_micro,
         )
-        if updated.modified_count == 0:
+        if not applied:
             continue
 
         tiers_granted.append(t)
@@ -121,7 +105,7 @@ async def grant_missing_vip_micro_tier_rewards(
         received_parts = []
         granted_keys = []
         for reward_key in REWARD_KEY_ORDER:
-            amount = int(rewards.get(reward_key) or 0)
+            amount = int(applied.get(reward_key) or 0)
             if amount <= 0:
                 continue
             granted_keys.append(reward_key)

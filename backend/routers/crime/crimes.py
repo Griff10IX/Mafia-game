@@ -459,6 +459,7 @@ from routers.kill.armoury import (
     TOKEN_GLOBAL_DROP_AMOUNT_MIN,
     TOKEN_GLOBAL_DROP_CHANCE,
 )
+from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
 from utils.point_provenance import log_points_event
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_CRIMES
 
@@ -869,7 +870,7 @@ async def _commit_crime_impl(crime_id: str, current_user: dict, *, via_auto_rank
                 prestige_bonus_earned["token_amount"] = token_amt
         await db.users.update_one(
             {"id": current_user["id"]},
-            {"$inc": inc},
+            apply_season_rp_mirror_to_update({"$inc": inc}),
         )
         # Exploit check: flag impossible single-action gains (e.g. >$50M from one crime)
         try:

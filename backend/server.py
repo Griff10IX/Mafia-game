@@ -763,10 +763,17 @@ class UserResponse(BaseModel):
     rank_xp_pass_tokens: int = 0
     # For unactivated pass tokens only: expires if not used within 1 month.
     rank_xp_pass_token_expires_at: Optional[str] = None
-    # Tier snapshot for the pass (rank_points at purchase time), used to compute rewards.
+    # Active VIP: season RP at activation (max with pending snapshot). Unactivated purchase: pending = season RP at purchase.
     rank_xp_pass_tier_snapshot: Optional[int] = None
+    # Unactivated token: season RP at purchase time (activation uses max with live season RP).
+    rank_xp_pass_pending_tier_snapshot: Optional[int] = None
     # Cursor: highest micro tier rewards already granted (1..100, 0 = none).
     rank_xp_pass_last_granted_micro_tier: int = 0
+    # Season-isolated Game Pass progress (mirrors positive rank_points gains; reconciled on season_id change).
+    game_pass_season_id: Optional[str] = None
+    rank_xp_pass_season_rp: int = 0
+    # Current season id from game_settings (for UI; user.game_pass_season_id is last reconciled marker).
+    game_pass_current_season_id: str = "1"
     # RP banked on prestige while VIP pass active; added to rank_points for pass tier math only.
     rank_xp_pass_prestige_carry_rp: int = 0
     # Idempotency guard for tiered one-time rewards.
@@ -1030,6 +1037,18 @@ async def get_current_user(
     if (user.get("money") or 0) < 0:
         await db.users.update_one({"id": user_id}, {"$set": {"money": 0}})
         user["money"] = 0
+    try:
+        from utils.game_pass_season_rp import reconcile_user_game_pass_season_if_stale_after_load
+
+        if await reconcile_user_game_pass_season_if_stale_after_load(db, user):
+            user = await db.users.find_one({"id": user_id}, {"_id": 0})
+            if user is None:
+                _log_auth_failure(user_id, 401, "User not found")
+                raise HTTPException(status_code=401, detail="User not found")
+    except HTTPException:
+        raise
+    except Exception:
+        pass
     # Reject if token was invalidated (e.g. admin "log out user")
     if payload.get("v", 0) != user.get("token_version", 0):
         _log_auth_failure(user_id, 401, "Session invalidated (token_version mismatch)")
@@ -1190,7 +1209,7 @@ async def get_current_user(
             token_ready = bool(token_count > 0 and expires_dt and expires_dt > now)
 
             if not token_ready:
-                current_micro = micro_tier_from_rank_points(user.get("rank_points"))
+                current_micro = micro_tier_from_rank_points(int(user.get("rank_xp_pass_season_rp") or 0))
                 if current_micro > 0:
                     last_micro = int(user.get("rank_xp_pass_free_last_micro_tier_granted") or 0)
                     if current_micro > last_micro:

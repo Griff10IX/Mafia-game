@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { Package, ShoppingBag, Clock, Settings } from 'lucide-react';
+import { Package, ShoppingBag, Clock, Settings, Sparkles } from 'lucide-react';
 import api, { refreshUser } from '../../utils/api';
 
 import { toast } from 'sonner';
@@ -100,6 +100,9 @@ const TARGET_POINTS_TOTAL = 10_000;
 const TARGET_BULLETS_TOTAL = 250_000;
 const TARGET_AUTO_RANK_2H_TOTAL = 75;
 const TARGET_RANDOM_TOKENS_TOTAL = 250; // tokens chosen from this "random pool" set
+const TARGET_LOOT_PIECES_TOTAL = 500;
+const TARGET_XP_CRIMES_TOKENS_TOTAL = 150;
+const TARGET_XP_GTA_TOKENS_TOTAL = 150;
 
 const MONEY_BASE_TIER = 10;
 const POINTS_BASE_TIER = 50;
@@ -177,8 +180,8 @@ function distributeTotal(total, keys) {
 }
 
 const TWO_BUCKET_CHANCE = 0.30;
-const SEED_CATEGORY = 'game_pass_micro_rewards:category:v2';
-const SEED_FREE = 'game_pass_micro_rewards:free:v2';
+const SEED_CATEGORY = 'game_pass_micro_rewards:category:v3';
+const SEED_FREE = 'game_pass_micro_rewards:free:v3';
 
 const SELECTABLE_KEYS = [
   'money',
@@ -186,6 +189,7 @@ const SELECTABLE_KEYS = [
   'xp_crimes_tokens',
   'xp_gta_tokens',
   'points',
+  'loot_box_pieces',
   ...SELECTABLE_RANDOM_TOKEN_KEYS,
 ];
 
@@ -195,6 +199,7 @@ const CATEGORY_WEIGHTS = {
   xp_crimes_tokens: 10,
   xp_gta_tokens: 10,
   points: 12,
+  loot_box_pieces: 8,
   melt_tokens: 2,
   jailbust_tokens: 2,
   travel_tokens: 2,
@@ -207,6 +212,7 @@ const BASE_TIER_BY_KEY = {
   xp_crimes_tokens: 40,
   xp_gta_tokens: 40,
   points: POINTS_BASE_TIER,
+  loot_box_pieces: 55,
   melt_tokens: 70,
   jailbust_tokens: 80,
   travel_tokens: 90,
@@ -214,16 +220,16 @@ const BASE_TIER_BY_KEY = {
   auto_rank_2h_tokens: 100,
 };
 
-const FIXED_BASE_AMOUNT_BY_KEY = {
-  xp_crimes_tokens: 2,
-  xp_gta_tokens: 2,
-};
+const FIXED_BASE_AMOUNT_BY_KEY = {};
 
 const targetRandomByKey = distributeTotal(TARGET_RANDOM_TOKENS_TOTAL, SELECTABLE_RANDOM_TOKEN_KEYS);
 const TARGET_TOTAL_BY_KEY = {
   money: TARGET_CASH_TOTAL,
   bullets: TARGET_BULLETS_TOTAL,
   points: TARGET_POINTS_TOTAL,
+  loot_box_pieces: TARGET_LOOT_PIECES_TOTAL,
+  xp_crimes_tokens: TARGET_XP_CRIMES_TOKENS_TOTAL,
+  xp_gta_tokens: TARGET_XP_GTA_TOKENS_TOTAL,
   ...targetRandomByKey,
 };
 
@@ -301,6 +307,20 @@ for (let t = 1; t <= 100; t += 1) {
   PRECOMPUTED_REWARDS_BY_TIER[t] = rewards;
 }
 
+const PERK_ROTATION = ['rp_10', 'property_income_10', 'jail_bust_10', 'airport_cost'];
+const PERK_LABELS = {
+  property_income_10: '+24h: 10% property income',
+  rp_10: '+24h: +10% rank XP gains',
+  jail_bust_10: '+24h: +10% jail bust payout',
+  airport_cost: '+24h: airport travel discount',
+};
+const PERKS_FOR_TIER = Array.from({ length: 101 }, () => []);
+for (let tt = 1; tt <= 100; tt += 1) {
+  if (tt % 25 === 0) {
+    PERKS_FOR_TIER[tt] = [PERK_ROTATION[(Math.floor(tt / 25) - 1) % PERK_ROTATION.length]];
+  }
+}
+
 function getRewardsForMicroTier(microTier) {
   const t = Number(microTier || 0);
   if (!Number.isFinite(t) || t < 1) return {};
@@ -319,6 +339,7 @@ const REWARD_DISPLAY_ORDER = [
   'xp_gta_tokens',
   'points',
   'respect_points',
+  'loot_box_pieces',
   'melt_tokens',
   'jailbust_tokens',
   'travel_tokens',
@@ -334,6 +355,7 @@ const TOKEN_REWARD_NAMES = {
   travel_tokens: 'Travel Token',
   properties_tokens: 'Properties Token',
   auto_rank_2h_tokens: 'Auto Rank (2h) Token',
+  loot_box_pieces: 'Loot box pieces',
 };
 
 function formatTierRewardItem(key, value) {
@@ -343,18 +365,27 @@ function formatTierRewardItem(key, value) {
   if (key === 'bullets') return `${n.toLocaleString()} bullets`;
   if (key === 'points') return `${n.toLocaleString()} points`;
   if (key === 'respect_points') return `${n.toLocaleString()} respect`;
+  if (key === 'loot_box_pieces') return `${n.toLocaleString()} loot box pieces`;
   const tokenName = TOKEN_REWARD_NAMES[key] || key;
   return `${n.toLocaleString()}x ${tokenName}`;
 }
 
 function TierRewards({ rewards, isFreeMembership, isTierCompleted, microTier }) {
-  const hasAny = !!rewards && Object.values(rewards).some((v) => Number(v || 0) > 0);
+  const perkLines = PERKS_FOR_TIER[microTier] || [];
+  const hasNumeric = !!rewards && Object.values(rewards).some((v) => Number(v || 0) > 0);
+  const hasAny = hasNumeric || perkLines.length > 0;
   if (!hasAny) return null;
 
   const freeUnlockedRewardKey = isFreeMembership ? FREE_UNLOCKED_KEY_BY_TIER[microTier] : null;
 
   return (
     <div className="space-y-1">
+      {!isFreeMembership &&
+        perkLines.map((pk) => (
+          <div key={pk} className="text-[9px] font-heading text-emerald-300/90">
+            {PERK_LABELS[pk] || pk}
+          </div>
+        ))}
       {REWARD_DISPLAY_ORDER.map((k) => {
         const v = rewards?.[k];
         const text = formatTierRewardItem(k, v);
@@ -392,6 +423,7 @@ function getTierPrimaryLabel(tier, { isFreeMembership, freeUnlockedRewardKey } =
     if (key === 'auto_rank_2h_tokens') return `${n.toLocaleString()} Auto Rank (2h)`;
     if (key === 'xp_crimes_tokens') return `${n.toLocaleString()}x Crimes XP Token`;
     if (key === 'xp_gta_tokens') return `${n.toLocaleString()}x GTA XP Token`;
+    if (key === 'loot_box_pieces') return `${n.toLocaleString()} Loot Pieces`;
     return null;
   };
 
@@ -406,6 +438,7 @@ function getTierPrimaryLabel(tier, { isFreeMembership, freeUnlockedRewardKey } =
   if (rewards.bullets) return `${Number(rewards.bullets).toLocaleString()} Bullets`;
   if (rewards.xp_crimes_tokens) return `${Number(rewards.xp_crimes_tokens).toLocaleString()}x Crimes XP Token`;
   if (rewards.xp_gta_tokens) return `${Number(rewards.xp_gta_tokens).toLocaleString()}x GTA XP Token`;
+  if (rewards.loot_box_pieces) return `${Number(rewards.loot_box_pieces).toLocaleString()} Loot Pieces`;
   if (rewards.points) return `${Number(rewards.points).toLocaleString()} Points`;
   if (rewards.respect_points) return `${Number(rewards.respect_points).toLocaleString()} Respect`;
   if (rewards.melt_tokens) return `${Number(rewards.melt_tokens).toLocaleString()} Melt Tokens`;
@@ -486,15 +519,18 @@ export default function GamePass() {
   );
   const vipRewardTrackComplete = vipClaimed && lastGrantedMicro >= MAX_MICRO_TIER;
 
+  const seasonRp = Math.max(0, Math.floor(Number(user?.rank_xp_pass_season_rp ?? 0)));
+  const pendingSeasonSnap = Math.max(0, Math.floor(Number(user?.rank_xp_pass_pending_tier_snapshot ?? 0)));
+
   const previewRankPointsRaw = vipGrantingActive
     ? vipRewardTrackComplete
-      ? MAX_THRESHOLD_RP // Admin bulk completion / natural tier-100 payout: UI matches reward cursor, not raw rank XP.
-      : Number(user?.rank_points ?? 0) + Number(user?.rank_xp_pass_prestige_carry_rp ?? 0) // live RP + prestige carry (matches server VIP tier math)
+      ? MAX_THRESHOLD_RP // Admin bulk completion / natural tier-100 payout: UI matches reward cursor, not raw season RP.
+      : seasonRp
     : passIsUnactivatedValid
-      ? Number(user?.rank_xp_pass_pending_tier_snapshot ?? 0) // pending snapshot before activation
+      ? Math.max(pendingSeasonSnap, seasonRp)
       : vipClaimed
-        ? microTierToThresholdRp(Number(user?.rank_xp_pass_last_granted_micro_tier ?? 0)) // expired VIP: show progress from last granted tier
-        : Number(user?.rank_points ?? 0) + Number(user?.rank_xp_pass_prestige_carry_rp ?? 0); // free track: carry after prestige (matches server banking)
+        ? microTierToThresholdRp(Number(user?.rank_xp_pass_last_granted_micro_tier ?? 0))
+        : seasonRp;
   const previewRankPoints = Math.max(0, Math.floor(previewRankPointsRaw));
 
   const microTierCurrent = Math.min(MAX_MICRO_TIER, Math.max(0, Math.floor((previewRankPoints / MAX_THRESHOLD_RP) * 100)));
@@ -661,7 +697,7 @@ export default function GamePass() {
               </div>
             </div>
             <div className="p-3 space-y-3">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 <div className="p-2 rounded bg-zinc-900/30 border border-primary/10">
                   <div className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider">Membership Type</div>
                   <div className="text-[11px] font-heading font-bold text-primary">{membershipType}</div>
@@ -671,8 +707,18 @@ export default function GamePass() {
                   <div className="text-[11px] font-heading font-bold text-primary">{microTierCurrent}</div>
                 </div>
                 <div className="p-2 rounded bg-zinc-900/30 border border-primary/10">
-                  <div className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider">XP</div>
-                  <div className="text-[11px] font-heading font-bold text-primary">{previewRankPoints.toLocaleString()}</div>
+                  <div className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider">Season XP</div>
+                  <div className="text-[11px] font-heading font-bold text-primary tabular-nums">{previewRankPoints.toLocaleString()}</div>
+                </div>
+                <div className="p-2 rounded bg-zinc-900/30 border border-primary/10">
+                  <div className="text-[9px] font-heading font-bold text-mutedForeground uppercase tracking-wider">Pass season</div>
+                  <div className="text-[11px] font-heading font-bold text-primary tabular-nums">
+                    #{String(user?.game_pass_current_season_id ?? '1')}
+                    {user?.game_pass_season_id != null &&
+                    String(user.game_pass_season_id) !== String(user?.game_pass_current_season_id ?? '') ? (
+                      <span className="text-amber-400/90 font-normal text-[9px] ml-1">(syncing…)</span>
+                    ) : null}
+                  </div>
                 </div>
               </div>
 
@@ -752,7 +798,7 @@ export default function GamePass() {
               <p className="text-[8px] text-zinc-500/90 font-heading leading-relaxed border-t border-primary/10 pt-2">
                 Why this isn&apos;t the same as {SILVER_PACK_POINTS.toLocaleString()} pts for £{SILVER_PACK_PRICE_GBP}: that pack adds{' '}
                 <span className="text-zinc-400">spendable points</span> to your balance. Game Pass (£{GAME_PASS_PRICE_GBP}) does not credit store points — it
-                unlocks <span className="text-zinc-400">rank tier rewards</span> (cash, bullets, tokens, etc.) as you earn rank XP. Different product, different
+                unlocks <span className="text-zinc-400">rank tier rewards</span> (cash, bullets, tokens, etc.) as you earn rank XP this season. Different product, different
                 price.
               </p>
 
@@ -768,7 +814,9 @@ export default function GamePass() {
                 Value estimate for VIP: <span className="text-primary font-bold">~{TARGET_POINTS_TOTAL.toLocaleString()} points</span> +{" "}
                 <span className="text-primary font-bold">~${TARGET_CASH_TOTAL.toLocaleString()} cash</span> +{" "}
                 <span className="text-primary font-bold">~{TARGET_BULLETS_TOTAL.toLocaleString()} bullets</span> +{" "}
-                <span className="text-primary font-bold">~{TARGET_AUTO_RANK_2H_TOTAL} Auto Rank (2h)</span> tokens.
+                <span className="text-primary font-bold">~{TARGET_LOOT_PIECES_TOTAL} loot pieces</span> +{" "}
+                <span className="text-primary font-bold">~{TARGET_XP_CRIMES_TOKENS_TOTAL + TARGET_XP_GTA_TOKENS_TOTAL} XP tokens</span> +{" "}
+                <span className="text-primary font-bold">~{TARGET_AUTO_RANK_2H_TOTAL} Auto Rank (2h)</span> tokens (+ select 24h perks at tiers 25/50/75/100).
               </p>
 
               {vipClaimed && (
@@ -803,13 +851,54 @@ export default function GamePass() {
             <div className="store-art-line text-primary mx-3" />
           </div>
 
+          <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+            <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+            <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20 flex items-start gap-2">
+              <Sparkles className="text-amber-400/90 shrink-0 mt-0.5" size={14} aria-hidden />
+              <div className="min-w-0">
+                <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em]">This season on Game Pass</div>
+                <div className="text-[9px] text-zinc-400 font-heading italic mt-0.5 leading-snug">
+                  What is new on the track: season XP, loot pieces, XP tokens, and VIP time boosts. Everyone earns season XP; VIP unlocks the full reward table.
+                </div>
+              </div>
+            </div>
+            <div className="p-3">
+              <ul className="list-disc pl-4 space-y-1.5 text-[9px] text-zinc-300 font-heading leading-relaxed marker:text-primary/70">
+                <li>
+                  <span className="text-zinc-100 font-bold">Season-only progress</span> — Pass bar and free milestones use{' '}
+                  <span className="text-primary">season rank XP</span> only (resets when a new pass season starts). Lifetime rank is still used for rank names and
+                  leaderboards.
+                </li>
+                <li>
+                  <span className="text-zinc-100 font-bold">Loot box pieces</span> — About{' '}
+                  <span className="text-primary tabular-nums">{TARGET_LOOT_PIECES_TOTAL}</span> pieces across VIP tiers, in the same deterministic pool as cash and
+                  bullets.
+                </li>
+                <li>
+                  <span className="text-zinc-100 font-bold">Crimes and GTA XP tokens</span> — Roughly{' '}
+                  <span className="text-primary tabular-nums">{TARGET_XP_CRIMES_TOKENS_TOTAL}</span> Crimes tokens plus{' '}
+                  <span className="text-primary tabular-nums">{TARGET_XP_GTA_TOKENS_TOTAL}</span> GTA tokens, spread across tiers like other currencies.
+                </li>
+                <li>
+                  <span className="text-zinc-100 font-bold">24h VIP perks</span> — At micro-tiers 25, 50, 75, and 100: stacked loot-style boosts —{' '}
+                  {PERK_ROTATION.map((pk) => PERK_LABELS[pk]).join(' · ')}.
+                </li>
+                <li>
+                  <span className="text-zinc-100 font-bold">Free vs VIP</span> — Free players still get one milestone reward per 10-tier band. Perk lines on tier cards
+                  and cumulative VIP payouts require activating Game Pass.
+                </li>
+              </ul>
+            </div>
+            <div className="store-art-line text-primary mx-3" />
+          </div>
+
           {/* Season progress */}
           <div className={`relative ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
             <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
             <div className="px-3 py-2.5 bg-primary/8 border-b border-primary/20">
               <div className="text-[10px] font-heading font-bold text-primary uppercase tracking-[0.15em] truncate">Progress</div>
               <div className="text-[9px] text-zinc-400 font-heading italic mt-0.5">
-                Milestones every {MICRO_TIER_STEP_RP.toLocaleString()} rank XP (tier 1 at {MICRO_TIER_STEP_RP.toLocaleString()}, tier 2 at {(MICRO_TIER_STEP_RP * 2).toLocaleString()}, etc.)
+                Milestones every {MICRO_TIER_STEP_RP.toLocaleString()} season rank XP (resets each Game Pass season; lifetime rank elsewhere)
               </div>
             </div>
             <div className="p-3 space-y-2">
@@ -823,7 +912,7 @@ export default function GamePass() {
                   </p>
                 ) : (
                   <p className="text-[9px] text-zinc-500 font-heading leading-relaxed">
-                    VIP rewards are applied automatically: when you activate the pass, anything you already earned with rank XP is granted immediately; after that, each new tier credits on its own as soon as you pass the next milestone (you don’t need to buy again).
+                    VIP rewards are applied automatically: when you activate the pass, anything you already earned this season (season rank XP) is granted immediately; after that, each new tier credits on its own as soon as you pass the next milestone (you don’t need to buy again).
                   </p>
                 ))}
             </div>

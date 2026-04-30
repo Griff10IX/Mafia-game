@@ -126,6 +126,7 @@ from routers.account.objectives import update_objectives_progress
 from routers.admin.airport import _invalidate_travel_info_cache
 from routers.game.families import resolve_family_id
 from utils.family_vault_log import log_family_vault_tx
+from utils.game_pass_season_rp import apply_season_rp_mirror_to_update
 from utils.location_climate import get_location_climate, rank_multiplier_for_actor, success_multiplier_for_actor
 
 # Family members in an active war cannot liquidate exclusive / loot-exclusive cars (list, scrap, melt).
@@ -660,7 +661,7 @@ async def _attempt_gta_impl(option_id: str, current_user: dict, caller_updates_t
             gta_inc["respect_points"] = max(0, int(respect_drop * RESPECT_FROM_GTA_MULT * _fm_gta * pass_mult))
         await db.users.update_one(
             {"id": current_user.get("id") or ""},
-            {"$inc": gta_inc},
+            apply_season_rp_mirror_to_update({"$inc": gta_inc}),
         )
         if gta_inc.get("respect_points"):
             await log_respect_earned(current_user.get("id") or "", gta_inc["respect_points"], "gta")

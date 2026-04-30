@@ -29,7 +29,9 @@ from utils.game_pass_micro_rewards import (
     REWARD_KEY_LABELS,
     MAX_MICRO_TIER,
     vip_rewards_after_free_dedupe,
+    perks_for_micro_tier,
 )
+from utils.loot_perk_stack import apply_loot_style_perk_to_merged_set
 from routers.game.store import _store_cost_inc, STORE_TOKEN_MAX_HELD
 from routers.minigames.minigame_leaderboard import log_minigame_play
 from utils.minigame_run_session import (
@@ -246,6 +248,28 @@ async def _try_grant_rank_xp_pass_micro_tier(
     if not inc:
         inc = {}
 
+    now = datetime.now(timezone.utc)
+    user_perk_src = await db.users.find_one(
+        {"id": user_id},
+        {
+            "_id": 0,
+            "property_income_perk_until": 1,
+            "rp_perk_until": 1,
+            "jail_bust_payout_perk_until": 1,
+            "airport_cost_perk_until": 1,
+            "gta_rare_drop_perk_attempts_remaining": 1,
+        },
+    )
+    perk_set: Dict[str, Any] = {}
+    for pk in perks_for_micro_tier(t):
+        apply_loot_style_perk_to_merged_set(perk_set, user_perk_src or {}, pk, now=now)
+
+    set_doc: Dict[str, Any] = {"rank_xp_pass_last_granted_micro_tier": t}
+    set_doc.update(perk_set)
+    update_doc: Dict[str, Any] = {"$set": set_doc}
+    if inc:
+        update_doc["$inc"] = inc
+
     updated = await db.users.update_one(
         {
             "id": user_id,
@@ -255,10 +279,7 @@ async def _try_grant_rank_xp_pass_micro_tier(
                 {"rank_xp_pass_last_granted_micro_tier": {"$exists": False}},
             ],
         },
-        {
-            "$set": {"rank_xp_pass_last_granted_micro_tier": t},
-            **({"$inc": inc} if inc else {}),
-        },
+        update_doc,
     )
     if updated.modified_count == 0:
         return None
@@ -275,18 +296,17 @@ async def _activate_rank_xp_pass_and_grant_cumulative_micro_tiers(
     Activation grants rewards cumulatively for micro tiers 1..activation_micro.
     Cursor `rank_xp_pass_last_granted_micro_tier` is updated per micro tier.
 
-    Uses max(purchase-time snapshot, live rank_points) so players who buy/activate after
-    earning XP still get all tiers they have already reached (snapshot alone can be 0 or stale).
+    Uses max(purchase-time season RP snapshot, live season RP) so free grinders who buy mid-season
+    still receive VIP tiers for progress already earned this season.
     """
     u0 = await db.users.find_one(
         {"id": user_id},
-        {"_id": 0, "rank_points": 1, "rank_xp_pass_prestige_carry_rp": 1, "points": 1},
+        {"_id": 0, "rank_xp_pass_season_rp": 1, "points": 1},
     )
-    rp_live = int((u0 or {}).get("rank_points") or 0)
-    carry = int((u0 or {}).get("rank_xp_pass_prestige_carry_rp") or 0)
+    season_live = int((u0 or {}).get("rank_xp_pass_season_rp") or 0)
     points_running = int((u0 or {}).get("points") or 0)
     snap = int(tier_snapshot or 0)
-    effective_rp = max(snap, rp_live + carry)
+    effective_rp = max(snap, season_live)
     activation_micro = micro_tier_from_rank_points(effective_rp)
 
     # Flip rewards_granted atomically so concurrent activations don't double-grant.

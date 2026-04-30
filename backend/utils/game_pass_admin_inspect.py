@@ -19,6 +19,8 @@ GAME_PASS_USER_PROJECTION = {
     "id": 1,
     "username": 1,
     "rank_points": 1,
+    "rank_xp_pass_season_rp": 1,
+    "game_pass_season_id": 1,
     "rank_xp_pass_tokens": 1,
     "rank_xp_pass_token_expires_at": 1,
     "rank_xp_pass_rewards_granted": 1,
@@ -209,8 +211,9 @@ async def aggregate_game_pass_users_without_stripe_purchase(
 
 def game_pass_derived_fields(user_row: Dict[str, Any], *, now_utc: datetime) -> Dict[str, Any]:
     rp = int(user_row.get("rank_points") or 0)
+    season_rp = int(user_row.get("rank_xp_pass_season_rp") or 0)
     vip_claimed = user_row.get("rank_xp_pass_rewards_granted") is True
-    current_micro = micro_tier_for_vip_game_pass(user_row) if vip_claimed else micro_tier_from_rank_points(rp)
+    current_micro = micro_tier_for_vip_game_pass(user_row) if vip_claimed else micro_tier_from_rank_points(season_rp)
     tokens = int(user_row.get("rank_xp_pass_tokens") or 0)
     last_granted = int(user_row.get("rank_xp_pass_last_granted_micro_tier") or 0)
     free_last = int(user_row.get("rank_xp_pass_free_last_micro_tier_granted") or 0)
@@ -253,6 +256,7 @@ def game_pass_derived_fields(user_row: Dict[str, Any], *, now_utc: datetime) -> 
     return {
         "current_micro_tier": current_micro,
         "rank_points": rp,
+        "rank_xp_pass_season_rp": season_rp,
         "catch_up_pending": catch_up_pending,
         "unactivated_token_active": unactivated_active,
         "vip_token_expired_unactivated": unactivated_expired,
