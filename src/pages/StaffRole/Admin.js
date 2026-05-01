@@ -319,6 +319,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Game Pass points diagnostic', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-game-pass-inspector', keywords: ['game pass', 'points', 'diagnostic', 'ledger', 'stripe', 'purchase source', 'catch up pending'], adminOnly: true },
   { label: 'Game Pass stuck cursors', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-game-pass-inspector', keywords: ['game pass', 'stuck', 'cursor', 'broken', 'fix', 'repair', 'rewards'], adminOnly: true },
   { label: 'First Game Pass VIP completion', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-first-gp-vip-completion', keywords: ['game pass', 'first', 'vip', 'completion', 'bulk', 'tier', '100', 'bonus', 'one time'], adminOnly: true },
+  { label: 'User inbox (live)', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-user-inbox', keywords: ['inbox', 'notifications', 'dm', 'messages', 'mail', 'social'], adminOnly: true },
   { label: 'Deleted messages', categoryId: 'admin-players', collapseKey: 'userAdjustHub', scrollToId: 'admin-deleted-messages', keywords: ['deleted', 'messages', 'archive', 'forum', 'chat', 'dm', 'notification', 'history'], adminOnly: true },
   { label: 'Reset OC Timers', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['oc', 'organised', 'crime', 'timer'] },
   { label: 'Reset Daily Rewards Timer', categoryId: 'admin-testing', collapseKey: 'search', keywords: ['daily', 'rewards', 'timer', 'rps'] },
@@ -328,7 +329,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'GTA exclusive pool & dealer', categoryId: 'admin-world-systems', collapseKey: 'gtaPool', keywords: ['gta', 'exclusive', 'pool', 'dealer', 'cars', 'values'], adminOnly: true },
   { label: 'System health', categoryId: 'admin-operations', collapseKey: 'systemHealth', keywords: ['system', 'health', 'uptime', 'status', 'db'] },
   { label: 'Moderation related accounts', categoryId: 'admin-operations', collapseKey: 'moderationRelated', keywords: ['moderation', 'related', 'linked', 'accounts'] },
-  { label: 'Page locks (admin)', categoryId: 'admin-operations', collapseKey: 'pageLocks', keywords: ['page', 'lock', 'route'] },
+  { label: 'Page locks (admin)', categoryId: 'admin-world-systems', collapseKey: 'pageLocks', scrollToId: 'admin-page-locks', keywords: ['page', 'lock', 'route'] },
   { label: 'Family war — force truce', categoryId: 'admin-operations', collapseKey: 'familyWarTruce', scrollToId: 'admin-family-war-truce', keywords: ['family', 'war', 'truce', 'crew', 'end war', 'peace'], adminOnly: true },
   { label: 'Mod display', categoryId: 'admin-operations', collapseKey: 'modDisplay', keywords: ['mod', 'display', 'colour', 'color', 'badge'] },
   { label: 'Cheat detection (mod)', categoryId: 'admin-operations', collapseKey: 'cheatDetectionMod', keywords: ['cheat', 'detection', 'mod', 'suspicious'] },
@@ -355,7 +356,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Dupe check', categoryId: 'admin-mod-tools', collapseKey: 'dupeCheckMod', keywords: ['dupe', 'duplicate', 'multi', 'account'] },
   { label: 'Lock player', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['lock', 'player', 'investigation'] },
   { label: 'Modkill', categoryId: 'admin-moderation', collapseKey: 'moderationPlayer', keywords: ['modkill', 'kill', 'player'] },
-  { label: 'Lock page', categoryId: 'admin-operations', collapseKey: 'pageLocks', keywords: ['lock', 'page', 'maintenance'] },
+  { label: 'Lock page', categoryId: 'admin-world-systems', collapseKey: 'pageLocks', scrollToId: 'admin-page-locks', keywords: ['lock', 'page', 'maintenance'] },
 ];
 
 /** Display names for /admin/casinos/analytics/summary game_type keys */
@@ -793,6 +794,9 @@ export default function Admin() {
   const [firstGpVipCompletionPreviewLoading, setFirstGpVipCompletionPreviewLoading] = useState(false);
   const [firstGpVipCompletionConfirm, setFirstGpVipCompletionConfirm] = useState('');
   const [firstGpVipCompletionRunLoading, setFirstGpVipCompletionRunLoading] = useState(false);
+  const [userInboxData, setUserInboxData] = useState(null);
+  const [userInboxLoading, setUserInboxLoading] = useState(false);
+  const [userInboxScope, setUserInboxScope] = useState('inbox');
   const [deletedMsgs, setDeletedMsgs] = useState(null);
   const [deletedMsgsLoading, setDeletedMsgsLoading] = useState(false);
   const [deletedMsgsFilter, setDeletedMsgsFilter] = useState('');
@@ -3839,6 +3843,21 @@ export default function Admin() {
       toast.success(`${d.message}\nCredited: ${credited || 'none'}`, { duration: 8000 });
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed');
+    }
+  };
+
+  const loadUserInbox = async () => {
+    const u = (formData.targetUsername || '').trim();
+    if (!u) { toast.error('Enter a target username'); return; }
+    setUserInboxLoading(true);
+    try {
+      const qs = new URLSearchParams({ limit_count: '100', scope: userInboxScope || 'inbox' });
+      const res = await api.get(`/admin/user-inbox/${encodeURIComponent(u)}?${qs.toString()}`);
+      setUserInboxData(res.data);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to load inbox');
+    } finally {
+      setUserInboxLoading(false);
     }
   };
 
@@ -9840,6 +9859,81 @@ export default function Admin() {
               </div>
             </div>
 
+            <div id="admin-user-inbox" className="rounded-md border border-sky-500/30 bg-sky-500/5 p-3 space-y-2 scroll-mt-24">
+              <div className="flex flex-wrap items-center gap-2">
+                <Mail size={14} className="text-sky-300 shrink-0" />
+                <span className="text-[10px] font-heading font-bold text-sky-300 uppercase tracking-wider">User inbox (live)</span>
+              </div>
+              <p className="text-[9px] text-mutedForeground font-heading">
+                Read the target user’s current inbox rows from the notifications collection (matches Social → Inbox, not the deleted archive). Uses the target username above.
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <select
+                  value={userInboxScope}
+                  onChange={(e) => { setUserInboxScope(e.target.value); setUserInboxData(null); }}
+                  className="px-2 py-1 rounded border border-input bg-transparent text-[11px]"
+                >
+                  <option value="inbox">Inbox (incoming + system; no sent-folder copies)</option>
+                  <option value="sent">Sent DMs only</option>
+                  <option value="all">All rows for user_id</option>
+                </select>
+                <BtnPrimary type="button" onClick={loadUserInbox} disabled={userInboxLoading}>
+                  {userInboxLoading ? '...' : 'Load inbox'}
+                </BtnPrimary>
+              </div>
+              {userInboxData && (
+                <div className="space-y-1">
+                  <div className="text-[9px] text-mutedForeground font-heading">
+                    {userInboxData.username}: {userInboxData.count} row(s)
+                    {userInboxData.scope !== 'sent' && (
+                      <>
+                        {' · '}
+                        <span className="text-amber-300/90">{userInboxData.unread_count ?? 0} unread</span>
+                      </>
+                    )}
+                    {' · '}
+                    scope <span className="font-mono text-foreground/80">{userInboxData.scope}</span>
+                  </div>
+                  {userInboxData.count === 0 ? (
+                    <div className="text-[10px] text-green-400 font-heading">No notifications in this view.</div>
+                  ) : (
+                    <div className="overflow-x-auto max-h-96 border border-sky-500/20 rounded">
+                      <table className="w-full text-left text-[9px] border-collapse min-w-[720px]">
+                        <thead>
+                          <tr className="text-mutedForeground border-b border-zinc-700/50 sticky top-0 bg-zinc-900/95">
+                            <th className="px-2 py-1 whitespace-nowrap">When</th>
+                            <th className="px-2 py-1">Read</th>
+                            <th className="px-2 py-1">Type</th>
+                            <th className="px-2 py-1 max-w-[140px]">Title</th>
+                            <th className="px-2 py-1">From / To</th>
+                            <th className="px-2 py-1 max-w-xs">Message</th>
+                            <th className="px-2 py-1 font-mono">id</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(userInboxData.notifications || []).map((n, ni) => (
+                            <tr key={n.id || `inbox-${ni}`} className="border-b border-zinc-800/50 align-top">
+                              <td className="px-2 py-1 whitespace-nowrap">{n.created_at ? formatAdminDateTime(n.created_at) : '—'}</td>
+                              <td className="px-2 py-1">{n.read ? 'yes' : <span className="text-amber-300 font-semibold">no</span>}</td>
+                              <td className="px-2 py-1 font-mono text-[8px]">{n.notification_type || '—'}</td>
+                              <td className="px-2 py-1 max-w-[140px] truncate" title={n.title}>{n.title || '—'}</td>
+                              <td className="px-2 py-1 whitespace-nowrap">
+                                {n.notification_type === 'user_message_sent'
+                                  ? (n.recipient_username ? `→ ${n.recipient_username}` : '—')
+                                  : (n.sender_username || '—')}
+                              </td>
+                              <td className="px-2 py-1 max-w-xs break-words" title={n.message}>{n.message || '—'}</td>
+                              <td className="px-2 py-1 font-mono text-[8px] break-all max-w-[100px]">{n.id || '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div id="admin-deleted-messages" className="rounded-md border border-orange-500/30 bg-orange-500/5 p-3 space-y-2 scroll-mt-24">
               <div className="flex flex-wrap items-center gap-2">
                 <Eye size={14} className="text-orange-300 shrink-0" />
@@ -10231,15 +10325,19 @@ export default function Admin() {
           {!collapsed.moderationPageLocks && (
             <div className="p-3 space-y-2">
               <p className="text-[10px] text-mutedForeground">
-                Page lock controls were consolidated into the canonical Operations panel to remove duplicate entry points.
+                Route / page locks live under <span className="text-foreground font-semibold">World &amp; Systems</span> → <span className="text-foreground font-semibold">Lock page</span>. Use the button below to jump there.
               </p>
               <BtnSecondary
+                type="button"
                 onClick={() => {
-                  setActiveCategoryId('admin-operations');
+                  setActiveCategoryId('admin-world-systems');
                   setCollapsed((prev) => ({ ...prev, pageLocks: false }));
                   if (typeof window !== 'undefined') {
-                    window.location.hash = 'admin-operations';
-                    setTimeout(() => document.getElementById('admin-page-locks')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120);
+                    window.location.hash = 'admin-world-systems';
+                    const runScroll = () => {
+                      document.getElementById('admin-page-locks')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    };
+                    window.requestAnimationFrame(() => setTimeout(runScroll, 280));
                   }
                 }}
               >
@@ -11939,7 +12037,7 @@ export default function Admin() {
         </div>
         )}
 
-        <div id="admin-page-locks" className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Lock}
@@ -12273,7 +12371,7 @@ export default function Admin() {
         )}
         </div>
 
-        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+        <div id="admin-page-locks" className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel scroll-mt-24`}>
         <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
         <SectionHeader
           icon={Lock}

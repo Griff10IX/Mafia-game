@@ -62,7 +62,7 @@ export const ADMIN_ROUTE_GROUPS = [
   { id: 'users-online', label: 'Live online', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: Radio, description: 'Who is online now (IPs, last page, same-IP hints).' },
   { id: 'attack-logs', label: 'Attack logs', categoryId: 'admin-analytics-monitoring', anchorId: 'admin-logs', icon: Crosshair, description: 'PVP attack log console and analytics.' },
   { id: 'witness-statements', label: 'Witness', categoryId: 'admin-operations', anchorId: 'admin-moderation', icon: FileText, description: 'Witness statements review.' },
-  { id: 'locked', label: 'Page locks', categoryId: 'admin-operations', anchorId: 'admin-operations', icon: LockKeyhole, description: 'Locked accounts and route / page locks.' },
+  { id: 'locked', label: 'Page locks', categoryId: 'admin-world-systems', anchorId: 'admin-page-locks', icon: LockKeyhole, description: 'Route / page locks (Lock page under World & Systems).' },
 ];
 
 export const ADMIN_ROUTE_GROUP_MAP = ADMIN_ROUTE_GROUPS.reduce((acc, item) => {

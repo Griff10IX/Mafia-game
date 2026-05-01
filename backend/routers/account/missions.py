@@ -248,13 +248,14 @@ def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[s
         if missing:
             shown = missing[:3]
             more = len(missing) - 3
+            need_n = progress["target"] - len(done)
             progress["description"] = (
-                f"Complete {progress['target'] - len(done)} more: "
+                f"Complete {need_n:,} more: "
                 + ", ".join(shown)
-                + (f"… +{more} more" if more > 0 else "")
+                + (f"… +{more:,} more" if more > 0 else "")
             )
         else:
-            progress["description"] = f"{len(done)}/{progress['target']} missions complete"
+            progress["description"] = f"{len(done):,}/{progress['target']:,} missions complete"
         return met, progress
 
     # Multiple simple requirements: all must be met (e.g. crimes + jail_busts_npc + in_state)
@@ -334,39 +335,41 @@ def _check_mission_requirements(user: dict, mission: dict) -> tuple[bool, Dict[s
         display = min(current, target)
         if key == "rank_id":
             rank_name = next((r["name"] for r in RANKS if r["id"] == target), str(target))
-            parts.append(f"Reach {rank_name}: {display}/{target}" if not met else f"Reach {rank_name}: done")
+            parts.append(
+                f"Reach {rank_name}: {display:,}/{target:,}" if not met else f"Reach {rank_name}: done"
+            )
         elif key == "hitlist_npc_kills":
-            parts.append(f"{display}/{target} hitlist NPC kills")
+            parts.append(f"{display:,}/{target:,} hitlist NPC kills")
         elif key == "money_earned":
             parts.append(f"${display:,} / ${target:,} earned")
         elif key == "booze_sells":
-            parts.append(f"{display}/{target} booze runs")
+            parts.append(f"{display:,}/{target:,} booze runs")
         elif key == "jail_busts":
-            parts.append(f"{display}/{target} jail busts")
+            parts.append(f"{display:,}/{target:,} jail busts")
         elif key == "jail_busts_npc":
-            parts.append(f"Bust 1 NPC from jail: {display}/1")
+            parts.append(f"Bust 1 NPC from jail: {display:,}/1")
         elif key == "gta":
-            parts.append(f"{display}/{target} cars stolen")
+            parts.append(f"{display:,}/{target:,} cars stolen")
         elif key == "crimes":
-            parts.append(f"{display}/{target} crimes")
+            parts.append(f"{display:,}/{target:,} crimes")
         elif key == "crime_profit":
             parts.append(f"${display:,} / ${target:,} crime profit")
         elif key == "snitch_count":
-            parts.append(f"Snitch on someone (in jail): {display}/{target}")
+            parts.append(f"Snitch on someone (in jail): {display:,}/{target:,}")
         elif key == "cars_melted":
-            parts.append(f"{display}/{target} cars melted")
+            parts.append(f"{display:,}/{target:,} cars melted")
         elif key == "bullets_melted":
-            parts.append(f"{display}/{target} bullets melted")
+            parts.append(f"{display:,}/{target:,} bullets melted")
         elif key == "bullets_purchased_armoury":
-            parts.append(f"{display}/{target} bullets from armoury")
+            parts.append(f"{display:,}/{target:,} bullets from armoury")
         elif key == "uncommon_cars_scrapped":
-            parts.append(f"{display}/{target} uncommon cars scrapped")
+            parts.append(f"{display:,}/{target:,} uncommon cars scrapped")
         elif key == "uncommon_cars_stolen":
-            parts.append(f"{display}/{target} uncommon cars stolen")
+            parts.append(f"{display:,}/{target:,} uncommon cars stolen")
         elif key == "deposit_interest":
             parts.append(f"${display:,} / ${target:,} to interest bank")
         else:
-            parts.append(f"{display}/{target}")
+            parts.append(f"{display:,}/{target:,}")
     progress = {"current": met_count, "target": len(req), "description": " · ".join(parts)}
     return met_count >= len(req), progress
 

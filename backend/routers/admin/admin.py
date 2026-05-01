@@ -2725,6 +2725,44 @@ def register(router):
             "messages": rows,
         }
 
+    @router.get("/admin/user-inbox/{username}")
+    async def admin_user_inbox(
+        username: str,
+        limit_count: int = Query(100, ge=1, le=200),
+        scope: str = Query(
+            "inbox",
+            description="inbox = notifications except sent-folder copies; sent = outgoing DMs only; all = every row for this user_id",
+        ),
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Admin: read live notifications collection for a player (same store as Social → Inbox)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        s = (scope or "inbox").strip().lower()
+        if s not in ("inbox", "sent", "all"):
+            raise HTTPException(status_code=400, detail="scope must be inbox, sent, or all")
+        username_pattern = _username_pattern(username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = target["id"]
+        filt: Dict[str, Any] = {"user_id": uid}
+        if s == "inbox":
+            filt["notification_type"] = {"$ne": "user_message_sent"}
+        elif s == "sent":
+            filt["notification_type"] = "user_message_sent"
+        cursor = db.notifications.find(filt, {"_id": 0}).sort("created_at", -1).limit(limit_count)
+        rows = await cursor.to_list(length=limit_count)
+        unread = sum(1 for r in rows if not r.get("read")) if s != "sent" else 0
+        return {
+            "username": target.get("username"),
+            "user_id": uid,
+            "scope": s,
+            "count": len(rows),
+            "unread_count": unread,
+            "notifications": rows,
+        }
+
     @router.get("/admin/game-pass/stuck-cursors")
     async def admin_game_pass_stuck_cursors(
         fix: bool = Query(False),

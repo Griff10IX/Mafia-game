@@ -32,6 +32,13 @@ const MISSIONS_STYLES = `
 
 const fmt = (n) => `$${Number(n ?? 0).toLocaleString()}`;
 
+/** Whole numbers with thousands separators (mission stats, rewards, bullets, etc.). */
+const fmtInt = (n) => {
+  const x = Number(n ?? 0);
+  if (!Number.isFinite(x)) return String(n ?? '');
+  return Math.trunc(x).toLocaleString();
+};
+
 // Must match backend `LOOT_BOX_PIECES_PER_OPEN` (routers/money/loot_box.py)
 const LOOT_BOX_PIECES_PER_OPEN = 100;
 const LOOT_BOX_PIECES_TOOLTIP = `Loot box pieces. Collect ${LOOT_BOX_PIECES_PER_OPEN} on the Loot Box page to open a box for random rewards (cash, points, bullets, respect, XP tokens, and more).`;
@@ -190,7 +197,7 @@ function MissionFocusCard({ mission, role, missionIndex, missionTotal, onOpen, d
           <div className="flex flex-wrap items-center gap-2 mb-1.5">
             {missionIndex != null && missionTotal != null && (
               <span className="text-[11px] md:text-xs font-heading font-bold text-primary/90 tabular-nums">
-                {missionIndex}/{missionTotal}
+                {fmtInt(missionIndex)}/{fmtInt(missionTotal)}
               </span>
             )}
             {is_boss && <Skull size={16} className="text-primary shrink-0" />}
@@ -272,7 +279,7 @@ function MissionFocusCard({ mission, role, missionIndex, missionTotal, onOpen, d
           <span className="inline-flex items-center gap-1 text-green-400/90 font-medium">{fmt(mission.reward_tribute_daily)}/day</span>
         )}
         {(mission.reward_respect_daily > 0) && (
-          <span className="inline-flex items-center gap-1 text-fuchsia-400/90 font-medium">+{mission.reward_respect_daily} resp/day</span>
+          <span className="inline-flex items-center gap-1 text-fuchsia-400/90 font-medium">+{fmtInt(mission.reward_respect_daily)} resp/day</span>
         )}
         {mission.unlocks_city && (
           <span className="inline-flex items-center gap-1 text-violet-400 font-medium">
@@ -312,8 +319,8 @@ function MissionFocusSection({
         </div>
         <span className="text-[11px] md:text-xs font-heading font-bold text-foreground tabular-nums">
           {currentMission && missionIdToIndex[currentMission.id]
-            ? `Mission ${missionIdToIndex[currentMission.id].index} of ${orderedTotal}`
-            : `Progress ${completedCount} / ${orderedTotal}`}
+            ? `Mission ${fmtInt(missionIdToIndex[currentMission.id].index)} of ${fmtInt(orderedTotal)}`
+            : `Progress ${fmtInt(completedCount)} / ${fmtInt(orderedTotal)}`}
         </span>
       </div>
 
@@ -516,7 +523,7 @@ function MissionModal({ mission, onClose, onComplete, completing }) {
               {(mission.reward_respect_daily > 0) && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
                   <span style={{ color: '#71717a' }}>Respect (daily)</span>
-                  <span style={{ color: '#c084fc', fontWeight: 700 }}>+{mission.reward_respect_daily}/day</span>
+                  <span style={{ color: '#c084fc', fontWeight: 700 }}>+{fmtInt(mission.reward_respect_daily)}/day</span>
                 </div>
               )}
               {mission.reward_points > 0 && (
@@ -524,13 +531,13 @@ function MissionModal({ mission, onClose, onComplete, completing }) {
                   <span style={{ color: '#71717a', display: 'flex', alignItems: 'center', gap: 5 }}>
                     <Star size={12} /> Rank points
                   </span>
-                  <span style={{ color: '#eab308', fontWeight: 700 }}>+{mission.reward_points} RP</span>
+                  <span style={{ color: '#eab308', fontWeight: 700 }}>+{fmtInt(mission.reward_points)} RP</span>
                 </div>
               )}
               {(mission.reward_respect > 0) && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
                   <span style={{ color: '#71717a' }}>Respect</span>
-                  <span style={{ color: '#c084fc', fontWeight: 700 }}>+{mission.reward_respect}</span>
+                  <span style={{ color: '#c084fc', fontWeight: 700 }}>+{fmtInt(mission.reward_respect)}</span>
                 </div>
               )}
               {(mission.reward_tribute > 0) && (
@@ -544,7 +551,7 @@ function MissionModal({ mission, onClose, onComplete, completing }) {
               {mission.reward_bullets > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
                   <span style={{ color: '#71717a' }}>Ammo</span>
-                  <span style={{ color: '#f87171', fontWeight: 700 }}>+{mission.reward_bullets} bullets</span>
+                  <span style={{ color: '#f87171', fontWeight: 700 }}>+{fmtInt(mission.reward_bullets)} bullets</span>
                 </div>
               )}
               {(mission.reward_car_id || (mission.reward_car_ids && mission.reward_car_ids.length > 0)) && (
@@ -558,20 +565,20 @@ function MissionModal({ mission, onClose, onComplete, completing }) {
               {mission.reward_tribute_bullets_daily > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
                   <span style={{ color: '#71717a' }}>Tribute bullets (daily)</span>
-                  <span style={{ color: '#f87171', fontWeight: 700 }}>+{mission.reward_tribute_bullets_daily}/day</span>
+                  <span style={{ color: '#f87171', fontWeight: 700 }}>+{fmtInt(mission.reward_tribute_bullets_daily)}/day</span>
                 </div>
               )}
               {mission.reward_loot_box_pieces > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
                   <span style={{ color: '#71717a' }}>Loot box pieces</span>
-                  <span style={{ color: '#a78bfa', fontWeight: 700 }}>+{mission.reward_loot_box_pieces} <Link to="/loot-box" style={{ color: '#a78bfa', textDecoration: 'underline' }}>Loot Box</Link></span>
+                  <span style={{ color: '#a78bfa', fontWeight: 700 }}>+{fmtInt(mission.reward_loot_box_pieces)} <Link to="/loot-box" style={{ color: '#a78bfa', textDecoration: 'underline' }}>Loot Box</Link></span>
                 </div>
               )}
               {mission.reward_booze && Object.keys(mission.reward_booze).length > 0 && (
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.82rem' }}>
                   <span style={{ color: '#71717a' }}>Booze</span>
                   <span style={{ color: '#c084fc', fontWeight: 700 }}>
-                    {Object.entries(mission.reward_booze).map(([k, v]) => `${v}x ${k.replace(/_/g, ' ')}`).join(', ')}
+                    {Object.entries(mission.reward_booze).map(([k, v]) => `${fmtInt(v)}× ${k.replace(/_/g, ' ')}`).join(', ')}
                   </span>
                 </div>
               )}
@@ -804,7 +811,7 @@ function TributeBanner({
             {hasRespect && (
               <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-fuchsia-500/15 border border-fuchsia-500/30">
                 <Crown size={14} className="text-fuchsia-400" />
-                <span className="text-base font-heading font-bold text-fuchsia-400">{tributeRespect}</span>
+                <span className="text-base font-heading font-bold text-fuchsia-400">{fmtInt(tributeRespect)}</span>
                 <span className="text-[10px] text-fuchsia-400/80">respect</span>
               </span>
             )}
@@ -814,7 +821,7 @@ function TributeBanner({
                 className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-violet-500/15 border border-violet-500/30 cursor-help"
               >
                 <Star size={14} className="text-violet-400" />
-                <span className="text-base font-heading font-bold text-violet-400">{tributeLootBoxPieces}</span>
+                <span className="text-base font-heading font-bold text-violet-400">{fmtInt(tributeLootBoxPieces)}</span>
                 <span className="text-[10px] text-violet-400/80 max-w-[7.5rem] leading-tight">
                   loot box pieces
                 </span>
@@ -882,7 +889,7 @@ function TributeBanner({
           </div>
           {dailyTributeAutoRank2hTokens > 0 && (
             <p className="text-[8px] text-sky-400/95 mt-1.5 leading-snug">
-              +{dailyTributeAutoRank2hTokens} auto-rank 2h token{dailyTributeAutoRank2hTokens === 1 ? '' : 's'}/day — credited straight to your Auto-rank 2h balance (not stored in tribute).
+              +{fmtInt(dailyTributeAutoRank2hTokens)} auto-rank 2h token{dailyTributeAutoRank2hTokens === 1 ? '' : 's'}/day — credited straight to your Auto-rank 2h balance (not stored in tribute).
             </p>
           )}
           {completedItDailyTokensPerk && (
@@ -922,12 +929,12 @@ function TributeBanner({
                   )}
                   {m.bullets > 0 && (
                     <span className="inline-flex items-center gap-0.5 text-[9px] text-red-400">
-                      <AlertCircle size={9} />+{m.bullets}
+                      <AlertCircle size={9} />+{fmtInt(m.bullets)}
                     </span>
                   )}
                   {m.respect > 0 && (
                     <span className="inline-flex items-center gap-0.5 text-[9px] text-fuchsia-400">
-                      <Crown size={9} />+{m.respect}
+                      <Crown size={9} />+{fmtInt(m.respect)}
                     </span>
                   )}
                   {(m.loot || 0) > 0 && (
@@ -935,7 +942,7 @@ function TributeBanner({
                       className="inline-flex items-center gap-0.5 text-[9px] text-violet-400 cursor-help"
                       title={LOOT_BOX_PIECES_TOOLTIP}
                     >
-                      <Star size={9} />+{m.loot}{' '}
+                      <Star size={9} />+{fmtInt(m.loot)}{' '}
                       <span className="text-violet-400/85">loot box pcs</span>
                     </span>
                   )}
@@ -1014,8 +1021,8 @@ export default function Missions() {
         const tributeTotal = (res.data.reward_money || 0) + (res.data.reward_tribute || 0);
         if (tributeTotal > 0) parts.push(`+${fmt(tributeTotal)} tribute`);
         if (res.data.reward_cash_immediate > 0) parts.push(`+${fmt(res.data.reward_cash_immediate)} cash`);
-        if (res.data.reward_respect > 0) parts.push(`+${res.data.reward_respect} respect`);
-        if (res.data.reward_bullets > 0) parts.push(`+${res.data.reward_bullets} bullets`);
+        if (res.data.reward_respect > 0) parts.push(`+${fmtInt(res.data.reward_respect)} respect`);
+        if (res.data.reward_bullets > 0) parts.push(`+${fmtInt(res.data.reward_bullets)} bullets`);
         const carNames = Array.isArray(res.data.reward_car_names) ? res.data.reward_car_names.filter(Boolean) : [];
         if (carNames.length === 1) parts.push(carNames[0]);
         else if (carNames.length > 1) parts.push(carNames.join(', '));
@@ -1023,7 +1030,7 @@ export default function Missions() {
           if (res.data.reward_car_id) parts.push('1 car');
           if (res.data.reward_car_ids?.length) parts.push(`${res.data.reward_car_ids.length} cars`);
         }
-        if (res.data.reward_loot_box_pieces > 0) parts.push(`+${res.data.reward_loot_box_pieces} Loot Box Piece(s)`);
+        if (res.data.reward_loot_box_pieces > 0) parts.push(`+${fmtInt(res.data.reward_loot_box_pieces)} Loot Box Piece(s)`);
         if (res.data.unlocked_city) parts.push(`${res.data.unlocked_city} unlocked!`);
         toast.success(parts.join(' · ') || 'Mission complete');
         refreshUser();
@@ -1063,12 +1070,12 @@ export default function Missions() {
         const parts = [];
         if (collectedCash > 0) parts.push(`${fmt(collectedCash)} cash`);
         if (collectedBullets > 0) parts.push(`${collectedBullets.toLocaleString()} bullets`);
-        if (collectedLoot > 0) parts.push(`${collectedLoot} loot box piece(s)`);
-        if (collectedRespect > 0) parts.push(`${collectedRespect} respect`);
+        if (collectedLoot > 0) parts.push(`${fmtInt(collectedLoot)} loot box piece(s)`);
+        if (collectedRespect > 0) parts.push(`${fmtInt(collectedRespect)} respect`);
         if (collectedTokens > 0) {
           const tokenParts = Object.entries(tokensAwarded)
             .filter(([, count]) => count > 0)
-            .map(([type, count]) => `${count} ${TOKEN_LABELS[type] || type}`);
+            .map(([type, count]) => `${fmtInt(count)} ${TOKEN_LABELS[type] || type}`);
           if (tokenParts.length > 0) {
             parts.push(`${tokenParts.join(', ')} token(s)`);
           } else {
@@ -1245,8 +1252,8 @@ export default function Missions() {
         </div>
         <div className="p-2.5 flex gap-3 flex-wrap">
           {[
-            { label: 'Done', value: `${completedCount}/${totalMissions}`, cls: 'text-green-400' },
-            { label: 'Ready', value: readyCount, cls: readyCount > 0 ? 'text-primary' : 'text-mutedForeground' },
+            { label: 'Done', value: `${fmtInt(completedCount)}/${fmtInt(totalMissions)}`, cls: 'text-green-400' },
+            { label: 'Ready', value: fmtInt(readyCount), cls: readyCount > 0 ? 'text-primary' : 'text-mutedForeground' },
             { label: 'City', value: cityDisplayName(city), cls: 'text-foreground' },
           ].map(({ label, value, cls }) => (
             <div key={label} className="flex-1 min-w-[80px]">
@@ -1277,7 +1284,7 @@ export default function Missions() {
           <div className="flex items-center gap-2">
             <Skull size={11} className={bossM.requirements_met ? 'text-primary' : 'text-mutedForeground'} />
             <span className="text-[10px] text-mutedForeground italic">
-              {bossM.requirements_met ? `All requirements met — report to ${bossM.title}.` : `${bossDoneCount}/${bossReqCount} requirements met. Complete more to unlock "${bossM.title}".`}
+              {bossM.requirements_met ? `All requirements met — report to ${bossM.title}.` : `${fmtInt(bossDoneCount)}/${fmtInt(bossReqCount)} requirements met. Complete more to unlock "${bossM.title}".`}
             </span>
           </div>
         </div>
