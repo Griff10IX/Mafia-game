@@ -23,6 +23,7 @@ from server import (
     get_rank_info,
     user_prestige_rank_mult,
     CAPO_RANK_ID,
+    casino_ownership_write_below_capo_ops,
     maybe_auto_relinquish_below_capo,
     CASINO_MIN_OWNER_MAX_BET,
     _user_owns_any_casino,
@@ -314,9 +315,11 @@ async def _blackjack_auto_finish_game(game: dict, current_user: dict):
                     "buy_back_reward": 0,
                     "buy_back_points_held": 0,
                 }
-                if get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))[0] < CAPO_RANK_ID:
-                    bj_owner_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
-                await db.blackjack_ownership.update_one({"city": stored_city_bj or bj_city}, {"$set": bj_owner_set})
+                seiz_rank = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))[0]
+                await db.blackjack_ownership.update_one(
+                    {"city": stored_city_bj or bj_city},
+                    casino_ownership_write_below_capo_ops(bj_owner_set, new_owner_rank_id=seiz_rank),
+                )
                 await notify_casino_seizure(
                     former_owner_id=owner_id,
                     former_owner_username=(owner or {}).get("username"),
@@ -682,7 +685,10 @@ def register(router):
         from_username = from_user.get("username") if from_user else None
         await db.blackjack_ownership.update_one(
             {"city": city},
-            {"$set": {"owner_id": from_owner_id, "owner_username": from_username, "max_bet": 0, "buy_back_reward": 0, "buy_back_points_held": 0}},
+            {
+                "$set": {"owner_id": from_owner_id, "owner_username": from_username, "max_bet": 0, "buy_back_reward": 0, "buy_back_points_held": 0},
+                "$unset": {"below_capo_acquired_at": ""},
+            },
         )
         cnorm = _normalize_city_for_blackjack(str(city or "").strip()) if city else ""
         await cancel_quicktrade_casino_listings_by_locations("casino_blackjack", city, cnorm or None)
@@ -747,9 +753,11 @@ def register(router):
             "buy_back_reward": 0,
             "buy_back_points_held": 0,
         }
-        if get_rank_info(target.get("rank_points", 0), user_prestige_rank_mult(target))[0] < CAPO_RANK_ID:
-            send_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
-        await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$set": send_set})
+        tgt_rank = get_rank_info(target.get("rank_points", 0), user_prestige_rank_mult(target))[0]
+        await db.blackjack_ownership.update_one(
+            {"city": stored_city or city},
+            casino_ownership_write_below_capo_ops(send_set, new_owner_rank_id=tgt_rank),
+        )
         await cancel_quicktrade_casino_listings_by_locations("casino_blackjack", stored_city or city, city)
         _invalidate_ownership_cache(target.get("id") or "")
         await maybe_revoke_civilian_protection(db, target.get("id") or "", "received_casino_transfer")
@@ -886,9 +894,11 @@ def register(router):
                         "buy_back_reward": 0,
                         "buy_back_points_held": 0,
                     }
-                    if get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))[0] < CAPO_RANK_ID:
-                        bj_owner_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
-                    await db.blackjack_ownership.update_one({"city": stored_city or city}, {"$set": bj_owner_set})
+                    seiz_rank = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))[0]
+                    await db.blackjack_ownership.update_one(
+                        {"city": stored_city or city},
+                        casino_ownership_write_below_capo_ops(bj_owner_set, new_owner_rank_id=seiz_rank),
+                    )
                     await cancel_quicktrade_casino_listings_by_locations("casino_blackjack", stored_city or city, city)
                     # Track casino seizure stats
                     await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"casinos_seized": 1}})
@@ -1174,9 +1184,11 @@ def register(router):
                         "buy_back_reward": 0,
                         "buy_back_points_held": 0,
                     }
-                    if get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))[0] < CAPO_RANK_ID:
-                        bj_owner_set2["below_capo_acquired_at"] = datetime.now(timezone.utc)
-                    await db.blackjack_ownership.update_one({"city": stored_city_bj or bj_city}, {"$set": bj_owner_set2})
+                    seiz_rank = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))[0]
+                    await db.blackjack_ownership.update_one(
+                        {"city": stored_city_bj or bj_city},
+                        casino_ownership_write_below_capo_ops(bj_owner_set2, new_owner_rank_id=seiz_rank),
+                    )
                     bj_norm = _normalize_city_for_blackjack(str(bj_city or "").strip()) if bj_city else ""
                     await cancel_quicktrade_casino_listings_by_locations("casino_blackjack", stored_city_bj or bj_city, bj_norm or None)
                     # Track casino seizure stats

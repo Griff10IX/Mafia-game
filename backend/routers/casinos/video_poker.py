@@ -24,6 +24,7 @@ from server import (
     get_rank_info,
     user_prestige_rank_mult,
     CAPO_RANK_ID,
+    casino_ownership_write_below_capo_ops,
     maybe_auto_relinquish_below_capo,
     CASINO_MIN_OWNER_MAX_BET,
     _user_owns_any_casino,
@@ -622,7 +623,10 @@ def register(router):
         )
         await db.videopoker_ownership.update_one(
             {"city": city},
-            {"$set": {"owner_id": from_owner_id, "owner_username": from_user.get("username"), "max_bet": 0, "buy_back_reward": 0, "buy_back_points_held": 0}},
+            {
+                "$set": {"owner_id": from_owner_id, "owner_username": from_user.get("username"), "max_bet": 0, "buy_back_reward": 0, "buy_back_points_held": 0},
+                "$unset": {"below_capo_acquired_at": ""},
+            },
         )
         cnorm = _normalize_city(str(city or "").strip()) if city else ""
         await cancel_quicktrade_casino_listings_by_locations("casino_videopoker", city, cnorm or None)
@@ -688,9 +692,11 @@ def register(router):
             "buy_back_reward": 0,
             "buy_back_points_held": 0,
         }
-        if get_rank_info(target.get("rank_points", 0), user_prestige_rank_mult(target))[0] < CAPO_RANK_ID:
-            send_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
-        await db.videopoker_ownership.update_one({"city": stored_city or city}, {"$set": send_set})
+        tgt_rank = get_rank_info(target.get("rank_points", 0), user_prestige_rank_mult(target))[0]
+        await db.videopoker_ownership.update_one(
+            {"city": stored_city or city},
+            casino_ownership_write_below_capo_ops(send_set, new_owner_rank_id=tgt_rank),
+        )
         await cancel_quicktrade_casino_listings_by_locations("casino_videopoker", stored_city or city, city)
         _invalidate_ownership_cache(target.get("id") or "")
         await maybe_revoke_civilian_protection(db, target.get("id") or "", "received_casino_transfer")
@@ -905,9 +911,11 @@ def register(router):
                         "buy_back_reward": 0,
                         "buy_back_points_held": 0,
                     }
-                    if get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))[0] < CAPO_RANK_ID:
-                        vp_owner_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
-                    await db.videopoker_ownership.update_one({"city": city}, {"$set": vp_owner_set})
+                    seiz_rank = get_rank_info(current_user.get("rank_points", 0), user_prestige_rank_mult(current_user))[0]
+                    await db.videopoker_ownership.update_one(
+                        {"city": city},
+                        casino_ownership_write_below_capo_ops(vp_owner_set, new_owner_rank_id=seiz_rank),
+                    )
                     vp_norm = _normalize_city(str(city or "").strip()) if city else ""
                     await cancel_quicktrade_casino_listings_by_locations("casino_videopoker", city, vp_norm or None)
                     # Track casino won/lost stats

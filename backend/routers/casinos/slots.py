@@ -21,7 +21,7 @@ from server import (
     STATES,
     get_rank_info,
     user_prestige_rank_mult,
-    CAPO_RANK_ID,
+    casino_ownership_write_below_capo_ops,
     maybe_auto_relinquish_below_capo,
     CASINO_MIN_OWNER_MAX_BET,
     log_gambling,
@@ -209,11 +209,9 @@ async def _run_slots_draw_if_needed(state: str):
                 "expires_at": expires_at,
                 "next_draw_at": next_draw_iso,
             }
-            if winner_rank_id < CAPO_RANK_ID:
-                slots_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
             res = await db.slots_ownership.update_one(
                 {"state": filter_state},
-                {"$set": slots_set},
+                casino_ownership_write_below_capo_ops(slots_set, new_owner_rank_id=winner_rank_id),
                 upsert=True,
             )
             # One slots holding per user globally: remove stale owner_id from other states' docs
@@ -607,7 +605,8 @@ def register(router):
                     "max_bet": 0,
                     "buy_back_reward": 0,
                     "buy_back_points_held": 0,
-                }
+                },
+                "$unset": {"below_capo_acquired_at": ""},
             },
         )
         _invalidate_slots_ownership_cache(current_user.get("id") or "")
@@ -784,8 +783,7 @@ def register(router):
                 "buy_back_reward": 0,
                 "buy_back_points_held": 0,
             }
-            if spin_winner_rank_id < CAPO_RANK_ID:
-                spin_owner_set["below_capo_acquired_at"] = datetime.now(timezone.utc)
+            spin_owner_update = casino_ownership_write_below_capo_ops(spin_owner_set, new_owner_rank_id=spin_winner_rank_id)
             if points_offered <= 0:
                 if head_family_id:
                     edge_lose = int(bet * SLOTS_HOUSE_EDGE)
@@ -810,7 +808,7 @@ def register(router):
                 await db.users.update_one({"id": owner_id}, {"$set": {"slots_cooldown_until": cooldown_until}})
                 await db.slots_ownership.update_one(
                     {"state": stored_state or state},
-                    {"$set": spin_owner_set},
+                    spin_owner_update,
                 )
                 ownership_transferred = True
                 # Track casino won/lost stats
@@ -820,7 +818,7 @@ def register(router):
                 ownership_transferred = True
                 await db.slots_ownership.update_one(
                     {"state": stored_state or state},
-                    {"$set": spin_owner_set},
+                    spin_owner_update,
                 )
                 # Track casino won/lost stats
                 await db.users.update_one({"id": current_user.get("id") or ""}, {"$inc": {"casinos_seized": 1}})

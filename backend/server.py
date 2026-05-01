@@ -2001,6 +2001,15 @@ async def maybe_auto_relinquish_below_capo(coll, filter_dict: dict, *, reset_cas
         )
 
 
+def casino_ownership_write_below_capo_ops(owner_set: dict, *, new_owner_rank_id: int) -> dict:
+    """Mongo update for assigning casino ownership: below-Capo gets a fresh timer; Capo+ clears stale below_capo_acquired_at."""
+    s = dict(owner_set)
+    if new_owner_rank_id < CAPO_RANK_ID:
+        s["below_capo_acquired_at"] = datetime.now(timezone.utc)
+        return {"$set": s}
+    return {"$set": s, "$unset": {"below_capo_acquired_at": ""}}
+
+
 def get_wealth_rank(money: int | float) -> tuple[int, str, str]:
     """Get wealth rank based on cash on hand. Returns (id, name, color_hex)."""
     m = int(money) if money is not None else 0
