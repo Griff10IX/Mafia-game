@@ -868,7 +868,7 @@ async def _run_bust_only_for_user(user_id: str, username: str, telegram_chat_id:
 #   cooldown_until from the attempted option's cooldown (one attempt = all options on cooldown).
 # - OC: run_oc_heist_npc_only checks oc_cooldown_until and returns without running if on cooldown.
 # - Booze: uses same buy/sell/travel impls; travel duration and arrival are enforced there.
-# - Jail: bust attempts are limited to once per JAIL_BUST_MIN_INTERVAL_SEC (see jail.py). When bust-every-5-sec is on, only the bust loop runs (no crimes/GTA in main cycle).
+# - Jail: bust attempts are limited to once per JAIL_BUST_MIN_INTERVAL_SEC (see jail.py). When bust-every-5-sec is on, cron-bust still runs busts; main cycle also runs crimes/GTA/melt/scrap if those toggles are on.
 
 
 async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id: Optional[str] = None, bot_token: Optional[str] = None, crimes: Optional[list] = None):
@@ -890,8 +890,6 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
         return
     chat_id = (telegram_chat_id or "").strip()
     token = (bot_token or "").strip() or (user.get("telegram_bot_token") or "").strip()
-    bust_every_5 = user.get("auto_rank_bust_every_5_sec", False)
-
     if user.get("in_jail"):
         return
 
@@ -899,11 +897,10 @@ async def _run_auto_rank_for_user(user_id: str, username: str, telegram_chat_id:
     has_success = False
     respect_before = int(user.get("respect_points") or 0)
 
-    # When bust-every-5-sec is on, only the separate bust loop runs crimes/GTA are skipped here
-    run_crimes = user.get("auto_rank_crimes", True) and not bust_every_5
-    run_gta = user.get("auto_rank_gta", True) and not bust_every_5
-    run_melt = bool(user.get("auto_rank_melt", False)) and not bust_every_5
-    run_scrap = bool(user.get("auto_rank_scrap", False)) and not bust_every_5
+    run_crimes = user.get("auto_rank_crimes", True)
+    run_gta = user.get("auto_rank_gta", True)
+    run_melt = bool(user.get("auto_rank_melt", False))
+    run_scrap = bool(user.get("auto_rank_scrap", False))
 
     # --- Crimes: only those off cooldown (same rules as manual play; _commit_crime_impl also enforces) ---
     if run_crimes:

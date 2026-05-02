@@ -286,7 +286,7 @@ const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref }) => {
         label="Run crimes"
         description="Auto-commit crimes per cycle"
         checked={p.auto_rank_enabled ? p.auto_rank_crimes : false}
-        disabled={savingPrefs || !p.auto_rank_enabled || p.auto_rank_bust_every_5_sec}
+        disabled={savingPrefs || !p.auto_rank_enabled}
         onToggle={() => onUpdatePref('auto_rank_crimes', !p.auto_rank_crimes)}
       />
       
@@ -295,14 +295,14 @@ const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref }) => {
         label="Run GTA"
         description="One theft per cycle when cooldown ready"
         checked={p.auto_rank_enabled ? p.auto_rank_gta : false}
-        disabled={savingPrefs || !p.auto_rank_enabled || p.auto_rank_bust_every_5_sec}
+        disabled={savingPrefs || !p.auto_rank_enabled}
         onToggle={() => onUpdatePref('auto_rank_gta', !p.auto_rank_gta)}
       />
       
       <ToggleRow
         icon={Lock}
         label="Jail bust every 5 sec"
-        description="Bust every 5s; only jail busts (no crimes or GTA)"
+        description="Bust attempts every 5s (cron-bust). Runs alongside crimes/GTA when those are enabled"
         checked={p.auto_rank_enabled ? p.auto_rank_bust_every_5_sec : false}
         disabled={savingPrefs || !p.auto_rank_enabled}
         onToggle={() => onUpdatePref('auto_rank_bust_every_5_sec', !p.auto_rank_bust_every_5_sec)}
@@ -322,7 +322,7 @@ const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref }) => {
         label="Run melt"
         description="Melt cars for bullets or cash per main cycle"
         checked={p.auto_rank_enabled ? p.auto_rank_melt : false}
-        disabled={savingPrefs || !p.auto_rank_enabled || p.auto_rank_bust_every_5_sec}
+        disabled={savingPrefs || !p.auto_rank_enabled}
         onToggle={() => onUpdatePref('auto_rank_melt', !p.auto_rank_melt)}
       />
 
@@ -331,7 +331,7 @@ const SettingsCard = ({ prefs, canEnable, savingPrefs, onUpdatePref }) => {
         label="Run scrap"
         description="Scrap cars for cash every 2 minutes (separate from melt)"
         checked={p.auto_rank_enabled ? p.auto_rank_scrap : false}
-        disabled={savingPrefs || !p.auto_rank_enabled || p.auto_rank_bust_every_5_sec}
+        disabled={savingPrefs || !p.auto_rank_enabled}
         onToggle={() => onUpdatePref('auto_rank_scrap', !p.auto_rank_scrap)}
       />
 
@@ -600,10 +600,10 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
     if (sec === 0) return 'now';
     return readyLabel;
   };
-  const activeCrimes = enabled && prefs?.auto_rank_crimes && !prefs?.auto_rank_bust_every_5_sec;
-  const activeGta = enabled && prefs?.auto_rank_gta && !prefs?.auto_rank_bust_every_5_sec;
-  const activeMelt = enabled && prefs?.auto_rank_melt && !prefs?.auto_rank_bust_every_5_sec;
-  const activeScrap = enabled && prefs?.auto_rank_scrap && !prefs?.auto_rank_bust_every_5_sec;
+  const activeCrimes = enabled && prefs?.auto_rank_crimes;
+  const activeGta = enabled && prefs?.auto_rank_gta;
+  const activeMelt = enabled && prefs?.auto_rank_melt;
+  const activeScrap = enabled && prefs?.auto_rank_scrap;
   const activeBust5 = enabled && prefs?.auto_rank_bust_every_5_sec;
   const activeOc = enabled && prefs?.auto_rank_oc;
   const activeBooze = enabled && prefs?.auto_rank_booze;
@@ -731,13 +731,13 @@ const AutoRankSummaryCard = ({ stats, liveCountdown, prefs }) => {
                   <span className="text-zinc-500">OC</span>
                   <span className="text-foreground font-medium tabular-nums">{liveLine(liveCountdown?.nextOcSeconds)}</span>
                 </div>
-                {prefs?.auto_rank_crimes && !prefs?.auto_rank_bust_every_5_sec && (
+                {prefs?.auto_rank_crimes && (
                   <div className="flex justify-between gap-2">
                     <span className="text-zinc-500">Crimes</span>
                     <span className="text-foreground font-medium tabular-nums">{liveLine(liveCountdown?.nextCrimeSeconds)}</span>
                   </div>
                 )}
-                {prefs?.auto_rank_gta && !prefs?.auto_rank_bust_every_5_sec && (
+                {prefs?.auto_rank_gta && (
                   <div className="flex justify-between gap-2">
                     <span className="text-zinc-500">GTA</span>
                     <span className="text-foreground font-medium tabular-nums">{liveLine(liveCountdown?.nextGtaSeconds)}</span>
@@ -1820,10 +1820,10 @@ export default function AutoRank() {
           onDeselectAllScrapRarities={deselectAllScrapRarities}
           onSaveSettings={handleSaveSettings}
           savingSettings={savingSettings}
-          crimesDisabled={savingPrefs || !prefs?.auto_rank_enabled || prefs?.auto_rank_bust_every_5_sec}
-          gtaDisabled={savingPrefs || !prefs?.auto_rank_enabled || prefs?.auto_rank_bust_every_5_sec}
-          meltDisabled={savingPrefs || !prefs?.auto_rank_enabled || prefs?.auto_rank_bust_every_5_sec}
-          scrapDisabled={savingPrefs || !prefs?.auto_rank_enabled || prefs?.auto_rank_bust_every_5_sec}
+          crimesDisabled={savingPrefs || !prefs?.auto_rank_enabled}
+          gtaDisabled={savingPrefs || !prefs?.auto_rank_enabled}
+          meltDisabled={savingPrefs || !prefs?.auto_rank_enabled}
+          scrapDisabled={savingPrefs || !prefs?.auto_rank_enabled}
         />
       )}
 

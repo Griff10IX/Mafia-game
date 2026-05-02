@@ -643,7 +643,7 @@ export default function GTA() {
           <span className="text-[9px] font-heading font-bold text-primary uppercase tracking-[0.12em] gta-panel-header">GTA stats</span>
         </div>
         <div className="p-2 text-[10px] font-heading text-foreground gta-stats-text">
-          GTAs today: {gtaStats.count_today ?? 0}  successful today {gtaStats.success_today ?? 0}  past week {gtaStats.count_week ?? 0} ({gtaStats.success_week ?? 0} successful)
+          GTAs today: {(gtaStats.count_today ?? 0).toLocaleString()}  successful today {(gtaStats.success_today ?? 0).toLocaleString()}  past week {(gtaStats.count_week ?? 0).toLocaleString()} ({(gtaStats.success_week ?? 0).toLocaleString()} successful)
         </div>
         <div className="gta-art-line text-primary mx-2.5" />
       </div>
