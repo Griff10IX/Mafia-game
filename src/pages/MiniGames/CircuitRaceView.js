@@ -1197,6 +1197,8 @@ export default function CircuitRaceView({
   const [results,    setResults]    = useState(null);
   const [spMult,     setSpMult]     = useState(1);
   const spMultRef = useRef(1);
+  /** True while safety car / caution — show x30–x100 sim speed (orbit is capped slow under SC). */
+  const [showScSpeedRow, setShowScSpeedRow] = useState(false);
   const [paused,    setPaused]    = useState(false);
   const pausedRef = useRef(false);
   const [raceProg,  setRaceProg]  = useState(0);
@@ -1207,6 +1209,9 @@ export default function CircuitRaceView({
 
   useEffect(() => { const f = ()=>setNarrow(window.innerWidth<640); window.addEventListener("resize",f); return ()=>window.removeEventListener("resize",f); }, []);
   useEffect(() => { spMultRef.current = spMult; },  [spMult]);
+  useEffect(() => {
+    if (!showScSpeedRow) setSpMult((m) => (m > 4 ? 4 : m));
+  }, [showScSpeedRow]);
   useEffect(() => { pausedRef.current = paused; },  [paused]);
   useEffect(() => { manPitRef.current = manPit; },  [manPit]);
   const onVisualLapChangeRef = useRef(onVisualLapChange);
@@ -2302,6 +2307,7 @@ export default function CircuitRaceView({
       weatherChg={lap:cl,to:Object.keys(WEATHER_DEFS).filter(k=>k!==cond)[Math.floor(Math.random()*4)]};
     }
     let finishFlash=0;
+    let lastScUiReplay = false;
     stateRef.current={racers:racerArr,track,nLaps,wd:curWd,safetyCar:sc,fastestLap:fl,finishFlash:0,incidents};
     const SM=()=>spMultRef.current||1;
     const lapCrossAllowedAfterSec = nLaps > 1 ? (performance.now() / 1000 + 1.75) : -Infinity;
@@ -2318,6 +2324,10 @@ export default function CircuitRaceView({
         const prevMap={};prevSorted.forEach((r,i)=>{prevMap[r.id]={idx:i,prog:(r.totalLapsDone??0)+(r.trackPos??0)};});
 
         const scActive=sc.active&&nowSec<sc.endsAtSec;
+        if (scActive !== lastScUiReplay) {
+          lastScUiReplay = scActive;
+          setShowScSpeedRow(scActive);
+        }
         if(sc.active&&nowSec>=sc.endsAtSec){sc.active=false;addInc("Safety car in — green flag");setCommentary(rnd(COMMENTARY.safetyCarEnd));}
         stateRef.current.safetyCar=sc;
 
@@ -2879,6 +2889,8 @@ export default function CircuitRaceView({
     drawCanvas(track, cond, qualRacers, 0);
 
     function startRacing() {
+    let lastScUiFlag = Number(liveSafetyCarLapsRef.current || 0) > 0;
+    setShowScSpeedRow(lastScUiFlag);
     let lastFrame = performance.now();
     let firstFrame = true;
     let prevPitStopsLen = (livePitStopsRef.current || []).length;
@@ -2955,6 +2967,10 @@ export default function CircuitRaceView({
 
       const localScActive = sc.active && nowSec < sc.endsAtSec;
       const scActive = srvSc > 0 || localScActive;
+      if (scActive !== lastScUiFlag) {
+        lastScUiFlag = scActive;
+        setShowScSpeedRow(scActive);
+      }
       if (!st.safetyCar) st.safetyCar = { active: false, endsAtSec: 0 };
       st.safetyCar.active = scActive;
       st.safetyCar.endsAtSec = srvSc > 0 ? nowSec + 99999 : (localScActive ? sc.endsAtSec : 0);
@@ -3535,6 +3551,7 @@ export default function CircuitRaceView({
       clearInterval(cdRef.current); clearTimeout(gridTimerRef.current);
       clearTimeout(qualQueueTimerRef.current);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      setShowScSpeedRow(false);
     };
     // startRaceLoop / weather / liveTotalLaps / currentUserId omitted: use refs + small isPlayer patch so live polls
     // and profile load do not cancel qualifying RAF.
@@ -3688,6 +3705,15 @@ export default function CircuitRaceView({
                   style={{ fontFamily:"'Cinzel',serif",fontSize:9,fontWeight:700,padding:"2px 6px",background:spMult===x?"rgba(201,164,96,.35)":"rgba(0,0,0,.6)",border:`1px solid ${spMult===x?"var(--noir-primary)":"rgba(201,164,96,.2)"}`,color:spMult===x?"var(--noir-primary)":"var(--noir-muted)",cursor:"pointer",touchAction:"manipulation" }}>x{x}</button>
               ))}
             </div>
+            {showScSpeedRow && (
+              <div style={{ display:"flex",gap:2,flexWrap:"wrap",justifyContent:"flex-end",maxWidth:200 }}>
+                <span style={{ fontFamily:"'Cinzel',serif",fontSize:8,fontWeight:700,color:"#eab308",letterSpacing:".06em",alignSelf:"center",marginRight:2 }}>SC</span>
+                {[30,50,100].map((x) => (
+                  <button key={x} type="button" onClick={() => setSpMult(x)}
+                    style={{ fontFamily:"'Cinzel',serif",fontSize:9,fontWeight:700,padding:"2px 5px",background:spMult === x ? "rgba(234,179,8,.4)" : "rgba(0,0,0,.6)", border: `1px solid ${spMult === x ? "#eab308" : "rgba(234,179,8,.35)"}`, color: spMult === x ? "#fef08a" : "#ca8a04", cursor: "pointer", touchAction: "manipulation" }}>x{x}</button>
+                ))}
+              </div>
+            )}
             <div style={{ width:100,height:4,background:"rgba(255,255,255,.1)",borderRadius:2,overflow:"hidden" }}>
               <div style={{ width:`${Math.round(raceProg*100)}%`,height:"100%",background:"var(--noir-primary)",borderRadius:2,transition:"width .3s ease" }}/>
             </div>
