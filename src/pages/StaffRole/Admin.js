@@ -290,6 +290,7 @@ const SEARCHABLE_TOOLS = [
   { label: 'Trades analytics', categoryId: 'admin-analytics-monitoring', collapseKey: 'tradesAnalytics', keywords: ['trades', 'analytics', 'stock', 'market'] },
   { label: 'Hitlist & bodyguards analytics', categoryId: 'admin-analytics-monitoring', collapseKey: 'hitlistBodyguardsAnalytics', keywords: ['hitlist', 'bodyguard', 'analytics'] },
   { label: 'Economy analytics', categoryId: 'admin-analytics-monitoring', collapseKey: 'economyAnalytics', keywords: ['economy', 'analytics', 'sink', 'faucet'] },
+  { label: 'Loot box opens log', categoryId: 'admin-analytics-monitoring', collapseKey: 'lootBoxOpens', keywords: ['loot', 'box', 'opens', 'rewards', 'username'] },
   { label: 'Player compare', categoryId: 'admin-analytics-monitoring', collapseKey: 'playerCompare', keywords: ['compare', 'players', 'side by side'] },
   // Logs
   { label: 'Toast notifications', categoryId: 'admin-logs', collapseKey: 'toastNotifications', keywords: ['toast', 'notifications', 'popup', 'message', 'error', 'success'] },
@@ -372,8 +373,8 @@ function loadCollapsed() {
   try {
     const raw = localStorage.getItem(SECTIONS_KEY);
     const parsed = raw ? JSON.parse(raw) : {};
-    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, familyWarTruce: false, casinosDeadOwners: true, ...parsed };
-  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, familyWarTruce: false, casinosDeadOwners: true }; }
+    return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true, ...parsed };
+  } catch { return { referralsReport: false, userAdjustHub: true, botInvestigation: false, sportsBetsLedger: true, casinoSeizures: true, casinoBuybackHistory: true, mdgGamesLog: true, quicktradeTool: true, toastNotifications: true, walletActivity: true, bankEconomy: true, sustainedPageRl: true, sustainedRl429Log: false, familyWarTruce: false, casinosDeadOwners: true, lootBoxOpens: true }; }
 }
 
 function saveCollapsed(state) {
@@ -385,6 +386,37 @@ function formatAdminMoneyInt(n) {
   const x = Number(n);
   if (Number.isNaN(x)) return '—';
   return `$${x.toLocaleString()}`;
+}
+
+/** One-line summary for admin loot box open rows (economy_events). */
+function formatLootBoxOpenRewards(ev) {
+  const rewards = ev?.rewards;
+  if (Array.isArray(rewards) && rewards.length) {
+    const parts = rewards.map((r) => {
+      const t = r.type || '?';
+      if (t === 'cash') return formatAdminMoneyInt(r.amount);
+      if (t === 'points') return `${Number(r.amount || 0).toLocaleString()} pts`;
+      if (t === 'rank_points') return `${Number(r.amount || 0).toLocaleString()} RP`;
+      if (t === 'bullets') return `${Number(r.amount || 0).toLocaleString()} bullets`;
+      if (t === 'loot_pieces') return `${Number(r.amount || 0).toLocaleString()} box pieces`;
+      if (t === 'cars' && Array.isArray(r.items)) {
+        const names = r.items.map((it) => `${it.name || '?'}${it.rarity ? ` (${it.rarity})` : ''}`).join(', ');
+        return names ? `Cars: ${names}` : `Cars ×${r.count ?? ''}`;
+      }
+      if (t === 'token') return `${r.token_type || 'token'} ×${r.amount ?? ''}`;
+      if (t === 'perk') return r.name || 'Perk';
+      if (t === 'weapon' || t === 'armour' || t === 'property' || t === 'car') {
+        return `${t}: ${r.name || '?'}`;
+      }
+      return t;
+    });
+    return parts.join(' · ');
+  }
+  const types = ev?.reward_types;
+  if (Array.isArray(types) && types.length) {
+    return `${types.join(', ')} (summary only)`;
+  }
+  return '—';
 }
 
 /** Human-readable cells for Betting Log when game_type is mdg (avoids raw JSON). */
@@ -901,6 +933,10 @@ export default function Admin() {
   const [economyAnalyticsDays, setEconomyAnalyticsDays] = useState(7);
   const [economyAnalytics, setEconomyAnalytics] = useState(null);
   const [economyAnalyticsLoading, setEconomyAnalyticsLoading] = useState(false);
+  const [lootBoxOpensUsername, setLootBoxOpensUsername] = useState('');
+  const [lootBoxOpensSkip, setLootBoxOpensSkip] = useState(0);
+  const [lootBoxOpensData, setLootBoxOpensData] = useState(null);
+  const [lootBoxOpensLoading, setLootBoxOpensLoading] = useState(false);
   const [analyticsV2Bucket, setAnalyticsV2Bucket] = useState('daily');
   const [analyticsV2Periods, setAnalyticsV2Periods] = useState(14);
   const [analyticsV2Domain, setAnalyticsV2Domain] = useState('');
@@ -5682,6 +5718,24 @@ export default function Admin() {
       toast.error(e.response?.data?.detail || 'Failed to load economy analytics');
     } finally {
       setEconomyAnalyticsLoading(false);
+    }
+  };
+
+  const fetchLootBoxOpensPage = async (skipVal) => {
+    setLootBoxOpensLoading(true);
+    try {
+      const page = 50;
+      const params = { limit: page, skip: skipVal };
+      const u = (lootBoxOpensUsername || '').trim();
+      if (u) params.username = u;
+      const res = await api.get('/loot-box/admin/opens', { params });
+      setLootBoxOpensData(res.data || null);
+      setLootBoxOpensSkip(skipVal);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to load loot box opens');
+      setLootBoxOpensData(null);
+    } finally {
+      setLootBoxOpensLoading(false);
     }
   };
 
@@ -16511,6 +16565,81 @@ export default function Admin() {
                     )}
                   </div>
                 </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Loot box opens (economy_events) */}
+        <div className={`relative admin-module ${styles.panel} rounded-lg overflow-hidden border border-primary/20 mobile-panel`}>
+          <div className="h-0.5 bg-gradient-to-r from-transparent via-primary/40 to-transparent" />
+          <SectionHeader
+            icon={BarChart3}
+            title="Loot box opens"
+            badge={lootBoxOpensData?.total != null ? <span className="text-[10px] font-heading text-mutedForeground">{(lootBoxOpensData.total || 0).toLocaleString()} total</span> : null}
+            toolAnchor="lootBoxOpens"
+            isCollapsed={collapsed.lootBoxOpens}
+            onToggle={() => toggleSection('lootBoxOpens')}
+          />
+          {!collapsed.lootBoxOpens && (
+            <div className="p-3 space-y-2">
+              <p className="text-[10px] text-mutedForeground font-heading">Recent opens from the economy log. Leave username blank for all players, or filter by exact in-game username.</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="text"
+                  value={lootBoxOpensUsername}
+                  onChange={(e) => setLootBoxOpensUsername(e.target.value)}
+                  placeholder="username (optional)"
+                  className="w-full sm:w-40 bg-zinc-900/50 border border-zinc-700/50 rounded px-2 py-1 text-xs text-foreground focus:border-primary/50 focus:outline-none font-heading"
+                />
+                <BtnPrimary onClick={() => fetchLootBoxOpensPage(0)} disabled={lootBoxOpensLoading}>{lootBoxOpensLoading ? 'Loading…' : 'Load opens'}</BtnPrimary>
+                <BtnSecondary
+                  type="button"
+                  onClick={() => fetchLootBoxOpensPage(Math.max(0, lootBoxOpensSkip - 50))}
+                  disabled={lootBoxOpensLoading || lootBoxOpensSkip <= 0}
+                >
+                  Prev
+                </BtnSecondary>
+                <BtnSecondary
+                  type="button"
+                  onClick={() => fetchLootBoxOpensPage(lootBoxOpensSkip + 50)}
+                  disabled={lootBoxOpensLoading || !lootBoxOpensData?.opens?.length || (lootBoxOpensSkip + (lootBoxOpensData.opens?.length || 0)) >= (lootBoxOpensData.total || 0)}
+                >
+                  Next
+                </BtnSecondary>
+                <span className="text-[10px] text-mutedForeground font-heading">
+                  {lootBoxOpensData ? `Page skip ${lootBoxOpensSkip.toLocaleString()} · showing ${(lootBoxOpensData.opens || []).length}` : ''}
+                </span>
+              </div>
+              {lootBoxOpensData && (
+                <div className="overflow-x-auto max-h-96">
+                  {(!lootBoxOpensData.opens || lootBoxOpensData.opens.length === 0) ? (
+                    <p className="text-[10px] text-mutedForeground font-heading">No opens match this filter.</p>
+                  ) : (
+                    <table className="w-full text-[10px] font-heading">
+                      <thead>
+                        <tr>
+                          <th className="text-left p-1.5 text-mutedForeground">When</th>
+                          <th className="text-left p-1.5 text-mutedForeground">User</th>
+                          <th className="text-left p-1.5 text-mutedForeground">Box</th>
+                          <th className="text-right p-1.5 text-mutedForeground">#</th>
+                          <th className="text-left p-1.5 text-mutedForeground">Rewards</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(lootBoxOpensData.opens || []).map((row, idx) => (
+                          <tr key={`${row.at || ''}-${row.user_id || ''}-${idx}`} className="border-b border-zinc-700/30 align-top">
+                            <td className="py-1.5 pr-2 whitespace-nowrap text-mutedForeground">{row.at || '—'}</td>
+                            <td className="py-1.5 pr-2 font-medium">{row.username || row.user_id || '—'}</td>
+                            <td className="py-1.5 pr-2">{row.box_quality || '—'}</td>
+                            <td className="py-1.5 text-right">{row.prizes_count != null ? row.prizes_count : '—'}</td>
+                            <td className="py-1.5 text-zinc-200 break-words max-w-md">{formatLootBoxOpenRewards(row)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
               )}
             </div>
           )}

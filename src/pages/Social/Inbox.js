@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Mail, MailOpen, Bell, Trophy, Shield, Skull, Gift, Trash2, MessageCircle, Send, X, ChevronRight, Bot } from 'lucide-react';
-import api from '../../utils/api';
+import api, { apiGetWithResumeRetries } from '../../utils/api';
 import { toast } from 'sonner';
 import GifPicker from '../../components/GifPicker';
 import { parseForumContent, FORUM_INLINE_SMILEY_PX } from '../../utils/forumContent';
@@ -568,14 +568,17 @@ export default function Inbox() {
     }).catch(() => {});
   }, []);
 
-  const fetchNotifications = useCallback(async () => {
+  const fetchNotifications = useCallback(async (opts = {}) => {
+    const silent = opts.silent === true;
     try {
-      const response = await api.get('/notifications');
+      const response = await apiGetWithResumeRetries('/notifications');
       setNotifications(response.data?.notifications ?? []);
       setUnreadCount(response.data?.unread_count ?? 0);
     } catch (error) {
-      toast.error('Failed to load notifications');
-      // Do not clear inbox on failure — a later refetch can error while data is still valid on the server.
+      if (!silent) {
+        toast.error("Messages didn't load. Check your connection — try again or reopen this tab.");
+      }
+      // Do not clear inbox on failure — a later refetch can succeed after wake-from-background.
     } finally {
       setHasLoaded(true);
     }
@@ -583,7 +586,7 @@ export default function Inbox() {
 
   const fetchSentMessages = useCallback(async () => {
     try {
-      const response = await api.get('/notifications/sent');
+      const response = await apiGetWithResumeRetries('/notifications/sent');
       setSentMessages(response.data?.sent_messages ?? []);
     } catch (error) {
       setSentMessages([]);
@@ -593,6 +596,27 @@ export default function Inbox() {
   useEffect(() => {
     fetchNotifications();
     fetchSentMessages();
+  }, [fetchNotifications, fetchSentMessages]);
+
+  // iPhone / Safari: first fetch after returning from background often fails; refetch when tab is visible again (no error toast).
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState !== 'visible') return;
+      fetchNotifications({ silent: true });
+      fetchSentMessages();
+    };
+    const onPageShow = (e) => {
+      if (e.persisted) {
+        fetchNotifications({ silent: true });
+        fetchSentMessages();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pageshow', onPageShow);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pageshow', onPageShow);
+    };
   }, [fetchNotifications, fetchSentMessages]);
 
   useEffect(() => {

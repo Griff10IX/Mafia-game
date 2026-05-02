@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'rea
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { SAME_ROUTE_NAV_CLICK } from '../constants/navigationEvents';
 import { Menu, X, Home, Target, Shield, Building, Building2, Dice5, Sword, Trophy, ShoppingBag, DollarSign, User, LogOut, TrendingUp, Car, Settings, Users, Lock, Crosshair, Skull, Plane, Mail, ChevronDown, ChevronUp, ChevronRight, Landmark, Wine, Newspaper, MapPin, Map, ScrollText, FileText, ArrowLeftRight, MessageSquare, Bell, ListChecks, Palette, Bot, Search, Zap, LayoutGrid, Heart, Gift, Globe, HelpCircle, Headphones, PanelRight, BarChart3, Package, Gamepad2, UserPlus, Award, Activity, CircleDot, Spade, Flag, SquareStack, Video, Sparkles, Crown, LineChart, Image, Ticket, Mic2, Lightbulb } from 'lucide-react';
-import api, { getApiErrorMessage, onCooldownChange, invalidateApiCache, apiRequestWith429Retry } from '../utils/api';
+import api, { getApiErrorMessage, onCooldownChange, invalidateApiCache, apiRequestWith429Retry, apiGetWithResumeRetries } from '../utils/api';
 import { getThemeUiPlatform } from '../utils/themePlatform';
 import { readSessionJson } from '../utils/sessionPageCache';
 import { DASHBOARD_SESSION_CACHE_KEY } from '../utils/dashboardSessionCache';
@@ -397,6 +397,7 @@ export default function Layout({ children }) {
   const notificationPanelRef = useRef(null);
   const notificationPanelOpenRef = useRef(false);
   notificationPanelOpenRef.current = notificationPanelOpen;
+  const fetchDataRef = useRef(async () => {});
   const mobileBottomNavRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -673,7 +674,10 @@ export default function Layout({ children }) {
       fetchData(); fetchUnreadCount(); fetchHelpDeskOpenCount(); fetchWarStatus(); fetchRankingCounts();
       api.get('/oc/status').then((r) => setOcStatus(r.data)).catch(() => setOcStatus(null));
       if (notificationPanelOpenRef.current) {
-        try { const response = await api.get('/notifications'); setNotificationList(response.data.notifications || []); } catch { }
+        try {
+          const response = await apiGetWithResumeRetries('/notifications');
+          setNotificationList(response.data.notifications || []);
+        } catch { /* keep list */ }
       }
     };
     const handler = (event) => {
@@ -823,7 +827,7 @@ export default function Layout({ children }) {
   useEffect(() => {
     const pollNotifications = async () => {
       try {
-        const response = await apiRequestWith429Retry(() => api.get('/notifications'));
+        const response = await apiGetWithResumeRetries('/notifications');
         setUnreadCount(response.data.unread_count ?? 0);
         if (notificationPanelOpenRef.current) setNotificationList(response.data.notifications || []);
       } catch { }
@@ -894,7 +898,7 @@ export default function Layout({ children }) {
         p.catch(() => {});
       };
       const progressPromise = apiRequestWith429Retry(() => api.get('/user/rank-progress'));
-      const userRes = await api.get('/auth/me');
+      const userRes = await apiGetWithResumeRetries('/auth/me');
       if (userRes.data?.account_locked) {
         sinkProgress(progressPromise);
         if (window.location.pathname !== '/locked') {
@@ -917,7 +921,7 @@ export default function Layout({ children }) {
       }));
       setRankProgress(progressRes.data);
     } catch (error) {
-      const status = error.response?.status;
+      const status = error?.response?.status;
       if (status === 401 || (status === 403 && error.config?.url?.includes('/auth/me'))) {
         const msg = getApiErrorMessage(error);
         toast.error(msg || 'Session expired. Please log in again.');
@@ -929,6 +933,35 @@ export default function Layout({ children }) {
       }
     }
   };
+  fetchDataRef.current = fetchData;
+
+  useEffect(() => {
+    let debounceTimer = null;
+    const onVisibility = () => {
+      if (document.visibilityState !== 'visible') return;
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        debounceTimer = null;
+        (async () => {
+          try {
+            const r = await apiGetWithResumeRetries('/notifications');
+            setUnreadCount(r.data?.unread_count ?? 0);
+            if (notificationPanelOpenRef.current) {
+              setNotificationList(r.data?.notifications || []);
+            }
+          } catch (_) { /* badge unchanged */ }
+          try {
+            await fetchDataRef.current?.();
+          } catch (_) { /* fetchData handles auth */ }
+        })();
+      }, 450);
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, []);
 
   const fetchWarStatus = async () => {
     try {
@@ -939,7 +972,12 @@ export default function Layout({ children }) {
     }
   };
   const fetchUnreadCount = async () => {
-    try { const response = await api.get('/notifications'); setUnreadCount(response.data.unread_count); } catch (error) { console.error('Failed to fetch notifications'); }
+    try {
+      const response = await apiGetWithResumeRetries('/notifications');
+      setUnreadCount(response.data.unread_count ?? 0);
+    } catch (error) {
+      console.error('Failed to fetch notifications');
+    }
   };
   const fetchHelpDeskOpenCount = async () => {
     try { const res = await api.get('/help-desk/open-count'); setHelpDeskOpenCount(res.data?.open_tickets_count ?? 0); } catch { setHelpDeskOpenCount(0); }
@@ -961,7 +999,12 @@ export default function Layout({ children }) {
     const next = !notificationPanelOpen;
     setNotificationPanelOpen(next);
     if (next) {
-      try { const response = await api.get('/notifications'); setNotificationList(response.data.notifications || []); } catch { setNotificationList([]); }
+      try {
+        const response = await apiGetWithResumeRetries('/notifications');
+        setNotificationList(response.data.notifications || []);
+      } catch {
+        setNotificationList([]);
+      }
     }
   };
 

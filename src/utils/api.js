@@ -83,6 +83,49 @@ export async function apiRequestWith429Retry(requestFn, maxAttempts = 3) {
   throw lastErr;
 }
 
+const _RESUME_GET_MAX_ATTEMPTS = 3;
+
+function _sleepResumeRetry(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** True when a short backoff + retry may help (e.g. mobile tab waking from background). Not for 401/403. */
+export function isTransientResumeLoadError(error) {
+  if (!error?.response) {
+    const code = error?.code;
+    if (code === 'ERR_CANCELED' || error?.name === 'CanceledError') return false;
+    if (code === 'ERR_NETWORK' || code === 'ECONNABORTED' || code === 'ETIMEDOUT') return true;
+    const msg = String(error?.message || '').toLowerCase();
+    return msg.includes('network error') || msg.includes('timeout');
+  }
+  const st = error.response.status;
+  if (st === 401 || st === 403 || st === 404) return false;
+  return st === 408 || st === 502 || st === 503 || st === 504;
+}
+
+/**
+ * GET with 429-aware inner retries plus outer retries for wake-from-idle network/gateway failures.
+ * @param {string} path
+ * @param {import('axios').AxiosRequestConfig} [config]
+ * @param {number} [maxAttempts=3]
+ */
+export async function apiGetWithResumeRetries(path, config, maxAttempts = _RESUME_GET_MAX_ATTEMPTS) {
+  let lastErr;
+  for (let i = 0; i < maxAttempts; i++) {
+    try {
+      return await apiRequestWith429Retry(() => api.get(path, config));
+    } catch (e) {
+      lastErr = e;
+      if (isTransientResumeLoadError(e) && i < maxAttempts - 1) {
+        await _sleepResumeRetry(450 + i * 550);
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw lastErr;
+}
+
 // ── Rate-limit cooldown state (shared across the app) ──
 let _cooldownUntil = 0;        // timestamp (ms) when cooldown expires
 let _cooldownTimerId = null;

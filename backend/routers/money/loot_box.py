@@ -8,7 +8,7 @@ import uuid
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any, Tuple
 
-from fastapi import Depends, HTTPException, Body
+from fastapi import Depends, HTTPException, Body, Query
 from pydantic import BaseModel
 
 import os
@@ -781,6 +781,7 @@ async def open_loot_box(
             "box_quality": box_quality,
             "prizes_count": len(rewards),
             "reward_types": [r.get("type") for r in rewards if r.get("type")],
+            "rewards": rewards,
         })
 
         await log_activity(user_id, current_user.get("username", "?"), "loot_box_open", {
@@ -884,6 +885,36 @@ async def gift_speakeasy(body: SpeakeasyGiftRequest, current_user: dict = Depend
     return {"message": f"Speakeasy transferred to {r_display}.", "recipient_username": r_display}
 
 
+async def admin_loot_box_opens_list(
+    username: Optional[str] = None,
+    limit: int = Query(100, ge=1, le=500),
+    skip: int = Query(0, ge=0, le=100_000),
+    current_user: dict = Depends(get_current_user),
+):
+    """Admin only: paginated loot box opens from economy_events (newest first). Optional username filter."""
+    if not _is_admin(current_user):
+        raise HTTPException(status_code=403, detail="Admin only")
+    q: Dict[str, Any] = {"type": "loot_box_open"}
+    raw_un = (username or "").strip()
+    if raw_un:
+        pat = _username_pattern(raw_un)
+        if not pat:
+            raise HTTPException(status_code=400, detail="Invalid username")
+        user = await db.users.find_one({"username": pat}, {"_id": 0, "id": 1})
+        if not user:
+            return {"opens": [], "total": 0, "limit": limit, "skip": skip}
+        q["user_id"] = user["id"]
+    total = await db.economy_events.count_documents(q)
+    cursor = (
+        db.economy_events.find(q, {"_id": 0})
+        .sort("at", -1)
+        .skip(skip)
+        .limit(limit)
+    )
+    opens = await cursor.to_list(length=limit)
+    return {"opens": opens, "total": total, "limit": limit, "skip": skip}
+
+
 def register(router):
     router.add_api_route("/loot-box/status", get_loot_box_status, methods=["GET"])
     router.add_api_route("/loot-box/open", open_loot_box, methods=["POST"])
@@ -891,3 +922,4 @@ def register(router):
     router.add_api_route("/loot-box/speakeasy/gift", gift_speakeasy, methods=["POST"])
     router.add_api_route("/loot-box/admin/rarity", get_loot_box_rarity_admin, methods=["GET"])
     router.add_api_route("/loot-box/admin/rarity", set_loot_box_rarity_admin, methods=["POST"])
+    router.add_api_route("/loot-box/admin/opens", admin_loot_box_opens_list, methods=["GET"])
