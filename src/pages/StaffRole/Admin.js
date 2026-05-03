@@ -828,6 +828,7 @@ export default function Admin() {
   const [firstGpVipCompletionRunLoading, setFirstGpVipCompletionRunLoading] = useState(false);
   const [userInboxData, setUserInboxData] = useState(null);
   const [userInboxLoading, setUserInboxLoading] = useState(false);
+  const [userInboxDeletingId, setUserInboxDeletingId] = useState(null);
   const [userInboxScope, setUserInboxScope] = useState('inbox');
   const [deletedMsgs, setDeletedMsgs] = useState(null);
   const [deletedMsgsLoading, setDeletedMsgsLoading] = useState(false);
@@ -3894,6 +3895,23 @@ export default function Admin() {
       toast.error(error.response?.data?.detail || 'Failed to load inbox');
     } finally {
       setUserInboxLoading(false);
+    }
+  };
+
+  const deleteUserInboxNotification = async (notificationId, titlePreview) => {
+    const u = (formData.targetUsername || '').trim();
+    if (!u || !notificationId) return;
+    const preview = (titlePreview || notificationId || '').slice(0, 120);
+    if (!window.confirm(`Delete this inbox row for ${u}?\n\n${preview}`)) return;
+    setUserInboxDeletingId(notificationId);
+    try {
+      await api.delete(`/admin/user-inbox/${encodeURIComponent(u)}/notifications/${encodeURIComponent(notificationId)}`);
+      toast.success('Notification deleted');
+      await loadUserInbox();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete');
+    } finally {
+      setUserInboxDeletingId(null);
     }
   };
 
@@ -9919,7 +9937,7 @@ export default function Admin() {
                 <span className="text-[10px] font-heading font-bold text-sky-300 uppercase tracking-wider">User inbox (live)</span>
               </div>
               <p className="text-[9px] text-mutedForeground font-heading">
-                Read the target user’s current inbox rows from the notifications collection (matches Social → Inbox, not the deleted archive). Uses the target username above.
+                Read the target user’s current inbox rows from the notifications collection (matches Social → Inbox, not the deleted archive). Uses the target username above. Delete archives the row (same as the player deleting in Social → Inbox) then removes it.
               </p>
               <div className="flex flex-wrap items-center gap-2">
                 <select
@@ -9962,6 +9980,7 @@ export default function Admin() {
                             <th className="px-2 py-1">From / To</th>
                             <th className="px-2 py-1 max-w-xs">Message</th>
                             <th className="px-2 py-1 font-mono">id</th>
+                            <th className="px-2 py-1 whitespace-nowrap">Actions</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -9978,6 +9997,20 @@ export default function Admin() {
                               </td>
                               <td className="px-2 py-1 max-w-xs break-words" title={n.message}>{n.message || '—'}</td>
                               <td className="px-2 py-1 font-mono text-[8px] break-all max-w-[100px]">{n.id || '—'}</td>
+                              <td className="px-2 py-1 whitespace-nowrap">
+                                {n.id ? (
+                                  <BtnDanger
+                                    type="button"
+                                    className="!px-2 !py-0.5 text-[9px]"
+                                    disabled={!!userInboxDeletingId || userInboxLoading}
+                                    onClick={() => deleteUserInboxNotification(n.id, n.title || n.notification_type)}
+                                  >
+                                    {userInboxDeletingId === n.id ? '…' : 'Delete'}
+                                  </BtnDanger>
+                                ) : (
+                                  '—'
+                                )}
+                              </td>
                             </tr>
                           ))}
                         </tbody>

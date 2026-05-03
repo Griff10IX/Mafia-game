@@ -2767,6 +2767,40 @@ def register(router):
             "notifications": rows,
         }
 
+    @router.delete("/admin/user-inbox/{username}/notifications/{notification_id}")
+    async def admin_delete_user_notification(
+        username: str,
+        notification_id: str,
+        current_user: dict = Depends(get_current_user),
+    ):
+        """Admin: delete one notification row for a player (archives then removes; same as user's own delete)."""
+        if not _is_admin(current_user):
+            raise HTTPException(status_code=403, detail="Admin access required")
+        nid = (notification_id or "").strip()
+        if not nid:
+            raise HTTPException(status_code=400, detail="notification_id required")
+        username_pattern = _username_pattern(username)
+        target = await db.users.find_one({"username": username_pattern}, {"_id": 0, "id": 1, "username": 1})
+        if not target:
+            raise HTTPException(status_code=404, detail="User not found")
+        uid = target["id"]
+        doc = await db.notifications.find_one({"id": nid, "user_id": uid}, {"_id": 0})
+        if not doc:
+            raise HTTPException(status_code=404, detail="Notification not found")
+        from utils.deleted_messages_archive import archive_message
+        from routers.game.notifications import invalidate_notifications_list_cache_for_user
+
+        await archive_message(
+            source="notification",
+            doc=doc,
+            deleted_by_id=current_user.get("id"),
+            deleted_by_username=current_user.get("username"),
+            reason="admin_user_inbox_delete",
+        )
+        await db.notifications.delete_one({"id": nid, "user_id": uid})
+        invalidate_notifications_list_cache_for_user(uid)
+        return {"message": "Notification deleted", "id": nid}
+
     @router.get("/admin/game-pass/stuck-cursors")
     async def admin_game_pass_stuck_cursors(
         fix: bool = Query(False),

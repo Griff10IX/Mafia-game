@@ -69,6 +69,11 @@ def _invalidate_list_cache(user_id: str):
     _list_cache.pop(user_id, None)
 
 
+def invalidate_notifications_list_cache_for_user(user_id: str):
+    """Call after admin (or tooling) mutates another user's notifications so GET /notifications is fresh."""
+    _invalidate_list_cache(user_id or "")
+
+
 async def _notifications_sustained_rl_user(current_user: dict = Depends(get_current_user)):
     await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_NOTIFICATIONS)
 
