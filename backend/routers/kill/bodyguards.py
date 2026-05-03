@@ -36,6 +36,7 @@ from server import (
     db,
     get_current_user,
     get_effective_event,
+    get_effective_event_for_bodyguard_hire,
     log_activity,
     send_notification,
     get_rank_info,
@@ -516,15 +517,13 @@ async def hire_bodyguard(request: BodyguardHireRequest, current_user: dict = Dep
 
 
 async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
-    if await db.bodyguards.find_one({"bodyguard_user_id": current_user["id"], "is_robot": False}, {"_id": 1}):
-        raise HTTPException(
-            status_code=400,
-            detail="You cannot hire bodyguards while you're employed as someone else's bodyguard.",
-        )
-    if not is_robot:
-        raise HTTPException(status_code=400, detail="Human bodyguards are temporarily disabled. Use robot bodyguards.")
-    fresh = await db.users.find_one(
-        {"id": current_user["id"]},
+    uid = current_user["id"]
+    as_guard_coro = db.bodyguards.find_one(
+        {"bodyguard_user_id": uid, "is_robot": False},
+        {"_id": 1},
+    )
+    fresh_coro = db.users.find_one(
+        {"id": uid},
         {
             "_id": 0,
             "bodyguard_slots": 1,
@@ -533,6 +532,20 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
             "bodyguard_inflation_level": 1,
         },
     )
+    slots_list_coro = db.bodyguards.find(
+        {"user_id": uid},
+        {"_id": 0, "slot_number": 1},
+    ).to_list(10)
+    ev_coro = get_effective_event_for_bodyguard_hire()
+    as_guard, fresh, existing_bgs, ev = await asyncio.gather(as_guard_coro, fresh_coro, slots_list_coro, ev_coro)
+
+    if as_guard:
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot hire bodyguards while you're employed as someone else's bodyguard.",
+        )
+    if not is_robot:
+        raise HTTPException(status_code=400, detail="Human bodyguards are temporarily disabled. Use robot bodyguards.")
     slots = int((fresh or {}).get("bodyguard_slots") or 0)
     if is_robot:
         until_iso = (fresh or {}).get("bodyguard_robot_loss_hire_allowed_after")
@@ -543,16 +556,11 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
                 status_code=400,
                 detail=f"Your robot bodyguard was just taken out. Wait {secs_left} seconds before hiring another.",
             )
-    existing_bgs = await db.bodyguards.find(
-        {"user_id": current_user["id"]},
-        {"_id": 0, "slot_number": 1}
-    ).to_list(10)
     occupied = {b["slot_number"] for b in existing_bgs}
     slot = next((s for s in range(1, 5) if s not in occupied), None)
     if slot is None:
         raise HTTPException(status_code=400, detail="All bodyguard slots are full")
     unlock_next_slot = slot > slots
-    ev = await get_effective_event()
     event_cost_mult = ev.get("bodyguard_cost", 1.0)
     base_cost = BODYGUARD_SLOT_COSTS[slot - 1]
     # Bodyguard inflation: each hire within 3h adds % (0%, 2%, 5%, 7%, 12%, 17%, ...)
@@ -592,15 +600,18 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
         "event_bodyguard_cost_mult": event_cost_mult,
         "base_slot_cost": base_cost,
     }
-    await log_points_event(
-        db, user_id=current_user["id"], points=-total_cost, event_type="bodyguard_hire",
+    log_coro = log_points_event(
+        db, user_id=uid, points=-total_cost, event_type="bodyguard_hire",
         event_ref=f"slot:{slot}", meta=hire_meta,
     )
     robot_name = None
     robot_user_id = None
     robot_rank_points = 0
     if is_robot:
-        robot_user_id, robot_name, robot_rank_points = await _create_robot_bodyguard_user(current_user)
+        _, robot_tuple = await asyncio.gather(log_coro, _create_robot_bodyguard_user(current_user))
+        robot_user_id, robot_name, robot_rank_points = robot_tuple
+    else:
+        await log_coro
     hired_at_iso = datetime.now(timezone.utc).isoformat()
     bodyguard_doc = {
         "id": str(uuid.uuid4()),
@@ -615,8 +626,10 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
         "hired_at": hired_at_iso,
         "hire_cost": total_cost,
     }
-    await db.bodyguards.insert_one(bodyguard_doc)
-    await db.users.update_one({"id": current_user["id"]}, {"$unset": {"bodyguard_robot_loss_hire_allowed_after": ""}})
+    await asyncio.gather(
+        db.bodyguards.insert_one(bodyguard_doc),
+        db.users.update_one({"id": uid}, {"$unset": {"bodyguard_robot_loss_hire_allowed_after": ""}}),
+    )
 
     async def _hire_audit_log():
         try:

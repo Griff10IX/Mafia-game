@@ -532,6 +532,65 @@ async def get_effective_event_full():
     except Exception:
         return {"event": NO_EVENT.copy(), "event_ids": [], "expires_at": None, "duration_hours": 0}
 
+
+async def get_effective_event_for_bodyguard_hire() -> dict:
+    """Same combined multiplier dict as get_effective_event, with at most one game_config read before write.
+
+    Used by bodyguard hire hot path to avoid double find_one (get_events_enabled + get_or_rotate_random_events).
+    """
+    try:
+        now = datetime.now(timezone.utc)
+        doc = await db.game_config.find_one(
+            {"id": "main"},
+            {
+                "_id": 0,
+                "events_enabled": 1,
+                "random_events_active_ids": 1,
+                "random_events_expires_at": 1,
+                "random_events_duration_hours": 1,
+            },
+        )
+        enabled = True if doc is None else bool(doc.get("events_enabled", True))
+        if not enabled:
+            return NO_EVENT.copy()
+
+        if doc:
+            raw_expires = doc.get("random_events_expires_at")
+            expires_dt = None
+            if raw_expires:
+                if isinstance(raw_expires, str):
+                    try:
+                        expires_dt = datetime.fromisoformat(raw_expires.replace("Z", "+00:00"))
+                        if expires_dt.tzinfo is None:
+                            expires_dt = expires_dt.replace(tzinfo=timezone.utc)
+                    except Exception:
+                        expires_dt = None
+                elif isinstance(raw_expires, datetime):
+                    expires_dt = raw_expires if raw_expires.tzinfo else raw_expires.replace(tzinfo=timezone.utc)
+            ids = doc.get("random_events_active_ids") or []
+            if expires_dt and expires_dt > now and ids:
+                valid_ids = [eid for eid in ids if eid in GAME_EVENTS_BY_ID]
+                if valid_ids:
+                    return _build_combined_event(valid_ids)
+
+        event_ids, duration_hours = roll_random_events()
+        expires_at = now + timedelta(hours=duration_hours)
+        await db.game_config.update_one(
+            {"id": "main"},
+            {
+                "$set": {
+                    "random_events_active_ids": event_ids,
+                    "random_events_expires_at": expires_at.isoformat(),
+                    "random_events_duration_hours": duration_hours,
+                }
+            },
+            upsert=True,
+        )
+        return _build_combined_event(event_ids)
+    except Exception:
+        return NO_EVENT.copy()
+
+
 # Armoury/weapons: production cost is paid to produce; sell price = production_cost * ARMOUR_WEAPON_MARGIN (35% profit)
 ARMOUR_WEAPON_MARGIN = 1.35  # sell at 1.35× production cost → 35% profit per item
 

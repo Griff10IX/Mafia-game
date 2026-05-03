@@ -323,8 +323,6 @@ export default function Bodyguards() {
         } else if (batch > 1) {
           showHireBanner('success', `Hired ${batch} robot bodyguards.`);
         }
-        refreshUser().catch(() => {});
-        fetchData().catch(() => {});
       }
     }
   };
