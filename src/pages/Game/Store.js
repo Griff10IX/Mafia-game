@@ -107,6 +107,11 @@ const UPGRADES = [
   },
 ];
 
+function isQtAnonDisplayName(name) {
+  const n = String(name || '').trim();
+  return !n || n === '[Anonymous]' || (n.startsWith('[') && n.endsWith(']'));
+}
+
 function StorePointsTransferRow({ t, compact }) {
   const amt = Number(t.amount).toLocaleString();
   const when = t.created_at ? formatGameDateTime(t.created_at) : '';
@@ -126,9 +131,17 @@ function StorePointsTransferRow({ t, compact }) {
     >
       <div className={`flex items-center justify-between gap-2 min-w-0 ${compact ? 'w-full' : ''}`}>
         <span className="text-mutedForeground truncate min-w-0 flex-1">
-          <Link to={`/profile/${encodeURIComponent(t.from_username)}`} className="text-primary hover:underline">{t.from_username}</Link>
+          {isQtAnonDisplayName(t.from_username) ? (
+            <span className="text-primary">{t.from_username}</span>
+          ) : (
+            <Link to={`/profile/${encodeURIComponent(t.from_username)}`} className="text-primary hover:underline">{t.from_username}</Link>
+          )}
           {' → '}
-          <Link to={`/profile/${encodeURIComponent(t.to_username)}`} className="text-primary hover:underline">{t.to_username}</Link>
+          {isQtAnonDisplayName(t.to_username) ? (
+            <span className="text-primary">{t.to_username}</span>
+          ) : (
+            <Link to={`/profile/${encodeURIComponent(t.to_username)}`} className="text-primary hover:underline">{t.to_username}</Link>
+          )}
         </span>
         <div className="flex items-center gap-1 shrink-0">
           <button

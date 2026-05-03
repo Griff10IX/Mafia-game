@@ -658,6 +658,9 @@ def register(router):
     _is_hdo = srv._is_hdo
     _is_entertainer = srv._is_entertainer
     ADMIN_EMAILS = srv.ADMIN_EMAILS
+    cheat_detection_users_match = srv.cheat_detection_users_match
+    cheat_detection_aggregate_first_match = srv.cheat_detection_aggregate_first_match
+    cheat_detection_find_duplicates_username_match = srv.cheat_detection_find_duplicates_username_match
     _staff_exclude_user_filter = srv._staff_exclude_user_filter
     effective_player_kill_count = srv.effective_player_kill_count
 
@@ -9870,12 +9873,12 @@ def register(router):
         if username:
             pattern = re.compile(f".*{re.escape(username)}.*", re.IGNORECASE)
             users = await db.users.find(
-                {"username": pattern, "is_npc": {"$ne": True}},
+                cheat_detection_find_duplicates_username_match(pattern),
                 {"_id": 0, "id": 1, "username": 1, "email": 1, "total_kills": 1, "money": 1, "rank_points": 1, "current_state": 1, "created_at": 1, "is_dead": 1}
             ).to_list(50)
             return {"query": username, "count": len(users), "users": users}
         pipeline = [
-            {"$match": {"is_npc": {"$ne": True}}},
+            {"$match": cheat_detection_aggregate_first_match()},
             {"$group": {"_id": {"$toLower": "$username"}, "count": {"$sum": 1}, "users": {"$push": {"id": "$id", "username": "$username", "email": "$email", "total_kills": "$total_kills", "money": "$money", "created_at": "$created_at"}}}},
             {"$match": {"count": {"$gt": 1}}},
             {"$sort": {"count": -1}},
@@ -9889,7 +9892,7 @@ def register(router):
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         users = await db.users.find(
-            {"is_dead": {"$ne": True}, "is_npc": {"$ne": True}},
+            cheat_detection_users_match(),
             {"_id": 0, "id": 1, "username": 1, "email": 1, "registration_ip": 1, "login_ips": 1, "last_login_ip": 1, "last_request_ip": 1, "created_at": 1},
         ).to_list(5000)
         ip_to_users = {}
@@ -9967,11 +9970,11 @@ def register(router):
     ):
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
-        query = {"is_dead": {"$ne": True}, "is_npc": {"$ne": True}}
+        extra_dup: dict = {}
         if username and username.strip():
-            query["username"] = re.compile(re.escape(username.strip()), re.IGNORECASE)
+            extra_dup["username"] = re.compile(re.escape(username.strip()), re.IGNORECASE)
         users = await db.users.find(
-            query,
+            cheat_detection_users_match(extra_dup if extra_dup else None),
             {"_id": 0, "id": 1, "username": 1, "email": 1, "registration_ip": 1, "created_at": 1},
         ).to_list(2000)
         domain_groups = group_by_domain(users)
@@ -10061,9 +10064,10 @@ def register(router):
         def _all_ips(u: dict) -> Tuple[List[str], dict]:
             return user_ip_union(u, include_session_ips=include_session_ips)
 
-        query = {"is_dead": {"$ne": True}, "is_npc": {"$ne": True}}
+        extra_intel: dict = {}
         if username and username.strip():
-            query["username"] = re.compile(re.escape(username.strip()), re.IGNORECASE)
+            extra_intel["username"] = re.compile(re.escape(username.strip()), re.IGNORECASE)
+        query = cheat_detection_users_match(extra_intel if extra_intel else None)
         proj = {
             "_id": 0,
             "id": 1,
@@ -10928,7 +10932,7 @@ def register(router):
         if not _admin_or_mod(current_user):
             raise HTTPException(status_code=403, detail="Admin access required")
         users = await db.users.find(
-            {"is_dead": {"$ne": True}, "is_npc": {"$ne": True}},
+            cheat_detection_users_match(),
             {"_id": 0, "id": 1, "username": 1, "email": 1, "registration_ip": 1, "login_ips": 1, "last_login_ip": 1, "last_request_ip": 1, "last_user_agent": 1, "device_fingerprint": 1},
         ).to_list(10000)
 

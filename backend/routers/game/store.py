@@ -110,6 +110,7 @@ from routers.money.booze_run import (
 from routers.admin.airport import _invalidate_travel_info_cache
 from utils.point_provenance import consume_points_fifo, mint_transfer_in_lots
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_STORE
+from utils.transfer_display import redact_quicktrade_party_names
 
 
 async def _store_points_sustained_rl_user(current_user: dict = Depends(get_current_user)):
@@ -703,10 +704,20 @@ async def get_my_points_transfers(current_user: dict = Depends(get_current_user)
     uid = current_user["id"]
     cursor = db.points_transfers.find(
         {"$or": [{"from_user_id": uid}, {"to_user_id": uid}]},
-        {"_id": 0, "id": 1, "from_user_id": 1, "from_username": 1, "to_user_id": 1, "to_username": 1, "amount": 1, "created_at": 1},
+        {"_id": 0, "id": 1, "from_user_id": 1, "from_username": 1, "to_user_id": 1, "to_username": 1, "amount": 1, "created_at": 1, "qt_anonymize_from": 1, "qt_anonymize_to": 1},
     ).sort("created_at", -1).limit(10)
     items = await cursor.to_list(10)
-    return {"transfers": items}
+    out = []
+    for t in items:
+        r = redact_quicktrade_party_names(t, uid)
+        out.append({
+            "id": r.get("id"),
+            "from_username": r.get("from_username"),
+            "to_username": r.get("to_username"),
+            "amount": r.get("amount"),
+            "created_at": r.get("created_at"),
+        })
+    return {"transfers": out}
 
 
 async def admin_points_transfers(

@@ -341,21 +341,30 @@ const SendMoneyCard = ({
 
 const TransferCard = ({ transfer, delay = 0 }) => {
   const isCar = !!transfer.car_name;
+  const isQt = transfer.transfer_kind === 'quicktrade';
   const line1 = transfer.direction === 'sent' ? '📤 Sent' : '📥 Received';
   const line2 = isCar
     ? (transfer.direction === 'sent'
       ? (transfer.to_username === 'Dealer' ? `Car: ${transfer.car_name}` : `To: ${transfer.to_username} · ${transfer.car_name}`)
       : `From: ${transfer.from_username} · Sold: ${transfer.car_name}`)
-    : (transfer.direction === 'sent' ? `To: ${transfer.to_username}` : `From: ${transfer.from_username}`);
+    : isQt
+      ? (transfer.direction === 'sent'
+        ? `Quick Trade · To: ${transfer.to_username}`
+        : `Quick Trade · From: ${transfer.from_username}`)
+      : (transfer.direction === 'sent' ? `To: ${transfer.to_username}` : `From: ${transfer.from_username}`);
   const amountStr = formatMoney(transfer.amount);
   const when = formatDateTime(transfer.created_at);
   const copySummary = isCar
     ? (transfer.direction === 'sent'
       ? `Sent ${amountStr} (car: ${transfer.car_name}) to ${transfer.to_username} · ${when}`
       : `Received ${amountStr} for car ${transfer.car_name} from ${transfer.from_username} · ${when}`)
-    : (transfer.direction === 'sent'
-      ? `Sent ${amountStr} to ${transfer.to_username} · ${when}`
-      : `Received ${amountStr} from ${transfer.from_username} · ${when}`);
+    : isQt
+      ? (transfer.direction === 'sent'
+        ? `Quick Trade: sent ${amountStr} to ${transfer.to_username} · ${when}`
+        : `Quick Trade: received ${amountStr} from ${transfer.from_username} · ${when}`)
+      : (transfer.direction === 'sent'
+        ? `Sent ${amountStr} to ${transfer.to_username} · ${when}`
+        : `Received ${amountStr} from ${transfer.from_username} · ${when}`);
 
   const onCopy = async (e) => {
     e.preventDefault();

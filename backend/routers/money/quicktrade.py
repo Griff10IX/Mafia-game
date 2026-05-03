@@ -1,8 +1,13 @@
 # Quick Trade: sell/buy points (with fee, hide_name limits), property listings and purchase
+import asyncio
+import logging
+import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 import time
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 from fastapi import Depends, HTTPException
 from bson.objectid import ObjectId
@@ -96,6 +101,141 @@ def _invalidate_trade_caches():
     _token_offers_ts = 0
     _properties_cache = None
     _properties_ts = 0
+
+
+async def _log_qt_sell_offer_accept_transfers(
+    *,
+    seller_id: str,
+    seller_username: str,
+    buyer_id: str,
+    buyer_username: str,
+    points_amount: int,
+    cash_amount: int,
+    seller_hide_name: bool,
+    created_at_iso: str,
+) -> None:
+    """Points + cash ledger rows for someone buying a sell listing (Store + Bank history)."""
+    if points_amount <= 0 and cash_amount <= 0:
+        return
+    seller_un = (seller_username or "?").strip() or "?"
+    buyer_un = (buyer_username or "?").strip() or "?"
+    bu, su = await asyncio.gather(
+        db.users.find_one({"id": buyer_id}, {"_id": 0, "points": 1, "money": 1}),
+        db.users.find_one({"id": seller_id}, {"_id": 0, "points": 1, "money": 1}),
+    )
+    buyer_pts_after = int((bu or {}).get("points") or 0)
+    seller_pts_after = int((su or {}).get("points") or 0)
+    buyer_money_after = int((bu or {}).get("money") or 0)
+    seller_money_after = int((su or {}).get("money") or 0)
+    if points_amount > 0:
+        rp_before = buyer_pts_after - points_amount
+        await db.points_transfers.insert_one({
+            "id": str(uuid.uuid4()),
+            "from_user_id": seller_id,
+            "from_username": seller_un,
+            "to_user_id": buyer_id,
+            "to_username": buyer_un,
+            "amount": points_amount,
+            "created_at": created_at_iso,
+            "sender_points_before": seller_pts_after,
+            "sender_points_after": seller_pts_after,
+            "recipient_points_before": rp_before,
+            "recipient_points_after": buyer_pts_after,
+            "qt_anonymize_from": bool(seller_hide_name),
+            "qt_anonymize_to": False,
+        })
+    if cash_amount > 0:
+        await db.money_transfers.insert_one({
+            "id": str(uuid.uuid4()),
+            "from_user_id": buyer_id,
+            "from_username": buyer_un,
+            "to_user_id": seller_id,
+            "to_username": seller_un,
+            "amount": cash_amount,
+            "created_at": created_at_iso,
+            "sender_money_before": buyer_money_after + cash_amount,
+            "sender_money_after": buyer_money_after,
+            "recipient_money_before": seller_money_after - cash_amount,
+            "recipient_money_after": seller_money_after,
+            "transfer_kind": "quicktrade",
+            "qt_anonymize_from": False,
+            "qt_anonymize_to": bool(seller_hide_name),
+        })
+    try:
+        from routers.money.bank import _invalidate_overview_cache
+
+        _invalidate_overview_cache(buyer_id)
+        _invalidate_overview_cache(seller_id)
+    except Exception:
+        pass
+
+
+async def _log_qt_buy_offer_accept_transfers(
+    *,
+    buyer_id: str,
+    buyer_username: str,
+    seller_id: str,
+    seller_username: str,
+    points_amount: int,
+    cash_amount: int,
+    buyer_hide_name: bool,
+    created_at_iso: str,
+) -> None:
+    """Points + cash ledger rows for seller filling a buy offer (Store + Bank history)."""
+    if points_amount <= 0 and cash_amount <= 0:
+        return
+    seller_un = (seller_username or "?").strip() or "?"
+    buyer_un = (buyer_username or "?").strip() or "?"
+    bu, su = await asyncio.gather(
+        db.users.find_one({"id": buyer_id}, {"_id": 0, "points": 1, "money": 1}),
+        db.users.find_one({"id": seller_id}, {"_id": 0, "points": 1, "money": 1}),
+    )
+    buyer_pts_after = int((bu or {}).get("points") or 0)
+    seller_pts_after = int((su or {}).get("points") or 0)
+    buyer_money_after = int((bu or {}).get("money") or 0)
+    seller_money_after = int((su or {}).get("money") or 0)
+    if points_amount > 0:
+        rp_before = buyer_pts_after - points_amount
+        sp_before = seller_pts_after + points_amount
+        await db.points_transfers.insert_one({
+            "id": str(uuid.uuid4()),
+            "from_user_id": seller_id,
+            "from_username": seller_un,
+            "to_user_id": buyer_id,
+            "to_username": buyer_un,
+            "amount": points_amount,
+            "created_at": created_at_iso,
+            "sender_points_before": sp_before,
+            "sender_points_after": seller_pts_after,
+            "recipient_points_before": rp_before,
+            "recipient_points_after": buyer_pts_after,
+            "qt_anonymize_from": False,
+            "qt_anonymize_to": bool(buyer_hide_name),
+        })
+    if cash_amount > 0:
+        await db.money_transfers.insert_one({
+            "id": str(uuid.uuid4()),
+            "from_user_id": buyer_id,
+            "from_username": buyer_un,
+            "to_user_id": seller_id,
+            "to_username": seller_un,
+            "amount": cash_amount,
+            "created_at": created_at_iso,
+            "sender_money_before": buyer_money_after,
+            "sender_money_after": buyer_money_after,
+            "recipient_money_before": seller_money_after - cash_amount,
+            "recipient_money_after": seller_money_after,
+            "transfer_kind": "quicktrade",
+            "qt_anonymize_from": bool(buyer_hide_name),
+            "qt_anonymize_to": False,
+        })
+    try:
+        from routers.money.bank import _invalidate_overview_cache
+
+        _invalidate_overview_cache(buyer_id)
+        _invalidate_overview_cache(seller_id)
+    except Exception:
+        pass
 
 
 async def cancel_offers_on_death(user_id: str):
@@ -289,6 +429,19 @@ async def accept_sell_offer(offer_id: str, current_user: dict = Depends(get_curr
     if offer["points"] != 0:
         await log_points_event(db, user_id=buyer_id, points=offer["points"], event_type="quicktrade_buy", meta={"offer_id": offer_id, "direction": "sell_offer_accepted", "cost_cash": offer["cost"]})
     await db.users.update_one({"id": offer["user_id"]}, {"$inc": {"money": offer["cost"]}})
+    try:
+        await _log_qt_sell_offer_accept_transfers(
+            seller_id=offer["user_id"],
+            seller_username=(offer.get("username") or "Unknown"),
+            buyer_id=buyer_id,
+            buyer_username=buyer_username,
+            points_amount=int(offer.get("points") or 0),
+            cash_amount=int(offer.get("cost") or 0),
+            seller_hide_name=bool(offer.get("hide_name")),
+            created_at_iso=now.isoformat(),
+        )
+    except Exception:
+        logger.exception("quicktrade accept_sell_offer transfer ledger failed offer_id=%s", offer_id)
     _invalidate_trade_caches()
     _seller_u = (offer.get("username") or "Unknown").strip() or "Unknown"
     _pts = int(offer.get("points") or 0)
@@ -876,6 +1029,19 @@ async def accept_buy_offer(offer_id: str, current_user: dict = Depends(get_curre
     await db.users.update_one({"id": offer["user_id"]}, {"$inc": {"points": offer["points"]}})
     if offer["points"] != 0:
         await log_points_event(db, user_id=offer["user_id"], points=offer["points"], event_type="quicktrade_buy", meta={"offer_id": offer_id, "direction": "buy_offer_fulfilled"})
+    try:
+        await _log_qt_buy_offer_accept_transfers(
+            buyer_id=offer["user_id"],
+            buyer_username=(offer.get("username") or "Unknown"),
+            seller_id=seller_id,
+            seller_username=seller_username,
+            points_amount=int(offer.get("points") or 0),
+            cash_amount=int(offer.get("offer") or 0),
+            buyer_hide_name=bool(offer.get("hide_name")),
+            created_at_iso=now.isoformat(),
+        )
+    except Exception:
+        logger.exception("quicktrade accept_buy_offer transfer ledger failed offer_id=%s", offer_id)
     _invalidate_trade_caches()
     _buyer_real = (offer.get("username") or "Unknown").strip() or "Unknown"
     _buyer_disp = "[Anonymous]" if offer.get("hide_name") else _buyer_real

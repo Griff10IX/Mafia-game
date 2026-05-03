@@ -1559,13 +1559,13 @@ DEALER_RESTOCK_CHANCE_BY_RARITY = {
     "custom": 0.0,
     "exclusive": 0.0,
 }
-# Max dealer stock per car model by rarity (rarer = scarcer)
+# Max dealer stock per car model by rarity (sellable tiers capped at 5 each; custom/exclusive not sold)
 DEALER_STOCK_MAX_BY_RARITY = {
-    "common": 2,
-    "uncommon": 2,
-    "rare": 2,
-    "ultra_rare": 1,
-    "legendary": 1,
+    "common": 5,
+    "uncommon": 5,
+    "rare": 5,
+    "ultra_rare": 5,
+    "legendary": 5,
     "custom": 0,
     "exclusive": 0,
 }
@@ -1579,12 +1579,13 @@ DEALER_PRICE_MULTIPLIER_BY_RARITY = {
     "custom": 1.2,
     "exclusive": 1.2,
 }
-DEALER_PRICE_GLOBAL_MULTIPLIER = 9.0
+# Applied after rarity multiplier: dealer_price = int(value * rarity_mult * GLOBAL). +50% vs prior 9.0 baseline.
+DEALER_PRICE_GLOBAL_MULTIPLIER = 13.5
 
 
 def _dealer_max_stock(car_info: dict) -> int:
     r = car_info.get("rarity") or "common"
-    return DEALER_STOCK_MAX_BY_RARITY.get(r, 2)
+    return DEALER_STOCK_MAX_BY_RARITY.get(r, 5)
 
 
 def _dealer_price_multiplier(car_info: dict) -> float:

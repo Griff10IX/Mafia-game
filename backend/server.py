@@ -2146,6 +2146,62 @@ async def maybe_process_rank_up(user_id: str, rank_points_before, rank_points_ad
 _raw = (os.environ.get("ADMIN_EMAILS") or "").strip()
 ADMIN_EMAILS = [e.strip().lower() for e in _raw.split(",") if e.strip()] if _raw else []
 
+# Emails excluded from admin cheat-detection batch queries and shown synthetic IP-check data (comma-separated, lowercased).
+_dupe_exempt_raw = (os.environ.get("DUPE_DETECTION_EXEMPT_EMAILS") or "").strip()
+DUPE_DETECTION_EXEMPT_EMAILS = (
+    [e.strip().lower() for e in _dupe_exempt_raw.split(",") if e.strip()] if _dupe_exempt_raw else []
+)
+
+
+def _dupe_exempt_email_nor_clauses() -> List[dict]:
+    """$nor subclauses for exact email match (case-insensitive), same pattern as admin email exclusion."""
+    emails = [e for e in (DUPE_DETECTION_EXEMPT_EMAILS or []) if e and str(e).strip()]
+    if not emails:
+        return []
+    return [{"email": re.compile("^" + re.escape(e) + "$", re.IGNORECASE)} for e in emails]
+
+
+def user_has_dupe_exempt_email(user: Optional[dict]) -> bool:
+    """True if user's email is listed in DUPE_DETECTION_EXEMPT_EMAILS (env)."""
+    if not user:
+        return False
+    em = str(user.get("email") or "").strip().lower()
+    return bool(em and em in (DUPE_DETECTION_EXEMPT_EMAILS or []))
+
+
+def cheat_detection_users_match(extra: Optional[dict] = None) -> dict:
+    """Alive non-NPC users, excluding DUPE_DETECTION_EXEMPT_EMAILS — for admin/mod cheat batch endpoints."""
+    base = {"is_dead": {"$ne": True}, "is_npc": {"$ne": True}}
+    parts: List[dict] = [base]
+    nor_clauses = _dupe_exempt_email_nor_clauses()
+    if nor_clauses:
+        parts.append({"$nor": nor_clauses})
+    if extra:
+        parts.append(extra)
+    if len(parts) == 1:
+        return parts[0]
+    return {"$and": parts}
+
+
+def cheat_detection_aggregate_first_match() -> dict:
+    """First $match for admin find-duplicates pipeline (legacy: alive filter not applied here)."""
+    nor_clauses = _dupe_exempt_email_nor_clauses()
+    base = {"is_npc": {"$ne": True}}
+    if not nor_clauses:
+        return base
+    return {"$and": [base, {"$nor": nor_clauses}]}
+
+
+def cheat_detection_find_duplicates_username_match(username_regex) -> dict:
+    """Username contains search on find-duplicates, excluding dupe-exempt emails."""
+    nor_clauses = _dupe_exempt_email_nor_clauses()
+    parts: List[dict] = [{"username": username_regex, "is_npc": {"$ne": True}}]
+    if nor_clauses:
+        parts.append({"$nor": nor_clauses})
+    if len(parts) == 1:
+        return parts[0]
+    return {"$and": parts}
+
 
 async def log_activity(user_id: str, username: str, action: str, details: dict):
     """Append to activity_log for admin monitoring (crimes, forum, etc.)."""

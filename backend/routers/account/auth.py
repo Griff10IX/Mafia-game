@@ -431,6 +431,7 @@ def register(router):
     DEFAULT_GARAGE_BATCH_LIMIT = srv.DEFAULT_GARAGE_BATCH_LIMIT
     SWISS_BANK_LIMIT_START = srv.SWISS_BANK_LIMIT_START
     ADMIN_EMAILS = srv.ADMIN_EMAILS
+    DUPE_DETECTION_EXEMPT_EMAILS = getattr(srv, "DUPE_DETECTION_EXEMPT_EMAILS", []) or []
     send_notification = srv.send_notification
     effective_player_kill_count = srv.effective_player_kill_count
     RANKS = getattr(srv, "RANKS", [])
@@ -595,13 +596,18 @@ def register(router):
                     status_code=400,
                     detail="Registration from proxy or VPN is not allowed.",
                 )
-            # Allow up to 2 accounts per device/network (e.g. family); block only if 2 already exist (admins exempt)
+            # Allow up to 2 accounts per device/network (e.g. family); block only if 2 already exist (admins + dupe-exempt exempt)
             if client_ip:
                 admin_emails_list = list(ADMIN_EMAILS) if ADMIN_EMAILS else []
+                skip_ip_cap_emails = list(admin_emails_list)
+                for _e in DUPE_DETECTION_EXEMPT_EMAILS or []:
+                    _el = (_e or "").strip().lower()
+                    if _el and _el not in skip_ip_cap_emails:
+                        skip_ip_cap_emails.append(_el)
                 alive_same_ip_count = await db.users.count_documents(
                     {
                         "is_dead": {"$ne": True},
-                        "email": {"$nin": admin_emails_list},
+                        "email": {"$nin": skip_ip_cap_emails},
                         "$or": [
                             {"registration_ip": client_ip},
                             {"login_ips": client_ip},

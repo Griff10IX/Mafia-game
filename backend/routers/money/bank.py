@@ -13,6 +13,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from server import db, get_current_user, get_current_user_verified, log_activity, send_notification
 from utils.bank_economy_settings import get_bank_economy_config, interest_option_for_hours
 from utils.sustained_page_ratelimit import check_sustained_page_rl, PAGE_KEY_BANK
+from utils.transfer_display import redact_quicktrade_party_names
 
 # Set from server in register() (server keeps constants for UserProfile / new-user / auth/me)
 SWISS_BANK_LIMIT_START = None
@@ -123,6 +124,11 @@ async def bank_overview(current_user: dict = Depends(get_current_user_verified))
     transfers = list(transfers_raw)
     for t in transfers:
         t["direction"] = "sent" if t.get("from_user_id") == uid else "received"
+        r = redact_quicktrade_party_names(t, uid)
+        t["from_username"] = r.get("from_username")
+        t["to_username"] = r.get("to_username")
+        t.pop("qt_anonymize_from", None)
+        t.pop("qt_anonymize_to", None)
 
     payload = {
         "cash_on_hand": money,

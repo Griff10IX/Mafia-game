@@ -262,6 +262,7 @@ def register(router):
             "_id": 0,
             "id": 1,
             "username": 1,
+            "email": 1,
             "registration_ip": 1,
             "last_login_ip": 1,
             "last_request_ip": 1,
@@ -274,6 +275,11 @@ def register(router):
         user = await db.users.find_one(q, proj)
         if not user:
             raise HTTPException(status_code=404, detail="User not found")
+
+        if srv.user_has_dupe_exempt_email(user):
+            from utils.synthetic_user_ip_check import build_synthetic_user_ip_check
+
+            return build_synthetic_user_ip_check(user)
 
         uid = user["id"]
         uname = user.get("username") or ""
