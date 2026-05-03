@@ -3,7 +3,7 @@
 *.env
 !*.env.example
 
-# Kill bot - local/testing only; do not commit or deploy to server
+# Kill bot — keep on this machine only; never commit, push, or deploy (credentials + automation).
 MafiaKillBot/
 
 # Dependencies
