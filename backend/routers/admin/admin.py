@@ -661,6 +661,7 @@ def register(router):
     cheat_detection_users_match = srv.cheat_detection_users_match
     cheat_detection_aggregate_first_match = srv.cheat_detection_aggregate_first_match
     cheat_detection_find_duplicates_username_match = srv.cheat_detection_find_duplicates_username_match
+    user_has_dupe_exempt_email = getattr(srv, "user_has_dupe_exempt_email", lambda _u: False)
     _staff_exclude_user_filter = srv._staff_exclude_user_filter
     effective_player_kill_count = srv.effective_player_kill_count
 
@@ -5069,13 +5070,20 @@ def register(router):
                 "last_seen": u.get("last_seen"),
                 "last_path": u.get("last_path"),
                 "ip": ip,
+                "_dupe_exempt": bool(user_has_dupe_exempt_email(u)),
             })
+        # Same-IP badge: ignore DUPE_DETECTION_EXEMPT_EMAILS accounts (not counted, never show linked).
         ip_counts = {}
         for u in users:
+            if u.get("_dupe_exempt"):
+                continue
             ip = u.get("ip")
             if ip:
                 ip_counts[ip] = ip_counts.get(ip, 0) + 1
         for u in users:
+            if u.pop("_dupe_exempt", False):
+                u["same_ip_online_count"] = 0
+                continue
             ip = u.get("ip")
             same = (ip_counts.get(ip, 0) - 1) if ip else 0
             u["same_ip_online_count"] = max(0, same)
