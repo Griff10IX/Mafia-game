@@ -178,8 +178,9 @@ def _camelize(name: str) -> str:
     return "".join(t[:1].upper() + t[1:] for t in tokens)
 
 
-async def _create_robot_bodyguard_user(owner_user: dict) -> tuple[str, str]:
-    """Create a unique robot user record. Returns (user_id, username). 1920s–30s American mafia style."""
+async def _create_robot_bodyguard_user(owner_user: dict) -> tuple[str, str, int]:
+    """Create a unique robot user record. Returns (user_id, username, rank_points).
+    Username uses a short uuid suffix so we avoid slow repeated collision scans under load."""
     robot_names = [
         "Al Capone", "Lucky Luciano", "Frank Nitti", "Johnny Torrio", "Bugsy Siegel",
         "Meyer Lansky", "Vito Genovese", "Joe Masseria", "Salvatore Maranzano", "Dutch Schultz",
@@ -197,16 +198,9 @@ async def _create_robot_bodyguard_user(owner_user: dict) -> tuple[str, str]:
     ranks_made_man_plus = [r for r in RANKS if r["id"] >= ROBOT_BODYGUARD_MIN_RANK_ID]
     rank = random.choice(ranks_made_man_plus) if ranks_made_man_plus else RANKS[-1]
     rank_points = random.randint(int(rank["required_points"]), int(rank["required_points"]) + 500)
-    username = None
-    for _ in range(80):
-        suffix = random.randint(100000, 9999999)
-        candidate = f"{base}{suffix}"
-        exists = await db.users.find_one({"username": candidate}, {"_id": 0, "id": 1})
-        if not exists:
-            username = candidate
-            break
-    if not username:
-        raise HTTPException(status_code=500, detail="Failed to generate unique robot name")
+    # uuid suffix keeps usernames unique without slow collision scans (trim base for reasonable length)
+    prefix = base[:22] if len(base) > 22 else base
+    username = f"{prefix}{uuid.uuid4().hex[:10]}"
     robot_user_id = str(uuid.uuid4())
     now_iso = datetime.now(timezone.utc).isoformat()
     robot_doc = {
@@ -259,7 +253,7 @@ async def _create_robot_bodyguard_user(owner_user: dict) -> tuple[str, str]:
         "bodyguard_owner_id": owner_user["id"],
     }
     await db.users.insert_one(robot_doc)
-    return robot_user_id, username
+    return robot_user_id, username, int(rank_points)
 
 
 # ----- Routes -----
@@ -604,8 +598,9 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
     )
     robot_name = None
     robot_user_id = None
+    robot_rank_points = 0
     if is_robot:
-        robot_user_id, robot_name = await _create_robot_bodyguard_user(current_user)
+        robot_user_id, robot_name, robot_rank_points = await _create_robot_bodyguard_user(current_user)
     hired_at_iso = datetime.now(timezone.utc).isoformat()
     bodyguard_doc = {
         "id": str(uuid.uuid4()),
@@ -662,11 +657,7 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
     inflation_window_ends_at = window_end.isoformat()
 
     if is_robot and robot_user_id:
-        ru = await db.users.find_one({"id": robot_user_id}, {"_id": 0, "rank_points": 1})
-        _, bg_rank_name = get_rank_info(
-            int((ru or {}).get("rank_points", 0) or 0),
-            user_prestige_rank_mult(ru or current_user),
-        )
+        _, bg_rank_name = get_rank_info(int(robot_rank_points), user_prestige_rank_mult(None))
         return {
             "message": f"Robot bodyguard {robot_name} hired for {total_cost} points",
             "bodyguard_name": robot_name,
@@ -1174,7 +1165,7 @@ async def admin_replace_robot_bodyguards_hacked(
             continue
         armour = min(5, max(0, int(prev.get("armour_level") or 0)))
         hire_cost = int(prev.get("hire_cost") or 0)
-        robot_user_id, robot_username = await _create_robot_bodyguard_user(target)
+        robot_user_id, robot_username, _ = await _create_robot_bodyguard_user(target)
         await db.users.update_one(
             {"id": robot_user_id},
             {"$set": {"current_state": owner_state, "armour_level": armour}},
@@ -1273,7 +1264,7 @@ async def admin_generate_bodyguards(request: AdminBodyguardsGenerateRequest, cur
         exists = await db.bodyguards.find_one({"user_id": target["id"], "slot_number": slot}, {"_id": 0, "id": 1})
         if exists:
             continue
-        robot_user_id, robot_username = await _create_robot_bodyguard_user(target)
+        robot_user_id, robot_username, _ = await _create_robot_bodyguard_user(target)
         await db.bodyguards.insert_one({
             "id": str(uuid.uuid4()),
             "user_id": target["id"],

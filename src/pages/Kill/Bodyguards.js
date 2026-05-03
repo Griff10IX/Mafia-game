@@ -263,16 +263,19 @@ export default function Bodyguards() {
     const slot = claimNextSlot();
     if (slot == null) return;
     pendingHiresRef.current += 1;
+    let serverSlot = null;
     try {
       const response = await api.post('/bodyguards/hire', { slot, is_robot: isRobot });
       const d = response?.data;
-      if (d?.slot != null && d?.bodyguard_username != null) {
+      serverSlot = d?.slot ?? null;
+      const hiredName = d?.bodyguard_username ?? d?.bodyguard_name;
+      if (d?.slot != null && hiredName != null) {
         setBodyguards((prev) =>
           prev.map((b) =>
             b.slot_number === d.slot
               ? {
                   ...b,
-                  bodyguard_username: d.bodyguard_username,
+                  bodyguard_username: hiredName,
                   bodyguard_rank_name: d.bodyguard_rank_name ?? null,
                   armour_level: typeof d.armour_level === 'number' ? d.armour_level : 0,
                   hired_at: d.hired_at ?? null,
@@ -285,9 +288,6 @@ export default function Bodyguards() {
               : b
           )
         );
-        claimedSlotsRef.current.delete(d.slot);
-        claimedSlotsRef.current.delete(slot);
-        setHiringSlots(new Set(claimedSlotsRef.current));
         hireSuccessBatchRef.current += 1;
         lastHireSuccessMessageRef.current = d?.message ?? 'Bodyguard hired';
       }
@@ -296,8 +296,6 @@ export default function Bodyguards() {
         setInflationWindowEndsAt(d.inflation_window_ends_at ?? null);
       }
     } catch (error) {
-      claimedSlotsRef.current.delete(slot);
-      setHiringSlots(new Set(claimedSlotsRef.current));
       const raw = error.response?.data?.detail;
       const detail =
         typeof raw === 'string'
@@ -314,6 +312,9 @@ export default function Bodyguards() {
       }
     } finally {
       pendingHiresRef.current -= 1;
+      claimedSlotsRef.current.delete(slot);
+      if (serverSlot != null) claimedSlotsRef.current.delete(serverSlot);
+      setHiringSlots(new Set(claimedSlotsRef.current));
       if (pendingHiresRef.current === 0) {
         const batch = hireSuccessBatchRef.current;
         hireSuccessBatchRef.current = 0;
@@ -322,8 +323,6 @@ export default function Bodyguards() {
         } else if (batch > 1) {
           showHireBanner('success', `Hired ${batch} robot bodyguards.`);
         }
-        claimedSlotsRef.current.clear();
-        setHiringSlots(new Set());
         refreshUser().catch(() => {});
         fetchData().catch(() => {});
       }
@@ -475,7 +474,7 @@ export default function Bodyguards() {
         key={bg.slot_number}
         data-testid={`bodyguard-slot-${bg.slot_number}`}
         className={`bg-row rounded-lg transition-all bg-zinc-800/30 border ${
-          hirePending ? 'border-amber-500/25 animate-pulse' : 'border-transparent hover:border-primary/20'
+          hirePending ? 'border-amber-500/20' : 'border-transparent hover:border-primary/20'
         }`}
       >
         <div

@@ -12504,7 +12504,7 @@ def register(router):
                 owner = {"id": uid, "current_state": "Chicago"}
                 for slot in range(1, 3):
                     try:
-                        robot_user_id, robot_username = await _create_robot_bodyguard_user(owner)
+                        robot_user_id, robot_username, _ = await _create_robot_bodyguard_user(owner)
                         await db.bodyguards.insert_one({
                             "id": str(uuid.uuid4()),
                             "user_id": uid,
