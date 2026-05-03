@@ -74,15 +74,11 @@ export default function Bodyguards() {
   const [inviting, setInviting] = useState(false);
   const [actingInviteId, setActingInviteId] = useState(null);
   const [cancellingInviteId, setCancellingInviteId] = useState(null);
-  const [droppingSlot, setDroppingSlot] = useState(null);
-  const [bodyguardLastDropAt, setBodyguardLastDropAt] = useState(null);
   const [hiringSlots, setHiringSlots] = useState(new Set());
   const [refreshing, setRefreshing] = useState(false);
   const [hireBanner, setHireBanner] = useState(null);
   const claimedSlotsRef = useRef(new Set());
   const pendingHiresRef = useRef(0);
-
-  const DROP_COOLDOWN_HOURS = 3;
 
   const WEEKDAY_OPTIONS = [
     { value: 0, label: 'Monday' },
@@ -101,7 +97,6 @@ export default function Bodyguards() {
     setBodyguards(Array.isArray(bgData) ? bgData : (bgData?.bodyguards ?? []));
     setBodyguardFor(bgData?.bodyguard_for ?? null);
     setBodyguardProfit(bgData?.bodyguard_profit ?? null);
-    setBodyguardLastDropAt(bgData?.bodyguard_last_drop_at ?? null);
     if (w.user) setUser(w.user);
     setEvent(w.event ?? null);
     setEventsEnabled(!!w.eventsEnabled);
@@ -187,7 +182,6 @@ export default function Bodyguards() {
       setBodyguards(Array.isArray(bgData) ? bgData : (bgData?.bodyguards ?? []));
       setBodyguardFor(bgData?.bodyguard_for ?? null);
       setBodyguardProfit(bgData?.bodyguard_profit ?? null);
-      setBodyguardLastDropAt(bgData?.bodyguard_last_drop_at ?? null);
       setUser(userRes.data);
       setEvent(eventsRes.data?.event ?? null);
       setEventsEnabled(!!eventsRes.data?.events_enabled);
@@ -220,7 +214,6 @@ export default function Bodyguards() {
       setUser(null);
       setBodyguardFor(null);
       setBodyguardProfit(null);
-      setBodyguardLastDropAt(null);
       setBgStats(null);
       setInvites({ sent: [], received: [] });
       setNextHireInflationPct(0);
@@ -425,54 +418,8 @@ export default function Bodyguards() {
     }
   };
 
-  const dropBodyguard = async (slot) => {
-    if (droppingSlot) return;
-    setDroppingSlot(slot);
-    try {
-      await api.post(`/bodyguards/drop?slot=${slot}`);
-      toast.success('Bodyguard dropped. Payments cancelled.');
-      setBodyguards((prev) =>
-        prev.map((b) =>
-          b.slot_number === slot
-            ? { ...b, bodyguard_username: null, bodyguard_rank_name: null, armour_level: 0, hired_at: null, payment_points: 0, payment_money: 0, payout_weekday: null }
-            : b
-        )
-      );
-      fetchData().catch(() => {});
-    } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to drop bodyguard', { duration: 8000 });
-    } finally {
-      setDroppingSlot(null);
-    }
-  };
-
-  const getDropCooldownMinsLeft = (lastDropIso) => {
-    if (!lastDropIso) return 0;
-    try {
-      const last = new Date(lastDropIso.replace('Z', '')).getTime();
-      const end = last + DROP_COOLDOWN_HOURS * 60 * 60 * 1000;
-      return Math.max(0, Math.ceil((end - Date.now()) / 60000));
-    } catch {
-      return 0;
-    }
-  };
-
-  const [dropCooldownMins, setDropCooldownMins] = useState(0);
-  useEffect(() => {
-    if (!bodyguardLastDropAt) {
-      setDropCooldownMins(0);
-      return;
-    }
-    const tick = () => setDropCooldownMins(getDropCooldownMinsLeft(bodyguardLastDropAt));
-    tick();
-    const id = setInterval(tick, 60000);
-    return () => clearInterval(id);
-  }, [bodyguardLastDropAt]);
-
   const renderBodyguardCard = (bg) => {
-    const hasGuard = !!bg.bodyguard_username;
     const isExpanded = expandedSlot === bg.slot_number;
-    const dropOnCooldown = dropCooldownMins > 0;
     return (
       <div
         key={bg.slot_number}
@@ -582,18 +529,6 @@ export default function Bodyguards() {
                     {[(bg.payment_points ?? 0) > 0 && `${bg.payment_points ?? 0} pts`, (bg.payment_money ?? 0) > 0 && `$${Number(bg.payment_money ?? 0).toLocaleString()}`].filter(Boolean).join(' + ')}
                     {bg.payout_weekday != null && ` · ${WEEKDAY_OPTIONS[bg.payout_weekday]?.label ?? 'Weekly'}s`}
                   </div>
-                </div>
-              )}
-              {hasGuard && (
-                <div className="col-span-2 pt-1">
-                  <button
-                    type="button"
-                    onClick={(e) => { e.stopPropagation(); dropBodyguard(bg.slot_number); }}
-                    disabled={!!droppingSlot || dropOnCooldown}
-                    className="text-[10px] font-heading uppercase tracking-wide text-red-400 hover:text-red-300 border border-red-500/40 rounded px-2 py-1.5 bg-red-500/10 disabled:opacity-50"
-                  >
-                    {droppingSlot === bg.slot_number ? '…' : dropOnCooldown ? `Drop (in ${dropCooldownMins}m)` : `Drop ${bg.is_robot ? 'robot' : 'bodyguard'}`}
-                  </button>
                 </div>
               )}
             </div>

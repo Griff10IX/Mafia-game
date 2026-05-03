@@ -853,7 +853,7 @@ export default function Inbox() {
           <div className={`lg:col-span-2 border-r border-primary/20 bg-secondary/20 overflow-y-auto ${selectedNotification ? 'max-h-[40vh] lg:max-h-[480px]' : 'max-h-[480px]'}`}>
             {filter === 'bodyguard' && filteredNotifications.length > 0 && (
               <div className="px-2 py-1.5 border-b border-primary/20 bg-amber-500/5 text-[9px] text-mutedForeground font-heading italic">
-                Past hires shown here. Max 4 bodyguards at once — dropping creates space for new hires.
+                Past hires shown here. Max 4 bodyguards at once. Slots free up when a guard is lost in combat.
               </div>
             )}
             {filteredNotifications.length === 0 ? (

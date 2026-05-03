@@ -172,6 +172,8 @@ class TravelRequest(BaseModel):
     destination: str
     travel_method: str  # car_id or "airport"
     airport_slot: Optional[int] = None  # 1-4 when travel_method == "airport"
+    # When true, applies booze-run car damage (0.3% / leg) and allows car travel while carrying booze (same as Auto Rank booze).
+    booze_run: bool = False
 
 
 class AirportClaimRequest(BaseModel):
@@ -560,6 +562,7 @@ async def travel(request: TravelRequest, current_user: dict = Depends(get_curren
         request.destination,
         request.travel_method,
         request.airport_slot,
+        booze_run=bool(request.booze_run),
     )
 
 

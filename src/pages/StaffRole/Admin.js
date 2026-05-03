@@ -5155,7 +5155,7 @@ export default function Admin() {
   };
 
   const handleResetBgCooldown = async () => {
-    if (!window.confirm('Clear your bodyguard drop cooldown?')) return;
+    if (!window.confirm('Clear legacy bodyguard_last_drop_at on your account? (Players cannot dismiss bodyguards.)')) return;
     try {
       const res = await api.post('/admin/bodyguards/reset-cooldown');
       toast.success(res.data?.message ?? 'Cooldown reset', { duration: 5000 });
@@ -19832,7 +19832,7 @@ export default function Admin() {
                 </BtnPrimary>
               </ActionRow>
 
-              <ActionRow icon={Shield} label="Reset Drop Cooldown" description="Clear your bodyguard drop timer" color="text-amber-400">
+              <ActionRow icon={Shield} label="Clear legacy BG drop field" description="Unset bodyguard_last_drop_at on your user (DB cleanup)" color="text-amber-400">
                 <BtnPrimary onClick={handleResetBgCooldown}>Reset</BtnPrimary>
               </ActionRow>
 

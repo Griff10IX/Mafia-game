@@ -333,5 +333,7 @@ def register(router):
                 "username": username,
                 "is_dead": bool(u.get("is_dead")),
                 "in_jail": bool(u.get("in_jail")),
+                "is_admin": bool(u.get("email") in ADMIN_EMAILS),
+                "is_moderator": bool(_is_moderator(u)),
             })
         return {"users": result}

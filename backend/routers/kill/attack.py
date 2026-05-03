@@ -87,6 +87,17 @@ async def _kill_sustained_rl_verified(current_user: dict = Depends(get_current_u
     await check_sustained_page_rl(db, current_user.get("id") or "", PAGE_KEY_KILL)
 
 
+def _bodyguard_owner_slot_dec_update(target: dict) -> Dict[str, Any]:
+    """Decrement bodyguard_slots; if a robot NPC bodyguard died, block hiring another for a short window."""
+    ops: Dict[str, Any] = {"$inc": {"bodyguard_slots": -1}}
+    if target.get("is_npc") and target.get("is_bodyguard"):
+        from routers.kill.bodyguards import BODYGUARD_ROBOT_KILLED_HIRE_COOLDOWN_SECONDS
+
+        allowed_after = datetime.now(timezone.utc) + timedelta(seconds=BODYGUARD_ROBOT_KILLED_HIRE_COOLDOWN_SECONDS)
+        ops["$set"] = {"bodyguard_robot_loss_hire_allowed_after": allowed_after.isoformat()}
+    return ops
+
+
 def _safe_compare_execute_token(stored: str, submitted: Optional[str]) -> bool:
     """Constant-time compare for server-minted execute tokens."""
     a = (stored or "").strip()
@@ -1913,7 +1924,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                             await db.bodyguards.delete_one({"id": bg["id"]})
                         else:
                             await db.bodyguards.delete_one(delete_criteria)
-                        await db.users.update_one({"id": owner_id}, {"$inc": {"bodyguard_slots": -1}})
+                        await db.users.update_one({"id": owner_id}, _bodyguard_owner_slot_dec_update(target))
                         await db.users.update_one({"id": owner_id, "bodyguard_slots": {"$lt": 0}}, {"$set": {"bodyguard_slots": 0}})
                         await _record_vendetta_bg_kill(
                             killer_id, current_user.get("family_id"), owner_id, owner_doc,
@@ -2247,7 +2258,7 @@ async def execute_attack(request: AttackExecuteRequest, req: Request, current_us
                 await db.bodyguards.delete_one({"id": bg["id"]})
             else:
                 await db.bodyguards.delete_one(delete_criteria)
-            await db.users.update_one({"id": owner_id}, {"$inc": {"bodyguard_slots": -1}})
+            await db.users.update_one({"id": owner_id}, _bodyguard_owner_slot_dec_update(target))
             await db.users.update_one({"id": owner_id, "bodyguard_slots": {"$lt": 0}}, {"$set": {"bodyguard_slots": 0}})
             # Start war BEFORE recording the kill — if this BG kill triggers the war, it won't exist yet otherwise
             killer_fid = current_user.get("family_id") or None

@@ -771,6 +771,7 @@ async def booze_run_config(current_user: dict = Depends(get_current_user)):
         "prices_at_location": prices_at_location,
         "all_prices_by_location": all_prices,
         "carrying": carrying,
+        "booze_buy_location": dict(current_user.get("booze_buy_location") or {}),
         "capacity": capacity,
         "capacity_from_rank": capacity_from_rank,
         "capacity_extra_per_rank": BOOZE_CAPACITY_EXTRA_PER_RANK,

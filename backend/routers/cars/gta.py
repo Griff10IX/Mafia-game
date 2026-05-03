@@ -1615,18 +1615,11 @@ async def _ensure_dealer_stock_seeded():
     await _fill_dealer_stock_full()
 
 
-async def _dealer_after_sale_restock(car_id: str, car_info: dict) -> None:
-    """After removing one dealer unit: if the lot is empty, refill every model to max; else add one slot for this model (up to its cap)."""
+async def _dealer_after_sale_restock(_car_id: str, _car_info: dict) -> None:
+    """If the dealer lot is completely empty, re-seed all models. Do not top up per sale — that kept every model at max (e.g. always 5); partial restock runs on the replenish loop."""
     total = await db.dealer_stock.count_documents({})
     if total == 0:
         await _fill_dealer_stock_full()
-        return
-    max_stock = _dealer_max_stock(car_info)
-    have = await db.dealer_stock.count_documents({"car_id": car_id})
-    if have < max_stock:
-        await db.dealer_stock.insert_one(
-            {"car_id": car_id, "added_at": datetime.now(timezone.utc).isoformat()}
-        )
 
 
 async def get_cars_for_sale(current_user: dict = Depends(get_current_user)):
