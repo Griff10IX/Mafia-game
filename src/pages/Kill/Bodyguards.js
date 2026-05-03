@@ -79,6 +79,9 @@ export default function Bodyguards() {
   const [hireBanner, setHireBanner] = useState(null);
   const claimedSlotsRef = useRef(new Set());
   const pendingHiresRef = useRef(0);
+  const hireBannerTimeoutRef = useRef(null);
+  const hireSuccessBatchRef = useRef(0);
+  const lastHireSuccessMessageRef = useRef('');
 
   const WEEKDAY_OPTIONS = [
     { value: 0, label: 'Monday' },
@@ -236,8 +239,15 @@ export default function Bodyguards() {
   };
 
   const showHireBanner = (type, message) => {
+    if (hireBannerTimeoutRef.current) {
+      clearTimeout(hireBannerTimeoutRef.current);
+      hireBannerTimeoutRef.current = null;
+    }
     setHireBanner({ type, message });
-    setTimeout(() => setHireBanner((prev) => (prev?.message === message ? null : prev)), 6000);
+    hireBannerTimeoutRef.current = setTimeout(() => {
+      setHireBanner((prev) => (prev?.message === message ? null : prev));
+      hireBannerTimeoutRef.current = null;
+    }, 5000);
   };
 
   const claimNextSlot = () => {
@@ -275,12 +285,16 @@ export default function Bodyguards() {
               : b
           )
         );
+        claimedSlotsRef.current.delete(d.slot);
+        claimedSlotsRef.current.delete(slot);
+        setHiringSlots(new Set(claimedSlotsRef.current));
+        hireSuccessBatchRef.current += 1;
+        lastHireSuccessMessageRef.current = d?.message ?? 'Bodyguard hired';
       }
       if (typeof d?.next_hire_inflation_pct === 'number') {
         setNextHireInflationPct(d.next_hire_inflation_pct);
         setInflationWindowEndsAt(d.inflation_window_ends_at ?? null);
       }
-      showHireBanner('success', d?.message ?? 'Bodyguard hired');
     } catch (error) {
       claimedSlotsRef.current.delete(slot);
       setHiringSlots(new Set(claimedSlotsRef.current));
@@ -301,6 +315,13 @@ export default function Bodyguards() {
     } finally {
       pendingHiresRef.current -= 1;
       if (pendingHiresRef.current === 0) {
+        const batch = hireSuccessBatchRef.current;
+        hireSuccessBatchRef.current = 0;
+        if (batch === 1 && lastHireSuccessMessageRef.current) {
+          showHireBanner('success', lastHireSuccessMessageRef.current);
+        } else if (batch > 1) {
+          showHireBanner('success', `Hired ${batch} robot bodyguards.`);
+        }
         claimedSlotsRef.current.clear();
         setHiringSlots(new Set());
         refreshUser().catch(() => {});
@@ -350,6 +371,12 @@ export default function Bodyguards() {
   };
 
   const nextEmptySlot = bodyguards.find((b) => !b.bodyguard_username && !hiringSlots.has(b.slot_number) && !claimedSlotsRef.current.has(b.slot_number))?.slot_number;
+  const filledBodyguardSlots = bodyguards.filter((bg) => bg.bodyguard_username).length;
+  const pendingEmptySlots = [1, 2, 3, 4].filter((sn) => {
+    const row = bodyguards.find((b) => b.slot_number === sn);
+    return row && !row.bodyguard_username && hiringSlots.has(sn);
+  }).length;
+  const activeCount = Math.min(4, filledBodyguardSlots + pendingEmptySlots);
   // All active bodyguards sorted by slot number (mixed robots and humans together)
   const activeBodyguards = bodyguards
     .filter((b) => b.bodyguard_username)
@@ -566,8 +593,6 @@ export default function Bodyguards() {
       </div>
     );
   }
-
-  const activeCount = bodyguards.filter(bg => bg.bodyguard_username).length + hiringSlots.size;
 
   return (
     <div className={`space-y-4 ${styles.pageContent} mobile-page-root`} data-testid="bodyguards-page">
