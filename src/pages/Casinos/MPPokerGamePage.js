@@ -359,10 +359,10 @@ function MpPokerHandOutcomePanel({
                 return (
                   <p
                     key={w.user_id}
-                    className="text-[10px] font-heading font-bold leading-snug"
+                    className="text-xs sm:text-sm font-heading font-bold leading-snug"
                     style={{ color: didWinMainPot ? 'var(--noir-primary)' : 'rgba(255,255,255,0.5)' }}
                   >
-                    <span className="text-white/35 uppercase tracking-wider text-[8px] mr-1">Hand</span>
+                    <span className="text-white/35 uppercase tracking-wider text-[9px] sm:text-[10px] mr-1">Hand</span>
                     {nm}: {w.hand}
                   </p>
                 );
@@ -370,8 +370,8 @@ function MpPokerHandOutcomePanel({
             </div>
           ) : (
             winnerHand && (
-              <p className="text-[11px] font-heading font-bold mt-1" style={{ color: didWinMainPot ? 'var(--noir-primary)' : 'rgba(255,255,255,0.45)' }}>
-                <span className="text-white/35 uppercase tracking-wider text-[9px] mr-1">Hand</span>
+              <p className="text-sm sm:text-base font-heading font-bold mt-1 leading-snug px-1" style={{ color: didWinMainPot ? 'var(--noir-primary)' : 'rgba(255,255,255,0.45)' }}>
+                <span className="text-white/35 uppercase tracking-wider text-[10px] sm:text-xs block sm:inline sm:mr-1">Winning hand</span>
                 {winnerHand}
               </p>
             )
@@ -536,11 +536,11 @@ function MpPokerTournamentHandToast({ snapshot, myUserId, visible, compact }) {
           maxHeight: compact ? 'min(38vh, 220px)' : 'min(48vh, 320px)',
         }}
       >
-      <p className={`font-heading uppercase tracking-[0.2em] text-center ${compact ? 'text-[5px]' : 'text-[6px]'}`} style={{ color: 'rgba(255,255,255,0.4)' }}>
+      <p className={`font-heading uppercase tracking-[0.2em] text-center ${compact ? 'text-[9px]' : 'text-[10px]'}`} style={{ color: 'rgba(255,255,255,0.4)' }}>
         Hand #{snapshot.hand_number} · Showdown
       </p>
       <p
-        className={`text-center font-heading font-black uppercase tracking-wide mt-0.5 truncate px-0.5 ${compact ? 'text-[10px]' : 'text-[12px] sm:text-sm'}`}
+        className={`text-center font-heading font-black uppercase tracking-wide mt-0.5 truncate px-0.5 ${compact ? 'text-xs' : 'text-[12px] sm:text-sm'}`}
         style={{ color: 'var(--noir-primary-bright)' }}
       >
         {winnerLabel}
@@ -551,7 +551,7 @@ function MpPokerTournamentHandToast({ snapshot, myUserId, visible, compact }) {
             w.hand ? (
               <p
                 key={w.user_id}
-                className={`text-center font-heading font-bold leading-snug text-white/70 ${compact ? 'text-[6px]' : 'text-[7px]'}`}
+                className={`text-center font-heading font-bold leading-snug text-white/70 ${compact ? 'text-[11px]' : 'text-[7px]'}`}
               >
                 <span className="text-white/35 uppercase tracking-wider mr-0.5">Hand</span>
                 {w.user_id === myUserId ? 'You' : players.find((p) => p.user_id === w.user_id)?.username ?? 'Winner'}: {w.hand}
@@ -562,7 +562,7 @@ function MpPokerTournamentHandToast({ snapshot, myUserId, visible, compact }) {
       ) : (
         primary[0]?.hand && (
           <p
-            className={`text-center font-heading font-bold mt-0.5 px-1 leading-snug text-white/70 ${compact ? 'text-[6px]' : 'text-[8px]'}`}
+            className={`text-center font-heading font-bold mt-0.5 px-1 leading-snug text-white/70 ${compact ? 'text-[11px]' : 'text-[8px]'}`}
           >
             <span className="text-white/35 uppercase tracking-wider mr-0.5">Hand</span>
             {primary[0].hand}
@@ -622,6 +622,115 @@ function MpPokerTournamentHandToast({ snapshot, myUserId, visible, compact }) {
         })}
       </div>
       </div>
+    </div>
+  );
+}
+
+/** Readable strip below the header: last tournament hand winner + hand + board (API keeps `last_hand_showdown` after re-deal). */
+function MpPokerLastHandWinnerBanner({ snapshot, myUserId, payoutPoints = false }) {
+  if (!snapshot?.results?.length) return null;
+  const results = snapshot.results;
+  const players = snapshot.players || [];
+  const primary = mpPokerLargestShareWinners(results);
+  if (!primary.length) return null;
+  const primaryIds = new Set(primary.map((p) => p.user_id));
+  const winnerLabel = primary
+    .map((w) => {
+      if (w.user_id === myUserId) return 'You';
+      if (w.user_id === 'dealer') return 'The Dealer';
+      return players.find((p) => p.user_id === w.user_id)?.username ?? 'Winner';
+    })
+    .join(' & ');
+  const maxShare = primary.reduce((m, r) => Math.max(m, Number(r.payout) || 0), 0);
+  const pot = Number(snapshot.pot) || maxShare;
+  const brd = snapshot.board || [];
+  const handLines = primary
+    .map((w) => {
+      const h = w.hand && String(w.hand).trim();
+      if (!h) return null;
+      const nm =
+        w.user_id === myUserId ? 'You' : w.user_id === 'dealer' ? 'Dealer' : players.find((p) => p.user_id === w.user_id)?.username ?? 'Player';
+      return { key: w.user_id, nm, h };
+    })
+    .filter(Boolean);
+  const singleHand = primary.length === 1 ? primary[0]?.hand && String(primary[0].hand).trim() : null;
+
+  return (
+    <div
+      className="rounded-xl border border-primary/35 px-3 py-2.5 sm:py-2 animate-pkr-fade"
+      style={{
+        background: 'linear-gradient(180deg,rgba(15,23,42,0.92),rgba(0,0,0,0.72))',
+        boxShadow: '0 4px 20px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)',
+      }}
+    >
+      <p className="text-[10px] font-heading uppercase tracking-[0.2em] text-white/45">
+        Last hand #{snapshot.hand_number}
+        {pot > 0 && (
+          <>
+            {' · '}
+            {payoutPoints ? 'Prize' : 'Pot'}{' '}
+            <span className="text-emerald-400/90 font-bold">
+              {payoutPoints ? `${Math.trunc(pot).toLocaleString()} pts` : formatMoneyFull(pot)}
+            </span>
+          </>
+        )}
+      </p>
+      <p className="text-sm sm:text-base font-heading font-black uppercase tracking-wide mt-1 leading-tight" style={{ color: 'var(--noir-primary-bright)' }}>
+        {winnerLabel} {primary.length > 1 ? 'split the pot' : 'wins'}
+      </p>
+      {singleHand ? (
+        <p className="text-xs sm:text-sm font-heading font-bold mt-1 leading-snug" style={{ color: 'rgba(255,255,255,0.88)' }}>
+          <span className="text-white/40 uppercase tracking-wider text-[10px] mr-1">Winning hand</span>
+          {singleHand}
+        </p>
+      ) : (
+        handLines.length > 0 && (
+          <div className="mt-1 space-y-0.5">
+            {handLines.map((row) => (
+              <p key={row.key} className="text-xs sm:text-sm font-heading font-bold leading-snug" style={{ color: 'rgba(255,255,255,0.85)' }}>
+                <span className="text-white/40 font-semibold">{row.nm}:</span> {row.h}
+              </p>
+            ))}
+          </div>
+        )
+      )}
+      {(brd.length > 0 || primary.some((w) => players.find((p) => p.user_id === w.user_id)?.hole_cards?.length)) && (
+        <div className="mt-2 flex flex-wrap items-end justify-center gap-2 sm:gap-3">
+          {brd.length > 0 && (
+            <div className="flex flex-col items-center gap-1">
+              <span className="text-[9px] font-heading uppercase tracking-wider text-white/35">Board</span>
+              <div className="flex justify-center gap-1">
+                {brd.map((c, i) => (
+                  <Card key={`lb-${i}`} card={c} hidden={false} index={i} total={brd.length} small straight />
+                ))}
+              </div>
+            </div>
+          )}
+          {primary.map((w) => {
+            const pl = players.find((p) => p.user_id === w.user_id);
+            const hc = pl?.hole_cards || [];
+            if (!hc.length) return null;
+            const nm =
+              w.user_id === myUserId ? 'You' : pl?.is_bot ? 'Dealer' : pl?.username ?? 'Winner';
+            return (
+              <div key={w.user_id} className="flex flex-col items-center gap-1">
+                <span
+                  className={`text-[9px] font-heading uppercase tracking-wider max-w-[100px] truncate ${primaryIds.has(w.user_id) ? 'text-primary' : 'text-white/35'}`}
+                  title={nm}
+                >
+                  {nm}
+                  {primaryIds.has(w.user_id) ? ' · pot' : ''}
+                </span>
+                <div className="flex gap-0.5 justify-center">
+                  {hc.map((c, i) => (
+                    <Card key={`${w.user_id}-${i}`} card={c} hidden={false} index={i} total={hc.length} small straight />
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -891,16 +1000,6 @@ export default function MPPokerGamePage() {
     const id = setTimeout(() => setTournamentToast((prev) => ({ ...prev, visible: false })), 5000);
     return () => clearTimeout(id);
   }, [game?.mode, game?.status, game?.last_hand_showdown?.hand_number]);
-
-  // Hide showdown toast as soon as the table advances to the next hand (don't cover live play for 5s).
-  useEffect(() => {
-    const cur = Number(game?.hand_number);
-    const snapN = Number(tournamentToast.snap?.hand_number);
-    if (!tournamentToast.visible || !Number.isFinite(snapN)) return;
-    if (Number.isFinite(cur) && cur > snapN) {
-      setTournamentToast((prev) => ({ ...prev, visible: false }));
-    }
-  }, [game?.hand_number, tournamentToast.visible, tournamentToast.snap?.hand_number]);
 
   useEffect(() => {
     if (game?.mode !== 'tournament') {
@@ -1461,6 +1560,17 @@ export default function MPPokerGamePage() {
         )}
       </div>
 
+      {/* Last-hand winner + cards: persists after re-deal (mobile + desktop); `last_hand_showdown` from API */}
+      {isTournament &&
+        status === 'playing' &&
+        game?.last_hand_showdown?.results?.length > 0 && (
+          <MpPokerLastHandWinnerBanner
+            snapshot={game.last_hand_showdown}
+            myUserId={myUserId}
+            payoutPoints={isPointsTournamentGame(game)}
+          />
+        )}
+
       {/* ══ LOBBY ══ */}
       {phase === 'lobby' && status === 'open' && (
         <div
@@ -1678,7 +1788,7 @@ export default function MPPokerGamePage() {
               <MpPokerTournamentHandToast
                 snapshot={tournamentToast.snap}
                 myUserId={myUserId}
-                visible={tournamentToast.visible}
+                visible={tournamentToast.visible && !compactUi}
                 compact={compactUi}
               />
             )}

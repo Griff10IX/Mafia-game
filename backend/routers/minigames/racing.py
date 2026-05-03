@@ -1669,6 +1669,23 @@ async def _assert_npc_race_24h_budget(race: dict, current_user_id: str) -> None:
             )
 
 
+async def _refund_open_race_entry_fees(race: dict) -> None:
+    """Return each human entrant's entry fee (used when start is blocked after create/join already charged)."""
+    fee = int(race.get("entry_fee") or 0)
+    if fee <= 0:
+        return
+    for p in race.get("participants") or []:
+        if p.get("is_npc"):
+            continue
+        uid = (p.get("user_id") or "").strip()
+        if not uid:
+            continue
+        try:
+            await db.users.update_one({"id": uid}, {"$inc": {"money": fee}})
+        except Exception:
+            pass
+
+
 async def _record_npc_race_starts_if_vs_npcs(race: dict) -> None:
     """One row per human entrant when the started race includes NPCs."""
     if race.get("is_h2h") or race.get("is_automated"):
@@ -2392,11 +2409,6 @@ async def join_race(
     tyre_stock = int(prof.get(f"tyre_stock_{compound}") or 0)
     if tyre_stock < 1:
         raise HTTPException(status_code=400, detail=f"No {compound} tyres in stock. Buy tyres in My ride.")
-    entry_fee = int(race.get("entry_fee") or 0)
-    if entry_fee > 0:
-        user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
-        if int(user.get("money") or 0) < entry_fee:
-            raise HTTPException(status_code=400, detail="Insufficient cash for entry fee")
     participants.append({
         "user_id": current_user["id"],
         "username": current_user.get("username") or "?",
@@ -2406,6 +2418,13 @@ async def join_race(
         "is_npc": False,
         "tyre_compound": (body.tyre_compound or "medium").strip().lower() if hasattr(body, "tyre_compound") else "medium",
     })
+    race_preview = {**race, "participants": participants}
+    await _assert_npc_race_24h_budget(race_preview, current_user["id"])
+    entry_fee = int(race.get("entry_fee") or 0)
+    if entry_fee > 0:
+        user = await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "money": 1})
+        if int(user.get("money") or 0) < entry_fee:
+            raise HTTPException(status_code=400, detail="Insufficient cash for entry fee")
     await db.racing_races.update_one(
         {"id": race_id},
         {"$set": {"participants": participants}},
@@ -2676,7 +2695,19 @@ async def start_race(race_id: str, current_user: dict = Depends(get_current_user
     _require_racing_team(prof)
     if race.get("state") != "open":
         raise HTTPException(status_code=400, detail="Race already started or completed")
-    await _assert_npc_race_24h_budget(race, current_user["id"])
+    try:
+        await _assert_npc_race_24h_budget(race, current_user["id"])
+    except HTTPException as ex:
+        det_str = ex.detail if isinstance(ex.detail, str) else str(ex.detail or "")
+        if ex.status_code == 400 and (
+            "NPC race limit" in det_str or "reached their NPC race limit" in det_str
+        ):
+            await _refund_open_race_entry_fees(race)
+            await db.racing_races.update_one(
+                {"id": race_id},
+                {"$set": {"state": "cancelled", "cancelled_at": _now_iso(), "cancel_reason": "npc_race_limit"}},
+            )
+        raise
     race = await _start_race_internal(race_id)
     await _record_npc_race_starts_if_vs_npcs(race)
     return {"message": "Race started — run it live", "race": race}
