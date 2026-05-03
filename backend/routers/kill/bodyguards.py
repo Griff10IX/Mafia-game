@@ -531,7 +531,13 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
         raise HTTPException(status_code=400, detail="Human bodyguards are temporarily disabled. Use robot bodyguards.")
     fresh = await db.users.find_one(
         {"id": current_user["id"]},
-        {"_id": 0, "bodyguard_slots": 1, "bodyguard_robot_loss_hire_allowed_after": 1},
+        {
+            "_id": 0,
+            "bodyguard_slots": 1,
+            "bodyguard_robot_loss_hire_allowed_after": 1,
+            "bodyguard_inflation_until": 1,
+            "bodyguard_inflation_level": 1,
+        },
     )
     slots = int((fresh or {}).get("bodyguard_slots") or 0)
     if is_robot:
@@ -556,11 +562,7 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
     event_cost_mult = ev.get("bodyguard_cost", 1.0)
     base_cost = BODYGUARD_SLOT_COSTS[slot - 1]
     # Bodyguard inflation: each hire within 3h adds % (0%, 2%, 5%, 7%, 12%, 17%, ...)
-    user_inflation = await db.users.find_one(
-        {"id": current_user["id"]},
-        {"_id": 0, "bodyguard_inflation_until": 1, "bodyguard_inflation_level": 1}
-    )
-    user_for_inflation = user_inflation or {}
+    user_for_inflation = fresh or {}
     inflation_level = _bodyguard_inflation_level_now(user_for_inflation)
     inflation_mult = 1.0 + _bodyguard_inflation_percent_for_level(inflation_level)
     total_cost = int(base_cost * event_cost_mult * inflation_mult)
@@ -604,6 +606,7 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
     robot_user_id = None
     if is_robot:
         robot_user_id, robot_name = await _create_robot_bodyguard_user(current_user)
+    hired_at_iso = datetime.now(timezone.utc).isoformat()
     bodyguard_doc = {
         "id": str(uuid.uuid4()),
         "user_id": current_user["id"],
@@ -614,25 +617,36 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
         "bodyguard_user_id": robot_user_id if is_robot else None,
         "health": 100,
         "armour_level": 0,
-        "hired_at": datetime.now(timezone.utc).isoformat(),
+        "hired_at": hired_at_iso,
         "hire_cost": total_cost,
     }
     await db.bodyguards.insert_one(bodyguard_doc)
     await db.users.update_one({"id": current_user["id"]}, {"$unset": {"bodyguard_robot_loss_hire_allowed_after": ""}})
-    await db.hitlist_bodyguard_events.insert_one({
-        "at": datetime.now(timezone.utc),
-        "type": "bodyguard_hired",
-        "owner_id": current_user["id"],
-        "owner_username": current_user.get("username") or "",
-        "slot": slot,
-        "is_robot": is_robot,
-        "hire_cost": total_cost,
-        "bodyguard_username": robot_name if is_robot else None,
-        "inflation_level_before": inflation_level,
-        "inflation_mult": inflation_mult,
-        "event_bodyguard_cost_mult": event_cost_mult,
-        "base_slot_cost": base_cost,
-    })
+
+    async def _hire_audit_log():
+        try:
+            await db.hitlist_bodyguard_events.insert_one({
+                "at": datetime.now(timezone.utc),
+                "type": "bodyguard_hired",
+                "owner_id": current_user["id"],
+                "owner_username": current_user.get("username") or "",
+                "slot": slot,
+                "is_robot": is_robot,
+                "hire_cost": total_cost,
+                "bodyguard_username": robot_name if is_robot else None,
+                "inflation_level_before": inflation_level,
+                "inflation_mult": inflation_mult,
+                "event_bodyguard_cost_mult": event_cost_mult,
+                "base_slot_cost": base_cost,
+            })
+            await log_activity(current_user["id"], current_user.get("username", "?"), "bodyguard_hire", {
+                "slot": slot, "is_robot": is_robot, "cost": total_cost, "name": robot_name,
+            })
+        except Exception:
+            logger.exception("bodyguard hire audit log")
+
+    asyncio.create_task(_hire_audit_log())
+
     name_part = robot_name if is_robot else "a human bodyguard"
     msg = f"You hired {name_part} for {total_cost} points (slot {slot}/4). Past hires show here — max 4 at once."
     asyncio.create_task(send_notification(
@@ -642,10 +656,37 @@ async def _do_hire_bodyguard(slot: int, is_robot: bool, current_user: dict):
         "bodyguard"
     ))
     _invalidate_bodyguards_cache(current_user["id"])
-    await log_activity(current_user["id"], current_user.get("username", "?"), "bodyguard_hire", {
-        "slot": slot, "is_robot": is_robot, "cost": total_cost, "name": robot_name,
-    })
-    return {"message": f"{'Robot bodyguard ' + robot_name if is_robot else 'Human bodyguard slot'} hired for {total_cost} points", "bodyguard_name": robot_name}
+
+    next_level = inflation_level + 1
+    next_hire_inflation_pct = round(_bodyguard_inflation_percent_for_level(next_level) * 100)
+    inflation_window_ends_at = window_end.isoformat()
+
+    if is_robot and robot_user_id:
+        ru = await db.users.find_one({"id": robot_user_id}, {"_id": 0, "rank_points": 1})
+        _, bg_rank_name = get_rank_info(
+            int((ru or {}).get("rank_points", 0) or 0),
+            user_prestige_rank_mult(ru or current_user),
+        )
+        return {
+            "message": f"Robot bodyguard {robot_name} hired for {total_cost} points",
+            "bodyguard_name": robot_name,
+            "slot": slot,
+            "bodyguard_username": robot_name,
+            "bodyguard_rank_name": bg_rank_name,
+            "armour_level": 0,
+            "hire_cost": total_cost,
+            "hired_at": hired_at_iso,
+            "is_robot": True,
+            "next_hire_inflation_pct": next_hire_inflation_pct,
+            "inflation_window_ends_at": inflation_window_ends_at,
+        }
+    return {
+        "message": f"Human bodyguard slot hired for {total_cost} points",
+        "bodyguard_name": robot_name,
+        "slot": slot,
+        "next_hire_inflation_pct": next_hire_inflation_pct,
+        "inflation_window_ends_at": inflation_window_ends_at,
+    }
 
 
 def _weekday_name(weekday: int) -> str:

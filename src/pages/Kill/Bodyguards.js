@@ -255,7 +255,32 @@ export default function Bodyguards() {
     pendingHiresRef.current += 1;
     try {
       const response = await api.post('/bodyguards/hire', { slot, is_robot: isRobot });
-      showHireBanner('success', response?.data?.message ?? 'Bodyguard hired');
+      const d = response?.data;
+      if (d?.slot != null && d?.bodyguard_username != null) {
+        setBodyguards((prev) =>
+          prev.map((b) =>
+            b.slot_number === d.slot
+              ? {
+                  ...b,
+                  bodyguard_username: d.bodyguard_username,
+                  bodyguard_rank_name: d.bodyguard_rank_name ?? null,
+                  armour_level: typeof d.armour_level === 'number' ? d.armour_level : 0,
+                  hired_at: d.hired_at ?? null,
+                  hire_cost: typeof d.hire_cost === 'number' ? d.hire_cost : 0,
+                  is_robot: d.is_robot !== false,
+                  payment_points: 0,
+                  payment_money: 0,
+                  payout_weekday: null,
+                }
+              : b
+          )
+        );
+      }
+      if (typeof d?.next_hire_inflation_pct === 'number') {
+        setNextHireInflationPct(d.next_hire_inflation_pct);
+        setInflationWindowEndsAt(d.inflation_window_ends_at ?? null);
+      }
+      showHireBanner('success', d?.message ?? 'Bodyguard hired');
     } catch (error) {
       claimedSlotsRef.current.delete(slot);
       setHiringSlots(new Set(claimedSlotsRef.current));
@@ -277,13 +302,9 @@ export default function Bodyguards() {
       pendingHiresRef.current -= 1;
       if (pendingHiresRef.current === 0) {
         claimedSlotsRef.current.clear();
+        setHiringSlots(new Set());
         refreshUser().catch(() => {});
-        await fetchData();
-        try {
-          const inflRes = await apiRequestWith429Retry(() => api.get('/bodyguards/inflation', noCacheGetConfig()));
-          setNextHireInflationPct(inflRes.data?.next_hire_inflation_pct ?? 0);
-          setInflationWindowEndsAt(inflRes.data?.inflation_window_ends_at ?? null);
-        } catch { /* fetchData already set inflation */ }
+        fetchData().catch(() => {});
       }
     }
   };
