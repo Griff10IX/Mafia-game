@@ -195,23 +195,38 @@ function RewardIcon({ type, rarity }) {
   );
 }
 
+function fmtInt(n) {
+  const x = Number(n ?? 0);
+  return Number.isFinite(x) ? x.toLocaleString() : String(n ?? '');
+}
+
 function rewardLabel(reward) {
   if (!reward) return '—';
-  switch (reward.type) {
+  const t = String(reward.type || '').toLowerCase();
+  switch (t) {
     case 'weapon':    return reward.name || 'Exclusive weapon';
     case 'car':       return reward.name || 'Exclusive car';
     case 'armour':    return reward.name || 'Exclusive armour';
     case 'property':  return reward.name || 'Speakeasy';
-    case 'points':    return `${reward.amount ?? 0} points`;
-    case 'rank_points': return `${reward.amount ?? 0} rank points`;
-    case 'cash':      return `$${Number(reward.amount ?? 0).toLocaleString()}`;
+    case 'points': {
+      const amt = reward.amount ?? reward.points ?? reward.value;
+      return `${fmtInt(amt)} points`;
+    }
+    case 'rank_points': {
+      const amt = reward.amount ?? reward.rank_points ?? reward.value;
+      return `${fmtInt(amt)} rank points`;
+    }
+    case 'cash':      return `$${Number(reward.amount ?? reward.value ?? 0).toLocaleString()}`;
     case 'cars':
       if (reward.items?.length) return reward.items.map((it) => `${it.name} (${it.rarity ?? 'common'})`).join(', ');
-      return `${reward.count ?? 0} cars`;
-    case 'bullets':   return `${reward.amount ?? 0} bullets`;
-    case 'loot_pieces': return `${reward.amount ?? 0} loot box piece${(reward.amount ?? 0) === 1 ? '' : 's'}`;
+      return `${fmtInt(reward.count)} cars`;
+    case 'bullets':   return `${fmtInt(reward.amount ?? reward.value)} bullets`;
+    case 'loot_pieces': {
+      const amt = reward.amount ?? reward.value ?? 0;
+      return `${fmtInt(amt)} loot box piece${Number(amt) === 1 ? '' : 's'}`;
+    }
     case 'perk':      return reward.name || 'Perk';
-    case 'token':     return `${reward.amount ?? 1} ${(reward.token_type || 'bonus').replace(/_/g, ' ')} token(s)`;
+    case 'token':     return `${fmtInt(reward.amount ?? reward.value ?? 1)} ${(reward.token_type || 'bonus').replace(/_/g, ' ')} token(s)`;
     default:          return JSON.stringify(reward);
   }
 }
@@ -240,7 +255,7 @@ function LootRewardGuide({ rewardInfo, odds }) {
       </div>
       <div className="p-2 space-y-2">
         <p className="text-[8px] text-mutedForeground font-heading leading-snug">
-          Opens cost <span className="text-primary font-bold">{pieces_per_open}</span> pieces. Amounts below are min–max per prize when that category rolls for your box tier.
+          Opens cost <span className="text-primary font-bold">{fmtInt(pieces_per_open)}</span> pieces. Amounts below are min–max per prize when that category rolls for your box tier.
         </p>
         {odds && (
           <p className="text-[8px] text-mutedForeground font-heading leading-snug border border-primary/15 rounded px-1.5 py-1 bg-primary/5">
@@ -274,15 +289,15 @@ function LootRewardGuide({ rewardInfo, odds }) {
             return (
               <div key={key} className={`rounded border px-1.5 py-1.5 ${color}`}>
                 <div className="text-[9px] font-heading font-bold uppercase tracking-wider mb-1">{title}</div>
-                <div className="text-[7px] opacity-90 mb-1">{pLo}–{pHi} prizes</div>
+                <div className="text-[7px] opacity-90 mb-1">{fmtInt(pLo)}–{fmtInt(pHi)} prizes</div>
                 <ul className="list-none p-0 m-0 space-y-0.5 text-[7px] font-heading leading-tight opacity-95">
                   <li>Cash {formatCashRange(t.cash[0], t.cash[1])}</li>
                   <li>Points {formatNumRange(t.points[0], t.points[1])}</li>
                   <li>Rank pts {formatNumRange(t.rank_points[0], t.rank_points[1])}</li>
                   <li>Bullets {formatNumRange(t.bullets[0], t.bullets[1])}</li>
                   <li>Pieces {formatNumRange(t.loot_pieces[0], t.loot_pieces[1])}</li>
-                  <li>Tokens {taLo}–{taHi} (random type)</li>
-                  <li>Cars {cLo}–{cHi} · {(cars.rarities || []).join(', ')}</li>
+                  <li>Tokens {formatNumRange(taLo, taHi)} (random type)</li>
+                  <li>Cars {formatNumRange(cLo, cHi)} · {(cars.rarities || []).join(', ')}</li>
                 </ul>
                 {t.perks?.length > 0 && (
                   <p className="text-[7px] font-heading mt-1 pt-1 border-t border-white/10 leading-tight opacity-90">
@@ -552,7 +567,7 @@ function ResultModal({ result, onClose }) {
         </ul>
         <div className="mt-auto pt-3 px-4 pb-4 border-t border-primary/20 flex justify-between items-center">
           <span className="text-[11px] text-mutedForeground font-heading italic">Pieces remaining</span>
-          <span className="text-sm font-heading font-bold text-primary">{result.new_pieces ?? 0}</span>
+          <span className="text-sm font-heading font-bold text-primary">{fmtInt(result.new_pieces ?? 0)}</span>
         </div>
       </div>
     </div>
@@ -750,7 +765,7 @@ export default function LootBox() {
                 <ChestIcon shaking={phase === 'shaking'} exploding={phase === 'exploding'} ready={canOpen} />
                 <div className="text-center mb-2">
                   <div className="flex items-baseline justify-center gap-1.5">
-                    <span className="text-2xl font-heading font-bold text-primary">{pieces}</span>
+                    <span className="text-2xl font-heading font-bold text-primary">{fmtInt(pieces)}</span>
                     <span className="text-[10px] text-mutedForeground font-heading">/100</span>
                   </div>
                   <p className="text-[9px] text-mutedForeground font-heading italic mt-0.5">pieces collected</p>
@@ -767,7 +782,7 @@ export default function LootBox() {
                   }`}
                 >
                   <Package size={14} />
-                  {phase === 'shaking' ? 'RATTLING THE LOCK…' : phase === 'exploding' ? 'THE VAULT OPENS…' : canOpen ? 'CRACK THE VAULT' : `${100 - pieces} PIECES NEEDED`}
+                  {phase === 'shaking' ? 'RATTLING THE LOCK…' : phase === 'exploding' ? 'THE VAULT OPENS…' : canOpen ? 'CRACK THE VAULT' : `${fmtInt(Math.max(0, 100 - pieces))} PIECES NEEDED`}
                 </button>
               </div>
               <div className="lb-art-line text-primary mx-2.5" />

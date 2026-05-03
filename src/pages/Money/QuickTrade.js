@@ -221,6 +221,7 @@ export default function QuickTrade() {
   };
 
   const handleAcceptOffer = async (offerId, type) => {
+    if (!window.confirm(type === 'property' ? 'Buy this listing at the listed price?' : 'Accept this offer?')) return;
     try {
       const url = type === 'property'
         ? `/trade/property/${offerId}/accept`
@@ -236,6 +237,7 @@ export default function QuickTrade() {
 
   const handleAcceptBatch = async (offerIds, type) => {
     if (!offerIds.length) return;
+    if (!window.confirm(`Accept all ${offerIds.length} stacked ${type} offers?`)) return;
     let completed = 0;
     try {
       for (const id of offerIds) {
@@ -309,6 +311,7 @@ export default function QuickTrade() {
   };
 
   const handleAcceptTokenOffer = async (offerId) => {
+    if (!window.confirm('Accept this token offer?')) return;
     try {
       await api.post(`/trade/token-offer/${offerId}/accept`);
       toast.success('Token trade completed!');
